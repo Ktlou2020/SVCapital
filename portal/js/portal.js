@@ -3927,10 +3927,6 @@ async function _renderProductTrackRecord(type, color) {
           <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-top:3px">Returned to investors</div>
         </div>
       </div>
-      <div style="flex:1;min-width:130px;background:rgba(0,0,0,0.03);border:1px solid rgba(0,0,0,0.06);border-radius:14px;padding:16px">
-        <div style="font-size:1.6rem;font-weight:900;color:var(--text);letter-spacing:-0.02em">${Utils.rand(paidBack)}</div>
-        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px">invested to date</div>
-      </div>
 
       <p style="font-size:0.65rem;color:var(--text-muted);margin-top:10px;line-height:1.5;opacity:0.7">
         <i class="fa-solid fa-circle-info" style="margin-right:4px"></i>Past performance is not a guarantee of future returns. Investment returns may vary.
@@ -5371,7 +5367,12 @@ function generateStatement() {
   const activeInvAmt  = allInvestments.filter(i => i.status === 'active').reduce((s, i) => s + (Number(i.amount) || 0), 0);
   const totalValue    = activeInvAmt + walletBal;                   // Portfolio Value = active inv + wallet
   const totalDeposits = transactions.filter(t => t.type === 'deposit' && t.status !== 'cancelled').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
-  const totalReturns  = transactions.filter(t => t.type === 'return' || t.type === 'payout').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+  // Returns: prefer completed return/payout transactions in the period; fall back to
+  // paid-out investments' actual return amounts when no such transactions exist yet.
+  const _txnReturns  = transactions.filter(t => (t.type === 'return' || t.type === 'payout') && t.status !== 'cancelled').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+  const totalReturns = _txnReturns > 0 ? _txnReturns
+    : allInvestments.filter(i => ['paid_out', 'matured'].includes(i.status) && _inPeriod(i.maturity_date || i.investment_date))
+                    .reduce((s, i) => s + (i.actual_return_amount || i.expected_return_amount || 0), 0);
   const activeInv     = allInvestments.filter(i => i.status === 'active').length;
 
   // Build preview quick stats
@@ -10860,7 +10861,10 @@ function downloadStatement() {
     .sort((a, b) => new Date(b.transaction_date || b.created_at) - new Date(a.transaction_date || a.created_at));
 
   const totalInvested = PORTAL.investments.filter(i => !i.is_reinvestment).reduce((s, i) => s + (Number(i.amount) || 0), 0);
-  const totalReturns  = PORTAL.investments.reduce((s, i) => s + (Number(i.amount) || 0) * (Number(i.pool_actual_rate) || 0), 0);
+  const _txnReturns90 = txns.filter(t => (t.type === 'return' || t.type === 'payout') && t.status !== 'cancelled').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+  const totalReturns  = _txnReturns90 > 0 ? _txnReturns90
+    : PORTAL.investments.filter(i => ['paid_out', 'matured'].includes(i.status) && new Date(i.maturity_date || i.investment_date) >= from90)
+                        .reduce((s, i) => s + (i.actual_return_amount || i.expected_return_amount || 0), 0);
   const walletBal     = Number(investor.wallet_balance) || 0;
   const portfolioVal  = totalInvested + walletBal + totalReturns;
 
@@ -10972,7 +10976,10 @@ function downloadSaStatement(saId, saName) {
   const activeInvAmt  = investments.filter(i => i.status === 'active').reduce((s, i) => s + (Number(i.amount) || 0), 0);
   const totalValue    = activeInvAmt + walletBal;
   const totalDeposits = transactions.filter(t => t.type === 'deposit' && t.status !== 'cancelled').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
-  const totalReturns  = transactions.filter(t => t.type === 'return' || t.type === 'payout').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+  const _saTxnReturns = transactions.filter(t => (t.type === 'return' || t.type === 'payout') && t.status !== 'cancelled').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+  const totalReturns  = _saTxnReturns > 0 ? _saTxnReturns
+    : investments.filter(i => ['paid_out', 'matured'].includes(i.status))
+                 .reduce((s, i) => s + (i.actual_return_amount || i.expected_return_amount || 0), 0);
   const totalInvested = totalDeposits;
   const activeInv     = investments.filter(i => i.status === 'active').length;
 

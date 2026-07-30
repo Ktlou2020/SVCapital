@@ -357,6 +357,7 @@ DO $$ BEGIN
   BEGIN ALTER TABLE investors ADD COLUMN totp_enabled BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investors ADD COLUMN last_login_ip TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investors ADD COLUMN last_login_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE investors ADD COLUMN last_login TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
   -- Recurring investment columns for investors
   BEGIN ALTER TABLE investors ADD COLUMN recurring_amount NUMERIC(12,2) DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investors ADD COLUMN recurring_pool_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
@@ -763,9 +764,29 @@ CREATE TABLE IF NOT EXISTS solar_projects (
   annual_rate NUMERIC(8,6) DEFAULT 0,
   contracted_return NUMERIC(18,2), actual_return NUMERIC(18,2) DEFAULT 0,
   start_date TIMESTAMPTZ, maturity_date TIMESTAMPTZ, notes TEXT,
+  documents_url TEXT, foxess_device_sn TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS solar_projects_status_idx ON solar_projects(status);
+
+CREATE TABLE IF NOT EXISTS solar_investment_periods (
+  id TEXT PRIMARY KEY,
+  project_id TEXT REFERENCES solar_projects(id) ON DELETE CASCADE,
+  product_type TEXT DEFAULT '7yr',
+  term_years INT,
+  capital_deployed NUMERIC(18,2) DEFAULT 0,
+  annual_rate NUMERIC(8,6) DEFAULT 0,
+  contracted_return NUMERIC(18,2),
+  start_date TIMESTAMPTZ,
+  maturity_date TIMESTAMPTZ,
+  actual_return NUMERIC(18,2) DEFAULT 0,
+  status TEXT DEFAULT 'active',
+  notes TEXT,
+  sort_order INT DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS solar_periods_project_idx ON solar_investment_periods(project_id);
 
 CREATE TABLE IF NOT EXISTS solar_documents (
   id TEXT PRIMARY KEY,
@@ -1292,6 +1313,8 @@ async function autoSetup() {
         BEGIN ALTER TABLE investment_pools ADD COLUMN admin_notes TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE kyc_documents ADD COLUMN expiry_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE kyc_documents ADD COLUMN doc_subtype TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE solar_projects ADD COLUMN documents_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE solar_projects ADD COLUMN foxess_device_sn TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
       END $$
     `);
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS gifts_firebase_id_idx ON gifts(firebase_id) WHERE firebase_id IS NOT NULL`).catch(() => {});
@@ -1536,7 +1559,26 @@ Withdraw at maturity or roll over to a new cycle',
       console.warn('⚠️  Maturity date backfill skipped:', bfErr.message);
     }
 
-    // 8. Backfill cattle_cycles.cycle_start_date from invoice_date.
+    // 8. Migrate product_type 'smme' → 'short_term' everywhere.
+    //    SMME products are now unified under the Short Term Investment type.
+    //    Safe to run repeatedly — WHERE clause prevents no-op re-runs.
+    try {
+      const { rowCount: poolRows } = await pool.query(`
+        UPDATE investment_pools SET product_type = 'short_term' WHERE product_type = 'smme'
+      `);
+      const { rowCount: invRows } = await pool.query(`
+        UPDATE investments SET product_type = 'short_term' WHERE product_type = 'smme'
+      `);
+      const { rowCount: prodRows } = await pool.query(`
+        UPDATE products SET product_type = 'short_term' WHERE product_type = 'smme'
+      `).catch(() => ({ rowCount: 0 }));
+      const total = poolRows + invRows + prodRows;
+      if (total > 0) console.log(`✅ Migrated smme→short_term: ${poolRows} pools, ${invRows} investments, ${prodRows} products.`);
+    } catch (bfErr) {
+      console.warn('⚠️  smme→short_term migration skipped:', bfErr.message);
+    }
+
+    // 9. Backfill cattle_cycles.cycle_start_date from invoice_date.
     //    "Invoice Date_" in the import CSV is the cycle start date — previously
     //    it only populated invoice_date; now we also copy it to cycle_start_date.
     try {

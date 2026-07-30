@@ -152,6 +152,26 @@
     .sol-proj-nav-val   { font-size: 18px; font-weight: 800; }
     .sol-proj-actions   { display: flex; gap: 8px; margin-top: 12px; }
 
+    /* FoxESS live panel */
+    .sol-foxess-panel   { background: rgba(237,165,255,.06); border: 1px solid rgba(237,165,255,.15); border-radius: 10px; padding: 12px 14px; margin: 10px 0 4px; }
+    .sol-foxess-hd      { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: rgba(255,255,255,.5); margin-bottom: 10px; }
+    .sol-foxess-grid    { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; }
+    .sol-foxess-stat    { text-align: center; }
+    .sol-foxess-val     { font-size: 15px; font-weight: 800; color: var(--sol-gold); }
+    .sol-foxess-lbl     { font-size: 10px; color: rgba(255,255,255,.35); margin-top: 2px; }
+    .sol-foxess-loading { font-size: 12px; color: rgba(255,255,255,.35); text-align: center; padding: 6px 0; }
+    .sol-foxess-unavail { font-size: 12px; color: rgba(248,113,113,.7); text-align: center; padding: 4px 0; }
+
+    /* Investment periods table */
+    .sol-periods-table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 860px; }
+    .sol-periods-table th { padding: 7px 8px; text-align: left; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: rgba(255,255,255,.4); border-bottom: 1px solid rgba(255,255,255,.08); white-space: nowrap; }
+    .sol-periods-table td { padding: 6px 4px; vertical-align: middle; }
+    .sol-periods-table tr + tr td { border-top: 1px solid rgba(255,255,255,.05); }
+    .sol-periods-table input, .sol-periods-table select { width: 100%; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); border-radius: 6px; padding: 5px 7px; color: var(--sol-text); font-size: 12px; }
+    .sol-periods-table input:focus, .sol-periods-table select:focus { outline: none; border-color: var(--sol-gold); }
+    .sol-periods-table .del-btn { background: rgba(248,113,113,.12); border: 1px solid rgba(248,113,113,.2); border-radius: 6px; color: #f87171; padding: 4px 8px; cursor: pointer; font-size: 11px; white-space: nowrap; }
+    .sol-periods-table .del-btn:hover { background: rgba(248,113,113,.22); }
+
     /* Progress bar */
     .sol-progress-wrap { background: rgba(255,255,255,.08); border-radius: 6px; height: 6px; margin: 8px 0 4px; }
     .sol-progress-fill { height: 100%; border-radius: 6px; background: var(--sol-gold); transition: width .4s; }
@@ -530,67 +550,58 @@
         </div>
 
         <hr class="sol-divider">
-        <div class="sol-section-label"><i class="fa-solid fa-coins"></i> Investment Terms</div>
-        <div class="sol-form-grid col3" style="margin-bottom:18px">
-          <div class="sol-form-group">
-            <label>Product Type</label>
-            <select id="sp_product_type">
-              <option value="5yr">5-Year Product</option>
-              <option value="6yr">6-Year Product</option>
-              <option value="7yr" selected>7-Year Product</option>
-            </select>
-          </div>
-          <div class="sol-form-group">
-            <label>Status</label>
-            <select id="sp_status">
-              <option value="active">Active</option>
-              <option value="pending">Pending</option>
-              <option value="matured">Matured</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-          </div>
-          <div class="sol-form-group">
-            <label>Term (years)</label>
-            <input type="number" id="sp_term_years" min="1" max="30" placeholder="e.g. 7">
-          </div>
-          <div class="sol-form-group">
-            <label>Capital Deployed (R)</label>
-            <input type="number" id="sp_capital" step="0.01" min="0" placeholder="0.00">
-          </div>
-          <div class="sol-form-group">
-            <label>Annual Rate (%)</label>
-            <input type="number" id="sp_rate_pct" step="0.01" min="0" max="100" placeholder="e.g. 14.83">
-            <span class="hint">Enter as percentage e.g. 14.83</span>
-          </div>
-          <div class="sol-form-group">
-            <label>Contracted Return (R)</label>
-            <input type="number" id="sp_contracted_return" step="0.01" min="0" placeholder="Total contracted return">
-          </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div class="sol-section-label" style="margin-bottom:0"><i class="fa-solid fa-coins"></i> Investment Periods</div>
+          <button type="button" class="sol-btn sol-btn-secondary sol-btn-sm" onclick="addPeriodRow()">
+            <i class="fa-solid fa-plus"></i> Add Period
+          </button>
         </div>
-
-        <div class="sol-form-grid" style="margin-bottom:18px">
-          <div class="sol-form-group">
-            <label>Start Date</label>
-            <input type="date" id="sp_start_date">
-          </div>
-          <div class="sol-form-group">
-            <label>Maturity Date</label>
-            <input type="date" id="sp_maturity_date">
-          </div>
-        </div>
-
-        <hr class="sol-divider">
-        <div class="sol-section-label"><i class="fa-solid fa-check-circle"></i> Actual Returns</div>
-        <div class="sol-form-grid" style="margin-bottom:18px">
-          <div class="sol-form-group">
-            <label>Actual Return Received (R)</label>
-            <input type="number" id="sp_actual_return" step="0.01" min="0" placeholder="0.00">
-          </div>
+        <div style="overflow-x:auto;margin-bottom:18px">
+          <table class="sol-periods-table" id="periodsTable">
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>Status</th>
+                <th>Capital (R)</th>
+                <th>Rate (%)</th>
+                <th>Contracted Return (R)</th>
+                <th>Start Date</th>
+                <th>Maturity Date</th>
+                <th>Actual Return (R)</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="periodsBody"></tbody>
+          </table>
         </div>
 
         <div class="sol-form-group">
           <label>Notes</label>
           <textarea id="sp_notes" rows="3" style="resize:vertical" placeholder="PPA details, off-taker, project notes…"></textarea>
+        </div>
+
+        <hr class="sol-divider">
+        <div class="sol-section-label"><i class="fa-solid fa-link"></i> Documents &amp; Integration</div>
+        <div class="sol-form-grid" style="margin-bottom:18px">
+          <div class="sol-form-group">
+            <label>Documents Link</label>
+            <input type="url" id="sp_docs_url" placeholder="https://docs.google.com/…">
+            <span class="hint">Google Docs folder or shared drive link for this project</span>
+          </div>
+          <div class="sol-form-group">
+            <label>FoxESS Device SN</label>
+            <input type="text" id="sp_foxess_sn" placeholder="e.g. H1-1234567890">
+            <span class="hint">Inverter serial number — enables live generation dashboard</span>
+          </div>
+        </div>
+        <!-- FoxESS connection test -->
+        <div style="margin-bottom:16px;padding:12px 14px;border-radius:10px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07)">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <span style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:rgba(255,255,255,.4)">FoxESS API Diagnostic</span>
+            <button id="foxessPingBtn" onclick="runFoxESSPing()" style="font-size:0.75rem;padding:4px 12px;border-radius:6px;border:1px solid rgba(237,165,255,.3);background:rgba(237,165,255,.08);color:#eda5ff;cursor:pointer">Test Connection</button>
+          </div>
+          <div style="font-size:0.72rem;color:rgba(255,255,255,.3);margin-bottom:6px">Checks that the <strong style="color:rgba(255,255,255,.5)">FOXESS_API_KEY</strong> server environment variable is set and can reach the FoxESS cloud. Lists all devices on the account so you can verify the correct SN.</div>
+          <div id="foxessPingResult" style="display:none"></div>
         </div>
       </form>
     </div>

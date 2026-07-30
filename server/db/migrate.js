@@ -400,6 +400,10 @@ ALTER TABLE cattle_cycles    ADD COLUMN IF NOT EXISTS pool_id TEXT REFERENCES in
 ALTER TABLE solar_projects   ADD COLUMN IF NOT EXISTS pool_id TEXT REFERENCES investment_pools(id) ON DELETE SET NULL;
 ALTER TABLE shortterm_loans  ADD COLUMN IF NOT EXISTS pool_id TEXT REFERENCES investment_pools(id) ON DELETE SET NULL;
 
+/* ─── SOLAR PROJECT EXTENSIONS ─── */
+ALTER TABLE solar_projects ADD COLUMN IF NOT EXISTS documents_url   TEXT;
+ALTER TABLE solar_projects ADD COLUMN IF NOT EXISTS foxess_device_sn TEXT;
+
 `;
 
 async function migrate() {

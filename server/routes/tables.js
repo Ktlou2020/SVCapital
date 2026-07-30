@@ -121,6 +121,7 @@ const ALLOWED_TABLES = {
   shortterm_loans:       'id',
   loan_documents:        'id',
   solar_projects:        'id',
+  solar_investment_periods: 'id',
   solar_documents:       'id',
   fica_checks:           'id',   // read-only via generic API; writes via /api/fica/*
   quest_completions:     'id',   // read via generic API; writes via /api/quests/*
@@ -547,7 +548,7 @@ router.get('/investors/:id/activity', requireAuth, async (req, res) => {
 
     const investorId = req.params.id;
 
-    const [userRes, pushRes, sessionRes] = await Promise.all([
+    const [userRes, pushRes, sessionRes, invRes] = await Promise.all([
       pool.query(`
         SELECT id, email, role, created_at, last_login, totp_enabled, is_active
         FROM users WHERE investor_id = $1 LIMIT 1
@@ -573,10 +574,21 @@ router.get('/investors/:id/activity', requireAuth, async (req, res) => {
         ORDER BY s.last_used_at DESC
         LIMIT 10
       `, [investorId]).catch(() => ({ rows: [] })),
+
+      pool.query(`
+        SELECT last_login_at FROM investors WHERE id = $1 LIMIT 1
+      `, [investorId]).catch(() => ({ rows: [] })),
     ]);
 
+    // Merge investor.last_login_at as fallback when users.last_login is null
+    const userRow = userRes.rows[0] || null;
+    const invLastLogin = invRes.rows[0]?.last_login_at || null;
+    if (userRow && !userRow.last_login && invLastLogin) {
+      userRow.last_login = invLastLogin;
+    }
+
     res.json({
-      user:     userRes.rows[0]    || null,
+      user:     userRow,
       devices:  pushRes.rows,
       sessions: sessionRes.rows,
     });
@@ -1407,6 +1419,25 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
         rows = existing;
       } else {
         rows = updated;
+        // Credit wallet SYNCHRONOUSLY (before response) so it cannot be skipped by an
+        // audit/email failure and cannot race with a second concurrent PATCH.
+        // Mirrors the withdrawal-refund pattern above.
+        const u = updated[0];
+        if (u.investor_id &&
+            (u.type === 'deposit' || u.type === 'return' || u.type === 'payout' || u.type === 'referral_bonus')) {
+          if (u.sub_account_id && u.type === 'deposit') {
+            await pool.query(
+              'UPDATE sub_accounts SET wallet_balance = wallet_balance + $1 WHERE id = $2',
+              [parseFloat(u.amount), u.sub_account_id]
+            );
+          } else {
+            await pool.query(
+              'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
+              [parseFloat(u.amount), u.investor_id]
+            );
+          }
+          _skipWalletCredit = true; // prevent double-credit in the setImmediate email block
+        }
       }
     } else {
       const result = await pool.query(
@@ -1453,27 +1484,16 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
           });
         }
 
-        // Deposit / return / payout confirmed → credit wallet + email investor
-        if (table === 'transactions' && body.status === 'completed' && updated.investor_id &&
-            (updated.type === 'deposit' || updated.type === 'return' || updated.type === 'payout' || updated.type === 'referral_bonus')) {
-          // Only credit if this PATCH was the one that completed the transaction
-          if (!_skipWalletCredit) {
-            // Credit wallet atomically
-            await pool.query(
-              'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
-              [parseFloat(updated.amount), updated.investor_id]
-            );
-            // Only send confirmation email/SMS on the PATCH that actually credited the wallet
-            if (updated.type === 'deposit') {
-              const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [updated.investor_id]);
-              if (inv[0]) {
-                const gateway = updated.description?.includes('Paystack') ? 'Paystack'
-                              : updated.description?.includes('Ozow')     ? 'Ozow'
-                              : 'EFT';
-                await emailService.sendDepositConfirmed(inv[0], updated.amount, updated.reference || updated.id, gateway);
-                await smsService.sendDepositConfirmed(inv[0].phone, inv[0].first_name, updated.amount);
-              }
-            }
+        // Deposit confirmed → email investor (wallet already credited synchronously above)
+        if (table === 'transactions' && body.status === 'completed' && !_skipWalletCredit &&
+            updated.investor_id && updated.type === 'deposit') {
+          const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [updated.investor_id]);
+          if (inv[0]) {
+            const gateway = updated.description?.includes('Paystack') ? 'Paystack'
+                          : updated.description?.includes('Ozow')     ? 'Ozow'
+                          : 'EFT';
+            await emailService.sendDepositConfirmed(inv[0], updated.amount, updated.reference || updated.id, gateway);
+            await smsService.sendDepositConfirmed(inv[0].phone, inv[0].first_name, updated.amount);
           }
         }
 

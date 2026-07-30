@@ -190,7 +190,7 @@ router.post('/login', loginLimiter, async (req, res) => {
         // investor row alert already covered by user alert above — just update tracking
       }
       await pool.query(
-        'UPDATE investors SET last_login_ip = $1, last_login_at = NOW() WHERE id = $2',
+        'UPDATE investors SET last_login_ip = $1, last_login_at = NOW(), last_login = NOW() WHERE id = $2',
         [newIp || null, user.investor_id]
       ).catch(() => {});
     }

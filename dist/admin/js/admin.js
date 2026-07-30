@@ -714,7 +714,7 @@ async function loadDashboard() {
     const activePools = STATE.pools.filter(p => ['open', 'active', 'filling'].includes(p.status)).length;
     const nonArchived = STATE.investors.filter(i => i.status !== 'archived');
 
-    document.getElementById('ds-investors').textContent = nonArchived.length;
+    document.getElementById('ds-investors').textContent = STATE.investors.length;
     document.getElementById('ds-invested').textContent = Utils.rand(totalInvested);
     document.getElementById('ds-returns').textContent = Utils.rand(totalReturns);
     document.getElementById('ds-pools').textContent = activePools;
@@ -859,7 +859,7 @@ async function loadDashboard() {
           const totalInvested = STATE.investments.filter(i => i.status === 'active').reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
           const totalReturns  = STATE.transactions.filter(t => t.type === 'return' && t.status === 'completed').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
           const activePools = STATE.pools.filter(p => ['open', 'active', 'filling'].includes(p.status)).length;
-          document.getElementById('ds-investors').textContent = nonArchived.length;
+          document.getElementById('ds-investors').textContent = STATE.investors.length;
           document.getElementById('ds-invested').textContent = Utils.rand(totalInvested);
           document.getElementById('ds-returns').textContent = Utils.rand(totalReturns);
           document.getElementById('ds-pools').textContent = activePools;
@@ -1900,6 +1900,69 @@ function _invTab(name) {
 
 let _currentInvestorId = null;
 
+function _editInvProfile() {
+  document.getElementById('invProfileView').style.display = 'none';
+  document.getElementById('invProfileEdit').style.display = '';
+}
+
+function _cancelInvProfileEdit() {
+  document.getElementById('invProfileEdit').style.display = 'none';
+  document.getElementById('invProfileView').style.display = '';
+}
+
+async function _saveInvProfile(btn) {
+  const inv = STATE.investors.find(i => i.id === _currentInvestorId);
+  if (!inv) return;
+
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
+
+  try {
+    // Direct investor fields
+    const directFields = {
+      email:        document.getElementById('ipf-email').value.trim(),
+      phone:        document.getElementById('ipf-phone').value.trim(),
+      id_number:    document.getElementById('ipf-id_number').value.trim(),
+      province:     document.getElementById('ipf-province').value,
+      address:      document.getElementById('ipf-address').value.trim(),
+      occupation:   document.getElementById('ipf-occupation').value.trim(),
+      risk_profile: document.getElementById('ipf-risk_profile').value,
+    };
+
+    // Merge JSONB profile fields, preserving existing keys
+    let invProfile = {};
+    try {
+      if (inv.investor_profile) {
+        invProfile = typeof inv.investor_profile === 'string'
+          ? JSON.parse(inv.investor_profile)
+          : { ...inv.investor_profile };
+      }
+    } catch (_) {}
+    invProfile.employer     = document.getElementById('ipf-employer').value.trim();
+    invProfile.next_of_kin  = document.getElementById('ipf-next_of_kin').value.trim();
+    invProfile.kin_contact  = document.getElementById('ipf-kin_contact').value.trim();
+
+    await API._fetch('PATCH', `tables/investors/${_currentInvestorId}`, {
+      ...directFields,
+      investor_profile: invProfile,
+    });
+
+    // Update local STATE so the read-only view refreshes correctly
+    Object.assign(inv, directFields, { investor_profile: invProfile });
+
+    Toast.show('Profile saved.', 'success');
+    // Reload the investor detail to reflect updated data
+    await viewInvestor(_currentInvestorId);
+    _invTab('profile');
+  } catch (err) {
+    console.error('[saveInvProfile]', err);
+    Toast.show('Failed to save: ' + (err.message || 'Unknown error'), 'error');
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }
+}
+
 async function viewInvestor(id) {
   _currentInvestorId = id;
   const inv = STATE.investors.find(i => i.id === id);
@@ -2041,18 +2104,77 @@ async function viewInvestor(id) {
 
   <!-- ── Profile ── -->
   <div id="invPanel-profile" style="display:none">
-    <div class="info-list">
-      <div class="info-row"><span class="info-row__label">Email</span><span class="info-row__value">${_esc(inv.email)||'—'}${inv.email?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.email)},this)' title="Copy email"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
-      <div class="info-row"><span class="info-row__label">Phone</span><span class="info-row__value">${_esc(inv.phone)||'—'}${inv.phone?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.phone)},this)' title="Copy phone"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
-      <div class="info-row"><span class="info-row__label">SA ID Number</span><span class="info-row__value">${_esc(inv.id_number)||'—'}${inv.id_number?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.id_number)},this)' title="Copy ID"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
-      <div class="info-row"><span class="info-row__label">Province</span><span class="info-row__value">${_esc((inv.province||'').trim())||'—'}</span></div>
-      <div class="info-row"><span class="info-row__label">Address</span><span class="info-row__value" style="font-size:0.78rem">${_esc(inv.address)||'—'}</span></div>
-      <div class="info-row"><span class="info-row__label">Occupation</span><span class="info-row__value">${_esc(inv.occupation)||'—'}</span></div>
-      <div class="info-row"><span class="info-row__label">Employer</span><span class="info-row__value">${_esc(invProfile.employer||'')||'—'}</span></div>
-      <div class="info-row"><span class="info-row__label">Next of Kin</span><span class="info-row__value">${_esc(invProfile.next_of_kin||'')||'—'}</span></div>
-      <div class="info-row"><span class="info-row__label">Kin Contact</span><span class="info-row__value">${_esc(invProfile.kin_contact||'')||'—'}</span></div>
-      <div class="info-row"><span class="info-row__label">Risk Profile</span><span class="info-row__value" style="text-transform:capitalize">${_esc(inv.risk_profile)||'—'}</span></div>
-      <div class="info-row"><span class="info-row__label">Account Created</span><span class="info-row__value">${Utils.date(inv.date_joined)}</span></div>
+    <!-- read-only view -->
+    <div id="invProfileView">
+      <div class="info-list">
+        <div class="info-row"><span class="info-row__label">Email</span><span class="info-row__value">${_esc(inv.email)||'—'}${inv.email?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.email)},this)' title="Copy email"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
+        <div class="info-row"><span class="info-row__label">Phone</span><span class="info-row__value">${_esc(inv.phone)||'—'}${inv.phone?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.phone)},this)' title="Copy phone"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
+        <div class="info-row"><span class="info-row__label">SA ID Number</span><span class="info-row__value">${_esc(inv.id_number)||'—'}${inv.id_number?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.id_number)},this)' title="Copy ID"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
+        <div class="info-row"><span class="info-row__label">Province</span><span class="info-row__value">${_esc((inv.province||'').trim())||'—'}</span></div>
+        <div class="info-row"><span class="info-row__label">Address</span><span class="info-row__value" style="font-size:0.78rem">${_esc(inv.address)||'—'}</span></div>
+        <div class="info-row"><span class="info-row__label">Occupation</span><span class="info-row__value">${_esc(inv.occupation)||'—'}</span></div>
+        <div class="info-row"><span class="info-row__label">Employer</span><span class="info-row__value">${_esc(invProfile.employer||'')||'—'}</span></div>
+        <div class="info-row"><span class="info-row__label">Next of Kin</span><span class="info-row__value">${_esc(invProfile.next_of_kin||'')||'—'}</span></div>
+        <div class="info-row"><span class="info-row__label">Kin Contact</span><span class="info-row__value">${_esc(invProfile.kin_contact||'')||'—'}</span></div>
+        <div class="info-row"><span class="info-row__label">Risk Profile</span><span class="info-row__value" style="text-transform:capitalize">${_esc(inv.risk_profile)||'—'}</span></div>
+        <div class="info-row"><span class="info-row__label">Account Created</span><span class="info-row__value">${Utils.date(inv.date_joined)}</span></div>
+      </div>
+      <div style="margin-top:14px">
+        <button class="btn btn--secondary btn--sm" onclick="_editInvProfile()"><i class="fa-solid fa-pen-to-square"></i> Edit Profile</button>
+      </div>
+    </div>
+    <!-- edit form (hidden initially) -->
+    <div id="invProfileEdit" style="display:none">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" class="form-control" id="ipf-email" value="${_esc(inv.email||'')}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Phone</label>
+          <input type="text" class="form-control" id="ipf-phone" value="${_esc(inv.phone||'')}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">SA ID Number</label>
+          <input type="text" class="form-control" id="ipf-id_number" value="${_esc(inv.id_number||'')}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Province</label>
+          <select class="form-control" id="ipf-province">
+            ${['','Eastern Cape','Free State','Gauteng','KwaZulu-Natal','Limpopo','Mpumalanga','Northern Cape','North West','Western Cape'].map(p=>`<option value="${p}" ${(inv.province||'').trim()===p?'selected':''}>${p||'— Select province —'}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Address</label>
+          <textarea class="form-control" id="ipf-address" rows="2" style="resize:vertical">${_esc(inv.address||'')}</textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Occupation</label>
+          <input type="text" class="form-control" id="ipf-occupation" value="${_esc(inv.occupation||'')}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Employer</label>
+          <input type="text" class="form-control" id="ipf-employer" value="${_esc(invProfile.employer||'')}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Next of Kin</label>
+          <input type="text" class="form-control" id="ipf-next_of_kin" value="${_esc(invProfile.next_of_kin||'')}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Kin Contact</label>
+          <input type="text" class="form-control" id="ipf-kin_contact" value="${_esc(invProfile.kin_contact||'')}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Risk Profile</label>
+          <select class="form-control" id="ipf-risk_profile">
+            ${['','conservative','moderate','aggressive'].map(r=>`<option value="${r}" ${(inv.risk_profile||'')===r?'selected':''}>${r||'— Select —'}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:16px">
+        <button class="btn btn--primary btn--sm" onclick="_saveInvProfile(this)"><i class="fa-solid fa-floppy-disk"></i> Save Changes</button>
+        <button class="btn btn--secondary btn--sm" onclick="_cancelInvProfileEdit()"><i class="fa-solid fa-xmark"></i> Cancel</button>
+      </div>
     </div>
   </div>
 
@@ -2159,6 +2281,44 @@ async function viewInvestor(id) {
         <button class="btn btn--warning btn--sm" style="flex-shrink:0" onclick='_recalcInvestorWallet(${JSON.stringify(inv.id)},${JSON.stringify(inv.first_name + " " + inv.last_name)},this)'>
           <i class="fa-solid fa-calculator"></i> Recalculate Wallet
         </button>
+      </div>
+    </div>
+    <div class="panel mb-16" style="border-color:rgba(96,165,250,0.25)">
+      <div class="panel__header" style="background:rgba(96,165,250,0.06)">
+        <span class="panel__title"><i class="fa-solid fa-scale-balanced" style="color:#60a5fa;margin-right:6px"></i>Wallet Reconciliation</span>
+      </div>
+      <div class="panel__body" style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap">
+        <div style="flex:1;min-width:220px">
+          <div style="font-size:0.83rem;font-weight:600;color:var(--text);margin-bottom:4px">Reconcile from All Transactions</div>
+          <div style="font-size:0.77rem;color:var(--text-muted)">Recomputes wallet balance from all completed deposits, returns and payouts minus withdrawals and fees. Use when a deposit shows as completed but is not reflected in the wallet balance.</div>
+          <div id="invReconcileResult-${inv.id}" style="margin-top:8px;font-size:0.77rem"></div>
+        </div>
+        <button class="btn btn--sm" style="flex-shrink:0;background:rgba(96,165,250,.12);color:#60a5fa;border:1px solid rgba(96,165,250,.3)" onclick='reconcileInvestorWallet(${JSON.stringify(inv.id)},this)'>
+          <i class="fa-solid fa-scale-balanced"></i> Reconcile Wallet
+        </button>
+      </div>
+    </div>
+    <div class="panel mb-16" style="border-color:rgba(239,68,68,0.25)">
+      <div class="panel__header" style="background:rgba(239,68,68,0.06)">
+        <span class="panel__title"><i class="fa-solid fa-pen-to-square" style="color:#f87171;margin-right:6px"></i>Direct Balance Override</span>
+        <span style="font-size:0.72rem;color:#f87171;font-weight:600">Admin Fix</span>
+      </div>
+      <div class="panel__body">
+        <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px">Set the wallet balance directly without creating a transaction record. Use only when the balance cannot be corrected via reconciliation.</div>
+        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+          <div style="flex:1;min-width:140px">
+            <label style="font-size:0.77rem;font-weight:600;color:var(--text);display:block;margin-bottom:4px">New Balance (R)</label>
+            <input type="number" id="walletOverrideAmt-${inv.id}" class="form-input" min="0" step="0.01" placeholder="0.00" style="width:100%" value="${parseFloat(inv.wallet_balance)||0}">
+          </div>
+          <div style="flex:2;min-width:180px">
+            <label style="font-size:0.77rem;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Reason (optional)</label>
+            <input type="text" id="walletOverrideNotes-${inv.id}" class="form-input" placeholder="e.g. correcting reconciliation error" style="width:100%">
+          </div>
+          <button class="btn btn--sm" style="flex-shrink:0;background:rgba(239,68,68,.12);color:#f87171;border:1px solid rgba(239,68,68,.3)" onclick="overrideWalletBalance(${JSON.stringify(inv.id)},${JSON.stringify(inv.first_name+' '+inv.last_name)},this)">
+            <i class="fa-solid fa-pen-to-square"></i> Set Balance
+          </button>
+        </div>
+        <div id="walletOverrideResult-${inv.id}" style="margin-top:8px;font-size:0.77rem"></div>
       </div>
     </div>
     <div class="panel mb-16">
@@ -2280,6 +2440,77 @@ async function _recalcInvestorWallet(investorId, investorName, btn) {
       Modal.close('investorDetailModal');
       await loadInvestors();
     } catch (e) { Toast.error('Recalculation failed: ' + (e.message || 'unknown error')); }
+  });
+}
+
+async function reconcileInvestorWallet(investorId, btn) {
+  await _withBtn(btn, async () => {
+    try {
+      const resultEl = document.getElementById(`invReconcileResult-${investorId}`);
+      // Dry-run first to show what would change
+      const preview = await API._fetch('POST', 'admin/reconcile-wallet', { investor_id: investorId, dry_run: true });
+      if (!preview.diffs || !preview.diffs[0]) {
+        if (resultEl) resultEl.innerHTML = `<span style="color:var(--text-muted)">No transactions found.</span>`;
+        Toast.info('No completed transactions found to reconcile.');
+        return;
+      }
+      const d = preview.diffs[0];
+      if (Math.abs(d.diff) < 0.01) {
+        if (resultEl) resultEl.innerHTML = `<span style="color:var(--green)"><i class="fa-solid fa-check"></i> Wallet is correct (${Utils.rand(d.current)})</span>`;
+        Toast.info('Wallet balance is already correct — no change needed.');
+        return;
+      }
+      const confirmed = await Confirm.ask('Reconcile wallet balance?', {
+        body: `Current: ${Utils.rand(d.current)} → Computed from transactions: ${Utils.rand(d.computed)} (${d.diff > 0 ? '+' : ''}${Utils.rand(d.diff)}). This will overwrite the current balance.`,
+        confirmLabel: 'Apply',
+        danger: d.computed < 0,
+      });
+      if (!confirmed) return;
+      await API._fetch('POST', 'admin/reconcile-wallet', { investor_id: investorId });
+      if (resultEl) resultEl.innerHTML = `<span style="color:#fec24f"><i class="fa-solid fa-check"></i> Adjusted ${d.diff > 0 ? '+' : ''}${Utils.rand(d.diff)} → ${Utils.rand(d.computed)}</span>`;
+      Toast.success(`Wallet reconciled. New balance: ${Utils.rand(d.computed)}`);
+      const inv = STATE.investors.find(i => i.id === investorId);
+      if (inv) inv.wallet_balance = d.computed;
+    } catch (e) { Toast.error('Reconciliation failed: ' + (e.message || 'unknown error')); }
+  });
+}
+
+async function overrideWalletBalance(investorId, name, btn) {
+  const amtEl    = document.getElementById('walletOverrideAmt-' + investorId);
+  const notesEl  = document.getElementById('walletOverrideNotes-' + investorId);
+  const resultEl = document.getElementById('walletOverrideResult-' + investorId);
+  const nb = parseFloat(amtEl.value);
+  if (isNaN(nb) || nb < 0) {
+    if (resultEl) resultEl.innerHTML = '<span style="color:#f87171">Enter a valid amount (0 or more).</span>';
+    return;
+  }
+  const inv = STATE.investors.find(i => i.id === investorId);
+  const oldBal = parseFloat(inv?.wallet_balance) || 0;
+  const diff   = Math.round((nb - oldBal) * 100) / 100;
+  const diffStr = diff >= 0 ? `+${Utils.rand(diff)}` : `-${Utils.rand(Math.abs(diff))}`;
+
+  const confirmed = await Confirm.ask('Set wallet balance?', {
+    body: `Investor: ${name}\nCurrent: ${Utils.rand(oldBal)} → New: ${Utils.rand(nb)} (${diffStr})\n\nNo transaction record will be created. This action is logged.`,
+    confirmLabel: 'Set Balance',
+    danger: nb < oldBal,
+  });
+  if (!confirmed) return;
+
+  await _withBtn(btn, async () => {
+    try {
+      const res = await API._fetch('POST', 'admin/override-wallet', { investorId, newBalance: nb, notes: notesEl.value.trim() || null });
+      if (res.success) {
+        if (inv) inv.wallet_balance = nb;
+        if (resultEl) resultEl.innerHTML = `<span style="color:#4ade80"><i class="fa-solid fa-check"></i> Balance set to ${Utils.rand(nb)} (was ${Utils.rand(oldBal)})</span>`;
+        Toast.success(`Wallet balance set to ${Utils.rand(nb)}`);
+      } else {
+        if (resultEl) resultEl.innerHTML = `<span style="color:#f87171">${res.error || 'Failed'}</span>`;
+        Toast.error(res.error || 'Override failed');
+      }
+    } catch (e) {
+      if (resultEl) resultEl.innerHTML = `<span style="color:#f87171">${e.message}</span>`;
+      Toast.error('Override failed: ' + (e.message || 'unknown error'));
+    }
   });
 }
 
@@ -2593,6 +2824,11 @@ let _rejectingKycId = null;
 let _rejectBtn = null;
 let _rejectMode = 'withdrawal'; // 'withdrawal' | 'kyc'
 
+function _setRejectTemplate(text) {
+  const el = document.getElementById('rejectReasonInput');
+  if (el) { el.value = text; el.focus(); }
+}
+
 function rejectWithdrawalPrompt(txnId, btn) {
   if (!txnId) { Toast.error('Invalid withdrawal ID'); return; }
   _rejectingTxnId = txnId;
@@ -2602,6 +2838,10 @@ function rejectWithdrawalPrompt(txnId, btn) {
   document.getElementById('rejectModalTitle').textContent = 'Reject Withdrawal';
   document.getElementById('rejectModalBody').textContent = 'The investor will be notified and the funds returned to their wallet. Provide a reason below (optional).';
   document.getElementById('rejectReasonInput').value = '';
+  const tpl = document.getElementById('kycRejectTemplates');
+  if (tpl) tpl.style.display = 'none';
+  const emailRow = document.getElementById('kycRejectEmailRow');
+  if (emailRow) emailRow.style.display = 'none';
   const overlay = document.getElementById('rejectModal');
   overlay.style.display = 'flex';
   overlay.classList.add('open');
@@ -2620,7 +2860,14 @@ async function _submitRejection() {
   rm.classList.remove('open');
   document.body.style.overflow = '';
 
+  if (mode === 'kyc' && kycId === '__bulk__') {
+    const shouldEmail = document.getElementById('kycRejectEmailInvestor')?.checked !== false;
+    await _executeBulkKycReject(reason, shouldEmail);
+    return;
+  }
+
   if (mode === 'kyc' && kycId) {
+    const shouldEmail = document.getElementById('kycRejectEmailInvestor')?.checked !== false;
     await _withBtn(btn, async () => {
       try {
         const reviewedBy = _getAdminName();
@@ -2638,7 +2885,24 @@ async function _submitRejection() {
           }).catch(e => console.warn('[rejectKyc] bank status update failed:', e.message));
         }
         await _recomputeInvestorFicaStatus(doc?.investor_id).catch(() => {});
-        Toast.success('Document rejected');
+
+        // Auto-email investor with rejection reason
+        if (shouldEmail && doc?.investor_id) {
+          const inv = STATE.investors.find(i => i.id === doc.investor_id);
+          if (inv?.email) {
+            const DOC_LABELS = { id_document: 'Identity Document', proof_of_address: 'Proof of Address', proof_of_bank: 'Proof of Bank Account' };
+            const docLabel = DOC_LABELS[doc.doc_type] || 'KYC document';
+            const firstName = inv.first_name || 'Investor';
+            const rejectionReason = reason || 'Please re-upload a clearer, current document that meets our requirements.';
+            await API._fetch('POST', 'admin/send-investor-email', {
+              investor_id: inv.id,
+              subject: `Action required: Your ${docLabel} — SV Capital`,
+              message: `Dear ${firstName},\n\nThank you for submitting your documents. Unfortunately, we were unable to accept your ${docLabel} at this time.\n\nReason: ${rejectionReason}\n\nTo resubmit, please log in to your SV Capital investor portal, navigate to your profile or KYC section, and upload a new copy of the document.\n\nIf you have any questions or need assistance, please contact us at support@svcapital.co.za.\n\nKind regards,\nSV Capital Compliance Team`,
+            }).catch(e => console.warn('[kycReject] email notification failed:', e.message));
+          }
+        }
+
+        Toast.success('Document rejected' + (shouldEmail ? ' — investor notified by email' : ''));
         await loadKYC();
       } catch (e) {
         Toast.error('Failed to reject document: ' + (e.message || 'unknown error'));
@@ -2931,6 +3195,49 @@ function renderKYCStats() {
       ${avg ? `<div style="font-size:0.68rem;color:var(--text-muted);margin-top:4px"><i class="fa-solid fa-clock" style="margin-right:3px"></i>Avg review: <strong>${avg}</strong></div>` : `<div style="font-size:0.68rem;color:var(--text-muted);margin-top:4px">No reviewed docs yet</div>`}
     </div>`;
   }).join('');
+
+  // FICA compliance breakdown — 0/3, 1/3, 2/3, 3/3 approved docs per investor
+  const fcEl = document.getElementById('ficaComplianceBreakdown');
+  if (fcEl && STATE.investors.length) {
+    const REQ_DOCS = ['id_document', 'proof_of_address', 'proof_of_bank'];
+    const approvedByInv = {};
+    for (const doc of d) {
+      if (doc.status !== 'approved') continue;
+      if (!REQ_DOCS.includes(doc.doc_type)) continue;
+      if (!approvedByInv[doc.investor_id]) approvedByInv[doc.investor_id] = new Set();
+      approvedByInv[doc.investor_id].add(doc.doc_type);
+    }
+    const buckets = [0, 0, 0, 0]; // index = approved doc count (0–3)
+    let invCount = 0;
+    for (const inv of STATE.investors) {
+      if (inv.role && inv.role !== 'investor') continue;
+      invCount++;
+      const n = (approvedByInv[inv.id] || new Set()).size;
+      buckets[Math.min(3, n)]++;
+    }
+    const BUCKET_COLORS = ['#7a92a8', '#fec24f', '#60a5fa', '#22c55e'];
+    const BUCKET_LABELS = ['0 of 3 docs', '1 of 3 docs', '2 of 3 docs', 'Fully verified'];
+    const BUCKET_ICONS  = ['fa-circle-xmark', 'fa-circle-half-stroke', 'fa-circle-three-quarters-stroke', 'fa-circle-check'];
+    fcEl.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <span style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">FICA Compliance Breakdown</span>
+        <span style="font-size:0.72rem;color:var(--text-muted)">(${invCount} investors)</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+        ${buckets.map((n, i) => {
+          const pct = invCount ? Math.round(n / invCount * 100) : 0;
+          return `<div style="padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.03);border:1px solid ${BUCKET_COLORS[i]}22">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
+              <i class="fa-solid ${BUCKET_ICONS[i]}" style="color:${BUCKET_COLORS[i]};font-size:0.78rem"></i>
+              <span style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:${BUCKET_COLORS[i]}">${BUCKET_LABELS[i]}</span>
+            </div>
+            <div style="font-size:1.3rem;font-weight:800;color:${BUCKET_COLORS[i]}">${n}</div>
+            <div style="height:3px;background:rgba(255,255,255,.06);border-radius:2px;margin-top:6px"><div style="height:100%;width:${pct}%;background:${BUCKET_COLORS[i]};border-radius:2px"></div></div>
+            <div style="font-size:0.65rem;color:var(--text-muted);margin-top:3px">${pct}% of investors</div>
+          </div>`;
+        }).join('')}
+      </div>`;
+  }
 }
 
 function renderKYCTable() {
@@ -2971,6 +3278,15 @@ function renderKYCTable() {
     const canSelect = ['pending', 'under_review'].includes(k.status);
     const isBankDoc = k.doc_type === 'proof_of_bank';
 
+    // Expiry warning
+    const kExpDate = k.expiry_date ? new Date(k.expiry_date) : null;
+    const kDaysToExp = kExpDate ? Math.round((kExpDate - new Date()) / 86400000) : null;
+    const kRowExpiryStyle = kDaysToExp !== null && kDaysToExp < 30 && k.status !== 'rejected'
+      ? ';background:rgba(254,194,79,0.03);border-left:2px solid rgba(254,194,79,0.35)'
+      : kDaysToExp !== null && kDaysToExp < 0 && k.status !== 'rejected'
+        ? ';background:rgba(239,68,68,0.03);border-left:2px solid rgba(239,68,68,0.35)'
+        : '';
+
     // Detect if this KYC doc was submitted for a sub-account
     const _saNotesMatch = (k.notes || '').match(/^Sub-account banking:\s*(.+?)\s*—/i);
     const _isSubAcctDoc = !!_saNotesMatch;
@@ -3009,17 +3325,35 @@ function renderKYCTable() {
         </div>`;
     }
 
+    // Expiry cell with warning colours
+    const kExpLabel = kExpDate
+      ? (kDaysToExp < 0
+          ? `<div style="font-size:0.68rem;margin-top:2px;color:#ef4444;font-weight:600"><i class="fa-solid fa-calendar-xmark" style="margin-right:2px"></i>Expired ${Math.abs(kDaysToExp)}d ago</div>`
+          : kDaysToExp < 30
+            ? `<div style="font-size:0.68rem;margin-top:2px;color:#fec24f;font-weight:600"><i class="fa-solid fa-calendar-exclamation" style="margin-right:2px"></i>Expires in ${kDaysToExp}d</div>`
+            : `<div style="font-size:0.68rem;margin-top:2px;color:#9ca3af"><i class="fa-solid fa-calendar-xmark" style="margin-right:2px"></i>Exp: ${Utils.date(k.expiry_date)}</div>`)
+      : '';
+
+    // Notes indicator
+    const hasNotes = !!(k.notes && k.status !== 'rejected');
+    const notesIndicator = hasNotes
+      ? `<span title="${_esc(k.notes)}" style="display:inline-flex;align-items:center;gap:3px;font-size:0.65rem;color:#eda5ff;background:rgba(237,165,255,0.1);border-radius:4px;padding:1px 5px;cursor:pointer" onclick='openKycReview(${JSON.stringify(k.id)})'><i class="fa-solid fa-note-sticky"></i></span>`
+      : '';
+
     return `
-    <tr>
+    <tr style="transition:background .15s${kRowExpiryStyle}">
       <td><input type="checkbox" class="kyc-cb" value="${k.id}" ${!canSelect ? 'disabled' : ''} ${_kycSelected.has(k.id) ? 'checked' : ''} onchange="toggleKycRow('${k.id}', this.checked)" style="${canSelect ? 'cursor:pointer;width:16px;height:16px;accent-color:#fec24f' : 'opacity:0.3;width:16px;height:16px'}"></td>
-      <td><div class="td-strong clip">${kName}</div><div class="td-muted clip">${k.investor_id}</div>${_isSubAcctDoc ? `<div style="margin-top:3px"><span style="font-size:0.62rem;font-weight:700;color:#eda5ff;background:rgba(237,165,255,0.1);border:1px solid rgba(237,165,255,0.25);border-radius:4px;padding:1px 5px"><i class="fa-solid fa-layer-group" style="margin-right:3px;font-size:0.58rem"></i>Sub Account</span></div>` : ''}</td>
+      <td><div class="td-strong clip">${kName} ${notesIndicator}</div><div class="td-muted clip">${k.investor_id}</div>${_isSubAcctDoc ? `<div style="margin-top:3px"><span style="font-size:0.62rem;font-weight:700;color:#eda5ff;background:rgba(237,165,255,0.1);border:1px solid rgba(237,165,255,0.25);border-radius:4px;padding:1px 5px"><i class="fa-solid fa-layer-group" style="margin-right:3px;font-size:0.58rem"></i>Sub Account</span></div>` : ''}</td>
       <td>${docTypeCell}</td>
       <td class="td-muted clip">${k.file_name || 'Not uploaded'}</td>
       <td>${Utils.statusBadge(k.status)}</td>
-      <td class="td-muted">${Utils.date(k.submitted_at || k.submitted_date || k.created_at)}${k.expiry_date ? `<div style="font-size:0.68rem;margin-top:2px;color:${new Date(k.expiry_date) <= new Date() ? '#ef4444' : '#9ca3af'}"><i class="fa-solid fa-calendar-xmark" style="margin-right:2px"></i>Exp: ${Utils.date(k.expiry_date)}</div>` : ''}</td>
+      <td class="td-muted">${Utils.date(k.submitted_at || k.submitted_date || k.created_at)}${kExpLabel}</td>
       <td>
         ${k.file_data || k.file_url || k.attachment_data
-          ? `<button class="btn btn--secondary btn--sm" title="Open document in new tab" onclick='viewFicaDocument(${JSON.stringify(k.id)})'><i class="fa-solid fa-arrow-up-right-from-square"></i> Open</button>`
+          ? `<div style="display:flex;gap:4px;flex-wrap:wrap">
+               <button class="btn btn--secondary btn--sm" title="Side-by-side review" onclick='openKycReview(${JSON.stringify(k.id)})'><i class="fa-solid fa-magnifying-glass"></i></button>
+               <button class="btn btn--secondary btn--sm" title="Open document in new tab" onclick='viewFicaDocument(${JSON.stringify(k.id)})'><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
+             </div>`
           : k.file_name
             ? `<span class="td-muted" style="font-size:0.72rem;line-height:1.4">No file data<br><span style="font-size:0.65rem;color:var(--text-dim)">Investor must re-upload</span></span>`
             : `<span class="td-muted" style="font-size:0.72rem">No file</span>`}
@@ -3031,6 +3365,8 @@ function renderKYCTable() {
             <button class="btn btn--danger btn--sm" title="Reject document" onclick='rejectKyc(${JSON.stringify(k.id)}, this)'><i class="fa-solid fa-xmark"></i></button>
             <button class="btn btn--secondary btn--sm" title="Upload document for investor" onclick='openKycUploadModal(${JSON.stringify(k.investor_id)},${JSON.stringify(kName)})'><i class="fa-solid fa-upload"></i></button>
           ` : `<span class="td-muted" style="font-size:0.75rem">${Utils.date(k.reviewed_date || k.reviewed_at)}</span>`}
+          <button class="btn btn--secondary btn--sm" title="Add/view reviewer notes" onclick='openKycReview(${JSON.stringify(k.id)})'><i class="fa-solid fa-note-sticky"></i></button>
+          <button class="btn btn--secondary btn--sm" title="View KYC timeline" onclick='openKycTimeline(${JSON.stringify(k.investor_id)})'><i class="fa-solid fa-timeline"></i></button>
         </div>
       </td>
     </tr>
@@ -3384,11 +3720,244 @@ function rejectKyc(id, btn) {
   document.getElementById('rejectModalTitle').textContent = 'Reject KYC Document';
   document.getElementById('rejectModalBody').textContent = 'The document will be marked as rejected. Provide a reason for the investor (optional).';
   document.getElementById('rejectReasonInput').value = '';
+  const tpl = document.getElementById('kycRejectTemplates');
+  if (tpl) tpl.style.display = '';
+  const emailRow = document.getElementById('kycRejectEmailRow');
+  if (emailRow) emailRow.style.display = '';
+  const emailCb = document.getElementById('kycRejectEmailInvestor');
+  if (emailCb) emailCb.checked = true;
   const overlay = document.getElementById('rejectModal');
   overlay.style.display = 'flex';
   overlay.classList.add('open');
   document.body.style.overflow = 'hidden';
   setTimeout(() => document.getElementById('rejectReasonInput')?.focus(), 100);
+}
+
+/* ═══════════════════════════════════════════════
+   KYC SIDE-BY-SIDE REVIEW
+   ═══════════════════════════════════════════════ */
+let _reviewingKycId = null;
+
+function openKycReview(id) {
+  const doc = STATE.kyc.find(k => k.id === id);
+  if (!doc) return;
+  _reviewingKycId = id;
+  const inv = STATE.investors.find(i => i.id === doc.investor_id);
+  const invName = doc.investor_name || (inv ? `${inv.first_name} ${inv.last_name}`.trim() : doc.investor_id || '—');
+
+  // --- Document pane ---
+  const docContent = document.getElementById('kycReviewDocContent');
+  if (docContent) {
+    if (doc.file_data) {
+      const mime = doc.file_data.startsWith('data:') ? doc.file_data.split(';')[0].replace('data:', '') : '';
+      if (mime.startsWith('image/')) {
+        docContent.innerHTML = `<img src="${doc.file_data}" style="max-width:100%;max-height:calc(88vh - 100px);object-fit:contain;border-radius:8px">`;
+      } else if (mime === 'application/pdf') {
+        docContent.innerHTML = `<iframe src="${doc.file_data}" style="width:100%;height:calc(88vh - 100px);border:none;border-radius:8px"></iframe>`;
+      } else {
+        docContent.innerHTML = `<div style="text-align:center;padding:40px"><a href="${doc.file_data}" download="${_esc(doc.file_name||'document')}" class="btn btn--primary"><i class="fa-solid fa-download"></i> Download Document</a><p style="margin-top:12px;font-size:0.8rem;color:var(--text-muted)">${_esc(doc.file_name||'Unknown file')}</p></div>`;
+      }
+    } else if (doc.file_url) {
+      const isImg = /\.(jpg|jpeg|png|gif|webp)$/i.test(doc.file_url);
+      const isPDF = /\.pdf$/i.test(doc.file_url);
+      if (isImg) {
+        docContent.innerHTML = `<img src="${doc.file_url}" style="max-width:100%;max-height:calc(88vh - 100px);object-fit:contain;border-radius:8px">`;
+      } else if (isPDF) {
+        docContent.innerHTML = `<iframe src="${doc.file_url}" style="width:100%;height:calc(88vh - 100px);border:none;border-radius:8px"></iframe>`;
+      } else {
+        docContent.innerHTML = `<div style="text-align:center;padding:40px"><a href="${doc.file_url}" target="_blank" rel="noopener" class="btn btn--primary"><i class="fa-solid fa-external-link"></i> Open Document</a></div>`;
+      }
+    } else {
+      docContent.innerHTML = `<div style="text-align:center;padding:60px 0;color:var(--text-muted)"><i class="fa-solid fa-file-circle-question fa-3x" style="opacity:0.3;display:block;margin-bottom:12px"></i><div>No file attached</div><div style="font-size:0.78rem;margin-top:6px">The investor has not uploaded a file for this document.</div></div>`;
+    }
+  }
+
+  // --- Details pane ---
+  const DOC_LABELS = { id_document: 'Identity Document', proof_of_address: 'Proof of Address', proof_of_bank: 'Proof of Bank Account', other: 'Other Document' };
+  const docTypeLabel = DOC_LABELS[doc.doc_type] || doc.doc_type?.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()) || '—';
+  const expDate = doc.expiry_date ? new Date(doc.expiry_date) : null;
+  const daysToExp = expDate ? Math.round((expDate - new Date()) / 86400000) : null;
+  const expHtml = expDate ? `<div style="margin-top:5px;font-size:0.75rem;font-weight:600;color:${daysToExp < 0 ? '#ef4444' : daysToExp < 30 ? '#fec24f' : '#22c55e'}"><i class="fa-solid fa-calendar-xmark" style="margin-right:4px"></i>${daysToExp < 0 ? `Expired ${Math.abs(daysToExp)} days ago` : `Expires in ${daysToExp} days`}</div>` : '';
+
+  const detailsEl = document.getElementById('kycReviewDetails');
+  if (detailsEl) detailsEl.innerHTML = `
+    <div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,0.07)">
+      <div style="font-size:0.64rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);margin-bottom:5px">Investor</div>
+      <div style="font-weight:700;font-size:0.92rem">${_esc(invName)}</div>
+      ${inv?.email ? `<div style="font-size:0.75rem;color:var(--text-muted)">${_esc(inv.email)}</div>` : ''}
+      ${inv?.id_number ? `<div style="font-size:0.75rem;color:var(--text-muted)">ID: ${_esc(inv.id_number)}</div>` : ''}
+      ${inv?.phone ? `<div style="font-size:0.75rem;color:var(--text-muted)">Tel: ${_esc(inv.phone)}</div>` : ''}
+    </div>
+    <div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,0.07)">
+      <div style="font-size:0.64rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);margin-bottom:5px">Document</div>
+      <div style="font-weight:700;font-size:0.85rem">${docTypeLabel}</div>
+      ${doc.doc_subtype ? `<div style="font-size:0.72rem;color:var(--text-muted)">${doc.doc_subtype}</div>` : ''}
+      <div style="font-size:0.72rem;color:var(--text-muted);margin-top:3px">Submitted: ${Utils.date(doc.submitted_at || doc.created_at)}</div>
+      <div style="font-size:0.72rem;color:var(--text-muted)">File: ${_esc(doc.file_name || '—')}</div>
+      ${expHtml}
+    </div>
+    <div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,0.07)">
+      <div style="font-size:0.64rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);margin-bottom:5px">Status</div>
+      ${Utils.statusBadge(doc.status)}
+      ${doc.reviewed_by ? `<div style="font-size:0.72rem;color:var(--text-muted);margin-top:5px">Reviewed by: ${_esc(doc.reviewed_by)}</div>` : ''}
+      ${doc.reviewed_at ? `<div style="font-size:0.72rem;color:var(--text-muted)">Reviewed: ${Utils.date(doc.reviewed_at)}</div>` : ''}
+    </div>
+    <div>
+      <div style="font-size:0.64rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);margin-bottom:5px">Reviewer Notes</div>
+      <textarea id="kycReviewNotes" class="form-input" rows="4" placeholder="Internal notes (not shown to investor)…" style="width:100%;resize:vertical;font-size:0.82rem">${_esc(doc.notes || '')}</textarea>
+      <button class="btn btn--secondary btn--sm" style="margin-top:6px;width:100%" onclick="_saveKycReviewNotes()"><i class="fa-solid fa-floppy-disk"></i> Save Notes</button>
+    </div>`;
+
+  // --- Actions pane ---
+  const actionsEl = document.getElementById('kycReviewActions');
+  const canReview = ['pending','under_review'].includes(doc.status);
+  if (actionsEl) {
+    actionsEl.innerHTML = canReview
+      ? `<div style="display:flex;gap:8px">
+           <button class="btn btn--success" style="flex:1" onclick="_kycReviewApprove()"><i class="fa-solid fa-check"></i> Approve</button>
+           <button class="btn btn--danger" style="flex:1" onclick="_kycReviewReject()"><i class="fa-solid fa-xmark"></i> Reject</button>
+         </div>`
+      : `<div style="text-align:center;font-size:0.8rem;color:var(--text-muted);padding:4px 0">Document already ${doc.status}.<br>Change status via the KYC queue.</div>`;
+  }
+
+  const overlay = document.getElementById('kycReviewModal');
+  if (overlay) { overlay.style.display = 'flex'; overlay.classList.add('open'); document.body.style.overflow = 'hidden'; }
+}
+
+function closeKycReview() {
+  const overlay = document.getElementById('kycReviewModal');
+  if (overlay) { overlay.style.display = 'none'; overlay.classList.remove('open'); }
+  document.body.style.overflow = '';
+  _reviewingKycId = null;
+}
+
+async function _saveKycReviewNotes() {
+  const id = _reviewingKycId;
+  if (!id) return;
+  const notes = document.getElementById('kycReviewNotes')?.value || '';
+  try {
+    await API.kyc.update(id, { notes });
+    Toast.success('Notes saved');
+    const doc = STATE.kyc.find(k => k.id === id);
+    if (doc) doc.notes = notes;
+  } catch (e) { Toast.error('Failed to save notes: ' + e.message); }
+}
+
+async function _kycReviewApprove() {
+  const id = _reviewingKycId;
+  if (!id) return;
+  if (!await Confirm.ask('Approve KYC document?', { body: 'This will mark the document as verified.', confirmLabel: 'Approve' })) return;
+  const reviewedBy = _getAdminName();
+  try {
+    // Save any notes first
+    const notes = document.getElementById('kycReviewNotes')?.value || '';
+    await API.kyc.update(id, { status: 'approved', reviewed_by: reviewedBy, reviewed_at: new Date().toISOString(), notes: notes || undefined });
+    const doc = STATE.kyc.find(k => k.id === id);
+    if (doc) doc.notes = notes;
+    if (doc?.investor_id && doc?.doc_type === 'proof_of_bank' && !doc.sub_account_id) {
+      await API._fetch('PATCH', `tables/investors/${doc.investor_id}`, { bank_account_status: 'approved', bank_account_notes: null });
+    }
+    const result = await _recomputeInvestorFicaStatus(doc?.investor_id);
+    Toast.success(result.verified ? 'Approved — investor is now FICA-verified' : `Approved — still needed: ${result.missing.join(', ')}`);
+    closeKycReview();
+    await loadKYC();
+  } catch (e) { Toast.error('Failed to approve: ' + e.message); }
+}
+
+async function _kycReviewReject() {
+  const id = _reviewingKycId;
+  if (!id) return;
+  // Save notes before closing review modal, then open reject modal
+  const notes = document.getElementById('kycReviewNotes')?.value || '';
+  if (notes) {
+    try { await API.kyc.update(id, { notes }); const doc = STATE.kyc.find(k => k.id === id); if (doc) doc.notes = notes; } catch (_) {}
+  }
+  closeKycReview();
+  rejectKyc(id, null);
+}
+
+/* ═══════════════════════════════════════════════
+   KYC TIMELINE (PER INVESTOR)
+   ═══════════════════════════════════════════════ */
+function openKycTimeline(investorId) {
+  const inv = STATE.investors.find(i => i.id === investorId);
+  const invName = inv ? `${inv.first_name} ${inv.last_name}`.trim() : investorId || '—';
+  const titleEl = document.getElementById('kycTimelineTitle');
+  if (titleEl) titleEl.textContent = `KYC Timeline — ${invName}`;
+
+  const docs = (STATE.kyc || []).filter(k => k.investor_id === investorId).sort((a, b) =>
+    new Date(a.submitted_at || a.created_at || 0) - new Date(b.submitted_at || b.created_at || 0)
+  );
+
+  const DOC_LABELS = { id_document: 'Identity Document', proof_of_address: 'Proof of Address', proof_of_bank: 'Proof of Bank Account', other: 'Other' };
+  const DOC_ICONS  = { id_document: 'fa-id-card', proof_of_address: 'fa-house', proof_of_bank: 'fa-building-columns', other: 'fa-file' };
+  const STATUS_COLORS = { pending: '#fec24f', under_review: '#60a5fa', approved: '#22c55e', rejected: '#ef4444' };
+
+  // Build timeline events from KYC docs
+  const events = [];
+  for (const doc of docs) {
+    const dt = doc.doc_type;
+    const label = DOC_LABELS[dt] || dt?.replace(/_/g,' ') || 'Document';
+    const icon = DOC_ICONS[dt] || 'fa-file';
+    if (doc.submitted_at || doc.created_at) {
+      events.push({ date: doc.submitted_at || doc.created_at, icon, color: '#fec24f', title: `${label} submitted`, body: doc.file_name || '' });
+    }
+    if (doc.reviewed_at || doc.reviewed_date) {
+      const revDate = doc.reviewed_at || doc.reviewed_date;
+      const revColor = STATUS_COLORS[doc.status] || '#9ca3af';
+      const statusLabel = { pending: 'Pending', under_review: 'Under Review', approved: 'Approved', rejected: 'Rejected' }[doc.status] || doc.status;
+      events.push({ date: revDate, icon, color: revColor, title: `${label} ${statusLabel}`, body: doc.reviewed_by ? `Reviewed by ${doc.reviewed_by}` : '', notes: doc.notes && doc.status !== 'rejected' ? null : doc.notes });
+    }
+  }
+  events.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  const contentEl = document.getElementById('kycTimelineContent');
+  if (!contentEl) return;
+
+  if (!events.length) {
+    const ficaStatus = inv?.fica_status || 'not_started';
+    contentEl.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted)">
+      <i class="fa-solid fa-clock fa-2x" style="opacity:0.25;display:block;margin-bottom:12px"></i>
+      <div style="font-weight:600">${invName} has not submitted any KYC documents yet.</div>
+      <div style="margin-top:8px;font-size:0.8rem">FICA status: <strong>${ficaStatus}</strong></div>
+    </div>`;
+  } else {
+    // Summary badges at top
+    const approvedCount = docs.filter(d => d.status === 'approved').length;
+    const REQUIRED = 3;
+    const pct = Math.round(approvedCount / REQUIRED * 100);
+    contentEl.innerHTML = `
+      <div style="margin-bottom:16px;padding:12px 14px;border-radius:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <span style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)">FICA Progress</span>
+          <span style="font-size:0.78rem;font-weight:700;color:${approvedCount >= REQUIRED ? '#22c55e' : '#fec24f'}">${approvedCount}/${REQUIRED} docs approved</span>
+        </div>
+        <div style="height:5px;background:rgba(255,255,255,0.07);border-radius:3px">
+          <div style="height:100%;width:${pct}%;background:${approvedCount >= REQUIRED ? '#22c55e' : '#fec24f'};border-radius:3px;transition:width .4s"></div>
+        </div>
+        ${inv?.fica_status ? `<div style="margin-top:8px;font-size:0.72rem;color:var(--text-muted)">FICA status: <strong style="color:${STATUS_COLORS[inv.fica_status] || '#7a92a8'}">${inv.fica_status}</strong></div>` : ''}
+      </div>
+      <div style="position:relative;padding-left:24px">
+        <div style="position:absolute;left:9px;top:0;bottom:0;width:1px;background:rgba(255,255,255,0.08)"></div>
+        ${events.map(ev => `
+          <div style="position:relative;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.04)">
+            <div style="position:absolute;left:-19px;top:3px;width:10px;height:10px;border-radius:50%;background:${ev.color};box-shadow:0 0 0 2px rgba(255,255,255,0.06)"></div>
+            <div style="font-size:0.68rem;color:var(--text-muted);margin-bottom:3px">${Utils.date(ev.date)}</div>
+            <div style="font-weight:600;font-size:0.83rem;color:${ev.color}">${_esc(ev.title)}</div>
+            ${ev.body ? `<div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px">${_esc(ev.body)}</div>` : ''}
+            ${ev.notes ? `<div style="margin-top:5px;padding:6px 10px;background:rgba(239,68,68,0.06);border-left:2px solid rgba(239,68,68,0.4);border-radius:0 6px 6px 0;font-size:0.75rem;color:#f87171">${_esc(ev.notes)}</div>` : ''}
+          </div>`).join('')}
+      </div>`;
+  }
+
+  const overlay = document.getElementById('kycTimelineModal');
+  if (overlay) { overlay.style.display = 'flex'; overlay.classList.add('open'); document.body.style.overflow = 'hidden'; }
+}
+
+function closeKycTimeline() {
+  const overlay = document.getElementById('kycTimelineModal');
+  if (overlay) { overlay.style.display = 'none'; overlay.classList.remove('open'); }
+  document.body.style.overflow = '';
 }
 
 /* ═══════════════════════════════════════════════
@@ -4395,10 +4964,10 @@ async function saveNewPool(btn) {
         term_months: parseInt(document.getElementById('newPoolTerm').value) || 12,
         annual_rate: parseFloat(document.getElementById('newPoolRate').value) || 0.13,
         partner_name: document.getElementById('newPoolPartner').value.trim(),
-        start_date: document.getElementById('newPoolOpenDate').value ? new Date(document.getElementById('newPoolOpenDate').value).toISOString() : new Date().toISOString(),
-        end_date: document.getElementById('newPoolCloseDate').value ? new Date(document.getElementById('newPoolCloseDate').value).toISOString() : null,
-        investment_start_date: document.getElementById('newPoolInvStartDate').value ? new Date(document.getElementById('newPoolInvStartDate').value).toISOString() : null,
-        maturity_date: document.getElementById('newPoolMaturityDate').value ? new Date(document.getElementById('newPoolMaturityDate').value).toISOString() : null,
+        start_date: document.getElementById('newPoolOpenDate').value || new Date().toISOString().split('T')[0],
+        end_date: document.getElementById('newPoolCloseDate').value || null,
+        investment_start_date: document.getElementById('newPoolInvStartDate').value || null,
+        maturity_date: document.getElementById('newPoolMaturityDate').value || null,
         status: 'open', investor_count: 0,
         max_capacity,
         management_fee_pct:       (parseFloat(document.getElementById('newPoolMgtFeePct')?.value) || 0) / 100,
@@ -4551,8 +5120,6 @@ async function saveEditPool(btn) {
   const id = document.getElementById('editPoolId').value;
   if (!id) return;
 
-  const toISO = val => { try { return val ? new Date(val).toISOString() : ''; } catch { return ''; } };
-
   const maxCapVal2 = document.getElementById('editPoolMaxCapacity').value;
   const updates = {
     name:           document.getElementById('editPoolName').value.trim(),
@@ -4567,10 +5134,10 @@ async function saveEditPool(btn) {
     actual_rate:    parseFloat(document.getElementById('editPoolActualRate').value) || 0,
     partner_name:   document.getElementById('editPoolPartner').value.trim(),
     investor_count: parseInt(document.getElementById('editPoolInvCount').value) || 0,
-    start_date:            toISO(document.getElementById('editPoolOpenDate').value) || null,
-    end_date:              toISO(document.getElementById('editPoolCloseDate').value) || null,
-    investment_start_date: toISO(document.getElementById('editPoolInvStartDate').value) || null,
-    maturity_date:         toISO(document.getElementById('editPoolMaturityDate').value) || null,
+    start_date:            document.getElementById('editPoolOpenDate').value || null,
+    end_date:              document.getElementById('editPoolCloseDate').value || null,
+    investment_start_date: document.getElementById('editPoolInvStartDate').value || null,
+    maturity_date:         document.getElementById('editPoolMaturityDate').value || null,
     max_capacity:   maxCapVal2 ? (parseFloat(maxCapVal2) || null) : null,
     management_fee_pct:        (parseFloat(document.getElementById('editPoolMgtFeePct')?.value) || 0) / 100,
     management_fee_frequency:  document.getElementById('editPoolMgtFeeFreq')?.value || 'once',
@@ -4726,7 +5293,8 @@ function setupInvestmentFilters() {
       const investor = STATE.investors.find(inv => inv.id === i.investor_id);
       const invName  = i.investor_name || (investor ? `${investor.first_name} ${investor.last_name}` : '');
       const mq = !q || `${invName} ${i.pool_name} ${i.investor_id||''}`.toLowerCase().includes(q);
-      const mp = !pr || i.product_type === pr;
+      const ipt = i.product_type === 'smme' ? 'short_term' : i.product_type;
+      const mp = !pr || ipt === pr;
       const ms = !st || i.status === st;
       const iDate = i.start_date ? new Date(i.start_date) : null;
       const mFrom = !from || (iDate && iDate >= from);
@@ -7708,8 +8276,28 @@ async function bulkApproveKyc() {
 
 async function bulkRejectKyc() {
   if (!_kycSelected.size) return;
-  const reason = prompt(`Rejection reason for ${_kycSelected.size} document(s):`);
-  if (reason === null) return;
+  // Open the shared reject modal to collect the reason (with template chips)
+  _rejectingKycId = '__bulk__'; // sentinel for bulk mode
+  _rejectingTxnId = null;
+  _rejectMode = 'kyc';
+  _rejectBtn = null;
+  document.getElementById('rejectModalTitle').textContent = `Reject ${_kycSelected.size} KYC Document${_kycSelected.size > 1 ? 's' : ''}`;
+  document.getElementById('rejectModalBody').textContent = `All selected documents will be marked as rejected. Provide a reason (optional).`;
+  document.getElementById('rejectReasonInput').value = '';
+  const tpl = document.getElementById('kycRejectTemplates');
+  if (tpl) tpl.style.display = '';
+  const emailRow = document.getElementById('kycRejectEmailRow');
+  if (emailRow) emailRow.style.display = '';
+  const emailCb = document.getElementById('kycRejectEmailInvestor');
+  if (emailCb) emailCb.checked = true;
+  const overlay = document.getElementById('rejectModal');
+  overlay.style.display = 'flex';
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  setTimeout(() => document.getElementById('rejectReasonInput')?.focus(), 100);
+}
+
+async function _executeBulkKycReject(reason, shouldEmail) {
   const ids = [..._kycSelected];
   const total = ids.length;
   const approveBtn = document.querySelector('[onclick="bulkApproveKyc()"]');
@@ -7717,12 +8305,27 @@ async function bulkRejectKyc() {
   if (approveBtn) approveBtn.disabled = true;
   if (rejectBtn)  rejectBtn.disabled  = true;
   try {
+    const reviewedBy  = _getAdminName();
+    const reviewedAt  = new Date().toISOString();
     for (let i = 0; i < ids.length; i++) {
-      await API.kyc.update(ids[i], { status: 'rejected', notes: reason, reviewed_by: _getAdminName(), reviewed_at: new Date().toISOString() });
+      await API.kyc.update(ids[i], { status: 'rejected', notes: reason || 'Rejected by admin.', reviewed_by: reviewedBy, reviewed_at: reviewedAt });
+      if (shouldEmail) {
+        const doc = STATE.kyc.find(k => k.id === ids[i]);
+        const inv = doc?.investor_id ? STATE.investors.find(i2 => i2.id === doc.investor_id) : null;
+        if (inv?.email) {
+          const DOC_LABELS = { id_document: 'Identity Document', proof_of_address: 'Proof of Address', proof_of_bank: 'Proof of Bank Account' };
+          const docLabel = DOC_LABELS[doc.doc_type] || 'KYC document';
+          await API._fetch('POST', 'admin/send-investor-email', {
+            investor_id: inv.id,
+            subject: `Action required: Your ${docLabel} — SV Capital`,
+            message: `Dear ${inv.first_name || 'Investor'},\n\nYour ${docLabel} requires attention.\n\nReason: ${reason || 'Please re-upload a valid document.'}\n\nLog in to your investor portal to resubmit.\n\nKind regards,\nSV Capital Compliance Team`,
+          }).catch(() => {});
+        }
+      }
       if ((i + 1) % 5 === 0) Toast.info(`Processing ${i + 1}/${total}...`);
     }
     _kycSelected.clear();
-    Toast.success(`${ids.length} document(s) rejected`);
+    Toast.success(`${total} document(s) rejected${shouldEmail ? ' — investors notified' : ''}`);
     await loadKYC();
   } catch (e) { Toast.error('Bulk reject failed'); }
   finally {
@@ -10354,6 +10957,11 @@ function _renderFicaPipeline() {
   const stageOrder = ['not_started','submitted','in_review','approved','rejected'];
   const search = (document.getElementById('ficaPipelineSearch')?.value || '').toLowerCase();
 
+  // Priority: investors who have pending/under_review investments are surfaced first
+  const _hasPendingInvestment = inv => (STATE.investments || []).some(
+    inv2 => inv2.investor_id === inv.id && ['pending','under_review','active'].includes(inv2.status)
+  );
+
   const investors = STATE.investors.filter(inv => {
     if (inv.role && inv.role !== 'investor') return false;
     if (search) {
@@ -10362,6 +10970,12 @@ function _renderFicaPipeline() {
     }
     if (_ficaStageFilter !== 'all') return _ficaStageOf(inv) === _ficaStageFilter;
     return true;
+  }).sort((a, b) => {
+    // Investors with active investments who are NOT yet fully FICA-verified bubble up
+    const aStage = _ficaStageOf(a), bStage = _ficaStageOf(b);
+    const aPriority = _hasPendingInvestment(a) && aStage !== 'approved' ? 2 : _hasPendingInvestment(a) ? 1 : 0;
+    const bPriority = _hasPendingInvestment(b) && bStage !== 'approved' ? 2 : _hasPendingInvestment(b) ? 1 : 0;
+    return bPriority - aPriority;
   });
 
   const counts = {};
@@ -10397,12 +11011,21 @@ function _renderFicaPipeline() {
     const docCount = docs.length;
     const approvedCount = docs.filter(d => d.status === 'approved').length;
     const stageBadge = `<span style="background:${c.badge};color:${c.badgeText};border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700">${_ficaStageLabels[stage]}</span>`;
-    return `<tr>
-      <td><div style="font-weight:600;font-size:0.83rem">${_esc(inv.first_name)} ${_esc(inv.last_name)}</div><div style="font-size:0.72rem;color:#7a92a8">${_esc(inv.email||'')}</div></td>
+    const hasPriority = _hasPendingInvestment(inv) && stage !== 'approved';
+    const priorityBadge = hasPriority
+      ? `<span style="display:inline-flex;align-items:center;gap:3px;font-size:0.62rem;font-weight:700;color:#fec24f;background:rgba(254,194,79,0.12);border:1px solid rgba(254,194,79,0.3);border-radius:4px;padding:1px 6px;margin-left:4px" title="Has active investment — KYC verification pending"><i class="fa-solid fa-bolt" style="font-size:0.58rem"></i>Priority</span>`
+      : '';
+    return `<tr style="${hasPriority ? 'background:rgba(254,194,79,0.02)' : ''}">
+      <td><div style="font-weight:600;font-size:0.83rem">${_esc(inv.first_name)} ${_esc(inv.last_name)} ${priorityBadge}</div><div style="font-size:0.72rem;color:#7a92a8">${_esc(inv.email||'')}</div></td>
       <td style="font-size:0.82rem;color:#7a92a8">${Utils.date(inv.created_at)}</td>
       <td>${stageBadge}</td>
       <td style="font-size:0.82rem;color:#7a92a8">${docCount ? `${approvedCount}/${docCount} approved` : '—'}</td>
-      <td><button class="btn btn--secondary btn--sm" onclick='navigate("kyc", document.querySelector("[data-view=kyc]"))'><i class="fa-solid fa-id-card"></i> KYC Queue</button></td>
+      <td>
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
+          <button class="btn btn--secondary btn--sm" title="View KYC timeline" onclick='openKycTimeline(${JSON.stringify(inv.id)})'><i class="fa-solid fa-timeline"></i> Timeline</button>
+          <button class="btn btn--secondary btn--sm" onclick='navigate("kyc", document.querySelector("[data-view=kyc]"))'><i class="fa-solid fa-id-card"></i> Queue</button>
+        </div>
+      </td>
     </tr>`;
   }).join('');
 
