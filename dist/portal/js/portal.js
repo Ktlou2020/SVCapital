@@ -3870,36 +3870,67 @@ let _trackChart = null;
 async function _renderProductTrackRecord(type, color) {
   const el = document.getElementById('prodTrackRecord');
   if (!el) return;
+  el.innerHTML = `<div style="font-size:0.78rem;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i> Loading past performance…</div>`;
   const data = await _getTrackRecord();
   const isSolar = (type || '').startsWith('solar');
   const keys = Object.keys(data).filter(k => isSolar ? k.startsWith('solar') : k === type);
-  let pools = [], paidBack = 0, sumA = 0, n = 0;
+  let pools = [], paidBack = 0, sumA = 0, nA = 0, nTotal = 0;
   keys.forEach(k => {
     const d = data[k];
     pools = pools.concat(d.pools || []);
-    paidBack += d.total_paid_back || 0;
-    sumA += (d.avg_actual_rate || 0) * (d.matured_count || 0);
-    n += d.matured_count || 0;
+    paidBack  += d.total_paid_back || 0;
+    sumA      += (d.avg_actual_rate || 0) * (d.matured_count || 0);
+    nA        += d.matured_count || 0;
+    nTotal    += d.matured_count || 0;
   });
-  if (!n) { el.innerHTML = ''; return; }
-  pools.sort((a, b) => new Date(a.ended) - new Date(b.ended));
+  if (!nTotal) { el.innerHTML = ''; return; }
+  pools.sort((a, b) => new Date(b.ended) - new Date(a.ended)); // newest first
 
-  // Show the average delivered return (no chart).
+  const avgRate = nA ? (sumA / nA * 100).toFixed(2) : '—';
+
+  const poolRows = pools.map(p => {
+    const rateColor = p.actual_rate > 0 && p.benchmark_rate > 0
+      ? (p.actual_rate >= p.benchmark_rate ? '#22c55e' : '#f59e0b')
+      : '#9ca3af';
+    const statusLabel = p.status === 'paid_out' ? 'Paid Out' : 'Matured';
+    const statusColor = p.status === 'paid_out' ? '#22c55e' : '#eda5ff';
+    return `<tr>
+      <td style="font-weight:600;font-size:0.82rem">${_esc(p.name)}</td>
+      <td style="text-align:center;font-size:0.82rem">${p.term_months ? p.term_months + ' mo' : '—'}</td>
+      <td style="text-align:center">
+        <span style="font-weight:700;color:${rateColor};font-size:0.85rem">${p.actual_rate > 0 ? (p.actual_rate * 100).toFixed(2) + '%' : '—'}</span>
+        ${p.benchmark_rate > 0 ? `<div style="font-size:0.68rem;color:var(--text-muted)">target ${(p.benchmark_rate * 100).toFixed(2)}%</div>` : ''}
+      </td>
+      <td style="text-align:right;font-size:0.82rem;font-variant-numeric:tabular-nums">${p.raised_amount > 0 ? Utils.rand(p.raised_amount) : '—'}</td>
+      <td style="text-align:center;font-size:0.78rem;color:var(--text-muted)">${p.ended ? Utils.date(p.ended) : '—'}</td>
+      <td style="text-align:center"><span style="font-size:0.7rem;font-weight:700;color:${statusColor};background:${statusColor}18;border-radius:20px;padding:2px 9px">${statusLabel}</span></td>
+    </tr>`;
+  }).join('');
+
   el.innerHTML = `
-    <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:10px"><i class="fa-solid fa-award" style="color:${color}"></i> Track record — delivered returns</div>
-    <div style="display:flex;gap:12px;flex-wrap:wrap">
-      <div style="flex:1;min-width:130px;background:rgba(0,0,0,0.03);border:1px solid rgba(0,0,0,0.06);border-radius:14px;padding:16px">
-        <div style="font-size:1.6rem;font-weight:900;color:${color};letter-spacing:-0.02em">${(sumA / n * 100).toFixed(2)}%</div>
-        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px">avg return achieved p.a.</div>
+    <div style="margin-bottom:6px">
+      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:12px">
+        <i class="fa-solid fa-chart-line" style="color:${color};margin-right:5px"></i>Past Performance
       </div>
-      <div style="flex:1;min-width:130px;background:rgba(0,0,0,0.03);border:1px solid rgba(0,0,0,0.06);border-radius:14px;padding:16px">
-        <div style="font-size:1.6rem;font-weight:900;color:var(--text);letter-spacing:-0.02em">${n}</div>
-        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px">pool${n === 1 ? '' : 's'} matured</div>
+
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
+        <div style="background:${color}12;border:1px solid ${color}30;border-radius:12px;padding:14px 12px;text-align:center">
+          <div style="font-size:1.5rem;font-weight:900;color:${color};letter-spacing:-0.02em">${avgRate}%</div>
+          <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-top:3px">Avg return p.a.</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px 12px;text-align:center">
+          <div style="font-size:1.5rem;font-weight:900;color:var(--text);letter-spacing:-0.02em">${nTotal}</div>
+          <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-top:3px">Pool${nTotal === 1 ? '' : 's'} completed</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px 12px;text-align:center">
+          <div style="font-size:1.5rem;font-weight:900;color:var(--text);letter-spacing:-0.02em">${Utils.rand(paidBack)}</div>
+          <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-top:3px">Returned to investors</div>
+        </div>
       </div>
-      <div style="flex:1;min-width:130px;background:rgba(0,0,0,0.03);border:1px solid rgba(0,0,0,0.06);border-radius:14px;padding:16px">
-        <div style="font-size:1.6rem;font-weight:900;color:var(--text);letter-spacing:-0.02em">${Utils.rand(paidBack)}</div>
-        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px">invested to date</div>
-      </div>
+
+      <p style="font-size:0.65rem;color:var(--text-muted);margin-top:10px;line-height:1.5;opacity:0.7">
+        <i class="fa-solid fa-circle-info" style="margin-right:4px"></i>Past performance is not a guarantee of future returns. Investment returns may vary.
+      </p>
     </div>`;
 }
 
@@ -5336,7 +5367,12 @@ function generateStatement() {
   const activeInvAmt  = allInvestments.filter(i => i.status === 'active').reduce((s, i) => s + (Number(i.amount) || 0), 0);
   const totalValue    = activeInvAmt + walletBal;                   // Portfolio Value = active inv + wallet
   const totalDeposits = transactions.filter(t => t.type === 'deposit' && t.status !== 'cancelled').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
-  const totalReturns  = transactions.filter(t => t.type === 'return' || t.type === 'payout').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+  // Returns: prefer completed return/payout transactions in the period; fall back to
+  // paid-out investments' actual return amounts when no such transactions exist yet.
+  const _txnReturns  = transactions.filter(t => (t.type === 'return' || t.type === 'payout') && t.status !== 'cancelled').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+  const totalReturns = _txnReturns > 0 ? _txnReturns
+    : allInvestments.filter(i => ['paid_out', 'matured'].includes(i.status) && _inPeriod(i.maturity_date || i.investment_date))
+                    .reduce((s, i) => s + (i.actual_return_amount || i.expected_return_amount || 0), 0);
   const activeInv     = allInvestments.filter(i => i.status === 'active').length;
 
   // Build preview quick stats
@@ -8598,6 +8634,7 @@ async function submitSaFica() {
       doc_type:       docType,
       status:         'pending',
       file_name:      _saFicaFile.name,
+      file_data:      _saFicaB64,
       notes:          `FICA document for sub-account: ${sa?.name || _saFicaSaId}. File: ${_saFicaFile.name} (${((_saFicaFile.size)/1024).toFixed(1)} KB)`,
     });
     Toast.success('FICA document submitted! The admin team will review it within 1-2 business days.');
@@ -8685,13 +8722,13 @@ async function saveSaBankDetails() {
     const investorId   = PORTAL.investor?.id;
     const investorName = `${PORTAL.investor?.first_name || ''} ${PORTAL.investor?.last_name || ''}`.trim();
 
-    await API.kyc.create({
+    if (proofData) await API.kyc.create({
       investor_id:    investorId,
       investor_name:  investorName || undefined,
       doc_type:       'proof_of_bank',
       status:         'pending',
-      file_name:      proofFile ? proofFile.name : undefined,
-      file_data:      proofData || undefined,
+      file_name:      proofFile.name,
+      file_data:      proofData,
       notes:          `Sub-account banking: ${sa?.name || _saBankSaId} — ${name} ${maskedNum}`,
     }).catch(e => console.warn('[saBankDetails] KYC doc failed:', e.message));
 
@@ -8813,15 +8850,15 @@ async function saveBankDetails() {
     const updated = await API._fetch('PATCH', `tables/investors/${investorId}`, bankPatch);
     if (PORTAL.investor) Object.assign(PORTAL.investor, updated);
 
-    // Always create a KYC document entry so it appears in the FICA/KYC section
+    // Create a KYC document entry only when the investor attached a proof file
     const maskedAccNum = bank_account_number.slice(-4).padStart(bank_account_number.length, '•');
-    await API.kyc.create({
+    if (proofData) await API.kyc.create({
       investor_id:   investorId,
       investor_name: investorName || undefined,
       doc_type:      'proof_of_bank',
       status:        'pending',
-      file_name:     proofFile ? proofFile.name : undefined,
-      file_data:     proofData || undefined,
+      file_name:     proofFile.name,
+      file_data:     proofData,
       notes:         `Bank account submitted: ${bank_name} — ${maskedAccNum}`,
     }).catch(e => console.warn('[bank details] KYC doc failed:', e.message));
 
@@ -10824,7 +10861,10 @@ function downloadStatement() {
     .sort((a, b) => new Date(b.transaction_date || b.created_at) - new Date(a.transaction_date || a.created_at));
 
   const totalInvested = PORTAL.investments.filter(i => !i.is_reinvestment).reduce((s, i) => s + (Number(i.amount) || 0), 0);
-  const totalReturns  = PORTAL.investments.reduce((s, i) => s + (Number(i.amount) || 0) * (Number(i.pool_actual_rate) || 0), 0);
+  const _txnReturns90 = txns.filter(t => (t.type === 'return' || t.type === 'payout') && t.status !== 'cancelled').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+  const totalReturns  = _txnReturns90 > 0 ? _txnReturns90
+    : PORTAL.investments.filter(i => ['paid_out', 'matured'].includes(i.status) && new Date(i.maturity_date || i.investment_date) >= from90)
+                        .reduce((s, i) => s + (i.actual_return_amount || i.expected_return_amount || 0), 0);
   const walletBal     = Number(investor.wallet_balance) || 0;
   const portfolioVal  = totalInvested + walletBal + totalReturns;
 
@@ -10936,7 +10976,10 @@ function downloadSaStatement(saId, saName) {
   const activeInvAmt  = investments.filter(i => i.status === 'active').reduce((s, i) => s + (Number(i.amount) || 0), 0);
   const totalValue    = activeInvAmt + walletBal;
   const totalDeposits = transactions.filter(t => t.type === 'deposit' && t.status !== 'cancelled').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
-  const totalReturns  = transactions.filter(t => t.type === 'return' || t.type === 'payout').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+  const _saTxnReturns = transactions.filter(t => (t.type === 'return' || t.type === 'payout') && t.status !== 'cancelled').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+  const totalReturns  = _saTxnReturns > 0 ? _saTxnReturns
+    : investments.filter(i => ['paid_out', 'matured'].includes(i.status))
+                 .reduce((s, i) => s + (i.actual_return_amount || i.expected_return_amount || 0), 0);
   const totalInvested = totalDeposits;
   const activeInv     = investments.filter(i => i.status === 'active').length;
 
