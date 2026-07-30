@@ -4895,10 +4895,10 @@ async function saveNewPool(btn) {
         term_months: parseInt(document.getElementById('newPoolTerm').value) || 12,
         annual_rate: parseFloat(document.getElementById('newPoolRate').value) || 0.13,
         partner_name: document.getElementById('newPoolPartner').value.trim(),
-        start_date: document.getElementById('newPoolOpenDate').value ? new Date(document.getElementById('newPoolOpenDate').value).toISOString() : new Date().toISOString(),
-        end_date: document.getElementById('newPoolCloseDate').value ? new Date(document.getElementById('newPoolCloseDate').value).toISOString() : null,
-        investment_start_date: document.getElementById('newPoolInvStartDate').value ? new Date(document.getElementById('newPoolInvStartDate').value).toISOString() : null,
-        maturity_date: document.getElementById('newPoolMaturityDate').value ? new Date(document.getElementById('newPoolMaturityDate').value).toISOString() : null,
+        start_date: document.getElementById('newPoolOpenDate').value || new Date().toISOString().split('T')[0],
+        end_date: document.getElementById('newPoolCloseDate').value || null,
+        investment_start_date: document.getElementById('newPoolInvStartDate').value || null,
+        maturity_date: document.getElementById('newPoolMaturityDate').value || null,
         status: 'open', investor_count: 0,
         max_capacity,
         management_fee_pct:       (parseFloat(document.getElementById('newPoolMgtFeePct')?.value) || 0) / 100,
@@ -5051,8 +5051,6 @@ async function saveEditPool(btn) {
   const id = document.getElementById('editPoolId').value;
   if (!id) return;
 
-  const toISO = val => { try { return val ? new Date(val).toISOString() : ''; } catch { return ''; } };
-
   const maxCapVal2 = document.getElementById('editPoolMaxCapacity').value;
   const updates = {
     name:           document.getElementById('editPoolName').value.trim(),
@@ -5067,10 +5065,10 @@ async function saveEditPool(btn) {
     actual_rate:    parseFloat(document.getElementById('editPoolActualRate').value) || 0,
     partner_name:   document.getElementById('editPoolPartner').value.trim(),
     investor_count: parseInt(document.getElementById('editPoolInvCount').value) || 0,
-    start_date:            toISO(document.getElementById('editPoolOpenDate').value) || null,
-    end_date:              toISO(document.getElementById('editPoolCloseDate').value) || null,
-    investment_start_date: toISO(document.getElementById('editPoolInvStartDate').value) || null,
-    maturity_date:         toISO(document.getElementById('editPoolMaturityDate').value) || null,
+    start_date:            document.getElementById('editPoolOpenDate').value || null,
+    end_date:              document.getElementById('editPoolCloseDate').value || null,
+    investment_start_date: document.getElementById('editPoolInvStartDate').value || null,
+    maturity_date:         document.getElementById('editPoolMaturityDate').value || null,
     max_capacity:   maxCapVal2 ? (parseFloat(maxCapVal2) || null) : null,
     management_fee_pct:        (parseFloat(document.getElementById('editPoolMgtFeePct')?.value) || 0) / 100,
     management_fee_frequency:  document.getElementById('editPoolMgtFeeFreq')?.value || 'once',
