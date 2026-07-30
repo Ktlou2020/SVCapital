@@ -2283,6 +2283,21 @@ async function viewInvestor(id) {
         </button>
       </div>
     </div>
+    <div class="panel mb-16" style="border-color:rgba(96,165,250,0.25)">
+      <div class="panel__header" style="background:rgba(96,165,250,0.06)">
+        <span class="panel__title"><i class="fa-solid fa-scale-balanced" style="color:#60a5fa;margin-right:6px"></i>Wallet Reconciliation</span>
+      </div>
+      <div class="panel__body" style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap">
+        <div style="flex:1;min-width:220px">
+          <div style="font-size:0.83rem;font-weight:600;color:var(--text);margin-bottom:4px">Reconcile from All Transactions</div>
+          <div style="font-size:0.77rem;color:var(--text-muted)">Recomputes wallet balance from all completed deposits, returns and payouts minus withdrawals and fees. Use when a deposit shows as completed but is not reflected in the wallet balance.</div>
+          <div id="invReconcileResult-${inv.id}" style="margin-top:8px;font-size:0.77rem"></div>
+        </div>
+        <button class="btn btn--sm" style="flex-shrink:0;background:rgba(96,165,250,.12);color:#60a5fa;border:1px solid rgba(96,165,250,.3)" onclick='reconcileInvestorWallet(${JSON.stringify(inv.id)},this)'>
+          <i class="fa-solid fa-scale-balanced"></i> Reconcile Wallet
+        </button>
+      </div>
+    </div>
     <div class="panel mb-16">
       <div class="panel__header">
         <span class="panel__title">Notes History</span>
@@ -2402,6 +2417,31 @@ async function _recalcInvestorWallet(investorId, investorName, btn) {
       Modal.close('investorDetailModal');
       await loadInvestors();
     } catch (e) { Toast.error('Recalculation failed: ' + (e.message || 'unknown error')); }
+  });
+}
+
+async function reconcileInvestorWallet(investorId, btn) {
+  await _withBtn(btn, async () => {
+    try {
+      const res = await API._fetch('POST', 'admin/reconcile-wallet', { investor_id: investorId });
+      const resultEl = document.getElementById(`invReconcileResult-${investorId}`);
+      if (res.diffs && res.diffs[0]) {
+        const d = res.diffs[0];
+        const diff = d.diff;
+        if (Math.abs(diff) < 0.01) {
+          if (resultEl) resultEl.innerHTML = `<span style="color:var(--green)"><i class="fa-solid fa-check"></i> Wallet is correct (${Utils.rand(d.current)})</span>`;
+          Toast.info('Wallet balance is already correct — no change needed.');
+        } else {
+          if (resultEl) resultEl.innerHTML = `<span style="color:#fec24f"><i class="fa-solid fa-triangle-exclamation"></i> Adjusted ${diff > 0 ? '+' : ''}${Utils.rand(diff)} → new balance ${Utils.rand(d.computed)}</span>`;
+          Toast.success(`Wallet reconciled — adjusted ${diff > 0 ? '+' : ''}${Utils.rand(diff)}. New balance: ${Utils.rand(d.computed)}`);
+          const inv = STATE.investors.find(i => i.id === investorId);
+          if (inv) inv.wallet_balance = d.computed;
+        }
+      } else {
+        if (resultEl) resultEl.innerHTML = `<span style="color:var(--text-muted)">No transactions found for this investor.</span>`;
+        Toast.info('No completed transactions found to reconcile.');
+      }
+    } catch (e) { Toast.error('Reconciliation failed: ' + (e.message || 'unknown error')); }
   });
 }
 

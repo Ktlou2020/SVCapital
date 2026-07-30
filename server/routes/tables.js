@@ -1419,6 +1419,25 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
         rows = existing;
       } else {
         rows = updated;
+        // Credit wallet SYNCHRONOUSLY (before response) so it cannot be skipped by an
+        // audit/email failure and cannot race with a second concurrent PATCH.
+        // Mirrors the withdrawal-refund pattern above.
+        const u = updated[0];
+        if (u.investor_id &&
+            (u.type === 'deposit' || u.type === 'return' || u.type === 'payout' || u.type === 'referral_bonus')) {
+          if (u.sub_account_id && u.type === 'deposit') {
+            await pool.query(
+              'UPDATE sub_accounts SET wallet_balance = wallet_balance + $1 WHERE id = $2',
+              [parseFloat(u.amount), u.sub_account_id]
+            );
+          } else {
+            await pool.query(
+              'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
+              [parseFloat(u.amount), u.investor_id]
+            );
+          }
+          _skipWalletCredit = true; // prevent double-credit in the setImmediate email block
+        }
       }
     } else {
       const result = await pool.query(
@@ -1465,27 +1484,16 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
           });
         }
 
-        // Deposit / return / payout confirmed → credit wallet + email investor
-        if (table === 'transactions' && body.status === 'completed' && updated.investor_id &&
-            (updated.type === 'deposit' || updated.type === 'return' || updated.type === 'payout' || updated.type === 'referral_bonus')) {
-          // Only credit if this PATCH was the one that completed the transaction
-          if (!_skipWalletCredit) {
-            // Credit wallet atomically
-            await pool.query(
-              'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
-              [parseFloat(updated.amount), updated.investor_id]
-            );
-            // Only send confirmation email/SMS on the PATCH that actually credited the wallet
-            if (updated.type === 'deposit') {
-              const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [updated.investor_id]);
-              if (inv[0]) {
-                const gateway = updated.description?.includes('Paystack') ? 'Paystack'
-                              : updated.description?.includes('Ozow')     ? 'Ozow'
-                              : 'EFT';
-                await emailService.sendDepositConfirmed(inv[0], updated.amount, updated.reference || updated.id, gateway);
-                await smsService.sendDepositConfirmed(inv[0].phone, inv[0].first_name, updated.amount);
-              }
-            }
+        // Deposit confirmed → email investor (wallet already credited synchronously above)
+        if (table === 'transactions' && body.status === 'completed' && !_skipWalletCredit &&
+            updated.investor_id && updated.type === 'deposit') {
+          const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [updated.investor_id]);
+          if (inv[0]) {
+            const gateway = updated.description?.includes('Paystack') ? 'Paystack'
+                          : updated.description?.includes('Ozow')     ? 'Ozow'
+                          : 'EFT';
+            await emailService.sendDepositConfirmed(inv[0], updated.amount, updated.reference || updated.id, gateway);
+            await smsService.sendDepositConfirmed(inv[0].phone, inv[0].first_name, updated.amount);
           }
         }
 
