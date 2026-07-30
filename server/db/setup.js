@@ -1593,6 +1593,30 @@ Withdraw at maturity or roll over to a new cycle',
       console.warn('⚠️  Cattle cycle start date backfill skipped:', bfErr.message);
     }
 
+    // 10. Fix Bike Fleet Investment 22 maturity date (UTC save bug: 31 Jul stored as 30 Jul).
+    //     Corrects the pool and propagates to all active investments in that pool.
+    try {
+      const { rowCount: poolFix } = await pool.query(`
+        UPDATE investment_pools
+           SET maturity_date = '2026-07-31', updated_at = NOW()
+         WHERE name ILIKE '%Bike Fleet Investment 22%'
+           AND maturity_date = '2026-07-30'
+      `);
+      if (poolFix > 0) {
+        const { rowCount: invFix } = await pool.query(`
+          UPDATE investments i
+             SET end_date = '2026-07-31', updated_at = NOW()
+            FROM investment_pools ip
+           WHERE ip.id = i.pool_id
+             AND ip.name ILIKE '%Bike Fleet Investment 22%'
+             AND i.end_date = '2026-07-30'
+        `);
+        console.log(`✅ Fixed Bike Fleet Investment 22 maturity date: ${poolFix} pool(s), ${invFix} investment(s).`);
+      }
+    } catch (bfErr) {
+      console.warn('⚠️  Bike Fleet Investment 22 maturity fix skipped:', bfErr.message);
+    }
+
     console.log('✅ Provisioning complete — COO account ready.');
 
   } catch (err) {
