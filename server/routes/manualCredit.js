@@ -337,4 +337,49 @@ router.post('/reconcile-wallet', async (req, res) => {
   }
 });
 
+/* ─── POST /api/admin/override-wallet ────────────────────────────────────────
+   Directly sets wallet_balance to the specified value without creating any
+   transaction record. Admin-only correction tool for balance discrepancies
+   that cannot be resolved via normal reconciliation.
+
+   Body: { investorId: 'S-XXXXXX', newBalance: 1234.56, notes: '...' }
+   ─────────────────────────────────────────────────────────────────────── */
+router.post('/override-wallet', async (req, res) => {
+  try {
+    const { investorId, newBalance, notes } = req.body;
+    const nb = parseFloat(newBalance);
+    if (!investorId || isNaN(nb) || nb < 0) {
+      return res.status(400).json({ error: 'investorId and a non-negative newBalance are required.' });
+    }
+
+    const { rows: [inv] } = await pool.query(
+      'SELECT id, first_name, last_name, wallet_balance FROM investors WHERE id = $1',
+      [investorId]
+    );
+    if (!inv) return res.status(404).json({ error: 'Investor not found.' });
+
+    const oldBalance = parseFloat(inv.wallet_balance) || 0;
+
+    await pool.query(
+      'UPDATE investors SET wallet_balance = $1, updated_at = NOW() WHERE id = $2',
+      [nb, investorId]
+    );
+
+    setImmediate(() => audit.log({
+      actorId:    req.user.id,
+      actorEmail: req.user.email,
+      action:     'wallet.balance_override',
+      entityType: 'investors',
+      entityId:   investorId,
+      description: `Admin set wallet balance to R${nb} (was R${oldBalance}) for ${inv.first_name} ${inv.last_name} (${investorId}). Notes: ${notes || 'none'}`,
+      ip:         req.ip,
+    }).catch(() => {}));
+
+    res.json({ success: true, oldBalance, newBalance: nb });
+  } catch (err) {
+    console.error('/admin/override-wallet error:', err.message);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
 module.exports = router;

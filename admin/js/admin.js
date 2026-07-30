@@ -2298,6 +2298,29 @@ async function viewInvestor(id) {
         </button>
       </div>
     </div>
+    <div class="panel mb-16" style="border-color:rgba(239,68,68,0.25)">
+      <div class="panel__header" style="background:rgba(239,68,68,0.06)">
+        <span class="panel__title"><i class="fa-solid fa-pen-to-square" style="color:#f87171;margin-right:6px"></i>Direct Balance Override</span>
+        <span style="font-size:0.72rem;color:#f87171;font-weight:600">Admin Fix</span>
+      </div>
+      <div class="panel__body">
+        <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px">Set the wallet balance directly without creating a transaction record. Use only when the balance cannot be corrected via reconciliation.</div>
+        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+          <div style="flex:1;min-width:140px">
+            <label style="font-size:0.77rem;font-weight:600;color:var(--text);display:block;margin-bottom:4px">New Balance (R)</label>
+            <input type="number" id="walletOverrideAmt-${inv.id}" class="form-input" min="0" step="0.01" placeholder="0.00" style="width:100%" value="${parseFloat(inv.wallet_balance)||0}">
+          </div>
+          <div style="flex:2;min-width:180px">
+            <label style="font-size:0.77rem;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Reason (optional)</label>
+            <input type="text" id="walletOverrideNotes-${inv.id}" class="form-input" placeholder="e.g. correcting reconciliation error" style="width:100%">
+          </div>
+          <button class="btn btn--sm" style="flex-shrink:0;background:rgba(239,68,68,.12);color:#f87171;border:1px solid rgba(239,68,68,.3)" onclick="overrideWalletBalance(${JSON.stringify(inv.id)},${JSON.stringify(inv.first_name+' '+inv.last_name)},this)">
+            <i class="fa-solid fa-pen-to-square"></i> Set Balance
+          </button>
+        </div>
+        <div id="walletOverrideResult-${inv.id}" style="margin-top:8px;font-size:0.77rem"></div>
+      </div>
+    </div>
     <div class="panel mb-16">
       <div class="panel__header">
         <span class="panel__title">Notes History</span>
@@ -2449,6 +2472,45 @@ async function reconcileInvestorWallet(investorId, btn) {
       const inv = STATE.investors.find(i => i.id === investorId);
       if (inv) inv.wallet_balance = d.computed;
     } catch (e) { Toast.error('Reconciliation failed: ' + (e.message || 'unknown error')); }
+  });
+}
+
+async function overrideWalletBalance(investorId, name, btn) {
+  const amtEl    = document.getElementById('walletOverrideAmt-' + investorId);
+  const notesEl  = document.getElementById('walletOverrideNotes-' + investorId);
+  const resultEl = document.getElementById('walletOverrideResult-' + investorId);
+  const nb = parseFloat(amtEl.value);
+  if (isNaN(nb) || nb < 0) {
+    if (resultEl) resultEl.innerHTML = '<span style="color:#f87171">Enter a valid amount (0 or more).</span>';
+    return;
+  }
+  const inv = STATE.investors.find(i => i.id === investorId);
+  const oldBal = parseFloat(inv?.wallet_balance) || 0;
+  const diff   = Math.round((nb - oldBal) * 100) / 100;
+  const diffStr = diff >= 0 ? `+${Utils.rand(diff)}` : `-${Utils.rand(Math.abs(diff))}`;
+
+  const confirmed = await Confirm.ask('Set wallet balance?', {
+    body: `Investor: ${name}\nCurrent: ${Utils.rand(oldBal)} → New: ${Utils.rand(nb)} (${diffStr})\n\nNo transaction record will be created. This action is logged.`,
+    confirmLabel: 'Set Balance',
+    danger: nb < oldBal,
+  });
+  if (!confirmed) return;
+
+  await _withBtn(btn, async () => {
+    try {
+      const res = await API._fetch('POST', 'admin/override-wallet', { investorId, newBalance: nb, notes: notesEl.value.trim() || null });
+      if (res.success) {
+        if (inv) inv.wallet_balance = nb;
+        if (resultEl) resultEl.innerHTML = `<span style="color:#4ade80"><i class="fa-solid fa-check"></i> Balance set to ${Utils.rand(nb)} (was ${Utils.rand(oldBal)})</span>`;
+        Toast.success(`Wallet balance set to ${Utils.rand(nb)}`);
+      } else {
+        if (resultEl) resultEl.innerHTML = `<span style="color:#f87171">${res.error || 'Failed'}</span>`;
+        Toast.error(res.error || 'Override failed');
+      }
+    } catch (e) {
+      if (resultEl) resultEl.innerHTML = `<span style="color:#f87171">${e.message}</span>`;
+      Toast.error('Override failed: ' + (e.message || 'unknown error'));
+    }
   });
 }
 
