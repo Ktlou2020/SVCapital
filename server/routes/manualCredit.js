@@ -277,7 +277,7 @@ router.post('/backfill/fica-from-kyc', async (req, res) => {
          { all: true }                 — every investor (slow, use with care)
    ─────────────────────────────────────────────────────────────────────── */
 router.post('/reconcile-wallet', async (req, res) => {
-  const { investor_id, all } = req.body || {};
+  const { investor_id, all, dry_run } = req.body || {};
   if (!investor_id && !all) {
     return res.status(400).json({ error: 'Provide investor_id or all:true' });
   }
@@ -287,6 +287,11 @@ router.post('/reconcile-wallet', async (req, res) => {
     const whereClause = investor_id ? 'AND i.investor_id = $1' : '';
     const params      = investor_id ? [investor_id] : [];
 
+    /* Credits: deposits, returns, payouts, referral bonuses.
+       Debits: ONLY withdrawals (money actually leaving the system).
+       investment/platform_fee transactions are NOT subtracted — wallet_balance
+       is already decremented via direct SQL at invest time; subtracting them
+       again from transaction history would double-count every investment. */
     const { rows } = await pool.query(`
       SELECT
         i.investor_id,
@@ -294,7 +299,7 @@ router.post('/reconcile-wallet', async (req, res) => {
           CASE
             WHEN i.type IN ('deposit','return','payout','referral_bonus') AND i.status = 'completed'
               THEN  i.amount
-            WHEN i.type IN ('withdrawal','platform_fee','investment') AND i.status = 'completed'
+            WHEN i.type = 'withdrawal' AND i.status = 'completed'
               THEN -i.amount
             ELSE 0
           END
@@ -316,7 +321,7 @@ router.post('/reconcile-wallet', async (req, res) => {
       const current = parseFloat(cur[0].wallet_balance);
       const diff    = Math.round((computed - current) * 100) / 100;
       diffs.push({ investor_id: r.investor_id, current, computed, diff });
-      if (Math.abs(diff) >= 0.01) {
+      if (!dry_run && Math.abs(diff) >= 0.01) {
         await pool.query(
           'UPDATE investors SET wallet_balance = $1, updated_at = NOW() WHERE id = $2',
           [computed, r.investor_id]
