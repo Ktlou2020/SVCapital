@@ -4437,7 +4437,7 @@ function renderPoolsGrid() {
         </div>
 
         <div class="pool-card__stats">
-          <div class="pool-stat"><span class="pool-stat__label">Rate</span><span class="pool-stat__value pool-stat__value--gold">${Utils.pct(p.annual_rate)}</span></div>
+          <div class="pool-stat"><span class="pool-stat__label">${p.actual_rate > 0 ? 'Achieved' : 'Rate'}</span><span class="pool-stat__value pool-stat__value--gold">${Utils.pct(p.actual_rate > 0 ? p.actual_rate : p.annual_rate)}</span></div>
           <div class="pool-stat" style="cursor:pointer" onclick='viewPoolInvestors(${JSON.stringify(p.id)})' title="Click to view investors">
             <span class="pool-stat__label">Investors</span>
             <span class="pool-stat__value" style="color:var(--gold);text-decoration:underline dotted">${p.live_investor_count ?? p.investor_count ?? 0}</span>
