@@ -2423,24 +2423,31 @@ async function _recalcInvestorWallet(investorId, investorName, btn) {
 async function reconcileInvestorWallet(investorId, btn) {
   await _withBtn(btn, async () => {
     try {
-      const res = await API._fetch('POST', 'admin/reconcile-wallet', { investor_id: investorId });
       const resultEl = document.getElementById(`invReconcileResult-${investorId}`);
-      if (res.diffs && res.diffs[0]) {
-        const d = res.diffs[0];
-        const diff = d.diff;
-        if (Math.abs(diff) < 0.01) {
-          if (resultEl) resultEl.innerHTML = `<span style="color:var(--green)"><i class="fa-solid fa-check"></i> Wallet is correct (${Utils.rand(d.current)})</span>`;
-          Toast.info('Wallet balance is already correct — no change needed.');
-        } else {
-          if (resultEl) resultEl.innerHTML = `<span style="color:#fec24f"><i class="fa-solid fa-triangle-exclamation"></i> Adjusted ${diff > 0 ? '+' : ''}${Utils.rand(diff)} → new balance ${Utils.rand(d.computed)}</span>`;
-          Toast.success(`Wallet reconciled — adjusted ${diff > 0 ? '+' : ''}${Utils.rand(diff)}. New balance: ${Utils.rand(d.computed)}`);
-          const inv = STATE.investors.find(i => i.id === investorId);
-          if (inv) inv.wallet_balance = d.computed;
-        }
-      } else {
-        if (resultEl) resultEl.innerHTML = `<span style="color:var(--text-muted)">No transactions found for this investor.</span>`;
+      // Dry-run first to show what would change
+      const preview = await API._fetch('POST', 'admin/reconcile-wallet', { investor_id: investorId, dry_run: true });
+      if (!preview.diffs || !preview.diffs[0]) {
+        if (resultEl) resultEl.innerHTML = `<span style="color:var(--text-muted)">No transactions found.</span>`;
         Toast.info('No completed transactions found to reconcile.');
+        return;
       }
+      const d = preview.diffs[0];
+      if (Math.abs(d.diff) < 0.01) {
+        if (resultEl) resultEl.innerHTML = `<span style="color:var(--green)"><i class="fa-solid fa-check"></i> Wallet is correct (${Utils.rand(d.current)})</span>`;
+        Toast.info('Wallet balance is already correct — no change needed.');
+        return;
+      }
+      const confirmed = await Confirm.ask('Reconcile wallet balance?', {
+        body: `Current: ${Utils.rand(d.current)} → Computed from transactions: ${Utils.rand(d.computed)} (${d.diff > 0 ? '+' : ''}${Utils.rand(d.diff)}). This will overwrite the current balance.`,
+        confirmLabel: 'Apply',
+        danger: d.computed < 0,
+      });
+      if (!confirmed) return;
+      await API._fetch('POST', 'admin/reconcile-wallet', { investor_id: investorId });
+      if (resultEl) resultEl.innerHTML = `<span style="color:#fec24f"><i class="fa-solid fa-check"></i> Adjusted ${d.diff > 0 ? '+' : ''}${Utils.rand(d.diff)} → ${Utils.rand(d.computed)}</span>`;
+      Toast.success(`Wallet reconciled. New balance: ${Utils.rand(d.computed)}`);
+      const inv = STATE.investors.find(i => i.id === investorId);
+      if (inv) inv.wallet_balance = d.computed;
     } catch (e) { Toast.error('Reconciliation failed: ' + (e.message || 'unknown error')); }
   });
 }
