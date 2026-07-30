@@ -426,15 +426,17 @@ const Utils = {
     return (Number(rate) * 100).toFixed(decimals) + '%';
   },
 
-  /* Format date — parse date-only strings (YYYY-MM-DD) in local time to
-     avoid the UTC-midnight → timezone-shift off-by-one-day bug. */
+  /* Format date.
+     - Pure date strings (YYYY-MM-DD) are parsed as LOCAL midnight so a date
+       like 2026-07-31 isn't shifted to 30 Jul by the UTC-midnight/SAST bug.
+     - Full timestamps (contain T or Z) are passed to new Date() normally so
+       the UTC value is converted to local time correctly
+       (e.g. 2026-07-30T22:00:00Z → 31 Jul SAST). */
   date(str) {
     if (!str) return '—';
     const s = String(str);
-    const dateOnly = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    const d = dateOnly
-      ? new Date(+dateOnly[1], +dateOnly[2] - 1, +dateOnly[3])
-      : new Date(s);
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const d = m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(s);
     return d.toLocaleDateString('en-ZA', {
       day: '2-digit', month: 'short', year: 'numeric'
     });
