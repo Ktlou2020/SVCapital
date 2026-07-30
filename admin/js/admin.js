@@ -2314,7 +2314,7 @@ async function viewInvestor(id) {
             <label style="font-size:0.77rem;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Reason (optional)</label>
             <input type="text" id="walletOverrideNotes-${inv.id}" class="form-input" placeholder="e.g. correcting reconciliation error" style="width:100%">
           </div>
-          <button class="btn btn--sm" style="flex-shrink:0;background:rgba(239,68,68,.12);color:#f87171;border:1px solid rgba(239,68,68,.3)" onclick="overrideWalletBalance(${JSON.stringify(inv.id)},${JSON.stringify(inv.first_name+' '+inv.last_name)},this)">
+          <button class="btn btn--sm" style="flex-shrink:0;background:rgba(239,68,68,.12);color:#f87171;border:1px solid rgba(239,68,68,.3)" onclick='overrideWalletBalance(${JSON.stringify(inv.id)},${JSON.stringify(inv.first_name+' '+inv.last_name)},this)'>
             <i class="fa-solid fa-pen-to-square"></i> Set Balance
           </button>
         </div>
