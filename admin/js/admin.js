@@ -1900,6 +1900,69 @@ function _invTab(name) {
 
 let _currentInvestorId = null;
 
+function _editInvProfile() {
+  document.getElementById('invProfileView').style.display = 'none';
+  document.getElementById('invProfileEdit').style.display = '';
+}
+
+function _cancelInvProfileEdit() {
+  document.getElementById('invProfileEdit').style.display = 'none';
+  document.getElementById('invProfileView').style.display = '';
+}
+
+async function _saveInvProfile(btn) {
+  const inv = STATE.investors.find(i => i.id === _currentInvestorId);
+  if (!inv) return;
+
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
+
+  try {
+    // Direct investor fields
+    const directFields = {
+      email:        document.getElementById('ipf-email').value.trim(),
+      phone:        document.getElementById('ipf-phone').value.trim(),
+      id_number:    document.getElementById('ipf-id_number').value.trim(),
+      province:     document.getElementById('ipf-province').value,
+      address:      document.getElementById('ipf-address').value.trim(),
+      occupation:   document.getElementById('ipf-occupation').value.trim(),
+      risk_profile: document.getElementById('ipf-risk_profile').value,
+    };
+
+    // Merge JSONB profile fields, preserving existing keys
+    let invProfile = {};
+    try {
+      if (inv.investor_profile) {
+        invProfile = typeof inv.investor_profile === 'string'
+          ? JSON.parse(inv.investor_profile)
+          : { ...inv.investor_profile };
+      }
+    } catch (_) {}
+    invProfile.employer     = document.getElementById('ipf-employer').value.trim();
+    invProfile.next_of_kin  = document.getElementById('ipf-next_of_kin').value.trim();
+    invProfile.kin_contact  = document.getElementById('ipf-kin_contact').value.trim();
+
+    await API._fetch('PATCH', `tables/investors/${_currentInvestorId}`, {
+      ...directFields,
+      investor_profile: invProfile,
+    });
+
+    // Update local STATE so the read-only view refreshes correctly
+    Object.assign(inv, directFields, { investor_profile: invProfile });
+
+    Toast.show('Profile saved.', 'success');
+    // Reload the investor detail to reflect updated data
+    await viewInvestor(_currentInvestorId);
+    _invTab('profile');
+  } catch (err) {
+    console.error('[saveInvProfile]', err);
+    Toast.show('Failed to save: ' + (err.message || 'Unknown error'), 'error');
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }
+}
+
 async function viewInvestor(id) {
   _currentInvestorId = id;
   const inv = STATE.investors.find(i => i.id === id);
@@ -2041,18 +2104,77 @@ async function viewInvestor(id) {
 
   <!-- ── Profile ── -->
   <div id="invPanel-profile" style="display:none">
-    <div class="info-list">
-      <div class="info-row"><span class="info-row__label">Email</span><span class="info-row__value">${_esc(inv.email)||'—'}${inv.email?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.email)},this)' title="Copy email"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
-      <div class="info-row"><span class="info-row__label">Phone</span><span class="info-row__value">${_esc(inv.phone)||'—'}${inv.phone?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.phone)},this)' title="Copy phone"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
-      <div class="info-row"><span class="info-row__label">SA ID Number</span><span class="info-row__value">${_esc(inv.id_number)||'—'}${inv.id_number?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.id_number)},this)' title="Copy ID"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
-      <div class="info-row"><span class="info-row__label">Province</span><span class="info-row__value">${_esc((inv.province||'').trim())||'—'}</span></div>
-      <div class="info-row"><span class="info-row__label">Address</span><span class="info-row__value" style="font-size:0.78rem">${_esc(inv.address)||'—'}</span></div>
-      <div class="info-row"><span class="info-row__label">Occupation</span><span class="info-row__value">${_esc(inv.occupation)||'—'}</span></div>
-      <div class="info-row"><span class="info-row__label">Employer</span><span class="info-row__value">${_esc(invProfile.employer||'')||'—'}</span></div>
-      <div class="info-row"><span class="info-row__label">Next of Kin</span><span class="info-row__value">${_esc(invProfile.next_of_kin||'')||'—'}</span></div>
-      <div class="info-row"><span class="info-row__label">Kin Contact</span><span class="info-row__value">${_esc(invProfile.kin_contact||'')||'—'}</span></div>
-      <div class="info-row"><span class="info-row__label">Risk Profile</span><span class="info-row__value" style="text-transform:capitalize">${_esc(inv.risk_profile)||'—'}</span></div>
-      <div class="info-row"><span class="info-row__label">Account Created</span><span class="info-row__value">${Utils.date(inv.date_joined)}</span></div>
+    <!-- read-only view -->
+    <div id="invProfileView">
+      <div class="info-list">
+        <div class="info-row"><span class="info-row__label">Email</span><span class="info-row__value">${_esc(inv.email)||'—'}${inv.email?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.email)},this)' title="Copy email"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
+        <div class="info-row"><span class="info-row__label">Phone</span><span class="info-row__value">${_esc(inv.phone)||'—'}${inv.phone?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.phone)},this)' title="Copy phone"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
+        <div class="info-row"><span class="info-row__label">SA ID Number</span><span class="info-row__value">${_esc(inv.id_number)||'—'}${inv.id_number?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.id_number)},this)' title="Copy ID"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
+        <div class="info-row"><span class="info-row__label">Province</span><span class="info-row__value">${_esc((inv.province||'').trim())||'—'}</span></div>
+        <div class="info-row"><span class="info-row__label">Address</span><span class="info-row__value" style="font-size:0.78rem">${_esc(inv.address)||'—'}</span></div>
+        <div class="info-row"><span class="info-row__label">Occupation</span><span class="info-row__value">${_esc(inv.occupation)||'—'}</span></div>
+        <div class="info-row"><span class="info-row__label">Employer</span><span class="info-row__value">${_esc(invProfile.employer||'')||'—'}</span></div>
+        <div class="info-row"><span class="info-row__label">Next of Kin</span><span class="info-row__value">${_esc(invProfile.next_of_kin||'')||'—'}</span></div>
+        <div class="info-row"><span class="info-row__label">Kin Contact</span><span class="info-row__value">${_esc(invProfile.kin_contact||'')||'—'}</span></div>
+        <div class="info-row"><span class="info-row__label">Risk Profile</span><span class="info-row__value" style="text-transform:capitalize">${_esc(inv.risk_profile)||'—'}</span></div>
+        <div class="info-row"><span class="info-row__label">Account Created</span><span class="info-row__value">${Utils.date(inv.date_joined)}</span></div>
+      </div>
+      <div style="margin-top:14px">
+        <button class="btn btn--secondary btn--sm" onclick="_editInvProfile()"><i class="fa-solid fa-pen-to-square"></i> Edit Profile</button>
+      </div>
+    </div>
+    <!-- edit form (hidden initially) -->
+    <div id="invProfileEdit" style="display:none">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" class="form-control" id="ipf-email" value="${_esc(inv.email||'')}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Phone</label>
+          <input type="text" class="form-control" id="ipf-phone" value="${_esc(inv.phone||'')}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">SA ID Number</label>
+          <input type="text" class="form-control" id="ipf-id_number" value="${_esc(inv.id_number||'')}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Province</label>
+          <select class="form-control" id="ipf-province">
+            ${['','Eastern Cape','Free State','Gauteng','KwaZulu-Natal','Limpopo','Mpumalanga','Northern Cape','North West','Western Cape'].map(p=>`<option value="${p}" ${(inv.province||'').trim()===p?'selected':''}>${p||'— Select province —'}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Address</label>
+          <textarea class="form-control" id="ipf-address" rows="2" style="resize:vertical">${_esc(inv.address||'')}</textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Occupation</label>
+          <input type="text" class="form-control" id="ipf-occupation" value="${_esc(inv.occupation||'')}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Employer</label>
+          <input type="text" class="form-control" id="ipf-employer" value="${_esc(invProfile.employer||'')}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Next of Kin</label>
+          <input type="text" class="form-control" id="ipf-next_of_kin" value="${_esc(invProfile.next_of_kin||'')}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Kin Contact</label>
+          <input type="text" class="form-control" id="ipf-kin_contact" value="${_esc(invProfile.kin_contact||'')}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Risk Profile</label>
+          <select class="form-control" id="ipf-risk_profile">
+            ${['','conservative','moderate','aggressive'].map(r=>`<option value="${r}" ${(inv.risk_profile||'')===r?'selected':''}>${r||'— Select —'}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:16px">
+        <button class="btn btn--primary btn--sm" onclick="_saveInvProfile(this)"><i class="fa-solid fa-floppy-disk"></i> Save Changes</button>
+        <button class="btn btn--secondary btn--sm" onclick="_cancelInvProfileEdit()"><i class="fa-solid fa-xmark"></i> Cancel</button>
+      </div>
     </div>
   </div>
 
