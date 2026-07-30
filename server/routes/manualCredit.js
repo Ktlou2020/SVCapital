@@ -268,4 +268,68 @@ router.post('/backfill/fica-from-kyc', async (req, res) => {
   }
 });
 
+/* ─── POST /api/admin/reconcile-wallet ────────────────────────────────────────
+   Recomputes wallet_balance for one investor (or all investors) from their
+   completed transactions so any deposits silently missed by the old PATCH
+   credit bug are recovered.
+
+   Body: { investor_id: 'S-XXXXXX' }  — single investor
+         { all: true }                 — every investor (slow, use with care)
+   ─────────────────────────────────────────────────────────────────────── */
+router.post('/reconcile-wallet', async (req, res) => {
+  const { investor_id, all } = req.body || {};
+  if (!investor_id && !all) {
+    return res.status(400).json({ error: 'Provide investor_id or all:true' });
+  }
+  try {
+    /* Compute correct wallet balance = sum of credits minus sum of debits
+       across all completed transactions for the investor. */
+    const whereClause = investor_id ? 'AND i.investor_id = $1' : '';
+    const params      = investor_id ? [investor_id] : [];
+
+    const { rows } = await pool.query(`
+      SELECT
+        i.investor_id,
+        COALESCE(SUM(
+          CASE
+            WHEN i.type IN ('deposit','return','payout','referral_bonus') AND i.status = 'completed'
+              THEN  i.amount
+            WHEN i.type IN ('withdrawal','platform_fee','investment') AND i.status = 'completed'
+              THEN -i.amount
+            ELSE 0
+          END
+        ), 0) AS computed_balance
+      FROM transactions i
+      WHERE i.sub_account_id IS NULL
+        ${whereClause}
+      GROUP BY i.investor_id
+    `, params);
+
+    let updated = 0;
+    const diffs = [];
+    for (const r of rows) {
+      const computed = parseFloat(r.computed_balance);
+      const { rows: cur } = await pool.query(
+        'SELECT id, wallet_balance FROM investors WHERE id = $1', [r.investor_id]
+      );
+      if (!cur[0]) continue;
+      const current = parseFloat(cur[0].wallet_balance);
+      const diff    = Math.round((computed - current) * 100) / 100;
+      diffs.push({ investor_id: r.investor_id, current, computed, diff });
+      if (Math.abs(diff) >= 0.01) {
+        await pool.query(
+          'UPDATE investors SET wallet_balance = $1, updated_at = NOW() WHERE id = $2',
+          [computed, r.investor_id]
+        );
+        updated++;
+      }
+    }
+
+    res.json({ success: true, checked: rows.length, updated, diffs });
+  } catch (err) {
+    console.error('/admin/reconcile-wallet error:', err.message);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
 module.exports = router;
