@@ -3549,12 +3549,13 @@ async function loadMarketplace() {
       .map(p => {
         const pi = Utils.productInfo(p.product_type);
         return {
-          product_type: p.product_type,
-          label:        pi.label || p.product_type,
-          is_active:    true,
-          sort_order:   0,
+          product_type:   p.product_type,
+          label:          pi.label || p.product_type,
+          is_active:      true,
+          sort_order:     0,
           min_investment: p.min_investment,
           annual_rate:    p.annual_rate,
+          benchmark_rate: p.annual_rate,
         };
       });
   }
@@ -3616,11 +3617,11 @@ function renderMarketplace() {
   else { if (banner) banner.textContent = 'Investment Products'; renderProductsGrid(); }
 }
 
-// Count of open/waitlist pools for a product type
+// Count of open/waitlist/filling pools for a product type
 function _openPoolsForProduct(type) {
   return PORTAL.pools.filter(p => {
     if (p.product_type !== type) return false;
-    return p.status === 'open' || p.status === 'waitlist';
+    return p.status === 'open' || p.status === 'waitlist' || p.status === 'filling';
   });
 }
 
