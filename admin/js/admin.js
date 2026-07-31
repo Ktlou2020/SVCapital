@@ -2246,6 +2246,39 @@ async function viewInvestor(id) {
         }).join(''):'<tr><td colspan="8" class="text-center text-muted" style="padding:16px">No investments on record</td></tr>'}</tbody>
       </table>
     </div>
+    <!-- ── Create Investment on Behalf ── -->
+    <div class="panel mt-16" style="border-color:rgba(34,197,94,0.25)" id="adminInvestPanel-${inv.id}">
+      <div class="panel__header" style="background:rgba(34,197,94,0.06)">
+        <span class="panel__title"><i class="fa-solid fa-arrow-trend-up" style="color:#22c55e;margin-right:6px"></i>Create Investment on Behalf</span>
+        <span style="font-size:0.72rem;color:#22c55e;font-weight:600">Admin Action</span>
+      </div>
+      <div class="panel__body">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <div>
+            <label style="font-size:0.78rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Investment Pool</label>
+            <select id="adminInvestPool-${inv.id}" style="width:100%;padding:8px 10px;border:1.5px solid rgba(0,0,0,0.12);border-radius:8px;font-size:0.85rem;background:var(--bg-secondary);color:var(--text)">
+              <option value="">— Select pool —</option>
+              ${(STATE.pools||[]).filter(p=>['open','active','filling'].includes(p.status)).sort((a,b)=>(a.name||'').localeCompare(b.name||'')).map(p=>`<option value="${_esc(p.id)}">${_esc(p.name)} (min: ${Utils.rand(p.min_investment||0)}, ${Utils.pct(p.annual_rate||0)} p.a.)</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label style="font-size:0.78rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Amount (R)</label>
+            <input type="number" id="adminInvestAmt-${inv.id}" min="0" step="0.01" placeholder="e.g. 5000" style="width:100%;padding:8px 10px;border:1.5px solid rgba(0,0,0,0.12);border-radius:8px;font-size:0.85rem;background:var(--bg-secondary);color:var(--text);box-sizing:border-box" />
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.85rem;font-weight:600">
+            <input type="checkbox" id="adminInvestFee-${inv.id}" style="width:16px;height:16px;accent-color:#22c55e" />
+            Charge 1% platform fee
+          </label>
+          <span style="font-size:0.78rem;color:var(--text-muted)">· Wallet: <strong>${Utils.rand(inv.wallet_balance)}</strong></span>
+        </div>
+        <div id="adminInvestResult-${inv.id}" style="font-size:0.82rem;margin-bottom:10px"></div>
+        <button class="btn btn--success btn--sm" onclick='adminInvestOnBehalf(${JSON.stringify(inv.id)},${JSON.stringify(inv.first_name+" "+inv.last_name)},this)'>
+          <i class="fa-solid fa-arrow-trend-up"></i> Create Investment
+        </button>
+      </div>
+    </div>
   </div>
 
   <!-- ── Transactions ── -->
@@ -2510,6 +2543,58 @@ async function overrideWalletBalance(investorId, name, btn) {
     } catch (e) {
       if (resultEl) resultEl.innerHTML = `<span style="color:#f87171">${e.message}</span>`;
       Toast.error('Override failed: ' + (e.message || 'unknown error'));
+    }
+  });
+}
+
+async function adminInvestOnBehalf(investorId, name, btn) {
+  const poolEl   = document.getElementById('adminInvestPool-' + investorId);
+  const amtEl    = document.getElementById('adminInvestAmt-' + investorId);
+  const feeEl    = document.getElementById('adminInvestFee-' + investorId);
+  const resultEl = document.getElementById('adminInvestResult-' + investorId);
+
+  const poolId   = poolEl?.value;
+  const amt      = parseFloat(amtEl?.value);
+  const chargeFee = feeEl?.checked ?? false;
+
+  if (!poolId) {
+    if (resultEl) resultEl.innerHTML = '<span style="color:#f87171">Please select a pool.</span>';
+    return;
+  }
+  if (isNaN(amt) || amt <= 0) {
+    if (resultEl) resultEl.innerHTML = '<span style="color:#f87171">Enter a valid investment amount.</span>';
+    return;
+  }
+
+  const pool      = (STATE.pools || []).find(p => p.id === poolId);
+  const fee       = chargeFee ? Math.round(amt * 0.01 * 100) / 100 : 0;
+  const total     = amt + fee;
+  const feeNote   = chargeFee ? ` + R${fee.toFixed(2)} platform fee` : ' (no platform fee)';
+  const inv       = STATE.investors.find(i => i.id === investorId);
+  const balance   = parseFloat(inv?.wallet_balance) || 0;
+
+  const confirmed = await Confirm.ask('Create investment on behalf?', {
+    body: `Investor: ${name}\nPool: ${pool?.name || poolId}\nAmount: R${amt.toFixed(2)}${feeNote}\nTotal deducted from wallet: R${total.toFixed(2)}\nCurrent wallet: R${balance.toFixed(2)}\n\nThis will create an active investment record and deduct from the investor's wallet.`,
+    confirmLabel: 'Create Investment',
+  });
+  if (!confirmed) return;
+
+  await _withBtn(btn, async () => {
+    try {
+      const res = await API._fetch('POST', 'admin/invest-on-behalf', { investorId, poolId, amount: amt, chargeFee });
+      if (res.success) {
+        if (inv) inv.wallet_balance = parseFloat(inv.wallet_balance || 0) - res.totalDeducted;
+        if (resultEl) resultEl.innerHTML = `<span style="color:#4ade80"><i class="fa-solid fa-check"></i> Investment created — R${res.amount.toFixed(2)} in ${res.poolName}${res.fee > 0 ? `, R${res.fee.toFixed(2)} fee charged` : ''}</span>`;
+        Toast.success(`Investment of R${res.amount.toFixed(2)} created in ${res.poolName}`);
+        await viewInvestor(investorId);
+        _invTab('investments');
+      } else {
+        if (resultEl) resultEl.innerHTML = `<span style="color:#f87171">${res.error || 'Failed'}</span>`;
+        Toast.error(res.error || 'Investment failed');
+      }
+    } catch (e) {
+      if (resultEl) resultEl.innerHTML = `<span style="color:#f87171">${e.message}</span>`;
+      Toast.error('Investment failed: ' + (e.message || 'unknown error'));
     }
   });
 }

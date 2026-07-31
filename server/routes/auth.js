@@ -1217,6 +1217,7 @@ router.post('/investor-magic-link', requireAuth, async (req, res) => {
     const inv = r.rows[0];
     const token = jwt.sign(
       { sub: inv.id, email: inv.email, role: 'investor', purpose: 'admin_view_as',
+        investorId: inv.id,
         firstName: inv.first_name || '', lastName: inv.last_name || '' },
       JWT_SECRET,
       { expiresIn: '15m' }
