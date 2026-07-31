@@ -2557,6 +2557,27 @@
   </div>
 </div>
 
+<!-- Cancel Transaction Modal -->
+<div class="modal-overlay" id="cancelTxnModal" onclick="if(event.target===this)Modal.close('cancelTxnModal')">
+  <div class="modal modal--sm">
+    <div class="modal__header">
+      <h2 class="modal__title"><i class="fa-solid fa-ban" style="color:#ef4444;margin-right:8px"></i>Cancel Transaction</h2>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('cancelTxnModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:16px">This will mark the transaction as <strong style="color:#ef4444">Failed</strong>. Please provide a reason for the cancellation.</p>
+      <div class="form-group">
+        <label class="form-label">Cancellation Note <span style="color:#ef4444">*</span></label>
+        <textarea id="cancelTxnNote" class="form-input" rows="3" placeholder="e.g. EFT proof of payment not provided, duplicate transaction, investor request…" style="resize:vertical"></textarea>
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('cancelTxnModal')">Back</button>
+      <button class="btn btn--danger" onclick="confirmCancelTxn()"><i class="fa-solid fa-ban"></i> Confirm Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- Ticket Detail Modal -->
 <div class="modal-overlay" id="ticketModal" onclick="if(event.target===this)Modal.close('ticketModal')">
   <div class="modal modal--lg">
@@ -3192,7 +3213,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=4"></script>
-<script src="js/admin.js?v=21"></script>
+<script src="js/admin.js?v=22"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>
