@@ -337,6 +337,40 @@ router.post('/reconcile-wallet', async (req, res) => {
   }
 });
 
+/* ─── POST /api/admin/pools/fix-product-type ──────────────────────────────────
+   One-shot: renames product_type = 'smme' → 'short_term' across investment_pools,
+   investments, and products tables immediately, without requiring a server restart.
+   ─────────────────────────────────────────────────────────────────────── */
+router.post('/pools/fix-product-type', async (req, res) => {
+  try {
+    const { rowCount: poolRows } = await pool.query(
+      `UPDATE investment_pools SET product_type = 'short_term', updated_at = NOW() WHERE product_type = 'smme'`
+    );
+    const { rowCount: invRows } = await pool.query(
+      `UPDATE investments SET product_type = 'short_term', updated_at = NOW() WHERE product_type = 'smme'`
+    );
+    const { rowCount: prodRows } = await pool.query(
+      `UPDATE products SET product_type = 'short_term', updated_at = NOW() WHERE product_type = 'smme'`
+    ).catch(() => ({ rowCount: 0 }));
+
+    const total = poolRows + invRows + prodRows;
+
+    setImmediate(() => audit.log({
+      actorId:    req.user.id,
+      actorEmail: req.user.email,
+      action:     'admin.fix_product_type_smme',
+      entityType: 'investment_pools',
+      description: `Renamed product_type smme→short_term: ${poolRows} pools, ${invRows} investments, ${prodRows} products.`,
+      ip:         req.ip,
+    }).catch(() => {}));
+
+    res.json({ success: true, poolRows, invRows, prodRows, total });
+  } catch (err) {
+    console.error('/admin/pools/fix-product-type error:', err.message);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
 /* ─── POST /api/admin/override-wallet ────────────────────────────────────────
    Directly sets wallet_balance to the specified value without creating any
    transaction record. Admin-only correction tool for balance discrepancies
@@ -378,6 +412,262 @@ router.post('/override-wallet', async (req, res) => {
     res.json({ success: true, oldBalance, newBalance: nb });
   } catch (err) {
     console.error('/admin/override-wallet error:', err.message);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+/* ────────────────────────────────────────────────────────
+   POST /api/admin/invest-on-behalf
+   Body: { investorId, poolId, amount, chargeFee: bool }
+   Admin creates an investment for an investor, optionally charging
+   the 1% platform fee. Deducts from investor's wallet.
+   ──────────────────────────────────────────────────────── */
+router.post('/invest-on-behalf', async (req, res) => {
+  const { investorId, poolId, amount, chargeFee = false } = req.body || {};
+
+  const amt = parseFloat(amount);
+  if (!investorId || !poolId || isNaN(amt) || amt <= 0) {
+    return res.status(400).json({ error: 'investorId, poolId, and a positive amount are required.' });
+  }
+
+  const crypto = require('crypto');
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Lock investor row
+    const { rows: [inv] } = await client.query(
+      'SELECT id, first_name, last_name, email, wallet_balance FROM investors WHERE id = $1 FOR UPDATE',
+      [investorId]
+    );
+    if (!inv) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Investor not found.' });
+    }
+
+    // Fetch pool
+    const { rows: [poolRow] } = await client.query(
+      'SELECT id, name, product_type, annual_rate, min_investment, status, maturity_date FROM investment_pools WHERE id = $1',
+      [poolId]
+    );
+    if (!poolRow) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Pool not found.' });
+    }
+    if (!['open', 'active', 'filling'].includes(poolRow.status)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: `Pool is not accepting investments (status: ${poolRow.status}).` });
+    }
+
+    const minInv = parseFloat(poolRow.min_investment) || 0;
+    if (minInv && amt < minInv) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: `Minimum investment for this pool is R${minInv.toLocaleString('en-ZA')}.` });
+    }
+
+    const fee      = chargeFee ? Math.round(amt * 0.01 * 100) / 100 : 0;
+    const required = amt + fee;
+    const balance  = parseFloat(inv.wallet_balance) || 0;
+
+    if (balance < required - 0.001) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: `Insufficient wallet balance. Required: R${required.toLocaleString('en-ZA', { minimumFractionDigits: 2 })} (R${amt.toLocaleString('en-ZA', { minimumFractionDigits: 2 })} investment${chargeFee ? ` + R${fee.toLocaleString('en-ZA', { minimumFractionDigits: 2 })} fee` : ''}), available: R${balance.toLocaleString('en-ZA', { minimumFractionDigits: 2 })}.`,
+      });
+    }
+
+    // Deduct from wallet
+    await client.query(
+      `UPDATE investors SET wallet_balance = wallet_balance - $1,
+         total_invested = COALESCE(total_invested, 0) + $2,
+         updated_at = NOW()
+       WHERE id = $3`,
+      [required, amt, investorId]
+    );
+
+    // Create investment record
+    const invId  = 'INV-' + crypto.randomUUID().replace(/-/g, '').slice(0, 10).toUpperCase();
+    const now    = new Date();
+    const endDate = poolRow.maturity_date || null;
+    await client.query(
+      `INSERT INTO investments (id, investor_id, pool_id, pool_name, product_type, amount, annual_rate, status, start_date, end_date, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'active',NOW(),$8,NOW(),NOW())`,
+      [invId, investorId, poolId, poolRow.name, poolRow.product_type, amt, poolRow.annual_rate || 0, endDate]
+    );
+
+    // Optional platform fee transaction
+    if (chargeFee && fee > 0) {
+      const feeRef = 'FEE-' + crypto.randomUUID().replace(/-/g, '').slice(0, 10).toUpperCase();
+      await client.query(
+        `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, transaction_date, created_at, updated_at)
+         VALUES (gen_random_uuid(),$1,'platform_fee',$2,'completed',$3,$4,NOW(),NOW(),NOW())`,
+        [investorId, -fee, feeRef, `Platform fee (1%) for investment in ${poolRow.name}`]
+      );
+    }
+
+    // Deduct investment amount transaction
+    const invTxRef = 'INV-TXN-' + crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase();
+    await client.query(
+      `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, transaction_date, created_at, updated_at)
+       VALUES (gen_random_uuid(),$1,'investment',$2,'completed',$3,$4,NOW(),NOW(),NOW())`,
+      [investorId, -amt, invTxRef, `Investment in ${poolRow.name} (admin-created on behalf)`]
+    );
+
+    await client.query('COMMIT');
+
+    setImmediate(() => audit.log({
+      actorId:    req.user.id,
+      actorEmail: req.user.email,
+      action:     'investment.admin_created',
+      entityType: 'investments',
+      entityId:   invId,
+      description: `Admin created R${amt} investment in "${poolRow.name}" for ${inv.first_name} ${inv.last_name} (${investorId}). Fee charged: ${chargeFee ? `R${fee}` : 'none'}.`,
+      ip:         req.ip,
+    }).catch(() => {}));
+
+    res.json({
+      success: true,
+      investmentId: invId,
+      amount:       amt,
+      fee,
+      totalDeducted: required,
+      poolName:     poolRow.name,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('/admin/invest-on-behalf error:', err.message);
+    res.status(500).json({ error: 'Internal server error.' });
+  } finally {
+    client.release();
+  }
+});
+
+/* ─── POST /api/admin/reimport-bank-accounts ──────────────────────────────────
+   Accepts a bankAccounts JSON array (from the original Firebase export) and
+   updates the dedicated bank columns on investor records.
+
+   Body: { bankAccounts: [...] }
+   ─────────────────────────────────────────────────────────────────────── */
+router.post('/reimport-bank-accounts', async (req, res) => {
+  const bankAccounts = req.body?.bankAccounts;
+  if (!Array.isArray(bankAccounts) || !bankAccounts.length) {
+    return res.status(400).json({ error: 'bankAccounts must be a non-empty array.' });
+  }
+
+  // Build map: userAccountNumber → best active bank account
+  const bankByUser = {};
+  for (const ba of bankAccounts) {
+    if (!ba.userAccountNumber || ba.status !== 'ACTIVE') continue;
+    const ex = bankByUser[ba.userAccountNumber];
+    const newer = !ex
+      || (!ex.defaultAccount && ba.defaultAccount)
+      || (ex.defaultAccount === ba.defaultAccount && new Date(ba.dateUpdated || 0) > new Date(ex.dateUpdated || 0));
+    if (newer) bankByUser[ba.userAccountNumber] = ba;
+  }
+
+  let updated = 0;
+  let skipped = 0;
+  const errors = [];
+
+  for (const [investorId, ba] of Object.entries(bankByUser)) {
+    try {
+      const { rowCount } = await pool.query(
+        `UPDATE investors
+            SET bank_name           = $2,
+                bank_account_holder = $3,
+                bank_account_number = $4,
+                bank_branch_code    = $5,
+                bank_account_type   = $6,
+                bank_account_status = COALESCE(NULLIF(bank_account_status, ''), 'pending'),
+                updated_at          = NOW()
+          WHERE id = $1`,
+        [
+          investorId,
+          ba.bankName           || null,
+          ba.accountHolderName  || null,
+          ba.accountNumber      || null,
+          ba.branchNumber       || null,
+          (ba.accountType || '').toLowerCase() || null,
+        ]
+      );
+      if (rowCount > 0) updated++;
+      else skipped++;
+    } catch (e) {
+      errors.push(`${investorId}: ${e.message}`);
+    }
+  }
+
+  setImmediate(() => audit.log({
+    actorId:    req.user.id,
+    actorEmail: req.user.email,
+    action:     'investors.reimport_bank_accounts',
+    entityType: 'investors',
+    description: `Re-imported bank accounts from JSON upload: ${updated} updated, ${skipped} skipped (no match), ${errors.length} errors.`,
+    ip: req.ip,
+  }).catch(() => {}));
+
+  res.json({ success: true, total: Object.keys(bankByUser).length, updated, skipped, errors: errors.slice(0, 20) });
+});
+
+/* ─── POST /api/admin/promote-bank-from-notes ─────────────────────────────────
+   Promotes bank account data already stored in the investors.notes JSON column
+   into the dedicated bank_name / bank_account_number / etc. columns.
+   Safe to run multiple times — only fills nulls, never overwrites existing data.
+   ─────────────────────────────────────────────────────────────────────── */
+router.post('/promote-bank-from-notes', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, notes FROM investors
+        WHERE notes IS NOT NULL AND notes LIKE '{%'
+          AND (bank_name IS NULL OR bank_account_number IS NULL)`
+    );
+
+    let updated = 0;
+    let skipped = 0;
+    const errors = [];
+
+    for (const inv of rows) {
+      let bd;
+      try { bd = JSON.parse(inv.notes); } catch (_) { skipped++; continue; }
+
+      const bankName   = bd.bank_name      || null;
+      const acctNum    = bd.account_number || null;
+      const holder     = bd.account_holder || null;
+      const branchCode = bd.branch_code    || null;
+
+      if (!bankName && !acctNum) { skipped++; continue; }
+
+      try {
+        const { rowCount } = await pool.query(
+          `UPDATE investors
+              SET bank_name           = COALESCE(bank_name,           $2),
+                  bank_account_number = COALESCE(bank_account_number, $3),
+                  bank_account_holder = COALESCE(bank_account_holder, $4),
+                  bank_branch_code    = COALESCE(bank_branch_code,    $5),
+                  bank_account_status = COALESCE(bank_account_status, 'pending'),
+                  updated_at          = NOW()
+            WHERE id = $1`,
+          [inv.id, bankName, acctNum, holder, branchCode]
+        );
+        if (rowCount > 0) updated++;
+        else skipped++;
+      } catch (e) {
+        errors.push(`${inv.id}: ${e.message}`);
+      }
+    }
+
+    setImmediate(() => audit.log({
+      actorId:    req.user.id,
+      actorEmail: req.user.email,
+      action:     'investors.promote_bank_from_notes',
+      entityType: 'investors',
+      description: `Promoted bank account data from notes JSON: ${updated} updated, ${skipped} skipped, ${errors.length} errors.`,
+      ip: req.ip,
+    }).catch(() => {}));
+
+    res.json({ success: true, checked: rows.length, updated, skipped, errors: errors.slice(0, 20) });
+  } catch (err) {
+    console.error('/admin/promote-bank-from-notes error:', err.message);
     res.status(500).json({ error: 'Internal server error.' });
   }
 });

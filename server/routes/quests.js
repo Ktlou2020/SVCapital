@@ -153,7 +153,7 @@ const QUESTS = [
    GET /api/quests/my
    ──────────────────────────────────────────────────────── */
 router.get('/my', requireAuth, async (req, res) => {
-  const investorId = req.user.investorId;
+  const investorId = req.user.investorId || req.user.sub;
   if (!investorId) return res.status(400).json({ error: 'No investorId on token.' });
 
   try {
@@ -195,7 +195,7 @@ router.get('/my', requireAuth, async (req, res) => {
    Body: { questId, data: {} }
    ──────────────────────────────────────────────────────── */
 router.post('/complete', requireAuth, async (req, res) => {
-  const investorId = req.user.investorId;
+  const investorId = req.user.investorId || req.user.sub;
   if (!investorId) return res.status(400).json({ error: 'No investorId on token.' });
 
   const { questId, data = {} } = req.body || {};
