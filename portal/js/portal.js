@@ -5498,7 +5498,7 @@ function buildStatementHTML(opts) {
   if (incPerformance && investments.length > 0) {
     const byProduct = {};
     investments.forEach(inv => {
-      const p = inv.product_type || 'unknown';
+      const p = (inv.product_type === 'smme' ? 'short_term' : inv.product_type) || 'unknown';
       if (!byProduct[p]) byProduct[p] = { count: 0, capital: 0, returns: 0 };
       byProduct[p].count++;
       if (!inv.is_reinvestment) byProduct[p].capital += Number(inv.amount) || 0;
@@ -11031,7 +11031,7 @@ function downloadSaStatement(saId, saName) {
   if (investments.length > 0) {
     const byProduct = {};
     investments.forEach(inv => {
-      const p = inv.product_type || 'unknown';
+      const p = (inv.product_type === 'smme' ? 'short_term' : inv.product_type) || 'unknown';
       if (!byProduct[p]) byProduct[p] = { count: 0, capital: 0, returns: 0 };
       byProduct[p].count++;
       if (!inv.is_reinvestment) byProduct[p].capital += Number(inv.amount) || 0;
