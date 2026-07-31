@@ -3,6 +3,41 @@
    ═══════════════════════════════════════════════ */
 'use strict';
 
+/* ─── Admin "View as Investor" — consume ?viewas=<jwt> before any auth check ─── */
+(() => {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const viewasToken = params.get('viewas');
+    if (!viewasToken) return;
+
+    // Decode JWT payload (no crypto verification — server already signed it)
+    const parts = viewasToken.split('.');
+    if (parts.length !== 3) return;
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+    if (!payload.sub || payload.purpose !== 'admin_view_as') return;
+
+    // Inject token so Auth.isLoggedIn() and all API calls work as the investor
+    localStorage.setItem('svc_token', viewasToken);
+    localStorage.setItem('svc_user', JSON.stringify({
+      investorId: payload.sub,
+      email:      payload.email || '',
+      firstName:  payload.firstName || '',
+      lastName:   payload.lastName  || '',
+      role:       'investor',
+      _viewas:    true,
+    }));
+    // Clear stale cache so fresh investor data loads
+    localStorage.removeItem('svc_portal_cache');
+    // Flag for the banner (sessionStorage so it clears when the tab closes)
+    sessionStorage.setItem('svc_viewas_active', '1');
+    sessionStorage.setItem('svc_viewas_name', `${payload.firstName || ''} ${payload.lastName || ''}`.trim() || payload.email || payload.sub);
+
+    // Remove token from URL so it isn't visible or re-processed on refresh
+    const clean = window.location.pathname + window.location.hash;
+    history.replaceState(null, '', clean);
+  } catch (_) {}
+})();
+
 /* ─── Resolve investor ID from JWT session or fall back to demo ─── */
 const DEMO_INVESTOR_ID = (() => {
   // Check JWT-based auth first
@@ -12,7 +47,7 @@ const DEMO_INVESTOR_ID = (() => {
       return 'INV-001';
     }
     const user = Auth.getUser();
-    if (user && (user.investorId || user.investor_id)) return user.investorId || user.investor_id;
+    if (user && user.investorId) return user.investorId;
   }
   return 'INV-001'; // fallback for demo
 })();
@@ -446,11 +481,17 @@ function renderTaskCompletionPanel() {
 }
 
 
+/* Normalise a raw fica/kyc status value (handles capitalised external provider values) */
+function _normFicaStatus(s) {
+  const MAP = { Approved:'approved', Verified:'approved', Declined:'rejected', Unverified:'not_started', Outstanding:'pending', Pending:'pending' };
+  return MAP[String(s || '').trim()] || String(s || '').trim().toLowerCase();
+}
+
 function _isInvestorFicaApproved(inv = PORTAL.investor) {
-  const OK = ['approved', 'verified', 'active'];
-  return OK.includes(String(inv?.fica_status || '').toLowerCase())
-      || OK.includes(String(inv?.kyc_status  || '').toLowerCase())
-      || OK.includes(String(inv?.status      || '').toLowerCase());
+  const ficaN = _normFicaStatus(inv?.fica_status);
+  const kycN  = _normFicaStatus(inv?.kyc_status);
+  const OK    = ['approved', 'verified', 'active'];
+  return OK.includes(ficaN) || OK.includes(kycN) || OK.includes(String(inv?.status || '').toLowerCase());
 }
 
 function _poolEndMs(dateStr) {
@@ -465,6 +506,7 @@ function _poolEndMs(dateStr) {
 function _getOpenMarketplacePools() {
   return (PORTAL.pools || []).filter(p => {
     if (!p) return false;
+    // Trust status from the database — the cron manages transitions.
     return p.status === 'open' || p.status === 'waitlist';
   });
 }
@@ -544,7 +586,7 @@ function renderWalletReadinessPanel() {
   panel.innerHTML = `
     <div class="panel__header" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <span class="panel__title"><i class="fa-solid fa-bolt" style="color:${accent}"></i> Wallet Readiness</span>
-      <span style="margin-left:auto;font-size:0.72rem;font-weight:700;color:${accent};background:${accent}14;padding:4px 10px;border-radius:999px;border:1px solid ${accent}2f">${ficaApproved ? 'Investment ready checks' : 'KYC/FICA pending — withdrawals locked'}</span>
+      <span style="margin-left:auto;font-size:0.72rem;font-weight:700;color:${accent};background:${accent}14;padding:4px 10px;border-radius:999px;border:1px solid ${accent}2f">${ficaApproved ? 'Investment ready checks' : 'FICA pending — withdrawals locked'}</span>
     </div>
     <div class="panel__body" style="display:flex;flex-direction:column;gap:14px">
       <div style="border:1px solid rgba(0,0,0,0.06);border-radius:14px;padding:14px 16px;background:linear-gradient(135deg,rgba(255,255,255,0.98),rgba(254,194,79,0.05))">
@@ -621,7 +663,7 @@ function renderMarketConversionPanel(pools) {
   } else if (!openPools.length) {
     title = 'There are no open pools in this filter right now.';
     sub = 'Use the waitlist options below or switch category to keep your momentum.';
-    action = "filterMarket('all')";
+    action = "filterMarket('all', document.querySelector('#view-marketplace .tab-bar .tab-btn'))";
     actionLabel = 'Show all pools';
     accent = '#eda5ff';
   }
@@ -936,11 +978,18 @@ function _syncNotifDot() {
   if (dot) dot.classList.toggle('has-unread', unread > 0);
 }
 
+const _NOTIF_READ_KEY = 'svc_dismissed_notifs';
+function _getReadNotifs() {
+  try { return new Set(JSON.parse(localStorage.getItem(_NOTIF_READ_KEY) || '[]')); } catch(_) { return new Set(); }
+}
+function _saveReadNotifs(s) {
+  try { localStorage.setItem(_NOTIF_READ_KEY, JSON.stringify([...s])); } catch(_) {}
+}
+
 function markAllRead() {
-  const dismissed = _getNotifDismissed();
-  _currentNotifKeys.forEach(k => dismissed.add(k));
-  _saveNotifDismissed(dismissed);
-  _currentNotifKeys = [];
+  const dismissed = _getReadNotifs();
+  document.querySelectorAll('#notifList .notif-item[data-nid]').forEach(el => { if (el.dataset.nid) dismissed.add(el.dataset.nid); });
+  _saveReadNotifs(dismissed);
   const list = document.getElementById('notifList');
   if (list) list.innerHTML = '<div style="padding:24px 18px;text-align:center;color:#999;font-size:0.82rem">You\'re all caught up!</div>';
   const dot = document.getElementById('notifDot');
@@ -973,19 +1022,6 @@ function _animateNum(el, target, prefix = '', suffix = '', duration = 900) {
   requestAnimationFrame(step);
 }
 
-/* ─── Notification dismiss persistence ─── */
-let _currentNotifKeys = [];
-function _notifDismissKey() { return _portalScopedKey('svc_notif_dismissed'); }
-function _getNotifDismissed() {
-  try { return new Set(JSON.parse(_localGet(_notifDismissKey()) || '[]')); } catch (_) { return new Set(); }
-}
-function _saveNotifDismissed(set) { _localSet(_notifDismissKey(), JSON.stringify([...set])); }
-function _weekKey() {
-  const d = new Date(); const dn = d.getDay() || 7; d.setDate(d.getDate() + 4 - dn);
-  const ys = new Date(d.getFullYear(), 0, 1);
-  return d.getFullYear() + '-W' + String(Math.ceil((((d - ys) / 86400000) + 1) / 7)).padStart(2, '0');
-}
-
 function loadNotifications() {
   const list = document.getElementById('notifList');
   if (!list) return;
@@ -996,22 +1032,24 @@ function loadNotifications() {
   const tickets     = PORTAL.tickets      || [];
   const transactions= PORTAL.transactions || [];
   const pools       = PORTAL.pools        || [];
-  const wk          = _weekKey();
 
-  // 1. Low wallet balance (re-triggers each week while balance stays low)
+  const _dismissed = _getReadNotifs();
+  const _notif = (obj) => { if (obj.nid && _dismissed.has(obj.nid)) obj.unread = false; return obj; };
+
+  // 1. Low wallet balance
   if (inv && parseFloat(inv.wallet_balance) < 500) {
-    notifs.push({
-      key: `low-balance-${wk}`,
+    notifs.push(_notif({
+      nid: 'low-bal',
       icon: 'fa-wallet', iconBg: 'rgba(254,194,79,0.12)', iconColor: '#fec24f',
       title: 'Low wallet balance',
       sub: `Your balance is ${Utils.rand(parseFloat(inv.wallet_balance) || 0)}. Top up to keep investing.`,
       time: 'Now',
       action: "openTopUpModal()",
       unread: true,
-    });
+    }));
   }
 
-  // 2. Investments maturing within 60 days (re-triggers each week)
+  // 2. Investments maturing within 60 days
   const now = new Date();
   const soon = investments.filter(i => {
     if (i.status !== 'active') return false;
@@ -1023,56 +1061,58 @@ function loadNotifications() {
   if (soon.length) {
     const s = soon[0];
     const daysLeft = Math.round((new Date(s.end_date || s.maturity_date) - now) / 86400000);
-    notifs.push({
-      key: `maturing-soon-${s.id}-${wk}`,
+    notifs.push(_notif({
+      nid: `mat-soon-${s.id}`,
       icon: 'fa-coins', iconBg: 'rgba(34,197,94,0.1)', iconColor: '#22c55e',
       title: 'Investment maturing soon',
       sub: `${s.pool_name || 'An investment'} matures in ${daysLeft} day${daysLeft === 1 ? '' : 's'}. Submit your maturity instruction.`,
       time: `${daysLeft}d away`,
       action: "navigate('investments',document.querySelector('[data-view=investments]'))",
       unread: true,
-    });
+    }));
   }
 
   // 3. FICA / KYC status notifications
   if (inv) {
-    if (inv.fica_status === 'rejected' || inv.kyc_status === 'rejected') {
-      notifs.push({
-        key: 'fica-rejected',
+    const _fN = _normFicaStatus(inv.fica_status);
+    const _kN = _normFicaStatus(inv.kyc_status);
+    if (_fN === 'rejected' || _kN === 'rejected') {
+      notifs.push(_notif({
+        nid: 'fica-rej',
         icon: 'fa-triangle-exclamation', iconBg: 'rgba(239,68,68,0.12)', iconColor: '#ef4444',
         title: 'FICA/KYC verification unsuccessful',
         sub: 'Your documents could not be verified. Please re-upload and resubmit.',
         time: 'Action required',
         action: "navigate('fica',document.querySelector('[data-view=fica]'))",
         unread: true,
-      });
-    } else if (inv.fica_status === 'in_progress' || inv.kyc_status === 'in_progress') {
+      }));
+    } else if (_fN === 'approved' || _kN === 'approved' || _kN === 'verified') {
       notifs.push({
-        key: 'fica-submitted',
-        icon: 'fa-file-circle-check', iconBg: 'rgba(254,194,79,0.12)', iconColor: '#fec24f',
-        title: 'FICA documents submitted',
-        sub: 'Your documents have been received and will be reviewed within 1–2 business days. We\'ll notify you once verified.',
-        time: 'Under review',
-        action: "navigate('fica',document.querySelector('[data-view=fica]'))",
-        unread: true,
-      });
-    } else if (inv.fica_status === 'pending' || inv.kyc_status === 'pending' || inv.status === 'fica_submitted') {
-      notifs.push({
-        key: 'fica-pending',
-        icon: 'fa-clock', iconBg: 'rgba(254,194,79,0.12)', iconColor: '#fec24f',
-        title: 'FICA/KYC verification in progress',
-        sub: 'Your documents are under review — typically 1–2 business days.',
-        time: 'Pending',
+        icon: 'fa-shield-halved', iconBg: 'rgba(237,165,255,0.1)', iconColor: '#eda5ff',
+        title: 'Identity verified',
+        sub: 'Your FICA/KYC verification is complete. You can invest in all available pools.',
+        time: inv.fica_verified_at ? Utils.timeAgo(inv.fica_verified_at) : 'KYC Verified',
         action: null,
         unread: false,
       });
-    } else if (inv.fica_status === 'approved') {
+    } else if (_fN === 'in_progress' || _kN === 'in_progress' || _fN === 'submitted' || _kN === 'submitted') {
+      notifs.push(_notif({
+        nid: 'fica-submitted',
+        icon: 'fa-file-circle-check', iconBg: 'rgba(254,194,79,0.12)', iconColor: '#fec24f',
+        title: 'FICA documents submitted',
+        sub: 'Your documents have been received and will be reviewed within 1–2 business days. We\'ll notify you once verified.',
+        time: 'Pending Review',
+        action: "navigate('fica',document.querySelector('[data-view=fica]'))",
+        unread: true,
+      }));
+    } else if (_fN === 'not_started' || (!inv.fica_status && !inv.kyc_status)) {
+      // No FICA uploaded — prompt to get started
+    } else if (_fN === 'pending' || _kN === 'pending' || inv.status === 'fica_submitted') {
       notifs.push({
-        key: 'fica-approved',
-        icon: 'fa-shield-halved', iconBg: 'rgba(237,165,255,0.13)', iconColor: '#eda5ff',
-        title: 'Identity verified',
-        sub: 'Your FICA/KYC verification is complete. You can invest in all available pools.',
-        time: inv.fica_verified_at ? Utils.timeAgo(inv.fica_verified_at) : 'Approved',
+        icon: 'fa-clock', iconBg: 'rgba(254,194,79,0.12)', iconColor: '#fec24f',
+        title: 'FICA/KYC verification in progress',
+        sub: 'Your documents are under review — typically 1–2 business days.',
+        time: 'Pending Review',
         action: null,
         unread: false,
       });
@@ -1083,7 +1123,6 @@ function loadNotifications() {
   if (inv && inv.bank_account_number) {
     if (inv.bank_account_status === 'pending') {
       notifs.push({
-        key: 'bank-pending',
         icon: 'fa-building-columns', iconBg: 'rgba(254,194,79,0.12)', iconColor: '#fec24f',
         title: 'Bank account pending verification',
         sub: `${inv.bank_name || 'Your bank account'} is being reviewed by our team. Withdrawals will be enabled once approved.`,
@@ -1092,25 +1131,25 @@ function loadNotifications() {
         unread: false,
       });
     } else if (inv.bank_account_status === 'approved') {
-      notifs.push({
-        key: 'bank-approved',
+      notifs.push(_notif({
+        nid: 'bank-app',
         icon: 'fa-building-columns', iconBg: 'rgba(34,197,94,0.1)', iconColor: '#22c55e',
         title: 'Bank account verified',
         sub: `Your ${inv.bank_name || 'bank'} account has been verified. You can now request withdrawals.`,
         time: 'Approved',
         action: "navigate('wallet',document.querySelector('[data-view=wallet]'))",
         unread: true,
-      });
+      }));
     } else if (inv.bank_account_status === 'rejected') {
-      notifs.push({
-        key: 'bank-rejected',
+      notifs.push(_notif({
+        nid: 'bank-rej',
         icon: 'fa-building-columns', iconBg: 'rgba(239,68,68,0.12)', iconColor: '#ef4444',
         title: 'Bank account not verified',
         sub: inv.bank_account_notes || 'Your bank details could not be verified. Please update and resubmit.',
         time: 'Action required',
         action: "navigate('profile',document.querySelector('[data-view=profile]'))",
         unread: true,
-      });
+      }));
     }
   }
 
@@ -1120,36 +1159,35 @@ function loadNotifications() {
     return !i.maturity_instruction;
   });
   if (overdue.length) {
-    notifs.push({
-      key: `maturity-overdue-${overdue.map(i => i.id).sort().join('-')}`,
+    notifs.push(_notif({
+      nid: `mat-due-${overdue.map(i=>i.id).sort().join('-')}`,
       icon: 'fa-exclamation-circle', iconBg: 'rgba(239,68,68,0.12)', iconColor: '#ef4444',
       title: `${overdue.length} investment${overdue.length === 1 ? '' : 's'} awaiting instruction`,
       sub: `${overdue.map(i => i.pool_name || 'Investment').slice(0,2).join(', ')} ha${overdue.length === 1 ? 's' : 've'} matured — submit your payout instruction now.`,
       time: 'Urgent',
       action: "navigate('maturity',document.querySelector('[data-view=maturity]'))",
       unread: true,
-    });
+    }));
   }
 
   // 6. Support ticket responses — one notification per answered ticket
   const answered = tickets.filter(t => t.admin_response && t.admin_response.trim());
   answered.forEach(t => {
-    notifs.push({
-      key: `support-reply-${t.id}`,
+    notifs.push(_notif({
+      nid: `tkt-${t.id}-${t.responded_at || 'x'}`,
       icon: 'fa-reply', iconBg: 'rgba(47,140,155,0.1)', iconColor: '#656565',
       title: 'Support reply received',
       sub: `"${t.subject}" — our team has responded.`,
       time: t.responded_at ? Utils.timeAgo(t.responded_at) : 'Recently',
       action: "navigate('support',document.querySelector('[data-view=support]'))",
       unread: true,
-    });
+    }));
   });
 
   // 7. Pending withdrawal submitted
   const pendingWithdrawal = transactions.find(t => t.type === 'withdrawal' && t.status === 'pending');
   if (pendingWithdrawal) {
     notifs.push({
-      key: `withdrawal-pending-${pendingWithdrawal.id}`,
       icon: 'fa-money-bill-transfer', iconBg: 'rgba(99,102,241,0.1)', iconColor: '#656565',
       title: 'Withdrawal in progress',
       sub: `${Utils.rand(Math.abs(pendingWithdrawal.amount))} withdrawal is being processed — 1–2 business days.`,
@@ -1167,7 +1205,6 @@ function loadNotifications() {
   if (newPools.length) {
     const np = newPools[0];
     notifs.push({
-      key: `new-pool-${np.id}`,
       icon: 'fa-chart-line', iconBg: 'rgba(47,140,155,0.1)', iconColor: '#656565',
       title: 'New investment pool available',
       sub: `${np.name || np.pool_name} — ${Utils.pct(np.annual_rate || np.benchmark_rate)} benchmark over ${np.term_months} months.`,
@@ -1177,45 +1214,37 @@ function loadNotifications() {
     });
   }
 
-  // 9. Investment confirmed — one per investment created in the last 30 days
-  const recentInvs = investments.filter(i => {
-    const created = new Date(i.created_at || i.start_date);
-    return !isNaN(created) && (now - created) < 30 * 86400000;
+  // 9. Recently confirmed investments (placed within the last 14 days)
+  const recentInvests = investments.filter(i => {
+    const created = i.created_at || i.investment_date;
+    if (!created) return false;
+    return (now - new Date(created)) < 14 * 86400000 && (i.status === 'active' || i.status === 'pending_funds' || i.status === 'pending');
   });
-  recentInvs.forEach(i => {
-    const startLabel = i.start_date ? Utils.date(i.start_date) : null;
-    const parts = [Utils.rand(i.amount) + ' invested'];
-    if (i.pool_name) parts.push(i.pool_name);
-    if (startLabel)  parts.push('starts ' + startLabel);
-    notifs.push({
-      key: `investment-confirmed-${i.id}`,
+  recentInvests.forEach(ri => {
+    notifs.push(_notif({
+      nid: `inv-conf-${ri.id}`,
       icon: 'fa-circle-check', iconBg: 'rgba(34,197,94,0.1)', iconColor: '#22c55e',
       title: 'Investment confirmed',
-      sub: parts.join(' · '),
-      time: Utils.timeAgo(i.created_at || i.start_date),
+      sub: `${ri.pool_name || 'Your investment'} of ${Utils.rand(Math.abs(parseFloat(ri.amount) || 0))} has been placed and is now active.`,
+      time: Utils.timeAgo(ri.created_at || ri.investment_date),
       action: "navigate('investments',document.querySelector('[data-view=investments]'))",
       unread: true,
-    });
+    }));
   });
 
-  // Filter out already-dismissed notifications
-  const dismissed = _getNotifDismissed();
-  const visible = notifs.filter(n => !n.key || !dismissed.has(n.key));
-  _currentNotifKeys = visible.map(n => n.key).filter(Boolean);
-
-  if (!visible.length) {
+  if (!notifs.length) {
     list.innerHTML = '<div style="padding:24px 18px;text-align:center;color:#999;font-size:0.82rem">You\'re all caught up!</div>';
     _syncNotifDot();
     return;
   }
 
-  list.innerHTML = visible.map((n, i) => `
-    <div class="notif-item${n.unread ? ' unread' : ''}" data-id="n${i}" ${n.action ? `onclick="${n.action};toggleNotifPanel()" style="cursor:pointer"` : ''}>
+  list.innerHTML = notifs.map((n, i) => `
+    <div class="notif-item${n.unread ? ' unread' : ''}" data-id="n${i}" data-nid="${_esc(n.nid || '')}" ${n.action ? `onclick="${n.action};toggleNotifPanel()" style="cursor:pointer"` : ''}>
       <div class="notif-icon" style="background:${n.iconBg}"><i class="fa-solid ${n.icon}" style="color:${n.iconColor}"></i></div>
       <div class="notif-body">
         <div class="notif-title">${_esc(n.title)}</div>
         <div class="notif-sub">${_esc(n.sub)}</div>
-        <div class="notif-time">${n.time}</div>
+        <div class="notif-time">${_esc(n.time)}</div>
       </div>
     </div>
   `).join('');
@@ -1311,10 +1340,7 @@ function navigate(view, btnEl) {
     gifts: loadGiftsView,
     profile: () => { renderRiskProfile(); _initPushNotifToggle(); _refreshInvestorThenKyc(); },
   };
-  if (loaders[view]) {
-    const _res = loaders[view]();
-    if (_res && typeof _res.catch === 'function') _res.catch(e => console.warn('[navigate] loader failed:', view, e.message));
-  }
+  if (loaders[view]) loaders[view]();
 
   // End timer for the previous view, start one for this view
   if (navigate._current) SVC.timeEnd('view_' + navigate._current, 'svc_section_time', { section: navigate._current });
@@ -1375,6 +1401,7 @@ function _startPolling() {
         }
       }
     } catch(_) {}
+    loadNotifications();
   }, 30000);
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && _pollTimer) {} });
@@ -1382,9 +1409,13 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && _p
 // Expose stop function so Auth.logout() can kill the interval before redirecting
 window._stopPolling = function () { if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; } };
 
-// ─── Idle auto-logout (mobile) ───
-// Shows a countdown overlay after 10 min of inactivity; user can stay or sign out.
+// ─── Idle auto-logout (web only) ───
+// Shows a countdown overlay after 10 min of inactivity; skipped in native app.
 function initIdleAutoLogout() {
+  const isNative = (typeof _svcPlatform === 'function' && _svcPlatform() !== 'web') ||
+                   (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform());
+  if (isNative) return;
+
   const IDLE_MS  = 10 * 60 * 1000;  // 10 minutes total
   const WARN_MS  = 60 * 1000;        // show countdown for 60 seconds
   let idleTimer = null, warnTimer = null, countdownInterval = null;
@@ -1437,7 +1468,7 @@ function initIdleAutoLogout() {
     document.body.appendChild(overlayEl);
     countdownInterval = setInterval(() => {
       secs = Math.max(0, secs - 1);
-      const sc = document.getElementById('_idleSecs');
+      const sc  = document.getElementById('_idleSecs');
       const bar = document.getElementById('_idleBar');
       if (sc)  sc.textContent = secs;
       if (bar) bar.style.width = (secs / (WARN_MS / 1000) * 100) + '%';
@@ -1471,16 +1502,19 @@ function initIdleAutoLogout() {
     idleTimer  = setTimeout(doAutoLogout,  IDLE_MS);
   };
 
+  // Activity across tabs: broadcast last-activity via localStorage so multiple
+  // portal tabs share one idle clock.
   const markActivity = () => {
     if (_signingOut) return;
-    if (overlayEl) removeOverlay();  // any tap during countdown = stay signed in
+    if (overlayEl) removeOverlay();  // any interaction during countdown = stay signed in
     try { localStorage.setItem('svc_last_activity', String(Date.now())); } catch (_) {}
     reset();
   };
 
-  ['touchstart', 'touchmove', 'mousedown', 'keydown', 'scroll', 'click'].forEach(ev =>
+  ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'].forEach(ev =>
     window.addEventListener(ev, markActivity, { passive: true }));
 
+  // Sync idle clock when another tab reports activity or the tab regains focus.
   window.addEventListener('storage', e => { if (e.key === 'svc_last_activity') reset(); });
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible') return;
@@ -1491,29 +1525,6 @@ function initIdleAutoLogout() {
   });
 
   markActivity();
-}
-
-function _showNetworkError() {
-  let el = document.getElementById('_networkErrorBanner');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = '_networkErrorBanner';
-    el.style.cssText = [
-      'position:fixed', 'bottom:72px', 'left:12px', 'right:12px', 'z-index:8888',
-      'background:#ef4444', 'color:#fff', 'font-size:13px', 'font-weight:600',
-      'text-align:center', 'padding:10px 14px', 'border-radius:10px',
-      'box-shadow:0 4px 16px rgba(0,0,0,.25)', 'letter-spacing:0.01em',
-    ].join(';');
-    el.textContent = 'Could not connect to server — showing cached data';
-    document.body.appendChild(el);
-  }
-  el.style.display = 'block';
-  setTimeout(() => { if (el) el.style.display = 'none'; }, 8000);
-}
-
-function _hideNetworkError() {
-  const el = document.getElementById('_networkErrorBanner');
-  if (el) el.style.display = 'none';
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -1529,87 +1540,77 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (el) el.innerHTML = _skelSpan;
   });
 
-  // Restore nav badge counts from cache so they appear instantly before API data arrives
-  _restoreNavBadgesFromCache();
-
   // Immediately populate greeting from cached user so name never stays "Loading..."
   try {
-    const cached    = JSON.parse(localStorage.getItem('svc_user') || '{}') || {};
+    const cached = JSON.parse(localStorage.getItem('svc_user') || '{}') || {};
     const firstName = cached.firstName || cached.first_name || cached.name?.split(' ')[0] || '';
     const lastName  = cached.lastName  || cached.last_name  || cached.name?.split(' ').slice(1).join(' ') || '';
-    // Fallback: use email prefix if name not yet in cache (first cold-start)
-    const dispFirst = firstName || (cached.email ? cached.email.split('@')[0] : 'Investor');
-    const dispFull  = firstName ? `${firstName} ${lastName}`.trim() : dispFirst;
     const nameEl = document.getElementById('welcomeName');
-    if (nameEl) nameEl.textContent = dispFull;
+    // Always replace "Loading..." — use cached name if available, otherwise a neutral dash
+    if (nameEl) nameEl.textContent = firstName ? `${firstName} ${lastName}`.trim() : '—';
     const greetEl = document.getElementById('topbarGreeting');
-    if (greetEl) greetEl.textContent = `${_timeGreeting()}, ${dispFirst} 👋`;
+    if (greetEl) greetEl.textContent = firstName ? `${_timeGreeting()}, ${firstName} 👋` : _timeGreeting();
     const greetEl2 = document.getElementById('welcomeGreeting');
     if (greetEl2) greetEl2.textContent = _timeGreeting();
     const avEl = document.getElementById('welcomeAvatar');
-    if (avEl) avEl.textContent = ((dispFirst[0] || '') + (lastName[0] || '')).toUpperCase() || '?';
-    // Pre-fill PORTAL.investor with identity from login cache so renderOverview()
-    // has a name to display even if the first API call fails or times out.
-    // loadPortalData() will overwrite this with the full investor record on success.
-    if (!PORTAL.investor) {
-      PORTAL.investor = {
-        id:         cached.investorId || cached.investor_id || DEMO_INVESTOR_ID,
-        first_name: firstName,
-        last_name:  lastName,
-        email:      cached.email || '',
-      };
-    }
+    if (avEl && firstName) avEl.textContent = ((firstName[0] || '') + (lastName[0] || '')).toUpperCase() || '?';
+  } catch (_) {}
+  // Always clear "Loading..." from data tables immediately — render a spinner row instead
+  try {
+    const _spinRow = (cols) => `<tr><td colspan="${cols}" style="padding:24px;text-align:center;color:var(--text-muted);font-size:0.85rem"><i class="fa-solid fa-circle-notch fa-spin" style="margin-right:6px"></i>Loading…</td></tr>`;
+    const ib = document.getElementById('overviewInvestmentsBody');
+    const tb = document.getElementById('overviewTxnBody');
+    if (ib) ib.innerHTML = _spinRow(6);
+    if (tb) tb.innerHTML = _spinRow(4);
   } catch (_) {}
 
   // Try to render from cache immediately — hides cover instantly on repeat launches.
-  // We always use cached data if it exists (even if stale) and always refresh in
-  // background. This keeps the UI populated during CORS outages or server downtime.
+  // No TTL: always show cached data right away; the background refresh below keeps it fresh.
   let _cacheRendered = false;
-  const _CACHE_TTL   = 10 * 60 * 1000;   // 10 min — "fresh" (skip charts on BG refresh)
-  const _CACHE_STALE = 24 * 60 * 60 * 1000; // 24 h  — "stale" (show data, still refresh)
   try {
     const raw = localStorage.getItem('svc_portal_cache');
     if (raw) {
       const c = JSON.parse(raw);
-      const age = c && c.cachedAt ? (Date.now() - c.cachedAt) : Infinity;
-      if (c && age < _CACHE_STALE) {
+      if (c && c.cachedAt) {
         PORTAL.investor     = c.investor     || null;
         PORTAL.investments  = c.investments  || [];
         PORTAL.transactions = c.transactions || [];
         PORTAL.pools        = c.pools        || [];
         PORTAL.waitlist     = c.waitlist     || [];
-        if (c.products && c.products.length) { _portalProductsCache = c.products; Utils.setProductCache(c.products); }
         try { renderOverview(); } catch (_) {}
         if (window.__SVC_HIDE_COVER) window.__SVC_HIDE_COVER();
         _cacheRendered = true;
-        // Fresh cache → background refresh silently; stale → refresh but still no blocking.
-        // Exception: if investments are missing from the pre-cache (investorId not yet resolved
-        // at login time), fall through to the blocking load below so the screen never gets
-        // stuck showing skeleton placeholders for investments and transactions.
-        const _skipCharts = age < _CACHE_TTL;
-        if (PORTAL.investments && PORTAL.investments.length > 0) {
-          loadPortalData(0, { skipCharts: _skipCharts }).catch(() => {});
-        } else {
-          _cacheRendered = false; // force blocking load — investments must populate
-        }
       }
     }
   } catch (_) {}
 
-  if (!_cacheRendered) {
-    // First load or expired cache — show progressive status text during cold-start waits
+  if (_cacheRendered) {
+    // Silently refresh data in the background — don't block UI or re-render charts
+    loadPortalData(0, { skipCharts: true }).catch(() => {});
+  } else {
+    // No cache (first visit) — show progressive status while Railway may be cold-starting
+    const _statusRow = (cols, msg) => `<tr><td colspan="${cols}" style="padding:24px;text-align:center;color:var(--text-muted);font-size:0.85rem">${msg}</td></tr>`;
+    const _updateStatus = (msg) => {
+      const ib = document.getElementById('overviewInvestmentsBody');
+      const tb = document.getElementById('overviewTxnBody');
+      if (ib) ib.innerHTML = _statusRow(6, msg);
+      if (tb) tb.innerHTML = _statusRow(4, msg);
+    };
     const _coverText = document.getElementById('_nativeCoverText');
-    const _t1 = _coverText ? setTimeout(() => {
-      if (_coverText.textContent.includes('Loading')) _coverText.textContent = 'Server waking up, please wait…';
-    }, 4000) : null;
-    const _t2 = _coverText ? setTimeout(() => {
-      if (_coverText.textContent.includes('waking')) _coverText.textContent = 'Almost there…';
-    }, 9000) : null;
+    const _t1 = setTimeout(() => {
+      const wake = '<i class="fa-solid fa-circle-notch fa-spin" style="margin-right:6px"></i>Server is waking up — this can take up to 30 seconds…';
+      _updateStatus(wake);
+      if (_coverText) _coverText.textContent = 'Server waking up, please wait…';
+    }, 5000);
+    const _t2 = setTimeout(() => {
+      const almost = '<i class="fa-solid fa-circle-notch fa-spin" style="margin-right:6px"></i>Almost there…';
+      _updateStatus(almost);
+      if (_coverText) _coverText.textContent = 'Almost there…';
+    }, 20000);
 
     await loadPortalData();
-    if (_t1) clearTimeout(_t1);
-    if (_t2) clearTimeout(_t2);
-    // Reveal content — remove the native loading cover now that data is ready
+    clearTimeout(_t1);
+    clearTimeout(_t2);
     if (window.__SVC_HIDE_COVER) window.__SVC_HIDE_COVER();
   }
 
@@ -1618,11 +1619,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   _checkAutoStartTour();
   load2FAStatus();
   _startPolling();
-  _initPullToRefresh();
 
-  // Auto-subscribe to push notifications — runs after SW is ready (~1.5s gives
-  // the 'load' event time to fire and register the SW in index.html).
-  setTimeout(() => { _autoRegisterPush().catch(() => {}); }, 1500);
+  // Admin "View as Investor" banner
+  if (sessionStorage.getItem('svc_viewas_active') === '1') {
+    const invName = sessionStorage.getItem('svc_viewas_name') || 'investor';
+    const banner = document.createElement('div');
+    banner.id = 'viewasBanner';
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#fec24f;color:#1a1a1a;padding:8px 16px;display:flex;align-items:center;gap:10px;font-size:0.82rem;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,0.25)';
+    banner.innerHTML = `<i class="fa-solid fa-eye"></i> Admin View — viewing as <strong>${_esc(invName)}</strong> &nbsp;·&nbsp; <span style="font-weight:400">Read-only. Changes made here affect the real account.</span><button onclick="sessionStorage.removeItem('svc_viewas_active');sessionStorage.removeItem('svc_viewas_name');localStorage.removeItem('svc_token');localStorage.removeItem('svc_user');window.close()" style="margin-left:auto;background:rgba(0,0,0,0.15);border:none;cursor:pointer;font-weight:700;padding:4px 12px;border-radius:4px;font-size:0.78rem;color:#1a1a1a">✕ Exit</button>`;
+    document.body.prepend(banner);
+    // Push page content down so the banner doesn't overlap it
+    document.body.style.paddingTop = '38px';
+  }
+  _initPullToRefresh();
 
   // Watchdog: runs at 100ms, 600ms, and 1500ms to ensure the active view is visible.
   // Android WebView compositing (esp. with position:fixed overlays) can silently
@@ -1665,48 +1674,45 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function loadPortalData(_attempt = 0, _opts = {}) {
   const MAX_ATTEMPTS = 4;
   try {
-    // allSettled so a single failing endpoint never kills the whole portal load.
-    const [invResult, invstResult, txnResult, poolResult, payResult, prodResult] = await Promise.allSettled([
+    // allSettled so a single failing endpoint (e.g. a new table not yet migrated)
+    // never kills the whole portal load — each result is independently unpacked.
+    const [invResult, invstResult, txnResult, poolResult, payResult] = await Promise.allSettled([
       API.investors.list({ limit: 100 }),
       API.investments.list({ limit: 200 }),
       API.transactions.list({ limit: 200 }),
       API.pools.list({ limit: 100 }),
       loadPaymentConfig(),  // load Paystack key from server env var
-      API._fetch('GET', 'products'),
     ]);
 
     const invRes   = invResult.status   === 'fulfilled' ? invResult.value   : { data: [] };
     const invstRes = invstResult.status === 'fulfilled' ? invstResult.value : { data: [] };
     const txnRes   = txnResult.status   === 'fulfilled' ? txnResult.value   : { data: [] };
     const poolRes  = poolResult.status  === 'fulfilled' ? poolResult.value  : { data: [] };
-    const prodRes  = prodResult.status  === 'fulfilled' ? prodResult.value  : { data: [] };
 
+    // Log any API failures for debugging
     if (invResult.status === 'rejected')   console.warn('[portal] investors API failed:', invResult.reason?.message);
     if (invstResult.status === 'rejected') console.warn('[portal] investments API failed:', invstResult.reason?.message);
     if (txnResult.status === 'rejected')   console.warn('[portal] transactions API failed:', txnResult.reason?.message);
     if (poolResult.status === 'rejected')  console.warn('[portal] pools API failed:', poolResult.reason?.message);
     if (payResult.status  === 'rejected')  console.warn('[portal] payment config failed:', payResult.reason?.message);
-    if (prodResult.status === 'rejected')  console.warn('[portal] products API failed:', prodResult.reason?.message);
 
+    // If the investors call itself failed (e.g. 401/500), and all other calls also failed,
+    // that's a hard network/auth error — throw so the retry loop runs.
     if (invResult.status === 'rejected' && invstResult.status === 'rejected' && txnResult.status === 'rejected') {
       throw invResult.reason;
     }
 
-    let allInvestors     = invRes.data   || [];
+    let allInvestors   = invRes.data   || [];
     const allInvestments = invstRes.data || [];
     const allTxns        = txnRes.data   || [];
 
-    // Only overwrite PORTAL.investor when the investors call succeeded; if it failed
-    // (e.g. CORS block), keep whatever is already in PORTAL.investor from the cache.
-    if (invResult.status === 'fulfilled') {
-      // Find the logged-in investor by their JWT-resolved ID
-      PORTAL.investor = allInvestors.find(i => i.id === DEMO_INVESTOR_ID) || null;
+    // Find the logged-in investor by their JWT-resolved ID
+    PORTAL.investor = allInvestors.find(i => i.id === DEMO_INVESTOR_ID) || null;
 
-      // Fallback: the server already scopes investor-role list results to the authenticated user,
-      // so any item in allInvestors belongs to this user — use the first one when find-by-ID fails.
-      if (!PORTAL.investor && allInvestors.length > 0) {
-        PORTAL.investor = allInvestors[0];
-      }
+    // Fallback: the server already scopes investor-role list results to the authenticated user,
+    // so any item in allInvestors belongs to this user — use the first one when find-by-ID fails.
+    if (!PORTAL.investor && allInvestors.length > 0) {
+      PORTAL.investor = allInvestors[0];
     }
 
     // Last resort: if the list returned empty (server could not resolve investor from JWT),
@@ -1747,44 +1753,25 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
         (t.investor_name || '').toLowerCase().includes((PORTAL.investor?.first_name || '').toLowerCase())
       );
     }
-    // Last-resort: if the client ID (DEMO_INVESTOR_ID fallback) doesn't match anything
-    // but the server already returned scoped data, trust the server's result directly.
-    // This handles the case where users.investor_id is null in the DB so the JWT carries
-    // investorId: null and the client falls back to the legacy 'INV-001' placeholder.
-    if (myInvests.length === 0 && allInvestments.length > 0) {
-      console.warn('[portal] Client ID mismatch — using server-scoped investments directly');
-      myInvests = allInvestments;
-    }
-    if (myTxns.length === 0 && allTxns.length > 0) {
-      myTxns = allTxns;
-    }
 
     if (!PORTAL.investor) {
       console.error('[portal] Could not resolve investor — showing empty state');
       PORTAL.investor = { id: resolvedId };
     }
 
-    // Populate products cache from the parallel fetch so marketplace uses it immediately
-    if (prodRes.data && prodRes.data.length) {
-      _portalProductsCache = prodRes.data;
-      Utils.setProductCache(_portalProductsCache);
-    }
-
-    // Only overwrite PORTAL state when the API call actually succeeded.
-    // A rejected/CORS-blocked call returns [] which would wipe valid cached data.
-    if (invstResult.status === 'fulfilled') {
-      PORTAL.investments = myInvests.map(inv => ({
-        ...inv,
-        amount:                 parseFloat(inv.amount || inv.investment_amount || inv.principal || 0) || 0,
-        maturity_date:          inv.end_date         || inv.maturity_date,
-        investment_date:        inv.start_date        || inv.investment_date,
-        expected_return_amount: parseFloat(inv.expected_return   != null ? inv.expected_return   : (inv.expected_return_amount   || 0)) || 0,
-        actual_return_amount:   parseFloat(inv.actual_return     != null ? inv.actual_return     : (inv.actual_return_amount     || 0)) || 0,
-        expected_return_rate:   parseFloat(inv.annual_rate       != null ? inv.annual_rate       : (inv.expected_return_rate     || 0)) || 0,
-      }));
-    }
-    if (txnResult.status === 'fulfilled') PORTAL.transactions = myTxns;
-    if (poolResult.status === 'fulfilled' && (poolRes.data || []).length) PORTAL.pools = poolRes.data;
+    PORTAL.investments  = myInvests.map(inv => ({
+      ...inv,
+      // Normalise DB column names to the aliases used throughout the portal
+      // Always coerce to Number so reduce() never does string concatenation
+      amount:                 parseFloat(inv.amount || inv.investment_amount || inv.principal || 0) || 0,
+      maturity_date:          inv.end_date         || inv.maturity_date,
+      investment_date:        inv.start_date        || inv.investment_date,
+      expected_return_amount: parseFloat(inv.expected_return   != null ? inv.expected_return   : (inv.expected_return_amount   || 0)) || 0,
+      actual_return_amount:   parseFloat(inv.actual_return     != null ? inv.actual_return     : (inv.actual_return_amount     || 0)) || 0,
+      expected_return_rate:   parseFloat(inv.annual_rate       != null ? inv.annual_rate       : (inv.expected_return_rate     || 0)) || 0,
+    }));
+    PORTAL.transactions = myTxns;
+    PORTAL.pools        = poolRes.data || [];
 
     // Ensure investor object is never null so statement guard passes
     if (!PORTAL.investor) PORTAL.investor = { id: DEMO_INVESTOR_ID };
@@ -1796,26 +1783,19 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
     try { SVC.setUser(PORTAL.investor); } catch (_) {}
     try { SVC.track('portal_loaded', { active_investments: PORTAL.investments.filter(i => i.status === 'active').length }); } catch (_) {}
 
-    // Cache fresh data so the next launch renders instantly from localStorage.
-    // Only overwrite each key when its API call succeeded — preserve the previous
-    // cached value for any endpoint that was rejected (e.g. CORS-blocked), so a
-    // partial refresh never writes an empty array over good cached data.
+    // Cache fresh data so the next launch renders instantly from localStorage
     try {
-      let _prev = {};
-      try { _prev = JSON.parse(localStorage.getItem('svc_portal_cache') || '{}'); } catch (_) {}
       const _safeCache = {
         cachedAt:     Date.now(),
-        investor:     invResult.status    === 'fulfilled' ? PORTAL.investor     : (_prev.investor     || PORTAL.investor),
-        investments:  invstResult.status  === 'fulfilled' ? PORTAL.investments  : (_prev.investments  || PORTAL.investments),
-        transactions: txnResult.status    === 'fulfilled' ? PORTAL.transactions : (_prev.transactions || PORTAL.transactions),
-        pools:        poolResult.status   === 'fulfilled' ? PORTAL.pools        : (_prev.pools        || PORTAL.pools),
+        investor:     PORTAL.investor,
+        investments:  PORTAL.investments,
+        transactions: PORTAL.transactions,
+        pools:        PORTAL.pools,
         waitlist:     PORTAL.waitlist,
-        products:     (_portalProductsCache && _portalProductsCache.length) ? _portalProductsCache : (_prev.products || []),
       };
       localStorage.setItem('svc_portal_cache', JSON.stringify(_safeCache));
     } catch (_) {}
 
-    _hideNetworkError();
     renderOverview(_opts.skipCharts);
     renderOnboardingWizard();
     updateStmtQuickStats();
@@ -1827,35 +1807,30 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
 
     // Load gamification data (non-blocking — don't fail portal if quests fail)
     loadQuestData().catch(err => console.warn('[Quests] load error:', err.message));
-
-    // Pre-populate nav badges non-blocking so counts appear without navigating
-    _prefetchNavBadges();
   } catch (e) {
     console.error(`loadPortalData error (attempt ${_attempt + 1}):`, e);
-    _showNetworkError();
 
-    // Auth errors: do not retry — the session-expired overlay is already showing.
-    // Still clear "Loading..." placeholders so the page is not frozen behind the overlay.
-    if (e.message && e.message.includes('Session expired')) {
-      if (!PORTAL.investor) PORTAL.investor = { id: DEMO_INVESTOR_ID };
-      try { renderOverview(); } catch (_) {}
-      if (window.__SVC_HIDE_COVER) window.__SVC_HIDE_COVER();
-      return;
-    }
+    // Auth errors: do not retry — the session-expired overlay is already showing
+    if (e.message && e.message.includes('Session expired')) return;
 
     // Network / timeout errors: retry with backoff (handles Railway cold-start)
     if (_attempt < MAX_ATTEMPTS - 1) {
       const delay = (_attempt + 1) * 5000; // 5 s, 10 s, 15 s
       console.log(`[portal] Retrying data load in ${delay}ms…`);
       await new Promise(r => setTimeout(r, delay));
-      return loadPortalData(_attempt + 1, _opts);
+      return loadPortalData(_attempt + 1);
     }
 
-    // All attempts exhausted — ensure investor stub exists so renderOverview clears "Loading..."
+    // All attempts exhausted — clear any stale "Loading..." and show an actionable error
     if (!PORTAL.investor) PORTAL.investor = { id: DEMO_INVESTOR_ID };
     try { renderOverview(); } catch (_) {}
+    const _retryRow = (cols) => `<tr><td colspan="${cols}" style="padding:24px;text-align:center;color:var(--text-muted);font-size:0.85rem"><i class="fa-solid fa-triangle-exclamation" style="color:#f59e0b;margin-right:6px"></i>Could not reach server. <a href="#" onclick="location.reload()" style="color:var(--gold);text-decoration:none;font-weight:600">Tap to retry →</a></td></tr>`;
+    const _ib = document.getElementById('overviewInvestmentsBody');
+    const _tb = document.getElementById('overviewTxnBody');
+    if (_ib && (!PORTAL.investments.length || _ib.textContent.includes('Loading'))) _ib.innerHTML = _retryRow(6);
+    if (_tb && (!PORTAL.transactions.length || _tb.textContent.includes('Loading'))) _tb.innerHTML = _retryRow(4);
     if (window.__SVC_HIDE_COVER) window.__SVC_HIDE_COVER();
-    Toast.error('Could not connect to server — pull down to refresh');
+    Toast.error('Could not connect to server — tap "Tap to retry" to reload');
   }
 }
 
@@ -1873,11 +1848,11 @@ function renderOverview(skipCharts) {
   const totalValue    = totalInvested + (parseFloat(inv.wallet_balance) || 0);
   const returnPct     = totalMatured > 0 ? (totalRet / totalMatured * 100).toFixed(1) : '0';
   const activeCount = PORTAL.investments.filter(i => i.status === 'active').length;
-  const firstName   = inv.first_name || '';
+  const firstName   = inv.first_name || 'Investor';
 
   // ── Topbar greeting ──────────────────────────────────────────
   const greetEl = document.getElementById('topbarGreeting');
-  if (greetEl && firstName) greetEl.textContent = `${_timeGreeting()}, ${firstName} 👋`;
+  if (greetEl) greetEl.textContent = `${_timeGreeting()}, ${firstName} 👋`;
 
   // ── Portfolio hero values ────────────────────────────────────
   // Animate portfolio hero
@@ -1912,14 +1887,11 @@ function renderOverview(skipCharts) {
   }
 
   // ── Welcome banner ───────────────────────────────────────────
-  const initials = `${(inv.first_name || '')[0] || ''}${(inv.last_name || '')[0] || ''}`.toUpperCase();
+  const initials = `${(inv.first_name || '')[0] || '?'}${(inv.last_name || '')[0] || ''}`.toUpperCase();
   const avatarEl = document.getElementById('welcomeAvatar');
-  if (avatarEl && initials) avatarEl.textContent = initials;
+  if (avatarEl) avatarEl.textContent = initials;
   const nameEl = document.getElementById('welcomeName');
-  if (nameEl) {
-    const _n = `${inv.first_name || ''} ${inv.last_name || ''}`.trim();
-    if (_n) nameEl.textContent = _n;
-  }
+  if (nameEl) nameEl.textContent = `${inv.first_name || ''} ${inv.last_name || ''}`.trim() || 'Investor';
   const greetEl2 = document.getElementById('welcomeGreeting');
   if (greetEl2) greetEl2.textContent = _timeGreeting();
   const chipId = document.getElementById('wchipIdText');
@@ -1959,7 +1931,8 @@ function renderOverview(skipCharts) {
   if (sRole)   sRole.textContent   = `${inv.id || 'INV'} · ${inv.status === 'active' ? 'Active' : (inv.status || 'Investor')}`;
 
   // ── FICA pending alert ───────────────────────────────────────
-  const ficaPending = inv.fica_status === 'pending' || inv.status === 'pending_fica' || inv.fica_status === 'submitted';
+  const _ficaNP = _normFicaStatus(inv.fica_status);
+  const ficaPending = _ficaNP === 'pending' || _ficaNP === 'not_started' || _ficaNP === 'submitted' || _ficaNP === 'in_progress' || inv.status === 'pending_fica';
   let ficaBanner = document.getElementById('ficaAlertBanner');
   if (ficaPending && !ficaBanner) {
     ficaBanner = document.createElement('div');
@@ -2049,13 +2022,6 @@ function renderOnboardingWizard() {
   const wizard = document.getElementById('onboardingWizard');
   if (!wizard) return;
 
-  // The Action Centre is now the single onboarding checklist — retire the
-  // duplicate "Getting Started" wizard so the overview isn't cluttered with
-  // two identical step lists.
-  wizard.style.display = 'none';
-  return;
-
-  // eslint-disable-next-line no-unreachable
   // Check dismiss state first
   if (localStorage.getItem('svc_onboard_dismissed') === '1') {
     wizard.style.display = 'none';
@@ -2142,27 +2108,27 @@ function renderOverviewInvestments() {
   if (!body) return;
   const active = PORTAL.investments.filter(i => i.status === 'active');
 
-  if (!active.length) { body.innerHTML = '<div class="text-center text-muted" style="padding:24px">No active investments. <a href="#" onclick="navigate(\'marketplace\', null)" style="color:var(--gold)">Browse pools →</a></div>'; return; }
+  if (!active.length) { body.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:24px">No active investments. <a href="#" onclick="navigate(\'marketplace\', null)" style="color:var(--gold)">Browse pools →</a></td></tr>'; return; }
 
   body.innerHTML = active.map(inv => {
     const pi = Utils.productInfo(inv.product_type);
     const days = Utils.daysRemaining(inv.maturity_date);
     const pool = PORTAL.pools.find(p => p.id === inv.pool_id);
     const progress = pool ? Utils.poolFillPct(pool) : 100;
-    const soon = days !== null && days <= 30;
 
-    return `
-      <div class="ov-inv">
-        <div class="ov-inv__icon ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i></div>
-        <div class="ov-inv__main">
-          <div class="ov-inv__name">${_esc(inv.pool_name)}</div>
-          <div class="ov-inv__sub">${pi.label} · ${days !== null ? `<span style="${soon ? 'color:#d97706;font-weight:700' : ''}">${days} days left</span>` : 'Active'}</div>
-          <div class="ov-inv__bar"><div class="ov-inv__bar-fill" style="width:${progress}%"></div></div>
+    return `<tr>
+      <td>
+        <div class="td-strong">${_esc(inv.pool_name)}</div>
+        <div style="margin-top:4px">
+          <div class="progress-bar" style="width:120px;height:4px"><div class="progress-fill" style="width:${progress}%"></div></div>
         </div>
-        <div class="ov-inv__right">
-          <div class="ov-inv__amount">${Utils.rand(inv.amount)}</div>
-        </div>
-      </div>`;
+      </td>
+      <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
+      <td class="td-gold fw-700">${Utils.rand(inv.amount)}</td>
+      <td class="td-muted">${Utils.date(inv.investment_date || inv.start_date)}</td>
+      <td class="td-muted">${Utils.date(inv.maturity_date || inv.end_date)}</td>
+      <td>${Utils.statusBadge(inv.status)}</td>
+    </tr>`;
   }).join('');
 }
 
@@ -2170,22 +2136,19 @@ function renderOverviewTxns() {
   const body = document.getElementById('overviewTxnBody');
   if (!body) return;
   const recent = [...PORTAL.transactions].sort((a, b) => new Date(b.transaction_date || b.created_at || 0) - new Date(a.transaction_date || a.created_at || 0)).slice(0, 5);
+  const typeColors = { deposit: 'green', investment: 'blue', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple', withdrawal: 'red', gift_sent: 'orange', gift_received: 'green', reward: 'purple' };
 
-  if (!recent.length) { body.innerHTML = '<div class="text-center text-muted" style="padding:24px">No transactions yet</div>'; return; }
+  if (!recent.length) { body.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:24px">No transactions yet</td></tr>'; return; }
 
   const _txnIsPositive = t => !['withdrawal', 'fee', 'investment', 'gift_sent'].includes(t.type);
   body.innerHTML = recent.map(t => {
     const pos = _txnIsPositive(t);
-    const meta = _TXN_META[t.type] || { icon: 'fa-circle-dot', color: '#9ca3af', label: _toSentenceCase((t.type || 'transaction').replace(/_/g, ' ')) };
-    return `
-      <div class="ov-txn">
-        <div class="ov-txn__icon" style="background:${meta.color}1a;color:${meta.color}"><i class="fa-solid ${meta.icon}"></i></div>
-        <div class="ov-txn__main">
-          <div class="ov-txn__label">${meta.label}</div>
-          <div class="ov-txn__date">${t.description ? _esc(_toSentenceCase(t.description)) + ' · ' : ''}${Utils.date(t.transaction_date)}</div>
-        </div>
-        <div class="ov-txn__amount" style="color:${pos ? '#16a34a' : '#dc2626'}">${pos ? '+' : '-'}${Utils.rand(Math.abs(t.amount))}</div>
-      </div>`;
+    return `<tr>
+      <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${(t.type?.replace(/_/g, ' ') || '').replace(/^\w/, c => c.toUpperCase())}</span></td>
+      <td class="${pos ? 'td-green' : 'td-red'} fw-700">${pos ? '+' : '-'}${Utils.rand(Math.abs(t.amount))}</td>
+      <td class="td-muted" style="font-size:0.75rem">${t.description || '—'}</td>
+      <td class="td-muted">${Utils.date(t.transaction_date || t.created_at)}</td>
+    </tr>`;
   }).join('');
 }
 
@@ -2383,12 +2346,11 @@ async function loadMyInvestments() {
 }
 
 function renderMyInvestmentStats() {
-  const d = PORTAL.investments || [];
-  const _s = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-  _s('mi-capital',  Utils.rand(d.filter(i => !i.is_reinvestment).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0)));
-  _s('mi-expected', Utils.rand(d.reduce((s, i) => s + (parseFloat(i.expected_return_amount) || 0), 0)));
-  _s('mi-earned',   Utils.rand(d.reduce((s, i) => s + (parseFloat(i.amount) || 0) * (parseFloat(i.pool_actual_rate) || 0), 0)));
-  _s('mi-count',    d.length);
+  const d = PORTAL.investments;
+  document.getElementById('mi-capital').textContent  = Utils.rand(d.filter(i => !i.is_reinvestment).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0));
+  document.getElementById('mi-expected').textContent = Utils.rand(d.reduce((s, i) => s + (parseFloat(i.expected_return_amount) || 0), 0));
+  document.getElementById('mi-earned').textContent   = Utils.rand(d.reduce((s, i) => s + (parseFloat(i.amount) || 0) * (parseFloat(i.pool_actual_rate) || 0), 0));
+  document.getElementById('mi-count').textContent    = d.length;
 }
 
 function filterMyInvestments(filter, btn) {
@@ -2402,7 +2364,7 @@ function filterMyInvestments(filter, btn) {
 function populateMyInvProductFilter() {
   const container = document.getElementById('myInvProductFilter');
   if (!container) return;
-  const types = [...new Set((PORTAL.investments || []).filter(i => !i.sub_account_id).map(i => i.product_type).filter(Boolean))];
+  const types = [...new Set((PORTAL.investments || []).map(i => i.product_type).filter(Boolean))];
   const cur = container.dataset.activeType || '';
   const items = [
     { value: '', icon: 'fa-layer-group', label: 'All' },
@@ -2458,8 +2420,7 @@ function renderMyInvestmentCards() {
   const grid = document.getElementById('myInvestmentsGrid');
   const _pf = document.getElementById('myInvProductFilter');
   const productFilter = _pf?.dataset?.activeType || _pf?.value || '';
-  const mainInvs = (PORTAL.investments || []).filter(i => !i.sub_account_id);
-  let items = PORTAL.myInvFilter === 'all' ? mainInvs : mainInvs.filter(i => i.status === PORTAL.myInvFilter);
+  let items = PORTAL.myInvFilter === 'all' ? PORTAL.investments : PORTAL.investments.filter(i => i.status === PORTAL.myInvFilter);
   if (productFilter) items = items.filter(i => i.product_type === productFilter);
 
   if (!items.length) {
@@ -2491,7 +2452,7 @@ function renderMyInvestmentCards() {
     const breakdownRows = multiple ? group.map(i => `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid var(--border);font-size:0.78rem">
         <span style="color:var(--text-muted)">${Utils.date(i.investment_date || i.start_date || i.created_at)}</span>
-        <span style="color:var(--gold);font-weight:700">${Utils.rand(Math.round(i.amount * 0.99 * 100) / 100)}</span>
+        <span style="color:var(--gold);font-weight:700">${Utils.rand(i.amount)}</span>
       </div>`).join('') : '';
 
     return `
@@ -2518,7 +2479,7 @@ function renderMyInvestmentCards() {
         ` : ''}
 
         <div class="my-inv-card__stats">
-          <div class="mic-stat"><span class="mic-stat__label">${multiple ? 'Total Invested' : 'Amount Invested'}</span><span class="mic-stat__value mic-stat__value--gold">${Utils.rand(Math.round(totalAmount * 0.99 * 100) / 100)}</span></div>
+          <div class="mic-stat"><span class="mic-stat__label">${multiple ? 'Total Invested' : 'Amount Invested'}</span><span class="mic-stat__value mic-stat__value--gold">${Utils.rand(totalAmount)}</span></div>
           <div class="mic-stat"><span class="mic-stat__label">Start Date</span><span class="mic-stat__value">${Utils.date(_invStartDate)}</span></div>
           <div class="mic-stat"><span class="mic-stat__label">Maturity Date</span><span class="mic-stat__value">${Utils.date(inv.maturity_date)}</span></div>
           ${isPaidOut ? `
@@ -2555,108 +2516,41 @@ async function loadMyTransactions() {
   if (!PORTAL.transactions.length) await loadPortalData();
   renderMyTxnTable();
 
-  // Guard against duplicate listeners on repeated tab visits
-  const _tf = document.getElementById('myTxnTypeFilter');
-  if (_tf && !_tf.__txnListenerAdded) {
-    _tf.addEventListener('change', renderMyTxnTable);
-    _tf.__txnListenerAdded = true;
-  }
-}
-
-/* Capitalise first letter, preserve the rest (avoid lowercasing currency symbols, proper nouns, etc.) */
-const _toSentenceCase = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
-
-/* Icon + accent colour per transaction type */
-const _TXN_META = {
-  deposit:        { icon: 'fa-download',            color: '#22c55e', label: 'Deposit' },
-  investment:     { icon: 'fa-chart-line',          color: '#3b82f6', label: 'Investment' },
-  return:         { icon: 'fa-arrow-trend-up',      color: '#eab308', label: 'Return Payment' },
-  payout:         { icon: 'fa-money-bill-wave',     color: '#22c55e', label: 'Payout' },
-  reinvestment:   { icon: 'fa-arrows-rotate',       color: '#3b82f6', label: 'Re-investment' },
-  fee:            { icon: 'fa-receipt',             color: '#fec24f', label: 'Platform Fee' },
-  referral_bonus: { icon: 'fa-user-group',          color: '#eda5ff', label: 'Referral Bonus' },
-  withdrawal:     { icon: 'fa-upload',              color: '#ef4444', label: 'Withdrawal' },
-  gift_sent:      { icon: 'fa-gift',                color: '#fec24f', label: 'Gift Sent' },
-  gift_received:  { icon: 'fa-gift',                color: '#22c55e', label: 'Gift Received' },
-  reward:         { icon: 'fa-award',               color: '#eda5ff', label: 'Reward' },
-};
-
-function _setTxnFilter(type, btn) {
-  const sel = document.getElementById('myTxnTypeFilter');
-  if (sel) sel.value = type;
-  document.querySelectorAll('#txnFilterPills .txn-pill').forEach(p => p.classList.remove('active'));
-  if (btn) btn.classList.add('active');
-  renderMyTxnTable();
-  SVC.track('svc_filter_changed', { filter_type: 'transactions', filter_value: type || 'all' });
+  document.getElementById('myTxnTypeFilter').addEventListener('change', renderMyTxnTable);
 }
 
 function renderMyTxnTable() {
   const body = document.getElementById('myTxnBody');
-  if (!body) return;
-  const filter = document.getElementById('myTxnTypeFilter')?.value || '';
+  const filter = document.getElementById('myTxnTypeFilter').value;
   const items = filter ? PORTAL.transactions.filter(t => t.type === filter) : PORTAL.transactions;
   const sorted = [...items].sort((a, b) => new Date(b.transaction_date || b.created_at || 0) - new Date(a.transaction_date || a.created_at || 0));
 
-  // Summary strip — money in vs out (all transactions, unfiltered)
-  const summary = document.getElementById('txnSummary');
-  if (summary) {
-    const _isPos = t => !['withdrawal', 'fee', 'investment', 'gift_sent'].includes(t.type);
-    let moneyIn = 0, moneyOut = 0;
-    PORTAL.transactions.forEach(t => {
-      const amt = Math.abs(parseFloat(t.amount) || 0);
-      if (t.status === 'rejected' || t.status === 'failed') return;
-      if (_isPos(t)) moneyIn += amt; else moneyOut += amt;
-    });
-    summary.innerHTML = `
-      <div class="txn-summary__item">
-        <div class="txn-summary__icon" style="background:rgba(34,197,94,0.15);color:#22c55e"><i class="fa-solid fa-arrow-down"></i></div>
-        <div><div class="txn-summary__label">Money In</div><div class="txn-summary__value" style="color:#22c55e">${Utils.rand(moneyIn)}</div></div>
-      </div>
-      <div class="txn-summary__divider"></div>
-      <div class="txn-summary__item">
-        <div class="txn-summary__icon" style="background:rgba(239,68,68,0.12);color:#ef4444"><i class="fa-solid fa-arrow-up"></i></div>
-        <div><div class="txn-summary__label">Money Out</div><div class="txn-summary__value" style="color:#ef4444">${Utils.rand(moneyOut)}</div></div>
-      </div>`;
-  }
+  const typeColors = { deposit: 'green', investment: 'blue', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple', withdrawal: 'red', gift_sent: 'orange', gift_received: 'green', reward: 'purple' };
 
   if (!sorted.length) {
-    body.innerHTML = `<div class="empty-state">
+    body.innerHTML = `<tr><td colspan="6" style="padding:0;border:none">
+      <div class="empty-state">
         <i class="fa-solid fa-receipt"></i>
         <div class="empty-state__title">No transactions yet</div>
         <div class="empty-state__sub">Top up your wallet or make an investment to see activity here.<br>
           <a href="#" onclick="navigate('wallet', document.querySelector('[data-view=wallet]'))" style="color:var(--gold)">Go to Wallet →</a>
         </div>
-      </div>`;
+      </div>
+    </td></tr>`;
     return;
   }
 
   const _isPosTxn = t => !['withdrawal', 'fee', 'investment', 'gift_sent'].includes(t.type);
-
-  // Group by month for section headers
-  let lastMonth = '';
   body.innerHTML = sorted.map(t => {
-    const pos  = _isPosTxn(t);
-    const meta = _TXN_META[t.type] || { icon: 'fa-circle-dot', color: '#9ca3af', label: _toSentenceCase((t.type || 'transaction').replace(/_/g, ' ')) };
-    const d    = new Date(t.transaction_date || t.created_at || 0);
-    const month = d.toLocaleString('default', { month: 'long', year: 'numeric' });
-    let header = '';
-    if (month !== lastMonth) { header = `<div class="txn-month">${month}</div>`; lastMonth = month; }
-    const desc = _toSentenceCase(t.description || t.reference) || '—';
-
-    return `${header}
-      <div class="txn-card">
-        <div class="txn-card__icon" style="background:${meta.color}1a;color:${meta.color}">
-          <i class="fa-solid ${meta.icon}"></i>
-        </div>
-        <div class="txn-card__main">
-          <div class="txn-card__title">${meta.label}</div>
-          <div class="txn-card__meta">${_esc(desc)}</div>
-        </div>
-        <div class="txn-card__right">
-          <div class="txn-card__amount" style="color:${pos ? '#16a34a' : '#dc2626'}">${pos ? '+' : '-'}${Utils.rand(Math.abs(t.amount))}</div>
-          <div class="txn-card__status txn-card__status--${(t.status || '').toLowerCase()}">${(t.status || 'completed').replace(/^\w/, c => c.toUpperCase())}</div>
-        </div>
-      </div>`;
+    const pos = _isPosTxn(t);
+    return `<tr>
+      <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${(t.type?.replace(/_/g, ' ') || '').replace(/^\w/, c => c.toUpperCase())}</span></td>
+      <td class="${pos ? 'td-green' : 'td-red'} fw-700">${pos ? '+' : '-'}${Utils.rand(Math.abs(t.amount))}</td>
+      <td>${Utils.statusBadge(t.status)}</td>
+      <td class="td-muted" style="font-size:0.72rem">${t.reference || '—'}</td>
+      <td class="td-muted" style="font-size:0.75rem">${t.description || '—'}</td>
+      <td class="td-muted">${Utils.date(t.transaction_date || t.created_at)}</td>
+    </tr>`;
   }).join('');
 }
 
@@ -2778,12 +2672,12 @@ async function loadWallet() {
     const statusTag = t.status === 'pending' ? ' <span style="font-size:0.7rem;background:rgba(254,194,79,0.15);color:#fec24f;padding:1px 6px;border-radius:4px;font-weight:600">Pending</span>' :
                       t.status === 'rejected' ? ' <span style="font-size:0.7rem;background:rgba(239,68,68,0.12);color:#ef4444;padding:1px 6px;border-radius:4px;font-weight:600">Rejected</span>' : '';
     return `
-    <div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid rgba(0,0,0,0.06)">
-      <div style="flex:1;min-width:0">
-        <div style="font-size:0.82rem;font-weight:600;color:#1a1a1a;white-space:normal;overflow-wrap:break-word;word-break:break-word;padding-right:8px">${_toSentenceCase(t.description || t.type?.replace(/_/g, ' '))}${statusTag}</div>
-        <div style="font-size:0.7rem;color:#9ca3af;margin-top:2px">${Utils.date(t.created_at || t.transaction_date)}</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(0,0,0,0.06)">
+      <div>
+        <div style="font-size:0.82rem;font-weight:600;color:#1a1a1a">${t.description || t.type?.replace(/_/g, ' ')}${statusTag}</div>
+        <div style="font-size:0.7rem;color:#9ca3af">${Utils.date(t.created_at || t.transaction_date)}</div>
       </div>
-      <span style="font-weight:700;color:${colour};white-space:nowrap;flex-shrink:0">${sign}${Utils.rand(Math.abs(t.amount))}</span>
+      <span style="font-weight:700;color:${colour}">${sign}${Utils.rand(Math.abs(t.amount))}</span>
     </div>
   `}).join('');
 }
@@ -2805,7 +2699,7 @@ function _renderRecurringTab() {
   const listEl     = document.getElementById('recurringInvestmentsList');
   if (!statusCard || !listEl) return;
 
-  const PRODUCT_LABELS = { cattle:'Cattle Finance', solar_7yr:'Solar Energy 7yr', solar_6yr:'Solar Energy 6yr', solar_5yr:'Solar Energy 5yr', short_term:'Short Term', smme:'SMME Finance', delivery_bike:'Delivery Bike', other:'Other' };
+  const PRODUCT_LABELS = { cattle:'Cattle Finance', solar_7yr:'Solar Energy 7yr', solar_6yr:'Solar Energy 6yr', solar_5yr:'Solar Energy 5yr', short_term:'Short Term', smme:'Short Term', delivery_bike:'Delivery Bike', other:'Other' };
   const productType = inv?.recurring_product_type;
   const isActive    = !!(inv?.recurring_enabled && inv?.recurring_amount && productType);
   const day         = inv?.recurring_day || 1;
@@ -2835,16 +2729,20 @@ function _renderRecurringTab() {
     statusCard.innerHTML = `
       <div class="wallet-card__label">Recurring Investment</div>
       <div class="wallet-card__value" style="font-size:1.1rem;color:#9ca3af">Not active</div>
-      <div class="wallet-card__sub">Automate monthly investments into any open pool — minimum R100/month</div>
+      <div class="wallet-card__sub">Automate monthly investments into any open pool each month</div>
       <div class="wallet-card__actions">
         <button class="btn btn--primary" onclick="openRecurringModal()"><i class="fa-solid fa-plus"></i> Set Up Recurring</button>
       </div>`;
   }
 
-  // Show active investments matching the selected product type
-  const recurringInvs = productType
-    ? PORTAL.investments.filter(i => i.status === 'active' && i.product_type === productType)
-    : [];
+  // Show all active investments placed by the recurring cron (INV-RC- prefix),
+  // plus any active investments matching the currently configured product type
+  const recurringInvs = (PORTAL.investments || []).filter(i =>
+    i.status === 'active' && (
+      (i.id && i.id.startsWith('INV-RC-')) ||
+      (productType && i.product_type === productType)
+    )
+  );
 
   if (!recurringInvs.length) {
     listEl.innerHTML = `<div class="empty-state" style="padding:20px"><i class="fa-solid fa-rotate"></i><p>${isActive ? 'Your first recurring investment will be processed at the start of next month.' : 'Set up a recurring investment to automate your monthly savings.'}</p></div>`;
@@ -2987,11 +2885,11 @@ function _renderAutoTopUpCard(container) {
           <strong>${Utils.rand(amount)}</strong> charged on the <strong>${day}${suffix}</strong> of each month
         </div>` : ''}
 
-      <div style="display:flex;flex-direction:column;gap:8px">
-        <button class="btn btn--primary btn--full" onclick="openAutoTopUpModal()" style="font-size:0.82rem;padding:9px 14px">
+      <div style="display:flex;gap:8px">
+        <button class="btn btn--primary btn--sm" onclick="openAutoTopUpModal()" style="flex:1">
           <i class="fa-solid fa-pen"></i> ${enabled ? 'Edit Schedule' : 'Set Up Auto Top-Up'}
         </button>
-        ${enabled ? `<button class="btn btn--secondary btn--full" onclick="_cancelAutoTopUp()" style="font-size:0.82rem;padding:9px 14px;color:#ef4444;border-color:rgba(239,68,68,0.3)">
+        ${enabled ? `<button class="btn btn--secondary btn--sm" onclick="_cancelAutoTopUp()" style="color:#ef4444;border-color:rgba(239,68,68,0.3)">
           <i class="fa-solid fa-xmark"></i> Cancel
         </button>` : ''}
       </div>
@@ -3002,7 +2900,11 @@ function openAutoTopUpModal() {
   const settings = _autoTopUpSettings || {};
   const el = id => document.getElementById(id);
   if (!el('autoTopUpModal')) return;
-  if (el('atuEnabled'))  el('atuEnabled').checked = !!settings.auto_topup_enabled;
+  const isEnabled = !!settings.auto_topup_enabled;
+  if (el('atuEnabled'))  el('atuEnabled').checked = isEnabled;
+  // Sync the custom toggle span colour to match the checkbox state
+  const toggleSpan = el('autoTopUpModal').querySelector('label span');
+  if (toggleSpan) toggleSpan.style.background = isEnabled ? '#fec24f' : '#ccc';
   if (el('atuAmount'))   el('atuAmount').value    = settings.auto_topup_amount || '';
   if (el('atuDay'))      el('atuDay').value       = settings.auto_topup_day || 1;
   updateAutoTopUpFee();
@@ -3017,7 +2919,7 @@ function updateAutoTopUpFee() {
   const rawFee = _pmFee(net);
   const fee    = Math.min(rawFee, 800);
   const gross  = Math.round((net + fee) * 100) / 100;
-  const fmt    = v => 'R ' + v.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  const fmt    = v => 'R ' + v.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
   bd.style.display = 'block';
   document.getElementById('atuFeeNet').textContent   = fmt(net);
   document.getElementById('atuFeeAmt').textContent   = '+ ' + fmt(Math.round(fee * 100) / 100);
@@ -3041,15 +2943,7 @@ async function saveAutoTopUp() {
   try {
     await API._fetch('POST', 'payments/auto-topup', { enabled, amount, day });
     Modal.close('autoTopUpModal');
-    if (enabled) {
-      const rawFee = (amount + 2) / 0.985 - amount;
-      const fee    = Math.min(rawFee, 800);
-      const gross  = Math.round((amount + fee) * 100) / 100;
-      const ord    = day===1?'st':day===2?'nd':day===3?'rd':'th';
-      Toast.success(`Auto top-up set — ${Utils.rand(gross)} charged on the ${day}${ord}, ${Utils.rand(amount)} credited to wallet`);
-    } else {
-      Toast.success('Auto top-up disabled');
-    }
+    Toast.success(enabled ? `Auto top-up of ${Utils.rand(amount)} set for the ${day}${day===1?'st':day===2?'nd':day===3?'rd':'th'} of each month` : 'Auto top-up disabled');
     SVC.track('svc_auto_topup_set', { enabled: !!enabled, amount: amount, day: day });
     await _loadAutoTopUpCard();
   } catch (e) {
@@ -3310,6 +3204,7 @@ function launchPaystack() {
         email:    _pmInvestorEmail(),
         amount:   Math.round(totalCharged * 100),   // Paystack expects kobo/cents
         currency: 'ZAR',
+        channels: ['card'],  // card-only so we always get a reusable auth for auto top-up
         ref:      `SVC-PS-${Date.now()}`,
         metadata: {
           investor_id:    _pmInvestorId(),
@@ -3641,7 +3536,9 @@ async function loadMarketplace() {
   }
   try { _mktProducts = await _getPortalProducts(); } catch (_) { _mktProducts = []; }
 
-  // Fallback: synthesise virtual products from pool data if none are configured
+  // Fallback: if the products table has no active entries, synthesise a virtual
+  // product for each distinct product_type that has at least one pool so the
+  // marketplace always shows what's available.
   if (!_mktProducts.length && PORTAL.pools.length) {
     const seen = new Set();
     _mktProducts = PORTAL.pools
@@ -3672,17 +3569,13 @@ async function loadMarketplace() {
   } catch (_) {}
 }
 
-function filterMarket(type) {
+function filterMarket(type, btn) {
   PORTAL.marketFilter = type;
+  const bar = document.getElementById('marketRiskTabBar');
+  if (bar) bar.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
   renderMarketplace();
-  const tabBar = document.getElementById('marketRiskTabBar');
-  if (tabBar) tabBar.style.display = '';
-  // Highlight the active risk pill
-  document.querySelectorAll('.mkt-risk-pill').forEach(p =>
-    p.classList.toggle('active', p.getAttribute('data-risk') === type)
-  );
-  const sel = document.getElementById('marketRiskSelect');
-  if (sel && sel.value !== type) sel.value = type;
+  if (bar) bar.style.display = '';   // renderMarketplace hides .tab-bar; keep risk filter visible
   SVC.track('svc_filter_changed', { filter_type: 'marketplace_risk', filter_value: type });
 }
 
@@ -3694,11 +3587,11 @@ const _POOL_META = {
   cattle:        { blurb: `Partner with ${_partnerNameLink('Beefcor')} — SA's premier feedlot — and earn returns as your herd grows from 200kg to 500kg.`, risk: 'Aggressive',   riskColor: '#ef4444' },
   short_term:    { blurb: 'Fund South African SMMEs through asset finance. Capital deployed into vetted businesses generating strong short-cycle returns.', risk: 'Moderate',  riskColor: '#fec24f' },
   delivery_bike: { blurb: 'Fleet funding for delivery riders. Steady, predictable returns.',    risk: 'Conservative', riskColor: '#22c55e' },
+  gridfarmer:    { blurb: 'Own a uniquely identified 1-ha white maize GPS grid. Your return is your plot\'s actual yield × SAFEX price — satellite-monitored, GPS-verified.', risk: 'High', riskColor: '#ff5229' },
 };
-
+// Map each product's risk label to a filter group
 // Risk profile is defined per-product in the admin console (products.risk_profile).
-// This resolves the current risk label + colour for a product type from the
-// live product records rather than any hardcoded value.
+// Resolve the current risk label + colour for a product type from live records.
 const _RISK_COLORS = { 'Low': '#22c55e', 'Medium': '#fec24f', 'Medium-High': '#fec24f', 'High': '#ef4444' };
 function _productRisk(productType) {
   const p = (_mktProducts || []).find(pr => pr.product_type === productType);
@@ -3712,9 +3605,9 @@ function _productRisk(productType) {
 // + factsheets + a chart, then the open pools under it, and invest from there.
 
 function renderMarketplace() {
-  // Toggle the legacy category tab-bar — not used in the product-first flow
-  const tabBar = document.querySelector('#view-marketplace .tab-bar');
-  if (tabBar) tabBar.style.display = 'none';
+  // Risk filter bar: visible on the product grid, hidden inside a product detail
+  const tabBar = document.getElementById('marketRiskTabBar');
+  if (tabBar) tabBar.style.display = _selectedProductType ? 'none' : '';
   const banner = document.querySelector('#view-marketplace .section-banner__title');
   if (_selectedProductType) { if (banner) banner.textContent = 'Product Details'; renderProductDetailView(_selectedProductType); }
   else { if (banner) banner.textContent = 'Investment Products'; renderProductsGrid(); }
@@ -3726,25 +3619,6 @@ function _openPoolsForProduct(type) {
     if (p.product_type !== type) return false;
     return p.status === 'open' || p.status === 'waitlist';
   });
-}
-
-/* Compute annualised average actual return rate from this investor's
-   paid-out / matured investments for a given product type.
-   Returns a decimal (e.g. 0.13 = 13%) or null if no data. */
-function _computeAvgActualRate(productType) {
-  const matured = (PORTAL.investments || []).filter(i =>
-    i.product_type === productType &&
-    (i.status === 'paid_out' || i.status === 'matured') &&
-    parseFloat(i.actual_return_amount) > 0 &&
-    parseFloat(i.amount) > 0
-  );
-  if (!matured.length) return null;
-  const sumRate = matured.reduce((s, i) => {
-    const rate    = parseFloat(i.actual_return_amount) / parseFloat(i.amount);
-    const termYrs = (parseFloat(i.term_months) || 12) / 12;
-    return s + rate / termYrs;
-  }, 0);
-  return sumRate / matured.length;
 }
 
 function renderProductsGrid() {
@@ -3783,12 +3657,12 @@ function renderProductsGrid() {
 
   // All active products (details + factsheets browsable even with no open pool),
   // sorted by sort order. Products with open pools rank first.
-  // Risk filter reads the product's own risk_profile (set in the admin console).
+  // Filtered by risk level (Conservative / Moderate / Aggressive).
   const mf = PORTAL.marketFilter || 'all';
   const products = (_mktProducts || []).filter(p => {
     if (!p.is_active) return false;
     if (mf === 'all') return true;
-    return (p.risk_profile || 'Medium') === mf;
+    return (p.risk_profile || 'Medium') === mf;   // risk from the product (admin console)
   }).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
   const shown = products
     .map(p => ({ p, open: _openPoolsForProduct(p.product_type) }))
@@ -3808,9 +3682,9 @@ function renderProductsGrid() {
     const pi = Utils.productInfo(p.product_type);
     const color = Utils.productColor(p);
     const icon = p.icon || pi.icon;
-    const avg = p.avg_actual_rate != null ? parseFloat(p.avg_actual_rate) : _computeAvgActualRate(p.product_type);
+    const avg = p.avg_actual_rate != null ? parseFloat(p.avg_actual_rate) : null;
     const poolRate = open[0] ? parseFloat(open[0].annual_rate) : null;
-    const rateLabel = avg != null ? `${(avg * 100).toFixed(1)}%` : (p.benchmark_rate ? `${(parseFloat(p.benchmark_rate) * 100).toFixed(1)}%` : (poolRate != null ? `${(poolRate * 100).toFixed(1)}%` : '—'));
+    const rateLabel = avg != null ? `${(avg * 100).toFixed(2)}%` : (p.benchmark_rate ? `${(parseFloat(p.benchmark_rate) * 100).toFixed(1)}%` : (poolRate != null ? `${(poolRate * 100).toFixed(1)}%` : '—'));
     const rateSub = avg != null ? 'AVG RETURN' : 'TARGET RETURN';
     const termMonths = p.term_months || (open[0] && open[0].term_months) || null;
     // soonest closing among the open pools
@@ -3861,18 +3735,14 @@ function renderProductsGrid() {
 function openProductDetail(type) {
   _selectedProductType = type;
   renderMarketplace();
-  // Scroll to the grid (not the full view) so the detail content is visible,
-  // not the hero/filter bar that sits above it.
-  const grid = document.getElementById('marketplaceGrid');
-  if (grid) grid.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const v = document.getElementById('view-marketplace');
+  if (v) v.scrollIntoView({ behavior: 'smooth', block: 'start' });
   SVC.track('select_item', { item_list_id: 'products', items: [{ item_id: type }] });
 }
 
 function backToProducts() {
   _selectedProductType = null;
   renderMarketplace();
-  const grid = document.getElementById('marketplaceGrid');
-  if (grid) grid.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 async function renderProductDetailView(type) {
@@ -3883,23 +3753,23 @@ async function renderProductDetailView(type) {
   const color = Utils.productColor(product);
   const icon = product.icon || pi.icon;
   const open = _openPoolsForProduct(type);
-  const avg = product.avg_actual_rate != null ? parseFloat(product.avg_actual_rate) : _computeAvgActualRate(type);
+  const avg = product.avg_actual_rate != null ? parseFloat(product.avg_actual_rate) : null;
   const projRate = avg != null ? avg : (product.benchmark_rate ? parseFloat(product.benchmark_rate) : (open[0] ? parseFloat(open[0].annual_rate) : 0.13));
   const keyDetails = (product.key_details || '').split('\n').map(s => s.trim()).filter(Boolean);
 
   // Live data panels: cattle herd status / solar telematics
   const isSolar = (type || '').startsWith('solar');
   const herdSlot = type === 'cattle'
-    ? '<div id="prodHerdStatus" style="margin-top:20px;margin-bottom:16px"></div>'
-    : (isSolar ? '<div id="prodSolarStatus" style="margin-top:20px;margin-bottom:16px"></div>' : '');
+    ? '<div id="prodHerdStatus" style="margin-bottom:16px"></div>'
+    : (isSolar ? '<div id="prodSolarStatus" style="margin-bottom:16px"></div>' : '');
 
   grid.innerHTML = `
-    <div style="grid-column:1/-1;padding:0 12px">
+    <div style="grid-column:1/-1">
       <button class="btn btn--ghost btn--sm" onclick="backToProducts()" style="margin-bottom:14px"><i class="fa-solid fa-arrow-left"></i> All products</button>
 
       <div class="market-pool-card mpc-v2" style="cursor:default">
         <div class="mpc2-accent" style="background:linear-gradient(90deg,${color},${color}88)"></div>
-        <div style="padding:16px 20px 8px">
+        <div style="padding:16px 16px 8px">
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
             <div class="mpc2-icon" style="background:${color}18;color:${color}"><i class="fa-solid ${icon}"></i></div>
             <div>
@@ -3911,7 +3781,7 @@ async function renderProductDetailView(type) {
 
           <div class="mpc2-metrics" style="margin-bottom:16px">
             <div class="mpc2-metric">
-              <div class="mpc2-metric__val" style="background:linear-gradient(135deg,${color},${color}bb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">${avg != null ? (avg * 100).toFixed(1) + '%' : (product.benchmark_rate ? (parseFloat(product.benchmark_rate) * 100).toFixed(1) + '%' : (open[0] ? (parseFloat(open[0].annual_rate) * 100).toFixed(1) + '%' : '—'))}</div>
+              <div class="mpc2-metric__val" style="background:linear-gradient(135deg,${color},${color}bb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">${avg != null ? (avg * 100).toFixed(2) + '%' : (product.benchmark_rate ? (parseFloat(product.benchmark_rate) * 100).toFixed(1) + '%' : (open[0] ? (parseFloat(open[0].annual_rate) * 100).toFixed(1) + '%' : '—'))}</div>
               <div class="mpc2-metric__lbl">${avg != null ? 'AVG RETURN' : 'TARGET RETURN'}</div>
             </div>
             <div class="mpc2-metric-sep"></div>
@@ -3922,7 +3792,7 @@ async function renderProductDetailView(type) {
           </div>
 
           ${type === 'cattle' && keyDetails.length
-            ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start;margin-bottom:16px;margin-top:20px">
+            ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start;margin-bottom:16px">
                 <div id="prodHerdStatus"></div>
                 <div style="background:rgba(254,194,79,0.06);border:1px solid rgba(254,194,79,0.22);border-radius:12px;padding:14px 16px">
                   <div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#b8860b;margin-bottom:10px"><i class="fa-solid fa-list" style="margin-right:5px"></i>Key Details</div>
@@ -3966,104 +3836,23 @@ async function renderProductDetailView(type) {
   _renderProductFactsheets(type, product);
 }
 
-// Compound-growth projection of R10,000 over 5 years (60 months)
+// Compound-growth projection of R10,000 over the term
 let _prodGrowthChart = null;
 function _renderProductGrowthChart(rate, termMonths, color) {
   const canvas = document.getElementById('prodGrowthChart');
   if (!canvas || typeof Chart === 'undefined') return;
   try { if (_prodGrowthChart) { _prodGrowthChart.destroy(); _prodGrowthChart = null; } } catch (_) {}
-
-  // Always show 5-year (60 month) window, tick every 12 months
-  const totalMonths = 60;
+  const months = Math.max(1, Math.min(120, parseInt(termMonths) || 12));
   const labels = [], data = [];
-  for (let m = 0; m <= totalMonths; m++) {
-    labels.push(m === 0 ? 'Start' : (m % 12 === 0 ? `Y${m / 12}` : ''));
-    data.push(Math.round(10000 * Math.pow(1 + rate, m / 12)));
-  }
-
-  // Parse hex color for gradient
-  const ctx = canvas.getContext('2d');
-  const grad = ctx.createLinearGradient(0, 0, 0, 220);
-  grad.addColorStop(0, color + '55');
-  grad.addColorStop(1, color + '08');
-
-  const finalVal = data[data.length - 1];
-  const startVal = data[0];
-
-  _prodGrowthChart = new Chart(ctx, {
+  for (let m = 0; m <= months; m++) { labels.push(m === 0 ? 'Start' : `M${m}`); data.push(Math.round(10000 * Math.pow(1 + rate, m / 12))); }
+  _prodGrowthChart = new Chart(canvas.getContext('2d'), {
     type: 'line',
-    data: {
-      labels,
-      datasets: [{
-        data,
-        borderColor: color,
-        backgroundColor: grad,
-        fill: true,
-        tension: 0.4,
-        pointRadius: labels.map((l, i) => (i === 0 || i === totalMonths || (i % 12 === 0)) ? 4 : 0),
-        pointBackgroundColor: color,
-        pointBorderColor: '#fff',
-        pointBorderWidth: 2,
-        borderWidth: 2.5,
-      }],
-    },
+    data: { labels, datasets: [{ data, borderColor: color, backgroundColor: color + '22', fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2 }] },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            title: items => `Month ${items[0].dataIndex}`,
-            label: c => `  Value: ${Utils.rand(c.parsed.y)}`,
-          },
-          backgroundColor: '#1a1a1a',
-          titleColor: '#9ca3af',
-          bodyColor: '#ffffff',
-          padding: 10,
-          cornerRadius: 8,
-        },
-        annotation: {
-          annotations: {
-            endLabel: {
-              type: 'label',
-              xValue: totalMonths,
-              yValue: finalVal,
-              content: [Utils.rand(finalVal)],
-              color: color,
-              font: { size: 10, weight: '700' },
-              position: { x: 'end', y: 'center' },
-              xAdjust: -4,
-              yAdjust: -14,
-            },
-          },
-        },
-      },
-      scales: {
-        x: {
-          grid: { display: false },
-          border: { display: true, color: 'rgba(0,0,0,0.1)' },
-          ticks: {
-            color: 'rgba(0,0,0,0.45)',
-            font: { size: 9, weight: '600' },
-            maxRotation: 0,
-            callback: (val, i) => labels[i] || null,
-          },
-        },
-        y: {
-          position: 'left',
-          border: { display: false },
-          grid: { color: 'rgba(0,0,0,0.06)', drawTicks: false },
-          ticks: {
-            callback: v => 'R' + (v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v),
-            color: 'rgba(0,0,0,0.45)',
-            font: { size: 9, weight: '600' },
-            maxTicksLimit: 6,
-            padding: 4,
-          },
-        },
-      },
-      layout: { padding: { top: 18, right: 12, bottom: 4, left: 4 } },
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => Utils.rand(c.parsed.y) } } },
+      scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 6, color: 'rgba(0,0,0,0.4)', font: { size: 9 } } },
+                y: { ticks: { callback: v => 'R' + (v / 1000).toFixed(0) + 'k', color: 'rgba(0,0,0,0.4)', font: { size: 9 } }, grid: { color: 'rgba(0,0,0,0.05)' } } },
     },
   });
 }
@@ -4081,36 +3870,67 @@ let _trackChart = null;
 async function _renderProductTrackRecord(type, color) {
   const el = document.getElementById('prodTrackRecord');
   if (!el) return;
+  el.innerHTML = `<div style="font-size:0.78rem;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i> Loading past performance…</div>`;
   const data = await _getTrackRecord();
   const isSolar = (type || '').startsWith('solar');
   const keys = Object.keys(data).filter(k => isSolar ? k.startsWith('solar') : k === type);
-  let pools = [], paidBack = 0, sumA = 0, n = 0;
+  let pools = [], paidBack = 0, sumA = 0, nA = 0, nTotal = 0;
   keys.forEach(k => {
     const d = data[k];
     pools = pools.concat(d.pools || []);
-    paidBack += d.total_paid_back || 0;
-    sumA += (d.avg_actual_rate || 0) * (d.matured_count || 0);
-    n += d.matured_count || 0;
+    paidBack  += d.total_paid_back || 0;
+    sumA      += (d.avg_actual_rate || 0) * (d.matured_count || 0);
+    nA        += d.matured_count || 0;
+    nTotal    += d.matured_count || 0;
   });
-  if (!n) { el.innerHTML = ''; return; }
-  pools.sort((a, b) => new Date(a.ended) - new Date(b.ended));
+  if (!nTotal) { el.innerHTML = ''; return; }
+  pools.sort((a, b) => new Date(b.ended) - new Date(a.ended)); // newest first
 
-  // Show the average delivered return (no chart).
+  const avgRate = nA ? (sumA / nA * 100).toFixed(2) : '—';
+
+  const poolRows = pools.map(p => {
+    const rateColor = p.actual_rate > 0 && p.benchmark_rate > 0
+      ? (p.actual_rate >= p.benchmark_rate ? '#22c55e' : '#f59e0b')
+      : '#9ca3af';
+    const statusLabel = p.status === 'paid_out' ? 'Paid Out' : 'Matured';
+    const statusColor = p.status === 'paid_out' ? '#22c55e' : '#eda5ff';
+    return `<tr>
+      <td style="font-weight:600;font-size:0.82rem">${_esc(p.name)}</td>
+      <td style="text-align:center;font-size:0.82rem">${p.term_months ? p.term_months + ' mo' : '—'}</td>
+      <td style="text-align:center">
+        <span style="font-weight:700;color:${rateColor};font-size:0.85rem">${p.actual_rate > 0 ? (p.actual_rate * 100).toFixed(2) + '%' : '—'}</span>
+        ${p.benchmark_rate > 0 ? `<div style="font-size:0.68rem;color:var(--text-muted)">target ${(p.benchmark_rate * 100).toFixed(2)}%</div>` : ''}
+      </td>
+      <td style="text-align:right;font-size:0.82rem;font-variant-numeric:tabular-nums">${p.raised_amount > 0 ? Utils.rand(p.raised_amount) : '—'}</td>
+      <td style="text-align:center;font-size:0.78rem;color:var(--text-muted)">${p.ended ? Utils.date(p.ended) : '—'}</td>
+      <td style="text-align:center"><span style="font-size:0.7rem;font-weight:700;color:${statusColor};background:${statusColor}18;border-radius:20px;padding:2px 9px">${statusLabel}</span></td>
+    </tr>`;
+  }).join('');
+
   el.innerHTML = `
-    <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:10px"><i class="fa-solid fa-award" style="color:${color}"></i> Track record — delivered returns</div>
-    <div style="display:flex;gap:12px;flex-wrap:wrap">
-      <div style="flex:1;min-width:110px;background:rgba(0,0,0,0.03);border:1px solid rgba(0,0,0,0.06);border-radius:14px;padding:14px">
-        <div style="font-size:1.5rem;font-weight:900;color:${color};letter-spacing:-0.02em">${(sumA / n * 100).toFixed(2)}%</div>
-        <div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px">avg return achieved p.a.</div>
+    <div style="margin-bottom:6px">
+      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:12px">
+        <i class="fa-solid fa-chart-line" style="color:${color};margin-right:5px"></i>Past Performance
       </div>
-      <div style="flex:1;min-width:110px;background:rgba(0,0,0,0.03);border:1px solid rgba(0,0,0,0.06);border-radius:14px;padding:14px">
-        <div style="font-size:1.5rem;font-weight:900;color:var(--text);letter-spacing:-0.02em">${n}</div>
-        <div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px">pool${n === 1 ? '' : 's'} matured</div>
+
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
+        <div style="background:${color}12;border:1px solid ${color}30;border-radius:12px;padding:14px 12px;text-align:center">
+          <div style="font-size:1.5rem;font-weight:900;color:${color};letter-spacing:-0.02em">${avgRate}%</div>
+          <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-top:3px">Avg return p.a.</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px 12px;text-align:center">
+          <div style="font-size:1.5rem;font-weight:900;color:var(--text);letter-spacing:-0.02em">${nTotal}</div>
+          <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-top:3px">Pool${nTotal === 1 ? '' : 's'} completed</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px 12px;text-align:center">
+          <div style="font-size:1.5rem;font-weight:900;color:var(--text);letter-spacing:-0.02em">${Utils.rand(paidBack)}</div>
+          <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-top:3px">Returned to investors</div>
+        </div>
       </div>
-      <div style="flex:1;min-width:110px;background:rgba(0,0,0,0.03);border:1px solid rgba(0,0,0,0.06);border-radius:14px;padding:14px">
-        <div style="font-size:1.5rem;font-weight:900;color:var(--text);letter-spacing:-0.02em">${Utils.rand(paidBack)}</div>
-        <div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px">invested to date</div>
-      </div>
+
+      <p style="font-size:0.65rem;color:var(--text-muted);margin-top:10px;line-height:1.5;opacity:0.7">
+        <i class="fa-solid fa-circle-info" style="margin-right:4px"></i>Past performance is not a guarantee of future returns. Investment returns may vary.
+      </p>
     </div>`;
 }
 
@@ -4260,7 +4080,7 @@ function _marketPoolCardHtml(pool, idx, walletBal, waitlist, investorId) {
               <i class="fa-solid ${pi.icon}"></i>
             </div>
             <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
-              ${highlighted ? `<span class="mpc2-badge mpc2-badge--featured"><i class="fa-solid fa-star" style="font-size:0.6rem"></i> Best Next Step</span>` : ''}
+              ${highlighted ? `<span class="mpc2-badge mpc2-badge--featured"><i class="fa-solid fa-star" style="font-size:0.72rem"></i> Best Next Step</span>` : ''}
               <span class="mpc2-badge" style="background:${pr.color}14;color:${pr.color};border-color:${pr.color}30">${pr.risk} risk</span>
               ${isWaitlisted
                 ? '<span class="mpc2-badge mpc2-badge--full"><i class="fa-solid fa-lock"></i> Pool Full</span>'
@@ -4381,39 +4201,67 @@ function _cattleHerdStatusCompactHtml(s) {
   const weight = s.avg_current_weight || s.avg_entry_weight;
   return `<div style="background:rgba(254,194,79,0.07);border:1px solid rgba(254,194,79,0.25);border-radius:10px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px;font-size:0.82rem;flex-wrap:wrap">
     <i class="fa-solid fa-cow" style="color:#fec24f;flex-shrink:0"></i>
-    <span style="color:#303030"><strong>${(s.live_count || 0).toLocaleString('en-ZA')}</strong> cattle live</span>
-    ${weight ? `<span style="color:#656565">·</span><span style="color:#303030">avg <strong>${weight}kg</strong></span>` : ''}
-    <span style="color:#656565">·</span>
+    <span style="color:var(--text)"><strong>${(s.live_count || 0).toLocaleString('en-ZA')}</strong> cattle live</span>
+    ${weight ? `<span style="color:var(--text-muted)">·</span><span style="color:var(--text)">avg <strong>${weight}kg</strong></span>` : ''}
+    <span style="color:var(--text-muted)">·</span>
     <span style="color:#65ed00;font-weight:700"><i class="fa-solid fa-heart-pulse" style="font-size:0.72rem"></i> ${survival}% survival</span>
   </div>`;
 }
 
 function _cattleHerdStatusHtml(s) {
   if (!s || !s.total_purchased) return '';
-  const weight   = s.avg_current_weight || s.avg_entry_weight;
-  const genders  = (s.by_gender || []).filter(g => g.count > 0 && (g.label || '').toLowerCase() !== 'unspecified');
-  const breeds   = (s.by_breed  || []).filter(b => b.count > 0 && (b.label || '').toLowerCase() !== 'unspecified');
-  const totalG   = genders.reduce((a, g) => a + g.count, 0) || 1;
-  const chip = txt => `<span style="font-size:0.76rem;background:rgba(254,194,79,0.14);color:#8a6d1f;border-radius:20px;padding:3px 11px">${txt}</span>`;
+  const weight  = s.avg_current_weight || s.avg_entry_weight;
+  const genders = (s.by_gender || []).filter(g => g.count > 0 && (g.label || '').toLowerCase() !== 'unspecified');
+  const breeds  = (s.by_breed  || []).filter(b => b.count > 0 && (b.label || '').toLowerCase() !== 'unspecified');
+  const totalG  = genders.reduce((a, g) => a + g.count, 0) || 1;
+  const totalB  = breeds.reduce((a, b) => a + b.count, 0) || 1;
 
+  const gChip = txt => `<span style="font-size:0.73rem;background:rgba(254,194,79,0.15);color:#8a6d1f;border-radius:6px;padding:3px 9px;font-weight:600;white-space:nowrap">${txt}</span>`;
+  const bChip = txt => `<span style="font-size:0.73rem;background:rgba(0,0,0,0.05);color:var(--text-muted);border-radius:6px;padding:3px 9px;white-space:nowrap">${txt}</span>`;
 
-  // Survival / mortality
   const mortRate = s.total_purchased ? (s.mortality_count || 0) / s.total_purchased * 100 : 0;
-  const mortBlock = `<div style="font-size:0.76rem;color:var(--text-muted);margin-top:8px"><i class="fa-solid fa-heart-pulse" style="color:#22c55e"></i> Survival rate <strong style="color:var(--text)">${(100 - mortRate).toFixed(1)}%</strong></div>`;
+  const survival = (100 - mortRate).toFixed(1);
 
   return `
-    <div style="background:rgba(254,194,79,0.07);border:1px solid rgba(254,194,79,0.25);border-radius:12px;padding:14px 16px;margin-top:16px;margin-bottom:14px">
-      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#fec24f;margin-bottom:10px"><i class="fa-solid fa-cow"></i> Live Herd Status</div>
-      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px">
-        <div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${s.total_purchased.toLocaleString('en-ZA')}</div><div style="font-size:0.7rem;color:var(--text-muted)">purchased to date</div></div>
-        ${weight ? `<div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${weight}<span style="font-size:0.78rem"> kg</span></div><div style="font-size:0.7rem;color:var(--text-muted)">average weight</div></div>` : ''}
+    <div style="background:rgba(254,194,79,0.06);border:1px solid rgba(254,194,79,0.22);border-radius:12px;padding:14px 16px;margin-top:16px;margin-bottom:14px">
+
+      <!-- Header row -->
+      <div style="display:flex;align-items:center;margin-bottom:12px">
+        <span style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#b8860b"><i class="fa-solid fa-cow" style="margin-right:5px"></i>Live Herd Status</span>
+        <span style="margin-left:auto;display:inline-flex;align-items:center;gap:4px;background:rgba(34,197,94,0.1);border-radius:100px;padding:2px 9px;font-size:0.67rem;color:#16a34a;font-weight:700">
+          <span style="width:6px;height:6px;border-radius:50%;background:#22c55e;display:inline-block"></span>Live
+        </span>
       </div>
 
-      ${genders.length ? `<div style="margin-bottom:${breeds.length ? '10px' : '0'}"><div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:5px">Gender</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">${genders.map(g => chip(`${_esc(g.label)}: <strong>${g.count}</strong> (${Math.round(g.count / totalG * 100)}%)`)).join('')}</div></div>` : ''}
-      ${breeds.length ? `<div><div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:5px">Breeds</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">${breeds.slice(0, 3).map(b => chip(`${_esc(b.label)}: <strong>${Math.round(b.count / (breeds.reduce((a,x)=>a+x.count,0)||1) * 100)}%</strong>`)).join('')}</div></div>` : ''}
-      ${mortBlock}
+      <!-- Compact stat strip: Total · Weight · Survival -->
+      <div style="display:flex;align-items:stretch;border:1px solid rgba(0,0,0,0.07);border-radius:8px;overflow:hidden;margin-bottom:12px">
+        <div style="padding:9px 14px;flex:0 0 auto">
+          <div style="font-size:1.15rem;font-weight:800;color:var(--text);line-height:1.1">${s.total_purchased.toLocaleString('en-ZA')}</div>
+          <div style="font-size:0.67rem;color:var(--text-muted);margin-top:2px">purchased to date</div>
+        </div>
+        ${weight ? `<div style="width:1px;background:rgba(0,0,0,0.07);flex-shrink:0"></div>
+        <div style="padding:9px 14px;flex:0 0 auto">
+          <div style="font-size:1.15rem;font-weight:800;color:var(--text);line-height:1.1">${weight}<span style="font-size:0.78rem;font-weight:600"> kg</span></div>
+          <div style="font-size:0.67rem;color:var(--text-muted);margin-top:2px">average weight</div>
+        </div>` : ''}
+        <div style="flex:1"></div>
+        <div style="padding:9px 14px;border-left:1px solid rgba(0,0,0,0.07);flex-shrink:0;display:flex;flex-direction:column;justify-content:center;align-items:flex-end">
+          <div style="font-size:1rem;font-weight:800;color:#16a34a;line-height:1.1"><i class="fa-solid fa-heart-pulse" style="font-size:0.8rem;margin-right:3px"></i>${survival}%</div>
+          <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px">survival rate</div>
+        </div>
+      </div>
+
+      <!-- Breakdown grid: Gender | Breeds -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px">
+        ${genders.length ? `<div>
+          <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:6px">Gender</div>
+          <div style="display:flex;gap:5px;flex-wrap:wrap">${genders.map(g => gChip(`${_esc(g.label)} <strong>${Math.round(g.count / totalG * 100)}%</strong>`)).join('')}</div>
+        </div>` : ''}
+        ${breeds.length ? `<div>
+          <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:6px">Breeds</div>
+          <div style="display:flex;gap:5px;flex-wrap:wrap">${breeds.slice(0, 4).map(b => bChip(`${_esc(b.label)} ${Math.round(b.count / totalB * 100)}%`)).join('')}</div>
+        </div>` : ''}
+      </div>
     </div>`;
 }
 
@@ -4445,7 +4293,7 @@ function _solarStatusHtml(s) {
         <i class="fa-solid fa-solar-panel"></i> Live Solar Generation
         ${live ? '<span style="display:inline-flex;align-items:center;gap:5px;margin-left:auto;font-size:0.68rem;color:#22c55e;text-transform:none;letter-spacing:0"><span style="width:7px;height:7px;border-radius:50%;background:#22c55e;display:inline-block;animation:pulse 1.5s infinite"></span> generating now</span>' : ''}
       </div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px">
         <div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${(s.current_power_kw || 0).toLocaleString('en-ZA')}<span style="font-size:0.78rem"> kW</span></div><div style="font-size:0.7rem;color:var(--text-muted)">generating now</div></div>
         <div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${kwh(s.today_kwh)}<span style="font-size:0.78rem"> kWh</span></div><div style="font-size:0.7rem;color:var(--text-muted)">today</div></div>
         <div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${kwh(s.month_kwh)}<span style="font-size:0.78rem"> kWh</span></div><div style="font-size:0.7rem;color:var(--text-muted)">this month</div></div>
@@ -4572,7 +4420,6 @@ function _minPlusFee(pool) {
   return min + _platformFee(min);
 }
 
-/* Quick-pick chip selection helper */
 function openInvestModal(poolId) {
   const pool = PORTAL.pools.find(p => p.id === poolId);
   if (!pool) return;
@@ -4584,7 +4431,7 @@ function openInvestModal(poolId) {
   const walletBal  = _activeSa ? (parseFloat(_activeSa.wallet_balance) || 0) : (parseFloat(PORTAL.investor?.wallet_balance) || 0);
   const pi         = Utils.productInfo(pool.product_type);
   const meta       = _POOL_META[pool.product_type] || { risk: 'Medium', riskColor: '#fec24f' };
-  const pr         = _productRisk(pool.product_type);
+  const pr         = _productRisk(pool.product_type);   // risk from the product (admin console)
   const maturityDt = new Date();
   maturityDt.setMonth(maturityDt.getMonth() + pool.term_months);
   const maturityStr = maturityDt.toLocaleDateString('en-ZA', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -4612,14 +4459,14 @@ function openInvestModal(poolId) {
 
     ${pool.product_type === 'cattle' ? '<div id="cattleHerdStatus"></div>' : ''}
 
-    <!-- Wallet balance indicator -->
+    <!-- Wallet balance indicator (needs to cover the minimum + 1% platform fee) -->
     ${walletBal < _minPlusFee(pool)
       ? `<div style="background:rgba(239,68,68,0.07);border:1.5px solid rgba(239,68,68,0.3);border-radius:12px;padding:14px 16px;margin-bottom:14px">
            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
              <i class="fa-solid fa-triangle-exclamation" style="color:#ef4444;font-size:1.1rem;flex-shrink:0"></i>
              <div>
                <div style="font-weight:700;color:#ef4444;font-size:0.9rem">Wallet top-up required</div>
-               <div style="font-size:0.78rem;color:#656565;margin-top:2px">You have <strong style="color:#303030">${Utils.rand(walletBal)}</strong> — you need <strong style="color:#303030">${Utils.rand(_minPlusFee(pool))}</strong> to invest the minimum (${Utils.rand(pool.min_investment)} + ${Utils.rand(_platformFee(pool.min_investment))} fee).</div>
+               <div style="font-size:0.78rem;color:#6b7280;margin-top:2px">You have <strong style="color:#1a1a1a">${Utils.rand(walletBal)}</strong> — you need <strong style="color:#1a1a1a">${Utils.rand(_minPlusFee(pool))}</strong> to invest the minimum (${Utils.rand(pool.min_investment)} + ${Utils.rand(_platformFee(pool.min_investment))} fee).</div>
              </div>
            </div>
            <button class="btn btn--primary btn--sm" style="width:100%" onclick="Modal.close('investModal');navigate('wallet',document.querySelector('[data-view=wallet]'))">
@@ -4633,7 +4480,7 @@ function openInvestModal(poolId) {
          </div>`}
 
     <!-- Quick-pick amount buttons -->
-    <div class="form-group">
+    <div class="form-group" style="margin-top:14px">
       <label class="form-label">How much would you like to invest?</label>
       <div class="invest-quickpick mb-8">
         ${[pool.min_investment, 5000, 10000, 25000].filter(v => (v + _platformFee(v)) <= walletBal || v === pool.min_investment).map(v =>
@@ -4647,51 +4494,56 @@ function openInvestModal(poolId) {
     </div>
     <div id="investInsufficientBanner" style="display:none"></div>
 
-    <!-- Wallet deduction breakdown -->
+
+    <!-- Wallet deduction breakdown (amount invested + platform fee) -->
     <div id="investFeeBreakdown" style="margin-top:12px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;padding:10px 14px;font-size:0.84rem">
-      <div style="display:flex;justify-content:space-between;padding:3px 0;color:#656565">
-        <span>Amount invested</span><span id="ic-fee-amount" style="font-weight:600;color:#303030">—</span>
+      <div style="display:flex;justify-content:space-between;padding:3px 0;color:var(--text-muted)">
+        <span>Amount invested</span><span id="ic-fee-amount" style="font-weight:600;color:#1a1a1a">—</span>
       </div>
-      <div style="display:flex;justify-content:space-between;padding:3px 0;color:#656565">
-        <span>Platform fee (1%)</span><span id="ic-fee-fee" style="font-weight:600;color:#303030">—</span>
+      <div style="display:flex;justify-content:space-between;padding:3px 0;color:var(--text-muted)">
+        <span>Platform fee (1%)</span><span id="ic-fee-fee" style="font-weight:600;color:#1a1a1a">—</span>
       </div>
       <div style="display:flex;justify-content:space-between;padding:7px 0 1px;margin-top:5px;border-top:1px dashed rgba(0,0,0,0.12);font-weight:700">
-        <span>Total deducted from ${_activeSa ? 'sub-account' : 'wallet'}</span><span id="ic-fee-total" style="color:#303030">—</span>
+        <span>Total deducted from ${_activeSa ? 'sub-account' : 'wallet'}</span><span id="ic-fee-total" style="color:#1a1a1a">—</span>
       </div>
     </div>
+
   `;
 
   const invBtn = document.getElementById('investConfirmBtn');
   invBtn.onclick = () => _withBtn(invBtn, () => confirmInvestment(pool));
   Modal.open('investModal');
-  if (pool.product_type === 'cattle') _renderCattleHerdStatus('cattleHerdStatus', true);
+  if (pool.product_type === 'cattle') {
+    _renderCattleHerdStatus('cattleHerdStatus', true); // true = compact mode
+  }
 }
 
 function _updateInvestCalc(amt, rate, termMonths, minInvest, walletBal) {
-  const banner     = document.getElementById('investInsufficientBanner');
+  const banner   = document.getElementById('investInsufficientBanner');
   const confirmBtn = document.getElementById('investConfirmBtn');
-  const feeAmtEl   = document.getElementById('ic-fee-amount');
-  const feeFeeEl   = document.getElementById('ic-fee-fee');
-  const feeTotEl   = document.getElementById('ic-fee-total');
+  const feeAmtEl = document.getElementById('ic-fee-amount');
+  const feeFeeEl = document.getElementById('ic-fee-fee');
+  const feeTotEl = document.getElementById('ic-fee-total');
 
-  const fee          = _platformFee(amt);
-  const totalNeeded  = amt + fee;
+  const fee        = _platformFee(amt);
+  const totalNeeded = amt + fee;
   const maxAffordable = walletBal ? Math.floor(walletBal / (1 + PLATFORM_FEE_RATE)) : null;
-  const overBudget   = walletBal != null && totalNeeded > walletBal + 0.005;
+  const overBudget  = walletBal != null && totalNeeded > walletBal + 0.005;
 
   if (amt >= minInvest) {
     if (feeAmtEl) feeAmtEl.textContent = Utils.rand(amt, 2);
     if (feeFeeEl) feeFeeEl.textContent = Utils.rand(fee, 2);
     if (feeTotEl) {
       feeTotEl.textContent = Utils.rand(totalNeeded, 2);
-      feeTotEl.style.color = overBudget ? '#ef4444' : 'var(--text-primary,#1a1a1a)';
+      feeTotEl.style.color = overBudget ? '#ef4444' : '#1a1a1a';
     }
   } else {
     if (feeAmtEl) feeAmtEl.textContent = '—';
     if (feeFeeEl) feeFeeEl.textContent = '—';
-    if (feeTotEl) { feeTotEl.textContent = '—'; feeTotEl.style.color = 'var(--text-primary,#1a1a1a)'; }
+    if (feeTotEl) { feeTotEl.textContent = '—'; feeTotEl.style.color = '#1a1a1a'; }
   }
 
+  // Over-budget: show top-up prompt with max investable guide
   if (banner) {
     if (overBudget && maxAffordable != null) {
       const canInvest = maxAffordable >= minInvest;
@@ -4702,10 +4554,10 @@ function _updateInvestCalc(amt, rate, termMonths, minInvest, walletBal) {
             <i class="fa-solid fa-circle-exclamation" style="color:#ef4444;margin-top:2px;flex-shrink:0"></i>
             <div style="flex:1">
               <div style="font-size:0.83rem;font-weight:700;color:#ef4444;margin-bottom:4px">Insufficient funds including the platform fee</div>
-              <div style="font-size:0.78rem;color:#656565;line-height:1.5">
-                You need <strong style="color:#303030">${Utils.rand(totalNeeded, 2)}</strong> (${Utils.rand(amt)} + ${Utils.rand(fee, 2)} fee) but your wallet has <strong style="color:#303030">${Utils.rand(walletBal)}</strong>.
+              <div style="font-size:0.78rem;color:#6b7280;line-height:1.5">
+                You need <strong style="color:#1a1a1a">${Utils.rand(totalNeeded, 2)}</strong> (${Utils.rand(amt)} + ${Utils.rand(fee, 2)} fee) but your wallet has <strong style="color:#1a1a1a">${Utils.rand(walletBal)}</strong>.
                 ${canInvest
-                  ? `The most you can invest right now is <strong style="color:#303030">${Utils.rand(maxAffordable)}</strong>.`
+                  ? `The most you can invest right now is <strong style="color:#1a1a1a">${Utils.rand(maxAffordable)}</strong>.`
                   : `This exceeds your available balance even at the minimum investment.`}
               </div>
               <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
@@ -4755,8 +4607,8 @@ async function confirmInvestment(pool) {
       start_date: new Date().toISOString().split('T')[0],
       end_date: maturityDate.toISOString().split('T')[0],
       term_months: pool.term_months,
-      payout_option: 'reinvest',
-      maturity_instruction: 'reinvest',   // default: roll into next open pool of same product
+      payout_option: pool.product_type?.includes('delivery_bike') ? 'payout_all' : 'reinvest',
+      maturity_instruction: pool.product_type?.includes('delivery_bike') ? 'payout_all' : 'reinvest',
       sub_account_id: _pmSaId || undefined,
       is_reinvestment: false,
     });
@@ -4815,6 +4667,29 @@ async function confirmInvestment(pool) {
 /* ═══════════════════════════════════════════════
    MATURITY
    ═══════════════════════════════════════════════ */
+
+function _maturityProductIcon(type) {
+  const t = (type || '').toLowerCase();
+  if (t.includes('cattle'))   return 'cow';
+  if (t.includes('solar'))    return 'solar-panel';
+  if (t.includes('delivery')) return 'bicycle';
+  if (t.includes('short'))    return 'clock-rotate-left';
+  return 'chart-line';
+}
+function _maturityProductColor(type) {
+  const t = (type || '').toLowerCase();
+  if (t.includes('cattle'))   return '#fec24f';   // brand gold
+  if (t.includes('solar'))    return '#65ed00';   // brand green
+  if (t.includes('delivery')) return '#eda5ff';   // brand lavender
+  if (t.includes('short'))    return '#0096ff';   // brand blue
+  return '#fec24f';                               // brand orange
+}
+function _maturityInstructionLabel(key) {
+  const map = { reinvest: 'Reinvest on maturity', payout_all: 'Full cash payout',
+    partial_reinvest: 'Partial reinvest', switch_product: 'Switch product' };
+  return map[key] || (key || '').replace(/_/g,' ');
+}
+
 async function loadMaturity() {
   if (!PORTAL.investments.length) await loadPortalData();
 
@@ -4826,14 +4701,34 @@ async function loadMaturity() {
 
   if (active.length) {
     const activeGroups = _groupInvsByPool(active);
-    html += `<h3 style="font-size:0.85rem;font-weight:700;color:var(--text-muted);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.08em"><i class="fa-solid fa-hourglass-half"></i> Upcoming Maturities (${activeGroups.length})</h3>`;
-    html += activeGroups.map(group => {
-      const inv = group[0];
-      const days = Utils.daysRemaining(inv.maturity_date);
-      const multiple = group.length > 1;
-      const uid = 'mat_' + (inv.pool_id || inv.id);
-      const totalAmount = group.reduce((s, i) => s + (i.amount || 0), 0);
+    html += `
+      <div class="mc2-section-header">
+        <span class="mc2-section-header__icon"><i class="fa-solid fa-hourglass-half"></i></span>
+        <span class="mc2-section-header__title">Upcoming Maturities</span>
+        <span class="mc2-section-header__count">${activeGroups.length}</span>
+      </div>`;
 
+    html += activeGroups.map(group => {
+      const inv         = group[0];
+      const days        = Utils.daysRemaining(inv.maturity_date);
+      const color       = _maturityProductColor(inv.product_type);
+      const icon        = _maturityProductIcon(inv.product_type);
+      const urgencyCls  = days <= 7 ? 'soon' : days <= 30 ? 'near' : 'far';
+      const stripColor  = days <= 7 ? '#ff5229' : days <= 30 ? '#fec24f' : '#65ed00';
+      const multiple    = group.length > 1;
+      const uid         = 'mat_' + (inv.pool_id || inv.id);
+
+      const start    = new Date(inv.start_date || inv.created_at).getTime();
+      const end      = new Date(inv.maturity_date).getTime();
+      const progress = (start && end && end > start)
+        ? Math.min(100, Math.max(2, Math.round((Date.now() - start) / (end - start) * 100)))
+        : 50;
+
+      const totalAmount  = group.reduce((s, i) => s + (i.amount || 0), 0);
+      const totalReturn  = group.reduce((s, i) => s + (i.expected_return || i.expected_return_amount || 0), 0);
+      const productLabel = Utils.productInfo ? (Utils.productInfo(inv.product_type)||{}).label : inv.product_type;
+
+      // Pool-level instruction state
       const allInstrs   = group.map(i => i.maturity_instruction).filter(Boolean);
       const uniqueInstrs = [...new Set(allInstrs)];
       const poolInstr   = uniqueInstrs.length === 1 ? uniqueInstrs[0] : null;
@@ -4841,7 +4736,7 @@ async function loadMaturity() {
       const instrSet    = !!poolInstr || hasMixed;
       const instrLabel  = hasMixed
         ? `Mixed — ${allInstrs.length} of ${group.length} set`
-        : (poolInstr ? poolInstr.replace(/_/g,' ').replace(/^(\w)/, c => c.toUpperCase()) : null);
+        : (poolInstr ? _maturityInstructionLabel(poolInstr) : 'No instruction set yet');
 
       const modalCall = multiple
         ? `openPoolMaturityModal(${JSON.stringify(inv.pool_id)})`
@@ -4857,7 +4752,8 @@ async function loadMaturity() {
             </div>
             <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
               <span style="font-size:0.72rem;color:${hasInstr ? 'var(--green)' : 'var(--text-muted)'}">
-                ${hasInstr ? i.maturity_instruction.replace(/_/g,' ') : 'Not set'}
+                <i class="fa-solid fa-${hasInstr ? 'circle-check' : 'circle-exclamation'}"></i>
+                ${hasInstr ? _maturityInstructionLabel(i.maturity_instruction) : 'Not set'}
               </span>
               <button class="btn btn--ghost btn--sm" style="font-size:0.72rem;padding:3px 8px" onclick='openMaturityModal(${JSON.stringify(i.id)})'>
                 ${hasInstr ? 'Update' : 'Set'}
@@ -4866,55 +4762,140 @@ async function loadMaturity() {
           </div>`;
       }).join('') : '';
 
-      return `<div class="maturity-card" style="border-color:var(--border);display:block">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px">
-          <div class="maturity-card__info" style="flex:1;min-width:0">
-            <div class="maturity-card__name">${_esc(inv.pool_name)}${multiple ? ` <span style="color:var(--gold);font-size:0.78rem">(${group.length})</span>` : ''}</div>
-            <div class="maturity-card__detail">Matures: ${Utils.date(inv.maturity_date)} · ${days} days · ${Utils.rand(totalAmount)}</div>
-            ${instrSet ? `<div style="font-size:0.72rem;color:var(--green);margin-top:4px"><i class="fa-solid fa-check-circle"></i> ${instrLabel}</div>` : ''}
+      return `
+      <div class="mc2 mc2--active" data-id="${_esc(inv.id)}">
+        <div class="mc2__strip" style="background:${stripColor}"></div>
+        <div class="mc2__body">
+          <div class="mc2__header">
+            <div class="mc2__icon" style="background:${color}1a;color:${color}">
+              <i class="fa-solid fa-${icon}"></i>
+            </div>
+            <div class="mc2__titles">
+              <div class="mc2__name">${_esc(inv.pool_name)}</div>
+              <div class="mc2__sub">${inv.term_months ? inv.term_months + '-month term' : ''}${productLabel ? ' · ' + _esc(productLabel) : ''}${multiple ? ` · <span style="color:var(--gold)">${group.length} investments</span>` : ''}</div>
+            </div>
+            <div class="mc2__badge mc2__badge--${urgencyCls}">
+              <i class="fa-solid fa-clock"></i>
+              ${days === 0 ? 'Today' : days === 1 ? '1 day' : days + ' days'}
+            </div>
           </div>
-          <button class="btn ${instrSet ? 'btn--secondary' : 'btn--primary'}" style="flex-shrink:0" onclick='${modalCall}'>
-            <i class="fa-solid fa-${instrSet ? 'pen' : 'paper-plane'}"></i> ${instrSet ? 'Update' : 'Set'}
-          </button>
+
+          <div class="mc2__stats">
+            <div class="mc2__stat">
+              <div class="mc2__stat-val">${Utils.rand(totalAmount)}</div>
+              <div class="mc2__stat-lbl">${multiple ? 'Total invested' : 'Invested'}</div>
+            </div>
+            <div class="mc2__stat">
+              <div class="mc2__stat-val mc2__stat-val--gold">${totalReturn ? '+' + Utils.rand(totalReturn) : '—'}</div>
+              <div class="mc2__stat-lbl">Expected return</div>
+            </div>
+            <div class="mc2__stat">
+              <div class="mc2__stat-val">${Utils.date(inv.maturity_date)}</div>
+              <div class="mc2__stat-lbl">Maturity date</div>
+            </div>
+          </div>
+
+          <div class="mc2__progress-wrap">
+            <div class="mc2__progress-meta">
+              <span>${Utils.date(inv.start_date)}</span>
+              <span>${progress}% complete</span>
+              <span>${Utils.date(inv.maturity_date)}</span>
+            </div>
+            <div class="mc2__progress-bar">
+              <div class="mc2__progress-fill" style="width:${progress}%;background:${stripColor}"></div>
+            </div>
+          </div>
+
+          <div class="mc2__footer">
+            <div class="mc2__instruction ${instrSet ? 'mc2__instruction--set' : 'mc2__instruction--unset'}">
+              <i class="fa-solid fa-${instrSet ? 'circle-check' : 'circle-exclamation'}"></i>
+              ${instrLabel}
+            </div>
+            <button class="mc2__cta ${instrSet ? 'mc2__cta--secondary' : 'mc2__cta--primary'}"
+                    onclick='${modalCall}'>
+              <i class="fa-solid fa-${instrSet ? 'pen' : 'paper-plane'}"></i>
+              ${instrSet ? 'Update' : 'Set Instruction'}
+            </button>
+          </div>
+
+          ${multiple ? `
+          <div style="border-top:1px solid var(--border);margin-top:8px;padding-top:4px">
+            <button class="btn btn--ghost btn--full btn--sm" onclick="toggleInvBreakdown('${uid}')" style="font-size:0.73rem;color:var(--text-muted)">
+              <i class="fa-solid fa-list" id="icon-${uid}"></i> Individual instructions (${group.length})
+            </button>
+            <div id="breakdown-${uid}" style="display:none;padding:0 2px">
+              ${indivRows}
+            </div>
+          </div>` : ''}
         </div>
-        ${multiple ? `
-        <div style="border-top:1px solid var(--border);padding-top:4px">
-          <button class="btn btn--ghost btn--full btn--sm" onclick="toggleInvBreakdown('${uid}')" style="font-size:0.73rem;color:var(--text-muted)">
-            <i class="fa-solid fa-list" id="icon-${uid}"></i> Individual instructions (${group.length})
-          </button>
-          <div id="breakdown-${uid}" style="display:none">
-            ${indivRows}
-          </div>
-        </div>` : ''}
       </div>`;
     }).join('');
   }
 
   if (matured.length) {
     const maturedGroups = _groupInvsByPool(matured);
-    html += `<h3 style="font-size:0.85rem;font-weight:700;color:var(--red);margin-top:${active.length ? '24px' : '0'};margin-bottom:12px;text-transform:uppercase;letter-spacing:0.08em"><i class="fa-solid fa-exclamation-circle"></i> Matured (${maturedGroups.length})</h3>`;
+    if (active.length) {
+      html += `<div class="mc2-section-divider">
+        <div class="mc2-section-divider__line"></div>
+        <div class="mc2-section-divider__label"><i class="fa-solid fa-circle-check"></i> Matured (${maturedGroups.length})</div>
+        <div class="mc2-section-divider__line"></div>
+      </div>`;
+    } else {
+      html += `<div class="mc2-section-header">
+        <span class="mc2-section-header__icon" style="color:#22c55e"><i class="fa-solid fa-circle-check"></i></span>
+        <span class="mc2-section-header__title" style="color:#22c55e">Matured</span>
+        <span class="mc2-section-header__count" style="background:rgba(34,197,94,0.1);color:#16a34a">${maturedGroups.length}</span>
+      </div>`;
+    }
+
     html += maturedGroups.map(group => {
       const inv         = group[0];
       const totalAmount = group.reduce((s, i) => s + (i.amount || 0), 0);
       const totalReturn = group.reduce((s, i) => s + (i.actual_return_amount || i.expected_return_amount || 0), 0);
       const total       = totalAmount + totalReturn;
+      const color       = _maturityProductColor(inv.product_type);
+      const icon        = _maturityProductIcon(inv.product_type);
       const allInstrs   = group.map(i => i.maturity_instruction).filter(Boolean);
       const uniqueInstrs = [...new Set(allInstrs)];
       const poolInstr   = uniqueInstrs.length === 1 ? uniqueInstrs[0] : null;
       const hasMixed    = uniqueInstrs.length > 1;
       const instrSet    = !!poolInstr || hasMixed;
-      const instrLabel  = hasMixed ? `Mixed (${allInstrs.length}/${group.length})` : (poolInstr ? poolInstr.replace(/_/g,' ').replace(/^(\w)/, c => c.toUpperCase()) : null);
+      const instrLabel  = hasMixed
+        ? `Mixed — ${allInstrs.length} of ${group.length} set`
+        : (poolInstr ? _maturityInstructionLabel(poolInstr) : 'Awaiting instruction');
 
-      return `<div class="maturity-card">
-        <div class="maturity-card__info">
-          <div class="maturity-card__name">${_esc(inv.pool_name)}${group.length > 1 ? ` <span style="color:var(--gold);font-size:0.78rem">(${group.length})</span>` : ''}</div>
-          <div class="maturity-card__detail">Matured: ${Utils.date(inv.maturity_date)} · ${Utils.rand(total)}</div>
-          ${instrSet ? `<div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px"><i class="fa-solid fa-circle-check" style="color:var(--green)"></i> ${instrLabel}</div>` : ''}
+      return `
+      <div class="mc2 mc2--matured">
+        <div class="mc2__strip" style="background:#65ed00"></div>
+        <div class="mc2__body">
+          <div class="mc2__header">
+            <div class="mc2__icon" style="background:${color}1a;color:${color}">
+              <i class="fa-solid fa-${icon}"></i>
+            </div>
+            <div class="mc2__titles">
+              <div class="mc2__name">${_esc(inv.pool_name)}</div>
+              <div class="mc2__sub">Matured ${Utils.date(inv.maturity_date)}${group.length > 1 ? ` · <span style="color:var(--gold)">${group.length} investments</span>` : ''}</div>
+            </div>
+            <div class="mc2__badge mc2__badge--done">
+              <i class="fa-solid fa-circle-check"></i> Matured
+            </div>
+          </div>
+
+          <div class="mc2__payout">
+            <i class="fa-solid fa-sack-dollar" style="color:#22c55e;font-size:1.1rem"></i>
+            <div>
+              <div class="mc2__payout-val">${Utils.rand(total)}</div>
+              <div class="mc2__payout-lbl">Total payout value</div>
+            </div>
+          </div>
+
+          <div class="mc2__footer">
+            <div class="mc2__instruction ${instrSet ? 'mc2__instruction--set' : 'mc2__instruction--unset'}">
+              <i class="fa-solid fa-${instrSet ? 'circle-check' : 'circle-exclamation'}"></i>
+              ${instrLabel}
+            </div>
+          </div>
         </div>
-        ${instrSet
-          ? `<span class="badge badge--gray">${instrLabel}</span>`
-          : `<span class="badge" style="background:rgba(239,68,68,0.12);color:#b91c1c">Awaiting instruction</span>`
-        }
       </div>`;
     }).join('');
   }
@@ -4930,85 +4911,100 @@ async function openMaturityModal(investmentId) {
   const inv = PORTAL.investments.find(i => i.id === investmentId);
   if (!inv) return;
 
-  const isActive  = inv.status === 'active';
-  const total     = inv.amount + (inv.actual_return_amount || inv.expected_return_amount);
-  const existing  = inv.maturity_instruction || '';
+  const isDeliveryBike = (inv.product_type || '').includes('delivery_bike');
+  const isActive      = inv.status === 'active';
+  const hasActualRate = !!(inv.actual_return_amount && inv.actual_return_amount > 0);
+  const total         = hasActualRate ? inv.amount + inv.actual_return_amount : null;
 
-  // Fetch open pools of matching product type for reinvest option
-  let reinvestPools = [];
-  try {
-    const poolsRes = await API.pools.list({ limit: 100 });
-    reinvestPools = (poolsRes.data || []).filter(p => p.status === 'open' && p.product_type === inv.product_type);
-  } catch (_) { /* non-fatal */ }
+  // Delivery bike: force payout_all — no reinvest options
+  const existing = isDeliveryBike
+    ? (inv.maturity_instruction === 'reinvest' || !inv.maturity_instruction ? 'payout_all' : inv.maturity_instruction)
+    : (inv.maturity_instruction || '');
 
-  const reinvestPoolsHtml = reinvestPools.length
-    ? reinvestPools.map(p => `<option value="${p.id}">${p.name} (${Utils.rand(p.min_investment)} min · ${Utils.pct(p.annual_rate)} p.a.)</option>`).join('')
-    : `<option value="" disabled>No open pools available for this product type</option>`;
+  // All product types for switch option (resolved at maturity, pool may not be open yet)
+  const allProductTypes = [...new Set(
+    (PORTAL.pools || []).filter(p => p.product_type && p.product_type !== inv.product_type).map(p => p.product_type)
+  )];
+  const switchProductsHtml = allProductTypes.length
+    ? allProductTypes.map(pt => {
+        const pi = Utils.productInfo(pt);
+        return `<option value="${pt}" ${existing==='switch_product' && inv.switch_product_type===pt?'selected':''}>${pi.label || pt}</option>`;
+      }).join('')
+    : `<option value="" disabled>No other product types available</option>`;
 
-  // Other products the client can switch the remaining funds into.
-  const _seenPt = new Set();
-  const switchProductsHtml = (_mktProducts || [])
-    .filter(p => p.is_active && p.product_type !== inv.product_type && !_seenPt.has(p.product_type) && _seenPt.add(p.product_type))
-    .map(p => `<option value="${p.product_type}" ${inv.switch_product_type === p.product_type ? 'selected' : ''}>${_esc(p.label || p.product_type)}</option>`).join('')
-    || `<option value="" disabled>No other products available</option>`;
+  const poolNote = `<div style="font-size:0.72rem;color:var(--text-dim);margin-top:4px"><i class="fa-solid fa-info-circle"></i> The first available open pool for this product will be assigned when your investment matures.</div>`;
 
   document.getElementById('maturityModalBody').innerHTML = `
     <div class="info-list mb-16">
       <div class="info-row"><span class="info-row__label">Pool</span><span class="info-row__value">${_esc(inv.pool_name)}</span></div>
       <div class="info-row"><span class="info-row__label">Capital</span><span class="info-row__value">${Utils.rand(inv.amount)}</span></div>
-      <div class="info-row"><span class="info-row__label">Returns</span><span class="info-row__value text-green">${Utils.rand(inv.actual_return_amount || inv.expected_return_amount)}</span></div>
+      ${hasActualRate ? `
+      <div class="info-row"><span class="info-row__label">Actual Rate (Achieved)</span><span class="info-row__value text-green">${Utils.rand(inv.actual_return_amount)}</span></div>
       <div class="info-row"><span class="info-row__label">Total Payout</span><span class="info-row__value text-gold fw-700">${Utils.rand(total)}</span></div>
+      ` : ''}
     </div>
 
     <div class="form-group">
       <label class="form-label">Instruction Type *</label>
       <select class="form-select" id="matInstructionType">
-        <option value="payout_all" ${existing==='payout_all'?'selected':''}>Payout All — Receive full capital + returns</option>
-        <option value="payout_return" ${existing==='payout_return'?'selected':''}>Payout Returns Only — Keep capital reinvested</option>
-        <option value="reinvest" ${existing==='reinvest'?'selected':''}>Reinvest — Roll over into same product</option>
-        <option value="payout_custom" ${existing==='payout_custom'?'selected':''}>Custom Payout — Specify amount</option>
-        <option value="custom_switch" ${existing==='custom_switch'?'selected':''}>Custom Switch — Payout a portion & switch the rest to another product</option>
+        <option value="payout_all"     ${existing==='payout_all'    ?'selected':''}>Payout All — Receive full capital + returns</option>
+        ${isDeliveryBike ? `
+        <option value="switch_product" ${existing==='switch_product'?'selected':''}>Switch Product — Move payout into a different product</option>
+        ` : `
+        <option value="payout_return"  ${existing==='payout_return' ?'selected':''}>Payout Returns Only — Keep capital reinvested</option>
+        <option value="reinvest"       ${existing==='reinvest'      ?'selected':''}>Reinvest — Roll over into same product</option>
+        <option value="switch_product" ${existing==='switch_product'?'selected':''}>Switch Product — Move payout into a different product</option>
+        <option value="payout_custom"  ${existing==='payout_custom' ?'selected':''}>Custom Payout — Specify amount; remainder reinvested</option>
+        <option value="custom_switch"  ${existing==='custom_switch' ?'selected':''}>Custom Switch — Pay out a portion &amp; switch the rest to another product</option>
+        `}
       </select>
     </div>
 
-    <div id="switchProductGroup" style="display:${existing==='custom_switch'?'block':'none'}">
-      <div class="form-group">
-        <label class="form-label">Switch Remaining Funds Into *</label>
-        <select class="form-select" id="matSwitchProduct">${switchProductsHtml}</select>
+    ${!isDeliveryBike ? `
+    <div id="reinvestGroup" style="display:${existing==='reinvest'?'block':'none'}">
+      <div style="font-size:0.72rem;color:var(--text-dim);padding:10px 12px;background:rgba(254,194,79,0.06);border-radius:8px;border:1px solid rgba(254,194,79,0.15)">
+        <i class="fa-solid fa-rotate" style="color:var(--gold);margin-right:4px"></i>
+        Your full payout will be rolled into the next available open pool for <strong>${Utils.productInfo(inv.product_type).label}</strong>. ${poolNote}
       </div>
     </div>
+    ` : ''}
 
-    <div id="reinvestPoolGroup" style="display:${existing==='reinvest'?'block':'none'}">
+    <div id="switchProductGroup" style="display:${(existing==='switch_product'||existing==='custom_switch')?'block':'none'}">
       <div class="form-group">
-        <label class="form-label">Select Pool to Reinvest Into *</label>
-        <select class="form-select" id="matReinvestPool">
-          ${reinvestPoolsHtml}
+        <label class="form-label">Switch to Product *</label>
+        <select class="form-select" id="matSwitchProductType">
+          ${switchProductsHtml}
         </select>
-        ${!reinvestPools.length ? `<div style="font-size:0.72rem;color:var(--text-dim);margin-top:4px"><i class="fa-solid fa-info-circle"></i> A suitable open pool will be selected at maturity if none is available now.</div>` : ''}
+        ${poolNote}
       </div>
     </div>
 
+    ${!isDeliveryBike ? `
     <div id="customPayoutGroup" style="display:${(existing==='payout_custom'||existing==='custom_switch')?'block':'none'}">
       <div class="form-group">
         <label class="form-label">Amount to Pay Out (R)</label>
-        <input type="number" class="form-input" id="matCustomAmount" placeholder="Amount to withdraw" value="${inv.custom_payout_amount || ''}" />
+        <input type="number" class="form-input" id="matCustomAmount" placeholder="Amount to withdraw" max="${total ?? ''}" value="${inv.custom_payout_amount || ''}" />
+        <div style="font-size:0.72rem;color:var(--text-dim);margin-top:4px"><i class="fa-solid fa-info-circle"></i> The remaining balance is reinvested (Custom Payout) or switched to the chosen product (Custom Switch).</div>
       </div>
     </div>
+    ` : `<div id="customPayoutGroup" style="display:none"></div>`}
 
     <div style="font-size:0.72rem;color:var(--text-dim);line-height:1.6;margin-top:8px">
       <i class="fa-solid fa-clock" style="color:var(--gold)"></i>
       ${isActive
-        ? `You can update this instruction at any time before maturity. If not submitted, funds will be automatically reinvested.`
-        : `Instruction must be submitted before <strong>5:00 PM on ${Utils.date(inv.maturity_date)}</strong>. If not submitted, funds will be automatically reinvested.`
+        ? `You can update this instruction at any time before maturity. If not submitted, funds will be automatically ${isDeliveryBike ? 'paid out to your wallet' : 'reinvested'}.`
+        : `Instruction must be submitted before <strong>5:00 PM on ${Utils.date(inv.maturity_date)}</strong>. If not submitted, funds will be automatically ${isDeliveryBike ? 'paid out to your wallet' : 'reinvested'}.`
       }
     </div>
   `;
 
   document.getElementById('matInstructionType').addEventListener('change', e => {
     const v = e.target.value;
-    document.getElementById('customPayoutGroup').style.display  = (v === 'payout_custom' || v === 'custom_switch') ? 'block' : 'none';
-    document.getElementById('reinvestPoolGroup').style.display  = v === 'reinvest'      ? 'block' : 'none';
-    const sg = document.getElementById('switchProductGroup'); if (sg) sg.style.display = v === 'custom_switch' ? 'block' : 'none';
+    document.getElementById('switchProductGroup').style.display  = (v === 'switch_product' || v === 'custom_switch') ? 'block' : 'none';
+    if (!isDeliveryBike) {
+      document.getElementById('reinvestGroup').style.display      = v === 'reinvest'       ? 'block' : 'none';
+      document.getElementById('customPayoutGroup').style.display  = (v === 'payout_custom' || v === 'custom_switch') ? 'block' : 'none';
+    }
   });
 
   const matBtn = document.getElementById('maturityConfirmBtn');
@@ -5017,43 +5013,26 @@ async function openMaturityModal(investmentId) {
 }
 
 async function submitMaturityInstruction(inv) {
-  const type      = document.getElementById('matInstructionType').value;
-  const needsCustom = (type === 'payout_custom' || type === 'custom_switch');
-  const customAmt = needsCustom ? parseFloat(document.getElementById('matCustomAmount').value) : null;
-  const reinvestPoolId = type === 'reinvest' ? (document.getElementById('matReinvestPool')?.value || null) : null;
-  const switchProductType = type === 'custom_switch' ? (document.getElementById('matSwitchProduct')?.value || null) : null;
-  const total = inv.amount + (inv.actual_return_amount || inv.expected_return_amount);
+  const type              = document.getElementById('matInstructionType').value;
+  const total             = inv.amount + (inv.actual_return_amount || inv.expected_return_amount);
+  const needsCustom       = (type === 'payout_custom' || type === 'custom_switch');
+  const customAmt         = needsCustom ? parseFloat(document.getElementById('matCustomAmount')?.value || 0) : null;
+  const switchProductType = (type === 'switch_product' || type === 'custom_switch') ? (document.getElementById('matSwitchProductType')?.value || null) : null;
 
-  if (needsCustom && (!customAmt || customAmt <= 0)) { Toast.error('Please enter a valid payout amount'); return; }
-  if (needsCustom && customAmt >= total) { Toast.error(`Payout amount must be less than the total of ${Utils.rand(total)}`); return; }
-  if (type === 'custom_switch' && !switchProductType) { Toast.error('Please choose a product to switch the remaining funds into'); return; }
-  if (type === 'reinvest' && !reinvestPoolId) { Toast.error('Please select a pool to reinvest into, or choose another instruction type'); return; }
+  if (needsCustom && (!customAmt || customAmt <= 0))  { Toast.error('Please enter a valid payout amount'); return; }
+  if (needsCustom && customAmt >= total)              { Toast.error(`Payout amount must be less than the total of ${Utils.rand(total)}`); return; }
+  if ((type === 'switch_product' || type === 'custom_switch') && !switchProductType) { Toast.error('Please select a product to switch into'); return; }
 
   try {
     // Set the instruction via the dedicated endpoint FIRST — it enforces the
     // 17:00 SAST maturity-day cutoff and rejects late submissions.
     await API._fetch('POST', 'investments/' + inv.id + '/instruction', { instruction: type });
 
-    // Persist the amount + switch target onto the investment for the engine.
+    // Persist any auxiliary fields (custom amount / product switch).
     const extra = {};
-    if (needsCustom)         extra.custom_payout_amount = customAmt;
-    if (switchProductType)   extra.switch_product_type  = switchProductType;
+    if (customAmt)          extra.custom_payout_amount = customAmt;
+    if (switchProductType)  extra.switch_product_type  = switchProductType;
     if (Object.keys(extra).length) await API.investments.update(inv.id, extra);
-
-    await API.maturityInstructions.create({
-      id: Utils.genId('MAT'),
-      investment_id: inv.id,
-      investor_id: PORTAL.investor?.id,
-      investor_name: `${PORTAL.investor.first_name} ${PORTAL.investor.last_name}`,
-      pool_name: inv.pool_name,
-      instruction: type,
-      instruction_type: type,
-      custom_payout_amount: customAmt || 0,
-      reinvest_pool_id: reinvestPoolId,
-      status: 'submitted',
-      submitted_date: new Date().toISOString(),
-      total_payout: total
-    });
 
     Toast.success('Maturity instruction saved successfully!');
     SVC.track('svc_maturity_instruction', { investment_id: inv.id, action: type });
@@ -5071,17 +5050,22 @@ async function openPoolMaturityModal(poolId) {
   const poolInvs = PORTAL.investments.filter(i => i.pool_id === poolId && i.status === 'active');
   if (!poolInvs.length) return;
   const first = poolInvs[0];
-  const totalAmount = poolInvs.reduce((s, i) => s + (i.amount || 0), 0);
 
-  const allInstrs   = poolInvs.map(i => i.maturity_instruction).filter(Boolean);
+  const isDeliveryBike = (first.product_type || '').includes('delivery_bike');
+  const totalAmount    = poolInvs.reduce((s, i) => s + (i.amount || 0), 0);
+
+  const allInstrs    = poolInvs.map(i => i.maturity_instruction).filter(Boolean);
   const uniqueInstrs = [...new Set(allInstrs)];
-  const existing    = uniqueInstrs.length === 1 ? uniqueInstrs[0] : '';
+  let   existing     = uniqueInstrs.length === 1 ? uniqueInstrs[0] : '';
+  if (isDeliveryBike && (existing === 'reinvest' || !existing)) existing = 'payout_all';
 
-  const _seenPt = new Set();
-  const switchProductsHtml = (_mktProducts || [])
-    .filter(p => p.is_active && p.product_type !== first.product_type && !_seenPt.has(p.product_type) && _seenPt.add(p.product_type))
-    .map(p => `<option value="${p.product_type}">${_esc(p.label || p.product_type)}</option>`).join('')
-    || `<option value="" disabled>No other products available</option>`;
+  const allProductTypes = [...new Set(
+    (PORTAL.pools || []).filter(p => p.product_type && p.product_type !== first.product_type).map(p => p.product_type)
+  )];
+  const switchProductsHtml = allProductTypes.length
+    ? allProductTypes.map(pt => { const pi = Utils.productInfo(pt); return `<option value="${pt}">${pi.label || pt}</option>`; }).join('')
+    : `<option value="" disabled>No other product types available</option>`;
+  const poolNote = `<div style="font-size:0.72rem;color:var(--text-dim);margin-top:4px"><i class="fa-solid fa-info-circle"></i> The first available open pool for this product will be assigned when your investment matures.</div>`;
 
   document.getElementById('maturityModalBody').innerHTML = `
     <div class="info-list mb-16">
@@ -5091,40 +5075,59 @@ async function openPoolMaturityModal(poolId) {
     </div>
     <div style="font-size:0.8rem;color:var(--text-muted);background:rgba(254,194,79,0.08);border:1px solid rgba(254,194,79,0.2);border-radius:8px;padding:10px 12px;margin-bottom:16px">
       <i class="fa-solid fa-layer-group" style="color:var(--gold);margin-right:6px"></i>
-      This instruction applies to all ${poolInvs.length} investments. To set per-investment instructions, expand <strong>Individual instructions</strong>.
+      This instruction applies to all ${poolInvs.length} investments in this pool. To set per-investment instructions expand <strong>Individual instructions</strong> on the card.
     </div>
     <div class="form-group">
       <label class="form-label">Instruction Type *</label>
       <select class="form-select" id="matInstructionType">
-        <option value="payout_all" ${existing==='payout_all'?'selected':''}>Payout All — Receive full capital + returns</option>
-        <option value="payout_return" ${existing==='payout_return'?'selected':''}>Payout Returns Only — Keep capital reinvested</option>
-        <option value="reinvest" ${existing==='reinvest'?'selected':''}>Reinvest — Roll over into same product</option>
-        <option value="payout_custom" ${existing==='payout_custom'?'selected':''}>Custom Payout — Specify amount per investment</option>
-        <option value="custom_switch" ${existing==='custom_switch'?'selected':''}>Custom Switch — Payout a portion &amp; switch the rest</option>
+        <option value="payout_all"     ${existing==='payout_all'    ?'selected':''}>Payout All — Receive full capital + returns</option>
+        ${isDeliveryBike ? `
+        <option value="switch_product" ${existing==='switch_product'?'selected':''}>Switch Product — Move payout into a different product</option>
+        ` : `
+        <option value="payout_return"  ${existing==='payout_return' ?'selected':''}>Payout Returns Only — Keep capital reinvested</option>
+        <option value="reinvest"       ${existing==='reinvest'      ?'selected':''}>Reinvest — Roll over into same product</option>
+        <option value="switch_product" ${existing==='switch_product'?'selected':''}>Switch Product — Move payout into a different product</option>
+        <option value="payout_custom"  ${existing==='payout_custom' ?'selected':''}>Custom Payout — Specify amount; remainder reinvested</option>
+        <option value="custom_switch"  ${existing==='custom_switch' ?'selected':''}>Custom Switch — Pay out a portion &amp; switch the rest to another product</option>
+        `}
       </select>
     </div>
-    <div id="switchProductGroup" style="display:${existing==='custom_switch'?'block':'none'}">
-      <div class="form-group">
-        <label class="form-label">Switch Remaining Funds Into *</label>
-        <select class="form-select" id="matSwitchProduct">${switchProductsHtml}</select>
+    ${!isDeliveryBike ? `
+    <div id="reinvestGroup" style="display:${existing==='reinvest'?'block':'none'}">
+      <div style="font-size:0.72rem;color:var(--text-dim);padding:10px 12px;background:rgba(254,194,79,0.06);border-radius:8px;border:1px solid rgba(254,194,79,0.15)">
+        <i class="fa-solid fa-rotate" style="color:var(--gold);margin-right:4px"></i>
+        Your full payout will be rolled into the next available open pool for <strong>${Utils.productInfo(first.product_type).label}</strong>. ${poolNote}
       </div>
     </div>
+    ` : ''}
+    <div id="switchProductGroup" style="display:${(existing==='switch_product'||existing==='custom_switch')?'block':'none'}">
+      <div class="form-group">
+        <label class="form-label">Switch to Product *</label>
+        <select class="form-select" id="matSwitchProductType">${switchProductsHtml}</select>
+        ${poolNote}
+      </div>
+    </div>
+    ${!isDeliveryBike ? `
     <div id="customPayoutGroup" style="display:${(existing==='payout_custom'||existing==='custom_switch')?'block':'none'}">
       <div class="form-group">
-        <label class="form-label">Amount to Pay Out (R) — per investment</label>
+        <label class="form-label">Amount to Pay Out (R) — applied per investment</label>
         <input type="number" class="form-input" id="matCustomAmount" placeholder="Amount per investment" />
       </div>
     </div>
+    ` : `<div id="customPayoutGroup" style="display:none"></div>`}
     <div style="font-size:0.72rem;color:var(--text-dim);line-height:1.6;margin-top:8px">
       <i class="fa-solid fa-clock" style="color:var(--gold)"></i>
-      You can update this instruction at any time before maturity. If not submitted, funds will be automatically reinvested.
+      You can update this instruction at any time before maturity. If not submitted, funds will be automatically ${isDeliveryBike ? 'paid out to your wallet' : 'reinvested'}.
     </div>
   `;
 
   document.getElementById('matInstructionType').addEventListener('change', e => {
     const v = e.target.value;
-    document.getElementById('customPayoutGroup').style.display  = (v === 'payout_custom' || v === 'custom_switch') ? 'block' : 'none';
-    const sg = document.getElementById('switchProductGroup'); if (sg) sg.style.display = v === 'custom_switch' ? 'block' : 'none';
+    document.getElementById('switchProductGroup').style.display  = (v === 'switch_product' || v === 'custom_switch') ? 'block' : 'none';
+    if (!isDeliveryBike) {
+      document.getElementById('reinvestGroup').style.display      = v === 'reinvest' ? 'block' : 'none';
+      document.getElementById('customPayoutGroup').style.display  = (v === 'payout_custom' || v === 'custom_switch') ? 'block' : 'none';
+    }
   });
 
   const matBtn = document.getElementById('maturityConfirmBtn');
@@ -5139,10 +5142,10 @@ async function submitPoolMaturityInstruction(poolId) {
   const type              = document.getElementById('matInstructionType').value;
   const needsCustom       = (type === 'payout_custom' || type === 'custom_switch');
   const customAmt         = needsCustom ? parseFloat(document.getElementById('matCustomAmount')?.value || 0) : null;
-  const switchProductType = type === 'custom_switch' ? (document.getElementById('matSwitchProduct')?.value || null) : null;
+  const switchProductType = (type === 'switch_product' || type === 'custom_switch') ? (document.getElementById('matSwitchProductType')?.value || null) : null;
 
   if (needsCustom && (!customAmt || customAmt <= 0)) { Toast.error('Please enter a valid payout amount'); return; }
-  if (type === 'custom_switch' && !switchProductType) { Toast.error('Please choose a product to switch the remaining funds into'); return; }
+  if ((type === 'switch_product' || type === 'custom_switch') && !switchProductType) { Toast.error('Please select a product to switch into'); return; }
 
   try {
     await Promise.all(poolInvs.map(async inv => {
@@ -5151,19 +5154,6 @@ async function submitPoolMaturityInstruction(poolId) {
       if (customAmt)         extra.custom_payout_amount = customAmt;
       if (switchProductType) extra.switch_product_type  = switchProductType;
       if (Object.keys(extra).length) await API.investments.update(inv.id, extra);
-      await API.maturityInstructions.create({
-        id: Utils.genId('MAT'),
-        investment_id: inv.id,
-        investor_id: PORTAL.investor?.id,
-        investor_name: `${PORTAL.investor.first_name} ${PORTAL.investor.last_name}`,
-        pool_name: inv.pool_name,
-        instruction: type,
-        instruction_type: type,
-        custom_payout_amount: customAmt || 0,
-        status: 'submitted',
-        submitted_date: new Date().toISOString(),
-        total_payout: inv.amount + (inv.actual_return_amount || inv.expected_return_amount || 0)
-      });
     }));
     Toast.success(`Maturity instruction applied to all ${poolInvs.length} investments!`);
     SVC.track('svc_pool_maturity_instruction', { pool_id: poolId, action: type });
@@ -5368,15 +5358,29 @@ function generateStatement() {
     return d >= from && d <= to;
   }
   const transactions = allTxns.filter(t => _inPeriod(t.transaction_date || t.created_at));
-  const investments  = allInvestments.filter(i => _inPeriod(i.start_date || i.investment_date || i.created_at));
+
+  // Show investments that were active at any point during the period
+  const investments = allInvestments.filter(inv => {
+    const start = new Date(inv.start_date || inv.investment_date || inv.created_at || 0);
+    const end   = inv.end_date ? new Date(inv.end_date) : (inv.maturity_date ? new Date(inv.maturity_date) : null);
+    if (inv.status === 'active') return start <= to;
+    if (end) return start <= to && end >= from;
+    return start >= from && start <= to;
+  });
 
   // Compute stats
   const walletBal     = Number(investor.wallet_balance) || 0;
   const activeInvAmt  = allInvestments.filter(i => i.status === 'active').reduce((s, i) => s + (Number(i.amount) || 0), 0);
-  const totalValue    = activeInvAmt + walletBal;
+  const totalValue    = activeInvAmt + walletBal;                   // Portfolio Value = active inv + wallet
   const totalDeposits = transactions.filter(t => t.type === 'deposit' && t.status !== 'cancelled').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
-  const totalReturns  = transactions.filter(t => t.type === 'return' || t.type === 'payout').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+  // Returns: prefer completed return/payout transactions in the period; fall back to
+  // paid-out investments' actual return amounts when no such transactions exist yet.
+  const _txnReturns  = transactions.filter(t => (t.type === 'return' || t.type === 'payout') && t.status !== 'cancelled').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+  const totalReturns = _txnReturns > 0 ? _txnReturns
+    : allInvestments.filter(i => ['paid_out', 'matured'].includes(i.status) && _inPeriod(i.maturity_date || i.investment_date))
+                    .reduce((s, i) => s + (i.actual_return_amount || i.expected_return_amount || 0), 0);
   const activeInv     = allInvestments.filter(i => i.status === 'active').length;
+  const totalCapital  = allInvestments.reduce((s, i) => s + (Number(i.amount) || 0), 0);
 
   // Build preview quick stats
   const previewEl = document.getElementById('stmtQuickStats');
@@ -5386,7 +5390,7 @@ function generateStatement() {
         ${quickStatRow('Period', `${fmtDate(from)} — ${fmtDate(to)}`)}
         ${quickStatRow('Investments in Period', investments.length)}
         ${quickStatRow('Transactions in Period', transactions.length)}
-        ${quickStatRow('Deposits', Utils.rand(totalDeposits))}
+        ${quickStatRow('Capital Invested', Utils.rand(totalCapital))}
         ${quickStatRow('Returns in Period', Utils.rand(totalReturns))}
         ${quickStatRow('Portfolio Value', Utils.rand(totalValue))}
       </div>
@@ -5403,6 +5407,7 @@ function generateStatement() {
   let html = buildStatementHTML({
     investor, investments, transactions,
     from, to, totalDeposits, totalReturns, walletBal, totalValue, activeInv,
+    totalCapital, activeInvAmt,
     statementNumber, generatedAt,
     incPortfolio:    effectivePortfolio,
     incInvestments:  effectiveInvestments,
@@ -5445,235 +5450,339 @@ function buildStatementHTML(opts) {
   const {
     investor, investments, transactions,
     from, to, totalDeposits, totalReturns, walletBal, totalValue, activeInv,
+    totalCapital, activeInvAmt,
     statementNumber, generatedAt,
     incPortfolio, incInvestments, incTransactions, incPerformance
   } = opts;
-  const totalInvested = totalDeposits;
 
-  const fullName = `${investor.first_name || 'Thabo'} ${investor.last_name || 'Khumalo'}`;
-  const investorId = investor.id || 'INV-002';
-  const memberSince = investor.date_joined ? fmtDate(investor.date_joined) : '20 Aug 2022';
-  const ficaStatus = investor.fica_status || 'approved';
+  const fullName   = `${investor.first_name || ''} ${investor.last_name || ''}`.trim() || 'Investor';
+  const investorId = investor.id || '—';
+  const memberSince = investor.date_joined ? fmtDate(investor.date_joined) : '—';
+  const logoUrl     = `${window.location.origin}/assets/sv-capital-logo-horizontal-white-text.png`;
+  const logoOutlineUrl = new URL('../assets/logo-outline.png', window.location.href).href;
+  const now = new Date();
 
-  // Logo URL — relative to www root (Capacitor serves www/ as root)
-  const logoUrl = 'assets/sv-capital-logo-horizontal-white-text.png';
+  // ── Status helpers ──────────────────────────────────────────────────────
+  const STATUS_LABEL  = { active:'Active', matured:'Matured', paid_out:'Completed', cancelled:'Cancelled' };
+  const STATUS_COLOR  = { active:'#16a34a', matured:'#b45309', paid_out:'#1d4ed8', cancelled:'#6b7280' };
+  const STATUS_BG     = { active:'#f0fdf4', matured:'#fffbeb', paid_out:'#eff6ff',  cancelled:'#f8fafc' };
+  const STATUS_BORDER = { active:'#bbf7d0', matured:'#fde68a', paid_out:'#bfdbfe',  cancelled:'#e2e8f0' };
+
+  function statusPill(status) {
+    const c  = STATUS_COLOR[status]  || '#6b7280';
+    const b  = STATUS_BG[status]     || '#f8fafc';
+    const br = STATUS_BORDER[status] || '#e2e8f0';
+    const l  = STATUS_LABEL[status]  || status;
+    return `<span style="display:inline-flex;align-items:center;gap:3px;background:${b};color:${c};border:1px solid ${br};font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;text-transform:uppercase;letter-spacing:0.05em;white-space:nowrap"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0;display:inline-block"></span>${l}</span>`;
+  }
+
+  const INSTR_LABEL = { reinvest:'Reinvest', switch:'Switch', payout:'Payout', payout_return:'Payout Returns', reinvest_all:'Reinvest All', payout_all:'Payout All' };
+  const INSTR_COLOR = { reinvest:'#1d4ed8', switch:'#6d28d9', payout:'#9f1239', payout_return:'#9f1239', reinvest_all:'#1d4ed8', payout_all:'#9f1239' };
+  const INSTR_BG    = { reinvest:'#eff6ff', switch:'#fdf4ff', payout:'#fff1f2', payout_return:'#fff1f2', reinvest_all:'#eff6ff', payout_all:'#fff1f2' };
+
+  function instrPill(instr) {
+    if (!instr) return '<span style="color:#9ca3af;font-size:10px">—</span>';
+    const c = INSTR_COLOR[instr] || '#6b7280';
+    const b = INSTR_BG[instr]    || '#f8fafc';
+    const l = INSTR_LABEL[instr] || instr;
+    return `<span style="background:${b};color:${c};font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap">${l}</span>`;
+  }
+
+  function sectionHead(title, accentColor, badge) {
+    return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid ${accentColor}">
+      <div style="width:4px;height:22px;background:${accentColor};border-radius:2px"></div>
+      <h3 style="font-size:13px;font-weight:800;color:#1a1a1a;letter-spacing:0.06em;text-transform:uppercase;margin:0">${title}</h3>
+      ${badge ? `<span style="margin-left:auto;font-size:10px;color:#9ca3af">${badge}</span>` : ''}
+    </div>`;
+  }
+
+  function th(label, align) {
+    return `<th style="padding:9px 10px;font-size:10px;text-align:${align||'left'};font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em;background:#F7F8FA;white-space:nowrap">${label}</th>`;
+  }
+  function tdCell(content, align, extraStyle) {
+    return `<td style="padding:8px 10px;font-size:11px;color:#1a1a1a;text-align:${align||'left'};${extraStyle||''}">${content}</td>`;
+  }
+
+  // ── Pre-sort investments ────────────────────────────────────────────────
+  const activeInvestments    = investments.filter(i => i.status === 'active')
+    .sort((a, b) => new Date(a.maturity_date || '9999') - new Date(b.maturity_date || '9999'));
+  const completedInvestments = investments.filter(i => ['matured', 'paid_out'].includes(i.status))
+    .sort((a, b) => new Date(b.maturity_date || b.updated_at || 0) - new Date(a.maturity_date || a.updated_at || 0));
+
+  const nextMaturityDate = activeInvestments.find(i => i.maturity_date)?.maturity_date;
+  const capitalInvested  = (totalCapital != null ? totalCapital : 0) ||
+    investments.reduce((s, i) => s + (Number(i.amount) || 0), 0);
 
   let sections = '';
 
-  // ─── PORTFOLIO SUMMARY ───
+  // ─── PORTFOLIO SUMMARY ─────────────────────────────────────────────────
   if (incPortfolio) {
     sections += `
       <section style="margin-bottom:36px">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #fec24f">
-          <div style="width:4px;height:22px;background:linear-gradient(180deg,#fec24f,#FF5229);border-radius:2px"></div>
-          <h3 style="font-size:13px;font-weight:800;color:#1a1a1a;letter-spacing:0.06em;text-transform:uppercase;margin:0">Portfolio Summary</h3>
+        ${sectionHead('Portfolio Summary', '#fec24f')}
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px">
+          ${stmtKPIBox('Portfolio Value',  fmtNum(totalValue),      '#fec24f')}
+          ${stmtKPIBox('Capital Invested', fmtNum(capitalInvested),  '#656565')}
+          ${stmtKPIBox('Returns Earned',   fmtNum(totalReturns),     '#22C55E')}
+          ${stmtKPIBox('Wallet Balance',   fmtNum(walletBal),        '#0096ff')}
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:20px">
-          ${stmtKPIBox('Total Portfolio Value', fmtNum(totalValue), '#fec24f')}
-          ${stmtKPIBox('Deposits', fmtNum(totalDeposits), '#656565')}
-          ${stmtKPIBox('Returns Earned', fmtNum(totalReturns), '#22C55E')}
-          ${stmtKPIBox('Wallet Balance', fmtNum(walletBal), '#0096ff')}
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
           <div style="background:#F7F8FA;border-radius:8px;padding:14px;border:1px solid rgba(0,0,0,0.06)">
             <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#9ca3af;font-weight:700;margin-bottom:10px">Account Details</div>
-            ${stmtInfoRow('Investor Name', fullName)}
-            ${stmtInfoRow('Investor ID', investorId)}
-            ${stmtInfoRow('Email', investor.email || '—')}
-            ${stmtInfoRow('Phone', investor.phone || '—')}
-            ${stmtInfoRow('Member Since', memberSince)}
-            ${stmtInfoRow('FICA Status', ficaStatus.charAt(0).toUpperCase() + ficaStatus.slice(1))}
+            ${stmtInfoRow('Investor Name',  fullName)}
+            ${stmtInfoRow('Account Number', investorId)}
+            ${stmtInfoRow('Email',          investor.email || '—')}
+            ${stmtInfoRow('Phone',          investor.phone || '—')}
+            ${stmtInfoRow('Member Since',   memberSince)}
           </div>
           <div style="background:#F7F8FA;border-radius:8px;padding:14px;border:1px solid rgba(0,0,0,0.06)">
             <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#9ca3af;font-weight:700;margin-bottom:10px">Investment Snapshot</div>
-            ${stmtInfoRow('Total Investments', investments.length)}
-            ${stmtInfoRow('Active Investments', activeInv)}
-            ${stmtInfoRow('Matured', investments.filter(i=>['matured','paid_out'].includes(i.status)).length)}
-            ${stmtInfoRow('Risk Profile', investor.risk_profile ? investor.risk_profile.charAt(0).toUpperCase() + investor.risk_profile.slice(1) : 'Moderate')}
-            ${stmtInfoRow('Province', investor.province || '—')}
-            ${stmtInfoRow('Referral Code', investor.referral_code || '—')}
+            ${stmtInfoRow('Total Investments',  investments.length)}
+            ${stmtInfoRow('Active',             activeInvestments.length)}
+            ${stmtInfoRow('Completed',          completedInvestments.length)}
+            ${stmtInfoRow('Next Maturity Date', nextMaturityDate ? fmtDate(nextMaturityDate) : '—')}
+            ${stmtInfoRow('Statement Period',   `${fmtDate(from)} — ${fmtDate(to)}`)}
           </div>
         </div>
       </section>`;
   }
 
-  // ─── PERFORMANCE ANALYSIS ───
+  // ─── PERFORMANCE ANALYSIS ──────────────────────────────────────────────
   if (incPerformance && investments.length > 0) {
-    const byProduct = {};
-    investments.forEach(inv => {
-      const p = inv.product_type || 'unknown';
-      if (!byProduct[p]) byProduct[p] = { count: 0, capital: 0, returns: 0 };
-      byProduct[p].count++;
-      if (!inv.is_reinvestment) byProduct[p].capital += Number(inv.amount) || 0;
-      byProduct[p].returns += (Number(inv.amount) || 0) * (Number(inv.pool_actual_rate) || 0);
+    const confirmedByProduct = {};
+    completedInvestments.forEach(inv => {
+      const p = (inv.product_type === 'smme' ? 'short_term' : inv.product_type) || 'unknown';
+      if (!confirmedByProduct[p]) confirmedByProduct[p] = { count:0, capital:0, returns:0 };
+      confirmedByProduct[p].count++;
+      confirmedByProduct[p].capital += Number(inv.amount) || 0;
+      const earned = inv.actual_return_amount != null
+        ? Number(inv.actual_return_amount)
+        : (Number(inv.amount) || 0) * (Number(inv.pool_actual_rate) || 0);
+      confirmedByProduct[p].returns += earned;
     });
 
-    const perfRows = Object.entries(byProduct).map(([prod, d]) => {
-      const pct = d.capital > 0 ? ((d.returns / d.capital) * 100).toFixed(2) : '0.00';
+    const projectedByProduct = {};
+    activeInvestments.forEach(inv => {
+      const p = (inv.product_type === 'smme' ? 'short_term' : inv.product_type) || 'unknown';
+      if (!projectedByProduct[p]) projectedByProduct[p] = { count:0, capital:0, returns:0 };
+      projectedByProduct[p].count++;
+      projectedByProduct[p].capital += Number(inv.amount) || 0;
+      projectedByProduct[p].returns += (Number(inv.amount) || 0) * (Number(inv.annual_rate) || 0);
+    });
+
+    const tableHead = `<tr style="background:#F7F8FA">${th('Product')}${th('Count','center')}${th('Capital','right')}${th('Returns','right')}${th('Return %','right')}</tr>`;
+
+    const buildPerfRows = (byProduct) => Object.entries(byProduct).map(([prod, d]) => {
+      const pct  = d.capital > 0 ? ((d.returns / d.capital) * 100).toFixed(2) : '0.00';
       const info = getProductInfo(prod);
       return `<tr style="border-bottom:1px solid #f0f0f0">
-        <td style="padding:8px 10px;font-size:11px;font-weight:700;color:#1a1a1a">${info.label}</td>
-        <td style="padding:8px 10px;font-size:11px;color:#6b7280;text-align:center">${d.count}</td>
-        <td style="padding:8px 10px;font-size:11px;color:#1a1a1a;text-align:right;font-weight:600">${fmtNum(d.capital)}</td>
-        <td style="padding:8px 10px;font-size:11px;color:#22C55E;text-align:right;font-weight:700">${fmtNum(d.returns)}</td>
-        <td style="padding:8px 10px;font-size:11px;color:#fec24f;text-align:right;font-weight:700">${pct}%</td>
+        ${tdCell(`<span style="font-weight:700">${info.label}</span>`)}
+        ${tdCell(d.count, 'center')}
+        ${tdCell(fmtNum(d.capital), 'right', 'font-weight:600')}
+        ${tdCell(fmtNum(d.returns), 'right', 'font-weight:700')}
+        ${tdCell(pct + '%', 'right', 'font-weight:700')}
       </tr>`;
     }).join('');
 
+    const confirmedRows = buildPerfRows(confirmedByProduct);
+    const projectedRows = buildPerfRows(projectedByProduct);
+    const totC_cap = Object.values(confirmedByProduct).reduce((s, d) => s + d.capital, 0);
+    const totC_ret = Object.values(confirmedByProduct).reduce((s, d) => s + d.returns, 0);
+    const totP_cap = Object.values(projectedByProduct).reduce((s, d) => s + d.capital, 0);
+    const totP_ret = Object.values(projectedByProduct).reduce((s, d) => s + d.returns, 0);
+
     sections += `
       <section style="margin-bottom:36px">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #656565">
-          <div style="width:4px;height:22px;background:linear-gradient(180deg,#656565,#656565);border-radius:2px"></div>
-          <h3 style="font-size:13px;font-weight:800;color:#1a1a1a;letter-spacing:0.06em;text-transform:uppercase;margin:0">Performance Analysis</h3>
-        </div>
-        <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #eaeaea">
-          <thead>
-            <tr style="background:#F7F8FA">
-              <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Product</th>
-              <th style="padding:9px 10px;font-size:10px;text-align:center;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Count</th>
-              <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Capital</th>
-              <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Returns</th>
-              <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Return %</th>
-            </tr>
-          </thead>
-          <tbody>${perfRows}</tbody>
-          <tfoot>
-            <tr style="background:#F7F8FA">
-              <td colspan="2" style="padding:9px 10px;font-size:11px;font-weight:800;color:#1a1a1a">TOTAL</td>
-              <td style="padding:9px 10px;font-size:11px;font-weight:800;color:#1a1a1a;text-align:right">${fmtNum(totalInvested)}</td>
-              <td style="padding:9px 10px;font-size:11px;font-weight:800;color:#22C55E;text-align:right">${fmtNum(totalReturns)}</td>
-              <td style="padding:9px 10px;font-size:11px;font-weight:800;color:#fec24f;text-align:right">${totalInvested>0?((totalReturns/totalInvested)*100).toFixed(2):0}%</td>
-            </tr>
-          </tfoot>
-        </table>
+        ${sectionHead('Performance Analysis', '#656565')}
+        ${confirmedRows ? `
+          <div style="font-size:10px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">✓ Confirmed — Completed Investments</div>
+          <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #eaeaea;margin-bottom:20px">
+            <thead>${tableHead}</thead>
+            <tbody>${confirmedRows}</tbody>
+            <tfoot><tr style="background:#F7F8FA">
+              <td colspan="2" style="padding:9px 10px;font-size:11px;font-weight:800;color:#1a1a1a">CONFIRMED TOTAL</td>
+              ${tdCell(fmtNum(totC_cap), 'right', 'font-weight:800')}
+              <td style="padding:9px 10px;font-size:11px;font-weight:800;color:#22C55E;text-align:right">${fmtNum(totC_ret)}</td>
+              <td style="padding:9px 10px;font-size:11px;font-weight:800;color:#fec24f;text-align:right">${totC_cap > 0 ? ((totC_ret/totC_cap)*100).toFixed(2) : 0}%</td>
+            </tr></tfoot>
+          </table>` : ''}
+        ${projectedRows ? `
+          <div style="font-size:10px;font-weight:700;color:#1d4ed8;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">~ Projected — Active Investments (estimated, not yet realised)</div>
+          <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #eaeaea">
+            <thead>${tableHead}</thead>
+            <tbody>${projectedRows}</tbody>
+            <tfoot><tr style="background:#F7F8FA">
+              <td colspan="2" style="padding:9px 10px;font-size:11px;font-weight:800;color:#1a1a1a">PROJECTED TOTAL</td>
+              ${tdCell(fmtNum(totP_cap), 'right', 'font-weight:800')}
+              <td style="padding:9px 10px;font-size:11px;font-weight:800;color:#60a5fa;text-align:right">${fmtNum(totP_ret)} est.</td>
+              <td style="padding:9px 10px;font-size:11px;font-weight:800;color:#60a5fa;text-align:right">${totP_cap > 0 ? ((totP_ret/totP_cap)*100).toFixed(2) : 0}% est.</td>
+            </tr></tfoot>
+          </table>` : ''}
       </section>`;
   }
 
-  // ─── INVESTMENT DETAILS ───
+  // ─── INVESTMENT DETAILS ────────────────────────────────────────────────
   if (incInvestments && investments.length > 0) {
-    const invRows = investments.map(inv => {
+    const tableStyle = `width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #eaeaea;min-width:780px`;
+
+    // Active table
+    let activeRows = '';
+    let totActiveCapital = 0, totActiveProj = 0;
+    activeInvestments.forEach(inv => {
       const info = getProductInfo(inv.product_type);
-      const poolRate = (Number(inv.pool_actual_rate) || 0) * 100;
-      const rateCell = poolRate > 0 ? `${poolRate.toFixed(2)}%` : '—';
-      const maturity = inv.maturity_date ? fmtDate(inv.maturity_date) : '—';
-      const statusColor = inv.status === 'active' ? '#656565' : inv.status === 'paid_out' ? '#22C55E' : '#9ca3af';
-      return `<tr style="border-bottom:1px solid #f0f0f0">
-        <td style="padding:8px 10px;font-size:10px;color:#9ca3af;font-family:monospace">${inv.id}</td>
-        <td style="padding:8px 10px;font-size:11px;font-weight:600;color:#1a1a1a">${_esc(inv.pool_name) || '—'}</td>
-        <td style="padding:8px 10px">
-          <span style="background:${info.bg};color:${info.color};font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;text-transform:uppercase;letter-spacing:0.05em;white-space:nowrap">${info.label}</span>
-        </td>
-        <td style="padding:8px 10px;font-size:11px;color:#1a1a1a;text-align:right;font-weight:700">${fmtNum(inv.amount)}</td>
-        <td style="padding:8px 10px;font-size:11px;color:${rateCell==='—'?'#9ca3af':'#fec24f'};text-align:right;font-weight:700">${rateCell}</td>
-        <td style="padding:8px 10px;font-size:11px;color:#1a1a1a;text-align:right">${fmtDate(inv.investment_date)}</td>
-        <td style="padding:8px 10px;font-size:11px;color:#1a1a1a;text-align:right">${maturity}</td>
-        <td style="padding:8px 10px">
-          <span style="color:${statusColor};font-size:10px;font-weight:700;text-transform:uppercase">${inv.status}</span>
-        </td>
+      const rate    = Number(inv.annual_rate) || Number(inv.pool_actual_rate) || 0;
+      const projected = (Number(inv.amount) || 0) * rate;
+      const daysLeft = inv.maturity_date ? Math.ceil((new Date(inv.maturity_date) - now) / 86400000) : null;
+      const daysColor = daysLeft != null && daysLeft <= 60 ? '#b45309' : '#6b7280';
+      const daysStr   = daysLeft != null
+        ? `<span style="color:${daysColor};font-weight:${daysLeft <= 60 ? '700' : '400'}">${daysLeft > 0 ? daysLeft + 'd' : 'Due'}${daysLeft <= 60 ? ' ⚠' : ''}</span>`
+        : '—';
+      totActiveCapital += Number(inv.amount) || 0;
+      totActiveProj    += projected;
+      activeRows += `<tr style="border-bottom:1px solid #f0f0f0">
+        ${tdCell(`<span style="font-size:9px;color:#9ca3af;font-family:monospace">${inv.id}</span>`)}
+        ${tdCell(`<span style="font-weight:600">${_esc(inv.pool_name) || '—'}</span>`)}
+        ${tdCell(`<span style="background:${info.bg};color:${info.color};font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;text-transform:uppercase;letter-spacing:0.05em">${info.label}</span>`)}
+        ${tdCell(fmtNum(inv.amount), 'right', 'font-weight:700')}
+        ${tdCell(rate > 0 ? `<span style="color:#22C55E;font-weight:700">${(rate*100).toFixed(2)}%</span> <span style="color:#9ca3af;font-size:9px">proj.</span>` : '—', 'right')}
+        ${tdCell(projected > 0 ? `<span style="color:#60a5fa;font-size:9px">est.</span> ${fmtNum(projected)}` : '—', 'right')}
+        ${tdCell(fmtDate(inv.start_date || inv.investment_date))}
+        ${tdCell(fmtDate(inv.maturity_date))}
+        ${tdCell(daysStr, 'center')}
+        ${tdCell(instrPill(inv.maturity_instruction))}
       </tr>`;
-    }).join('');
+    });
+
+    // Completed table
+    let completedRows = '';
+    let totCompletedCapital = 0, totCompletedReturns = 0;
+    completedInvestments.forEach(inv => {
+      const info       = getProductInfo(inv.product_type);
+      const actualRate = Number(inv.pool_actual_rate) || 0;
+      const earned     = inv.actual_return_amount != null
+        ? Number(inv.actual_return_amount)
+        : (Number(inv.amount) || 0) * actualRate;
+      totCompletedCapital  += Number(inv.amount) || 0;
+      totCompletedReturns  += earned;
+      completedRows += `<tr style="border-bottom:1px solid #f0f0f0">
+        ${tdCell(`<span style="font-size:9px;color:#9ca3af;font-family:monospace">${inv.id}</span>`)}
+        ${tdCell(`<span style="font-weight:600">${_esc(inv.pool_name) || '—'}</span>`)}
+        ${tdCell(`<span style="background:${info.bg};color:${info.color};font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;text-transform:uppercase;letter-spacing:0.05em">${info.label}</span>`)}
+        ${tdCell(fmtNum(inv.amount), 'right', 'font-weight:700')}
+        ${tdCell(actualRate > 0 ? `<span style="color:#22C55E;font-weight:700">${(actualRate*100).toFixed(2)}%</span>` : '<span style="color:#9ca3af">—</span>', 'right')}
+        ${tdCell(earned > 0 ? `<span style="color:#22C55E;font-weight:700">+${fmtNum(earned)}</span>` : '<span style="color:#9ca3af">—</span>', 'right')}
+        ${tdCell(fmtDate(inv.start_date || inv.investment_date))}
+        ${tdCell(fmtDate(inv.maturity_date))}
+        ${tdCell(statusPill(inv.status))}
+      </tr>`;
+    });
 
     sections += `
       <section style="margin-bottom:36px">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #22C55E">
-          <div style="width:4px;height:22px;background:linear-gradient(180deg,#22C55E,#16A34A);border-radius:2px"></div>
-          <h3 style="font-size:13px;font-weight:800;color:#1a1a1a;letter-spacing:0.06em;text-transform:uppercase;margin:0">Investment Details</h3>
-          <span style="margin-left:auto;font-size:10px;color:#9ca3af">${investments.length} records</span>
-        </div>
-        <div style="overflow-x:auto">
-          <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #eaeaea;min-width:700px">
-            <thead>
-              <tr style="background:#F7F8FA">
-                <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">ID</th>
-                <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Pool</th>
-                <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Product</th>
-                <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Amount</th>
-                <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Actual Rate</th>
-                <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Invested</th>
-                <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Maturity</th>
-                <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Status</th>
-              </tr>
-            </thead>
-            <tbody>${invRows}</tbody>
-          </table>
-        </div>
+        ${sectionHead('Investment Details', '#22C55E', `${investments.length} total`)}
+
+        ${activeInvestments.length > 0 ? `
+          <div style="font-size:10px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">
+            Active Investments — ${activeInvestments.length} (sorted by earliest maturity)
+          </div>
+          <div style="overflow-x:auto;margin-bottom:20px">
+            <table style="${tableStyle}">
+              <thead><tr style="background:#F7F8FA">${th('Reference')}${th('Pool')}${th('Product')}${th('Amount','right')}${th('Proj. Rate','right')}${th('Est. Return','right')}${th('Start Date')}${th('Maturity')}${th('Days Left','center')}${th('At Maturity')}</tr></thead>
+              <tbody>${activeRows}</tbody>
+              <tfoot><tr style="background:#F7F8FA">
+                <td colspan="3" style="padding:9px 10px;font-size:11px;font-weight:800;color:#1a1a1a">ACTIVE TOTAL</td>
+                ${tdCell(fmtNum(totActiveCapital), 'right', 'font-weight:800')}
+                <td></td>
+                <td style="padding:9px 10px;font-size:11px;font-weight:800;color:#60a5fa;text-align:right">${fmtNum(totActiveProj)} est.</td>
+                <td colspan="4"></td>
+              </tr></tfoot>
+            </table>
+          </div>` : ''}
+
+        ${completedInvestments.length > 0 ? `
+          <div style="font-size:10px;font-weight:700;color:#b45309;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">
+            Completed Investments — ${completedInvestments.length}
+          </div>
+          <div style="overflow-x:auto">
+            <table style="${tableStyle}">
+              <thead><tr style="background:#F7F8FA">${th('Reference')}${th('Pool')}${th('Product')}${th('Amount','right')}${th('Actual Rate','right')}${th('Returns Earned','right')}${th('Start Date')}${th('Maturity Date')}${th('Status')}</tr></thead>
+              <tbody>${completedRows}</tbody>
+              <tfoot><tr style="background:#F7F8FA">
+                <td colspan="3" style="padding:9px 10px;font-size:11px;font-weight:800;color:#1a1a1a">COMPLETED TOTAL</td>
+                ${tdCell(fmtNum(totCompletedCapital), 'right', 'font-weight:800')}
+                <td></td>
+                <td style="padding:9px 10px;font-size:11px;font-weight:800;color:#22C55E;text-align:right">+${fmtNum(totCompletedReturns)}</td>
+                <td colspan="3"></td>
+              </tr></tfoot>
+            </table>
+          </div>` : ''}
       </section>`;
   }
 
-  // ─── TRANSACTION LEDGER ───
+  // ─── TRANSACTION LEDGER ────────────────────────────────────────────────
   if (incTransactions) {
-    const txnRows = transactions.length > 0 ? transactions.map(t => {
-      const isPos = !['withdrawal', 'fee', 'investment', 'gift_sent'].includes(t.type);
-      const amt = isPos ? `+${fmtNum(Math.abs(t.amount))}` : `-${fmtNum(Math.abs(t.amount))}`;
-      const amtColor = isPos ? '#22C55E' : '#EF4444';
-      const typeMap = {deposit:'Deposit',withdrawal:'Withdrawal',investment:'Investment',return:'Return',payout:'Payout',fee:'Fee',referral_bonus:'Referral Bonus',gift_sent:'Gift Sent',gift_received:'Gift Received',reward:'XP Reward'};
-      return `<tr style="border-bottom:1px solid #f0f0f0">
-        <td style="padding:7px 10px;font-size:10px;color:#9ca3af;font-family:monospace">${t.reference || '—'}</td>
-        <td style="padding:7px 10px;font-size:11px;color:#1a1a1a">${typeMap[t.type] || t.type}</td>
-        <td style="padding:7px 10px;font-size:11px;color:#1a1a1a">${t.pool_name || t.description || '—'}</td>
-        <td style="padding:7px 10px;font-size:11px;font-weight:700;color:${amtColor};text-align:right">${amt}</td>
-        <td style="padding:7px 10px;font-size:10px;color:#9ca3af;text-align:right">${fmtDate(t.transaction_date || t.created_at)}</td>
-        <td style="padding:7px 10px">
-          <span style="background:${t.status==='completed'?'#dcfce7':'#fef9c3'};color:${t.status==='completed'?'#16a34a':'#92400e'};font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;text-transform:uppercase">${t.status}</span>
-        </td>
-      </tr>`;
-    }).join('') : `<tr><td colspan="6" style="padding:20px;text-align:center;color:#9ca3af;font-size:11px">No transactions in selected period</td></tr>`;
+    const TYPE_LABEL = { deposit:'Deposit', withdrawal:'Withdrawal', investment:'Investment', return:'Return', payout:'Payout', fee:'Fee', platform_fee:'Platform Fee', referral_bonus:'Referral Bonus', gift_sent:'Gift Sent', gift_received:'Gift Received', reward:'XP Reward' };
+    const isCreditType = t => ['deposit','return','payout','referral_bonus','gift_received','reward'].includes(t.type);
+    const isDebitType  = t => ['withdrawal','investment','platform_fee','fee','gift_sent'].includes(t.type);
 
-    // Running balance
-    let running = 0;
-    const sortedTxns = [...transactions].sort((a,b) => new Date(a.transaction_date||a.created_at) - new Date(b.transaction_date||b.created_at));
-    const totalDeposits = transactions.filter(t=>t.type==='deposit').reduce((s,t)=>s+Number(t.amount||0),0);
-    const totalWithdrawals = transactions.filter(t=>t.type==='withdrawal'||t.type==='investment').reduce((s,t)=>s+Math.abs(Number(t.amount||0)),0);
-    const totalReturnsTxn = transactions.filter(t=>t.type==='return'||t.type==='payout').reduce((s,t)=>s+Number(t.amount||0),0);
+    const sortedTxns = [...transactions].sort((a, b) =>
+      new Date(a.transaction_date || a.created_at) - new Date(b.transaction_date || b.created_at)
+    );
+
+    const txnRows = sortedTxns.length > 0 ? sortedTxns.map(t => {
+      const absAmt    = Math.abs(Number(t.amount) || 0);
+      const isCredit  = isCreditType(t);
+      const isDebit   = isDebitType(t);
+      const debitStr  = isDebit  ? `<span style="color:#ef4444;font-weight:700">${fmtNum(absAmt)}</span>` : `<span style="color:#d1d5db">—</span>`;
+      const creditStr = isCredit ? `<span style="color:#22C55E;font-weight:700">${fmtNum(absAmt)}</span>` : `<span style="color:#d1d5db">—</span>`;
+      const desc = t.pool_name || t.description || '—';
+      const statusPillHtml = `<span style="background:${t.status==='completed'?'#dcfce7':'#fef9c3'};color:${t.status==='completed'?'#16a34a':'#92400e'};font-size:9px;font-weight:700;padding:2px 6px;border-radius:20px;text-transform:uppercase">${t.status}</span>`;
+      return `<tr style="border-bottom:1px solid #f0f0f0">
+        ${tdCell(`<span style="font-size:9px;color:#9ca3af;font-family:monospace">${t.reference || '—'}</span>`)}
+        ${tdCell(TYPE_LABEL[t.type] || t.type)}
+        ${tdCell(desc)}
+        ${tdCell(debitStr, 'right')}
+        ${tdCell(creditStr, 'right')}
+        ${tdCell(fmtDate(t.transaction_date || t.created_at), 'right')}
+        ${tdCell(statusPillHtml)}
+      </tr>`;
+    }).join('') : `<tr><td colspan="7" style="padding:20px;text-align:center;color:#9ca3af;font-size:11px">No transactions in selected period</td></tr>`;
+
+    const txDeposits = sortedTxns.filter(t => t.type === 'deposit').reduce((s, t) => s + Math.abs(Number(t.amount)||0), 0);
+    const txReturns  = sortedTxns.filter(t => ['return','payout'].includes(t.type)).reduce((s, t) => s + Math.abs(Number(t.amount)||0), 0);
+    const txDebits   = sortedTxns.filter(isDebitType).reduce((s, t) => s + Math.abs(Number(t.amount)||0), 0);
+    const txCredits  = sortedTxns.filter(isCreditType).reduce((s, t) => s + Math.abs(Number(t.amount)||0), 0);
 
     sections += `
       <section style="margin-bottom:36px">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #eda5ff">
-          <div style="width:4px;height:22px;background:linear-gradient(180deg,#eda5ff,#eda5ff);border-radius:2px"></div>
-          <h3 style="font-size:13px;font-weight:800;color:#1a1a1a;letter-spacing:0.06em;text-transform:uppercase;margin:0">Transaction Ledger</h3>
-          <span style="margin-left:auto;font-size:10px;color:#9ca3af">${transactions.length} transactions · ${fmtDate(from)} — ${fmtDate(to)}</span>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">
-          ${stmtMiniBox('Total Deposits', fmtNum(totalDeposits), '#22C55E')}
-          ${stmtMiniBox('Total Invested', fmtNum(totalWithdrawals), '#656565')}
-          ${stmtMiniBox('Returns Received', fmtNum(totalReturnsTxn), '#fec24f')}
+        ${sectionHead('Transaction Ledger', '#eda5ff', `${transactions.length} transactions · ${fmtDate(from)} — ${fmtDate(to)}`)}
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px">
+          ${stmtMiniBox('Total Deposits',   fmtNum(txDeposits),  '#22C55E')}
+          ${stmtMiniBox('Returns Received', fmtNum(txReturns),   '#fec24f')}
+          ${stmtMiniBox('Total Debits',     fmtNum(txDebits),    '#ef4444')}
+          ${stmtMiniBox('Total Credits',    fmtNum(txCredits),   '#22C55E')}
         </div>
         <div style="overflow-x:auto">
-          <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #eaeaea;min-width:600px">
-            <thead>
-              <tr style="background:#F7F8FA">
-                <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Reference</th>
-                <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Type</th>
-                <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Description</th>
-                <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Amount</th>
-                <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Date</th>
-                <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Status</th>
-              </tr>
-            </thead>
+          <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #eaeaea;min-width:640px">
+            <thead><tr style="background:#F7F8FA">${th('Reference')}${th('Type')}${th('Description')}${th('Debit','right')}${th('Credit','right')}${th('Date','right')}${th('Status')}</tr></thead>
             <tbody>${txnRows}</tbody>
           </table>
         </div>
       </section>`;
   }
 
-  // ─── FULL DOCUMENT ───
   return `
-    <div id="stmtPrintArea" style="font-family:'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a1a;background:#fff;min-height:100%;min-width:700px">
-
-      <!-- Header Band -->
-      <div style="background:#303030;padding:24px 40px;display:flex;align-items:center;justify-content:space-between">
-        <div style="display:flex;align-items:center;gap:14px">
-          <img src="${logoUrl}" alt="SV Capital" style="height:44px;width:auto;max-width:220px;object-fit:contain;display:block">
-        </div>
+    <div id="stmtPrintArea" style="font-family:'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a1a;background:#fff;min-height:100%;position:relative">
+      <div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:0;opacity:0.04;width:480px;height:480px;background:url('${logoOutlineUrl}') center/contain no-repeat;print-color-adjust:exact;-webkit-print-color-adjust:exact"></div>
+      <div style="background:#303030;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;position:relative;z-index:1">
+        <img src="${logoUrl}" alt="SV Capital" style="height:44px;width:auto;max-width:220px;object-fit:contain;display:block">
         <div style="text-align:right">
           <div style="font-size:16px;font-weight:800;color:#fec24f;letter-spacing:0.04em">ACCOUNT STATEMENT</div>
           <div style="font-size:10px;color:rgba(255,255,255,0.55);margin-top:4px"># ${statementNumber}</div>
           <div style="font-size:10px;color:rgba(255,255,255,0.55);margin-top:2px">Generated: ${generatedAt}</div>
         </div>
       </div>
-
-      <!-- Period Banner -->
-      <div style="background:linear-gradient(90deg,rgba(254,194,79,0.08),rgba(47,140,155,0.06));border-top:3px solid #fec24f;border-bottom:1px solid rgba(0,0,0,0.06);padding:12px 40px;display:flex;align-items:center;justify-content:space-between">
+      <div style="background:linear-gradient(90deg,rgba(254,194,79,0.08),rgba(47,140,155,0.06));border-top:3px solid #fec24f;border-bottom:1px solid rgba(0,0,0,0.06);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
         <div style="display:flex;align-items:center;gap:6px">
           <span style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em">Statement Period:</span>
           <span style="font-size:12px;font-weight:800;color:#1a1a1a">${fmtDate(from)} — ${fmtDate(to)}</span>
@@ -5684,24 +5793,21 @@ function buildStatementHTML(opts) {
           <span style="background:rgba(254,194,79,0.1);color:#ff5229;font-size:9px;font-weight:700;padding:2px 8px;border-radius:20px;border:1px solid rgba(254,194,79,0.2);margin-left:4px">${investorId}</span>
         </div>
       </div>
-
-      <!-- Body -->
-      <div style="padding:32px 40px">
-        ${sections}
-      </div>
-
-      <!-- Footer -->
-      <div style="background:#F7F8FA;border-top:1px solid rgba(0,0,0,0.07);padding:20px 40px;display:flex;align-items:center;justify-content:space-between">
-        <div>
-          <div style="font-size:10px;font-weight:700;color:#1a1a1a;margin-bottom:3px">SmartVest Financial Services (Pty) Ltd</div>
-          <div style="font-size:9px;color:#9ca3af">Authorised Financial Services Provider · FSP License #52449 · Regulated by the FSCA</div>
+      <div style="padding:32px 40px">${sections}</div>
+      <div style="background:#F7F8FA;border-top:3px solid #fec24f;padding:20px 40px;position:relative;z-index:1">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
+          <div>
+            <div style="font-size:10px;font-weight:700;color:#1a1a1a;margin-bottom:3px">SV Capital (Pty) Ltd</div>
+            <div style="font-size:9px;color:#9ca3af">enquiry@svcapital.co.za · www.svcapital.co.za · 011 568 3490</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:9px;color:#c1c7d0">This statement is computer generated and does not require a signature.</div>
+          </div>
         </div>
-        <div style="text-align:right">
-          <div style="font-size:9px;color:#9ca3af">enquiry@svcapital.co.za · www.svcapital.co.za</div>
-          <div style="font-size:9px;color:#c1c7d0;margin-top:2px">This statement is computer generated and does not require a signature.</div>
+        <div style="font-size:7.5px;color:#b0b8c4;border-top:1px solid rgba(0,0,0,0.06);padding-top:8px;line-height:1.5">
+          IMPORTANT NOTICE: This investment is not a regulated financial product under the Financial Sector Conduct Authority (FSCA) and is not covered by the Financial Advisory and Intermediary Services Act (FAIS) or the Collective Investment Schemes Control Act (CISCA). This investment is managed solely by SV Capital (Pty) Ltd. Capital is at risk and returns are not guaranteed.
         </div>
       </div>
-
     </div>`;
 }
 
@@ -5734,157 +5840,61 @@ function getProductInfo(type) {
   return { label, color, bg: color + '1f' };   // 8-digit hex → light tint of the product colour
 }
 
-/* ── Mobile-safe share/print helper ─────────────────────────────────────
-   On mobile (Capacitor WebView): invokes the native share sheet via
-   navigator.share() — user can print via AirPrint/Android Print or save
-   to Files/Drive. Falls back to <a download> if share isn't supported.
-   On desktop: opens a new window with a print button.               ── */
-async function _shareOrPrint(html, filename) {
-  const isMobile = navigator.maxTouchPoints > 0 || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-
-  if (isMobile) {
-    // Try native share sheet (iOS/Android) — user can print from there
-    if (navigator.canShare) {
-      try {
-        const file = new File([blob], filename, { type: 'text/html' });
-        if (navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file], title: 'SV Capital' });
-          return;
-        }
-      } catch (e) {
-        if (e.name === 'AbortError') return; // user cancelled — don't fall through
-      }
-    }
-    // Fallback: download the HTML file
-    const url = URL.createObjectURL(blob);
-    const a   = document.createElement('a');
-    a.href = url; a.download = filename;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
-    Toast.success('Saved to Downloads — open in your browser to print or save as PDF.');
-    return;
-  }
-
-  // Desktop: open blob in new tab with print bar
-  try {
-    const url = URL.createObjectURL(blob);
-    const win = window.open(url, '_blank');
-    if (win) { win.focus(); setTimeout(() => URL.revokeObjectURL(url), 120000); return; }
-    URL.revokeObjectURL(url);
-  } catch (_) {}
-  // Last resort: data URI
-  window.open('data:text/html;charset=utf-8,' + encodeURIComponent(html), '_blank');
-}
-
-async function printStatement() {
+function printStatement() {
   const stmtDoc = document.getElementById('statementDocument');
   if (!stmtDoc || !stmtDoc.innerHTML.trim()) {
     Toast.error('Please generate a statement first, then print.');
     return;
   }
-
-  const fullHtml = `<!DOCTYPE html>
+  const htmlContent = `<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<title>SV Capital – Account Statement</title>
-<meta name="viewport" content="width=794,initial-scale=1">
-<style>
-*{box-sizing:border-box}
-body{margin:0;font-family:Poppins,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fff}
-.svc-pbar{position:fixed;top:0;left:0;right:0;z-index:9999;background:#fff;border-bottom:1px solid #e5e7eb;padding:10px 20px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 8px rgba(0,0,0,.08)}
-.svc-pbar h3{font-size:14px;font-weight:700;color:#111827;margin:0}
-.svc-pbtn{background:linear-gradient(135deg,#fec24f,#FF5229);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:8px}
-.svc-content{padding-top:52px}
-@media print{.svc-pbar{display:none!important}.svc-content{padding-top:0}@page{size:A4;margin:0}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SV Capital — Account Statement</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Poppins',-apple-system,BlinkMacSystemFont,sans-serif;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;color:#1a1a1a}
+    @page{size:A4;margin:0}
+    @media print{.no-print{display:none!important}.print-body{padding-top:0!important}}
+    .no-print{position:fixed;top:0;left:0;right:0;background:#1a1a1a;padding:12px 24px;display:flex;justify-content:space-between;align-items:center;z-index:999;box-shadow:0 2px 12px rgba(0,0,0,0.3)}
+    .no-print span{color:#fff;font-size:13px;font-weight:600}
+    .no-print button{background:linear-gradient(135deg,#fec24f,#FF5229);color:#fff;border:none;padding:8px 22px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer}
+    .no-print button:hover{opacity:0.9}
+    .print-body{padding-top:52px}
+  </style>
 </head>
 <body>
-<div class="svc-pbar">
-  <h3>SV Capital — Account Statement</h3>
-  <button class="svc-pbtn" onclick="window.print()">🖨️ Print / Save PDF</button>
-</div>
-<div class="svc-content">
-${stmtDoc.innerHTML}
-</div>
+  <div class="no-print">
+    <span>SV Capital — Account Statement</span>
+    <button onclick="window.print()">⬇&nbsp; Save as PDF / Print</button>
+  </div>
+  <div class="print-body">${stmtDoc.innerHTML}</div>
+  <script>window.addEventListener('load',function(){setTimeout(function(){window.print();},600);});</script>
 </body>
 </html>`;
-
-  await _shareOrPrint(fullHtml, 'SVC-Statement.html');
+  const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  // Open as new tab (no width/height = new tab, not popup → avoids popup blocker)
+  const win = window.open(url, '_blank');
+  if (!win) {
+    // Blocked or native app — download the file directly
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `SVC-Statement-${new Date().toISOString().slice(0,10)}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    Toast.success('Statement downloaded — open in your browser, then use File → Print → Save as PDF.');
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 120000);
 }
 
 /* ── Sub-account deposit ─────────────────────── */
 function openSaDeposit(saId) {
   Modal.close('saDetailModal');
   openTopUpModal(null, saId);
-}
-
-/* ── Sub-account wallet transfer ─────────────── */
-function openSaTransfer(saId) {
-  const sa = (PORTAL.subAccounts || []).find(s => s.id === saId);
-  if (!sa) return Toast.error('Sub-account not found');
-  const el = id => document.getElementById(id);
-  if (!el('saTransferModal')) return;
-  el('saTransferSaId').value        = saId;
-  el('saTransferSaName').textContent = sa.name;
-  el('saTransferWalletBal').textContent = Utils.rand(parseFloat(PORTAL.investor?.wallet_balance) || 0);
-  el('saTransferAmount').value = '';
-  el('saTransferHint').style.color = '#9ca3af';
-  el('saTransferHint').textContent = 'Minimum R10. Funds move instantly.';
-  Modal.open('saTransferModal');
-}
-
-function setSaTransferAmount(amt) {
-  const el = document.getElementById('saTransferAmount');
-  if (el) { el.value = amt; updateSaTransferHint(); }
-}
-
-function updateSaTransferHint() {
-  const amount  = parseFloat(document.getElementById('saTransferAmount')?.value) || 0;
-  const hint    = document.getElementById('saTransferHint');
-  const walBal  = parseFloat(PORTAL.investor?.wallet_balance) || 0;
-  if (!hint) return;
-  if (amount > 0 && amount > walBal) {
-    hint.style.color = '#ef4444';
-    hint.textContent = `Exceeds your wallet balance of ${Utils.rand(walBal)}`;
-  } else {
-    hint.style.color = '#9ca3af';
-    hint.textContent = 'Minimum R10. Funds move instantly.';
-  }
-}
-
-async function saveWalletTransfer() {
-  const el     = id => document.getElementById(id);
-  const saId   = el('saTransferSaId')?.value;
-  const amount = parseFloat(el('saTransferAmount')?.value);
-  const walBal = parseFloat(PORTAL.investor?.wallet_balance) || 0;
-
-  if (!amount || amount < 10)  return Toast.error('Minimum transfer is R10');
-  if (amount > walBal)         return Toast.error(`Insufficient balance — your wallet has ${Utils.rand(walBal)}`);
-
-  const btn = el('saTransferBtn');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Transferring…'; }
-
-  try {
-    await API._fetch('POST', 'payments/wallet-transfer', { sub_account_id: saId, amount });
-    Modal.close('saTransferModal');
-    Toast.success(`${Utils.rand(amount)} transferred to ${el('saTransferSaName')?.textContent || 'sub-account'}`);
-    // Update local state immediately then reload
-    if (PORTAL.investor) PORTAL.investor.wallet_balance = Math.max(0, walBal - amount);
-    const sa = (PORTAL.subAccounts || []).find(s => s.id === saId);
-    if (sa) sa.wallet_balance = (parseFloat(sa.wallet_balance) || 0) + amount;
-    renderOverviewTxns();
-    renderWallet();
-    SVC.track('svc_wallet_transfer', { amount, sub_account_id: saId });
-    // Re-open sub-account detail with updated data
-    await loadPortalData();
-    openSaDetail(saId);
-  } catch (e) {
-    Toast.error(e.message || 'Transfer failed');
-  } finally {
-    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-arrow-right-arrow-left"></i> Transfer'; }
-  }
 }
 
 /* ─── Profile ─── */
@@ -5966,7 +5976,12 @@ async function loadQuestData() {
   try {
     const token = Auth.getToken();
     if (!token) return;
-    const data = await API._fetch('GET', 'quests/my');
+    const res  = await fetch((window.__SVC_API_BASE__ || '/api/') + 'quests/my', {
+      headers: { 'Authorization': `Bearer ${token}` },
+      credentials: 'include',
+    });
+    if (!res.ok) return;
+    const data = await res.json();
     PORTAL.quests = data;
 
     // Auto-detect and claim milestone quests silently
@@ -5975,7 +5990,8 @@ async function loadQuestData() {
     renderXPWidget();
     _updateXPNavBadge();
 
-    // Update the pov-rewards stat tile — renderOverview() runs before this resolves
+    // Update the pov-rewards stat tile — renderOverview() runs before this
+    // resolves so the tile would otherwise stay at "Seed · 0 XP" indefinitely
     const _rewEl = document.getElementById('pov-rewards');
     if (_rewEl) {
       const _xp = PORTAL.quests?.xp || 0;
@@ -6108,62 +6124,10 @@ function _updateXPNavBadge() {
     if (readyCount > 0) {
       badge.textContent = readyCount;
       badge.style.display = 'inline-flex';
-      _saveNavBadgeCache('xp', readyCount);
     } else {
       badge.style.display = 'none';
-      _saveNavBadgeCache('xp', 0);
     }
   }
-}
-
-/* ─── Nav badge cache — persists counts so they show instantly on next load ─── */
-const _NAV_BADGE_KEY = 'svc_nav_badges';
-function _saveNavBadgeCache(key, value) {
-  try {
-    const cur = JSON.parse(localStorage.getItem(_NAV_BADGE_KEY) || '{}');
-    cur[key] = value;
-    localStorage.setItem(_NAV_BADGE_KEY, JSON.stringify(cur));
-  } catch (_) {}
-}
-function _restoreNavBadgesFromCache() {
-  try {
-    const cache = JSON.parse(localStorage.getItem(_NAV_BADGE_KEY) || '{}');
-    const set = (id, val) => {
-      const el = document.getElementById(id);
-      if (!el) return;
-      if (val > 0) { el.textContent = val; el.style.display = 'inline-flex'; }
-      else el.style.display = 'none';
-    };
-    set('subacctsBadge', cache.subaccounts || 0);
-    set('xpNavBadge',    cache.xp || 0);
-    set('giftsBadge',    cache.gifts || 0);
-  } catch (_) {}
-}
-async function _prefetchNavBadges() {
-  try {
-    // Sub-accounts count
-    const myId = PORTAL.investor?.id;
-    if (myId) {
-      const res = await API._fetch('GET', 'tables/sub_accounts', null, { parent_investor_id: myId, limit: 200 });
-      const all = (res.data || []).filter(a => a.parent_investor_id === myId || a.investor_id === myId);
-      PORTAL.subAccounts = all;
-      const sb = document.getElementById('subacctsBadge');
-      if (sb) {
-        sb.textContent = all.length || '';
-        sb.style.display = all.length ? '' : 'none';
-      }
-      _saveNavBadgeCache('subaccounts', all.length);
-    }
-    // Received gifts count (unclaimed = pending)
-    const giftsRes = await API._fetch('GET', 'gifts/received');
-    const pending = (giftsRes.data || []).filter(g => g.status === 'pending').length;
-    const gb = document.getElementById('giftsBadge');
-    if (gb) {
-      if (pending > 0) { gb.textContent = pending; gb.style.display = 'inline-flex'; }
-      else gb.style.display = 'none';
-    }
-    _saveNavBadgeCache('gifts', pending);
-  } catch (_) {}
 }
 
 /* ═════════════════════════════════════════════════════════
@@ -6400,7 +6364,7 @@ let _fbRating = 0;
 function setFbStar(n) {
   _fbRating = n;
   document.querySelectorAll('.fb-star').forEach(s => {
-    s.style.color = parseInt(s.dataset.v) <= n ? '#fec24f' : '';
+    s.style.color = parseInt(s.dataset.v) <= n ? '#fec24f' : '#d1d5db';
   });
 }
 
@@ -6409,55 +6373,73 @@ async function loadMyFeedback() {
     const res = await fetch((window.__SVC_API_BASE__ || '/api/') + 'testimonials/my', {
       headers: { Authorization: 'Bearer ' + (localStorage.getItem('svc_token') || '') },
     });
-    if (!res.ok) return;
-    const data = await res.json();
-    const t = data.testimonial;
-    if (!t) return;
-    const formWrap = document.getElementById('feedbackFormWrap');
-    const submitted = document.getElementById('feedbackSubmitted');
-    const statusEl  = document.getElementById('feedbackSubmittedStatus');
-    if (formWrap) formWrap.style.display = 'none';
-    if (submitted) submitted.style.display = '';
-    if (statusEl) {
-      if (t.status === 'approved') statusEl.textContent = 'Your review has been published. Thank you!';
-      else if (t.status === 'rejected') statusEl.textContent = 'Your review was not approved' + (t.rejection_reason ? ': ' + t.rejection_reason : '.') + ' You may resubmit after updating.';
-      else statusEl.textContent = 'Your review is pending approval.';
+    const { data } = await res.json();
+    if (data) {
+      const wrap = document.getElementById('feedbackFormWrap');
+      const done = document.getElementById('feedbackSubmitted');
+      const statusEl = document.getElementById('feedbackSubmittedStatus');
+      if (wrap) wrap.style.display = 'none';
+      if (done) done.style.display = '';
+      if (statusEl) {
+        const msgs = { pending: 'Your review is pending admin approval.', approved: '✓ Your review is live on the homepage!', rejected: 'Your review was not approved. You can resubmit.' };
+        statusEl.textContent = msgs[data.status] || '';
+        if (data.status === 'rejected') {
+          statusEl.innerHTML += ` <button class="btn btn--sm btn--ghost" style="margin-top:8px;display:block" onclick="document.getElementById('feedbackFormWrap').style.display='';document.getElementById('feedbackSubmitted').style.display='none'">Edit & Resubmit</button>`;
+          if (wrap) wrap.style.display = '';
+          if (done) done.style.display = 'none';
+          // Pre-fill
+          const bodyEl = document.getElementById('feedbackBody');
+          const lblEl = document.getElementById('feedbackProductLabel');
+          if (bodyEl) bodyEl.value = data.body || '';
+          if (lblEl) lblEl.value = data.product_label || '';
+          setFbStar(data.rating || 0);
+        }
+      }
     }
   } catch (_) {}
 }
 
 async function submitFeedback() {
-  const btn  = document.getElementById('feedbackSubmitBtn');
-  const msg  = document.getElementById('feedbackMsg');
-  const body = (document.getElementById('feedbackBody') || {}).value || '';
-  const label = (document.getElementById('feedbackProductLabel') || {}).value || '';
-  if (!_fbRating) { if (msg) { msg.textContent = 'Please select a star rating.'; msg.style.color = '#ef4444'; msg.style.display = ''; } return; }
-  if (body.trim().length < 20) { if (msg) { msg.textContent = 'Please write at least 20 characters.'; msg.style.color = '#ef4444'; msg.style.display = ''; } return; }
-  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Submitting…'; }
+  const btn = document.getElementById('feedbackSubmitBtn');
+  const msg = document.getElementById('feedbackMsg');
+  const body = document.getElementById('feedbackBody')?.value?.trim();
+  const productLabel = document.getElementById('feedbackProductLabel')?.value?.trim();
+
+  if (!_fbRating) { if (msg) { msg.style.display = ''; msg.style.color = '#ef4444'; msg.textContent = 'Please select a star rating.'; } return; }
+  if (!body || body.length < 20) { if (msg) { msg.style.display = ''; msg.style.color = '#ef4444'; msg.textContent = 'Please write at least 20 characters.'; } return; }
+
+  if (btn) btn.disabled = true;
+  if (msg) msg.style.display = 'none';
+
   try {
     const res = await fetch((window.__SVC_API_BASE__ || '/api/') + 'testimonials', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (localStorage.getItem('svc_token') || '') },
-      body: JSON.stringify({ rating: _fbRating, body: body.trim(), product_label: label.trim() || undefined }),
+      body: JSON.stringify({ rating: _fbRating, body, product_label: productLabel }),
     });
     const data = await res.json();
-    if (res.ok) {
-      const formWrap  = document.getElementById('feedbackFormWrap');
-      const submitted = document.getElementById('feedbackSubmitted');
-      if (formWrap)  formWrap.style.display  = 'none';
-      if (submitted) submitted.style.display = '';
-      if (data.xpAwarded) {
-        if (PORTAL.quests) PORTAL.quests.xp = (PORTAL.quests.xp || 0) + data.xpAwarded;
+    if (!res.ok) throw new Error(data.error || 'Submission failed');
+
+    const wrap = document.getElementById('feedbackFormWrap');
+    const done = document.getElementById('feedbackSubmitted');
+    const statusEl = document.getElementById('feedbackSubmittedStatus');
+    if (wrap) wrap.style.display = 'none';
+    if (done) done.style.display = '';
+    if (statusEl) statusEl.textContent = 'Your review is pending admin approval.';
+
+    if (data.xpAwarded > 0) {
+      Toast.success(`+${data.xpAwarded} XP earned for your feedback! 🌟`);
+      if (PORTAL.quests) {
+        PORTAL.quests.xp = (PORTAL.quests.xp || 0) + data.xpAwarded;
         renderXPWidget && renderXPWidget();
         _updateXPNavBadge && _updateXPNavBadge();
       }
     } else {
-      if (msg) { msg.textContent = data.error || 'Could not submit feedback. Please try again.'; msg.style.color = '#ef4444'; msg.style.display = ''; }
-      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit Feedback'; }
+      Toast.success('Feedback submitted — thank you!');
     }
-  } catch (_) {
-    if (msg) { msg.textContent = 'Network error. Please try again.'; msg.style.color = '#ef4444'; msg.style.display = ''; }
-    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit Feedback'; }
+  } catch (err) {
+    if (msg) { msg.style.display = ''; msg.style.color = '#ef4444'; msg.textContent = err.message; }
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -6890,11 +6872,13 @@ function renderLearnView() {
   const tabs = LEARN_TRACKS.map(t => `
     <button class="learn-track-tab ${_learnActiveTrack === t.id ? 'active' : ''}"
             onclick="_setLearnTrack('${t.id}')"
-            style="${_learnActiveTrack === t.id ? `border-color:${t.color}` : ''}">
-      ${t.id === recommended.id ? `<span class="learn-tab-recommended">RECOMMENDED</span>` : ''}
-      <div class="learn-tab-icon-wrap"><i class="fa-solid ${t.icon}"></i></div>
-      <div class="learn-tab-name">${t.label}</div>
-      <div class="learn-tab-sub">${t.desc}</div>
+            style="${_learnActiveTrack === t.id ? `border-color:${t.color};color:${t.color}` : ''}">
+      <i class="fa-solid ${t.icon}"></i>
+      <div>
+        <div class="learn-tab-name">${t.label}</div>
+        <div class="learn-tab-sub">${t.desc}</div>
+      </div>
+      ${t.id === recommended.id ? `<span class="learn-tab-recommended">Recommended</span>` : ''}
     </button>`).join('');
 
   const activeTrack = LEARN_TRACKS.find(t => t.id === _learnActiveTrack) || LEARN_TRACKS[0];
@@ -7350,7 +7334,7 @@ Email: <strong>info@svcapital.co.za</strong></p>
 <p>In accordance with Section 72 of POPIA, personal information will only be transferred to a third party in a foreign country if: (a) the recipient is subject to a law, binding corporate rules, or binding agreement that provides an adequate level of protection substantially similar to POPIA; or (b) you have consented to the transfer. We will not transfer your information to jurisdictions that do not provide adequate protection without appropriate safeguards.</p>
 
 <h4>9. Retention Periods</h4>
-<table style="width:100%;border-collapse:collapse;font-size:0.87rem;margin-bottom:12px">
+<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.87rem;margin-bottom:12px;min-width:400px">
 <thead><tr style="background:rgba(0,0,0,0.05)"><th style="text-align:left;padding:7px 10px;border:1px solid rgba(0,0,0,0.1)">Category</th><th style="text-align:left;padding:7px 10px;border:1px solid rgba(0,0,0,0.1)">Retention Period</th><th style="text-align:left;padding:7px 10px;border:1px solid rgba(0,0,0,0.1)">Legal Basis</th></tr></thead>
 <tbody>
 <tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">FICA/KYC documentation</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">5 years after account closure</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">FIC Act s.23</td></tr>
@@ -7360,7 +7344,7 @@ Email: <strong>info@svcapital.co.za</strong></p>
 <tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Support and complaint records</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">3 years from resolution</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Legitimate interest</td></tr>
 <tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Policy acceptance records</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Duration of account + 7 years</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Legal obligation / evidence</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <h4>10. Your Rights as a Data Subject</h4>
 <p>Sections 23–25 of POPIA afford you the following rights, which you may exercise by contacting our Information Officer:</p>
@@ -7508,7 +7492,7 @@ PAIAComplaints.IR@justice.gov.za (for PAIA complaints)</p>`,
 </ol>
 
 <h4>8. Fees</h4>
-<table style="width:100%;border-collapse:collapse;font-size:0.87rem;margin-bottom:12px">
+<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.87rem;margin-bottom:12px;min-width:400px">
 <thead><tr style="background:rgba(0,0,0,0.05)"><th style="text-align:left;padding:7px 10px;border:1px solid rgba(0,0,0,0.1)">Fee Type</th><th style="text-align:left;padding:7px 10px;border:1px solid rgba(0,0,0,0.1)">Amount</th></tr></thead>
 <tbody>
 <tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Request fee (payable on submission)</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">R35.00</td></tr>
@@ -7517,7 +7501,7 @@ PAIAComplaints.IR@justice.gov.za (for PAIA complaints)</p>`,
 <tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Electronic copy (per megabyte)</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">R7.50 per MB</td></tr>
 <tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Deposit (if reproduction fee exceeds R100)</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">1/3 of total fee upfront</td></tr>
 </tbody>
-</table>
+</table></div>
 <p>Fees are prescribed in terms of the PAIA regulations and are subject to change by the Information Regulator.</p>
 
 <h4>9. Response Timeframes</h4>
@@ -7578,7 +7562,7 @@ PAIAComplaints.IR@justice.gov.za (for PAIA complaints)</p>`,
 <p>You are not required to exhaust our internal procedure before referring a complaint to an external body, but we encourage you to do so as many matters can be resolved more efficiently through direct engagement.</p>
 
 <h4>8. Timeframe Summary</h4>
-<table style="width:100%;border-collapse:collapse;font-size:0.87rem;margin-bottom:12px">
+<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.87rem;margin-bottom:12px;min-width:400px">
 <thead><tr style="background:rgba(0,0,0,0.05)"><th style="text-align:left;padding:7px 10px;border:1px solid rgba(0,0,0,0.1)">Stage</th><th style="text-align:left;padding:7px 10px;border:1px solid rgba(0,0,0,0.1)">Action</th><th style="text-align:left;padding:7px 10px;border:1px solid rgba(0,0,0,0.1)">Timeframe</th></tr></thead>
 <tbody>
 <tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Receipt</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Acknowledgement issued</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">1 business day</td></tr>
@@ -7586,7 +7570,7 @@ PAIAComplaints.IR@justice.gov.za (for PAIA complaints)</p>`,
 <tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Stage 2</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Compliance Officer review</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">10 business days</td></tr>
 <tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Stage 3</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">External referral</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">As per regulator</td></tr>
 </tbody>
-</table>
+</table></div>
 
 <h4>9. Record Keeping</h4>
 <p>SV Capital maintains a complaints register as required by the FSCA and FAIS. All complaints are recorded with their reference number, date received, nature of complaint, response provided, and resolution outcome. This register is available for inspection by the FSCA upon request. Complaints records are retained for 5 years.</p>
@@ -7732,10 +7716,11 @@ let _tourStep = 0;
 let _tourActive = false;
 
 function _checkAutoStartTour() {
-  // Tour is fully disabled on mobile (Android + iOS). Mark as done so
-  // quest indicators don't show an incomplete state on first install.
-  localStorage.setItem('svc_tour_done', '1');
-  return;
+  // Tour disabled on native Android — on-device UX is different enough that
+  // the desktop-oriented tour is confusing. Users can still tap the tour
+  // button manually if the topbar button is visible.
+  if (window.__SVC_NATIVE__) return;
+  if (localStorage.getItem('svc_tour_done')) return;
   const inv = PORTAL.investor;
   if (!inv || (!inv.first_name && !inv.last_name && !inv.email)) return;
   // Mark as done BEFORE starting so that closing the browser tab during the
@@ -8025,13 +8010,13 @@ const SA_TYPE_META = {
   },
   trust:    {
     icon: 'fa-scale-balanced',  label: 'Trust',
-    color: '#eda5ff',           bg: 'linear-gradient(135deg,#4c1d95 0%,#2563eb 100%)',
+    color: '#eda5ff',           bg: 'linear-gradient(135deg,#2d1d6e 0%,#eda5ff 100%)',
     tagline: 'Invest through a family or business trust',
     ficaDocs: ['Trust Deed (certified copy)', 'Letters of Authority (Master of Court)', 'Trustee(s) ID documents', 'Trust tax clearance certificate'],
   },
   stokvel:  {
     icon: 'fa-people-group',    label: 'Stokvel',
-    color: '#65ed00',           bg: 'linear-gradient(135deg,#2d6b00 0%,#65ed00 100%)',
+    color: '#22c55e',           bg: 'linear-gradient(135deg,#064e1e 0%,#22c55e 100%)',
     tagline: 'Community savings club investing together',
     ficaDocs: ['Stokvel constitution / rules', 'Proof of banking account', 'Two or more members\' ID documents', 'NASASA certificate (if applicable)'],
   },
@@ -8096,7 +8081,6 @@ async function loadSubAccounts() {
   if (badge) {
     badge.textContent = PORTAL.subAccounts.length || '';
     badge.style.display = PORTAL.subAccounts.length ? '' : 'none';
-    _saveNavBadgeCache('subaccounts', PORTAL.subAccounts.length);
   }
 }
 
@@ -8124,10 +8108,10 @@ function _saCard(sa) {
   const balance = parseFloat(sa.wallet_balance) || 0;
   const invested= parseFloat(sa.total_invested)  || 0;
   const kycBadge = sa.kyc_status === 'approved'
-    ? `<span class="sa-kyc-badge sa-kyc-badge--ok"><i class="fa-solid fa-circle-check"></i> KYC/FICA Verified</span>`
+    ? `<span class="sa-kyc-badge sa-kyc-badge--ok"><i class="fa-solid fa-circle-check"></i> FICA Verified</span>`
     : sa.kyc_status === 'under_review'
     ? `<span class="sa-kyc-badge sa-kyc-badge--pending"><i class="fa-solid fa-clock"></i> Under Review</span>`
-    : `<span class="sa-kyc-badge sa-kyc-badge--missing"><i class="fa-solid fa-triangle-exclamation"></i> KYC/FICA Required</span>`;
+    : `<span class="sa-kyc-badge sa-kyc-badge--missing"><i class="fa-solid fa-triangle-exclamation"></i> FICA Required</span>`;
 
   const isMinor = sa.account_type === 'minor';
   const age     = isMinor ? _saAgeGroup(sa.date_of_birth) : null;
@@ -8394,6 +8378,8 @@ async function openSaDetail(saId) {
   const meta    = SA_TYPE_META[sa.account_type] || SA_TYPE_META.business;
   SVC.track('svc_subaccount_viewed', { account_type: sa.account_type, kyc_status: sa.kyc_status });
 
+  document.getElementById('saDetailTitle').textContent = sa.name;
+
   if (isMinor) {
     document.getElementById('saDetailBody').innerHTML = _saMinorHub(sa);
     _saInitTipCarousel(sa);
@@ -8405,226 +8391,86 @@ async function openSaDetail(saId) {
 }
 
 function _saNormalDetail(sa, meta) {
-  const balance  = parseFloat(sa.wallet_balance)  || 0;
-  const invested = parseFloat(sa.total_invested)   || 0;
-  const returns  = parseFloat(sa.total_returns)    || 0;
-  const total    = balance + invested;
+  const ficaItems = (SA_TYPE_META[sa.account_type]?.ficaDocs || [])
+    .map(d => `<div class="sa-fica-item"><i class="fa-solid fa-file-alt" style="color:${meta.color}"></i><span>${d}</span></div>`)
+    .join('');
 
-  const kycStatus = sa.kyc_status || 'missing';
-  const kycMeta = {
-    approved:     { label: 'FICA Verified',   icon: 'fa-circle-check',         color: '#22c55e', bg: 'rgba(34,197,94,0.18)',  border: 'rgba(34,197,94,0.35)' },
-    under_review: { label: 'Under Review',    icon: 'fa-clock',                color: '#fec24f', bg: 'rgba(254,194,79,0.18)', border: 'rgba(254,194,79,0.35)' },
-    pending:      { label: 'Documents Needed',icon: 'fa-triangle-exclamation', color: '#f97316', bg: 'rgba(249,115,22,0.15)', border: 'rgba(249,115,22,0.3)' },
-    missing:      { label: 'FICA Required',   icon: 'fa-triangle-exclamation', color: '#ef4444', bg: 'rgba(239,68,68,0.15)',  border: 'rgba(239,68,68,0.3)' },
-  }[kycStatus] || { label: kycStatus, icon: 'fa-circle-info', color: '#9ca3af', bg: 'rgba(156,163,175,0.1)', border: 'rgba(156,163,175,0.2)' };
+  const saAllTxns = PORTAL.transactions
+    .filter(t => t.sub_account_id === sa.id);
 
-  const ficaDocs  = SA_TYPE_META[sa.account_type]?.ficaDocs || [];
-  const ficaDone  = kycStatus === 'approved';
-  const saAllTxns = (PORTAL.transactions || []).filter(t => t.sub_account_id === sa.id).slice(0, 20);
-  const saInvs    = (PORTAL.investments  || []).filter(i => i.sub_account_id === sa.id);
-
-  const txnIcon = t => ({ deposit:'fa-arrow-down-to-line', investment:'fa-seedling', withdrawal:'fa-arrow-up-from-line', return:'fa-coins', fee:'fa-receipt' }[t.type] || 'fa-circle-dot');
-  const isPos   = t => !['withdrawal','fee','investment','gift_sent'].includes(t.type);
-
-  /* ── gradient accent derived from meta.color ── */
-  const accent = meta.color;
+  const saInvs = (PORTAL.investments || []).filter(i => i.sub_account_id === sa.id);
 
   return `
-  <div style="background:var(--bg);min-height:100%;font-family:inherit">
-
-    <!-- ═══ HERO ═══ -->
-    <div style="position:relative;background:${meta.bg};padding:52px 20px 0;overflow:hidden">
-      <!-- close -->
-      <button onclick="Modal.close('saDetailModal')" style="position:absolute;top:14px;right:14px;width:34px;height:34px;border-radius:50%;border:none;background:rgba(0,0,0,0.25);color:#fff;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)">
-        <i class="fa-solid fa-xmark"></i>
-      </button>
-      <!-- type badge -->
-      <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(0,0,0,0.22);border:1px solid rgba(255,255,255,0.15);border-radius:20px;padding:4px 12px;font-size:0.7rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:rgba(255,255,255,0.85);margin-bottom:12px;backdrop-filter:blur(4px)">
-        <i class="fa-solid ${meta.icon}"></i> ${meta.label} Account
+    <div class="sa-detail-banner" style="background:${meta.bg}">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="sa-detail-icon"><i class="fa-solid ${meta.icon}"></i></div>
+        <div>
+          <div style="font-size:1.1rem;font-weight:800;color:#fff">${sa.name}</div>
+          <div style="font-size:0.78rem;color:rgba(255,255,255,0.75)">${meta.label} Account · ${Utils.statusBadge ? Utils.statusBadge(sa.kyc_status) : sa.kyc_status}</div>
+        </div>
       </div>
-      <!-- name -->
-      <div style="font-size:1.65rem;font-weight:900;color:#fff;line-height:1.15;margin-bottom:4px;text-shadow:0 2px 12px rgba(0,0,0,0.3)">${_esc(sa.name)}</div>
-      <!-- ref -->
-      <div style="font-size:0.7rem;color:rgba(255,255,255,0.5);font-family:monospace;margin-bottom:14px;letter-spacing:0.04em">${sa.sa_reference || sa.id}</div>
-      <!-- KYC chip -->
-      <div style="display:inline-flex;align-items:center;gap:6px;background:${kycMeta.bg};border:1px solid ${kycMeta.border};border-radius:20px;padding:5px 12px;font-size:0.72rem;font-weight:700;color:${kycMeta.color};margin-bottom:20px;backdrop-filter:blur(4px)">
-        <i class="fa-solid ${kycMeta.icon}"></i> ${kycMeta.label}
-      </div>
-      <!-- floating stats glass card -->
-      <div style="background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.12);border-radius:16px 16px 0 0;padding:18px 20px;backdrop-filter:blur(12px);display:grid;grid-template-columns:1fr 1px 1fr 1px 1fr;gap:0;margin:0 -20px">
-        <div style="text-align:center;padding:0 6px">
-          <div style="font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:rgba(255,255,255,0.45);margin-bottom:5px">Wallet</div>
-          <div style="font-size:1.05rem;font-weight:800;color:#fec24f">${Utils.rand(balance)}</div>
-        </div>
-        <div style="background:rgba(255,255,255,0.1)"></div>
-        <div style="text-align:center;padding:0 6px">
-          <div style="font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:rgba(255,255,255,0.45);margin-bottom:5px">Invested</div>
-          <div style="font-size:1.05rem;font-weight:800;color:#fff">${Utils.rand(invested)}</div>
-        </div>
-        <div style="background:rgba(255,255,255,0.1)"></div>
-        <div style="text-align:center;padding:0 6px">
-          <div style="font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:rgba(255,255,255,0.45);margin-bottom:5px">Returns</div>
-          <div style="font-size:1.05rem;font-weight:800;color:#4ade80">${Utils.rand(returns)}</div>
-        </div>
+      <div style="display:flex;gap:24px;margin-top:16px">
+        <div><div style="font-size:0.7rem;color:rgba(255,255,255,0.7);text-transform:uppercase;letter-spacing:.5px">Wallet</div><div style="font-size:1.3rem;font-weight:800;color:#fff">${Utils.rand(sa.wallet_balance)}</div></div>
+        <div><div style="font-size:0.7rem;color:rgba(255,255,255,0.7);text-transform:uppercase;letter-spacing:.5px">Invested</div><div style="font-size:1.3rem;font-weight:800;color:#fff">${Utils.rand(sa.total_invested)}</div></div>
+        <div><div style="font-size:0.7rem;color:rgba(255,255,255,0.7);text-transform:uppercase;letter-spacing:.5px">Returns</div><div style="font-size:1.3rem;font-weight:800;color:rgba(255,255,255,0.9)">${Utils.rand(sa.total_returns)}</div></div>
       </div>
     </div>
 
-    <!-- ═══ ACTION GRID ═══ -->
-    <div style="padding:20px 16px 8px">
-      <button onclick="Modal.close('saDetailModal');openSaDeposit('${sa.id}')" style="width:100%;padding:15px;border-radius:14px;border:none;background:linear-gradient(135deg,#f97316,#fec24f);color:#fff;font-size:1rem;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:10px;letter-spacing:0.01em;box-shadow:0 4px 20px rgba(249,115,22,0.35)">
-        <i class="fa-solid fa-wallet"></i> Deposit Funds
-      </button>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <button onclick="Modal.close('saDetailModal');openSaInvest('${sa.id}')" style="padding:13px 10px;border-radius:12px;border:1px solid rgba(237,165,255,0.25);background:rgba(237,165,255,0.08);color:#eda5ff;font-size:0.82rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px">
-          <i class="fa-solid fa-seedling"></i> Invest
-        </button>
-        ${sa.kyc_status === 'approved' ? `
-        <button onclick="openSaWithdrawal('${sa.id}')" style="padding:13px 10px;border-radius:12px;border:1px solid rgba(239,68,68,0.2);background:rgba(239,68,68,0.07);color:#f87171;font-size:0.82rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px">
-          <i class="fa-solid fa-arrow-up-from-bracket"></i> Withdraw
-        </button>` : `
-        <button onclick="openSaBankDetails('${sa.id}')" style="padding:13px 10px;border-radius:12px;border:1px solid rgba(100,180,255,0.2);background:rgba(100,180,255,0.07);color:#93c5fd;font-size:0.82rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px">
-          <i class="fa-solid fa-building-columns"></i> Banking
-        </button>`}
-        <button onclick="Modal.close('saDetailModal');downloadSaStatement('${sa.id}','${sa.name}')" style="padding:13px 10px;border-radius:12px;border:1px solid rgba(156,163,175,0.2);background:rgba(156,163,175,0.07);color:#9ca3af;font-size:0.82rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px">
-          <i class="fa-solid fa-file-pdf"></i> Statement
-        </button>
-        ${sa.kyc_status === 'approved' ? `
-        <button onclick="openSaBankDetails('${sa.id}')" style="padding:13px 10px;border-radius:12px;border:1px solid rgba(100,180,255,0.2);background:rgba(100,180,255,0.07);color:#93c5fd;font-size:0.82rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px">
-          <i class="fa-solid fa-building-columns"></i> Banking
-        </button>` : `
-        <button onclick="openSaFicaUpload('${sa.id}')" style="padding:13px 10px;border-radius:12px;border:1px solid rgba(249,115,22,0.25);background:rgba(249,115,22,0.08);color:#fb923c;font-size:0.82rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px">
-          <i class="fa-solid fa-cloud-arrow-up"></i> FICA Docs
-        </button>`}
-      </div>
+    <div style="display:flex;gap:8px;margin:16px 0;flex-wrap:wrap">
+      <button class="btn btn--primary btn--sm" onclick="Modal.close('saDetailModal');openSaDeposit('${sa.id}')"><i class="fa-solid fa-wallet"></i> Deposit</button>
+      <button class="btn btn--secondary btn--sm" onclick="Modal.close('saDetailModal');openSaInvest('${sa.id}')"><i class="fa-solid fa-chart-line"></i> Invest</button>
+      ${sa.kyc_status === 'approved' ? `<button class="btn btn--secondary btn--sm" onclick="openSaWithdrawal('${sa.id}')"><i class="fa-solid fa-arrow-up-from-bracket"></i> Withdraw</button>` : ''}
+      <button class="btn btn--ghost btn--sm" onclick="Modal.close('saDetailModal');downloadSaStatement('${sa.id}','${sa.name}')"><i class="fa-solid fa-file-pdf"></i> Statement</button>
+      <button class="btn btn--ghost btn--sm" onclick="openSaBankDetails('${sa.id}')"><i class="fa-solid fa-building-columns"></i> Banking</button>
     </div>
 
-    <!-- ═══ BANKING CARD ═══ -->
-    <div style="margin:8px 16px;border-radius:16px;border:1px solid var(--border);background:var(--bg-secondary);overflow:hidden">
-      <div style="display:flex;align-items:center;gap:10px;padding:14px 16px 10px;border-bottom:1px solid var(--border)">
-        <div style="width:32px;height:32px;border-radius:8px;background:rgba(100,180,255,0.12);display:flex;align-items:center;justify-content:center;color:#93c5fd;font-size:0.95rem">
-          <i class="fa-solid fa-building-columns"></i>
-        </div>
-        <span style="font-size:0.8rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-muted)">Banking Details</span>
-      </div>
-      <div style="padding:14px 16px">
-        ${sa.sa_bank_name ? `
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
-          <div>
-            <div style="font-size:0.95rem;font-weight:800;color:var(--text);margin-bottom:3px">${_esc(sa.sa_bank_name)}</div>
-            <div style="font-size:0.75rem;color:var(--text-muted)">${_esc(sa.sa_bank_holder||'')} · ****${(sa.sa_bank_number||'').slice(-4)} · ${(sa.sa_bank_type||'current')}</div>
-          </div>
-          <span style="flex-shrink:0;font-size:0.65rem;font-weight:800;letter-spacing:0.05em;text-transform:uppercase;padding:4px 10px;border-radius:20px;background:${sa.sa_bank_status==='approved'?'rgba(34,197,94,0.15)':sa.sa_bank_status==='pending'?'rgba(249,115,22,0.15)':'rgba(156,163,175,0.12)'};color:${sa.sa_bank_status==='approved'?'#4ade80':sa.sa_bank_status==='pending'?'#fb923c':'#9ca3af'};border:1px solid ${sa.sa_bank_status==='approved'?'rgba(74,222,128,0.3)':sa.sa_bank_status==='pending'?'rgba(249,115,22,0.3)':'rgba(156,163,175,0.2)'}">${sa.sa_bank_status||'none'}</span>
-        </div>` : `
-        <div style="display:flex;align-items:center;justify-content:space-between">
-          <span style="font-size:0.83rem;color:var(--text-dim)">No banking details on file</span>
-          <button onclick="openSaBankDetails('${sa.id}')" style="font-size:0.73rem;font-weight:700;padding:6px 14px;border-radius:20px;border:1px solid rgba(249,115,22,0.3);background:rgba(249,115,22,0.08);color:#fb923c;cursor:pointer">Add Details</button>
-        </div>`}
-      </div>
+    <div class="sa-section-title mt-16"><i class="fa-solid fa-building-columns"></i> Banking Details</div>
+    <div style="padding:10px 0;font-size:0.82rem;color:var(--text-muted)">
+      ${sa.sa_bank_name
+        ? `<div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-weight:700;color:var(--text)">${sa.sa_bank_name}</div>
+              <div>${sa.sa_bank_holder} · ****${(sa.sa_bank_number||'').slice(-4)} · ${sa.sa_bank_type || 'current'}</div>
+            </div>
+            <span class="badge badge--${sa.sa_bank_status === 'pending' ? 'orange' : sa.sa_bank_status === 'approved' ? 'green' : 'gray'}">${sa.sa_bank_status || 'none'}</span>
+          </div>`
+        : `<span style="color:var(--text-dim)">No banking details on file</span>`}
     </div>
 
-    <!-- ═══ FICA / DOCUMENTS ═══ -->
-    ${ficaDone ? `
-    <div style="margin:8px 16px;border-radius:16px;border:1px solid rgba(34,197,94,0.25);background:rgba(34,197,94,0.06);padding:14px 16px;display:flex;align-items:center;gap:12px">
-      <div style="width:36px;height:36px;border-radius:50%;background:rgba(34,197,94,0.18);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-        <i class="fa-solid fa-circle-check" style="color:#4ade80;font-size:1.1rem"></i>
-      </div>
-      <div>
-        <div style="font-size:0.85rem;font-weight:700;color:#4ade80">FICA Verified</div>
-        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:1px">All documents approved · Full access enabled</div>
-      </div>
-    </div>` : `
-    <div style="margin:8px 16px;border-radius:16px;border:1px solid var(--border);background:var(--bg-secondary);overflow:hidden">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px 10px;border-bottom:1px solid var(--border)">
-        <div style="display:flex;align-items:center;gap:10px">
-          <div style="width:32px;height:32px;border-radius:8px;background:rgba(249,115,22,0.12);display:flex;align-items:center;justify-content:center;color:#fb923c;font-size:0.95rem">
-            <i class="fa-solid fa-id-card"></i>
-          </div>
-          <span style="font-size:0.8rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-muted)">FICA Documents</span>
-        </div>
-        ${kycStatus === 'under_review' ? `<span style="font-size:0.65rem;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(254,194,79,0.15);color:#fec24f;border:1px solid rgba(254,194,79,0.3)">Under Review</span>` : ''}
-      </div>
-      <div style="padding:12px 16px">
-        ${ficaDocs.map((d, i) => `
-        <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;${i < ficaDocs.length-1 ? 'border-bottom:1px solid var(--border)' : ''}">
-          <div style="flex-shrink:0;width:22px;height:22px;border-radius:6px;background:rgba(249,115,22,0.12);display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:800;color:#fb923c;margin-top:1px">${i+1}</div>
-          <span style="font-size:0.8rem;color:var(--text);line-height:1.4">${_esc(d)}</span>
-        </div>`).join('')}
-      </div>
-      <div style="padding:0 16px 16px">
-        <button onclick="openSaFicaUpload('${sa.id}')" style="width:100%;padding:13px;border-radius:12px;border:none;background:linear-gradient(135deg,#f97316,#fec24f);color:#fff;font-size:0.88rem;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">
-          <i class="fa-solid fa-cloud-arrow-up"></i> Upload FICA Documents
-        </button>
-      </div>
-    </div>`}
-
-    <!-- ═══ INVESTMENTS ═══ -->
     ${saInvs.length ? `
-    <div style="margin:8px 16px;border-radius:16px;border:1px solid var(--border);background:var(--bg-secondary);overflow:hidden">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;border-bottom:1px solid var(--border)">
-        <div style="display:flex;align-items:center;gap:10px">
-          <div style="width:32px;height:32px;border-radius:8px;background:rgba(74,222,128,0.12);display:flex;align-items:center;justify-content:center;color:#4ade80;font-size:0.95rem">
-            <i class="fa-solid fa-seedling"></i>
-          </div>
-          <span style="font-size:0.8rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-muted)">Investments</span>
-        </div>
-        <span style="font-size:0.7rem;font-weight:800;padding:3px 10px;border-radius:20px;background:rgba(74,222,128,0.12);color:#4ade80;border:1px solid rgba(74,222,128,0.25)">${saInvs.length} active</span>
-      </div>
-      <div>
-        ${saInvs.map((inv, i) => {
-          const pi  = Utils.productInfo(inv.product_type);
-          const days = Utils.daysRemaining(inv.maturity_date);
-          const isActive = inv.status === 'active';
-          const pctProg = (inv.start_date && inv.end_date) ? Math.min(100, Math.max(0, Math.round(((new Date()-new Date(inv.start_date))/(new Date(inv.end_date)-new Date(inv.start_date)))*100))) : 0;
-          return `
-          <div onclick="Modal.close('saDetailModal');navigate('investments',document.querySelector('[data-view=investments]'))" style="padding:14px 16px;cursor:pointer;${i < saInvs.length-1 ? 'border-bottom:1px solid var(--border)' : ''}">
-            <div style="display:flex;align-items:center;gap:12px">
-              <div style="width:40px;height:40px;border-radius:12px;background:${pi.color}1a;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                <i class="fa-solid ${pi.icon}" style="color:${pi.color};font-size:1.05rem"></i>
-              </div>
-              <div style="flex:1;min-width:0">
-                <div style="font-size:0.87rem;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(inv.pool_name || pi.label)}</div>
-                <div style="font-size:0.7rem;color:var(--text-muted);margin-top:1px">${isActive ? (days !== null ? `${days} days left` : 'Active') : (inv.status||'inactive')} · ${inv.annual_rate ? Utils.pct(inv.annual_rate) : '—'} p.a.</div>
-                ${isActive && pctProg > 0 ? `<div style="height:3px;border-radius:2px;background:rgba(255,255,255,0.08);margin-top:6px;overflow:hidden"><div style="height:100%;width:${pctProg}%;background:${pctProg>=90?'#ef4444':pctProg>=70?'#fec24f':'#4ade80'};border-radius:2px"></div></div>` : ''}
-              </div>
-              <div style="text-align:right;flex-shrink:0">
-                <div style="font-size:0.93rem;font-weight:800;color:${isActive?'#4ade80':'#9ca3af'}">${Utils.rand(inv.amount)}</div>
-                ${inv.status === 'matured' && !inv.maturity_instruction ? `<button onclick="event.stopPropagation();Modal.close('saDetailModal');openMaturityModal('${inv.id}')" style="margin-top:4px;font-size:0.62rem;font-weight:700;padding:3px 8px;border-radius:20px;border:1px solid rgba(237,165,255,0.3);background:rgba(237,165,255,0.1);color:#eda5ff;cursor:pointer">Instruction</button>` : ''}
-              </div>
-            </div>
-          </div>`;
-        }).join('')}
-      </div>
-    </div>` : ''}
+    <div class="sa-section-title"><i class="fa-solid fa-chart-line"></i> Active Investments</div>
+    <table class="data-table">
+      <thead><tr><th>Pool</th><th>Status</th><th>Matures In</th><th>Amount</th><th></th></tr></thead>
+      <tbody>${saInvs.map(inv => {
+        const pi = Utils.productInfo(inv.product_type);
+        const daysLeft = inv.maturity_date ? Math.max(0, Math.ceil((new Date(inv.maturity_date) - Date.now()) / 86400000)) : null;
+        return `<tr style="cursor:pointer" onclick="Modal.close('saDetailModal');navigate('investments',document.querySelector('[data-view=investments]'))">
+          <td><span style="display:inline-flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:50%;background:${pi.color};flex-shrink:0;display:inline-block"></span>${inv.pool_name || 'Investment'}</span></td>
+          <td>${Utils.statusBadge(inv.status)}</td>
+          <td class="td-muted">${daysLeft !== null ? `${daysLeft}d` : '—'}</td>
+          <td class="td-green fw-700">${Utils.rand(inv.amount)}</td>
+          <td>${inv.status === 'matured' && !inv.maturity_instruction ? `<button class="btn btn--ghost btn--sm" style="font-size:0.7rem;padding:2px 8px;white-space:nowrap" onclick="event.stopPropagation();Modal.close('saDetailModal');openMaturityModal('${inv.id}')">Give Instruction</button>` : ''}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>` : ''}
 
-    <!-- ═══ TRANSACTIONS ═══ -->
+    <div class="sa-section-title mt-16"><i class="fa-solid fa-id-card"></i> FICA Documents Required</div>
+    <div class="sa-fica-list">${ficaItems}</div>
+    <button class="btn btn--secondary btn--sm mt-8" onclick="openSaFicaUpload('${sa.id}')"><i class="fa-solid fa-upload"></i> Upload FICA Document</button>
+
     ${saAllTxns.length ? `
-    <div style="margin:8px 16px 24px;border-radius:16px;border:1px solid var(--border);background:var(--bg-secondary);overflow:hidden">
-      <div style="display:flex;align-items:center;gap:10px;padding:14px 16px 10px;border-bottom:1px solid var(--border)">
-        <div style="width:32px;height:32px;border-radius:8px;background:rgba(156,163,175,0.1);display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:0.95rem">
-          <i class="fa-solid fa-clock-rotate-left"></i>
-        </div>
-        <span style="font-size:0.8rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-muted)">Recent Activity</span>
-      </div>
-      <div${saAllTxns.length > 8 ? ' style="max-height:320px;overflow-y:auto"' : ''}>
-        ${saAllTxns.map((t, i) => {
-          const pos = isPos(t);
-          return `
-          <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;${i < saAllTxns.length-1 ? 'border-bottom:1px solid var(--border)' : ''}">
-            <div style="width:36px;height:36px;border-radius:10px;background:${pos?'rgba(74,222,128,0.1)':'rgba(239,68,68,0.08)'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
-              <i class="fa-solid ${txnIcon(t)}" style="color:${pos?'#4ade80':'#f87171'};font-size:0.85rem"></i>
-            </div>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:0.82rem;font-weight:600;color:var(--text);text-transform:capitalize">${(t.type||'transaction').replace(/_/g,' ')}</div>
-              <div style="font-size:0.68rem;color:var(--text-muted);margin-top:1px">${Utils.date(t.transaction_date || t.created_at)}</div>
-            </div>
-            <div style="font-size:0.9rem;font-weight:800;color:${pos?'#4ade80':'#f87171'};flex-shrink:0">${pos?'+':'-'}${Utils.rand(Math.abs(parseFloat(t.amount)||0))}</div>
-          </div>`;
-        }).join('')}
-      </div>
-    </div>` : ''}
-
-    <div style="height:env(safe-area-inset-bottom,16px)"></div>
-  </div>`;
+    <div class="sa-section-title mt-16"><i class="fa-solid fa-receipt"></i> All Transactions (${saAllTxns.length})</div>
+    ${saAllTxns.length > 10 ? `<div style="max-height:320px;overflow-y:auto">` : ''}
+    <table class="data-table">
+      <thead><tr><th>Type</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead>
+      <tbody>${saAllTxns.map(t => { const _p = !['withdrawal','fee','investment','gift_sent'].includes(t.type); return `<tr>
+        <td><span class="badge badge--gray">${t.type}</span></td>
+        <td class="${_p ? 'td-green' : 'td-red'} fw-700">${_p ? '' : '-'}${Utils.rand(Math.abs(t.amount))}</td>
+        <td>${Utils.statusBadge(t.status)}</td>
+        <td class="td-muted">${Utils.date(t.created_at)}</td>
+      </tr>`; }).join('')}</tbody>
+    </table>
+    ${saAllTxns.length > 10 ? `</div>` : ''}` : ''}`;
 }
 
 /* ── Minor Hub ──────────────────────────────────────────────── */
@@ -8637,8 +8483,9 @@ function _saMinorHub(sa) {
   const goalPct = goal > 0 ? Math.min(100, Math.round((total / goal) * 100)) : 0;
   const jarFill = Math.min(100, Math.max(5, total > 0 ? Math.min(100, (total / Math.max(goal, total + 1)) * 100) : 0));
 
-  const ageInfo    = age || { age: '?', label: 'Saver', theme: 'minor-young' };
-  const saAllTxnsM = (PORTAL.transactions || []).filter(t => t.sub_account_id === sa.id);
+  const ageInfo     = age || { age: '?', label: 'Saver', theme: 'minor-young' };
+  const saInvsM     = (PORTAL.investments || []).filter(i => i.sub_account_id === sa.id);
+  const saAllTxnsM  = (PORTAL.transactions || []).filter(t => t.sub_account_id === sa.id);
 
   return `
   <div class="minor-hub minor-hub--${ageInfo.theme || 'minor-young'}">
@@ -8678,40 +8525,33 @@ function _saMinorHub(sa) {
     </div>
 
     <!-- Actions -->
-    <div class="minor-actions minor-actions--4">
+    <div class="minor-actions">
       <button class="minor-btn minor-btn--deposit" onclick="Modal.close('saDetailModal');openSaDeposit('${sa.id}')"><i class="fa-solid fa-piggy-bank"></i><span>Add to Jar</span></button>
-      <button class="minor-btn minor-btn--transfer" onclick="openSaTransfer('${sa.id}')"><i class="fa-solid fa-arrow-right-arrow-left"></i><span>Transfer</span></button>
       <button class="minor-btn minor-btn--invest" onclick="Modal.close('saDetailModal');openSaInvest('${sa.id}')"><i class="fa-solid fa-seedling"></i><span>Invest</span></button>
       <button class="minor-btn minor-btn--fica" onclick="openSaFicaUpload('${sa.id}')"><i class="fa-solid fa-id-card"></i><span>FICA Docs</span></button>
     </div>
-    <div style="display:flex;gap:8px;padding:0 16px 16px">
-      <button class="sad-action-btn" style="flex:1;font-size:0.75rem" onclick="Modal.close('saDetailModal');downloadSaStatement('${sa.id}','${sa.name}')"><i class="fa-solid fa-file-pdf"></i> Statement</button>
-      <button class="sad-action-btn" style="flex:1;font-size:0.75rem" onclick="openSaBankDetails('${sa.id}')"><i class="fa-solid fa-building-columns"></i> Banking</button>
+    <div style="display:flex;gap:8px;padding:0 22px 16px">
+      <button class="btn btn--ghost btn--sm" style="flex:1" onclick="Modal.close('saDetailModal');downloadSaStatement('${sa.id}','${sa.name}')"><i class="fa-solid fa-file-pdf"></i> Statement</button>
+      <button class="btn btn--ghost btn--sm" style="flex:1" onclick="openSaBankDetails('${sa.id}')"><i class="fa-solid fa-building-columns"></i> Banking</button>
     </div>
 
-    ${(() => {
-      const saInvs = (PORTAL.investments || []).filter(i => i.sub_account_id === sa.id);
-      if (!saInvs.length) return '';
-      return `
-    <!-- Investments -->
+    ${saInvsM.length ? `
+    <!-- Active Investments -->
     <div class="minor-investments">
-      <div class="minor-investments__title">📈 Active Investments</div>
-      ${saInvs.map(inv => {
-        const pi   = Utils.productInfo(inv.product_type);
-        const days = Utils.daysRemaining(inv.maturity_date);
-        const isActive = inv.status === 'active';
-        return `
-        <div class="minor-inv-row" onclick="Modal.close('saDetailModal');navigate('investments',document.querySelector('[data-view=investments]'))">
+      <div class="minor-investments__title"><i class="fa-solid fa-chart-line" style="color:#4ade80;margin-right:6px"></i>Active Investments</div>
+      ${saInvsM.map(inv => {
+        const pi = Utils.productInfo(inv.product_type);
+        const daysLeft = inv.maturity_date ? Math.max(0, Math.ceil((new Date(inv.maturity_date) - Date.now()) / 86400000)) : null;
+        return `<div class="minor-inv-row" onclick="Modal.close('saDetailModal');navigate('investments',document.querySelector('[data-view=investments]'))">
           <div class="minor-inv-row__icon" style="background:${pi.color}22;color:${pi.color}"><i class="fa-solid ${pi.icon}"></i></div>
           <div class="minor-inv-row__info">
-            <div class="minor-inv-row__name">${_esc(inv.pool_name || pi.label)}</div>
-            <div class="minor-inv-row__sub">${isActive ? (days !== null ? days + ' days left' : 'Active') : (inv.status || 'inactive')}</div>
+            <div class="minor-inv-row__name">${inv.pool_name || 'Investment'}</div>
+            <div class="minor-inv-row__sub">${daysLeft !== null ? `${daysLeft} days remaining` : inv.status}</div>
           </div>
           <div class="minor-inv-row__amount">${Utils.rand(inv.amount)}</div>
         </div>`;
       }).join('')}
-    </div>`;
-    })()}
+    </div>` : ''}
 
     <!-- Learning Zone -->
     <div class="minor-learn-zone">
@@ -8724,14 +8564,14 @@ function _saMinorHub(sa) {
 
     <!-- Banking Details -->
     <div class="minor-investments" style="margin-top:12px">
-      <div class="minor-investments__title">🏦 Banking Details</div>
+      <div class="minor-investments__title"><i class="fa-solid fa-building-columns" style="color:#eda5ff;margin-right:6px"></i>Banking Details</div>
       ${sa.sa_bank_name
         ? `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0">
             <div>
               <div style="font-size:0.82rem;font-weight:700;color:#fff">${sa.sa_bank_name}</div>
               <div style="font-size:0.72rem;color:rgba(255,255,255,0.6)">${sa.sa_bank_holder || ''} · ****${(sa.sa_bank_number||'').slice(-4)} · ${sa.sa_bank_type||'current'}</div>
             </div>
-            <span style="font-size:0.68rem;font-weight:700;padding:2px 8px;border-radius:20px;background:${sa.sa_bank_status==='approved'?'rgba(34,197,94,0.2)':sa.sa_bank_status==='pending'?'rgba(249,115,22,0.2)':'rgba(255,255,255,0.1)'};color:${sa.sa_bank_status==='approved'?'#4ade80':sa.sa_bank_status==='pending'?'#fb923c':'rgba(255,255,255,0.5)'}">${sa.sa_bank_status||'none'}</span>
+            <span class="badge badge--${sa.sa_bank_status==='approved'?'green':sa.sa_bank_status==='pending'?'orange':'gray'}" style="font-size:0.65rem">${sa.sa_bank_status||'none'}</span>
           </div>`
         : `<div style="font-size:0.78rem;color:rgba(255,255,255,0.5);padding:4px 0">No banking details — tap Banking above to add</div>`}
     </div>
@@ -8739,11 +8579,11 @@ function _saMinorHub(sa) {
     <!-- All Transactions -->
     ${saAllTxnsM.length ? `
     <div class="minor-investments" style="margin-top:12px">
-      <div class="minor-investments__title">🧾 All Transactions (${saAllTxnsM.length})</div>
+      <div class="minor-investments__title"><i class="fa-solid fa-receipt" style="color:#fec24f;margin-right:6px"></i>All Transactions (${saAllTxnsM.length})</div>
       <div style="${saAllTxnsM.length > 8 ? 'max-height:240px;overflow-y:auto' : ''}">
         ${saAllTxnsM.map(t => `
         <div class="minor-inv-row">
-          <div class="minor-inv-row__icon" style="background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.7);font-size:0.8rem">🧾</div>
+          <div class="minor-inv-row__icon" style="background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.7)"><i class="fa-solid fa-receipt" style="font-size:0.8rem"></i></div>
           <div class="minor-inv-row__info">
             <div class="minor-inv-row__name">${t.description || t.type}</div>
             <div class="minor-inv-row__sub">${Utils.date(t.created_at || t.transaction_date)}</div>
@@ -8888,7 +8728,13 @@ function saFicaFileChange(input) {
 }
 
 async function submitSaFica() {
-  if (!_saFicaSaId || !_saFicaFile || !_saFicaB64) { Toast.error('Please select a document to upload'); return; }
+  if (!_saFicaSaId) { Toast.error('No sub-account selected'); return; }
+  if (!_saFicaFile || !_saFicaB64) {
+    Toast.error('An attachment is required — please select a file to upload');
+    const inp = document.getElementById('saFicaFileInput');
+    if (inp) { inp.style.outline = '2px solid #ef4444'; setTimeout(() => { inp.style.outline = ''; }, 2500); }
+    return;
+  }
   const docType = document.getElementById('saFicaDocType').value;
   if (!docType) { Toast.error('Please select a document type'); return; }
   const sa = PORTAL.subAccounts.find(a => a.id === _saFicaSaId);
@@ -8900,6 +8746,7 @@ async function submitSaFica() {
       doc_type:       docType,
       status:         'pending',
       file_name:      _saFicaFile.name,
+      file_data:      _saFicaB64,
       notes:          `FICA document for sub-account: ${sa?.name || _saFicaSaId}. File: ${_saFicaFile.name} (${((_saFicaFile.size)/1024).toFixed(1)} KB)`,
     });
     Toast.success('FICA document submitted! The admin team will review it within 1-2 business days.');
@@ -8983,17 +8830,17 @@ async function saveSaBankDetails() {
     });
     if (sa) { Object.assign(sa, { sa_bank_name: name, sa_bank_holder: holder, sa_bank_number: number, sa_bank_branch: branch, sa_bank_type: type, sa_bank_status: 'pending' }); }
 
-    const maskedNum    = number.slice(-4).padStart(number.length, '•');
+    const maskedNum = number.slice(-4).padStart(number.length, '•');
     const investorId   = PORTAL.investor?.id;
     const investorName = `${PORTAL.investor?.first_name || ''} ${PORTAL.investor?.last_name || ''}`.trim();
 
-    await API.kyc.create({
+    if (proofData) await API.kyc.create({
       investor_id:    investorId,
       investor_name:  investorName || undefined,
       doc_type:       'proof_of_bank',
       status:         'pending',
-      file_name:      proofFile ? proofFile.name : undefined,
-      file_data:      proofData || undefined,
+      file_name:      proofFile.name,
+      file_data:      proofData,
       notes:          `Sub-account banking: ${sa?.name || _saBankSaId} — ${name} ${maskedNum}`,
     }).catch(e => console.warn('[saBankDetails] KYC doc failed:', e.message));
 
@@ -9092,6 +8939,7 @@ async function saveBankDetails() {
   const investorId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
   const investorName = `${PORTAL.investor?.first_name || ''} ${PORTAL.investor?.last_name || ''}`.trim();
   try {
+    // Read the proof of bank file as a base64 data URL so admin can view & approve it
     let proofData = null;
     if (proofFile) {
       proofData = await new Promise((resolve, reject) => {
@@ -9114,15 +8962,15 @@ async function saveBankDetails() {
     const updated = await API._fetch('PATCH', `tables/investors/${investorId}`, bankPatch);
     if (PORTAL.investor) Object.assign(PORTAL.investor, updated);
 
-    // Always create a KYC document entry so it appears in the FICA/KYC section
+    // Create a KYC document entry only when the investor attached a proof file
     const maskedAccNum = bank_account_number.slice(-4).padStart(bank_account_number.length, '•');
-    await API.kyc.create({
+    if (proofData) await API.kyc.create({
       investor_id:   investorId,
       investor_name: investorName || undefined,
       doc_type:      'proof_of_bank',
       status:        'pending',
-      file_name:     proofFile ? proofFile.name : undefined,
-      file_data:     proofData || undefined,
+      file_name:     proofFile.name,
+      file_data:     proofData,
       notes:         `Bank account submitted: ${bank_name} — ${maskedAccNum}`,
     }).catch(e => console.warn('[bank details] KYC doc failed:', e.message));
 
@@ -9161,8 +9009,8 @@ function openSaWithdrawal(saId) {
     content.innerHTML = `
       <div style="text-align:center;padding:20px 0">
         <i class="fa-solid fa-shield-halved" style="font-size:2.5rem;color:#656565;margin-bottom:16px"></i>
-        <p style="font-size:0.9rem;font-weight:700;margin-bottom:8px">FICA verification required</p>
-        <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:16px">${sa.name} needs completed FICA/KYC before withdrawals.</p>
+        <p style="font-size:0.9rem;font-weight:700;color:#1a1a1a;margin-bottom:8px">FICA verification required</p>
+        <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:16px">${sa.name} needs completed FICA/KYC before withdrawals. Upload the required documents from the sub-account details page.</p>
       </div>`;
     footer.style.display = 'none';
     Modal.open('withdrawalModal');
@@ -9173,7 +9021,7 @@ function openSaWithdrawal(saId) {
     content.innerHTML = `
       <div style="text-align:center;padding:20px 0">
         <i class="fa-solid fa-building-columns" style="font-size:2.5rem;color:#9ca3af;margin-bottom:16px"></i>
-        <p style="font-size:0.9rem;color:var(--text-muted);margin-bottom:16px">Add a verified bank account to ${sa.name} before withdrawing.</p>
+        <p style="font-size:0.9rem;color:var(--text-muted);margin-bottom:16px">You need to add a verified bank account to ${sa.name} before withdrawing.</p>
         <button class="btn btn--primary" onclick="Modal.close('withdrawalModal');openSaBankDetails('${sa.id}')"><i class="fa-solid fa-plus"></i> Add Bank Account</button>
       </div>`;
     footer.style.display = 'none';
@@ -9185,19 +9033,19 @@ function openSaWithdrawal(saId) {
     content.innerHTML = `
       <div style="text-align:center;padding:20px 0">
         <i class="fa-solid fa-clock" style="font-size:2.5rem;color:#fec24f;margin-bottom:16px"></i>
-        <p style="font-size:0.9rem;color:var(--text-muted)">${sa.sa_bank_status === 'pending' ? 'Bank account for ' + sa.name + ' is pending verification.' : 'Bank account not verified.'}</p>
+        <p style="font-size:0.9rem;color:var(--text-muted)">${sa.sa_bank_status === 'pending' ? 'The bank account for ' + sa.name + ' is pending verification. Withdrawals will be available once approved.' : 'Bank account not verified. Please update bank details.'}</p>
       </div>`;
     footer.style.display = 'none';
     Modal.open('withdrawalModal');
     return;
   }
 
-  const pendingWd = (PORTAL.transactions || []).find(t => t.sub_account_id === saId && t.type === 'withdrawal' && t.status === 'pending');
-  if (pendingWd) {
+  const pendingWithdrawal = (PORTAL.transactions || []).find(t => t.sub_account_id === saId && t.type === 'withdrawal' && t.status === 'pending');
+  if (pendingWithdrawal) {
     content.innerHTML = `
       <div style="padding:14px 16px;border-radius:14px;background:rgba(47,140,155,0.08);border:1px solid rgba(47,140,155,0.18)">
-        <div style="font-size:0.92rem;font-weight:800">A withdrawal for ${sa.name} is already in progress.</div>
-        <div style="font-size:0.8rem;color:var(--text-muted);margin-top:4px">${Utils.rand(Math.abs(parseFloat(pendingWd.amount)||0))} — payout within 1–2 business days.</div>
+        <div style="font-size:0.92rem;font-weight:800;color:#1a1a1a">A withdrawal for ${sa.name} is already in progress.</div>
+        <div style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;line-height:1.55">${Utils.rand(Math.abs(parseFloat(pendingWithdrawal.amount)||0))} was requested on ${Utils.date(pendingWithdrawal.created_at||pendingWithdrawal.transaction_date)}. Most payouts land within 1–2 business days.</div>
       </div>`;
     footer.style.display = 'none';
     Modal.open('withdrawalModal');
@@ -9208,7 +9056,7 @@ function openSaWithdrawal(saId) {
     content.innerHTML = `
       <div style="text-align:center;padding:20px 0">
         <i class="fa-solid fa-wallet" style="font-size:2.5rem;color:#9ca3af;margin-bottom:16px"></i>
-        <p style="font-size:0.9rem;color:var(--text-muted)">Balance for ${sa.name}: <strong>${Utils.rand(balance)}</strong>. Minimum withdrawal is R50.</p>
+        <p style="font-size:0.9rem;color:var(--text-muted)">The available balance for ${sa.name} is <strong>${Utils.rand(balance)}</strong>. The minimum withdrawal is R50.</p>
       </div>`;
     footer.style.display = 'none';
     Modal.open('withdrawalModal');
@@ -9219,26 +9067,31 @@ function openSaWithdrawal(saId) {
   const quickAmounts = [0.25, 0.5, 1].map(r => Math.floor((balance * r) / 10) * 10).filter(v => v >= 50);
   content.innerHTML = `
     <div style="margin-bottom:10px;padding:8px 12px;border-radius:8px;background:rgba(237,165,255,0.08);border:1px solid rgba(237,165,255,0.2);font-size:0.8rem;color:var(--text-muted)">
-      <i class="fa-solid fa-folder-open" style="color:#eda5ff;margin-right:6px"></i>Withdrawing from <strong>${sa.name}</strong>
+      <i class="fa-solid fa-folder-open" style="color:#eda5ff;margin-right:6px"></i>Withdrawing from <strong>${Utils.esc ? Utils.esc(sa.name) : sa.name}</strong>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px">
-      <div style="padding:12px 14px;border-radius:12px;background:rgba(255,255,255,0.04);border:1px solid var(--border)">
-        <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);font-weight:800">Available</div>
-        <div style="font-size:1.08rem;font-weight:900;margin-top:4px">${Utils.rand(balance)}</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px">
+      <div style="padding:12px 14px;border-radius:12px;background:#F8FAFC;border:1px solid rgba(0,0,0,0.06)">
+        <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;font-weight:800">Available now</div>
+        <div style="font-size:1.08rem;font-weight:900;color:#1a1a1a;margin-top:4px">${Utils.rand(balance)}</div>
       </div>
-      <div style="padding:12px 14px;border-radius:12px;background:rgba(255,255,255,0.04);border:1px solid var(--border)">
-        <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);font-weight:800">Destination</div>
-        <div style="font-size:0.82rem;font-weight:800;margin-top:6px">${sa.sa_bank_name || ''} ${masked}</div>
+      <div style="padding:12px 14px;border-radius:12px;background:#F8FAFC;border:1px solid rgba(0,0,0,0.06)">
+        <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;font-weight:800">Destination</div>
+        <div style="font-size:0.88rem;font-weight:800;color:#1a1a1a;margin-top:6px">${sa.sa_bank_name || ''} ${masked}</div>
       </div>
     </div>
     <div class="form-group">
-      <label class="form-label">Amount (R) <span style="color:#ef4444">*</span></label>
+      <label class="form-label">Withdrawal Amount (R) <span style="color:#ef4444">*</span></label>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-        ${quickAmounts.map(v => `<button type="button" class="btn btn--secondary btn--sm" onclick="document.getElementById('wdAmount').value='${v}';_withdrawCalcSa(${balance})">${v >= balance ? 'All' : Utils.rand(v)}</button>`).join('')}
+        ${quickAmounts.map(v => `<button type="button" class="btn btn--secondary btn--sm" onclick="document.getElementById('wdAmount').value='${v}';_withdrawCalcSa(${balance})">${v >= balance ? 'All available' : Utils.rand(v)}</button>`).join('')}
       </div>
       <input type="number" class="form-input" id="wdAmount" placeholder="e.g. ${balance.toFixed(0)}" min="50" max="${balance.toFixed(2)}" oninput="_withdrawCalcSa(${balance})" />
+      <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">Maximum: ${Utils.rand(balance)} · Minimum: R50</div>
     </div>
-    <div id="wdCalcBox" style="display:none;margin-top:4px"></div>`;
+    <div id="wdCalcBox" style="display:none;margin-top:4px"></div>
+    <div class="info-box" style="background:rgba(254,194,79,0.06);border:1px solid rgba(254,194,79,0.2);border-radius:10px;padding:12px 14px;font-size:0.8rem;color:var(--text-muted);margin-top:12px;line-height:1.6">
+      <i class="fa-solid fa-shield-halved" style="color:#fec24f"></i>
+      Funds are sent only to the verified bank account on file for this sub-account. Requests are reviewed within 1–2 business days.
+    </div>`;
   footer.style.display = '';
   Modal.open('withdrawalModal');
 }
@@ -9250,7 +9103,7 @@ function _withdrawCalcSa(balance) {
   if (!amount || amount <= 0) { box.style.display = 'none'; return; }
   if (amount > balance) {
     box.style.display = '';
-    box.innerHTML = `<div style="color:#ef4444;font-size:0.8rem"><i class="fa-solid fa-triangle-exclamation"></i> Exceeds available balance ${Utils.rand(balance)}</div>`;
+    box.innerHTML = `<div style="color:#ef4444;font-size:0.8rem"><i class="fa-solid fa-triangle-exclamation"></i> Amount exceeds available balance of ${Utils.rand(balance)}</div>`;
     return;
   }
   if (amount < 50) {
@@ -9259,7 +9112,11 @@ function _withdrawCalcSa(balance) {
     return;
   }
   box.style.display = '';
-  box.innerHTML = `<div style="padding:8px 12px;border-radius:8px;background:rgba(255,255,255,0.04);font-size:0.8rem">Remaining: <strong>${Utils.rand(balance - amount)}</strong></div>`;
+  box.innerHTML = `
+    <div style="padding:10px 12px;border-radius:10px;background:#F8FAFC;border:1px solid rgba(0,0,0,0.06)">
+      <div class="info-row" style="padding:0 0 6px"><span class="info-row__label">You will receive</span><span class="info-row__value" style="font-weight:800;color:#1a1a1a">${Utils.rand(amount)}</span></div>
+      <div class="info-row" style="padding:6px 0;border-top:1px solid rgba(0,0,0,0.06)"><span class="info-row__label">Remaining in sub-account wallet</span><span class="info-row__value text-gold">${Utils.rand(balance - amount)}</span></div>
+    </div>`;
 }
 
 function openWithdrawalModal() {
@@ -9276,7 +9133,7 @@ function openWithdrawalModal() {
     content.innerHTML = `
       <div style="text-align:center;padding:20px 0">
         <i class="fa-solid fa-shield-halved" style="font-size:2.5rem;color:#656565;margin-bottom:16px"></i>
-        <p style="font-size:0.9rem;font-weight:700;color:#1a1a1a;margin-bottom:8px">KYC/FICA verification required</p>
+        <p style="font-size:0.9rem;font-weight:700;color:#1a1a1a;margin-bottom:8px">FICA verification required</p>
         <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:16px">You need to complete FICA/KYC verification before you can withdraw funds. You can still top up your wallet and invest in the meantime.</p>
         <button class="btn btn--primary" onclick="Modal.close('withdrawalModal');navigate('profile', document.querySelector('[data-view=profile]'));openKycUploadModal()"><i class="fa-solid fa-upload"></i> Complete FICA/KYC</button>
       </div>`;
@@ -9411,7 +9268,7 @@ async function confirmWithdrawal() {
     if (amount > balance)       { Toast.error('Amount exceeds available balance'); return; }
     if (btn) { btn.disabled = true; btn.textContent = 'Processing…'; }
     try {
-      await API._fetch('POST', 'withdrawals/request', {
+      const result = await API._fetch('POST', 'withdrawals/request', {
         amount,
         sub_account_id:      _saWithdrawalId,
         bank_account_number: sa.sa_bank_number || undefined,
@@ -9461,7 +9318,7 @@ async function confirmWithdrawal() {
    ═══════════════════════════════════════════════ */
 let _lastTaxCertHTML = null; // cached for PDF download
 
-async function generateTaxCertificate() {
+function generateTaxCertificate() {
   if (!PORTAL.investor) { Toast.error('Portfolio data still loading — please wait'); return; }
 
   const inv = PORTAL.investor;
@@ -9522,7 +9379,7 @@ td:last-child{text-align:right;font-weight:600}
 <div class="wrap">
   <div class="hdr">
     <div>
-      <div class="logo"><img src="${window.location.origin}/assets/full-colour-logo-horizontal-white-text.png" alt="SV Capital"></div>
+      <div class="logo"><img src="${window.location.origin}/assets/sv-capital-logo-horizontal-white-text.png" alt="SV Capital"></div>
       <div style="font-size:0.75rem;color:#6b7280;margin-top:6px">SV Capital (Pty) Ltd &nbsp;·&nbsp; FSCA Regulated</div>
     </div>
     <div class="cert-badge">
@@ -9584,7 +9441,10 @@ td:last-child{text-align:right;font-weight:600}
 
   SVC.track('svc_tax_cert_generated', { tax_year: taxYear });
 
-  await _shareOrPrint(html, 'SVC-IT3b-Tax-Certificate.html');
+  const win = window.open('', '_blank', 'width=820,height=900');
+  if (!win) { Toast.error('Pop-up blocked — please allow pop-ups for this site'); return; }
+  win.document.write(html);
+  win.document.close();
 }
 
 /* ── IT3(b) jsPDF download ── */
@@ -9689,7 +9549,7 @@ async function confirm2FASetup() {
     const footer = document.getElementById('twoFAModalFooter');
     if (body) body.innerHTML = `
   <div style="text-align:center;margin-bottom:12px">
-    <i class="fa-solid fa-shield-halved" style="font-size:2rem;color:var(--green)"></i>
+    <i class="fa-solid fa-shield-check" style="font-size:2rem;color:var(--green)"></i>
     <h3 style="margin:10px 0 4px;font-size:1rem">2FA Enabled!</h3>
     <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:16px">Save these backup codes somewhere safe. Each code can only be used once if you lose access to your authenticator app.</p>
   </div>
@@ -9726,7 +9586,7 @@ function renderOnboardingChecklist() {
   const steps = [
     {
       id: 'fica',
-      label: 'Complete your KYC/FICA verification',
+      label: 'Complete your FICA verification',
       desc: 'Submit your ID document and proof of address.',
       done: inv.fica_status === 'approved',
       action: "navigate('profile', document.querySelector('[data-view=profile]'))",
@@ -9830,12 +9690,10 @@ function openInvestNowPicker() {
   const body = document.getElementById('investNowPickerBody');
   if (!body) return;
 
-  // Build product list: use live _mktProducts if loaded, else derive from pools
   const products = (_mktProducts && _mktProducts.length)
     ? _mktProducts
     : [...new Set((PORTAL.pools || []).map(p => p.product_type))].map(t => ({ product_type: t }));
 
-  // Count open pools per product
   const openCounts = {};
   (PORTAL.pools || []).forEach(p => {
     if (p.status === 'open') openCounts[p.product_type] = (openCounts[p.product_type] || 0) + 1;
@@ -9846,19 +9704,19 @@ function openInvestNowPicker() {
     const meta = _POOL_META[prod.product_type] || {};
     const open = openCounts[prod.product_type] || 0;
     return `
-      <div onclick="selectInvestNowProduct('${_esc(prod.product_type)}')" style="display:flex;align-items:center;gap:14px;padding:14px;border:1.5px solid rgba(0,0,0,0.07);border-radius:14px;cursor:pointer;background:#fff;transition:border-color 0.15s" onmousedown="this.style.borderColor='#fec24f'" onmouseup="this.style.borderColor='rgba(0,0,0,0.07)'" ontouchstart="this.style.borderColor='#fec24f'" ontouchend="this.style.borderColor='rgba(0,0,0,0.07)'">
+      <div onclick="selectInvestNowProduct('${_esc(prod.product_type)}')" style="display:flex;align-items:center;gap:14px;padding:14px;border:1.5px solid rgba(0,0,0,0.07);border-radius:14px;cursor:pointer;background:var(--panel-bg,#fff);transition:border-color 0.15s" onmouseenter="this.style.borderColor='#fec24f'" onmouseleave="this.style.borderColor='rgba(0,0,0,0.07)'">
         <div style="width:46px;height:46px;border-radius:12px;background:${pi.color}1a;color:${pi.color};display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0">
           <i class="fa-solid ${pi.icon}"></i>
         </div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:0.92rem;font-weight:800;color:#303030">${prod.label || pi.label}</div>
-          ${meta.blurb ? `<div style="font-size:0.75rem;color:#656565;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${meta.blurb}</div>` : ''}
-          <div style="font-size:0.72rem;margin-top:4px;font-weight:600;${open ? 'color:#65ed00' : 'color:#656565'}">
+          <div style="font-size:0.92rem;font-weight:800;color:var(--text-primary,#1a1a1a)">${prod.label || pi.label}</div>
+          ${meta.blurb ? `<div style="font-size:0.75rem;color:var(--text-muted,#6b7280);margin-top:2px">${meta.blurb}</div>` : ''}
+          <div style="font-size:0.72rem;margin-top:4px;font-weight:600;${open ? 'color:#65ed00' : 'color:#9ca3af'}">
             <i class="fa-solid ${open ? 'fa-circle-check' : 'fa-clock'}" style="font-size:0.65rem"></i>
             ${open ? `${open} open pool${open !== 1 ? 's' : ''}` : 'No open pools currently'}
           </div>
         </div>
-        <i class="fa-solid fa-chevron-right" style="color:#656565;font-size:0.8rem;flex-shrink:0"></i>
+        <i class="fa-solid fa-chevron-right" style="color:#9ca3af;font-size:0.8rem;flex-shrink:0"></i>
       </div>`;
   }).join('');
 
@@ -9999,10 +9857,7 @@ async function loadReferralDashboard() {
   const body = document.getElementById('referredInvestorsBody');
   if (!body) return;
   if (!referred.length) {
-    body.innerHTML = `<div class="ref-empty">
-      <i class="fa-solid fa-user-plus"></i>
-      <div>No referrals yet — share your code to get started.</div>
-    </div>`;
+    body.innerHTML = `<tr><td colspan="5" class="text-center text-muted" style="padding:16px">No referrals yet — share your code to get started <i class="fa-solid fa-arrow-up-right-from-square" style="margin-left:4px"></i></td></tr>`;
     return;
   }
   body.innerHTML = referred.map(r => {
@@ -10010,25 +9865,20 @@ async function loadReferralDashboard() {
       t.type === 'referral_bonus' &&
       (t.referred_investor_id === r.id || Math.abs(new Date(t.created_at) - new Date(r.date_joined||r.created_at)) < 86400000 * 7)
     );
-    const name = `${_esc(r.first_name || '')} ${_esc(r.last_name || '')}`.trim() || 'Investor';
-    const initials = name.split(' ').map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
-    const hasInvested = (r.total_invested || 0) > 0;
-    const bonusChip = bonusTx
-      ? `<span class="ref-person__bonus ref-person__bonus--paid">+${Utils.rand(bonusTx.amount || 0)}</span>`
-      : `<span class="ref-person__bonus ref-person__bonus--pending">Pending</span>`;
+    const bonusCell = bonusTx
+      ? `<span style="font-weight:700;color:#22c55e">${Utils.rand(bonusTx.amount||0)}</span>`
+      : `<span style="color:#fec24f">Pending</span>`;
     return `
-    <div class="ref-person">
-      <div class="ref-person__avatar">${initials}</div>
-      <div class="ref-person__info">
-        <div class="ref-person__name">${name}</div>
-        <div class="ref-person__meta">
-          <span class="ref-person__dot ${hasInvested ? 'ref-person__dot--green' : 'ref-person__dot--amber'}"></span>
-          ${hasInvested ? 'Invested' : 'Not invested yet'} · ${Utils.date(r.date_joined)}
-        </div>
-      </div>
-      ${bonusChip}
-    </div>`;
-  }).join('');
+    <tr>
+      <td><div style="font-weight:600;font-size:0.82rem;color:#1a1a1a">${_esc(r.first_name)} ${_esc(r.last_name)}</div></td>
+      <td>${Utils.statusBadge(r.fica_status || r.status)}</td>
+      <td>${(r.total_invested || 0) > 0
+        ? `<span class="badge badge--green">Invested</span>`
+        : `<span class="badge badge--gray">Not yet</span>`}</td>
+      <td style="font-size:0.75rem;color:#6b7280">${Utils.date(r.date_joined)}</td>
+      <td>${bonusCell}</td>
+    </tr>
+  `}).join('');
 }
 
 /* ═══════════════════════════════════════════════
@@ -10037,6 +9887,7 @@ async function loadReferralDashboard() {
 
 /* ─── KYC Document Upload ─────────────────────────────────────── */
 let _kycFile = null;
+
 
 function _kycFileSelected(file) {
   if (!file) return;
@@ -10065,6 +9916,7 @@ function _kycHandleDrop(event) {
   if (zone) zone.style.borderColor = 'rgba(254,194,79,0.35)';
   const file = event.dataTransfer?.files?.[0];
   if (file) {
+    // Bug #10 fix: actually reset the input value (the old line was a no-op read)
     const inp = document.getElementById('kycFileInput');
     if (inp) inp.value = '';
     _kycFileSelected(file);
@@ -10081,19 +9933,33 @@ function _kycClearFile() {
   if (zone) { zone.style.borderColor = 'rgba(254,194,79,0.35)'; zone.style.background = 'rgba(254,194,79,0.03)'; }
 }
 
-function openKycUploadModal() {
+function _kycDocTypeChanged(val) {
+  const grp = document.getElementById('kycDocSubtypeGroup');
+  if (grp) grp.style.display = val === 'id_document' ? '' : 'none';
+}
+
+function openKycUploadModal(docType) {
   _kycClearFile();
-  const typeEl  = document.getElementById('kycDocType');
-  const notesEl = document.getElementById('kycNotes');
-  if (typeEl)  typeEl.value  = '';
-  if (notesEl) notesEl.value = '';
+  const typeEl     = document.getElementById('kycDocType');
+  const notesEl    = document.getElementById('kycNotes');
+  const subtypeEl  = document.getElementById('kycDocSubtype');
+  const subtypeGrp = document.getElementById('kycDocSubtypeGroup');
+  if (typeEl)     typeEl.value     = docType || '';
+  if (notesEl)    notesEl.value    = '';
+  if (subtypeEl)  subtypeEl.value  = '';
+  if (subtypeGrp) subtypeGrp.style.display = docType === 'id_document' ? '' : 'none';
   Modal.open('kycUploadModal');
 }
 
 async function submitKycDocument() {
   const docType = document.getElementById('kycDocType')?.value;
   if (!docType) { Toast.error('Please select a document type'); return; }
-  if (!_kycFile) { Toast.error('Please select a file to upload'); return; }
+  if (!_kycFile) {
+    Toast.error('An attachment is required — please select a file to upload');
+    const dz = document.getElementById('kycDropZone');
+    if (dz) { dz.style.borderColor = '#ef4444'; setTimeout(() => { dz.style.borderColor = 'rgba(255,155,12,0.35)'; }, 2500); }
+    return;
+  }
 
   const btn = document.getElementById('kycSubmitBtn');
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Submitting…'; }
@@ -10108,15 +9974,29 @@ async function submitKycDocument() {
     });
 
     const inv = PORTAL.investor;
-    const notes = (document.getElementById('kycNotes')?.value || '').trim();
+    const notes      = (document.getElementById('kycNotes')?.value || '').trim();
+    const docSubtype = document.getElementById('kycDocSubtype')?.value || '';
+
+    if (docType === 'id_document' && !docSubtype) {
+      Toast.error('Please select the ID document type (SA ID, Passport, or Asylum Permit)');
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit for Review'; }
+      return;
+    }
+
+    const subtypeLabels = { rsa_id: 'SA ID', passport: 'Passport', asylum_permit: 'Asylum Permit' };
+    const noteParts = [notes];
+    if (docSubtype) noteParts.push(`DocType: ${subtypeLabels[docSubtype] || docSubtype}`);
+    noteParts.push(`File: ${_kycFile.name} (${(_kycFile.size / 1024).toFixed(1)} KB)`);
+
     await API.kyc.create({
       investor_id:   inv?.id || DEMO_INVESTOR_ID,
       investor_name: inv ? `${inv.first_name} ${inv.last_name}`.trim() : undefined,
       doc_type:      docType,
+      doc_subtype:   docSubtype || undefined,
       status:        'pending',
       file_name:     _kycFile.name,
       file_data:     fileData,
-      notes:         [notes, `File: ${_kycFile.name} (${(_kycFile.size / 1024).toFixed(1)} KB)`].filter(Boolean).join(' — '),
+      notes:         noteParts.filter(Boolean).join(' — '),
     });
     // Reflect that documents are now being checked (unless already fully verified)
     if (inv && inv.kyc_status !== 'approved' && inv.fica_status !== 'approved') {
@@ -10126,9 +10006,10 @@ async function submitKycDocument() {
     Toast.success('Document submitted! The compliance team will review it within 1–2 business days.');
     SVC.track('svc_kyc_uploaded', { doc_type: docType });
     Modal.close('kycUploadModal');
-    // Refresh KYC panels with fresh data (Bug #7)
+    // Refresh both KYC panels with a single shared fetch (Bug #7 fix)
     _refreshKycPanels();
   } catch (e) {
+    // Bug #15 fix: also check HTTP status 413, not just message keywords
     const msg = e?.message || '';
     if (e?.status === 413 || msg.includes('too large') || msg.includes('entity') || msg.includes('limit')) {
       Toast.error('File too large for upload. Please compress the image or use a smaller file (max 10 MB).');
@@ -10137,11 +10018,16 @@ async function submitKycDocument() {
     }
     console.error('[submitKycDocument]', e);
   } finally {
+    // Bug #8/12 fix: always clear _kycFile reference — prevents stale large object
+    // sitting in memory after a failed upload
     _kycFile = null;
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit for Review'; }
   }
 }
 
+// Refresh the investor record from the server so that admin-side KYC/FICA
+// status changes (approvals, rejections) are immediately visible on the portal
+// without requiring a full page reload. Called whenever the profile tab opens.
 async function _refreshInvestorThenKyc() {
   try {
     if (PORTAL.investor?.id) {
@@ -10152,6 +10038,8 @@ async function _refreshInvestorThenKyc() {
   _refreshKycPanels();
 }
 
+// Bug #7 fix: single fetch shared between both panel renderers to avoid two
+// back-to-back identical API calls after every upload.
 async function _refreshKycPanels() {
   if (!PORTAL.investor) return;
   let docs = [];
@@ -10164,6 +10052,7 @@ async function _refreshKycPanels() {
   _renderKycDocsList(docs);
 }
 
+// Bug #7 fix: accepts optional pre-fetched docs from _refreshKycPanels()
 async function _renderKycStatusPanel(preloadedDocs) {
   const body = document.getElementById('kycStatusBody');
   if (!body || !PORTAL.investor) return;
@@ -10178,9 +10067,11 @@ async function _renderKycStatusPanel(preloadedDocs) {
 
   const inv = PORTAL.investor;
   const overallStatus = inv.fica_status || inv.kyc_status || 'pending';
-  const statusColor = { approved: '#22c55e', rejected: '#ef4444', pending: '#fec24f', in_progress: '#656565', submitted: '#656565', not_started: '#9ca3af' };
-  const color = statusColor[overallStatus] || '#9ca3af';
+  const overallNorm   = _normFicaStatus(overallStatus);
+  const statusColor   = { approved: '#22c55e', verified: '#22c55e', rejected: '#ef4444', pending: '#fec24f', in_progress: '#fec24f', submitted: '#fec24f', not_started: '#9ca3af' };
+  const color = statusColor[overallNorm] || '#9ca3af';
 
+  // Bug #13 fix: shared label map — 'other' is 'Other Document' in both panels
   const typeLabel = {
     id_document: 'SA ID / Passport', proof_of_address: 'Proof of Address',
     proof_of_bank: 'Proof of Bank Account',
@@ -10190,21 +10081,22 @@ async function _renderKycStatusPanel(preloadedDocs) {
   body.innerHTML = `
     <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid rgba(0,0,0,0.07);margin-bottom:12px">
       <div style="width:40px;height:40px;border-radius:50%;background:${color}22;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-        <i class="fa-solid fa-${overallStatus === 'approved' ? 'shield-halved' : overallStatus === 'rejected' ? 'circle-xmark' : 'clock'}" style="color:${color};font-size:1.1rem"></i>
+        <i class="fa-solid fa-${overallNorm === 'approved' || overallNorm === 'verified' ? 'shield-check' : overallNorm === 'rejected' ? 'shield-xmark' : overallNorm === 'not_started' ? 'circle-xmark' : 'clock'}" style="color:${color};font-size:1.1rem"></i>
       </div>
       <div>
-        <div style="font-size:0.88rem;font-weight:700;color:#1a1a1a">KYC/FICA Verification</div>
-        <div style="font-size:0.78rem;color:#6b7280;margin-top:1px">${Utils.statusBadge(overallStatus)}</div>
+        <div style="font-size:0.88rem;font-weight:700;color:#1a1a1a">FICA / KYC Verification</div>
+        <div style="font-size:0.78rem;color:#6b7280;margin-top:1px">${Utils.ficaBadge(overallStatus)}</div>
       </div>
     </div>
     ${docs.length ? `
       <div style="display:flex;flex-direction:column;gap:8px">
         ${docs.map(d => `
-          <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(0,0,0,0.03);border-radius:8px">
-            <i class="fa-solid fa-file-lines" style="color:#fec24f;font-size:0.9rem;flex-shrink:0"></i>
+          <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 10px;background:${d.status === 'rejected' ? 'rgba(239,68,68,0.05)' : 'rgba(0,0,0,0.03)'};border:${d.status === 'rejected' ? '1px solid rgba(239,68,68,0.2)' : '1px solid transparent'};border-radius:8px">
+            <i class="fa-solid fa-file-lines" style="color:${d.status === 'rejected' ? '#ef4444' : '#fec24f'};font-size:0.9rem;flex-shrink:0;margin-top:2px"></i>
             <div style="flex:1;min-width:0">
               <div style="font-size:0.82rem;font-weight:600;color:#1a1a1a">${typeLabel[d.doc_type] || _esc(d.doc_type)}</div>
-              <div style="font-size:0.72rem;color:#9ca3af">${_esc(d.file_name) || '—'} · ${Utils.date(d.created_at)}</div>
+              <div style="font-size:0.72rem;color:#9ca3af">${_esc(d.file_name)} · ${Utils.date(d.created_at)}</div>
+              ${d.status === 'rejected' ? `<button class="btn btn--secondary btn--sm" style="margin-top:6px;font-size:0.72rem" onclick="openKycUploadModal('${d.doc_type}')"><i class="fa-solid fa-rotate-right"></i> Replace &amp; Resubmit</button>` : ''}
             </div>
             ${Utils.statusBadge(d.status)}
           </div>
@@ -10255,18 +10147,20 @@ async function _renderKycDocsList(preloadedDocs) {
         <table class="data-table">
           <thead><tr><th>Document Type</th><th>File</th><th>Submitted</th><th>Status</th><th>Notes</th><th></th></tr></thead>
           <tbody>
-            ${docs.map(d => `<tr>
+            ${docs.map(d => `<tr${d.status === 'rejected' ? ' style="background:rgba(239,68,68,0.03)"' : ''}>
               <td class="td-strong">${typeLabel[d.doc_type] || _esc(d.doc_type)}</td>
-              <td class="td-muted" style="font-size:0.78rem">${_esc(d.file_name) || '—'}</td>
+              <td class="td-muted" style="font-size:0.78rem">${_esc(d.file_name)}</td>
               <td class="td-muted">${Utils.date(d.created_at)}</td>
               <td>${Utils.statusBadge(d.status)}</td>
-              <td class="td-muted" style="font-size:0.72rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(d.notes) || '—'}</td>
-              <td>${
-                d.file_url
-                  ? `<a href="${_safeUrl(d.file_url)}" target="_blank" rel="noopener" class="btn btn--secondary btn--sm"><i class="fa-solid fa-download"></i> View</a>`
-                  : d.file_data
-                    ? `<button class="btn btn--secondary btn--sm" onclick="_viewKycDoc('${d.id}')"><i class="fa-solid fa-eye"></i> View</button>`
-                    : '—'
+              <td class="td-muted" style="font-size:0.72rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(d.notes)}</td>
+              <td style="white-space:nowrap">${
+                d.status === 'rejected'
+                  ? `<button class="btn btn--secondary btn--sm" onclick="openKycUploadModal('${d.doc_type}')"><i class="fa-solid fa-rotate-right"></i> Resubmit</button>`
+                  : d.file_url
+                    ? `<a href="${_safeUrl(d.file_url)}" target="_blank" rel="noopener" class="btn btn--secondary btn--sm"><i class="fa-solid fa-download"></i> View</a>`
+                    : d.file_data
+                      ? `<button class="btn btn--secondary btn--sm" onclick="_viewKycDoc('${d.id}')"><i class="fa-solid fa-eye"></i> View</button>`
+                      : '—'
               }</td>
             </tr>`).join('')}
           </tbody>
@@ -10642,35 +10536,27 @@ function _renderCertificatesTable() {
 
   const investments = PORTAL.investments;
   if (!investments.length) {
-    body.innerHTML = `<div class="empty-state" style="padding:20px 0;border:none;background:transparent"><i class="fa-solid fa-file-circle-check"></i><div class="empty-state__title">No investment certificates yet</div><div class="empty-state__sub">Your first completed investment will unlock downloadable certificates and term sheets here.</div><div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px"><button class="btn btn--primary btn--sm" onclick="navigate('marketplace', document.querySelector('[data-view=marketplace]'))"><i class="fa-solid fa-layer-group"></i> Browse pools</button><button class="btn btn--secondary btn--sm" onclick="navigate('wallet', document.querySelector('[data-view=wallet]'))"><i class="fa-solid fa-wallet"></i> Fund wallet</button></div></div>`;
+    body.innerHTML = `<tr><td colspan="8" style="padding:28px"><div class="empty-state" style="padding:0;border:none;background:transparent"><i class="fa-solid fa-file-certificate"></i><div class="empty-state__title">No investment certificates yet</div><div class="empty-state__sub">Your first completed investment will unlock downloadable certificates and term sheets here.</div><div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px"><button class="btn btn--primary btn--sm" onclick="navigate('marketplace', document.querySelector('[data-view=marketplace]'))"><i class="fa-solid fa-layer-group"></i> Browse pools</button><button class="btn btn--secondary btn--sm" onclick="navigate('wallet', document.querySelector('[data-view=wallet]'))"><i class="fa-solid fa-wallet"></i> Fund wallet</button></div></div></td></tr>`;
     return;
   }
 
   body.innerHTML = investments.map(inv => {
     const pi = Utils.productInfo(inv.product_type);
-    const pool = PORTAL.pools.find(p => p.id === inv.pool_id);
-    const termSheet = pool && pool.term_sheet_url
-      ? `<a href="${pool.term_sheet_url}" target="_blank" rel="noopener" class="doc-card__btn doc-card__btn--ghost"><i class="fa-solid fa-file-contract"></i> Term Sheet</a>` : '';
-    return `
-    <div class="doc-card">
-      <div class="doc-card__top">
-        <div class="doc-card__icon ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i></div>
-        <div class="doc-card__head">
-          <div class="doc-card__title">${_esc(inv.pool_name) || pi.label}</div>
-          <div class="doc-card__sub">${pi.label} · ${Utils.pct(inv.expected_return_rate || inv.annual_rate)} p.a.</div>
-        </div>
-        <div class="doc-card__amount">${Utils.rand(inv.amount)}</div>
-      </div>
-      <div class="doc-card__meta">
-        <span><i class="fa-solid fa-calendar-day"></i> ${Utils.date(inv.investment_date || inv.start_date)}</span>
-        <span><i class="fa-solid fa-flag-checkered"></i> ${Utils.date(inv.maturity_date || inv.end_date)}</span>
-        <span class="doc-card__status">${Utils.statusBadge(inv.status)}</span>
-      </div>
-      <div class="doc-card__actions">
-        <button class="doc-card__btn doc-card__btn--primary" onclick="downloadCertificate('${inv.id}')"><i class="fa-solid fa-file-pdf"></i> Certificate</button>
-        ${termSheet}
-      </div>
-    </div>`;
+    return `<tr>
+      <td class="td-strong">${_esc(inv.pool_name) || '—'}</td>
+      <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
+      <td class="td-gold fw-700">${Utils.rand(inv.amount)}</td>
+      <td>${Utils.pct(inv.expected_return_rate || inv.annual_rate)}</td>
+      <td class="td-muted">${Utils.date(inv.investment_date || inv.start_date)}</td>
+      <td class="td-muted">${Utils.date(inv.maturity_date || inv.end_date)}</td>
+      <td>${Utils.statusBadge(inv.status)}</td>
+      <td style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn--primary btn--sm" onclick="downloadCertificate('${inv.id}')">
+          <i class="fa-solid fa-file-pdf"></i> Certificate
+        </button>
+        ${(() => { const pool = PORTAL.pools.find(p => p.id === inv.pool_id); return pool && pool.term_sheet_url ? `<a href="${pool.term_sheet_url}" target="_blank" rel="noopener" class="btn btn--secondary btn--sm"><i class="fa-solid fa-file-contract"></i> Term Sheet</a>` : ''; })()}
+      </td>
+    </tr>`;
   }).join('');
 }
 
@@ -10684,21 +10570,20 @@ function _renderReceiptsTable() {
     .slice(0, 20);
 
   if (!deposits.length) {
-    body.innerHTML = `<div class="empty-state" style="padding:20px 0;border:none;background:transparent"><i class="fa-solid fa-receipt"></i><div class="empty-state__title">No deposit receipts yet</div><div class="empty-state__sub">As soon as your first wallet top-up is completed, the receipt will appear here for download.</div><div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px"><button class="btn btn--primary btn--sm" onclick="openTopUpModal()"><i class="fa-solid fa-plus"></i> Top up wallet</button><button class="btn btn--secondary btn--sm" onclick="navigate('statement', document.querySelector('[data-view=statement]'))"><i class="fa-solid fa-file-invoice"></i> Generate statement</button></div></div>`;
+    body.innerHTML = `<tr><td colspan="6" style="padding:28px"><div class="empty-state" style="padding:0;border:none;background:transparent"><i class="fa-solid fa-receipt"></i><div class="empty-state__title">No deposit receipts yet</div><div class="empty-state__sub">As soon as your first wallet top-up is completed, the receipt will appear here for download.</div><div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px"><button class="btn btn--primary btn--sm" onclick="openTopUpModal()"><i class="fa-solid fa-plus"></i> Top up wallet</button><button class="btn btn--secondary btn--sm" onclick="navigate('statement', document.querySelector('[data-view=statement]'))"><i class="fa-solid fa-file-invoice"></i> Generate statement</button></div></div></td></tr>`;
     return;
   }
 
-  body.innerHTML = deposits.map(t => `
-    <div class="doc-card doc-card--receipt">
-      <div class="doc-card__icon" style="background:rgba(34,197,94,0.14);color:#16a34a"><i class="fa-solid fa-arrow-down-to-line"></i></div>
-      <div class="doc-card__head">
-        <div class="doc-card__title">${t.description || 'Wallet Deposit'}</div>
-      </div>
-      <div class="doc-card__receipt-right">
-        <div class="doc-card__amount" style="color:#1a1a1a;font-weight:700">+${Utils.rand(Math.abs(t.amount))}</div>
-        <button class="doc-card__btn doc-card__btn--ghost doc-card__btn--sm" onclick="downloadReceipt('${t.id}')"><i class="fa-solid fa-download"></i> Receipt</button>
-      </div>
-    </div>`).join('');
+  body.innerHTML = deposits.map(t => `<tr>
+    <td class="td-muted">${Utils.date(t.transaction_date || t.created_at)}</td>
+    <td class="td-green fw-700">+${Utils.rand(Math.abs(t.amount))}</td>
+    <td class="td-muted" style="font-size:0.78rem">${t.description || 'Wallet deposit'}</td>
+    <td class="td-muted" style="font-size:0.75rem">${t.reference || '—'}</td>
+    <td>${Utils.statusBadge(t.status)}</td>
+    <td><button class="btn btn--secondary btn--sm" onclick="downloadReceipt('${t.id}')">
+      <i class="fa-solid fa-download"></i> Receipt
+    </button></td>
+  </tr>`).join('');
 }
 
 /* ── Investment Certificate PDF (html path) ── */
@@ -10757,18 +10642,22 @@ function generateInvestmentCertificate(invId) {
 
 /* ── PDF: logo cache ── */
 let _cachedLogoDataUrl = null;
+let _cachedLogoOutlineDataUrl = null;
 async function _preloadLogo() {
   try {
-    const url  = new URL('../assets/logo.png', window.location.href).href;
-    const resp = await fetch(url);
-    if (!resp.ok) return;
-    const blob = await resp.blob();
-    _cachedLogoDataUrl = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload  = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
+    const toDataUrl = async (url) => {
+      const resp = await fetch(url);
+      if (!resp.ok) return null;
+      const blob = await resp.blob();
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload  = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    };
+    _cachedLogoDataUrl        = await toDataUrl(new URL('../assets/logo.png',         window.location.href).href);
+    _cachedLogoOutlineDataUrl = await toDataUrl(new URL('../assets/logo-outline.png', window.location.href).href);
   } catch (_) {}
 }
 
@@ -10785,15 +10674,29 @@ function _getPDF(orientation = 'portrait') {
   return new lib({ orientation, unit: 'mm', format: 'a4' });
 }
 
+/* ── PDF: watermark (centred logo outline at low opacity) ── */
+function _pdfWatermark(doc) {
+  if (!_cachedLogoOutlineDataUrl) return;
+  const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
+  const size = 100; // mm
+  doc.saveGraphicsState?.();
+  // jsPDF doesn't support native opacity for images; draw at reduced opacity via GState if available
+  try { doc.setGState(new doc.GState({ opacity: 0.05 })); } catch (_) {}
+  doc.addImage(_cachedLogoOutlineDataUrl, 'PNG', (W - size) / 2, (H - size) / 2, size, size);
+  try { doc.setGState(new doc.GState({ opacity: 1 })); } catch (_) {}
+  doc.restoreGraphicsState?.();
+}
+
 /* ── PDF: dark header bar ── */
 function _pdfHeader(doc, title, subtitle) {
   const W = doc.internal.pageSize.getWidth();
   // Dark header band
-  doc.setFillColor(26, 34, 53); // #303030
+  doc.setFillColor(48, 48, 48); // #303030
   doc.rect(0, 0, W, 38, 'F');
   // Gold accent line
   doc.setFillColor(255, 155, 12);
-  doc.rect(0, 38, W, 2, 'F');
+  doc.rect(0, 38, W, 3, 'F');
   // Logo icon (square lotus mark) + brand name text
   if (_cachedLogoDataUrl) {
     doc.addImage(_cachedLogoDataUrl, 'PNG', 9, 7, 22, 22);
@@ -10806,7 +10709,7 @@ function _pdfHeader(doc, title, subtitle) {
   doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(156, 163, 175);
-  doc.text('SmartVest Financial Services · FSP #52449', textX, 24);
+  doc.text('SV Capital (Pty) Ltd', textX, 24);
   // Document title (right aligned)
   doc.setFontSize(13);
   doc.setFont('helvetica', 'bold');
@@ -10864,6 +10767,7 @@ function downloadCertificate(investmentId) {
 
   // Header
   let y = _pdfHeader(doc, 'INVESTMENT CERTIFICATE', `#${inv.id}`);
+  _pdfWatermark(doc);
 
   // Certificate outer box — spans full content area
   const certBoxY = y + 6;
@@ -10896,8 +10800,8 @@ function downloadCertificate(investmentId) {
   const valRight = W / 2 + 54;
 
   doc.setFillColor(255, 255, 255);
-  doc.roundedRect(leftX + 4, y, (W - 28) / 2 - 6, 68, 2, 2, 'F');
-  doc.roundedRect(rightX, y, (W - 28) / 2 - 6, 68, 2, 2, 'F');
+  doc.roundedRect(leftX + 4, y, (W - 28) / 2 - 6, 62, 2, 2, 'F');
+  doc.roundedRect(rightX, y, (W - 28) / 2 - 6, 62, 2, 2, 'F');
 
   doc.setFontSize(8);
   doc.setFont('helvetica', 'bold');
@@ -10926,12 +10830,12 @@ function downloadCertificate(investmentId) {
   infoL('Investor Name', `${investor.first_name} ${investor.last_name}`);
   infoL('Investor ID', investor.id);
   infoL('Email', investor.email || '—');
-  infoL('FICA Status', (investor.fica_status || 'approved').toUpperCase());
+  const _ficaPdfLabels = { approved:'KYC VERIFIED', verified:'KYC VERIFIED', rejected:'REJECTED', Declined:'REJECTED', not_started:'NO FICA UPLOADED', Unverified:'NO FICA UPLOADED', submitted:'PENDING REVIEW', in_progress:'PENDING REVIEW', pending:'PENDING REVIEW', Pending:'PENDING REVIEW', Outstanding:'PENDING REVIEW', Approved:'KYC VERIFIED' };
+  infoL('FICA Status', _ficaPdfLabels[investor.fica_status] || _ficaPdfLabels[_normFicaStatus(investor.fica_status)] || 'PENDING REVIEW');
 
   infoR('Investment ID', inv.id);
   infoR('Pool Name', inv.pool_name || pool.name || '—');
   infoR('Amount Invested', Utils.rand(inv.amount));
-  infoR('Annual Rate', Utils.pct(inv.expected_return_rate || inv.annual_rate));
 
   y = Math.max(ly, ry) + 4;
 
@@ -10960,8 +10864,10 @@ function downloadCertificate(investmentId) {
   doc.setFontSize(7.5);
   doc.setFont('helvetica', 'italic');
   doc.setTextColor(156, 163, 175);
-  doc.text('This certificate is a record of investment and does not constitute a guarantee of returns. All investments are subject to the terms', 14, y, { maxWidth: W - 28 });
-  doc.text('and conditions of SV Capital and SmartVest Financial Services (Pty) Ltd (FSP #52449).', 14, y + 5, { maxWidth: W - 28 });
+  doc.text('This certificate is a record of investment and does not constitute a guarantee of returns. All investments are subject to the terms and conditions of SV Capital.', 14, y, { maxWidth: W - 28 });
+  y += 8;
+  doc.setFontSize(6.5);
+  doc.text('IMPORTANT NOTICE: This investment is not a regulated financial product under the Financial Sector Conduct Authority (FSCA) and is not covered by the Financial Advisory and Intermediary Services Act (FAIS) or the Collective Investment Schemes Control Act (CISCA). This investment is managed solely by SV Capital (Pty) Ltd. Investors should be aware that their capital is at risk and there is no guarantee of returns. Past performance is not indicative of future results.', 14, y, { maxWidth: W - 28 });
 
   _pdfFooter(doc);
   doc.save(`SVC-Certificate-${inv.id}.pdf`);
@@ -11067,7 +10973,10 @@ function downloadStatement() {
     .sort((a, b) => new Date(b.transaction_date || b.created_at) - new Date(a.transaction_date || a.created_at));
 
   const totalInvested = PORTAL.investments.filter(i => !i.is_reinvestment).reduce((s, i) => s + (Number(i.amount) || 0), 0);
-  const totalReturns  = PORTAL.investments.reduce((s, i) => s + (Number(i.amount) || 0) * (Number(i.pool_actual_rate) || 0), 0);
+  const _txnReturns90 = txns.filter(t => (t.type === 'return' || t.type === 'payout') && t.status !== 'cancelled').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+  const totalReturns  = _txnReturns90 > 0 ? _txnReturns90
+    : PORTAL.investments.filter(i => ['paid_out', 'matured'].includes(i.status) && new Date(i.maturity_date || i.investment_date) >= from90)
+                        .reduce((s, i) => s + (i.actual_return_amount || i.expected_return_amount || 0), 0);
   const walletBal     = Number(investor.wallet_balance) || 0;
   const portfolioVal  = totalInvested + walletBal + totalReturns;
 
@@ -11075,6 +10984,7 @@ function downloadStatement() {
 
   // Header
   let y = _pdfHeader(doc, 'ACCOUNT STATEMENT', periodLabel);
+  _pdfWatermark(doc);
   y += 6;
 
   // Investor info
@@ -11092,7 +11002,7 @@ function downloadStatement() {
   const stats = [
     ['Portfolio Value', Utils.rand(portfolioVal), [255, 155, 12]],
     ['Wallet Balance',  Utils.rand(walletBal),    [0, 150, 255]],
-    ['Total Invested',  Utils.rand(totalInvested), [26, 34, 53]],
+    ['Total Invested',  Utils.rand(totalInvested), [48, 48, 48]],
     ['Returns Earned',  Utils.rand(totalReturns),  [34, 197, 94]],
   ];
   const boxW = (W - 28 - 9) / 4;
@@ -11117,14 +11027,20 @@ function downloadStatement() {
     doc.text('No transactions in the last 90 days.', 14, y + 10);
   } else {
     const typeMap = { deposit: 'Deposit', withdrawal: 'Withdrawal', investment: 'Investment', return: 'Return', payout: 'Payout', fee: 'Fee', referral_bonus: 'Referral Bonus', gift_sent: 'Gift Sent', gift_received: 'Gift Received', reward: 'XP Reward' };
-    const tableHead = [['Date', 'Type', 'Description', 'Amount', 'Status']];
-    const tableBody = txns.map(t => [
-      Utils.date(t.transaction_date || t.created_at),
-      typeMap[t.type] || t.type,
-      (t.description || '—').slice(0, 38),
-      (t.amount > 0 ? '+' : '') + Utils.rand(t.amount),
-      (t.status || '—').toUpperCase(),
-    ]);
+    const tableHead = [['Date', 'Type', 'Description', 'Debit', 'Credit', 'Status']];
+    const _isCreditTx = t => ['deposit','return','payout','referral_bonus','gift_received','reward'].includes(t.type);
+    const _isDebitTx  = t => ['withdrawal','investment','platform_fee','fee','gift_sent'].includes(t.type);
+    const tableBody = txns.map(t => {
+      const absAmt = Math.abs(Number(t.amount) || 0);
+      return [
+        Utils.date(t.transaction_date || t.created_at),
+        typeMap[t.type] || t.type,
+        t.description || t.pool_name || '—',
+        _isDebitTx(t)  ? Utils.rand(absAmt) : '—',
+        _isCreditTx(t) ? Utils.rand(absAmt) : '—',
+        (t.status || '—').toUpperCase(),
+      ];
+    });
 
     if (doc.autoTable) {
       doc.autoTable({
@@ -11132,15 +11048,16 @@ function downloadStatement() {
         body: tableBody,
         startY: y,
         margin: { left: 14, right: 14 },
-        headStyles: { fillColor: [26, 34, 53], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
+        headStyles: { fillColor: [48, 48, 48], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
         bodyStyles: { fontSize: 8, textColor: [26, 26, 26] },
         alternateRowStyles: { fillColor: [247, 248, 250] },
         columnStyles: {
           0: { cellWidth: 22 },
           1: { cellWidth: 26 },
           2: { cellWidth: 'auto' },
-          3: { cellWidth: 28, halign: 'right' },
-          4: { cellWidth: 22, halign: 'center' },
+          3: { cellWidth: 28, halign: 'right', textColor: [239, 68, 68] },
+          4: { cellWidth: 28, halign: 'right', textColor: [22, 163, 74]  },
+          5: { cellWidth: 20, halign: 'center' },
         },
         didDrawPage: () => _pdfFooter(doc),
       });
@@ -11168,7 +11085,7 @@ function downloadStatement() {
 }
 
 /* downloadSaStatement() — sub-account statement (matches main investor statement structure) */
-async function downloadSaStatement(saId, saName) {
+function downloadSaStatement(saId, saName) {
   const sa           = (PORTAL.subAccounts || []).find(a => a.id === saId) || { id: saId, name: saName, wallet_balance: 0 };
   const investments  = (PORTAL.investments  || []).filter(i => i.sub_account_id === saId);
   const transactions = (PORTAL.transactions || []).filter(t => t.sub_account_id === saId);
@@ -11178,18 +11095,22 @@ async function downloadSaStatement(saId, saName) {
   const activeInvAmt  = investments.filter(i => i.status === 'active').reduce((s, i) => s + (Number(i.amount) || 0), 0);
   const totalValue    = activeInvAmt + walletBal;
   const totalDeposits = transactions.filter(t => t.type === 'deposit' && t.status !== 'cancelled').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
-  const totalReturns  = transactions.filter(t => t.type === 'return' || t.type === 'payout').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+  const _saTxnReturns = transactions.filter(t => (t.type === 'return' || t.type === 'payout') && t.status !== 'cancelled').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+  const totalReturns  = _saTxnReturns > 0 ? _saTxnReturns
+    : investments.filter(i => ['paid_out', 'matured'].includes(i.status))
+                 .reduce((s, i) => s + (i.actual_return_amount || i.expected_return_amount || 0), 0);
   const totalInvested = totalDeposits;
   const activeInv     = investments.filter(i => i.status === 'active').length;
 
-  const now             = new Date();
-  const generatedAt     = now.toLocaleString('en-ZA', { dateStyle: 'long', timeStyle: 'short' });
+  const now           = new Date();
+  const generatedAt   = now.toLocaleString('en-ZA', { dateStyle: 'long', timeStyle: 'short' });
   const statementNumber = `SVC-${now.getFullYear()}-SA-${String(Math.floor(Math.random() * 90000) + 10000)}`;
-  const logoUrl         = `${window.location.origin}/assets/sv-capital-logo-horizontal-white-text.png`;
-  const logoOutlineUrl  = new URL('../assets/logo-outline.png', window.location.href).href;
-  const saType          = sa.type ? sa.type.charAt(0).toUpperCase() + sa.type.slice(1) : 'Sub-Account';
-  const parentName      = `${investor.first_name || ''} ${investor.last_name || ''}`.trim() || 'Parent Investor';
+  const logoUrl       = `${window.location.origin}/assets/sv-capital-logo-horizontal-white-text.png`;
+  const logoOutlineUrl = new URL('../assets/logo-outline.png', window.location.href).href;
+  const saType        = sa.type ? sa.type.charAt(0).toUpperCase() + sa.type.slice(1) : 'Sub-Account';
+  const parentName    = `${investor.first_name || ''} ${investor.last_name || ''}`.trim() || 'Parent Investor';
 
+  // ─── PORTFOLIO SUMMARY ───
   const summarySection = `
     <section style="margin-bottom:36px">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #fec24f">
@@ -11224,11 +11145,12 @@ async function downloadSaStatement(saId, saName) {
       </div>
     </section>`;
 
+  // ─── PERFORMANCE ANALYSIS ───
   let performanceSection = '';
   if (investments.length > 0) {
     const byProduct = {};
     investments.forEach(inv => {
-      const p = inv.product_type || 'unknown';
+      const p = (inv.product_type === 'smme' ? 'short_term' : inv.product_type) || 'unknown';
       if (!byProduct[p]) byProduct[p] = { count: 0, capital: 0, returns: 0 };
       byProduct[p].count++;
       if (!inv.is_reinvestment) byProduct[p].capital += Number(inv.amount) || 0;
@@ -11270,6 +11192,7 @@ async function downloadSaStatement(saId, saName) {
       </section>`;
   }
 
+  // ─── INVESTMENT DETAILS ───
   let investmentSection = '';
   if (investments.length > 0) {
     const invRows = investments.map(inv => {
@@ -11313,7 +11236,8 @@ async function downloadSaStatement(saId, saName) {
       </section>`;
   }
 
-  const typeMap    = { deposit: 'Deposit', withdrawal: 'Withdrawal', investment: 'Investment', return: 'Return', payout: 'Payout', fee: 'Fee', referral_bonus: 'Referral Bonus', gift_sent: 'Gift Sent', gift_received: 'Gift Received', reward: 'XP Reward', transfer_in: 'Transfer In', transfer_out: 'Transfer Out' };
+  // ─── TRANSACTION LEDGER ───
+  const typeMap = { deposit: 'Deposit', withdrawal: 'Withdrawal', investment: 'Investment', return: 'Return', payout: 'Payout', fee: 'Fee', referral_bonus: 'Referral Bonus', gift_sent: 'Gift Sent', gift_received: 'Gift Received', reward: 'XP Reward', transfer_in: 'Transfer In', transfer_out: 'Transfer Out' };
   const sortedTxns = [...transactions].sort((a, b) => new Date(b.transaction_date || b.created_at) - new Date(a.transaction_date || a.created_at));
   const txnRows = sortedTxns.length > 0 ? sortedTxns.map(t => {
     const isPos    = !['withdrawal', 'fee', 'investment', 'gift_sent', 'transfer_out'].includes(t.type);
@@ -11331,8 +11255,8 @@ async function downloadSaStatement(saId, saName) {
     </tr>`;
   }).join('') : `<tr><td colspan="6" style="padding:20px;text-align:center;color:#9ca3af;font-size:11px">No transactions found for this account</td></tr>`;
 
-  const totalTransferIn = transactions.filter(t => t.type === 'transfer_in').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
-  const totalFees       = transactions.filter(t => t.type === 'fee').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+  const totalTransferIn  = transactions.filter(t => t.type === 'transfer_in').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+  const totalFees        = transactions.filter(t => t.type === 'fee').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
 
   const ledgerSection = `
     <section style="margin-bottom:36px">
@@ -11361,6 +11285,7 @@ async function downloadSaStatement(saId, saName) {
       </div>
     </section>`;
 
+  // ─── FULL DOCUMENT ───
   const htmlContent = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -11432,8 +11357,19 @@ async function downloadSaStatement(saId, saName) {
 </body>
 </html>`;
 
-  const saFilename = `SVC-Statement-${(saName || 'Account').replace(/[^a-zA-Z0-9_-]/g, '-')}-${now.toISOString().slice(0, 10)}.html`;
-  await _shareOrPrint(htmlContent, saFilename);
+  const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const win  = window.open(url, '_blank');
+  if (!win) {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `SVC-Statement-${(saName || 'Account').replace(/[^a-zA-Z0-9_-]/g, '-')}-${now.toISOString().slice(0, 10)}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    Toast.success('Statement downloaded — open in a browser to save as PDF.');
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 120000);
 }
 
 /* ═══════════════════════════════════════════════
@@ -11484,17 +11420,6 @@ function renderRiskProfile() {
   const inv = PORTAL.investor;
   if (!inv) return;
 
-  // ── Populate profile hero ─────────────────────────────────
-  const fullName = [inv.first_name, inv.last_name].filter(Boolean).join(' ') || inv.name || 'Investor';
-  const initials = fullName.split(' ').map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
-  const _heroSet = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '—'; };
-  _heroSet('profileHeroAvatar', initials);
-  _heroSet('profileHeroName', fullName);
-  _heroSet('profileHeroEmail', inv.email);
-  _heroSet('profileHeroId', inv.id);
-  _heroSet('profileHeroJoined', inv.date_joined ? new Date(inv.date_joined).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }) : '—');
-  _heroSet('profileHeroStatus', (inv.status || 'active').replace(/^\w/, c => c.toUpperCase()));
-
   // ── Populate personal info form ───────────────────────────
   const _set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
   _set('profFirstName', inv.first_name);
@@ -11515,7 +11440,7 @@ function renderRiskProfile() {
   _setText('profSummaryId',       inv.id);
   _setText('profSummaryJoined',   inv.date_joined ? new Date(inv.date_joined).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
 
-  // Add copy button for Investor ID — placed BEFORE the value so layout is: [label] ... [copy] [value]
+  // Copy button for Investor ID — placed BEFORE the value: [label] ... [copy] [value]
   const invIdEl = document.getElementById('profSummaryId');
   if (invIdEl && !invIdEl.previousElementSibling?.classList?.contains('copy-btn')) {
     const btn = document.createElement('button');
@@ -11922,9 +11847,21 @@ function openRecurringModal() {
     toggle.checked = !!(inv && inv.recurring_enabled);
     updateRecurringToggleStyle();
   }
-  if (amtEl && inv?.recurring_amount)         amtEl.value   = inv.recurring_amount;
-  if (prodSel && inv?.recurring_product_type) prodSel.value = inv.recurring_product_type;
-  if (daySel  && inv?.recurring_day)          daySel.value  = inv.recurring_day;
+  if (amtEl && inv?.recurring_amount) amtEl.value = inv.recurring_amount;
+  if (daySel && inv?.recurring_day)   daySel.value = inv.recurring_day;
+
+  // Populate product types from pools that currently have an open pool
+  if (prodSel) {
+    const openProductTypes = [...new Set(
+      (PORTAL.pools || [])
+        .filter(p => p.status === 'open')
+        .map(p => p.product_type)
+        .filter(Boolean)
+    )];
+    prodSel.innerHTML = '<option value="">Select a product…</option>' +
+      openProductTypes.map(pt => `<option value="${pt}">${Utils.productInfo(pt).label || pt}</option>`).join('');
+    if (inv?.recurring_product_type) prodSel.value = inv.recurring_product_type;
+  }
 
   Modal.open('recurringModal');
 }
@@ -11944,6 +11881,22 @@ async function saveRecurringInvestment() {
     if (!amount || amount < 100) { Toast.error('Please enter a monthly amount of at least R100'); return; }
     if (!productType) { Toast.error('Please select a product type'); return; }
     if (!day || day < 1 || day > 31) { Toast.error('Please select a valid day (1–31)'); return; }
+
+    // Validate against the open pool's minimum investment
+    const openPool = (PORTAL.pools || []).find(p => p.status === 'open' && p.product_type === productType);
+    if (openPool) {
+      const minInvest = parseFloat(openPool.min_investment) || 0;
+      if (amount < minInvest) {
+        Toast.error(`Minimum investment for this product is ${Utils.rand(minInvest)}`);
+        return;
+      }
+      const platformFee = Math.round(amount * 0.01 * 100) / 100;
+      const totalRequired = amount + platformFee;
+      const walletBal = parseFloat(PORTAL.investor?.wallet_balance) || 0;
+      if (walletBal < totalRequired) {
+        Toast.warn(`Note: your wallet (${Utils.rand(walletBal)}) will need at least ${Utils.rand(totalRequired)} on the chosen day (${Utils.rand(amount)} + ${Utils.rand(platformFee)} platform fee).`);
+      }
+    }
   }
 
   const investorId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
@@ -11965,7 +11918,7 @@ async function saveRecurringInvestment() {
     Modal.close('recurringModal');
     SVC.track('svc_recurring_investment_set', { enabled, product_type: productType, amount, day });
 
-    const PRODUCT_LABELS = { cattle:'Cattle Finance', solar_7yr:'Solar 7yr', solar_6yr:'Solar 6yr', solar_5yr:'Solar 5yr', short_term:'Short Term', smme:'SMME Finance', delivery_bike:'Delivery Bike', other:'Other' };
+    const PRODUCT_LABELS = { cattle:'Cattle Finance', solar_7yr:'Solar 7yr', solar_6yr:'Solar 6yr', solar_5yr:'Solar 5yr', short_term:'Short Term', smme:'Short Term', delivery_bike:'Delivery Bike', other:'Other' };
     if (enabled) {
       const suffix = day === 1 ? 'st' : day === 2 ? 'nd' : day === 3 ? 'rd' : 'th';
       Toast.success(`Recurring ${Utils.rand(amount)}/month into ${PRODUCT_LABELS[productType] || productType} set for the ${day}${suffix} of each month`);
@@ -11988,7 +11941,7 @@ function _renderRecurringStatusSummary() {
   const summaryEl = document.getElementById('recurringStatusSummary');
   if (!summaryEl) return;
 
-  const PRODUCT_LABELS = { cattle:'Cattle Finance', solar_7yr:'Solar 7yr', solar_6yr:'Solar 6yr', solar_5yr:'Solar 5yr', short_term:'Short Term', smme:'SMME Finance', delivery_bike:'Delivery Bike', other:'Other' };
+  const PRODUCT_LABELS = { cattle:'Cattle Finance', solar_7yr:'Solar 7yr', solar_6yr:'Solar 6yr', solar_5yr:'Solar 5yr', short_term:'Short Term', smme:'Short Term', delivery_bike:'Delivery Bike', other:'Other' };
   if (inv && inv.recurring_enabled && inv.recurring_amount && inv.recurring_product_type) {
     const day    = inv.recurring_day || 1;
     const suffix = day === 1 ? 'st' : day === 2 ? 'nd' : day === 3 ? 'rd' : 'th';
@@ -12068,10 +12021,20 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 function _initPushNotifToggle() {
-  if (!document.getElementById('pushNotifToggle')) return;
+  const toggle     = document.getElementById('pushNotifToggle');
+  const slider     = document.getElementById('pushNotifSlider');
+  const statusText = document.getElementById('pushNotifStatusText');
+  if (!toggle) return;
+
   const saved   = localStorage.getItem(PUSH_PREF_KEY);
   const enabled = saved === 'true';
-  _syncPushToggleUI(enabled);
+  toggle.checked = enabled;
+  if (slider) {
+    slider.style.background = enabled ? '#fec24f' : '#ccc';
+  }
+  if (statusText) statusText.textContent = enabled
+    ? 'Enabled — you will receive investment alerts'
+    : 'Enable to receive investment alerts';
 }
 
 async function togglePushNotifications(checked) {
@@ -12193,88 +12156,63 @@ async function togglePushNotifications(checked) {
   }
 }
 
-/**
- * Silently subscribe this browser to push notifications on portal load.
- * Runs automatically after the portal initialises; respects explicit opt-outs.
- * The native-app path is already handled by native.js/initPush().
- */
-async function _autoRegisterPush() {
-  if (window.__SVC_NATIVE__) return;
-  if (!('Notification' in window) || !('PushManager' in window) || !('serviceWorker' in navigator)) return;
-  if (Notification.permission === 'denied') return;
-  // Respect explicit opt-out from the settings toggle
-  if (localStorage.getItem(PUSH_PREF_KEY) === 'false') return;
+/* ═══════════════════════════════════════════════════════════════
+   PWA INSTALL PROMPT
+   ═══════════════════════════════════════════════════════════════ */
+let _pwaPromptEvt = null;
 
-  try {
-    // Wait for the service worker (registered on the 'load' event in index.html)
-    let swReg = window._swReg;
-    if (!swReg) {
-      try { swReg = await navigator.serviceWorker.ready; } catch (_) { return; }
-    }
-    if (!swReg) return;
-
-    // If already subscribed just sync the UI state and bail
-    const existing = await swReg.pushManager.getSubscription().catch(() => null);
-    if (existing) {
-      localStorage.setItem(PUSH_PREF_KEY, 'true');
-      _syncPushToggleUI(true);
-      return;
-    }
-
-    // Request permission (no-op if already 'granted')
-    let permission = Notification.permission;
-    if (permission === 'default') {
-      permission = await Notification.requestPermission();
-    }
-    if (permission !== 'granted') {
-      localStorage.setItem(PUSH_PREF_KEY, 'false');
-      _syncPushToggleUI(false);
-      return;
-    }
-
-    // Fetch VAPID public key from server
-    const keyRes = await fetch((window.__SVC_API_BASE__ || '/api/') + 'push/vapid-public-key');
-    if (!keyRes.ok) return;
-    const { publicKey } = await keyRes.json();
-
-    // Subscribe
-    const subscription = await swReg.pushManager.subscribe({
-      userVisibleOnly:      true,
-      applicationServerKey: urlBase64ToUint8Array(publicKey),
-    });
-
-    // Register subscription with server
-    const token = (typeof Auth !== 'undefined' ? Auth.getToken() : null) || localStorage.getItem('svc_token');
-    const subRes = await fetch((window.__SVC_API_BASE__ || '/api/') + 'push/subscribe', {
-      method:  'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({ subscription: subscription.toJSON(), userAgent: navigator.userAgent }),
-    });
-
-    if (subRes.ok) {
-      localStorage.setItem(PUSH_PREF_KEY, 'true');
-      _syncPushToggleUI(true);
-    }
-  } catch (err) {
-    console.warn('[Push] auto-register error:', err.message || err);
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  _pwaPromptEvt = e;
+  if (!localStorage.getItem('pwa_installed') && !localStorage.getItem('pwa_dismissed')) {
+    setTimeout(() => {
+      const banner = document.getElementById('pwaInstallBanner');
+      if (banner) banner.style.display = 'flex';
+    }, 8000);
   }
+});
+
+window.addEventListener('appinstalled', () => {
+  localStorage.setItem('pwa_installed', '1');
+  const banner = document.getElementById('pwaInstallBanner');
+  if (banner) banner.style.display = 'none';
+  Toast.success('App installed! You can now open SV Capital from your home screen.');
+});
+
+function pwaInstall() {
+  if (!_pwaPromptEvt) return;
+  _pwaPromptEvt.prompt();
+  _pwaPromptEvt.userChoice.then(({ outcome }) => {
+    if (outcome === 'accepted') localStorage.setItem('pwa_installed', '1');
+    _pwaPromptEvt = null;
+    const banner = document.getElementById('pwaInstallBanner');
+    if (banner) banner.style.display = 'none';
+  });
 }
 
-function _syncPushToggleUI(enabled) {
-  const toggle     = document.getElementById('pushNotifToggle');
-  const slider     = document.getElementById('pushNotifSlider');
-  const statusText = document.getElementById('pushNotifStatusText');
-  if (toggle) toggle.checked = enabled;
-  if (slider) slider.style.background = enabled ? '#fec24f' : '#ccc';
-  if (statusText) statusText.textContent = enabled
-    ? 'Enabled — you will receive investment alerts'
-    : 'Enable to receive investment alerts';
+function _dismissPwaPrompt() {
+  const banner = document.getElementById('pwaInstallBanner');
+  if (banner) banner.style.display = 'none';
+  localStorage.setItem('pwa_dismissed', Date.now().toString());
 }
 
-/* PWA install prompts removed — users are directed to App Store / Google Play */
+/* ── iOS / Safari "Add to Home Screen" prompt ── */
+(function _initIOSBanner() {
+  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) && !window.MSStream;
+  const isStandalone = window.navigator.standalone === true;
+  if (!isIOS || isStandalone) return;
+  if (localStorage.getItem('ios_pwa_dismissed')) return;
+  setTimeout(() => {
+    const el = document.getElementById('iosPwaBanner');
+    if (el) el.style.display = 'flex';
+  }, 8000);
+})();
+
+function _dismissIosBanner() {
+  const el = document.getElementById('iosPwaBanner');
+  if (el) el.style.display = 'none';
+  localStorage.setItem('ios_pwa_dismissed', '1');
+}
 
 /* ═══════════════════════════════════════════════════════════════
    PORTFOLIO ANALYTICS VIEW
@@ -12301,10 +12239,18 @@ function _renderAnalyticsKPIs() {
     ? done.reduce((s, i) => {
         const start = new Date(i.start_date || i.created_at);
         const end   = new Date(i.end_date || i.maturity_date || i.updated_at);
-        return s + (isNaN(start) || isNaN(end) ? (i.term_days || 0) : Math.max(0, (end - start) / 86400000));
+        const actual = isNaN(start) || isNaN(end) ? 0 : Math.max(0, (end - start) / 86400000);
+        const expected = (parseFloat(i.term_months) || 0) * 30;
+        return s + Math.max(actual, expected, 30);
       }, 0) / done.length
     : 0;
-  const irr = moic > 0 && avgDays > 0 ? (Math.pow(moic, 365 / avgDays) - 1) : 0;
+  // Weighted-average annual rate across all investments (contracted rate × amount)
+  const totalAmt = all.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+  const weightedRate = totalAmt > 0
+    ? all.reduce((s, i) => s + (parseFloat(i.annual_rate || i.expected_return_rate || 0)) * (parseFloat(i.amount) || 0), 0) / totalAmt
+    : 0;
+  const irr = weightedRate > 0 ? weightedRate
+    : (moic > 0 && avgDays > 0 ? (Math.pow(moic, 365 / avgDays) - 1) : 0);
 
   const byPool = {};
   done.forEach(i => {
@@ -12321,7 +12267,7 @@ function _renderAnalyticsKPIs() {
 
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
   set('an-moic',    moic > 0 ? moic.toFixed(3) + 'x' : '—');
-  set('an-irr',     irr > 0 ? (irr * 100).toFixed(1) + '% p.a.' : '—');
+  set('an-irr',     irr > 0 ? Math.min(irr * 100, 9999).toFixed(2) + '% p.a.' : '—');
   set('an-best',    bestPool !== '—' ? bestPool : (all.length ? (all[0].pool_name || '—') : '—'));
   set('an-avgdays', avgDays > 0 ? Math.round(avgDays) + ' d' : '—');
 }
@@ -12424,15 +12370,13 @@ function _renderAnalyticsTimeline() {
     return;
   }
   const statusMeta = s => {
-    const map = { active:'#22c55e', paid_out:'#656565', matured:'#eda5ff', cancelled:'#ef4444', pending:'#f97316' };
+    const map = { active:'#22c55e', paid_out:'#656565', matured:'#eda5ff', cancelled:'#ef4444', pending:'#f97316', open:'#22c55e', closed:'#656565' };
     return map[s] || '#9ca3af';
   };
   const fmt = v => v ? new Date(v).toLocaleDateString('en-ZA', { day:'numeric', month:'short', year:'numeric' }) : '—';
   tbody.innerHTML = invs.slice(0, 30).map(i => {
-    // Connect the row to its pool so name/dates/status reflect the actual pool.
     const pool    = (PORTAL.pools || []).find(p => p.id === i.pool_id) || {};
     const capital = parseFloat(i.amount) || 0;
-    const ret     = parseFloat(i.net_return) || parseFloat(i.expected_return) || 0;
     const startVal = pool.start_date || i.start_date || i.created_at;
     const endVal   = pool.end_date   || i.end_date   || i.maturity_date;
     const start   = new Date(startVal);
@@ -12476,17 +12420,20 @@ function updateWealthProjection() {
 }
 
 function exportAnalyticsCSV() {
-  const rows = [['Pool', 'Invested (R)', 'Return (R)', 'Rate (%)', 'Start', 'End', 'Days', 'Status']];
+  const rows = [['Pool', 'Invested (R)', 'Target Return (% p.a.)', 'Start', 'End', 'Days', 'Status']];
   PORTAL.investments.forEach(i => {
+    const pool = (PORTAL.pools || []).find(p => p.id === i.pool_id) || {};
     const fmt = v => v ? new Date(v).toLocaleDateString('en-ZA') : '';
-    const start = new Date(i.start_date || i.created_at);
-    const end   = new Date(i.end_date   || i.maturity_date);
+    const startVal = pool.start_date || i.start_date || i.created_at;
+    const endVal   = pool.end_date   || i.end_date   || i.maturity_date;
+    const start = new Date(startVal);
+    const end   = new Date(endVal);
     const days  = (!isNaN(start) && !isNaN(end)) ? Math.max(0, Math.round((end - start) / 86400000)) : (i.term_days || '');
+    const status = (pool.status === 'matured' || pool.status === 'paid_out') ? 'matured' : (i.status || pool.status || '');
     rows.push([
-      i.pool_name || '', parseFloat(i.amount) || 0,
-      parseFloat(i.net_return) || parseFloat(i.expected_return) || 0,
-      parseFloat(i.interest_rate) || '', fmt(i.start_date || i.created_at),
-      fmt(i.end_date || i.maturity_date), days, i.status || '',
+      pool.name || i.pool_name || '', parseFloat(i.amount) || 0,
+      Utils.pct(pool.annual_rate || i.annual_rate || i.expected_return_rate || 0),
+      fmt(startVal), fmt(endVal), days, status,
     ]);
   });
   const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
