@@ -5778,12 +5778,41 @@ function setupTxnFilters() {
   if (dateTo) dateTo.addEventListener('change', filter);
 }
 
-async function changeTxnStatus(txnId, newStatus, investorId, amount) {
+let _cancelTxnPending = null; // { txnId, investorId, amount }
+
+function openCancelTxnModal(txnId, investorId, amount) {
+  _cancelTxnPending = { txnId, investorId, amount };
+  const noteEl = document.getElementById('cancelTxnNote');
+  if (noteEl) noteEl.value = '';
+  Modal.open('cancelTxnModal');
+}
+
+async function confirmCancelTxn() {
+  if (!_cancelTxnPending) return;
+  const note = (document.getElementById('cancelTxnNote')?.value || '').trim();
+  if (!note) { Toast.error('Please enter a cancellation note'); return; }
+  Modal.close('cancelTxnModal');
+  await changeTxnStatus(_cancelTxnPending.txnId, 'failed', _cancelTxnPending.investorId, _cancelTxnPending.amount, note);
+  _cancelTxnPending = null;
+}
+
+async function changeTxnStatus(txnId, newStatus, investorId, amount, cancelNote) {
+  // 'failed' always requires a note — open the modal if called without one
+  if (newStatus === 'failed' && !cancelNote) {
+    openCancelTxnModal(txnId, investorId, amount);
+    return;
+  }
   try {
     const txn = STATE.transactions.find(t => t.id === txnId);
     if (!txn) return;
 
-    await API.transactions.update(txnId, { ...txn, status: newStatus });
+    const patch = { status: newStatus };
+    if (cancelNote) {
+      patch.description = txn.description
+        ? `${txn.description} | Cancelled: ${cancelNote}`
+        : `Cancelled: ${cancelNote}`;
+    }
+    await API.transactions.update(txnId, patch);
 
     // If approving a pending deposit to completed, credit the investor's wallet
     if (newStatus === 'completed' && txn.status !== 'completed' && txn.type === 'deposit' && investorId && amount > 0) {
@@ -5795,6 +5824,8 @@ async function changeTxnStatus(txnId, newStatus, investorId, amount) {
       } else {
         Toast.success('Transaction status updated to completed');
       }
+    } else if (newStatus === 'failed') {
+      Toast.success('Transaction cancelled — note saved');
     } else {
       Toast.success(`Transaction status updated to ${newStatus}`);
     }
