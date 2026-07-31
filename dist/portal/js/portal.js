@@ -6034,7 +6034,18 @@ function _updateXPNavBadge() {
    ═════════════════════════════════════════════════════════ */
 function renderQuestView() {
   if (!PORTAL.quests) {
-    loadQuestData().then(renderQuestView);
+    const _catEl = document.getElementById('questCategories');
+    if (_catEl && !_catEl.dataset.questLoading) {
+      _catEl.dataset.questLoading = '1';
+      _catEl.innerHTML = '<div style="text-align:center;padding:40px 16px;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin" style="font-size:1.4rem;margin-bottom:10px;display:block"></i>Loading quests…</div>';
+    }
+    if (!_catEl?.dataset.questLoading || _catEl.dataset.questLoading === '1') {
+      if (_catEl) _catEl.dataset.questLoading = '2';
+      loadQuestData().then(() => {
+        if (_catEl) delete _catEl.dataset.questLoading;
+        renderQuestView();
+      });
+    }
     return;
   }
 
