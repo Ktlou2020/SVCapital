@@ -1844,7 +1844,10 @@ function renderOverview(skipCharts) {
   const totalInvested = PORTAL.investments.filter(i => i.status === 'active').reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
   const maturedInvs   = PORTAL.investments.filter(i => i.status === 'matured');
   const totalMatured  = maturedInvs.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
-  const totalRet      = maturedInvs.reduce((s, i) => s + (parseFloat(i.expected_return) || (parseFloat(i.amount) || 0) * (parseFloat(i.annual_rate) || 0)), 0);
+  const totalRet      = maturedInvs.reduce((s, i) => {
+    const ar = parseFloat(i.pool_actual_rate) || 0;
+    return s + (ar > 0 ? (parseFloat(i.amount) || 0) * ar : (parseFloat(i.expected_return) || (parseFloat(i.amount) || 0) * (parseFloat(i.annual_rate) || 0)));
+  }, 0);
   const totalValue    = totalInvested + (parseFloat(inv.wallet_balance) || 0);
   const returnPct     = totalMatured > 0 ? (totalRet / totalMatured * 100).toFixed(1) : '0';
   const activeCount = PORTAL.investments.filter(i => i.status === 'active').length;
@@ -3546,12 +3549,13 @@ async function loadMarketplace() {
       .map(p => {
         const pi = Utils.productInfo(p.product_type);
         return {
-          product_type: p.product_type,
-          label:        pi.label || p.product_type,
-          is_active:    true,
-          sort_order:   0,
+          product_type:   p.product_type,
+          label:          pi.label || p.product_type,
+          is_active:      true,
+          sort_order:     0,
           min_investment: p.min_investment,
           annual_rate:    p.annual_rate,
+          benchmark_rate: p.annual_rate,
         };
       });
   }
@@ -3613,11 +3617,11 @@ function renderMarketplace() {
   else { if (banner) banner.textContent = 'Investment Products'; renderProductsGrid(); }
 }
 
-// Count of open/waitlist pools for a product type
+// Count of open/waitlist/filling pools for a product type
 function _openPoolsForProduct(type) {
   return PORTAL.pools.filter(p => {
     if (p.product_type !== type) return false;
-    return p.status === 'open' || p.status === 'waitlist';
+    return p.status === 'open' || p.status === 'waitlist' || p.status === 'filling';
   });
 }
 
@@ -5555,9 +5559,10 @@ function buildStatementHTML(opts) {
       if (!confirmedByProduct[p]) confirmedByProduct[p] = { count:0, capital:0, returns:0 };
       confirmedByProduct[p].count++;
       confirmedByProduct[p].capital += Number(inv.amount) || 0;
-      const earned = inv.actual_return_amount != null
-        ? Number(inv.actual_return_amount)
-        : (Number(inv.amount) || 0) * (Number(inv.pool_actual_rate) || 0);
+      const _ar = Number(inv.pool_actual_rate) || 0;
+      const earned = _ar > 0
+        ? (Number(inv.amount) || 0) * _ar
+        : (Number(inv.actual_return_amount) || 0);
       confirmedByProduct[p].returns += earned;
     });
 
@@ -5659,9 +5664,9 @@ function buildStatementHTML(opts) {
     completedInvestments.forEach(inv => {
       const info       = getProductInfo(inv.product_type);
       const actualRate = Number(inv.pool_actual_rate) || 0;
-      const earned     = inv.actual_return_amount != null
-        ? Number(inv.actual_return_amount)
-        : (Number(inv.amount) || 0) * actualRate;
+      const earned     = actualRate > 0
+        ? (Number(inv.amount) || 0) * actualRate
+        : (Number(inv.actual_return_amount) || 0);
       totCompletedCapital  += Number(inv.amount) || 0;
       totCompletedReturns  += earned;
       completedRows += `<tr style="border-bottom:1px solid #f0f0f0">
