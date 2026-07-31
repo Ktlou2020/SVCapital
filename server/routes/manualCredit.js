@@ -337,6 +337,40 @@ router.post('/reconcile-wallet', async (req, res) => {
   }
 });
 
+/* ─── POST /api/admin/pools/fix-product-type ──────────────────────────────────
+   One-shot: renames product_type = 'smme' → 'short_term' across investment_pools,
+   investments, and products tables immediately, without requiring a server restart.
+   ─────────────────────────────────────────────────────────────────────── */
+router.post('/pools/fix-product-type', async (req, res) => {
+  try {
+    const { rowCount: poolRows } = await pool.query(
+      `UPDATE investment_pools SET product_type = 'short_term', updated_at = NOW() WHERE product_type = 'smme'`
+    );
+    const { rowCount: invRows } = await pool.query(
+      `UPDATE investments SET product_type = 'short_term', updated_at = NOW() WHERE product_type = 'smme'`
+    );
+    const { rowCount: prodRows } = await pool.query(
+      `UPDATE products SET product_type = 'short_term', updated_at = NOW() WHERE product_type = 'smme'`
+    ).catch(() => ({ rowCount: 0 }));
+
+    const total = poolRows + invRows + prodRows;
+
+    setImmediate(() => audit.log({
+      actorId:    req.user.id,
+      actorEmail: req.user.email,
+      action:     'admin.fix_product_type_smme',
+      entityType: 'investment_pools',
+      description: `Renamed product_type smme→short_term: ${poolRows} pools, ${invRows} investments, ${prodRows} products.`,
+      ip:         req.ip,
+    }).catch(() => {}));
+
+    res.json({ success: true, poolRows, invRows, prodRows, total });
+  } catch (err) {
+    console.error('/admin/pools/fix-product-type error:', err.message);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
 /* ─── POST /api/admin/override-wallet ────────────────────────────────────────
    Directly sets wallet_balance to the specified value without creating any
    transaction record. Admin-only correction tool for balance discrepancies
