@@ -1015,9 +1015,9 @@ function _animateNum(el, target, prefix = '', suffix = '', duration = 900) {
     const progress = Math.min(elapsed / duration, 1);
     const eased = 1 - Math.pow(1 - progress, 3);
     const current = start + (safeTarget - start) * eased;
-    el.textContent = prefix + Math.round(current).toLocaleString('en-ZA') + suffix;
+    el.textContent = prefix + Number(current).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + suffix;
     if (progress < 1) requestAnimationFrame(step);
-    else { el.textContent = prefix + Math.round(safeTarget).toLocaleString('en-ZA') + suffix; el.dataset.animated = safeTarget; }
+    else { el.textContent = prefix + Number(safeTarget).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + suffix; el.dataset.animated = safeTarget; }
   };
   requestAnimationFrame(step);
 }
