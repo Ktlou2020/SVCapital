@@ -416,4 +416,130 @@ router.post('/override-wallet', async (req, res) => {
   }
 });
 
+/* ────────────────────────────────────────────────────────
+   POST /api/admin/invest-on-behalf
+   Body: { investorId, poolId, amount, chargeFee: bool }
+   Admin creates an investment for an investor, optionally charging
+   the 1% platform fee. Deducts from investor's wallet.
+   ──────────────────────────────────────────────────────── */
+router.post('/invest-on-behalf', async (req, res) => {
+  const { investorId, poolId, amount, chargeFee = false } = req.body || {};
+
+  const amt = parseFloat(amount);
+  if (!investorId || !poolId || isNaN(amt) || amt <= 0) {
+    return res.status(400).json({ error: 'investorId, poolId, and a positive amount are required.' });
+  }
+
+  const crypto = require('crypto');
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Lock investor row
+    const { rows: [inv] } = await client.query(
+      'SELECT id, first_name, last_name, email, wallet_balance FROM investors WHERE id = $1 FOR UPDATE',
+      [investorId]
+    );
+    if (!inv) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Investor not found.' });
+    }
+
+    // Fetch pool
+    const { rows: [poolRow] } = await client.query(
+      'SELECT id, name, product_type, annual_rate, min_investment, status, maturity_date FROM investment_pools WHERE id = $1',
+      [poolId]
+    );
+    if (!poolRow) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Pool not found.' });
+    }
+    if (!['open', 'active', 'filling'].includes(poolRow.status)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: `Pool is not accepting investments (status: ${poolRow.status}).` });
+    }
+
+    const minInv = parseFloat(poolRow.min_investment) || 0;
+    if (minInv && amt < minInv) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: `Minimum investment for this pool is R${minInv.toLocaleString('en-ZA')}.` });
+    }
+
+    const fee      = chargeFee ? Math.round(amt * 0.01 * 100) / 100 : 0;
+    const required = amt + fee;
+    const balance  = parseFloat(inv.wallet_balance) || 0;
+
+    if (balance < required - 0.001) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: `Insufficient wallet balance. Required: R${required.toLocaleString('en-ZA', { minimumFractionDigits: 2 })} (R${amt.toLocaleString('en-ZA', { minimumFractionDigits: 2 })} investment${chargeFee ? ` + R${fee.toLocaleString('en-ZA', { minimumFractionDigits: 2 })} fee` : ''}), available: R${balance.toLocaleString('en-ZA', { minimumFractionDigits: 2 })}.`,
+      });
+    }
+
+    // Deduct from wallet
+    await client.query(
+      `UPDATE investors SET wallet_balance = wallet_balance - $1,
+         total_invested = COALESCE(total_invested, 0) + $2,
+         updated_at = NOW()
+       WHERE id = $3`,
+      [required, amt, investorId]
+    );
+
+    // Create investment record
+    const invId  = 'INV-' + crypto.randomUUID().replace(/-/g, '').slice(0, 10).toUpperCase();
+    const now    = new Date();
+    const endDate = poolRow.maturity_date || null;
+    await client.query(
+      `INSERT INTO investments (id, investor_id, pool_id, pool_name, product_type, amount, annual_rate, status, start_date, end_date, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'active',NOW(),$8,NOW(),NOW())`,
+      [invId, investorId, poolId, poolRow.name, poolRow.product_type, amt, poolRow.annual_rate || 0, endDate]
+    );
+
+    // Optional platform fee transaction
+    if (chargeFee && fee > 0) {
+      const feeRef = 'FEE-' + crypto.randomUUID().replace(/-/g, '').slice(0, 10).toUpperCase();
+      await client.query(
+        `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, transaction_date, created_at, updated_at)
+         VALUES (gen_random_uuid(),$1,'platform_fee',$2,'completed',$3,$4,NOW(),NOW(),NOW())`,
+        [investorId, -fee, feeRef, `Platform fee (1%) for investment in ${poolRow.name}`]
+      );
+    }
+
+    // Deduct investment amount transaction
+    const invTxRef = 'INV-TXN-' + crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase();
+    await client.query(
+      `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, transaction_date, created_at, updated_at)
+       VALUES (gen_random_uuid(),$1,'investment',$2,'completed',$3,$4,NOW(),NOW(),NOW())`,
+      [investorId, -amt, invTxRef, `Investment in ${poolRow.name} (admin-created on behalf)`]
+    );
+
+    await client.query('COMMIT');
+
+    setImmediate(() => audit.log({
+      actorId:    req.user.id,
+      actorEmail: req.user.email,
+      action:     'investment.admin_created',
+      entityType: 'investments',
+      entityId:   invId,
+      description: `Admin created R${amt} investment in "${poolRow.name}" for ${inv.first_name} ${inv.last_name} (${investorId}). Fee charged: ${chargeFee ? `R${fee}` : 'none'}.`,
+      ip:         req.ip,
+    }).catch(() => {}));
+
+    res.json({
+      success: true,
+      investmentId: invId,
+      amount:       amt,
+      fee,
+      totalDeducted: required,
+      poolName:     poolRow.name,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('/admin/invest-on-behalf error:', err.message);
+    res.status(500).json({ error: 'Internal server error.' });
+  } finally {
+    client.release();
+  }
+});
+
 module.exports = router;
