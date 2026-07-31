@@ -5359,8 +5359,14 @@ function generateStatement() {
   }
   const transactions = allTxns.filter(t => _inPeriod(t.transaction_date || t.created_at));
 
-  // Filter investments whose start date falls within the period for the ledger
-  const investments = allInvestments.filter(i => _inPeriod(i.start_date || i.investment_date || i.created_at));
+  // Show investments that were active at any point during the period
+  const investments = allInvestments.filter(inv => {
+    const start = new Date(inv.start_date || inv.investment_date || inv.created_at || 0);
+    const end   = inv.end_date ? new Date(inv.end_date) : (inv.maturity_date ? new Date(inv.maturity_date) : null);
+    if (inv.status === 'active') return start <= to;
+    if (end) return start <= to && end >= from;
+    return start >= from && start <= to;
+  });
 
   // Compute stats
   const walletBal     = Number(investor.wallet_balance) || 0;
@@ -5374,6 +5380,7 @@ function generateStatement() {
     : allInvestments.filter(i => ['paid_out', 'matured'].includes(i.status) && _inPeriod(i.maturity_date || i.investment_date))
                     .reduce((s, i) => s + (i.actual_return_amount || i.expected_return_amount || 0), 0);
   const activeInv     = allInvestments.filter(i => i.status === 'active').length;
+  const totalCapital  = allInvestments.reduce((s, i) => s + (Number(i.amount) || 0), 0);
 
   // Build preview quick stats
   const previewEl = document.getElementById('stmtQuickStats');
@@ -5383,7 +5390,7 @@ function generateStatement() {
         ${quickStatRow('Period', `${fmtDate(from)} — ${fmtDate(to)}`)}
         ${quickStatRow('Investments in Period', investments.length)}
         ${quickStatRow('Transactions in Period', transactions.length)}
-        ${quickStatRow('Deposits', Utils.rand(totalDeposits))}
+        ${quickStatRow('Capital Invested', Utils.rand(totalCapital))}
         ${quickStatRow('Returns in Period', Utils.rand(totalReturns))}
         ${quickStatRow('Portfolio Value', Utils.rand(totalValue))}
       </div>
@@ -5400,6 +5407,7 @@ function generateStatement() {
   let html = buildStatementHTML({
     investor, investments, transactions,
     from, to, totalDeposits, totalReturns, walletBal, totalValue, activeInv,
+    totalCapital, activeInvAmt,
     statementNumber, generatedAt,
     incPortfolio:    effectivePortfolio,
     incInvestments:  effectiveInvestments,
@@ -5442,239 +5450,338 @@ function buildStatementHTML(opts) {
   const {
     investor, investments, transactions,
     from, to, totalDeposits, totalReturns, walletBal, totalValue, activeInv,
+    totalCapital, activeInvAmt,
     statementNumber, generatedAt,
     incPortfolio, incInvestments, incTransactions, incPerformance
   } = opts;
-  const totalInvested = totalDeposits; // alias for legacy references below
 
-  const fullName = `${investor.first_name || 'Thabo'} ${investor.last_name || 'Khumalo'}`;
-  const investorId = investor.id || 'INV-002';
-  const memberSince = investor.date_joined ? fmtDate(investor.date_joined) : '20 Aug 2022';
-  const ficaStatus = investor.fica_status || 'approved';
+  const fullName   = `${investor.first_name || ''} ${investor.last_name || ''}`.trim() || 'Investor';
+  const investorId = investor.id || '—';
+  const memberSince = investor.date_joined ? fmtDate(investor.date_joined) : '—';
+  const logoUrl     = `${window.location.origin}/assets/sv-capital-logo-horizontal-white-text.png`;
+  const logoOutlineUrl = new URL('../assets/logo-outline.png', window.location.href).href;
+  const now = new Date();
 
-  // Logo URL — absolute path using origin so it resolves inside the statement div
-  const logoUrl = `${window.location.origin}/assets/sv-capital-logo-horizontal-white-text.png`;
+  // ── Status helpers ──────────────────────────────────────────────────────
+  const STATUS_LABEL  = { active:'Active', matured:'Matured', paid_out:'Completed', cancelled:'Cancelled' };
+  const STATUS_COLOR  = { active:'#16a34a', matured:'#b45309', paid_out:'#1d4ed8', cancelled:'#6b7280' };
+  const STATUS_BG     = { active:'#f0fdf4', matured:'#fffbeb', paid_out:'#eff6ff',  cancelled:'#f8fafc' };
+  const STATUS_BORDER = { active:'#bbf7d0', matured:'#fde68a', paid_out:'#bfdbfe',  cancelled:'#e2e8f0' };
+
+  function statusPill(status) {
+    const c  = STATUS_COLOR[status]  || '#6b7280';
+    const b  = STATUS_BG[status]     || '#f8fafc';
+    const br = STATUS_BORDER[status] || '#e2e8f0';
+    const l  = STATUS_LABEL[status]  || status;
+    return `<span style="display:inline-flex;align-items:center;gap:3px;background:${b};color:${c};border:1px solid ${br};font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;text-transform:uppercase;letter-spacing:0.05em;white-space:nowrap"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0;display:inline-block"></span>${l}</span>`;
+  }
+
+  const INSTR_LABEL = { reinvest:'Reinvest', switch:'Switch', payout:'Payout', payout_return:'Payout Returns', reinvest_all:'Reinvest All', payout_all:'Payout All' };
+  const INSTR_COLOR = { reinvest:'#1d4ed8', switch:'#6d28d9', payout:'#9f1239', payout_return:'#9f1239', reinvest_all:'#1d4ed8', payout_all:'#9f1239' };
+  const INSTR_BG    = { reinvest:'#eff6ff', switch:'#fdf4ff', payout:'#fff1f2', payout_return:'#fff1f2', reinvest_all:'#eff6ff', payout_all:'#fff1f2' };
+
+  function instrPill(instr) {
+    if (!instr) return '<span style="color:#9ca3af;font-size:10px">—</span>';
+    const c = INSTR_COLOR[instr] || '#6b7280';
+    const b = INSTR_BG[instr]    || '#f8fafc';
+    const l = INSTR_LABEL[instr] || instr;
+    return `<span style="background:${b};color:${c};font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap">${l}</span>`;
+  }
+
+  function sectionHead(title, accentColor, badge) {
+    return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid ${accentColor}">
+      <div style="width:4px;height:22px;background:${accentColor};border-radius:2px"></div>
+      <h3 style="font-size:13px;font-weight:800;color:#1a1a1a;letter-spacing:0.06em;text-transform:uppercase;margin:0">${title}</h3>
+      ${badge ? `<span style="margin-left:auto;font-size:10px;color:#9ca3af">${badge}</span>` : ''}
+    </div>`;
+  }
+
+  function th(label, align) {
+    return `<th style="padding:9px 10px;font-size:10px;text-align:${align||'left'};font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em;background:#F7F8FA;white-space:nowrap">${label}</th>`;
+  }
+  function tdCell(content, align, extraStyle) {
+    return `<td style="padding:8px 10px;font-size:11px;color:#1a1a1a;text-align:${align||'left'};${extraStyle||''}">${content}</td>`;
+  }
+
+  // ── Pre-sort investments ────────────────────────────────────────────────
+  const activeInvestments    = investments.filter(i => i.status === 'active')
+    .sort((a, b) => new Date(a.maturity_date || '9999') - new Date(b.maturity_date || '9999'));
+  const completedInvestments = investments.filter(i => ['matured', 'paid_out'].includes(i.status))
+    .sort((a, b) => new Date(b.maturity_date || b.updated_at || 0) - new Date(a.maturity_date || a.updated_at || 0));
+
+  const nextMaturityDate = activeInvestments.find(i => i.maturity_date)?.maturity_date;
+  const capitalInvested  = (totalCapital != null ? totalCapital : 0) ||
+    investments.reduce((s, i) => s + (Number(i.amount) || 0), 0);
 
   let sections = '';
 
-  // ─── PORTFOLIO SUMMARY ───
+  // ─── PORTFOLIO SUMMARY ─────────────────────────────────────────────────
   if (incPortfolio) {
     sections += `
       <section style="margin-bottom:36px">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #fec24f">
-          <div style="width:4px;height:22px;background:linear-gradient(180deg,#fec24f,#FF5229);border-radius:2px"></div>
-          <h3 style="font-size:13px;font-weight:800;color:#1a1a1a;letter-spacing:0.06em;text-transform:uppercase;margin:0">Portfolio Summary</h3>
-        </div>
+        ${sectionHead('Portfolio Summary', '#fec24f')}
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px">
-          ${stmtKPIBox('Total Portfolio Value', fmtNum(totalValue), '#fec24f')}
-          ${stmtKPIBox('Deposits', fmtNum(totalDeposits), '#656565')}
-          ${stmtKPIBox('Returns Earned', fmtNum(totalReturns), '#22C55E')}
-          ${stmtKPIBox('Wallet Balance', fmtNum(walletBal), '#0096ff')}
+          ${stmtKPIBox('Portfolio Value',  fmtNum(totalValue),      '#fec24f')}
+          ${stmtKPIBox('Capital Invested', fmtNum(capitalInvested),  '#656565')}
+          ${stmtKPIBox('Returns Earned',   fmtNum(totalReturns),     '#22C55E')}
+          ${stmtKPIBox('Wallet Balance',   fmtNum(walletBal),        '#0096ff')}
         </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
           <div style="background:#F7F8FA;border-radius:8px;padding:14px;border:1px solid rgba(0,0,0,0.06)">
             <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#9ca3af;font-weight:700;margin-bottom:10px">Account Details</div>
-            ${stmtInfoRow('Investor Name', fullName)}
-            ${stmtInfoRow('Investor ID', investorId)}
-            ${stmtInfoRow('Email', investor.email || '—')}
-            ${stmtInfoRow('Phone', investor.phone || '—')}
-            ${stmtInfoRow('Member Since', memberSince)}
-            ${stmtInfoRow('FICA Status', ficaStatus.charAt(0).toUpperCase() + ficaStatus.slice(1))}
+            ${stmtInfoRow('Investor Name',  fullName)}
+            ${stmtInfoRow('Account Number', investorId)}
+            ${stmtInfoRow('Email',          investor.email || '—')}
+            ${stmtInfoRow('Phone',          investor.phone || '—')}
+            ${stmtInfoRow('Member Since',   memberSince)}
           </div>
           <div style="background:#F7F8FA;border-radius:8px;padding:14px;border:1px solid rgba(0,0,0,0.06)">
             <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#9ca3af;font-weight:700;margin-bottom:10px">Investment Snapshot</div>
-            ${stmtInfoRow('Total Investments', investments.length)}
-            ${stmtInfoRow('Active Investments', activeInv)}
-            ${stmtInfoRow('Matured', investments.filter(i=>['matured','paid_out'].includes(i.status)).length)}
-            ${stmtInfoRow('Risk Profile', investor.risk_profile ? investor.risk_profile.charAt(0).toUpperCase() + investor.risk_profile.slice(1) : 'Moderate')}
-            ${stmtInfoRow('Province', investor.province || '—')}
-            ${stmtInfoRow('Referral Code', investor.referral_code || '—')}
+            ${stmtInfoRow('Total Investments',  investments.length)}
+            ${stmtInfoRow('Active',             activeInvestments.length)}
+            ${stmtInfoRow('Completed',          completedInvestments.length)}
+            ${stmtInfoRow('Next Maturity Date', nextMaturityDate ? fmtDate(nextMaturityDate) : '—')}
+            ${stmtInfoRow('Statement Period',   `${fmtDate(from)} — ${fmtDate(to)}`)}
           </div>
         </div>
       </section>`;
   }
 
-  // ─── PERFORMANCE ANALYSIS ───
+  // ─── PERFORMANCE ANALYSIS ──────────────────────────────────────────────
   if (incPerformance && investments.length > 0) {
-    const byProduct = {};
-    investments.forEach(inv => {
+    const confirmedByProduct = {};
+    completedInvestments.forEach(inv => {
       const p = (inv.product_type === 'smme' ? 'short_term' : inv.product_type) || 'unknown';
-      if (!byProduct[p]) byProduct[p] = { count: 0, capital: 0, returns: 0 };
-      byProduct[p].count++;
-      if (!inv.is_reinvestment) byProduct[p].capital += Number(inv.amount) || 0;
-      byProduct[p].returns += (Number(inv.amount) || 0) * (Number(inv.pool_actual_rate) || 0);
+      if (!confirmedByProduct[p]) confirmedByProduct[p] = { count:0, capital:0, returns:0 };
+      confirmedByProduct[p].count++;
+      confirmedByProduct[p].capital += Number(inv.amount) || 0;
+      const earned = inv.actual_return_amount != null
+        ? Number(inv.actual_return_amount)
+        : (Number(inv.amount) || 0) * (Number(inv.pool_actual_rate) || 0);
+      confirmedByProduct[p].returns += earned;
     });
 
-    const perfRows = Object.entries(byProduct).map(([prod, d]) => {
-      const pct = d.capital > 0 ? ((d.returns / d.capital) * 100).toFixed(2) : '0.00';
+    const projectedByProduct = {};
+    activeInvestments.forEach(inv => {
+      const p = (inv.product_type === 'smme' ? 'short_term' : inv.product_type) || 'unknown';
+      if (!projectedByProduct[p]) projectedByProduct[p] = { count:0, capital:0, returns:0 };
+      projectedByProduct[p].count++;
+      projectedByProduct[p].capital += Number(inv.amount) || 0;
+      projectedByProduct[p].returns += (Number(inv.amount) || 0) * (Number(inv.annual_rate) || 0);
+    });
+
+    const tableHead = `<tr style="background:#F7F8FA">${th('Product')}${th('Count','center')}${th('Capital','right')}${th('Returns','right')}${th('Return %','right')}</tr>`;
+
+    const buildPerfRows = (byProduct) => Object.entries(byProduct).map(([prod, d]) => {
+      const pct  = d.capital > 0 ? ((d.returns / d.capital) * 100).toFixed(2) : '0.00';
       const info = getProductInfo(prod);
       return `<tr style="border-bottom:1px solid #f0f0f0">
-        <td style="padding:8px 10px;font-size:11px;font-weight:700;color:#1a1a1a">${info.label}</td>
-        <td style="padding:8px 10px;font-size:11px;color:#6b7280;text-align:center">${d.count}</td>
-        <td style="padding:8px 10px;font-size:11px;color:#1a1a1a;text-align:right;font-weight:600">${fmtNum(d.capital)}</td>
-        <td style="padding:8px 10px;font-size:11px;color:#22C55E;text-align:right;font-weight:700">${fmtNum(d.returns)}</td>
-        <td style="padding:8px 10px;font-size:11px;color:#fec24f;text-align:right;font-weight:700">${pct}%</td>
+        ${tdCell(`<span style="font-weight:700">${info.label}</span>`)}
+        ${tdCell(d.count, 'center')}
+        ${tdCell(fmtNum(d.capital), 'right', 'font-weight:600')}
+        ${tdCell(fmtNum(d.returns), 'right', 'font-weight:700')}
+        ${tdCell(pct + '%', 'right', 'font-weight:700')}
       </tr>`;
     }).join('');
 
+    const confirmedRows = buildPerfRows(confirmedByProduct);
+    const projectedRows = buildPerfRows(projectedByProduct);
+    const totC_cap = Object.values(confirmedByProduct).reduce((s, d) => s + d.capital, 0);
+    const totC_ret = Object.values(confirmedByProduct).reduce((s, d) => s + d.returns, 0);
+    const totP_cap = Object.values(projectedByProduct).reduce((s, d) => s + d.capital, 0);
+    const totP_ret = Object.values(projectedByProduct).reduce((s, d) => s + d.returns, 0);
+
     sections += `
       <section style="margin-bottom:36px">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #656565">
-          <div style="width:4px;height:22px;background:linear-gradient(180deg,#656565,#656565);border-radius:2px"></div>
-          <h3 style="font-size:13px;font-weight:800;color:#1a1a1a;letter-spacing:0.06em;text-transform:uppercase;margin:0">Performance Analysis</h3>
-        </div>
-        <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #eaeaea">
-          <thead>
-            <tr style="background:#F7F8FA">
-              <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Product</th>
-              <th style="padding:9px 10px;font-size:10px;text-align:center;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Count</th>
-              <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Capital</th>
-              <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Returns</th>
-              <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Return %</th>
-            </tr>
-          </thead>
-          <tbody>${perfRows}</tbody>
-          <tfoot>
-            <tr style="background:#F7F8FA">
-              <td colspan="2" style="padding:9px 10px;font-size:11px;font-weight:800;color:#1a1a1a">TOTAL</td>
-              <td style="padding:9px 10px;font-size:11px;font-weight:800;color:#1a1a1a;text-align:right">${fmtNum(totalInvested)}</td>
-              <td style="padding:9px 10px;font-size:11px;font-weight:800;color:#22C55E;text-align:right">${fmtNum(totalReturns)}</td>
-              <td style="padding:9px 10px;font-size:11px;font-weight:800;color:#fec24f;text-align:right">${totalInvested>0?((totalReturns/totalInvested)*100).toFixed(2):0}%</td>
-            </tr>
-          </tfoot>
-        </table>
+        ${sectionHead('Performance Analysis', '#656565')}
+        ${confirmedRows ? `
+          <div style="font-size:10px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">✓ Confirmed — Completed Investments</div>
+          <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #eaeaea;margin-bottom:20px">
+            <thead>${tableHead}</thead>
+            <tbody>${confirmedRows}</tbody>
+            <tfoot><tr style="background:#F7F8FA">
+              <td colspan="2" style="padding:9px 10px;font-size:11px;font-weight:800;color:#1a1a1a">CONFIRMED TOTAL</td>
+              ${tdCell(fmtNum(totC_cap), 'right', 'font-weight:800')}
+              <td style="padding:9px 10px;font-size:11px;font-weight:800;color:#22C55E;text-align:right">${fmtNum(totC_ret)}</td>
+              <td style="padding:9px 10px;font-size:11px;font-weight:800;color:#fec24f;text-align:right">${totC_cap > 0 ? ((totC_ret/totC_cap)*100).toFixed(2) : 0}%</td>
+            </tr></tfoot>
+          </table>` : ''}
+        ${projectedRows ? `
+          <div style="font-size:10px;font-weight:700;color:#1d4ed8;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">~ Projected — Active Investments (estimated, not yet realised)</div>
+          <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #eaeaea">
+            <thead>${tableHead}</thead>
+            <tbody>${projectedRows}</tbody>
+            <tfoot><tr style="background:#F7F8FA">
+              <td colspan="2" style="padding:9px 10px;font-size:11px;font-weight:800;color:#1a1a1a">PROJECTED TOTAL</td>
+              ${tdCell(fmtNum(totP_cap), 'right', 'font-weight:800')}
+              <td style="padding:9px 10px;font-size:11px;font-weight:800;color:#60a5fa;text-align:right">${fmtNum(totP_ret)} est.</td>
+              <td style="padding:9px 10px;font-size:11px;font-weight:800;color:#60a5fa;text-align:right">${totP_cap > 0 ? ((totP_ret/totP_cap)*100).toFixed(2) : 0}% est.</td>
+            </tr></tfoot>
+          </table>` : ''}
       </section>`;
   }
 
-  // ─── INVESTMENT DETAILS ───
+  // ─── INVESTMENT DETAILS ────────────────────────────────────────────────
   if (incInvestments && investments.length > 0) {
-    const invRows = investments.map(inv => {
+    const tableStyle = `width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #eaeaea;min-width:780px`;
+
+    // Active table
+    let activeRows = '';
+    let totActiveCapital = 0, totActiveProj = 0;
+    activeInvestments.forEach(inv => {
       const info = getProductInfo(inv.product_type);
-      // Actual rate ACHIEVED: only meaningful once matured. While active, show "—".
-      const poolRate = (Number(inv.pool_actual_rate) || 0) * 100;
-      const rateCell = poolRate > 0 ? `${poolRate.toFixed(2)}%` : '—';
-      const maturity = inv.maturity_date ? fmtDate(inv.maturity_date) : '—';
-      const statusColor = inv.status === 'active' ? '#656565' : inv.status === 'paid_out' ? '#22C55E' : '#9ca3af';
-      return `<tr style="border-bottom:1px solid #f0f0f0">
-        <td style="padding:8px 10px;font-size:10px;color:#9ca3af;font-family:monospace">${inv.id}</td>
-        <td style="padding:8px 10px;font-size:11px;font-weight:600;color:#1a1a1a">${_esc(inv.pool_name) || '—'}</td>
-        <td style="padding:8px 10px">
-          <span style="background:${info.bg};color:${info.color};font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;text-transform:uppercase;letter-spacing:0.05em">${info.label}</span>
-        </td>
-        <td style="padding:8px 10px;font-size:11px;color:#1a1a1a;text-align:right;font-weight:700">${fmtNum(inv.amount)}</td>
-        <td style="padding:8px 10px;font-size:11px;color:${rateCell==='—'?'#9ca3af':'#fec24f'};text-align:right;font-weight:700">${rateCell}</td>
-        <td style="padding:8px 10px;font-size:11px;color:#1a1a1a;text-align:right">${fmtDate(inv.investment_date)}</td>
-        <td style="padding:8px 10px;font-size:11px;color:#1a1a1a;text-align:right">${maturity}</td>
-        <td style="padding:8px 10px">
-          <span style="color:${statusColor};font-size:10px;font-weight:700;text-transform:uppercase">${inv.status}</span>
-        </td>
+      const rate    = Number(inv.annual_rate) || Number(inv.pool_actual_rate) || 0;
+      const projected = (Number(inv.amount) || 0) * rate;
+      const daysLeft = inv.maturity_date ? Math.ceil((new Date(inv.maturity_date) - now) / 86400000) : null;
+      const daysColor = daysLeft != null && daysLeft <= 60 ? '#b45309' : '#6b7280';
+      const daysStr   = daysLeft != null
+        ? `<span style="color:${daysColor};font-weight:${daysLeft <= 60 ? '700' : '400'}">${daysLeft > 0 ? daysLeft + 'd' : 'Due'}${daysLeft <= 60 ? ' ⚠' : ''}</span>`
+        : '—';
+      totActiveCapital += Number(inv.amount) || 0;
+      totActiveProj    += projected;
+      activeRows += `<tr style="border-bottom:1px solid #f0f0f0">
+        ${tdCell(`<span style="font-size:9px;color:#9ca3af;font-family:monospace">${inv.id}</span>`)}
+        ${tdCell(`<span style="font-weight:600">${_esc(inv.pool_name) || '—'}</span>`)}
+        ${tdCell(`<span style="background:${info.bg};color:${info.color};font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;text-transform:uppercase;letter-spacing:0.05em">${info.label}</span>`)}
+        ${tdCell(fmtNum(inv.amount), 'right', 'font-weight:700')}
+        ${tdCell(rate > 0 ? `<span style="color:#22C55E;font-weight:700">${(rate*100).toFixed(2)}%</span> <span style="color:#9ca3af;font-size:9px">proj.</span>` : '—', 'right')}
+        ${tdCell(projected > 0 ? `<span style="color:#60a5fa;font-size:9px">est.</span> ${fmtNum(projected)}` : '—', 'right')}
+        ${tdCell(fmtDate(inv.start_date || inv.investment_date))}
+        ${tdCell(fmtDate(inv.maturity_date))}
+        ${tdCell(daysStr, 'center')}
+        ${tdCell(instrPill(inv.maturity_instruction))}
       </tr>`;
-    }).join('');
+    });
+
+    // Completed table
+    let completedRows = '';
+    let totCompletedCapital = 0, totCompletedReturns = 0;
+    completedInvestments.forEach(inv => {
+      const info       = getProductInfo(inv.product_type);
+      const actualRate = Number(inv.pool_actual_rate) || 0;
+      const earned     = inv.actual_return_amount != null
+        ? Number(inv.actual_return_amount)
+        : (Number(inv.amount) || 0) * actualRate;
+      totCompletedCapital  += Number(inv.amount) || 0;
+      totCompletedReturns  += earned;
+      completedRows += `<tr style="border-bottom:1px solid #f0f0f0">
+        ${tdCell(`<span style="font-size:9px;color:#9ca3af;font-family:monospace">${inv.id}</span>`)}
+        ${tdCell(`<span style="font-weight:600">${_esc(inv.pool_name) || '—'}</span>`)}
+        ${tdCell(`<span style="background:${info.bg};color:${info.color};font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;text-transform:uppercase;letter-spacing:0.05em">${info.label}</span>`)}
+        ${tdCell(fmtNum(inv.amount), 'right', 'font-weight:700')}
+        ${tdCell(actualRate > 0 ? `<span style="color:#22C55E;font-weight:700">${(actualRate*100).toFixed(2)}%</span>` : '<span style="color:#9ca3af">—</span>', 'right')}
+        ${tdCell(earned > 0 ? `<span style="color:#22C55E;font-weight:700">+${fmtNum(earned)}</span>` : '<span style="color:#9ca3af">—</span>', 'right')}
+        ${tdCell(fmtDate(inv.start_date || inv.investment_date))}
+        ${tdCell(fmtDate(inv.maturity_date))}
+        ${tdCell(statusPill(inv.status))}
+      </tr>`;
+    });
 
     sections += `
       <section style="margin-bottom:36px">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #22C55E">
-          <div style="width:4px;height:22px;background:linear-gradient(180deg,#22C55E,#16A34A);border-radius:2px"></div>
-          <h3 style="font-size:13px;font-weight:800;color:#1a1a1a;letter-spacing:0.06em;text-transform:uppercase;margin:0">Investment Details</h3>
-          <span style="margin-left:auto;font-size:10px;color:#9ca3af">${investments.length} records</span>
-        </div>
-        <div style="overflow-x:auto">
-          <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #eaeaea;min-width:700px">
-            <thead>
-              <tr style="background:#F7F8FA">
-                <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">ID</th>
-                <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Pool</th>
-                <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Product</th>
-                <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Amount</th>
-                <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Actual Rate</th>
-                <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Invested</th>
-                <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Maturity</th>
-                <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Status</th>
-              </tr>
-            </thead>
-            <tbody>${invRows}</tbody>
-          </table>
-        </div>
+        ${sectionHead('Investment Details', '#22C55E', `${investments.length} total`)}
+
+        ${activeInvestments.length > 0 ? `
+          <div style="font-size:10px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">
+            Active Investments — ${activeInvestments.length} (sorted by earliest maturity)
+          </div>
+          <div style="overflow-x:auto;margin-bottom:20px">
+            <table style="${tableStyle}">
+              <thead><tr style="background:#F7F8FA">${th('Reference')}${th('Pool')}${th('Product')}${th('Amount','right')}${th('Proj. Rate','right')}${th('Est. Return','right')}${th('Start Date')}${th('Maturity')}${th('Days Left','center')}${th('At Maturity')}</tr></thead>
+              <tbody>${activeRows}</tbody>
+              <tfoot><tr style="background:#F7F8FA">
+                <td colspan="3" style="padding:9px 10px;font-size:11px;font-weight:800;color:#1a1a1a">ACTIVE TOTAL</td>
+                ${tdCell(fmtNum(totActiveCapital), 'right', 'font-weight:800')}
+                <td></td>
+                <td style="padding:9px 10px;font-size:11px;font-weight:800;color:#60a5fa;text-align:right">${fmtNum(totActiveProj)} est.</td>
+                <td colspan="4"></td>
+              </tr></tfoot>
+            </table>
+          </div>` : ''}
+
+        ${completedInvestments.length > 0 ? `
+          <div style="font-size:10px;font-weight:700;color:#b45309;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">
+            Completed Investments — ${completedInvestments.length}
+          </div>
+          <div style="overflow-x:auto">
+            <table style="${tableStyle}">
+              <thead><tr style="background:#F7F8FA">${th('Reference')}${th('Pool')}${th('Product')}${th('Amount','right')}${th('Actual Rate','right')}${th('Returns Earned','right')}${th('Start Date')}${th('Maturity Date')}${th('Status')}</tr></thead>
+              <tbody>${completedRows}</tbody>
+              <tfoot><tr style="background:#F7F8FA">
+                <td colspan="3" style="padding:9px 10px;font-size:11px;font-weight:800;color:#1a1a1a">COMPLETED TOTAL</td>
+                ${tdCell(fmtNum(totCompletedCapital), 'right', 'font-weight:800')}
+                <td></td>
+                <td style="padding:9px 10px;font-size:11px;font-weight:800;color:#22C55E;text-align:right">+${fmtNum(totCompletedReturns)}</td>
+                <td colspan="3"></td>
+              </tr></tfoot>
+            </table>
+          </div>` : ''}
       </section>`;
   }
 
-  // ─── TRANSACTION LEDGER ───
+  // ─── TRANSACTION LEDGER ────────────────────────────────────────────────
   if (incTransactions) {
-    const txnRows = transactions.length > 0 ? transactions.map(t => {
-      const isPos = !['withdrawal', 'fee', 'investment', 'gift_sent'].includes(t.type);
-      const amt = isPos ? `+${fmtNum(Math.abs(t.amount))}` : `-${fmtNum(Math.abs(t.amount))}`;
-      const amtColor = isPos ? '#22C55E' : '#EF4444';
-      const typeMap = {deposit:'Deposit',withdrawal:'Withdrawal',investment:'Investment',return:'Return',payout:'Payout',fee:'Fee',referral_bonus:'Referral Bonus',gift_sent:'Gift Sent',gift_received:'Gift Received',reward:'XP Reward'};
-      return `<tr style="border-bottom:1px solid #f0f0f0">
-        <td style="padding:7px 10px;font-size:10px;color:#9ca3af;font-family:monospace">${t.reference || '—'}</td>
-        <td style="padding:7px 10px;font-size:11px;color:#1a1a1a">${typeMap[t.type] || t.type}</td>
-        <td style="padding:7px 10px;font-size:11px;color:#1a1a1a">${t.pool_name || t.description || '—'}</td>
-        <td style="padding:7px 10px;font-size:11px;font-weight:700;color:${amtColor};text-align:right">${amt}</td>
-        <td style="padding:7px 10px;font-size:10px;color:#9ca3af;text-align:right">${fmtDate(t.transaction_date || t.created_at)}</td>
-        <td style="padding:7px 10px">
-          <span style="background:${t.status==='completed'?'#dcfce7':'#fef9c3'};color:${t.status==='completed'?'#16a34a':'#92400e'};font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;text-transform:uppercase">${t.status}</span>
-        </td>
-      </tr>`;
-    }).join('') : `<tr><td colspan="6" style="padding:20px;text-align:center;color:#9ca3af;font-size:11px">No transactions in selected period</td></tr>`;
+    const TYPE_LABEL = { deposit:'Deposit', withdrawal:'Withdrawal', investment:'Investment', return:'Return', payout:'Payout', fee:'Fee', platform_fee:'Platform Fee', referral_bonus:'Referral Bonus', gift_sent:'Gift Sent', gift_received:'Gift Received', reward:'XP Reward' };
+    const isCreditType = t => ['deposit','return','payout','referral_bonus','gift_received','reward'].includes(t.type);
+    const isDebitType  = t => ['withdrawal','investment','platform_fee','fee','gift_sent'].includes(t.type);
 
-    // Running balance
-    let running = 0;
-    const sortedTxns = [...transactions].sort((a,b) => new Date(a.transaction_date||a.created_at) - new Date(b.transaction_date||b.created_at));
-    const totalDeposits = transactions.filter(t=>t.type==='deposit').reduce((s,t)=>s+Number(t.amount||0),0);
-    const totalWithdrawals = transactions.filter(t=>t.type==='withdrawal'||t.type==='investment').reduce((s,t)=>s+Math.abs(Number(t.amount||0)),0);
-    const totalReturnsTxn = transactions.filter(t=>t.type==='return'||t.type==='payout').reduce((s,t)=>s+Number(t.amount||0),0);
+    const sortedTxns = [...transactions].sort((a, b) =>
+      new Date(a.transaction_date || a.created_at) - new Date(b.transaction_date || b.created_at)
+    );
+
+    const txnRows = sortedTxns.length > 0 ? sortedTxns.map(t => {
+      const absAmt    = Math.abs(Number(t.amount) || 0);
+      const isCredit  = isCreditType(t);
+      const isDebit   = isDebitType(t);
+      const debitStr  = isDebit  ? `<span style="color:#ef4444;font-weight:700">${fmtNum(absAmt)}</span>` : `<span style="color:#d1d5db">—</span>`;
+      const creditStr = isCredit ? `<span style="color:#22C55E;font-weight:700">${fmtNum(absAmt)}</span>` : `<span style="color:#d1d5db">—</span>`;
+      const desc = t.pool_name || t.description || '—';
+      const statusPillHtml = `<span style="background:${t.status==='completed'?'#dcfce7':'#fef9c3'};color:${t.status==='completed'?'#16a34a':'#92400e'};font-size:9px;font-weight:700;padding:2px 6px;border-radius:20px;text-transform:uppercase">${t.status}</span>`;
+      return `<tr style="border-bottom:1px solid #f0f0f0">
+        ${tdCell(`<span style="font-size:9px;color:#9ca3af;font-family:monospace">${t.reference || '—'}</span>`)}
+        ${tdCell(TYPE_LABEL[t.type] || t.type)}
+        ${tdCell(desc)}
+        ${tdCell(debitStr, 'right')}
+        ${tdCell(creditStr, 'right')}
+        ${tdCell(fmtDate(t.transaction_date || t.created_at), 'right')}
+        ${tdCell(statusPillHtml)}
+      </tr>`;
+    }).join('') : `<tr><td colspan="7" style="padding:20px;text-align:center;color:#9ca3af;font-size:11px">No transactions in selected period</td></tr>`;
+
+    const txDeposits = sortedTxns.filter(t => t.type === 'deposit').reduce((s, t) => s + Math.abs(Number(t.amount)||0), 0);
+    const txReturns  = sortedTxns.filter(t => ['return','payout'].includes(t.type)).reduce((s, t) => s + Math.abs(Number(t.amount)||0), 0);
+    const txDebits   = sortedTxns.filter(isDebitType).reduce((s, t) => s + Math.abs(Number(t.amount)||0), 0);
+    const txCredits  = sortedTxns.filter(isCreditType).reduce((s, t) => s + Math.abs(Number(t.amount)||0), 0);
 
     sections += `
       <section style="margin-bottom:36px">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #eda5ff">
-          <div style="width:4px;height:22px;background:linear-gradient(180deg,#eda5ff,#eda5ff);border-radius:2px"></div>
-          <h3 style="font-size:13px;font-weight:800;color:#1a1a1a;letter-spacing:0.06em;text-transform:uppercase;margin:0">Transaction Ledger</h3>
-          <span style="margin-left:auto;font-size:10px;color:#9ca3af">${transactions.length} transactions · ${fmtDate(from)} — ${fmtDate(to)}</span>
-        </div>
+        ${sectionHead('Transaction Ledger', '#eda5ff', `${transactions.length} transactions · ${fmtDate(from)} — ${fmtDate(to)}`)}
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px">
-          ${stmtMiniBox('Total Deposits', fmtNum(totalDeposits), '#22C55E')}
-          ${stmtMiniBox('Total Invested', fmtNum(totalWithdrawals), '#656565')}
-          ${stmtMiniBox('Returns Received', fmtNum(totalReturnsTxn), '#fec24f')}
+          ${stmtMiniBox('Total Deposits',   fmtNum(txDeposits),  '#22C55E')}
+          ${stmtMiniBox('Returns Received', fmtNum(txReturns),   '#fec24f')}
+          ${stmtMiniBox('Total Debits',     fmtNum(txDebits),    '#ef4444')}
+          ${stmtMiniBox('Total Credits',    fmtNum(txCredits),   '#22C55E')}
         </div>
         <div style="overflow-x:auto">
-          <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #eaeaea;min-width:600px">
-            <thead>
-              <tr style="background:#F7F8FA">
-                <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Reference</th>
-                <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Type</th>
-                <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Description</th>
-                <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Amount</th>
-                <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Date</th>
-                <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Status</th>
-              </tr>
-            </thead>
+          <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #eaeaea;min-width:640px">
+            <thead><tr style="background:#F7F8FA">${th('Reference')}${th('Type')}${th('Description')}${th('Debit','right')}${th('Credit','right')}${th('Date','right')}${th('Status')}</tr></thead>
             <tbody>${txnRows}</tbody>
           </table>
         </div>
       </section>`;
   }
 
-  const logoOutlineUrl = new URL('../assets/logo-outline.png', window.location.href).href;
-  // ─── FULL DOCUMENT ───
   return `
     <div id="stmtPrintArea" style="font-family:'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a1a;background:#fff;min-height:100%;position:relative">
-
-      <!-- Watermark -->
       <div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:0;opacity:0.04;width:480px;height:480px;background:url('${logoOutlineUrl}') center/contain no-repeat;print-color-adjust:exact;-webkit-print-color-adjust:exact"></div>
-
-      <!-- Header Band -->
       <div style="background:#303030;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;position:relative;z-index:1">
-        <div style="display:flex;align-items:center;gap:14px">
-          <img src="${logoUrl}" alt="SV Capital" style="height:44px;width:auto;max-width:220px;object-fit:contain;display:block">
-        </div>
+        <img src="${logoUrl}" alt="SV Capital" style="height:44px;width:auto;max-width:220px;object-fit:contain;display:block">
         <div style="text-align:right">
           <div style="font-size:16px;font-weight:800;color:#fec24f;letter-spacing:0.04em">ACCOUNT STATEMENT</div>
           <div style="font-size:10px;color:rgba(255,255,255,0.55);margin-top:4px"># ${statementNumber}</div>
           <div style="font-size:10px;color:rgba(255,255,255,0.55);margin-top:2px">Generated: ${generatedAt}</div>
         </div>
       </div>
-
-      <!-- Period Banner -->
       <div style="background:linear-gradient(90deg,rgba(254,194,79,0.08),rgba(47,140,155,0.06));border-top:3px solid #fec24f;border-bottom:1px solid rgba(0,0,0,0.06);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
         <div style="display:flex;align-items:center;gap:6px">
           <span style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em">Statement Period:</span>
@@ -5686,18 +5793,12 @@ function buildStatementHTML(opts) {
           <span style="background:rgba(254,194,79,0.1);color:#ff5229;font-size:9px;font-weight:700;padding:2px 8px;border-radius:20px;border:1px solid rgba(254,194,79,0.2);margin-left:4px">${investorId}</span>
         </div>
       </div>
-
-      <!-- Body -->
-      <div style="padding:32px 40px">
-        ${sections}
-      </div>
-
-      <!-- Footer -->
+      <div style="padding:32px 40px">${sections}</div>
       <div style="background:#F7F8FA;border-top:3px solid #fec24f;padding:20px 40px;position:relative;z-index:1">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
           <div>
             <div style="font-size:10px;font-weight:700;color:#1a1a1a;margin-bottom:3px">SV Capital (Pty) Ltd</div>
-            <div style="font-size:9px;color:#9ca3af">enquiry@svcapital.co.za · www.svcapital.co.za</div>
+            <div style="font-size:9px;color:#9ca3af">enquiry@svcapital.co.za · www.svcapital.co.za · 011 568 3490</div>
           </div>
           <div style="text-align:right">
             <div style="font-size:9px;color:#c1c7d0">This statement is computer generated and does not require a signature.</div>
@@ -5707,7 +5808,6 @@ function buildStatementHTML(opts) {
           IMPORTANT NOTICE: This investment is not a regulated financial product under the Financial Sector Conduct Authority (FSCA) and is not covered by the Financial Advisory and Intermediary Services Act (FAIS) or the Collective Investment Schemes Control Act (CISCA). This investment is managed solely by SV Capital (Pty) Ltd. Capital is at risk and returns are not guaranteed.
         </div>
       </div>
-
     </div>`;
 }
 
@@ -5771,6 +5871,7 @@ function printStatement() {
     <button onclick="window.print()">⬇&nbsp; Save as PDF / Print</button>
   </div>
   <div class="print-body">${stmtDoc.innerHTML}</div>
+  <script>window.addEventListener('load',function(){setTimeout(function(){window.print();},600);});</script>
 </body>
 </html>`;
   const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
@@ -5785,7 +5886,7 @@ function printStatement() {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    Toast.success('Statement downloaded — open in a browser to save as PDF.');
+    Toast.success('Statement downloaded — open in your browser, then use File → Print → Save as PDF.');
   }
   setTimeout(() => URL.revokeObjectURL(url), 120000);
 }
@@ -10926,14 +11027,20 @@ function downloadStatement() {
     doc.text('No transactions in the last 90 days.', 14, y + 10);
   } else {
     const typeMap = { deposit: 'Deposit', withdrawal: 'Withdrawal', investment: 'Investment', return: 'Return', payout: 'Payout', fee: 'Fee', referral_bonus: 'Referral Bonus', gift_sent: 'Gift Sent', gift_received: 'Gift Received', reward: 'XP Reward' };
-    const tableHead = [['Date', 'Type', 'Description', 'Amount', 'Status']];
-    const tableBody = txns.map(t => [
-      Utils.date(t.transaction_date || t.created_at),
-      typeMap[t.type] || t.type,
-      (t.description || '—').slice(0, 38),
-      (t.amount > 0 ? '+' : '') + Utils.rand(t.amount),
-      (t.status || '—').toUpperCase(),
-    ]);
+    const tableHead = [['Date', 'Type', 'Description', 'Debit', 'Credit', 'Status']];
+    const _isCreditTx = t => ['deposit','return','payout','referral_bonus','gift_received','reward'].includes(t.type);
+    const _isDebitTx  = t => ['withdrawal','investment','platform_fee','fee','gift_sent'].includes(t.type);
+    const tableBody = txns.map(t => {
+      const absAmt = Math.abs(Number(t.amount) || 0);
+      return [
+        Utils.date(t.transaction_date || t.created_at),
+        typeMap[t.type] || t.type,
+        t.description || t.pool_name || '—',
+        _isDebitTx(t)  ? Utils.rand(absAmt) : '—',
+        _isCreditTx(t) ? Utils.rand(absAmt) : '—',
+        (t.status || '—').toUpperCase(),
+      ];
+    });
 
     if (doc.autoTable) {
       doc.autoTable({
@@ -10948,8 +11055,9 @@ function downloadStatement() {
           0: { cellWidth: 22 },
           1: { cellWidth: 26 },
           2: { cellWidth: 'auto' },
-          3: { cellWidth: 28, halign: 'right' },
-          4: { cellWidth: 22, halign: 'center' },
+          3: { cellWidth: 28, halign: 'right', textColor: [239, 68, 68] },
+          4: { cellWidth: 28, halign: 'right', textColor: [22, 163, 74]  },
+          5: { cellWidth: 20, halign: 'center' },
         },
         didDrawPage: () => _pdfFooter(doc),
       });
