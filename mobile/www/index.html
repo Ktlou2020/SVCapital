@@ -38,6 +38,7 @@
       color: var(--white, #f0f4ff) !important;
     }
     #paymentModalBox * { box-sizing: border-box; }
+    #pmAmount, #pmAmount::placeholder { font-size: 2.8rem; font-weight: 900; color: #f0f4ff; }
   </style>
   <!-- Google Analytics 4 -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-5LEPWC7EFP"></script>
@@ -1751,9 +1752,9 @@
         <div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:8px">Amount to deposit</div>
         <div style="display:flex;align-items:center;justify-content:center;gap:0">
           <span style="font-size:2.8rem;font-weight:900;color:#f0f4ff;line-height:1;margin-right:4px">R</span>
-          <input type="number" id="pmAmount" min="100" step="100" placeholder="0"
+          <input type="text" inputmode="numeric" pattern="[0-9]*" id="pmAmount" placeholder="0"
             style="font-size:2.8rem;font-weight:900;color:#f0f4ff;background:transparent;border:none;outline:none;width:180px;text-align:left;font-family:inherit;line-height:1"
-            oninput="updateAmountPreview()" />
+            oninput="this.value=this.value.replace(/[^0-9]/g,'');updateAmountPreview()" />
         </div>
         <div id="pmAmountHint" style="font-size:0.75rem;color:#9ca3af;margin-top:4px">Minimum deposit: R100</div>
       </div>
@@ -3046,7 +3047,7 @@
 </nav>
 
 <script src="../js/api.js?v=8"></script>
-<script src="js/portal.js?v=18"></script>
+<script src="js/portal.js?v=19"></script>
 <!-- sv-intelligence.js hidden -->
 <script>
 if ('serviceWorker' in navigator && !window.__SVC_NATIVE__) {
