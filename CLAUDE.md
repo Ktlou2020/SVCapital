@@ -1,14 +1,13 @@
 # SVCapital — Claude Code Instructions
 
 ## Branch Strategy
-Changes are routed to two tracks depending on what is being modified:
+All changes go to a single track targeting `main`:
 
 | Files changed | Work branch | PR target |
 |---|---|---|
-| `portal/**`, `mobile/**` | `claude/staging-develop` | `develop` (staging) |
-| Everything else (`admin/**`, `server/**`, `team/**`, `dist/**`, etc.) | `claude/exciting-volta-CxUp1` | `main` (production) |
+| All files (`portal/**`, `mobile/**`, `admin/**`, `server/**`, `dist/**`, etc.) | `claude/exciting-volta-CxUp1` | `main` |
 
-Always switch to the correct branch **before** making changes. If a single task touches both tracks, split it into two commits on the respective branches.
+Always work on `claude/exciting-volta-CxUp1`. The `develop` branch no longer exists.
 
 ## Pull Requests
 - Always create a PR (not draft) after pushing, if one doesn't already exist for the branch.
