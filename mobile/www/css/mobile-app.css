@@ -174,14 +174,18 @@ input, textarea, [contenteditable] {
   display: none !important;
 }
 
-/* Sidebar drawer — slides in from top of screen so logo is visible */
+/* Sidebar drawer — starts below the fixed topbar so content is never hidden */
 .sidebar {
-  top: 0 !important;
+  top: calc(52px + max(env(safe-area-inset-top, 0px), var(--native-sb-h, 0px))) !important;
   padding-top: 0 !important;
   padding-bottom: env(safe-area-inset-bottom, 0px) !important;
 }
 .sidebar.open {
   z-index: 1300 !important;
+}
+/* Backdrop also starts below the topbar for visual consistency */
+.sidebar-backdrop {
+  top: calc(52px + max(env(safe-area-inset-top, 0px), var(--native-sb-h, 0px))) !important;
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -2136,7 +2140,7 @@ input[disabled].form-input {
    16d. Sidebar — brand / logo section
    ═══════════════════════════════════════════════════════════════ */
 .sidebar__brand {
-  padding: max(32px, calc(env(safe-area-inset-top, 0px) + max(var(--native-sb-h, 0px), 0px) + 12px)) 18px 18px !important;
+  padding: 18px 18px 18px !important;
   border-bottom: 1px solid rgba(255,255,255,0.07) !important;
   margin-bottom: 8px !important;
   flex-shrink: 0 !important;
