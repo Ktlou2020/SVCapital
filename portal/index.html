@@ -39,7 +39,6 @@
     #paymentModalBox [style*="background:#252933"],
     #paymentModalBox [style*="background: #252933"] { background: #161920 !important; }
     #paymentModalBox * { box-sizing: border-box; }
-    #pmAmount, #pmAmount::placeholder { font-size: 2.8rem; font-weight: 900; color: #f0f4ff; }
   </style>
   <!-- Google Analytics 4 -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-5LEPWC7EFP"></script>
@@ -1725,7 +1724,7 @@
         <div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:8px">Amount to deposit</div>
         <div style="display:flex;align-items:baseline;justify-content:center;gap:6px">
           <span style="font-size:2.8rem;font-weight:900;color:#f0f4ff;line-height:1">R</span>
-          <input type="text" inputmode="numeric" pattern="[0-9]*" id="pmAmount" placeholder="0"
+          <input type="number" id="pmAmount" min="100" step="100" placeholder="0"
             style="font-size:2.8rem;font-weight:900;color:#f0f4ff;background:transparent;border:none;outline:none;width:180px;text-align:left;font-family:inherit;line-height:1"
             oninput="updateAmountPreview()" />
         </div>
@@ -2984,7 +2983,7 @@ if (window.Capacitor) {
 }
 </script>
 <script src="/js/native.js"></script>
-<script src="js/portal.js?v=66"></script>
+<script src="js/portal.js?v=65"></script>
 <!-- sv-intelligence.js hidden -->
 <script>
 // Service worker: web browsers only (not Capacitor). Handles web push notifications.
