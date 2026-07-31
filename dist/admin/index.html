@@ -1653,6 +1653,16 @@
                             <div id="poolRecalcResult" style="margin-top:10px;font-size:0.82rem"></div>
                           </div>
           
+                          <!-- Fix SMME → Short Term product type -->
+                          <div style="background:var(--bg-secondary);border-radius:10px;padding:16px;margin-top:14px">
+                            <p style="font-weight:600;margin-bottom:6px">Fix SMME → Short Term Product Type</p>
+                            <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px">Renames <code>product_type = 'smme'</code> to <code>'short_term'</code> across pools, investments, and products immediately. Idempotent — safe to run multiple times.</p>
+                            <button class="btn btn--secondary" onclick="fixSmmeProductType(this)">
+                              <i class="fa-solid fa-arrow-right-arrow-left"></i> Fix SMME Product Types
+                            </button>
+                            <div id="smmeFixResult" style="margin-top:10px;font-size:0.82rem"></div>
+                          </div>
+
                           <!-- Backfill orphan pools -->
                           <div style="background:var(--bg-secondary);border-radius:10px;padding:16px;margin-top:14px">
                             <p style="font-weight:600;margin-bottom:6px">Backfill Orphan Pool Records</p>
@@ -3157,7 +3167,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=4"></script>
-<script src="js/admin.js?v=18"></script>
+<script src="js/admin.js?v=19"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>

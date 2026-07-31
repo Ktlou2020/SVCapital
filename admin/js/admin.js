@@ -931,7 +931,7 @@ function renderOpenPoolsWidget() {
   if (!open.length) { el.innerHTML = '<div class="empty-state"><i class="fa-solid fa-layer-group"></i><p>No open pools</p></div>'; return; }
 
   el.innerHTML = open.map(p => {
-    const pi = Utils.productInfo(p.product_type);
+    const pi = Utils.productInfo(p.product_type === 'smme' ? 'short_term' : p.product_type);
     const pct = Utils.poolFillPct(p);
     return `<div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)">
       <div class="flex-between mb-4">
@@ -4289,7 +4289,7 @@ function filterPools(status, btn) {
 function _refreshPoolProductFilter() {
   const sel = document.getElementById('poolProductFilter');
   if (!sel) return;
-  const types = [...new Set((STATE.pools || []).map(p => p.product_type).filter(Boolean))].sort();
+  const types = [...new Set((STATE.pools || []).map(p => (p.product_type === 'smme' ? 'short_term' : p.product_type)).filter(Boolean))].sort();
   const current = sel.value;
   sel.innerHTML = '<option value="">All Products</option>' +
     types.map(t => {
@@ -4366,7 +4366,7 @@ function renderPoolsGrid() {
   // Product type filter
   const productFilter = (document.getElementById('poolProductFilter')?.value || '').trim();
   if (productFilter) {
-    pools = pools.filter(p => p.product_type === productFilter);
+    pools = pools.filter(p => (p.product_type === 'smme' ? 'short_term' : p.product_type) === productFilter);
   }
 
   // Free-text search across pool name, product and ID
@@ -4396,7 +4396,7 @@ function renderPoolsGrid() {
   if (!pools.length) { grid.innerHTML = '<div class="text-center text-muted" style="grid-column:1/-1;padding:32px">No pools found</div>'; return; }
 
   grid.innerHTML = pools.map(p => {
-    const pi = Utils.productInfo(p.product_type);
+    const pi = Utils.productInfo(p.product_type === 'smme' ? 'short_term' : p.product_type);
     const pct = Utils.poolFillPct(p);
     const isWaitlist = p.status === 'waitlist';
     const isFull = (Number(p.max_capacity) > 0) && (Number(p.current_invested) >= Number(p.max_capacity));
@@ -10271,6 +10271,29 @@ async function recalculatePoolStats(btn) {
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<i class="fa-solid fa-calculator"></i> Recalculate Pool Stats';
+  }
+}
+
+async function fixSmmeProductType(btn) {
+  const resultEl = document.getElementById('smmeFixResult');
+  if (!await Confirm.ask('Rename SMME → Short Term?', {
+    body: 'This will update product_type from "smme" to "short_term" in all pools, investments, and products. Continue?',
+    confirmLabel: 'Fix Now',
+  })) return;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Fixing…';
+  if (resultEl) resultEl.textContent = '';
+  try {
+    const data = await API._fetch('POST', 'admin/pools/fix-product-type');
+    if (resultEl) resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> Fixed ${data.poolRows} pool(s), ${data.invRows} investment(s), ${data.prodRows} product(s).</span>`;
+    Toast.success(`SMME → Short Term: ${data.total} record(s) updated`);
+    await loadPools();
+  } catch (e) {
+    if (resultEl) resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Failed'}</span>`;
+    Toast.error(e.message || 'Fix failed');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-arrow-right-arrow-left"></i> Fix SMME Product Types';
   }
 }
 
