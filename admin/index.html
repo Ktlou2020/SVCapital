@@ -1682,6 +1682,31 @@
                             </button>
                             <div id="ficaBackfillResult" style="margin-top:10px;font-size:0.82rem"></div>
                           </div>
+
+                          <!-- Bank account reimport -->
+                          <div style="background:var(--bg-secondary);border-radius:10px;padding:16px;margin-top:14px">
+                            <p style="font-weight:600;margin-bottom:6px">Re-import Bank Accounts from JSON</p>
+                            <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px">Upload the <code>bankAccounts</code> JSON export from Firebase to populate the dedicated bank columns (<code>bank_name</code>, <code>bank_account_number</code>, etc.) for all matching investors. Only ACTIVE accounts are imported; defaults to the account flagged <code>defaultAccount</code>.</p>
+                            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                              <label style="display:inline-flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:7px 14px;cursor:pointer;font-size:0.82rem;color:var(--text)">
+                                <i class="fa-solid fa-file-arrow-up" style="color:var(--purple)"></i>
+                                <span id="bankJsonFileName">Choose bankAccounts.json…</span>
+                                <input type="file" id="bankJsonFile" accept=".json" style="display:none" onchange="document.getElementById('bankJsonFileName').textContent=this.files[0]?.name||'Choose bankAccounts.json…'">
+                              </label>
+                              <button class="btn btn--secondary" id="bankReimportBtn" onclick="reimportBankAccounts(this)">
+                                <i class="fa-solid fa-building-columns"></i> Re-import Bank Accounts
+                              </button>
+                            </div>
+                            <div id="bankReimportResult" style="margin-top:10px;font-size:0.82rem"></div>
+
+                            <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
+                            <p style="font-weight:600;margin-bottom:4px;font-size:0.88rem">Promote from Existing Notes</p>
+                            <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:10px">If bank data was stored in the <code>notes</code> JSON column during a previous migration, promote it to the dedicated columns without needing a new file upload. Only fills null columns — never overwrites existing data.</p>
+                            <button class="btn btn--secondary" onclick="promoteBankFromNotes(this)">
+                              <i class="fa-solid fa-arrow-up-from-bracket"></i> Promote from Notes
+                            </button>
+                            <div id="bankPromoteResult" style="margin-top:10px;font-size:0.82rem"></div>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -3167,7 +3192,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=4"></script>
-<script src="js/admin.js?v=20"></script>
+<script src="js/admin.js?v=21"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>
