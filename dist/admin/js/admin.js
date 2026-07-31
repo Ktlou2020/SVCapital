@@ -10404,6 +10404,73 @@ async function backfillFicaFromKyc(btn) {
   }
 }
 
+async function reimportBankAccounts(btn) {
+  const fileInput = document.getElementById('bankJsonFile');
+  const resultEl  = document.getElementById('bankReimportResult');
+  if (!fileInput?.files[0]) {
+    Toast.error('Please choose a bankAccounts JSON file first.');
+    return;
+  }
+
+  let bankAccounts;
+  try {
+    const text = await fileInput.files[0].text();
+    bankAccounts = JSON.parse(text);
+    if (!Array.isArray(bankAccounts)) throw new Error('File must contain a JSON array.');
+  } catch (e) {
+    Toast.error('Invalid JSON file: ' + e.message);
+    return;
+  }
+
+  if (!await Confirm.ask('Re-import bank accounts?', {
+    body: `File contains ${bankAccounts.length} records. This will update bank_name, bank_account_number, bank_account_holder, bank_branch_code, and bank_account_type for matching investors. Continue?`,
+    confirmLabel: 'Re-import',
+  })) return;
+
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Importing…';
+  resultEl.textContent = '';
+
+  try {
+    const data = await API._fetch('POST', 'admin/reimport-bank-accounts', { bankAccounts });
+    const errHtml = data.errors?.length
+      ? `<div style="margin-top:6px;font-size:0.75rem;color:#ef4444">${data.errors.map(e => `• ${_esc(e)}`).join('<br>')}</div>`
+      : '';
+    resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> Done — <strong>${data.updated}</strong> investors updated, ${data.skipped} skipped (no match), ${data.total} active accounts in file.</span>${errHtml}`;
+    Toast.success(`Bank accounts re-imported: ${data.updated} updated`);
+  } catch (e) {
+    resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Failed'}</span>`;
+    Toast.error(e.message || 'Re-import failed');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-building-columns"></i> Re-import Bank Accounts';
+  }
+}
+
+async function promoteBankFromNotes(btn) {
+  const resultEl = document.getElementById('bankPromoteResult');
+  if (!await Confirm.ask('Promote bank data from notes?', {
+    body: 'This will extract bank account data from the notes JSON column and populate the dedicated bank columns for investors where those columns are empty. Existing data is never overwritten. Continue?',
+    confirmLabel: 'Promote',
+  })) return;
+
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Promoting…';
+  resultEl.textContent = '';
+
+  try {
+    const data = await API._fetch('POST', 'admin/promote-bank-from-notes');
+    resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> Done — <strong>${data.updated}</strong> investors updated from notes (${data.checked} checked, ${data.skipped} skipped).</span>`;
+    Toast.success(`Bank data promoted: ${data.updated} investors updated`);
+  } catch (e) {
+    resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Failed'}</span>`;
+    Toast.error(e.message || 'Promotion failed');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-arrow-up-from-bracket"></i> Promote from Notes';
+  }
+}
+
 /* ═══════════════════════════════════════════════
    COMPLIANCE CALENDAR
    ═══════════════════════════════════════════════ */

@@ -542,4 +542,134 @@ router.post('/invest-on-behalf', async (req, res) => {
   }
 });
 
+/* ─── POST /api/admin/reimport-bank-accounts ──────────────────────────────────
+   Accepts a bankAccounts JSON array (from the original Firebase export) and
+   updates the dedicated bank columns on investor records.
+
+   Body: { bankAccounts: [...] }
+   ─────────────────────────────────────────────────────────────────────── */
+router.post('/reimport-bank-accounts', async (req, res) => {
+  const bankAccounts = req.body?.bankAccounts;
+  if (!Array.isArray(bankAccounts) || !bankAccounts.length) {
+    return res.status(400).json({ error: 'bankAccounts must be a non-empty array.' });
+  }
+
+  // Build map: userAccountNumber → best active bank account
+  const bankByUser = {};
+  for (const ba of bankAccounts) {
+    if (!ba.userAccountNumber || ba.status !== 'ACTIVE') continue;
+    const ex = bankByUser[ba.userAccountNumber];
+    const newer = !ex
+      || (!ex.defaultAccount && ba.defaultAccount)
+      || (ex.defaultAccount === ba.defaultAccount && new Date(ba.dateUpdated || 0) > new Date(ex.dateUpdated || 0));
+    if (newer) bankByUser[ba.userAccountNumber] = ba;
+  }
+
+  let updated = 0;
+  let skipped = 0;
+  const errors = [];
+
+  for (const [investorId, ba] of Object.entries(bankByUser)) {
+    try {
+      const { rowCount } = await pool.query(
+        `UPDATE investors
+            SET bank_name           = $2,
+                bank_account_holder = $3,
+                bank_account_number = $4,
+                bank_branch_code    = $5,
+                bank_account_type   = $6,
+                bank_account_status = COALESCE(NULLIF(bank_account_status, ''), 'pending'),
+                updated_at          = NOW()
+          WHERE id = $1`,
+        [
+          investorId,
+          ba.bankName           || null,
+          ba.accountHolderName  || null,
+          ba.accountNumber      || null,
+          ba.branchNumber       || null,
+          (ba.accountType || '').toLowerCase() || null,
+        ]
+      );
+      if (rowCount > 0) updated++;
+      else skipped++;
+    } catch (e) {
+      errors.push(`${investorId}: ${e.message}`);
+    }
+  }
+
+  setImmediate(() => audit.log({
+    actorId:    req.user.id,
+    actorEmail: req.user.email,
+    action:     'investors.reimport_bank_accounts',
+    entityType: 'investors',
+    description: `Re-imported bank accounts from JSON upload: ${updated} updated, ${skipped} skipped (no match), ${errors.length} errors.`,
+    ip: req.ip,
+  }).catch(() => {}));
+
+  res.json({ success: true, total: Object.keys(bankByUser).length, updated, skipped, errors: errors.slice(0, 20) });
+});
+
+/* ─── POST /api/admin/promote-bank-from-notes ─────────────────────────────────
+   Promotes bank account data already stored in the investors.notes JSON column
+   into the dedicated bank_name / bank_account_number / etc. columns.
+   Safe to run multiple times — only fills nulls, never overwrites existing data.
+   ─────────────────────────────────────────────────────────────────────── */
+router.post('/promote-bank-from-notes', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, notes FROM investors
+        WHERE notes IS NOT NULL AND notes LIKE '{%'
+          AND (bank_name IS NULL OR bank_account_number IS NULL)`
+    );
+
+    let updated = 0;
+    let skipped = 0;
+    const errors = [];
+
+    for (const inv of rows) {
+      let bd;
+      try { bd = JSON.parse(inv.notes); } catch (_) { skipped++; continue; }
+
+      const bankName   = bd.bank_name      || null;
+      const acctNum    = bd.account_number || null;
+      const holder     = bd.account_holder || null;
+      const branchCode = bd.branch_code    || null;
+
+      if (!bankName && !acctNum) { skipped++; continue; }
+
+      try {
+        const { rowCount } = await pool.query(
+          `UPDATE investors
+              SET bank_name           = COALESCE(bank_name,           $2),
+                  bank_account_number = COALESCE(bank_account_number, $3),
+                  bank_account_holder = COALESCE(bank_account_holder, $4),
+                  bank_branch_code    = COALESCE(bank_branch_code,    $5),
+                  bank_account_status = COALESCE(bank_account_status, 'pending'),
+                  updated_at          = NOW()
+            WHERE id = $1`,
+          [inv.id, bankName, acctNum, holder, branchCode]
+        );
+        if (rowCount > 0) updated++;
+        else skipped++;
+      } catch (e) {
+        errors.push(`${inv.id}: ${e.message}`);
+      }
+    }
+
+    setImmediate(() => audit.log({
+      actorId:    req.user.id,
+      actorEmail: req.user.email,
+      action:     'investors.promote_bank_from_notes',
+      entityType: 'investors',
+      description: `Promoted bank account data from notes JSON: ${updated} updated, ${skipped} skipped, ${errors.length} errors.`,
+      ip: req.ip,
+    }).catch(() => {}));
+
+    res.json({ success: true, checked: rows.length, updated, skipped, errors: errors.slice(0, 20) });
+  } catch (err) {
+    console.error('/admin/promote-bank-from-notes error:', err.message);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
 module.exports = router;
