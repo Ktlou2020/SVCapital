@@ -1,19 +1,10 @@
 # SVCapital — Claude Code Instructions
 
 ## Branch Strategy
-All changes go to a single track targeting `main`:
-
-| Files changed | Work branch | PR target |
-|---|---|---|
-| All files (`portal/**`, `mobile/**`, `admin/**`, `server/**`, `dist/**`, etc.) | `claude/exciting-volta-CxUp1` | `main` |
-
-Always work on `claude/exciting-volta-CxUp1`. The `develop` branch no longer exists.
+All changes go directly to `main`. Commit and push to `main` after every change. No intermediary branches.
 
 ## Pull Requests
-- Always create a PR (not draft) after pushing, if one doesn't already exist for the branch.
-- Immediately after creating the PR, call `mcp__github__enable_pr_auto_merge` with `mergeMethod: "SQUASH"` so it merges automatically once checks pass.
-- If `enable_pr_auto_merge` returns "already in clean status", call `mcp__github__merge_pull_request` with `merge_method: "squash"` to merge it directly.
-- If the PR was already open, still call `enable_pr_auto_merge` on it (then merge directly if already clean).
+Do not create pull requests. Push commits directly to `main`.
 
 ## Service Worker Cache
 Bump `mobile/www/sw.js` CACHE version (svc-portal-vN) with every JS/CSS change to mobile.
