@@ -4175,13 +4175,13 @@ function _marketPoolCardHtml(pool, idx, walletBal, waitlist, investorId) {
 // Cache of the public products feed (factsheets, herd stats source, etc.)
 let _portalProductsCache = null;
 async function _getPortalProducts() {
-  if (_portalProductsCache) return _portalProductsCache;
+  if (_portalProductsCache && _portalProductsCache.length) return _portalProductsCache;
   try {
     const r = await API._fetch('GET', 'products');
-    _portalProductsCache = r.data || [];
-    Utils.setProductCache(_portalProductsCache);
-  } catch (_) { _portalProductsCache = []; }
-  return _portalProductsCache;
+    _portalProductsCache = r.data || null;
+    if (_portalProductsCache && _portalProductsCache.length) Utils.setProductCache(_portalProductsCache);
+  } catch (_) { _portalProductsCache = null; }
+  return _portalProductsCache || [];
 }
 
 // Live cattle herd status (from the fund-management herd data), shown on the
