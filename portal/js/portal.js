@@ -3946,18 +3946,18 @@ async function _renderProductTrackRecord(type, color) {
         <i class="fa-solid fa-chart-line" style="color:${color};margin-right:5px"></i>Past Performance
       </div>
 
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
-        <div style="background:${color}12;border:1px solid ${color}30;border-radius:12px;padding:14px 12px;text-align:center">
-          <div style="font-size:1.5rem;font-weight:900;color:${color};letter-spacing:-0.02em">${avgRate}%</div>
-          <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-top:3px">Avg return p.a.</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">
+        <div style="background:${color}12;border:1px solid ${color}30;border-radius:12px;padding:12px 8px;text-align:center;min-width:0">
+          <div style="font-size:clamp(0.85rem,4vw,1.5rem);font-weight:900;color:${color};letter-spacing:-0.02em;overflow-wrap:break-word">${avgRate}%</div>
+          <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-top:3px">Avg return p.a.</div>
         </div>
-        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px 12px;text-align:center">
-          <div style="font-size:1.5rem;font-weight:900;color:var(--text);letter-spacing:-0.02em">${nTotal}</div>
-          <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-top:3px">Pool${nTotal === 1 ? '' : 's'} completed</div>
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:12px 8px;text-align:center;min-width:0">
+          <div style="font-size:clamp(0.85rem,4vw,1.5rem);font-weight:900;color:var(--text);letter-spacing:-0.02em;overflow-wrap:break-word">${nTotal}</div>
+          <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-top:3px">Pool${nTotal === 1 ? '' : 's'} completed</div>
         </div>
-        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px 12px;text-align:center">
-          <div style="font-size:1.5rem;font-weight:900;color:var(--text);letter-spacing:-0.02em">${Utils.rand(paidBack)}</div>
-          <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-top:3px">Returned to investors</div>
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:12px 8px;text-align:center;min-width:0">
+          <div style="font-size:clamp(0.75rem,3.5vw,1.5rem);font-weight:900;color:var(--text);letter-spacing:-0.02em;overflow-wrap:break-word;word-break:break-word">${Utils.rand(paidBack)}</div>
+          <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-top:3px">Returned to investors</div>
         </div>
       </div>
 
