@@ -1555,13 +1555,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const avEl = document.getElementById('welcomeAvatar');
     if (avEl && firstName) avEl.textContent = ((firstName[0] || '') + (lastName[0] || '')).toUpperCase() || '?';
   } catch (_) {}
-  // Always clear "Loading..." from data tables immediately — render a spinner row instead
+  // Always clear "Loading..." from data tables immediately — render a spinner instead
   try {
-    const _spinRow = (cols) => `<tr><td colspan="${cols}" style="padding:24px;text-align:center;color:var(--text-muted);font-size:0.85rem"><i class="fa-solid fa-circle-notch fa-spin" style="margin-right:6px"></i>Loading…</td></tr>`;
+    const _spinDiv = `<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:0.85rem"><i class="fa-solid fa-circle-notch fa-spin" style="margin-right:6px"></i>Loading…</div>`;
     const ib = document.getElementById('overviewInvestmentsBody');
     const tb = document.getElementById('overviewTxnBody');
-    if (ib) ib.innerHTML = _spinRow(6);
-    if (tb) tb.innerHTML = _spinRow(4);
+    if (ib) ib.innerHTML = _spinDiv;
+    if (tb) tb.innerHTML = _spinDiv;
   } catch (_) {}
 
   // Try to render from cache immediately — hides cover instantly on repeat launches.
@@ -1607,12 +1607,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadPortalData(0, { skipCharts: true }).catch(() => {});
   } else {
     // No cache (first visit) — show progressive status while Railway may be cold-starting
-    const _statusRow = (cols, msg) => `<tr><td colspan="${cols}" style="padding:24px;text-align:center;color:var(--text-muted);font-size:0.85rem">${msg}</td></tr>`;
+    const _statusDiv = (msg) => `<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:0.85rem">${msg}</div>`;
     const _updateStatus = (msg) => {
       const ib = document.getElementById('overviewInvestmentsBody');
       const tb = document.getElementById('overviewTxnBody');
-      if (ib) ib.innerHTML = _statusRow(6, msg);
-      if (tb) tb.innerHTML = _statusRow(4, msg);
+      if (ib) ib.innerHTML = _statusDiv(msg);
+      if (tb) tb.innerHTML = _statusDiv(msg);
     };
     const _coverText = document.getElementById('_nativeCoverText');
     const _t1 = setTimeout(() => {
@@ -1842,11 +1842,11 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
     // All attempts exhausted — clear any stale "Loading..." and show an actionable error
     if (!PORTAL.investor) PORTAL.investor = { id: DEMO_INVESTOR_ID };
     try { renderOverview(); } catch (_) {}
-    const _retryRow = (cols) => `<tr><td colspan="${cols}" style="padding:24px;text-align:center;color:var(--text-muted);font-size:0.85rem"><i class="fa-solid fa-triangle-exclamation" style="color:#f59e0b;margin-right:6px"></i>Could not reach server. <a href="#" onclick="location.reload()" style="color:var(--gold);text-decoration:none;font-weight:600">Tap to retry →</a></td></tr>`;
+    const _retryDiv = `<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:0.85rem"><i class="fa-solid fa-triangle-exclamation" style="color:#f59e0b;margin-right:6px"></i>Could not reach server. <a href="#" onclick="location.reload()" style="color:var(--gold);text-decoration:none;font-weight:600">Tap to retry →</a></div>`;
     const _ib = document.getElementById('overviewInvestmentsBody');
     const _tb = document.getElementById('overviewTxnBody');
-    if (_ib && (!PORTAL.investments.length || _ib.textContent.includes('Loading'))) _ib.innerHTML = _retryRow(6);
-    if (_tb && (!PORTAL.transactions.length || _tb.textContent.includes('Loading'))) _tb.innerHTML = _retryRow(4);
+    if (_ib && (!PORTAL.investments.length || _ib.textContent.includes('Loading'))) _ib.innerHTML = _retryDiv;
+    if (_tb && (!PORTAL.transactions.length || _tb.textContent.includes('Loading'))) _tb.innerHTML = _retryDiv;
     if (window.__SVC_HIDE_COVER) window.__SVC_HIDE_COVER();
     Toast.error('Could not connect to server — tap "Tap to retry" to reload');
   }
@@ -2124,53 +2124,91 @@ function dismissOnboarding() {
   if (wizard) wizard.style.display = 'none';
 }
 
+function _hexToRgb(hex) {
+  const h = (hex || '#9ca3af').replace('#', '');
+  const n = parseInt(h.length === 3 ? h.split('').map(c => c + c).join('') : h, 16);
+  return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`;
+}
+
 function renderOverviewInvestments() {
   const body = document.getElementById('overviewInvestmentsBody');
   if (!body) return;
   const active = PORTAL.investments.filter(i => i.status === 'active');
 
-  if (!active.length) { body.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:24px">No active investments. <a href="#" onclick="navigate(\'marketplace\', null)" style="color:var(--gold)">Browse pools →</a></td></tr>'; return; }
+  if (!active.length) {
+    body.innerHTML = `<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:0.85rem">No active investments. <a href="#" onclick="navigate('marketplace',document.querySelector('[data-view=marketplace]'))" style="color:var(--gold);text-decoration:none;font-weight:600">Browse pools →</a></div>`;
+    return;
+  }
 
   body.innerHTML = active.map(inv => {
-    const pi = Utils.productInfo(inv.product_type);
-    const days = Utils.daysRemaining(inv.maturity_date);
-    const pool = PORTAL.pools.find(p => p.id === inv.pool_id);
-    const progress = pool ? Utils.poolFillPct(pool) : 100;
-
-    return `<tr>
-      <td>
-        <div class="td-strong">${_esc(inv.pool_name)}</div>
-        <div style="margin-top:4px">
-          <div class="progress-bar" style="width:120px;height:4px"><div class="progress-fill" style="width:${progress}%"></div></div>
-        </div>
-      </td>
-      <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
-      <td class="td-gold fw-700">${Utils.rand(inv.amount)}</td>
-      <td class="td-muted">${Utils.date(inv.investment_date || inv.start_date)}</td>
-      <td class="td-muted">${Utils.date(inv.maturity_date || inv.end_date)}</td>
-      <td>${Utils.statusBadge(inv.status)}</td>
-    </tr>`;
+    const pi    = Utils.productInfo(inv.product_type);
+    const days  = Utils.daysRemaining(inv.maturity_date);
+    const daysStr = days != null ? `${days}d left` : Utils.date(inv.maturity_date || inv.end_date);
+    const iconBg  = `rgba(${_hexToRgb(pi.color)},0.12)`;
+    return `<div class="ov-inv-card" onclick="viewInvestmentDetail('${_esc(inv.id)}')">
+      <div class="ov-inv-card__icon" style="background:${iconBg}">
+        <i class="fa-solid ${pi.icon}" style="color:${pi.color}"></i>
+      </div>
+      <div class="ov-inv-card__main">
+        <div class="ov-inv-card__name">${_esc(inv.pool_name || inv.pool_id || 'Investment')}</div>
+        <div class="ov-inv-card__meta">${_esc(pi.label)} · matures ${daysStr}</div>
+      </div>
+      <div class="ov-inv-card__right">
+        <div class="ov-inv-card__amount">${Utils.rand(inv.amount)}</div>
+        <div class="ov-inv-card__days">${Utils.statusBadge(inv.status)}</div>
+      </div>
+    </div>`;
   }).join('');
+}
+
+const _TXN_ICON = {
+  deposit:        { icon: 'fa-arrow-down',        color: '#22c55e' },
+  withdrawal:     { icon: 'fa-arrow-up',           color: '#ef4444' },
+  investment:     { icon: 'fa-seedling',           color: '#eda5ff' },
+  reinvestment:   { icon: 'fa-rotate',             color: '#eda5ff' },
+  return:         { icon: 'fa-arrow-trend-up',     color: '#22c55e' },
+  payout:         { icon: 'fa-circle-check',       color: '#22c55e' },
+  fee:            { icon: 'fa-minus-circle',        color: '#f97316' },
+  referral_bonus: { icon: 'fa-gift',               color: '#eda5ff' },
+  gift_sent:      { icon: 'fa-paper-plane',        color: '#f97316' },
+  gift_received:  { icon: 'fa-envelope-open-text', color: '#22c55e' },
+  reward:         { icon: 'fa-star',               color: '#fec24f' },
+};
+const _txnIsPositive = t => !['withdrawal', 'fee', 'investment', 'reinvestment', 'gift_sent'].includes(t.type);
+
+function _txnCardHTML(t) {
+  const ti   = _TXN_ICON[t.type] || { icon: 'fa-circle-dot', color: '#9ca3af' };
+  const pos  = _txnIsPositive(t);
+  const label = (t.type?.replace(/_/g, ' ') || '').replace(/^\w/, c => c.toUpperCase());
+  const amtColor = pos ? '#22c55e' : '#ef4444';
+  const amtStr   = (pos ? '+' : '−') + Utils.rand(Math.abs(parseFloat(t.amount) || 0));
+  const statusCls = `txn-card__status txn-card__status--${(t.status || '').toLowerCase()}`;
+  return `<div class="txn-card">
+    <div class="txn-card__icon" style="background:${ti.color}18">
+      <i class="fa-solid ${ti.icon}" style="color:${ti.color}"></i>
+    </div>
+    <div class="txn-card__main">
+      <div class="txn-card__title">${label}</div>
+      <div class="txn-card__meta">${t.description || t.reference || '—'}</div>
+    </div>
+    <div class="txn-card__right">
+      <div class="txn-card__amount" style="color:${amtColor}">${amtStr}</div>
+      <div class="${statusCls}">${t.status || ''}</div>
+    </div>
+  </div>`;
 }
 
 function renderOverviewTxns() {
   const body = document.getElementById('overviewTxnBody');
   if (!body) return;
-  const recent = [...PORTAL.transactions].sort((a, b) => new Date(b.transaction_date || b.created_at || 0) - new Date(a.transaction_date || a.created_at || 0)).slice(0, 5);
-  const typeColors = { deposit: 'green', investment: 'blue', reinvestment: 'purple', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple', withdrawal: 'red', gift_sent: 'orange', gift_received: 'green', reward: 'purple' };
-
-  if (!recent.length) { body.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:24px">No transactions yet</td></tr>'; return; }
-
-  const _txnIsPositive = t => !['withdrawal', 'fee', 'investment', 'reinvestment', 'gift_sent'].includes(t.type);
-  body.innerHTML = recent.map(t => {
-    const pos = _txnIsPositive(t);
-    return `<tr>
-      <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${(t.type?.replace(/_/g, ' ') || '').replace(/^\w/, c => c.toUpperCase())}</span></td>
-      <td class="${pos ? 'td-green' : 'td-red'} fw-700">${pos ? '+' : '-'}${Utils.rand(Math.abs(t.amount))}</td>
-      <td class="td-muted" style="font-size:0.75rem">${t.description || '—'}</td>
-      <td class="td-muted">${Utils.date(t.transaction_date || t.created_at)}</td>
-    </tr>`;
-  }).join('');
+  const recent = [...PORTAL.transactions]
+    .sort((a, b) => new Date(b.transaction_date || b.created_at || 0) - new Date(a.transaction_date || a.created_at || 0))
+    .slice(0, 5);
+  if (!recent.length) {
+    body.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:0.85rem">No transactions yet</div>';
+    return;
+  }
+  body.innerHTML = recent.map(_txnCardHTML).join('');
 }
 
 function renderPortfolioTrendChart() {
@@ -2540,39 +2578,32 @@ async function loadMyTransactions() {
   document.getElementById('myTxnTypeFilter').addEventListener('change', renderMyTxnTable);
 }
 
+function _setTxnFilter(type, btn) {
+  const sel = document.getElementById('myTxnTypeFilter');
+  if (sel) sel.value = type;
+  document.querySelectorAll('#txnFilterPills .txn-pill').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderMyTxnTable();
+}
+
 function renderMyTxnTable() {
   const body = document.getElementById('myTxnBody');
-  const filter = document.getElementById('myTxnTypeFilter').value;
+  if (!body) return;
+  const filter = (document.getElementById('myTxnTypeFilter') || {}).value || '';
   const items = filter ? PORTAL.transactions.filter(t => t.type === filter) : PORTAL.transactions;
   const sorted = [...items].sort((a, b) => new Date(b.transaction_date || b.created_at || 0) - new Date(a.transaction_date || a.created_at || 0));
 
-  const typeColors = { deposit: 'green', investment: 'blue', reinvestment: 'purple', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple', withdrawal: 'red', gift_sent: 'orange', gift_received: 'green', reward: 'purple' };
-
   if (!sorted.length) {
-    body.innerHTML = `<tr><td colspan="6" style="padding:0;border:none">
-      <div class="empty-state">
-        <i class="fa-solid fa-receipt"></i>
-        <div class="empty-state__title">No transactions yet</div>
-        <div class="empty-state__sub">Top up your wallet or make an investment to see activity here.<br>
-          <a href="#" onclick="navigate('wallet', document.querySelector('[data-view=wallet]'))" style="color:var(--gold)">Go to Wallet →</a>
-        </div>
+    body.innerHTML = `<div class="empty-state">
+      <i class="fa-solid fa-receipt"></i>
+      <div class="empty-state__title">No transactions yet</div>
+      <div class="empty-state__sub">Top up your wallet or make an investment to see activity here.<br>
+        <a href="#" onclick="navigate('wallet', document.querySelector('[data-view=wallet]'))" style="color:var(--gold)">Go to Wallet →</a>
       </div>
-    </td></tr>`;
+    </div>`;
     return;
   }
-
-  const _isPosTxn = t => !['withdrawal', 'fee', 'investment', 'reinvestment', 'gift_sent'].includes(t.type);
-  body.innerHTML = sorted.map(t => {
-    const pos = _isPosTxn(t);
-    return `<tr>
-      <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${(t.type?.replace(/_/g, ' ') || '').replace(/^\w/, c => c.toUpperCase())}</span></td>
-      <td class="${pos ? 'td-green' : 'td-red'} fw-700">${pos ? '+' : '-'}${Utils.rand(Math.abs(t.amount))}</td>
-      <td>${Utils.statusBadge(t.status)}</td>
-      <td class="td-muted" style="font-size:0.72rem">${t.reference || '—'}</td>
-      <td class="td-muted" style="font-size:0.75rem">${t.description || '—'}</td>
-      <td class="td-muted">${Utils.date(t.transaction_date || t.created_at)}</td>
-    </tr>`;
-  }).join('');
+  body.innerHTML = sorted.map(t => _txnCardHTML(t)).join('');
 }
 
 function _switchTxnTab(tab, btn) {
@@ -3578,6 +3609,26 @@ async function loadMarketplace() {
       });
   }
 
+  // Enrich each product's avg_actual_rate from the track record (matured pools).
+  // The products table may store 0 when no pools have matured yet; we compute
+  // the weighted average ourselves so the cards always reflect real performance.
+  try {
+    const tr = await _getTrackRecord();
+    if (tr && Object.keys(tr).length) {
+      _mktProducts.forEach(p => {
+        const isSolar = (p.product_type || '').startsWith('solar');
+        const keys = Object.keys(tr).filter(k => isSolar ? k.startsWith('solar') : k === p.product_type);
+        let sumA = 0, nA = 0;
+        keys.forEach(k => {
+          const d = tr[k];
+          sumA += (d.avg_actual_rate || 0) * (d.matured_count || 0);
+          nA   += d.matured_count || 0;
+        });
+        if (nA > 0) p.avg_actual_rate = sumA / nA;
+      });
+    }
+  } catch (_) {}
+
   _selectedProductType = null;   // always land on the product grid
   try {
     renderMarketplace();
@@ -3704,10 +3755,10 @@ function renderProductsGrid() {
     const pi = Utils.productInfo(p.product_type);
     const color = Utils.productColor(p);
     const icon = p.icon || pi.icon;
-    const avg = p.avg_actual_rate != null ? parseFloat(p.avg_actual_rate) : null;
+    const avg = p.avg_actual_rate > 0 ? parseFloat(p.avg_actual_rate) : null;
     const poolRate = open[0] ? parseFloat(open[0].annual_rate) : null;
     const rateLabel = avg != null ? `${(avg * 100).toFixed(2)}%` : (p.benchmark_rate ? `${(parseFloat(p.benchmark_rate) * 100).toFixed(1)}%` : (poolRate != null ? `${(poolRate * 100).toFixed(1)}%` : '—'));
-    const rateSub = avg != null ? 'AVG RETURN' : 'TARGET RETURN';
+    const rateSub = avg != null ? 'AVG RETURN P.A.' : 'TARGET RETURN P.A.';
     const termMonths = p.term_months || (open[0] && open[0].term_months) || null;
     // soonest closing among the open pools
     const days = open.map(o => Utils.daysRemaining(o.end_date)).filter(d => d !== null);
@@ -3775,7 +3826,7 @@ async function renderProductDetailView(type) {
   const color = Utils.productColor(product);
   const icon = product.icon || pi.icon;
   const open = _openPoolsForProduct(type);
-  const avg = product.avg_actual_rate != null ? parseFloat(product.avg_actual_rate) : null;
+  const avg = product.avg_actual_rate > 0 ? parseFloat(product.avg_actual_rate) : null;
   const projRate = avg != null ? avg : (product.benchmark_rate ? parseFloat(product.benchmark_rate) : (open[0] ? parseFloat(open[0].annual_rate) : 0.13));
   const keyDetails = (product.key_details || '').split('\n').map(s => s.trim()).filter(Boolean);
 
@@ -3804,7 +3855,7 @@ async function renderProductDetailView(type) {
           <div class="mpc2-metrics" style="margin-bottom:16px">
             <div class="mpc2-metric">
               <div class="mpc2-metric__val" style="background:linear-gradient(135deg,${color},${color}bb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">${avg != null ? (avg * 100).toFixed(2) + '%' : (product.benchmark_rate ? (parseFloat(product.benchmark_rate) * 100).toFixed(1) + '%' : (open[0] ? (parseFloat(open[0].annual_rate) * 100).toFixed(1) + '%' : '—'))}</div>
-              <div class="mpc2-metric__lbl">${avg != null ? 'AVG RETURN' : 'TARGET RETURN'}</div>
+              <div class="mpc2-metric__lbl">${avg != null ? 'AVG RETURN P.A.' : 'TARGET RETURN P.A.'}</div>
             </div>
             <div class="mpc2-metric-sep"></div>
             <div class="mpc2-metric"><div class="mpc2-metric__val" style="font-size:1.25rem">${Utils.rand(product.min_investment || 0)}</div><div class="mpc2-metric__lbl">minimum</div></div>
@@ -3814,7 +3865,7 @@ async function renderProductDetailView(type) {
           </div>
 
           ${type === 'cattle' && keyDetails.length
-            ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start;margin-bottom:16px">
+            ? `<div class="prod-detail-grid" style="margin-bottom:16px">
                 <div id="prodHerdStatus"></div>
                 <div style="background:rgba(254,194,79,0.06);border:1px solid rgba(254,194,79,0.22);border-radius:12px;padding:14px 16px">
                   <div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#b8860b;margin-bottom:10px"><i class="fa-solid fa-list" style="margin-right:5px"></i>Key Details</div>

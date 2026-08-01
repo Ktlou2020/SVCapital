@@ -3559,6 +3559,24 @@ async function loadMarketplace() {
       });
   }
 
+  // Enrich each product's avg_actual_rate from the track record (matured pools).
+  try {
+    const tr = await _getTrackRecord();
+    if (tr && Object.keys(tr).length) {
+      _mktProducts.forEach(p => {
+        const isSolar = (p.product_type || '').startsWith('solar');
+        const keys = Object.keys(tr).filter(k => isSolar ? k.startsWith('solar') : k === p.product_type);
+        let sumA = 0, nA = 0;
+        keys.forEach(k => {
+          const d = tr[k];
+          sumA += (d.avg_actual_rate || 0) * (d.matured_count || 0);
+          nA   += d.matured_count || 0;
+        });
+        if (nA > 0) p.avg_actual_rate = sumA / nA;
+      });
+    }
+  } catch (_) {}
+
   _selectedProductType = null;   // always land on the product grid
   try {
     renderMarketplace();
@@ -3685,10 +3703,10 @@ function renderProductsGrid() {
     const pi = Utils.productInfo(p.product_type);
     const color = Utils.productColor(p);
     const icon = p.icon || pi.icon;
-    const avg = p.avg_actual_rate != null ? parseFloat(p.avg_actual_rate) : null;
+    const avg = p.avg_actual_rate > 0 ? parseFloat(p.avg_actual_rate) : null;
     const poolRate = open[0] ? parseFloat(open[0].annual_rate) : null;
     const rateLabel = avg != null ? `${(avg * 100).toFixed(2)}%` : (p.benchmark_rate ? `${(parseFloat(p.benchmark_rate) * 100).toFixed(1)}%` : (poolRate != null ? `${(poolRate * 100).toFixed(1)}%` : '—'));
-    const rateSub = avg != null ? 'AVG RETURN' : 'TARGET RETURN';
+    const rateSub = avg != null ? 'AVG RETURN P.A.' : 'TARGET RETURN P.A.';
     const termMonths = p.term_months || (open[0] && open[0].term_months) || null;
     // soonest closing among the open pools
     const days = open.map(o => Utils.daysRemaining(o.end_date)).filter(d => d !== null);
@@ -3756,7 +3774,7 @@ async function renderProductDetailView(type) {
   const color = Utils.productColor(product);
   const icon = product.icon || pi.icon;
   const open = _openPoolsForProduct(type);
-  const avg = product.avg_actual_rate != null ? parseFloat(product.avg_actual_rate) : null;
+  const avg = product.avg_actual_rate > 0 ? parseFloat(product.avg_actual_rate) : null;
   const projRate = avg != null ? avg : (product.benchmark_rate ? parseFloat(product.benchmark_rate) : (open[0] ? parseFloat(open[0].annual_rate) : 0.13));
   const keyDetails = (product.key_details || '').split('\n').map(s => s.trim()).filter(Boolean);
 
@@ -3785,7 +3803,7 @@ async function renderProductDetailView(type) {
           <div class="mpc2-metrics" style="margin-bottom:16px">
             <div class="mpc2-metric">
               <div class="mpc2-metric__val" style="background:linear-gradient(135deg,${color},${color}bb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">${avg != null ? (avg * 100).toFixed(2) + '%' : (product.benchmark_rate ? (parseFloat(product.benchmark_rate) * 100).toFixed(1) + '%' : (open[0] ? (parseFloat(open[0].annual_rate) * 100).toFixed(1) + '%' : '—'))}</div>
-              <div class="mpc2-metric__lbl">${avg != null ? 'AVG RETURN' : 'TARGET RETURN'}</div>
+              <div class="mpc2-metric__lbl">${avg != null ? 'AVG RETURN P.A.' : 'TARGET RETURN P.A.'}</div>
             </div>
             <div class="mpc2-metric-sep"></div>
             <div class="mpc2-metric"><div class="mpc2-metric__val" style="font-size:1.25rem">${Utils.rand(product.min_investment || 0)}</div><div class="mpc2-metric__lbl">minimum</div></div>

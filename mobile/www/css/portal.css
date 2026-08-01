@@ -2481,3 +2481,105 @@ html body.dark-mode .invest-guide-strip {
   background: rgba(255,255,255,0.03) !important;
   border-color: rgba(255,255,255,0.07) !important;
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Transaction filter pills
+   ───────────────────────────────────────────────────────────── */
+.txn-filter-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: 12px;
+  /* hide scrollbar */
+  scrollbar-width: none;
+}
+.txn-filter-scroll::-webkit-scrollbar { display: none; }
+
+.txn-filter-pills {
+  display: flex;
+  gap: 8px;
+  padding-bottom: 2px;
+  width: max-content;
+}
+
+.txn-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  font-family: inherit;
+  line-height: 1;
+}
+.txn-pill:hover { border-color: var(--gold); color: var(--gold); }
+.txn-pill.active {
+  background: var(--gold);
+  color: #1a1a1a;
+  border-color: var(--gold);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Investment overview cards (ov-list)
+   ───────────────────────────────────────────────────────────── */
+.ov-inv-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.ov-inv-card:last-child { border-bottom: none; }
+.ov-inv-card__icon {
+  width: 42px; height: 42px;
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  font-size: 1.05rem;
+}
+.ov-inv-card__main { flex: 1; min-width: 0; }
+.ov-inv-card__name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--white);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ov-inv-card__meta {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+.ov-inv-card__right { flex-shrink: 0; text-align: right; }
+.ov-inv-card__amount {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--gold);
+}
+.ov-inv-card__days {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+
+/* Product detail: live status + key details — stack on mobile, side-by-side on wider screens */
+.prod-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  align-items: start;
+}
+@media (min-width: 520px) {
+  .prod-detail-grid { grid-template-columns: 1fr 1fr; }
+}
+
+/* Transaction list container */
+.txn-list { padding: 0; }
