@@ -5946,10 +5946,47 @@ function printStatement() {
   _openStatementOverlay(stmtDoc.innerHTML);
 }
 
-/* Open an in-page full-screen overlay with the statement so window.print()
-   works in Capacitor WebView (which blocks window.open with blob URLs).
+/* Cached statement body HTML for _handleSavePdf() */
+let _stmtBodyHtmlCache = '';
+
+/* Save/share the statement.
+   - Web: window.print() opens the browser print dialog → Save as PDF.
+   - Capacitor WebView: window.print() is silent, so we build a standalone
+     HTML file and invoke the native share sheet via navigator.share({ files }).
+     On iOS the share sheet includes a "Print" option which saves as PDF.
+     On Android the user can share to Chrome → print from there. */
+function _handleSavePdf() {
+  if (!window.Capacitor) {
+    window.print();
+    return;
+  }
+  if (!_stmtBodyHtmlCache) {
+    Toast.error('Please generate a statement first.');
+    return;
+  }
+  const fullHtml = `<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SV Capital Statement</title>
+<style>body{margin:0;padding:0;background:#fff;color:#1a1a1a}@page{size:A4;margin:0}</style>
+</head><body>${_stmtBodyHtmlCache}</body></html>`;
+
+  const blob = new Blob([fullHtml], { type: 'text/html' });
+  const file = new File([blob], 'SV-Capital-Statement.html', { type: 'text/html' });
+
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    Toast.info('Tap "Print" in the share menu to save as PDF.');
+    navigator.share({ files: [file], title: 'SV Capital — Account Statement' })
+      .catch(e => { if (e.name !== 'AbortError') window.print(); });
+    return;
+  }
+  window.print();
+}
+
+/* Open an in-page full-screen overlay with the statement.
    @media print hides the app UI and shows only the statement. */
 function _openStatementOverlay(bodyHtml) {
+  _stmtBodyHtmlCache = bodyHtml;
   document.getElementById('stmtPrintOverlay')?.remove();
   document.getElementById('stmtPrintStyle')?.remove();
 
@@ -5960,7 +5997,7 @@ function _openStatementOverlay(bodyHtml) {
     <div id="stmtOverlayBar" style="position:sticky;top:0;background:#1a1a1a;padding:12px 20px;display:flex;justify-content:space-between;align-items:center;gap:10px;box-shadow:0 2px 12px rgba(0,0,0,0.4)">
       <span style="color:#fff;font-size:13px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">SV Capital — Account Statement</span>
       <div style="display:flex;gap:8px;align-items:center;flex-shrink:0">
-        <button onclick="window.print()" style="background:linear-gradient(135deg,#fec24f,#FF5229);color:#fff;border:none;padding:9px 16px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:5px"><i class="fa-solid fa-print"></i> Save as PDF</button>
+        <button onclick="_handleSavePdf()" style="background:linear-gradient(135deg,#fec24f,#FF5229);color:#fff;border:none;padding:9px 16px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:5px"><i class="fa-solid fa-share-nodes"></i> Save as PDF</button>
         <button onclick="document.getElementById('stmtPrintOverlay').remove();document.getElementById('stmtPrintStyle')?.remove()" style="background:rgba(255,255,255,0.1);color:#fff;border:1px solid rgba(255,255,255,0.2);padding:9px 12px;border-radius:8px;font-size:0.78rem;cursor:pointer"><i class="fa-solid fa-xmark"></i></button>
       </div>
     </div>
