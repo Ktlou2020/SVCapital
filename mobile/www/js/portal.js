@@ -4008,7 +4008,7 @@ async function _renderProductTrackRecord(type, color) {
           <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-top:3px">Pool${nTotal === 1 ? '' : 's'} completed</div>
         </div>
         <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:12px 8px;text-align:center;min-width:0">
-          <div style="font-size:clamp(0.75rem,3.5vw,1.5rem);font-weight:900;color:var(--text);letter-spacing:-0.02em;overflow-wrap:break-word;word-break:break-word">${Utils.rand(paidBack)}</div>
+          <div style="font-size:clamp(0.85rem,4vw,1.5rem);font-weight:900;color:var(--text);letter-spacing:-0.02em;white-space:nowrap">${Utils.randShort(paidBack)}</div>
           <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-top:3px">Returned to investors</div>
         </div>
       </div>

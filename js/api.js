@@ -421,6 +421,15 @@ const Utils = {
     });
   },
 
+  /* Abbreviated Rand for compact tiles — R61.1M, R1.2B, R950K */
+  randShort(amount) {
+    const n = Number(amount) || 0;
+    if (n >= 1e9)  return 'R' + (n / 1e9).toFixed(1) + 'B';
+    if (n >= 1e6)  return 'R' + (n / 1e6).toFixed(1) + 'M';
+    if (n >= 1e3)  return 'R' + (n / 1e3).toFixed(1) + 'K';
+    return 'R' + n.toFixed(0);
+  },
+
   /* Format percentage */
   pct(rate, decimals = 2) {
     return (Number(rate) * 100).toFixed(decimals) + '%';
