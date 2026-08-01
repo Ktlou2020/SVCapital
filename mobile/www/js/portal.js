@@ -11517,6 +11517,19 @@ function renderRiskProfile() {
   const inv = PORTAL.investor;
   if (!inv) return;
 
+  // ── Profile hero card ─────────────────────────────────────
+  const initials = `${(inv.first_name || '')[0] || '?'}${(inv.last_name || '')[0] || ''}`.toUpperCase();
+  const _ht = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '—'; };
+  _ht('profileHeroAvatar', initials);
+  _ht('profileHeroName',   `${inv.first_name || ''} ${inv.last_name || ''}`.trim() || '—');
+  _ht('profileHeroEmail',  inv.email || '—');
+  _ht('profileHeroId',     inv.id || '—');
+  _ht('profileHeroJoined', (inv.date_joined || inv.created_at || inv.registration_date)
+    ? new Date(inv.date_joined || inv.created_at || inv.registration_date)
+        .toLocaleString('en-ZA', { month: 'short', year: 'numeric' })
+    : '—');
+  _ht('profileHeroStatus', inv.status ? (inv.status.charAt(0).toUpperCase() + inv.status.slice(1)) : 'Active');
+
   // ── Populate personal info form ───────────────────────────
   const _set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
   _set('profFirstName', inv.first_name);
