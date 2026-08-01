@@ -1,0 +1,1359 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SV Capital — Platform Handbook</title>
+<style>
+/* ── Tokens ─────────────────────────────────────────────── */
+:root {
+  --bg:        #0d0f17;
+  --surface:   #151824;
+  --surface2:  #1c2035;
+  --border:    #242842;
+  --border2:   #2e3455;
+  --text:      #e4e7f1;
+  --muted:     #7a8299;
+  --accent:    #eda5ff;
+  --accent-dim:#3d2a50;
+  --warn:      #fbbf24;
+  --warn-dim:  #3d2f00;
+  --success:   #34d399;
+  --success-dim:#0d3326;
+  --danger:    #f87171;
+  --danger-dim:#3d1010;
+  --info:      #60a5fa;
+  --info-dim:  #0d2247;
+  --code-bg:   #0a0c14;
+  --sidebar-w: 230px;
+  --topbar-h:  56px;
+  --radius:    6px;
+}
+
+/* ── Reset ───────────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:15px;color-scheme:dark}
+body{
+  font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  background:var(--bg);color:var(--text);
+  line-height:1.65;overflow-x:hidden;
+}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+code,pre,kbd{font-family:'JetBrains Mono','Courier New',Courier,monospace}
+
+/* ── Top search bar ──────────────────────────────────────── */
+#topbar{
+  position:fixed;top:0;left:0;right:0;height:var(--topbar-h);
+  background:#10121e;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:14px;padding:0 20px;
+  z-index:200;
+}
+.topbar__brand{
+  display:flex;align-items:center;gap:10px;white-space:nowrap;
+  font-size:.8rem;font-weight:700;color:var(--accent);letter-spacing:.04em;
+  text-transform:uppercase;flex-shrink:0;
+}
+.topbar__brand svg{flex-shrink:0}
+.search-wrap{
+  position:relative;flex:1;max-width:520px;
+}
+.search-wrap svg{
+  position:absolute;left:11px;top:50%;transform:translateY(-50%);
+  color:var(--muted);pointer-events:none;
+}
+#searchInput{
+  width:100%;background:var(--surface2);border:1px solid var(--border2);
+  border-radius:var(--radius);color:var(--text);font-size:.875rem;
+  padding:8px 12px 8px 36px;outline:none;transition:border-color .15s;
+}
+#searchInput:focus{border-color:var(--accent)}
+#searchInput::placeholder{color:var(--muted)}
+#searchCount{
+  font-size:.75rem;color:var(--muted);white-space:nowrap;flex-shrink:0;
+}
+.topbar__updated{
+  margin-left:auto;font-size:.72rem;color:var(--muted);
+  white-space:nowrap;flex-shrink:0;
+}
+
+/* ── Layout ──────────────────────────────────────────────── */
+#layout{
+  display:flex;margin-top:var(--topbar-h);min-height:calc(100vh - var(--topbar-h));
+}
+
+/* ── Sidebar ─────────────────────────────────────────────── */
+#sidebar{
+  width:var(--sidebar-w);flex-shrink:0;
+  position:sticky;top:var(--topbar-h);
+  height:calc(100vh - var(--topbar-h));
+  overflow-y:auto;overflow-x:hidden;
+  background:var(--surface);border-right:1px solid var(--border);
+  padding:16px 0 40px;
+  scrollbar-width:thin;scrollbar-color:var(--border) transparent;
+}
+.sidebar-group{margin-bottom:4px}
+.sidebar-group__label{
+  font-size:.67rem;font-weight:700;color:var(--muted);
+  letter-spacing:.1em;text-transform:uppercase;
+  padding:10px 18px 4px;
+}
+.sidebar-link{
+  display:block;padding:6px 18px;font-size:.82rem;color:var(--muted);
+  cursor:pointer;border-left:2px solid transparent;
+  transition:color .12s,border-color .12s,background .12s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.sidebar-link:hover{color:var(--text);background:var(--surface2)}
+.sidebar-link.active{color:var(--accent);border-left-color:var(--accent);background:var(--accent-dim)}
+
+/* ── Content ─────────────────────────────────────────────── */
+#content{
+  flex:1;padding:36px 48px 80px;max-width:900px;
+}
+@media(max-width:1100px){#content{padding:28px 28px 80px}}
+
+/* ── Section blocks ──────────────────────────────────────── */
+.section{margin-bottom:52px}
+.section-title{
+  font-size:1.25rem;font-weight:700;color:var(--text);
+  padding-bottom:10px;border-bottom:1px solid var(--border);
+  margin-bottom:20px;display:flex;align-items:center;gap:10px;
+}
+.section-title .section-icon{
+  width:28px;height:28px;border-radius:6px;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--accent-dim);color:var(--accent);font-size:.9rem;flex-shrink:0;
+}
+.subsection{margin-bottom:28px}
+.subsection-title{
+  font-size:.88rem;font-weight:700;color:var(--text);
+  text-transform:uppercase;letter-spacing:.07em;
+  margin-bottom:12px;
+}
+
+/* ── Entry rows ──────────────────────────────────────────── */
+.entry{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);padding:14px 16px;
+  margin-bottom:8px;transition:border-color .12s;
+}
+.entry:hover{border-color:var(--border2)}
+.entry.hidden{display:none}
+.entry__label{font-size:.78rem;font-weight:700;color:var(--text);margin-bottom:3px}
+.entry__value{font-size:.82rem;color:var(--muted);line-height:1.55}
+.entry__value code{
+  background:var(--code-bg);color:var(--accent);
+  padding:1px 5px;border-radius:3px;font-size:.8em;
+}
+
+/* ── Callout cards ───────────────────────────────────────── */
+.callout{
+  border-radius:var(--radius);padding:14px 16px;
+  margin-bottom:10px;border-left:3px solid;font-size:.85rem;
+  line-height:1.6;
+}
+.callout.critical{background:var(--warn-dim);border-color:var(--warn);color:#fde68a}
+.callout.critical strong{color:var(--warn)}
+.callout.info{background:var(--info-dim);border-color:var(--info);color:#bfdbfe}
+.callout.info strong{color:var(--info)}
+.callout.success{background:var(--success-dim);border-color:var(--success);color:#a7f3d0}
+.callout.success strong{color:var(--success)}
+.callout.danger{background:var(--danger-dim);border-color:var(--danger);color:#fecaca}
+.callout.danger strong{color:var(--danger)}
+
+/* ── Code blocks ─────────────────────────────────────────── */
+.code-block{
+  background:var(--code-bg);border:1px solid var(--border);
+  border-radius:var(--radius);padding:14px 16px;
+  font-size:.8rem;line-height:1.7;overflow-x:auto;
+  margin-bottom:12px;position:relative;
+}
+.code-block pre{white-space:pre;color:#c9d1e8}
+.code-block .copy-btn{
+  position:absolute;top:8px;right:8px;
+  background:var(--surface2);border:1px solid var(--border2);
+  color:var(--muted);font-size:.7rem;padding:3px 8px;border-radius:4px;
+  cursor:pointer;transition:color .1s;
+}
+.code-block .copy-btn:hover{color:var(--text)}
+.code-block .hl-key{color:var(--accent)}
+.code-block .hl-val{color:#86efac}
+.code-block .hl-comment{color:#4a5270;font-style:italic}
+
+/* ── Table ───────────────────────────────────────────────── */
+.data-table{width:100%;border-collapse:collapse;font-size:.82rem;margin-bottom:12px}
+.data-table th{
+  text-align:left;padding:8px 12px;
+  background:var(--surface2);color:var(--muted);
+  font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+  border-bottom:1px solid var(--border);
+}
+.data-table td{
+  padding:9px 12px;border-bottom:1px solid var(--border);
+  vertical-align:top;color:var(--text);
+}
+.data-table tr:last-child td{border-bottom:none}
+.data-table td code{
+  background:var(--code-bg);color:var(--accent);
+  padding:1px 5px;border-radius:3px;font-size:.78em;
+}
+.data-table td .muted{color:var(--muted);font-size:.78em}
+
+/* ── Tags / badges ───────────────────────────────────────── */
+.tag{
+  display:inline-block;font-size:.68rem;font-weight:700;
+  padding:2px 7px;border-radius:20px;letter-spacing:.04em;
+  text-transform:uppercase;white-space:nowrap;
+}
+.tag.purple{background:var(--accent-dim);color:var(--accent)}
+.tag.yellow{background:#3d2f00;color:#fde68a}
+.tag.green{background:var(--success-dim);color:#34d399}
+.tag.blue{background:var(--info-dim);color:#60a5fa}
+.tag.red{background:var(--danger-dim);color:#f87171}
+.tag.grey{background:var(--surface2);color:var(--muted)}
+
+/* ── Two-column grid ─────────────────────────────────────── */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+@media(max-width:700px){.grid-2{grid-template-columns:1fr}}
+
+/* ── No results message ──────────────────────────────────── */
+#noResults{
+  display:none;text-align:center;padding:60px 20px;
+  color:var(--muted);font-size:.9rem;
+}
+.section.hidden{display:none}
+
+/* ── Search highlight ────────────────────────────────────── */
+mark{background:#5b3a00;color:#fde68a;border-radius:2px;padding:0 2px}
+
+/* ── Scrollbar ───────────────────────────────────────────── */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:10px}
+
+/* ── Mobile ──────────────────────────────────────────────── */
+@media(max-width:768px){
+  :root{--sidebar-w:0px}
+  #sidebar{display:none}
+  #content{padding:20px 16px 60px}
+  .topbar__updated{display:none}
+}
+</style>
+</head>
+<body>
+
+<!-- ══ TOP BAR ═══════════════════════════════════════════ -->
+<div id="topbar">
+  <div class="topbar__brand">
+    <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+      <rect width="22" height="22" rx="5" fill="#eda5ff" fill-opacity=".15"/>
+      <path d="M6 16L11 6L16 16" stroke="#eda5ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M8 13H14" stroke="#eda5ff" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+    Platform Handbook
+  </div>
+
+  <div class="search-wrap">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+      <path d="M6.5 0a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zm0 1.5a5 5 0 1 0 0 10 5 5 0 0 0 0-10zm8.78 10.72a.75.75 0 0 1 0 1.06l-.72.72a.75.75 0 0 1-1.06 0l-3.04-3.04a.75.75 0 0 1 0-1.06l.72-.72a.75.75 0 0 1 1.06 0l3.04 3.04z"/>
+    </svg>
+    <input id="searchInput" type="search" placeholder="Search anything — rules, files, integrations…" autocomplete="off" spellcheck="false">
+  </div>
+
+  <span id="searchCount"></span>
+  <span class="topbar__updated">Last updated: 01 Aug 2026</span>
+</div>
+
+<!-- ══ LAYOUT ════════════════════════════════════════════ -->
+<div id="layout">
+
+<!-- ══ SIDEBAR ═══════════════════════════════════════════ -->
+<aside id="sidebar">
+
+  <div class="sidebar-group">
+    <div class="sidebar-group__label">Core</div>
+    <a class="sidebar-link" href="#overview">Platform Overview</a>
+    <a class="sidebar-link" href="#architecture">Architecture</a>
+    <a class="sidebar-link" href="#codebase">Codebase Map</a>
+  </div>
+
+  <div class="sidebar-group">
+    <div class="sidebar-group__label">Rules</div>
+    <a class="sidebar-link" href="#dev-rules">Development Rules</a>
+    <a class="sidebar-link" href="#design-system">Design System</a>
+    <a class="sidebar-link" href="#business-rules">Business Rules</a>
+  </div>
+
+  <div class="sidebar-group">
+    <div class="sidebar-group__label">Portals</div>
+    <a class="sidebar-link" href="#investor-portal">Investor Portal</a>
+    <a class="sidebar-link" href="#admin-console">Admin Console</a>
+    <a class="sidebar-link" href="#mobile-app">Mobile App</a>
+  </div>
+
+  <div class="sidebar-group">
+    <div class="sidebar-group__label">Backend</div>
+    <a class="sidebar-link" href="#api">API Routes</a>
+    <a class="sidebar-link" href="#database">Database Schema</a>
+    <a class="sidebar-link" href="#cron-jobs">Cron Jobs</a>
+    <a class="sidebar-link" href="#integrations">Integrations</a>
+  </div>
+
+  <div class="sidebar-group">
+    <div class="sidebar-group__label">Ops</div>
+    <a class="sidebar-link" href="#deployment">Deployment</a>
+    <a class="sidebar-link" href="#env-vars">Environment Variables</a>
+    <a class="sidebar-link" href="#products-list">Investment Products</a>
+  </div>
+
+</aside>
+
+<!-- ══ CONTENT ═══════════════════════════════════════════ -->
+<main id="content">
+
+<div id="noResults">No results matched your search. Try different keywords.</div>
+
+<!-- ─────────────────────────────────────────────────── -->
+<section class="section" id="overview">
+  <h2 class="section-title">
+    <span class="section-icon">&#9670;</span>
+    Platform Overview
+  </h2>
+
+  <div class="callout info">
+    <strong>Purpose of this document</strong> — Single source of truth for the entire SV Capital platform. All team members should refer to this before making any change to the codebase, business logic, or infrastructure. When rules here conflict with tribal knowledge, this document wins.
+  </div>
+
+  <div class="subsection">
+    <div class="subsection-title">What the platform is</div>
+    <div class="entry" data-kw="sv capital platform investment fintech south africa">
+      <div class="entry__label">SV Capital</div>
+      <div class="entry__value">A South African alternative investment platform connecting retail investors to products across cattle, solar energy, SMME lending, gridfarmer, delivery bikes, and short-term instruments. Investors deposit via card (Paystack) or EFT (Ozow), invest into pooled products, and receive returns at maturity.</div>
+    </div>
+    <div class="entry" data-kw="production url live site railway">
+      <div class="entry__label">Production URL</div>
+      <div class="entry__value"><code>https://svcapital-production.up.railway.app</code> — serves both the API and all frontend files.</div>
+    </div>
+    <div class="entry" data-kw="staging url test environment">
+      <div class="entry__label">Staging URL</div>
+      <div class="entry__value"><code>https://svcapital-staging.up.railway.app</code> — used for testing before production deploys.</div>
+    </div>
+  </div>
+
+  <div class="subsection">
+    <div class="subsection-title">Tech stack at a glance</div>
+    <div class="grid-2">
+      <div class="entry" data-kw="frontend html css javascript vanilla">
+        <div class="entry__label">Frontend</div>
+        <div class="entry__value">Vanilla HTML/CSS/JS — no framework. Chart.js, jsPDF, html2canvas, QRCode.js from CDN.</div>
+      </div>
+      <div class="entry" data-kw="backend node express postgresql">
+        <div class="entry__label">Backend</div>
+        <div class="entry__value">Node 20 · Express 4 · PostgreSQL via <code>pg</code> (Railway-hosted)</div>
+      </div>
+      <div class="entry" data-kw="mobile capacitor android ios app">
+        <div class="entry__label">Mobile</div>
+        <div class="entry__value">Capacitor 6 wrapping the investor portal as a native Android &amp; iOS app.</div>
+      </div>
+      <div class="entry" data-kw="hosting cloudflare railway deployment">
+        <div class="entry__label">Hosting</div>
+        <div class="entry__value">Railway (primary, Docker-based, full-stack) + Cloudflare Pages (static fallback, <code>dist/</code>).</div>
+      </div>
+      <div class="entry" data-kw="auth jwt token session login">
+        <div class="entry__label">Auth</div>
+        <div class="entry__value">JWT access tokens (30 min) + httpOnly refresh tokens stored as cookies. TOTP 2FA available for admin accounts.</div>
+      </div>
+      <div class="entry" data-kw="email sms resend africa talking notifications">
+        <div class="entry__label">Comms</div>
+        <div class="entry__value">Email: Resend (<code>noreply@svcapital.co.za</code>). SMS: Africa's Talking. Push: web-push &amp; Capacitor push notifications.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────── -->
+<section class="section" id="architecture">
+  <h2 class="section-title">
+    <span class="section-icon">&#9741;</span>
+    Architecture
+  </h2>
+
+  <div class="entry" data-kw="architecture diagram overview portals admin investor mobile fund ifa team">
+    <div class="entry__label">Frontend portals — who uses what</div>
+    <div class="entry__value" style="margin-top:6px">
+      <table class="data-table">
+        <thead><tr><th>Portal</th><th>Path</th><th>Users</th></tr></thead>
+        <tbody>
+          <tr><td>Public homepage</td><td><code>/index.html</code></td><td>Public</td></tr>
+          <tr><td>Investor Portal (web)</td><td><code>/portal/</code></td><td>Investors</td></tr>
+          <tr><td>Mobile App</td><td><code>/mobile/www/</code> → native app</td><td>Investors (iOS/Android)</td></tr>
+          <tr><td>Admin Console</td><td><code>/admin/</code></td><td>SV Capital staff</td></tr>
+          <tr><td>IFA Portal</td><td><code>/ifa/</code></td><td>IFA partners</td></tr>
+          <tr><td>Team/HR Portal</td><td><code>/team/</code></td><td>SV Capital employees</td></tr>
+          <tr><td>Fund Portal</td><td><code>/fund/</code></td><td>Fund managers</td></tr>
+          <tr><td>Complaints</td><td><code>/complaints.html</code></td><td>Public</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="entry" data-kw="service worker cache pwa offline sw.js">
+    <div class="entry__label">Service Workers — which file controls which portal</div>
+    <div class="entry__value" style="margin-top:6px">
+      <table class="data-table">
+        <thead><tr><th>SW File</th><th>Controls</th><th>Cache Name</th></tr></thead>
+        <tbody>
+          <tr><td><code>sw.js</code> (root)</td><td>Public homepage</td><td><code>svc-shell-v1</code></td></tr>
+          <tr><td><code>portal/sw.js</code></td><td>Web investor portal (push only)</td><td>—</td></tr>
+          <tr><td><code>mobile/www/sw.js</code></td><td>Mobile app shell &amp; assets</td><td><code>svc-portal-v122</code> (current)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="entry" data-kw="api request flow frontend backend proxy cloudflare">
+    <div class="entry__label">Request flow</div>
+    <div class="entry__value">Browser → <code>/api/*</code> → Railway Express server. Cloudflare Pages proxies <code>/api/*</code> via a <code>_redirects</code> rule. Direct Railway URL is always the canonical source.</div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────── -->
+<section class="section" id="codebase">
+  <h2 class="section-title">
+    <span class="section-icon">&#9741;</span>
+    Codebase Map
+  </h2>
+
+  <div class="callout info">
+    <strong>One repo.</strong> Everything — frontend, backend, mobile build config, and deployment config — lives in a single git repository. All commits go directly to <code>main</code>.
+  </div>
+
+  <div class="entry" data-kw="directory structure files folders codebase map admin portal mobile server css js assets">
+    <div class="entry__value" style="margin-top:4px">
+      <table class="data-table">
+        <thead><tr><th>Directory / File</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td><code>admin/</code></td><td>Admin console SPA. <code>index.html</code> + <code>js/admin.js</code></td></tr>
+          <tr><td><code>portal/</code></td><td>Web investor portal SPA. <code>index.html</code> + <code>js/portal.js</code></td></tr>
+          <tr><td><code>mobile/</code></td><td>Capacitor project. Source in <code>mobile/src/</code>, built output in <code>mobile/www/</code></td></tr>
+          <tr><td><code>mobile/www/js/portal.js</code></td><td>Mobile-specific copy of the investor portal JS (patched for native WebView)</td></tr>
+          <tr><td><code>server/</code></td><td>Express API. Entry: <code>server/index.js</code>. Routes in <code>server/routes/</code>, jobs in <code>server/jobs/</code></td></tr>
+          <tr><td><code>js/</code></td><td>Shared scripts: <code>api.js</code> (Auth/API/Utils/Toast/Modal), <code>main.js</code>, <code>analytics.js</code>, <code>native.js</code>, <code>staff-auth.js</code>, <code>sv-intelligence.js</code></td></tr>
+          <tr><td><code>css/</code></td><td>Shared stylesheets. Key: <code>admin.css</code>, <code>portal.css</code>, <code>ci-theme.css</code>, <code>style.css</code></td></tr>
+          <tr><td><code>assets/</code></td><td>Logos, favicons, OG image, brand CI PDF</td></tr>
+          <tr><td><code>fund/</code></td><td>Fund-manager portal (cattle, solar, gridfarmer, short-term views)</td></tr>
+          <tr><td><code>ifa/</code></td><td>IFA partner portal</td></tr>
+          <tr><td><code>team/</code></td><td>Employee/HR portal (director, accounting, employee, hub views)</td></tr>
+          <tr><td><code>dist/</code></td><td>Cloudflare Pages build output — committed to repo, mirrors production</td></tr>
+          <tr><td><code>server/db/setup.js</code></td><td>68 CREATE TABLE statements — the authoritative database schema</td></tr>
+          <tr><td><code>Dockerfile</code></td><td>Multi-stage Node 20 Alpine build for Railway</td></tr>
+          <tr><td><code>wrangler.jsonc</code></td><td>Cloudflare Pages config, build output dir, compatibility date</td></tr>
+          <tr><td><code>capacitor.config.ts</code></td><td>Root Capacitor config (appId: <code>co.za.svcapital.app</code>, points to Railway prod URL)</td></tr>
+          <tr><td><code>CLAUDE.md</code></td><td>AI coding assistant rules — must be kept in sync with this document</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="subsection">
+    <div class="subsection-title">Current JS/CSS version numbers</div>
+    <div class="callout info"><strong>Always check these before making a change.</strong> The current version numbers live in the HTML files, not here — this table is a reference for the format, not a live tracker.</div>
+    <div class="entry" data-kw="version number admin.js portal.js sw.js cache bump">
+      <div class="entry__value" style="margin-top:4px">
+        <table class="data-table">
+          <thead><tr><th>Asset</th><th>Controlled by</th><th>Format</th></tr></thead>
+          <tbody>
+            <tr><td><code>admin/js/admin.js</code></td><td><code>admin/index.html</code></td><td><code>js/admin.js?v=N</code></td></tr>
+            <tr><td><code>portal/js/portal.js</code></td><td><code>portal/index.html</code></td><td><code>js/portal.js?v=N</code></td></tr>
+            <tr><td><code>mobile/www/js/portal.js</code></td><td><code>mobile/www/index.html</code></td><td><code>js/portal.js?v=N</code></td></tr>
+            <tr><td>Mobile SW cache</td><td><code>mobile/www/sw.js</code></td><td><code>svc-portal-vN</code></td></tr>
+            <tr><td>Root SW cache</td><td><code>sw.js</code></td><td><code>svc-shell-vN</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────── -->
+<section class="section" id="dev-rules">
+  <h2 class="section-title">
+    <span class="section-icon">&#9888;</span>
+    Development Rules
+  </h2>
+
+  <div class="callout critical">
+    <strong>These rules are non-negotiable.</strong> Every person touching this codebase — developer, admin, or AI assistant — must follow them without exception. Violations cause broken experiences for investors.
+  </div>
+
+  <div class="subsection">
+    <div class="subsection-title">Git &amp; branching</div>
+
+    <div class="entry" data-kw="git branch main commit push no pull request pr">
+      <div class="entry__label">Push directly to <code>main</code> <span class="tag yellow">Critical</span></div>
+      <div class="entry__value">There are no feature branches. All changes — no matter how small — go directly to <code>main</code>. No pull requests. No review gates. Commit and push immediately after every change.</div>
+    </div>
+
+    <div class="entry" data-kw="commit message format git log">
+      <div class="entry__label">Commit message format</div>
+      <div class="entry__value">Use conventional commits: <code>fix(mobile): description</code> / <code>feat(admin): description</code> / <code>chore: description</code>. Keep the subject under 72 characters. Add a body when the why is non-obvious.</div>
+    </div>
+  </div>
+
+  <div class="subsection">
+    <div class="subsection-title">Version bumping — when and where</div>
+
+    <div class="callout critical">
+      <strong>Why this matters.</strong> Browsers and the mobile app cache JS and CSS aggressively. Without a version bump, investors and staff will run stale code after a deploy. Always bump before committing a change to a JS or CSS file.
+    </div>
+
+    <div class="entry" data-kw="portal js version bump web portal portal/index.html query string">
+      <div class="entry__label">Web investor portal JS change <span class="tag blue">portal/js/portal.js</span></div>
+      <div class="entry__value">Open <code>portal/index.html</code>, find <code>js/portal.js?v=N</code>, increment <code>N</code> by 1. Do this <strong>before</strong> the commit, not after.</div>
+    </div>
+
+    <div class="entry" data-kw="admin js version bump admin console admin/index.html query string">
+      <div class="entry__label">Admin console JS change <span class="tag blue">admin/js/admin.js</span></div>
+      <div class="entry__value">Open <code>admin/index.html</code>, find <code>js/admin.js?v=N</code>, check the current value, increment by 1. Never assume the version — always look it up first.</div>
+    </div>
+
+    <div class="entry" data-kw="mobile js css version bump mobile/www/index.html sw.js service worker cache">
+      <div class="entry__label">Mobile app JS <em>or</em> CSS change <span class="tag yellow">Both files must be bumped</span></div>
+      <div class="entry__value">
+        1. <code>mobile/www/index.html</code> — bump <code>js/portal.js?v=N</code><br>
+        2. <code>mobile/www/sw.js</code> — bump <code>const CACHE = 'svc-portal-vN'</code><br>
+        Both must be bumped in the same commit. Missing the SW bump means installed app users get stale assets.
+      </div>
+    </div>
+
+    <div class="entry" data-kw="api.js version bump shared api js">
+      <div class="entry__label">Shared <code>js/api.js</code> change</div>
+      <div class="entry__value">Bump the <code>?v=N</code> query string in every HTML file that loads it: <code>admin/index.html</code>, <code>portal/index.html</code>, <code>mobile/www/index.html</code>. Check all three.</div>
+    </div>
+  </div>
+
+  <div class="subsection">
+    <div class="subsection-title">CSS versioning</div>
+
+    <div class="entry" data-kw="css version bump mobile-app.css portal.css portal-premium.css">
+      <div class="entry__label">Mobile CSS change (<code>mobile-app.css</code>, <code>portal.css</code>, <code>portal-premium.css</code>)</div>
+      <div class="entry__value">Bump the SW cache in <code>mobile/www/sw.js</code> AND bump the CSS query string in <code>mobile/www/index.html</code> (e.g. <code>mobile-app.css?v=N</code>).</div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────── -->
+<section class="section" id="design-system">
+  <h2 class="section-title">
+    <span class="section-icon">&#9670;</span>
+    Design System
+  </h2>
+
+  <div class="subsection">
+    <div class="subsection-title">Brand colours</div>
+
+    <div class="callout critical">
+      <strong>The canonical purple is <code>#eda5ff</code>.</strong> This is the single permitted purple across the entire platform — all portals, all apps, all documents. Any other purple value is a bug. If you find one, replace it.
+    </div>
+
+    <div class="entry" data-kw="purple brand colour color eda5ff canonical hex">
+      <div class="entry__label" style="display:flex;align-items:center;gap:8px">
+        <span style="display:inline-block;width:16px;height:16px;background:#eda5ff;border-radius:3px;flex-shrink:0"></span>
+        Purple — <code>#eda5ff</code> <span class="tag purple">Canonical</span>
+      </div>
+      <div class="entry__value">Used for: active states, highlights, CTA accents, branded elements. Do not substitute with any other shade of purple.</div>
+    </div>
+
+    <div class="entry" data-kw="gold orange gradient color colour cta button">
+      <div class="entry__label" style="display:flex;align-items:center;gap:8px">
+        <span style="display:inline-block;width:16px;height:16px;background:linear-gradient(135deg,#fec24f,#FF5229);border-radius:3px;flex-shrink:0"></span>
+        Gold→Orange gradient — <code>#fec24f → #FF5229</code>
+      </div>
+      <div class="entry__value">Primary CTA buttons, action elements. Used with <code>background:linear-gradient(135deg,#fec24f,#FF5229)</code>.</div>
+    </div>
+
+    <div class="entry" data-kw="dark background color colour theme dark mode">
+      <div class="entry__label">Dark theme palette (admin &amp; mobile)</div>
+      <div class="entry__value">
+        <code>#0d0f17</code> page background ·
+        <code>#151824</code> card surface ·
+        <code>#1c2035</code> elevated surface ·
+        <code>#242842</code> border ·
+        <code>#e4e7f1</code> primary text ·
+        <code>#7a8299</code> muted text
+      </div>
+    </div>
+  </div>
+
+  <div class="subsection">
+    <div class="subsection-title">Typography</div>
+
+    <div class="entry" data-kw="font typography poppins system-ui heading body">
+      <div class="entry__label">Fonts in use</div>
+      <div class="entry__value">
+        <strong>Poppins</strong> (Google Fonts) — investor portal headings and display text.<br>
+        <strong>DM Serif Display</strong> (Google Fonts) — premium/statement display headings.<br>
+        <strong>System-UI / -apple-system</strong> — admin console UI text (no external font load).<br>
+        <strong>JetBrains Mono / Courier New</strong> — code blocks and reference numbers.
+      </div>
+    </div>
+  </div>
+
+  <div class="subsection">
+    <div class="subsection-title">CSS file guide</div>
+    <div class="entry" data-kw="css files stylesheets admin portal mobile ci-theme premium brand">
+      <div class="entry__value" style="margin-top:4px">
+        <table class="data-table">
+          <thead><tr><th>File</th><th>Applies to</th></tr></thead>
+          <tbody>
+            <tr><td><code>css/admin.css</code></td><td>Admin console base styles</td></tr>
+            <tr><td><code>css/admin-premium.css</code></td><td>Admin premium/dark-card overrides</td></tr>
+            <tr><td><code>css/ci-theme.css</code></td><td>Corporate identity theme (shared)</td></tr>
+            <tr><td><code>portal/css/portal.css</code></td><td>Web investor portal</td></tr>
+            <tr><td><code>portal/css/portal-premium.css</code></td><td>Web portal premium components</td></tr>
+            <tr><td><code>mobile/www/css/mobile-app.css</code></td><td>Mobile-specific overrides and components</td></tr>
+            <tr><td><code>css/style.css</code></td><td>Public marketing homepage</td></tr>
+            <tr><td><code>css/brand.css</code></td><td>Shared brand utilities</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────── -->
+<section class="section" id="business-rules">
+  <h2 class="section-title">
+    <span class="section-icon">&#9888;</span>
+    Business Rules
+  </h2>
+
+  <div class="callout critical">
+    <strong>These rules encode real money handling.</strong> Getting them wrong affects investor balances, compliance records, and trust. Every code path that touches investments, fees, or transactions must honour these rules.
+  </div>
+
+  <div class="subsection">
+    <div class="subsection-title">Platform fee</div>
+    <div class="entry" data-kw="platform fee 1 percent investment amount fee ledger negative transaction">
+      <div class="entry__label">1% platform fee on every investment <span class="tag yellow">Always negative</span></div>
+      <div class="entry__value">
+        The platform charges <strong>1% of the investment amount</strong> as a fee. Rules:<br><br>
+        1. Fee = <code>investment_amount × 0.01</code><br>
+        2. Fee transactions must <strong>always display as a negative value</strong> in all transaction lists, investor statements, and exports. Never positive.<br>
+        3. Recorded in the <code>fee_ledger</code> table and as a <code>type: 'fee'</code> transaction in <code>transactions</code>.
+      </div>
+    </div>
+  </div>
+
+  <div class="subsection">
+    <div class="subsection-title">Sub-account invest gate</div>
+    <div class="entry" data-kw="openSaInvest sub account invest gate wallet balance minimum investment platform fee">
+      <div class="entry__label"><code>openSaInvest()</code> — balance gate before marketplace navigation <span class="tag yellow">Critical</span></div>
+      <div class="entry__value">
+        Before allowing a sub-account to invest, the function must verify:<br><br>
+        <code>wallet_balance &ge; min_investment + platform_fee</code><br><br>
+        Where <code>min_investment</code> and <code>platform_fee</code> are derived from the cheapest currently open investment pool. If the condition is not met, the user must top up before proceeding. Never navigate to the marketplace without this check.
+      </div>
+    </div>
+  </div>
+
+  <div class="subsection">
+    <div class="subsection-title">KYC / FICA requirements</div>
+    <div class="entry" data-kw="kyc fica identity verification required documents id selfie proof of address">
+      <div class="entry__label">Required KYC documents before investment</div>
+      <div class="entry__value">
+        Investors must complete KYC before their first investment. Required:<br>
+        • South African ID document or passport<br>
+        • Selfie / liveness photo<br>
+        • Proof of address (utility bill, bank statement — not older than 3 months)<br>
+        • Bank account verification (via Stitch Money)<br>
+        KYC status is tracked on the <code>investors.kyc_status</code> field. FICA annual re-checks are handled by <code>ficaCron.js</code>.
+      </div>
+    </div>
+  </div>
+
+  <div class="subsection">
+    <div class="subsection-title">Maturity &amp; payouts</div>
+    <div class="entry" data-kw="maturity payout reinvest options custom payout switch product">
+      <div class="entry__label">Payout options at maturity</div>
+      <div class="entry__value">
+        Investors choose one of four maturity instructions:<br>
+        • <code>reinvest</code> — full amount reinvested into a new pool<br>
+        • <code>payout_all</code> — capital + returns paid to bank account<br>
+        • <code>payout_return</code> — only returns paid out; capital reinvested<br>
+        • <code>payout_custom</code> — custom amount paid out; remainder reinvested<br><br>
+        Processed nightly by <code>maturityCron.js</code> at 23:00 SAST.
+      </div>
+    </div>
+    <div class="entry" data-kw="benchmark rate performance fee 13 percent 20 percent product">
+      <div class="entry__label">Default product rates</div>
+      <div class="entry__value">Benchmark rate: <strong>13% p.a.</strong> · Performance fee: <strong>20%</strong> of excess returns above benchmark. Both can be overridden per product in the admin console.</div>
+    </div>
+  </div>
+
+  <div class="subsection">
+    <div class="subsection-title">Wallet &amp; reconciliation</div>
+    <div class="entry" data-kw="wallet balance reconciliation deposit withdrawal transaction types">
+      <div class="entry__label">Transaction types</div>
+      <div class="entry__value">
+        <code>deposit</code> — money added to wallet · <code>withdrawal</code> — money paid out to bank · <code>investment</code> — wallet deducted for investment · <code>return</code> — interest/return credited · <code>payout</code> — maturity payout credited · <code>fee</code> — platform fee deducted (always negative) · <code>refund</code> — cancelled investment refund · <code>transfer</code> — between accounts
+      </div>
+    </div>
+    <div class="entry" data-kw="withdrawal approval manual admin bank account proof">
+      <div class="entry__label">Withdrawal approval</div>
+      <div class="entry__value">All withdrawals require admin approval before payment. Approvals trigger email + SMS notifications. Rejections require a reason from a provided template. Alert crons fire at 10:00, 13:00, and 16:00 SAST for pending withdrawals.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────── -->
+<section class="section" id="investor-portal">
+  <h2 class="section-title">
+    <span class="section-icon">&#9670;</span>
+    Investor Portal
+  </h2>
+
+  <div class="callout info">
+    <strong>Web vs mobile.</strong> The investor portal runs as a web SPA at <code>/portal/</code> and as a Capacitor native app. The JS logic is the same — but <code>mobile/www/js/portal.js</code> is a separate file with mobile-specific patches and must be updated independently.
+  </div>
+
+  <div class="subsection">
+    <div class="subsection-title">All portal views</div>
+    <div class="entry" data-kw="portal views screens overview marketplace wallet investments support profile transactions analytics maturity documents statement subaccounts learn quests gifts policies referral">
+      <div class="entry__value" style="margin-top:4px">
+        <table class="data-table">
+          <thead><tr><th>View (<code>data-view</code>)</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>overview</code></td><td>Portfolio hero, XP bar, stat cards, recent investments &amp; transactions, quick actions</td></tr>
+            <tr><td><code>marketplace</code></td><td>Active investment products available to invest in</td></tr>
+            <tr><td><code>wallet</code></td><td>Wallet balance, top up via card (Paystack) or EFT (Ozow)</td></tr>
+            <tr><td><code>investments</code></td><td>My investments list — capital deployed, target returns, returns earned</td></tr>
+            <tr><td><code>support</code></td><td>Support ticket list + create new ticket</td></tr>
+            <tr><td><code>profile</code></td><td>Personal details, risk profile, password change, 2FA</td></tr>
+            <tr><td><code>transactions</code></td><td>Full transaction history with filters</td></tr>
+            <tr><td><code>analytics</code></td><td>Performance charts and portfolio analytics</td></tr>
+            <tr><td><code>maturity</code></td><td>Upcoming maturities, maturity instruction management</td></tr>
+            <tr><td><code>documents</code></td><td>KYC document status &amp; upload, certificate downloads, tax receipts, account statements</td></tr>
+            <tr><td><code>statement</code></td><td>Period-selectable account statements, downloadable as PDF</td></tr>
+            <tr><td><code>subaccounts</code></td><td>Business, trust, stokvel, minor, and individual sub-accounts</td></tr>
+            <tr><td><code>learn</code></td><td>Educational content library</td></tr>
+            <tr><td><code>quests</code></td><td>Gamified quests and rewards</td></tr>
+            <tr><td><code>gifts</code></td><td>Gift investment creation and management</td></tr>
+            <tr><td><code>policies</code></td><td>Terms of use, privacy policy, POPIA notice</td></tr>
+            <tr><td><code>referral</code></td><td>Referral programme (hidden by default, shown when active)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="subsection">
+    <div class="subsection-title">Statement generation</div>
+    <div class="entry" data-kw="statement pdf download buildStatementHTML jsPDF html2canvas print save">
+      <div class="entry__label">How statements are generated</div>
+      <div class="entry__value">
+        <code>buildStatementHTML(opts)</code> — builds a fully styled, self-contained HTML fragment from investor data. Called in both web and mobile portal.js.<br><br>
+        <strong>Web:</strong> renders into <code>#statementDocument</code> element. "Save as PDF" calls <code>window.print()</code> via an overlay.<br><br>
+        <strong>Mobile:</strong> same overlay, but <code>window.print()</code> is blocked in the Capacitor WebView. Instead, <code>_handleSavePdf()</code> uses <code>html2canvas</code> to render the overlay content to a canvas, converts it to A4 pages via <code>jsPDF</code>, then shares the PDF blob via <code>navigator.share({ files: [pdfFile] })</code> — triggering the native iOS/Android share sheet.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────── -->
+<section class="section" id="admin-console">
+  <h2 class="section-title">
+    <span class="section-icon">&#9670;</span>
+    Admin Console
+  </h2>
+
+  <div class="entry" data-kw="admin access login staff auth pin 2fa totp">
+    <div class="entry__label">Access</div>
+    <div class="entry__value">Admin console at <code>/admin/</code>. Protected by <code>staff-auth.js</code> — staff email + PIN combination, optional TOTP 2FA. Staff roles and permissions managed under Settings → Staff &amp; Roles.</div>
+  </div>
+
+  <div class="subsection">
+    <div class="subsection-title">All admin views</div>
+    <div class="entry" data-kw="admin views screens dashboard investors kyc products pools investments maturity transactions withdrawals reconciliation opsconsole support comms feedback analytics compliance terms settings ifa">
+      <div class="entry__value" style="margin-top:4px">
+        <table class="data-table">
+          <thead><tr><th>View</th><th>Key Functions</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Dashboard</strong></td><td>KPI cards (AUM, investors, investments, pending KYC/withdrawals), AUM chart, product mix chart, recent investments, open pools, pending actions, activity feed</td></tr>
+            <tr><td><strong>Investors</strong></td><td>Full investor table, bulk ops (invite/archive/approve-FICA/export), investor detail modal, notes, timeline, view-as-investor, statements per investor. Sub-tab: International Interest</td></tr>
+            <tr><td><strong>IFA</strong></td><td>IFA partner management — add, link/unlink clients, enable/disable</td></tr>
+            <tr><td><strong>KYC / FICA</strong></td><td>Document review queue, bulk approve/reject, bank account verification, FICA pipeline</td></tr>
+            <tr><td><strong>Products</strong></td><td>Product catalogue — create, edit, delete investment products; factsheet management</td></tr>
+            <tr><td><strong>Pools</strong></td><td>Investment pool grid — filter by status, pool detail, cycler, waitlist notify, close-out wizard, move investments between pools</td></tr>
+            <tr><td><strong>Investments</strong></td><td>All investments table with allocation tools</td></tr>
+            <tr><td><strong>Maturity</strong></td><td>Upcoming maturity management and instruction overrides</td></tr>
+            <tr><td><strong>Transactions</strong></td><td>All transactions, add manual transactions</td></tr>
+            <tr><td><strong>Withdrawals</strong></td><td>Pending withdrawal queue, approve/reject with reason templates, bulk actions</td></tr>
+            <tr><td><strong>Reconciliation</strong></td><td>Wallet reconciliation, manual credit, balance override, CSV export</td></tr>
+            <tr><td><strong>Ops Console</strong></td><td>Health check, KPIs, money overview, investor pulse, conversion funnel, AUM by product, top pools, velocity, comms status, audit stream</td></tr>
+            <tr><td><strong>Support</strong></td><td>Ticket list and detail, AML review flags. Sub-tab: AML Review</td></tr>
+            <tr><td><strong>Comms</strong></td><td>Broadcast (email + push), segment picker, broadcast history, push analytics, subscriber list. Sub-tab: Email Logs</td></tr>
+            <tr><td><strong>Feedback</strong></td><td>Investor feedback and app rating entries</td></tr>
+            <tr><td><strong>Analytics</strong></td><td>AUM chart, new investors, returns, status, maturity forecast, cohort, mobile activity, product volume, province map, risk, transaction flow, conversion funnel, signup friction</td></tr>
+            <tr><td><strong>Compliance</strong></td><td>Compliance calendar, audit log, upcoming maturities, failed logins, accepted documents</td></tr>
+            <tr><td><strong>Legal Documents</strong></td><td>Rich-text editor for Terms of Use and Privacy Policy — saved to <code>platform_settings</code></td></tr>
+            <tr><td><strong>Settings</strong></td><td>Platform settings, 2FA management, sign-out-all, data migration tools, staff roles</td></tr>
+            <tr><td><strong>Handbook</strong></td><td>This document — team source of truth</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────── -->
+<section class="section" id="mobile-app">
+  <h2 class="section-title">
+    <span class="section-icon">&#9670;</span>
+    Mobile App
+  </h2>
+
+  <div class="subsection">
+    <div class="subsection-title">Configuration</div>
+    <div class="entry" data-kw="mobile capacitor config app id android ios bundle identifier za.co.svcapital">
+      <div class="entry__label">App identifiers</div>
+      <div class="entry__value">
+        App ID: <code>za.co.svcapital</code> (Play Store / App Store bundle)<br>
+        App Name: SV Capital<br>
+        Root Capacitor config: <code>capacitor.config.ts</code> — <code>appId: co.za.svcapital.app</code> (root-level sync target)
+      </div>
+    </div>
+    <div class="entry" data-kw="capacitor plugins installed haptics local notifications network push notifications splash screen status bar">
+      <div class="entry__label">Installed Capacitor plugins (v6)</div>
+      <div class="entry__value">
+        <code>@capacitor/app</code> · <code>@capacitor/haptics</code> · <code>@capacitor/local-notifications</code> · <code>@capacitor/network</code> · <code>@capacitor/push-notifications</code> · <code>@capacitor/splash-screen</code> · <code>@capacitor/status-bar</code>
+        <br><br>
+        <span class="tag red">Not installed</span> <code>@capacitor/share</code> · <code>@capacitor/filesystem</code> — use <code>navigator.share()</code> for file sharing instead.
+      </div>
+    </div>
+  </div>
+
+  <div class="subsection">
+    <div class="subsection-title">Build process</div>
+    <div class="entry" data-kw="mobile build process npm run build script android ios capacitor sync">
+      <div class="entry__label">Building the mobile app</div>
+      <div class="entry__value">
+        1. Run <code>npm run build</code> from <code>mobile/</code> — executes <code>scripts/build.js</code>, copies portal assets into <code>mobile/www/</code> and patches native API base URL.<br>
+        2. Run <code>npx cap sync android</code> (or <code>ios</code>) to sync web assets into the native project.<br>
+        3. For a release APK/AAB: <code>npm run cap:build:android</code> (runs Gradle <code>bundleRelease</code>).<br>
+        Android signing keystore: <code>mobile/android-config/uploadkeystore.jks</code>.
+      </div>
+    </div>
+  </div>
+
+  <div class="subsection">
+    <div class="subsection-title">WebView limitations &amp; known workarounds</div>
+    <div class="entry" data-kw="webview capacitor limitations window.open blob url print window.print blocked">
+      <div class="entry__label"><code>window.open(blobUrl)</code> is blocked <span class="tag red">Known issue</span></div>
+      <div class="entry__value">Capacitor WebView blocks opening blob URLs via <code>window.open()</code>. Workaround: render content into an in-page full-screen overlay instead. File downloads use <code>navigator.share({ files: [file] })</code>.</div>
+    </div>
+    <div class="entry" data-kw="window.print silent blocked capacitor webview print dialog">
+      <div class="entry__label"><code>window.print()</code> is silent <span class="tag red">Known issue</span></div>
+      <div class="entry__value">The native WebView does not open a print dialog when <code>window.print()</code> is called. Workaround for statements: <code>_handleSavePdf()</code> uses <code>html2canvas</code> + <code>jsPDF</code> to generate a real PDF blob and shares it via <code>navigator.share()</code>.</div>
+    </div>
+    <div class="entry" data-kw="a download link click anchor download blocked webview">
+      <div class="entry__label"><code>&lt;a download&gt;</code> clicks may not trigger download</div>
+      <div class="entry__value">Programmatic anchor click-to-download is unreliable in Capacitor WebView on iOS. Always prefer <code>navigator.share({ files: [...] })</code> for any file the user needs to save.</div>
+    </div>
+    <div class="entry" data-kw="navigator.share files pdf html native share sheet ios android">
+      <div class="entry__label">Preferred file sharing pattern on mobile</div>
+      <div class="entry__value">
+        Build a <code>Blob</code> → wrap in a <code>File</code> → check <code>navigator.canShare({ files: [file] })</code> → call <code>navigator.share({ files: [file], title: '...' })</code>. Triggers native iOS/Android share sheet. Supported on iOS 15+ and Android Chrome.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────── -->
+<section class="section" id="api">
+  <h2 class="section-title">
+    <span class="section-icon">&#9670;</span>
+    API Routes
+  </h2>
+
+  <div class="entry" data-kw="api base url express server routes">
+    <div class="entry__label">Base</div>
+    <div class="entry__value">All API routes are prefixed with <code>/api</code>. The server runs Express 4 on Node 20. Auth middleware (<code>server/middleware/auth.js</code>) validates the JWT on protected routes.</div>
+  </div>
+
+  <div class="subsection">
+    <div class="subsection-title">Route map</div>
+    <div class="entry" data-kw="api routes endpoints auth users tables fica payments admin push privacy withdrawals analytics statements waitlist migrate events settings legal quests testimonials email investments gifts factsheets products opsconsole cattle">
+      <div class="entry__value" style="margin-top:4px">
+        <table class="data-table">
+          <thead><tr><th>Mount Path</th><th>File</th><th>Covers</th></tr></thead>
+          <tbody>
+            <tr><td><code>/api/auth</code></td><td><code>routes/auth.js</code></td><td>Login, signup, refresh token, password reset, TOTP 2FA, KYC uploads, bank accounts, Smile Identity webhook</td></tr>
+            <tr><td><code>/api/users</code></td><td><code>routes/users.js</code></td><td>Profile updates, investor data</td></tr>
+            <tr><td><code>/api/tables</code></td><td><code>routes/tables.js</code></td><td>Core data tables — investors, investments, pools, transactions, sub-accounts, maturity, products (admin)</td></tr>
+            <tr><td><code>/api/fica</code></td><td><code>routes/fica.js</code></td><td>FICA document management</td></tr>
+            <tr><td><code>/api/payments</code></td><td><code>routes/payments.js</code></td><td>Paystack card, Ozow EFT webhooks &amp; callbacks</td></tr>
+            <tr><td><code>/api/admin</code></td><td><code>routes/broadcast.js</code>, <code>bankVerify.js</code>, <code>manualCredit.js</code></td><td>Broadcast comms, bank verification, manual wallet credits</td></tr>
+            <tr><td><code>/api/push</code></td><td><code>routes/push.js</code></td><td>Push notification subscriptions &amp; sending</td></tr>
+            <tr><td><code>/api/withdrawals</code></td><td><code>routes/withdrawals.js</code></td><td>Withdrawal requests, approve, reject</td></tr>
+            <tr><td><code>/api/analytics</code></td><td><code>routes/friction.js</code></td><td>Signup friction and analytics events</td></tr>
+            <tr><td><code>/api/statements</code></td><td><code>routes/statements.js</code></td><td>Monthly statement generation &amp; retrieval</td></tr>
+            <tr><td><code>/api/investments</code></td><td><code>routes/investments.js</code></td><td>Investment creation, cancellation, maturity instructions</td></tr>
+            <tr><td><code>/api/products</code></td><td><code>routes/products.js</code></td><td>Product catalogue (public read, admin write)</td></tr>
+            <tr><td><code>/api/factsheets</code></td><td><code>routes/factsheets.js</code></td><td>Product factsheet upload &amp; retrieval</td></tr>
+            <tr><td><code>/api/legal</code></td><td><code>routes/legal.js</code></td><td>Terms of use, privacy policy content</td></tr>
+            <tr><td><code>/api/quests</code></td><td><code>routes/quests.js</code></td><td>Gamification quest completions</td></tr>
+            <tr><td><code>/api/gifts</code></td><td><code>routes/gifts.js</code></td><td>Gift investment management</td></tr>
+            <tr><td><code>/api/email-logs</code></td><td><code>routes/emailLogs.js</code></td><td>Email send log, retry failed</td></tr>
+            <tr><td><code>/api/opsconsole</code></td><td><code>routes/opsconsole.js</code></td><td>Ops console aggregated data</td></tr>
+            <tr><td><code>/api/events</code></td><td><code>routes/events.js</code></td><td>Server-sent events (SSE real-time dashboard updates)</td></tr>
+            <tr><td><code>/api/settings</code></td><td><code>routes/settings.js</code></td><td>Platform settings key/value store</td></tr>
+            <tr><td><code>/api/waitlist</code></td><td><code>routes/waitlist.js</code></td><td>Investment &amp; international waitlists</td></tr>
+            <tr><td><code>/api/migrate</code></td><td><code>routes/migrate.js</code></td><td>Data migration tools (admin only)</td></tr>
+            <tr><td><code>/api/privacy</code></td><td><code>routes/privacy.js</code></td><td>Privacy consent management</td></tr>
+            <tr><td><code>/api/cattle</code></td><td><code>routes/cattle.js</code></td><td>Cattle investment data and cycle management</td></tr>
+            <tr><td><code>/api/testimonials</code></td><td><code>routes/testimonials.js</code></td><td>Investor testimonials</td></tr>
+            <tr><td><code>/api/health</code></td><td>inline in <code>server/index.js</code></td><td>Railway healthcheck endpoint</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────── -->
+<section class="section" id="database">
+  <h2 class="section-title">
+    <span class="section-icon">&#9670;</span>
+    Database Schema
+  </h2>
+
+  <div class="callout info">
+    <strong>Authoritative schema file:</strong> <code>server/db/setup.js</code> — 68 CREATE TABLE statements. Run via <code>node server/db/setup.js</code> to initialise a new database. Migrations are in <code>server/db/migrate.js</code>.
+  </div>
+
+  <div class="subsection">
+    <div class="subsection-title">Core entities</div>
+    <div class="entry" data-kw="investors table database fields columns id email wallet balance risk profile kyc status">
+      <div class="entry__label">investors</div>
+      <div class="entry__value">
+        Primary investor record. Key fields: <code>id</code>, <code>first_name</code>, <code>last_name</code>, <code>email</code>, <code>phone</code>, <code>id_number</code>, <code>dob</code>, <code>province</code>, <code>risk_profile</code>, <code>kyc_status</code>, <code>status</code>, <code>wallet_balance</code>, <code>total_invested</code>, <code>total_returns</code>, <code>referral_code</code>, <code>referred_by</code>, <code>ifa_id</code>, <code>archived_at</code>.
+      </div>
+    </div>
+    <div class="entry" data-kw="sub_accounts table sub account business trust stokvel minor individual parent investor">
+      <div class="entry__label">sub_accounts</div>
+      <div class="entry__value">
+        Sub-accounts linked to a parent investor via <code>parent_investor_id</code>. Types: <code>business</code>, <code>trust</code>, <code>stokvel</code>, <code>minor</code>, <code>individual</code>. Has own <code>wallet_balance</code>, <code>kyc_status</code>, and bank details.
+      </div>
+    </div>
+    <div class="entry" data-kw="investment_pools table pools status open active matured target amount annual rate term">
+      <div class="entry__label">investment_pools</div>
+      <div class="entry__value">
+        Investment product pools. Key fields: <code>product_type</code>, <code>status</code> (<code>open</code>/<code>active</code>/<code>matured</code>), <code>target_amount</code>, <code>raised_amount</code>, <code>min_investment</code>, <code>annual_rate</code>, <code>term_months</code>, <code>start_date</code>, <code>end_date</code>, <code>maturity_summary</code> (JSONB).
+      </div>
+    </div>
+    <div class="entry" data-kw="investments table investor pool amount status payout option maturity instruction sub account">
+      <div class="entry__label">investments</div>
+      <div class="entry__value">
+        Individual investor positions. Links <code>investor_id</code> → <code>pool_id</code>. Key fields: <code>amount</code>, <code>status</code>, <code>expected_return</code>, <code>actual_return</code>, <code>payout_option</code>, <code>sub_account_id</code>, <code>maturity_instruction</code>, <code>maturity_processed_at</code>.
+      </div>
+    </div>
+    <div class="entry" data-kw="transactions table type amount status reference description fee deposit withdrawal investment return payout">
+      <div class="entry__label">transactions</div>
+      <div class="entry__value">
+        All money movements. Links to <code>investor_id</code>, optionally <code>investment_id</code>, <code>pool_id</code>, <code>sub_account_id</code>. Types: <code>deposit</code>, <code>withdrawal</code>, <code>investment</code>, <code>return</code>, <code>payout</code>, <code>fee</code>, <code>refund</code>, <code>transfer</code>. Fee transactions are always stored and displayed as negative amounts.
+      </div>
+    </div>
+    <div class="entry" data-kw="products table product type label description min investment term months color icon factsheet">
+      <div class="entry__label">products</div>
+      <div class="entry__value">
+        Product catalogue. One row per product type. Key fields: <code>product_type</code> (unique), <code>label</code>, <code>min_investment</code>, <code>term_months</code>, <code>benchmark_rate</code>, <code>performance_fee_pct</code>, <code>is_active</code>, <code>display_on_homepage</code>, <code>color</code>, <code>factsheet_url</code>.
+      </div>
+    </div>
+  </div>
+
+  <div class="subsection">
+    <div class="subsection-title">Supporting tables (selected)</div>
+    <div class="entry" data-kw="kyc documents fica audit sessions push tokens email queue compliance quests gifts testimonials cattle solar shortterm employees payslips">
+      <div class="entry__value" style="margin-top:4px">
+        <table class="data-table">
+          <thead><tr><th>Table</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td><code>kyc_documents</code></td><td>KYC document uploads per investor/sub-account</td></tr>
+            <tr><td><code>fica_checks</code></td><td>FICA compliance check records and results</td></tr>
+            <tr><td><code>accepted_client_documents</code></td><td>Terms &amp; POPIA acceptance records</td></tr>
+            <tr><td><code>maturity_instructions</code></td><td>Custom payout/bank instructions at maturity</td></tr>
+            <tr><td><code>fee_ledger</code></td><td>Platform fee records linked to investments</td></tr>
+            <tr><td><code>audit_events</code></td><td>All admin actions (who did what, when)</td></tr>
+            <tr><td><code>sessions</code></td><td>Refresh token store (JWT rotation)</td></tr>
+            <tr><td><code>push_subscriptions</code></td><td>Web push subscription endpoints</td></tr>
+            <tr><td><code>push_tokens</code></td><td>Capacitor push notification device tokens</td></tr>
+            <tr><td><code>email_queue</code></td><td>Outbound email queue (processed every 2 min)</td></tr>
+            <tr><td><code>email_logs</code></td><td>Email send history with status and retry count</td></tr>
+            <tr><td><code>investor_notes</code></td><td>Admin notes per investor</td></tr>
+            <tr><td><code>investor_statements</code></td><td>Generated monthly statement records</td></tr>
+            <tr><td><code>compliance_calendar</code></td><td>Compliance task calendar items</td></tr>
+            <tr><td><code>totp_recovery_codes</code></td><td>2FA recovery codes</td></tr>
+            <tr><td><code>international_waitlist</code></td><td>International investor interest registrations</td></tr>
+            <tr><td><code>investment_waitlist</code></td><td>Waitlist for oversubscribed pools</td></tr>
+            <tr><td><code>platform_settings</code></td><td>Key/value config store (terms content, etc.)</td></tr>
+            <tr><td><code>quest_completions</code></td><td>Gamification quest progress</td></tr>
+            <tr><td><code>gifts</code></td><td>Gift investment records</td></tr>
+            <tr><td><code>ifas</code></td><td>IFA partner records</td></tr>
+            <tr><td><code>employees</code>, <code>payslips</code></td><td>HR portal data</td></tr>
+            <tr><td><code>shortterm_loans</code>, <code>solar_projects</code>, <code>cattle_cycles</code></td><td>Product-specific operational data</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────── -->
+<section class="section" id="cron-jobs">
+  <h2 class="section-title">
+    <span class="section-icon">&#9670;</span>
+    Cron Jobs
+  </h2>
+
+  <div class="callout info">
+    All cron jobs live in <code>server/jobs/</code> and are registered in <code>server/index.js</code>. Times are SAST (UTC+2) unless noted.
+  </div>
+
+  <div class="entry" data-kw="cron jobs schedule daily monthly maturity payout statement reconciliation fica pool archive withdrawal">
+    <div class="entry__value" style="margin-top:4px">
+      <table class="data-table">
+        <thead><tr><th>File</th><th>Schedule</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td><code>maturityCron.js</code></td><td>Daily 23:00 SAST</td><td>Processes matured investments. Runs the full payout engine — credits returns, executes maturity instructions (reinvest / payout / custom), sends notifications. Consolidated payoutCron.</td></tr>
+          <tr><td><code>poolCyclerCron.js</code></td><td>Daily 00:30 SAST</td><td>Advances investment pools through their lifecycle (open → active → matured based on dates)</td></tr>
+          <tr><td><code>archiveCron.js</code></td><td>Daily 00:00 UTC</td><td>Archives investors with no activity for 6+ months (sets <code>archived_at</code>)</td></tr>
+          <tr><td><code>withdrawalAlertCron.js</code></td><td>10:00, 13:00, 16:00 SAST</td><td>Alerts admin of pending withdrawal requests awaiting approval</td></tr>
+          <tr><td><code>statementCron.js</code></td><td>1st of month 07:00 SAST</td><td>Generates and emails monthly account statements to all active investors</td></tr>
+          <tr><td><code>directorReportCron.js</code></td><td>1st of month 07:00 UTC</td><td>Sends monthly director summary report</td></tr>
+          <tr><td><code>recurringCron.js</code></td><td>1st of month 03:00 UTC</td><td>Processes recurring investment instructions</td></tr>
+          <tr><td><code>ficaCron.js</code></td><td>Annual</td><td>Annual FICA re-check cycle for all active investors</td></tr>
+          <tr><td><code>interestCron.js</code></td><td><span class="tag grey">Disabled</span></td><td>Interest was credited at maturity — not monthly. This cron is disabled.</td></tr>
+          <tr><td><code>payoutCron.js</code></td><td><span class="tag grey">Retired</span></td><td>Merged into maturityCron.js</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────── -->
+<section class="section" id="integrations">
+  <h2 class="section-title">
+    <span class="section-icon">&#9670;</span>
+    Third-party Integrations
+  </h2>
+
+  <div class="entry" data-kw="paystack card payment gateway south africa deposit">
+    <div class="entry__label">Paystack <span class="tag green">Card payments</span></div>
+    <div class="entry__value">Card deposit processing. Public key in frontend (<code>PAYSTACK_PUBLIC_KEY</code>). Secret key in backend (<code>PAYSTACK_SECRET_KEY</code>). Webhook at <code>/api/payments</code> confirms successful payments.</div>
+  </div>
+
+  <div class="entry" data-kw="ozow eft bank transfer payment south africa deposit instant">
+    <div class="entry__label">Ozow <span class="tag green">EFT / Instant payments</span></div>
+    <div class="entry__value">Bank EFT and instant payment processing. Config: <code>OZOW_SITE_CODE</code>, <code>OZOW_PRIVATE_KEY</code>, <code>OZOW_IS_TEST</code>. Callback handled in <code>/api/payments</code>.</div>
+  </div>
+
+  <div class="entry" data-kw="smile identity kyc id verification identity south africa biometric liveness">
+    <div class="entry__label">Smile Identity <span class="tag blue">KYC / Identity verification</span></div>
+    <div class="entry__value">South African ID verification and biometric liveness checks. Config: <code>SMILE_PARTNER_ID</code>, <code>SMILE_API_KEY</code>, <code>SMILE_SANDBOX</code> (set false in production), <code>SMILE_WEBHOOK_SECRET</code>. Webhook at <code>/api/auth</code>. Service: <code>server/services/smileIdentity.js</code>.</div>
+  </div>
+
+  <div class="entry" data-kw="stitch money bank account verification open banking south africa">
+    <div class="entry__label">Stitch Money <span class="tag blue">Bank account verification</span></div>
+    <div class="entry__value">Open-banking bank account ownership verification before withdrawal approval. Config: <code>STITCH_CLIENT_ID</code>, <code>STITCH_CLIENT_SECRET</code>, <code>STITCH_SANDBOX</code>, <code>STITCH_WEBHOOK_SECRET</code>. Service: <code>server/services/stitch.js</code>.</div>
+  </div>
+
+  <div class="entry" data-kw="resend email transactional email sending noreply svcapital">
+    <div class="entry__label">Resend <span class="tag purple">Transactional email</span></div>
+    <div class="entry__value">All transactional emails (welcome, KYC approved, investment confirmed, statements, withdrawals, broadcasts). Sender: <code>noreply@svcapital.co.za</code>. Config: <code>RESEND_API_KEY</code>, <code>FROM_EMAIL</code>. Service: <code>server/services/email.js</code>. Queue: <code>server/services/emailQueue.js</code> (processes every 2 min).</div>
+  </div>
+
+  <div class="entry" data-kw="africa's talking sms south africa notifications text message">
+    <div class="entry__label">Africa's Talking <span class="tag blue">SMS</span></div>
+    <div class="entry__value">SMS notifications for deposits, withdrawals, KYC updates, maturity events. Config: <code>AFRICASTALKING_API_KEY</code>, <code>AFRICASTALKING_USERNAME</code>, <code>AFRICASTALKING_SENDER</code>. Service: <code>server/services/sms.js</code>.</div>
+  </div>
+
+  <div class="entry" data-kw="foxess solar monitoring api energy generation">
+    <div class="entry__label">FoxESS <span class="tag green">Solar monitoring</span></div>
+    <div class="entry__value">Solar generation data for the solar investment portal. Config: <code>FOXESS_API_KEY</code>. Service: <code>server/services/foxess.js</code>.</div>
+  </div>
+
+  <div class="entry" data-kw="google analytics ga4 tracking measurement id">
+    <div class="entry__label">Google Analytics 4</div>
+    <div class="entry__value">Measurement ID: <code>G-5LEPWC7EFP</code>. Loaded via <code>js/analytics.js</code>. Used across public pages and portals.</div>
+  </div>
+
+  <div class="entry" data-kw="cloudflare pages cdn hosting static files wrangler">
+    <div class="entry__label">Cloudflare Pages</div>
+    <div class="entry__value">Static CDN hosting, alternative to Railway for serving frontend files. Config: <code>wrangler.jsonc</code>. Build output: <code>dist/</code>. The <code>_redirects</code> file proxies <code>/api/*</code> to Railway. Run <code>npm run pages:build</code> to rebuild <code>dist/</code>.</div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────── -->
+<section class="section" id="deployment">
+  <h2 class="section-title">
+    <span class="section-icon">&#9670;</span>
+    Deployment
+  </h2>
+
+  <div class="subsection">
+    <div class="subsection-title">Railway (primary)</div>
+    <div class="entry" data-kw="railway deployment docker build node server frontend backend production staging">
+      <div class="entry__label">How it works</div>
+      <div class="entry__value">
+        Railway builds from the <code>Dockerfile</code> (multi-stage Node 20 Alpine). The Express server at <code>server/index.js</code> serves both the API (<code>/api/*</code>) and all static files (HTML, CSS, JS, assets) from the repo root.<br><br>
+        Healthcheck: <code>GET /api/health</code> — must return 200. Railway restarts the service on failure (max 10 retries).<br><br>
+        Production: <code>https://svcapital-production.up.railway.app</code><br>
+        Staging: <code>https://svcapital-staging.up.railway.app</code>
+      </div>
+    </div>
+    <div class="entry" data-kw="railway deploy push git main automatic continuous deployment">
+      <div class="entry__label">Trigger a deploy</div>
+      <div class="entry__value">Push any commit to <code>main</code>. Railway auto-detects the push via its GitHub integration and triggers a new build and deploy. No manual steps required.</div>
+    </div>
+    <div class="entry" data-kw="railway.toml config healthcheck restart policy">
+      <div class="entry__label">Config: <code>railway.toml</code></div>
+      <div class="entry__value">
+        <code>builder = DOCKERFILE</code> · <code>healthcheckPath = /api/health</code> · <code>healthcheckTimeout = 30</code> · <code>restartPolicyType = ON_FAILURE</code> · <code>restartPolicyMaxRetries = 10</code>
+      </div>
+    </div>
+  </div>
+
+  <div class="subsection">
+    <div class="subsection-title">Cloudflare Pages (static fallback)</div>
+    <div class="entry" data-kw="cloudflare pages static hosting dist wrangler build output redirects proxy">
+      <div class="entry__label">How it works</div>
+      <div class="entry__value">
+        The <code>dist/</code> directory is a committed snapshot of all frontend files. Cloudflare Pages serves these. API calls are proxied to Railway via <code>dist/_redirects</code>.<br><br>
+        To rebuild: <code>npm run pages:build</code> from the root — copies everything into <code>dist/</code>. Commit and push to deploy.
+      </div>
+    </div>
+  </div>
+
+  <div class="subsection">
+    <div class="subsection-title">Mobile release build</div>
+    <div class="entry" data-kw="mobile android release build aab apk play store upload keystore gradle">
+      <div class="entry__label">Android release APK/AAB</div>
+      <div class="entry__value">
+        1. Update version in <code>mobile/android/app/build.gradle</code> (<code>versionCode</code>, <code>versionName</code>)<br>
+        2. Run <code>npm run build</code> from <code>mobile/</code><br>
+        3. Run <code>npx cap sync android</code><br>
+        4. Run <code>npm run cap:build:android</code> — Gradle <code>bundleRelease</code><br>
+        Signing key: <code>mobile/android-config/uploadkeystore.jks</code> — keep this file safe, never commit key credentials.
+      </div>
+    </div>
+    <div class="entry" data-kw="ios release build xcode app store ios-config capacitor">
+      <div class="entry__label">iOS release</div>
+      <div class="entry__value">
+        1. Run <code>npm run build</code> from <code>mobile/</code><br>
+        2. Run <code>npx cap sync ios</code><br>
+        3. Open <code>mobile/ios/App/App.xcworkspace</code> in Xcode<br>
+        4. Archive and upload via Xcode Organizer
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────── -->
+<section class="section" id="env-vars">
+  <h2 class="section-title">
+    <span class="section-icon">&#9670;</span>
+    Environment Variables
+  </h2>
+
+  <div class="callout danger">
+    <strong>Never commit real values.</strong> The reference file at <code>server/.env.example</code> documents all variables with placeholder values. Set real values in the Railway dashboard environment settings only.
+  </div>
+
+  <div class="entry" data-kw="environment variables env database jwt paystack ozow smile stitch resend africa talking foxess allowed origins">
+    <div class="entry__value" style="margin-top:4px">
+      <table class="data-table">
+        <thead><tr><th>Variable</th><th>Purpose</th><th>Where to set</th></tr></thead>
+        <tbody>
+          <tr><td><code>DATABASE_URL</code></td><td>PostgreSQL connection string</td><td>Railway auto-sets from PostgreSQL plugin</td></tr>
+          <tr><td><code>JWT_SECRET</code></td><td>JWT signing secret (long, random)</td><td>Railway env</td></tr>
+          <tr><td><code>JWT_EXPIRES_IN</code></td><td>Access token lifetime (recommended: <code>30m</code>)</td><td>Railway env</td></tr>
+          <tr><td><code>ALLOWED_ORIGINS</code></td><td>CORS allowed origins (comma-separated)</td><td>Railway env</td></tr>
+          <tr><td><code>PAYSTACK_PUBLIC_KEY</code></td><td>Paystack publishable key (client-side)</td><td>Railway env</td></tr>
+          <tr><td><code>PAYSTACK_SECRET_KEY</code></td><td>Paystack secret key (server-side only)</td><td>Railway env</td></tr>
+          <tr><td><code>OZOW_SITE_CODE</code></td><td>Ozow site code</td><td>Railway env</td></tr>
+          <tr><td><code>OZOW_PRIVATE_KEY</code></td><td>Ozow private key</td><td>Railway env</td></tr>
+          <tr><td><code>OZOW_IS_TEST</code></td><td><code>false</code> in production</td><td>Railway env</td></tr>
+          <tr><td><code>SMILE_PARTNER_ID</code></td><td>Smile Identity partner ID</td><td>Railway env</td></tr>
+          <tr><td><code>SMILE_API_KEY</code></td><td>Smile Identity API key</td><td>Railway env</td></tr>
+          <tr><td><code>SMILE_SANDBOX</code></td><td><code>false</code> in production</td><td>Railway env</td></tr>
+          <tr><td><code>SMILE_WEBHOOK_SECRET</code></td><td>Smile Identity webhook verification</td><td>Railway env</td></tr>
+          <tr><td><code>STITCH_CLIENT_ID</code></td><td>Stitch Money OAuth client ID</td><td>Railway env</td></tr>
+          <tr><td><code>STITCH_CLIENT_SECRET</code></td><td>Stitch Money OAuth client secret</td><td>Railway env</td></tr>
+          <tr><td><code>STITCH_SANDBOX</code></td><td><code>false</code> in production</td><td>Railway env</td></tr>
+          <tr><td><code>STITCH_WEBHOOK_SECRET</code></td><td>Stitch webhook verification</td><td>Railway env</td></tr>
+          <tr><td><code>RESEND_API_KEY</code></td><td>Resend email service API key</td><td>Railway env</td></tr>
+          <tr><td><code>FROM_EMAIL</code></td><td>Sender address: <code>noreply@svcapital.co.za</code></td><td>Railway env</td></tr>
+          <tr><td><code>AFRICASTALKING_API_KEY</code></td><td>Africa's Talking API key</td><td>Railway env</td></tr>
+          <tr><td><code>AFRICASTALKING_USERNAME</code></td><td>Africa's Talking account username</td><td>Railway env</td></tr>
+          <tr><td><code>AFRICASTALKING_SENDER</code></td><td>SMS sender ID</td><td>Railway env</td></tr>
+          <tr><td><code>FOXESS_API_KEY</code></td><td>FoxESS solar monitoring API key</td><td>Railway env</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────── -->
+<section class="section" id="products-list">
+  <h2 class="section-title">
+    <span class="section-icon">&#9670;</span>
+    Investment Products
+  </h2>
+
+  <div class="entry" data-kw="product types cattle solar gridfarmer short term smme delivery bike 12j ilobola investment products">
+    <div class="entry__value" style="margin-top:4px">
+      <table class="data-table">
+        <thead><tr><th>Product Type</th><th>Label</th><th>Partner</th><th>Min. Investment</th><th>Term</th></tr></thead>
+        <tbody>
+          <tr><td><code>cattle</code></td><td>Cattle Investment</td><td>Beefcor</td><td>R 500</td><td>12 months</td></tr>
+          <tr><td><code>solar_7yr</code></td><td>Solar Investment (7yr)</td><td>—</td><td>R 10,000</td><td>84 months</td></tr>
+          <tr><td><code>solar_6yr</code></td><td>Solar Investment (6yr)</td><td>—</td><td>R 10,000</td><td>72 months</td></tr>
+          <tr><td><code>solar_5yr</code></td><td>Solar Investment (5yr)</td><td>—</td><td>R 10,000</td><td>60 months</td></tr>
+          <tr><td><code>short_term</code></td><td>Short Term Investment</td><td>MoolaLend</td><td>R 1,000</td><td>5 months</td></tr>
+          <tr><td><code>delivery_bike</code></td><td>Delivery Bikes</td><td>—</td><td>R 3,100</td><td>18 months</td></tr>
+          <tr><td><code>cattle_12j</code></td><td>12J Cattle Investment</td><td>Beefcor</td><td>R 5,000</td><td>60 months</td></tr>
+          <tr><td><code>ilobola</code></td><td>iLobola</td><td>—</td><td>R 500</td><td>12 months</td></tr>
+          <tr><td><code>gridfarmer</code></td><td>GridFarmer</td><td>GridFarmer</td><td>R 17,000</td><td>12 months</td></tr>
+          <tr><td><code>smme</code></td><td>SMME (legacy)</td><td>—</td><td>R 1,000</td><td>1 month</td></tr>
+        </tbody>
+      </table>
+      <div style="margin-top:8px;font-size:.78rem;color:var(--muted)"><span class="tag grey">Note</span> <code>smme</code> has been migrated to <code>short_term</code>. SMME pools are historical only — do not create new SMME pools.</div>
+    </div>
+  </div>
+</section>
+
+</main>
+</div>
+
+<script>
+/* ── Search ──────────────────────────────────────────────── */
+const searchInput  = document.getElementById('searchInput');
+const searchCount  = document.getElementById('searchCount');
+const noResults    = document.getElementById('noResults');
+const sections     = document.querySelectorAll('.section');
+const entries      = document.querySelectorAll('.entry');
+
+searchInput.addEventListener('input', () => {
+  const raw = searchInput.value.trim();
+  const q   = raw.toLowerCase();
+
+  if (!q) {
+    entries.forEach(e => { e.classList.remove('hidden'); clearHighlights(e); });
+    sections.forEach(s => s.classList.remove('hidden'));
+    searchCount.textContent = '';
+    noResults.style.display = 'none';
+    return;
+  }
+
+  let total = 0;
+  entries.forEach(e => {
+    const kw    = (e.dataset.kw || '').toLowerCase();
+    const text  = e.textContent.toLowerCase();
+    const match = kw.includes(q) || text.includes(q);
+    e.classList.toggle('hidden', !match);
+    if (match) { total++; highlight(e, raw); } else { clearHighlights(e); }
+  });
+
+  sections.forEach(s => {
+    const visible = [...s.querySelectorAll('.entry')].some(e => !e.classList.contains('hidden'));
+    s.classList.toggle('hidden', !visible);
+  });
+
+  searchCount.textContent = total === 0 ? 'No results' : `${total} result${total === 1 ? '' : 's'}`;
+  noResults.style.display = total === 0 ? 'block' : 'none';
+});
+
+function highlight(el, q) {
+  const labels = el.querySelectorAll('.entry__label, .entry__value');
+  labels.forEach(node => {
+    const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+    const texts  = [];
+    let n;
+    while ((n = walker.nextNode())) texts.push(n);
+    texts.forEach(t => {
+      const idx = t.textContent.toLowerCase().indexOf(q.toLowerCase());
+      if (idx === -1) return;
+      const before = t.textContent.slice(0, idx);
+      const matched = t.textContent.slice(idx, idx + q.length);
+      const after   = t.textContent.slice(idx + q.length);
+      const span    = document.createElement('span');
+      span.innerHTML = escHtml(before) + '<mark>' + escHtml(matched) + '</mark>' + escHtml(after);
+      t.parentNode.replaceChild(span, t);
+    });
+  });
+}
+
+function clearHighlights(el) {
+  el.querySelectorAll('mark').forEach(m => {
+    m.replaceWith(document.createTextNode(m.textContent));
+  });
+  el.querySelectorAll('span[data-hl]').forEach(s => {
+    s.replaceWith(document.createTextNode(s.textContent));
+  });
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/* ── Sidebar active section tracker ─────────────────────── */
+const links = document.querySelectorAll('.sidebar-link');
+const sectionEls = document.querySelectorAll('.section[id]');
+
+const io = new IntersectionObserver(entries => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      links.forEach(l => l.classList.remove('active'));
+      const match = document.querySelector(`.sidebar-link[href="#${entry.target.id}"]`);
+      if (match) match.classList.add('active');
+    }
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+
+sectionEls.forEach(s => io.observe(s));
+
+links.forEach(l => {
+  l.addEventListener('click', e => {
+    e.preventDefault();
+    const id  = l.getAttribute('href').slice(1);
+    const el  = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+});
+
+/* ── Keyboard shortcut: focus search ────────────────────── */
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault();
+    searchInput.focus();
+    searchInput.select();
+  }
+});
+
+/* ── Copy buttons on code blocks ────────────────────────── */
+document.querySelectorAll('.code-block').forEach(block => {
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn';
+  btn.textContent = 'copy';
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(block.querySelector('pre').textContent).then(() => {
+      btn.textContent = 'copied!';
+      setTimeout(() => { btn.textContent = 'copy'; }, 1500);
+    });
+  });
+  block.appendChild(btn);
+});
+</script>
+</body>
+</html>
