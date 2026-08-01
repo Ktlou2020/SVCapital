@@ -673,7 +673,7 @@ router.get('/investment_pools/:id/investors', requireAuth, async (req, res) => {
     const PLATFORM_FEE_PCT = 0.01;
     rows.forEach(r => {
       const amt         = parseFloat(r.amount) || 0;
-      const platformFee = Math.round(amt * PLATFORM_FEE_PCT * 100) / 100;
+      const platformFee = r.is_reinvestment ? 0 : Math.round(amt * PLATFORM_FEE_PCT * 100) / 100;
       const upfrontFee  = Math.round(amt * mgmtFeePct * 100) / 100;
       // EVA is evaRate% of the upfront fee net of 15% VAT — taken from the upfront fee, not additional
       const evaCalc     = Math.round((upfrontFee / 1.15) * evaRate * 100) / 100;
@@ -826,7 +826,8 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
         }
       }
 
-      const platformFee = Math.round(amount * 0.01 * 100) / 100;
+      const isReinvestment = !!body.is_reinvestment;
+      const platformFee = isReinvestment ? 0 : Math.round(amount * 0.01 * 100) / 100;
       const required    = amount + platformFee;
       const walletLabel = body.sub_account_id ? 'this sub-account' : 'your wallet';
 
@@ -853,9 +854,9 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
         if (required - walletBal > 0.001) {
           await _invClient.query('ROLLBACK');
           return res.status(400).json({
-            error: `Insufficient balance. This investment requires R${required.toLocaleString('en-ZA')} `
-                 + `(R${amount.toLocaleString('en-ZA')} + R${platformFee.toLocaleString('en-ZA')} platform fee), `
-                 + `but the available balance in ${walletLabel} is R${walletBal.toLocaleString('en-ZA')}.`,
+            error: isReinvestment
+            ? `Insufficient balance. This reinvestment requires R${required.toLocaleString('en-ZA')} but the available balance in ${walletLabel} is R${walletBal.toLocaleString('en-ZA')}.`
+            : `Insufficient balance. This investment requires R${required.toLocaleString('en-ZA')} (R${amount.toLocaleString('en-ZA')} + R${platformFee.toLocaleString('en-ZA')} platform fee), but the available balance in ${walletLabel} is R${walletBal.toLocaleString('en-ZA')}.`,
           });
         }
         // Deduct while holding the row lock — prevents double-spend on concurrent requests
@@ -1183,9 +1184,10 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
     if (table === 'investments' && clean.investor_id && parseFloat(clean.amount) > 0) {
       setImmediate(async () => {
         try {
-          const investAmt   = parseFloat(clean.amount);
-          const platformFee = Math.round(investAmt * 0.01 * 100) / 100;
-          const totalDeduct = investAmt + platformFee;
+          const investAmt      = parseFloat(clean.amount);
+          const isReinvestment = !!clean.is_reinvestment;
+          const platformFee    = isReinvestment ? 0 : Math.round(investAmt * 0.01 * 100) / 100;
+          const totalDeduct    = investAmt + platformFee;
 
           // Deduct wallet + total_invested — skip if already done atomically in the
           // affordability transaction above (investor-role POSTs only).
@@ -1211,15 +1213,16 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
             }
           }
 
-          // Record the platform fee as a separate transaction (tagged to the
-          // sub-account when applicable so it appears in that account's activity)
-          const feeId = `FEE-${clean.id}`;
-          await pool.query(
-            `INSERT INTO transactions (id, investor_id, sub_account_id, type, amount, status, reference, description, transaction_date, created_at)
-             VALUES ($1, $2, $3, 'fee', $4, 'completed', $5, '1% platform fee on investment', NOW(), NOW())
-             ON CONFLICT (id) DO NOTHING`,
-            [feeId, clean.investor_id, clean.sub_account_id || null, platformFee, feeId]
-          );
+          // Record the platform fee — skipped for reinvestments (no fee charged)
+          if (!isReinvestment) {
+            const feeId = `FEE-${clean.id}`;
+            await pool.query(
+              `INSERT INTO transactions (id, investor_id, sub_account_id, type, amount, status, reference, description, transaction_date, created_at)
+               VALUES ($1, $2, $3, 'fee', $4, 'completed', $5, '1% platform fee on investment', NOW(), NOW())
+               ON CONFLICT (id) DO NOTHING`,
+              [feeId, clean.investor_id, clean.sub_account_id || null, platformFee, feeId]
+            );
+          }
 
           // EVA calculation — only on new funds (not reinvestments)
           if (!clean.is_reinvestment && clean.pool_id) {
@@ -1266,7 +1269,7 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
             [clean.investor_id]
           );
 
-          console.log(`[investment hook] R${platformFee} fee + R${investAmt} deducted from wallet for investment ${clean.id}`);
+          console.log(`[investment hook] R${investAmt} deducted from wallet for investment ${clean.id}${isReinvestment ? ' (reinvestment — no platform fee)' : ` + R${platformFee} platform fee`}`);
         } catch (err) {
           console.error('[investment hook] error:', err.message);
         }
