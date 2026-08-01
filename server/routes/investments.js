@@ -84,4 +84,112 @@ router.post('/:id/instruction', requireAuth, async (req, res) => {
   }
 });
 
+/* ═══════════════════════════════════════════════════════════
+   POST /api/investments/:id/cancel  (admin/staff only)
+   Cancels an active investment and credits the full amount
+   plus any platform fee back to the investor's wallet.
+   ═══════════════════════════════════════════════════════════ */
+router.post('/:id/cancel', requireAuth, async (req, res) => {
+  if (!STAFF_ROLES.includes(req.user.role)) {
+    return res.status(403).json({ error: 'Forbidden — staff only.' });
+  }
+
+  const { id } = req.params;
+  const { reason } = req.body || {};
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Lock the investment row
+    const { rows } = await client.query(
+      'SELECT * FROM investments WHERE id = $1 FOR UPDATE',
+      [id]
+    );
+    const inv = rows[0];
+    if (!inv) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Investment not found.' });
+    }
+    if (['cancelled', 'matured', 'paid_out'].includes(inv.status)) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: `Investment is already ${inv.status} and cannot be cancelled.` });
+    }
+
+    const amount = parseFloat(inv.amount) || 0;
+
+    // Find the platform fee paid for this investment (negative amount, type='fee')
+    const { rows: feeTxns } = await client.query(
+      `SELECT id, amount FROM transactions
+        WHERE investment_id = $1
+          AND type = 'fee'
+          AND status = 'completed'
+        LIMIT 1`,
+      [id]
+    );
+    const platformFee = feeTxns.length ? Math.abs(parseFloat(feeTxns[0].amount) || 0) : 0;
+    const totalRefund = amount + platformFee;
+
+    // Cancel the investment
+    await client.query(
+      `UPDATE investments SET status = 'cancelled', updated_at = NOW() WHERE id = $1`,
+      [id]
+    );
+
+    // Cancel all associated transactions (investment + fee)
+    await client.query(
+      `UPDATE transactions SET status = 'cancelled', updated_at = NOW()
+        WHERE investment_id = $1 AND status = 'completed'`,
+      [id]
+    );
+
+    // Credit wallet: principal + platform fee
+    await client.query(
+      'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
+      [totalRefund, inv.investor_id]
+    );
+
+    // Record the refund as a deposit transaction
+    const refundDesc = platformFee > 0
+      ? `Investment cancellation refund — ${inv.pool_name || inv.pool_id} (R${amount.toFixed(2)} principal + R${platformFee.toFixed(2)} platform fee)`
+      : `Investment cancellation refund — ${inv.pool_name || inv.pool_id}`;
+
+    await client.query(
+      `INSERT INTO transactions
+         (id, investor_id, type, amount, status, reference, description, investment_id, pool_id, transaction_date, created_at, updated_at)
+       VALUES (gen_random_uuid(), $1, 'deposit', $2, 'completed', $3, $4, $5, $6, NOW(), NOW(), NOW())`,
+      [inv.investor_id, totalRefund, 'REV-' + id, refundDesc, id, inv.pool_id]
+    );
+
+    // Reduce pool totals
+    if (inv.pool_id) {
+      await client.query(
+        `UPDATE investment_pools
+            SET current_invested = GREATEST(0, COALESCE(current_invested, 0) - $1),
+                raised_amount    = GREATEST(0, COALESCE(raised_amount,    0) - $1),
+                updated_at       = NOW()
+          WHERE id = $2`,
+        [amount, inv.pool_id]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    audit.log({
+      actorId: req.user.id || req.user.investorId, actorEmail: req.user.email, actorRole: req.user.role,
+      action: 'investment.cancelled', entityType: 'investments', entityId: id,
+      description: `Investment cancelled — R${amount.toFixed(2)}${platformFee > 0 ? ` + R${platformFee.toFixed(2)} fee` : ''} refunded to wallet${reason ? ` — Reason: ${reason}` : ''}`,
+      platform: req.headers['x-platform'] || null,
+    }).catch(() => {});
+
+    res.json({ success: true, refunded: totalRefund, principal: amount, platformFee });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[investments/cancel] error:', err.message);
+    res.status(500).json({ error: 'Internal server error.' });
+  } finally {
+    client.release();
+  }
+});
+
 module.exports = router;

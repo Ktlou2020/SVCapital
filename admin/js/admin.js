@@ -5465,6 +5465,9 @@ function viewInvestmentDetail(id) {
         <button class="btn btn--primary btn--sm" onclick='payoutInvestment(${JSON.stringify(inv.id)})'>
           <i class="fa-solid fa-money-bill-transfer"></i> Process Payout
         </button>
+        <button class="btn btn--danger btn--sm" onclick='cancelInvestment(${JSON.stringify(inv.id)})'>
+          <i class="fa-solid fa-ban"></i> Cancel &amp; Refund
+        </button>
       </div>
     ` : ''}
   `;
@@ -5483,6 +5486,25 @@ async function adminSetInstruction(id) {
     await loadInvestments();
   } catch (e) {
     Toast.error(e.message || 'Failed to set instruction');
+  }
+}
+
+async function cancelInvestment(id) {
+  const inv = STATE.investments.find(i => i.id === id);
+  if (!inv) return;
+  const confirmed = await Confirm.ask('Cancel Investment & Refund?', {
+    body: `This will cancel the investment of <strong>${Utils.rand(inv.amount)}</strong> in <strong>${_esc(inv.pool_name)}</strong> and credit the full amount plus any platform fee back to <strong>${_esc(inv.investor_name)}</strong>'s wallet. This cannot be undone.`,
+    confirmLabel: 'Cancel & Refund',
+    confirmClass: 'btn--danger',
+  });
+  if (!confirmed) return;
+  try {
+    const result = await API._fetch('POST', `investments/${id}/cancel`, { reason: 'Admin cancellation' });
+    Toast.success(`Investment cancelled — ${Utils.rand(result.refunded)} refunded to wallet`);
+    Modal.close('investorDetailModal');
+    await Promise.all([loadInvestments(), loadInvestors()]);
+  } catch (e) {
+    Toast.error(e.message || 'Failed to cancel investment');
   }
 }
 
