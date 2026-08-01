@@ -2139,11 +2139,11 @@ function renderOverviewTxns() {
   const body = document.getElementById('overviewTxnBody');
   if (!body) return;
   const recent = [...PORTAL.transactions].sort((a, b) => new Date(b.transaction_date || b.created_at || 0) - new Date(a.transaction_date || a.created_at || 0)).slice(0, 5);
-  const typeColors = { deposit: 'green', investment: 'blue', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple', withdrawal: 'red', gift_sent: 'orange', gift_received: 'green', reward: 'purple' };
+  const typeColors = { deposit: 'green', investment: 'blue', reinvestment: 'purple', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple', withdrawal: 'red', gift_sent: 'orange', gift_received: 'green', reward: 'purple' };
 
   if (!recent.length) { body.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:24px">No transactions yet</td></tr>'; return; }
 
-  const _txnIsPositive = t => !['withdrawal', 'fee', 'investment', 'gift_sent'].includes(t.type);
+  const _txnIsPositive = t => !['withdrawal', 'fee', 'investment', 'reinvestment', 'gift_sent'].includes(t.type);
   body.innerHTML = recent.map(t => {
     const pos = _txnIsPositive(t);
     return `<tr>
@@ -2528,7 +2528,7 @@ function renderMyTxnTable() {
   const items = filter ? PORTAL.transactions.filter(t => t.type === filter) : PORTAL.transactions;
   const sorted = [...items].sort((a, b) => new Date(b.transaction_date || b.created_at || 0) - new Date(a.transaction_date || a.created_at || 0));
 
-  const typeColors = { deposit: 'green', investment: 'blue', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple', withdrawal: 'red', gift_sent: 'orange', gift_received: 'green', reward: 'purple' };
+  const typeColors = { deposit: 'green', investment: 'blue', reinvestment: 'purple', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple', withdrawal: 'red', gift_sent: 'orange', gift_received: 'green', reward: 'purple' };
 
   if (!sorted.length) {
     body.innerHTML = `<tr><td colspan="6" style="padding:0;border:none">
@@ -2543,7 +2543,7 @@ function renderMyTxnTable() {
     return;
   }
 
-  const _isPosTxn = t => !['withdrawal', 'fee', 'investment', 'gift_sent'].includes(t.type);
+  const _isPosTxn = t => !['withdrawal', 'fee', 'investment', 'reinvestment', 'gift_sent'].includes(t.type);
   body.innerHTML = sorted.map(t => {
     const pos = _isPosTxn(t);
     return `<tr>
@@ -5726,9 +5726,9 @@ function buildStatementHTML(opts) {
 
   // ─── TRANSACTION LEDGER ────────────────────────────────────────────────
   if (incTransactions) {
-    const TYPE_LABEL = { deposit:'Deposit', withdrawal:'Withdrawal', investment:'Investment', return:'Return', payout:'Payout', fee:'Fee', platform_fee:'Platform Fee', referral_bonus:'Referral Bonus', gift_sent:'Gift Sent', gift_received:'Gift Received', reward:'XP Reward' };
+    const TYPE_LABEL = { deposit:'Deposit', withdrawal:'Withdrawal', investment:'Investment', reinvestment:'Reinvestment', return:'Return', payout:'Payout', fee:'Fee', platform_fee:'Platform Fee', referral_bonus:'Referral Bonus', gift_sent:'Gift Sent', gift_received:'Gift Received', reward:'XP Reward' };
     const isCreditType = t => ['deposit','return','payout','referral_bonus','gift_received','reward'].includes(t.type);
-    const isDebitType  = t => ['withdrawal','investment','platform_fee','fee','gift_sent'].includes(t.type);
+    const isDebitType  = t => ['withdrawal','investment','reinvestment','platform_fee','fee','gift_sent'].includes(t.type);
 
     const sortedTxns = [...transactions].sort((a, b) =>
       new Date(a.transaction_date || a.created_at) - new Date(b.transaction_date || b.created_at)

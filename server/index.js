@@ -315,9 +315,9 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
   const { startMaturityCron } = require('./jobs/maturityCron');
   startMaturityCron();
 
-  // Start monthly interest crediting cron (1st of month, 06:00 SAST)
-  const { startInterestCron } = require('./jobs/interestCron');
-  startInterestCron();
+  // Interest is credited at maturity only (maturityCron) — monthly accrual disabled.
+  // const { startInterestCron } = require('./jobs/interestCron');
+  // startInterestCron();
 
   // Payout processing is now consolidated into the maturity engine (maturityCron).
   // The standalone payoutCron has been retired.

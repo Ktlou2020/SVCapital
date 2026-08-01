@@ -1,7 +1,9 @@
 /* ═══════════════════════════════════════════════════════════
    Maturity Engine (consolidated — replaces the old payoutCron)
    Timing (South African time, Africa/Johannesburg):
-     • 23:00 on an investment's maturity day → runMaturityProcessing:
+     • 23:00 on an investment's maturity day → cycleExpiredPools() first
+       (ensures the next month's pool is open before reinvestment looks for it),
+       then runMaturityProcessing:
          - mark the investment 'matured'
          - mark the pool 'matured' (its end_date has passed)
          - execute the maturity instruction immediately (reinvested/switched
@@ -23,6 +25,7 @@ const pool         = require('../db/pool');
 const emailService = require('../services/email');
 const smsService   = require('../services/sms');
 const pushService  = require('../services/pushService');
+const { cycleExpiredPools } = require('./poolCyclerCron');
 
 // Reinvestments are NOT charged a platform fee — the full matured amount rolls over.
 const round2 = n => Math.round((Number(n) || 0) * 100) / 100;
@@ -307,7 +310,7 @@ async function reinvestAmount(client, inv, amount, productType, sourcePoolName) 
     await client.query(
       `INSERT INTO transactions
          (id, investor_id, type, amount, status, reference, description, investment_id, pool_id, transaction_date, created_at, updated_at)
-       VALUES (gen_random_uuid(),$1,'investment',$2,'completed',$3,$4,$5,$6,NOW(),NOW(),NOW())`,
+       VALUES (gen_random_uuid(),$1,'reinvestment',$2,'completed',$3,$4,$5,$6,NOW(),NOW(),NOW())`,
       [inv.investor_id, amt, 'REINV-' + inv.id, `Maturity ${verb} — ${sourcePoolName} → ${target.name}`, newInvId, target.id]
     );
 
@@ -440,16 +443,18 @@ async function runMonthlyMaturityReminder() {
 }
 
 function startMaturityCron() {
-  // 23:00 SAST daily — maturity processing + 30-day / 7-day / 3-day alerts.
+  // 23:00 SAST daily — cycle pools first so the new month's pool exists before
+  // reinvestment instructions run, then process maturity + advance alerts.
   cron.schedule('0 23 * * *', async () => {
     try {
+      await cycleExpiredPools();
       await runMaturityProcessing();
       await runMaturityAlerts();
     } catch (err) {
       console.error('[maturity] cron error:', err.message);
     }
   }, { timezone: 'Africa/Johannesburg' });
-  console.log('[maturity] scheduled: daily at 23:00 SAST — maturity processing + alerts');
+  console.log('[maturity] scheduled: daily at 23:00 SAST — pool cycle + maturity processing + alerts');
 
   // 08:00 SAST on the 1st of each month — monthly maturity summary to investors.
   cron.schedule('0 8 1 * *', async () => {

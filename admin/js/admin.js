@@ -1768,6 +1768,7 @@ function setupInvestorFilters() {
       if (so === 'name_asc')      return `${a.first_name||''} ${a.last_name||''}`.localeCompare(`${b.first_name||''} ${b.last_name||''}`);
       if (so === 'name_desc')     return `${b.first_name||''} ${b.last_name||''}`.localeCompare(`${a.first_name||''} ${a.last_name||''}`);
       if (so === 'wallet_desc')   return (parseFloat(b.wallet_balance) || 0) - (parseFloat(a.wallet_balance) || 0);
+      if (so === 'wallet_asc')    return (parseFloat(a.wallet_balance) || 0) - (parseFloat(b.wallet_balance) || 0);
       if (so === 'invested_desc') return (parseFloat(b.total_invested) || 0) - (parseFloat(a.total_invested) || 0);
       // date_desc (default)
       return new Date(b.date_joined || 0) - new Date(a.date_joined || 0);
@@ -4652,6 +4653,13 @@ async function viewPoolInvestors(poolId) {
         </div>
       </div>
 
+      <!-- Search -->
+      <div style="margin-bottom:10px">
+        <input type="text" id="poolInvSearch" class="form-input" placeholder="Search by name, email or account…"
+          oninput="_filterPoolInvTable(this.value)"
+          style="width:100%;max-width:380px;font-size:0.82rem;padding:7px 12px" />
+      </div>
+
       <!-- Per-investment table -->
       <div style="overflow-x:auto">
         <table class="data-table" style="table-layout:fixed;width:100%;min-width:900px">
@@ -4666,7 +4674,7 @@ async function viewPoolInvestors(poolId) {
             <th style="width:7%">Rate</th>
             <th style="width:8%">Status</th>
             <th style="width:8%">Start</th>
-            <th style="width:8%">Instruction</th>
+            <th style="width:10%">Source</th>
           </tr></thead>
           <tbody>
             ${investors.map(r => {
@@ -4686,7 +4694,12 @@ async function viewPoolInvestors(poolId) {
                 <td class="td-green clip">${r.annual_rate ? Utils.pct(r.annual_rate) : '—'}</td>
                 <td><span class="badge ${statusColor[r.investment_status]||'badge--gray'}">${r.investment_status||'—'}</span></td>
                 <td class="td-muted clip">${Utils.date(r.start_date)}</td>
-                <td class="clip" style="font-size:0.75rem;color:var(--text-muted)">${r.maturity_instruction?.replace(/_/g,' ')||'—'}</td>
+                <td class="clip">
+                  ${r.is_reinvestment
+                    ? '<span class="badge badge--purple" style="font-size:0.65rem">Reinvestment</span>'
+                    : '<span class="badge badge--blue"   style="font-size:0.65rem">New</span>'}
+                  <div style="font-size:0.65rem;color:var(--text-muted);margin-top:3px">${r.maturity_instruction?.replace(/_/g,' ')||'—'}</div>
+                </td>
               </tr>`;
             }).join('')}
           </tbody>
@@ -4698,6 +4711,15 @@ async function viewPoolInvestors(poolId) {
   }
 }
 
+function _filterPoolInvTable(q) {
+  const needle = (q || '').toLowerCase().trim();
+  const rows = document.querySelectorAll('#poolInvestorsBody .data-table tbody tr');
+  rows.forEach(row => {
+    const text = row.textContent.toLowerCase();
+    row.style.display = (!needle || text.includes(needle)) ? '' : 'none';
+  });
+}
+
 function downloadPoolCsv() {
   if (!_poolInvestorsSnapshot || !_poolInvestorsSnapshot.investors.length) {
     Toast.error('No data to export');
@@ -4706,7 +4728,7 @@ function downloadPoolCsv() {
   const { investors, poolName } = _poolInvestorsSnapshot;
   const PLATFORM_FEE_PCT = 0.01;
 
-  const headers = ['Investor','Email','Account ID','Sub Account','Gross Amount','Upfront Fee','Platform Fee','EVA','Net Amount','Annual Rate','Status','Start Date','Maturity Date','Maturity Instruction'];
+  const headers = ['Investor','Email','Account ID','Sub Account','Gross Amount','Upfront Fee','Platform Fee','EVA','Net Amount','Annual Rate','Status','Start Date','Maturity Date','Maturity Instruction','Source'];
 
   const csvRows = [headers];
   for (const r of investors) {
@@ -4729,6 +4751,7 @@ function downloadPoolCsv() {
       r.start_date ? r.start_date.slice(0, 10) : '',
       r.end_date   ? r.end_date.slice(0, 10)   : '',
       (r.maturity_instruction || '').replace(/_/g, ' '),
+      r.is_reinvestment ? 'Reinvestment' : 'New',
     ]);
   }
 
@@ -5158,6 +5181,7 @@ function editPool(id) {
   }
 
   document.getElementById('editPoolId').value          = pool.id;
+  document.getElementById('editPoolIdDisplay').value   = pool.id;
   document.getElementById('editPoolName').value        = pool.name || '';
   document.getElementById('editPoolStatus').value      = pool.status || 'open';
   // Populate product-type options from the products catalogue, ensuring this
@@ -5458,6 +5482,9 @@ function viewInvestmentDetail(id) {
         <button class="btn btn--primary btn--sm" onclick='payoutInvestment(${JSON.stringify(inv.id)})'>
           <i class="fa-solid fa-money-bill-transfer"></i> Process Payout
         </button>
+        <button class="btn btn--danger btn--sm" onclick='cancelInvestment(${JSON.stringify(inv.id)})'>
+          <i class="fa-solid fa-ban"></i> Cancel &amp; Refund
+        </button>
       </div>
     ` : ''}
   `;
@@ -5476,6 +5503,25 @@ async function adminSetInstruction(id) {
     await loadInvestments();
   } catch (e) {
     Toast.error(e.message || 'Failed to set instruction');
+  }
+}
+
+async function cancelInvestment(id) {
+  const inv = STATE.investments.find(i => i.id === id);
+  if (!inv) return;
+  const confirmed = await Confirm.ask('Cancel Investment & Refund?', {
+    body: `This will cancel the investment of <strong>${Utils.rand(inv.amount)}</strong> in <strong>${_esc(inv.pool_name)}</strong> and credit the full amount plus any platform fee back to <strong>${_esc(inv.investor_name)}</strong>'s wallet. This cannot be undone.`,
+    confirmLabel: 'Cancel & Refund',
+    confirmClass: 'btn--danger',
+  });
+  if (!confirmed) return;
+  try {
+    const result = await API._fetch('POST', `investments/${id}/cancel`, { reason: 'Admin cancellation' });
+    Toast.success(`Investment cancelled — ${Utils.rand(result.refunded)} refunded to wallet`);
+    Modal.close('investorDetailModal');
+    await Promise.all([loadInvestments(), loadInvestors()]);
+  } catch (e) {
+    Toast.error(e.message || 'Failed to cancel investment');
   }
 }
 
@@ -5705,7 +5751,7 @@ function renderTxnTable() {
     return;
   }
 
-  const typeColors = { deposit: 'green', withdrawal: 'red', investment: 'blue', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple' };
+  const typeColors = { deposit: 'green', withdrawal: 'red', investment: 'blue', reinvestment: 'purple', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple' };
 
   body.innerHTML = page.map(t => {
     const isPendingDeposit = t.type === 'deposit' && t.status === 'pending';
@@ -5880,7 +5926,7 @@ async function saveNewTxn(btn) {
         id:          Utils.genId('TXN'),
         investor_id: investorId,
         type,
-        amount:      type === 'investment' || type === 'withdrawal' ? -Math.abs(amount) : Math.abs(amount),
+        amount:      type === 'investment' || type === 'reinvestment' || type === 'withdrawal' ? -Math.abs(amount) : Math.abs(amount),
         status,
         reference:   document.getElementById('txnRef').value.trim(),
         description: document.getElementById('txnDesc').value.trim(),
