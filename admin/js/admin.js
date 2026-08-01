@@ -4653,6 +4653,13 @@ async function viewPoolInvestors(poolId) {
         </div>
       </div>
 
+      <!-- Search -->
+      <div style="margin-bottom:10px">
+        <input type="text" id="poolInvSearch" class="form-input" placeholder="Search by name, email or account…"
+          oninput="_filterPoolInvTable(this.value)"
+          style="width:100%;max-width:380px;font-size:0.82rem;padding:7px 12px" />
+      </div>
+
       <!-- Per-investment table -->
       <div style="overflow-x:auto">
         <table class="data-table" style="table-layout:fixed;width:100%;min-width:900px">
@@ -4702,6 +4709,15 @@ async function viewPoolInvestors(poolId) {
   } catch (e) {
     body.innerHTML = `<div class="text-center text-muted" style="padding:32px">Failed to load pool investors</div>`;
   }
+}
+
+function _filterPoolInvTable(q) {
+  const needle = (q || '').toLowerCase().trim();
+  const rows = document.querySelectorAll('#poolInvestorsBody .data-table tbody tr');
+  rows.forEach(row => {
+    const text = row.textContent.toLowerCase();
+    row.style.display = (!needle || text.includes(needle)) ? '' : 'none';
+  });
 }
 
 function downloadPoolCsv() {
