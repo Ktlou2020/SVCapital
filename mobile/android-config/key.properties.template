@@ -1,0 +1,10 @@
+# Copy this file to android/key.properties (NEVER commit key.properties to git)
+# Fill in your keystore details below.
+#
+# The uploadkeystore.jks file lives in mobile/android-config/
+# Copy it to android/app/uploadkeystore.jks before building.
+
+storePassword=YOUR_STORE_PASSWORD
+keyAlias=YOUR_KEY_ALIAS
+keyPassword=YOUR_KEY_PASSWORD
+storeFile=uploadkeystore.jks

@@ -42,6 +42,11 @@ build/
 mobile/android/
 mobile/ios/
 mobile/node_modules/
+
+# Android signing credentials — NEVER commit these
+*.jks
+*.keystore
+key.properties
 migration-data/
 
 .pgdata/

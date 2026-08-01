@@ -100,12 +100,36 @@ npm run build
 
 ### Android (Google Play)
 
+#### First-time signing setup (do once after `cap add android`)
+
+The upload keystore is stored in `android-config/uploadkeystore.jks` (gitignored).
+
+```bash
+# 1. Copy the keystore into the app folder
+cp android-config/uploadkeystore.jks android/app/uploadkeystore.jks
+
+# 2. Create android/key.properties (gitignored) from the template
+cp android-config/key.properties.template android/key.properties
+# Then fill in the real storePassword, keyAlias, keyPassword values.
+
+# 3. Apply signing config to android/app/build.gradle
+# See android-config/signing-config.gradle.patch for exactly what to add/change.
+```
+
+After editing `android/app/build.gradle`, the `release` build type will automatically
+use the upload key. **Never commit `key.properties` or `*.jks` to git.**
+
+#### Build & upload
+
 1. `npm run sync`
 2. Open Android Studio: `npm run open:android`
 3. **Build → Generate Signed Bundle/APK**
-4. Choose **Android App Bundle (.aab)**
-5. Create or use existing keystore
-6. Upload `.aab` to Google Play Console → Production
+4. Choose **Android App Bundle (.aab)** → select **Release**
+   *(signing is automatic if build.gradle is configured; or point to the keystore manually)*
+5. Upload `.aab` to Google Play Console → Production
+
+> **SHA1 fingerprint for the upload key:** `07:01:84:5B:FA:EF:8D:F6:46:CA:CB:5C:7B:14:EC:2D:1A:51:A5:F7`  
+> Verify with: `keytool -list -keystore android/app/uploadkeystore.jks`
 
 ### iOS (App Store)
 

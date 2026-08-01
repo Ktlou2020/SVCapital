@@ -1,0 +1,31 @@
+// ─── SIGNING CONFIGURATION ──────────────────────────────────────────────────
+// Apply this to: android/app/build.gradle
+//
+// 1. Place uploadkeystore.jks in android/app/
+// 2. Place key.properties (filled from key.properties.template) in android/
+// 3. Add the blocks below to android/app/build.gradle
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── ADD at the TOP of android/app/build.gradle (before the `android {` block) ──
+def keystorePropertiesFile = rootProject.file("key.properties")
+def keystoreProperties = new Properties()
+keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+
+// ── ADD inside the `android { ... }` block ──
+signingConfigs {
+    release {
+        keyAlias     keystoreProperties['keyAlias']
+        keyPassword  keystoreProperties['keyPassword']
+        storeFile    file(keystoreProperties['storeFile'])
+        storePassword keystoreProperties['storePassword']
+    }
+}
+
+// ── UPDATE the existing buildTypes block inside `android { ... }` ──
+buildTypes {
+    release {
+        signingConfig signingConfigs.release
+        minifyEnabled false
+        proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+    }
+}
