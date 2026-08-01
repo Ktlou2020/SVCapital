@@ -1768,6 +1768,7 @@ function setupInvestorFilters() {
       if (so === 'name_asc')      return `${a.first_name||''} ${a.last_name||''}`.localeCompare(`${b.first_name||''} ${b.last_name||''}`);
       if (so === 'name_desc')     return `${b.first_name||''} ${b.last_name||''}`.localeCompare(`${a.first_name||''} ${a.last_name||''}`);
       if (so === 'wallet_desc')   return (parseFloat(b.wallet_balance) || 0) - (parseFloat(a.wallet_balance) || 0);
+      if (so === 'wallet_asc')    return (parseFloat(a.wallet_balance) || 0) - (parseFloat(b.wallet_balance) || 0);
       if (so === 'invested_desc') return (parseFloat(b.total_invested) || 0) - (parseFloat(a.total_invested) || 0);
       // date_desc (default)
       return new Date(b.date_joined || 0) - new Date(a.date_joined || 0);
