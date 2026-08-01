@@ -4667,7 +4667,7 @@ async function viewPoolInvestors(poolId) {
             <th style="width:7%">Rate</th>
             <th style="width:8%">Status</th>
             <th style="width:8%">Start</th>
-            <th style="width:8%">Instruction</th>
+            <th style="width:10%">Source</th>
           </tr></thead>
           <tbody>
             ${investors.map(r => {
@@ -4687,7 +4687,12 @@ async function viewPoolInvestors(poolId) {
                 <td class="td-green clip">${r.annual_rate ? Utils.pct(r.annual_rate) : '—'}</td>
                 <td><span class="badge ${statusColor[r.investment_status]||'badge--gray'}">${r.investment_status||'—'}</span></td>
                 <td class="td-muted clip">${Utils.date(r.start_date)}</td>
-                <td class="clip" style="font-size:0.75rem;color:var(--text-muted)">${r.maturity_instruction?.replace(/_/g,' ')||'—'}</td>
+                <td class="clip">
+                  ${r.is_reinvestment
+                    ? '<span class="badge badge--purple" style="font-size:0.65rem">Reinvestment</span>'
+                    : '<span class="badge badge--blue"   style="font-size:0.65rem">New</span>'}
+                  <div style="font-size:0.65rem;color:var(--text-muted);margin-top:3px">${r.maturity_instruction?.replace(/_/g,' ')||'—'}</div>
+                </td>
               </tr>`;
             }).join('')}
           </tbody>
