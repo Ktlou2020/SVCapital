@@ -3900,10 +3900,18 @@ async function _getTrackRecord() {
 }
 
 let _trackChart = null;
+function _fmtShort(n) {
+  n = Number(n) || 0;
+  if (n >= 1e9) return 'R' + (n / 1e9).toFixed(1) + 'B';
+  if (n >= 1e6) return 'R' + (n / 1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return 'R' + (n / 1e3).toFixed(1) + 'K';
+  return 'R' + n.toFixed(0);
+}
 async function _renderProductTrackRecord(type, color) {
   const el = document.getElementById('prodTrackRecord');
   if (!el) return;
   el.innerHTML = `<div style="font-size:0.78rem;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i> Loading past performance…</div>`;
+  try {
   const data = await _getTrackRecord();
   const isSolar = (type || '').startsWith('solar');
   const keys = Object.keys(data).filter(k => isSolar ? k.startsWith('solar') : k === type);
@@ -3956,7 +3964,7 @@ async function _renderProductTrackRecord(type, color) {
           <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-top:3px">Pool${nTotal === 1 ? '' : 's'} completed</div>
         </div>
         <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:12px 8px;text-align:center;min-width:0">
-          <div style="font-size:clamp(0.85rem,4vw,1.5rem);font-weight:900;color:var(--text);letter-spacing:-0.02em;white-space:nowrap">${Utils.randShort(paidBack)}</div>
+          <div style="font-size:clamp(0.85rem,4vw,1.5rem);font-weight:900;color:var(--text);letter-spacing:-0.02em;white-space:nowrap">${_fmtShort(paidBack)}</div>
           <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-top:3px">Invested to date</div>
         </div>
       </div>
@@ -3965,6 +3973,9 @@ async function _renderProductTrackRecord(type, color) {
         <i class="fa-solid fa-circle-info" style="margin-right:4px"></i>Past performance is not a guarantee of future returns. Investment returns may vary.
       </p>
     </div>`;
+  } catch (e) {
+    el.innerHTML = '';
+  }
 }
 
 // ── Solar: daily generation this month (FoxESS history) ──
