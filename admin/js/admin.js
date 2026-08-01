@@ -5158,6 +5158,7 @@ function editPool(id) {
   }
 
   document.getElementById('editPoolId').value          = pool.id;
+  document.getElementById('editPoolIdDisplay').value   = pool.id;
   document.getElementById('editPoolName').value        = pool.name || '';
   document.getElementById('editPoolStatus').value      = pool.status || 'open';
   // Populate product-type options from the products catalogue, ensuring this
