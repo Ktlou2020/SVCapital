@@ -4712,7 +4712,7 @@ function downloadPoolCsv() {
   const { investors, poolName } = _poolInvestorsSnapshot;
   const PLATFORM_FEE_PCT = 0.01;
 
-  const headers = ['Investor','Email','Account ID','Sub Account','Gross Amount','Upfront Fee','Platform Fee','EVA','Net Amount','Annual Rate','Status','Start Date','Maturity Date','Maturity Instruction'];
+  const headers = ['Investor','Email','Account ID','Sub Account','Gross Amount','Upfront Fee','Platform Fee','EVA','Net Amount','Annual Rate','Status','Start Date','Maturity Date','Maturity Instruction','Source'];
 
   const csvRows = [headers];
   for (const r of investors) {
@@ -4735,6 +4735,7 @@ function downloadPoolCsv() {
       r.start_date ? r.start_date.slice(0, 10) : '',
       r.end_date   ? r.end_date.slice(0, 10)   : '',
       (r.maturity_instruction || '').replace(/_/g, ' '),
+      r.is_reinvestment ? 'Reinvestment' : 'New',
     ]);
   }
 
