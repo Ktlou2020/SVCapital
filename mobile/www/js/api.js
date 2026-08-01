@@ -116,10 +116,16 @@ const Auth = {
    * Calling Auth.clear() logs out from both auth systems.
    */
   clear() {
-    ['svc_token', 'svc_user', 'svc_portal_cache'].forEach(k => {
+    ['svc_token', 'svc_user'].forEach(k => {
       localStorage.removeItem(k);
       sessionStorage.removeItem(k);
     });
+    // On native, preserve the portal data cache so the UI renders instantly on re-login.
+    // The cache is validated against the current investor's JWT before use in portal.js.
+    if (!window.__SVC_NATIVE__) {
+      localStorage.removeItem('svc_portal_cache');
+    }
+    sessionStorage.removeItem('svc_portal_cache');
     // Also clear staffSession so StaffAuth pages redirect to login
     localStorage.removeItem('staffSession');
   },

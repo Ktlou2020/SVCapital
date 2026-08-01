@@ -1571,15 +1571,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     const raw = localStorage.getItem('svc_portal_cache');
     if (raw) {
       const c = JSON.parse(raw);
-      if (c && c.cachedAt) {
-        PORTAL.investor     = c.investor     || null;
-        PORTAL.investments  = c.investments  || [];
-        PORTAL.transactions = c.transactions || [];
-        PORTAL.pools        = c.pools        || [];
-        PORTAL.waitlist     = c.waitlist     || [];
-        try { renderOverview(); } catch (_) {}
-        if (window.__SVC_HIDE_COVER) window.__SVC_HIDE_COVER();
-        _cacheRendered = true;
+      if (c && c.cachedAt && c.investor) {
+        // Validate cache belongs to the currently logged-in investor (guards against
+        // a native-preserved cache from a previous user's session being shown to a
+        // different user who logs in on the same device).
+        let _cacheOk = true;
+        try {
+          const _tok = Auth.getToken();
+          if (_tok) {
+            const _p = JSON.parse(atob(_tok.split('.')[1]));
+            const _jwtInvId = _p.investorId || null;
+            if (_jwtInvId && c.investor.id && _jwtInvId !== c.investor.id) {
+              _cacheOk = false; // stale cache from a different investor
+              localStorage.removeItem('svc_portal_cache');
+            }
+          }
+        } catch (_) {}
+
+        if (_cacheOk) {
+          PORTAL.investor     = c.investor     || null;
+          PORTAL.investments  = c.investments  || [];
+          PORTAL.transactions = c.transactions || [];
+          PORTAL.pools        = c.pools        || [];
+          PORTAL.waitlist     = c.waitlist     || [];
+          try { renderOverview(); } catch (_) {}
+          if (window.__SVC_HIDE_COVER) window.__SVC_HIDE_COVER();
+          _cacheRendered = true;
+        }
       }
     }
   } catch (_) {}
