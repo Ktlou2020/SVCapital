@@ -5943,49 +5943,40 @@ function printStatement() {
     Toast.error('Please generate a statement first, then print.');
     return;
   }
-  const htmlContent = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>SV Capital — Account Statement</title>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <style>
-    *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
-    body{font-family:'Poppins',-apple-system,BlinkMacSystemFont,sans-serif;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;color:#1a1a1a}
-    @page{size:A4;margin:0}
-    @media print{.no-print{display:none!important}.print-body{padding-top:0!important}}
-    .no-print{position:fixed;top:0;left:0;right:0;background:#1a1a1a;padding:12px 24px;display:flex;justify-content:space-between;align-items:center;z-index:999;box-shadow:0 2px 12px rgba(0,0,0,0.3)}
-    .no-print span{color:#fff;font-size:13px;font-weight:600}
-    .no-print button{background:linear-gradient(135deg,#fec24f,#FF5229);color:#fff;border:none;padding:8px 22px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer}
-    .no-print button:hover{opacity:0.9}
-    .print-body{padding-top:52px}
-  </style>
-</head>
-<body>
-  <div class="no-print">
-    <span>SV Capital — Account Statement</span>
-    <button onclick="window.print()">⬇&nbsp; Save as PDF / Print</button>
-  </div>
-  <div class="print-body">${stmtDoc.innerHTML}</div>
-  <script>window.addEventListener('load',function(){setTimeout(function(){window.print();},600);});</script>
-</body>
-</html>`;
-  const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
-  const url  = URL.createObjectURL(blob);
-  // Open as new tab (no width/height = new tab, not popup → avoids popup blocker)
-  const win = window.open(url, '_blank');
-  if (!win) {
-    // Blocked or native app — download the file directly
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `SVC-Statement-${new Date().toISOString().slice(0,10)}.html`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    Toast.success('Statement downloaded — open in your browser, then use File → Print → Save as PDF.');
-  }
-  setTimeout(() => URL.revokeObjectURL(url), 120000);
+  _openStatementOverlay(stmtDoc.innerHTML);
+}
+
+/* Open an in-page full-screen overlay with the statement so window.print()
+   works in Capacitor WebView (which blocks window.open with blob URLs).
+   @media print hides the app UI and shows only the statement. */
+function _openStatementOverlay(bodyHtml) {
+  document.getElementById('stmtPrintOverlay')?.remove();
+  document.getElementById('stmtPrintStyle')?.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'stmtPrintOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#fff;overflow-y:auto;-webkit-overflow-scrolling:touch';
+  overlay.innerHTML = `
+    <div id="stmtOverlayBar" style="position:sticky;top:0;background:#1a1a1a;padding:12px 20px;display:flex;justify-content:space-between;align-items:center;gap:10px;box-shadow:0 2px 12px rgba(0,0,0,0.4)">
+      <span style="color:#fff;font-size:13px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">SV Capital — Account Statement</span>
+      <div style="display:flex;gap:8px;align-items:center;flex-shrink:0">
+        <button onclick="window.print()" style="background:linear-gradient(135deg,#fec24f,#FF5229);color:#fff;border:none;padding:9px 16px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:5px"><i class="fa-solid fa-print"></i> Save as PDF</button>
+        <button onclick="document.getElementById('stmtPrintOverlay').remove();document.getElementById('stmtPrintStyle')?.remove()" style="background:rgba(255,255,255,0.1);color:#fff;border:1px solid rgba(255,255,255,0.2);padding:9px 12px;border-radius:8px;font-size:0.78rem;cursor:pointer"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+    </div>
+    <div style="padding:0;font-family:Poppins,-apple-system,BlinkMacSystemFont,sans-serif">${bodyHtml}</div>`;
+  document.body.appendChild(overlay);
+
+  const style = document.createElement('style');
+  style.id = 'stmtPrintStyle';
+  style.textContent = `
+    @media print {
+      body > *:not(#stmtPrintOverlay) { display:none!important }
+      #stmtPrintOverlay { position:static!important;overflow:visible!important }
+      #stmtOverlayBar   { display:none!important }
+      @page { size:A4; margin:0 }
+    }`;
+  document.head.appendChild(style);
 }
 
 /* ── Sub-account deposit ─────────────────────── */
@@ -11153,17 +11144,15 @@ function downloadStatement() {
 </body>
 </html>`;
 
+  // Try to open in a new browser tab first; fall back to in-page overlay
+  // (Capacitor WebView blocks window.open with blob URLs)
   const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
   const url  = URL.createObjectURL(blob);
   const win  = window.open(url, '_blank');
   if (!win) {
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `SVC-Statement-${now.toISOString().slice(0, 10)}.html`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    Toast.success('Statement downloaded — open in your browser, then use Share → Print → Save as PDF.');
+    URL.revokeObjectURL(url);
+    _openStatementOverlay(bodyHtml);
+    return;
   }
   setTimeout(() => URL.revokeObjectURL(url), 120000);
 }
