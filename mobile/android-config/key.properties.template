@@ -1,10 +1,12 @@
 # Copy this file to android/key.properties (NEVER commit key.properties to git)
-# Fill in your keystore details below.
 #
 # The uploadkeystore.jks file lives in mobile/android-config/
 # Copy it to android/app/uploadkeystore.jks before building.
+#
+# IMPORTANT: Use the 'upload' alias — NOT 'keystore'.
+# The 'upload' alias has SHA1 07:01:84:5B:... which is what Google Play expects.
 
-storePassword=YOUR_STORE_PASSWORD
-keyAlias=YOUR_KEY_ALIAS
-keyPassword=YOUR_KEY_PASSWORD
+storePassword=Thestation2026!
+keyAlias=upload
+keyPassword=Thestation2026!
 storeFile=uploadkeystore.jks

@@ -129,7 +129,8 @@ use the upload key. **Never commit `key.properties` or `*.jks` to git.**
 5. Upload `.aab` to Google Play Console → Production
 
 > **SHA1 fingerprint for the upload key:** `07:01:84:5B:FA:EF:8D:F6:46:CA:CB:5C:7B:14:EC:2D:1A:51:A5:F7`  
-> Verify with: `keytool -list -keystore android/app/uploadkeystore.jks`
+> **IMPORTANT:** The JKS has two aliases — always use alias **`upload`** (NOT `keystore`).  
+> Verify with: `keytool -list -alias upload -keystore android/app/uploadkeystore.jks`
 
 ### iOS (App Store)
 
