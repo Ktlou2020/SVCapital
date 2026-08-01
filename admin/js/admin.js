@@ -4563,6 +4563,30 @@ function renderPoolsGrid() {
           ${p.maturity_date ? `<span>Matures: ${Utils.date(p.maturity_date)}</span>` : ''}
         </div>
 
+        ${(() => {
+          if (p.status !== 'matured' || !p.maturity_summary) return '';
+          const sm = typeof p.maturity_summary === 'string' ? JSON.parse(p.maturity_summary) : p.maturity_summary;
+          const labelMap = {
+            reinvest:       'Reinvest',
+            auto_reinvest:  'Automatic Reinvest',
+            payout_all:     'Payout',
+            payout_return:  'Payout Return',
+            payout_custom:  'Payout Custom',
+            switch_product: 'Switch Product',
+            custom_switch:  'Custom Switch',
+          };
+          const rows = Object.entries(sm).map(([k, v]) =>
+            `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0">
+               <span style="color:var(--text-muted)">${labelMap[k] || k} <span style="color:var(--text-dim);font-size:0.68rem">(${v.count})</span></span>
+               <span style="font-weight:600;font-variant-numeric:tabular-nums">${Utils.rand(v.total)}</span>
+             </div>`
+          ).join('');
+          return `<div style="margin-top:10px;padding:10px 12px;background:var(--dark-2);border-radius:8px;border:1px solid var(--border);font-size:0.75rem">
+            <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-dim);margin-bottom:6px"><i class="fa-solid fa-list-check" style="margin-right:4px;color:#22c55e"></i>Maturity Instructions Executed</div>
+            ${rows}
+          </div>`;
+        })()}
+
         <div class="pool-card__actions">
           <button class="btn btn--secondary btn--sm flex-1" onclick='editPool(${JSON.stringify(p.id)})'><i class="fa-solid fa-pen"></i> Edit</button>
           <button class="btn btn--secondary btn--sm" onclick='openFactsheetManager(${JSON.stringify(p.id)},${JSON.stringify(p.name)})' title="Manage factsheets"><i class="fa-solid fa-file-pdf" style="color:#ef4444"></i></button>

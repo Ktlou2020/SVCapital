@@ -147,7 +147,7 @@ async function runMaturityProcessing() {
       // Because we set maturity_processed_at just above, the current investment is
       // already excluded by the NOT EXISTS check.
       if (inv.pool_id) {
-        await client.query(
+        const poolUpdateResult = await client.query(
           `UPDATE investment_pools
               SET status = 'matured', updated_at = NOW()
             WHERE id = $1
@@ -161,6 +161,19 @@ async function runMaturityProcessing() {
               )`,
           [inv.pool_id]
         );
+        // Last investment processed — compute and persist the maturity instruction summary.
+        if (poolUpdateResult.rowCount > 0) {
+          try {
+            const summary = await computePoolMaturitySummary(client, inv.pool_id);
+            await client.query(
+              `UPDATE investment_pools SET maturity_summary = $1 WHERE id = $2`,
+              [JSON.stringify(summary), inv.pool_id]
+            );
+            console.log(`[maturity] summary stored for pool ${inv.pool_id}:`, JSON.stringify(summary));
+          } catch (sumErr) {
+            console.error(`[maturity] summary compute failed for pool ${inv.pool_id}:`, sumErr.message);
+          }
+        }
       }
 
       await client.query('COMMIT');
@@ -193,6 +206,32 @@ async function runMaturityProcessing() {
 
   console.log(`[maturity] done — ${processed} matured (${reinvestPending} reinvested/rolled)`);
   return processed;
+}
+
+/* ────────────────────────────────────────────────────────────
+   computePoolMaturitySummary — after all investments in a pool
+   have been processed, aggregate the maturity instructions into
+   a breakdown object: { [instruction]: { count, total } }.
+   Uses the same `client` so it runs inside the final investment's
+   transaction before COMMIT.
+   ──────────────────────────────────────────────────────────── */
+async function computePoolMaturitySummary(client, poolId) {
+  const { rows } = await client.query(`
+    SELECT
+      COALESCE(NULLIF(maturity_instruction,''), 'auto_reinvest') AS instruction,
+      COUNT(*)::int                                               AS count,
+      SUM(amount + COALESCE(actual_return, expected_return, 0))  AS total
+    FROM investments
+    WHERE pool_id = $1
+      AND maturity_processed_at IS NOT NULL
+    GROUP BY 1
+  `, [poolId]);
+
+  const summary = {};
+  for (const r of rows) {
+    summary[r.instruction] = { count: r.count, total: round2(parseFloat(r.total) || 0) };
+  }
+  return summary;
 }
 
 /* ────────────────────────────────────────────────────────────

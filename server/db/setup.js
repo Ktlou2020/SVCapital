@@ -72,6 +72,11 @@ CREATE TABLE IF NOT EXISTS investment_pools (
   created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+DO $$ BEGIN
+  ALTER TABLE investment_pools ADD COLUMN IF NOT EXISTS maturity_summary JSONB;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
 CREATE TABLE IF NOT EXISTS investments (
   id TEXT PRIMARY KEY,
   investor_id TEXT REFERENCES investors(id) ON DELETE CASCADE,
