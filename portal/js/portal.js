@@ -3572,6 +3572,9 @@ async function loadMarketplace() {
           sumA += (d.avg_actual_rate || 0) * (d.matured_count || 0);
           nA   += d.matured_count || 0;
         });
+        // short_term stores period rates (not p.a.); the products API SQL already gives the
+        // correct period average — skip enrichment to avoid overwriting it with an annualised value.
+        if (p.product_type === 'short_term') return;
         const enriched = nA > 0 ? sumA / nA : 0;
         if (enriched > 0) p.avg_actual_rate = enriched;
       });
@@ -3707,8 +3710,11 @@ function renderProductsGrid() {
     const avg = p.avg_actual_rate > 0 ? parseFloat(p.avg_actual_rate) : null;
     const poolRate = open[0] ? parseFloat(open[0].annual_rate) : null;
     const rateLabel = avg != null ? `${(avg * 100).toFixed(2)}%` : (p.benchmark_rate ? `${(parseFloat(p.benchmark_rate) * 100).toFixed(1)}%` : (poolRate != null ? `${(poolRate * 100).toFixed(1)}%` : '—'));
-    const rateSub = avg != null ? 'AVG RETURN P.A.' : 'TARGET RETURN P.A.';
     const termMonths = p.term_months || (open[0] && open[0].term_months) || null;
+    const isStProduct = p.product_type === 'short_term';
+    const rateSub = avg != null
+      ? (isStProduct && termMonths ? `AVG RETURN (${termMonths} MO)` : 'AVG RETURN P.A.')
+      : (isStProduct && termMonths ? `TARGET RETURN (${termMonths} MO)` : 'TARGET RETURN P.A.');
     // soonest closing among the open pools
     const days = open.map(o => Utils.daysRemaining(o.end_date)).filter(d => d !== null);
     const soonest = days.length ? Math.min(...days) : null;
@@ -3778,6 +3784,11 @@ async function renderProductDetailView(type) {
   const avg = product.avg_actual_rate > 0 ? parseFloat(product.avg_actual_rate) : null;
   const projRate = avg != null ? avg : (product.benchmark_rate ? parseFloat(product.benchmark_rate) : (open[0] ? parseFloat(open[0].annual_rate) : 0.13));
   const keyDetails = (product.key_details || '').split('\n').map(s => s.trim()).filter(Boolean);
+  const isStDetail = type === 'short_term';
+  const termMoDetail = product.term_months || (open[0] && open[0].term_months) || null;
+  const returnLbl = avg != null
+    ? (isStDetail && termMoDetail ? `AVG RETURN (${termMoDetail} MO)` : 'AVG RETURN P.A.')
+    : (isStDetail && termMoDetail ? `TARGET RETURN (${termMoDetail} MO)` : 'TARGET RETURN P.A.');
 
   // Live data panels: cattle herd status / solar telematics
   const isSolar = (type || '').startsWith('solar');
@@ -3804,7 +3815,7 @@ async function renderProductDetailView(type) {
           <div class="mpc2-metrics" style="margin-bottom:16px">
             <div class="mpc2-metric">
               <div class="mpc2-metric__val" style="background:linear-gradient(135deg,${color},${color}bb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">${avg != null ? (avg * 100).toFixed(2) + '%' : (product.benchmark_rate ? (parseFloat(product.benchmark_rate) * 100).toFixed(1) + '%' : (open[0] ? (parseFloat(open[0].annual_rate) * 100).toFixed(1) + '%' : '—'))}</div>
-              <div class="mpc2-metric__lbl">${avg != null ? 'AVG RETURN P.A.' : 'TARGET RETURN P.A.'}</div>
+              <div class="mpc2-metric__lbl">${returnLbl}</div>
             </div>
             <div class="mpc2-metric-sep"></div>
             <div class="mpc2-metric"><div class="mpc2-metric__val" style="font-size:1.25rem">${Utils.rand(product.min_investment || 0)}</div><div class="mpc2-metric__lbl">minimum</div></div>
