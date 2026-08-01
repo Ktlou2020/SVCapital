@@ -11072,137 +11072,100 @@ function downloadReceipt(transactionId) {
   Toast.success('Receipt downloaded!');
 }
 
-/* downloadStatement() — 90-day statement */
+/* downloadStatement() — full A4 HTML statement matching web portal format */
 function downloadStatement() {
   const investor = PORTAL.investor;
   if (!investor) { Toast.error('Portfolio data still loading'); return; }
 
-  const doc = _getPDF('portrait');
-  if (!doc) return;
-
-  const W  = doc.internal.pageSize.getWidth();
-  const now = new Date();
+  const now    = new Date();
   const from90 = new Date(now);
   from90.setDate(from90.getDate() - 90);
 
-  // Filter last 90 days
-  const txns = PORTAL.transactions
-    .filter(t => {
-      const d = new Date(t.transaction_date || t.created_at || 0);
-      return d >= from90;
-    })
-    .sort((a, b) => new Date(b.transaction_date || b.created_at) - new Date(a.transaction_date || a.created_at));
-
-  const totalInvested = PORTAL.investments.filter(i => !i.is_reinvestment).reduce((s, i) => s + (Number(i.amount) || 0), 0);
-  const _txnReturns90 = txns.filter(t => (t.type === 'return' || t.type === 'payout') && t.status !== 'cancelled').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
-  const totalReturns  = _txnReturns90 > 0 ? _txnReturns90
-    : PORTAL.investments.filter(i => ['paid_out', 'matured'].includes(i.status) && new Date(i.maturity_date || i.investment_date) >= from90)
-                        .reduce((s, i) => s + (i.actual_return_amount || i.expected_return_amount || 0), 0);
-  const walletBal     = Number(investor.wallet_balance) || 0;
-  const portfolioVal  = totalInvested + walletBal + totalReturns;
-
-  const periodLabel = `${from90.toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' })} – ${now.toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' })}`;
-
-  // Header
-  let y = _pdfHeader(doc, 'ACCOUNT STATEMENT', periodLabel);
-  _pdfWatermark(doc);
-  y += 6;
-
-  // Investor info
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(26, 26, 26);
-  doc.text(`${investor.first_name} ${investor.last_name}`, 14, y);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(107, 114, 128);
-  doc.setFontSize(8);
-  doc.text(`${investor.id} · ${investor.email || ''}`, 14, y + 5);
-  y += 14;
-
-  // Summary stats
-  const stats = [
-    ['Portfolio Value', Utils.rand(portfolioVal), [255, 155, 12]],
-    ['Wallet Balance',  Utils.rand(walletBal),    [0, 150, 255]],
-    ['Total Invested',  Utils.rand(totalInvested), [48, 48, 48]],
-    ['Returns Earned',  Utils.rand(totalReturns),  [34, 197, 94]],
-  ];
-  const boxW = (W - 28 - 9) / 4;
-  stats.forEach(([label, value, color], i) => {
-    const bx = 14 + i * (boxW + 3);
-    doc.setFillColor(247, 248, 250);
-    doc.roundedRect(bx, y, boxW, 24, 2, 2, 'F');
-    doc.setFontSize(7.5); doc.setFont('helvetica', 'bold');
-    doc.setTextColor(color[0], color[1], color[2]);
-    doc.text(label.toUpperCase(), bx + boxW / 2, y + 8, { align: 'center' });
-    doc.setFontSize(10); doc.setFont('helvetica', 'bold');
-    doc.setTextColor(26, 26, 26);
-    doc.text(value, bx + boxW / 2, y + 18, { align: 'center' });
-  });
-  y += 30;
-
-  // Transaction table
-  if (!txns.length) {
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'italic');
-    doc.setTextColor(156, 163, 175);
-    doc.text('No transactions in the last 90 days.', 14, y + 10);
-  } else {
-    const typeMap = { deposit: 'Deposit', withdrawal: 'Withdrawal', investment: 'Investment', return: 'Return', payout: 'Payout', fee: 'Fee', referral_bonus: 'Referral Bonus', gift_sent: 'Gift Sent', gift_received: 'Gift Received', reward: 'XP Reward' };
-    const tableHead = [['Date', 'Type', 'Description', 'Debit', 'Credit', 'Status']];
-    const _isCreditTx = t => ['deposit','return','payout','referral_bonus','gift_received','reward'].includes(t.type);
-    const _isDebitTx  = t => ['withdrawal','investment','platform_fee','fee','gift_sent'].includes(t.type);
-    const tableBody = txns.map(t => {
-      const absAmt = Math.abs(Number(t.amount) || 0);
-      return [
-        Utils.date(t.transaction_date || t.created_at),
-        typeMap[t.type] || t.type,
-        t.description || t.pool_name || '—',
-        _isDebitTx(t)  ? Utils.rand(absAmt) : '—',
-        _isCreditTx(t) ? Utils.rand(absAmt) : '—',
-        (t.status || '—').toUpperCase(),
-      ];
-    });
-
-    if (doc.autoTable) {
-      doc.autoTable({
-        head: tableHead,
-        body: tableBody,
-        startY: y,
-        margin: { left: 14, right: 14 },
-        headStyles: { fillColor: [48, 48, 48], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
-        bodyStyles: { fontSize: 8, textColor: [26, 26, 26] },
-        alternateRowStyles: { fillColor: [247, 248, 250] },
-        columnStyles: {
-          0: { cellWidth: 22 },
-          1: { cellWidth: 26 },
-          2: { cellWidth: 'auto' },
-          3: { cellWidth: 28, halign: 'right', textColor: [239, 68, 68] },
-          4: { cellWidth: 28, halign: 'right', textColor: [22, 163, 74]  },
-          5: { cellWidth: 20, halign: 'center' },
-        },
-        didDrawPage: () => _pdfFooter(doc),
-      });
-    } else {
-      // Fallback without autoTable
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(107, 114, 128);
-      doc.text('Date', 14, y + 6); doc.text('Type', 40, y + 6); doc.text('Description', 70, y + 6); doc.text('Amount', 150, y + 6); doc.text('Status', 175, y + 6);
-      y += 10;
-      doc.setFont('helvetica', 'normal'); doc.setTextColor(26, 26, 26);
-      tableBody.slice(0, 30).forEach(row => {
-        doc.text(row[0], 14, y); doc.text(row[1], 40, y); doc.text(row[2].slice(0, 30), 70, y);
-        doc.text(row[3], 150, y, { align: 'right' }); doc.text(row[4], 175, y);
-        y += 6;
-        if (y > 260) { doc.addPage(); y = 20; }
-      });
-    }
+  function _inPeriod(raw) {
+    if (!raw) return false;
+    const d = new Date(String(raw).length === 10 ? raw + 'T00:00:00' : raw);
+    return !isNaN(d.getTime()) && d >= from90 && d <= now;
   }
 
-  _pdfFooter(doc);
-  const ym = now.toISOString().slice(0, 7);
-  doc.save(`SVC-Statement-${ym}.pdf`);
-  Toast.success('90-day statement downloaded!');
+  const allInvestments = PORTAL.investments || [];
+  const allTxns        = PORTAL.transactions || [];
+
+  const transactions = allTxns
+    .filter(t => _inPeriod(t.transaction_date || t.created_at))
+    .sort((a, b) => new Date(b.transaction_date || b.created_at) - new Date(a.transaction_date || a.created_at));
+
+  const investments = allInvestments.filter(inv => {
+    const start = new Date(inv.start_date || inv.investment_date || inv.created_at || 0);
+    const end   = inv.end_date ? new Date(inv.end_date) : (inv.maturity_date ? new Date(inv.maturity_date) : null);
+    if (inv.status === 'active') return start <= now;
+    if (end) return start <= now && end >= from90;
+    return start >= from90 && start <= now;
+  });
+
+  const walletBal    = Number(investor.wallet_balance) || 0;
+  const totalCapital = allInvestments.filter(i => !i.is_reinvestment).reduce((s, i) => s + (Number(i.amount) || 0), 0);
+  const activeInvAmt = allInvestments.filter(i => i.status === 'active').reduce((s, i) => s + (Number(i.amount) || 0), 0);
+  const totalDeposits = transactions.filter(t => t.type === 'deposit' && t.status !== 'cancelled').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+  const _txnReturns  = transactions.filter(t => (t.type === 'return' || t.type === 'payout') && t.status !== 'cancelled').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+  const totalReturns = _txnReturns > 0 ? _txnReturns
+    : allInvestments.filter(i => ['paid_out', 'matured'].includes(i.status) && _inPeriod(i.maturity_date || i.investment_date))
+                    .reduce((s, i) => s + (i.actual_return_amount || i.expected_return_amount || 0), 0);
+  const totalValue   = activeInvAmt + walletBal;
+  const activeInv    = allInvestments.filter(i => i.status === 'active').length;
+
+  const statementNumber = `SVC-${now.getFullYear()}-${String(Date.now()).slice(-5)}`;
+  const generatedAt     = now.toLocaleString('en-ZA', { dateStyle: 'long', timeStyle: 'short' });
+
+  const bodyHtml = buildStatementHTML({
+    investor, investments, transactions,
+    from: from90, to: now,
+    totalDeposits, totalReturns, walletBal, totalValue, activeInv,
+    totalCapital, activeInvAmt,
+    statementNumber, generatedAt,
+    incPortfolio: true, incInvestments: true, incTransactions: true, incPerformance: true,
+  });
+
+  const htmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SV Capital — Account Statement</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Poppins',-apple-system,BlinkMacSystemFont,sans-serif;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;color:#1a1a1a}
+    @page{size:A4;margin:0}
+    @media print{.no-print{display:none!important}.print-body{padding-top:0!important}}
+    .no-print{position:fixed;top:0;left:0;right:0;background:#1a1a1a;padding:12px 24px;display:flex;justify-content:space-between;align-items:center;z-index:999;box-shadow:0 2px 12px rgba(0,0,0,0.3)}
+    .no-print span{color:#fff;font-size:13px;font-weight:600}
+    .no-print button{background:linear-gradient(135deg,#fec24f,#FF5229);color:#fff;border:none;padding:8px 22px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer}
+    .print-body{padding-top:52px}
+  </style>
+</head>
+<body>
+  <div class="no-print">
+    <span>SV Capital — Account Statement</span>
+    <button onclick="window.print()">&#x2B07;&nbsp; Save as PDF / Print</button>
+  </div>
+  <div class="print-body">${bodyHtml}</div>
+  <script>window.addEventListener('load',function(){setTimeout(function(){window.print();},600);});<\/script>
+</body>
+</html>`;
+
+  const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const win  = window.open(url, '_blank');
+  if (!win) {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `SVC-Statement-${now.toISOString().slice(0, 10)}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    Toast.success('Statement downloaded — open in your browser, then use Share → Print → Save as PDF.');
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 120000);
 }
 
 /* downloadSaStatement() — sub-account statement (matches main investor statement structure) */
