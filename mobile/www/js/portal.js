@@ -5949,38 +5949,75 @@ function printStatement() {
 /* Cached statement body HTML for _handleSavePdf() */
 let _stmtBodyHtmlCache = '';
 
-/* Save/share the statement.
-   - Web: window.print() opens the browser print dialog → Save as PDF.
-   - Capacitor WebView: window.print() is silent, so we build a standalone
-     HTML file and invoke the native share sheet via navigator.share({ files }).
-     On iOS the share sheet includes a "Print" option which saves as PDF.
-     On Android the user can share to Chrome → print from there. */
-function _handleSavePdf() {
+/* Save the statement as a real PDF.
+   - Web: window.print() → browser print dialog.
+   - Capacitor WebView: html2canvas renders the overlay content to a canvas,
+     jsPDF slices it into A4 pages, and the PDF blob is shared via the
+     native share sheet (iOS "Save to Files" / "Print", Android share). */
+async function _handleSavePdf() {
   if (!window.Capacitor) {
     window.print();
     return;
   }
-  if (!_stmtBodyHtmlCache) {
+
+  const contentEl = document.querySelector('#stmtPrintOverlay > div:last-child');
+  if (!contentEl) {
     Toast.error('Please generate a statement first.');
     return;
   }
-  const fullHtml = `<!DOCTYPE html><html lang="en"><head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SV Capital Statement</title>
-<style>body{margin:0;padding:0;background:#fff;color:#1a1a1a}@page{size:A4;margin:0}</style>
-</head><body>${_stmtBodyHtmlCache}</body></html>`;
-
-  const blob = new Blob([fullHtml], { type: 'text/html' });
-  const file = new File([blob], 'SV-Capital-Statement.html', { type: 'text/html' });
-
-  if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    Toast.info('Tap "Print" in the share menu to save as PDF.');
-    navigator.share({ files: [file], title: 'SV Capital — Account Statement' })
-      .catch(e => { if (e.name !== 'AbortError') window.print(); });
+  if (typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined') {
+    Toast.error('PDF library not loaded — please check your connection and try again.');
     return;
   }
-  window.print();
+
+  Toast.info('Generating PDF…');
+  try {
+    const canvas = await html2canvas(contentEl, {
+      scale: 1.5,
+      useCORS: true,
+      allowTaint: true,
+      logging: false,
+      backgroundColor: '#ffffff',
+      windowWidth: 390,
+    });
+
+    const { jsPDF } = window.jspdf;
+    const pdf     = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const pgW     = pdf.internal.pageSize.getWidth();
+    const pgH     = pdf.internal.pageSize.getHeight();
+    const imgW    = pgW;
+    const imgH    = (canvas.height * pgW) / canvas.width;
+    const imgData = canvas.toDataURL('image/jpeg', 0.92);
+
+    let remaining = imgH;
+    let yOffset   = 0;
+
+    pdf.addImage(imgData, 'JPEG', 0, yOffset, imgW, imgH);
+    remaining -= pgH;
+
+    while (remaining > 0) {
+      yOffset -= pgH;
+      pdf.addPage();
+      pdf.addImage(imgData, 'JPEG', 0, yOffset, imgW, imgH);
+      remaining -= pgH;
+    }
+
+    const pdfBlob = pdf.output('blob');
+    const pdfFile = new File([pdfBlob], 'SV-Capital-Statement.pdf', { type: 'application/pdf' });
+
+    if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+      await navigator.share({ files: [pdfFile], title: 'SV Capital Account Statement' });
+    } else {
+      const url = URL.createObjectURL(pdfBlob);
+      const a   = document.createElement('a');
+      a.href = url; a.download = 'SV-Capital-Statement.pdf';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 15000);
+    }
+  } catch (err) {
+    console.error('PDF generation error:', err);
+    Toast.error('Could not generate PDF — please try again.');
+  }
 }
 
 /* Open an in-page full-screen overlay with the statement.
