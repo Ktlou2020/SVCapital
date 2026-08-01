@@ -310,7 +310,7 @@ async function reinvestAmount(client, inv, amount, productType, sourcePoolName) 
     await client.query(
       `INSERT INTO transactions
          (id, investor_id, type, amount, status, reference, description, investment_id, pool_id, transaction_date, created_at, updated_at)
-       VALUES (gen_random_uuid(),$1,'investment',$2,'completed',$3,$4,$5,$6,NOW(),NOW(),NOW())`,
+       VALUES (gen_random_uuid(),$1,'reinvestment',$2,'completed',$3,$4,$5,$6,NOW(),NOW(),NOW())`,
       [inv.investor_id, amt, 'REINV-' + inv.id, `Maturity ${verb} — ${sourcePoolName} → ${target.name}`, newInvId, target.id]
     );
 

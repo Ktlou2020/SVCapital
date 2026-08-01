@@ -579,6 +579,7 @@
               <button class="txn-pill active" data-type="" onclick="_setTxnFilter('',this)">All</button>
               <button class="txn-pill" data-type="deposit" onclick="_setTxnFilter('deposit',this)">Deposits</button>
               <button class="txn-pill" data-type="investment" onclick="_setTxnFilter('investment',this)">Investments</button>
+              <button class="txn-pill" data-type="reinvestment" onclick="_setTxnFilter('reinvestment',this)">Reinvestments</button>
               <button class="txn-pill" data-type="return" onclick="_setTxnFilter('return',this)">Returns</button>
               <button class="txn-pill" data-type="payout" onclick="_setTxnFilter('payout',this)">Payouts</button>
               <button class="txn-pill" data-type="withdrawal" onclick="_setTxnFilter('withdrawal',this)">Withdrawals</button>
@@ -3047,7 +3048,7 @@
 </nav>
 
 <script src="../js/api.js?v=8"></script>
-<script src="js/portal.js?v=19"></script>
+<script src="js/portal.js?v=20"></script>
 <!-- sv-intelligence.js hidden -->
 <script>
 if ('serviceWorker' in navigator && !window.__SVC_NATIVE__) {

@@ -5707,7 +5707,7 @@ function renderTxnTable() {
     return;
   }
 
-  const typeColors = { deposit: 'green', withdrawal: 'red', investment: 'blue', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple' };
+  const typeColors = { deposit: 'green', withdrawal: 'red', investment: 'blue', reinvestment: 'purple', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple' };
 
   body.innerHTML = page.map(t => {
     const isPendingDeposit = t.type === 'deposit' && t.status === 'pending';
@@ -5882,7 +5882,7 @@ async function saveNewTxn(btn) {
         id:          Utils.genId('TXN'),
         investor_id: investorId,
         type,
-        amount:      type === 'investment' || type === 'withdrawal' ? -Math.abs(amount) : Math.abs(amount),
+        amount:      type === 'investment' || type === 'reinvestment' || type === 'withdrawal' ? -Math.abs(amount) : Math.abs(amount),
         status,
         reference:   document.getElementById('txnRef').value.trim(),
         description: document.getElementById('txnDesc').value.trim(),
