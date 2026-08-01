@@ -10633,27 +10633,46 @@ function _renderCertificatesTable() {
 
   const investments = PORTAL.investments;
   if (!investments.length) {
-    body.innerHTML = `<tr><td colspan="8" style="padding:28px"><div class="empty-state" style="padding:0;border:none;background:transparent"><i class="fa-solid fa-file-certificate"></i><div class="empty-state__title">No investment certificates yet</div><div class="empty-state__sub">Your first completed investment will unlock downloadable certificates and term sheets here.</div><div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px"><button class="btn btn--primary btn--sm" onclick="navigate('marketplace', document.querySelector('[data-view=marketplace]'))"><i class="fa-solid fa-layer-group"></i> Browse pools</button><button class="btn btn--secondary btn--sm" onclick="navigate('wallet', document.querySelector('[data-view=wallet]'))"><i class="fa-solid fa-wallet"></i> Fund wallet</button></div></div></td></tr>`;
+    body.innerHTML = `<div class="empty-state" style="padding:0;border:none;background:transparent">
+      <i class="fa-solid fa-file-certificate"></i>
+      <div class="empty-state__title">No investment certificates yet</div>
+      <div class="empty-state__sub">Your first completed investment will unlock downloadable certificates and term sheets here.</div>
+      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px">
+        <button class="btn btn--primary btn--sm" onclick="navigate('marketplace', document.querySelector('[data-view=marketplace]'))"><i class="fa-solid fa-layer-group"></i> Browse pools</button>
+        <button class="btn btn--secondary btn--sm" onclick="navigate('wallet', document.querySelector('[data-view=wallet]'))"><i class="fa-solid fa-wallet"></i> Fund wallet</button>
+      </div>
+    </div>`;
     return;
   }
 
   body.innerHTML = investments.map(inv => {
     const pi = Utils.productInfo(inv.product_type);
-    return `<tr>
-      <td class="td-strong">${_esc(inv.pool_name) || '—'}</td>
-      <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
-      <td class="td-gold fw-700">${Utils.rand(inv.amount)}</td>
-      <td>${Utils.pct(inv.expected_return_rate || inv.annual_rate)}</td>
-      <td class="td-muted">${Utils.date(inv.investment_date || inv.start_date)}</td>
-      <td class="td-muted">${Utils.date(inv.maturity_date || inv.end_date)}</td>
-      <td>${Utils.statusBadge(inv.status)}</td>
-      <td style="display:flex;gap:6px;flex-wrap:wrap">
-        <button class="btn btn--primary btn--sm" onclick="downloadCertificate('${inv.id}')">
+    const pool = PORTAL.pools.find(p => p.id === inv.pool_id);
+    const hasTermSheet = pool && pool.term_sheet_url;
+    return `<div class="doc-card">
+      <div class="doc-card__top">
+        <div class="doc-card__icon" style="background:${pi.color || '#fec24f'}18;color:${pi.color || '#fec24f'}">
+          <i class="fa-solid ${pi.icon || 'fa-chart-line'}"></i>
+        </div>
+        <div class="doc-card__head">
+          <div class="doc-card__title">${_esc(inv.pool_name) || '—'}</div>
+          <div class="doc-card__sub"><span class="badge ${pi.badgeClass}" style="font-size:0.62rem">${pi.label}</span></div>
+        </div>
+        <div class="doc-card__amount">${Utils.rand(inv.amount)}</div>
+      </div>
+      <div class="doc-card__meta">
+        <span><i class="fa-solid fa-calendar-day"></i> ${Utils.date(inv.investment_date || inv.start_date)}</span>
+        <span><i class="fa-solid fa-flag-checkered"></i> ${Utils.date(inv.maturity_date || inv.end_date)}</span>
+        <span><i class="fa-solid fa-percent"></i> ${Utils.pct(inv.expected_return_rate || inv.annual_rate)}</span>
+        <span class="doc-card__status">${Utils.statusBadge(inv.status)}</span>
+      </div>
+      <div class="doc-card__actions">
+        <button class="doc-card__btn doc-card__btn--primary" onclick="downloadCertificate('${inv.id}')">
           <i class="fa-solid fa-file-pdf"></i> Certificate
         </button>
-        ${(() => { const pool = PORTAL.pools.find(p => p.id === inv.pool_id); return pool && pool.term_sheet_url ? `<a href="${pool.term_sheet_url}" target="_blank" rel="noopener" class="btn btn--secondary btn--sm"><i class="fa-solid fa-file-contract"></i> Term Sheet</a>` : ''; })()}
-      </td>
-    </tr>`;
+        ${hasTermSheet ? `<a href="${pool.term_sheet_url}" target="_blank" rel="noopener" class="doc-card__btn doc-card__btn--ghost"><i class="fa-solid fa-file-contract"></i> Term Sheet</a>` : ''}
+      </div>
+    </div>`;
   }).join('');
 }
 
@@ -10671,16 +10690,21 @@ function _renderReceiptsTable() {
     return;
   }
 
-  body.innerHTML = deposits.map(t => `<tr>
-    <td class="td-muted">${Utils.date(t.transaction_date || t.created_at)}</td>
-    <td class="td-green fw-700">+${Utils.rand(Math.abs(t.amount))}</td>
-    <td class="td-muted" style="font-size:0.78rem">${t.description || 'Wallet deposit'}</td>
-    <td class="td-muted" style="font-size:0.75rem">${t.reference || '—'}</td>
-    <td>${Utils.statusBadge(t.status)}</td>
-    <td><button class="btn btn--secondary btn--sm" onclick="downloadReceipt('${t.id}')">
-      <i class="fa-solid fa-download"></i> Receipt
-    </button></td>
-  </tr>`).join('');
+  body.innerHTML = deposits.map(t => `<div class="doc-card doc-card--receipt">
+    <div class="doc-card__icon" style="background:rgba(34,197,94,0.1);color:#16a34a">
+      <i class="fa-solid fa-arrow-down-to-line"></i>
+    </div>
+    <div class="doc-card__head">
+      <div class="doc-card__title">${_esc(t.description || 'Wallet Deposit')}</div>
+      <div class="doc-card__sub">${Utils.date(t.transaction_date || t.created_at)}${t.reference ? ' · ' + _esc(t.reference) : ''}</div>
+    </div>
+    <div class="doc-card__receipt-right">
+      <div class="doc-card__amount" style="color:#4ade80">+${Utils.rand(Math.abs(t.amount))}</div>
+      <button class="doc-card__btn doc-card__btn--ghost doc-card__btn--sm" onclick="downloadReceipt('${t.id}')">
+        <i class="fa-solid fa-download"></i>
+      </button>
+    </div>
+  </div>`).join('');
 }
 
 /* ── Investment Certificate PDF (html path) ── */

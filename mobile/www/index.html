@@ -1208,12 +1208,12 @@
         <!-- Section 3: Account Statement -->
         <div class="panel">
           <div class="panel__header">
-            <span class="panel__title"><i class="fa-solid fa-file-arrow-down" style="color:#656565"></i> Account Statement</span>
+            <span class="panel__title"><i class="fa-solid fa-file-invoice" style="color:#22c55e"></i> Account Statement</span>
           </div>
           <div class="panel__body">
-            <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:16px">Download a full 90-day account statement showing all transactions, investments, and portfolio summary.</p>
-            <button class="btn btn--primary" onclick="downloadStatement()">
-              <i class="fa-solid fa-file-arrow-down"></i> Download 90-day Statement
+            <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:16px">Generate a full statement with date range, portfolio summary, investments, transactions, and performance analysis.</p>
+            <button class="btn btn--primary" onclick="navigate('statement', document.querySelector('[data-view=statement]'))">
+              <i class="fa-solid fa-file-invoice"></i> Open Statement Generator
             </button>
           </div>
         </div>
@@ -3048,7 +3048,7 @@
 </nav>
 
 <script src="../js/api.js?v=10"></script>
-<script src="js/portal.js?v=29"></script>
+<script src="js/portal.js?v=30"></script>
 <!-- sv-intelligence.js hidden -->
 <script>
 if ('serviceWorker' in navigator && !window.__SVC_NATIVE__) {
