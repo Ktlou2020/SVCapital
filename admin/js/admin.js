@@ -4135,6 +4135,7 @@ function renderProductsGrid() {
         <div class="pool-card__actions">
           <button class="btn btn--secondary btn--sm flex-1" onclick='editProduct(${JSON.stringify(p.id)})'><i class="fa-solid fa-pen"></i> Edit</button>
           ${p.factsheet_url ? `<button class="btn btn--secondary btn--sm" onclick='_viewProductFactsheet(${JSON.stringify(p.id)})' title="View factsheet"><i class="fa-solid fa-file-pdf" style="color:#ef4444"></i></button>` : ''}
+          ${p.factsheet_url ? `<button class="btn btn--secondary btn--sm" onclick='removeProductFactsheet(${JSON.stringify(p.id)})' title="Remove factsheet"><i class="fa-solid fa-file-circle-xmark" style="color:#ef4444"></i></button>` : ''}
           <button class="btn btn--secondary btn--sm" onclick='deleteProduct(${JSON.stringify(p.id)})' title="Delete"><i class="fa-solid fa-trash" style="color:#ef4444"></i></button>
         </div>
       </div>`;
@@ -4153,6 +4154,21 @@ function _viewProductFactsheet(id) {
     const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
     window.open(url, '_blank', 'noopener');
   } catch (_) { Toast.error('Could not open factsheet'); }
+}
+
+async function removeProductFactsheet(productId) {
+  if (!await Confirm.ask('Remove factsheet?', { body: 'This removes the factsheet from this product and cannot be undone.', confirmLabel: 'Remove', danger: true })) return;
+  try {
+    await API.products.update(productId, { factsheet_url: null, factsheet_name: null });
+    const p = (STATE.products || []).find(x => x.id === productId);
+    if (p) { p.factsheet_url = null; p.factsheet_name = null; }
+    const cur = document.getElementById('prodFactsheetCurrent');
+    if (cur) cur.innerHTML = '<span style="font-size:0.82rem;color:var(--text-muted)">No factsheet loaded yet.</span>';
+    renderProductsGrid();
+    Toast.success('Factsheet removed');
+  } catch (e) {
+    Toast.error('Failed to remove factsheet: ' + (e.message || 'error'));
+  }
 }
 
 function openProductModal() {
@@ -4199,8 +4215,11 @@ function editProduct(id) {
   document.getElementById('prodHomepage').value    = p.display_on_homepage ? 'true' : 'false';
   const ff = document.getElementById('prodFactsheetFile'); if (ff) ff.value = '';
   document.getElementById('prodFactsheetCurrent').innerHTML = p.factsheet_url
-    ? `Current: <strong>${p.factsheet_name || 'factsheet'}</strong> — uploading a new file replaces it.`
-    : 'No factsheet loaded yet.';
+    ? `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+         <span style="font-size:0.82rem;color:var(--text-muted)">Current: <strong>${p.factsheet_name || 'factsheet'}</strong> — uploading a new file replaces it.</span>
+         <button class="btn btn--danger btn--sm" type="button" onclick="removeProductFactsheet('${p.id}')"><i class="fa-solid fa-trash"></i> Remove</button>
+       </div>`
+    : '<span style="font-size:0.82rem;color:var(--text-muted)">No factsheet loaded yet.</span>';
   const avg = _productAvgReturn(p.product_type);
   document.getElementById('prodAvgReturnInfo').innerHTML = avg
     ? `<strong style="color:var(--gold)">${(avg.rate * 100).toFixed(2)}% p.a.</strong> — average achieved return across ${avg.count} matured pool${avg.count === 1 ? '' : 's'}. Updates automatically as more pools mature.`
