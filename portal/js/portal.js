@@ -3572,7 +3572,8 @@ async function loadMarketplace() {
           sumA += (d.avg_actual_rate || 0) * (d.matured_count || 0);
           nA   += d.matured_count || 0;
         });
-        if (nA > 0) p.avg_actual_rate = sumA / nA;
+        const enriched = nA > 0 ? sumA / nA : 0;
+        if (enriched > 0) p.avg_actual_rate = enriched;
       });
     }
   } catch (_) {}

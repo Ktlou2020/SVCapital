@@ -246,11 +246,10 @@ router.get('/track-record', async (req, res) => {
     const data = {};
     for (const [t, v] of Object.entries(byType)) {
       const n = v.pools.length;
-      const nr = v.n_with_rate;
       data[t] = {
         matured_count:      n,
-        avg_actual_rate:    nr ? v.sum_actual / nr : 0,
-        avg_benchmark_rate: nr ? v.sum_benchmark / nr : 0,
+        avg_actual_rate:    n ? v.sum_actual / n : 0,
+        avg_benchmark_rate: n ? v.sum_benchmark / n : 0,
         total_paid_back:    Math.round(v.total_paid_back),
         pools:              v.pools,
       };
