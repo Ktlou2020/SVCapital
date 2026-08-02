@@ -653,7 +653,10 @@ router.post('/forgot-password', forgotLimiter, async (req, res) => {
 router.post('/reset-password', async (req, res) => {
   const { token, password } = req.body;
   if (!token || !password) return res.status(400).json({ error: 'Token and new password are required.' });
-  if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+  if (password.length < 10) return res.status(400).json({ error: 'Password must be at least 10 characters.' });
+  if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {
+    return res.status(400).json({ error: 'Password must contain at least one uppercase letter, one lowercase letter, and one number.' });
+  }
 
   try {
     const payload = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
@@ -744,7 +747,7 @@ async function issueStaffJwt(emp, res) {
    Returns pin_set so the client knows whether to show "temp PIN" or "your PIN",
    and locked/lockedSecsRemaining so the UI can show a countdown.
    ──────────────────────────────────────────────────────────────────────── */
-router.post('/staff-lookup', async (req, res) => {
+router.post('/staff-lookup', requireAuth, async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email is required.' });

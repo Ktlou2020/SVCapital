@@ -473,6 +473,15 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object OR undefined_table THEN NULL;
 END $$;
 
+/* Payment intent reference registry — maps Paystack reference to investor (H-6) */
+CREATE TABLE IF NOT EXISTS payment_intent_refs (
+  reference     TEXT PRIMARY KEY,
+  investor_id   TEXT NOT NULL REFERENCES investors(id) ON DELETE CASCADE,
+  sub_account_id TEXT,
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS pir_investor_idx ON payment_intent_refs(investor_id);
+
 /* Paystack reusable card tokens for auto wallet top-up */
 CREATE TABLE IF NOT EXISTS paystack_authorizations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

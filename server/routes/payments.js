@@ -146,10 +146,8 @@ router.post('/paystack/verify', requireAuth, async (req, res) => {
       });
     }
 
-    // Use wallet_credit from metadata (base amount, excluding gateway fee)
-    // Fall back to full transaction amount if metadata missing.
-    // Always credit the authenticated user — never trust investor_id from Paystack metadata.
-    const creditAmount = Number(psData.data.metadata?.wallet_credit) || (psData.data.amount / 100);
+    // Use the amount Paystack confirms — never trust metadata.wallet_credit (C-1)
+    const creditAmount = psData.data.amount / 100;
 
     const result = await creditWallet(investorId, creditAmount, reference, req.user?.email, 'paystack', subAccountId || null);
     aml.checkDeposit(pool, investorId, creditAmount, reference).catch(e => console.error('[aml]', e.message));
@@ -214,13 +212,34 @@ router.post('/paystack/webhook', async (req, res) => {
   const { event, data } = req.body;
   if (event !== 'charge.success') return;
 
-  const reference    = data?.reference;
-  const investorId   = data?.metadata?.investor_id;
-  const creditAmt    = Number(data?.metadata?.wallet_credit) || (data?.amount / 100);
-  const subAccountId = data?.metadata?.sub_account_id || null;
+  const reference = data?.reference;
+  // Use Paystack-confirmed amount, never metadata (H-6 / C-1)
+  const creditAmt = data?.amount / 100;
+
+  // Look up investor from payment_intent_refs registered before the popup opened (H-6)
+  let investorId, subAccountId;
+  try {
+    const { rows: refRows } = await pool.query(
+      'SELECT investor_id, sub_account_id FROM payment_intent_refs WHERE reference = $1',
+      [reference]
+    );
+    if (refRows[0]) {
+      investorId   = refRows[0].investor_id;
+      subAccountId = refRows[0].sub_account_id || null;
+    } else {
+      // Fallback for legacy payments without a registered ref
+      investorId   = data?.metadata?.investor_id;
+      subAccountId = data?.metadata?.sub_account_id || null;
+      if (investorId) console.warn('[payments/webhook] No registered ref found — using metadata fallback, ref:', reference);
+    }
+  } catch (_e) {
+    // Table not yet created (pre-migration) — fall back to metadata
+    investorId   = data?.metadata?.investor_id;
+    subAccountId = data?.metadata?.sub_account_id || null;
+  }
 
   if (!investorId) {
-    console.warn('[payments/webhook] No investor_id in metadata, ref:', reference);
+    console.warn('[payments/webhook] No investor_id resolved, ref:', reference);
     return;
   }
 
@@ -232,6 +251,32 @@ router.post('/paystack/webhook', async (req, res) => {
     }
   } catch (err) {
     console.error('[payments/webhook] creditWallet error:', err.message);
+  }
+});
+
+/* ──────────────────────────────────────────────────────────
+   POST /api/payments/paystack/register-ref
+   Frontend calls this BEFORE opening the Paystack popup to
+   bind the payment reference to the authenticated investor.
+   The webhook then uses this mapping instead of trusting
+   attacker-controlled metadata.investor_id (H-6 fix).
+────────────────────────────────────────────────────────── */
+router.post('/paystack/register-ref', requireAuth, async (req, res) => {
+  const { reference, subAccountId } = req.body;
+  if (!reference) return res.status(400).json({ error: 'reference is required' });
+  const investorId = req.user.investorId;
+  if (!investorId) return res.status(400).json({ error: 'investorId required' });
+  try {
+    await pool.query(
+      `INSERT INTO payment_intent_refs (reference, investor_id, sub_account_id)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (reference) DO UPDATE SET investor_id=$2, sub_account_id=$3`,
+      [reference, investorId, subAccountId || null]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[payments/register-ref]', err.message);
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
