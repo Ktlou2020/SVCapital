@@ -5257,13 +5257,20 @@ function openUnmergeModal() {
   Modal.open('unmergePoolModal');
 }
 
-function loadUnmergeInvestments() {
+async function loadUnmergeInvestments() {
   const targetId = document.getElementById('unmergeTargetPool').value;
   const listEl   = document.getElementById('unmergeInvList');
   const itemsEl  = document.getElementById('unmergeInvItems');
   const countEl  = document.getElementById('unmergeInvCount');
 
   if (!targetId) { listEl.style.display = 'none'; return; }
+
+  if (!STATE.investments || !STATE.investments.length) {
+    listEl.style.display = 'block';
+    itemsEl.innerHTML = '<p style="padding:10px;color:var(--text-muted);font-size:0.85rem"><i class="fa-solid fa-spinner fa-spin" style="margin-right:6px"></i>Loading investments…</p>';
+    try { STATE.investments = (await API.investments.list({ limit: 5000 })).data || []; }
+    catch (e) { itemsEl.innerHTML = '<p style="padding:10px;color:#ef4444;font-size:0.85rem">Failed to load investments.</p>'; return; }
+  }
 
   const invs = (STATE.investments || []).filter(i => i.pool_id === targetId);
   listEl.style.display = 'block';
@@ -5364,14 +5371,31 @@ function openMoveInvestmentsModal() {
   Modal.open('moveInvestmentsModal');
 }
 
-function loadMoveInvestmentsList() {
+async function loadMoveInvestmentsList() {
   const sourceId = document.getElementById('moveInvSource').value;
   const listEl   = document.getElementById('moveInvList');
   const emptyEl  = document.getElementById('moveInvEmpty');
   const itemsEl  = document.getElementById('moveInvItems');
+  const countEl  = document.getElementById('moveInvCount');
   listEl.style.display  = 'none';
   emptyEl.style.display = 'none';
+  itemsEl.innerHTML = '';
+  countEl.textContent = '';
   if (!sourceId) return;
+
+  // Investments load in the background after loadPools — fetch them if not ready yet
+  if (!STATE.investments || !STATE.investments.length) {
+    listEl.style.display = 'block';
+    itemsEl.innerHTML = '<p style="padding:12px;color:var(--text-muted);font-size:0.85rem"><i class="fa-solid fa-spinner fa-spin" style="margin-right:6px"></i>Loading investments…</p>';
+    try {
+      STATE.investments = (await API.investments.list({ limit: 5000 })).data || [];
+    } catch (e) {
+      itemsEl.innerHTML = '<p style="padding:12px;color:#ef4444;font-size:0.85rem">Failed to load investments.</p>';
+      return;
+    }
+    listEl.style.display  = 'none';
+    itemsEl.innerHTML = '';
+  }
 
   const invs = (STATE.investments || []).filter(i => i.pool_id === sourceId);
   if (!invs.length) { emptyEl.style.display = 'block'; return; }
@@ -5385,7 +5409,7 @@ function loadMoveInvestmentsList() {
     const edate = i.end_date ? new Date(i.end_date).toLocaleDateString('en-ZA') : '—';
     const rate  = i.annual_rate ? `${Number(i.annual_rate).toFixed(2)}%` : '0%';
     return `<label style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-bottom:1px solid var(--border);cursor:pointer;font-size:0.82rem">
-      <input type="checkbox" class="move-inv-cb" value="${_esc(i.id)}" style="width:15px;height:15px;accent-color:#eda5ff;flex-shrink:0">
+      <input type="checkbox" class="move-inv-cb" value="${_esc(i.id)}" checked style="width:15px;height:15px;accent-color:#eda5ff;flex-shrink:0">
       <span style="min-width:120px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(name)}">${_esc(name)}</span>
       <span style="color:var(--text-muted);min-width:90px;font-size:0.78rem">${_esc(saId)}</span>
       <span style="color:var(--text-muted);font-size:0.78rem">${rate}</span>
