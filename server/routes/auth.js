@@ -747,10 +747,14 @@ async function issueStaffJwt(emp, res) {
    Returns pin_set so the client knows whether to show "temp PIN" or "your PIN",
    and locked/lockedSecsRemaining so the UI can show a countdown.
    ──────────────────────────────────────────────────────────────────────── */
-router.post('/staff-lookup', requireAuth, async (req, res) => {
+router.post('/staff-lookup', async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email is required.' });
+    // Restrict to company domain only — prevents external email enumeration (H-5)
+    if (!email.toLowerCase().trim().endsWith('@svcapital.co.za')) {
+      return res.status(200).json({ message: 'If an account exists, login instructions have been sent.' });
+    }
 
     const { rows } = await pool.query(
       `SELECT id, first_name, last_name, email, role, level, department,
