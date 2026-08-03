@@ -8889,17 +8889,6 @@ async function saveSaBankDetails() {
       notes:          `Sub-account banking: ${sa?.name || _saBankSaId} — ${name} ${maskedNum}`,
     }).catch(e => console.warn('[saBankDetails] KYC doc failed:', e.message));
 
-    await API.tickets.create({
-      investor_id:    investorId,
-      investor_name:  investorName,
-      investor_email: PORTAL.investor?.email || '',
-      subject:        `Sub-Account Bank Verification — ${sa?.name || _saBankSaId}`,
-      message:        `Sub-account banking details submitted for verification.\n\nSub-Account: ${sa?.name || _saBankSaId}\nType: ${sa?.account_type || ''}\n\nBank: ${name}\nAccount Holder: ${holder}\nAccount Number: ${maskedNum}\nAccount Type: ${type}\nBranch Code: ${branch}\n\nPlease verify and approve or reject in the admin panel.`,
-      status:         'open',
-      priority:       'medium',
-      category:       'bank_verification',
-    }).catch(e => console.warn('[saBankDetails] ticket failed:', e.message));
-
     Modal.close('saBankModal');
     Toast.success('Banking details submitted — the admin team will verify within 1–2 business days.');
     await loadSubAccounts();
@@ -9018,18 +9007,6 @@ async function saveBankDetails() {
       file_data:     proofData,
       notes:         `Bank account submitted: ${bank_name} — ${maskedAccNum}`,
     }).catch(e => console.warn('[bank details] KYC doc failed:', e.message));
-
-    // Always create a support ticket so admin can review and approve/decline
-    await API.tickets.create({
-      investor_id:    investorId,
-      investor_name:  investorName,
-      investor_email: PORTAL.investor?.email || '',
-      subject:        `Bank Account Verification — ${bank_name}`,
-      message:        `Investor has submitted bank details for verification.\n\nBank: ${bank_name}\nAccount Holder: ${bank_account_holder}\nAccount Number: ${maskedAccNum}\nAccount Type: ${bank_account_type}\nBranch Code: ${bank_branch_code}\n\nPlease verify and approve or reject in the investor's profile.`,
-      status:         'open',
-      priority:       'medium',
-      category:       'bank_verification',
-    }).catch(e => console.warn('[bank details] ticket creation failed:', e.message));
 
     _renderBankDetailsPanel();
     Toast.success('Bank details saved! The admin team will verify them within 1–2 business days.');
