@@ -12,11 +12,11 @@ router.get('/autocomplete', (req, res) => {
   if (!apiKey) return res.status(503).json({ error: 'Address service not configured' });
 
   const params = new URLSearchParams({
-    text: q,
-    'filter[countrycode]': 'za',
+    text:   q,
+    filter: 'countrycode:za',
     format: 'json',
     apiKey,
-    limit: 6,
+    limit:  6,
   });
 
   const hReq = https.get(

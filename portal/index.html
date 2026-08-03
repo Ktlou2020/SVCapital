@@ -792,10 +792,10 @@
                 </div>
                 <div class="form-group"><label class="form-label">Email</label><input type="email" class="form-input" id="profEmail" /></div>
                 <div class="form-group"><label class="form-label">Phone</label><input type="text" class="form-input" id="profPhone" /></div>
-                <div class="form-group" style="position:relative">
+                <div class="form-group" style="position:relative;z-index:10">
                   <label class="form-label">Address Search <span style="color:var(--text-muted);font-weight:400;text-transform:none;letter-spacing:0">(auto-fills fields below)</span></label>
                   <input type="text" class="form-input" id="profAddressSearch" placeholder="Start typing your address…" autocomplete="off" />
-                  <div id="profAddressDrop" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:300;background:var(--card);border:1px solid var(--border);border-radius:8px;margin-top:4px;box-shadow:0 8px 24px rgba(0,0,0,0.25);overflow:hidden"></div>
+                  <div id="profAddressDrop" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:9999;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.35);overflow:hidden"></div>
                 </div>
                 <div class="form-group">
                   <label class="form-label">Street Address</label>
