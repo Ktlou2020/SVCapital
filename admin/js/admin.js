@@ -3874,10 +3874,15 @@ async function openKycReview(id) {
             ${_dlBtn(doc.file_data, fname, false)}
           </div>`;
       } else if (mime === 'application/pdf') {
+        // Browsers block data: URIs in iframes — convert to a blob URL instead
+        const b64 = doc.file_data.split(',')[1];
+        const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+        const blobUrl = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+        docContent._pdfBlobUrl = blobUrl;
         docContent.innerHTML = `
           <div style="display:flex;flex-direction:column;height:100%">
             <div style="flex:1">
-              <iframe src="${doc.file_data}" style="width:100%;height:100%;border:none;border-radius:8px 8px 0 0"></iframe>
+              <iframe src="${blobUrl}" style="width:100%;height:100%;border:none;border-radius:8px 8px 0 0"></iframe>
             </div>
             ${_dlBtn(doc.file_data, fname, false)}
           </div>`;
@@ -3967,6 +3972,8 @@ function closeKycReview() {
   if (overlay) { overlay.style.display = 'none'; overlay.classList.remove('open'); }
   document.body.style.overflow = '';
   _reviewingKycId = null;
+  const docContent = document.getElementById('kycReviewDocContent');
+  if (docContent?._pdfBlobUrl) { URL.revokeObjectURL(docContent._pdfBlobUrl); docContent._pdfBlobUrl = null; }
 }
 
 async function _saveKycReviewNotes() {
