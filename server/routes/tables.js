@@ -1420,41 +1420,49 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
     const sets   = keys.map((k, i) => `${k} = $${i + 1}`).join(', ');
     values.push(req.params.id);
 
-    // For transaction completion use a conditional UPDATE to prevent race-condition
-    // double-credits: only applies if the row is not already completed.
-    // The WHERE AND condition is atomic so two concurrent PATCHes cannot both succeed.
+    // For transaction completion use a conditional UPDATE inside a DB transaction
+    // to prevent race-condition double-credits AND ensure the wallet credit is
+    // atomic with the status change (both succeed or both roll back).
     let rows, _skipWalletCredit = false, _withdrawalRefundDone = false;
     if (table === 'transactions' && body.status === 'completed') {
-      const { rows: updated } = await pool.query(
-        `UPDATE ${table} SET ${sets} WHERE ${key} = $${values.length} AND status <> 'completed' RETURNING *`,
-        values
-      );
-      if (!updated[0]) {
-        const { rows: existing } = await pool.query('SELECT * FROM transactions WHERE id = $1', [req.params.id]);
-        if (!existing[0]) return res.status(404).json({ error: 'Record not found.' });
-        _skipWalletCredit = true;
-        rows = existing;
-      } else {
-        rows = updated;
-        // Credit wallet SYNCHRONOUSLY (before response) so it cannot be skipped by an
-        // audit/email failure and cannot race with a second concurrent PATCH.
-        // Mirrors the withdrawal-refund pattern above.
-        const u = updated[0];
-        if (u.investor_id &&
-            (u.type === 'deposit' || u.type === 'return' || u.type === 'payout' || u.type === 'referral_bonus')) {
-          if (u.sub_account_id && u.type === 'deposit') {
-            await pool.query(
-              'UPDATE sub_accounts SET wallet_balance = wallet_balance + $1 WHERE id = $2',
-              [parseFloat(u.amount), u.sub_account_id]
-            );
-          } else {
-            await pool.query(
-              'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
-              [parseFloat(u.amount), u.investor_id]
-            );
+      const dbClient = await pool.connect();
+      try {
+        await dbClient.query('BEGIN');
+        const { rows: updated } = await dbClient.query(
+          `UPDATE ${table} SET ${sets} WHERE ${key} = $${values.length} AND status <> 'completed' RETURNING *`,
+          values
+        );
+        if (!updated[0]) {
+          await dbClient.query('ROLLBACK');
+          const { rows: existing } = await pool.query('SELECT * FROM transactions WHERE id = $1', [req.params.id]);
+          if (!existing[0]) return res.status(404).json({ error: 'Record not found.' });
+          _skipWalletCredit = true;
+          rows = existing;
+        } else {
+          const u = updated[0];
+          if (u.investor_id &&
+              (u.type === 'deposit' || u.type === 'return' || u.type === 'payout' || u.type === 'referral_bonus')) {
+            if (u.sub_account_id && u.type === 'deposit') {
+              await dbClient.query(
+                'UPDATE sub_accounts SET wallet_balance = wallet_balance + $1 WHERE id = $2',
+                [parseFloat(u.amount), u.sub_account_id]
+              );
+            } else {
+              await dbClient.query(
+                'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
+                [parseFloat(u.amount), u.investor_id]
+              );
+            }
+            _skipWalletCredit = true; // prevent double-credit in the setImmediate email block
           }
-          _skipWalletCredit = true; // prevent double-credit in the setImmediate email block
+          await dbClient.query('COMMIT');
+          rows = updated;
         }
+      } catch (txErr) {
+        await dbClient.query('ROLLBACK').catch(() => {});
+        throw txErr;
+      } finally {
+        dbClient.release();
       }
     } else {
       const result = await pool.query(

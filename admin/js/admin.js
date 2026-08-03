@@ -6308,6 +6308,12 @@ async function viewTicket(id) {
                 reference:   ref,
               });
             }
+            // Safeguard: reconcile the investor's wallet balance from completed
+            // transactions. The PATCH/POST hooks credit the wallet synchronously,
+            // but a transient DB error between the two queries can leave the
+            // transaction marked completed while the wallet_balance is unchanged.
+            // Reconcile is a no-op if the balance is already correct.
+            await API._fetch('POST', 'admin/reconcile-wallet', { investor_id: tkt.investor_id }).catch(() => {});
           }
           await API.tickets.update(id, {
             status:         'resolved',
