@@ -752,7 +752,7 @@ router.get('/tax-cert', async (req, res) => {
          ORDER BY created_at`,
         [investor_id, from, to]
       ),
-      pool.query('SELECT id FROM sub_accounts WHERE investor_id = $1', [investor_id]),
+      pool.query('SELECT id FROM sub_accounts WHERE parent_investor_id = $1', [investor_id]),
     ]);
 
     if (!invRes.rows[0]) return res.status(404).json({ error: 'Investor not found' });
