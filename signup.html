@@ -1284,42 +1284,52 @@
         </div>
       </div>
 
-      <div class="form-grid">
+      <!-- SA address: search + expanded fields -->
+      <div id="saAddressBlock">
+        <div class="form-group" style="position:relative">
+          <label class="form-label" for="addressSearch">Address Search <span>*</span></label>
+          <input type="text" class="form-input" id="addressSearch" placeholder="Start typing your address…" autocomplete="off" />
+          <div id="addressDrop" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:300;background:#1a1f2e;border:1px solid rgba(255,255,255,0.12);border-radius:8px;margin-top:4px;box-shadow:0 8px 24px rgba(0,0,0,0.4);overflow:hidden"></div>
+        </div>
         <div class="form-group">
-          <label class="form-label" for="city">City <span>*</span></label>
-          <input type="text" class="form-input" id="city" placeholder="Search your city…" autocomplete="off" list="sa-cities-list" />
-          <datalist id="sa-cities-list">
-            <option value="Johannesburg"><option value="Cape Town"><option value="Durban"><option value="Pretoria"><option value="Gqeberha (Port Elizabeth)"><option value="Bloemfontein"><option value="East London"><option value="Polokwane"><option value="Mbombela (Nelspruit)"><option value="Kimberley">
-            <option value="Sandton"><option value="Randburg"><option value="Roodepoort"><option value="Soweto"><option value="Centurion"><option value="Midrand"><option value="Boksburg"><option value="Benoni"><option value="Springs"><option value="Germiston"><option value="Alberton"><option value="Edenvale"><option value="Kempton Park"><option value="Krugersdorp"><option value="Vanderbijlpark"><option value="Vereeniging"><option value="Tembisa"><option value="Brakpan"><option value="Randfontein"><option value="Westonaria"><option value="Ekurhuleni">
-            <option value="Stellenbosch"><option value="Paarl"><option value="Worcester"><option value="Somerset West"><option value="Strand"><option value="Bellville"><option value="Brackenfell"><option value="George"><option value="Mossel Bay"><option value="Knysna"><option value="Oudtshoorn"><option value="Hermanus"><option value="Robertson"><option value="Swellendam"><option value="Beaufort West"><option value="Atlantis"><option value="Mitchells Plain"><option value="Khayelitsha"><option value="Jeffreys Bay"><option value="Langebaan"><option value="Saldanha">
-            <option value="Pietermaritzburg"><option value="Richards Bay"><option value="Empangeni"><option value="Newcastle"><option value="Ladysmith"><option value="Pinetown"><option value="Umhlanga"><option value="Ballito"><option value="Margate"><option value="Port Shepstone"><option value="Tongaat">
-            <option value="Makhanda (Grahamstown)"><option value="Komani (Queenstown)"><option value="Bhisho"><option value="Uitenhage"><option value="Graaff-Reinet"><option value="Aliwal North"><option value="Port Alfred"><option value="Butterworth"><option value="Mthatha">
-            <option value="Welkom"><option value="Bethlehem"><option value="Kroonstad"><option value="Sasolburg"><option value="Parys"><option value="Harrismith"><option value="Phuthaditjhaba">
-            <option value="Tzaneen"><option value="Phalaborwa"><option value="Makhado (Louis Trichardt)"><option value="Musina"><option value="Thohoyandou"><option value="Mokopane"><option value="Lephalale"><option value="Lebowakgomo"><option value="Bela-Bela">
-            <option value="eMalahleni (Witbank)"><option value="Middelburg"><option value="Secunda"><option value="Standerton"><option value="Ermelo"><option value="Piet Retief">
-            <option value="Rustenburg"><option value="Potchefstroom"><option value="Klerksdorp"><option value="Mahikeng (Mafikeng)"><option value="Brits"><option value="Lichtenburg">
-            <option value="Upington"><option value="De Aar"><option value="Springbok"><option value="Alexander Bay"><option value="Kuruman"><option value="Colesberg">
-          </datalist>
+          <label class="form-label" for="streetAddress">Street Address <span>*</span></label>
+          <input type="text" class="form-input" id="streetAddress" placeholder="e.g. 10 Main Road" autocomplete="street-address" />
         </div>
-        <div class="form-group" id="saProvinceGroup">
-          <label class="form-label" for="province">Province <span>*</span></label>
-          <select class="form-select" id="province">
-            <option value="">Select province</option>
-            <option>Gauteng</option>
-            <option>Western Cape</option>
-            <option>KwaZulu-Natal</option>
-            <option>Eastern Cape</option>
-            <option>Limpopo</option>
-            <option>Mpumalanga</option>
-            <option>North West</option>
-            <option>Free State</option>
-            <option>Northern Cape</option>
-          </select>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label" for="suburb">Suburb</label>
+            <input type="text" class="form-input" id="suburb" placeholder="e.g. Sandton" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="city">City <span>*</span></label>
+            <input type="text" class="form-input" id="city" placeholder="e.g. Johannesburg" />
+          </div>
         </div>
-        <div class="form-group" id="intlRegionGroup" style="display:none">
-          <label class="form-label" for="region">State / Region <span>*</span></label>
-          <input type="text" class="form-input" id="region" placeholder="State or Province" autocomplete="address-level1" />
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label" for="postalCode">Postal Code <span>*</span></label>
+            <input type="text" class="form-input" id="postalCode" placeholder="e.g. 2196" inputmode="numeric" maxlength="10" />
+          </div>
+          <div class="form-group" id="saProvinceGroup">
+            <label class="form-label" for="province">Province <span>*</span></label>
+            <select class="form-select" id="province">
+              <option value="">Select province</option>
+              <option>Gauteng</option>
+              <option>Western Cape</option>
+              <option>KwaZulu-Natal</option>
+              <option>Eastern Cape</option>
+              <option>Limpopo</option>
+              <option>Mpumalanga</option>
+              <option>North West</option>
+              <option>Free State</option>
+              <option>Northern Cape</option>
+            </select>
+          </div>
         </div>
+      </div>
+      <div class="form-group" id="intlRegionGroup" style="display:none">
+        <label class="form-label" for="region">State / Region <span>*</span></label>
+        <input type="text" class="form-input" id="region" placeholder="State or Province" autocomplete="address-level1" />
       </div>
 
       <div class="form-group" id="referralGroup" style="display:none">
@@ -1783,6 +1793,7 @@ window.addEventListener('DOMContentLoaded', () => {
   initReturnEstimate();
   bindDraftAutosave();
   restoreDraft();
+  _initSignupAddressSearch();
 
   // Citizenship toggle (both the in-step1 toggle and the waitlist panel toggle)
   document.getElementById('btnCitizenSA').addEventListener('click',    () => toggleCitizenship('sa'));
@@ -2223,7 +2234,9 @@ function validateStep(n) {
       if (!country) return showError('Please select your country of residence.');
     }
 
+    if (!v('streetAddress')) return showError('Please enter your street address.');
     if (!v('city')) return showError('Please enter your city.');
+    if (!v('postalCode')) return showError('Please enter your postal code.');
     if (clientType === 'sa' && !v('province'))
       return showError('Please select your province.');
     if (clientType !== 'sa' && !v('region'))
@@ -2301,7 +2314,10 @@ function persistDraft() {
       passportExpiry: draftValue('passportExpiry'),
       nationality: draftValue('nationality'),
       countryResidence: draftValue('countryResidence'),
+      streetAddress: draftValue('streetAddress'),
+      suburb: draftValue('suburb'),
       city: draftValue('city'),
+      postalCode: draftValue('postalCode'),
       province: draftValue('province'),
       region: draftValue('region'),
       referralCode: draftValue('referralCode'),
@@ -2344,10 +2360,75 @@ function clearDraft() {
   try { localStorage.removeItem(SIGNUP_DRAFT_KEY); } catch (_) {}
 }
 
+function _initSignupAddressSearch() {
+  const searchEl = document.getElementById('addressSearch');
+  const dropEl   = document.getElementById('addressDrop');
+  if (!searchEl || !dropEl) return;
+
+  let _timer = null;
+  let _results = [];
+
+  const _esc = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const _hide = () => { dropEl.style.display = 'none'; };
+
+  const _show = items => {
+    _results = items;
+    if (!items.length) { _hide(); return; }
+    dropEl.innerHTML = items.map((r, i) => {
+      const line1 = [r.housenumber, r.street].filter(Boolean).join(' ') || r.city || r.formatted || '';
+      const line2 = [r.suburb || r.quarter, r.city || r.town, r.postcode].filter(Boolean).join(', ');
+      return `<div data-idx="${i}" style="padding:9px 14px;cursor:pointer;font-size:0.82rem;border-bottom:1px solid rgba(255,255,255,0.08);color:#e8edf2" onmouseover="this.style.background='rgba(237,165,255,0.1)'" onmouseout="this.style.background=''">
+        <div style="font-weight:600">${_esc(line1)}</div>
+        ${line2 ? `<div style="font-size:0.74rem;color:#8899aa;margin-top:2px">${_esc(line2)}</div>` : ''}
+      </div>`;
+    }).join('');
+    dropEl.style.display = 'block';
+  };
+
+  const _fill = r => {
+    const _s = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val; };
+    _s('streetAddress', [r.housenumber, r.street].filter(Boolean).join(' '));
+    _s('suburb',        r.suburb || r.quarter || r.neighbourhood || '');
+    _s('city',          r.city || r.town || r.municipality || '');
+    _s('postalCode',    r.postcode || '');
+    const sel = document.getElementById('province');
+    if (sel && r.state) {
+      const opt = [...sel.options].find(o => o.value.toLowerCase() === r.state.toLowerCase() || o.text.toLowerCase() === r.state.toLowerCase());
+      if (opt) opt.selected = true;
+    }
+    _hide();
+    searchEl.value = '';
+    persistDraft();
+  };
+
+  searchEl.addEventListener('input', () => {
+    clearTimeout(_timer);
+    const q = searchEl.value.trim();
+    if (q.length < 3) { _hide(); return; }
+    _timer = setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/address/autocomplete?q=${encodeURIComponent(q)}`);
+        if (!r.ok) return;
+        const d = await r.json();
+        _show(d.results || []);
+      } catch (_) {}
+    }, 300);
+  });
+
+  dropEl.addEventListener('mousedown', e => {
+    const row = e.target.closest('[data-idx]');
+    if (row) { e.preventDefault(); _fill(_results[+row.dataset.idx]); }
+  });
+
+  document.addEventListener('click', e => {
+    if (!searchEl.contains(e.target) && !dropEl.contains(e.target)) _hide();
+  });
+}
+
 function bindDraftAutosave() {
   const ids = [
     'firstName','lastName','email','phoneDialCode','phone','idNumber','passportNumber','passportExpiry',
-    'nationality','countryResidence','city','province','region','referralCode',
+    'nationality','countryResidence','streetAddress','suburb','city','postalCode','province','region','referralCode',
     'investExp','hearAbout','termsCheck','ficaConsentCheck','popiaCheck'
   ];
 
@@ -2574,6 +2655,10 @@ async function _doSubmit(skippedFica) {
       email, password, firstName, lastName,
       phone: fullPhone,
       idNumber, province,
+      streetAddress: v('streetAddress') || undefined,
+      suburb:        v('suburb') || undefined,
+      city:          v('city') || undefined,
+      postalCode:    v('postalCode') || undefined,
       occupation:   '',
       role:         'investor',
       referredBy:   referral || '',

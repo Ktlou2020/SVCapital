@@ -247,12 +247,15 @@ function initPortalFormUX() {
 }
 function _profileFields() {
   return {
-    first_name: document.getElementById('profFirstName')?.value?.trim() || '',
-    last_name: document.getElementById('profLastName')?.value?.trim() || '',
-    phone: document.getElementById('profPhone')?.value?.trim() || '',
-    city: document.getElementById('profCity')?.value?.trim() || '',
-    province: document.getElementById('profProvince')?.value || '',
-    risk_profile: document.querySelector('input[name="riskProf"]:checked')?.value || '',
+    first_name:     document.getElementById('profFirstName')?.value?.trim() || '',
+    last_name:      document.getElementById('profLastName')?.value?.trim() || '',
+    phone:          document.getElementById('profPhone')?.value?.trim() || '',
+    street_address: document.getElementById('profStreetAddress')?.value?.trim() || '',
+    suburb:         document.getElementById('profSuburb')?.value?.trim() || '',
+    city:           document.getElementById('profCity')?.value?.trim() || '',
+    postal_code:    document.getElementById('profPostalCode')?.value?.trim() || '',
+    province:       document.getElementById('profProvince')?.value || '',
+    risk_profile:   document.querySelector('input[name="riskProf"]:checked')?.value || '',
   };
 }
 function _profileDraftHasValue(data) {
@@ -262,11 +265,14 @@ function _applyProfileDraft(data) {
   if (!data) return;
   _profileHydrating = true;
   const set = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val; };
-  set('profFirstName', data.first_name || '');
-  set('profLastName', data.last_name || '');
-  set('profPhone', data.phone || '');
-  set('profCity', data.city || '');
-  set('profProvince', data.province || '');
+  set('profFirstName',     data.first_name || '');
+  set('profLastName',      data.last_name || '');
+  set('profPhone',         data.phone || '');
+  set('profStreetAddress', data.street_address || '');
+  set('profSuburb',        data.suburb || '');
+  set('profCity',          data.city || '');
+  set('profPostalCode',    data.postal_code || '');
+  set('profProvince',      data.province || '');
   if (data.risk_profile) {
     const radio = document.querySelector(`input[name="riskProf"][value="${data.risk_profile}"]`);
     if (radio) radio.checked = true;
@@ -311,11 +317,15 @@ function clearProfileDraft() {
 function bindProfileDraft() {
   if (document.body.dataset.profileDraftBound === '1') return;
   document.body.dataset.profileDraftBound = '1';
-  ['profFirstName','profLastName','profPhone','profCity','profProvince'].forEach(id => {
+  ['profFirstName','profLastName','profPhone','profStreetAddress','profSuburb','profCity','profPostalCode','profProvince'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.addEventListener('input', () => { if (!_profileHydrating) _persistProfileDraft(); });
     el.addEventListener('change', () => { if (!_profileHydrating) _persistProfileDraft(); });
+  });
+  _initAddressSearch('profAddressSearch', 'profAddressDrop', {
+    street: 'profStreetAddress', suburb: 'profSuburb',
+    city: 'profCity', postal: 'profPostalCode', province: 'profProvince',
   });
   document.querySelectorAll('input[name="riskProf"]').forEach(el => {
     el.addEventListener('change', () => { if (!_profileHydrating) _persistProfileDraft(); });
@@ -5943,6 +5953,75 @@ function openSaDeposit(saId) {
 }
 
 /* ─── Profile ─── */
+function _initAddressSearch(searchId, dropId, fields) {
+  const searchEl = document.getElementById(searchId);
+  const dropEl   = document.getElementById(dropId);
+  if (!searchEl || !dropEl) return;
+
+  let _timer = null;
+  let _results = [];
+
+  const _hide = () => { dropEl.style.display = 'none'; };
+
+  const _show = items => {
+    _results = items;
+    if (!items.length) { _hide(); return; }
+    dropEl.innerHTML = items.map((r, i) => {
+      const line1 = [r.housenumber, r.street].filter(Boolean).join(' ') || r.city || r.formatted || '';
+      const line2 = [r.suburb || r.quarter, r.city || r.town, r.postcode].filter(Boolean).join(', ');
+      return `<div data-idx="${i}" style="padding:9px 14px;cursor:pointer;font-size:0.82rem;border-bottom:1px solid rgba(255,255,255,0.05);transition:background 0.1s" onmouseover="this.style.background='rgba(237,165,255,0.08)'" onmouseout="this.style.background=''">
+        <div style="font-weight:600;color:var(--text)">${_esc(line1)}</div>
+        ${line2 ? `<div style="font-size:0.74rem;color:var(--text-muted);margin-top:2px">${_esc(line2)}</div>` : ''}
+      </div>`;
+    }).join('');
+    dropEl.style.display = 'block';
+  };
+
+  const _fill = r => {
+    const _s = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val; };
+    if (fields.street)   _s(fields.street,  [r.housenumber, r.street].filter(Boolean).join(' '));
+    if (fields.suburb)   _s(fields.suburb,   r.suburb || r.quarter || r.neighbourhood || '');
+    if (fields.city)     _s(fields.city,     r.city || r.town || r.municipality || '');
+    if (fields.postal)   _s(fields.postal,   r.postcode || '');
+    if (fields.province) {
+      const sel = document.getElementById(fields.province);
+      if (sel && r.state) {
+        const opt = [...sel.options].find(o => o.value.toLowerCase() === r.state.toLowerCase() || o.text.toLowerCase() === r.state.toLowerCase());
+        if (opt) opt.selected = true;
+      }
+    }
+    _hide();
+    searchEl.value = '';
+    if (!_profileHydrating) _persistProfileDraft();
+  };
+
+  searchEl.addEventListener('input', () => {
+    clearTimeout(_timer);
+    const q = searchEl.value.trim();
+    if (q.length < 3) { _hide(); return; }
+    _timer = setTimeout(async () => {
+      try {
+        const token = localStorage.getItem('svc_token');
+        const r = await fetch(`/api/address/autocomplete?q=${encodeURIComponent(q)}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!r.ok) return;
+        const d = await r.json();
+        _show(d.results || []);
+      } catch (_) {}
+    }, 300);
+  });
+
+  dropEl.addEventListener('mousedown', e => {
+    const row = e.target.closest('[data-idx]');
+    if (row) { e.preventDefault(); _fill(_results[+row.dataset.idx]); }
+  });
+
+  document.addEventListener('click', e => {
+    if (!searchEl.contains(e.target) && !dropEl.contains(e.target)) _hide();
+  });
+}
+
 async function saveProfile() {
   const inv = PORTAL.investor;
   if (!inv) return;
@@ -5958,12 +6037,15 @@ async function saveProfile() {
   if (phone && phone.replace(/\D/g, '').length < 8) { Toast.error('Please enter a valid phone number.'); return; }
 
   const updates = {
-    first_name: firstName,
-    last_name:  lastName,
-    phone:      phone || inv.phone,
-    address:    city || inv.address,
-    province:   document.getElementById('profProvince')?.value || inv.province,
-    risk_profile: risk,
+    first_name:     firstName,
+    last_name:      lastName,
+    phone:          phone || inv.phone,
+    address:        city || inv.address,
+    street_address: document.getElementById('profStreetAddress')?.value?.trim() || null,
+    suburb:         document.getElementById('profSuburb')?.value?.trim() || null,
+    postal_code:    document.getElementById('profPostalCode')?.value?.trim() || null,
+    province:       document.getElementById('profProvince')?.value || inv.province,
+    risk_profile:   risk,
   };
 
   await _withBtn(saveBtn, async () => {
@@ -11448,7 +11530,10 @@ function renderRiskProfile() {
   _set('profLastName',  inv.last_name);
   _set('profEmail',     inv.email);
   _set('profPhone',     inv.phone);
-  _set('profCity',      inv.address || inv.city);
+  _set('profStreetAddress', inv.street_address || '');
+  _set('profSuburb',        inv.suburb || '');
+  _set('profCity',          inv.address || inv.city || '');
+  _set('profPostalCode',    inv.postal_code || '');
 
   // Province dropdown: select matching option
   const provSel = document.getElementById('profProvince');

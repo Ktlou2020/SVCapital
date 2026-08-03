@@ -177,6 +177,7 @@ app.use('/api/analytics',  require('./routes/friction'));
 app.use('/api/statements', require('./routes/statements'));
 app.use('/api/waitlist',   require('./routes/waitlist'));
 app.use('/api/migrate',   require('./routes/migrate'));
+app.use('/api/address',   require('./routes/address'));
 app.use('/api/events',    require('./routes/events').router);
 app.use('/api/settings',  require('./routes/settings'));
 app.use('/api/legal',     require('./routes/legal'));

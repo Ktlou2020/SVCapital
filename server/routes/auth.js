@@ -293,6 +293,7 @@ router.post('/register', registerLimiter, async (req, res) => {
       idNumber, province, occupation, role = 'investor',
       riskProfile = 'moderate', referredBy = '', notes = '',
       termsAccepted = true, ficaConsent = true, popiaAccepted = true,
+      streetAddress, suburb, city, postalCode,
     } = req.body;
     const firstName = stripHtml(req.body.firstName);
     const lastName  = stripHtml(req.body.lastName);
@@ -347,12 +348,14 @@ router.post('/register', registerLimiter, async (req, res) => {
         INSERT INTO investors
           (id, first_name, last_name, email, phone, id_number, province, occupation,
            risk_profile, referred_by, notes,
+           street_address, suburb, address, postal_code,
            kyc_status, status, wallet_balance, referral_code, date_joined)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending', 'active', 0, $12, NOW())
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'pending', 'active', 0, $16, NOW())
       `, [invId, firstName.trim(), lastName.trim(),
           email.toLowerCase().trim(), phone || null,
           idNumber || null, province || null, occupation || null,
           riskProfile || 'moderate', referredBy || null, notes || null,
+          streetAddress || null, suburb || null, city || null, postalCode || null,
           referralCode]);
 
       // Link investor_id on user
