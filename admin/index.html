@@ -756,6 +756,7 @@
             <button class="btn btn--secondary" onclick="exportPoolsCSV()"><i class="fa-solid fa-file-csv"></i> Export</button>
             <button class="btn btn--secondary" onclick="runPoolCycler(this)" title="Cycle any pools whose close date has passed"><i class="fa-solid fa-rotate"></i> Run Pool Cycler</button>
             <button class="btn btn--secondary" onclick="openUnmergeModal()" title="Recreate a deleted pool and move investments back"><i class="fa-solid fa-code-branch"></i> Undo Merge</button>
+            <button class="btn btn--secondary" onclick="openMoveInvestmentsModal()" title="Move investments from one pool to another"><i class="fa-solid fa-right-left"></i> Move Investments</button>
             <button class="btn btn--primary" onclick="openAddPoolModal()"><i class="fa-solid fa-plus"></i> New Pool</button>
           </div>
         </div>
@@ -3185,6 +3186,52 @@
   </div>
 </div>
 
+<!-- Move Investments Between Pools Modal -->
+<div class="modal-overlay" id="moveInvestmentsModal" onclick="if(event.target===this)Modal.close('moveInvestmentsModal')">
+  <div class="modal modal--lg" style="max-width:700px">
+    <div class="modal__header">
+      <h3 class="modal__title"><i class="fa-solid fa-right-left" style="color:#eda5ff;margin-right:8px"></i>Move Investments Between Pools</h3>
+      <button class="modal__close" onclick="Modal.close('moveInvestmentsModal')">&times;</button>
+    </div>
+    <div class="modal__body" style="max-height:72vh;overflow-y:auto">
+      <div style="display:grid;grid-template-columns:1fr 40px 1fr;align-items:center;gap:12px;margin-bottom:18px">
+        <div>
+          <label class="form-label">From pool</label>
+          <select id="moveInvSource" class="form-input" style="width:100%" onchange="loadMoveInvestmentsList()">
+            <option value="">— Select source —</option>
+          </select>
+        </div>
+        <div style="text-align:center;margin-top:20px;color:var(--text-muted)">
+          <i class="fa-solid fa-arrow-right"></i>
+        </div>
+        <div>
+          <label class="form-label">To pool</label>
+          <select id="moveInvTarget" class="form-input" style="width:100%">
+            <option value="">— Select target —</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="moveInvList" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <label class="form-label" style="margin:0">Select investments to move</label>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn--ghost btn--sm" onclick="moveInvSelectAll(true)">Select all</button>
+            <button class="btn btn--ghost btn--sm" onclick="moveInvSelectAll(false)">None</button>
+          </div>
+        </div>
+        <div id="moveInvItems" style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:4px"></div>
+        <p id="moveInvCount" style="font-size:0.82rem;color:var(--text-muted);margin-top:6px"></p>
+      </div>
+      <div id="moveInvEmpty" style="display:none;padding:20px;text-align:center;color:var(--text-muted);font-size:0.87rem">No investments found in selected pool.</div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--ghost" onclick="Modal.close('moveInvestmentsModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="confirmMoveInvestments()"><i class="fa-solid fa-right-left"></i> Move Selected</button>
+    </div>
+  </div>
+</div>
+
 <!-- Pool Investors Modal -->
 <div class="modal-overlay" id="poolInvestorsModal" onclick="if(event.target===this){_currentPoolId=null;Modal.close('poolInvestorsModal')}">
   <div class="modal modal--lg" style="max-width:900px">
@@ -4061,7 +4108,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=4"></script>
-<script src="js/admin.js?v=38"></script>
+<script src="js/admin.js?v=39"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>

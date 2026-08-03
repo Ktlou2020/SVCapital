@@ -5352,6 +5352,99 @@ async function confirmUnmerge() {
   }
 }
 
+function openMoveInvestmentsModal() {
+  const allPools = (STATE.pools || []).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  const opts = '<option value="">— Select pool —</option>' +
+    allPools.map(p => `<option value="${_esc(p.id)}">${_esc(p.name)} (${p.status})</option>`).join('');
+  document.getElementById('moveInvSource').innerHTML = opts;
+  document.getElementById('moveInvTarget').innerHTML = opts;
+  document.getElementById('moveInvList').style.display  = 'none';
+  document.getElementById('moveInvEmpty').style.display = 'none';
+  document.getElementById('moveInvItems').innerHTML = '';
+  Modal.open('moveInvestmentsModal');
+}
+
+function loadMoveInvestmentsList() {
+  const sourceId = document.getElementById('moveInvSource').value;
+  const listEl   = document.getElementById('moveInvList');
+  const emptyEl  = document.getElementById('moveInvEmpty');
+  const itemsEl  = document.getElementById('moveInvItems');
+  listEl.style.display  = 'none';
+  emptyEl.style.display = 'none';
+  if (!sourceId) return;
+
+  const invs = (STATE.investments || []).filter(i => i.pool_id === sourceId);
+  if (!invs.length) { emptyEl.style.display = 'block'; return; }
+
+  listEl.style.display = 'block';
+  invs.sort((a, b) => (b.end_date || '').localeCompare(a.end_date || ''));
+  itemsEl.innerHTML = invs.map(i => {
+    const name  = i.investor_name || i.investor_id || '—';
+    const saId  = i.sub_account_id || '—';
+    const amt   = Utils.fmtCcy(i.amount);
+    const edate = i.end_date ? new Date(i.end_date).toLocaleDateString('en-ZA') : '—';
+    const rate  = i.annual_rate ? `${Number(i.annual_rate).toFixed(2)}%` : '0%';
+    return `<label style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-bottom:1px solid var(--border);cursor:pointer;font-size:0.82rem">
+      <input type="checkbox" class="move-inv-cb" value="${_esc(i.id)}" style="width:15px;height:15px;accent-color:#eda5ff;flex-shrink:0">
+      <span style="min-width:120px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(name)}">${_esc(name)}</span>
+      <span style="color:var(--text-muted);min-width:90px;font-size:0.78rem">${_esc(saId)}</span>
+      <span style="color:var(--text-muted);font-size:0.78rem">${rate}</span>
+      <span style="font-variant-numeric:tabular-nums;font-weight:600;min-width:90px;text-align:right">${amt}</span>
+      <span style="color:var(--text-muted);font-size:0.78rem;min-width:75px;text-align:right">${edate}</span>
+    </label>`;
+  }).join('');
+
+  updateMoveInvCount();
+  itemsEl.querySelectorAll('.move-inv-cb').forEach(cb => cb.addEventListener('change', updateMoveInvCount));
+}
+
+function updateMoveInvCount() {
+  const checked = document.querySelectorAll('.move-inv-cb:checked').length;
+  const total   = document.querySelectorAll('.move-inv-cb').length;
+  document.getElementById('moveInvCount').textContent = `${checked} of ${total} investment(s) selected`;
+}
+
+function moveInvSelectAll(check) {
+  document.querySelectorAll('.move-inv-cb').forEach(cb => { cb.checked = check; });
+  updateMoveInvCount();
+}
+
+async function confirmMoveInvestments() {
+  const sourceId = document.getElementById('moveInvSource').value;
+  const targetId = document.getElementById('moveInvTarget').value;
+  if (!sourceId) { Toast.error('Select a source pool.'); return; }
+  if (!targetId) { Toast.error('Select a target pool.'); return; }
+  if (sourceId === targetId) { Toast.error('Source and target pools must differ.'); return; }
+
+  const ids = [...document.querySelectorAll('.move-inv-cb:checked')].map(cb => cb.value);
+  if (!ids.length) { Toast.error('Select at least one investment to move.'); return; }
+
+  const srcName = STATE.pools.find(p => p.id === sourceId)?.name || sourceId;
+  const tgtName = STATE.pools.find(p => p.id === targetId)?.name || targetId;
+
+  if (!await Confirm.ask(`Move ${ids.length} investment(s)?`, {
+    body: `Investments will be moved from "${srcName}" to "${tgtName}". This cannot be undone.`,
+    confirmLabel: 'Move Investments',
+    danger: true,
+  })) return;
+
+  try {
+    const token = localStorage.getItem('svc_token');
+    const res = await fetch('/api/admin/bulk-reassign-investments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ source_pool_id: sourceId, target_pool_id: targetId, investment_ids: ids }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Move failed');
+    Modal.close('moveInvestmentsModal');
+    Toast.success(`Moved ${data.moved} investment(s) from "${srcName}" to "${tgtName}".`);
+    await Promise.all([loadPools(), loadInvestments()]);
+  } catch (e) {
+    Toast.error('Move failed: ' + e.message);
+  }
+}
+
 async function deletePool(id) {
   const pool = STATE.pools.find(p => p.id === id);
   const name = pool?.name || id;

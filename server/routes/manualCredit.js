@@ -672,4 +672,44 @@ router.post('/promote-bank-from-notes', async (req, res) => {
   }
 });
 
+/* ─── POST /api/admin/bulk-reassign-investments ─── */
+/* Moves selected investments from one pool to another */
+router.post('/bulk-reassign-investments', async (req, res) => {
+  try {
+    const { source_pool_id, target_pool_id, investment_ids } = req.body || {};
+    if (!source_pool_id)   return res.status(400).json({ error: 'source_pool_id required' });
+    if (!target_pool_id)   return res.status(400).json({ error: 'target_pool_id required' });
+    if (source_pool_id === target_pool_id) return res.status(400).json({ error: 'Source and target pools must differ' });
+    if (!Array.isArray(investment_ids) || !investment_ids.length)
+      return res.status(400).json({ error: 'investment_ids array required' });
+
+    const { rows: poolCheck } = await pool.query(
+      `SELECT id FROM investment_pools WHERE id = ANY($1)`,
+      [[source_pool_id, target_pool_id]]
+    );
+    if (poolCheck.length < 2) return res.status(404).json({ error: 'One or both pools not found' });
+
+    const { rowCount: moved } = await pool.query(
+      `UPDATE investments SET pool_id = $1
+       WHERE id = ANY($2::text[]) AND pool_id = $3`,
+      [target_pool_id, investment_ids, source_pool_id]
+    );
+
+    setImmediate(() => audit.log({
+      actorId:    req.user.id,
+      actorEmail: req.user.email,
+      action:     'investments.bulk_reassign',
+      entityType: 'investment_pools',
+      entityId:   target_pool_id,
+      description: `Bulk-reassigned ${moved} investment(s) from pool ${source_pool_id} to ${target_pool_id}`,
+      ip: req.ip,
+    }).catch(() => {}));
+
+    res.json({ moved, source_pool_id, target_pool_id });
+  } catch (err) {
+    console.error('[bulk-reassign-investments]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
