@@ -712,4 +712,107 @@ router.post('/bulk-reassign-investments', async (req, res) => {
   }
 });
 
+/* ════════════════════════════════════════════════════
+   GET /api/admin/tax-cert
+   Fetch transaction data for an investor's tax certificate
+   Tax year: 1 March (year-1) → last day of February (year)
+   ════════════════════════════════════════════════════ */
+router.get('/tax-cert', async (req, res) => {
+  try {
+    const { investor_id, year } = req.query;
+    if (!investor_id || !year) return res.status(400).json({ error: 'investor_id and year required' });
+
+    const taxYear = parseInt(year, 10);
+    if (isNaN(taxYear) || taxYear < 2019 || taxYear > 2040)
+      return res.status(400).json({ error: 'Invalid year' });
+
+    // SA tax year: 1 March (taxYear-1) → last day of February (taxYear)
+    const from = new Date(taxYear - 1, 2, 1, 0, 0, 0).toISOString();
+    const to   = new Date(taxYear,     2, 0, 23, 59, 59).toISOString(); // day 0 of March = last Feb day
+
+    const [invRes, returnsRes, depositsRes, subAccRes] = await Promise.all([
+      pool.query('SELECT * FROM investors WHERE id = $1 LIMIT 1', [investor_id]),
+      pool.query(
+        `SELECT id, created_at, type, description, amount, reference
+         FROM transactions
+         WHERE investor_id = $1
+           AND type IN ('return','payout')
+           AND status = 'completed'
+           AND created_at >= $2 AND created_at <= $3
+         ORDER BY created_at`,
+        [investor_id, from, to]
+      ),
+      pool.query(
+        `SELECT id, created_at, type, description, amount, reference
+         FROM transactions
+         WHERE investor_id = $1
+           AND type = 'deposit'
+           AND status = 'completed'
+           AND created_at >= $2 AND created_at <= $3
+         ORDER BY created_at`,
+        [investor_id, from, to]
+      ),
+      pool.query('SELECT id FROM sub_accounts WHERE investor_id = $1', [investor_id]),
+    ]);
+
+    if (!invRes.rows[0]) return res.status(404).json({ error: 'Investor not found' });
+
+    // Include sub-account transactions if any
+    const subIds = subAccRes.rows.map(r => r.id);
+    let saReturns = [], saDeposits = [];
+    if (subIds.length) {
+      const [saR, saD] = await Promise.all([
+        pool.query(
+          `SELECT id, created_at, type, description, amount, reference
+           FROM transactions
+           WHERE sub_account_id = ANY($1::text[])
+             AND type IN ('return','payout')
+             AND status = 'completed'
+             AND created_at >= $2 AND created_at <= $3
+           ORDER BY created_at`,
+          [subIds, from, to]
+        ),
+        pool.query(
+          `SELECT id, created_at, type, description, amount, reference
+           FROM transactions
+           WHERE sub_account_id = ANY($1::text[])
+             AND type = 'deposit'
+             AND status = 'completed'
+             AND created_at >= $2 AND created_at <= $3
+           ORDER BY created_at`,
+          [subIds, from, to]
+        ),
+      ]);
+      saReturns  = saR.rows;
+      saDeposits = saD.rows;
+    }
+
+    const returns  = [...returnsRes.rows,  ...saReturns];
+    const deposits = [...depositsRes.rows, ...saDeposits];
+
+    // Sort merged arrays chronologically
+    returns.sort((a, b)  => new Date(a.created_at) - new Date(b.created_at));
+    deposits.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+    const totalReturns  = returns.reduce((s, t)  => s + Math.abs(parseFloat(t.amount) || 0), 0);
+    const totalDeposits = deposits.reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
+
+    const inv = invRes.rows[0];
+    res.json({
+      investor: {
+        id: inv.id, first_name: inv.first_name, last_name: inv.last_name,
+        email: inv.email, id_number: inv.id_number,
+        street_address: inv.street_address, suburb: inv.suburb,
+        address: inv.address, postal_code: inv.postal_code, province: inv.province,
+      },
+      taxYear, from, to,
+      returns, totalReturns,
+      deposits, totalDeposits,
+    });
+  } catch (err) {
+    console.error('[admin/tax-cert]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

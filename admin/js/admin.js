@@ -2426,6 +2426,27 @@ async function viewInvestor(id) {
 
   <!-- ── Statements ── -->
   <div id="invPanel-statements" style="display:none">
+    <!-- Tax Certificate -->
+    <div class="panel mb-16">
+      <div class="panel__header">
+        <span class="panel__title"><i class="fa-solid fa-file-invoice" style="color:#22c55e;margin-right:6px"></i>Investment Income Reference</span>
+      </div>
+      <div class="panel__body">
+        <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px">Generate an investment income reference for the client showing returns earned and deposits made in the selected SA tax year (1 March – last day of February).</p>
+        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+          <div class="form-group" style="margin:0;flex:1;min-width:180px">
+            <label class="form-label">Tax Year (ending February)</label>
+            <select class="form-control" id="adminTaxCertYear">
+              ${[new Date().getFullYear(), new Date().getFullYear()-1, new Date().getFullYear()-2, new Date().getFullYear()-3].map(y => `<option value="${y}">${y-1} / ${y}</option>`).join('')}
+            </select>
+          </div>
+          <button class="btn btn--primary btn--sm" id="adminTaxCertBtn" onclick="_generateAdminTaxCert('${inv.id}')">
+            <i class="fa-solid fa-file-invoice"></i> Generate Certificate
+          </button>
+        </div>
+      </div>
+    </div>
+    <!-- Monthly statements list -->
     <div id="invStatementsList"><div style="text-align:center;padding:40px;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin fa-2x"></i></div></div>
   </div>
 
@@ -12088,6 +12109,183 @@ async function viewAsInvestor(investorId) {
 /* ═══════════════════════════════════════════════
    INVESTOR STATEMENTS
    ═══════════════════════════════════════════════ */
+async function _generateAdminTaxCert(investorId) {
+  const year = parseInt(document.getElementById('adminTaxCertYear')?.value || new Date().getFullYear());
+  const btn  = document.getElementById('adminTaxCertBtn');
+  const orig = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading…'; }
+  try {
+    const data = await API._fetch('GET', 'admin/tax-cert', null, { investor_id: investorId, year });
+    _openAdminTaxCertWindow(data);
+  } catch (e) {
+    Toast.error('Failed to generate certificate: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+  }
+}
+
+function _openAdminTaxCertWindow(data) {
+  const { investor: inv, taxYear, returns, deposits, totalReturns, totalDeposits, from, to } = data;
+
+  const fmt = n => 'R ' + parseFloat(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtDate = s => s ? new Date(s).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+  const esc = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const certNo = `SVCRC-${taxYear}-${String(inv.id).replace(/\D/g,'').slice(-6)}`;
+  const issuedAt = new Date().toLocaleString('en-ZA', { dateStyle: 'long', timeStyle: 'short' });
+  const fromLabel = new Date(from).toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' });
+  const toLabel   = new Date(to).toLocaleDateString('en-ZA',   { day: 'numeric', month: 'long', year: 'numeric' });
+  const fullAddr  = [inv.street_address, inv.suburb, inv.address, inv.postal_code, inv.province].filter(Boolean).join(', ');
+
+  const returnsRows = returns.map(t => `
+    <tr>
+      <td>${fmtDate(t.created_at)}</td>
+      <td>${esc(t.description || (t.type === 'return' ? 'Investment return' : 'Payout'))}</td>
+      <td class="amt">${fmt(Math.abs(parseFloat(t.amount||0)))}</td>
+    </tr>`).join('');
+
+  const depositsRows = deposits.map(t => `
+    <tr>
+      <td>${fmtDate(t.created_at)}</td>
+      <td>${esc(t.description || 'Client deposit')}</td>
+      <td class="amt">${fmt(Math.abs(parseFloat(t.amount||0)))}</td>
+    </tr>`).join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<title>SV Capital Investment Income Reference ${taxYear-1}/${taxYear}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,Helvetica,sans-serif;background:#fff;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:13px}
+@page{size:A4 portrait;margin:16mm 20mm}
+@media print{.no-print{display:none!important}.wrap{margin-top:0!important}}
+.no-print{position:fixed;top:0;left:0;right:0;background:#303030;padding:9px 20px;display:flex;justify-content:space-between;align-items:center;z-index:99;gap:10px}
+.no-print span{color:#fff;font-size:12px;font-weight:600}
+.no-print button{background:#eda5ff;color:#111;border:none;padding:7px 18px;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer}
+.wrap{max-width:740px;margin:56px auto 32px;padding:32px}
+/* Header */
+.hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:18px;border-bottom:3px solid #303030;margin-bottom:22px}
+.hdr-left h1{font-size:16px;font-weight:700;color:#303030;margin-bottom:2px}
+.hdr-left p{font-size:11px;color:#666;margin-top:3px}
+.cert-badge{text-align:right;font-size:10px;color:#555;line-height:1.6}
+.cert-badge strong{display:block;font-size:12px;color:#303030;font-weight:700}
+/* Warning */
+.warning{background:#fff8e1;border:1.5px solid #f59e0b;border-radius:6px;padding:10px 14px;margin-bottom:20px;font-size:11px;color:#78350f;display:flex;gap:8px;align-items:flex-start}
+.warning strong{display:block;margin-bottom:2px}
+/* Summary boxes */
+.summary{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:24px}
+.sum-box{border-radius:8px;padding:16px 18px;text-align:center}
+.sum-box.green{background:#f0fdf4;border:1.5px solid #22c55e}
+.sum-box.blue{background:#eff6ff;border:1.5px solid #3b82f6}
+.sum-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px}
+.sum-box.green .sum-lbl{color:#166534}
+.sum-box.blue  .sum-lbl{color:#1e40af}
+.sum-amt{font-size:22px;font-weight:800}
+.sum-box.green .sum-amt{color:#15803d}
+.sum-box.blue  .sum-amt{color:#1d4ed8}
+.sum-period{font-size:10px;margin-top:3px}
+.sum-box.green .sum-period{color:#166534}
+.sum-box.blue  .sum-period{color:#1e40af}
+/* Investor details */
+.section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#374151;margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid #e5e7eb}
+.details-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 20px;margin-bottom:22px;font-size:12px}
+.details-grid dt{color:#6b7280;font-weight:600}
+.details-grid dd{color:#111;font-weight:500}
+/* Tables */
+table{width:100%;border-collapse:collapse;margin-bottom:22px;font-size:12px}
+thead tr{background:#f1f5f9}
+th{padding:7px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#374151}
+td{padding:8px 10px;border-bottom:1px solid #f1f5f9;color:#374151}
+td.amt{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+tr.total-row td{border-top:2px solid #e5e7eb;border-bottom:none;font-weight:700;background:#f8fafc}
+tr.total-row td.amt{color:#111}
+.empty{text-align:center;padding:16px;background:#f8fafc;border-radius:6px;color:#9ca3af;font-size:12px;margin-bottom:22px}
+/* Footer */
+.footer{border-top:1px solid #e5e7eb;padding-top:14px;font-size:10px;color:#6b7280;line-height:1.7;margin-top:8px}
+.footer strong{color:#374151}
+.stamp{display:inline-block;border:2px solid #303030;color:#303030;padding:5px 12px;border-radius:3px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-top:12px}
+</style></head><body>
+<div class="no-print">
+  <span>SV Capital — Investment Income Reference &nbsp;·&nbsp; ${taxYear-1} / ${taxYear} &nbsp;·&nbsp; ${esc(inv.first_name)} ${esc(inv.last_name)}</span>
+  <button onclick="window.print()">Print / Save PDF</button>
+</div>
+<div class="wrap">
+  <div class="hdr">
+    <div class="hdr-left">
+      <h1>SV Capital (Pty) Ltd</h1>
+      <p>FSCA Regulated Financial Services Provider</p>
+      <p style="font-size:10px;color:#9ca3af;margin-top:4px">Ref No: ${certNo}</p>
+    </div>
+    <div class="cert-badge">
+      <strong>Investment Income Reference</strong>
+      Tax Year: 1 March ${taxYear-1} – 28 February ${taxYear}<br>
+      Issued: ${issuedAt}
+    </div>
+  </div>
+
+  <div class="warning">
+    <span style="font-size:16px">⚠</span>
+    <div><strong>For reference purposes only — not an official SARS tax certificate.</strong>
+    This document is provided to assist the client in preparing their tax return. It has not been submitted to SARS and does not replace an official IT3(b) certificate.</div>
+  </div>
+
+  <div class="summary">
+    <div class="sum-box green">
+      <div class="sum-lbl">Total Returns Earned</div>
+      <div class="sum-amt">${fmt(totalReturns)}</div>
+      <div class="sum-period">${fromLabel} – ${toLabel}</div>
+    </div>
+    <div class="sum-box blue">
+      <div class="sum-lbl">Total Deposits Made</div>
+      <div class="sum-amt">${fmt(totalDeposits)}</div>
+      <div class="sum-period">${fromLabel} – ${toLabel}</div>
+    </div>
+  </div>
+
+  <div class="section-title">Investor Details</div>
+  <dl class="details-grid">
+    <dt>Full Name</dt><dd>${esc(inv.first_name)} ${esc(inv.last_name)}</dd>
+    <dt>Investor Account</dt><dd>${esc(inv.id)}</dd>
+    <dt>Email Address</dt><dd>${esc(inv.email || '—')}</dd>
+    <dt>SA ID / Passport</dt><dd>${esc(inv.id_number || '—')}</dd>
+    ${fullAddr ? `<dt>Address</dt><dd>${esc(fullAddr)}</dd>` : ''}
+  </dl>
+
+  <div class="section-title" style="color:#166534">Returns Earned</div>
+  ${returns.length ? `<table>
+    <thead><tr><th>Date</th><th>Description</th><th style="text-align:right">Amount</th></tr></thead>
+    <tbody>
+      ${returnsRows}
+      <tr class="total-row"><td colspan="2">TOTAL RETURNS EARNED</td><td class="amt">${fmt(totalReturns)}</td></tr>
+    </tbody>
+  </table>` : `<div class="empty">No returns recorded for this tax year.</div>`}
+
+  <div class="section-title" style="color:#1e40af">Deposits Made</div>
+  ${deposits.length ? `<table>
+    <thead><tr><th>Date</th><th>Description</th><th style="text-align:right">Amount</th></tr></thead>
+    <tbody>
+      ${depositsRows}
+      <tr class="total-row"><td colspan="2">TOTAL DEPOSITS MADE</td><td class="amt">${fmt(totalDeposits)}</td></tr>
+    </tbody>
+  </table>` : `<div class="empty">No deposits recorded for this tax year.</div>`}
+
+  <div class="footer">
+    <strong>SV Capital (Pty) Ltd</strong> — FSCA Regulated Financial Services Provider.<br>
+    This document is generated for client reference only and does not constitute an official SARS IT3(b) interest income certificate.
+    Returns shown are investment returns and payouts credited to the investor account in the tax year ${taxYear-1}/${taxYear}
+    (1 March ${taxYear-1} to 28 February ${taxYear}).<br>
+    Deposits shown are funds deposited into the investor's SV Capital account during the same period.<br>
+    <strong>Ref:</strong> ${certNo} &nbsp;·&nbsp; <strong>Issued:</strong> ${issuedAt}<br>
+    <div class="stamp">SV Capital</div>
+  </div>
+</div>
+</body></html>`;
+
+  const win = window.open('', '_blank', 'width=860,height=960');
+  if (!win) { Toast.error('Pop-up blocked — allow pop-ups for this site and try again'); return; }
+  win.document.write(html);
+  win.document.close();
+}
+
 async function _loadInvestorStatements(investorId) {
   const el = document.getElementById('invStatementsList');
   if (!el) return;
