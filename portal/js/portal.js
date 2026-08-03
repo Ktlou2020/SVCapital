@@ -5969,9 +5969,9 @@ function _initAddressSearch(searchId, dropId, fields) {
     dropEl.innerHTML = items.map((r, i) => {
       const line1 = [r.housenumber, r.street].filter(Boolean).join(' ') || r.city || r.formatted || '';
       const line2 = [r.suburb || r.quarter, r.city || r.town, r.postcode].filter(Boolean).join(', ');
-      return `<div data-idx="${i}" style="padding:9px 14px;cursor:pointer;font-size:0.82rem;border-bottom:1px solid rgba(255,255,255,0.05);transition:background 0.1s" onmouseover="this.style.background='rgba(237,165,255,0.08)'" onmouseout="this.style.background=''">
-        <div style="font-weight:600;color:var(--text)">${_esc(line1)}</div>
-        ${line2 ? `<div style="font-size:0.74rem;color:var(--text-muted);margin-top:2px">${_esc(line2)}</div>` : ''}
+      return `<div data-idx="${i}" style="padding:9px 14px;cursor:pointer;font-size:0.82rem;border-bottom:1px solid rgba(255,255,255,0.06);transition:background 0.12s" onmouseover="this.style.background='rgba(237,165,255,0.12)'" onmouseout="this.style.background=''">
+        <div style="font-weight:600;color:#e8edf2">${_esc(line1)}</div>
+        ${line2 ? `<div style="font-size:0.74rem;color:#8aa0b8;margin-top:2px">${_esc(line2)}</div>` : ''}
       </div>`;
     }).join('');
     dropEl.style.display = 'block';
