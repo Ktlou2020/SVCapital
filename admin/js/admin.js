@@ -3829,15 +3829,29 @@ function rejectKyc(id, btn) {
    ═══════════════════════════════════════════════ */
 let _reviewingKycId = null;
 
-function openKycReview(id) {
-  const doc = STATE.kyc.find(k => k.id === id);
-  if (!doc) return;
+async function openKycReview(id) {
+  const cached = STATE.kyc.find(k => k.id === id);
+  if (!cached) return;
   _reviewingKycId = id;
+
+  // Open modal immediately with metadata (no file yet)
+  const overlay = document.getElementById('kycReviewModal');
+  if (overlay) { overlay.style.display = 'flex'; overlay.classList.add('open'); document.body.style.overflow = 'hidden'; }
+
+  const docContent = document.getElementById('kycReviewDocContent');
+  if (docContent) docContent.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin" style="margin-right:8px"></i>Loading document…</div>';
+
+  // Fetch the full record (includes file_data which is excluded from the list query)
+  let doc = cached;
+  try {
+    const full = await API.kyc.get(id);
+    if (full && full.id) doc = { ...cached, ...full };
+  } catch (_) {}
+
   const inv = STATE.investors.find(i => i.id === doc.investor_id);
   const invName = doc.investor_name || (inv ? `${inv.first_name} ${inv.last_name}`.trim() : doc.investor_id || '—');
 
   // --- Document pane ---
-  const docContent = document.getElementById('kycReviewDocContent');
   if (docContent) {
     if (doc.file_data) {
       const mime = doc.file_data.startsWith('data:') ? doc.file_data.split(';')[0].replace('data:', '') : '';
@@ -3911,8 +3925,6 @@ function openKycReview(id) {
       : `<div style="text-align:center;font-size:0.8rem;color:var(--text-muted);padding:4px 0">Document already ${doc.status}.<br>Change status via the KYC queue.</div>`;
   }
 
-  const overlay = document.getElementById('kycReviewModal');
-  if (overlay) { overlay.style.display = 'flex'; overlay.classList.add('open'); document.body.style.overflow = 'hidden'; }
 }
 
 function closeKycReview() {
