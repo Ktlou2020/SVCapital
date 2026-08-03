@@ -49,15 +49,12 @@ const Auth = {
   },
 
   /**
-   * Store token and user info — always sessionStorage to reduce XSS exposure (L-11)
+   * Store token and user info
    */
   setToken(token, user, remember = true) {
-    const store = sessionStorage;
+    const store = remember ? localStorage : sessionStorage;
     store.setItem('svc_token', token);
     if (user) store.setItem('svc_user', JSON.stringify(user));
-    // Remove any previously persisted token from localStorage
-    localStorage.removeItem('svc_token');
-    localStorage.removeItem('svc_user');
   },
 
   /**

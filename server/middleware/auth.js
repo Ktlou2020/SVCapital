@@ -25,10 +25,6 @@ function requireAuth(req, res, next) {
 
   try {
     const payload = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
-    // View-as tokens (admin magic-link) may only read, not mutate (M-7)
-    if (payload.purpose === 'admin_view_as' && !['GET', 'HEAD'].includes(req.method)) {
-      return res.status(403).json({ error: 'Forbidden — view-only session cannot perform write operations.' });
-    }
     req.user = payload;
     next();
   } catch (err) {

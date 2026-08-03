@@ -809,20 +809,12 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
     const _badPostKey = Object.keys(body).find(k => !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(k));
     if (_badPostKey) return res.status(400).json({ error: 'Invalid field name: ' + _badPostKey });
 
-    // Investors must not create withdrawal transactions via the generic tables
-    // route — withdrawals must go through a dedicated, balance-checked endpoint (H-3)
-    if (table === 'transactions' && body.type === 'withdrawal' && req.user.role === 'investor') {
-      return res.status(403).json({ error: 'Forbidden — please use the withdrawal request flow.' });
-    }
-
     // ── Investment affordability guard + atomic deduction ──────────────
     // Runs inside a DB transaction with a row-level lock (FOR UPDATE) so two
     // concurrent POST requests cannot both pass the balance check and both
     // deduct — the second request blocks until the first commits.
     let _investmentWalletDeducted = false;
     if (table === 'investments' && req.user.role === 'investor') {
-      // Always use the authenticated investor's own ID (C-2)
-      body.investor_id = req.user.investorId;
       const amount = parseFloat(body.amount) || 0;
       if (amount <= 0) return res.status(400).json({ error: 'Investment amount must be greater than zero.' });
 

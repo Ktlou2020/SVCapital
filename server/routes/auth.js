@@ -653,10 +653,7 @@ router.post('/forgot-password', forgotLimiter, async (req, res) => {
 router.post('/reset-password', async (req, res) => {
   const { token, password } = req.body;
   if (!token || !password) return res.status(400).json({ error: 'Token and new password are required.' });
-  if (password.length < 10) return res.status(400).json({ error: 'Password must be at least 10 characters.' });
-  if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {
-    return res.status(400).json({ error: 'Password must contain at least one uppercase letter, one lowercase letter, and one number.' });
-  }
+  if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
 
   try {
     const payload = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
@@ -751,10 +748,6 @@ router.post('/staff-lookup', async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email is required.' });
-    // Restrict to company domain only — prevents external email enumeration (H-5)
-    if (!email.toLowerCase().trim().endsWith('@svcapital.co.za')) {
-      return res.status(200).json({ message: 'If an account exists, login instructions have been sent.' });
-    }
 
     const { rows } = await pool.query(
       `SELECT id, first_name, last_name, email, role, level, department,

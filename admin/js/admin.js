@@ -2543,7 +2543,7 @@ async function overrideWalletBalance(investorId, name, btn) {
         Toast.error(res.error || 'Override failed');
       }
     } catch (e) {
-      if (resultEl) resultEl.innerHTML = `<span style="color:#f87171">${_esc(e.message)}</span>`;
+      if (resultEl) resultEl.innerHTML = `<span style="color:#f87171">${e.message}</span>`;
       Toast.error('Override failed: ' + (e.message || 'unknown error'));
     }
   });
@@ -2595,7 +2595,7 @@ async function adminInvestOnBehalf(investorId, name, btn) {
         Toast.error(res.error || 'Investment failed');
       }
     } catch (e) {
-      if (resultEl) resultEl.innerHTML = `<span style="color:#f87171">${_esc(e.message)}</span>`;
+      if (resultEl) resultEl.innerHTML = `<span style="color:#f87171">${e.message}</span>`;
       Toast.error('Investment failed: ' + (e.message || 'unknown error'));
     }
   });
@@ -3832,63 +3832,30 @@ function openKycReview(id) {
   const inv = STATE.investors.find(i => i.id === doc.investor_id);
   const invName = doc.investor_name || (inv ? `${inv.first_name} ${inv.last_name}`.trim() : doc.investor_id || '—');
 
-  // --- Document pane (H-4: use DOM methods, never innerHTML with unescaped URLs) ---
+  // --- Document pane ---
   const docContent = document.getElementById('kycReviewDocContent');
   if (docContent) {
-    docContent.innerHTML = '';
     if (doc.file_data) {
       const mime = doc.file_data.startsWith('data:') ? doc.file_data.split(';')[0].replace('data:', '') : '';
       if (mime.startsWith('image/')) {
-        const el = document.createElement('img');
-        el.setAttribute('src', doc.file_data);
-        el.style.cssText = 'max-width:100%;max-height:calc(88vh - 100px);object-fit:contain;border-radius:8px';
-        docContent.appendChild(el);
+        docContent.innerHTML = `<img src="${doc.file_data}" style="max-width:100%;max-height:calc(88vh - 100px);object-fit:contain;border-radius:8px">`;
       } else if (mime === 'application/pdf') {
-        const el = document.createElement('iframe');
-        el.setAttribute('src', doc.file_data);
-        el.style.cssText = 'width:100%;height:calc(88vh - 100px);border:none;border-radius:8px';
-        docContent.appendChild(el);
+        docContent.innerHTML = `<iframe src="${doc.file_data}" style="width:100%;height:calc(88vh - 100px);border:none;border-radius:8px"></iframe>`;
       } else {
-        const wrap = document.createElement('div');
-        wrap.style.cssText = 'text-align:center;padding:40px';
-        const a = document.createElement('a');
-        a.setAttribute('href', doc.file_data);
-        a.setAttribute('download', doc.file_name || 'document');
-        a.className = 'btn btn--primary';
-        a.innerHTML = '<i class="fa-solid fa-download"></i> Download Document';
-        const p = document.createElement('p');
-        p.style.cssText = 'margin-top:12px;font-size:0.8rem;color:var(--text-muted)';
-        p.textContent = doc.file_name || 'Unknown file';
-        wrap.appendChild(a); wrap.appendChild(p);
-        docContent.appendChild(wrap);
+        docContent.innerHTML = `<div style="text-align:center;padding:40px"><a href="${doc.file_data}" download="${_esc(doc.file_name||'document')}" class="btn btn--primary"><i class="fa-solid fa-download"></i> Download Document</a><p style="margin-top:12px;font-size:0.8rem;color:var(--text-muted)">${_esc(doc.file_name||'Unknown file')}</p></div>`;
       }
     } else if (doc.file_url) {
       const isImg = /\.(jpg|jpeg|png|gif|webp)$/i.test(doc.file_url);
       const isPDF = /\.pdf$/i.test(doc.file_url);
       if (isImg) {
-        const el = document.createElement('img');
-        el.setAttribute('src', doc.file_url);
-        el.style.cssText = 'max-width:100%;max-height:calc(88vh - 100px);object-fit:contain;border-radius:8px';
-        docContent.appendChild(el);
+        docContent.innerHTML = `<img src="${doc.file_url}" style="max-width:100%;max-height:calc(88vh - 100px);object-fit:contain;border-radius:8px">`;
       } else if (isPDF) {
-        const el = document.createElement('iframe');
-        el.setAttribute('src', doc.file_url);
-        el.style.cssText = 'width:100%;height:calc(88vh - 100px);border:none;border-radius:8px';
-        docContent.appendChild(el);
+        docContent.innerHTML = `<iframe src="${doc.file_url}" style="width:100%;height:calc(88vh - 100px);border:none;border-radius:8px"></iframe>`;
       } else {
-        const wrap = document.createElement('div');
-        wrap.style.cssText = 'text-align:center;padding:40px';
-        const a = document.createElement('a');
-        a.setAttribute('href', doc.file_url);
-        a.setAttribute('target', '_blank');
-        a.setAttribute('rel', 'noopener');
-        a.className = 'btn btn--primary';
-        a.innerHTML = '<i class="fa-solid fa-external-link"></i> Open Document';
-        wrap.appendChild(a);
-        docContent.appendChild(wrap);
+        docContent.innerHTML = `<div style="text-align:center;padding:40px"><a href="${doc.file_url}" target="_blank" rel="noopener" class="btn btn--primary"><i class="fa-solid fa-external-link"></i> Open Document</a></div>`;
       }
     } else {
-      docContent.innerHTML = '<div style="text-align:center;padding:60px 0;color:var(--text-muted)"><i class="fa-solid fa-file-circle-question fa-3x" style="opacity:0.3;display:block;margin-bottom:12px"></i><div>No file attached</div><div style="font-size:0.78rem;margin-top:6px">The investor has not uploaded a file for this document.</div></div>';
+      docContent.innerHTML = `<div style="text-align:center;padding:60px 0;color:var(--text-muted)"><i class="fa-solid fa-file-circle-question fa-3x" style="opacity:0.3;display:block;margin-bottom:12px"></i><div>No file attached</div><div style="font-size:0.78rem;margin-top:6px">The investor has not uploaded a file for this document.</div></div>`;
     }
   }
 
@@ -4938,7 +4905,7 @@ async function _loadAdminFactsheets(poolId, listEl) {
         <button class="btn btn--ghost btn--sm" style="color:#ef4444" onclick="deleteFactsheet('${s.id}','${poolId}')" title="Delete"><i class="fa-solid fa-trash"></i></button>
       </div>`).join('');
   } catch (e) {
-    listEl.innerHTML = `<div style="color:#ef4444;font-size:0.78rem;text-align:center;padding:12px">${_esc(e.message)}</div>`;
+    listEl.innerHTML = `<div style="color:#ef4444;font-size:0.78rem;text-align:center;padding:12px">${e.message}</div>`;
   }
 }
 
@@ -10505,7 +10472,7 @@ async function recalculatePoolStats(btn) {
     resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> Updated ${data.poolsUpdated} pool${data.poolsUpdated !== 1 ? 's' : ''} successfully.</span>`;
     Toast.success(`Pool stats recalculated (${data.poolsUpdated} pools updated)`);
   } catch (e) {
-    resultEl.innerHTML = `<span style="color:#ef4444">${_esc(e.message) || 'Failed'}</span>`;
+    resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Failed'}</span>`;
     Toast.error(e.message || 'Recalculation failed');
   } finally {
     btn.disabled = false;
@@ -10528,7 +10495,7 @@ async function fixSmmeProductType(btn) {
     Toast.success(`SMME → Short Term: ${data.total} record(s) updated`);
     await loadPools();
   } catch (e) {
-    if (resultEl) resultEl.innerHTML = `<span style="color:#ef4444">${_esc(e.message) || 'Failed'}</span>`;
+    if (resultEl) resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Failed'}</span>`;
     Toast.error(e.message || 'Fix failed');
   } finally {
     btn.disabled = false;
@@ -10550,7 +10517,7 @@ async function backfillFicaFromKyc(btn) {
     resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> Updated <strong>${data.updated}</strong> investor${data.updated !== 1 ? 's' : ''} (${data.fromKyc} from KYC→FICA, ${data.fromFica} from FICA→KYC sync).</span>`;
     Toast.success(`FICA backfill complete — ${data.updated} investors updated`);
   } catch (e) {
-    resultEl.innerHTML = `<span style="color:#ef4444">${_esc(e.message) || 'Failed'}</span>`;
+    resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Failed'}</span>`;
     Toast.error(e.message || 'Backfill failed');
   } finally {
     btn.disabled = false;
@@ -10593,7 +10560,7 @@ async function reimportBankAccounts(btn) {
     resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> Done — <strong>${data.updated}</strong> investors updated, ${data.skipped} skipped (no match), ${data.total} active accounts in file.</span>${errHtml}`;
     Toast.success(`Bank accounts re-imported: ${data.updated} updated`);
   } catch (e) {
-    resultEl.innerHTML = `<span style="color:#ef4444">${_esc(e.message) || 'Failed'}</span>`;
+    resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Failed'}</span>`;
     Toast.error(e.message || 'Re-import failed');
   } finally {
     btn.disabled = false;
@@ -10617,7 +10584,7 @@ async function promoteBankFromNotes(btn) {
     resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> Done — <strong>${data.updated}</strong> investors updated from notes (${data.checked} checked, ${data.skipped} skipped).</span>`;
     Toast.success(`Bank data promoted: ${data.updated} investors updated`);
   } catch (e) {
-    resultEl.innerHTML = `<span style="color:#ef4444">${_esc(e.message) || 'Failed'}</span>`;
+    resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Failed'}</span>`;
     Toast.error(e.message || 'Promotion failed');
   } finally {
     btn.disabled = false;
@@ -11384,7 +11351,7 @@ async function loadIntlInterest() {
   } catch (err) {
     console.error('[intl interest] load error:', err);
     const body = document.getElementById('intlInterestBody');
-    if (body) body.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#ef4444;padding:24px">Failed to load: ${_esc(err.message)}</td></tr>`;
+    if (body) body.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#ef4444;padding:24px">Failed to load: ${err.message}</td></tr>`;
   }
 }
 
@@ -11564,7 +11531,7 @@ async function loadFeedback(filter = 'all') {
       </div>
     `).join('');
   } catch (err) {
-    list.innerHTML = `<p style="color:#ef4444;text-align:center;padding:40px 0">Failed to load feedback: ${_esc(err.message)}</p>`;
+    list.innerHTML = `<p style="color:#ef4444;text-align:center;padding:40px 0">Failed to load feedback: ${err.message}</p>`;
   }
 }
 
@@ -11693,7 +11660,7 @@ async function loadEmailLogs(resetPage = true) {
         </div>`;
     }
   } catch (err) {
-    if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="padding:40px;text-align:center;color:#ef4444">${_esc(err.message)}</td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="padding:40px;text-align:center;color:#ef4444">${err.message}</td></tr>`;
   }
 }
 
@@ -11947,7 +11914,7 @@ async function loadUpcomingMaturities() {
       </table>
     </div>
     <div style="margin-top:12px;font-size:0.75rem;color:var(--text-muted);text-align:right">${upcoming.length} pool${upcoming.length!==1?'s':''} maturing within 90 days</div>`;
-  } catch (e) { el.innerHTML = `<div style="color:#ef4444;padding:16px;font-size:0.82rem">Failed to load: ${_esc(e.message)}</div>`; }
+  } catch (e) { el.innerHTML = `<div style="color:#ef4444;padding:16px;font-size:0.82rem">Failed to load: ${e.message}</div>`; }
 }
 
 /* ═══════════════════════════════════════════════
@@ -11984,7 +11951,7 @@ async function loadFailedLogins() {
       </table>
     </div>
     <div style="margin-top:12px;font-size:0.75rem;color:var(--text-muted)">${events.length} event${events.length!==1?'s':''} · Showing most recent 200 audit records filtered for login failures</div>`;
-  } catch (e) { el.innerHTML = `<div style="color:#ef4444;padding:16px;font-size:0.82rem">Failed to load: ${_esc(e.message)}</div>`; }
+  } catch (e) { el.innerHTML = `<div style="color:#ef4444;padding:16px;font-size:0.82rem">Failed to load: ${e.message}</div>`; }
 }
 
 /* ═══════════════════════════════════════════════
@@ -12022,7 +11989,7 @@ async function loadStaffPermissions() {
       </table>
     </div>
     <div style="margin-top:12px;font-size:0.75rem;color:var(--text-muted)">${staff.length} staff account${staff.length!==1?'s':''}</div>`;
-  } catch (e) { el.innerHTML = `<div style="color:#ef4444;padding:16px;font-size:0.82rem">Failed to load staff: ${_esc(e.message)}</div>`; }
+  } catch (e) { el.innerHTML = `<div style="color:#ef4444;padding:16px;font-size:0.82rem">Failed to load staff: ${e.message}</div>`; }
 }
 
 /* ══════════════════════════════════════════════════════════════

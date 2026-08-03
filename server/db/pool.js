@@ -19,10 +19,10 @@ function getPool() {
   }
 
   // SSL configuration: SSL is enabled by default in production.
-  // Railway's internal PG host uses self-signed certs so rejectUnauthorized
-  // defaults to false. Set DATABASE_SSL_REJECT_UNAUTHORIZED=true and supply
-  // DATABASE_SSL_CA only after configuring a CA-signed cert on the DB host.
+  // Railway (and most managed PG hosts) use self-signed internal certs, so
+  // rejectUnauthorized defaults to false. The connection is still encrypted.
   // Set DATABASE_SSL=false to disable SSL entirely (local dev without SSL).
+  // Set DATABASE_SSL_REJECT_UNAUTHORIZED=true to enforce CA-signed certs.
   const sslConfig = dbUrl
     ? process.env.DATABASE_SSL === 'false' ? false : {
         rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === 'true',

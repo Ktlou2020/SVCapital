@@ -90,8 +90,8 @@ router.post('/:id/instruction', requireAuth, async (req, res) => {
    plus any platform fee back to the investor's wallet.
    ═══════════════════════════════════════════════════════════ */
 router.post('/:id/cancel', requireAuth, async (req, res) => {
-  if (!['admin', 'director'].includes(req.user.role)) {
-    return res.status(403).json({ error: 'Forbidden — admin or director only.' });
+  if (!STAFF_ROLES.includes(req.user.role)) {
+    return res.status(403).json({ error: 'Forbidden — staff only.' });
   }
 
   const { id } = req.params;
