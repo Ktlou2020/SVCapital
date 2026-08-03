@@ -3853,22 +3853,57 @@ async function openKycReview(id) {
 
   // --- Document pane ---
   if (docContent) {
+    const _dlBtn = (href, filename, isExternal) => `
+      <div style="padding:8px 12px;background:rgba(0,0,0,0.25);border-top:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;gap:8px;flex-shrink:0">
+        <a href="${href}" ${isExternal ? 'target="_blank" rel="noopener"' : `download="${_esc(filename||'document')}"`}
+           class="btn btn--secondary btn--sm" style="font-size:0.78rem">
+          <i class="fa-solid ${isExternal ? 'fa-external-link' : 'fa-download'}"></i>
+          ${isExternal ? 'Open in new tab' : 'Download'} ${_esc(filename ? '— ' + filename : '')}
+        </a>
+      </div>`;
+
     if (doc.file_data) {
       const mime = doc.file_data.startsWith('data:') ? doc.file_data.split(';')[0].replace('data:', '') : '';
+      const fname = doc.file_name || 'document';
       if (mime.startsWith('image/')) {
-        docContent.innerHTML = `<img src="${doc.file_data}" style="max-width:100%;max-height:calc(88vh - 100px);object-fit:contain;border-radius:8px">`;
+        docContent.innerHTML = `
+          <div style="display:flex;flex-direction:column;height:100%">
+            <div style="flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;padding:12px">
+              <img src="${doc.file_data}" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:8px">
+            </div>
+            ${_dlBtn(doc.file_data, fname, false)}
+          </div>`;
       } else if (mime === 'application/pdf') {
-        docContent.innerHTML = `<iframe src="${doc.file_data}" style="width:100%;height:calc(88vh - 100px);border:none;border-radius:8px"></iframe>`;
+        docContent.innerHTML = `
+          <div style="display:flex;flex-direction:column;height:100%">
+            <div style="flex:1">
+              <iframe src="${doc.file_data}" style="width:100%;height:100%;border:none;border-radius:8px 8px 0 0"></iframe>
+            </div>
+            ${_dlBtn(doc.file_data, fname, false)}
+          </div>`;
       } else {
-        docContent.innerHTML = `<div style="text-align:center;padding:40px"><a href="${doc.file_data}" download="${_esc(doc.file_name||'document')}" class="btn btn--primary"><i class="fa-solid fa-download"></i> Download Document</a><p style="margin-top:12px;font-size:0.8rem;color:var(--text-muted)">${_esc(doc.file_name||'Unknown file')}</p></div>`;
+        docContent.innerHTML = `<div style="text-align:center;padding:40px"><a href="${doc.file_data}" download="${_esc(fname)}" class="btn btn--primary"><i class="fa-solid fa-download"></i> Download Document</a><p style="margin-top:12px;font-size:0.8rem;color:var(--text-muted)">${_esc(fname)}</p></div>`;
       }
     } else if (doc.file_url) {
       const isImg = /\.(jpg|jpeg|png|gif|webp)$/i.test(doc.file_url);
       const isPDF = /\.pdf$/i.test(doc.file_url);
+      const fname = doc.file_name || doc.file_url.split('/').pop() || 'document';
       if (isImg) {
-        docContent.innerHTML = `<img src="${doc.file_url}" style="max-width:100%;max-height:calc(88vh - 100px);object-fit:contain;border-radius:8px">`;
+        docContent.innerHTML = `
+          <div style="display:flex;flex-direction:column;height:100%">
+            <div style="flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;padding:12px">
+              <img src="${doc.file_url}" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:8px">
+            </div>
+            ${_dlBtn(doc.file_url, fname, true)}
+          </div>`;
       } else if (isPDF) {
-        docContent.innerHTML = `<iframe src="${doc.file_url}" style="width:100%;height:calc(88vh - 100px);border:none;border-radius:8px"></iframe>`;
+        docContent.innerHTML = `
+          <div style="display:flex;flex-direction:column;height:100%">
+            <div style="flex:1">
+              <iframe src="${doc.file_url}" style="width:100%;height:100%;border:none;border-radius:8px 8px 0 0"></iframe>
+            </div>
+            ${_dlBtn(doc.file_url, fname, true)}
+          </div>`;
       } else {
         docContent.innerHTML = `<div style="text-align:center;padding:40px"><a href="${doc.file_url}" target="_blank" rel="noopener" class="btn btn--primary"><i class="fa-solid fa-external-link"></i> Open Document</a></div>`;
       }
