@@ -690,9 +690,9 @@ router.post('/bulk-reassign-investments', async (req, res) => {
     if (poolCheck.length < 2) return res.status(404).json({ error: 'One or both pools not found' });
 
     const { rowCount: moved } = await pool.query(
-      `UPDATE investments SET pool_id = $1
-       WHERE id = ANY($2::text[]) AND pool_id = $3`,
-      [target_pool_id, investment_ids, source_pool_id]
+      `UPDATE investments SET pool_id = $1, pool_name = NULL
+       WHERE id = ANY($2::text[])`,
+      [target_pool_id, investment_ids]
     );
 
     setImmediate(() => audit.log({
