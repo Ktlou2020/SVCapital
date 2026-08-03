@@ -1926,8 +1926,11 @@ async function _saveInvProfile(btn) {
       email:        document.getElementById('ipf-email').value.trim(),
       phone:        document.getElementById('ipf-phone').value.trim(),
       id_number:    document.getElementById('ipf-id_number').value.trim(),
-      province:     document.getElementById('ipf-province').value,
-      address:      document.getElementById('ipf-address').value.trim(),
+      street_address: document.getElementById('ipf-street_address').value.trim() || null,
+      suburb:         document.getElementById('ipf-suburb').value.trim() || null,
+      address:        document.getElementById('ipf-address').value.trim(),
+      postal_code:    document.getElementById('ipf-postal_code').value.trim() || null,
+      province:       document.getElementById('ipf-province').value,
       occupation:   document.getElementById('ipf-occupation').value.trim(),
       risk_profile: document.getElementById('ipf-risk_profile').value,
     };
@@ -2112,8 +2115,11 @@ async function viewInvestor(id) {
         <div class="info-row"><span class="info-row__label">Email</span><span class="info-row__value">${_esc(inv.email)||'—'}${inv.email?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.email)},this)' title="Copy email"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
         <div class="info-row"><span class="info-row__label">Phone</span><span class="info-row__value">${_esc(inv.phone)||'—'}${inv.phone?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.phone)},this)' title="Copy phone"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
         <div class="info-row"><span class="info-row__label">SA ID Number</span><span class="info-row__value">${_esc(inv.id_number)||'—'}${inv.id_number?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.id_number)},this)' title="Copy ID"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
+        ${inv.street_address ? `<div class="info-row"><span class="info-row__label">Street Address</span><span class="info-row__value" style="font-size:0.78rem">${_esc(inv.street_address)}</span></div>` : ''}
+        ${inv.suburb ? `<div class="info-row"><span class="info-row__label">Suburb</span><span class="info-row__value">${_esc(inv.suburb)}</span></div>` : ''}
+        <div class="info-row"><span class="info-row__label">City</span><span class="info-row__value">${_esc(inv.address)||'—'}</span></div>
+        ${inv.postal_code ? `<div class="info-row"><span class="info-row__label">Postal Code</span><span class="info-row__value">${_esc(inv.postal_code)}</span></div>` : ''}
         <div class="info-row"><span class="info-row__label">Province</span><span class="info-row__value">${_esc((inv.province||'').trim())||'—'}</span></div>
-        <div class="info-row"><span class="info-row__label">Address</span><span class="info-row__value" style="font-size:0.78rem">${_esc(inv.address)||'—'}</span></div>
         <div class="info-row"><span class="info-row__label">Occupation</span><span class="info-row__value">${_esc(inv.occupation)||'—'}</span></div>
         <div class="info-row"><span class="info-row__label">Employer</span><span class="info-row__value">${_esc(invProfile.employer||'')||'—'}</span></div>
         <div class="info-row"><span class="info-row__label">Next of Kin</span><span class="info-row__value">${_esc(invProfile.next_of_kin||'')||'—'}</span></div>
@@ -2140,15 +2146,27 @@ async function viewInvestor(id) {
           <label class="form-label">SA ID Number</label>
           <input type="text" class="form-control" id="ipf-id_number" value="${_esc(inv.id_number||'')}">
         </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Street Address</label>
+          <input type="text" class="form-control" id="ipf-street_address" value="${_esc(inv.street_address||'')}" placeholder="e.g. 10 Main Road">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Suburb</label>
+          <input type="text" class="form-control" id="ipf-suburb" value="${_esc(inv.suburb||'')}" placeholder="e.g. Sandton">
+        </div>
+        <div class="form-group">
+          <label class="form-label">City</label>
+          <input type="text" class="form-control" id="ipf-address" value="${_esc(inv.address||'')}" placeholder="e.g. Johannesburg">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Postal Code</label>
+          <input type="text" class="form-control" id="ipf-postal_code" value="${_esc(inv.postal_code||'')}" placeholder="e.g. 2196">
+        </div>
         <div class="form-group">
           <label class="form-label">Province</label>
           <select class="form-control" id="ipf-province">
             ${['','Eastern Cape','Free State','Gauteng','KwaZulu-Natal','Limpopo','Mpumalanga','Northern Cape','North West','Western Cape'].map(p=>`<option value="${p}" ${(inv.province||'').trim()===p?'selected':''}>${p||'— Select province —'}</option>`).join('')}
           </select>
-        </div>
-        <div class="form-group" style="grid-column:1/-1">
-          <label class="form-label">Address</label>
-          <textarea class="form-control" id="ipf-address" rows="2" style="resize:vertical">${_esc(inv.address||'')}</textarea>
         </div>
         <div class="form-group">
           <label class="form-label">Occupation</label>
