@@ -3242,10 +3242,24 @@ function launchPaystack() {
   // Total charged to card = base amount + 2.9% + R1 gateway fee
   const totalCharged = _pmTotal(_pmAmount);
 
-  setTimeout(() => {
+  setTimeout(async () => {
     try {
       if (typeof PaystackPop === 'undefined') {
         throw new Error('Paystack JS library did not load. Check your internet connection and try again.');
+      }
+
+      // Generate the reference before the popup opens so we can register it
+      // server-side — the webhook uses this mapping instead of trusting
+      // attacker-controlled metadata.investor_id (H-6)
+      const ref = `SVC-PS-${Date.now()}`;
+      try {
+        await API._fetch('POST', 'payments/paystack/register-ref', {
+          reference:    ref,
+          subAccountId: _pmSaId || undefined,
+        });
+      } catch (_regErr) {
+        // Non-fatal: webhook falls back to metadata if registration fails
+        console.warn('[paystack] register-ref failed:', _regErr.message);
       }
 
       // Paystack v2 API — replaces deprecated PaystackPop.setup() + openIframe()
@@ -3257,7 +3271,7 @@ function launchPaystack() {
         amount:   Math.round(totalCharged * 100),   // Paystack expects kobo/cents
         currency: 'ZAR',
         channels: ['card'],  // card-only so we always get a reusable auth for auto top-up
-        ref:      `SVC-PS-${Date.now()}`,
+        ref,
         metadata: {
           investor_id:    _pmInvestorId(),
           investor_name:  _pmInvestorName(),
