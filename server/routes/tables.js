@@ -636,6 +636,37 @@ router.post('/investment_pools/:id/merge', requireAuth, async (req, res) => {
   }
 });
 
+/* ─── GET /api/tables/investment_pools/:id/all-investments ─── */
+/* Returns all investments for a pool matched by pool_id OR legacy pool_name */
+router.get('/investment_pools/:id/all-investments', requireAuth, async (req, res) => {
+  try {
+    if (!['admin','director','fund_manager'].includes(req.user.role))
+      return res.status(403).json({ error: 'Forbidden.' });
+
+    const poolId = req.params.id;
+    const { rows } = await pool.query(`
+      SELECT
+        i.id, i.investor_id, i.sub_account_id, i.pool_id, i.pool_name,
+        i.amount, i.status, i.start_date, i.end_date, i.annual_rate,
+        i.term_months, i.product_type, i.payout_option, i.notes,
+        i.maturity_instruction, i.is_reinvestment, i.created_at,
+        inv.first_name || ' ' || inv.last_name AS investor_name,
+        inv.email AS investor_email
+      FROM investments i
+      JOIN investors inv ON inv.id = i.investor_id
+      JOIN investment_pools ip ON ip.id = $1
+      WHERE i.pool_id = $1
+         OR (i.pool_name = ip.name AND i.pool_id IS NULL)
+      ORDER BY i.end_date DESC NULLS LAST, i.created_at DESC
+    `, [poolId]);
+
+    res.json({ data: rows, total: rows.length });
+  } catch (err) {
+    console.error('[pool all-investments]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 /* ─── POST /api/tables/investment_pools/unmerge ─── */
 /* Recreates a deleted source pool and moves specified investments back into it */
 router.post('/investment_pools/unmerge', requireAuth, async (req, res) => {

@@ -5265,30 +5265,31 @@ async function loadUnmergeInvestments() {
 
   if (!targetId) { listEl.style.display = 'none'; return; }
 
-  if (!STATE.investments || !STATE.investments.length) {
-    listEl.style.display = 'block';
-    itemsEl.innerHTML = '<p style="padding:10px;color:var(--text-muted);font-size:0.85rem"><i class="fa-solid fa-spinner fa-spin" style="margin-right:6px"></i>Loading investments…</p>';
-    try { STATE.investments = (await API.investments.list({ limit: 5000 })).data || []; }
-    catch (e) { itemsEl.innerHTML = '<p style="padding:10px;color:#ef4444;font-size:0.85rem">Failed to load investments.</p>'; return; }
-  }
-
-  // Match by pool_id OR pool_name (legacy link)
-  const tgtPool = STATE.pools.find(p => p.id === targetId);
-  const invs = (STATE.investments || []).filter(i =>
-    i.pool_id === targetId ||
-    (tgtPool?.name && i.pool_name && i.pool_name === tgtPool.name)
-  );
   listEl.style.display = 'block';
+  itemsEl.innerHTML = '<p style="padding:10px;color:var(--text-muted);font-size:0.85rem"><i class="fa-solid fa-spinner fa-spin" style="margin-right:6px"></i>Loading investments…</p>';
+  countEl.textContent = '';
 
-  if (!invs.length) {
-    itemsEl.innerHTML = '<p style="padding:10px;color:var(--text-muted);font-size:0.85rem">No investments found in this pool.</p>';
-    countEl.textContent = '';
+  let invs = [];
+  try {
+    const token = localStorage.getItem('svc_token');
+    const r = await fetch(`/api/tables/investment_pools/${encodeURIComponent(targetId)}/all-investments`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Failed');
+    invs = d.data || [];
+  } catch (e) {
+    itemsEl.innerHTML = `<p style="padding:10px;color:#ef4444;font-size:0.85rem">Failed to load: ${_esc(e.message)}</p>`;
     return;
   }
 
-  const invMap2 = Object.fromEntries((STATE.investors || []).map(inv => [inv.id, `${inv.first_name || ''} ${inv.last_name || ''}`.trim()]));
+  if (!invs.length) {
+    itemsEl.innerHTML = '<p style="padding:10px;color:var(--text-muted);font-size:0.85rem">No investments found in this pool.</p>';
+    return;
+  }
+
   itemsEl.innerHTML = invs.map(i => {
-    const name = invMap2[i.investor_id] || i.investor_id || '—';
+    const name = i.investor_name || i.investor_id || '—';
     const amt  = Utils.fmtCcy(i.amount);
     const date = i.start_date ? new Date(i.start_date).toLocaleDateString('en-ZA') : '—';
     return `<label style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-bottom:1px solid var(--border);cursor:pointer;font-size:0.83rem">
@@ -5389,33 +5390,31 @@ async function loadMoveInvestmentsList() {
   countEl.textContent = '';
   if (!sourceId) return;
 
-  // Investments load in the background after loadPools — fetch fresh to be sure
   listEl.style.display = 'block';
   itemsEl.innerHTML = '<p style="padding:12px;color:var(--text-muted);font-size:0.85rem"><i class="fa-solid fa-spinner fa-spin" style="margin-right:6px"></i>Loading investments…</p>';
+
+  let invs = [];
   try {
-    STATE.investments = (await API.investments.list({ limit: 5000 })).data || [];
+    const token = localStorage.getItem('svc_token');
+    const r = await fetch(`/api/tables/investment_pools/${encodeURIComponent(sourceId)}/all-investments`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Failed');
+    invs = d.data || [];
   } catch (e) {
-    itemsEl.innerHTML = '<p style="padding:12px;color:#ef4444;font-size:0.85rem">Failed to load investments.</p>';
+    itemsEl.innerHTML = `<p style="padding:12px;color:#ef4444;font-size:0.85rem">Failed to load investments: ${_esc(e.message)}</p>`;
     return;
   }
-  listEl.style.display  = 'none';
-  itemsEl.innerHTML = '';
 
-  // Match by pool_id OR pool_name (legacy link)
-  const srcPool = STATE.pools.find(p => p.id === sourceId);
-  const invs = (STATE.investments || []).filter(i =>
-    i.pool_id === sourceId ||
-    (srcPool?.name && i.pool_name && i.pool_name === srcPool.name)
-  );
-  if (!invs.length) { emptyEl.style.display = 'block'; return; }
+  if (!invs.length) {
+    listEl.style.display  = 'none';
+    emptyEl.style.display = 'block';
+    return;
+  }
 
-  // Build investor name lookup
-  const invMap = Object.fromEntries((STATE.investors || []).map(inv => [inv.id, `${inv.first_name || ''} ${inv.last_name || ''}`.trim()]));
-
-  listEl.style.display = 'block';
-  invs.sort((a, b) => (b.end_date || '').localeCompare(a.end_date || ''));
   itemsEl.innerHTML = invs.map(i => {
-    const name  = invMap[i.investor_id] || i.investor_id || '—';
+    const name  = i.investor_name || i.investor_id || '—';
     const saId  = i.sub_account_id || '—';
     const amt   = Utils.fmtCcy(i.amount);
     const edate = i.end_date ? new Date(i.end_date).toLocaleDateString('en-ZA') : '—';
