@@ -636,6 +636,71 @@ router.post('/investment_pools/:id/merge', requireAuth, async (req, res) => {
   }
 });
 
+/* ─── POST /api/tables/investment_pools/unmerge ─── */
+/* Recreates a deleted source pool and moves specified investments back into it */
+router.post('/investment_pools/unmerge', requireAuth, async (req, res) => {
+  try {
+    if (!['admin', 'director'].includes(req.user.role))
+      return res.status(403).json({ error: 'Forbidden.' });
+
+    const { investment_ids, pool: poolData } = req.body || {};
+    if (!Array.isArray(investment_ids) || !investment_ids.length)
+      return res.status(400).json({ error: 'investment_ids required' });
+    if (!poolData?.name || !poolData?.product_type)
+      return res.status(400).json({ error: 'pool.name and pool.product_type required' });
+
+    const newPoolId = uuidv4();
+    const dbClient = await pool.connect();
+    try {
+      await dbClient.query('BEGIN');
+      await dbClient.query(
+        `INSERT INTO investment_pools
+           (id, name, product_type, status, target_amount, raised_amount,
+            min_investment, max_investment, annual_rate, term_months,
+            start_date, end_date, maturity_date, description, risk_level,
+            partner_name, management_fee_pct, operational_fee_pct,
+            created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,NOW(),NOW())`,
+        [
+          newPoolId,
+          poolData.name,
+          poolData.product_type,
+          poolData.status || 'open',
+          poolData.target_amount || 0,
+          0,
+          poolData.min_investment || 1000,
+          poolData.max_investment || null,
+          poolData.annual_rate || 0,
+          poolData.term_months || 6,
+          poolData.start_date || null,
+          poolData.end_date || null,
+          poolData.maturity_date || null,
+          poolData.description || null,
+          poolData.risk_level || 'medium',
+          poolData.partner_name || null,
+          poolData.management_fee_pct || 0,
+          poolData.operational_fee_pct || 0,
+        ]
+      );
+      const { rowCount: moved } = await dbClient.query(
+        `UPDATE investments SET pool_id = $1
+         WHERE id = ANY($2::text[])`,
+        [newPoolId, investment_ids]
+      );
+      await dbClient.query('COMMIT');
+      res.json({ pool_id: newPoolId, moved });
+    } catch (err) {
+      await dbClient.query('ROLLBACK').catch(() => {});
+      throw err;
+    } finally {
+      dbClient.release();
+    }
+  } catch (err) {
+    console.error('[unmerge pools]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 /* ─── GET /api/tables/investment_pools/:id/investors ─── */
 /* Returns all investors + their investment details for a specific pool */
 router.get('/investment_pools/:id/investors', requireAuth, async (req, res) => {

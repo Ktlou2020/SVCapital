@@ -755,6 +755,7 @@
           <div style="display:flex;gap:8px">
             <button class="btn btn--secondary" onclick="exportPoolsCSV()"><i class="fa-solid fa-file-csv"></i> Export</button>
             <button class="btn btn--secondary" onclick="runPoolCycler(this)" title="Cycle any pools whose close date has passed"><i class="fa-solid fa-rotate"></i> Run Pool Cycler</button>
+            <button class="btn btn--secondary" onclick="openUnmergeModal()" title="Recreate a deleted pool and move investments back"><i class="fa-solid fa-code-branch"></i> Undo Merge</button>
             <button class="btn btn--primary" onclick="openAddPoolModal()"><i class="fa-solid fa-plus"></i> New Pool</button>
           </div>
         </div>
@@ -3081,6 +3082,109 @@
   </div>
 </div>
 
+<!-- Undo Merge Modal -->
+<div class="modal-overlay" id="unmergePoolModal" onclick="if(event.target===this)Modal.close('unmergePoolModal')">
+  <div class="modal" style="max-width:640px">
+    <div class="modal__header">
+      <h3 class="modal__title"><i class="fa-solid fa-code-branch" style="color:#eda5ff;margin-right:8px"></i>Undo Pool Merge</h3>
+      <button class="modal__close" onclick="Modal.close('unmergePoolModal')">&times;</button>
+    </div>
+    <div class="modal__body" style="max-height:70vh;overflow-y:auto">
+
+      <!-- Step 1: Pick target pool -->
+      <div id="unmergeStep1">
+        <p style="margin-bottom:12px;color:var(--text-muted);font-size:0.87rem">Select the pool that investments were merged <strong>into</strong>, then choose which investments to move back.</p>
+        <label class="form-label">Target pool (received the merge)</label>
+        <select id="unmergeTargetPool" class="form-input" style="width:100%;margin-bottom:16px" onchange="loadUnmergeInvestments()">
+          <option value="">— Select pool —</option>
+        </select>
+        <div id="unmergeInvList" style="display:none">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <label class="form-label" style="margin:0">Select investments to move back</label>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn--ghost btn--sm" onclick="unmergeSelectAll(true)">Select all</button>
+              <button class="btn btn--ghost btn--sm" onclick="unmergeSelectAll(false)">None</button>
+            </div>
+          </div>
+          <div id="unmergeInvItems" style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:6px"></div>
+          <p id="unmergeInvCount" style="font-size:0.82rem;color:var(--text-muted);margin-top:6px"></p>
+        </div>
+      </div>
+
+      <hr style="border-color:var(--border);margin:18px 0">
+
+      <!-- Step 2: Recreate source pool -->
+      <p style="font-size:0.87rem;color:var(--text-muted);margin-bottom:14px">Fill in the details for the <strong>recreated pool</strong> (the one that was deleted).</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div style="grid-column:1/-1">
+          <label class="form-label">Pool name <span style="color:#ef4444">*</span></label>
+          <input id="unmergePoolName" class="form-input" placeholder="e.g. SME Pool B" style="width:100%">
+        </div>
+        <div>
+          <label class="form-label">Product type <span style="color:#ef4444">*</span></label>
+          <select id="unmergePoolProduct" class="form-input" style="width:100%">
+            <option value="">— Select —</option>
+            <option value="fixed_deposit">Fixed Deposit</option>
+            <option value="short_term">Short-term / SMME</option>
+            <option value="property">Property</option>
+            <option value="equity">Equity</option>
+            <option value="money_market">Money Market</option>
+          </select>
+        </div>
+        <div>
+          <label class="form-label">Status</label>
+          <select id="unmergePoolStatus" class="form-input" style="width:100%">
+            <option value="open">Open</option>
+            <option value="active">Active</option>
+            <option value="closed">Closed</option>
+            <option value="matured">Matured</option>
+          </select>
+        </div>
+        <div>
+          <label class="form-label">Annual rate (%)</label>
+          <input id="unmergePoolRate" class="form-input" type="number" step="0.01" placeholder="e.g. 12.5" style="width:100%">
+        </div>
+        <div>
+          <label class="form-label">Term (months)</label>
+          <input id="unmergePoolTerm" class="form-input" type="number" placeholder="e.g. 12" style="width:100%">
+        </div>
+        <div>
+          <label class="form-label">Min investment (R)</label>
+          <input id="unmergePoolMin" class="form-input" type="number" placeholder="e.g. 5000" style="width:100%">
+        </div>
+        <div>
+          <label class="form-label">Start date</label>
+          <input id="unmergePoolStart" class="form-input" type="date" style="width:100%">
+        </div>
+        <div>
+          <label class="form-label">End / maturity date</label>
+          <input id="unmergePoolEnd" class="form-input" type="date" style="width:100%">
+        </div>
+        <div>
+          <label class="form-label">Partner name</label>
+          <input id="unmergePoolPartner" class="form-input" placeholder="e.g. Acme Capital" style="width:100%">
+        </div>
+        <div>
+          <label class="form-label">Risk level</label>
+          <select id="unmergePoolRisk" class="form-input" style="width:100%">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+          </select>
+        </div>
+        <div style="grid-column:1/-1">
+          <label class="form-label">Description</label>
+          <textarea id="unmergePoolDesc" class="form-input" rows="2" placeholder="Optional description" style="width:100%;resize:vertical"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--ghost" onclick="Modal.close('unmergePoolModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="confirmUnmerge()"><i class="fa-solid fa-code-branch"></i> Restore Pool &amp; Move Investments</button>
+    </div>
+  </div>
+</div>
+
 <!-- Pool Investors Modal -->
 <div class="modal-overlay" id="poolInvestorsModal" onclick="if(event.target===this){_currentPoolId=null;Modal.close('poolInvestorsModal')}">
   <div class="modal modal--lg" style="max-width:900px">
@@ -3957,7 +4061,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=4"></script>
-<script src="js/admin.js?v=37"></script>
+<script src="js/admin.js?v=38"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>

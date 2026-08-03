@@ -5246,6 +5246,112 @@ async function confirmMergePool() {
   }
 }
 
+function openUnmergeModal() {
+  const sel = document.getElementById('unmergeTargetPool');
+  sel.innerHTML = '<option value="">— Select pool —</option>' +
+    (STATE.pools || [])
+      .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+      .map(p => `<option value="${_esc(p.id)}">${_esc(p.name)} (${p.status})</option>`)
+      .join('');
+  document.getElementById('unmergeInvList').style.display = 'none';
+  Modal.open('unmergePoolModal');
+}
+
+function loadUnmergeInvestments() {
+  const targetId = document.getElementById('unmergeTargetPool').value;
+  const listEl   = document.getElementById('unmergeInvList');
+  const itemsEl  = document.getElementById('unmergeInvItems');
+  const countEl  = document.getElementById('unmergeInvCount');
+
+  if (!targetId) { listEl.style.display = 'none'; return; }
+
+  const invs = (STATE.investments || []).filter(i => i.pool_id === targetId);
+  listEl.style.display = 'block';
+
+  if (!invs.length) {
+    itemsEl.innerHTML = '<p style="padding:10px;color:var(--text-muted);font-size:0.85rem">No investments found in this pool.</p>';
+    countEl.textContent = '';
+    return;
+  }
+
+  itemsEl.innerHTML = invs.map(i => {
+    const name = i.investor_name || i.investor_id || '—';
+    const amt  = Utils.fmtCcy(i.amount);
+    const date = i.start_date ? new Date(i.start_date).toLocaleDateString('en-ZA') : '—';
+    return `<label style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-bottom:1px solid var(--border);cursor:pointer;font-size:0.83rem">
+      <input type="checkbox" class="unmerge-inv-cb" value="${_esc(i.id)}" checked style="width:15px;height:15px;accent-color:#eda5ff">
+      <span style="flex:1">${_esc(name)}</span>
+      <span style="color:var(--text-muted)">${_esc(i.status || '')}</span>
+      <span style="font-variant-numeric:tabular-nums;font-weight:600">${amt}</span>
+      <span style="color:var(--text-muted);min-width:80px;text-align:right">${date}</span>
+    </label>`;
+  }).join('');
+
+  updateUnmergeCount();
+  itemsEl.querySelectorAll('.unmerge-inv-cb').forEach(cb => cb.addEventListener('change', updateUnmergeCount));
+}
+
+function updateUnmergeCount() {
+  const checked = document.querySelectorAll('.unmerge-inv-cb:checked').length;
+  const total   = document.querySelectorAll('.unmerge-inv-cb').length;
+  document.getElementById('unmergeInvCount').textContent = `${checked} of ${total} investment(s) selected`;
+}
+
+function unmergeSelectAll(check) {
+  document.querySelectorAll('.unmerge-inv-cb').forEach(cb => { cb.checked = check; });
+  updateUnmergeCount();
+}
+
+async function confirmUnmerge() {
+  const targetId = document.getElementById('unmergeTargetPool').value;
+  if (!targetId) { Toast.error('Please select the target pool.'); return; }
+
+  const ids = [...document.querySelectorAll('.unmerge-inv-cb:checked')].map(cb => cb.value);
+  if (!ids.length) { Toast.error('Select at least one investment to move back.'); return; }
+
+  const name = (document.getElementById('unmergePoolName').value || '').trim();
+  const product = document.getElementById('unmergePoolProduct').value;
+  if (!name)    { Toast.error('Pool name is required.'); return; }
+  if (!product) { Toast.error('Product type is required.'); return; }
+
+  const poolData = {
+    name,
+    product_type:        product,
+    status:              document.getElementById('unmergePoolStatus').value || 'open',
+    annual_rate:         parseFloat(document.getElementById('unmergePoolRate').value) || 0,
+    term_months:         parseInt(document.getElementById('unmergePoolTerm').value) || 6,
+    min_investment:      parseFloat(document.getElementById('unmergePoolMin').value) || 1000,
+    start_date:          document.getElementById('unmergePoolStart').value || null,
+    end_date:            document.getElementById('unmergePoolEnd').value || null,
+    maturity_date:       document.getElementById('unmergePoolEnd').value || null,
+    partner_name:        (document.getElementById('unmergePoolPartner').value || '').trim() || null,
+    risk_level:          document.getElementById('unmergePoolRisk').value || 'medium',
+    description:         (document.getElementById('unmergePoolDesc').value || '').trim() || null,
+  };
+
+  const targetName = (STATE.pools.find(p => p.id === targetId)?.name) || targetId;
+  if (!await Confirm.ask(`Restore pool "${name}"?`, {
+    body: `${ids.length} investment(s) will be moved from "${targetName}" to the new pool "${name}". This cannot be undone.`,
+    confirmLabel: 'Restore Pool',
+  })) return;
+
+  try {
+    const token = localStorage.getItem('svc_token');
+    const res = await fetch('/api/tables/investment_pools/unmerge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ investment_ids: ids, pool: poolData }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Unmerge failed');
+    Modal.close('unmergePoolModal');
+    Toast.success(`Pool "${name}" restored — ${data.moved} investment(s) moved back.`);
+    await Promise.all([loadPools(), loadInvestments()]);
+  } catch (e) {
+    Toast.error('Unmerge failed: ' + e.message);
+  }
+}
+
 async function deletePool(id) {
   const pool = STATE.pools.find(p => p.id === id);
   const name = pool?.name || id;
