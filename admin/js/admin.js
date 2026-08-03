@@ -3892,6 +3892,14 @@ async function openKycReview(id) {
 
   // --- Document pane ---
   if (docContent) {
+    docContent._zoom = 1;
+    const _zoomBar = () => `
+      <div style="display:flex;align-items:center;gap:6px;padding:5px 10px;background:rgba(0,0,0,0.35);border-bottom:1px solid rgba(255,255,255,0.08);flex-shrink:0">
+        <button class="btn btn--ghost btn--sm" onclick="_docZoom(-0.25)" title="Zoom out" style="padding:3px 7px"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
+        <span id="docZoomLabel" style="font-size:0.75rem;color:var(--text-muted);min-width:40px;text-align:center">100%</span>
+        <button class="btn btn--ghost btn--sm" onclick="_docZoom(0.25)" title="Zoom in" style="padding:3px 7px"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+        <button class="btn btn--ghost btn--sm" onclick="_docZoom(0)" title="Reset to fit" style="padding:3px 8px;font-size:0.72rem">Fit</button>
+      </div>`;
     const _dlBtn = (href, filename, isExternal) => `
       <div style="padding:8px 12px;background:rgba(0,0,0,0.25);border-top:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;gap:8px;flex-shrink:0">
         <a href="${href}" ${isExternal ? 'target="_blank" rel="noopener"' : `download="${_esc(filename||'document')}"`}
@@ -3907,8 +3915,11 @@ async function openKycReview(id) {
       if (mime.startsWith('image/')) {
         docContent.innerHTML = `
           <div style="display:flex;flex-direction:column;height:100%">
-            <div style="flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;padding:12px">
-              <img src="${doc.file_data}" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:8px">
+            ${_zoomBar()}
+            <div style="flex:1;overflow:auto;display:flex;justify-content:center;padding:12px">
+              <div id="docZoomTarget" style="transition:transform 0.15s;transform-origin:top center">
+                <img src="${doc.file_data}" style="max-width:100%;border-radius:8px;display:block">
+              </div>
             </div>
             ${_dlBtn(doc.file_data, fname, false)}
           </div>`;
@@ -3920,8 +3931,11 @@ async function openKycReview(id) {
         docContent._pdfBlobUrl = blobUrl;
         docContent.innerHTML = `
           <div style="display:flex;flex-direction:column;height:100%">
-            <div style="flex:1">
-              <iframe src="${blobUrl}" style="width:100%;height:100%;border:none;border-radius:8px 8px 0 0"></iframe>
+            ${_zoomBar()}
+            <div style="flex:1;overflow:auto">
+              <div id="docZoomTarget" style="transition:transform 0.15s;transform-origin:top center">
+                <iframe src="${blobUrl}" style="width:100%;height:800px;border:none;display:block"></iframe>
+              </div>
             </div>
             ${_dlBtn(doc.file_data, fname, false)}
           </div>`;
@@ -3935,16 +3949,22 @@ async function openKycReview(id) {
       if (isImg) {
         docContent.innerHTML = `
           <div style="display:flex;flex-direction:column;height:100%">
-            <div style="flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;padding:12px">
-              <img src="${doc.file_url}" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:8px">
+            ${_zoomBar()}
+            <div style="flex:1;overflow:auto;display:flex;justify-content:center;padding:12px">
+              <div id="docZoomTarget" style="transition:transform 0.15s;transform-origin:top center">
+                <img src="${doc.file_url}" style="max-width:100%;border-radius:8px;display:block">
+              </div>
             </div>
             ${_dlBtn(doc.file_url, fname, true)}
           </div>`;
       } else if (isPDF) {
         docContent.innerHTML = `
           <div style="display:flex;flex-direction:column;height:100%">
-            <div style="flex:1">
-              <iframe src="${doc.file_url}" style="width:100%;height:100%;border:none;border-radius:8px 8px 0 0"></iframe>
+            ${_zoomBar()}
+            <div style="flex:1;overflow:auto">
+              <div id="docZoomTarget" style="transition:transform 0.15s;transform-origin:top center">
+                <iframe src="${doc.file_url}" style="width:100%;height:800px;border:none;display:block"></iframe>
+              </div>
             </div>
             ${_dlBtn(doc.file_url, fname, true)}
           </div>`;
@@ -4013,6 +4033,17 @@ function closeKycReview() {
   _reviewingKycId = null;
   const docContent = document.getElementById('kycReviewDocContent');
   if (docContent?._pdfBlobUrl) { URL.revokeObjectURL(docContent._pdfBlobUrl); docContent._pdfBlobUrl = null; }
+  docContent._zoom = 1;
+}
+
+function _docZoom(delta) {
+  const docContent = document.getElementById('kycReviewDocContent');
+  if (!docContent) return;
+  docContent._zoom = delta === 0 ? 1 : Math.min(4, Math.max(0.25, (docContent._zoom || 1) + delta));
+  const target = document.getElementById('docZoomTarget');
+  if (target) { target.style.transform = `scale(${docContent._zoom})`; target.style.transformOrigin = 'top center'; }
+  const label = document.getElementById('docZoomLabel');
+  if (label) label.textContent = Math.round(docContent._zoom * 100) + '%';
 }
 
 async function _saveKycReviewNotes() {
