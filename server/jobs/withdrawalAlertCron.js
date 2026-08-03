@@ -37,13 +37,11 @@ async function runWithdrawalAlert() {
       LIMIT 20
     `);
 
-    const admins = [
-      { email: 'Kagiso@svcapital.co.za',      first_name: 'Kagiso' },
-      { email: 'Ayanda@svcapital.co.za',      first_name: 'Ayanda' },
-      { email: 'Linda@svcapital.co.za',       first_name: 'Linda' },
-      { email: 'Ordireleng@svcapital.co.za',  first_name: 'Ordireleng' },
-      { email: 'Balepi@svcapital.co.za',      first_name: 'Balepi' },
-    ];
+    const { rows: admins } = await pool.query(
+      `SELECT email, first_name FROM users
+        WHERE role IN ('admin', 'director') AND email IS NOT NULL
+        ORDER BY first_name`
+    );
 
     for (const admin of admins) {
       await emailService.sendWithdrawalAlert(admin, {

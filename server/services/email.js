@@ -497,7 +497,7 @@ function sendWithdrawalRejected(investor, { amount, reference, reason }) {
       </div>
       <p><strong>${_fmt(amount)} has been returned to your SV Capital wallet.</strong></p>
       <p>If you believe this is an error or need further assistance, please contact our support team by raising a ticket.</p>
-      <a href="${BASE_URL}/portal/" class="btn">Contact Support →</a>
+      <a href="${BASE_URL}/portal/" class="btn">Go to My Portal →</a>
     `),
     text: `Hi ${first_name}, your withdrawal of ${_fmt(amount)} (ref: ${reference}) was declined and the funds have been returned to your wallet.${reason ? ' Reason: ' + reason : ''} Contact support if you need help.`,
   });
@@ -635,11 +635,11 @@ function sendMonthlyStatement(investor, { investments, recentTransactions }) {
   </div>
 
   <div style="text-align:center;margin-bottom:24px">
-    <a href="${process.env.PORTAL_URL || 'https://svcapital.co.za/portal'}" style="display:inline-block;background:linear-gradient(135deg,#fec24f,#fec24f);color:#000;font-weight:700;font-size:14px;padding:14px 32px;border-radius:10px;text-decoration:none">View Full Portfolio →</a>
+    <a href="${BASE_URL}/portal/" style="display:inline-block;background:linear-gradient(135deg,#fec24f,#fec24f);color:#000;font-weight:700;font-size:14px;padding:14px 32px;border-radius:10px;text-decoration:none">View Full Portfolio →</a>
   </div>
 
   <div style="text-align:center;font-size:11px;color:#4b5563;line-height:1.6">
-    <p>SV Capital (Pty) Ltd · Registered Investment Manager · FSP Number XXXXX</p>
+    <p>SV Capital (Pty) Ltd · Registered Investment Manager · FSP #52449</p>
     <p>This statement is for information purposes only and does not constitute financial advice.</p>
     <p>Effective overall return: <strong style="color:#10b981">${effectiveReturn}</strong></p>
   </div>
@@ -830,7 +830,6 @@ function sendKycRejected(investor, { reason, notes } = {}) {
 
 /* ── 16. FICA re-verification reminder ───────────────────── */
 function sendFicaResubmitReminder(investor) {
-  const BASE_URL = process.env.BASE_URL || 'https://portal.svcapital.co.za';
   if (investor.id) setImmediate(() => push.sendPushToInvestor(investor.id, {
     title: '📋 FICA/KYC Renewal Required',
     body: 'Your verification documents are approaching their 3-year renewal date. Please resubmit via My Profile.',

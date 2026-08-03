@@ -232,7 +232,7 @@ router.post('/run',
             'INSERT INTO password_reset_tokens (jti, user_id, expires_at) VALUES ($1, $2, $3)',
             [jti, newUser.id, expiresAt]
           );
-          const resetLink = `${BASE_URL}/reset-password?token=${token}`;
+          const resetLink = `${BASE_URL}/reset-password.html?token=${token}`;
           setImmediate(() =>
             emailService.sendAccountSetup(newUser.email, newUser.first_name || firstName, resetLink)
               .catch(err => console.error('[migrate] setup email failed:', newUser.email, err.message))
@@ -428,7 +428,7 @@ router.post('/resend-setup-emails',
           [jti, user.id, expiresAt]
         );
 
-        const resetLink = `${BASE_URL}/reset-password?token=${token}`;
+        const resetLink = `${BASE_URL}/reset-password.html?token=${token}`;
         await emailService.sendAccountSetup(user.email, user.first_name || user.email, resetLink);
         sent++;
       } catch (err) {
