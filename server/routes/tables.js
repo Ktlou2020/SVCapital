@@ -482,6 +482,20 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
         LIMIT $${params.length - 1} OFFSET $${params.length}
       `;
       countQuery = `SELECT COUNT(*) FROM investments i LEFT JOIN investment_pools ip ON ip.id = i.pool_id ${invWhere}`;
+    } else if (table === 'kyc_documents') {
+      // Exclude file_data (base64 blobs) from list queries — fetching thousands of
+      // documents with embedded file contents times out. File data is only fetched
+      // by specific routes (bankVerify, portal) that select it explicitly.
+      query = `
+        SELECT id, investor_id, doc_type, status, file_url, file_name, notes,
+               reviewed_by, reviewed_at, submitted_at, created_at, updated_at,
+               sub_account_id, investor_name, reviewed_date, expiry_date, doc_subtype
+        FROM kyc_documents
+        ${where}
+        ${orderClause}
+        LIMIT $${params.length - 1} OFFSET $${params.length}
+      `;
+      countQuery = `SELECT COUNT(*) FROM kyc_documents ${where}`;
     } else {
       query = `
         SELECT * FROM ${table}

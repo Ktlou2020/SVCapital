@@ -3211,7 +3211,11 @@ async function loadKYC() {
     // Filters are wired via inline onchange/oninput in HTML; guard against double-wiring the status filter
     const kycFilterEl = document.getElementById('kycStatusFilter');
     if (kycFilterEl && !kycFilterEl._wired) { kycFilterEl._wired = true; }
-  } catch (e) { Toast.error('Failed to load KYC data'); }
+  } catch (e) {
+    Toast.error('Failed to load KYC data');
+    const kycBody = document.getElementById('kycBody');
+    if (kycBody) kycBody.innerHTML = '<tr><td colspan="8" class="text-center text-muted" style="padding:32px"><i class="fa-solid fa-triangle-exclamation" style="margin-right:8px;color:#fec24f"></i>Failed to load KYC documents — please refresh the page.</td></tr>';
+  }
 }
 
 function renderKYCStats() {
