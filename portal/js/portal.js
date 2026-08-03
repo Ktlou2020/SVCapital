@@ -788,13 +788,11 @@ function renderStatementAssistCard(meta = {}) {
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn--secondary btn--sm" onclick="applyStatementPreset('30d')">Last 30 days</button>
         <button class="btn btn--secondary btn--sm" onclick="applyStatementPreset('90d')">Last 90 days</button>
-        <button class="btn btn--secondary btn--sm" onclick="applyStatementPreset('tax')">Tax year</button>
         <button class="btn btn--secondary btn--sm" onclick="applyStatementPreset('all')">All activity</button>
       </div>
       <div style="font-size:0.76rem;color:var(--text-muted);line-height:1.6">
         <div><strong style="color:#1a1a1a">Current range:</strong> ${fmtDate(fromVal)} — ${fmtDate(toVal)}</div>
         <div style="margin-top:4px"><strong style="color:#1a1a1a">Included sections:</strong> ${sections.length ? sections.join(', ') : 'Portfolio summary will be added automatically'}</div>
-        <div style="margin-top:4px"><strong style="color:#1a1a1a">Tax certificate:</strong> IT3(b) for year ending Feb ${taxYear}</div>
       </div>
       ${_statementAssistMeta?.generatedAt ? `<div style="padding:10px 12px;border-radius:10px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.18);font-size:0.75rem;color:#166534;line-height:1.55"><strong>Last preview generated:</strong> ${_statementAssistMeta.generatedAt}<br>${_statementAssistMeta.summary || ''}</div>` : `<div style="padding:10px 12px;border-radius:10px;background:rgba(254,194,79,0.08);border:1px solid rgba(254,194,79,0.18);font-size:0.75rem;color:#9a5d00;line-height:1.55">Generate a preview once, then use Print / Save PDF to complete the task without re-entering your settings.</div>`}
     </div>`;
