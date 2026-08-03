@@ -11,6 +11,7 @@
 const router = require('express').Router();
 const pool   = require('../db/pool');
 const audit  = require('../services/audit');
+const email  = require('../services/email');
 const { requireAuth } = require('../middleware/auth');
 
 const VALID_INSTRUCTIONS = ['payout_all', 'payout_return', 'payout_custom', 'reinvest', 'switch_product', 'custom_switch'];
@@ -73,6 +74,27 @@ router.post('/:id/instruction', requireAuth, async (req, res) => {
       description: `Maturity instruction set to '${instruction}'${isStaff ? ' by staff on behalf of investor' : ''}`,
       platform: req.headers['x-platform'] || null,
     }).catch(() => {});
+
+    // Fire-and-forget confirmation email to the investor
+    const _invId = inv.investor_id;
+    const _poolName = inv.pool_name || inv.pool_id;
+    const _endDate = inv.end_date;
+    setImmediate(async () => {
+      try {
+        const { rows: [investor] } = await pool.query(
+          'SELECT first_name, last_name, email FROM investors WHERE id = $1',
+          [_invId]
+        );
+        if (investor && investor.email) {
+          email.sendMaturityInstructionConfirmed(investor, {
+            poolName: _poolName,
+            endDate: _endDate,
+            instruction,
+            onBehalf: isStaff,
+          }).catch(() => {});
+        }
+      } catch (_) {}
+    });
 
     res.json({ success: true, instruction, onBehalf: isStaff });
   } catch (err) {

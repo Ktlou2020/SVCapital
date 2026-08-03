@@ -1023,6 +1023,59 @@ function sendInternationalWaitlistConfirmation({ full_name, email, country }) {
   });
 }
 
+/* ── Maturity instruction confirmed (investor) ───────────────── */
+function sendMaturityInstructionConfirmed(investor, { poolName, endDate, instruction, onBehalf = false }) {
+  const { email, first_name } = investor;
+  if (!email) return Promise.resolve();
+
+  const LABELS = {
+    payout_all:    'Pay out full balance (principal + returns)',
+    payout_return: 'Pay out returns only — reinvest principal',
+    payout_custom: 'Custom payout amount',
+    reinvest:      'Reinvest in full (roll over)',
+    switch_product:'Switch to a different product',
+    custom_switch: 'Custom switch arrangement',
+  };
+  const label = LABELS[instruction] || instruction;
+
+  const submittedAt = new Date().toLocaleString('en-ZA', {
+    day: 'numeric', month: 'long', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+    timeZone: 'Africa/Johannesburg', timeZoneName: 'short',
+  });
+
+  const onBehalfNote = onBehalf
+    ? `<p style="font-size:0.84rem;background:#fffbf0;border-left:3px solid #fec24f;padding:10px 14px;border-radius:0 8px 8px 0;margin:14px 0">
+         This instruction was submitted by the SV Capital support team on your behalf.
+       </p>`
+    : '';
+
+  return _send({
+    to: email,
+    subject: `Maturity instruction confirmed — ${poolName || 'your investment'}`,
+    type: 'maturity_alert',
+    html: _wrap(`
+      <h2>Maturity Instruction Confirmed ✅</h2>
+      <p>Hi ${escHtml(first_name)}, your maturity instruction for <strong>${escHtml(poolName || 'your investment')}</strong> has been received and recorded.</p>
+      ${onBehalfNote}
+      <div class="box">
+        <div class="row"><span class="lbl">Pool</span><span class="val">${escHtml(poolName || '—')}</span></div>
+        <div class="row"><span class="lbl">Instruction</span><span class="val gold">${escHtml(label)}</span></div>
+        <div class="row"><span class="lbl">Maturity Date</span><span class="val">${_date(endDate)}</span></div>
+        <div class="row"><span class="lbl">Confirmed At</span><span class="val">${submittedAt}</span></div>
+      </div>
+      <p>You may update this instruction at any time before <strong>17:00 (SA time) on ${_date(endDate)}</strong>.
+         After this cutoff, please contact support to make any changes.</p>
+      <a href="${BASE_URL}/portal/" class="btn">Manage My Investment →</a>
+      <p style="font-size:0.82rem;color:#999;margin-top:18px">
+        If you did not submit this instruction or believe this is an error, contact us immediately at
+        <a href="mailto:support@svcapital.co.za" style="color:#fec24f">support@svcapital.co.za</a>.
+      </p>
+    `),
+    text: `Hi ${first_name}, your maturity instruction for ${poolName || 'your investment'} has been confirmed.\n\nInstruction: ${label}\nMaturity Date: ${_date(endDate)}\nConfirmed At: ${submittedAt}\n\nYou can update this instruction before 17:00 (SA time) on ${_date(endDate)} via your portal: ${BASE_URL}/portal/\n\nIf you did not submit this, contact support@svcapital.co.za immediately.`,
+  });
+}
+
 /* ── Withdrawal alert to admins ─────────────────────────────── */
 function sendWithdrawalAlert(admin, { count, total, requests }) {
   const { email, first_name } = admin;
@@ -1097,4 +1150,5 @@ module.exports = {
   sendAlert,
   sendInternationalWaitlistConfirmation,
   sendWithdrawalAlert,
+  sendMaturityInstructionConfirmed,
 };
