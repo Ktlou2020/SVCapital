@@ -2,6 +2,6 @@
 <resources>
     <string name="app_name">SV Capital</string>
     <string name="title_activity_main">SV Capital</string>
-    <string name="package_name">co.za.svcapital.investor</string>
+    <string name="package_name">co.za.svcapital.app</string>
     <string name="custom_url_scheme">svcapital</string>
 </resources>
