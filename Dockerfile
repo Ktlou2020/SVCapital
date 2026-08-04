@@ -33,6 +33,8 @@ COPY terms.html      ./
 COPY popia.html      ./
 COPY paia.html       ./
 COPY complaints.html ./
+COPY robots.txt      ./
+COPY sitemap.xml     ./
 
 # Copy server (with node_modules from build stage)
 COPY server/    ./server/
