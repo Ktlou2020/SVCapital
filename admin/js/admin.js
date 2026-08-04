@@ -2051,9 +2051,10 @@ async function viewInvestor(id) {
       </div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px">
-      <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center">
+      <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center;position:relative" id="walletTile-${inv.id}">
         <div style="font-size:1.05rem;font-weight:800;color:#fec24f">${Utils.rand(inv.wallet_balance)}</div>
         <div style="font-size:0.72rem;color:var(--text-muted)">Wallet</div>
+        <button onclick="_quickEditWallet('${inv.id}')" title="Edit wallet balance" style="position:absolute;top:5px;right:6px;background:none;border:none;cursor:pointer;color:var(--text-muted);padding:2px;line-height:1;font-size:0.7rem;opacity:0.6" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.6"><i class="fa-solid fa-pen"></i></button>
       </div>
       <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center">
         <div style="font-size:1.05rem;font-weight:800;color:var(--text)">${Utils.rand(totalInvested)}</div>
@@ -2547,6 +2548,63 @@ async function reconcileInvestorWallet(investorId, btn) {
       if (inv) inv.wallet_balance = d.computed;
     } catch (e) { Toast.error('Reconciliation failed: ' + (e.message || 'unknown error')); }
   });
+}
+
+async function _quickEditWallet(investorId) {
+  const inv = STATE.investors.find(i => i.id === investorId);
+  if (!inv) return;
+  const tile = document.getElementById('walletTile-' + investorId);
+  if (!tile) return;
+  const oldBal = parseFloat(inv.wallet_balance) || 0;
+  tile.innerHTML = `
+    <div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:4px">Set wallet balance</div>
+    <input id="qwEdit-${investorId}" type="number" min="0" step="0.01" value="${oldBal}"
+      style="width:100%;padding:4px 6px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85rem;text-align:center;margin-bottom:6px">
+    <div style="display:flex;gap:4px;justify-content:center">
+      <button onclick="_quickEditWalletSave('${investorId}')" class="btn btn--success btn--sm" style="padding:3px 10px;font-size:0.72rem">Save</button>
+      <button onclick="_quickEditWalletCancel('${investorId}', ${oldBal})" class="btn btn--secondary btn--sm" style="padding:3px 8px;font-size:0.72rem">Cancel</button>
+    </div>`;
+  tile.querySelector('input')?.select();
+}
+
+function _quickEditWalletCancel(investorId, oldBal) {
+  const inv = STATE.investors.find(i => i.id === investorId);
+  const tile = document.getElementById('walletTile-' + investorId);
+  if (!tile) return;
+  tile.innerHTML = `
+    <div style="font-size:1.05rem;font-weight:800;color:#fec24f">${Utils.rand(inv?.wallet_balance ?? oldBal)}</div>
+    <div style="font-size:0.72rem;color:var(--text-muted)">Wallet</div>
+    <button onclick="_quickEditWallet('${investorId}')" title="Edit wallet balance" style="position:absolute;top:5px;right:6px;background:none;border:none;cursor:pointer;color:var(--text-muted);padding:2px;line-height:1;font-size:0.7rem;opacity:0.6" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.6"><i class="fa-solid fa-pen"></i></button>`;
+}
+
+async function _quickEditWalletSave(investorId) {
+  const inv   = STATE.investors.find(i => i.id === investorId);
+  const input = document.getElementById('qwEdit-' + investorId);
+  if (!inv || !input) return;
+  const nb     = parseFloat(input.value);
+  const oldBal = parseFloat(inv.wallet_balance) || 0;
+  if (isNaN(nb) || nb < 0) { Toast.error('Enter a valid amount'); return; }
+  const diff    = Math.round((nb - oldBal) * 100) / 100;
+  const diffStr = diff >= 0 ? `+${Utils.rand(diff)}` : `-${Utils.rand(Math.abs(diff))}`;
+  const name    = `${inv.first_name} ${inv.last_name}`;
+  const confirmed = await Confirm.ask('Set wallet balance?', {
+    body: `Investor: ${name}\nCurrent: ${Utils.rand(oldBal)} → New: ${Utils.rand(nb)} (${diffStr})\n\nNo transaction record will be created.`,
+    confirmLabel: 'Set Balance',
+    danger: nb < oldBal,
+  });
+  if (!confirmed) return;
+  try {
+    const res = await API._fetch('POST', 'admin/override-wallet', { investorId, newBalance: nb, notes: 'Quick edit from profile tile' });
+    if (res.success) {
+      inv.wallet_balance = nb;
+      Toast.success(`Wallet set to ${Utils.rand(nb)}`);
+    } else {
+      Toast.error(res.error || 'Override failed');
+    }
+  } catch (e) {
+    Toast.error('Override failed: ' + (e.message || 'unknown error'));
+  }
+  _quickEditWalletCancel(investorId, nb);
 }
 
 async function overrideWalletBalance(investorId, name, btn) {
