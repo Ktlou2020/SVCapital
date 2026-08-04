@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+
+Disallow: /portal/
+Disallow: /admin/
+Disallow: /api/
+
+Sitemap: https://platform.svcapital.co.za/sitemap.xml
