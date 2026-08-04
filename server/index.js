@@ -213,6 +213,10 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
+/* ─── SEO Files — must be before the .html redirect middleware ─── */
+app.get('/sitemap.xml', (_req, res) => res.sendFile(path.join(__dirname, '..', 'sitemap.xml'), { headers: { 'Content-Type': 'application/xml', 'Cache-Control': 'public, max-age=86400' } }));
+app.get('/robots.txt',  (_req, res) => res.sendFile(path.join(__dirname, '..', 'robots.txt'),  { headers: { 'Content-Type': 'text/plain',       'Cache-Control': 'public, max-age=86400' } }));
+
 /* ─── Legal Pages — served directly at both /page and /page.html ─── */
 // These must come BEFORE the .html redirect so they are never intercepted.
 ['terms', 'popia', 'paia', 'complaints'].forEach(page => {
