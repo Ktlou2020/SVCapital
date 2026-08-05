@@ -2083,13 +2083,16 @@ async function viewInvestor(id) {
           <div class="info-row"><span class="info-row__label">Branch Code</span><span class="info-row__value">${bankBranch}</span></div>
           <div class="info-row"><span class="info-row__label">Status</span><span class="info-row__value"><span class="badge ${bCls[bStatus]}">${bLbl[bStatus]}</span></span></div>
         </div>
-        ${bStatus!=='none'?`<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-          <button class="btn btn--secondary btn--sm" onclick='viewBankProof(${JSON.stringify(inv.id)})'><i class="fa-solid fa-arrow-up-right-from-square"></i> View Proof of Bank</button>
-          ${bStatus==='pending'?`
-            <button class="btn btn--success btn--sm" onclick='approveBankAccount(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-check"></i> Approve</button>
-            <button class="btn btn--danger btn--sm" onclick='rejectBankAccount(${JSON.stringify(inv.id)})'><i class="fa-solid fa-xmark"></i> Reject</button>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <button class="btn btn--secondary btn--sm" onclick='editBankDetails(${JSON.stringify(inv.id)})'><i class="fa-solid fa-pen-to-square"></i> Edit</button>
+          ${bStatus!=='none'?`
+            <button class="btn btn--secondary btn--sm" onclick='viewBankProof(${JSON.stringify(inv.id)})'><i class="fa-solid fa-arrow-up-right-from-square"></i> View Proof of Bank</button>
+            ${bStatus==='pending'?`
+              <button class="btn btn--success btn--sm" onclick='approveBankAccount(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-check"></i> Approve</button>
+              <button class="btn btn--danger btn--sm" onclick='rejectBankAccount(${JSON.stringify(inv.id)})'><i class="fa-solid fa-xmark"></i> Reject</button>
+            `:''}
           `:''}
-        </div>`:''}
+        </div>
       </div>
     </div>
     <div class="flex-between mt-16" style="flex-wrap:wrap;gap:8px">
@@ -2750,6 +2753,51 @@ async function _pendingProofOfBankDocs(investorId) {
     const res = await API.kyc.list({ investor_id: investorId, limit: 200 });
     return (res.data || []).filter(d => d.doc_type === 'proof_of_bank' && ['pending', 'under_review'].includes(d.status));
   } catch (_) { return []; }
+}
+
+function editBankDetails(investorId) {
+  const inv = STATE.investors.find(i => i.id === investorId);
+  if (!inv) return;
+  document.getElementById('ebf-investor-id').value     = investorId;
+  document.getElementById('editBankSubtitle').textContent = `${inv.first_name} ${inv.last_name}`;
+  document.getElementById('ebf-bank-name').value        = inv.bank_name           || '';
+  document.getElementById('ebf-account-holder').value   = inv.bank_account_holder || '';
+  document.getElementById('ebf-account-number').value   = inv.bank_account_number || '';
+  document.getElementById('ebf-branch-code').value      = inv.bank_branch_code    || '';
+  document.getElementById('ebf-account-type').value     = inv.bank_account_type   || 'current';
+  document.getElementById('ebf-account-status').value   = inv.bank_account_status || 'none';
+  document.getElementById('ebf-notes').value            = inv.bank_account_notes  || '';
+  Modal.open('editBankModal');
+}
+
+async function _saveBankDetails(btn) {
+  const investorId = document.getElementById('ebf-investor-id').value;
+  if (!investorId) return;
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
+  try {
+    const payload = {
+      bank_name:            document.getElementById('ebf-bank-name').value.trim()       || null,
+      bank_account_holder:  document.getElementById('ebf-account-holder').value.trim()  || null,
+      bank_account_number:  document.getElementById('ebf-account-number').value.trim()  || null,
+      bank_branch_code:     document.getElementById('ebf-branch-code').value.trim()     || null,
+      bank_account_type:    document.getElementById('ebf-account-type').value           || 'current',
+      bank_account_status:  document.getElementById('ebf-account-status').value         || 'none',
+      bank_account_notes:   document.getElementById('ebf-notes').value.trim()           || null,
+    };
+    await API._fetch('PATCH', `tables/investors/${investorId}`, payload);
+    const inv = STATE.investors.find(i => i.id === investorId);
+    if (inv) Object.assign(inv, payload);
+    Toast.success('Banking details saved.');
+    Modal.close('editBankModal');
+    await viewInvestor(investorId);
+    _invTab('overview');
+  } catch (e) {
+    Toast.error('Failed to save: ' + (e.message || 'unknown error'));
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }
 }
 
 async function approveBankAccount(investorId, btn) {
