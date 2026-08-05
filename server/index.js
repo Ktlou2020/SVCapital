@@ -322,6 +322,10 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
   const { startMaturityCron } = require('./jobs/maturityCron');
   startMaturityCron();
 
+  // Start PE review reminder cron (daily 08:00 SAST)
+  const { startReviewReminderCron } = require('./jobs/reviewReminderCron');
+  startReviewReminderCron();
+
   // Interest is credited at maturity only (maturityCron) — monthly accrual disabled.
   // const { startInterestCron } = require('./jobs/interestCron');
   // startInterestCron();

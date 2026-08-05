@@ -255,12 +255,14 @@
     <div class="panel-tab" data-tab="financials">Financials</div>
     <div class="panel-tab" data-tab="updates">Updates</div>
     <div class="panel-tab" data-tab="fees">Fees</div>
+    <div class="panel-tab" data-tab="reviews">Reviews</div>
     <div class="panel-tab" data-tab="documents">Documents</div>
   </div>
   <div id="cp-overview"   class="panel-tab-body active"></div>
   <div id="cp-financials" class="panel-tab-body"></div>
   <div id="cp-updates"    class="panel-tab-body"></div>
   <div id="cp-fees"       class="panel-tab-body"></div>
+  <div id="cp-reviews"    class="panel-tab-body"></div>
   <div id="cp-documents"  class="panel-tab-body"></div>
 </div>
 
@@ -573,6 +575,31 @@
   </div>
 </div>
 
+<!-- ══ ADD REVIEW MODAL ══ -->
+<div id="review-modal" class="modal-overlay">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-header">
+      <span id="review-modal-title">Schedule Review</span>
+      <button class="modal-close" onclick="closeModal('review-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="review-form" onsubmit="event.preventDefault(); saveReview()">
+        <div class="form-grid">
+          <input type="hidden" name="company_id" />
+          <div class="form-group"><label>Review Date *</label><input name="review_date" type="date" required /></div>
+          <div class="form-group"><label>Next Review Date</label><input name="next_review_date" type="date" /></div>
+          <div class="form-group full"><label>Attendees</label><input name="attendees" placeholder="e.g. Jane Smith, John Doe" /></div>
+          <div class="form-group full"><label>Meeting Notes</label><textarea name="notes" rows="5" placeholder="Summary of the meeting, key decisions, action items…"></textarea></div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('review-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveReview()"><i class="fa-solid fa-save"></i> Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ ADD UPDATE MODAL ══ -->
 <div id="update-modal" class="modal-overlay">
   <div class="modal" style="max-width:500px">
@@ -605,6 +632,6 @@
 </div>
 
 <script src="/js/staff-auth.js"></script>
-<script src="js/pe-monitor.js?v=10"></script>
+<script src="js/pe-monitor.js?v=11"></script>
 </body>
 </html>

@@ -1209,6 +1209,19 @@ CREATE TABLE IF NOT EXISTS pe_updates (
   updated_at   TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS pe_updates_company_idx ON pe_updates(company_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS pe_reviews (
+  id               TEXT PRIMARY KEY,
+  company_id       TEXT NOT NULL REFERENCES pe_companies(id) ON DELETE CASCADE,
+  review_date      DATE NOT NULL,
+  next_review_date DATE,
+  notes            TEXT,
+  attendees        TEXT,
+  created_at       TIMESTAMPTZ DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS pe_reviews_company_idx ON pe_reviews(company_id, review_date DESC);
+CREATE INDEX IF NOT EXISTS pe_reviews_next_idx    ON pe_reviews(next_review_date);
 `;
 
 /* Default product catalogue — seeded once, then fully editable in the admin

@@ -52,6 +52,7 @@ let _deals      = [];
 let _financials = [];
 let _fees       = [];
 let _updates    = [];
+let _reviews    = [];
 let _activeView = 'dashboard';
 let _openCompanyId = null;
 let _openDealId    = null;
@@ -159,12 +160,13 @@ async function safeFetch(table) {
 }
 
 async function loadAll() {
-  [_companies, _deals, _financials, _fees, _updates] = await Promise.all([
+  [_companies, _deals, _financials, _fees, _updates, _reviews] = await Promise.all([
     safeFetch('pe_companies'),
     safeFetch('pe_deals'),
     safeFetch('pe_financials'),
     safeFetch('pe_fees'),
     safeFetch('pe_updates'),
+    safeFetch('pe_reviews'),
   ]);
 }
 
@@ -691,11 +693,52 @@ function openCompanyPanel(id) {
         <div class="fee-amt">${fmtR(f.amount)}</div>
       </div>`).join('') : '<p style="color:var(--text-muted);font-size:13px">No fees recorded.</p>'}`;
 
+  // Reviews tab
+  renderReviewsTab(id);
+
   // Open to overview tab
   switchPanelTab('overview');
   panel.classList.add('open');
   // Load documents tab in background
   loadCompanyDocs(id);
+}
+
+function renderReviewsTab(companyId) {
+  const reviews = _reviews
+    .filter(r => r.company_id === companyId)
+    .sort((a, b) => new Date(b.review_date) - new Date(a.review_date));
+
+  const next = reviews.find(r => r.next_review_date);
+  const nextDate = next?.next_review_date;
+  const daysUntil = nextDate ? Math.round((new Date(nextDate) - new Date()) / 86400000) : null;
+
+  document.getElementById('cp-reviews').innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div>
+        ${nextDate ? `
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:3px">Next Review</div>
+          <div style="font-size:14px;font-weight:600">${fmtDate(nextDate)}
+            <span style="font-size:12px;font-weight:400;color:${daysUntil <= 14 ? 'var(--danger)' : 'var(--text-muted)'};margin-left:6px">${daysUntil !== null ? (daysUntil === 0 ? 'Today' : daysUntil < 0 ? `${Math.abs(daysUntil)}d overdue` : `in ${daysUntil}d`) : ''}</span>
+          </div>` : '<div style="font-size:13px;color:var(--text-muted)">No review scheduled</div>'}
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="openAddReview('${esc(companyId)}')">
+        <i class="fa-solid fa-calendar-plus"></i> Schedule Review
+      </button>
+    </div>
+    ${reviews.length ? reviews.map(r => `
+      <div class="review-item">
+        <div class="review-header">
+          <span class="review-date"><i class="fa-solid fa-calendar-check" style="margin-right:6px;color:var(--accent)"></i>${fmtDate(r.review_date)}</span>
+          ${r.next_review_date ? `<span style="font-size:12px;color:var(--text-muted)">Next: ${fmtDate(r.next_review_date)}</span>` : ''}
+        </div>
+        ${r.attendees ? `<div class="review-attendees"><i class="fa-solid fa-users" style="margin-right:5px;color:var(--text-muted)"></i>${esc(r.attendees)}</div>` : ''}
+        ${r.notes ? `<div class="review-notes">${esc(r.notes)}</div>` : ''}
+        <div style="margin-top:8px">
+          <button class="btn btn-ghost btn-sm" onclick="openEditReview('${esc(r.id)}')"><i class="fa-solid fa-pen"></i> Edit</button>
+          <button class="btn btn-ghost btn-sm" onclick="deleteReview('${esc(r.id)}','${esc(companyId)}')"><i class="fa-solid fa-trash" style="color:var(--danger)"></i></button>
+        </div>
+      </div>`).join('')
+    : '<p style="color:var(--text-muted);font-size:13px">No reviews recorded yet.</p>'}`;
 }
 
 function switchPanelTab(tab) {
@@ -759,7 +802,35 @@ async function updateDealStage(id, stage) {
     await loadAll();
     renderPipeline();
     openDealPanel(id);
+
+    if (stage === 'closed') {
+      const deal = _deals.find(d => d.id === id);
+      if (deal) await _autoCreateCompanyFromDeal(deal);
+    }
   } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function _autoCreateCompanyFromDeal(deal) {
+  if (!deal.company_name) return;
+  const existing = _companies.find(c =>
+    c.name.trim().toLowerCase() === deal.company_name.trim().toLowerCase()
+  );
+  if (existing) return; // already exists
+  try {
+    const coData = {
+      id:          'peco-' + uid(),
+      name:        deal.company_name,
+      sector:      deal.sector || null,
+      status:      'portfolio',
+      description: deal.deal_description || null,
+      entry_date:  new Date().toISOString().split('T')[0],
+    };
+    await apiCreate('pe_companies', coData);
+    await loadAll();
+    alert(`Company "${deal.company_name}" has been automatically added to your Portfolio.`);
+  } catch (e) {
+    console.warn('[PE] Auto-create company failed:', e.message);
+  }
 }
 
 /* ═══════════════════════════════════════════════════
@@ -1037,6 +1108,26 @@ async function deleteDoc(docId, afterFn) {
   if (afterFn) afterFn();
 }
 
+function _docListHtml(docs, companyId, docType) {
+  if (!docs.length) return `<p style="color:var(--text-muted);font-size:13px;padding:4px 0">None yet.</p>`;
+  return docs.map(d => `
+    <div class="doc-existing-item">
+      ${_docIcon(d.mimetype)}
+      <div class="doc-existing-info">
+        <div class="doc-existing-label">${esc(d.label || d.filename)}</div>
+        <div class="doc-existing-meta">${fmtDate(d.uploaded_at)}</div>
+      </div>
+      <a href="/api/pe/documents/${esc(d.id)}/download" target="_blank"
+        class="btn btn-ghost btn-sm" title="Download" onclick="event.stopPropagation()">
+        <i class="fa-solid fa-download"></i>
+      </a>
+      <button class="btn btn-ghost btn-sm" title="Delete"
+        onclick="deleteDoc('${esc(d.id)}', () => loadCompanyDocs('${esc(companyId)}'))">
+        <i class="fa-solid fa-trash" style="color:var(--danger)"></i>
+      </button>
+    </div>`).join('');
+}
+
 async function loadCompanyDocs(companyId) {
   const el = document.getElementById('cp-documents');
   if (!el) return;
@@ -1046,47 +1137,46 @@ async function loadCompanyDocs(companyId) {
       credentials: 'include', headers: _authHeaders(),
     });
     const json = await res.json();
-    const docs = json.docs || [];
+    const all  = json.docs || [];
+    const agreements = all.filter(d => d.doc_type === 'partnership');
+    const other      = all.filter(d => d.doc_type !== 'partnership');
+
     el.innerHTML = `
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-        <span style="font-size:13px;font-weight:600">Documents (${docs.length})</span>
-        <label class="btn btn-primary btn-sm doc-attach-btn" style="cursor:pointer">
+      <!-- Partnership Agreements -->
+      <div class="doc-section-header" style="margin-top:0">
+        <span><i class="fa-solid fa-file-signature" style="margin-right:6px;color:var(--accent)"></i>Partnership Agreements (${agreements.length})</span>
+        <label class="btn btn-ghost btn-sm doc-attach-btn" style="cursor:pointer">
+          <i class="fa-solid fa-upload"></i> Upload Agreement
+          <input type="file" multiple accept=".pdf,.doc,.docx,image/jpeg,image/png"
+            style="display:none"
+            onchange="uploadCompanyDoc(event.target.files,'${esc(companyId)}','partnership')">
+        </label>
+      </div>
+      <div style="margin-bottom:20px">${_docListHtml(agreements, companyId, 'partnership')}</div>
+
+      <!-- General Documents -->
+      <div class="doc-section-header">
+        <span><i class="fa-solid fa-folder-open" style="margin-right:6px;color:var(--accent)"></i>General Documents (${other.length})</span>
+        <label class="btn btn-ghost btn-sm doc-attach-btn" style="cursor:pointer">
           <i class="fa-solid fa-upload"></i> Upload
           <input type="file" multiple accept=".pdf,.doc,.docx,image/jpeg,image/png,image/webp"
             style="display:none"
-            onchange="uploadAndRefreshCompanyDocs(event.target.files,'${esc(companyId)}')">
+            onchange="uploadCompanyDoc(event.target.files,'${esc(companyId)}','general')">
         </label>
       </div>
-      ${docs.length ? docs.map(d => `
-        <div class="doc-existing-item">
-          ${_docIcon(d.mimetype)}
-          <div class="doc-existing-info">
-            <div class="doc-existing-label">${esc(d.label || d.filename)}</div>
-            <div class="doc-existing-meta">${d.doc_type} · ${fmtDate(d.uploaded_at)}</div>
-          </div>
-          <a href="/api/pe/documents/${esc(d.id)}/download" target="_blank"
-            class="btn btn-ghost btn-sm" title="Download"
-            onclick="event.stopPropagation()">
-            <i class="fa-solid fa-download"></i>
-          </a>
-          <button class="btn btn-ghost btn-sm" title="Delete"
-            onclick="deleteDoc('${esc(d.id)}', () => loadCompanyDocs('${esc(companyId)}'))">
-            <i class="fa-solid fa-trash" style="color:var(--danger)"></i>
-          </button>
-        </div>`).join('')
-      : '<p style="color:var(--text-muted);font-size:13px">No documents attached yet.</p>'}`;
+      ${_docListHtml(other, companyId, 'general')}`;
   } catch (err) {
     el.innerHTML = `<p style="color:var(--danger);font-size:13px">Could not load documents.</p>`;
   }
 }
 
-async function uploadAndRefreshCompanyDocs(files, companyId) {
+async function uploadCompanyDoc(files, companyId, docType) {
   try {
     for (const f of files) {
       const fd = new FormData();
       fd.append('document', f);
       fd.append('label', f.name);
-      fd.append('doc_type', 'AFS');
+      fd.append('doc_type', docType);
       fd.append('company_id', companyId);
       const r = await fetch('/api/pe/documents/upload', {
         method: 'POST', credentials: 'include', headers: _authHeaders(), body: fd,
@@ -1095,6 +1185,10 @@ async function uploadAndRefreshCompanyDocs(files, companyId) {
     }
     loadCompanyDocs(companyId);
   } catch (e) { alert('Upload error: ' + e.message); }
+}
+
+async function uploadAndRefreshCompanyDocs(files, companyId) {
+  return uploadCompanyDoc(files, companyId, 'general');
 }
 
 async function loadDealDocs(dealId) {
@@ -1406,7 +1500,9 @@ async function saveFee() {
    'invoice_date','due_date','paid_date','invoice_number','notes'].forEach(k => {
     data[k] = f.elements[k]?.value || null;
   });
-  if (!data.company_id || !data.amount) { alert('Company and amount are required'); return; }
+  if (!data.company_id) { alert('Please select a company'); return; }
+  if (!data.amount)     { alert('Amount is required'); return; }
+  if (!data.period_start || !data.period_end) { alert('Period start and end dates are required'); return; }
   try {
     if (editId) {
       await apiUpdate('pe_fees', editId, { ...data, updated_at: new Date().toISOString() });
@@ -1418,6 +1514,67 @@ async function saveFee() {
     await loadAll();
     renderView(_activeView);
     if (_openCompanyId) openCompanyPanel(_openCompanyId);
+  } catch(e) { alert('Error: ' + _cleanErr(e.message)); }
+}
+
+// ── Reviews ──
+function openAddReview(companyId) {
+  document.getElementById('review-form').reset();
+  delete document.getElementById('review-form').dataset.editId;
+  document.getElementById('review-modal-title').textContent = 'Schedule Review';
+  document.getElementById('review-form').elements['company_id'].value = companyId || '';
+  // Default review_date to today
+  document.getElementById('review-form').elements['review_date'].value = new Date().toISOString().split('T')[0];
+  // Default next_review_date to 3 months from now
+  const next = new Date();
+  next.setMonth(next.getMonth() + 3);
+  document.getElementById('review-form').elements['next_review_date'].value = next.toISOString().split('T')[0];
+  document.getElementById('review-modal').classList.add('open');
+}
+
+function openEditReview(id) {
+  const r = _reviews.find(r => r.id === id);
+  if (!r) return;
+  document.getElementById('review-modal-title').textContent = 'Edit Review';
+  const f = document.getElementById('review-form');
+  f.dataset.editId = id;
+  ['company_id','review_date','next_review_date','attendees','notes'].forEach(k => {
+    const el = f.elements[k];
+    if (el) el.value = r[k] != null ? r[k] : '';
+  });
+  document.getElementById('review-modal').classList.add('open');
+}
+
+async function saveReview() {
+  const f = document.getElementById('review-form');
+  const editId = f.dataset.editId;
+  const data = {};
+  ['company_id','review_date','next_review_date','attendees','notes'].forEach(k => {
+    data[k] = f.elements[k]?.value || null;
+  });
+  if (!data.company_id)   { alert('Company is required'); return; }
+  if (!data.review_date)  { alert('Review date is required'); return; }
+  try {
+    if (editId) {
+      await apiUpdate('pe_reviews', editId, { ...data, updated_at: new Date().toISOString() });
+    } else {
+      data.id = 'perev-' + uid();
+      await apiCreate('pe_reviews', data);
+    }
+    closeModal('review-modal');
+    await loadAll();
+    if (_openCompanyId) openCompanyPanel(_openCompanyId);
+    switchPanelTab('reviews');
+  } catch(e) { alert('Error: ' + _cleanErr(e.message)); }
+}
+
+async function deleteReview(id, companyId) {
+  if (!confirm('Delete this review record?')) return;
+  try {
+    await apiDelete('pe_reviews', id);
+    await loadAll();
+    if (_openCompanyId) openCompanyPanel(_openCompanyId);
+    switchPanelTab('reviews');
   } catch(e) { alert('Error: ' + e.message); }
 }
 

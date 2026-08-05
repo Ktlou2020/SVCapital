@@ -141,6 +141,7 @@ const ALLOWED_TABLES = {
   pe_financials:            'id',
   pe_fees:                  'id',
   pe_updates:               'id',
+  pe_reviews:               'id',
 };
 
 /* ─── Tables that require admin/director role for READ ─── */
@@ -1396,8 +1397,9 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
       });
     }
   } catch (err) {
-    console.error('[tables]', err);
-    res.status(500).json({ error: 'Internal server error.' });
+    console.error('[tables POST]', req.params.table, err.message);
+    const msg = err.detail || err.message || 'Internal server error.';
+    res.status(500).json({ error: msg });
   }
 });
 

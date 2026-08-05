@@ -618,6 +618,52 @@ td.num { font-variant-numeric: tabular-nums; text-align: right; white-space: now
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ── Review Items ── */
+.review-item {
+  background: var(--bg-row);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+}
+.review-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.review-date {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.review-attendees {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.review-notes {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  margin-top: 6px;
+}
+
+/* ── Document Section Headers ── */
+.doc-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-top: 18px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
 @media (max-width: 768px) {
   .sidebar { display: none; }
   .form-grid { grid-template-columns: 1fr; }
