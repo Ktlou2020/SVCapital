@@ -22,4 +22,4 @@ The single canonical purple across the entire platform is `#eda5ff`. No other pu
 Platform fee is 1% of investment amount. Fee transactions must always display as **negative** in all transaction lists and statements.
 
 ## Sub-Account Invest Gate
-`openSaInvest()` must check `wallet_balance >= min_investment + platform_fee` before navigating to the marketplace. Uses cheapest open pool as the threshold.
+`openSaInvest()` must check `wallet_balance >= min_investment` before navigating to the marketplace. Uses cheapest open pool as the threshold. Fee is inclusive (taken from the wallet amount, not added on top).

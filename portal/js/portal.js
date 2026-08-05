@@ -4110,7 +4110,7 @@ function _marketPoolCardHtml(pool, idx, walletBal, waitlist, investorId) {
     } else {
       ctaHtml = `<div class="pool-card__need-topup">
                    <i class="fa-solid fa-wallet"></i>
-                   <span>Need ${Utils.rand(Math.max(0, _minPlusFee(pool) - walletBal))} more in wallet (incl. 1% fee)</span>
+                   <span>Need ${Utils.rand(Math.max(0, _minPlusFee(pool) - walletBal))} more in wallet</span>
                    <button class="btn btn--ghost btn--sm" onclick="navigate('wallet',document.querySelector('[data-view=wallet]'))">Top Up</button>
                  </div>`;
     }
@@ -4460,16 +4460,16 @@ async function joinWaitlist(poolId) {
   }
 }
 
-/* Platform fee charged on every investment (1% of the amount, on top of it). */
+/* Platform fee is taken FROM the wallet spend (fee-inclusive model).
+   User enters total wallet amount; fee ≈ 0.99% of that; pool gets the rest. */
 const PLATFORM_FEE_RATE = 0.01;
-function _platformFee(amount) {
-  return Math.round((parseFloat(amount) || 0) * PLATFORM_FEE_RATE * 100) / 100;
+function _platformFee(walletAmount) {
+  return Math.round((parseFloat(walletAmount) || 0) * (PLATFORM_FEE_RATE / (1 + PLATFORM_FEE_RATE)) * 100) / 100;
 }
-/* Wallet needed to make the smallest allowed investment in a pool: the pool
-   minimum plus the platform fee charged on that minimum. */
+/* Minimum wallet balance needed to invest in this pool.
+   Fee comes from the amount, so no extra top-up required. */
 function _minPlusFee(pool) {
-  const min = parseFloat(pool.min_investment) || 0;
-  return min + _platformFee(min);
+  return parseFloat(pool.min_investment) || 0;
 }
 
 function openInvestModal(poolId) {
@@ -4518,7 +4518,7 @@ function openInvestModal(poolId) {
              <i class="fa-solid fa-triangle-exclamation" style="color:#ef4444;font-size:1.1rem;flex-shrink:0"></i>
              <div>
                <div style="font-weight:700;color:#ef4444;font-size:0.9rem">Wallet top-up required</div>
-               <div style="font-size:0.78rem;color:#6b7280;margin-top:2px">You have <strong style="color:#1a1a1a">${Utils.rand(walletBal)}</strong> — you need <strong style="color:#1a1a1a">${Utils.rand(_minPlusFee(pool))}</strong> to invest the minimum (${Utils.rand(pool.min_investment)} + ${Utils.rand(_platformFee(pool.min_investment))} fee).</div>
+               <div style="font-size:0.78rem;color:#6b7280;margin-top:2px">You have <strong style="color:#1a1a1a">${Utils.rand(walletBal)}</strong> — you need <strong style="color:#1a1a1a">${Utils.rand(_minPlusFee(pool))}</strong> to invest. The 1% platform fee is included in that amount.</div>
              </div>
            </div>
            <button class="btn btn--primary btn--sm" style="width:100%" onclick="Modal.close('investModal');navigate('wallet',document.querySelector('[data-view=wallet]'))">
@@ -4535,28 +4535,28 @@ function openInvestModal(poolId) {
     <div class="form-group" style="margin-top:14px">
       <label class="form-label">How much would you like to invest?</label>
       <div class="invest-quickpick mb-8">
-        ${[pool.min_investment, 5000, 10000, 25000].filter(v => (v + _platformFee(v)) <= walletBal || v === pool.min_investment).map(v =>
+        ${[pool.min_investment, 5000, 10000, 25000].filter(v => v <= walletBal || v === pool.min_investment).map(v =>
           `<button class="invest-qp-btn" onclick="document.getElementById('investAmount').value=${v};_updateInvestCalc(${v},${pool.annual_rate},${pool.term_months},${pool.min_investment},${walletBal})">${Utils.rand(v)}</button>`
         ).join('')}
       </div>
       <input type="number" class="form-input" id="investAmount"
         placeholder="Enter amount (min ${Utils.rand(pool.min_investment)})"
-        min="${pool.min_investment}" max="${Math.floor(walletBal / (1 + PLATFORM_FEE_RATE))}"
+        min="${pool.min_investment}" max="${walletBal}"
         oninput="_updateInvestCalc(parseFloat(this.value)||0,${pool.annual_rate},${pool.term_months},${pool.min_investment},${walletBal})" />
     </div>
     <div id="investInsufficientBanner" style="display:none"></div>
 
 
-    <!-- Wallet deduction breakdown (amount invested + platform fee) -->
+    <!-- Wallet deduction breakdown (fee-inclusive: user enters wallet spend) -->
     <div id="investFeeBreakdown" style="margin-top:12px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;padding:10px 14px;font-size:0.84rem">
       <div style="display:flex;justify-content:space-between;padding:3px 0;color:var(--text-muted)">
-        <span>Amount invested</span><span id="ic-fee-amount" style="font-weight:600;color:#1a1a1a">—</span>
+        <span>Pool investment</span><span id="ic-fee-amount" style="font-weight:600;color:#1a1a1a">—</span>
       </div>
       <div style="display:flex;justify-content:space-between;padding:3px 0;color:var(--text-muted)">
         <span>Platform fee (1%)</span><span id="ic-fee-fee" style="font-weight:600;color:#1a1a1a">—</span>
       </div>
       <div style="display:flex;justify-content:space-between;padding:7px 0 1px;margin-top:5px;border-top:1px dashed rgba(0,0,0,0.12);font-weight:700">
-        <span>Total deducted from ${_activeSa ? 'sub-account' : 'wallet'}</span><span id="ic-fee-total" style="color:#1a1a1a">—</span>
+        <span>Total from ${_activeSa ? 'sub-account' : 'wallet'}</span><span id="ic-fee-total" style="color:#1a1a1a">—</span>
       </div>
     </div>
 
@@ -4577,16 +4577,16 @@ function _updateInvestCalc(amt, rate, termMonths, minInvest, walletBal) {
   const feeFeeEl = document.getElementById('ic-fee-fee');
   const feeTotEl = document.getElementById('ic-fee-total');
 
+  // Fee-inclusive: fee comes FROM amt, pool gets the remainder
   const fee        = _platformFee(amt);
-  const totalNeeded = amt + fee;
-  const maxAffordable = walletBal ? Math.floor(walletBal / (1 + PLATFORM_FEE_RATE)) : null;
-  const overBudget  = walletBal != null && totalNeeded > walletBal + 0.005;
+  const poolAmt    = Math.round((amt - fee) * 100) / 100;
+  const overBudget = walletBal != null && amt > walletBal + 0.005;
 
   if (amt >= minInvest) {
-    if (feeAmtEl) feeAmtEl.textContent = Utils.rand(amt, 2);
+    if (feeAmtEl) feeAmtEl.textContent = Utils.rand(poolAmt, 2);
     if (feeFeeEl) feeFeeEl.textContent = Utils.rand(fee, 2);
     if (feeTotEl) {
-      feeTotEl.textContent = Utils.rand(totalNeeded, 2);
+      feeTotEl.textContent = Utils.rand(amt, 2);
       feeTotEl.style.color = overBudget ? '#ef4444' : '#1a1a1a';
     }
   } else {
@@ -4595,25 +4595,25 @@ function _updateInvestCalc(amt, rate, termMonths, minInvest, walletBal) {
     if (feeTotEl) { feeTotEl.textContent = '—'; feeTotEl.style.color = '#1a1a1a'; }
   }
 
-  // Over-budget: show top-up prompt with max investable guide
+  // Over-budget: show top-up prompt
   if (banner) {
-    if (overBudget && maxAffordable != null) {
-      const canInvest = maxAffordable >= minInvest;
+    if (overBudget) {
+      const canInvest = walletBal >= minInvest;
       banner.style.display = 'block';
       banner.innerHTML = `
         <div style="margin-top:10px;background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.25);border-radius:10px;padding:12px 14px">
           <div style="display:flex;align-items:flex-start;gap:10px">
             <i class="fa-solid fa-circle-exclamation" style="color:#ef4444;margin-top:2px;flex-shrink:0"></i>
             <div style="flex:1">
-              <div style="font-size:0.83rem;font-weight:700;color:#ef4444;margin-bottom:4px">Insufficient funds including the platform fee</div>
+              <div style="font-size:0.83rem;font-weight:700;color:#ef4444;margin-bottom:4px">Amount exceeds available balance</div>
               <div style="font-size:0.78rem;color:#6b7280;line-height:1.5">
-                You need <strong style="color:#1a1a1a">${Utils.rand(totalNeeded, 2)}</strong> (${Utils.rand(amt)} + ${Utils.rand(fee, 2)} fee) but your wallet has <strong style="color:#1a1a1a">${Utils.rand(walletBal)}</strong>.
+                You entered <strong style="color:#1a1a1a">${Utils.rand(amt, 2)}</strong> but your wallet has <strong style="color:#1a1a1a">${Utils.rand(walletBal)}</strong>.
                 ${canInvest
-                  ? `The most you can invest right now is <strong style="color:#1a1a1a">${Utils.rand(maxAffordable)}</strong>.`
+                  ? `The most you can invest right now is <strong style="color:#1a1a1a">${Utils.rand(walletBal)}</strong>.`
                   : `This exceeds your available balance even at the minimum investment.`}
               </div>
               <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-                ${canInvest ? `<button class="btn btn--secondary btn--sm" onclick="document.getElementById('investAmount').value=${maxAffordable};_updateInvestCalc(${maxAffordable},${rate},${termMonths},${minInvest},${walletBal})">Use max (${Utils.rand(maxAffordable)})</button>` : ''}
+                ${canInvest ? `<button class="btn btn--secondary btn--sm" onclick="document.getElementById('investAmount').value=${walletBal};_updateInvestCalc(${walletBal},${rate},${termMonths},${minInvest},${walletBal})">Use max (${Utils.rand(walletBal)})</button>` : ''}
                 <button class="btn btn--primary btn--sm" onclick="Modal.close('investModal');navigate('wallet',document.querySelector('[data-view=wallet]'))"><i class="fa-solid fa-plus"></i> Top Up Wallet</button>
               </div>
             </div>
@@ -4629,14 +4629,18 @@ function _updateInvestCalc(amt, rate, termMonths, minInvest, walletBal) {
 }
 
 async function confirmInvestment(pool) {
-  const amount = parseFloat(document.getElementById('investAmount').value);
-  if (!amount || amount < pool.min_investment) { Toast.error(`Minimum investment is ${Utils.rand(pool.min_investment)}`); return; }
+  // walletSpend = what user entered (total leaving wallet, fee-inclusive)
+  const walletSpend = parseFloat(document.getElementById('investAmount').value);
+  if (!walletSpend || walletSpend < pool.min_investment) { Toast.error(`Minimum investment is ${Utils.rand(pool.min_investment)}`); return; }
 
   const _confSa = _pmSaId ? PORTAL.subAccounts.find(s => s.id === _pmSaId) : null;
   const wallet = _confSa ? (parseFloat(_confSa.wallet_balance) || 0) : (parseFloat(PORTAL.investor?.wallet_balance) || 0);
-  const platformFee = _platformFee(amount);
-  const totalDeducted = amount + platformFee;
-  if (totalDeducted > wallet) { Toast.error(`Insufficient balance. This investment requires ${Utils.rand(totalDeducted)} (${Utils.rand(amount)} + ${Utils.rand(platformFee)} platform fee).`); return; }
+  if (walletSpend > wallet + 0.005) { Toast.error(`Insufficient balance. You have ${Utils.rand(wallet)} in your wallet.`); return; }
+
+  // Split wallet spend into pool amount + fee (server still charges fee on pool amount)
+  const amount = Math.round((walletSpend / (1 + PLATFORM_FEE_RATE)) * 100) / 100;
+  const platformFee = Math.round((walletSpend - amount) * 100) / 100;
+  const totalDeducted = walletSpend;
 
   try {
     const expectedReturn = amount * pool.annual_rate * (pool.term_months / 12);
@@ -4665,13 +4669,13 @@ async function confirmInvestment(pool) {
       is_reinvestment: false,
     });
 
-    // Record investment transaction
+    // Record investment transaction (walletSpend = total deducted from wallet)
     await API.transactions.create({
       id:          Utils.genId('TXN'),
       investor_id: PORTAL.investor?.id,
       investor_name:    `${PORTAL.investor.first_name} ${PORTAL.investor.last_name}`,
       type:             'investment',
-      amount:           amount,
+      amount:           walletSpend,
       status:           'completed',
       reference:        `INVST-${Date.now()}`,
       description:      `Investment into ${pool.name}`,
@@ -4696,7 +4700,7 @@ async function confirmInvestment(pool) {
       }
     }
 
-    Toast.success(`Successfully invested ${Utils.rand(amount)} in ${pool.name}!`);
+    Toast.success(`Successfully invested ${Utils.rand(walletSpend)} in ${pool.name}!`);
     Modal.close('investModal');
 
     SVC.track('purchase', { transaction_id: investmentId, value: amount, currency: 'ZAR', items: [{ item_id: pool.id, item_name: pool.name, item_category: pool.product_type, price: amount, quantity: 1 }] });
@@ -8808,7 +8812,7 @@ function openSaInvest(saId) {
   const bal      = parseFloat(sa.wallet_balance) || 0;
   const openPools = (PORTAL.pools || []).filter(p => p.status === 'open');
   const minNeeded = openPools.length
-    ? Math.min(...openPools.map(p => { const m = parseFloat(p.min_investment) || 0; return Math.round((m + m * 0.01) * 100) / 100; }))
+    ? Math.min(...openPools.map(p => parseFloat(p.min_investment) || 0))
     : 0;
   if (bal <= 0 || (minNeeded > 0 && bal < minNeeded)) { _showSaNoFundsPrompt(sa, minNeeded); return; }
 
