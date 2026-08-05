@@ -151,7 +151,7 @@ async function apiDelete(table, id) {
 async function safeFetch(table) {
   try {
     const r = await apiFetch(table);
-    return r.rows || [];
+    return r.data || r.rows || [];
   } catch (e) {
     console.warn(`[PE Monitor] table '${table}' unavailable:`, e.message);
     return [];
