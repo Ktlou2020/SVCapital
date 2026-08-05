@@ -522,6 +522,36 @@ td.num { font-variant-numeric: tabular-nums; text-align: right; white-space: now
   margin: 2px;
 }
 
+/* ── Financials view AFS documents ── */
+.fin-docs-section {
+  margin-top: 24px;
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+}
+.fin-docs-header {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13px; font-weight: 600; color: var(--text);
+  margin-bottom: 14px;
+}
+.fin-docs-count {
+  background: var(--bg-row); border: 1px solid var(--border);
+  border-radius: 99px; padding: 1px 8px;
+  font-size: 11px; color: var(--text-muted);
+}
+.fin-docs-grid {
+  display: flex; flex-direction: column; gap: 8px;
+}
+.fin-doc-card {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px; border-radius: 8px;
+  background: var(--bg-card); border: 1px solid var(--border);
+}
+.fin-doc-icon { font-size: 1.4rem; color: var(--danger); flex-shrink: 0; }
+.fin-doc-info { flex: 1; min-width: 0; }
+.fin-doc-label { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fin-doc-meta  { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+.fin-doc-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
 /* ── Document Attachment Section ── */
 .doc-attach-section {
   border-top: 1px solid var(--border);

@@ -23,6 +23,26 @@ const upload = multer({
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+/* Retry up to 3 times on 529 overloaded errors with exponential backoff */
+async function callClaude(params) {
+  const MAX = 3;
+  for (let attempt = 0; attempt <= MAX; attempt++) {
+    try {
+      return await client.messages.create(params);
+    } catch (err) {
+      const overloaded = err.status === 529 ||
+        (err.message && err.message.includes('overloaded'));
+      if (overloaded && attempt < MAX) {
+        await new Promise(r => setTimeout(r, (attempt + 1) * 3000)); // 3s, 6s, 9s
+        continue;
+      }
+      // Surface a clean error message
+      if (overloaded) throw new Error('The AI service is temporarily overloaded. Please wait a moment and try again.');
+      throw err;
+    }
+  }
+}
+
 const EXTRACTION_PROMPT = `You are an expert financial analyst assistant. Carefully read the attached document (Annual Financial Statement, company profile, pitch deck, or similar) and extract the following company information.
 
 Return ONLY a JSON object with these exact keys (omit any key you cannot find — do not guess):
@@ -83,7 +103,7 @@ router.post('/extract-company', requireAuth, upload.single('document'), async (r
       ];
     }
 
-    const response = await client.messages.create({
+    const response = await callClaude({
       model:      'claude-opus-5',
       max_tokens: 1024,
       thinking:   { type: 'adaptive' },
@@ -152,7 +172,7 @@ router.post('/extract-deal', requireAuth, upload.single('document'), async (req,
       ];
     }
 
-    const response = await client.messages.create({
+    const response = await callClaude({
       model:      'claude-opus-5',
       max_tokens: 1024,
       thinking:   { type: 'adaptive' },
@@ -230,7 +250,7 @@ router.post('/extract-financials', requireAuth, upload.single('document'), async
       ];
     }
 
-    const response = await client.messages.create({
+    const response = await callClaude({
       model:      'claude-opus-5',
       max_tokens: 1024,
       thinking:   { type: 'adaptive' },

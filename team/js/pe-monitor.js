@@ -90,6 +90,19 @@ function sectorColor(sector) {
   return SECTOR_COLORS[i % SECTOR_COLORS.length];
 }
 
+/* ── Clean up raw API error messages ── */
+function _cleanErr(msg = '') {
+  try {
+    const m = msg.match(/\{[\s\S]*\}/);
+    if (m) {
+      const o = JSON.parse(m[0]);
+      if (o?.error?.type === 'overloaded_error') return 'The AI service is temporarily overloaded — please try again in a moment.';
+      if (o?.error?.message) return o.error.message;
+    }
+  } catch (_) {}
+  return msg;
+}
+
 /* ── API ── */
 function _authHeaders(extra = {}) {
   const token = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
@@ -460,6 +473,51 @@ function renderFinancialsView() {
         <tbody>${tableRows}</tbody>
       </table>
     </div>`;
+
+  loadFinViewDocs(companyId);
+}
+
+async function loadFinViewDocs(companyId) {
+  const wrap = document.getElementById('fin-docs-wrap');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  try {
+    const res  = await fetch(`/api/pe/documents/list?company_id=${encodeURIComponent(companyId)}`, {
+      credentials: 'include', headers: _authHeaders(),
+    });
+    const json = await res.json();
+    const docs = (json.docs || []).filter(d => d.doc_type === 'AFS' || d.label?.includes('AFS'));
+    if (!docs.length) return;
+
+    wrap.innerHTML = `
+      <div class="fin-docs-section">
+        <div class="fin-docs-header">
+          <i class="fa-solid fa-file-pdf" style="color:var(--danger)"></i>
+          AFS Documents
+          <span class="fin-docs-count">${docs.length}</span>
+        </div>
+        <div class="fin-docs-grid">
+          ${docs.map(d => `
+            <div class="fin-doc-card">
+              <div class="fin-doc-icon"><i class="fa-solid fa-file-pdf"></i></div>
+              <div class="fin-doc-info">
+                <div class="fin-doc-label">${esc(d.label || d.filename)}</div>
+                <div class="fin-doc-meta">${fmtDate(d.uploaded_at)}</div>
+              </div>
+              <div class="fin-doc-actions">
+                <a href="/api/pe/documents/${esc(d.id)}/download" target="_blank"
+                   class="btn btn-primary btn-sm" title="Download">
+                  <i class="fa-solid fa-download"></i> Download
+                </a>
+                <button class="btn btn-ghost btn-sm" title="Delete"
+                  onclick="deleteDoc('${esc(d.id)}', () => loadFinViewDocs('${esc(companyId)}'))">
+                  <i class="fa-solid fa-trash" style="color:var(--danger)"></i>
+                </button>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>`;
+  } catch (_) { /* silent */ }
 }
 
 /* ═══════════════════════════════════════════════════
@@ -770,7 +828,7 @@ async function extractFromDocument(file) {
     loading.style.display = 'none';
     idle.style.display    = 'flex';
     idle.querySelector('span').textContent = 'Upload AFS or company doc — AI will pre-fill the form';
-    alert('AI extraction error: ' + err.message);
+    alert('AI extraction error: ' + _cleanErr(err.message));
   } finally {
     zone.style.pointerEvents = '';
     document.getElementById('ai-doc-input').value = '';
@@ -824,7 +882,7 @@ async function extractFromDealDocument(file) {
     loading.style.display = 'none';
     idle.style.display    = 'flex';
     idle.querySelector('span').textContent = 'Upload pitch deck, IM or term sheet — AI will pre-fill the form';
-    alert('AI extraction error: ' + err.message);
+    alert('AI extraction error: ' + _cleanErr(err.message));
   } finally {
     zone.style.pointerEvents = '';
     document.getElementById('deal-ai-doc-input').value = '';
