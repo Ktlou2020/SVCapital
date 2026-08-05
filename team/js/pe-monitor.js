@@ -91,9 +91,16 @@ function sectorColor(sector) {
 }
 
 /* ── API ── */
+function _authHeaders(extra = {}) {
+  const token = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
+  return token ? { 'Authorization': `Bearer ${token}`, ...extra } : extra;
+}
 async function apiFetch(table, params = {}) {
   const qs = new URLSearchParams(params).toString();
-  const res = await fetch(`${API_BASE}/${table}${qs ? '?' + qs : ''}`, { credentials: 'include' });
+  const res = await fetch(`${API_BASE}/${table}${qs ? '?' + qs : ''}`, {
+    credentials: 'include',
+    headers: _authHeaders(),
+  });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
@@ -101,7 +108,7 @@ async function apiCreate(table, data) {
   const res = await fetch(`${API_BASE}/${table}`, {
     method: 'POST',
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
+    headers: _authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(data),
   });
   if (!res.ok) { const t = await res.text(); throw new Error(t); }
@@ -111,14 +118,18 @@ async function apiUpdate(table, id, data) {
   const res = await fetch(`${API_BASE}/${table}/${id}`, {
     method: 'PUT',
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
+    headers: _authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(data),
   });
   if (!res.ok) { const t = await res.text(); throw new Error(t); }
   return res.json();
 }
 async function apiDelete(table, id) {
-  const res = await fetch(`${API_BASE}/${table}/${id}`, { method: 'DELETE', credentials: 'include' });
+  const res = await fetch(`${API_BASE}/${table}/${id}`, {
+    method: 'DELETE',
+    credentials: 'include',
+    headers: _authHeaders(),
+  });
   if (!res.ok) { const t = await res.text(); throw new Error(t); }
   return res.json();
 }
@@ -625,6 +636,8 @@ function openCompanyPanel(id) {
   // Open to overview tab
   switchPanelTab('overview');
   panel.classList.add('open');
+  // Load documents tab in background
+  loadCompanyDocs(id);
 }
 
 function switchPanelTab(tab) {
@@ -679,6 +692,7 @@ function openDealPanel(id) {
     </div>`;
 
   document.getElementById('deal-panel').classList.add('open');
+  loadDealDocs(id);
 }
 
 async function updateDealStage(id, stage) {
@@ -818,6 +832,236 @@ async function extractFromDealDocument(file) {
 }
 
 /* ═══════════════════════════════════════════════════
+   DOCUMENT ATTACHMENTS (AFS / Supporting Docs)
+   ═══════════════════════════════════════════════════ */
+
+let _companyDocQueue = [];
+let _dealDocQueue    = [];
+
+function _docIcon(mimetype) {
+  if (mimetype === 'application/pdf') return '<i class="fa-solid fa-file-pdf" style="color:var(--danger)"></i>';
+  if (mimetype.startsWith('image/'))  return '<i class="fa-solid fa-file-image" style="color:var(--accent)"></i>';
+  return '<i class="fa-solid fa-file-lines" style="color:var(--text-muted)"></i>';
+}
+
+function renderDocQueue(queue, queueListId, queueName) {
+  const el = document.getElementById(queueListId);
+  if (!el) return;
+  if (!queue.length) { el.innerHTML = ''; return; }
+  el.innerHTML = queue.map((item, i) => `
+    <div class="doc-queue-item">
+      ${_docIcon(item.file.type)}
+      <input class="doc-label-input" value="${esc(item.label)}"
+        onchange="updateDocLabel('${queueName}',${i},this.value)"
+        placeholder="Label (e.g. AFS 2024)">
+      <span class="doc-filename" title="${esc(item.file.name)}">${esc(item.file.name)}</span>
+      <button class="icon-btn" onclick="removeDocFromQueue('${queueName}',${i})" title="Remove">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>`).join('');
+}
+
+function queueCompanyDoc(files) {
+  Array.from(files).forEach(f => _companyDocQueue.push({ file: f, label: f.name }));
+  renderDocQueue(_companyDocQueue, 'company-doc-queue', 'company');
+  document.getElementById('company-doc-input').value = '';
+}
+
+function queueDealDoc(files) {
+  Array.from(files).forEach(f => _dealDocQueue.push({ file: f, label: f.name }));
+  renderDocQueue(_dealDocQueue, 'deal-doc-queue', 'deal');
+  document.getElementById('deal-doc-input').value = '';
+}
+
+function updateDocLabel(queueName, i, val) {
+  if (queueName === 'company') _companyDocQueue[i].label = val;
+  else _dealDocQueue[i].label = val;
+}
+
+function removeDocFromQueue(queueName, i) {
+  if (queueName === 'company') {
+    _companyDocQueue.splice(i, 1);
+    renderDocQueue(_companyDocQueue, 'company-doc-queue', 'company');
+  } else {
+    _dealDocQueue.splice(i, 1);
+    renderDocQueue(_dealDocQueue, 'deal-doc-queue', 'deal');
+  }
+}
+
+async function uploadDocQueue(queue, companyId, dealId) {
+  for (const item of queue) {
+    const fd = new FormData();
+    fd.append('document', item.file);
+    fd.append('label', item.label || item.file.name);
+    fd.append('doc_type', 'AFS');
+    if (companyId) fd.append('company_id', companyId);
+    if (dealId)    fd.append('deal_id', dealId);
+    const res = await fetch('/api/pe/documents/upload', {
+      method: 'POST',
+      credentials: 'include',
+      headers: _authHeaders(),
+      body: fd,
+    });
+    if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.error || 'Upload failed'); }
+  }
+}
+
+async function deleteDoc(docId, afterFn) {
+  if (!confirm('Delete this document?')) return;
+  await fetch(`/api/pe/documents/${docId}`, {
+    method: 'DELETE', credentials: 'include', headers: _authHeaders(),
+  });
+  if (afterFn) afterFn();
+}
+
+async function loadCompanyDocs(companyId) {
+  const el = document.getElementById('cp-documents');
+  if (!el) return;
+  el.innerHTML = '<p style="color:var(--text-muted);font-size:13px">Loading…</p>';
+  try {
+    const res  = await fetch(`/api/pe/documents/list?company_id=${encodeURIComponent(companyId)}`, {
+      credentials: 'include', headers: _authHeaders(),
+    });
+    const json = await res.json();
+    const docs = json.docs || [];
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <span style="font-size:13px;font-weight:600">Documents (${docs.length})</span>
+        <label class="btn btn-primary btn-sm doc-attach-btn" style="cursor:pointer">
+          <i class="fa-solid fa-upload"></i> Upload
+          <input type="file" multiple accept=".pdf,.doc,.docx,image/jpeg,image/png,image/webp"
+            style="display:none"
+            onchange="uploadAndRefreshCompanyDocs(event.target.files,'${esc(companyId)}')">
+        </label>
+      </div>
+      ${docs.length ? docs.map(d => `
+        <div class="doc-existing-item">
+          ${_docIcon(d.mimetype)}
+          <div class="doc-existing-info">
+            <div class="doc-existing-label">${esc(d.label || d.filename)}</div>
+            <div class="doc-existing-meta">${d.doc_type} · ${fmtDate(d.uploaded_at)}</div>
+          </div>
+          <a href="/api/pe/documents/${esc(d.id)}/download" target="_blank"
+            class="btn btn-ghost btn-sm" title="Download"
+            onclick="event.stopPropagation()">
+            <i class="fa-solid fa-download"></i>
+          </a>
+          <button class="btn btn-ghost btn-sm" title="Delete"
+            onclick="deleteDoc('${esc(d.id)}', () => loadCompanyDocs('${esc(companyId)}'))">
+            <i class="fa-solid fa-trash" style="color:var(--danger)"></i>
+          </button>
+        </div>`).join('')
+      : '<p style="color:var(--text-muted);font-size:13px">No documents attached yet.</p>'}`;
+  } catch (err) {
+    el.innerHTML = `<p style="color:var(--danger);font-size:13px">Could not load documents.</p>`;
+  }
+}
+
+async function uploadAndRefreshCompanyDocs(files, companyId) {
+  try {
+    for (const f of files) {
+      const fd = new FormData();
+      fd.append('document', f);
+      fd.append('label', f.name);
+      fd.append('doc_type', 'AFS');
+      fd.append('company_id', companyId);
+      const r = await fetch('/api/pe/documents/upload', {
+        method: 'POST', credentials: 'include', headers: _authHeaders(), body: fd,
+      });
+      if (!r.ok) throw new Error((await r.json()).error || 'Upload failed');
+    }
+    loadCompanyDocs(companyId);
+  } catch (e) { alert('Upload error: ' + e.message); }
+}
+
+async function loadDealDocs(dealId) {
+  const el = document.getElementById('dp-docs');
+  if (!el) return;
+  try {
+    const res  = await fetch(`/api/pe/documents/list?deal_id=${encodeURIComponent(dealId)}`, {
+      credentials: 'include', headers: _authHeaders(),
+    });
+    const json = await res.json();
+    const docs = json.docs || [];
+    el.innerHTML = `
+      <div style="border-top:1px solid var(--border);padding:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <span style="font-size:13px;font-weight:600">Documents (${docs.length})</span>
+          <label class="btn btn-primary btn-sm doc-attach-btn" style="cursor:pointer">
+            <i class="fa-solid fa-upload"></i> Upload
+            <input type="file" multiple accept=".pdf,.doc,.docx,image/jpeg,image/png,image/webp"
+              style="display:none"
+              onchange="uploadAndRefreshDealDocs(event.target.files,'${esc(dealId)}')">
+          </label>
+        </div>
+        ${docs.length ? docs.map(d => `
+          <div class="doc-existing-item">
+            ${_docIcon(d.mimetype)}
+            <div class="doc-existing-info">
+              <div class="doc-existing-label">${esc(d.label || d.filename)}</div>
+              <div class="doc-existing-meta">${d.doc_type} · ${fmtDate(d.uploaded_at)}</div>
+            </div>
+            <a href="/api/pe/documents/${esc(d.id)}/download" target="_blank"
+              class="btn btn-ghost btn-sm" title="Download"
+              onclick="event.stopPropagation()">
+              <i class="fa-solid fa-download"></i>
+            </a>
+            <button class="btn btn-ghost btn-sm" title="Delete"
+              onclick="deleteDoc('${esc(d.id)}', () => loadDealDocs('${esc(dealId)}'))">
+              <i class="fa-solid fa-trash" style="color:var(--danger)"></i>
+            </button>
+          </div>`).join('')
+        : '<p style="color:var(--text-muted);font-size:13px">No documents attached yet.</p>'}
+      </div>`;
+  } catch (_) { /* silent */ }
+}
+
+async function uploadAndRefreshDealDocs(files, dealId) {
+  try {
+    for (const f of files) {
+      const fd = new FormData();
+      fd.append('document', f);
+      fd.append('label', f.name);
+      fd.append('doc_type', 'AFS');
+      fd.append('deal_id', dealId);
+      const r = await fetch('/api/pe/documents/upload', {
+        method: 'POST', credentials: 'include', headers: _authHeaders(), body: fd,
+      });
+      if (!r.ok) throw new Error((await r.json()).error || 'Upload failed');
+    }
+    loadDealDocs(dealId);
+  } catch (e) { alert('Upload error: ' + e.message); }
+}
+
+async function _loadExistingDocsIntoModal(recordId, containerId, type) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const param = type === 'company' ? `company_id=${encodeURIComponent(recordId)}` : `deal_id=${encodeURIComponent(recordId)}`;
+  try {
+    const res  = await fetch(`/api/pe/documents/list?${param}`, { credentials: 'include', headers: _authHeaders() });
+    const json = await res.json();
+    const docs = json.docs || [];
+    if (!docs.length) { el.innerHTML = ''; return; }
+    el.innerHTML = `<div style="margin-bottom:8px;font-size:12px;color:var(--text-muted);font-weight:600">ATTACHED</div>` +
+      docs.map(d => `
+        <div class="doc-existing-item">
+          ${_docIcon(d.mimetype)}
+          <div class="doc-existing-info">
+            <div class="doc-existing-label">${esc(d.label || d.filename)}</div>
+            <div class="doc-existing-meta">${d.doc_type} · ${fmtDate(d.uploaded_at)}</div>
+          </div>
+          <a href="/api/pe/documents/${esc(d.id)}/download" target="_blank" class="btn btn-ghost btn-sm" title="Download">
+            <i class="fa-solid fa-download"></i>
+          </a>
+          <button class="btn btn-ghost btn-sm" title="Delete"
+            onclick="deleteDoc('${esc(d.id)}', () => _loadExistingDocsIntoModal('${esc(recordId)}','${containerId}','${type}'))">
+            <i class="fa-solid fa-trash" style="color:var(--danger)"></i>
+          </button>
+        </div>`).join('');
+  } catch (_) { /* silent */ }
+}
+
+/* ═══════════════════════════════════════════════════
    ADD / EDIT MODALS
    ═══════════════════════════════════════════════════ */
 
@@ -828,7 +1072,9 @@ function openAddCompany() {
   f.reset();
   f.dataset.editId = '';
   f.dataset.extractedFinancials = '';
-  // Reset AI upload zone
+  _companyDocQueue = [];
+  renderDocQueue(_companyDocQueue, 'company-doc-queue', 'company');
+  document.getElementById('company-doc-existing').innerHTML = '';
   const idle = document.getElementById('ai-upload-idle');
   if (idle) idle.querySelector('span').textContent = 'Upload AFS or company doc — AI will pre-fill the form';
   document.getElementById('company-modal').classList.add('open');
@@ -847,6 +1093,10 @@ function openEditCompany(id) {
     const el = f.elements[k];
     if (el) el.value = co[k] != null ? co[k] : '';
   });
+  _companyDocQueue = [];
+  renderDocQueue(_companyDocQueue, 'company-doc-queue', 'company');
+  // Load existing docs into modal
+  _loadExistingDocsIntoModal(id, 'company-doc-existing', 'company');
   document.getElementById('company-modal').classList.add('open');
 }
 
@@ -862,12 +1112,16 @@ async function saveCompany() {
   });
   if (!data.name || !data.sector) { alert('Name and sector are required'); return; }
   try {
+    let savedId = editId;
     if (editId) {
       await apiUpdate('pe_companies', editId, { ...data, updated_at: new Date().toISOString() });
     } else {
       data.id = 'peco-' + uid();
       await apiCreate('pe_companies', data);
+      savedId = data.id;
     }
+    if (_companyDocQueue.length) await uploadDocQueue(_companyDocQueue, savedId, null);
+    _companyDocQueue = [];
     closeModal('company-modal');
     await loadAll();
     renderView(_activeView);
@@ -881,7 +1135,9 @@ function openAddDeal() {
   document.getElementById('deal-form').reset();
   document.getElementById('deal-form').dataset.editId = '';
   document.getElementById('company-modal').classList.remove('open');
-  // Reset AI upload zone
+  _dealDocQueue = [];
+  renderDocQueue(_dealDocQueue, 'deal-doc-queue', 'deal');
+  document.getElementById('deal-doc-existing').innerHTML = '';
   const idle = document.getElementById('deal-ai-upload-idle');
   if (idle) idle.querySelector('span').textContent = 'Upload pitch deck, IM or term sheet — AI will pre-fill the form';
   document.getElementById('deal-modal').classList.add('open');
@@ -900,6 +1156,9 @@ function openEditDeal(id) {
     const el = f.elements[k];
     if (el) el.value = deal[k] != null ? deal[k] : '';
   });
+  _dealDocQueue = [];
+  renderDocQueue(_dealDocQueue, 'deal-doc-queue', 'deal');
+  _loadExistingDocsIntoModal(id, 'deal-doc-existing', 'deal');
   document.getElementById('deal-modal').classList.add('open');
 }
 
@@ -915,12 +1174,16 @@ async function saveDeal() {
   });
   if (!data.company_name) { alert('Company name is required'); return; }
   try {
+    let savedId = editId;
     if (editId) {
       await apiUpdate('pe_deals', editId, { ...data, updated_at: new Date().toISOString() });
     } else {
       data.id = 'pede-' + uid();
       await apiCreate('pe_deals', data);
+      savedId = data.id;
     }
+    if (_dealDocQueue.length) await uploadDocQueue(_dealDocQueue, null, savedId);
+    _dealDocQueue = [];
     closeModal('deal-modal');
     await loadAll();
     renderView(_activeView);

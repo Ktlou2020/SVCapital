@@ -254,11 +254,13 @@
     <div class="panel-tab" data-tab="financials">Financials</div>
     <div class="panel-tab" data-tab="updates">Updates</div>
     <div class="panel-tab" data-tab="fees">Fees</div>
+    <div class="panel-tab" data-tab="documents">Documents</div>
   </div>
   <div id="cp-overview"   class="panel-tab-body active"></div>
   <div id="cp-financials" class="panel-tab-body"></div>
   <div id="cp-updates"    class="panel-tab-body"></div>
   <div id="cp-fees"       class="panel-tab-body"></div>
+  <div id="cp-documents"  class="panel-tab-body"></div>
 </div>
 
 <!-- ══ DEAL DETAIL PANEL ══ -->
@@ -270,7 +272,8 @@
     </div>
     <button class="modal-close" onclick="closePanelOnBackdrop()">&times;</button>
   </div>
-  <div id="dp-body" class="panel-body"></div>
+  <div id="dp-body"  class="panel-body"></div>
+  <div id="dp-docs"  class="panel-body" style="padding-top:0"></div>
 </div>
 
 <!-- ══ ADD/EDIT COMPANY MODAL ══ -->
@@ -340,6 +343,18 @@
           <div class="form-group full"><label>Notes</label><textarea name="notes" rows="2"></textarea></div>
         </div>
       </form>
+      <!-- AFS / Documents section -->
+      <div class="doc-attach-section">
+        <div class="doc-attach-header">
+          <span><i class="fa-solid fa-paperclip"></i> AFS / Supporting Documents</span>
+          <label class="btn btn-ghost btn-sm doc-attach-btn">
+            <i class="fa-solid fa-plus"></i> Attach
+            <input type="file" id="company-doc-input" multiple accept=".pdf,.doc,.docx,image/jpeg,image/png,image/webp" style="display:none" onchange="queueCompanyDoc(this.files)">
+          </label>
+        </div>
+        <div id="company-doc-existing"></div>
+        <div id="company-doc-queue"></div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('company-modal')">Cancel</button>
@@ -425,6 +440,18 @@
           <div class="form-group full"><label>Decision Notes</label><textarea name="decision_notes" rows="2"></textarea></div>
         </div>
       </form>
+      <!-- AFS / Documents section -->
+      <div class="doc-attach-section">
+        <div class="doc-attach-header">
+          <span><i class="fa-solid fa-paperclip"></i> AFS / Supporting Documents</span>
+          <label class="btn btn-ghost btn-sm doc-attach-btn">
+            <i class="fa-solid fa-plus"></i> Attach
+            <input type="file" id="deal-doc-input" multiple accept=".pdf,.doc,.docx,image/jpeg,image/png,image/webp" style="display:none" onchange="queueDealDoc(this.files)">
+          </label>
+        </div>
+        <div id="deal-doc-existing"></div>
+        <div id="deal-doc-queue"></div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('deal-modal')">Cancel</button>
@@ -564,6 +591,6 @@
 </div>
 
 <script src="/js/staff-auth.js"></script>
-<script src="js/pe-monitor.js?v=6"></script>
+<script src="js/pe-monitor.js?v=7"></script>
 </body>
 </html>
