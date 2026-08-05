@@ -1606,6 +1606,49 @@ Withdraw at maturity or roll over to a new cycle',
       console.warn('⚠️  investor_id repair warning:', backfillErr.message);
     }
 
+    // 2a. Always seed PE portfolio companies (idempotent — ON CONFLICT DO UPDATE)
+    try {
+      await pool.query(`
+        INSERT INTO pe_companies
+          (id, name, sector, status, aum_amount, entry_date, description)
+        VALUES
+          ('peco-hb-svc-2025',       'Hillermann Brothers Properties Proprietary Limited', 'Property',      'portfolio', 300000000, '2025-07-01', 'Property holding company partnered with SV Capital.'),
+          ('peco-sas-svc-2025',      'Scientific Aquatic Services Pty Ltd',                'Other',         'portfolio', 1000,       '2025-07-01', 'Aquatic services company partnered with SV Capital.'),
+          ('peco-gma-svc-2025',      'GM Associates Proprietary Limited',                  'Other',         'portfolio', 50000000,   '2025-07-01', 'Associates firm partnered with SV Capital.'),
+          ('peco-edelsenz-svc-2025', 'EdelSenz Proprietary Limited',                       'Other',         'portfolio', 25000000,   '2025-08-01', 'Technology and services company partnered with SV Capital.'),
+          ('peco-steelstudio-svc-2026','New Steel Studio Proprietary Limited',             'Manufacturing', 'portfolio', NULL,       '2026-08-01', 'Steel manufacturing company partnered with SV Capital.')
+        ON CONFLICT (id) DO UPDATE SET
+          name       = EXCLUDED.name,
+          sector     = EXCLUDED.sector,
+          status     = EXCLUDED.status,
+          aum_amount = EXCLUDED.aum_amount,
+          entry_date = EXCLUDED.entry_date,
+          description = EXCLUDED.description
+      `);
+      await pool.query(`
+        INSERT INTO pe_fees
+          (id, company_id, period_start, period_end, total_fee, svc_fee, partner_fee, status, due_date)
+        VALUES
+          ('pefee-hb-2025-07',          'peco-hb-svc-2025',          '2025-07-01','2025-07-31', 10400, 5304,  5096,  'due', '2025-08-01'),
+          ('pefee-sas-2025-07',         'peco-sas-svc-2025',         '2025-07-01','2025-07-31', 40000, 20400, 19600, 'due', '2025-08-01'),
+          ('pefee-gma-2025-07',         'peco-gma-svc-2025',         '2025-07-01','2025-07-31', 40000, 20400, 19600, 'due', '2025-08-01'),
+          ('pefee-edelsenz-2025-08',    'peco-edelsenz-svc-2025',    '2025-08-01','2025-08-31', 6500,  3315,  3185,  'due', '2025-09-01'),
+          ('pefee-steelstudio-2026-08', 'peco-steelstudio-svc-2026', '2026-08-01','2026-08-31', 10500, 5355,  5145,  'due', '2026-09-01')
+        ON CONFLICT (id) DO UPDATE SET
+          company_id   = EXCLUDED.company_id,
+          period_start = EXCLUDED.period_start,
+          period_end   = EXCLUDED.period_end,
+          total_fee    = EXCLUDED.total_fee,
+          svc_fee      = EXCLUDED.svc_fee,
+          partner_fee  = EXCLUDED.partner_fee,
+          status       = EXCLUDED.status,
+          due_date     = EXCLUDED.due_date
+      `);
+      console.log('✅ PE portfolio companies seeded.');
+    } catch (peErr) {
+      console.warn('⚠️  PE portfolio seed warning:', peErr.message);
+    }
+
     // 2. Ensure the COO account exists — upsert so existing users are never wiped
     const { rows: existing } = await pool.query(
       "SELECT id FROM users WHERE email = 'coo@svcapital.co.za' LIMIT 1"
