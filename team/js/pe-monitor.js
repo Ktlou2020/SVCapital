@@ -122,19 +122,24 @@ async function apiDelete(table, id) {
 }
 
 /* ── Load all data ── */
+async function safeFetch(table) {
+  try {
+    const r = await apiFetch(table);
+    return r.rows || [];
+  } catch (e) {
+    console.warn(`[PE Monitor] table '${table}' unavailable:`, e.message);
+    return [];
+  }
+}
+
 async function loadAll() {
-  const [companies, deals, financials, fees, updates] = await Promise.all([
-    apiFetch('pe_companies'),
-    apiFetch('pe_deals'),
-    apiFetch('pe_financials'),
-    apiFetch('pe_fees'),
-    apiFetch('pe_updates'),
+  [_companies, _deals, _financials, _fees, _updates] = await Promise.all([
+    safeFetch('pe_companies'),
+    safeFetch('pe_deals'),
+    safeFetch('pe_financials'),
+    safeFetch('pe_fees'),
+    safeFetch('pe_updates'),
   ]);
-  _companies  = companies.rows  || [];
-  _deals      = deals.rows      || [];
-  _financials = financials.rows || [];
-  _fees       = fees.rows       || [];
-  _updates    = updates.rows    || [];
 }
 
 /* ── Navigation ── */
@@ -983,7 +988,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('fin-company-select')?.addEventListener('change', () => renderFinancialsView());
 
   // Load and render
-  await loadAll();
+  try { await loadAll(); } catch(e) { console.error('[PE Monitor] load failed', e); }
   populateCompanySelects();
   navigate('dashboard');
 });
