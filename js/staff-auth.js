@@ -253,6 +253,22 @@
    * RBAC helpers
    * ───────────────────────────────────────────────────────────── */
 
+  /* Fetch the employee's current app_access from the DB and update the
+     stored session so the hub reflects changes made in the Director Panel
+     without requiring the user to log out and back in. */
+  async function syncAppAccess(empId) {
+    try {
+      const base = window.__SVC_API_BASE__ || '/api/';
+      const r = await fetch(`${base}tables/employees/${empId}`);
+      if (!r.ok) return;
+      const data = await r.json();
+      const emp = data.row || data;
+      if (emp && Array.isArray(emp.app_access)) {
+        refreshSession({ appAccess: emp.app_access });
+      }
+    } catch (_) {}
+  }
+
   async function loadRbac() {
     try {
       const base = window.__SVC_API_BASE__ || '/api/';
@@ -576,6 +592,7 @@
     setSession,
     clearSession,
     refreshSession,
+    syncAppAccess,
     loadRbac,
     getAllowedApps,
     canAccess,

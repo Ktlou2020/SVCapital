@@ -629,15 +629,20 @@ window.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
+  // Sync the employee's app_access from the DB so Director Panel changes
+  // take effect immediately without requiring a logout/login cycle.
+  await StaffAuth.syncAppAccess(session.empId);
+
   // Load the director-configured RBAC matrix from the server BEFORE rendering
   // tiles. Without this, getAllowedApps() falls back to the hardcoded defaults
   // and ignores any permission changes made in the Director Panel — meaning
   // users would see apps they were not granted access to.
   await StaffAuth.loadRbac();
 
-  populateHero(session);
-  populateSession(session);
-  renderApps(session);
+  const freshSession = StaffAuth.getSession();
+  populateHero(freshSession);
+  populateSession(freshSession);
+  renderApps(freshSession);
   checkDeniedRedirect();
   loadNotifications(session);
 
