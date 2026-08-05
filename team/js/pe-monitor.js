@@ -689,14 +689,92 @@ async function updateDealStage(id, stage) {
 }
 
 /* ═══════════════════════════════════════════════════
+   AI DOCUMENT EXTRACTION
+   ═══════════════════════════════════════════════════ */
+
+async function extractFromDocument(file) {
+  if (!file) return;
+
+  const idle    = document.getElementById('ai-upload-idle');
+  const loading = document.getElementById('ai-upload-loading');
+  const status  = document.getElementById('ai-upload-status');
+  const zone    = document.getElementById('ai-upload-zone');
+
+  idle.style.display    = 'none';
+  loading.style.display = 'flex';
+  zone.style.pointerEvents = 'none';
+  status.textContent = 'Reading document…';
+
+  try {
+    const fd = new FormData();
+    fd.append('document', file);
+
+    const res = await fetch('/api/pe/extract-company', {
+      method: 'POST',
+      credentials: 'include',
+      body: fd,
+    });
+    const json = await res.json();
+    if (!res.ok || !json.ok) throw new Error(json.error || 'Extraction failed');
+
+    const f      = document.getElementById('company-form');
+    const fields = json.fields || {};
+    const FILLABLE = [
+      'name','sector','sub_sector','country','city','description','website',
+      'registration_number','vat_number','founded_year','employee_count',
+      'contact_name','contact_email','contact_phone',
+    ];
+    let filled = 0;
+    FILLABLE.forEach(k => {
+      if (fields[k] == null) return;
+      const el = f.elements[k];
+      if (!el) return;
+      el.value = fields[k];
+      filled++;
+    });
+
+    status.textContent = `Done — ${filled} field${filled !== 1 ? 's' : ''} filled`;
+    loading.style.display = 'none';
+    idle.style.display    = 'flex';
+    idle.querySelector('span').textContent = `✓ ${filled} fields pre-filled from document`;
+
+    // Store financial data for potential use, but don't auto-fill (separate table)
+    if (fields.revenue || fields.ebitda || fields.net_profit || fields.total_assets || fields.total_equity) {
+      document.getElementById('company-form').dataset.extractedFinancials = JSON.stringify({
+        revenue:       fields.revenue,
+        ebitda:        fields.ebitda,
+        net_profit:    fields.net_profit,
+        total_assets:  fields.total_assets,
+        total_equity:  fields.total_equity,
+        fy_end:        fields.financial_year_end,
+      });
+    }
+  } catch (err) {
+    status.textContent = 'Extraction failed';
+    loading.style.display = 'none';
+    idle.style.display    = 'flex';
+    idle.querySelector('span').textContent = 'Upload AFS or company doc — AI will pre-fill the form';
+    alert('AI extraction error: ' + err.message);
+  } finally {
+    zone.style.pointerEvents = '';
+    document.getElementById('ai-doc-input').value = '';
+  }
+}
+
+/* ═══════════════════════════════════════════════════
    ADD / EDIT MODALS
    ═══════════════════════════════════════════════════ */
 
 // ── Company ──
 function openAddCompany() {
   document.getElementById('company-modal-title').textContent = 'Add Company';
-  document.getElementById('company-form').reset();
-  document.getElementById('company-form').dataset.editId = '';
+  const f = document.getElementById('company-form');
+  f.reset();
+  f.dataset.editId = '';
+  f.dataset.extractedFinancials = '';
+  // Reset AI upload zone
+  const idle = document.getElementById('ai-upload-idle');
+  if (idle) idle.querySelector('span').textContent = 'Upload AFS or company doc — AI will pre-fill the form';
   document.getElementById('company-modal').classList.add('open');
 }
 

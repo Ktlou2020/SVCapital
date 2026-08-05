@@ -281,6 +281,19 @@
       <button class="modal-close" onclick="closeModal('company-modal')">&times;</button>
     </div>
     <div class="modal-body">
+      <!-- AI document extraction -->
+      <div class="ai-upload-zone" id="ai-upload-zone" onclick="document.getElementById('ai-doc-input').click()">
+        <input type="file" id="ai-doc-input" accept=".pdf,image/jpeg,image/png,image/webp" style="display:none" onchange="extractFromDocument(this.files[0])">
+        <div id="ai-upload-idle">
+          <i class="fa-solid fa-wand-magic-sparkles" style="color:#eda5ff;font-size:1.25rem"></i>
+          <span>Upload AFS or company doc — AI will pre-fill the form</span>
+          <span class="ai-upload-hint">PDF, JPEG, PNG · max 20 MB</span>
+        </div>
+        <div id="ai-upload-loading" style="display:none">
+          <span class="ai-spinner"></span>
+          <span id="ai-upload-status">Reading document…</span>
+        </div>
+      </div>
       <form id="company-form" onsubmit="event.preventDefault(); saveCompany()">
         <div class="form-grid">
           <div class="form-group full"><label>Company Name *</label><input name="name" required placeholder="e.g. Acme Technologies" /></div>
@@ -538,6 +551,6 @@
 </div>
 
 <script src="/js/staff-auth.js"></script>
-<script src="js/pe-monitor.js?v=3"></script>
+<script src="js/pe-monitor.js?v=4"></script>
 </body>
 </html>

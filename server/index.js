@@ -190,6 +190,7 @@ app.use('/api/factsheets',   require('./routes/factsheets'));
 app.use('/api/products',     require('./routes/products'));
 app.use('/api/opsconsole',  require('./routes/opsconsole'));
 app.use('/api/cattle',      require('./routes/cattle'));
+app.use('/api/pe',          require('./routes/pe-extract'));
 
 
 /* ─── Health Check ─────────────────────────────────────────────────────────

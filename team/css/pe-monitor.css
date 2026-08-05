@@ -522,6 +522,32 @@ td.num { font-variant-numeric: tabular-nums; text-align: right; white-space: now
   margin: 2px;
 }
 
+/* ── AI Upload Zone ── */
+.ai-upload-zone {
+  display: flex; align-items: center; justify-content: center;
+  gap: .6rem; flex-direction: column;
+  border: 1.5px dashed #eda5ff44;
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+  background: rgba(237,165,255,.04);
+  text-align: center;
+}
+.ai-upload-zone:hover { background: rgba(237,165,255,.09); border-color: #eda5ff88; }
+#ai-upload-idle { display: flex; flex-direction: column; align-items: center; gap: .35rem; }
+#ai-upload-idle span { font-size: .85rem; color: var(--text-muted); }
+.ai-upload-hint { font-size: .75rem !important; opacity: .6; }
+#ai-upload-loading { display: flex; align-items: center; gap: .75rem; }
+#ai-upload-loading span { font-size: .85rem; color: var(--purple); }
+.ai-spinner {
+  width: 18px; height: 18px; border-radius: 50%;
+  border: 2px solid #eda5ff33; border-top-color: #eda5ff;
+  animation: spin .7s linear infinite; flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
 @media (max-width: 768px) {
   .sidebar { display: none; }
   .form-grid { grid-template-columns: 1fr; }
