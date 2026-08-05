@@ -1,10 +1,10 @@
 # SVCapital — Claude Code Instructions
 
 ## Branch Strategy
-All changes go directly to `main`. Commit and push to `main` after every change. No intermediary branches.
+Develop on `staging`. Commit and push all changes to `staging`. Merge `staging` → `main` only when ready to deploy to production.
 
 ## Pull Requests
-Do not create pull requests. Push commits directly to `main`.
+Do not create pull requests. Push commits directly to `staging` during development.
 
 ## Service Worker Cache
 Bump `mobile/www/sw.js` CACHE version (svc-portal-vN) with every JS/CSS change to mobile.
