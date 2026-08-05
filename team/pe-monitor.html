@@ -356,6 +356,19 @@
       <button class="modal-close" onclick="closeModal('deal-modal')">&times;</button>
     </div>
     <div class="modal-body">
+      <!-- AI document extraction -->
+      <div class="ai-upload-zone" id="deal-ai-upload-zone" onclick="document.getElementById('deal-ai-doc-input').click()">
+        <input type="file" id="deal-ai-doc-input" accept=".pdf,image/jpeg,image/png,image/webp" style="display:none" onchange="extractFromDealDocument(this.files[0])">
+        <div id="deal-ai-upload-idle">
+          <i class="fa-solid fa-wand-magic-sparkles" style="color:#eda5ff;font-size:1.25rem"></i>
+          <span>Upload pitch deck, IM or term sheet — AI will pre-fill the form</span>
+          <span class="ai-upload-hint">PDF, JPEG, PNG · max 20 MB</span>
+        </div>
+        <div id="deal-ai-upload-loading" style="display:none">
+          <span class="ai-spinner"></span>
+          <span id="deal-ai-upload-status">Reading document…</span>
+        </div>
+      </div>
       <form id="deal-form" onsubmit="event.preventDefault(); saveDeal()">
         <div class="form-grid">
           <div class="form-group full"><label>Company Name *</label><input name="company_name" required placeholder="e.g. Startup Corp" /></div>
@@ -551,6 +564,6 @@
 </div>
 
 <script src="/js/staff-auth.js"></script>
-<script src="js/pe-monitor.js?v=5"></script>
+<script src="js/pe-monitor.js?v=6"></script>
 </body>
 </html>

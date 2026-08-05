@@ -103,4 +103,71 @@ router.post('/extract-company', requireAuth, upload.single('document'), async (r
   }
 });
 
+/* ─────────────────────────────────────────────────────────
+   POST /api/pe/extract-deal
+   Extracts deal / pitch deck information to pre-fill the
+   Add Deal form (company name, sector, amounts, thesis, etc.)
+   ───────────────────────────────────────────────────────── */
+
+const DEAL_EXTRACTION_PROMPT = `You are a private equity analyst. Carefully read the attached document (pitch deck, information memorandum, term sheet, or similar) and extract deal information.
+
+Return ONLY a JSON object with these exact keys (omit any key you cannot find — do not guess):
+{
+  "company_name":        "Company or issuer name",
+  "sector":              "One of: Technology, Healthcare, Financial Services, Agriculture, Energy, Property, Retail, Manufacturing, Logistics, Media, Education, Mining, Other",
+  "deal_type":           "One of: equity, debt, hybrid, mezzanine, convertible",
+  "target_amount":       123456.78,
+  "committed_amount":    123456.78,
+  "deal_description":    "2–4 sentence overview of the business and the transaction",
+  "investment_thesis":   "2–3 sentence explanation of why this is a compelling investment",
+  "key_risks":           "Main risks and mitigants in 2–3 sentences",
+  "originator":          "Name of the person or firm that originated the deal",
+  "source":              "How the deal was sourced (e.g. direct, referral, network)"
+}
+
+Rules:
+- Monetary values must be numeric (no currency symbols or commas).
+- deal_type must be one of the exact values listed.
+- sector must be one of the exact values listed.
+- Return ONLY the JSON — no markdown, no explanation.`;
+
+router.post('/extract-deal', requireAuth, upload.single('document'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+  const b64    = req.file.buffer.toString('base64');
+  const isPdf  = req.file.mimetype === 'application/pdf';
+  const imgMap = { 'image/jpeg': 'image/jpeg', 'image/png': 'image/png', 'image/webp': 'image/webp' };
+
+  try {
+    let content;
+    if (isPdf) {
+      content = [
+        { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } },
+        { type: 'text', text: DEAL_EXTRACTION_PROMPT },
+      ];
+    } else {
+      content = [
+        { type: 'image', source: { type: 'base64', media_type: imgMap[req.file.mimetype], data: b64 } },
+        { type: 'text', text: DEAL_EXTRACTION_PROMPT },
+      ];
+    }
+
+    const response = await client.messages.create({
+      model:      'claude-opus-5',
+      max_tokens: 1024,
+      thinking:   { type: 'adaptive' },
+      messages:   [{ role: 'user', content }],
+    });
+
+    const raw     = response.content.find(b => b.type === 'text')?.text || '{}';
+    const cleaned = raw.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
+    const fields  = JSON.parse(cleaned);
+
+    return res.json({ ok: true, fields });
+  } catch (err) {
+    console.error('[PE Extract Deal]', err.message);
+    return res.status(500).json({ error: err.message || 'Extraction failed' });
+  }
+});
+
 module.exports = router;

@@ -763,6 +763,60 @@ async function extractFromDocument(file) {
   }
 }
 
+async function extractFromDealDocument(file) {
+  if (!file) return;
+
+  const idle    = document.getElementById('deal-ai-upload-idle');
+  const loading = document.getElementById('deal-ai-upload-loading');
+  const status  = document.getElementById('deal-ai-upload-status');
+  const zone    = document.getElementById('deal-ai-upload-zone');
+
+  idle.style.display    = 'none';
+  loading.style.display = 'flex';
+  zone.style.pointerEvents = 'none';
+  status.textContent = 'Reading document…';
+
+  try {
+    const fd = new FormData();
+    fd.append('document', file);
+
+    const res = await fetch('/api/pe/extract-deal', {
+      method: 'POST',
+      credentials: 'include',
+      body: fd,
+    });
+    const json = await res.json();
+    if (!res.ok || !json.ok) throw new Error(json.error || 'Extraction failed');
+
+    const f      = document.getElementById('deal-form');
+    const fields = json.fields || {};
+    const FILLABLE = [
+      'company_name','sector','deal_type','target_amount','committed_amount',
+      'deal_description','investment_thesis','key_risks','originator','source',
+    ];
+    let filled = 0;
+    FILLABLE.forEach(k => {
+      if (fields[k] == null) return;
+      const el = f.elements[k];
+      if (!el) return;
+      el.value = fields[k];
+      filled++;
+    });
+
+    loading.style.display = 'none';
+    idle.style.display    = 'flex';
+    idle.querySelector('span').textContent = `✓ ${filled} fields pre-filled from document`;
+  } catch (err) {
+    loading.style.display = 'none';
+    idle.style.display    = 'flex';
+    idle.querySelector('span').textContent = 'Upload pitch deck, IM or term sheet — AI will pre-fill the form';
+    alert('AI extraction error: ' + err.message);
+  } finally {
+    zone.style.pointerEvents = '';
+    document.getElementById('deal-ai-doc-input').value = '';
+  }
+}
+
 /* ═══════════════════════════════════════════════════
    ADD / EDIT MODALS
    ═══════════════════════════════════════════════════ */
@@ -827,6 +881,9 @@ function openAddDeal() {
   document.getElementById('deal-form').reset();
   document.getElementById('deal-form').dataset.editId = '';
   document.getElementById('company-modal').classList.remove('open');
+  // Reset AI upload zone
+  const idle = document.getElementById('deal-ai-upload-idle');
+  if (idle) idle.querySelector('span').textContent = 'Upload pitch deck, IM or term sheet — AI will pre-fill the form';
   document.getElementById('deal-modal').classList.add('open');
 }
 
