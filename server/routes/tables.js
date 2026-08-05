@@ -131,6 +131,11 @@ const ALLOWED_TABLES = {
   compliance_calendar:      'id',
   accepted_client_documents: 'id',
   products:                 'id',
+  pe_companies:             'id',
+  pe_deals:                 'id',
+  pe_financials:            'id',
+  pe_fees:                  'id',
+  pe_updates:               'id',
 };
 
 /* ─── Tables that require admin/director role for READ ─── */
