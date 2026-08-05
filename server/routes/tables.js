@@ -55,6 +55,10 @@ async function _sendPush(investorId, payload) {
 /* ─── Input Validation ─── */
 const NUMERIC_FIELDS = new Set(['amount','wallet_balance','total_invested','total_returns','annual_rate','max_capacity','current_invested','recurring_amount','xp_points']);
 const STATUS_FIELDS  = { status: ['active','inactive','suspended','pending','pending_fica','fica_submitted','matured','paid_out','cancelled','rejected','failed','open','filling','closed','resolved','in_review','completed','waitlist','in_progress','waiting_investor','submitted','approved','expired','archived'], fica_status: ['pending','approved','rejected','not_started','submitted','in_progress'], bank_account_status: ['none','pending','approved','rejected'], maturity_instruction: ['payout_all','payout_return','payout_custom','reinvest','switch_product','custom_switch','pending'] };
+const TABLE_STATUS_OVERRIDES = {
+  pe_companies: ['prospect','deal_flow','due_diligence','approved','portfolio','exited','declined'],
+  pe_fees:      ['projected','invoiced','paid','overdue','waived'],
+};
 
 /* Normalise external fica_status values (e.g. from Firebase import / KYC provider) to internal ones */
 const _FICA_NORM_MAP = { Approved:'approved', Verified:'approved', Declined:'rejected', Unverified:'not_started', Outstanding:'pending', Pending:'pending' };
@@ -69,8 +73,9 @@ function validateBody(table, body, isCreate) {
       if ((key === 'amount') && n < 0 && isCreate) errors.push(`${key} cannot be negative`);
     }
     if (STATUS_FIELDS[key] && val !== null && val !== undefined) {
-      if (!STATUS_FIELDS[key].includes(val)) {
-        errors.push(`${key} must be one of: ${STATUS_FIELDS[key].join(', ')}`);
+      const allowed = (key === 'status' && TABLE_STATUS_OVERRIDES[table]) ? TABLE_STATUS_OVERRIDES[table] : STATUS_FIELDS[key];
+      if (!allowed.includes(val)) {
+        errors.push(`${key} must be one of: ${allowed.join(', ')}`);
       }
     }
   }
