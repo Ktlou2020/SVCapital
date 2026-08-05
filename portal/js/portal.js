@@ -4637,17 +4637,15 @@ async function confirmInvestment(pool) {
   const wallet = _confSa ? (parseFloat(_confSa.wallet_balance) || 0) : (parseFloat(PORTAL.investor?.wallet_balance) || 0);
   if (walletSpend > wallet + 0.005) { Toast.error(`Insufficient balance. You have ${Utils.rand(wallet)} in your wallet.`); return; }
 
-  // Split wallet spend into pool amount + fee (server still charges fee on pool amount)
-  const amount = Math.round((walletSpend / (1 + PLATFORM_FEE_RATE)) * 100) / 100;
-  const platformFee = Math.round((walletSpend - amount) * 100) / 100;
-  const totalDeducted = walletSpend;
+  // Pool amount = what actually goes to the pool (fee is taken from wallet spend)
+  const poolAmount = Math.round((walletSpend / (1 + PLATFORM_FEE_RATE)) * 100) / 100;
 
   try {
-    const expectedReturn = amount * pool.annual_rate * (pool.term_months / 12);
+    const expectedReturn = poolAmount * pool.annual_rate * (pool.term_months / 12);
     const maturityDate = new Date();
     maturityDate.setMonth(maturityDate.getMonth() + pool.term_months);
 
-    // Create investment (server-side hook deducts wallet + fee atomically)
+    // Server receives walletSpend as amount + fee_inclusive flag, splits it internally
     const investmentId = Utils.genId('INVST');
     await API.investments.create({
       id: investmentId,
@@ -4655,7 +4653,8 @@ async function confirmInvestment(pool) {
       pool_id: pool.id,
       product_type: pool.product_type,
       pool_name: pool.name,
-      amount,
+      amount: walletSpend,
+      fee_inclusive: true,
       annual_rate: pool.annual_rate,
       expected_return: Math.round(expectedReturn),
       actual_return: 0,
@@ -4669,13 +4668,13 @@ async function confirmInvestment(pool) {
       is_reinvestment: false,
     });
 
-    // Record investment transaction (walletSpend = total deducted from wallet)
+    // Investment transaction records the pool amount (fee is a separate 'fee' transaction)
     await API.transactions.create({
       id:          Utils.genId('TXN'),
       investor_id: PORTAL.investor?.id,
       investor_name:    `${PORTAL.investor.first_name} ${PORTAL.investor.last_name}`,
       type:             'investment',
-      amount:           walletSpend,
+      amount:           poolAmount,
       status:           'completed',
       reference:        `INVST-${Date.now()}`,
       description:      `Investment into ${pool.name}`,
@@ -4684,29 +4683,23 @@ async function confirmInvestment(pool) {
       transaction_date: new Date().toISOString(),
     });
 
-    // Wallet deduction and total_invested update are handled atomically server-side
-    // in the investment creation hook — do not also set wallet_balance here.
-
-    // Sub-account wallet deduction (amount + fee) and total_invested are handled
-    // atomically server-side in the investment hook — do NOT also PATCH the
-    // sub-account here (that would double-deduct). Optimistically update the
-    // local cache for instant UI; loadPortalData() below refreshes the truth.
+    // Optimistically update sub-account cache (server handles the real deduction atomically)
     if (_pmSaId) {
       const saIdx = PORTAL.subAccounts.findIndex(s => s.id === _pmSaId);
       if (saIdx !== -1) {
         const sa = PORTAL.subAccounts[saIdx];
-        PORTAL.subAccounts[saIdx].wallet_balance = Math.max(0, Math.round(((parseFloat(sa.wallet_balance) || 0) - totalDeducted) * 100) / 100);
-        PORTAL.subAccounts[saIdx].total_invested  = Math.round(((parseFloat(sa.total_invested) || 0) + amount) * 100) / 100;
+        PORTAL.subAccounts[saIdx].wallet_balance = Math.max(0, Math.round(((parseFloat(sa.wallet_balance) || 0) - walletSpend) * 100) / 100);
+        PORTAL.subAccounts[saIdx].total_invested  = Math.round(((parseFloat(sa.total_invested) || 0) + poolAmount) * 100) / 100;
       }
     }
 
     Toast.success(`Successfully invested ${Utils.rand(walletSpend)} in ${pool.name}!`);
     Modal.close('investModal');
 
-    SVC.track('purchase', { transaction_id: investmentId, value: amount, currency: 'ZAR', items: [{ item_id: pool.id, item_name: pool.name, item_category: pool.product_type, price: amount, quantity: 1 }] });
-    SVC.track('svc_investment_created', { pool_id: pool.id, pool_name: pool.name, product_type: pool.product_type, amount, amount_bucket: _amtBucket(amount), term_months: pool.term_months, annual_rate: parseFloat(pool.annual_rate) || 0, wallet_balance_bucket: _amtBucket(PORTAL.investor?.wallet_balance), total_investments: PORTAL.investments.filter(i => i.investor_id === (PORTAL.investor?.id || DEMO_INVESTOR_ID)).length + 1 });
+    SVC.track('purchase', { transaction_id: investmentId, value: poolAmount, currency: 'ZAR', items: [{ item_id: pool.id, item_name: pool.name, item_category: pool.product_type, price: poolAmount, quantity: 1 }] });
+    SVC.track('svc_investment_created', { pool_id: pool.id, pool_name: pool.name, product_type: pool.product_type, amount: poolAmount, amount_bucket: _amtBucket(poolAmount), term_months: pool.term_months, annual_rate: parseFloat(pool.annual_rate) || 0, wallet_balance_bucket: _amtBucket(PORTAL.investor?.wallet_balance), total_investments: PORTAL.investments.filter(i => i.investor_id === (PORTAL.investor?.id || DEMO_INVESTOR_ID)).length + 1 });
     if (_pmSaId) {
-      SVC.track('svc_subaccount_invested', { sub_account_id: _pmSaId, amount: amount });
+      SVC.track('svc_subaccount_invested', { sub_account_id: _pmSaId, amount: poolAmount });
     }
     _pmSaId = null;  // clear after investment completes
 

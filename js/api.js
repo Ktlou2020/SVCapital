@@ -674,7 +674,7 @@ const Toast = {
     document.body.appendChild(this.container);
   },
   show(message, type = 'info', duration, opts = {}) {
-    const defaults = { success: 6500, error: 6000, warning: 6000, info: 4000 };
+    const defaults = { success: 6500, error: 12000, warning: 8000, info: 4000 };
     const ms = duration ?? defaults[type] ?? 4000;
     if (!this.container) this.init();
     const existing = this.container.querySelectorAll('.toast');

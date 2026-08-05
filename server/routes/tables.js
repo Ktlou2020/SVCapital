@@ -925,20 +925,35 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
     // deduct — the second request blocks until the first commits.
     let _investmentWalletDeducted = false;
     if (table === 'investments' && req.user.role === 'investor') {
-      const amount = parseFloat(body.amount) || 0;
-      if (amount <= 0) return res.status(400).json({ error: 'Investment amount must be greater than zero.' });
+      const rawAmount = parseFloat(body.amount) || 0;
+      if (rawAmount <= 0) return res.status(400).json({ error: 'Investment amount must be greater than zero.' });
+
+      // fee_inclusive: client sends total wallet spend; server splits into pool amount + fee
+      const feeInclusive = !!body.fee_inclusive;
+      delete body.fee_inclusive; // not a DB column
+
+      const isReinvestment = !!body.is_reinvestment;
+      let poolAmount, platformFee, required;
+
+      if (feeInclusive && !isReinvestment) {
+        poolAmount  = Math.round((rawAmount / 1.01) * 100) / 100;
+        platformFee = rawAmount - poolAmount;  // exact, no extra rounding
+        required    = rawAmount;               // exact wallet deduction
+        body.amount = poolAmount;              // store pool amount in investments record
+      } else {
+        poolAmount  = rawAmount;
+        platformFee = isReinvestment ? 0 : Math.round(rawAmount * 0.01 * 100) / 100;
+        required    = rawAmount + platformFee;
+      }
 
       if (body.pool_id) {
         const { rows: pr } = await pool.query('SELECT min_investment FROM investment_pools WHERE id = $1', [body.pool_id]);
         const minInv = parseFloat(pr[0]?.min_investment) || 0;
-        if (minInv && amount < minInv) {
+        if (minInv && required < minInv - 0.005) {
           return res.status(400).json({ error: `Minimum investment for this pool is R${minInv.toLocaleString('en-ZA')}.` });
         }
       }
 
-      const isReinvestment = !!body.is_reinvestment;
-      const platformFee = isReinvestment ? 0 : Math.round(amount * 0.01 * 100) / 100;
-      const required    = amount + platformFee;
       const walletLabel = body.sub_account_id ? 'this sub-account' : 'your wallet';
 
       const _invClient = await pool.connect();
@@ -966,19 +981,29 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
           return res.status(400).json({
             error: isReinvestment
             ? `Insufficient balance. This reinvestment requires R${required.toLocaleString('en-ZA')} but the available balance in ${walletLabel} is R${walletBal.toLocaleString('en-ZA')}.`
-            : `Insufficient balance. This investment requires R${required.toLocaleString('en-ZA')} (R${amount.toLocaleString('en-ZA')} + R${platformFee.toLocaleString('en-ZA')} platform fee), but the available balance in ${walletLabel} is R${walletBal.toLocaleString('en-ZA')}.`,
+            : `Insufficient balance. This investment requires R${required.toLocaleString('en-ZA')} but the available balance in ${walletLabel} is R${walletBal.toLocaleString('en-ZA')}.`,
           });
         }
         // Deduct while holding the row lock — prevents double-spend on concurrent requests
         if (body.sub_account_id) {
           await _invClient.query(
             `UPDATE sub_accounts SET wallet_balance = wallet_balance - $1, total_invested = COALESCE(total_invested, 0) + $2, updated_at = NOW() WHERE id = $3`,
-            [required, amount, body.sub_account_id]
+            [required, poolAmount, body.sub_account_id]
           );
         } else {
           await _invClient.query(
             `UPDATE investors SET wallet_balance = wallet_balance - $1, total_invested = COALESCE(total_invested, 0) + $2, updated_at = NOW() WHERE id = $3`,
-            [required, amount, body.investor_id]
+            [required, poolAmount, body.investor_id]
+          );
+        }
+        // For fee_inclusive: record the exact fee now so the hook's ON CONFLICT is a no-op
+        if (feeInclusive && !isReinvestment && platformFee > 0 && body.id) {
+          const feeId = `FEE-${body.id}`;
+          await _invClient.query(
+            `INSERT INTO transactions (id, investor_id, sub_account_id, type, amount, status, reference, description, transaction_date, created_at, updated_at)
+             VALUES ($1, $2, $3, 'fee', $4, 'completed', $5, '1% platform fee on investment', NOW(), NOW(), NOW())
+             ON CONFLICT (id) DO NOTHING`,
+            [feeId, body.investor_id, body.sub_account_id || null, platformFee, feeId]
           );
         }
         await _invClient.query('COMMIT');
