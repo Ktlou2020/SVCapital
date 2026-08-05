@@ -80,15 +80,18 @@ const ALL_ROLES = [
 ];
 const APP_NAMES = {
   employee:'My Dashboard', team:'Team Dashboard', fund:'Fund Operations',
-  admin:'Admin Console', ifa:'IFA Portal', portal:'Investor Portal', director:'Director Panel'
+  admin:'Admin Console', ifa:'IFA Portal', portal:'Investor Portal', director:'Director Panel',
+  accounting:'Accounting', pe_monitor:'PE Monitor'
 };
 const APP_ICONS = {
   employee:'fa-user-circle', team:'fa-people-group', fund:'fa-chart-line',
-  admin:'fa-shield-halved', ifa:'fa-handshake', portal:'fa-building-columns', director:'fa-crown'
+  admin:'fa-shield-halved', ifa:'fa-handshake', portal:'fa-building-columns', director:'fa-crown',
+  accounting:'fa-calculator', pe_monitor:'fa-briefcase'
 };
 const APP_COLORS = {
   employee:'#eda5ff', team:'#00d4aa', fund:'#fec24f',
-  admin:'#e84393', ifa:'#656565', portal:'#10b981', director:'#fec24f'
+  admin:'#e84393', ifa:'#656565', portal:'#10b981', director:'#fec24f',
+  accounting:'#656565', pe_monitor:'#3b82f6'
 };
 
 const LEVEL_LABELS = { junior:'Junior', mid:'Mid-Level', senior:'Senior', lead:'Lead', executive:'Executive' };

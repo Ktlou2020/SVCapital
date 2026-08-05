@@ -4081,6 +4081,64 @@
   </div>
 </div>
 
+<!-- Edit Sub-Account Banking Details Modal -->
+<div class="modal-overlay" id="editSaBankModal" onclick="if(event.target===this)Modal.close('editSaBankModal')">
+  <div class="modal" style="max-width:480px">
+    <div class="modal__header">
+      <div>
+        <span class="modal__title"><i class="fa-solid fa-pen-to-square" style="color:#eda5ff;margin-right:8px"></i>Edit Sub-Account Banking</span>
+        <div style="font-size:0.72rem;color:var(--text-dim);margin-top:2px" id="editSaBankSubtitle"></div>
+      </div>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('editSaBankModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <input type="hidden" id="esabf-sa-id" />
+      <div class="form-group" style="margin-bottom:14px">
+        <label class="form-label">Bank Name</label>
+        <input type="text" id="esabf-bank-name" class="form-input" placeholder="e.g. First National Bank" />
+      </div>
+      <div class="form-group" style="margin-bottom:14px">
+        <label class="form-label">Account Holder</label>
+        <input type="text" id="esabf-account-holder" class="form-input" placeholder="Full name as on bank account" />
+      </div>
+      <div class="form-group" style="margin-bottom:14px">
+        <label class="form-label">Account Number</label>
+        <input type="text" id="esabf-account-number" class="form-input" placeholder="Full account number" />
+      </div>
+      <div class="form-group" style="margin-bottom:14px">
+        <label class="form-label">Branch Code</label>
+        <input type="text" id="esabf-branch-code" class="form-input" placeholder="e.g. 250655" />
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+        <div class="form-group">
+          <label class="form-label">Account Type</label>
+          <select id="esabf-account-type" class="form-input">
+            <option value="current">Current</option>
+            <option value="savings">Savings</option>
+            <option value="transmission">Transmission</option>
+            <option value="credit">Credit</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select id="esabf-account-status" class="form-input">
+            <option value="none">Not added</option>
+            <option value="pending">On file (pending)</option>
+            <option value="approved">Verified</option>
+            <option value="rejected">Rejected</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn btn--secondary" onclick="Modal.close('editSaBankModal')">Cancel</button>
+        <button class="btn btn--primary" id="esabf-save-btn" onclick="_saveSaBankDetails(this)">
+          <i class="fa-solid fa-save"></i> Save Banking Details
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Bank Details Full View Modal -->
 <div class="modal-overlay" id="bankDetailsModal" onclick="if(event.target===this)Modal.close('bankDetailsModal')">
   <div class="modal" style="max-width:460px">
@@ -4170,7 +4228,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=4"></script>
-<script src="js/admin.js?v=48"></script>
+<script src="js/admin.js?v=49"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>

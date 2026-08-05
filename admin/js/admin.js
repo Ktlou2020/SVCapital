@@ -1872,16 +1872,20 @@ function viewSubAccount(saId) {
       <i class="fa-solid fa-id-card" style="margin-right:6px;color:#eda5ff"></i>No documents submitted yet for this sub-account.
     </div>`}
 
-    ${sa.sa_bank_holder ? `<div style="background:var(--dark-3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:16px">
-      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:8px">Bank Details</div>
-      <div class="info-list">
+    <div style="background:var(--dark-3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted)">Bank Details</div>
+        <button class="btn btn--secondary btn--sm" style="padding:3px 10px;font-size:0.72rem" onclick='editSaBankDetails(${JSON.stringify(sa.id)})'><i class="fa-solid fa-pen-to-square" style="margin-right:4px"></i>Edit</button>
+      </div>
+      ${sa.sa_bank_holder ? `<div class="info-list">
         <div class="info-row"><span class="info-row__label">Account Holder</span><span class="info-row__value">${_esc(sa.sa_bank_holder||'—')}</span></div>
         <div class="info-row"><span class="info-row__label">Bank</span><span class="info-row__value">${_esc(sa.sa_bank_name||'—')}</span></div>
         <div class="info-row"><span class="info-row__label">Account Number</span><span class="info-row__value" style="font-family:monospace">${_esc(sa.sa_bank_number||'—')}</span></div>
         <div class="info-row"><span class="info-row__label">Account Type</span><span class="info-row__value">${_esc(sa.sa_bank_type||'—')}</span></div>
         ${sa.sa_bank_branch ? `<div class="info-row"><span class="info-row__label">Branch Code</span><span class="info-row__value" style="font-family:monospace">${_esc(sa.sa_bank_branch)}</span></div>` : ''}
-      </div>
-    </div>` : ''}
+        <div class="info-row"><span class="info-row__label">Status</span><span class="info-row__value" style="color:${bankColor};font-weight:700">${bankLabel}</span></div>
+      </div>` : `<div style="font-size:0.8rem;color:var(--text-muted)"><i class="fa-solid fa-circle-info" style="margin-right:6px"></i>No banking details on file — click Edit to add.</div>`}
+    </div>
     <div style="background:rgba(237,165,255,0.08);border:1px solid rgba(237,165,255,0.2);border-radius:10px;padding:12px 14px">
       <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px">Parent Account Holder</div>
       <div style="font-weight:700;font-size:0.88rem;margin-bottom:2px">${_esc(parentName)}</div>
@@ -2793,6 +2797,48 @@ async function _saveBankDetails(btn) {
     Modal.close('editBankModal');
     await viewInvestor(investorId);
     _invTab('overview');
+  } catch (e) {
+    Toast.error('Failed to save: ' + (e.message || 'unknown error'));
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }
+}
+
+function editSaBankDetails(saId) {
+  const sa = (STATE.subAccounts || []).find(s => s.id === saId);
+  if (!sa) return;
+  document.getElementById('esabf-sa-id').value          = saId;
+  document.getElementById('editSaBankSubtitle').textContent = sa.name || sa.sa_reference || saId;
+  document.getElementById('esabf-bank-name').value       = sa.sa_bank_name   || '';
+  document.getElementById('esabf-account-holder').value  = sa.sa_bank_holder || '';
+  document.getElementById('esabf-account-number').value  = sa.sa_bank_number || '';
+  document.getElementById('esabf-branch-code').value     = sa.sa_bank_branch || '';
+  document.getElementById('esabf-account-type').value    = sa.sa_bank_type   || 'current';
+  document.getElementById('esabf-account-status').value  = sa.sa_bank_status || 'none';
+  Modal.open('editSaBankModal');
+}
+
+async function _saveSaBankDetails(btn) {
+  const saId = document.getElementById('esabf-sa-id').value;
+  if (!saId) return;
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
+  try {
+    const payload = {
+      sa_bank_name:   document.getElementById('esabf-bank-name').value.trim()       || null,
+      sa_bank_holder: document.getElementById('esabf-account-holder').value.trim()  || null,
+      sa_bank_number: document.getElementById('esabf-account-number').value.trim()  || null,
+      sa_bank_branch: document.getElementById('esabf-branch-code').value.trim()     || null,
+      sa_bank_type:   document.getElementById('esabf-account-type').value           || 'current',
+      sa_bank_status: document.getElementById('esabf-account-status').value         || 'none',
+    };
+    await API._fetch('PATCH', `tables/sub_accounts/${saId}`, payload);
+    const sa = (STATE.subAccounts || []).find(s => s.id === saId);
+    if (sa) Object.assign(sa, payload);
+    Toast.success('Banking details saved.');
+    Modal.close('editSaBankModal');
+    viewSubAccount(saId);
   } catch (e) {
     Toast.error('Failed to save: ' + (e.message || 'unknown error'));
     btn.disabled = false;
