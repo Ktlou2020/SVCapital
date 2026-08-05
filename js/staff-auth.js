@@ -294,13 +294,14 @@
   /* Determine which appKey the current page corresponds to */
   function currentAppKey() {
     const path = window.location.pathname;
-    if (path.includes('/team/employee'))  return 'employee';
+    if (path.includes('/team/pe-monitor'))  return 'pe_monitor';
+    if (path.includes('/team/employee'))    return 'employee';
     if (path.includes('/team/index') || path.endsWith('/team/')) return 'team';
-    if (path.includes('/fund/'))          return 'fund';
-    if (path.includes('/admin/'))         return 'admin';
-    if (path.includes('/ifa/'))           return 'ifa';
-    if (path.includes('/portal/'))        return 'portal';
-    if (path.includes('/team/accounting')) return 'accounting';
+    if (path.includes('/fund/'))            return 'fund';
+    if (path.includes('/admin/'))           return 'admin';
+    if (path.includes('/ifa/'))             return 'ifa';
+    if (path.includes('/portal/'))          return 'portal';
+    if (path.includes('/team/accounting'))  return 'accounting';
     return null;
   }
 
