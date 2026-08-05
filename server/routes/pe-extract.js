@@ -170,4 +170,82 @@ router.post('/extract-deal', requireAuth, upload.single('document'), async (req,
   }
 });
 
+/* ─────────────────────────────────────────────────────────
+   POST /api/pe/extract-financials
+   Reads an AFS PDF and returns structured financial data
+   for pre-filling the Add Financials form.
+   ───────────────────────────────────────────────────────── */
+
+const FINANCIALS_EXTRACTION_PROMPT = `You are a chartered accountant and financial analyst. Carefully read the attached Annual Financial Statement (AFS) and extract the financial data.
+
+Return ONLY a JSON object with these exact keys (omit any key where the value cannot be reliably determined — do not guess or derive values not explicitly stated):
+{
+  "financial_year":       2024,
+  "audited":              true,
+  "revenue":              123456.78,
+  "gross_profit":         123456.78,
+  "ebitda":               123456.78,
+  "ebit":                 123456.78,
+  "net_profit":           123456.78,
+  "ebitda_margin":        0.2500,
+  "net_margin":           0.1000,
+  "revenue_growth":       0.1500,
+  "total_assets":         123456.78,
+  "total_liabilities":    123456.78,
+  "equity":               123456.78,
+  "cash":                 123456.78,
+  "total_debt":           123456.78,
+  "operating_cashflow":   123456.78,
+  "free_cashflow":        123456.78,
+  "capex":                123456.78
+}
+
+Rules:
+- financial_year is the calendar year in which the financial period ENDS (integer).
+- audited is true if the statements are audited, false if reviewed or unaudited.
+- All monetary values must be plain numbers (no currency symbols, commas, or spaces). Use negative numbers for losses.
+- Margins and growth rates must be expressed as decimals (e.g. 25% → 0.25).
+- If EBITDA is not stated but EBIT is, do NOT estimate EBITDA — omit it.
+- If a margin or growth rate is not stated, derive it only if BOTH inputs are present (e.g. ebitda_margin = ebitda / revenue when both are available).
+- Return ONLY the JSON — no markdown fences, no explanation.`;
+
+router.post('/extract-financials', requireAuth, upload.single('document'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+  const b64    = req.file.buffer.toString('base64');
+  const isPdf  = req.file.mimetype === 'application/pdf';
+  const imgMap = { 'image/jpeg': 'image/jpeg', 'image/png': 'image/png', 'image/webp': 'image/webp' };
+
+  try {
+    let content;
+    if (isPdf) {
+      content = [
+        { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } },
+        { type: 'text', text: FINANCIALS_EXTRACTION_PROMPT },
+      ];
+    } else {
+      content = [
+        { type: 'image', source: { type: 'base64', media_type: imgMap[req.file.mimetype], data: b64 } },
+        { type: 'text', text: FINANCIALS_EXTRACTION_PROMPT },
+      ];
+    }
+
+    const response = await client.messages.create({
+      model:      'claude-opus-5',
+      max_tokens: 1024,
+      thinking:   { type: 'adaptive' },
+      messages:   [{ role: 'user', content }],
+    });
+
+    const raw     = response.content.find(b => b.type === 'text')?.text || '{}';
+    const cleaned = raw.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
+    const fields  = JSON.parse(cleaned);
+
+    return res.json({ ok: true, fields });
+  } catch (err) {
+    console.error('[PE Extract Financials]', err.message);
+    return res.status(500).json({ error: err.message || 'Extraction failed' });
+  }
+});
+
 module.exports = router;

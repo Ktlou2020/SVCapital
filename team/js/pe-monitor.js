@@ -831,6 +831,71 @@ async function extractFromDealDocument(file) {
   }
 }
 
+/* ── Financials AFS extraction ── */
+let _finDocQueue = null; // single file queued for storage
+
+async function extractFromFinancialsDocument(file) {
+  if (!file) return;
+
+  const idle    = document.getElementById('fin-ai-upload-idle');
+  const loading = document.getElementById('fin-ai-upload-loading');
+  const status  = document.getElementById('fin-ai-upload-status');
+  const zone    = document.getElementById('fin-ai-upload-zone');
+
+  idle.style.display    = 'none';
+  loading.style.display = 'flex';
+  zone.style.pointerEvents = 'none';
+  status.textContent = 'Reading AFS…';
+
+  // Queue the file for storage regardless of extraction outcome
+  _finDocQueue = file;
+
+  try {
+    const fd = new FormData();
+    fd.append('document', file);
+
+    const res  = await fetch('/api/pe/extract-financials', {
+      method: 'POST', credentials: 'include', headers: _authHeaders(), body: fd,
+    });
+    const json = await res.json();
+    if (!res.ok || !json.ok) throw new Error(json.error || 'Extraction failed');
+
+    const f      = document.getElementById('fin-form');
+    const fields = json.fields || {};
+    const FILLABLE = [
+      'financial_year','revenue','gross_profit','ebitda','ebit','net_profit',
+      'ebitda_margin','net_margin','revenue_growth',
+      'total_assets','total_liabilities','equity','cash','total_debt',
+      'operating_cashflow','free_cashflow','capex',
+    ];
+    let filled = 0;
+    FILLABLE.forEach(k => {
+      if (fields[k] == null) return;
+      const el = f.elements[k];
+      if (!el) return;
+      el.value = fields[k];
+      filled++;
+    });
+    if (fields.audited != null && f.elements['audited']) {
+      f.elements['audited'].checked = !!fields.audited;
+      filled++;
+    }
+
+    status.textContent = `Done — ${filled} fields filled`;
+    loading.style.display = 'none';
+    idle.style.display    = 'flex';
+    idle.querySelector('span').textContent = `✓ ${file.name} · ${filled} fields filled — will be stored on save`;
+  } catch (err) {
+    loading.style.display = 'none';
+    idle.style.display    = 'flex';
+    idle.querySelector('span').textContent = `⚠ Extraction failed — ${file.name} will still be stored on save`;
+    console.error('[PE fin extract]', err.message);
+  } finally {
+    zone.style.pointerEvents = '';
+    document.getElementById('fin-ai-doc-input').value = '';
+  }
+}
+
 /* ═══════════════════════════════════════════════════
    DOCUMENT ATTACHMENTS (AFS / Supporting Docs)
    ═══════════════════════════════════════════════════ */
@@ -1196,6 +1261,12 @@ function openAddFinancials(companyId) {
   document.getElementById('fin-form').reset();
   document.getElementById('fin-form').dataset.editId = '';
   document.getElementById('fin-form').elements['company_id'].value = companyId || '';
+  _finDocQueue = null;
+  const idle = document.getElementById('fin-ai-upload-idle');
+  if (idle) idle.querySelector('span').textContent = 'Upload AFS — AI will read and fill all financial fields';
+  const loading = document.getElementById('fin-ai-upload-loading');
+  if (loading) loading.style.display = 'none';
+  if (idle) idle.style.display = 'flex';
   document.getElementById('fin-modal').classList.add('open');
 }
 
@@ -1218,6 +1289,18 @@ async function saveFinancials() {
     } else {
       data.id = 'pefin-' + uid();
       await apiCreate('pe_financials', data);
+    }
+    // Upload queued AFS PDF and link it to the company
+    if (_finDocQueue) {
+      const fd = new FormData();
+      fd.append('document', _finDocQueue);
+      fd.append('company_id', data.company_id);
+      fd.append('doc_type', 'AFS');
+      fd.append('label', `AFS ${data.financial_year || ''} — ${_finDocQueue.name}`);
+      await fetch('/api/pe/documents/upload', {
+        method: 'POST', credentials: 'include', headers: _authHeaders(), body: fd,
+      });
+      _finDocQueue = null;
     }
     closeModal('fin-modal');
     await loadAll();
