@@ -8,12 +8,12 @@ const { requireAuth, requireRole } = require('../middleware/auth');
 const RBAC_KEY = 'rbac_matrix';
 
 const DEFAULT_RBAC = {
-  'CEO':                 ['employee','team','fund','admin','ifa','portal','director'],
-  'COO':                 ['employee','team','fund','admin','ifa','portal','director'],
-  'Operations Manager':  ['employee','team','fund','admin'],
-  'Finance Manager':     ['employee','team','fund','admin'],
-  'Tech Lead':           ['employee','team','fund','admin'],
-  'Investment Analyst':  ['employee','team','fund'],
+  'CEO':                 ['employee','team','fund','admin','ifa','portal','director','accounting','pe_monitor'],
+  'COO':                 ['employee','team','fund','admin','ifa','portal','director','accounting','pe_monitor'],
+  'Operations Manager':  ['employee','team','fund','admin','accounting'],
+  'Finance Manager':     ['employee','team','fund','admin','accounting','pe_monitor'],
+  'Tech Lead':           ['employee','team','fund','admin','accounting'],
+  'Investment Analyst':  ['employee','team','fund','pe_monitor'],
   'Compliance Officer':  ['employee','admin'],
   'Internal Audit':      ['employee','admin'],
   'Client Relations':    ['employee','portal'],
@@ -27,7 +27,26 @@ const DEFAULT_RBAC = {
 router.get('/rbac', requireAuth, async (req, res) => {
   try {
     const row = await db.query('SELECT value FROM platform_settings WHERE key = $1', [RBAC_KEY]);
-    const matrix = row.rows[0] ? JSON.parse(row.rows[0].value) : DEFAULT_RBAC;
+    if (!row.rows[0]) return res.json({ matrix: DEFAULT_RBAC });
+
+    let matrix = JSON.parse(row.rows[0].value);
+
+    // When a new app is added to DEFAULT_RBAC it won't be in previously-saved
+    // matrices. Detect "brand-new" apps (absent from every stored role entry) and
+    // add them to each role that should have them per DEFAULT_RBAC, so a code
+    // update doesn't require a manual Director Panel re-save.
+    for (const [role, defaultApps] of Object.entries(DEFAULT_RBAC)) {
+      if (!matrix[role]) continue;
+      for (const app of defaultApps) {
+        if (!matrix[role].includes(app)) {
+          const presentAnywhere = Object.values(matrix).some(apps => Array.isArray(apps) && apps.includes(app));
+          if (!presentAnywhere) {
+            matrix[role] = [...matrix[role], app];
+          }
+        }
+      }
+    }
+
     res.json({ matrix });
   } catch (_) {
     res.json({ matrix: DEFAULT_RBAC });
@@ -40,7 +59,7 @@ router.put('/rbac', requireAuth, requireRole('admin', 'director'), async (req, r
   if (!matrix || typeof matrix !== 'object' || Array.isArray(matrix)) {
     return res.status(400).json({ error: 'matrix must be an object mapping role → app[]' });
   }
-  const valid = ['employee','team','fund','admin','ifa','portal','director','accounting'];
+  const valid = ['employee','team','fund','admin','ifa','portal','director','accounting','pe_monitor'];
   for (const [role, apps] of Object.entries(matrix)) {
     if (!Array.isArray(apps) || apps.some(a => !valid.includes(a))) {
       return res.status(400).json({ error: `Invalid app key for role "${role}"` });

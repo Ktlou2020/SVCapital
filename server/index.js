@@ -190,6 +190,8 @@ app.use('/api/factsheets',   require('./routes/factsheets'));
 app.use('/api/products',     require('./routes/products'));
 app.use('/api/opsconsole',  require('./routes/opsconsole'));
 app.use('/api/cattle',      require('./routes/cattle'));
+app.use('/api/pe',          require('./routes/pe-extract'));
+app.use('/api/pe/documents', require('./routes/pe-documents'));
 
 
 /* ─── Health Check ─────────────────────────────────────────────────────────
@@ -319,6 +321,10 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
   // Start maturity alert cron (daily 08:00 SAST)
   const { startMaturityCron } = require('./jobs/maturityCron');
   startMaturityCron();
+
+  // Start PE review reminder cron (daily 08:00 SAST)
+  const { startReviewReminderCron } = require('./jobs/reviewReminderCron');
+  startReviewReminderCron();
 
   // Interest is credited at maturity only (maturityCron) — monthly accrual disabled.
   // const { startInterestCron } = require('./jobs/interestCron');

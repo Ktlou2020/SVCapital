@@ -1081,6 +1081,147 @@ CREATE TABLE IF NOT EXISTS products (
   updated_at          TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS products_type_idx ON products(product_type);
+
+-- ── Private Equity Monitor ──────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS pe_companies (
+  id                   TEXT PRIMARY KEY,
+  name                 TEXT NOT NULL,
+  sector               TEXT NOT NULL,
+  sub_sector           TEXT,
+  country              TEXT DEFAULT 'South Africa',
+  city                 TEXT,
+  description          TEXT,
+  website              TEXT,
+  registration_number  TEXT,
+  vat_number           TEXT,
+  founded_year         INT,
+  employee_count       INT,
+  status               TEXT DEFAULT 'portfolio'
+                         CHECK (status IN ('prospect','deal_flow','due_diligence','approved','portfolio','exited','declined')),
+  aum_amount           NUMERIC(18,2) DEFAULT 0,
+  fee_rate             NUMERIC(8,4) DEFAULT 0.02,
+  fee_billing_period   TEXT DEFAULT 'annual' CHECK (fee_billing_period IN ('monthly','quarterly','annual')),
+  entry_date           DATE,
+  exit_date            DATE,
+  exit_value           NUMERIC(18,2),
+  contact_name         TEXT,
+  contact_email        TEXT,
+  contact_phone        TEXT,
+  notes                TEXT,
+  created_at           TIMESTAMPTZ DEFAULT NOW(),
+  updated_at           TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS pe_companies_sector_idx ON pe_companies(sector);
+CREATE INDEX IF NOT EXISTS pe_companies_status_idx ON pe_companies(status);
+
+CREATE TABLE IF NOT EXISTS pe_deals (
+  id                  TEXT PRIMARY KEY,
+  company_name        TEXT NOT NULL,
+  company_id          TEXT REFERENCES pe_companies(id) ON DELETE SET NULL,
+  stage               TEXT NOT NULL DEFAULT 'sourcing'
+                        CHECK (stage IN ('sourcing','screening','due_diligence','ic_review','approved','closed','declined','exited')),
+  deal_type           TEXT DEFAULT 'equity'
+                        CHECK (deal_type IN ('equity','debt','hybrid','mezzanine','convertible')),
+  sector              TEXT,
+  target_amount       NUMERIC(18,2),
+  committed_amount    NUMERIC(18,2) DEFAULT 0,
+  deal_description    TEXT,
+  investment_thesis   TEXT,
+  key_risks           TEXT,
+  source              TEXT,
+  originator          TEXT,
+  assigned_analyst    TEXT,
+  sourced_date        DATE,
+  screening_date      DATE,
+  dd_start_date       DATE,
+  ic_date             DATE,
+  decision_date       DATE,
+  decision_notes      TEXT,
+  priority            TEXT DEFAULT 'medium'
+                        CHECK (priority IN ('low','medium','high','urgent')),
+  created_at          TIMESTAMPTZ DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS pe_deals_stage_idx    ON pe_deals(stage);
+CREATE INDEX IF NOT EXISTS pe_deals_company_idx  ON pe_deals(company_id);
+CREATE INDEX IF NOT EXISTS pe_deals_sector_idx   ON pe_deals(sector);
+
+CREATE TABLE IF NOT EXISTS pe_financials (
+  id                  TEXT PRIMARY KEY,
+  company_id          TEXT NOT NULL REFERENCES pe_companies(id) ON DELETE CASCADE,
+  financial_year      INT NOT NULL,
+  revenue             NUMERIC(18,2),
+  gross_profit        NUMERIC(18,2),
+  ebitda              NUMERIC(18,2),
+  ebit                NUMERIC(18,2),
+  net_profit          NUMERIC(18,2),
+  total_assets        NUMERIC(18,2),
+  total_liabilities   NUMERIC(18,2),
+  equity              NUMERIC(18,2),
+  cash                NUMERIC(18,2),
+  total_debt          NUMERIC(18,2),
+  capex               NUMERIC(18,2),
+  operating_cashflow  NUMERIC(18,2),
+  free_cashflow       NUMERIC(18,2),
+  revenue_growth      NUMERIC(8,4),
+  ebitda_margin       NUMERIC(8,4),
+  net_margin          NUMERIC(8,4),
+  notes               TEXT,
+  audited             BOOLEAN DEFAULT false,
+  created_at          TIMESTAMPTZ DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (company_id, financial_year)
+);
+CREATE INDEX IF NOT EXISTS pe_financials_company_idx ON pe_financials(company_id, financial_year DESC);
+
+CREATE TABLE IF NOT EXISTS pe_fees (
+  id              TEXT PRIMARY KEY,
+  company_id      TEXT NOT NULL REFERENCES pe_companies(id) ON DELETE CASCADE,
+  period_start    DATE NOT NULL,
+  period_end      DATE NOT NULL,
+  fee_type        TEXT DEFAULT 'management'
+                    CHECK (fee_type IN ('management','performance','transaction','monitoring','other')),
+  amount          NUMERIC(18,2) NOT NULL,
+  status          TEXT DEFAULT 'projected'
+                    CHECK (status IN ('projected','invoiced','paid','overdue','waived')),
+  invoice_date    DATE,
+  due_date        DATE,
+  paid_date       DATE,
+  invoice_number  TEXT,
+  notes           TEXT,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS pe_fees_company_idx ON pe_fees(company_id);
+CREATE INDEX IF NOT EXISTS pe_fees_status_idx  ON pe_fees(status);
+CREATE INDEX IF NOT EXISTS pe_fees_due_idx     ON pe_fees(due_date);
+
+CREATE TABLE IF NOT EXISTS pe_updates (
+  id           TEXT PRIMARY KEY,
+  company_id   TEXT NOT NULL REFERENCES pe_companies(id) ON DELETE CASCADE,
+  update_type  TEXT DEFAULT 'general'
+                 CHECK (update_type IN ('general','financial','operational','governance','risk','exit')),
+  title        TEXT NOT NULL,
+  body         TEXT NOT NULL,
+  author       TEXT,
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS pe_updates_company_idx ON pe_updates(company_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS pe_reviews (
+  id               TEXT PRIMARY KEY,
+  company_id       TEXT NOT NULL REFERENCES pe_companies(id) ON DELETE CASCADE,
+  review_date      DATE NOT NULL,
+  next_review_date DATE,
+  notes            TEXT,
+  attendees        TEXT,
+  created_at       TIMESTAMPTZ DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS pe_reviews_company_idx ON pe_reviews(company_id, review_date DESC);
+CREATE INDEX IF NOT EXISTS pe_reviews_next_idx    ON pe_reviews(next_review_date);
 `;
 
 /* Default product catalogue — seeded once, then fully editable in the admin

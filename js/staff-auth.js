@@ -54,11 +54,11 @@
   let _rbacCache = null;
 
   const ROLE_PERMISSIONS = {
-    'CEO':                  ['employee', 'team', 'fund', 'admin', 'ifa', 'portal', 'director', 'accounting'],
+    'CEO':                  ['employee', 'team', 'fund', 'admin', 'ifa', 'portal', 'director', 'accounting', 'pe_monitor'],
     'Operations Manager':   ['employee', 'team', 'fund', 'admin', 'accounting'],
-    'Finance Manager':      ['employee', 'team', 'fund', 'admin', 'accounting'],
+    'Finance Manager':      ['employee', 'team', 'fund', 'admin', 'accounting', 'pe_monitor'],
     'Tech Lead':            ['employee', 'team', 'fund', 'admin', 'accounting'],
-    'Investment Analyst':   ['employee', 'team', 'fund'],
+    'Investment Analyst':   ['employee', 'team', 'fund', 'pe_monitor'],
     'Compliance Officer':   ['employee', 'admin'],
     'Client Relations':     ['employee', 'portal'],
     'Marketing':            ['employee'],
@@ -67,7 +67,7 @@
   };
 
   /* Level-based elevation (overrides role if level is executive) */
-  const EXECUTIVE_APPS = ['employee', 'team', 'fund', 'admin', 'ifa', 'portal', 'director', 'accounting'];
+  const EXECUTIVE_APPS = ['employee', 'team', 'fund', 'admin', 'ifa', 'portal', 'director', 'accounting', 'pe_monitor'];
 
   /* Director-level check — executive level, CEO/COO/CTO/CFO titles,
      or a JWT role of 'director' or 'admin' all grant Director panel access */
@@ -139,6 +139,14 @@
       icon:        'fa-solid fa-building-columns',
       color:       '#10b981',
       path:        '/portal/index.html',
+      guard:       true,
+    },
+    pe_monitor: {
+      label:       'PE Monitor',
+      description: 'Private equity deal flow, portfolio monitoring & fee tracking',
+      icon:        'fa-solid fa-briefcase',
+      color:       '#3b82f6',
+      path:        '/team/pe-monitor.html',
       guard:       true,
     },
   };
@@ -245,6 +253,22 @@
    * RBAC helpers
    * ───────────────────────────────────────────────────────────── */
 
+  /* Fetch the employee's current app_access from the DB and update the
+     stored session so the hub reflects changes made in the Director Panel
+     without requiring the user to log out and back in. */
+  async function syncAppAccess(empId) {
+    try {
+      const base = window.__SVC_API_BASE__ || '/api/';
+      const r = await fetch(`${base}tables/employees/${empId}`);
+      if (!r.ok) return;
+      const data = await r.json();
+      const emp = data.row || data;
+      if (emp && Array.isArray(emp.app_access)) {
+        refreshSession({ appAccess: emp.app_access });
+      }
+    } catch (_) {}
+  }
+
   async function loadRbac() {
     try {
       const base = window.__SVC_API_BASE__ || '/api/';
@@ -286,13 +310,14 @@
   /* Determine which appKey the current page corresponds to */
   function currentAppKey() {
     const path = window.location.pathname;
-    if (path.includes('/team/employee'))  return 'employee';
+    if (path.includes('/team/pe-monitor'))  return 'pe_monitor';
+    if (path.includes('/team/employee'))    return 'employee';
     if (path.includes('/team/index') || path.endsWith('/team/')) return 'team';
-    if (path.includes('/fund/'))          return 'fund';
-    if (path.includes('/admin/'))         return 'admin';
-    if (path.includes('/ifa/'))           return 'ifa';
-    if (path.includes('/portal/'))        return 'portal';
-    if (path.includes('/team/accounting')) return 'accounting';
+    if (path.includes('/fund/'))            return 'fund';
+    if (path.includes('/admin/'))           return 'admin';
+    if (path.includes('/ifa/'))             return 'ifa';
+    if (path.includes('/portal/'))          return 'portal';
+    if (path.includes('/team/accounting'))  return 'accounting';
     return null;
   }
 
@@ -567,6 +592,7 @@
     setSession,
     clearSession,
     refreshSession,
+    syncAppAccess,
     loadRbac,
     getAllowedApps,
     canAccess,
