@@ -303,7 +303,6 @@ function renderPipeline() {
       <div class="pipeline-cards">${cardsHtml}</div>
     </div>`;
   }).join('');
-}
 
   // Closed / declined / exited table
   const closed = _deals.filter(d => ['closed','declined','exited'].includes(d.stage));
