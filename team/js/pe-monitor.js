@@ -93,13 +93,14 @@ function sectorColor(sector) {
 /* ── API ── */
 async function apiFetch(table, params = {}) {
   const qs = new URLSearchParams(params).toString();
-  const res = await fetch(`${API_BASE}/${table}${qs ? '?' + qs : ''}`);
+  const res = await fetch(`${API_BASE}/${table}${qs ? '?' + qs : ''}`, { credentials: 'include' });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 async function apiCreate(table, data) {
   const res = await fetch(`${API_BASE}/${table}`, {
     method: 'POST',
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
@@ -109,6 +110,7 @@ async function apiCreate(table, data) {
 async function apiUpdate(table, id, data) {
   const res = await fetch(`${API_BASE}/${table}/${id}`, {
     method: 'PUT',
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
@@ -116,7 +118,7 @@ async function apiUpdate(table, id, data) {
   return res.json();
 }
 async function apiDelete(table, id) {
-  const res = await fetch(`${API_BASE}/${table}/${id}`, { method: 'DELETE' });
+  const res = await fetch(`${API_BASE}/${table}/${id}`, { method: 'DELETE', credentials: 'include' });
   if (!res.ok) { const t = await res.text(); throw new Error(t); }
   return res.json();
 }
