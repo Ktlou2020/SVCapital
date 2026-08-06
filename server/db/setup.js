@@ -1627,22 +1627,21 @@ Withdraw at maturity or roll over to a new cycle',
       `);
       await pool.query(`
         INSERT INTO pe_fees
-          (id, company_id, period_start, period_end, total_fee, svc_fee, partner_fee, status, due_date)
+          (id, company_id, period_start, period_end, amount, status, due_date, notes)
         VALUES
-          ('pefee-hb-2025-07',          'peco-hb-svc-2025',          '2025-07-01','2025-07-31', 10400, 5304,  5096,  'due', '2025-08-01'),
-          ('pefee-sas-2025-07',         'peco-sas-svc-2025',         '2025-07-01','2025-07-31', 40000, 20400, 19600, 'due', '2025-08-01'),
-          ('pefee-gma-2025-07',         'peco-gma-svc-2025',         '2025-07-01','2025-07-31', 40000, 20400, 19600, 'due', '2025-08-01'),
-          ('pefee-edelsenz-2025-08',    'peco-edelsenz-svc-2025',    '2025-08-01','2025-08-31', 6500,  3315,  3185,  'due', '2025-09-01'),
-          ('pefee-steelstudio-2026-08', 'peco-steelstudio-svc-2026', '2026-08-01','2026-08-31', 10500, 5355,  5145,  'due', '2026-09-01')
+          ('pefee-hb-2025-07',          'peco-hb-svc-2025',          '2025-07-01','2025-07-31', 10400, 'invoiced', '2025-08-01', 'Monthly management fee — 51% SVC R5304 | 49% partner R5096'),
+          ('pefee-sas-2025-07',         'peco-sas-svc-2025',         '2025-07-01','2025-07-31', 40000, 'invoiced', '2025-08-01', 'Monthly management fee — 51% SVC R20400 | 49% partner R19600'),
+          ('pefee-gma-2025-07',         'peco-gma-svc-2025',         '2025-07-01','2025-07-31', 40000, 'invoiced', '2025-08-01', 'Monthly management fee — 51% SVC R20400 | 49% partner R19600'),
+          ('pefee-edelsenz-2025-08',    'peco-edelsenz-svc-2025',    '2025-08-01','2025-08-31', 6500,  'invoiced', '2025-09-01', 'Monthly management fee — 51% SVC R3315 | 49% partner R3185'),
+          ('pefee-steelstudio-2026-08', 'peco-steelstudio-svc-2026', '2026-08-01','2026-08-31', 10500, 'invoiced', '2026-09-01', 'Monthly management fee — 51% SVC R5355 | 49% partner R5145')
         ON CONFLICT (id) DO UPDATE SET
           company_id   = EXCLUDED.company_id,
           period_start = EXCLUDED.period_start,
           period_end   = EXCLUDED.period_end,
-          total_fee    = EXCLUDED.total_fee,
-          svc_fee      = EXCLUDED.svc_fee,
-          partner_fee  = EXCLUDED.partner_fee,
+          amount       = EXCLUDED.amount,
           status       = EXCLUDED.status,
-          due_date     = EXCLUDED.due_date
+          due_date     = EXCLUDED.due_date,
+          notes        = EXCLUDED.notes
       `);
       console.log('✅ PE portfolio companies seeded.');
     } catch (peErr) {

@@ -8224,7 +8224,7 @@ function renderIFATable(filterStatus = '', searchQ = '') {
         </span>
       </td>
       <td class="td-gold fw-700">${Utils.rand(ifa.aum_managed || 0)}</td>
-      <td class="td-muted">${(ifa.commission_rate || 0).toFixed(2)}%</td>
+      <td class="td-muted">${Number(ifa.commission_rate || 0).toFixed(2)}%</td>
       <td><span class="badge ${statusColor}">${ifa.status || 'unknown'}</span></td>
       <td class="td-muted">${Utils.date(ifa.date_joined)}</td>
       <td>
