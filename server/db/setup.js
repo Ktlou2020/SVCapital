@@ -1226,7 +1226,7 @@ CREATE INDEX IF NOT EXISTS pe_reviews_next_idx    ON pe_reviews(next_review_date
 -- ── Change Requests & Suggestions ────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS change_requests (
-  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id               TEXT PRIMARY KEY,
   employee_id      TEXT NOT NULL,
   submitted_by     TEXT NOT NULL,
   category         TEXT NOT NULL DEFAULT 'other'
@@ -1684,6 +1684,25 @@ Withdraw at maturity or roll over to a new cycle',
       console.log('✅ change_requests app access ensured for all employees.');
     } catch (crErr) {
       console.warn('⚠️  change_requests access patch warning:', crErr.message);
+    }
+
+    // 2c. Migrate change_requests.id from UUID to TEXT if created before fix
+    try {
+      await pool.query(`
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'change_requests'
+              AND column_name = 'id'
+              AND data_type = 'uuid'
+          ) THEN
+            ALTER TABLE change_requests ALTER COLUMN id TYPE TEXT;
+          END IF;
+        END $$;
+      `);
+    } catch (migrErr) {
+      console.warn('⚠️  change_requests id migration warning:', migrErr.message);
     }
 
     // 2. Ensure the COO account exists — upsert so existing users are never wiped

@@ -1083,6 +1083,7 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
         solar_projects:        'SOL',
         solar_documents:       'SDOC',
         sub_accounts:          'SUBACC',
+        change_requests:       'CR',
       };
       const prefix = prefixMap[table] || 'REC';
       body.id = `${prefix}-${Date.now()}`;
