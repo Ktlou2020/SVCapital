@@ -129,7 +129,7 @@ const PARTNER_PROFILES = {
   'MoolaLend': {
     tagline: "SA's receivables finance platform for registered businesses",
     profile: 'MoolaLend is a South African receivables finance platform for registered businesses. Apply online and our automated risk engine vets your invoice instantly — strong applications are pre-approved on the spot, our team confirms funding shortly after, and the balance is released once your customer settles the invoice.',
-    website: 'https://moolalend-production.up.railway.app/',
+    website: 'https://portal.moolalend.co.za/',
   },
   'The Solar Experts': {
     tagline: 'Cape Town\'s trusted solar design & installation specialists',
