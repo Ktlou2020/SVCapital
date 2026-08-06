@@ -8284,7 +8284,7 @@ function viewIFA(ifaId) {
         <div class="info-list">
           <div class="info-row"><span class="info-row__label">Phone</span><span class="info-row__value">${_esc(ifa.phone) || '—'}</span></div>
           <div class="info-row"><span class="info-row__label">FSP License</span><span class="info-row__value td-gold">${_esc(ifa.license_number) || '—'}</span></div>
-          <div class="info-row"><span class="info-row__label">Commission Rate</span><span class="info-row__value">${(ifa.commission_rate || 0).toFixed(2)}%</span></div>
+          <div class="info-row"><span class="info-row__label">Commission Rate</span><span class="info-row__value">${Number(ifa.commission_rate || 0).toFixed(2)}%</span></div>
           <div class="info-row"><span class="info-row__label">Date Joined</span><span class="info-row__value">${Utils.date(ifa.date_joined)}</span></div>
         </div>
       </div>
