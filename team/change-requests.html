@@ -320,6 +320,44 @@
     .detail-section__body { font-size: 0.88rem; color: var(--muted2); line-height: 1.65; }
     .detail-section__body.text-bright { color: var(--text); font-weight: 600; }
 
+    /* Comment bubble */
+    .comment-bubble {
+      background: var(--surface2);
+      border: 1px solid rgba(237,165,255,0.18);
+      border-left: 3px solid var(--purple);
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-bottom: 20px;
+    }
+    .comment-bubble__header {
+      display: flex; align-items: center; gap: 9px; margin-bottom: 10px;
+    }
+    .comment-avatar {
+      width: 28px; height: 28px; border-radius: 8px;
+      background: rgba(237,165,255,0.15); color: var(--purple);
+      font-size: 0.68rem; font-weight: 800;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; letter-spacing: 0.02em;
+    }
+    .comment-meta { flex: 1; min-width: 0; }
+    .comment-meta__name { font-size: 0.8rem; font-weight: 700; color: var(--text); }
+    .comment-meta__time { font-size: 0.7rem; color: var(--muted); margin-top: 1px; }
+    .comment-bubble__label {
+      font-size: 0.65rem; font-weight: 700; color: var(--purple);
+      text-transform: uppercase; letter-spacing: 0.07em;
+      background: rgba(237,165,255,0.1); border-radius: 4px;
+      padding: 2px 7px;
+    }
+    .comment-bubble__body {
+      font-size: 0.86rem; color: var(--muted2); line-height: 1.65;
+    }
+
+    /* Note indicator on card */
+    .card-note-indicator {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 0.7rem; color: var(--purple); font-weight: 600;
+    }
+
     .admin-panel {
       background: var(--surface2); border: 1px solid var(--border);
       border-radius: 12px; padding: 16px; margin-top: 18px;
@@ -723,6 +761,7 @@ function buildCard(r, showAuthor) {
         <div class="card-footer-left">
           <span><span class="priority-dot prio--${r.priority}"></span>${prio.label} priority</span>
           <span><i class="fa-regular fa-clock" style="margin-right:3px"></i>${date}</span>
+          ${r.admin_notes ? `<span class="card-note-indicator"><i class="fa-solid fa-comment-lines"></i>Note</span>` : ''}
         </div>
         <span style="color:var(--muted);font-size:0.7rem"><i class="fa-solid fa-chevron-right"></i></span>
       </div>
@@ -834,8 +873,8 @@ function openDetail(id) {
           <option value="rejected"    ${r.status==='rejected'    ?'selected':''}>Rejected</option>
           <option value="implemented" ${r.status==='implemented' ?'selected':''}>Implemented</option>
         </select>
-        <label class="form-label" style="font-size:0.72rem;margin-bottom:6px;display:block">Admin Notes</label>
-        <textarea class="admin-textarea" id="detailAdminNotes" placeholder="Add notes for the requester (optional)…">${esc(r.admin_notes || '')}</textarea>
+        <label class="form-label" style="font-size:0.72rem;margin-bottom:6px;display:block">Note for submitter <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">(visible to them)</span></label>
+        <textarea class="admin-textarea" id="detailAdminNotes" placeholder="Leave a note explaining the decision or asking for more info…">${esc(r.admin_notes || '')}</textarea>
         <div style="margin-top:10px;display:flex;gap:8px;justify-content:flex-end">
           <button class="btn btn--primary" style="font-size:0.8rem;padding:7px 14px" onclick="saveReview('${r.id}')">
             <i class="fa-solid fa-check"></i> Save Review
@@ -870,15 +909,17 @@ function openDetail(id) {
       <div class="detail-section__label">Expected Impact</div>
       <div class="detail-section__body">${esc(r.expected_impact).replace(/\n/g,'<br>')}</div>
     </div>` : ''}
-    ${r.admin_notes && !IS_ADMIN ? `
-    <div class="detail-section">
-      <div class="detail-section__label" style="color:var(--purple)">Admin Notes</div>
-      <div class="detail-section__body">${esc(r.admin_notes).replace(/\n/g,'<br>')}</div>
-    </div>` : ''}
-    ${r.reviewed_by ? `
-    <div class="detail-section">
-      <div class="detail-section__label">Reviewed by</div>
-      <div class="detail-section__body text-bright">${esc(r.reviewed_by)}</div>
+    ${r.admin_notes ? `
+    <div class="comment-bubble">
+      <div class="comment-bubble__header">
+        <div class="comment-avatar">${(r.reviewed_by || 'R').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()}</div>
+        <div class="comment-meta">
+          <div class="comment-meta__name">${esc(r.reviewed_by || 'Reviewer')}</div>
+          <div class="comment-meta__time">${r.reviewed_at ? new Date(r.reviewed_at).toLocaleString('en-ZA',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : ''}</div>
+        </div>
+        <span class="comment-bubble__label">Reviewer Note</span>
+      </div>
+      <div class="comment-bubble__body">${esc(r.admin_notes).replace(/\n/g,'<br>')}</div>
     </div>` : ''}
     ${adminPanel}
   `;
