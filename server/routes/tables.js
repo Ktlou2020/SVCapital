@@ -1454,8 +1454,11 @@ router.put('/:table/:id', requireAuth, validateTable, async (req, res) => {
       }
     }
 
-    // Employee data isolation: staff can only modify their own rows
-    if (req.user.empId && !['admin','director','fund_manager'].includes(req.user.role)) {
+    // Employee data isolation: staff can only modify their own rows.
+    // Exception: leads and executives may update change_requests regardless of ownership.
+    const isLeadOrExec = ['lead','executive'].includes(req.user.level);
+    const isCrReviewer = table === 'change_requests' && isLeadOrExec;
+    if (req.user.empId && !['admin','director','fund_manager'].includes(req.user.role) && !isCrReviewer) {
       if (EMPLOYEE_OWNED_COLS[table]) {
         const ownerCol = EMPLOYEE_OWNED_COLS[table];
         const { rows: ownerRows } = await pool.query(

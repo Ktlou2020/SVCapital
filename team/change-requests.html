@@ -605,7 +605,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   SESSION = StaffAuth.getSession();
   if (!SESSION) { window.location.replace('login.html'); return; }
 
-  IS_ADMIN = (SESSION.role === 'admin' || SESSION.role === 'director');
+  IS_ADMIN = (SESSION.role === 'admin' || SESSION.role === 'director' ||
+              SESSION.level === 'executive' || SESSION.level === 'lead');
 
   await loadData();
 
@@ -639,13 +640,13 @@ async function apiFetch(url, opts = {}) {
 async function loadData() {
   try {
     if (IS_ADMIN) {
-      const all = await apiFetch('/api/tables/change_requests?order_by=created_at&order=desc&limit=200');
+      const all = await apiFetch('/api/tables/change_requests?sort=created_at&order=desc&limit=200');
       ALL_REQUESTS = all.rows || [];
       document.getElementById('adminSection').style.display = 'block';
       renderAllRequests();
     }
 
-    const mine = await apiFetch(`/api/tables/change_requests?order_by=created_at&order=desc&limit=200`);
+    const mine = await apiFetch(`/api/tables/change_requests?sort=created_at&order=desc&limit=200`);
     MY_REQUESTS = (mine.rows || []).filter(r => r.employee_id === SESSION.empId);
 
     renderMyRequests();
