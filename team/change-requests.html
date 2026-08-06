@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="icon" type="image/x-icon" href="../assets/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png" />
+  <link rel="apple-touch-icon" sizes="192x192" href="../assets/logo-192.png" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SV Capital — Change Requests</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
+  <script src="../js/staff-auth.js?v=5"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0b0c10;
+      --surface:  #111318;
+      --surface2: #1a1c24;
+      --surface3: #22252f;
+      --border:   rgba(255,255,255,0.07);
+      --border2:  rgba(255,255,255,0.12);
+      --purple:   #eda5ff;
+      --text:     #e8eaf6;
+      --muted:    #6b7280;
+      --muted2:   #9ca3af;
+      --green:    #10b981;
+      --yellow:   #f59e0b;
+      --red:      #ef4444;
+      --blue:     #3b82f6;
+    }
+
+    html, body {
+      min-height: 100vh;
+      background: var(--bg);
+      font-family: 'Inter', sans-serif;
+      color: var(--text);
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-image:
+        linear-gradient(rgba(237,165,255,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(237,165,255,0.025) 1px, transparent 1px);
+      background-size: 52px 52px;
+    }
+
+    .orb { position: fixed; border-radius: 50%; filter: blur(120px); opacity: 0.08; z-index: 0; pointer-events: none; }
+    .orb--1 { width: 500px; height: 500px; background: #eda5ff; top: -200px; left: -100px; }
+    .orb--2 { width: 300px; height: 300px; background: #00d4aa; bottom: -80px; right: -60px; }
+
+    /* Global loader */
+    #globalLoader {
+      position: fixed; inset: 0; background: var(--bg);
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column; gap: 14px; z-index: 9999;
+    }
+    #globalLoader .spin {
+      width: 40px; height: 40px;
+      border: 3px solid rgba(237,165,255,0.15); border-top-color: var(--purple);
+      border-radius: 50%; animation: spin 0.65s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Page layout */
+    .page { position: relative; z-index: 1; max-width: 960px; margin: 0 auto; padding: 0 24px 80px; }
+
+    /* Top bar */
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 0 28px;
+    }
+    .topbar-left { display: flex; align-items: center; gap: 14px; }
+    .back-btn {
+      display: flex; align-items: center; gap: 7px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 8px 14px;
+      color: var(--muted2); font-size: 0.82rem; font-weight: 600;
+      text-decoration: none; transition: border-color 0.15s, color 0.15s;
+    }
+    .back-btn:hover { border-color: var(--purple); color: var(--purple); }
+    .page-title {
+      font-family: 'Poppins', sans-serif;
+      font-size: 1.4rem; font-weight: 800; letter-spacing: -0.02em;
+    }
+    .page-title span { color: var(--purple); }
+    .new-btn {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--purple); color: #0b0c10;
+      border: none; border-radius: 10px;
+      padding: 10px 18px; font-size: 0.85rem; font-weight: 700;
+      cursor: pointer; transition: opacity 0.15s, transform 0.15s;
+      font-family: 'Inter', sans-serif;
+    }
+    .new-btn:hover { opacity: 0.88; transform: translateY(-1px); }
+
+    /* Stat cards */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 12px; margin-bottom: 28px;
+    }
+    .stat-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 16px 18px;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .stat-card__label { font-size: 0.72rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+    .stat-card__value { font-size: 1.6rem; font-weight: 800; font-family: 'Poppins', sans-serif; }
+    .stat-card--pending  .stat-card__value { color: var(--yellow); }
+    .stat-card--review   .stat-card__value { color: var(--blue); }
+    .stat-card--done     .stat-card__value { color: var(--green); }
+    .stat-card--total    .stat-card__value { color: var(--purple); }
+
+    /* Filter tabs */
+    .filter-row {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 20px; flex-wrap: wrap;
+    }
+    .filter-btn {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 6px 14px;
+      font-size: 0.78rem; font-weight: 600; color: var(--muted2);
+      cursor: pointer; transition: all 0.15s; font-family: 'Inter', sans-serif;
+    }
+    .filter-btn.active {
+      background: rgba(237,165,255,0.12);
+      border-color: var(--purple); color: var(--purple);
+    }
+    .filter-btn:hover:not(.active) { border-color: var(--border2); color: var(--text); }
+
+    /* Section header */
+    .section-head {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .section-label {
+      font-size: 0.72rem; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.08em;
+    }
+    .section-count-badge {
+      font-size: 0.72rem; font-weight: 700;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 20px; padding: 2px 10px; color: var(--muted2);
+    }
+
+    /* Request cards */
+    .requests-list { display: flex; flex-direction: column; gap: 10px; }
+    .request-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 18px 20px;
+      transition: border-color 0.15s;
+      cursor: pointer;
+    }
+    .request-card:hover { border-color: var(--border2); }
+
+    .card-header { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 8px; }
+    .card-icon {
+      width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.85rem;
+    }
+    .card-meta { flex: 1; min-width: 0; }
+    .card-title {
+      font-size: 0.92rem; font-weight: 700; margin-bottom: 3px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .card-sub { font-size: 0.75rem; color: var(--muted); display: flex; gap: 10px; flex-wrap: wrap; }
+    .card-badges { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+
+    /* Badges */
+    .badge {
+      font-size: 0.68rem; font-weight: 700; padding: 3px 9px;
+      border-radius: 20px; letter-spacing: 0.03em; text-transform: uppercase;
+    }
+    .badge--pending    { background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
+    .badge--reviewing  { background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3); }
+    .badge--approved   { background: rgba(16,185,129,0.15); color: #34d399; border: 1px solid rgba(16,185,129,0.3); }
+    .badge--rejected   { background: rgba(239,68,68,0.12);  color: #f87171; border: 1px solid rgba(239,68,68,0.25); }
+    .badge--implemented{ background: rgba(237,165,255,0.12); color: #eda5ff; border: 1px solid rgba(237,165,255,0.3); }
+
+    .priority-dot {
+      width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 4px;
+    }
+    .prio--low    { background: #6b7280; }
+    .prio--medium { background: #f59e0b; }
+    .prio--high   { background: #f97316; }
+    .prio--urgent { background: #ef4444; }
+
+    .card-desc {
+      font-size: 0.8rem; color: var(--muted2); line-height: 1.55;
+      margin-top: 6px;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .card-footer {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-top: 12px; padding-top: 12px;
+      border-top: 1px solid var(--border);
+      font-size: 0.73rem; color: var(--muted);
+    }
+    .card-footer-left { display: flex; gap: 14px; align-items: center; }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center; padding: 56px 24px;
+      color: var(--muted);
+    }
+    .empty-state i { font-size: 2.4rem; margin-bottom: 14px; display: block; opacity: 0.4; }
+    .empty-state p { font-size: 0.88rem; }
+
+    /* ── Modal overlay ── */
+    .modal-overlay {
+      position: fixed; inset: 0; z-index: 8000;
+      background: rgba(0,0,0,0.65); backdrop-filter: blur(4px);
+      display: none; align-items: center; justify-content: center;
+      padding: 20px;
+    }
+    .modal-overlay.open { display: flex; }
+
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: 20px;
+      width: 100%; max-width: 600px;
+      max-height: 90vh; overflow-y: auto;
+      position: relative;
+    }
+    .modal-header {
+      position: sticky; top: 0; z-index: 1;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 20px 24px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .modal-icon {
+      width: 38px; height: 38px; border-radius: 11px;
+      background: rgba(237,165,255,0.12);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--purple); font-size: 0.95rem; flex-shrink: 0;
+    }
+    .modal-title-group { flex: 1; }
+    .modal-title { font-size: 1rem; font-weight: 800; font-family: 'Poppins', sans-serif; }
+    .modal-sub   { font-size: 0.75rem; color: var(--muted); margin-top: 1px; }
+    .modal-close {
+      background: none; border: none; color: var(--muted);
+      cursor: pointer; font-size: 1.1rem; padding: 4px;
+      transition: color 0.15s;
+    }
+    .modal-close:hover { color: var(--text); }
+    .modal-body { padding: 24px; }
+
+    /* Form */
+    .form-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+    }
+    .form-grid .span-2 { grid-column: 1 / -1; }
+    .form-field { display: flex; flex-direction: column; gap: 6px; }
+    .form-label { font-size: 0.76rem; font-weight: 700; color: var(--muted2); text-transform: uppercase; letter-spacing: 0.05em; }
+    .form-input, .form-select, .form-textarea {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 10px 13px;
+      font-size: 0.88rem; color: var(--text);
+      font-family: 'Inter', sans-serif;
+      transition: border-color 0.15s;
+      outline: none;
+    }
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+      border-color: var(--purple);
+    }
+    .form-select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
+    .form-select option { background: #1a1c24; color: var(--text); }
+    .form-textarea { resize: vertical; min-height: 90px; line-height: 1.6; }
+
+    .priority-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; }
+    .prio-option { display: none; }
+    .prio-label {
+      display: flex; flex-direction: column; align-items: center; gap: 5px;
+      background: var(--surface2); border: 1.5px solid var(--border);
+      border-radius: 10px; padding: 10px 8px; cursor: pointer;
+      font-size: 0.76rem; font-weight: 700; color: var(--muted);
+      transition: all 0.15s; text-align: center;
+    }
+    .prio-label i { font-size: 1rem; }
+    .prio-option:checked + .prio-label {
+      border-color: currentColor; background: rgba(255,255,255,0.04);
+    }
+    .prio-option[value="low"]    + .prio-label { color: #9ca3af; }
+    .prio-option[value="medium"] + .prio-label { color: #f59e0b; }
+    .prio-option[value="high"]   + .prio-label { color: #f97316; }
+    .prio-option[value="urgent"] + .prio-label { color: #ef4444; }
+    .prio-option:checked[value="low"]    + .prio-label { background: rgba(156,163,175,0.1); }
+    .prio-option:checked[value="medium"] + .prio-label { background: rgba(245,158,11,0.1); }
+    .prio-option:checked[value="high"]   + .prio-label { background: rgba(249,115,22,0.1); }
+    .prio-option:checked[value="urgent"] + .prio-label { background: rgba(239,68,68,0.1); }
+
+    .char-count { font-size: 0.7rem; color: var(--muted); text-align: right; margin-top: 2px; }
+
+    .form-footer {
+      display: flex; gap: 10px; justify-content: flex-end;
+      margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--border);
+    }
+    .btn {
+      display: inline-flex; align-items: center; gap: 7px;
+      border-radius: 10px; padding: 9px 18px;
+      font-size: 0.84rem; font-weight: 700; cursor: pointer;
+      font-family: 'Inter', sans-serif; transition: all 0.15s; border: none;
+    }
+    .btn--primary { background: var(--purple); color: #0b0c10; }
+    .btn--primary:hover { opacity: 0.88; }
+    .btn--ghost { background: var(--surface2); border: 1px solid var(--border); color: var(--muted2); }
+    .btn--ghost:hover { border-color: var(--border2); color: var(--text); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    /* Detail modal */
+    .detail-section { margin-bottom: 20px; }
+    .detail-section:last-child { margin-bottom: 0; }
+    .detail-section__label { font-size: 0.7rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 6px; }
+    .detail-section__body { font-size: 0.88rem; color: var(--muted2); line-height: 1.65; }
+    .detail-section__body.text-bright { color: var(--text); font-weight: 600; }
+
+    .admin-panel {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 12px; padding: 16px; margin-top: 18px;
+    }
+    .admin-panel__header {
+      font-size: 0.76rem; font-weight: 700; color: var(--purple);
+      text-transform: uppercase; letter-spacing: 0.06em;
+      margin-bottom: 14px; display: flex; align-items: center; gap: 7px;
+    }
+    .admin-select {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 8px 12px; color: var(--text);
+      font-size: 0.85rem; font-family: 'Inter', sans-serif; width: 100%;
+      margin-bottom: 10px; outline: none; transition: border-color 0.15s;
+    }
+    .admin-select:focus { border-color: var(--purple); }
+    .admin-select option { background: #1a1c24; }
+    .admin-textarea {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px 12px; color: var(--text);
+      font-size: 0.82rem; font-family: 'Inter', sans-serif; width: 100%;
+      min-height: 80px; resize: vertical; outline: none;
+      transition: border-color 0.15s; line-height: 1.6;
+    }
+    .admin-textarea:focus { border-color: var(--purple); }
+
+    /* Toast */
+    #toast {
+      position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(20px);
+      background: var(--surface2); border: 1px solid var(--border2);
+      border-radius: 12px; padding: 12px 20px;
+      font-size: 0.85rem; font-weight: 600; color: var(--text);
+      z-index: 9999; opacity: 0; transition: all 0.25s;
+      white-space: nowrap; pointer-events: none;
+      display: flex; align-items: center; gap: 9px;
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    #toast.ok  i { color: var(--green); }
+    #toast.err i { color: var(--red); }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      .form-grid { grid-template-columns: 1fr; }
+      .form-grid .span-2 { grid-column: 1; }
+      .stats-row { grid-template-columns: repeat(2,1fr); }
+      .priority-row { grid-template-columns: repeat(2,1fr); }
+    }
+
+    /* Admin section separator */
+    .admin-divider {
+      display: flex; align-items: center; gap: 12px;
+      margin: 30px 0 20px;
+    }
+    .admin-divider span {
+      font-size: 0.72rem; font-weight: 700; color: var(--purple);
+      text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap;
+    }
+    .admin-divider::before, .admin-divider::after {
+      content: ''; flex: 1; height: 1px; background: rgba(237,165,255,0.2);
+    }
+  </style>
+</head>
+<body>
+
+<div id="globalLoader">
+  <div class="spin"></div>
+  <div style="font-size:0.8rem;color:#4e5470;font-weight:600">Loading change requests…</div>
+</div>
+
+<div class="orb orb--1"></div>
+<div class="orb orb--2"></div>
+
+<div class="page" id="mainContent" style="display:none">
+
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <a href="hub.html" class="back-btn"><i class="fa-solid fa-arrow-left"></i> Hub</a>
+      <div class="page-title">Change <span>Requests</span></div>
+    </div>
+    <button class="new-btn" onclick="openNewModal()">
+      <i class="fa-solid fa-plus"></i> New Request
+    </button>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row" id="statsRow">
+    <div class="stat-card stat-card--total">
+      <div class="stat-card__label">Total</div>
+      <div class="stat-card__value" id="statTotal">—</div>
+    </div>
+    <div class="stat-card stat-card--pending">
+      <div class="stat-card__label">Pending</div>
+      <div class="stat-card__value" id="statPending">—</div>
+    </div>
+    <div class="stat-card stat-card--review">
+      <div class="stat-card__label">In Review</div>
+      <div class="stat-card__value" id="statReview">—</div>
+    </div>
+    <div class="stat-card stat-card--done">
+      <div class="stat-card__label">Implemented</div>
+      <div class="stat-card__value" id="statDone">—</div>
+    </div>
+  </div>
+
+  <!-- ── Admin: All Requests section (directors/admins only) ── -->
+  <div id="adminSection" style="display:none">
+    <div class="admin-divider"><span><i class="fa-solid fa-shield-halved" style="margin-right:6px"></i>All Team Submissions</span></div>
+
+    <div class="filter-row" id="adminFilterRow">
+      <button class="filter-btn active" data-filter="all" onclick="filterAll('all',this)">All</button>
+      <button class="filter-btn" data-filter="pending"     onclick="filterAll('pending',this)">Pending</button>
+      <button class="filter-btn" data-filter="reviewing"   onclick="filterAll('reviewing',this)">In Review</button>
+      <button class="filter-btn" data-filter="approved"    onclick="filterAll('approved',this)">Approved</button>
+      <button class="filter-btn" data-filter="implemented" onclick="filterAll('implemented',this)">Implemented</button>
+      <button class="filter-btn" data-filter="rejected"    onclick="filterAll('rejected',this)">Rejected</button>
+    </div>
+
+    <div class="section-head">
+      <div class="section-label">Team submissions</div>
+      <div class="section-count-badge" id="allCountBadge">—</div>
+    </div>
+    <div class="requests-list" id="allRequestsList"></div>
+  </div>
+
+  <!-- ── My Submissions section ── -->
+  <div id="mySection">
+    <div class="filter-row" id="myFilterRow">
+      <button class="filter-btn active" data-filter="all" onclick="filterMy('all',this)">All</button>
+      <button class="filter-btn" data-filter="pending"     onclick="filterMy('pending',this)">Pending</button>
+      <button class="filter-btn" data-filter="reviewing"   onclick="filterMy('reviewing',this)">In Review</button>
+      <button class="filter-btn" data-filter="approved"    onclick="filterMy('approved',this)">Approved</button>
+      <button class="filter-btn" data-filter="implemented" onclick="filterMy('implemented',this)">Implemented</button>
+      <button class="filter-btn" data-filter="rejected"    onclick="filterMy('rejected',this)">Rejected</button>
+    </div>
+
+    <div class="section-head">
+      <div class="section-label">My submissions</div>
+      <div class="section-count-badge" id="myCountBadge">—</div>
+    </div>
+    <div class="requests-list" id="myRequestsList"></div>
+  </div>
+
+</div>
+
+<!-- ── New Request Modal ── -->
+<div class="modal-overlay" id="newModal" onclick="maybeCloseNew(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-icon"><i class="fa-solid fa-code-pull-request"></i></div>
+      <div class="modal-title-group">
+        <div class="modal-title">New Change Request</div>
+        <div class="modal-sub">Submit a request, bug report or suggestion for the platform</div>
+      </div>
+      <button class="modal-close" onclick="closeNewModal()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <form id="newRequestForm" onsubmit="submitRequest(event)">
+        <div class="form-grid">
+
+          <div class="form-field span-2">
+            <label class="form-label">Category</label>
+            <select class="form-select" id="newCategory" required>
+              <option value="">Select a category…</option>
+              <option value="feature">Feature Request</option>
+              <option value="bug">Bug Fix</option>
+              <option value="process">Process Change</option>
+              <option value="data">Data / Report</option>
+              <option value="security">Security Concern</option>
+              <option value="ui_ux">UI / UX Improvement</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+
+          <div class="form-field span-2">
+            <label class="form-label">Priority</label>
+            <div class="priority-row">
+              <div>
+                <input class="prio-option" type="radio" name="priority" id="pLow" value="low">
+                <label class="prio-label" for="pLow"><i class="fa-solid fa-circle-minus"></i>Low</label>
+              </div>
+              <div>
+                <input class="prio-option" type="radio" name="priority" id="pMed" value="medium" checked>
+                <label class="prio-label" for="pMed"><i class="fa-solid fa-circle-half-stroke"></i>Medium</label>
+              </div>
+              <div>
+                <input class="prio-option" type="radio" name="priority" id="pHigh" value="high">
+                <label class="prio-label" for="pHigh"><i class="fa-solid fa-circle-exclamation"></i>High</label>
+              </div>
+              <div>
+                <input class="prio-option" type="radio" name="priority" id="pUrgent" value="urgent">
+                <label class="prio-label" for="pUrgent"><i class="fa-solid fa-triangle-exclamation"></i>Urgent</label>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-field span-2">
+            <label class="form-label">Title <span style="color:#ef4444">*</span></label>
+            <input class="form-input" type="text" id="newTitle" maxlength="120"
+              placeholder="Short, descriptive title for your request…" required
+              oninput="document.getElementById('titleCount').textContent=this.value.length+'/120'">
+            <div class="char-count" id="titleCount">0/120</div>
+          </div>
+
+          <div class="form-field span-2">
+            <label class="form-label">Description <span style="color:#ef4444">*</span></label>
+            <textarea class="form-textarea" id="newDesc" maxlength="2000"
+              placeholder="Describe the change or issue in detail. What should happen? What is currently happening?"
+              required
+              oninput="document.getElementById('descCount').textContent=this.value.length+'/2000'"></textarea>
+            <div class="char-count" id="descCount">0/2000</div>
+          </div>
+
+          <div class="form-field span-2">
+            <label class="form-label">Expected Impact <span style="color:var(--muted)">(optional)</span></label>
+            <textarea class="form-textarea" id="newImpact" maxlength="800"
+              placeholder="What benefit or improvement will this bring to the team or platform?"
+              style="min-height:70px"
+              oninput="document.getElementById('impactCount').textContent=this.value.length+'/800'"></textarea>
+            <div class="char-count" id="impactCount">0/800</div>
+          </div>
+
+        </div>
+        <div class="form-footer">
+          <button type="button" class="btn btn--ghost" onclick="closeNewModal()">Cancel</button>
+          <button type="submit" class="btn btn--primary" id="submitBtn">
+            <i class="fa-solid fa-paper-plane"></i> Submit Request
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ── Detail Modal ── -->
+<div class="modal-overlay" id="detailModal" onclick="maybeCloseDetail(event)">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-header" id="detailHeader">
+      <div class="modal-icon" id="detailIcon"><i class="fa-solid fa-file-lines"></i></div>
+      <div class="modal-title-group">
+        <div class="modal-title" id="detailTitle">Request Details</div>
+        <div class="modal-sub" id="detailSub"></div>
+      </div>
+      <button class="modal-close" onclick="closeDetailModal()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body" id="detailBody"></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"><i class="fa-solid fa-check-circle"></i><span id="toastMsg"></span></div>
+
+<script>
+/* ── State ── */
+let SESSION = null;
+let IS_ADMIN = false;
+let ALL_REQUESTS  = [];   // all requests (admin view)
+let MY_REQUESTS   = [];   // own requests
+let CURRENT_DETAIL = null;
+let ALL_FILTER = 'all';
+let MY_FILTER  = 'all';
+
+/* ── Category config ── */
+const CAT_META = {
+  feature:  { label: 'Feature Request',     icon: 'fa-solid fa-wand-magic-sparkles', color: '#a78bfa' },
+  bug:      { label: 'Bug Fix',             icon: 'fa-solid fa-bug',                 color: '#f87171' },
+  process:  { label: 'Process Change',      icon: 'fa-solid fa-arrows-rotate',        color: '#60a5fa' },
+  data:     { label: 'Data / Report',       icon: 'fa-solid fa-chart-bar',            color: '#34d399' },
+  security: { label: 'Security Concern',    icon: 'fa-solid fa-shield-halved',        color: '#fbbf24' },
+  ui_ux:    { label: 'UI / UX',            icon: 'fa-solid fa-paintbrush',            color: '#f472b6' },
+  other:    { label: 'Other',              icon: 'fa-solid fa-ellipsis',              color: '#9ca3af' },
+};
+
+const PRIO_META = {
+  low:    { label: 'Low',    color: '#9ca3af' },
+  medium: { label: 'Medium', color: '#f59e0b' },
+  high:   { label: 'High',   color: '#f97316' },
+  urgent: { label: 'Urgent', color: '#ef4444' },
+};
+
+/* ── Init ── */
+document.addEventListener('DOMContentLoaded', async () => {
+  SESSION = StaffAuth.getSession();
+  if (!SESSION) { window.location.replace('login.html'); return; }
+
+  IS_ADMIN = (SESSION.role === 'admin' || SESSION.role === 'director');
+
+  await loadData();
+
+  document.getElementById('globalLoader').style.display = 'none';
+  document.getElementById('mainContent').style.display  = 'block';
+});
+
+/* ── API helpers ── */
+function apiHeaders() {
+  const token = localStorage.getItem('staffSession')
+    ? null
+    : (localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token'));
+  const staffRaw = localStorage.getItem('staffSession');
+  if (staffRaw) {
+    try {
+      const s = JSON.parse(staffRaw);
+      return { 'Content-Type': 'application/json', 'X-Staff-Token': s.token };
+    } catch(_) {}
+  }
+  return { 'Content-Type': 'application/json', ...(token ? { 'Authorization': 'Bearer ' + token } : {}) };
+}
+
+async function apiFetch(url, opts = {}) {
+  const res = await fetch(url, { ...opts, headers: { ...apiHeaders(), ...(opts.headers || {}) } });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || 'Request failed');
+  return json;
+}
+
+/* ── Load all data ── */
+async function loadData() {
+  try {
+    if (IS_ADMIN) {
+      const all = await apiFetch('/api/tables/change_requests?order_by=created_at&order=desc&limit=200');
+      ALL_REQUESTS = all.rows || [];
+      document.getElementById('adminSection').style.display = 'block';
+      renderAllRequests();
+    }
+
+    const mine = await apiFetch(`/api/tables/change_requests?order_by=created_at&order=desc&limit=200`);
+    MY_REQUESTS = (mine.rows || []).filter(r => r.employee_id === SESSION.empId);
+
+    renderMyRequests();
+    updateStats();
+  } catch(err) {
+    toast('Failed to load data: ' + err.message, true);
+  }
+}
+
+/* ── Render stats ── */
+function updateStats() {
+  const source = IS_ADMIN ? ALL_REQUESTS : MY_REQUESTS;
+  document.getElementById('statTotal').textContent   = source.length;
+  document.getElementById('statPending').textContent = source.filter(r => r.status === 'pending').length;
+  document.getElementById('statReview').textContent  = source.filter(r => r.status === 'reviewing').length;
+  document.getElementById('statDone').textContent    = source.filter(r => r.status === 'implemented').length;
+}
+
+/* ── Render all requests (admin) ── */
+function renderAllRequests() {
+  const list   = document.getElementById('allRequestsList');
+  const badge  = document.getElementById('allCountBadge');
+  const items  = ALL_FILTER === 'all' ? ALL_REQUESTS : ALL_REQUESTS.filter(r => r.status === ALL_FILTER);
+  badge.textContent = items.length + ' request' + (items.length !== 1 ? 's' : '');
+  if (!items.length) {
+    list.innerHTML = emptyState('No submissions match this filter.');
+    return;
+  }
+  list.innerHTML = items.map(r => buildCard(r, true)).join('');
+}
+
+/* ── Render my requests ── */
+function renderMyRequests() {
+  const list  = document.getElementById('myRequestsList');
+  const badge = document.getElementById('myCountBadge');
+  const items = MY_FILTER === 'all' ? MY_REQUESTS : MY_REQUESTS.filter(r => r.status === MY_FILTER);
+  badge.textContent = items.length + ' request' + (items.length !== 1 ? 'S' : '');
+  if (!items.length) {
+    list.innerHTML = emptyState(MY_REQUESTS.length === 0
+      ? 'You haven\'t submitted any requests yet.'
+      : 'No submissions match this filter.');
+    return;
+  }
+  list.innerHTML = items.map(r => buildCard(r, false)).join('');
+}
+
+/* ── Build card HTML ── */
+function buildCard(r, showAuthor) {
+  const cat    = CAT_META[r.category] || CAT_META.other;
+  const prio   = PRIO_META[r.priority] || PRIO_META.medium;
+  const date   = new Date(r.created_at).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' });
+  const statusBadge = `<span class="badge badge--${r.status}">${statusLabel(r.status)}</span>`;
+  const authorLine  = showAuthor ? `<span><i class="fa-regular fa-user" style="margin-right:3px"></i>${r.submitted_by}</span>` : '';
+
+  return `
+    <div class="request-card" onclick="openDetail('${r.id}')">
+      <div class="card-header">
+        <div class="card-icon" style="background:${cat.color}18;color:${cat.color}">
+          <i class="${cat.icon}"></i>
+        </div>
+        <div class="card-meta">
+          <div class="card-title">${esc(r.title)}</div>
+          <div class="card-sub">
+            <span>${cat.label}</span>
+            ${authorLine}
+          </div>
+        </div>
+        <div class="card-badges">
+          ${statusBadge}
+        </div>
+      </div>
+      <div class="card-desc">${esc(r.description)}</div>
+      <div class="card-footer">
+        <div class="card-footer-left">
+          <span><span class="priority-dot prio--${r.priority}"></span>${prio.label} priority</span>
+          <span><i class="fa-regular fa-clock" style="margin-right:3px"></i>${date}</span>
+        </div>
+        <span style="color:var(--muted);font-size:0.7rem"><i class="fa-solid fa-chevron-right"></i></span>
+      </div>
+    </div>`;
+}
+
+function emptyState(msg) {
+  return `<div class="empty-state"><i class="fa-regular fa-folder-open"></i><p>${msg}</p></div>`;
+}
+
+function statusLabel(s) {
+  return { pending:'Pending', reviewing:'In Review', approved:'Approved', rejected:'Rejected', implemented:'Implemented' }[s] || s;
+}
+
+function esc(s) {
+  return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ── Filters ── */
+function filterAll(val, btn) {
+  ALL_FILTER = val;
+  document.querySelectorAll('#adminFilterRow .filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderAllRequests();
+}
+function filterMy(val, btn) {
+  MY_FILTER = val;
+  document.querySelectorAll('#myFilterRow .filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderMyRequests();
+}
+
+/* ── New Request Modal ── */
+function openNewModal() {
+  document.getElementById('newModal').classList.add('open');
+  document.getElementById('newTitle').focus();
+}
+function closeNewModal() {
+  document.getElementById('newModal').classList.remove('open');
+  document.getElementById('newRequestForm').reset();
+  document.getElementById('titleCount').textContent = '0/120';
+  document.getElementById('descCount').textContent  = '0/2000';
+  document.getElementById('impactCount').textContent= '0/800';
+}
+function maybeCloseNew(e) { if (e.target === document.getElementById('newModal')) closeNewModal(); }
+
+async function submitRequest(e) {
+  e.preventDefault();
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Submitting…';
+
+  const priority = document.querySelector('input[name="priority"]:checked')?.value || 'medium';
+  const body = {
+    employee_id:     SESSION.empId,
+    submitted_by:    SESSION.firstName + ' ' + SESSION.lastName,
+    category:        document.getElementById('newCategory').value,
+    priority,
+    title:           document.getElementById('newTitle').value.trim(),
+    description:     document.getElementById('newDesc').value.trim(),
+    expected_impact: document.getElementById('newImpact').value.trim() || null,
+    status:          'pending',
+  };
+
+  try {
+    const created = await apiFetch('/api/tables/change_requests', { method:'POST', body: JSON.stringify(body) });
+    MY_REQUESTS.unshift(created.row || created);
+    if (IS_ADMIN) ALL_REQUESTS.unshift(created.row || created);
+    updateStats();
+    renderMyRequests();
+    if (IS_ADMIN) renderAllRequests();
+    closeNewModal();
+    toast('Request submitted successfully!');
+  } catch(err) {
+    toast('Failed to submit: ' + err.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit Request';
+  }
+}
+
+/* ── Detail Modal ── */
+function openDetail(id) {
+  const r = [...ALL_REQUESTS, ...MY_REQUESTS].find(x => x.id === id);
+  if (!r) return;
+  CURRENT_DETAIL = r;
+
+  const cat  = CAT_META[r.category] || CAT_META.other;
+  const prio = PRIO_META[r.priority] || PRIO_META.medium;
+  const date = new Date(r.created_at).toLocaleString('en-ZA', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+
+  document.getElementById('detailIcon').style.background = cat.color + '18';
+  document.getElementById('detailIcon').style.color      = cat.color;
+  document.getElementById('detailIcon').innerHTML = `<i class="${cat.icon}"></i>`;
+  document.getElementById('detailTitle').textContent = r.title;
+  document.getElementById('detailSub').innerHTML =
+    `<span class="badge badge--${r.status}" style="font-size:0.65rem">${statusLabel(r.status)}</span> &nbsp;${cat.label} · ${date}`;
+
+  let adminPanel = '';
+  if (IS_ADMIN) {
+    adminPanel = `
+      <div class="admin-panel">
+        <div class="admin-panel__header"><i class="fa-solid fa-shield-halved"></i>Admin Review</div>
+        <label class="form-label" style="font-size:0.72rem;margin-bottom:6px;display:block">Update Status</label>
+        <select class="admin-select" id="detailStatus">
+          <option value="pending"     ${r.status==='pending'     ?'selected':''}>Pending</option>
+          <option value="reviewing"   ${r.status==='reviewing'   ?'selected':''}>In Review</option>
+          <option value="approved"    ${r.status==='approved'    ?'selected':''}>Approved</option>
+          <option value="rejected"    ${r.status==='rejected'    ?'selected':''}>Rejected</option>
+          <option value="implemented" ${r.status==='implemented' ?'selected':''}>Implemented</option>
+        </select>
+        <label class="form-label" style="font-size:0.72rem;margin-bottom:6px;display:block">Admin Notes</label>
+        <textarea class="admin-textarea" id="detailAdminNotes" placeholder="Add notes for the requester (optional)…">${esc(r.admin_notes || '')}</textarea>
+        <div style="margin-top:10px;display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn--primary" style="font-size:0.8rem;padding:7px 14px" onclick="saveReview('${r.id}')">
+            <i class="fa-solid fa-check"></i> Save Review
+          </button>
+        </div>
+      </div>`;
+  }
+
+  document.getElementById('detailBody').innerHTML = `
+    <div class="detail-section">
+      <div class="detail-section__label">Submitted by</div>
+      <div class="detail-section__body text-bright">${esc(r.submitted_by)}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div class="detail-section">
+        <div class="detail-section__label">Category</div>
+        <div class="detail-section__body" style="color:${cat.color};font-weight:700">${cat.label}</div>
+      </div>
+      <div class="detail-section">
+        <div class="detail-section__label">Priority</div>
+        <div class="detail-section__body" style="color:${prio.color};font-weight:700">
+          <span class="priority-dot prio--${r.priority}"></span>${prio.label}
+        </div>
+      </div>
+    </div>
+    <div class="detail-section">
+      <div class="detail-section__label">Description</div>
+      <div class="detail-section__body">${esc(r.description).replace(/\n/g,'<br>')}</div>
+    </div>
+    ${r.expected_impact ? `
+    <div class="detail-section">
+      <div class="detail-section__label">Expected Impact</div>
+      <div class="detail-section__body">${esc(r.expected_impact).replace(/\n/g,'<br>')}</div>
+    </div>` : ''}
+    ${r.admin_notes && !IS_ADMIN ? `
+    <div class="detail-section">
+      <div class="detail-section__label" style="color:var(--purple)">Admin Notes</div>
+      <div class="detail-section__body">${esc(r.admin_notes).replace(/\n/g,'<br>')}</div>
+    </div>` : ''}
+    ${r.reviewed_by ? `
+    <div class="detail-section">
+      <div class="detail-section__label">Reviewed by</div>
+      <div class="detail-section__body text-bright">${esc(r.reviewed_by)}</div>
+    </div>` : ''}
+    ${adminPanel}
+  `;
+
+  document.getElementById('detailModal').classList.add('open');
+}
+function closeDetailModal() { document.getElementById('detailModal').classList.remove('open'); CURRENT_DETAIL = null; }
+function maybeCloseDetail(e) { if (e.target === document.getElementById('detailModal')) closeDetailModal(); }
+
+async function saveReview(id) {
+  const status     = document.getElementById('detailStatus').value;
+  const adminNotes = document.getElementById('detailAdminNotes').value.trim();
+  const reviewedBy = SESSION.firstName + ' ' + SESSION.lastName;
+
+  try {
+    const updated = await apiFetch(`/api/tables/change_requests/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status, admin_notes: adminNotes || null, reviewed_by: reviewedBy, reviewed_at: new Date().toISOString() }),
+    });
+    const row = updated.row || updated;
+    // Update local state
+    const updateList = list => { const i = list.findIndex(x => x.id === id); if (i !== -1) list[i] = row; };
+    updateList(ALL_REQUESTS); updateList(MY_REQUESTS);
+    updateStats();
+    renderAllRequests();
+    renderMyRequests();
+    closeDetailModal();
+    toast('Review saved.');
+  } catch(err) {
+    toast('Failed to save: ' + err.message, true);
+  }
+}
+
+/* ── Toast ── */
+function toast(msg, isErr = false) {
+  const el = document.getElementById('toast');
+  el.className = isErr ? 'err' : 'ok';
+  el.querySelector('i').className = isErr ? 'fa-solid fa-circle-exclamation' : 'fa-solid fa-check-circle';
+  document.getElementById('toastMsg').textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3200);
+}
+</script>
+</body>
+</html>

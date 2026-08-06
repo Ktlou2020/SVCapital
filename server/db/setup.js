@@ -1222,6 +1222,31 @@ CREATE TABLE IF NOT EXISTS pe_reviews (
 );
 CREATE INDEX IF NOT EXISTS pe_reviews_company_idx ON pe_reviews(company_id, review_date DESC);
 CREATE INDEX IF NOT EXISTS pe_reviews_next_idx    ON pe_reviews(next_review_date);
+
+-- ── Change Requests & Suggestions ────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS change_requests (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  employee_id      TEXT NOT NULL,
+  submitted_by     TEXT NOT NULL,
+  category         TEXT NOT NULL DEFAULT 'other'
+                     CHECK (category IN ('feature','bug','process','data','security','ui_ux','other')),
+  priority         TEXT NOT NULL DEFAULT 'medium'
+                     CHECK (priority IN ('low','medium','high','urgent')),
+  title            TEXT NOT NULL,
+  description      TEXT NOT NULL,
+  expected_impact  TEXT,
+  status           TEXT NOT NULL DEFAULT 'pending'
+                     CHECK (status IN ('pending','reviewing','approved','rejected','implemented')),
+  admin_notes      TEXT,
+  reviewed_by      TEXT,
+  reviewed_at      TIMESTAMPTZ,
+  created_at       TIMESTAMPTZ DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS change_requests_employee_idx ON change_requests(employee_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS change_requests_status_idx   ON change_requests(status);
+CREATE INDEX IF NOT EXISTS change_requests_priority_idx ON change_requests(priority);
 `;
 
 /* Default product catalogue — seeded once, then fully editable in the admin

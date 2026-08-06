@@ -142,6 +142,7 @@ const ALLOWED_TABLES = {
   pe_fees:                  'id',
   pe_updates:               'id',
   pe_reviews:               'id',
+  change_requests:          'id',
 };
 
 /* ─── Tables that require admin/director role for READ ─── */
@@ -211,6 +212,7 @@ const EMPLOYEE_OWNED_COLS = {
   payslips:            'employee_id',
   activity_feed:       'employee_id',
   course_progress:     'employee_id',
+  change_requests:     'employee_id',
   employee_onboarding: 'employee_id',
 };
 
