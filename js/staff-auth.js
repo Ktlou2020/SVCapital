@@ -54,9 +54,9 @@
   let _rbacCache = null;
 
   const ROLE_PERMISSIONS = {
-    'CEO':                  ['employee', 'team', 'fund', 'admin', 'ifa', 'portal', 'director', 'accounting', 'pe_monitor', 'change_requests'],
+    'CEO':                  ['employee', 'team', 'fund', 'admin', 'ifa', 'portal', 'director', 'accounting', 'pe_monitor', 'change_requests', 'moolalend'],
     'Operations Manager':   ['employee', 'team', 'fund', 'admin', 'accounting', 'change_requests'],
-    'Finance Manager':      ['employee', 'team', 'fund', 'admin', 'accounting', 'pe_monitor', 'change_requests'],
+    'Finance Manager':      ['employee', 'team', 'fund', 'admin', 'accounting', 'pe_monitor', 'change_requests', 'moolalend'],
     'Tech Lead':            ['employee', 'team', 'fund', 'admin', 'accounting', 'change_requests'],
     'Investment Analyst':   ['employee', 'team', 'fund', 'pe_monitor', 'change_requests'],
     'Compliance Officer':   ['employee', 'admin', 'change_requests'],
@@ -67,7 +67,7 @@
   };
 
   /* Level-based elevation (overrides role if level is executive) */
-  const EXECUTIVE_APPS = ['employee', 'team', 'fund', 'admin', 'ifa', 'portal', 'director', 'accounting', 'pe_monitor', 'change_requests'];
+  const EXECUTIVE_APPS = ['employee', 'team', 'fund', 'admin', 'ifa', 'portal', 'director', 'accounting', 'pe_monitor', 'change_requests', 'moolalend'];
 
   /* Director-level check — executive level, CEO/COO/CTO/CFO titles,
      or a JWT role of 'director' or 'admin' all grant Director panel access */
