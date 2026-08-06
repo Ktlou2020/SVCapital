@@ -1673,6 +1673,19 @@ Withdraw at maturity or roll over to a new cycle',
       console.warn('⚠️  PE portfolio seed warning:', peErr.message);
     }
 
+    // 2b. Ensure change_requests app key is in every employee's app_access array
+    try {
+      await pool.query(`
+        UPDATE employees
+        SET app_access = array_append(app_access, 'change_requests')
+        WHERE app_access IS NOT NULL
+          AND NOT (app_access @> ARRAY['change_requests']::TEXT[])
+      `);
+      console.log('✅ change_requests app access ensured for all employees.');
+    } catch (crErr) {
+      console.warn('⚠️  change_requests access patch warning:', crErr.message);
+    }
+
     // 2. Ensure the COO account exists — upsert so existing users are never wiped
     const { rows: existing } = await pool.query(
       "SELECT id FROM users WHERE email = 'coo@svcapital.co.za' LIMIT 1"
