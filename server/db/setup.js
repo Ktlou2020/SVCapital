@@ -1686,7 +1686,21 @@ Withdraw at maturity or roll over to a new cycle',
       console.warn('⚠️  change_requests access patch warning:', crErr.message);
     }
 
-    // 2c. Migrate change_requests.id from UUID to TEXT if created before fix
+    // 2c. Grant moolalend access to CEOs, Finance Managers, and Executives
+    try {
+      await pool.query(`
+        UPDATE employees
+        SET app_access = array_append(app_access, 'moolalend')
+        WHERE app_access IS NOT NULL
+          AND NOT (app_access @> ARRAY['moolalend']::TEXT[])
+          AND (level = 'executive' OR role IN ('CEO', 'Finance Manager'))
+      `);
+      console.log('✅ moolalend app access granted to eligible employees.');
+    } catch (mlErr) {
+      console.warn('⚠️  moolalend access patch warning:', mlErr.message);
+    }
+
+    // 2d. Migrate change_requests.id from UUID to TEXT if created before fix
     try {
       await pool.query(`
         DO $$
