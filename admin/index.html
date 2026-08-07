@@ -3411,7 +3411,15 @@
       <button class="modal__close" aria-label="Close" onclick="Modal.close('addTxnModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body">
-      <div class="form-group"><label class="form-label">Investor</label><select class="form-select" id="txnInvestorSelect"><option value="">Select investor…</option></select></div>
+      <div class="form-group"><label class="form-label">Investor</label>
+        <div style="position:relative">
+          <input type="text" class="form-select" id="txnInvSearchInput"
+            placeholder="Search by name, account no. or email…"
+            autocomplete="off" style="width:100%">
+          <input type="hidden" id="txnInvestorSelect">
+          <ul id="txnInvDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:200;background:#1a1d23;border:1px solid rgba(255,255,255,0.12);border-radius:8px;max-height:220px;overflow-y:auto;list-style:none;padding:4px 0;margin:4px 0 0;box-shadow:0 8px 24px rgba(0,0,0,.4)"></ul>
+        </div>
+      </div>
       <div class="form-row form-row--2">
         <div class="form-group"><label class="form-label">Type</label>
           <select class="form-select" id="txnType">
@@ -4231,7 +4239,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=4"></script>
-<script src="js/admin.js?v=51"></script>
+<script src="js/admin.js?v=52"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>

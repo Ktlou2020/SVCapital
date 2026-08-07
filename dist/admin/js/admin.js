@@ -6458,13 +6458,62 @@ async function viewEftProof(txnId) {
 }
 
 function openAddTxnModal() {
-  const sel = document.getElementById('txnInvestorSelect');
-  if (sel) {
-    sel.innerHTML = '<option value="">Select investor…</option>' +
-      [...STATE.investors]
-        .sort((a, b) => `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`))
-        .map(i => `<option value="${i.id}">${i.first_name} ${i.last_name} (${i.id})</option>`)
-        .join('');
+  /* Reset hidden investor value */
+  const hiddenSel = document.getElementById('txnInvestorSelect');
+  if (hiddenSel) hiddenSel.value = '';
+
+  /* Investor search-as-you-type */
+  const txnSearch = document.getElementById('txnInvSearchInput');
+  const txnDrop   = document.getElementById('txnInvDropdown');
+  if (txnSearch && txnDrop) {
+    txnSearch.value = '';
+    txnDrop.style.display = 'none';
+    txnDrop.innerHTML = '';
+
+    function _txnRenderDropdown(q) {
+      const term = q.trim().toLowerCase();
+      if (!term) { txnDrop.style.display = 'none'; return; }
+      const matches = STATE.investors.filter(inv => {
+        const name  = `${inv.first_name || ''} ${inv.last_name || ''}`.toLowerCase();
+        const id    = (inv.id    || '').toLowerCase();
+        const email = (inv.email || '').toLowerCase();
+        return name.includes(term) || id.includes(term) || email.includes(term);
+      }).slice(0, 25);
+      if (!matches.length) { txnDrop.style.display = 'none'; return; }
+      txnDrop.innerHTML = matches.map(inv => {
+        const name = `${inv.first_name || ''} ${inv.last_name || ''}`.trim() || '—';
+        const emailLine = inv.email
+          ? `<span style="color:var(--text-muted);font-size:0.77rem">${inv.email}</span>` : '';
+        return `<li data-id="${inv.id}" data-name="${name}" style="padding:9px 14px;cursor:pointer;display:flex;flex-direction:column;gap:2px">
+          <span style="font-weight:600;font-size:0.87rem">${name}
+            <span style="color:var(--text-muted);font-weight:400;font-size:0.8rem">(${inv.id})</span>
+          </span>
+          ${emailLine}
+        </li>`;
+      }).join('');
+      txnDrop.style.display = 'block';
+      txnDrop.querySelectorAll('li').forEach(li => {
+        li.onmouseenter = () => li.style.background = 'rgba(255,255,255,0.06)';
+        li.onmouseleave = () => li.style.background = '';
+        li.onclick = () => {
+          document.getElementById('txnInvestorSelect').value = li.dataset.id;
+          txnSearch.value = `${li.dataset.name} (${li.dataset.id})`;
+          txnDrop.style.display = 'none';
+        };
+      });
+    }
+
+    txnSearch.oninput = () => _txnRenderDropdown(txnSearch.value);
+    txnSearch.onfocus = () => { if (txnSearch.value) _txnRenderDropdown(txnSearch.value); };
+    setTimeout(() => {
+      const _closeTxnDrop = e => {
+        if (!txnSearch.contains(e.target) && !txnDrop.contains(e.target)) {
+          txnDrop.style.display = 'none';
+          document.removeEventListener('click', _closeTxnDrop);
+        }
+      };
+      document.addEventListener('click', _closeTxnDrop);
+    }, 0);
   }
   Modal.open('addTxnModal');
 }
