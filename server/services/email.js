@@ -1117,6 +1117,64 @@ function sendWithdrawalAlert(admin, { count, total, requests }) {
   });
 }
 
+/* ── Change Request Daily Summary ────────────────────────── */
+function sendChangeRequestSummary(to, { date, stats, requests }) {
+  const statusColor = s => ({ pending:'#f59e0b', reviewing:'#eda5ff', approved:'#22c55e', rejected:'#ef4444', implemented:'#3b82f6' }[s] || '#888');
+  const priorityBadge = p => ({ urgent:'🔴', high:'🟠', medium:'🟡', low:'🟢' }[p] || '⚪');
+  const categoryLabel = c => ({ feature:'Feature', bug:'Bug', process:'Process', data:'Data', security:'Security', ui_ux:'UI/UX', other:'Other' }[c] || c);
+  const statusLabel   = s => ({ pending:'Pending', reviewing:'Reviewing', approved:'Approved', rejected:'Rejected', implemented:'Implemented' }[s] || s);
+
+  const rows = requests.map(r => `
+    <tr>
+      <td style="padding:9px 8px;border-bottom:1px solid #eee;font-size:0.78rem;color:#aaa;white-space:nowrap">${escHtml(r.id)}</td>
+      <td style="padding:9px 8px;border-bottom:1px solid #eee;font-size:0.87rem;font-weight:600;color:#303030">${escHtml(r.title)}</td>
+      <td style="padding:9px 8px;border-bottom:1px solid #eee;font-size:0.82rem;color:#555;white-space:nowrap">${priorityBadge(r.priority)} ${categoryLabel(r.category)}</td>
+      <td style="padding:9px 8px;border-bottom:1px solid #eee">
+        <span style="background:${statusColor(r.status)};color:#fff;font-size:0.74rem;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap">${statusLabel(r.status)}</span>
+      </td>
+      <td style="padding:9px 8px;border-bottom:1px solid #eee;font-size:0.82rem;color:#555;white-space:nowrap">${escHtml(r.submitted_by)}</td>
+      <td style="padding:9px 8px;border-bottom:1px solid #eee;font-size:0.80rem;color:#999;white-space:nowrap">${_date(r.created_at)}</td>
+    </tr>`).join('');
+
+  const tableHtml = requests.length > 0 ? `
+    <div style="overflow-x:auto;margin-top:20px">
+      <table style="width:100%;border-collapse:collapse;min-width:520px">
+        <thead>
+          <tr style="background:#f7f9fc">
+            <th style="padding:9px 8px;text-align:left;font-size:0.76rem;color:#888;font-weight:600;border-bottom:2px solid #eee;white-space:nowrap">ID</th>
+            <th style="padding:9px 8px;text-align:left;font-size:0.76rem;color:#888;font-weight:600;border-bottom:2px solid #eee">Title</th>
+            <th style="padding:9px 8px;text-align:left;font-size:0.76rem;color:#888;font-weight:600;border-bottom:2px solid #eee;white-space:nowrap">Category</th>
+            <th style="padding:9px 8px;text-align:left;font-size:0.76rem;color:#888;font-weight:600;border-bottom:2px solid #eee">Status</th>
+            <th style="padding:9px 8px;text-align:left;font-size:0.76rem;color:#888;font-weight:600;border-bottom:2px solid #eee;white-space:nowrap">Submitted By</th>
+            <th style="padding:9px 8px;text-align:left;font-size:0.76rem;color:#888;font-weight:600;border-bottom:2px solid #eee;white-space:nowrap">Date</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>` : `<p style="text-align:center;color:#aaa;padding:24px 0;font-size:0.9rem">No change requests have been logged yet.</p>`;
+
+  return _send({
+    to,
+    subject: `Change Requests Summary — ${date}`,
+    type: 'general',
+    html: _wrap(`
+      <h2>📋 Daily Change Requests Summary</h2>
+      <p style="color:#888;font-size:0.88rem;margin-bottom:18px">${date}</p>
+      <div class="box">
+        <div class="row"><span class="lbl">Total Submissions</span><span class="val">${stats.total}</span></div>
+        <div class="row"><span class="lbl">Pending</span><span class="val" style="color:#f59e0b">${stats.pending}</span></div>
+        <div class="row"><span class="lbl">In Review</span><span class="val" style="color:#eda5ff">${stats.reviewing}</span></div>
+        <div class="row"><span class="lbl">Approved</span><span class="val" style="color:#22c55e">${stats.approved}</span></div>
+        <div class="row"><span class="lbl">Implemented</span><span class="val" style="color:#3b82f6">${stats.implemented}</span></div>
+        <div class="row"><span class="lbl">Rejected</span><span class="val" style="color:#ef4444">${stats.rejected}</span></div>
+      </div>
+      ${tableHtml}
+      <a href="${BASE_URL}/team/change-requests.html" class="btn" style="margin-top:24px">View All Requests →</a>
+    `),
+    text: `Change Requests Summary — ${date}\n\nTotal: ${stats.total} | Pending: ${stats.pending} | Reviewing: ${stats.reviewing} | Approved: ${stats.approved} | Implemented: ${stats.implemented} | Rejected: ${stats.rejected}\n\nView all: ${BASE_URL}/team/change-requests.html`,
+  });
+}
+
 module.exports = {
   sendWelcome,
   sendLeaveRequestSubmitted,
@@ -1150,4 +1208,5 @@ module.exports = {
   sendInternationalWaitlistConfirmation,
   sendWithdrawalAlert,
   sendMaturityInstructionConfirmed,
+  sendChangeRequestSummary,
 };

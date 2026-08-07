@@ -357,6 +357,10 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
   const { startWithdrawalAlertCron } = require('./jobs/withdrawalAlertCron');
   startWithdrawalAlertCron();
 
+  // Change request daily summary — 08:00 SAST to kagiso@svcapital.co.za
+  const { startChangeRequestSummaryCron } = require('./jobs/changeRequestSummaryCron');
+  startChangeRequestSummaryCron();
+
   // Email queue processor — runs every 2 minutes
   const emailQueueCron = require('node-cron');
   const { processQueue } = require('./services/emailQueue');
