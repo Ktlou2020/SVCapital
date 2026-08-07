@@ -8548,18 +8548,67 @@ function openKycUploadModal(investorId, investorName) {
   document.getElementById('kycUploadStatus').textContent = '';
   document.getElementById('kycUploadDropLabel').textContent = 'Click or drag a file here';
 
-  /* Populate investor dropdown */
-  const sel = document.getElementById('kycUploadInvestorSelect');
-  if (sel) {
-    sel.innerHTML = '<option value="">— Select investor —</option>' +
-      STATE.investors.map(inv =>
-        `<option value="${inv.id}" data-name="${inv.first_name} ${inv.last_name}" ${inv.id === investorId ? 'selected' : ''}>${inv.first_name} ${inv.last_name} (${inv.id})</option>`
-      ).join('');
-    sel.onchange = () => {
-      const opt = sel.options[sel.selectedIndex];
-      document.getElementById('kycUploadInvestorId').value   = opt.value || '';
-      document.getElementById('kycUploadInvestorName').value = opt.dataset.name || '';
-    };
+  /* Investor search-as-you-type */
+  const kycSearchInput = document.getElementById('kycInvSearchInput');
+  const kycDropdown    = document.getElementById('kycInvDropdown');
+  if (kycSearchInput && kycDropdown) {
+    // Pre-fill when opened from a specific investor row
+    if (investorId) {
+      const pre = STATE.investors.find(i => i.id === investorId);
+      const preName = pre ? `${pre.first_name || ''} ${pre.last_name || ''}`.trim() : (investorName || '');
+      kycSearchInput.value = preName ? `${preName} (${investorId})` : investorId;
+    } else {
+      kycSearchInput.value = '';
+    }
+    kycDropdown.style.display = 'none';
+    kycDropdown.innerHTML = '';
+
+    function _kycRenderDropdown(q) {
+      const term = q.trim().toLowerCase();
+      if (!term) { kycDropdown.style.display = 'none'; return; }
+      const matches = STATE.investors.filter(inv => {
+        const name  = `${inv.first_name || ''} ${inv.last_name || ''}`.toLowerCase();
+        const id    = (inv.id    || '').toLowerCase();
+        const email = (inv.email || '').toLowerCase();
+        return name.includes(term) || id.includes(term) || email.includes(term);
+      }).slice(0, 25);
+      if (!matches.length) { kycDropdown.style.display = 'none'; return; }
+      kycDropdown.innerHTML = matches.map(inv => {
+        const name = `${inv.first_name || ''} ${inv.last_name || ''}`.trim() || '—';
+        const emailLine = inv.email
+          ? `<span style="color:var(--text-muted);font-size:0.77rem">${inv.email}</span>` : '';
+        return `<li data-id="${inv.id}" data-name="${name}" style="padding:9px 14px;cursor:pointer;display:flex;flex-direction:column;gap:2px">
+          <span style="font-weight:600;font-size:0.87rem">${name}
+            <span style="color:var(--text-muted);font-weight:400;font-size:0.8rem">(${inv.id})</span>
+          </span>
+          ${emailLine}
+        </li>`;
+      }).join('');
+      kycDropdown.style.display = 'block';
+      kycDropdown.querySelectorAll('li').forEach(li => {
+        li.onmouseenter = () => li.style.background = 'rgba(255,255,255,0.06)';
+        li.onmouseleave = () => li.style.background = '';
+        li.onclick = () => {
+          document.getElementById('kycUploadInvestorId').value   = li.dataset.id;
+          document.getElementById('kycUploadInvestorName').value = li.dataset.name;
+          kycSearchInput.value = `${li.dataset.name} (${li.dataset.id})`;
+          kycDropdown.style.display = 'none';
+        };
+      });
+    }
+
+    kycSearchInput.oninput = () => _kycRenderDropdown(kycSearchInput.value);
+    kycSearchInput.onfocus = () => { if (kycSearchInput.value) _kycRenderDropdown(kycSearchInput.value); };
+    // Close dropdown when clicking outside
+    setTimeout(() => {
+      const _closeKycDrop = e => {
+        if (!kycSearchInput.contains(e.target) && !kycDropdown.contains(e.target)) {
+          kycDropdown.style.display = 'none';
+          document.removeEventListener('click', _closeKycDrop);
+        }
+      };
+      document.addEventListener('click', _closeKycDrop);
+    }, 0);
   }
   Modal.open('kycUploadModal');
 }

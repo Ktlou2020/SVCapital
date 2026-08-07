@@ -423,6 +423,7 @@ function navigate(view, btnEl) {
     terms: 'Legal Documents', privacy: 'Privacy Policy &amp; POPIA Notice', intlinterest: 'International Interest',
     opsconsole: 'Operations Console', feedback: 'Client Feedback', emaillogs: 'Email Logs',
     'fica-pipeline': 'FICA Pipeline',
+    handbook: 'Platform Handbook',
   };
   document.getElementById('topbarTitle').textContent = titles[view] || view;
   STATE.currentView = view;
@@ -1768,6 +1769,7 @@ function setupInvestorFilters() {
       if (so === 'name_asc')      return `${a.first_name||''} ${a.last_name||''}`.localeCompare(`${b.first_name||''} ${b.last_name||''}`);
       if (so === 'name_desc')     return `${b.first_name||''} ${b.last_name||''}`.localeCompare(`${a.first_name||''} ${a.last_name||''}`);
       if (so === 'wallet_desc')   return (parseFloat(b.wallet_balance) || 0) - (parseFloat(a.wallet_balance) || 0);
+      if (so === 'wallet_asc')    return (parseFloat(a.wallet_balance) || 0) - (parseFloat(b.wallet_balance) || 0);
       if (so === 'invested_desc') return (parseFloat(b.total_invested) || 0) - (parseFloat(a.total_invested) || 0);
       // date_desc (default)
       return new Date(b.date_joined || 0) - new Date(a.date_joined || 0);
@@ -1870,16 +1872,20 @@ function viewSubAccount(saId) {
       <i class="fa-solid fa-id-card" style="margin-right:6px;color:#eda5ff"></i>No documents submitted yet for this sub-account.
     </div>`}
 
-    ${sa.sa_bank_holder ? `<div style="background:var(--dark-3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:16px">
-      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:8px">Bank Details</div>
-      <div class="info-list">
+    <div style="background:var(--dark-3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted)">Bank Details</div>
+        <button class="btn btn--secondary btn--sm" style="padding:3px 10px;font-size:0.72rem" onclick='editSaBankDetails(${JSON.stringify(sa.id)})'><i class="fa-solid fa-pen-to-square" style="margin-right:4px"></i>Edit</button>
+      </div>
+      ${sa.sa_bank_holder ? `<div class="info-list">
         <div class="info-row"><span class="info-row__label">Account Holder</span><span class="info-row__value">${_esc(sa.sa_bank_holder||'—')}</span></div>
         <div class="info-row"><span class="info-row__label">Bank</span><span class="info-row__value">${_esc(sa.sa_bank_name||'—')}</span></div>
         <div class="info-row"><span class="info-row__label">Account Number</span><span class="info-row__value" style="font-family:monospace">${_esc(sa.sa_bank_number||'—')}</span></div>
         <div class="info-row"><span class="info-row__label">Account Type</span><span class="info-row__value">${_esc(sa.sa_bank_type||'—')}</span></div>
         ${sa.sa_bank_branch ? `<div class="info-row"><span class="info-row__label">Branch Code</span><span class="info-row__value" style="font-family:monospace">${_esc(sa.sa_bank_branch)}</span></div>` : ''}
-      </div>
-    </div>` : ''}
+        <div class="info-row"><span class="info-row__label">Status</span><span class="info-row__value" style="color:${bankColor};font-weight:700">${bankLabel}</span></div>
+      </div>` : `<div style="font-size:0.8rem;color:var(--text-muted)"><i class="fa-solid fa-circle-info" style="margin-right:6px"></i>No banking details on file — click Edit to add.</div>`}
+    </div>
     <div style="background:rgba(237,165,255,0.08);border:1px solid rgba(237,165,255,0.2);border-radius:10px;padding:12px 14px">
       <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px">Parent Account Holder</div>
       <div style="font-weight:700;font-size:0.88rem;margin-bottom:2px">${_esc(parentName)}</div>
@@ -1924,8 +1930,11 @@ async function _saveInvProfile(btn) {
       email:        document.getElementById('ipf-email').value.trim(),
       phone:        document.getElementById('ipf-phone').value.trim(),
       id_number:    document.getElementById('ipf-id_number').value.trim(),
-      province:     document.getElementById('ipf-province').value,
-      address:      document.getElementById('ipf-address').value.trim(),
+      street_address: document.getElementById('ipf-street_address').value.trim() || null,
+      suburb:         document.getElementById('ipf-suburb').value.trim() || null,
+      address:        document.getElementById('ipf-address').value.trim(),
+      postal_code:    document.getElementById('ipf-postal_code').value.trim() || null,
+      province:       document.getElementById('ipf-province').value,
       occupation:   document.getElementById('ipf-occupation').value.trim(),
       risk_profile: document.getElementById('ipf-risk_profile').value,
     };
@@ -2046,9 +2055,10 @@ async function viewInvestor(id) {
       </div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px">
-      <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center">
+      <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center;position:relative" id="walletTile-${inv.id}">
         <div style="font-size:1.05rem;font-weight:800;color:#fec24f">${Utils.rand(inv.wallet_balance)}</div>
         <div style="font-size:0.72rem;color:var(--text-muted)">Wallet</div>
+        <button onclick="_quickEditWallet('${inv.id}')" title="Edit wallet balance" style="position:absolute;top:5px;right:6px;background:none;border:none;cursor:pointer;color:var(--text-muted);padding:2px;line-height:1;font-size:0.7rem;opacity:0.6" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.6"><i class="fa-solid fa-pen"></i></button>
       </div>
       <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center">
         <div style="font-size:1.05rem;font-weight:800;color:var(--text)">${Utils.rand(totalInvested)}</div>
@@ -2077,13 +2087,16 @@ async function viewInvestor(id) {
           <div class="info-row"><span class="info-row__label">Branch Code</span><span class="info-row__value">${bankBranch}</span></div>
           <div class="info-row"><span class="info-row__label">Status</span><span class="info-row__value"><span class="badge ${bCls[bStatus]}">${bLbl[bStatus]}</span></span></div>
         </div>
-        ${bStatus!=='none'?`<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-          <button class="btn btn--secondary btn--sm" onclick='viewBankProof(${JSON.stringify(inv.id)})'><i class="fa-solid fa-arrow-up-right-from-square"></i> View Proof of Bank</button>
-          ${bStatus==='pending'?`
-            <button class="btn btn--success btn--sm" onclick='approveBankAccount(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-check"></i> Approve</button>
-            <button class="btn btn--danger btn--sm" onclick='rejectBankAccount(${JSON.stringify(inv.id)})'><i class="fa-solid fa-xmark"></i> Reject</button>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <button class="btn btn--secondary btn--sm" onclick='editBankDetails(${JSON.stringify(inv.id)})'><i class="fa-solid fa-pen-to-square"></i> Edit</button>
+          ${bStatus!=='none'?`
+            <button class="btn btn--secondary btn--sm" onclick='viewBankProof(${JSON.stringify(inv.id)})'><i class="fa-solid fa-arrow-up-right-from-square"></i> View Proof of Bank</button>
+            ${bStatus==='pending'?`
+              <button class="btn btn--success btn--sm" onclick='approveBankAccount(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-check"></i> Approve</button>
+              <button class="btn btn--danger btn--sm" onclick='rejectBankAccount(${JSON.stringify(inv.id)})'><i class="fa-solid fa-xmark"></i> Reject</button>
+            `:''}
           `:''}
-        </div>`:''}
+        </div>
       </div>
     </div>
     <div class="flex-between mt-16" style="flex-wrap:wrap;gap:8px">
@@ -2110,8 +2123,11 @@ async function viewInvestor(id) {
         <div class="info-row"><span class="info-row__label">Email</span><span class="info-row__value">${_esc(inv.email)||'—'}${inv.email?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.email)},this)' title="Copy email"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
         <div class="info-row"><span class="info-row__label">Phone</span><span class="info-row__value">${_esc(inv.phone)||'—'}${inv.phone?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.phone)},this)' title="Copy phone"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
         <div class="info-row"><span class="info-row__label">SA ID Number</span><span class="info-row__value">${_esc(inv.id_number)||'—'}${inv.id_number?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.id_number)},this)' title="Copy ID"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
+        ${inv.street_address ? `<div class="info-row"><span class="info-row__label">Street Address</span><span class="info-row__value" style="font-size:0.78rem">${_esc(inv.street_address)}</span></div>` : ''}
+        ${inv.suburb ? `<div class="info-row"><span class="info-row__label">Suburb</span><span class="info-row__value">${_esc(inv.suburb)}</span></div>` : ''}
+        <div class="info-row"><span class="info-row__label">City</span><span class="info-row__value">${_esc(inv.address)||'—'}</span></div>
+        ${inv.postal_code ? `<div class="info-row"><span class="info-row__label">Postal Code</span><span class="info-row__value">${_esc(inv.postal_code)}</span></div>` : ''}
         <div class="info-row"><span class="info-row__label">Province</span><span class="info-row__value">${_esc((inv.province||'').trim())||'—'}</span></div>
-        <div class="info-row"><span class="info-row__label">Address</span><span class="info-row__value" style="font-size:0.78rem">${_esc(inv.address)||'—'}</span></div>
         <div class="info-row"><span class="info-row__label">Occupation</span><span class="info-row__value">${_esc(inv.occupation)||'—'}</span></div>
         <div class="info-row"><span class="info-row__label">Employer</span><span class="info-row__value">${_esc(invProfile.employer||'')||'—'}</span></div>
         <div class="info-row"><span class="info-row__label">Next of Kin</span><span class="info-row__value">${_esc(invProfile.next_of_kin||'')||'—'}</span></div>
@@ -2138,15 +2154,27 @@ async function viewInvestor(id) {
           <label class="form-label">SA ID Number</label>
           <input type="text" class="form-control" id="ipf-id_number" value="${_esc(inv.id_number||'')}">
         </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Street Address</label>
+          <input type="text" class="form-control" id="ipf-street_address" value="${_esc(inv.street_address||'')}" placeholder="e.g. 10 Main Road">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Suburb</label>
+          <input type="text" class="form-control" id="ipf-suburb" value="${_esc(inv.suburb||'')}" placeholder="e.g. Sandton">
+        </div>
+        <div class="form-group">
+          <label class="form-label">City</label>
+          <input type="text" class="form-control" id="ipf-address" value="${_esc(inv.address||'')}" placeholder="e.g. Johannesburg">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Postal Code</label>
+          <input type="text" class="form-control" id="ipf-postal_code" value="${_esc(inv.postal_code||'')}" placeholder="e.g. 2196">
+        </div>
         <div class="form-group">
           <label class="form-label">Province</label>
           <select class="form-control" id="ipf-province">
             ${['','Eastern Cape','Free State','Gauteng','KwaZulu-Natal','Limpopo','Mpumalanga','Northern Cape','North West','Western Cape'].map(p=>`<option value="${p}" ${(inv.province||'').trim()===p?'selected':''}>${p||'— Select province —'}</option>`).join('')}
           </select>
-        </div>
-        <div class="form-group" style="grid-column:1/-1">
-          <label class="form-label">Address</label>
-          <textarea class="form-control" id="ipf-address" rows="2" style="resize:vertical">${_esc(inv.address||'')}</textarea>
         </div>
         <div class="form-group">
           <label class="form-label">Occupation</label>
@@ -2406,6 +2434,27 @@ async function viewInvestor(id) {
 
   <!-- ── Statements ── -->
   <div id="invPanel-statements" style="display:none">
+    <!-- Tax Certificate -->
+    <div class="panel mb-16">
+      <div class="panel__header">
+        <span class="panel__title"><i class="fa-solid fa-file-invoice" style="color:#22c55e;margin-right:6px"></i>Investment Income Reference</span>
+      </div>
+      <div class="panel__body">
+        <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px">Generate an investment income reference for the client showing returns earned and deposits made in the selected SA tax year (1 March – last day of February).</p>
+        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+          <div class="form-group" style="margin:0;flex:1;min-width:180px">
+            <label class="form-label">Tax Year (ending February)</label>
+            <select class="form-control" id="adminTaxCertYear">
+              ${[new Date().getFullYear(), new Date().getFullYear()-1, new Date().getFullYear()-2, new Date().getFullYear()-3].map(y => `<option value="${y}">${y-1} / ${y}</option>`).join('')}
+            </select>
+          </div>
+          <button class="btn btn--primary btn--sm" id="adminTaxCertBtn" onclick="_generateAdminTaxCert('${inv.id}')">
+            <i class="fa-solid fa-file-invoice"></i> Generate Certificate
+          </button>
+        </div>
+      </div>
+    </div>
+    <!-- Monthly statements list -->
     <div id="invStatementsList"><div style="text-align:center;padding:40px;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin fa-2x"></i></div></div>
   </div>
 
@@ -2506,6 +2555,63 @@ async function reconcileInvestorWallet(investorId, btn) {
       if (inv) inv.wallet_balance = d.computed;
     } catch (e) { Toast.error('Reconciliation failed: ' + (e.message || 'unknown error')); }
   });
+}
+
+async function _quickEditWallet(investorId) {
+  const inv = STATE.investors.find(i => i.id === investorId);
+  if (!inv) return;
+  const tile = document.getElementById('walletTile-' + investorId);
+  if (!tile) return;
+  const oldBal = parseFloat(inv.wallet_balance) || 0;
+  tile.innerHTML = `
+    <div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:4px">Set wallet balance</div>
+    <input id="qwEdit-${investorId}" type="number" min="0" step="0.01" value="${oldBal}"
+      style="width:100%;padding:4px 6px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85rem;text-align:center;margin-bottom:6px">
+    <div style="display:flex;gap:4px;justify-content:center">
+      <button onclick="_quickEditWalletSave('${investorId}')" class="btn btn--success btn--sm" style="padding:3px 10px;font-size:0.72rem">Save</button>
+      <button onclick="_quickEditWalletCancel('${investorId}', ${oldBal})" class="btn btn--secondary btn--sm" style="padding:3px 8px;font-size:0.72rem">Cancel</button>
+    </div>`;
+  tile.querySelector('input')?.select();
+}
+
+function _quickEditWalletCancel(investorId, oldBal) {
+  const inv = STATE.investors.find(i => i.id === investorId);
+  const tile = document.getElementById('walletTile-' + investorId);
+  if (!tile) return;
+  tile.innerHTML = `
+    <div style="font-size:1.05rem;font-weight:800;color:#fec24f">${Utils.rand(inv?.wallet_balance ?? oldBal)}</div>
+    <div style="font-size:0.72rem;color:var(--text-muted)">Wallet</div>
+    <button onclick="_quickEditWallet('${investorId}')" title="Edit wallet balance" style="position:absolute;top:5px;right:6px;background:none;border:none;cursor:pointer;color:var(--text-muted);padding:2px;line-height:1;font-size:0.7rem;opacity:0.6" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.6"><i class="fa-solid fa-pen"></i></button>`;
+}
+
+async function _quickEditWalletSave(investorId) {
+  const inv   = STATE.investors.find(i => i.id === investorId);
+  const input = document.getElementById('qwEdit-' + investorId);
+  if (!inv || !input) return;
+  const nb     = parseFloat(input.value);
+  const oldBal = parseFloat(inv.wallet_balance) || 0;
+  if (isNaN(nb) || nb < 0) { Toast.error('Enter a valid amount'); return; }
+  const diff    = Math.round((nb - oldBal) * 100) / 100;
+  const diffStr = diff >= 0 ? `+${Utils.rand(diff)}` : `-${Utils.rand(Math.abs(diff))}`;
+  const name    = `${inv.first_name} ${inv.last_name}`;
+  const confirmed = await Confirm.ask('Set wallet balance?', {
+    body: `Investor: ${name}\nCurrent: ${Utils.rand(oldBal)} → New: ${Utils.rand(nb)} (${diffStr})\n\nNo transaction record will be created.`,
+    confirmLabel: 'Set Balance',
+    danger: nb < oldBal,
+  });
+  if (!confirmed) return;
+  try {
+    const res = await API._fetch('POST', 'admin/override-wallet', { investorId, newBalance: nb, notes: 'Quick edit from profile tile' });
+    if (res.success) {
+      inv.wallet_balance = nb;
+      Toast.success(`Wallet set to ${Utils.rand(nb)}`);
+    } else {
+      Toast.error(res.error || 'Override failed');
+    }
+  } catch (e) {
+    Toast.error('Override failed: ' + (e.message || 'unknown error'));
+  }
+  _quickEditWalletCancel(investorId, nb);
 }
 
 async function overrideWalletBalance(investorId, name, btn) {
@@ -2651,6 +2757,93 @@ async function _pendingProofOfBankDocs(investorId) {
     const res = await API.kyc.list({ investor_id: investorId, limit: 200 });
     return (res.data || []).filter(d => d.doc_type === 'proof_of_bank' && ['pending', 'under_review'].includes(d.status));
   } catch (_) { return []; }
+}
+
+function editBankDetails(investorId) {
+  const inv = STATE.investors.find(i => i.id === investorId);
+  if (!inv) return;
+  document.getElementById('ebf-investor-id').value     = investorId;
+  document.getElementById('editBankSubtitle').textContent = `${inv.first_name} ${inv.last_name}`;
+  document.getElementById('ebf-bank-name').value        = inv.bank_name           || '';
+  document.getElementById('ebf-account-holder').value   = inv.bank_account_holder || '';
+  document.getElementById('ebf-account-number').value   = inv.bank_account_number || '';
+  document.getElementById('ebf-branch-code').value      = inv.bank_branch_code    || '';
+  document.getElementById('ebf-account-type').value     = inv.bank_account_type   || 'current';
+  document.getElementById('ebf-account-status').value   = inv.bank_account_status || 'none';
+  document.getElementById('ebf-notes').value            = inv.bank_account_notes  || '';
+  Modal.open('editBankModal');
+}
+
+async function _saveBankDetails(btn) {
+  const investorId = document.getElementById('ebf-investor-id').value;
+  if (!investorId) return;
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
+  try {
+    const payload = {
+      bank_name:            document.getElementById('ebf-bank-name').value.trim()       || null,
+      bank_account_holder:  document.getElementById('ebf-account-holder').value.trim()  || null,
+      bank_account_number:  document.getElementById('ebf-account-number').value.trim()  || null,
+      bank_branch_code:     document.getElementById('ebf-branch-code').value.trim()     || null,
+      bank_account_type:    document.getElementById('ebf-account-type').value           || 'current',
+      bank_account_status:  document.getElementById('ebf-account-status').value         || 'none',
+      bank_account_notes:   document.getElementById('ebf-notes').value.trim()           || null,
+    };
+    await API._fetch('PATCH', `tables/investors/${investorId}`, payload);
+    const inv = STATE.investors.find(i => i.id === investorId);
+    if (inv) Object.assign(inv, payload);
+    Toast.success('Banking details saved.');
+    Modal.close('editBankModal');
+    await viewInvestor(investorId);
+    _invTab('overview');
+  } catch (e) {
+    Toast.error('Failed to save: ' + (e.message || 'unknown error'));
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }
+}
+
+function editSaBankDetails(saId) {
+  const sa = (STATE.subAccounts || []).find(s => s.id === saId);
+  if (!sa) return;
+  document.getElementById('esabf-sa-id').value          = saId;
+  document.getElementById('editSaBankSubtitle').textContent = sa.name || sa.sa_reference || saId;
+  document.getElementById('esabf-bank-name').value       = sa.sa_bank_name   || '';
+  document.getElementById('esabf-account-holder').value  = sa.sa_bank_holder || '';
+  document.getElementById('esabf-account-number').value  = sa.sa_bank_number || '';
+  document.getElementById('esabf-branch-code').value     = sa.sa_bank_branch || '';
+  document.getElementById('esabf-account-type').value    = sa.sa_bank_type   || 'current';
+  document.getElementById('esabf-account-status').value  = sa.sa_bank_status || 'none';
+  Modal.open('editSaBankModal');
+}
+
+async function _saveSaBankDetails(btn) {
+  const saId = document.getElementById('esabf-sa-id').value;
+  if (!saId) return;
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
+  try {
+    const payload = {
+      sa_bank_name:   document.getElementById('esabf-bank-name').value.trim()       || null,
+      sa_bank_holder: document.getElementById('esabf-account-holder').value.trim()  || null,
+      sa_bank_number: document.getElementById('esabf-account-number').value.trim()  || null,
+      sa_bank_branch: document.getElementById('esabf-branch-code').value.trim()     || null,
+      sa_bank_type:   document.getElementById('esabf-account-type').value           || 'current',
+      sa_bank_status: document.getElementById('esabf-account-status').value         || 'none',
+    };
+    await API._fetch('PATCH', `tables/sub_accounts/${saId}`, payload);
+    const sa = (STATE.subAccounts || []).find(s => s.id === saId);
+    if (sa) Object.assign(sa, payload);
+    Toast.success('Banking details saved.');
+    Modal.close('editSaBankModal');
+    viewSubAccount(saId);
+  } catch (e) {
+    Toast.error('Failed to save: ' + (e.message || 'unknown error'));
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }
 }
 
 async function approveBankAccount(investorId, btn) {
@@ -3209,7 +3402,11 @@ async function loadKYC() {
     // Filters are wired via inline onchange/oninput in HTML; guard against double-wiring the status filter
     const kycFilterEl = document.getElementById('kycStatusFilter');
     if (kycFilterEl && !kycFilterEl._wired) { kycFilterEl._wired = true; }
-  } catch (e) { Toast.error('Failed to load KYC data'); }
+  } catch (e) {
+    Toast.error('Failed to load KYC data');
+    const kycBody = document.getElementById('kycBody');
+    if (kycBody) kycBody.innerHTML = '<tr><td colspan="8" class="text-center text-muted" style="padding:32px"><i class="fa-solid fa-triangle-exclamation" style="margin-right:8px;color:#fec24f"></i>Failed to load KYC documents — please refresh the page.</td></tr>';
+  }
 }
 
 function renderKYCStats() {
@@ -3823,32 +4020,106 @@ function rejectKyc(id, btn) {
    ═══════════════════════════════════════════════ */
 let _reviewingKycId = null;
 
-function openKycReview(id) {
-  const doc = STATE.kyc.find(k => k.id === id);
-  if (!doc) return;
+async function openKycReview(id) {
+  const cached = STATE.kyc.find(k => k.id === id);
+  if (!cached) return;
   _reviewingKycId = id;
+
+  // Open modal immediately with metadata (no file yet)
+  const overlay = document.getElementById('kycReviewModal');
+  if (overlay) { overlay.style.display = 'flex'; overlay.classList.add('open'); document.body.style.overflow = 'hidden'; }
+
+  const docContent = document.getElementById('kycReviewDocContent');
+  if (docContent) docContent.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin" style="margin-right:8px"></i>Loading document…</div>';
+
+  // Fetch the full record (includes file_data which is excluded from the list query)
+  let doc = cached;
+  try {
+    const full = await API.kyc.get(id);
+    if (full && full.id) doc = { ...cached, ...full };
+  } catch (_) {}
+
   const inv = STATE.investors.find(i => i.id === doc.investor_id);
   const invName = doc.investor_name || (inv ? `${inv.first_name} ${inv.last_name}`.trim() : doc.investor_id || '—');
 
   // --- Document pane ---
-  const docContent = document.getElementById('kycReviewDocContent');
   if (docContent) {
+    docContent._zoom = 1;
+    const _zoomBar = () => `
+      <div style="display:flex;align-items:center;gap:6px;padding:5px 10px;background:rgba(0,0,0,0.35);border-bottom:1px solid rgba(255,255,255,0.08);flex-shrink:0">
+        <button class="btn btn--ghost btn--sm" onclick="_docZoom(-0.25)" title="Zoom out" style="padding:3px 7px"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
+        <span id="docZoomLabel" style="font-size:0.75rem;color:var(--text-muted);min-width:40px;text-align:center">100%</span>
+        <button class="btn btn--ghost btn--sm" onclick="_docZoom(0.25)" title="Zoom in" style="padding:3px 7px"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+        <button class="btn btn--ghost btn--sm" onclick="_docZoom(0)" title="Reset to fit" style="padding:3px 8px;font-size:0.72rem">Fit</button>
+      </div>`;
+    const _dlBtn = (href, filename, isExternal) => `
+      <div style="padding:8px 12px;background:rgba(0,0,0,0.25);border-top:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;gap:8px;flex-shrink:0">
+        <a href="${href}" ${isExternal ? 'target="_blank" rel="noopener"' : `download="${_esc(filename||'document')}"`}
+           class="btn btn--secondary btn--sm" style="font-size:0.78rem">
+          <i class="fa-solid ${isExternal ? 'fa-external-link' : 'fa-download'}"></i>
+          ${isExternal ? 'Open in new tab' : 'Download'} ${_esc(filename ? '— ' + filename : '')}
+        </a>
+      </div>`;
+
     if (doc.file_data) {
       const mime = doc.file_data.startsWith('data:') ? doc.file_data.split(';')[0].replace('data:', '') : '';
+      const fname = doc.file_name || 'document';
       if (mime.startsWith('image/')) {
-        docContent.innerHTML = `<img src="${doc.file_data}" style="max-width:100%;max-height:calc(88vh - 100px);object-fit:contain;border-radius:8px">`;
+        docContent.innerHTML = `
+          <div style="display:flex;flex-direction:column;height:100%">
+            ${_zoomBar()}
+            <div style="flex:1;overflow:auto;display:flex;justify-content:center;padding:12px">
+              <div id="docZoomTarget" style="transition:transform 0.15s;transform-origin:top center">
+                <img src="${doc.file_data}" style="max-width:100%;border-radius:8px;display:block">
+              </div>
+            </div>
+            ${_dlBtn(doc.file_data, fname, false)}
+          </div>`;
       } else if (mime === 'application/pdf') {
-        docContent.innerHTML = `<iframe src="${doc.file_data}" style="width:100%;height:calc(88vh - 100px);border:none;border-radius:8px"></iframe>`;
+        // Browsers block data: URIs in iframes — convert to a blob URL instead
+        const b64 = doc.file_data.split(',')[1];
+        const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+        const blobUrl = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+        docContent._pdfBlobUrl = blobUrl;
+        docContent.innerHTML = `
+          <div style="display:flex;flex-direction:column;height:100%">
+            ${_zoomBar()}
+            <div style="flex:1;overflow:auto">
+              <div id="docZoomTarget" style="transition:transform 0.15s;transform-origin:top center">
+                <iframe src="${blobUrl}" style="width:100%;height:800px;border:none;display:block"></iframe>
+              </div>
+            </div>
+            ${_dlBtn(doc.file_data, fname, false)}
+          </div>`;
       } else {
-        docContent.innerHTML = `<div style="text-align:center;padding:40px"><a href="${doc.file_data}" download="${_esc(doc.file_name||'document')}" class="btn btn--primary"><i class="fa-solid fa-download"></i> Download Document</a><p style="margin-top:12px;font-size:0.8rem;color:var(--text-muted)">${_esc(doc.file_name||'Unknown file')}</p></div>`;
+        docContent.innerHTML = `<div style="text-align:center;padding:40px"><a href="${doc.file_data}" download="${_esc(fname)}" class="btn btn--primary"><i class="fa-solid fa-download"></i> Download Document</a><p style="margin-top:12px;font-size:0.8rem;color:var(--text-muted)">${_esc(fname)}</p></div>`;
       }
     } else if (doc.file_url) {
       const isImg = /\.(jpg|jpeg|png|gif|webp)$/i.test(doc.file_url);
       const isPDF = /\.pdf$/i.test(doc.file_url);
+      const fname = doc.file_name || doc.file_url.split('/').pop() || 'document';
       if (isImg) {
-        docContent.innerHTML = `<img src="${doc.file_url}" style="max-width:100%;max-height:calc(88vh - 100px);object-fit:contain;border-radius:8px">`;
+        docContent.innerHTML = `
+          <div style="display:flex;flex-direction:column;height:100%">
+            ${_zoomBar()}
+            <div style="flex:1;overflow:auto;display:flex;justify-content:center;padding:12px">
+              <div id="docZoomTarget" style="transition:transform 0.15s;transform-origin:top center">
+                <img src="${doc.file_url}" style="max-width:100%;border-radius:8px;display:block">
+              </div>
+            </div>
+            ${_dlBtn(doc.file_url, fname, true)}
+          </div>`;
       } else if (isPDF) {
-        docContent.innerHTML = `<iframe src="${doc.file_url}" style="width:100%;height:calc(88vh - 100px);border:none;border-radius:8px"></iframe>`;
+        docContent.innerHTML = `
+          <div style="display:flex;flex-direction:column;height:100%">
+            ${_zoomBar()}
+            <div style="flex:1;overflow:auto">
+              <div id="docZoomTarget" style="transition:transform 0.15s;transform-origin:top center">
+                <iframe src="${doc.file_url}" style="width:100%;height:800px;border:none;display:block"></iframe>
+              </div>
+            </div>
+            ${_dlBtn(doc.file_url, fname, true)}
+          </div>`;
       } else {
         docContent.innerHTML = `<div style="text-align:center;padding:40px"><a href="${doc.file_url}" target="_blank" rel="noopener" class="btn btn--primary"><i class="fa-solid fa-external-link"></i> Open Document</a></div>`;
       }
@@ -3905,8 +4176,6 @@ function openKycReview(id) {
       : `<div style="text-align:center;font-size:0.8rem;color:var(--text-muted);padding:4px 0">Document already ${doc.status}.<br>Change status via the KYC queue.</div>`;
   }
 
-  const overlay = document.getElementById('kycReviewModal');
-  if (overlay) { overlay.style.display = 'flex'; overlay.classList.add('open'); document.body.style.overflow = 'hidden'; }
 }
 
 function closeKycReview() {
@@ -3914,6 +4183,19 @@ function closeKycReview() {
   if (overlay) { overlay.style.display = 'none'; overlay.classList.remove('open'); }
   document.body.style.overflow = '';
   _reviewingKycId = null;
+  const docContent = document.getElementById('kycReviewDocContent');
+  if (docContent?._pdfBlobUrl) { URL.revokeObjectURL(docContent._pdfBlobUrl); docContent._pdfBlobUrl = null; }
+  docContent._zoom = 1;
+}
+
+function _docZoom(delta) {
+  const docContent = document.getElementById('kycReviewDocContent');
+  if (!docContent) return;
+  docContent._zoom = delta === 0 ? 1 : Math.min(4, Math.max(0.25, (docContent._zoom || 1) + delta));
+  const target = document.getElementById('docZoomTarget');
+  if (target) { target.style.transform = `scale(${docContent._zoom})`; target.style.transformOrigin = 'top center'; }
+  const label = document.getElementById('docZoomLabel');
+  if (label) label.textContent = Math.round(docContent._zoom * 100) + '%';
 }
 
 async function _saveKycReviewNotes() {
@@ -4134,6 +4416,7 @@ function renderProductsGrid() {
         <div class="pool-card__actions">
           <button class="btn btn--secondary btn--sm flex-1" onclick='editProduct(${JSON.stringify(p.id)})'><i class="fa-solid fa-pen"></i> Edit</button>
           ${p.factsheet_url ? `<button class="btn btn--secondary btn--sm" onclick='_viewProductFactsheet(${JSON.stringify(p.id)})' title="View factsheet"><i class="fa-solid fa-file-pdf" style="color:#ef4444"></i></button>` : ''}
+          ${p.factsheet_url ? `<button class="btn btn--secondary btn--sm" onclick='removeProductFactsheet(${JSON.stringify(p.id)})' title="Remove factsheet"><i class="fa-solid fa-file-circle-xmark" style="color:#ef4444"></i></button>` : ''}
           <button class="btn btn--secondary btn--sm" onclick='deleteProduct(${JSON.stringify(p.id)})' title="Delete"><i class="fa-solid fa-trash" style="color:#ef4444"></i></button>
         </div>
       </div>`;
@@ -4152,6 +4435,21 @@ function _viewProductFactsheet(id) {
     const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
     window.open(url, '_blank', 'noopener');
   } catch (_) { Toast.error('Could not open factsheet'); }
+}
+
+async function removeProductFactsheet(productId) {
+  if (!await Confirm.ask('Remove factsheet?', { body: 'This removes the factsheet from this product and cannot be undone.', confirmLabel: 'Remove', danger: true })) return;
+  try {
+    await API.products.update(productId, { factsheet_url: null, factsheet_name: null });
+    const p = (STATE.products || []).find(x => x.id === productId);
+    if (p) { p.factsheet_url = null; p.factsheet_name = null; }
+    const cur = document.getElementById('prodFactsheetCurrent');
+    if (cur) cur.innerHTML = '<span style="font-size:0.82rem;color:var(--text-muted)">No factsheet loaded yet.</span>';
+    renderProductsGrid();
+    Toast.success('Factsheet removed');
+  } catch (e) {
+    Toast.error('Failed to remove factsheet: ' + (e.message || 'error'));
+  }
 }
 
 function openProductModal() {
@@ -4198,8 +4496,11 @@ function editProduct(id) {
   document.getElementById('prodHomepage').value    = p.display_on_homepage ? 'true' : 'false';
   const ff = document.getElementById('prodFactsheetFile'); if (ff) ff.value = '';
   document.getElementById('prodFactsheetCurrent').innerHTML = p.factsheet_url
-    ? `Current: <strong>${p.factsheet_name || 'factsheet'}</strong> — uploading a new file replaces it.`
-    : 'No factsheet loaded yet.';
+    ? `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+         <span style="font-size:0.82rem;color:var(--text-muted)">Current: <strong>${p.factsheet_name || 'factsheet'}</strong> — uploading a new file replaces it.</span>
+         <button class="btn btn--danger btn--sm" type="button" onclick="removeProductFactsheet('${p.id}')"><i class="fa-solid fa-trash"></i> Remove</button>
+       </div>`
+    : '<span style="font-size:0.82rem;color:var(--text-muted)">No factsheet loaded yet.</span>';
   const avg = _productAvgReturn(p.product_type);
   document.getElementById('prodAvgReturnInfo').innerHTML = avg
     ? `<strong style="color:var(--gold)">${(avg.rate * 100).toFixed(2)}% p.a.</strong> — average achieved return across ${avg.count} matured pool${avg.count === 1 ? '' : 's'}. Updates automatically as more pools mature.`
@@ -4562,6 +4863,30 @@ function renderPoolsGrid() {
           ${p.maturity_date ? `<span>Matures: ${Utils.date(p.maturity_date)}</span>` : ''}
         </div>
 
+        ${(() => {
+          if (p.status !== 'matured' || !p.maturity_summary) return '';
+          const sm = typeof p.maturity_summary === 'string' ? JSON.parse(p.maturity_summary) : p.maturity_summary;
+          const labelMap = {
+            reinvest:       'Reinvest',
+            auto_reinvest:  'Automatic Reinvest',
+            payout_all:     'Payout',
+            payout_return:  'Payout Return',
+            payout_custom:  'Payout Custom',
+            switch_product: 'Switch Product',
+            custom_switch:  'Custom Switch',
+          };
+          const rows = Object.entries(sm).map(([k, v]) =>
+            `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0">
+               <span style="color:var(--text-muted)">${labelMap[k] || k} <span style="color:var(--text-dim);font-size:0.68rem">(${v.count})</span></span>
+               <span style="font-weight:600;font-variant-numeric:tabular-nums">${Utils.rand(v.total)}</span>
+             </div>`
+          ).join('');
+          return `<div style="margin-top:10px;padding:10px 12px;background:var(--dark-2);border-radius:8px;border:1px solid var(--border);font-size:0.75rem">
+            <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-dim);margin-bottom:6px"><i class="fa-solid fa-list-check" style="margin-right:4px;color:#22c55e"></i>Maturity Instructions Executed</div>
+            ${rows}
+          </div>`;
+        })()}
+
         <div class="pool-card__actions">
           <button class="btn btn--secondary btn--sm flex-1" onclick='editPool(${JSON.stringify(p.id)})'><i class="fa-solid fa-pen"></i> Edit</button>
           <button class="btn btn--secondary btn--sm" onclick='openFactsheetManager(${JSON.stringify(p.id)},${JSON.stringify(p.name)})' title="Manage factsheets"><i class="fa-solid fa-file-pdf" style="color:#ef4444"></i></button>
@@ -4652,6 +4977,13 @@ async function viewPoolInvestors(poolId) {
         </div>
       </div>
 
+      <!-- Search -->
+      <div style="margin-bottom:10px">
+        <input type="text" id="poolInvSearch" class="form-input" placeholder="Search by name, email or account…"
+          oninput="_filterPoolInvTable(this.value)"
+          style="width:100%;max-width:380px;font-size:0.82rem;padding:7px 12px" />
+      </div>
+
       <!-- Per-investment table -->
       <div style="overflow-x:auto">
         <table class="data-table" style="table-layout:fixed;width:100%;min-width:900px">
@@ -4666,7 +4998,7 @@ async function viewPoolInvestors(poolId) {
             <th style="width:7%">Rate</th>
             <th style="width:8%">Status</th>
             <th style="width:8%">Start</th>
-            <th style="width:8%">Instruction</th>
+            <th style="width:10%">Source</th>
           </tr></thead>
           <tbody>
             ${investors.map(r => {
@@ -4686,7 +5018,12 @@ async function viewPoolInvestors(poolId) {
                 <td class="td-green clip">${r.annual_rate ? Utils.pct(r.annual_rate) : '—'}</td>
                 <td><span class="badge ${statusColor[r.investment_status]||'badge--gray'}">${r.investment_status||'—'}</span></td>
                 <td class="td-muted clip">${Utils.date(r.start_date)}</td>
-                <td class="clip" style="font-size:0.75rem;color:var(--text-muted)">${r.maturity_instruction?.replace(/_/g,' ')||'—'}</td>
+                <td class="clip">
+                  ${r.is_reinvestment
+                    ? '<span class="badge badge--purple" style="font-size:0.65rem">Reinvestment</span>'
+                    : '<span class="badge badge--blue"   style="font-size:0.65rem">New</span>'}
+                  <div style="font-size:0.65rem;color:var(--text-muted);margin-top:3px">${r.maturity_instruction?.replace(/_/g,' ')||'—'}</div>
+                </td>
               </tr>`;
             }).join('')}
           </tbody>
@@ -4698,6 +5035,15 @@ async function viewPoolInvestors(poolId) {
   }
 }
 
+function _filterPoolInvTable(q) {
+  const needle = (q || '').toLowerCase().trim();
+  const rows = document.querySelectorAll('#poolInvestorsBody .data-table tbody tr');
+  rows.forEach(row => {
+    const text = row.textContent.toLowerCase();
+    row.style.display = (!needle || text.includes(needle)) ? '' : 'none';
+  });
+}
+
 function downloadPoolCsv() {
   if (!_poolInvestorsSnapshot || !_poolInvestorsSnapshot.investors.length) {
     Toast.error('No data to export');
@@ -4706,7 +5052,7 @@ function downloadPoolCsv() {
   const { investors, poolName } = _poolInvestorsSnapshot;
   const PLATFORM_FEE_PCT = 0.01;
 
-  const headers = ['Investor','Email','Account ID','Sub Account','Gross Amount','Upfront Fee','Platform Fee','EVA','Net Amount','Annual Rate','Status','Start Date','Maturity Date','Maturity Instruction'];
+  const headers = ['Investor','Email','Account ID','Sub Account','Gross Amount','Upfront Fee','Platform Fee','EVA','Net Amount','Annual Rate','Status','Start Date','Maturity Date','Maturity Instruction','Source'];
 
   const csvRows = [headers];
   for (const r of investors) {
@@ -4729,6 +5075,7 @@ function downloadPoolCsv() {
       r.start_date ? r.start_date.slice(0, 10) : '',
       r.end_date   ? r.end_date.slice(0, 10)   : '',
       (r.maturity_instruction || '').replace(/_/g, ' '),
+      r.is_reinvestment ? 'Reinvestment' : 'New',
     ]);
   }
 
@@ -5128,6 +5475,240 @@ async function confirmMergePool() {
   }
 }
 
+function openUnmergeModal() {
+  const sel = document.getElementById('unmergeTargetPool');
+  sel.innerHTML = '<option value="">— Select pool —</option>' +
+    (STATE.pools || [])
+      .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+      .map(p => `<option value="${_esc(p.id)}">${_esc(p.name)} (${p.status})</option>`)
+      .join('');
+  document.getElementById('unmergeInvList').style.display = 'none';
+  Modal.open('unmergePoolModal');
+}
+
+async function loadUnmergeInvestments() {
+  const targetId = document.getElementById('unmergeTargetPool').value;
+  const listEl   = document.getElementById('unmergeInvList');
+  const itemsEl  = document.getElementById('unmergeInvItems');
+  const countEl  = document.getElementById('unmergeInvCount');
+
+  if (!targetId) { listEl.style.display = 'none'; return; }
+
+  listEl.style.display = 'block';
+  itemsEl.innerHTML = '<p style="padding:10px;color:var(--text-muted);font-size:0.85rem"><i class="fa-solid fa-spinner fa-spin" style="margin-right:6px"></i>Loading investments…</p>';
+  countEl.textContent = '';
+
+  let invs = [];
+  try {
+    const token = localStorage.getItem('svc_token');
+    const r = await fetch(`/api/tables/investment_pools/${encodeURIComponent(targetId)}/all-investments`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Failed');
+    invs = d.data || [];
+  } catch (e) {
+    itemsEl.innerHTML = `<p style="padding:10px;color:#ef4444;font-size:0.85rem">Failed to load: ${_esc(e.message)}</p>`;
+    return;
+  }
+
+  if (!invs.length) {
+    itemsEl.innerHTML = '<p style="padding:10px;color:var(--text-muted);font-size:0.85rem">No investments found in this pool.</p>';
+    return;
+  }
+
+  itemsEl.innerHTML = invs.map(i => {
+    const name = i.investor_name || i.investor_id || '—';
+    const amt  = Utils.fmtCcy(i.amount);
+    const date = i.start_date ? new Date(i.start_date).toLocaleDateString('en-ZA') : '—';
+    return `<label style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-bottom:1px solid var(--border);cursor:pointer;font-size:0.83rem">
+      <input type="checkbox" class="unmerge-inv-cb" value="${_esc(i.id)}" checked style="width:15px;height:15px;accent-color:#eda5ff">
+      <span style="flex:1">${_esc(name)}</span>
+      <span style="color:var(--text-muted)">${_esc(i.status || '')}</span>
+      <span style="font-variant-numeric:tabular-nums;font-weight:600">${amt}</span>
+      <span style="color:var(--text-muted);min-width:80px;text-align:right">${date}</span>
+    </label>`;
+  }).join('');
+
+  updateUnmergeCount();
+  itemsEl.querySelectorAll('.unmerge-inv-cb').forEach(cb => cb.addEventListener('change', updateUnmergeCount));
+}
+
+function updateUnmergeCount() {
+  const checked = document.querySelectorAll('.unmerge-inv-cb:checked').length;
+  const total   = document.querySelectorAll('.unmerge-inv-cb').length;
+  document.getElementById('unmergeInvCount').textContent = `${checked} of ${total} investment(s) selected`;
+}
+
+function unmergeSelectAll(check) {
+  document.querySelectorAll('.unmerge-inv-cb').forEach(cb => { cb.checked = check; });
+  updateUnmergeCount();
+}
+
+async function confirmUnmerge() {
+  const targetId = document.getElementById('unmergeTargetPool').value;
+  if (!targetId) { Toast.error('Please select the target pool.'); return; }
+
+  const ids = [...document.querySelectorAll('.unmerge-inv-cb:checked')].map(cb => cb.value);
+  if (!ids.length) { Toast.error('Select at least one investment to move back.'); return; }
+
+  const name = (document.getElementById('unmergePoolName').value || '').trim();
+  const product = document.getElementById('unmergePoolProduct').value;
+  if (!name)    { Toast.error('Pool name is required.'); return; }
+  if (!product) { Toast.error('Product type is required.'); return; }
+
+  const poolData = {
+    name,
+    product_type:        product,
+    status:              document.getElementById('unmergePoolStatus').value || 'open',
+    annual_rate:         parseFloat(document.getElementById('unmergePoolRate').value) || 0,
+    term_months:         parseInt(document.getElementById('unmergePoolTerm').value) || 6,
+    min_investment:      parseFloat(document.getElementById('unmergePoolMin').value) || 1000,
+    start_date:          document.getElementById('unmergePoolStart').value || null,
+    end_date:            document.getElementById('unmergePoolEnd').value || null,
+    maturity_date:       document.getElementById('unmergePoolEnd').value || null,
+    partner_name:        (document.getElementById('unmergePoolPartner').value || '').trim() || null,
+    risk_level:          document.getElementById('unmergePoolRisk').value || 'medium',
+    description:         (document.getElementById('unmergePoolDesc').value || '').trim() || null,
+  };
+
+  const targetName = (STATE.pools.find(p => p.id === targetId)?.name) || targetId;
+  if (!await Confirm.ask(`Restore pool "${name}"?`, {
+    body: `${ids.length} investment(s) will be moved from "${targetName}" to the new pool "${name}". This cannot be undone.`,
+    confirmLabel: 'Restore Pool',
+  })) return;
+
+  try {
+    const token = localStorage.getItem('svc_token');
+    const res = await fetch('/api/tables/investment_pools/unmerge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ investment_ids: ids, pool: poolData }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Unmerge failed');
+    Modal.close('unmergePoolModal');
+    Toast.success(`Pool "${name}" restored — ${data.moved} investment(s) moved back.`);
+    await Promise.all([loadPools(), loadInvestments()]);
+  } catch (e) {
+    Toast.error('Unmerge failed: ' + e.message);
+  }
+}
+
+function openMoveInvestmentsModal() {
+  const allPools = (STATE.pools || []).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  const opts = '<option value="">— Select pool —</option>' +
+    allPools.map(p => `<option value="${_esc(p.id)}">${_esc(p.name)} (${p.status})</option>`).join('');
+  document.getElementById('moveInvSource').innerHTML = opts;
+  document.getElementById('moveInvTarget').innerHTML = opts;
+  document.getElementById('moveInvList').style.display  = 'none';
+  document.getElementById('moveInvEmpty').style.display = 'none';
+  document.getElementById('moveInvItems').innerHTML = '';
+  Modal.open('moveInvestmentsModal');
+}
+
+async function loadMoveInvestmentsList() {
+  const sourceId = document.getElementById('moveInvSource').value;
+  const listEl   = document.getElementById('moveInvList');
+  const emptyEl  = document.getElementById('moveInvEmpty');
+  const itemsEl  = document.getElementById('moveInvItems');
+  const countEl  = document.getElementById('moveInvCount');
+  listEl.style.display  = 'none';
+  emptyEl.style.display = 'none';
+  itemsEl.innerHTML = '';
+  countEl.textContent = '';
+  if (!sourceId) return;
+
+  listEl.style.display = 'block';
+  itemsEl.innerHTML = '<p style="padding:12px;color:var(--text-muted);font-size:0.85rem"><i class="fa-solid fa-spinner fa-spin" style="margin-right:6px"></i>Loading investments…</p>';
+
+  let invs = [];
+  try {
+    const token = localStorage.getItem('svc_token');
+    const r = await fetch(`/api/tables/investment_pools/${encodeURIComponent(sourceId)}/all-investments`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Failed');
+    invs = d.data || [];
+  } catch (e) {
+    itemsEl.innerHTML = `<p style="padding:12px;color:#ef4444;font-size:0.85rem">Failed to load investments: ${_esc(e.message)}</p>`;
+    return;
+  }
+
+  if (!invs.length) {
+    listEl.style.display  = 'none';
+    emptyEl.style.display = 'block';
+    return;
+  }
+
+  itemsEl.innerHTML = invs.map(i => {
+    const name  = i.investor_name || i.investor_id || '—';
+    const saId  = i.sub_account_id || '—';
+    const amt   = Utils.fmtCcy(i.amount);
+    const edate = i.end_date ? new Date(i.end_date).toLocaleDateString('en-ZA') : '—';
+    const rate  = i.annual_rate ? `${Number(i.annual_rate).toFixed(2)}%` : '0%';
+    return `<label style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-bottom:1px solid var(--border);cursor:pointer;font-size:0.82rem">
+      <input type="checkbox" class="move-inv-cb" value="${_esc(i.id)}" checked style="width:15px;height:15px;accent-color:#eda5ff;flex-shrink:0">
+      <span style="min-width:120px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(name)}">${_esc(name)}</span>
+      <span style="color:var(--text-muted);min-width:90px;font-size:0.78rem">${_esc(saId)}</span>
+      <span style="color:var(--text-muted);font-size:0.78rem">${rate}</span>
+      <span style="font-variant-numeric:tabular-nums;font-weight:600;min-width:90px;text-align:right">${amt}</span>
+      <span style="color:var(--text-muted);font-size:0.78rem;min-width:75px;text-align:right">${edate}</span>
+    </label>`;
+  }).join('');
+
+  updateMoveInvCount();
+  itemsEl.querySelectorAll('.move-inv-cb').forEach(cb => cb.addEventListener('change', updateMoveInvCount));
+}
+
+function updateMoveInvCount() {
+  const checked = document.querySelectorAll('.move-inv-cb:checked').length;
+  const total   = document.querySelectorAll('.move-inv-cb').length;
+  document.getElementById('moveInvCount').textContent = `${checked} of ${total} investment(s) selected`;
+}
+
+function moveInvSelectAll(check) {
+  document.querySelectorAll('.move-inv-cb').forEach(cb => { cb.checked = check; });
+  updateMoveInvCount();
+}
+
+async function confirmMoveInvestments() {
+  const sourceId = document.getElementById('moveInvSource').value;
+  const targetId = document.getElementById('moveInvTarget').value;
+  if (!sourceId) { Toast.error('Select a source pool.'); return; }
+  if (!targetId) { Toast.error('Select a target pool.'); return; }
+  if (sourceId === targetId) { Toast.error('Source and target pools must differ.'); return; }
+
+  const ids = [...document.querySelectorAll('.move-inv-cb:checked')].map(cb => cb.value);
+  if (!ids.length) { Toast.error('Select at least one investment to move.'); return; }
+
+  const srcName = STATE.pools.find(p => p.id === sourceId)?.name || sourceId;
+  const tgtName = STATE.pools.find(p => p.id === targetId)?.name || targetId;
+
+  if (!await Confirm.ask(`Move ${ids.length} investment(s)?`, {
+    body: `Investments will be moved from "${srcName}" to "${tgtName}". This cannot be undone.`,
+    confirmLabel: 'Move Investments',
+    danger: true,
+  })) return;
+
+  try {
+    const token = localStorage.getItem('svc_token');
+    const res = await fetch('/api/admin/bulk-reassign-investments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ source_pool_id: sourceId, target_pool_id: targetId, investment_ids: ids }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Move failed');
+    Modal.close('moveInvestmentsModal');
+    Toast.success(`Moved ${data.moved} investment(s) from "${srcName}" to "${tgtName}".`);
+    await Promise.all([loadPools(), loadInvestments()]);
+  } catch (e) {
+    Toast.error('Move failed: ' + e.message);
+  }
+}
+
 async function deletePool(id) {
   const pool = STATE.pools.find(p => p.id === id);
   const name = pool?.name || id;
@@ -5158,6 +5739,7 @@ function editPool(id) {
   }
 
   document.getElementById('editPoolId').value          = pool.id;
+  document.getElementById('editPoolIdDisplay').value   = pool.id;
   document.getElementById('editPoolName').value        = pool.name || '';
   document.getElementById('editPoolStatus').value      = pool.status || 'open';
   // Populate product-type options from the products catalogue, ensuring this
@@ -5458,6 +6040,9 @@ function viewInvestmentDetail(id) {
         <button class="btn btn--primary btn--sm" onclick='payoutInvestment(${JSON.stringify(inv.id)})'>
           <i class="fa-solid fa-money-bill-transfer"></i> Process Payout
         </button>
+        <button class="btn btn--danger btn--sm" onclick='cancelInvestment(${JSON.stringify(inv.id)})'>
+          <i class="fa-solid fa-ban"></i> Cancel &amp; Refund
+        </button>
       </div>
     ` : ''}
   `;
@@ -5476,6 +6061,25 @@ async function adminSetInstruction(id) {
     await loadInvestments();
   } catch (e) {
     Toast.error(e.message || 'Failed to set instruction');
+  }
+}
+
+async function cancelInvestment(id) {
+  const inv = STATE.investments.find(i => i.id === id);
+  if (!inv) return;
+  const confirmed = await Confirm.ask('Cancel Investment & Refund?', {
+    body: `This will cancel the investment of <strong>${Utils.rand(inv.amount)}</strong> in <strong>${_esc(inv.pool_name)}</strong> and credit the full amount plus any platform fee back to <strong>${_esc(inv.investor_name)}</strong>'s wallet. This cannot be undone.`,
+    confirmLabel: 'Cancel & Refund',
+    confirmClass: 'btn--danger',
+  });
+  if (!confirmed) return;
+  try {
+    const result = await API._fetch('POST', `investments/${id}/cancel`, { reason: 'Admin cancellation' });
+    Toast.success(`Investment cancelled — ${Utils.rand(result.refunded)} refunded to wallet`);
+    Modal.close('investorDetailModal');
+    await Promise.all([loadInvestments(), loadInvestors()]);
+  } catch (e) {
+    Toast.error(e.message || 'Failed to cancel investment');
   }
 }
 
@@ -5705,7 +6309,7 @@ function renderTxnTable() {
     return;
   }
 
-  const typeColors = { deposit: 'green', withdrawal: 'red', investment: 'blue', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple' };
+  const typeColors = { deposit: 'green', withdrawal: 'red', investment: 'blue', reinvestment: 'purple', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple' };
 
   body.innerHTML = page.map(t => {
     const isPendingDeposit = t.type === 'deposit' && t.status === 'pending';
@@ -5880,7 +6484,7 @@ async function saveNewTxn(btn) {
         id:          Utils.genId('TXN'),
         investor_id: investorId,
         type,
-        amount:      type === 'investment' || type === 'withdrawal' ? -Math.abs(amount) : Math.abs(amount),
+        amount:      type === 'investment' || type === 'reinvestment' || type === 'withdrawal' ? -Math.abs(amount) : Math.abs(amount),
         status,
         reference:   document.getElementById('txnRef').value.trim(),
         description: document.getElementById('txnDesc').value.trim(),
@@ -6202,6 +6806,12 @@ async function viewTicket(id) {
                 reference:   ref,
               });
             }
+            // Safeguard: reconcile the investor's wallet balance from completed
+            // transactions. The PATCH/POST hooks credit the wallet synchronously,
+            // but a transient DB error between the two queries can leave the
+            // transaction marked completed while the wallet_balance is unchanged.
+            // Reconcile is a no-op if the balance is already correct.
+            await API._fetch('POST', 'admin/reconcile-wallet', { investor_id: tkt.investor_id }).catch(() => {});
           }
           await API.tickets.update(id, {
             status:         'resolved',
@@ -7614,7 +8224,7 @@ function renderIFATable(filterStatus = '', searchQ = '') {
         </span>
       </td>
       <td class="td-gold fw-700">${Utils.rand(ifa.aum_managed || 0)}</td>
-      <td class="td-muted">${(ifa.commission_rate || 0).toFixed(2)}%</td>
+      <td class="td-muted">${Number(ifa.commission_rate || 0).toFixed(2)}%</td>
       <td><span class="badge ${statusColor}">${ifa.status || 'unknown'}</span></td>
       <td class="td-muted">${Utils.date(ifa.date_joined)}</td>
       <td>
@@ -7674,7 +8284,7 @@ function viewIFA(ifaId) {
         <div class="info-list">
           <div class="info-row"><span class="info-row__label">Phone</span><span class="info-row__value">${_esc(ifa.phone) || '—'}</span></div>
           <div class="info-row"><span class="info-row__label">FSP License</span><span class="info-row__value td-gold">${_esc(ifa.license_number) || '—'}</span></div>
-          <div class="info-row"><span class="info-row__label">Commission Rate</span><span class="info-row__value">${(ifa.commission_rate || 0).toFixed(2)}%</span></div>
+          <div class="info-row"><span class="info-row__label">Commission Rate</span><span class="info-row__value">${Number(ifa.commission_rate || 0).toFixed(2)}%</span></div>
           <div class="info-row"><span class="info-row__label">Date Joined</span><span class="info-row__value">${Utils.date(ifa.date_joined)}</span></div>
         </div>
       </div>
@@ -7938,18 +8548,67 @@ function openKycUploadModal(investorId, investorName) {
   document.getElementById('kycUploadStatus').textContent = '';
   document.getElementById('kycUploadDropLabel').textContent = 'Click or drag a file here';
 
-  /* Populate investor dropdown */
-  const sel = document.getElementById('kycUploadInvestorSelect');
-  if (sel) {
-    sel.innerHTML = '<option value="">— Select investor —</option>' +
-      STATE.investors.map(inv =>
-        `<option value="${inv.id}" data-name="${inv.first_name} ${inv.last_name}" ${inv.id === investorId ? 'selected' : ''}>${inv.first_name} ${inv.last_name} (${inv.id})</option>`
-      ).join('');
-    sel.onchange = () => {
-      const opt = sel.options[sel.selectedIndex];
-      document.getElementById('kycUploadInvestorId').value   = opt.value || '';
-      document.getElementById('kycUploadInvestorName').value = opt.dataset.name || '';
-    };
+  /* Investor search-as-you-type */
+  const kycSearchInput = document.getElementById('kycInvSearchInput');
+  const kycDropdown    = document.getElementById('kycInvDropdown');
+  if (kycSearchInput && kycDropdown) {
+    // Pre-fill when opened from a specific investor row
+    if (investorId) {
+      const pre = STATE.investors.find(i => i.id === investorId);
+      const preName = pre ? `${pre.first_name || ''} ${pre.last_name || ''}`.trim() : (investorName || '');
+      kycSearchInput.value = preName ? `${preName} (${investorId})` : investorId;
+    } else {
+      kycSearchInput.value = '';
+    }
+    kycDropdown.style.display = 'none';
+    kycDropdown.innerHTML = '';
+
+    function _kycRenderDropdown(q) {
+      const term = q.trim().toLowerCase();
+      if (!term) { kycDropdown.style.display = 'none'; return; }
+      const matches = STATE.investors.filter(inv => {
+        const name  = `${inv.first_name || ''} ${inv.last_name || ''}`.toLowerCase();
+        const id    = (inv.id    || '').toLowerCase();
+        const email = (inv.email || '').toLowerCase();
+        return name.includes(term) || id.includes(term) || email.includes(term);
+      }).slice(0, 25);
+      if (!matches.length) { kycDropdown.style.display = 'none'; return; }
+      kycDropdown.innerHTML = matches.map(inv => {
+        const name = `${inv.first_name || ''} ${inv.last_name || ''}`.trim() || '—';
+        const emailLine = inv.email
+          ? `<span style="color:var(--text-muted);font-size:0.77rem">${inv.email}</span>` : '';
+        return `<li data-id="${inv.id}" data-name="${name}" style="padding:9px 14px;cursor:pointer;display:flex;flex-direction:column;gap:2px">
+          <span style="font-weight:600;font-size:0.87rem">${name}
+            <span style="color:var(--text-muted);font-weight:400;font-size:0.8rem">(${inv.id})</span>
+          </span>
+          ${emailLine}
+        </li>`;
+      }).join('');
+      kycDropdown.style.display = 'block';
+      kycDropdown.querySelectorAll('li').forEach(li => {
+        li.onmouseenter = () => li.style.background = 'rgba(255,255,255,0.06)';
+        li.onmouseleave = () => li.style.background = '';
+        li.onclick = () => {
+          document.getElementById('kycUploadInvestorId').value   = li.dataset.id;
+          document.getElementById('kycUploadInvestorName').value = li.dataset.name;
+          kycSearchInput.value = `${li.dataset.name} (${li.dataset.id})`;
+          kycDropdown.style.display = 'none';
+        };
+      });
+    }
+
+    kycSearchInput.oninput = () => _kycRenderDropdown(kycSearchInput.value);
+    kycSearchInput.onfocus = () => { if (kycSearchInput.value) _kycRenderDropdown(kycSearchInput.value); };
+    // Close dropdown when clicking outside
+    setTimeout(() => {
+      const _closeKycDrop = e => {
+        if (!kycSearchInput.contains(e.target) && !kycDropdown.contains(e.target)) {
+          kycDropdown.style.display = 'none';
+          document.removeEventListener('click', _closeKycDrop);
+        }
+      };
+      document.addEventListener('click', _closeKycDrop);
+    }, 0);
   }
   Modal.open('kycUploadModal');
 }
@@ -11682,6 +12341,183 @@ async function viewAsInvestor(investorId) {
 /* ═══════════════════════════════════════════════
    INVESTOR STATEMENTS
    ═══════════════════════════════════════════════ */
+async function _generateAdminTaxCert(investorId) {
+  const year = parseInt(document.getElementById('adminTaxCertYear')?.value || new Date().getFullYear());
+  const btn  = document.getElementById('adminTaxCertBtn');
+  const orig = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading…'; }
+  try {
+    const data = await API._fetch('GET', 'admin/tax-cert', null, { investor_id: investorId, year });
+    _openAdminTaxCertWindow(data);
+  } catch (e) {
+    Toast.error('Failed to generate certificate: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+  }
+}
+
+function _openAdminTaxCertWindow(data) {
+  const { investor: inv, taxYear, returns, deposits, totalReturns, totalDeposits, from, to } = data;
+
+  const fmt = n => 'R ' + parseFloat(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtDate = s => s ? new Date(s).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+  const esc = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const certNo = `SVCRC-${taxYear}-${String(inv.id).replace(/\D/g,'').slice(-6)}`;
+  const issuedAt = new Date().toLocaleString('en-ZA', { dateStyle: 'long', timeStyle: 'short' });
+  const fromLabel = new Date(from).toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' });
+  const toLabel   = new Date(to).toLocaleDateString('en-ZA',   { day: 'numeric', month: 'long', year: 'numeric' });
+  const fullAddr  = [inv.street_address, inv.suburb, inv.address, inv.postal_code, inv.province].filter(Boolean).join(', ');
+
+  const returnsRows = returns.map(t => `
+    <tr>
+      <td>${fmtDate(t.created_at)}</td>
+      <td>${esc(t.description || (t.type === 'return' ? 'Investment return' : 'Payout'))}</td>
+      <td class="amt">${fmt(Math.abs(parseFloat(t.amount||0)))}</td>
+    </tr>`).join('');
+
+  const depositsRows = deposits.map(t => `
+    <tr>
+      <td>${fmtDate(t.created_at)}</td>
+      <td>${esc(t.description || 'Client deposit')}</td>
+      <td class="amt">${fmt(Math.abs(parseFloat(t.amount||0)))}</td>
+    </tr>`).join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<title>SV Capital Investment Income Reference ${taxYear-1}/${taxYear}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,Helvetica,sans-serif;background:#fff;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:13px}
+@page{size:A4 portrait;margin:16mm 20mm}
+@media print{.no-print{display:none!important}.wrap{margin-top:0!important}}
+.no-print{position:fixed;top:0;left:0;right:0;background:#303030;padding:9px 20px;display:flex;justify-content:space-between;align-items:center;z-index:99;gap:10px}
+.no-print span{color:#fff;font-size:12px;font-weight:600}
+.no-print button{background:#eda5ff;color:#111;border:none;padding:7px 18px;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer}
+.wrap{max-width:740px;margin:56px auto 32px;padding:32px}
+/* Header */
+.hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:18px;border-bottom:3px solid #303030;margin-bottom:22px}
+.hdr-left h1{font-size:16px;font-weight:700;color:#303030;margin-bottom:2px}
+.hdr-left p{font-size:11px;color:#666;margin-top:3px}
+.cert-badge{text-align:right;font-size:10px;color:#555;line-height:1.6}
+.cert-badge strong{display:block;font-size:12px;color:#303030;font-weight:700}
+/* Warning */
+.warning{background:#fff8e1;border:1.5px solid #f59e0b;border-radius:6px;padding:10px 14px;margin-bottom:20px;font-size:11px;color:#78350f;display:flex;gap:8px;align-items:flex-start}
+.warning strong{display:block;margin-bottom:2px}
+/* Summary boxes */
+.summary{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:24px}
+.sum-box{border-radius:8px;padding:16px 18px;text-align:center}
+.sum-box.green{background:#f0fdf4;border:1.5px solid #22c55e}
+.sum-box.blue{background:#eff6ff;border:1.5px solid #3b82f6}
+.sum-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px}
+.sum-box.green .sum-lbl{color:#166534}
+.sum-box.blue  .sum-lbl{color:#1e40af}
+.sum-amt{font-size:22px;font-weight:800}
+.sum-box.green .sum-amt{color:#15803d}
+.sum-box.blue  .sum-amt{color:#1d4ed8}
+.sum-period{font-size:10px;margin-top:3px}
+.sum-box.green .sum-period{color:#166534}
+.sum-box.blue  .sum-period{color:#1e40af}
+/* Investor details */
+.section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#374151;margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid #e5e7eb}
+.details-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 20px;margin-bottom:22px;font-size:12px}
+.details-grid dt{color:#6b7280;font-weight:600}
+.details-grid dd{color:#111;font-weight:500}
+/* Tables */
+table{width:100%;border-collapse:collapse;margin-bottom:22px;font-size:12px}
+thead tr{background:#f1f5f9}
+th{padding:7px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#374151}
+td{padding:8px 10px;border-bottom:1px solid #f1f5f9;color:#374151}
+td.amt{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+tr.total-row td{border-top:2px solid #e5e7eb;border-bottom:none;font-weight:700;background:#f8fafc}
+tr.total-row td.amt{color:#111}
+.empty{text-align:center;padding:16px;background:#f8fafc;border-radius:6px;color:#9ca3af;font-size:12px;margin-bottom:22px}
+/* Footer */
+.footer{border-top:1px solid #e5e7eb;padding-top:14px;font-size:10px;color:#6b7280;line-height:1.7;margin-top:8px}
+.footer strong{color:#374151}
+.stamp{display:inline-block;border:2px solid #303030;color:#303030;padding:5px 12px;border-radius:3px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-top:12px}
+</style></head><body>
+<div class="no-print">
+  <span>SV Capital — Investment Income Reference &nbsp;·&nbsp; ${taxYear-1} / ${taxYear} &nbsp;·&nbsp; ${esc(inv.first_name)} ${esc(inv.last_name)}</span>
+  <button onclick="window.print()">Print / Save PDF</button>
+</div>
+<div class="wrap">
+  <div class="hdr">
+    <div class="hdr-left">
+      <h1>SV Capital (Pty) Ltd</h1>
+      <p>FSCA Regulated Financial Services Provider</p>
+      <p style="font-size:10px;color:#9ca3af;margin-top:4px">Ref No: ${certNo}</p>
+    </div>
+    <div class="cert-badge">
+      <strong>Investment Income Reference</strong>
+      Tax Year: 1 March ${taxYear-1} – 28 February ${taxYear}<br>
+      Issued: ${issuedAt}
+    </div>
+  </div>
+
+  <div class="warning">
+    <span style="font-size:16px">⚠</span>
+    <div><strong>For reference purposes only — not an official SARS tax certificate.</strong>
+    This document is provided to assist the client in preparing their tax return. It has not been submitted to SARS and does not replace an official IT3(b) certificate.</div>
+  </div>
+
+  <div class="summary">
+    <div class="sum-box green">
+      <div class="sum-lbl">Total Returns Earned</div>
+      <div class="sum-amt">${fmt(totalReturns)}</div>
+      <div class="sum-period">${fromLabel} – ${toLabel}</div>
+    </div>
+    <div class="sum-box blue">
+      <div class="sum-lbl">Total Deposits Made</div>
+      <div class="sum-amt">${fmt(totalDeposits)}</div>
+      <div class="sum-period">${fromLabel} – ${toLabel}</div>
+    </div>
+  </div>
+
+  <div class="section-title">Investor Details</div>
+  <dl class="details-grid">
+    <dt>Full Name</dt><dd>${esc(inv.first_name)} ${esc(inv.last_name)}</dd>
+    <dt>Investor Account</dt><dd>${esc(inv.id)}</dd>
+    <dt>Email Address</dt><dd>${esc(inv.email || '—')}</dd>
+    <dt>SA ID / Passport</dt><dd>${esc(inv.id_number || '—')}</dd>
+    ${fullAddr ? `<dt>Address</dt><dd>${esc(fullAddr)}</dd>` : ''}
+  </dl>
+
+  <div class="section-title" style="color:#166534">Returns Earned</div>
+  ${returns.length ? `<table>
+    <thead><tr><th>Date</th><th>Description</th><th style="text-align:right">Amount</th></tr></thead>
+    <tbody>
+      ${returnsRows}
+      <tr class="total-row"><td colspan="2">TOTAL RETURNS EARNED</td><td class="amt">${fmt(totalReturns)}</td></tr>
+    </tbody>
+  </table>` : `<div class="empty">No returns recorded for this tax year.</div>`}
+
+  <div class="section-title" style="color:#1e40af">Deposits Made</div>
+  ${deposits.length ? `<table>
+    <thead><tr><th>Date</th><th>Description</th><th style="text-align:right">Amount</th></tr></thead>
+    <tbody>
+      ${depositsRows}
+      <tr class="total-row"><td colspan="2">TOTAL DEPOSITS MADE</td><td class="amt">${fmt(totalDeposits)}</td></tr>
+    </tbody>
+  </table>` : `<div class="empty">No deposits recorded for this tax year.</div>`}
+
+  <div class="footer">
+    <strong>SV Capital (Pty) Ltd</strong> — FSCA Regulated Financial Services Provider.<br>
+    This document is generated for client reference only and does not constitute an official SARS IT3(b) interest income certificate.
+    Returns shown are investment returns and payouts credited to the investor account in the tax year ${taxYear-1}/${taxYear}
+    (1 March ${taxYear-1} to 28 February ${taxYear}).<br>
+    Deposits shown are funds deposited into the investor's SV Capital account during the same period.<br>
+    <strong>Ref:</strong> ${certNo} &nbsp;·&nbsp; <strong>Issued:</strong> ${issuedAt}<br>
+    <div class="stamp">SV Capital</div>
+  </div>
+</div>
+</body></html>`;
+
+  const win = window.open('', '_blank', 'width=860,height=960');
+  if (!win) { Toast.error('Pop-up blocked — allow pop-ups for this site and try again'); return; }
+  win.document.write(html);
+  win.document.close();
+}
+
 async function _loadInvestorStatements(investorId) {
   const el = document.getElementById('invStatementsList');
   if (!el) return;
