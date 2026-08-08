@@ -4,5 +4,7 @@ Allow: /
 Disallow: /portal/
 Disallow: /admin/
 Disallow: /api/
+Disallow: /ifa/
+Disallow: /team/
 
 Sitemap: https://platform.svcapital.co.za/sitemap.xml

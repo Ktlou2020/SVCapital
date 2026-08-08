@@ -6,19 +6,29 @@
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://platform.svcapital.co.za/signup.html</loc>
+    <loc>https://platform.svcapital.co.za/fund/cattle.html</loc>
     <changefreq>monthly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://platform.svcapital.co.za/login.html</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
+    <priority>0.8</priority>
   </url>
   <url>
     <loc>https://platform.svcapital.co.za/fund/gridfarmer.html</loc>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://platform.svcapital.co.za/fund/solar.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://platform.svcapital.co.za/fund/shortterm.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://platform.svcapital.co.za/fund/index.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   <url>
     <loc>https://platform.svcapital.co.za/terms.html</loc>
