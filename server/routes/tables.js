@@ -299,17 +299,19 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
     limit = Math.min(isAdminOrDirector ? 10000 : 500, limit);
 
     // employee tables: admins get all; staff with empId are filtered to their own rows
+    const isLeadOrExec = ['lead', 'executive'].includes(req.user.level);
     if (!isAdminOrDirector) {
       if (ADMIN_ONLY_TABLES.has(table)) {
         return res.status(403).json({ error: 'Forbidden.' });
       }
       // Employee-owned tables require a staff identity (empId) and are isolated
       // to that employee's own rows. Non-staff (e.g. investors) get nothing.
+      // Exception: leads and executives may read change_requests without ownership filter.
       if (EMPLOYEE_OWNED_COLS[table] || table === 'peer_feedback') {
         if (!req.user.empId) {
           return res.status(403).json({ error: 'Forbidden.' });
         }
-        if (EMPLOYEE_OWNED_COLS[table]) {
+        if (EMPLOYEE_OWNED_COLS[table] && !(table === 'change_requests' && isLeadOrExec)) {
           params.push(req.user.empId);
           conditions.push(`${EMPLOYEE_OWNED_COLS[table]} = $${params.length}`);
         }

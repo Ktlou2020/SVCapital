@@ -679,13 +679,13 @@ async function loadData() {
   try {
     if (IS_ADMIN) {
       const all = await apiFetch('/api/tables/change_requests?sort=created_at&order=desc&limit=200');
-      ALL_REQUESTS = all.rows || [];
+      ALL_REQUESTS = all.data || [];
       document.getElementById('adminSection').style.display = 'block';
       renderAllRequests();
     }
 
     const mine = await apiFetch(`/api/tables/change_requests?sort=created_at&order=desc&limit=200`);
-    MY_REQUESTS = (mine.rows || []).filter(r => r.employee_id === SESSION.empId);
+    MY_REQUESTS = (mine.data || []).filter(r => r.employee_id === SESSION.empId);
 
     renderMyRequests();
     updateStats();
