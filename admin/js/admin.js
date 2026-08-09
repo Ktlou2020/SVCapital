@@ -11414,7 +11414,7 @@ function renderReconcTable() {
   const fmt = v => 'R ' + Math.abs(v).toLocaleString('en-ZA', {minimumFractionDigits:2,maximumFractionDigits:2});
 
   let rows = _reconcRows();
-  if (search) rows = rows.filter(r => `${r.inv.first_name} ${r.inv.last_name} ${r.inv.email||''}`.toLowerCase().includes(search));
+  if (search) rows = rows.filter(r => `${r.inv.first_name} ${r.inv.last_name} ${r.inv.id||''} ${r.inv.email||''}`.toLowerCase().includes(search));
   if (discOnly) rows = rows.filter(r => r.isDiscrepancy);
 
   const totalDep  = rows.reduce((s,r) => s+r.totalDeposited, 0);
@@ -11452,7 +11452,7 @@ function renderReconcTable() {
   const tbody = document.getElementById('reconcBody');
   if (!tbody) return;
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:#7a92a8">No records found</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:40px;color:#7a92a8">No records found</td></tr>`;
     return;
   }
   tbody.innerHTML = rows.map(r => {
@@ -11461,7 +11461,9 @@ function renderReconcTable() {
       ? `<span style="background:rgba(249,115,22,.15);color:#f97316;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700">⚠ Discrepancy</span>`
       : `<span style="background:rgba(34,197,94,.12);color:#22c55e;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700">✓ Balanced</span>`;
     return `<tr>
-      <td><div style="font-weight:600;font-size:0.83rem">${_esc(r.inv.first_name)} ${_esc(r.inv.last_name)}</div><div style="font-size:0.72rem;color:#7a92a8">${_esc(r.inv.email)||''}</div></td>
+      <td style="font-weight:600;font-size:0.83rem">${_esc(r.inv.first_name)} ${_esc(r.inv.last_name)}</td>
+      <td style="font-size:0.78rem;font-family:monospace;color:#fec24f">${_esc(r.inv.id)||'—'}</td>
+      <td style="font-size:0.78rem;color:#7a92a8">${_esc(r.inv.email)||'—'}</td>
       <td style="color:#fec24f;font-size:0.82rem;font-weight:600">${fmt(r.totalDeposited)}</td>
       <td style="color:#656565;font-size:0.82rem;font-weight:600">${fmt(r.totalInvested)}</td>
       <td style="color:#22c55e;font-size:0.82rem;font-weight:600">${fmt(r.walletBalance)}</td>
@@ -11514,9 +11516,9 @@ function exportReconciliationCSV() {
   const rows = _reconcRows();
   if (!rows.length) { Toast.warning('No data to export'); return; }
   const fmt = v => v.toFixed(2);
-  const headers = ['Investor','Email','Total Deposited','Total Invested','Wallet Balance','Expected Wallet','Variance','Status'];
+  const headers = ['Client','Account No.','Email','Total Deposited','Total Invested','Wallet Balance','Expected Wallet','Variance','Status'];
   const data = rows.map(r => [
-    `${r.inv.first_name} ${r.inv.last_name}`, r.inv.email||'',
+    `${r.inv.first_name} ${r.inv.last_name}`, r.inv.id||'', r.inv.email||'',
     fmt(r.totalDeposited), fmt(r.totalInvested), fmt(r.walletBalance),
     fmt(r.expectedWallet), fmt(r.variance),
     r.isDiscrepancy ? 'DISCREPANCY' : 'BALANCED'
