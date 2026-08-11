@@ -12682,49 +12682,74 @@ function _openAccountStatementWindow(data) {
   const activeInvests  = investments.filter(i => ['active','pending'].includes(i.status));
   const maturedInvests = investments.filter(i => ['matured','paid_out'].includes(i.status));
 
-  const tableHead = '<thead><tr><th>Date</th><th>Product</th><th class="num">Amount</th><th class="num">Return Earned</th><th>Pool Start</th><th>Pool End</th><th>Maturity Instruction</th><th>Status</th></tr></thead>';
+  const activeHead  = '<thead><tr><th>Date</th><th>Pool Name</th><th>Product</th><th class="num">Amount</th><th>Pool Start</th><th>Pool End</th><th>Maturity Instruction</th><th>Status</th></tr></thead>';
+  const maturedHead = '<thead><tr><th>Date</th><th>Pool Name</th><th>Product</th><th class="num">Amount</th><th class="num">Annual Rate</th><th>Pool Start</th><th>Pool End</th><th>Maturity Instruction</th><th>Status</th></tr></thead>';
 
-  const buildRows = rows => rows.map(i => {
-    const cfg   = STATUS_CFG[i.status] || { cls:'sb-pending', lbl: i.status || '' };
-    const prod  = PROD_LABELS[i.product_type] || i.pool_name || '—';
-    const instr = INSTR_LABELS[i.maturity_instruction] || i.maturity_instruction || '—';
-    const earned = i.actual_return
-      ? fmt(i.actual_return)
-      : (i.expected_return ? fmt(i.expected_return) + '*' : '—');
+  const getInstr = i => {
+    const raw = i.maturity_instruction || i.payout_option || '';
+    return { reinvest:'Reinvest', withdraw:'Withdraw', partial_withdraw:'Partial Withdraw', rollover:'Roll Over' }[raw] || (raw ? raw.replace(/_/g,' ') : '—');
+  };
+  const getRate = i => {
+    const r = parseFloat(i.annual_rate);
+    return r ? (r * 100).toFixed(2) + '% p.a.' : '—';
+  };
+
+  const buildActiveRows = rows => rows.map(i => {
+    const cfg  = STATUS_CFG[i.status] || { cls:'sb-pending', lbl: i.status || '' };
+    const prod = PROD_LABELS[i.product_type] || i.pool_name || '—';
     return '<tr>' +
       '<td>' + fmtDate(i.start_date || i.created_at) + '</td>' +
+      '<td>' + esc(i.pool_name || '—') + '</td>' +
       '<td>' + esc(prod) + '</td>' +
       '<td class="num">' + fmt(i.amount) + '</td>' +
-      '<td class="num earn">' + earned + '</td>' +
       '<td>' + fmtDate(i.pool_start_date) + '</td>' +
       '<td>' + fmtDate(i.pool_end_date) + '</td>' +
-      '<td>' + esc(instr) + '</td>' +
+      '<td>' + esc(getInstr(i)) + '</td>' +
       '<td><span class="sb ' + cfg.cls + '">' + cfg.lbl + '</span></td>' +
       '</tr>';
   }).join('');
 
-  const emptyRow = msg => '<tr><td colspan="8" class="empty-row">' + msg + '</td></tr>';
+  const buildMaturedRows = rows => rows.map(i => {
+    const cfg  = STATUS_CFG[i.status] || { cls:'sb-pending', lbl: i.status || '' };
+    const prod = PROD_LABELS[i.product_type] || i.pool_name || '—';
+    return '<tr>' +
+      '<td>' + fmtDate(i.start_date || i.created_at) + '</td>' +
+      '<td>' + esc(i.pool_name || '—') + '</td>' +
+      '<td>' + esc(prod) + '</td>' +
+      '<td class="num">' + fmt(i.amount) + '</td>' +
+      '<td class="num earn">' + getRate(i) + '</td>' +
+      '<td>' + fmtDate(i.pool_start_date) + '</td>' +
+      '<td>' + fmtDate(i.pool_end_date) + '</td>' +
+      '<td>' + esc(getInstr(i)) + '</td>' +
+      '<td><span class="sb ' + cfg.cls + '">' + cfg.lbl + '</span></td>' +
+      '</tr>';
+  }).join('');
+
+  const emptyActive  = '<tr><td colspan="8" class="empty-row">No active investments in this period</td></tr>';
+  const emptyMatured = '<tr><td colspan="9" class="empty-row">No matured investments in this period</td></tr>';
 
   // Build CSV for download button
   const csvRows = [
-    ['Date','Product','Amount','Return Earned','Pool Start Date','Pool End Date','Maturity Instruction','Status']
+    ['Date','Pool Name','Product','Amount','Annual Rate','Pool Start Date','Pool End Date','Maturity Instruction','Status']
   ].concat(investments.map(i => [
     fmtDate(i.start_date || i.created_at),
+    i.pool_name || '',
     PROD_LABELS[i.product_type] || i.pool_name || '',
     parseFloat(i.amount || 0).toFixed(2),
-    parseFloat(i.actual_return || i.expected_return || 0).toFixed(2),
+    getRate(i),
     fmtDate(i.pool_start_date),
     fmtDate(i.pool_end_date),
-    INSTR_LABELS[i.maturity_instruction] || i.maturity_instruction || '',
+    getInstr(i),
     (STATUS_CFG[i.status] || {}).lbl || i.status || '',
   ]));
   const csvEsc  = v => '"' + String(v).replace(/"/g, '""') + '"';
-  const csvData = csvRows.map(r => r.map(csvEsc).join(',')).join('\r\n');
+  const csvData = csvRows.map(r => r.map(csvEsc).join(',')).join('
+');
   const csvB64  = btoa(unescape(encodeURIComponent(csvData)));
   const csvName = 'SVC-Statement-' + inv.id + '-' + period.from.slice(0,10) + '-to-' + period.to.slice(0,10) + '.csv';
 
-  const activeRows  = activeInvests.length  ? buildRows(activeInvests)  : emptyRow('No active investments in this period');
-  const maturedRows = maturedInvests.length ? buildRows(maturedInvests) : emptyRow('No matured investments in this period');
+  const activeRows  = activeInvests.length  ? buildActiveRows(activeInvests)   : emptyActive;
+  const maturedRows = maturedInvests.length ? buildMaturedRows(maturedInvests) : emptyMatured;
   const aCnt = activeInvests.length;
   const mCnt = maturedInvests.length;
 
@@ -12809,9 +12834,9 @@ function _openAccountStatementWindow(data) {
     '    </dl></div>',
     '  </div>',
     '  <div class="sec-hdr active-hdr">Active Pools &mdash; ' + aCnt + ' investment' + (aCnt !== 1 ? 's' : '') + '</div>',
-    '  <table>' + tableHead + '<tbody>' + activeRows + '</tbody></table>',
+    '  <table>' + activeHead + '<tbody>' + activeRows + '</tbody></table>',
     '  <div class="sec-hdr matured-hdr">Matured Pools &mdash; ' + mCnt + ' investment' + (mCnt !== 1 ? 's' : '') + '</div>',
-    '  <table>' + tableHead + '<tbody>' + maturedRows + '</tbody></table>',
+    '  <table>' + maturedHead + '<tbody>' + maturedRows + '</tbody></table>',
     '  <p class="note">* Expected return shown where actual return has not yet been recorded.</p>',
     '  <div class="footer">',
     '    <strong>SV Capital (Pty) Ltd</strong> &mdash; FSCA Regulated Financial Services Provider.<br>',

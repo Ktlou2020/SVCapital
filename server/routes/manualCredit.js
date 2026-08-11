@@ -867,7 +867,9 @@ router.get('/account-statement', async (req, res) => {
         `SELECT i.id, i.amount, i.status, i.created_at,
                 COALESCE(i.start_date, i.created_at::date) AS start_date,
                 i.end_date AS maturity_date,
-                i.expected_return, i.actual_return, i.annual_rate,
+                i.expected_return, i.actual_return,
+                COALESCE(i.annual_rate, p.annual_rate) AS annual_rate,
+                i.payout_option,
                 p.name AS pool_name, p.product_type,
                 p.start_date AS pool_start_date, p.end_date AS pool_end_date,
                 mi.instruction AS maturity_instruction
