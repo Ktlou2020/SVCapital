@@ -407,17 +407,16 @@ router.post('/override-wallet', async (req, res) => {
       if (diff !== 0) {
         const isDeposit = diff > 0;
         const txType    = isDeposit ? 'deposit' : 'debit';
-        const txAmount  = isDeposit ? diff : diff; // diff is negative when debit
         const txRef     = `OVR-${Date.now()}`;
-        const txDesc    = isDeposit
-          ? `Admin balance override — deposit (R${diff.toFixed(2)} added). ${notes || ''}`.trim()
-          : `Admin balance override — debit (R${Math.abs(diff).toFixed(2)} removed). ${notes || ''}`.trim();
+        // Client-visible description is generic; admin reason stored in notes only
+        const txDesc    = isDeposit ? 'Wallet balance adjusted' : 'Wallet balance adjusted';
+        const adminNote = `Admin balance override — ${isDeposit ? 'deposit' : 'debit'} (R${Math.abs(diff).toFixed(2)} ${isDeposit ? 'added' : 'removed'}). Reason: ${notes || 'none'}`;
 
         await client.query(
           `INSERT INTO transactions
              (id, investor_id, type, amount, status, reference, description, notes, created_at, updated_at)
            VALUES (gen_random_uuid(), $1, $2, $3, 'completed', $4, $5, $6, NOW(), NOW())`,
-          [investorId, txType, txAmount, txRef, txDesc, notes || null]
+          [investorId, txType, diff, txRef, txDesc, adminNote]
         );
       }
 

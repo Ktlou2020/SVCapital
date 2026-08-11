@@ -539,6 +539,10 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
         if (r && typeof r.description === 'string' && r.description.indexOf('Monthly interest') !== -1) {
           r.description = r.description.replace(/Monthly interest/g, 'Return Earned');
         }
+        // Strip admin-only notes from non-admin/director users
+        if (r && !isAdminOrDirector) {
+          r.notes = undefined;
+        }
       }
     }
 
