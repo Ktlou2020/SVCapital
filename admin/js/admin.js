@@ -12682,7 +12682,7 @@ function _openAccountStatementWindow(data) {
   const activeInvests  = investments.filter(i => ['active','pending'].includes(i.status));
   const maturedInvests = investments.filter(i => ['matured','paid_out'].includes(i.status));
 
-  const activeHead  = '<thead><tr><th>Date</th><th>Pool Name</th><th>Product</th><th class="num">Amount</th><th>Pool Start</th><th>Pool End</th><th>Maturity Instruction</th><th>Status</th></tr></thead>';
+  const activeHead  = '<thead><tr><th>Date</th><th>Pool Name</th><th>Product</th><th class="num">Amount</th><th>Pool Start</th><th>Pool End</th><th>Status</th></tr></thead>';
   const maturedHead = '<thead><tr><th>Date</th><th>Pool Name</th><th>Product</th><th class="num">Amount</th><th class="num">Annual Rate</th><th>Pool Start</th><th>Pool End</th><th>Maturity Instruction</th><th>Status</th></tr></thead>';
 
   const getInstr = i => {
@@ -12704,7 +12704,6 @@ function _openAccountStatementWindow(data) {
       '<td class="num">' + fmt(i.amount) + '</td>' +
       '<td>' + fmtDate(i.pool_start_date) + '</td>' +
       '<td>' + fmtDate(i.pool_end_date) + '</td>' +
-      '<td>' + esc(getInstr(i)) + '</td>' +
       '<td><span class="sb ' + cfg.cls + '">' + cfg.lbl + '</span></td>' +
       '</tr>';
   }).join('');
@@ -12725,7 +12724,7 @@ function _openAccountStatementWindow(data) {
       '</tr>';
   }).join('');
 
-  const emptyActive  = '<tr><td colspan="8" class="empty-row">No active investments in this period</td></tr>';
+  const emptyActive  = '<tr><td colspan="7" class="empty-row">No active investments in this period</td></tr>';
   const emptyMatured = '<tr><td colspan="9" class="empty-row">No matured investments in this period</td></tr>';
 
   // Build CSV for download button
