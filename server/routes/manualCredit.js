@@ -393,11 +393,41 @@ router.post('/override-wallet', async (req, res) => {
     if (!inv) return res.status(404).json({ error: 'Investor not found.' });
 
     const oldBalance = parseFloat(inv.wallet_balance) || 0;
+    const diff = parseFloat((nb - oldBalance).toFixed(2));
 
-    await pool.query(
-      'UPDATE investors SET wallet_balance = $1, updated_at = NOW() WHERE id = $2',
-      [nb, investorId]
-    );
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      await client.query(
+        'UPDATE investors SET wallet_balance = $1, updated_at = NOW() WHERE id = $2',
+        [nb, investorId]
+      );
+
+      if (diff !== 0) {
+        const isDeposit = diff > 0;
+        const txType    = isDeposit ? 'deposit' : 'debit';
+        const txAmount  = isDeposit ? diff : diff; // diff is negative when debit
+        const txRef     = `OVR-${Date.now()}`;
+        const txDesc    = isDeposit
+          ? `Admin balance override — deposit (R${diff.toFixed(2)} added). ${notes || ''}`.trim()
+          : `Admin balance override — debit (R${Math.abs(diff).toFixed(2)} removed). ${notes || ''}`.trim();
+
+        await client.query(
+          `INSERT INTO transactions
+             (id, investor_id, type, amount, status, reference, description, notes, created_at, updated_at)
+           VALUES (gen_random_uuid(), $1, $2, $3, 'completed', $4, $5, $6, NOW(), NOW())`,
+          [investorId, txType, txAmount, txRef, txDesc, notes || null]
+        );
+      }
+
+      await client.query('COMMIT');
+    } catch (txErr) {
+      await client.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      client.release();
+    }
 
     setImmediate(() => audit.log({
       actorId:    req.user.id,
@@ -409,7 +439,7 @@ router.post('/override-wallet', async (req, res) => {
       ip:         req.ip,
     }).catch(() => {}));
 
-    res.json({ success: true, oldBalance, newBalance: nb });
+    res.json({ success: true, oldBalance, newBalance: nb, diff });
   } catch (err) {
     console.error('/admin/override-wallet error:', err.message);
     res.status(500).json({ error: 'Internal server error.' });
