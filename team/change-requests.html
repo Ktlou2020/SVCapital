@@ -12,955 +12,741 @@
   <script src="../js/staff-auth.js?v=5"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     :root {
-      --bg:       #0b0c10;
-      --surface:  #111318;
-      --surface2: #1a1c24;
-      --surface3: #22252f;
-      --border:   rgba(255,255,255,0.07);
-      --border2:  rgba(255,255,255,0.12);
-      --purple:   #eda5ff;
-      --text:     #e8eaf6;
-      --muted:    #6b7280;
-      --muted2:   #9ca3af;
-      --green:    #10b981;
-      --yellow:   #f59e0b;
-      --red:      #ef4444;
-      --blue:     #3b82f6;
+      --bg:      #0b0c10; --surface: #111318; --surface2: #1a1c24; --surface3: #22252f;
+      --border:  rgba(255,255,255,0.07); --border2: rgba(255,255,255,0.13);
+      --purple:  #eda5ff; --text: #e8eaf6; --muted: #6b7280; --muted2: #9ca3af;
+      --green:   #10b981; --yellow: #f59e0b; --red: #ef4444; --blue: #3b82f6;
     }
-
-    html, body {
-      min-height: 100vh;
-      background: var(--bg);
-      font-family: 'Inter', sans-serif;
-      color: var(--text);
-      overflow-x: hidden;
-    }
-
+    html,body { min-height:100vh; background:var(--bg); font-family:'Inter',sans-serif; color:var(--text); overflow-x:hidden; }
     body::before {
-      content: '';
-      position: fixed; inset: 0; z-index: 0; pointer-events: none;
-      background-image:
-        linear-gradient(rgba(237,165,255,0.025) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(237,165,255,0.025) 1px, transparent 1px);
-      background-size: 52px 52px;
+      content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
+      background-image: linear-gradient(rgba(237,165,255,.025) 1px,transparent 1px), linear-gradient(90deg,rgba(237,165,255,.025) 1px,transparent 1px);
+      background-size:52px 52px;
     }
+    .orb { position:fixed; border-radius:50%; filter:blur(120px); opacity:.08; z-index:0; pointer-events:none; }
+    .orb--1 { width:500px; height:500px; background:#eda5ff; top:-200px; left:-100px; }
+    .orb--2 { width:300px; height:300px; background:#00d4aa; bottom:-80px; right:-60px; }
 
-    .orb { position: fixed; border-radius: 50%; filter: blur(120px); opacity: 0.08; z-index: 0; pointer-events: none; }
-    .orb--1 { width: 500px; height: 500px; background: #eda5ff; top: -200px; left: -100px; }
-    .orb--2 { width: 300px; height: 300px; background: #00d4aa; bottom: -80px; right: -60px; }
+    #globalLoader { position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center; flex-direction:column; gap:14px; z-index:9999; }
+    #globalLoader .spin { width:40px; height:40px; border:3px solid rgba(237,165,255,.15); border-top-color:var(--purple); border-radius:50%; animation:spin .65s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    #mainContent { display:none; }
 
-    /* Global loader */
-    #globalLoader {
-      position: fixed; inset: 0; background: var(--bg);
-      display: flex; align-items: center; justify-content: center;
-      flex-direction: column; gap: 14px; z-index: 9999;
-    }
-    #globalLoader .spin {
-      width: 40px; height: 40px;
-      border: 3px solid rgba(237,165,255,0.15); border-top-color: var(--purple);
-      border-radius: 50%; animation: spin 0.65s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* Page layout */
-    .page { position: relative; z-index: 1; max-width: 960px; margin: 0 auto; padding: 0 24px 80px; }
+    .page { position:relative; z-index:1; max-width:980px; margin:0 auto; padding:0 20px 80px; }
 
     /* Top bar */
-    .topbar {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 20px 0 28px;
-    }
-    .topbar-left { display: flex; align-items: center; gap: 14px; }
-    .back-btn {
-      display: flex; align-items: center; gap: 7px;
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 10px; padding: 8px 14px;
-      color: var(--muted2); font-size: 0.82rem; font-weight: 600;
-      text-decoration: none; transition: border-color 0.15s, color 0.15s;
-    }
-    .back-btn:hover { border-color: var(--purple); color: var(--purple); }
-    .page-title {
-      font-family: 'Poppins', sans-serif;
-      font-size: 1.4rem; font-weight: 800; letter-spacing: -0.02em;
-    }
-    .page-title span { color: var(--purple); }
-    .new-btn {
-      display: flex; align-items: center; gap: 8px;
-      background: var(--purple); color: #0b0c10;
-      border: none; border-radius: 10px;
-      padding: 10px 18px; font-size: 0.85rem; font-weight: 700;
-      cursor: pointer; transition: opacity 0.15s, transform 0.15s;
-      font-family: 'Inter', sans-serif;
-    }
-    .new-btn:hover { opacity: 0.88; transform: translateY(-1px); }
+    .topbar { display:flex; align-items:center; justify-content:space-between; padding:20px 0 24px; gap:12px; flex-wrap:wrap; }
+    .topbar-left { display:flex; align-items:center; gap:12px; }
+    .back-btn { display:flex; align-items:center; gap:7px; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:8px 14px; color:var(--muted2); font-size:.82rem; font-weight:600; text-decoration:none; transition:border-color .15s,color .15s; }
+    .back-btn:hover { border-color:var(--purple); color:var(--purple); }
+    .page-title { font-family:'Poppins',sans-serif; font-size:1.35rem; font-weight:800; letter-spacing:-.02em; }
+    .page-title span { color:var(--purple); }
+    .topbar-right { display:flex; align-items:center; gap:10px; }
+    .new-btn { display:flex; align-items:center; gap:8px; background:var(--purple); color:#0b0c10; border:none; border-radius:10px; padding:10px 18px; font-size:.85rem; font-weight:700; cursor:pointer; transition:opacity .15s,transform .15s; font-family:'Inter',sans-serif; }
+    .new-btn:hover { opacity:.88; transform:translateY(-1px); }
 
-    /* Stat cards */
-    .stats-row {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-      gap: 12px; margin-bottom: 28px;
-    }
-    .stat-card {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 14px; padding: 16px 18px;
-      display: flex; flex-direction: column; gap: 4px;
-    }
-    .stat-card__label { font-size: 0.72rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
-    .stat-card__value { font-size: 1.6rem; font-weight: 800; font-family: 'Poppins', sans-serif; }
-    .stat-card--pending  .stat-card__value { color: var(--yellow); }
-    .stat-card--review   .stat-card__value { color: var(--blue); }
-    .stat-card--done     .stat-card__value { color: var(--green); }
-    .stat-card--total    .stat-card__value { color: var(--purple); }
+    /* Notification bell */
+    .notif-wrap { position:relative; }
+    .notif-btn { position:relative; width:40px; height:40px; background:var(--surface); border:1px solid var(--border); border-radius:10px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--muted2); font-size:.95rem; transition:border-color .15s,color .15s; }
+    .notif-btn:hover { border-color:var(--purple); color:var(--purple); }
+    .notif-badge { position:absolute; top:-5px; right:-5px; background:#ef4444; color:#fff; font-size:.6rem; font-weight:800; width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; border:2px solid var(--bg); }
+    .notif-dropdown { position:absolute; top:calc(100% + 8px); right:0; width:340px; background:var(--surface); border:1px solid var(--border2); border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.5); z-index:5000; display:none; overflow:hidden; }
+    .notif-dropdown.open { display:block; }
+    .notif-hdr { display:flex; align-items:center; justify-content:space-between; padding:14px 16px 10px; border-bottom:1px solid var(--border); }
+    .notif-hdr-title { font-size:.8rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); }
+    .notif-clear-btn { font-size:.74rem; font-weight:700; color:var(--purple); background:none; border:none; cursor:pointer; padding:3px 8px; border-radius:6px; transition:background .15s; }
+    .notif-clear-btn:hover { background:rgba(237,165,255,.1); }
+    .notif-list { max-height:320px; overflow-y:auto; }
+    .notif-item { display:flex; gap:10px; padding:11px 16px; border-bottom:1px solid var(--border); transition:background .15s; }
+    .notif-item:last-child { border-bottom:none; }
+    .notif-item:hover { background:var(--surface2); }
+    .notif-icon { width:30px; height:30px; border-radius:8px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:.75rem; }
+    .notif-icon--new   { background:rgba(237,165,255,.12); color:var(--purple); }
+    .notif-icon--comment { background:rgba(59,130,246,.12); color:#60a5fa; }
+    .notif-icon--status { background:rgba(16,185,129,.12); color:#34d399; }
+    .notif-text { flex:1; min-width:0; }
+    .notif-msg { font-size:.78rem; color:var(--text); line-height:1.45; }
+    .notif-time { font-size:.7rem; color:var(--muted); margin-top:2px; }
+    .notif-empty { text-align:center; padding:32px 16px; color:var(--muted); font-size:.82rem; }
 
-    /* Filter tabs */
-    .filter-row {
-      display: flex; align-items: center; gap: 8px;
-      margin-bottom: 20px; flex-wrap: wrap;
-    }
-    .filter-btn {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 8px; padding: 6px 14px;
-      font-size: 0.78rem; font-weight: 600; color: var(--muted2);
-      cursor: pointer; transition: all 0.15s; font-family: 'Inter', sans-serif;
-    }
-    .filter-btn.active {
-      background: rgba(237,165,255,0.12);
-      border-color: var(--purple); color: var(--purple);
-    }
-    .filter-btn:hover:not(.active) { border-color: var(--border2); color: var(--text); }
+    /* Stats */
+    .stats-row { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px; margin-bottom:24px; }
+    .stat-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px; }
+    .stat-card__label { font-size:.7rem; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:4px; }
+    .stat-card__value { font-size:1.6rem; font-weight:800; font-family:'Poppins',sans-serif; }
+    .stat-card--pending .stat-card__value  { color:var(--yellow); }
+    .stat-card--review  .stat-card__value  { color:var(--blue); }
+    .stat-card--done    .stat-card__value  { color:var(--green); }
+    .stat-card--total   .stat-card__value  { color:var(--purple); }
 
-    /* Section header */
-    .section-head {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 14px;
-    }
-    .section-label {
-      font-size: 0.72rem; font-weight: 700; color: var(--muted);
-      text-transform: uppercase; letter-spacing: 0.08em;
-    }
-    .section-count-badge {
-      font-size: 0.72rem; font-weight: 700;
-      background: var(--surface2); border: 1px solid var(--border);
-      border-radius: 20px; padding: 2px 10px; color: var(--muted2);
-    }
+    /* Filter row */
+    .filter-row { display:flex; align-items:center; gap:8px; margin-bottom:18px; flex-wrap:wrap; }
+    .filter-btn { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:6px 14px; font-size:.78rem; font-weight:600; color:var(--muted2); cursor:pointer; transition:all .15s; font-family:'Inter',sans-serif; }
+    .filter-btn.active { background:rgba(237,165,255,.12); border-color:var(--purple); color:var(--purple); }
+    .filter-btn:hover:not(.active) { border-color:var(--border2); color:var(--text); }
 
-    /* Request cards */
-    .requests-list { display: flex; flex-direction: column; gap: 10px; }
-    .request-card {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 14px; padding: 18px 20px;
-      transition: border-color 0.15s;
-      cursor: pointer;
-    }
-    .request-card:hover { border-color: var(--border2); }
+    /* Request list */
+    .requests-list { display:flex; flex-direction:column; gap:10px; }
+    .request-card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:16px 18px; transition:border-color .15s; cursor:pointer; }
+    .request-card:hover { border-color:var(--border2); }
+    .card-header { display:flex; align-items:flex-start; gap:12px; margin-bottom:8px; }
+    .card-icon { width:36px; height:36px; border-radius:10px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:.85rem; }
+    .card-meta { flex:1; min-width:0; }
+    .card-title { font-size:.9rem; font-weight:700; margin-bottom:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .card-sub { font-size:.74rem; color:var(--muted); display:flex; gap:10px; flex-wrap:wrap; }
+    .card-badges { display:flex; gap:6px; align-items:center; flex-shrink:0; }
+    .badge { font-size:.67rem; font-weight:700; padding:3px 9px; border-radius:20px; letter-spacing:.03em; text-transform:uppercase; }
+    .badge--pending      { background:rgba(245,158,11,.15); color:#f59e0b; border:1px solid rgba(245,158,11,.3); }
+    .badge--reviewing    { background:rgba(59,130,246,.15); color:#60a5fa; border:1px solid rgba(59,130,246,.3); }
+    .badge--approved     { background:rgba(16,185,129,.15); color:#34d399; border:1px solid rgba(16,185,129,.3); }
+    .badge--rejected     { background:rgba(239,68,68,.12);  color:#f87171; border:1px solid rgba(239,68,68,.25); }
+    .badge--implemented  { background:rgba(237,165,255,.12); color:#eda5ff; border:1px solid rgba(237,165,255,.3); }
+    .prio-dot { width:7px; height:7px; border-radius:50%; display:inline-block; margin-right:4px; }
+    .prio--low { background:#6b7280; } .prio--medium { background:#f59e0b; }
+    .prio--high { background:#f97316; } .prio--urgent { background:#ef4444; }
+    .card-desc { font-size:.79rem; color:var(--muted2); line-height:1.55; margin-top:6px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+    .card-footer { display:flex; align-items:center; justify-content:space-between; margin-top:10px; padding-top:10px; border-top:1px solid var(--border); font-size:.72rem; color:var(--muted); }
+    .card-footer-left { display:flex; gap:14px; align-items:center; }
+    .card-meta-pill { display:inline-flex; align-items:center; gap:5px; }
 
-    .card-header { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 8px; }
-    .card-icon {
-      width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 0.85rem;
-    }
-    .card-meta { flex: 1; min-width: 0; }
-    .card-title {
-      font-size: 0.92rem; font-weight: 700; margin-bottom: 3px;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .card-sub { font-size: 0.75rem; color: var(--muted); display: flex; gap: 10px; flex-wrap: wrap; }
-    .card-badges { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+    .empty-state { text-align:center; padding:48px 24px; color:var(--muted); }
+    .empty-state i { font-size:2.2rem; margin-bottom:12px; display:block; opacity:.4; }
+    .empty-state p { font-size:.86rem; }
 
-    /* Badges */
-    .badge {
-      font-size: 0.68rem; font-weight: 700; padding: 3px 9px;
-      border-radius: 20px; letter-spacing: 0.03em; text-transform: uppercase;
-    }
-    .badge--pending    { background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
-    .badge--reviewing  { background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3); }
-    .badge--approved   { background: rgba(16,185,129,0.15); color: #34d399; border: 1px solid rgba(16,185,129,0.3); }
-    .badge--rejected   { background: rgba(239,68,68,0.12);  color: #f87171; border: 1px solid rgba(239,68,68,0.25); }
-    .badge--implemented{ background: rgba(237,165,255,0.12); color: #eda5ff; border: 1px solid rgba(237,165,255,0.3); }
+    /* ── Detail modal ── */
+    .modal-overlay { position:fixed; inset:0; z-index:8000; background:rgba(0,0,0,.65); backdrop-filter:blur(4px); display:none; align-items:flex-start; justify-content:center; padding:20px; overflow-y:auto; }
+    .modal-overlay.open { display:flex; }
+    .modal { background:var(--surface); border:1px solid var(--border2); border-radius:20px; width:100%; max-width:680px; margin:auto; position:relative; }
+    .modal-close { position:absolute; top:14px; right:16px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:5px 10px; color:var(--muted2); cursor:pointer; font-size:.8rem; font-weight:600; transition:border-color .15s,color .15s; font-family:'Inter',sans-serif; }
+    .modal-close:hover { border-color:var(--red); color:var(--red); }
+    .modal-header { padding:22px 22px 16px; border-bottom:1px solid var(--border); }
+    .modal-title { font-size:1rem; font-weight:800; margin-bottom:8px; padding-right:60px; }
+    .modal-meta { display:flex; gap:8px; flex-wrap:wrap; align-items:center; font-size:.74rem; color:var(--muted); }
+    .modal-body { padding:20px 22px; }
 
-    .priority-dot {
-      width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 4px;
-    }
-    .prio--low    { background: #6b7280; }
-    .prio--medium { background: #f59e0b; }
-    .prio--high   { background: #f97316; }
-    .prio--urgent { background: #ef4444; }
+    /* Detail sections */
+    .detail-section { margin-bottom:20px; }
+    .detail-label { font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--muted); margin-bottom:6px; }
+    .detail-text { font-size:.84rem; color:var(--muted2); line-height:1.6; background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:12px 14px; }
+    .detail-text.empty-text { font-style:italic; color:var(--muted); }
 
-    .card-desc {
-      font-size: 0.8rem; color: var(--muted2); line-height: 1.55;
-      margin-top: 6px;
-      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-    }
-    .card-footer {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-top: 12px; padding-top: 12px;
-      border-top: 1px solid var(--border);
-      font-size: 0.73rem; color: var(--muted);
-    }
-    .card-footer-left { display: flex; gap: 14px; align-items: center; }
+    /* Admin notes / status update panel */
+    .admin-panel { background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:14px 16px; margin-bottom:20px; }
+    .admin-panel-title { font-size:.74rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--purple); margin-bottom:10px; display:flex; align-items:center; gap:6px; }
+    .admin-row { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px; }
+    .status-select { background:var(--surface3); border:1px solid var(--border2); border-radius:8px; padding:7px 10px; color:var(--text); font-size:.82rem; font-family:'Inter',sans-serif; flex:1; min-width:140px; }
+    .status-select:focus { outline:none; border-color:var(--purple); }
+    .notes-textarea { width:100%; background:var(--surface3); border:1px solid var(--border); border-radius:8px; padding:9px 12px; color:var(--text); font-size:.82rem; font-family:'Inter',sans-serif; resize:vertical; min-height:70px; }
+    .notes-textarea:focus { outline:none; border-color:var(--purple); }
+    .save-btn { background:var(--purple); color:#0b0c10; border:none; border-radius:8px; padding:8px 18px; font-size:.82rem; font-weight:700; cursor:pointer; font-family:'Inter',sans-serif; transition:opacity .15s; }
+    .save-btn:hover { opacity:.85; }
+    .save-btn:disabled { opacity:.5; cursor:not-allowed; }
 
-    /* Empty state */
-    .empty-state {
-      text-align: center; padding: 56px 24px;
-      color: var(--muted);
-    }
-    .empty-state i { font-size: 2.4rem; margin-bottom: 14px; display: block; opacity: 0.4; }
-    .empty-state p { font-size: 0.88rem; }
+    /* Attachments */
+    .attachments-grid { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+    .attachment-chip { display:inline-flex; align-items:center; gap:7px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:6px 12px; font-size:.76rem; color:var(--muted2); cursor:pointer; transition:border-color .15s,color .15s; text-decoration:none; }
+    .attachment-chip:hover { border-color:var(--purple); color:var(--purple); }
+    .attachment-chip i { font-size:.8rem; }
+    .attach-upload-row { display:flex; gap:8px; align-items:center; margin-top:10px; }
+    .file-input-label { display:inline-flex; align-items:center; gap:7px; background:var(--surface2); border:1px solid dashed; border-color:var(--border2); border-radius:8px; padding:7px 14px; font-size:.78rem; color:var(--muted2); cursor:pointer; transition:border-color .15s,color .15s; }
+    .file-input-label:hover { border-color:var(--purple); color:var(--purple); }
+    #attachFileInput { display:none; }
+    .upload-btn { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:7px 14px; font-size:.78rem; font-weight:600; color:var(--muted2); cursor:pointer; font-family:'Inter',sans-serif; transition:border-color .15s,color .15s; }
+    .upload-btn:hover { border-color:var(--purple); color:var(--purple); }
+    .upload-btn:disabled { opacity:.5; cursor:not-allowed; }
+    #attachFileName { font-size:.75rem; color:var(--muted); }
 
-    /* ── Modal overlay ── */
-    .modal-overlay {
-      position: fixed; inset: 0; z-index: 8000;
-      background: rgba(0,0,0,0.65); backdrop-filter: blur(4px);
-      display: none; align-items: center; justify-content: center;
-      padding: 20px;
-    }
-    .modal-overlay.open { display: flex; }
+    /* Comments */
+    .comments-section { border-top:1px solid var(--border); padding-top:18px; }
+    .comments-title { font-size:.74rem; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--muted); margin-bottom:14px; }
+    .comment-list { display:flex; flex-direction:column; gap:12px; margin-bottom:16px; }
+    .comment-item { display:flex; gap:10px; }
+    .comment-avatar { width:30px; height:30px; border-radius:50%; background:var(--surface3); flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:.7rem; font-weight:700; color:var(--purple); border:1px solid var(--border); }
+    .comment-bubble { flex:1; background:var(--surface2); border:1px solid var(--border); border-radius:12px; border-top-left-radius:4px; padding:10px 13px; }
+    .comment-bubble.mine { background:rgba(237,165,255,.07); border-color:rgba(237,165,255,.2); border-top-right-radius:4px; border-top-left-radius:12px; }
+    .comment-author { font-size:.74rem; font-weight:700; color:var(--text); margin-bottom:4px; }
+    .comment-author.kagiso { color:var(--purple); }
+    .comment-body { font-size:.82rem; color:var(--muted2); line-height:1.55; white-space:pre-wrap; }
+    .comment-time { font-size:.68rem; color:var(--muted); margin-top:5px; }
+    .comment-form { display:flex; gap:8px; align-items:flex-end; }
+    .comment-input { flex:1; background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:9px 13px; color:var(--text); font-size:.82rem; font-family:'Inter',sans-serif; resize:none; min-height:60px; transition:border-color .15s; }
+    .comment-input:focus { outline:none; border-color:var(--purple); }
+    .comment-submit { background:var(--purple); color:#0b0c10; border:none; border-radius:10px; padding:9px 16px; font-size:.82rem; font-weight:700; cursor:pointer; font-family:'Inter',sans-serif; transition:opacity .15s; align-self:flex-end; }
+    .comment-submit:hover { opacity:.85; }
+    .comment-submit:disabled { opacity:.5; cursor:not-allowed; }
 
-    .modal {
-      background: var(--surface);
-      border: 1px solid var(--border2);
-      border-radius: 20px;
-      width: 100%; max-width: 600px;
-      max-height: 90vh; overflow-y: auto;
-      position: relative;
-    }
-    .modal-header {
-      position: sticky; top: 0; z-index: 1;
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      padding: 20px 24px;
-      display: flex; align-items: center; gap: 12px;
-    }
-    .modal-icon {
-      width: 38px; height: 38px; border-radius: 11px;
-      background: rgba(237,165,255,0.12);
-      display: flex; align-items: center; justify-content: center;
-      color: var(--purple); font-size: 0.95rem; flex-shrink: 0;
-    }
-    .modal-title-group { flex: 1; }
-    .modal-title { font-size: 1rem; font-weight: 800; font-family: 'Poppins', sans-serif; }
-    .modal-sub   { font-size: 0.75rem; color: var(--muted); margin-top: 1px; }
-    .modal-close {
-      background: none; border: none; color: var(--muted);
-      cursor: pointer; font-size: 1.1rem; padding: 4px;
-      transition: color 0.15s;
-    }
-    .modal-close:hover { color: var(--text); }
-    .modal-body { padding: 24px; }
-
-    /* Form */
-    .form-grid {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
-    }
-    .form-grid .span-2 { grid-column: 1 / -1; }
-    .form-field { display: flex; flex-direction: column; gap: 6px; }
-    .form-label { font-size: 0.76rem; font-weight: 700; color: var(--muted2); text-transform: uppercase; letter-spacing: 0.05em; }
-    .form-input, .form-select, .form-textarea {
-      background: var(--surface2); border: 1px solid var(--border);
-      border-radius: 10px; padding: 10px 13px;
-      font-size: 0.88rem; color: var(--text);
-      font-family: 'Inter', sans-serif;
-      transition: border-color 0.15s;
-      outline: none;
-    }
-    .form-input:focus, .form-select:focus, .form-textarea:focus {
-      border-color: var(--purple);
-    }
-    .form-select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
-    .form-select option { background: #1a1c24; color: var(--text); }
-    .form-textarea { resize: vertical; min-height: 90px; line-height: 1.6; }
-
-    .priority-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; }
-    .prio-option { display: none; }
-    .prio-label {
-      display: flex; flex-direction: column; align-items: center; gap: 5px;
-      background: var(--surface2); border: 1.5px solid var(--border);
-      border-radius: 10px; padding: 10px 8px; cursor: pointer;
-      font-size: 0.76rem; font-weight: 700; color: var(--muted);
-      transition: all 0.15s; text-align: center;
-    }
-    .prio-label i { font-size: 1rem; }
-    .prio-option:checked + .prio-label {
-      border-color: currentColor; background: rgba(255,255,255,0.04);
-    }
-    .prio-option[value="low"]    + .prio-label { color: #9ca3af; }
-    .prio-option[value="medium"] + .prio-label { color: #f59e0b; }
-    .prio-option[value="high"]   + .prio-label { color: #f97316; }
-    .prio-option[value="urgent"] + .prio-label { color: #ef4444; }
-    .prio-option:checked[value="low"]    + .prio-label { background: rgba(156,163,175,0.1); }
-    .prio-option:checked[value="medium"] + .prio-label { background: rgba(245,158,11,0.1); }
-    .prio-option:checked[value="high"]   + .prio-label { background: rgba(249,115,22,0.1); }
-    .prio-option:checked[value="urgent"] + .prio-label { background: rgba(239,68,68,0.1); }
-
-    .char-count { font-size: 0.7rem; color: var(--muted); text-align: right; margin-top: 2px; }
-
-    .form-footer {
-      display: flex; gap: 10px; justify-content: flex-end;
-      margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--border);
-    }
-    .btn {
-      display: inline-flex; align-items: center; gap: 7px;
-      border-radius: 10px; padding: 9px 18px;
-      font-size: 0.84rem; font-weight: 700; cursor: pointer;
-      font-family: 'Inter', sans-serif; transition: all 0.15s; border: none;
-    }
-    .btn--primary { background: var(--purple); color: #0b0c10; }
-    .btn--primary:hover { opacity: 0.88; }
-    .btn--ghost { background: var(--surface2); border: 1px solid var(--border); color: var(--muted2); }
-    .btn--ghost:hover { border-color: var(--border2); color: var(--text); }
-    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
-
-    /* Detail modal */
-    .detail-section { margin-bottom: 20px; }
-    .detail-section:last-child { margin-bottom: 0; }
-    .detail-section__label { font-size: 0.7rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 6px; }
-    .detail-section__body { font-size: 0.88rem; color: var(--muted2); line-height: 1.65; }
-    .detail-section__body.text-bright { color: var(--text); font-weight: 600; }
-
-    /* Comment bubble */
-    .comment-bubble {
-      background: var(--surface2);
-      border: 1px solid rgba(237,165,255,0.18);
-      border-left: 3px solid var(--purple);
-      border-radius: 12px;
-      padding: 14px 16px;
-      margin-bottom: 20px;
-    }
-    .comment-bubble__header {
-      display: flex; align-items: center; gap: 9px; margin-bottom: 10px;
-    }
-    .comment-avatar {
-      width: 28px; height: 28px; border-radius: 8px;
-      background: rgba(237,165,255,0.15); color: var(--purple);
-      font-size: 0.68rem; font-weight: 800;
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0; letter-spacing: 0.02em;
-    }
-    .comment-meta { flex: 1; min-width: 0; }
-    .comment-meta__name { font-size: 0.8rem; font-weight: 700; color: var(--text); }
-    .comment-meta__time { font-size: 0.7rem; color: var(--muted); margin-top: 1px; }
-    .comment-bubble__label {
-      font-size: 0.65rem; font-weight: 700; color: var(--purple);
-      text-transform: uppercase; letter-spacing: 0.07em;
-      background: rgba(237,165,255,0.1); border-radius: 4px;
-      padding: 2px 7px;
-    }
-    .comment-bubble__body {
-      font-size: 0.86rem; color: var(--muted2); line-height: 1.65;
-    }
-
-    /* Note indicator on card */
-    .card-note-indicator {
-      display: inline-flex; align-items: center; gap: 4px;
-      font-size: 0.7rem; color: var(--purple); font-weight: 600;
-    }
-
-    .admin-panel {
-      background: var(--surface2); border: 1px solid var(--border);
-      border-radius: 12px; padding: 16px; margin-top: 18px;
-    }
-    .admin-panel__header {
-      font-size: 0.76rem; font-weight: 700; color: var(--purple);
-      text-transform: uppercase; letter-spacing: 0.06em;
-      margin-bottom: 14px; display: flex; align-items: center; gap: 7px;
-    }
-    .admin-select {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 8px; padding: 8px 12px; color: var(--text);
-      font-size: 0.85rem; font-family: 'Inter', sans-serif; width: 100%;
-      margin-bottom: 10px; outline: none; transition: border-color 0.15s;
-    }
-    .admin-select:focus { border-color: var(--purple); }
-    .admin-select option { background: #1a1c24; }
-    .admin-textarea {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 8px; padding: 10px 12px; color: var(--text);
-      font-size: 0.82rem; font-family: 'Inter', sans-serif; width: 100%;
-      min-height: 80px; resize: vertical; outline: none;
-      transition: border-color 0.15s; line-height: 1.6;
-    }
-    .admin-textarea:focus { border-color: var(--purple); }
+    /* New request modal */
+    .form-group { margin-bottom:16px; }
+    .form-label { display:block; font-size:.78rem; font-weight:600; color:var(--muted2); margin-bottom:6px; }
+    .form-input,.form-select,.form-textarea { width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:10px 13px; color:var(--text); font-size:.85rem; font-family:'Inter',sans-serif; transition:border-color .15s; }
+    .form-textarea { resize:vertical; min-height:90px; }
+    .form-input:focus,.form-select:focus,.form-textarea:focus { outline:none; border-color:var(--purple); }
+    .form-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .form-section-title { font-size:.74rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-bottom:12px; margin-top:4px; }
+    .drop-zone { border:2px dashed var(--border2); border-radius:10px; padding:20px; text-align:center; cursor:pointer; transition:border-color .15s,background .15s; margin-bottom:8px; }
+    .drop-zone:hover,.drop-zone.drag-over { border-color:var(--purple); background:rgba(237,165,255,.04); }
+    .drop-zone i { font-size:1.4rem; color:var(--muted); margin-bottom:8px; display:block; }
+    .drop-zone p { font-size:.78rem; color:var(--muted); }
+    .drop-zone span { color:var(--purple); font-weight:600; }
+    #newFileInput { display:none; }
+    .file-preview-list { display:flex; flex-direction:column; gap:6px; }
+    .file-preview-item { display:flex; align-items:center; justify-content:space-between; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:6px 12px; font-size:.76rem; color:var(--muted2); }
+    .file-remove-btn { background:none; border:none; color:var(--red); cursor:pointer; padding:0 4px; font-size:.8rem; }
+    .modal-footer { padding:14px 22px; border-top:1px solid var(--border); display:flex; gap:10px; justify-content:flex-end; }
+    .btn-cancel { background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:9px 18px; font-size:.84rem; font-weight:600; color:var(--muted2); cursor:pointer; font-family:'Inter',sans-serif; }
+    .btn-cancel:hover { border-color:var(--border2); color:var(--text); }
+    .btn-submit { background:var(--purple); color:#0b0c10; border:none; border-radius:10px; padding:9px 22px; font-size:.84rem; font-weight:700; cursor:pointer; font-family:'Inter',sans-serif; transition:opacity .15s; }
+    .btn-submit:hover { opacity:.85; }
+    .btn-submit:disabled { opacity:.5; cursor:not-allowed; }
 
     /* Toast */
-    #toast {
-      position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(20px);
-      background: var(--surface2); border: 1px solid var(--border2);
-      border-radius: 12px; padding: 12px 20px;
-      font-size: 0.85rem; font-weight: 600; color: var(--text);
-      z-index: 9999; opacity: 0; transition: all 0.25s;
-      white-space: nowrap; pointer-events: none;
-      display: flex; align-items: center; gap: 9px;
-    }
-    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-    #toast.ok  i { color: var(--green); }
-    #toast.err i { color: var(--red); }
-
-    /* Responsive */
-    @media (max-width: 600px) {
-      .form-grid { grid-template-columns: 1fr; }
-      .form-grid .span-2 { grid-column: 1; }
-      .stats-row { grid-template-columns: repeat(2,1fr); }
-      .priority-row { grid-template-columns: repeat(2,1fr); }
-    }
-
-    /* Admin section separator */
-    .admin-divider {
-      display: flex; align-items: center; gap: 12px;
-      margin: 30px 0 20px;
-    }
-    .admin-divider span {
-      font-size: 0.72rem; font-weight: 700; color: var(--purple);
-      text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap;
-    }
-    .admin-divider::before, .admin-divider::after {
-      content: ''; flex: 1; height: 1px; background: rgba(237,165,255,0.2);
-    }
+    #toastEl { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--surface3); border:1px solid var(--border2); border-radius:10px; padding:10px 20px; font-size:.82rem; font-weight:600; color:var(--text); z-index:99999; opacity:0; transition:opacity .25s; pointer-events:none; box-shadow:0 8px 24px rgba(0,0,0,.4); }
+    #toastEl.show { opacity:1; }
+    #toastEl.err  { border-color:rgba(239,68,68,.5); color:#f87171; }
   </style>
 </head>
 <body>
+  <div class="orb orb--1"></div>
+  <div class="orb orb--2"></div>
+  <div id="globalLoader"><div class="spin"></div></div>
+  <div id="toastEl"></div>
 
-<div id="globalLoader">
-  <div class="spin"></div>
-  <div style="font-size:0.8rem;color:#4e5470;font-weight:600">Loading change requests…</div>
-</div>
-
-<div class="orb orb--1"></div>
-<div class="orb orb--2"></div>
-
-<div class="page" id="mainContent" style="display:none">
-
-  <!-- Top bar -->
-  <div class="topbar">
-    <div class="topbar-left">
-      <a href="hub.html" class="back-btn"><i class="fa-solid fa-arrow-left"></i> Hub</a>
-      <div class="page-title">Change <span>Requests</span></div>
-    </div>
-    <button class="new-btn" onclick="openNewModal()">
-      <i class="fa-solid fa-plus"></i> New Request
-    </button>
-  </div>
-
-  <!-- Stats -->
-  <div class="stats-row" id="statsRow">
-    <div class="stat-card stat-card--total">
-      <div class="stat-card__label">Total</div>
-      <div class="stat-card__value" id="statTotal">—</div>
-    </div>
-    <div class="stat-card stat-card--pending">
-      <div class="stat-card__label">Pending</div>
-      <div class="stat-card__value" id="statPending">—</div>
-    </div>
-    <div class="stat-card stat-card--review">
-      <div class="stat-card__label">In Review</div>
-      <div class="stat-card__value" id="statReview">—</div>
-    </div>
-    <div class="stat-card stat-card--done">
-      <div class="stat-card__label">Implemented</div>
-      <div class="stat-card__value" id="statDone">—</div>
-    </div>
-  </div>
-
-  <!-- ── Admin: All Requests section (directors/admins only) ── -->
-  <div id="adminSection" style="display:none">
-    <div class="admin-divider"><span><i class="fa-solid fa-shield-halved" style="margin-right:6px"></i>All Team Submissions</span></div>
-
-    <div class="filter-row" id="adminFilterRow">
-      <button class="filter-btn active" data-filter="all" onclick="filterAll('all',this)">All</button>
-      <button class="filter-btn" data-filter="pending"     onclick="filterAll('pending',this)">Pending</button>
-      <button class="filter-btn" data-filter="reviewing"   onclick="filterAll('reviewing',this)">In Review</button>
-      <button class="filter-btn" data-filter="approved"    onclick="filterAll('approved',this)">Approved</button>
-      <button class="filter-btn" data-filter="implemented" onclick="filterAll('implemented',this)">Implemented</button>
-      <button class="filter-btn" data-filter="rejected"    onclick="filterAll('rejected',this)">Rejected</button>
-    </div>
-
-    <div class="section-head">
-      <div class="section-label">Team submissions</div>
-      <div class="section-count-badge" id="allCountBadge">—</div>
-    </div>
-    <div class="requests-list" id="allRequestsList"></div>
-  </div>
-
-  <!-- ── My Submissions section ── -->
-  <div id="mySection">
-    <div class="filter-row" id="myFilterRow">
-      <button class="filter-btn active" data-filter="all" onclick="filterMy('all',this)">All</button>
-      <button class="filter-btn" data-filter="pending"     onclick="filterMy('pending',this)">Pending</button>
-      <button class="filter-btn" data-filter="reviewing"   onclick="filterMy('reviewing',this)">In Review</button>
-      <button class="filter-btn" data-filter="approved"    onclick="filterMy('approved',this)">Approved</button>
-      <button class="filter-btn" data-filter="implemented" onclick="filterMy('implemented',this)">Implemented</button>
-      <button class="filter-btn" data-filter="rejected"    onclick="filterMy('rejected',this)">Rejected</button>
-    </div>
-
-    <div class="section-head">
-      <div class="section-label">My submissions</div>
-      <div class="section-count-badge" id="myCountBadge">—</div>
-    </div>
-    <div class="requests-list" id="myRequestsList"></div>
-  </div>
-
-</div>
-
-<!-- ── New Request Modal ── -->
-<div class="modal-overlay" id="newModal" onclick="maybeCloseNew(event)">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-icon"><i class="fa-solid fa-code-pull-request"></i></div>
-      <div class="modal-title-group">
-        <div class="modal-title">New Change Request</div>
-        <div class="modal-sub">Submit a request, bug report or suggestion for the platform</div>
+  <div id="mainContent">
+    <div class="page">
+      <div class="topbar">
+        <div class="topbar-left">
+          <a href="hub.html" class="back-btn"><i class="fa-solid fa-arrow-left"></i> Hub</a>
+          <h1 class="page-title">Change <span>Requests</span></h1>
+        </div>
+        <div class="topbar-right">
+          <div class="notif-wrap">
+            <button class="notif-btn" id="notifBtn" onclick="toggleNotifDropdown()">
+              <i class="fa-solid fa-bell"></i>
+              <span class="notif-badge" id="notifBadge" style="display:none">0</span>
+            </button>
+            <div class="notif-dropdown" id="notifDropdown">
+              <div class="notif-hdr">
+                <span class="notif-hdr-title">Notifications</span>
+                <button class="notif-clear-btn" onclick="clearNotifications()">Clear all</button>
+              </div>
+              <div class="notif-list" id="notifList"></div>
+            </div>
+          </div>
+          <button class="new-btn" onclick="openNewModal()"><i class="fa-solid fa-plus"></i> New Request</button>
+        </div>
       </div>
-      <button class="modal-close" onclick="closeNewModal()"><i class="fa-solid fa-xmark"></i></button>
-    </div>
-    <div class="modal-body">
-      <form id="newRequestForm" onsubmit="submitRequest(event)">
-        <div class="form-grid">
 
-          <div class="form-field span-2">
+      <!-- Stats -->
+      <div class="stats-row">
+        <div class="stat-card stat-card--total"><div class="stat-card__label">Total</div><div class="stat-card__value" id="statTotal">—</div></div>
+        <div class="stat-card stat-card--pending"><div class="stat-card__label">Pending</div><div class="stat-card__value" id="statPending">—</div></div>
+        <div class="stat-card stat-card--review"><div class="stat-card__label">In Review</div><div class="stat-card__value" id="statReview">—</div></div>
+        <div class="stat-card stat-card--done"><div class="stat-card__label">Implemented</div><div class="stat-card__value" id="statDone">—</div></div>
+      </div>
+
+      <!-- Filters -->
+      <div class="filter-row">
+        <button class="filter-btn active" data-filter="all"         onclick="setFilter('all')">All</button>
+        <button class="filter-btn"        data-filter="pending"     onclick="setFilter('pending')">Pending</button>
+        <button class="filter-btn"        data-filter="reviewing"   onclick="setFilter('reviewing')">In Review</button>
+        <button class="filter-btn"        data-filter="approved"    onclick="setFilter('approved')">Approved</button>
+        <button class="filter-btn"        data-filter="implemented" onclick="setFilter('implemented')">Implemented</button>
+        <button class="filter-btn"        data-filter="rejected"    onclick="setFilter('rejected')">Rejected</button>
+      </div>
+
+      <!-- Request list -->
+      <div class="requests-list" id="requestsList"></div>
+    </div>
+  </div>
+
+  <!-- ── Detail modal ── -->
+  <div class="modal-overlay" id="detailOverlay" onclick="closeDetailIfBg(event)">
+    <div class="modal" id="detailModal">
+      <button class="modal-close" onclick="closeDetail()">Close &times;</button>
+      <div class="modal-header">
+        <div class="modal-title" id="detailTitle"></div>
+        <div class="modal-meta" id="detailMeta"></div>
+      </div>
+      <div class="modal-body" id="detailBody"></div>
+    </div>
+  </div>
+
+  <!-- ── New request modal ── -->
+  <div class="modal-overlay" id="newOverlay" onclick="closeNewIfBg(event)">
+    <div class="modal">
+      <button class="modal-close" onclick="closeNew()">Close &times;</button>
+      <div class="modal-header"><div class="modal-title">Submit a Change Request</div></div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group">
             <label class="form-label">Category</label>
-            <select class="form-select" id="newCategory" required>
-              <option value="">Select a category…</option>
+            <select class="form-select" id="newCategory">
               <option value="feature">Feature Request</option>
-              <option value="bug">Bug Fix</option>
+              <option value="bug">Bug / Issue</option>
               <option value="process">Process Change</option>
-              <option value="data">Data / Report</option>
-              <option value="security">Security Concern</option>
-              <option value="ui_ux">UI / UX Improvement</option>
+              <option value="data">Data / Reporting</option>
+              <option value="ui_ux">UI / UX</option>
+              <option value="security">Security</option>
               <option value="other">Other</option>
             </select>
           </div>
-
-          <div class="form-field span-2">
+          <div class="form-group">
             <label class="form-label">Priority</label>
-            <div class="priority-row">
-              <div>
-                <input class="prio-option" type="radio" name="priority" id="pLow" value="low">
-                <label class="prio-label" for="pLow"><i class="fa-solid fa-circle-minus"></i>Low</label>
-              </div>
-              <div>
-                <input class="prio-option" type="radio" name="priority" id="pMed" value="medium" checked>
-                <label class="prio-label" for="pMed"><i class="fa-solid fa-circle-half-stroke"></i>Medium</label>
-              </div>
-              <div>
-                <input class="prio-option" type="radio" name="priority" id="pHigh" value="high">
-                <label class="prio-label" for="pHigh"><i class="fa-solid fa-circle-exclamation"></i>High</label>
-              </div>
-              <div>
-                <input class="prio-option" type="radio" name="priority" id="pUrgent" value="urgent">
-                <label class="prio-label" for="pUrgent"><i class="fa-solid fa-triangle-exclamation"></i>Urgent</label>
-              </div>
-            </div>
+            <select class="form-select" id="newPriority">
+              <option value="low">Low</option>
+              <option value="medium" selected>Medium</option>
+              <option value="high">High</option>
+              <option value="urgent">Urgent</option>
+            </select>
           </div>
-
-          <div class="form-field span-2">
-            <label class="form-label">Title <span style="color:#ef4444">*</span></label>
-            <input class="form-input" type="text" id="newTitle" maxlength="120"
-              placeholder="Short, descriptive title for your request…" required
-              oninput="document.getElementById('titleCount').textContent=this.value.length+'/120'">
-            <div class="char-count" id="titleCount">0/120</div>
-          </div>
-
-          <div class="form-field span-2">
-            <label class="form-label">Description <span style="color:#ef4444">*</span></label>
-            <textarea class="form-textarea" id="newDesc" maxlength="2000"
-              placeholder="Describe the change or issue in detail. What should happen? What is currently happening?"
-              required
-              oninput="document.getElementById('descCount').textContent=this.value.length+'/2000'"></textarea>
-            <div class="char-count" id="descCount">0/2000</div>
-          </div>
-
-          <div class="form-field span-2">
-            <label class="form-label">Expected Impact <span style="color:var(--muted)">(optional)</span></label>
-            <textarea class="form-textarea" id="newImpact" maxlength="800"
-              placeholder="What benefit or improvement will this bring to the team or platform?"
-              style="min-height:70px"
-              oninput="document.getElementById('impactCount').textContent=this.value.length+'/800'"></textarea>
-            <div class="char-count" id="impactCount">0/800</div>
-          </div>
-
         </div>
-        <div class="form-footer">
-          <button type="button" class="btn btn--ghost" onclick="closeNewModal()">Cancel</button>
-          <button type="submit" class="btn btn--primary" id="submitBtn">
-            <i class="fa-solid fa-paper-plane"></i> Submit Request
-          </button>
+        <div class="form-group">
+          <label class="form-label">Title *</label>
+          <input class="form-input" id="newTitle" placeholder="Short descriptive title" />
         </div>
-      </form>
-    </div>
-  </div>
-</div>
-
-<!-- ── Detail Modal ── -->
-<div class="modal-overlay" id="detailModal" onclick="maybeCloseDetail(event)">
-  <div class="modal" style="max-width:640px">
-    <div class="modal-header" id="detailHeader">
-      <div class="modal-icon" id="detailIcon"><i class="fa-solid fa-file-lines"></i></div>
-      <div class="modal-title-group">
-        <div class="modal-title" id="detailTitle">Request Details</div>
-        <div class="modal-sub" id="detailSub"></div>
+        <div class="form-group">
+          <label class="form-label">Description *</label>
+          <textarea class="form-textarea" id="newDesc" placeholder="Describe the change or issue in detail…"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Expected Impact</label>
+          <textarea class="form-textarea" id="newImpact" style="min-height:60px" placeholder="How will this improve things?"></textarea>
+        </div>
+        <div class="form-group">
+          <div class="form-section-title"><i class="fa-solid fa-paperclip" style="margin-right:5px"></i>Attachments (optional)</div>
+          <div class="drop-zone" id="newDropZone" onclick="document.getElementById('newFileInput').click()">
+            <i class="fa-solid fa-cloud-arrow-up"></i>
+            <p>Drag &amp; drop files here, or <span>browse</span></p>
+            <p style="margin-top:4px;font-size:.7rem">Images, PDFs, screenshots — up to 10 MB each</p>
+          </div>
+          <input type="file" id="newFileInput" multiple accept="image/*,.pdf,.doc,.docx,.txt,.xlsx,.csv" />
+          <div class="file-preview-list" id="newFileList"></div>
+        </div>
       </div>
-      <button class="modal-close" onclick="closeDetailModal()"><i class="fa-solid fa-xmark"></i></button>
+      <div class="modal-footer">
+        <button class="btn-cancel" onclick="closeNew()">Cancel</button>
+        <button class="btn-submit" id="newSubmitBtn" onclick="submitNewRequest()"><i class="fa-solid fa-paper-plane" style="margin-right:6px"></i>Submit Request</button>
+      </div>
     </div>
-    <div class="modal-body" id="detailBody"></div>
   </div>
-</div>
-
-<!-- Toast -->
-<div id="toast"><i class="fa-solid fa-check-circle"></i><span id="toastMsg"></span></div>
 
 <script>
-/* ── State ── */
-let SESSION = null;
-let IS_ADMIN = false;
-let ALL_REQUESTS  = [];   // all requests (admin view)
-let MY_REQUESTS   = [];   // own requests
-let CURRENT_DETAIL = null;
-let ALL_FILTER = 'all';
-let MY_FILTER  = 'all';
+/* ── Globals ── */
+let SESSION = null, IS_REVIEWER = false;
+let ALL_REQUESTS = [], CURRENT_FILTER = 'all';
+let NEW_FILES = [];
+let CURRENT_REQUEST_ID = null;
 
-/* ── Category config ── */
 const CAT_META = {
-  feature:  { label: 'Feature Request',     icon: 'fa-solid fa-wand-magic-sparkles', color: '#a78bfa' },
-  bug:      { label: 'Bug Fix',             icon: 'fa-solid fa-bug',                 color: '#f87171' },
-  process:  { label: 'Process Change',      icon: 'fa-solid fa-arrows-rotate',        color: '#60a5fa' },
-  data:     { label: 'Data / Report',       icon: 'fa-solid fa-chart-bar',            color: '#34d399' },
-  security: { label: 'Security Concern',    icon: 'fa-solid fa-shield-halved',        color: '#fbbf24' },
-  ui_ux:    { label: 'UI / UX',            icon: 'fa-solid fa-paintbrush',            color: '#f472b6' },
-  other:    { label: 'Other',              icon: 'fa-solid fa-ellipsis',              color: '#9ca3af' },
+  feature:  { label:'Feature Request', icon:'fa-solid fa-wand-magic-sparkles', color:'#eda5ff' },
+  bug:      { label:'Bug / Issue',      icon:'fa-solid fa-bug',                 color:'#ef4444' },
+  process:  { label:'Process Change',   icon:'fa-solid fa-gear',                color:'#f59e0b' },
+  data:     { label:'Data / Reporting', icon:'fa-solid fa-chart-bar',           color:'#3b82f6' },
+  security: { label:'Security',         icon:'fa-solid fa-shield-halved',       color:'#10b981' },
+  ui_ux:    { label:'UI / UX',          icon:'fa-solid fa-paintbrush',          color:'#00d4aa' },
+  other:    { label:'Other',            icon:'fa-solid fa-circle-dot',          color:'#6b7280' },
 };
-
-const PRIO_META = {
-  low:    { label: 'Low',    color: '#9ca3af' },
-  medium: { label: 'Medium', color: '#f59e0b' },
-  high:   { label: 'High',   color: '#f97316' },
-  urgent: { label: 'Urgent', color: '#ef4444' },
-};
+const STATUS_LABEL = { pending:'Pending', reviewing:'In Review', approved:'Approved', rejected:'Rejected', implemented:'Implemented' };
+const PRIO_LABEL   = { low:'Low', medium:'Medium', high:'High', urgent:'Urgent' };
 
 /* ── Init ── */
 document.addEventListener('DOMContentLoaded', async () => {
   SESSION = StaffAuth.getSession();
   if (!SESSION) { window.location.replace('login.html'); return; }
+  IS_REVIEWER = ['admin','director','fund_manager'].includes(SESSION.role) || SESSION.level === 'executive' || SESSION.level === 'lead';
 
-  IS_ADMIN = (SESSION.role === 'admin' || SESSION.role === 'director' ||
-              SESSION.level === 'executive' || SESSION.level === 'lead');
+  setupDragDrop();
+  document.getElementById('newFileInput').addEventListener('change', e => addFiles(Array.from(e.target.files)));
+  document.addEventListener('click', e => {
+    if (!document.getElementById('notifBtn').contains(e.target) &&
+        !document.getElementById('notifDropdown').contains(e.target))
+      document.getElementById('notifDropdown').classList.remove('open');
+  });
 
-  await loadData();
-
+  await Promise.all([loadRequests(), loadNotifications()]);
   document.getElementById('globalLoader').style.display = 'none';
   document.getElementById('mainContent').style.display  = 'block';
 });
 
-/* ── API helpers ── */
-function apiHeaders() {
-  const token = localStorage.getItem('staffSession')
-    ? null
-    : (localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token'));
-  const staffRaw = localStorage.getItem('staffSession');
-  if (staffRaw) {
-    try {
-      const s = JSON.parse(staffRaw);
-      return { 'Content-Type': 'application/json', 'X-Staff-Token': s.token };
-    } catch(_) {}
-  }
-  return { 'Content-Type': 'application/json', ...(token ? { 'Authorization': 'Bearer ' + token } : {}) };
+/* ── Auth headers ── */
+function apiHeaders(isJson = true) {
+  const s = localStorage.getItem('staffSession');
+  const h = {};
+  if (isJson) h['Content-Type'] = 'application/json';
+  if (s) { try { h['X-Staff-Token'] = JSON.parse(s).token; } catch(_){} }
+  return h;
 }
-
 async function apiFetch(url, opts = {}) {
-  const res = await fetch(url, { ...opts, headers: { ...apiHeaders(), ...(opts.headers || {}) } });
+  const isJson = !(opts.body instanceof FormData);
+  const res = await fetch(url, { ...opts, headers: { ...apiHeaders(isJson), ...(opts.headers||{}) }, credentials:'include' });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(json.error || 'Request failed');
   return json;
 }
 
-/* ── Load all data ── */
-async function loadData() {
+/* ── Load all requests ── */
+async function loadRequests() {
   try {
-    if (IS_ADMIN) {
-      const all = await apiFetch('/api/tables/change_requests?sort=created_at&order=desc&limit=200');
-      ALL_REQUESTS = all.data || [];
-      document.getElementById('adminSection').style.display = 'block';
-      renderAllRequests();
-    }
-
-    const mine = await apiFetch(`/api/tables/change_requests?sort=created_at&order=desc&limit=200`);
-    MY_REQUESTS = (mine.data || []).filter(r => r.employee_id === SESSION.empId);
-
-    renderMyRequests();
+    const data = await apiFetch('/api/change-requests');
+    ALL_REQUESTS = data.data || [];
+    renderRequests();
     updateStats();
-  } catch(err) {
-    toast('Failed to load data: ' + err.message, true);
-  }
+  } catch(err) { toast('Failed to load requests: ' + err.message, true); }
 }
 
-/* ── Render stats ── */
+/* ── Load notifications ── */
+async function loadNotifications() {
+  try {
+    const { data } = await apiFetch('/api/change-requests/notifications');
+    const items = data || [];
+    const badge = document.getElementById('notifBadge');
+    badge.textContent = items.length > 99 ? '99+' : items.length;
+    badge.style.display = items.length ? 'flex' : 'none';
+
+    const list = document.getElementById('notifList');
+    if (!items.length) {
+      list.innerHTML = '<div class="notif-empty"><i class="fa-regular fa-bell-slash"></i><br>No new notifications</div>';
+      return;
+    }
+    const iconMap = { new_request:'fa-solid fa-plus notif-icon--new', new_comment:'fa-solid fa-comment notif-icon--comment', status_change:'fa-solid fa-rotate notif-icon--status' };
+    list.innerHTML = items.map(n => `
+      <div class="notif-item" onclick="closeNotifAndOpenDetail('${n.request_id}')">
+        <div class="notif-icon ${iconMap[n.event_type]||'notif-icon--new'}"><i class="fa-solid fa-circle-dot"></i></div>
+        <div class="notif-text">
+          <div class="notif-msg">${esc(n.message)}</div>
+          <div class="notif-time">${timeAgo(n.created_at)}</div>
+        </div>
+      </div>`).join('');
+  } catch(_) {}
+}
+
+async function clearNotifications() {
+  try {
+    await apiFetch('/api/change-requests/notifications/clear', { method:'POST', body:'{}' });
+    document.getElementById('notifBadge').style.display = 'none';
+    document.getElementById('notifList').innerHTML = '<div class="notif-empty">All cleared</div>';
+  } catch(err) { toast(err.message, true); }
+}
+
+function toggleNotifDropdown() {
+  document.getElementById('notifDropdown').classList.toggle('open');
+}
+function closeNotifAndOpenDetail(reqId) {
+  document.getElementById('notifDropdown').classList.remove('open');
+  openDetail(reqId);
+}
+
+/* ── Stats ── */
 function updateStats() {
-  const source = IS_ADMIN ? ALL_REQUESTS : MY_REQUESTS;
-  document.getElementById('statTotal').textContent   = source.length;
-  document.getElementById('statPending').textContent = source.filter(r => r.status === 'pending').length;
-  document.getElementById('statReview').textContent  = source.filter(r => r.status === 'reviewing').length;
-  document.getElementById('statDone').textContent    = source.filter(r => r.status === 'implemented').length;
+  document.getElementById('statTotal').textContent   = ALL_REQUESTS.length;
+  document.getElementById('statPending').textContent = ALL_REQUESTS.filter(r=>r.status==='pending').length;
+  document.getElementById('statReview').textContent  = ALL_REQUESTS.filter(r=>r.status==='reviewing').length;
+  document.getElementById('statDone').textContent    = ALL_REQUESTS.filter(r=>r.status==='implemented').length;
 }
 
-/* ── Render all requests (admin) ── */
-function renderAllRequests() {
-  const list   = document.getElementById('allRequestsList');
-  const badge  = document.getElementById('allCountBadge');
-  const items  = ALL_FILTER === 'all' ? ALL_REQUESTS : ALL_REQUESTS.filter(r => r.status === ALL_FILTER);
-  badge.textContent = items.length + ' request' + (items.length !== 1 ? 's' : '');
+/* ── Filter ── */
+function setFilter(f) {
+  CURRENT_FILTER = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b.dataset.filter === f));
+  renderRequests();
+}
+
+/* ── Render list ── */
+function renderRequests() {
+  const items = CURRENT_FILTER === 'all' ? ALL_REQUESTS : ALL_REQUESTS.filter(r => r.status === CURRENT_FILTER);
+  const list  = document.getElementById('requestsList');
   if (!items.length) {
-    list.innerHTML = emptyState('No submissions match this filter.');
+    list.innerHTML = `<div class="empty-state"><i class="fa-solid fa-inbox"></i><p>${CURRENT_FILTER==='all'?'No requests yet. Be the first to submit one!':'No requests match this filter.'}</p></div>`;
     return;
   }
-  list.innerHTML = items.map(r => buildCard(r, true)).join('');
+  list.innerHTML = items.map(r => buildCard(r)).join('');
 }
 
-/* ── Render my requests ── */
-function renderMyRequests() {
-  const list  = document.getElementById('myRequestsList');
-  const badge = document.getElementById('myCountBadge');
-  const items = MY_FILTER === 'all' ? MY_REQUESTS : MY_REQUESTS.filter(r => r.status === MY_FILTER);
-  badge.textContent = items.length + ' request' + (items.length !== 1 ? 'S' : '');
-  if (!items.length) {
-    list.innerHTML = emptyState(MY_REQUESTS.length === 0
-      ? 'You haven\'t submitted any requests yet.'
-      : 'No submissions match this filter.');
-    return;
-  }
-  list.innerHTML = items.map(r => buildCard(r, false)).join('');
-}
-
-/* ── Build card HTML ── */
-function buildCard(r, showAuthor) {
-  const cat    = CAT_META[r.category] || CAT_META.other;
-  const prio   = PRIO_META[r.priority] || PRIO_META.medium;
-  const date   = new Date(r.created_at).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' });
-  const statusBadge = `<span class="badge badge--${r.status}">${statusLabel(r.status)}</span>`;
-  const authorLine  = showAuthor ? `<span><i class="fa-regular fa-user" style="margin-right:3px"></i>${r.submitted_by}</span>` : '';
-
+function buildCard(r) {
+  const cat  = CAT_META[r.category] || CAT_META.other;
+  const date = new Date(r.created_at).toLocaleDateString('en-ZA', { day:'numeric', month:'short', year:'numeric' });
+  const isMine = r.employee_id === SESSION.empId;
   return `
     <div class="request-card" onclick="openDetail('${r.id}')">
       <div class="card-header">
-        <div class="card-icon" style="background:${cat.color}18;color:${cat.color}">
-          <i class="${cat.icon}"></i>
-        </div>
+        <div class="card-icon" style="background:${cat.color}18;color:${cat.color}"><i class="${cat.icon}"></i></div>
         <div class="card-meta">
-          <div class="card-title">${esc(r.title)}</div>
-          <div class="card-sub">
-            <span>${cat.label}</span>
-            ${authorLine}
-          </div>
+          <div class="card-title">${esc(r.title)}${isMine?'<span style="font-size:.65rem;margin-left:6px;color:var(--purple);font-weight:600">MINE</span>':''}</div>
+          <div class="card-sub"><span>${cat.label}</span><span><i class="fa-regular fa-user" style="margin-right:3px"></i>${esc(r.submitted_by)}</span></div>
         </div>
         <div class="card-badges">
-          ${statusBadge}
+          <span class="badge badge--${r.status}">${STATUS_LABEL[r.status]||r.status}</span>
         </div>
       </div>
       <div class="card-desc">${esc(r.description)}</div>
       <div class="card-footer">
         <div class="card-footer-left">
-          <span><span class="priority-dot prio--${r.priority}"></span>${prio.label} priority</span>
-          <span><i class="fa-regular fa-clock" style="margin-right:3px"></i>${date}</span>
-          ${r.admin_notes ? `<span class="card-note-indicator"><i class="fa-solid fa-comment-lines"></i>Note</span>` : ''}
+          <span class="card-meta-pill"><span class="prio-dot prio--${r.priority}"></span>${PRIO_LABEL[r.priority]||r.priority}</span>
+          <span><i class="fa-regular fa-comment" style="margin-right:3px"></i>${r.comment_count||0}</span>
+          <span><i class="fa-solid fa-paperclip" style="margin-right:3px"></i>${r.attachment_count||0}</span>
         </div>
-        <span style="color:var(--muted);font-size:0.7rem"><i class="fa-solid fa-chevron-right"></i></span>
+        <span>${date}</span>
       </div>
     </div>`;
 }
 
-function emptyState(msg) {
-  return `<div class="empty-state"><i class="fa-regular fa-folder-open"></i><p>${msg}</p></div>`;
-}
-
-function statusLabel(s) {
-  return { pending:'Pending', reviewing:'In Review', approved:'Approved', rejected:'Rejected', implemented:'Implemented' }[s] || s;
-}
-
-function esc(s) {
-  return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-/* ── Filters ── */
-function filterAll(val, btn) {
-  ALL_FILTER = val;
-  document.querySelectorAll('#adminFilterRow .filter-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  renderAllRequests();
-}
-function filterMy(val, btn) {
-  MY_FILTER = val;
-  document.querySelectorAll('#myFilterRow .filter-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  renderMyRequests();
-}
-
-/* ── New Request Modal ── */
-function openNewModal() {
-  document.getElementById('newModal').classList.add('open');
-  document.getElementById('newTitle').focus();
-}
-function closeNewModal() {
-  document.getElementById('newModal').classList.remove('open');
-  document.getElementById('newRequestForm').reset();
-  document.getElementById('titleCount').textContent = '0/120';
-  document.getElementById('descCount').textContent  = '0/2000';
-  document.getElementById('impactCount').textContent= '0/800';
-}
-function maybeCloseNew(e) { if (e.target === document.getElementById('newModal')) closeNewModal(); }
-
-async function submitRequest(e) {
-  e.preventDefault();
-  const btn = document.getElementById('submitBtn');
-  btn.disabled = true;
-  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Submitting…';
-
-  const priority = document.querySelector('input[name="priority"]:checked')?.value || 'medium';
-  const body = {
-    employee_id:     SESSION.empId,
-    submitted_by:    SESSION.firstName + ' ' + SESSION.lastName,
-    category:        document.getElementById('newCategory').value,
-    priority,
-    title:           document.getElementById('newTitle').value.trim(),
-    description:     document.getElementById('newDesc').value.trim(),
-    expected_impact: document.getElementById('newImpact').value.trim() || null,
-    status:          'pending',
-  };
-
+/* ── Detail modal ── */
+async function openDetail(id) {
+  CURRENT_REQUEST_ID = id;
+  document.getElementById('detailBody').innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)"><div class="spin" style="margin:0 auto"></div></div>';
+  document.getElementById('detailTitle').textContent = 'Loading…';
+  document.getElementById('detailMeta').innerHTML = '';
+  document.getElementById('detailOverlay').classList.add('open');
   try {
-    const created = await apiFetch('/api/tables/change_requests', { method:'POST', body: JSON.stringify(body) });
-    MY_REQUESTS.unshift(created.row || created);
-    if (IS_ADMIN) ALL_REQUESTS.unshift(created.row || created);
-    updateStats();
-    renderMyRequests();
-    if (IS_ADMIN) renderAllRequests();
-    closeNewModal();
-    toast('Request submitted successfully!');
+    const { data: r, comments, attachments } = await apiFetch(`/api/change-requests/${id}`);
+    renderDetail(r, comments, attachments);
   } catch(err) {
-    toast('Failed to submit: ' + err.message, true);
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit Request';
+    document.getElementById('detailBody').innerHTML = `<p style="color:var(--red);padding:20px">${esc(err.message)}</p>`;
   }
 }
 
-/* ── Detail Modal ── */
-function openDetail(id) {
-  const r = [...ALL_REQUESTS, ...MY_REQUESTS].find(x => x.id === id);
-  if (!r) return;
-  CURRENT_DETAIL = r;
-
+function renderDetail(r, comments, attachments) {
   const cat  = CAT_META[r.category] || CAT_META.other;
-  const prio = PRIO_META[r.priority] || PRIO_META.medium;
-  const date = new Date(r.created_at).toLocaleString('en-ZA', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  const date = new Date(r.created_at).toLocaleDateString('en-ZA', { day:'numeric', month:'long', year:'numeric' });
 
-  document.getElementById('detailIcon').style.background = cat.color + '18';
-  document.getElementById('detailIcon').style.color      = cat.color;
-  document.getElementById('detailIcon').innerHTML = `<i class="${cat.icon}"></i>`;
   document.getElementById('detailTitle').textContent = r.title;
-  document.getElementById('detailSub').innerHTML =
-    `<span class="badge badge--${r.status}" style="font-size:0.65rem">${statusLabel(r.status)}</span> &nbsp;${cat.label} · ${date}`;
+  document.getElementById('detailMeta').innerHTML = `
+    <span class="badge badge--${r.status}">${STATUS_LABEL[r.status]||r.status}</span>
+    <span style="display:inline-flex;align-items:center;gap:4px"><span class="prio-dot prio--${r.priority}"></span>${PRIO_LABEL[r.priority]||r.priority}</span>
+    <span style="color:var(--muted)"><i class="${cat.icon}" style="margin-right:3px;color:${cat.color}"></i>${cat.label}</span>
+    <span><i class="fa-regular fa-user" style="margin-right:3px"></i>${esc(r.submitted_by)}</span>
+    <span>${date}</span>`;
 
-  let adminPanel = '';
-  if (IS_ADMIN) {
-    adminPanel = `
-      <div class="admin-panel">
-        <div class="admin-panel__header"><i class="fa-solid fa-shield-halved"></i>Admin Review</div>
-        <label class="form-label" style="font-size:0.72rem;margin-bottom:6px;display:block">Update Status</label>
-        <select class="admin-select" id="detailStatus">
-          <option value="pending"     ${r.status==='pending'     ?'selected':''}>Pending</option>
-          <option value="reviewing"   ${r.status==='reviewing'   ?'selected':''}>In Review</option>
-          <option value="approved"    ${r.status==='approved'    ?'selected':''}>Approved</option>
-          <option value="rejected"    ${r.status==='rejected'    ?'selected':''}>Rejected</option>
-          <option value="implemented" ${r.status==='implemented' ?'selected':''}>Implemented</option>
+  // Admin panel (reviewer only)
+  const adminHtml = IS_REVIEWER ? `
+    <div class="admin-panel">
+      <div class="admin-panel-title"><i class="fa-solid fa-shield-halved"></i> Review &amp; Respond</div>
+      <div class="admin-row">
+        <select class="status-select" id="detailStatus">
+          ${['pending','reviewing','approved','rejected','implemented'].map(s=>`<option value="${s}"${r.status===s?' selected':''}>${STATUS_LABEL[s]}</option>`).join('')}
         </select>
-        <label class="form-label" style="font-size:0.72rem;margin-bottom:6px;display:block">Note for submitter <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">(visible to them)</span></label>
-        <textarea class="admin-textarea" id="detailAdminNotes" placeholder="Leave a note explaining the decision or asking for more info…">${esc(r.admin_notes || '')}</textarea>
-        <div style="margin-top:10px;display:flex;gap:8px;justify-content:flex-end">
-          <button class="btn btn--primary" style="font-size:0.8rem;padding:7px 14px" onclick="saveReview('${r.id}')">
-            <i class="fa-solid fa-check"></i> Save Review
-          </button>
-        </div>
-      </div>`;
-  }
+        <button class="save-btn" id="statusSaveBtn" onclick="saveStatus()">Save Status</button>
+      </div>
+      <textarea class="notes-textarea" id="detailNotes" placeholder="Add admin notes visible to the team…">${esc(r.admin_notes||'')}</textarea>
+      <div style="margin-top:8px"><button class="save-btn" id="notesSaveBtn" onclick="saveNotes()">Save Notes</button></div>
+    </div>` : (r.admin_notes ? `<div class="detail-section"><div class="detail-label">Admin Response</div><div class="detail-text">${esc(r.admin_notes)}</div></div>` : '');
+
+  // Attachments
+  const existingAttach = attachments.length ? `
+    <div class="attachments-grid">
+      ${attachments.map(a => `
+        <a class="attachment-chip" href="/api/change-requests/attachments/${a.id}" target="_blank">
+          <i class="${attachIcon(a.filename)}"></i>${esc(a.filename)}
+          <span style="font-size:.65rem;color:var(--muted)">· ${esc(a.author_name)}</span>
+        </a>`).join('')}
+    </div>` : '<p style="font-size:.78rem;color:var(--muted);margin-top:4px">No attachments</p>';
 
   document.getElementById('detailBody').innerHTML = `
+    ${adminHtml}
     <div class="detail-section">
-      <div class="detail-section__label">Submitted by</div>
-      <div class="detail-section__body text-bright">${esc(r.submitted_by)}</div>
+      <div class="detail-label">Description</div>
+      <div class="detail-text">${esc(r.description)}</div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-      <div class="detail-section">
-        <div class="detail-section__label">Category</div>
-        <div class="detail-section__body" style="color:${cat.color};font-weight:700">${cat.label}</div>
-      </div>
-      <div class="detail-section">
-        <div class="detail-section__label">Priority</div>
-        <div class="detail-section__body" style="color:${prio.color};font-weight:700">
-          <span class="priority-dot prio--${r.priority}"></span>${prio.label}
-        </div>
-      </div>
-    </div>
+    ${r.expected_impact ? `<div class="detail-section"><div class="detail-label">Expected Impact</div><div class="detail-text">${esc(r.expected_impact)}</div></div>` : ''}
     <div class="detail-section">
-      <div class="detail-section__label">Description</div>
-      <div class="detail-section__body">${esc(r.description).replace(/\n/g,'<br>')}</div>
-    </div>
-    ${r.expected_impact ? `
-    <div class="detail-section">
-      <div class="detail-section__label">Expected Impact</div>
-      <div class="detail-section__body">${esc(r.expected_impact).replace(/\n/g,'<br>')}</div>
-    </div>` : ''}
-    ${r.admin_notes ? `
-    <div class="comment-bubble">
-      <div class="comment-bubble__header">
-        <div class="comment-avatar">${(r.reviewed_by || 'R').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()}</div>
-        <div class="comment-meta">
-          <div class="comment-meta__name">${esc(r.reviewed_by || 'Reviewer')}</div>
-          <div class="comment-meta__time">${r.reviewed_at ? new Date(r.reviewed_at).toLocaleString('en-ZA',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : ''}</div>
-        </div>
-        <span class="comment-bubble__label">Reviewer Note</span>
+      <div class="detail-label">Attachments</div>
+      ${existingAttach}
+      <div class="attach-upload-row">
+        <label class="file-input-label" for="attachFileInput"><i class="fa-solid fa-paperclip"></i> Attach file</label>
+        <input type="file" id="attachFileInput" multiple accept="image/*,.pdf,.doc,.docx,.txt,.xlsx,.csv" onchange="uploadAttachments()" />
+        <span id="attachFileName"></span>
       </div>
-      <div class="comment-bubble__body">${esc(r.admin_notes).replace(/\n/g,'<br>')}</div>
-    </div>` : ''}
-    ${adminPanel}
-  `;
-
-  document.getElementById('detailModal').classList.add('open');
+    </div>
+    <div class="comments-section">
+      <div class="comments-title"><i class="fa-solid fa-comments" style="margin-right:5px"></i>Discussion (${comments.length})</div>
+      <div class="comment-list" id="commentList">
+        ${comments.length ? comments.map(c => buildComment(c)).join('') : '<p style="font-size:.78rem;color:var(--muted);margin-bottom:12px">No comments yet — be the first.</p>'}
+      </div>
+      <div class="comment-form">
+        <textarea class="comment-input" id="commentInput" placeholder="Write a comment… (Shift+Enter for new line)" onkeydown="commentKeydown(event)"></textarea>
+        <button class="comment-submit" id="commentSubmitBtn" onclick="submitComment()"><i class="fa-solid fa-paper-plane"></i></button>
+      </div>
+    </div>`;
 }
-function closeDetailModal() { document.getElementById('detailModal').classList.remove('open'); CURRENT_DETAIL = null; }
-function maybeCloseDetail(e) { if (e.target === document.getElementById('detailModal')) closeDetailModal(); }
 
-async function saveReview(id) {
-  const status     = document.getElementById('detailStatus').value;
-  const adminNotes = document.getElementById('detailAdminNotes').value.trim();
-  const reviewedBy = SESSION.firstName + ' ' + SESSION.lastName;
+function buildComment(c) {
+  const initials = (c.author_name||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+  const isKagiso = c.author_name?.toLowerCase().includes('kagiso');
+  const isMine   = c.employee_id === SESSION.empId;
+  return `
+    <div class="comment-item">
+      <div class="comment-avatar">${initials}</div>
+      <div class="comment-bubble${isMine?' mine':''}">
+        <div class="comment-author${isKagiso?' kagiso':''}">${esc(c.author_name)}${isKagiso?' <i class="fa-solid fa-shield-halved" style="font-size:.65rem"></i>':''}</div>
+        <div class="comment-body">${esc(c.body)}</div>
+        <div class="comment-time">${timeAgo(c.created_at)}</div>
+      </div>
+    </div>`;
+}
 
+function commentKeydown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitComment(); }
+}
+
+async function submitComment() {
+  const input = document.getElementById('commentInput');
+  const body  = input.value.trim();
+  if (!body) return;
+  const btn = document.getElementById('commentSubmitBtn');
+  btn.disabled = true;
   try {
-    const updated = await apiFetch(`/api/tables/change_requests/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status, admin_notes: adminNotes || null, reviewed_by: reviewedBy, reviewed_at: new Date().toISOString() }),
+    const { data: c } = await apiFetch(`/api/change-requests/${CURRENT_REQUEST_ID}/comments`, {
+      method:'POST', body: JSON.stringify({ body })
     });
-    const row = updated.row || updated;
-    // Update local state
-    const updateList = list => { const i = list.findIndex(x => x.id === id); if (i !== -1) list[i] = row; };
-    updateList(ALL_REQUESTS); updateList(MY_REQUESTS);
-    updateStats();
-    renderAllRequests();
-    renderMyRequests();
-    closeDetailModal();
-    toast('Review saved.');
-  } catch(err) {
-    toast('Failed to save: ' + err.message, true);
-  }
+    const list = document.getElementById('commentList');
+    // Remove "no comments" placeholder if present
+    if (list.querySelector('p')) list.innerHTML = '';
+    list.insertAdjacentHTML('beforeend', buildComment(c));
+    input.value = '';
+    list.scrollTop = list.scrollHeight;
+    toast('Comment posted');
+    // update count in list
+    const card = ALL_REQUESTS.find(r => r.id === CURRENT_REQUEST_ID);
+    if (card) { card.comment_count = (card.comment_count || 0) + 1; renderRequests(); }
+    loadNotifications();
+  } catch(err) { toast(err.message, true); }
+  finally { btn.disabled = false; }
 }
 
-/* ── Toast ── */
+async function uploadAttachments() {
+  const input = document.getElementById('attachFileInput');
+  const files = Array.from(input.files);
+  if (!files.length) return;
+  document.getElementById('attachFileName').textContent = 'Uploading…';
+  for (const file of files) {
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      await fetch(`/api/change-requests/${CURRENT_REQUEST_ID}/attachments`, { method:'POST', body:fd, credentials:'include' });
+    } catch(e) { toast('Upload failed: ' + e.message, true); }
+  }
+  toast('Attachment(s) uploaded');
+  document.getElementById('attachFileName').textContent = '';
+  input.value = '';
+  // Reload detail
+  try {
+    const { data: r, comments, attachments } = await apiFetch(`/api/change-requests/${CURRENT_REQUEST_ID}`);
+    renderDetail(r, comments, attachments);
+  } catch(_) {}
+}
+
+async function saveStatus() {
+  const status = document.getElementById('detailStatus').value;
+  const btn = document.getElementById('statusSaveBtn');
+  btn.disabled = true;
+  try {
+    await apiFetch(`/api/change-requests/${CURRENT_REQUEST_ID}`, { method:'PATCH', body: JSON.stringify({ status }) });
+    toast('Status updated');
+    // Refresh list
+    const idx = ALL_REQUESTS.findIndex(r => r.id === CURRENT_REQUEST_ID);
+    if (idx !== -1) { ALL_REQUESTS[idx].status = status; renderRequests(); updateStats(); }
+    loadNotifications();
+  } catch(err) { toast(err.message, true); }
+  finally { btn.disabled = false; }
+}
+
+async function saveNotes() {
+  const admin_notes = document.getElementById('detailNotes').value;
+  const btn = document.getElementById('notesSaveBtn');
+  btn.disabled = true;
+  try {
+    await apiFetch(`/api/change-requests/${CURRENT_REQUEST_ID}`, { method:'PATCH', body: JSON.stringify({ admin_notes }) });
+    toast('Notes saved');
+  } catch(err) { toast(err.message, true); }
+  finally { btn.disabled = false; }
+}
+
+function closeDetail() { document.getElementById('detailOverlay').classList.remove('open'); CURRENT_REQUEST_ID = null; }
+function closeDetailIfBg(e) { if (e.target === document.getElementById('detailOverlay')) closeDetail(); }
+
+/* ── New request modal ── */
+function openNewModal() { document.getElementById('newOverlay').classList.add('open'); }
+function closeNew() { document.getElementById('newOverlay').classList.remove('open'); NEW_FILES = []; renderNewFiles(); }
+function closeNewIfBg(e) { if (e.target === document.getElementById('newOverlay')) closeNew(); }
+
+function setupDragDrop() {
+  const zone = document.getElementById('newDropZone');
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('drag-over');
+    addFiles(Array.from(e.dataTransfer.files));
+  });
+}
+function addFiles(files) {
+  files.forEach(f => { if (!NEW_FILES.find(x => x.name === f.name && x.size === f.size)) NEW_FILES.push(f); });
+  renderNewFiles();
+}
+function removeFile(idx) { NEW_FILES.splice(idx, 1); renderNewFiles(); }
+function renderNewFiles() {
+  document.getElementById('newFileList').innerHTML = NEW_FILES.map((f,i) => `
+    <div class="file-preview-item">
+      <span><i class="${attachIcon(f.name)}" style="margin-right:5px;color:var(--muted)"></i>${esc(f.name)} <span style="color:var(--muted)">(${(f.size/1024).toFixed(1)} KB)</span></span>
+      <button class="file-remove-btn" onclick="removeFile(${i})"><i class="fa-solid fa-xmark"></i></button>
+    </div>`).join('');
+}
+
+async function submitNewRequest() {
+  const title = document.getElementById('newTitle').value.trim();
+  const desc  = document.getElementById('newDesc').value.trim();
+  if (!title || !desc) { toast('Title and description are required', true); return; }
+  const btn = document.getElementById('newSubmitBtn');
+  btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="margin-right:6px"></i>Submitting…';
+  try {
+    const body = {
+      category:        document.getElementById('newCategory').value,
+      priority:        document.getElementById('newPriority').value,
+      title,
+      description:     desc,
+      expected_impact: document.getElementById('newImpact').value.trim() || undefined,
+    };
+    const { data: created } = await apiFetch('/api/change-requests', { method:'POST', body: JSON.stringify(body) });
+    // Upload attachments
+    for (const file of NEW_FILES) {
+      const fd = new FormData(); fd.append('file', file);
+      try { await fetch(`/api/change-requests/${created.id}/attachments`, { method:'POST', body:fd, credentials:'include' }); } catch(_) {}
+    }
+    toast('Request submitted — team has been notified');
+    closeNew();
+    // Reset form
+    ['newTitle','newDesc','newImpact'].forEach(id => document.getElementById(id).value = '');
+    NEW_FILES = []; renderNewFiles();
+    await Promise.all([loadRequests(), loadNotifications()]);
+  } catch(err) { toast(err.message, true); }
+  finally { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane" style="margin-right:6px"></i>Submit Request'; }
+}
+
+/* ── Helpers ── */
+function attachIcon(filename) {
+  const ext = (filename||'').split('.').pop().toLowerCase();
+  if (['jpg','jpeg','png','gif','webp','svg'].includes(ext)) return 'fa-solid fa-image';
+  if (ext === 'pdf') return 'fa-solid fa-file-pdf';
+  if (['doc','docx'].includes(ext)) return 'fa-solid fa-file-word';
+  if (['xls','xlsx','csv'].includes(ext)) return 'fa-solid fa-file-excel';
+  return 'fa-solid fa-file';
+}
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function timeAgo(ts) {
+  const diff = Date.now() - new Date(ts).getTime();
+  const m = Math.floor(diff/60000), h = Math.floor(diff/3600000), d = Math.floor(diff/86400000);
+  if (d >= 1) return d + 'd ago';
+  if (h >= 1) return h + 'h ago';
+  if (m >= 1) return m + 'm ago';
+  return 'Just now';
+}
+let _toastTimer;
 function toast(msg, isErr = false) {
-  const el = document.getElementById('toast');
-  el.className = isErr ? 'err' : 'ok';
-  el.querySelector('i').className = isErr ? 'fa-solid fa-circle-exclamation' : 'fa-solid fa-check-circle';
-  document.getElementById('toastMsg').textContent = msg;
-  el.classList.add('show');
-  setTimeout(() => el.classList.remove('show'), 3200);
+  const el = document.getElementById('toastEl');
+  el.textContent = msg;
+  el.className = 'show' + (isErr ? ' err' : '');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
 }
 </script>
 </body>

@@ -190,9 +190,10 @@ app.use('/api/factsheets',   require('./routes/factsheets'));
 app.use('/api/products',     require('./routes/products'));
 app.use('/api/opsconsole',  require('./routes/opsconsole'));
 app.use('/api/cattle',      require('./routes/cattle'));
-app.use('/api/pe',          require('./routes/pe-extract'));
-app.use('/api/pe/documents', require('./routes/pe-documents'));
-app.use('/api/ai',          require('./routes/aiCourses'));
+app.use('/api/pe',             require('./routes/pe-extract'));
+app.use('/api/pe/documents',   require('./routes/pe-documents'));
+app.use('/api/ai',             require('./routes/aiCourses'));
+app.use('/api/change-requests',require('./routes/changeRequests'));
 
 
 /* ─── Health Check ─────────────────────────────────────────────────────────

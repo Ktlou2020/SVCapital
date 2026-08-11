@@ -1247,6 +1247,43 @@ CREATE TABLE IF NOT EXISTS change_requests (
 CREATE INDEX IF NOT EXISTS change_requests_employee_idx ON change_requests(employee_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS change_requests_status_idx   ON change_requests(status);
 CREATE INDEX IF NOT EXISTS change_requests_priority_idx ON change_requests(priority);
+
+CREATE TABLE IF NOT EXISTS change_request_comments (
+  id          TEXT PRIMARY KEY,
+  request_id  TEXT NOT NULL REFERENCES change_requests(id) ON DELETE CASCADE,
+  employee_id TEXT NOT NULL,
+  author_name TEXT NOT NULL,
+  body        TEXT NOT NULL,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS cr_comments_req_idx ON change_request_comments(request_id, created_at);
+
+CREATE TABLE IF NOT EXISTS change_request_attachments (
+  id          TEXT PRIMARY KEY,
+  request_id  TEXT NOT NULL REFERENCES change_requests(id) ON DELETE CASCADE,
+  employee_id TEXT NOT NULL,
+  author_name TEXT NOT NULL,
+  filename    TEXT NOT NULL,
+  mime_type   TEXT,
+  file_data   TEXT NOT NULL,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS cr_attachments_req_idx ON change_request_attachments(request_id);
+
+CREATE TABLE IF NOT EXISTS cr_events (
+  id          TEXT PRIMARY KEY,
+  request_id  TEXT NOT NULL REFERENCES change_requests(id) ON DELETE CASCADE,
+  event_type  TEXT NOT NULL CHECK (event_type IN ('new_request','new_comment','status_change')),
+  actor_name  TEXT NOT NULL,
+  message     TEXT NOT NULL,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS cr_events_created_idx ON cr_events(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS cr_notification_clears (
+  employee_id TEXT PRIMARY KEY,
+  cleared_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 `;
 
 /* Default product catalogue — seeded once, then fully editable in the admin
