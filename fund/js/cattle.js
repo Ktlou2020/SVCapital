@@ -566,7 +566,7 @@ function renderCyclesView() {
 
   let filtered = S.cycles.filter(c => {
     const q = S.cycleFilter.search.toLowerCase();
-    const matchSearch = !q || (c.batch_name||'').toLowerCase().includes(q) || (c.company||'').toLowerCase().includes(q);
+    const matchSearch = !q || (c.batch_name||'').toLowerCase().includes(q) || (c.company||'').toLowerCase().includes(q) || (c.inv_no||'').toLowerCase().includes(q);
     const matchCompany = !S.cycleFilter.company || c.company === S.cycleFilter.company;
     const matchStatus  = !S.cycleFilter.status  || c.status  === S.cycleFilter.status;
     return matchSearch && matchCompany && matchStatus;
@@ -589,7 +589,7 @@ function renderCyclesView() {
     <div class="filter-bar">
       <div class="search-box">
         <i class="fa-solid fa-search"></i>
-        <input type="text" id="cycleSearch" placeholder="Search batch or company…" value="${escapeHtml(S.cycleFilter.search)}" oninput="S.cycleFilter.search=this.value;renderCyclesView()">
+        <input type="text" id="cycleSearch" placeholder="Search batch, company or invoice no…" value="${escapeHtml(S.cycleFilter.search)}" oninput="S.cycleFilter.search=this.value;renderCyclesView()">
       </div>
       <select class="filter-select" onchange="S.cycleFilter.company=this.value;renderCyclesView()">
         <option value="">All Companies</option>
