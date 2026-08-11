@@ -871,9 +871,10 @@ router.get('/account-statement', async (req, res) => {
         [investor_id]
       ),
       pool.query(
-        `SELECT i.id, i.amount, i.status, i.created_at, i.maturity_date,
-                i.expected_return, i.actual_return,
-                p.name AS pool_name, p.product_type, p.annual_rate
+        `SELECT i.id, i.amount, i.status, i.created_at,
+                i.start_date, i.end_date AS maturity_date,
+                i.expected_return, i.actual_return, i.annual_rate,
+                p.name AS pool_name, p.product_type
          FROM investments i
          LEFT JOIN investment_pools p ON p.id = i.pool_id
          WHERE i.investor_id = $1

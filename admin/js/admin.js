@@ -12723,7 +12723,7 @@ function _openAccountStatementWindow(data) {
       <td>${esc(prod)}</td>
       <td class="num">${fmt(i.amount)}</td>
       <td class="num">${rate}</td>
-      <td>${fmtDate(i.created_at)}</td>
+      <td>${fmtDate(i.start_date || i.created_at)}</td>
       <td>${fmtDate(i.maturity_date)}</td>
       <td class="num">${expRet}</td>
       <td><span class="sb ${badge}">${esc(label)}</span></td>
