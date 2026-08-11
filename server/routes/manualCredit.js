@@ -880,8 +880,8 @@ router.get('/account-statement', async (req, res) => {
            WHERE investment_id = i.id ORDER BY created_at DESC LIMIT 1
          ) mi ON true
          WHERE i.investor_id = $1
+           AND COALESCE(i.start_date, i.created_at::date) >= $2
            AND COALESCE(i.start_date, i.created_at::date) <= $3
-           AND (i.end_date IS NULL OR i.end_date >= $2 OR i.status IN ('active','pending'))
          ORDER BY i.created_at ASC`,
         [investor_id, fromDt.toISOString().slice(0,10), toDt.toISOString().slice(0,10)]
       ),
