@@ -696,8 +696,14 @@ function closeAiGenModal() {
 }
 
 async function startAiGenerationForCourse(courseId) {
-  const course = _courses.find(c=>c.id===courseId)||{ id:courseId, title:'Custom Course', role_target:_emp.role, category:'aum_growth', kpi_dimension:'revenue_contribution', kpi_boost_points:8, xp_reward:150 };
-  await runAiGeneration(course, '');
+  const course = _courses.find(c=>c.id===courseId)||{};
+  await runAiGeneration({
+    title:         course.title || 'Professional Development',
+    focus:         course.description || '',
+    category:      course.category || 'professional_development',
+    difficulty:    course.difficulty || 'intermediate',
+    kpi_dimension: course.kpi_dimension || 'task_completion_rate',
+  });
 }
 
 async function startAiGeneration() {
@@ -705,28 +711,12 @@ async function startAiGeneration() {
   const focus = document.getElementById('ai-focus').value.trim();
   if (!title) { showToast('Please enter a course title.','error'); return; }
   closeAiGenModal();
-  const cat = document.getElementById('ai-cat').value || 'aum_growth';
-  const dim = document.getElementById('ai-dim').value || 'revenue_contribution';
-
-  const course = await post('tables/employee_courses', {
-    id: `CRS-AI-${Date.now()}`,
-    title, role_target: _emp.role||'all',
-    department: _emp.department||'General',
-    category: cat, difficulty:'intermediate',
-    description: focus||`AI-generated course for ${_emp.role}: ${title}`,
-    learning_objectives: `Build expertise in: ${title}`,
-    estimated_minutes: 45, xp_reward:200,
-    kpi_dimension: dim, kpi_boost_points:10,
-    modules_count:3, quiz_questions:3, pass_score:60,
-    status:'active', ai_generated:true,
-    thumbnail_icon:'fa-robot',
-    thumbnail_color: catColors[cat]||'#eda5ff'
-  });
-  _courses.push(course);
-  await runAiGeneration(course, focus);
+  const cat = document.getElementById('ai-cat').value || 'professional_development';
+  const dim = document.getElementById('ai-dim').value || 'task_completion_rate';
+  await runAiGeneration({ title, focus, category: cat, kpi_dimension: dim, difficulty: 'intermediate' });
 }
 
-async function runAiGeneration(course, focus) {
+async function runAiGeneration(params, _unused) {
   const ov = document.getElementById('ai-gen-overlay');
   ov.classList.add('open');
   const steps = ['Analysing role & objectives','Structuring 3 modules','Generating lesson content','Building quiz questions','Enrolling you in the course'];
@@ -737,37 +727,53 @@ async function runAiGeneration(course, focus) {
     });
   }
 
-  setStep(0); await sleep(600);
-  setStep(1); await sleep(700);
-  const mods = buildModuleTemplates(course, focus);
-  setStep(2); await sleep(800);
-  for (const m of mods) {
-    const saved = await post('tables/course_modules', {...m, course_id:course.id});
-    if (!_modules[course.id]) _modules[course.id]=[]; _modules[course.id].push(saved);
-  }
-  setStep(3); await sleep(600);
-  setStep(4); await sleep(500);
+  try {
+    setStep(0); await sleep(400);
+    setStep(1);
 
-  // Enroll
-  if (!_progress.find(p=>p.course_id===course.id)) {
-    const prog = await post('tables/course_progress', {
-      employee_id:_emp.id, course_id:course.id,
-      status:'in_progress', current_module:_modules[course.id][0]?.id||'',
-      modules_completed:0, quiz_scores:'{}', overall_quiz_score:0,
-      xp_earned:0, kpi_applied:false, started_at:new Date().toISOString()
+    const result = await post('ai/generate-course', {
+      title:         params.title,
+      focus:         params.focus || params.title,
+      category:      params.category || 'professional_development',
+      difficulty:    params.difficulty || 'intermediate',
+      kpi_dimension: params.kpi_dimension || 'task_completion_rate',
     });
-    _progress.push(prog);
+
+    setStep(2); await sleep(400);
+    setStep(3); await sleep(400);
+
+    const course  = result.course;
+    const modules = result.modules;
+
+    _courses.push(course);
+    _modules[course.id] = modules;
+
+    setStep(4); await sleep(300);
+
+    // Enroll
+    if (!_progress.find(p=>p.course_id===course.id)) {
+      const prog = await post('tables/course_progress', {
+        employee_id:_emp.id, course_id:course.id,
+        status:'in_progress', current_module:modules[0]?.id||'',
+        modules_completed:0, quiz_scores:'{}', overall_quiz_score:0,
+        xp_earned:0, kpi_applied:false, started_at:new Date().toISOString()
+      });
+      _progress.push(prog);
+    }
+
+    ov.classList.remove('open');
+    showToast(`✨ Course "${course.title}" generated! 3 modules ready.`,'success');
+
+    // Open reader
+    _readerCourse = course;
+    _readerModules = _modules[course.id]||[];
+    _readerModIdx = 0; _readerMode='lesson'; _quizAnswers={}; _quizSubmitted=false;
+    document.getElementById('course-reader').classList.add('open');
+    renderReader();
+  } catch(err) {
+    ov.classList.remove('open');
+    showToast('Course generation failed: ' + (err.message||'Please try again.'),'error');
   }
-
-  ov.classList.remove('open');
-  showToast(`✨ Course "${course.title}" generated! 3 modules ready.`,'success');
-
-  // Open reader
-  _readerCourse = course;
-  _readerModules = _modules[course.id]||[];
-  _readerModIdx = 0; _readerMode='lesson'; _quizAnswers={}; _quizSubmitted=false;
-  document.getElementById('course-reader').classList.add('open');
-  renderReader();
 }
 
 const sleep = ms => new Promise(r=>setTimeout(r,ms));
@@ -1146,12 +1152,23 @@ function renderDashboard() {
 
 /* ═══ VIEW: COURSES ═════════════════════════════════════════════════ */
 function renderCourses() {
-  const myCourseIds = _progress.map(p=>p.course_id);
-  const myActive = _courses.filter(c=>myCourseIds.includes(c.id));
-  const recommended = _courses.filter(c=>
-    !myCourseIds.includes(c.id) && (c.role_target===_emp.role||c.role_target==='all')
+  const completedIds  = _progress.filter(p=>p.status==='completed').map(p=>p.course_id);
+  const enrolledIds   = _progress.map(p=>p.course_id);
+  const inProgressIds = enrolledIds.filter(id=>!completedIds.includes(id));
+
+  // Required: is_required and not yet completed
+  const required = _courses.filter(c=>c.is_required && !completedIds.includes(c.id));
+  // In Progress: enrolled, not required, not completed
+  const inProgress = _courses.filter(c=>inProgressIds.includes(c.id) && !c.is_required);
+  // Completed
+  const completed  = _courses.filter(c=>completedIds.includes(c.id));
+  // Suggested: not enrolled, matches role or is 'all'
+  const suggested  = _courses.filter(c=>
+    !enrolledIds.includes(c.id) && !c.is_required &&
+    (c.role_target===_emp.role||c.role_target==='all'||!c.role_target)
   ).slice(0,6);
-  const completedIds = _progress.filter(p=>p.status==='completed').map(p=>p.course_id);
+
+  const requiredDone = required.filter(c=>completedIds.includes(c.id)).length;
 
   const el = document.getElementById('view-courses');
   el.innerHTML = `
@@ -1162,33 +1179,43 @@ function renderCourses() {
       </div>
     </div>
 
+    <!-- Required -->
+    <div class="section-head"><i class="fa-solid fa-shield-check"></i> Required Training
+      <span class="section-count">${required.length}</span>
+      ${required.length ? `<span style="margin-left:auto;font-size:0.75rem;color:var(--muted)">${completedIds.filter(id=>_courses.find(c=>c.id===id&&c.is_required)).length}/${required.length + completed.filter(c=>c.is_required).length} complete</span>` : ''}
+    </div>
+    <div class="courses-grid">
+      ${required.map(c=>courseCardHTML(c,'required')).join('')}
+      ${!required.length ? `<div class="empty-state" style="background:rgba(0,212,170,0.06);border-color:rgba(0,212,170,0.2)"><i class="fa-solid fa-circle-check" style="color:var(--accent2)"></i><p style="color:var(--accent2)">All required training complete!</p></div>` : ''}
+    </div>
+
+    <!-- In Progress -->
+    ${inProgress.length ? `<div class="section-head"><i class="fa-solid fa-play"></i> In Progress <span class="section-count">${inProgress.length}</span></div>
+    <div class="courses-grid">
+      ${inProgress.map(c=>courseCardHTML(c,'inprog')).join('')}
+    </div>` : ''}
+
+    <!-- Completed -->
+    ${completed.length ? `<div class="section-head"><i class="fa-solid fa-check-circle"></i> Completed <span class="section-count">${completed.length}</span></div>
+    <div class="courses-grid">
+      ${completed.map(c=>courseCardHTML(c,'done')).join('')}
+    </div>` : ''}
+
     <!-- AI Banner -->
-    <div class="ai-banner">
+    <div class="ai-banner" style="margin:18px 0 10px">
       <div class="ai-banner-icon"><i class="fa-solid fa-brain"></i></div>
       <div class="ai-banner-text">
         <h3>AI Course Generator</h3>
-        <p>Tell us what you want to learn and we'll instantly generate a structured 3-module course with quizzes, key points, and automatic KPI boosts.</p>
+        <p>Tell us what you want to learn and we'll generate a structured 3-module course with quizzes, key points, and KPI boosts — powered by Claude AI.</p>
       </div>
       <button class="btn btn--primary" onclick="openAiGenModal()"><i class="fa-solid fa-plus"></i> Create Course</button>
     </div>
 
-    <!-- In Progress -->
-    ${myActive.length ? `<div class="section-head"><i class="fa-solid fa-play"></i> In Progress <span class="section-count">${myActive.filter(c=>!completedIds.includes(c.id)).length}</span></div>
+    <!-- Suggested -->
+    <div class="section-head"><i class="fa-solid fa-sparkles"></i> Suggested for Your Role <span class="section-count">${suggested.length}</span></div>
     <div class="courses-grid">
-      ${myActive.filter(c=>!completedIds.includes(c.id)).map(c=>courseCardHTML(c,'inprog')).join('')}
-    </div>` : ''}
-
-    <!-- Completed -->
-    ${completedIds.length ? `<div class="section-head"><i class="fa-solid fa-check-circle"></i> Completed <span class="section-count">${completedIds.length}</span></div>
-    <div class="courses-grid">
-      ${myActive.filter(c=>completedIds.includes(c.id)).map(c=>courseCardHTML(c,'done')).join('')}
-    </div>` : ''}
-
-    <!-- Recommended -->
-    <div class="section-head"><i class="fa-solid fa-sparkles"></i> Recommended for You <span class="section-count">${recommended.length}</span></div>
-    <div class="courses-grid">
-      ${recommended.map(c=>courseCardHTML(c,'rec')).join('')}
-      ${!recommended.length?`<div class="empty-state"><i class="fa-solid fa-check"></i><p>You've enrolled in all available courses!</p></div>`:''}
+      ${suggested.map(c=>courseCardHTML(c,'rec')).join('')}
+      ${!suggested.length?`<div class="empty-state"><i class="fa-solid fa-check"></i><p>You've enrolled in all available courses! Use AI Generate to create new ones.</p></div>`:''}
     </div>`;
 }
 
@@ -1196,11 +1223,14 @@ function courseCardHTML(c, mode) {
   const prog = _progress.find(p=>p.course_id===c.id);
   const pct  = prog ? Math.round((Number(prog.modules_completed)||0)/(Number(c.modules_count)||1)*100) : 0;
   const isDone = prog?.status==='completed';
+  const isRequired = c.is_required;
   const diffC = {beginner:'#00d4aa',intermediate:'#fec24f',advanced:'#ff6b6b'}[c.difficulty]||'#6b7280';
-  return `<div class="course-card ${isDone?'completed':''}" onclick="${isDone?`openCertificateByProgress('${prog?.id}')`:`openCourse('${c.id}')`}">
+  const borderStyle = mode==='required' && !isDone ? 'border:1.5px solid rgba(255,107,107,0.35)' : '';
+  return `<div class="course-card ${isDone?'completed':''}" style="${borderStyle}" onclick="${isDone?`openCertificateByProgress('${prog?.id}')`:`openCourse('${c.id}')`}">
     <div class="course-banner" style="background:${c.thumbnail_color||'#eda5ff'}20">
       <i class="fa-solid ${c.thumbnail_icon||'fa-book'}" style="color:${c.thumbnail_color||'#eda5ff'}"></i>
       <span class="diff-badge" style="background:${diffC}20;color:${diffC}">${c.difficulty||'intermediate'}</span>
+      ${isRequired&&!isDone?`<span style="position:absolute;top:8px;left:8px;font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:10px;background:rgba(255,107,107,0.2);color:#ff6b6b">Required</span>`:''}
       ${isDone?`<span style="position:absolute;top:8px;left:8px;font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:10px;background:rgba(0,212,170,0.2);color:var(--accent2)">✓ Done</span>`:''}
     </div>
     <div class="course-progress-bar"><div class="course-progress-bar-fill" style="width:${pct}%"></div></div>
