@@ -214,6 +214,81 @@ router.post('/import/animals', requireAuth, async (req, res) => {
   }
 });
 
+/* ── POST /api/cattle/cycles — create a single cycle ────────
+   Bypasses ADMIN_WRITE_TABLES so fund portal users can create cycles. */
+router.post('/cycles', requireAuth, async (req, res) => {
+  try {
+    const {
+      batch_name, company, inv_no, cycle_no, status,
+      no_purchased, mortalities, no_live, no_sold,
+      purchase_value, total_selling_price, net_return_pct,
+      cycle_start_date, sale_date, notes
+    } = req.body;
+
+    const id = genId('CC');
+    const { rows: [row] } = await pool.query(
+      `INSERT INTO cattle_cycles
+         (id, batch_name, company, inv_no, cycle_no, status,
+          no_purchased, mortalities, no_live, no_sold,
+          purchase_value, total_selling_price, net_return_pct,
+          cycle_start_date, sale_date, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+       RETURNING *`,
+      [id, batch_name, company, inv_no, cycle_no, status || 'active',
+       no_purchased || 0, mortalities || 0, no_live || 0, no_sold || 0,
+       purchase_value || 0, total_selling_price || 0, net_return_pct || 0,
+       cycle_start_date || null, sale_date || null, notes || null]
+    );
+    res.json(row);
+  } catch (err) {
+    console.error('[cattle/cycles POST]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ── PATCH /api/cattle/cycles/:id — update a single cycle ───
+   Bypasses ADMIN_WRITE_TABLES so fund portal users can update cycles. */
+router.patch('/cycles/:id', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const allowed = [
+      'batch_name','company','inv_no','cycle_no','status',
+      'no_purchased','mortalities','no_live','no_sold',
+      'purchase_value','total_selling_price','net_return_pct',
+      'cycle_start_date','sale_date','notes'
+    ];
+    const fields = Object.keys(req.body).filter(k => allowed.includes(k));
+    if (!fields.length) return res.status(400).json({ error: 'No valid fields to update.' });
+
+    const sets   = fields.map((f, i) => `${f} = $${i + 1}`).join(', ');
+    const values = fields.map(f => req.body[f]);
+    values.push(id);
+
+    const { rows: [row] } = await pool.query(
+      `UPDATE cattle_cycles SET ${sets} WHERE id = $${values.length} RETURNING *`,
+      values
+    );
+    if (!row) return res.status(404).json({ error: 'Cycle not found.' });
+    res.json(row);
+  } catch (err) {
+    console.error('[cattle/cycles PATCH]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ── DELETE /api/cattle/cycles/:id — delete a single cycle ──
+   Bypasses ADMIN_WRITE_TABLES so fund portal users can delete cycles. */
+router.delete('/cycles/:id', requireAuth, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query('DELETE FROM cattle_cycles WHERE id = $1', [req.params.id]);
+    if (!rowCount) return res.status(404).json({ error: 'Cycle not found.' });
+    res.json({ deleted: true });
+  } catch (err) {
+    console.error('[cattle/cycles DELETE]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 /* ── DELETE /api/cattle/purge ───────────────────────────────
    Truncates cattle_animals and cattle_cycles.
    Requires authenticated director session.               */

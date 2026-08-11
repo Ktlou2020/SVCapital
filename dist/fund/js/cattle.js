@@ -1312,10 +1312,10 @@ async function saveCycleForm() {
 
   try {
     if (id) {
-      await apiPatch(`tables/cattle_cycles/${id}`, data);
+      await apiPatch(`cattle/cycles/${id}`, data);
       CToast.show('Cycle updated', 'success');
     } else {
-      await apiPost('tables/cattle_cycles', data);
+      await apiPost('cattle/cycles', data);
       CToast.show('Cycle added', 'success');
     }
     closeCycleForm();
@@ -1328,7 +1328,7 @@ async function saveCycleForm() {
 async function deleteCycle(id) {
   if (!confirm('Delete this cycle? This cannot be undone.')) return;
   try {
-    await apiDelete(`tables/cattle_cycles/${id}`);
+    await apiDelete(`cattle/cycles/${id}`);
     S.cycles = S.cycles.filter(c => c.id !== id);
     renderCyclesView();
     CToast.show('Cycle deleted', 'success');
