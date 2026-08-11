@@ -12743,8 +12743,7 @@ function _openAccountStatementWindow(data) {
     (STATUS_CFG[i.status] || {}).lbl || i.status || '',
   ]));
   const csvEsc  = v => '"' + String(v).replace(/"/g, '""') + '"';
-  const csvData = csvRows.map(r => r.map(csvEsc).join(',')).join('
-');
+  const csvData = csvRows.map(r => r.map(csvEsc).join(',')).join('\r\n');
   const csvB64  = btoa(unescape(encodeURIComponent(csvData)));
   const csvName = 'SVC-Statement-' + inv.id + '-' + period.from.slice(0,10) + '-to-' + period.to.slice(0,10) + '.csv';
 
