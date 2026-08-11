@@ -12685,8 +12685,8 @@ function _openAccountStatementWindow(data) {
   activeInvests.sort(_sortDesc);
   maturedInvests.sort(_sortDesc);
 
-  const activeHead  = '<thead><tr><th>Date</th><th>Pool Name</th><th>Product</th><th class="num">Amount</th><th>Pool Start</th><th>Pool End</th><th>Status</th></tr></thead>';
-  const maturedHead = '<thead><tr><th>Date</th><th>Pool Name</th><th>Product</th><th class="num">Amount</th><th class="num">Annual Rate</th><th>Pool Start</th><th>Pool End</th><th>Maturity Instruction</th><th>Status</th></tr></thead>';
+  const activeHead  = '<thead><tr><th>Date</th><th>Pool Name</th><th>Product</th><th class="num">Capital</th><th>Pool Start</th><th>Pool End</th><th>Status</th></tr></thead>';
+  const maturedHead = '<thead><tr><th>Date</th><th>Pool Name</th><th>Product</th><th class="num">Capital</th><th class="num">Return</th><th class="num">Rand Return</th><th>Pool Start</th><th>Pool End</th><th>Maturity Instruction</th><th>Status</th></tr></thead>';
 
   const getInstr = i => {
     const raw = i.maturity_instruction || i.payout_option || '';
@@ -12720,6 +12720,7 @@ function _openAccountStatementWindow(data) {
       '<td>' + esc(prod) + '</td>' +
       '<td class="num">' + fmt(i.amount) + '</td>' +
       '<td class="num earn">' + getRate(i) + '</td>' +
+      '<td class="num earn">' + fmt(i.actual_return || i.expected_return) + '</td>' +
       '<td>' + fmtDate(i.pool_start_date) + '</td>' +
       '<td>' + fmtDate(i.pool_end_date) + '</td>' +
       '<td>' + esc(getInstr(i)) + '</td>' +
@@ -12728,17 +12729,18 @@ function _openAccountStatementWindow(data) {
   }).join('');
 
   const emptyActive  = '<tr><td colspan="7" class="empty-row">No active investments in this period</td></tr>';
-  const emptyMatured = '<tr><td colspan="9" class="empty-row">No matured investments in this period</td></tr>';
+  const emptyMatured = '<tr><td colspan="10" class="empty-row">No matured investments in this period</td></tr>';
 
   // Build CSV for download button
   const csvRows = [
-    ['Date','Pool Name','Product','Amount','Annual Rate','Pool Start Date','Pool End Date','Maturity Instruction','Status']
+    ['Date','Pool Name','Product','Capital','Return','Rand Return','Pool Start Date','Pool End Date','Maturity Instruction','Status']
   ].concat(investments.map(i => [
     fmtDate(i.start_date || i.created_at),
     i.pool_name || '',
     PROD_LABELS[i.product_type] || i.pool_name || '',
     parseFloat(i.amount || 0).toFixed(2),
     getRate(i),
+    parseFloat(i.actual_return || i.expected_return || 0).toFixed(2),
     fmtDate(i.pool_start_date),
     fmtDate(i.pool_end_date),
     getInstr(i),
@@ -12813,7 +12815,7 @@ function _openAccountStatementWindow(data) {
     '<div class="wrap">',
     '  <div class="hdr">',
     '    <div class="hdr-brand" style="display:flex;align-items:flex-start;gap:13px">',
-    '      <svg width="46" height="46" viewBox="0 0 46 46" xmlns="http://www.w3.org/2000/svg"><rect width="46" height="46" rx="10" fill="#eda5ff"/><text x="23" y="30" font-family="Arial,Helvetica,sans-serif" font-weight="900" font-size="14" fill="#fff" text-anchor="middle">SVC</text></svg>',
+    '      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 106.921 106.921" width="52" height="52"><defs><linearGradient gradientUnits="objectBoundingBox" id="lg1" x1="0.874" x2="0.11" y1="0.034" y2="0.986"><stop offset="0" stop-color="#ff9b0c"/><stop offset="0.204" stop-color="#ff940e"/><stop offset="0.492" stop-color="#ff8215"/><stop offset="0.827" stop-color="#ff6421"/><stop offset="0.997" stop-color="#ff5229"/></linearGradient><linearGradient gradientUnits="objectBoundingBox" id="lg2" x1="0.5" x2="0.5" y1="0.027" y2="0.994"><stop offset="0" stop-color="#eda5ff"/><stop offset="0.175" stop-color="#efa9e5"/><stop offset="0.549" stop-color="#f5b3a4"/><stop offset="1" stop-color="#fec24f"/></linearGradient><linearGradient gradientUnits="objectBoundingBox" id="lg3" x2="1" y1="0.5" y2="0.5"><stop offset="0" stop-color="#65ed00"/><stop offset="0.997" stop-color="#0096ff"/></linearGradient><linearGradient gradientUnits="objectBoundingBox" id="lg4" x2="1" y1="0.5" y2="0.5"><stop offset="0.003" stop-color="#0096ff"/><stop offset="1" stop-color="#65ed00"/></linearGradient><linearGradient href="#lg3" id="lg5" x1="0.943" x2="0.027" y1="0.044" y2="0.986"/><linearGradient gradientUnits="objectBoundingBox" id="lg6" x1="0.131" x2="0.889" y1="0.029" y2="0.996"><stop offset="0.003" stop-color="#ffe86a"/><stop offset="1" stop-color="#ffb782"/></linearGradient><linearGradient gradientUnits="objectBoundingBox" id="lg7" x1="0.049" x2="0.965" y1="0.044" y2="0.971"><stop offset="0" stop-color="#ff9b0c"/><stop offset="0.997" stop-color="#ff5229"/></linearGradient><linearGradient gradientUnits="objectBoundingBox" id="lg8" x1="0.5" x2="0.5" y1="0.056" y2="0.891"><stop offset="0" stop-color="#fec24f"/><stop offset="1" stop-color="#efa9e6"/></linearGradient></defs><g transform="translate(7, 4)"><path d="M47.268 21.928s-10.411-21.618-.073-41.726 33.975-24.223 33.975-24.223 10.41 21.619.073 41.727S47.268 21.928 47.268 21.928z" fill="url(#lg1)" opacity="0.8" transform="translate(-0.569 43.969)"/><path d="M41.394 17.261s20.658-15.612 20.658-40.011-20.658-40.011-20.658-40.011-20.657 15.612-20.657 40.011 20.657 40.011 20.657 40.011z" fill="url(#lg2)" opacity="0.8" transform="translate(5.99 48.73)"/><path d="M4.457 53.091a18.793 18.793 0 0 0 12.588 5.087 18.791 18.791 0 0 0 12.586-5.086 18.79 18.79 0 0 0-12.587-5.087A18.8 18.8 0 0 0 4.457 53.091z" fill="url(#lg3)" opacity="0.8" transform="translate(21.126 20.591)"/><path d="M57.546 53.091A18.79 18.79 0 0 0 70.13 58.178a18.794 18.794 0 0 0 12.588-5.086A18.793 18.793 0 0 0 70.13 47.995a18.791 18.791 0 0 0-12.584 5.096z" fill="url(#lg4)" opacity="0.8" transform="translate(6.638 20.591)"/><path d="M48.624 28.28s-2.935-21.1 11.262-35.3 35.3-11.261 35.3-11.261 2.936 21.1-11.261 35.3S48.624 28.28 48.624 28.28z" fill="url(#lg5)" opacity="0.8" transform="translate(-3.969 36.806) scale(-1,1) translate(-95.3 0)"/><path d="M34.864 21.928s10.411-21.618.074-41.726-33.975-24.223-33.975-24.223-10.411 21.619-.074 41.727 33.975 24.222 33.975 24.222z" fill="url(#lg6)" opacity="0.8" transform="translate(22.194 43.969)"/><path d="M32.301 28.28s2.935-21.1-11.262-35.3-35.3-11.261-35.3-11.261-2.935 21.1 11.262 35.3 35.3 11.261 35.3 11.261z" fill="url(#lg7)" opacity="0.8" transform="translate(24.945 36.806)"/><path d="M46.701 73.879s5.074-3.835 5.074-9.827-5.074-9.828-5.074-9.828-5.074 3.828-5.074 9.828 5.074 9.827 5.074 9.827z" fill="url(#lg8)" opacity="0.8" transform="translate(.682 19.01)"/></g></svg>',
     '      <div><h1 style="font-size:18px;font-weight:900;color:#1f2937;letter-spacing:-.3px">SV Capital (Pty) Ltd</h1><p style="font-size:10px;color:#6b7280;margin-top:3px">FSCA Regulated Financial Services Provider</p><p style="margin-top:2px;font-size:10px;color:#eda5ff;font-weight:600">www.svcapital.co.za</p></div>',
     '    </div>',
     '    <div class="hdr-right"><div class="stmt-lbl">Document Type</div><div class="stmt-title">Investment Statement</div>',
