@@ -461,7 +461,10 @@
   <div id="hubNotifications" style="display:none; margin-bottom:40px">
     <div class="section-head">
       <div class="section-title"><i class="fa-solid fa-bell" style="margin-right:6px;font-size:0.75rem"></i>Notifications</div>
-      <div class="section-count" id="notifCountBadge"></div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="section-count" id="notifCountBadge"></div>
+        <button id="clearNotifsBtn" onclick="clearNotifications()" style="background:none;border:1px solid rgba(255,255,255,0.15);color:#9ca3af;font-size:0.72rem;padding:3px 10px;border-radius:20px;cursor:pointer;transition:all 0.2s" onmouseover="this.style.borderColor='#eda5ff';this.style.color='#eda5ff'" onmouseout="this.style.borderColor='rgba(255,255,255,0.15)';this.style.color='#9ca3af'">Clear all</button>
+      </div>
     </div>
     <div id="notifList" class="notif-list"></div>
   </div>
@@ -809,6 +812,23 @@ function showToast(msg) {
 }
 
 /* ── Notifications ── */
+let _feedIds = []; // IDs of clearable activity_feed items
+
+async function clearNotifications() {
+  const btn = document.getElementById('clearNotifsBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Clearing…'; }
+  const token = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
+  const h = { 'Authorization': `Bearer ${token}` };
+  try {
+    await Promise.all(_feedIds.map(id =>
+      fetch(`/api/tables/activity_feed/${id}`, { method: 'DELETE', headers: h, credentials: 'include' })
+    ));
+  } catch(e) { console.error('[hub] clear notifications error:', e); }
+  _feedIds = [];
+  document.getElementById('hubNotifications').style.display = 'none';
+  showToast('Notifications cleared');
+}
+
 async function loadNotifications(session) {
   const token = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
   if (!token || !session.empId) return;
@@ -867,8 +887,13 @@ function _renderNotifications(feed, pending, empMap) {
   const total = feed.length + pending.length;
   if (!total) return;
 
+  _feedIds = feed.map(i => i.id).filter(Boolean);
+
   document.getElementById('hubNotifications').style.display = 'block';
   document.getElementById('notifCountBadge').textContent = total;
+  // Only show Clear button when there are clearable feed items
+  const clearBtn = document.getElementById('clearNotifsBtn');
+  if (clearBtn) clearBtn.style.display = _feedIds.length ? '' : 'none';
 
   const list = document.getElementById('notifList');
   list.innerHTML = '';
