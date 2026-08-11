@@ -12657,237 +12657,179 @@ async function _generateAccountStatement(investorId) {
 }
 
 function _openAccountStatementWindow(data) {
-  const { investor: inv, period, openingBalance, closingBalance, transactions, investments, portfolio } = data;
+  const { investor: inv, period, investments } = data;
 
-  const fmt = n => 'R ' + Math.abs(parseFloat(n) || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmt = n => 'R ' + Math.abs(parseFloat(n) || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtDate = s => s ? new Date(s).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
   const esc = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
   const fromLabel = new Date(period.from).toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' });
   const toLabel   = new Date(period.to).toLocaleDateString('en-ZA',   { day: 'numeric', month: 'long', year: 'numeric' });
   const issuedAt  = new Date().toLocaleString('en-ZA', { dateStyle: 'long', timeStyle: 'short' });
-  const stmtRef   = `SVCAS-${new Date().getFullYear()}-${String(inv.id).replace(/\D/g,'').slice(-6) || String(inv.id).slice(-6).toUpperCase()}`;
+  const stmtRef   = 'SVCAS-' + new Date().getFullYear() + '-' + (String(inv.id).replace(/\D/g,'').slice(-6) || String(inv.id).slice(-6).toUpperCase());
   const fullAddr  = [inv.street_address, inv.suburb, inv.address, inv.postal_code, inv.province].filter(Boolean).join(', ');
 
-  const TYPE_LABELS = {
-    deposit:'Deposit', withdrawal:'Withdrawal', investment:'Investment', reinvestment:'Reinvestment',
-    return:'Return', payout:'Payout', platform_fee:'Platform Fee',
-    debit:'Debit', referral_bonus:'Referral Bonus', balance_override:'Adjustment',
-  };
-  const TYPE_BADGE = {
-    deposit:'tb-deposit', withdrawal:'tb-withdrawal', investment:'tb-investment', reinvestment:'tb-investment',
-    return:'tb-return', payout:'tb-return', platform_fee:'tb-platform_fee',
-    debit:'tb-debit', referral_bonus:'tb-return', balance_override:'tb-override',
-  };
-  const PROD_LABELS = {
-    cattle:'Cattle Investment', short_term:'Short-Term Investment', solar:'Solar Investment',
+  const PROD_LABELS  = { cattle:'Cattle Investment', short_term:'Short-Term Investment', solar:'Solar Investment' };
+  const INSTR_LABELS = { reinvest:'Reinvest', withdraw:'Withdraw', partial_withdraw:'Partial Withdraw', rollover:'Roll Over' };
+  const STATUS_CFG   = {
+    active:    { cls:'sb-active',    lbl:'Active'    },
+    pending:   { cls:'sb-pending',   lbl:'Pending'   },
+    matured:   { cls:'sb-matured',   lbl:'Matured'   },
+    paid_out:  { cls:'sb-paidout',   lbl:'Paid Out'  },
+    cancelled: { cls:'sb-cancelled', lbl:'Cancelled' },
   };
 
-  // Compute totals for summary cards
-  let totalIn = 0, totalOut = 0;
-  for (const t of transactions) {
-    const amt = parseFloat(t.amount) || 0;
-    const isDebit = t.type === 'platform_fee' || amt < 0;
-    if (isDebit) totalOut += Math.abs(amt);
-    else if (amt > 0) totalIn += amt;
-  }
+  const activeInvests  = investments.filter(i => ['active','pending'].includes(i.status));
+  const maturedInvests = investments.filter(i => ['matured','paid_out'].includes(i.status));
 
-  // Transaction rows
-  const txnRows = transactions.length ? transactions.map(t => {
-    const amt     = parseFloat(t.amount) || 0;
-    const isDebit = t.type === 'platform_fee' || amt < 0;
-    const label   = TYPE_LABELS[t.type] || (t.type || '—').replace(/_/g,' ');
-    const badge   = TYPE_BADGE[t.type]  || 'tb-override';
-    const debitAmt  = isDebit  ? fmt(Math.abs(amt)) : '';
-    const creditAmt = !isDebit && amt !== 0 ? fmt(amt) : '';
-    return `<tr>
-      <td>${fmtDate(t.created_at)}</td>
-      <td><span class="tb ${badge}">${esc(label)}</span></td>
-      <td class="td-desc">${esc(t.description || '—')}</td>
-      <td class="td-ref">${esc(t.reference || '—')}</td>
-      <td class="num td-debit">${debitAmt}</td>
-      <td class="num td-credit">${creditAmt}</td>
-      <td class="num">${fmt(t.running_balance)}</td>
-    </tr>`;
-  }).join('') : `<tr class="no-txns"><td colspan="7">No transactions recorded in this period</td></tr>`;
+  const tableHead = '<thead><tr><th>Date</th><th>Product</th><th class="num">Amount</th><th class="num">Return Earned</th><th>Pool Start</th><th>Pool End</th><th>Maturity Instruction</th><th>Status</th></tr></thead>';
 
-  // Portfolio rows — active and pending investments only
-  const activeInvests = investments.filter(i => ['active','pending'].includes(i.status));
-  const portfolioRows = activeInvests.map(i => {
-    const badge  = { active:'sb-active', matured:'sb-matured', pending:'sb-pending', paid_out:'sb-paidout' }[i.status] || 'sb-pending';
-    const label  = { active:'Active', pending:'Pending', matured:'Matured', paid_out:'Paid Out' }[i.status] || i.status;
-    const prod   = PROD_LABELS[i.product_type] || i.pool_name || '—';
-    const rate   = i.annual_rate ? (parseFloat(i.annual_rate) * 100).toFixed(2) + '% p.a.' : '—';
-    const expRet = i.expected_return ? fmt(i.expected_return) : '—';
-    return `<tr>
-      <td>${esc(prod)}</td>
-      <td class="num">${fmt(i.amount)}</td>
-      <td class="num">${rate}</td>
-      <td>${fmtDate(i.start_date || i.created_at)}</td>
-      <td>${fmtDate(i.maturity_date)}</td>
-      <td class="num">${expRet}</td>
-      <td><span class="sb ${badge}">${esc(label)}</span></td>
-    </tr>`;
+  const buildRows = rows => rows.map(i => {
+    const cfg   = STATUS_CFG[i.status] || { cls:'sb-pending', lbl: i.status || '' };
+    const prod  = PROD_LABELS[i.product_type] || i.pool_name || '—';
+    const instr = INSTR_LABELS[i.maturity_instruction] || i.maturity_instruction || '—';
+    const earned = i.actual_return
+      ? fmt(i.actual_return)
+      : (i.expected_return ? fmt(i.expected_return) + '*' : '—');
+    return '<tr>' +
+      '<td>' + fmtDate(i.start_date || i.created_at) + '</td>' +
+      '<td>' + esc(prod) + '</td>' +
+      '<td class="num">' + fmt(i.amount) + '</td>' +
+      '<td class="num earn">' + earned + '</td>' +
+      '<td>' + fmtDate(i.pool_start_date) + '</td>' +
+      '<td>' + fmtDate(i.pool_end_date) + '</td>' +
+      '<td>' + esc(instr) + '</td>' +
+      '<td><span class="sb ' + cfg.cls + '">' + cfg.lbl + '</span></td>' +
+      '</tr>';
   }).join('');
 
-  const html = `<!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8">
-<title>SV Capital — Account Statement ${fromLabel} to ${toLabel}</title>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:Arial,Helvetica,sans-serif;background:#fff;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:12px}
-@page{size:A4 portrait;margin:14mm 18mm}
-@media print{.no-print{display:none!important}.wrap{margin-top:0!important}}
-.no-print{position:fixed;top:0;left:0;right:0;background:#1f2937;padding:9px 20px;display:flex;justify-content:space-between;align-items:center;z-index:99;gap:10px}
-.no-print span{color:#fff;font-size:12px;font-weight:600}
-.no-print button{background:#eda5ff;color:#111;border:none;padding:7px 18px;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer}
-.wrap{max-width:800px;margin:52px auto 32px;padding:28px 32px}
-.hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:14px;border-bottom:3px solid #1f2937;margin-bottom:18px}
-.hdr-brand h1{font-size:17px;font-weight:800;color:#1f2937;letter-spacing:-0.3px}
-.hdr-brand p{font-size:10px;color:#6b7280;margin-top:2px}
-.hdr-right{text-align:right}
-.stmt-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#9ca3af;margin-bottom:3px}
-.stmt-title{font-size:22px;font-weight:800;color:#1f2937;margin-bottom:4px}
-.stmt-meta{font-size:10px;color:#6b7280;line-height:1.6}
-.info-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
-.info-box{border:1.5px solid #e5e7eb;border-radius:7px;padding:12px 14px}
-.info-box-title{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:#9ca3af;margin-bottom:7px}
-.info-grid{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:11px}
-.info-grid dt{color:#6b7280;font-weight:600;white-space:nowrap}
-.info-grid dd{color:#111;font-weight:500}
-.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px}
-.sum-card{border-radius:7px;padding:11px 13px;text-align:center;border:1.5px solid #e5e7eb;background:#f9fafb}
-.c-open{background:#eff6ff;border-color:#bfdbfe}.c-in{background:#f0fdf4;border-color:#86efac}
-.c-out{background:#fff7ed;border-color:#fed7aa}.c-close{background:#faf5ff;border-color:#e9d5ff}
-.sum-lbl{font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#9ca3af;margin-bottom:4px}
-.c-open .sum-lbl{color:#1e40af}.c-in .sum-lbl{color:#166534}.c-out .sum-lbl{color:#9a3412}.c-close .sum-lbl{color:#6b21a8}
-.sum-val{font-size:13px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
-.c-open .sum-val{color:#1d4ed8}.c-in .sum-val{color:#15803d}.c-out .sum-val{color:#c2410c}.c-close .sum-val{color:#7e22ce}
-.sec-hdr{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#374151;margin:18px 0 7px;padding-bottom:5px;border-bottom:1.5px solid #e5e7eb}
-table{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:11px}
-thead tr{background:#f1f5f9}
-th{padding:6px 8px;text-align:left;font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#374151;white-space:nowrap}
-th.num,td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
-td{padding:6px 8px;border-bottom:1px solid #f1f5f9;color:#374151;vertical-align:middle}
-td.td-ref{font-size:9.5px;color:#9ca3af;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-td.td-desc{max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-td.td-debit{color:#dc2626;font-weight:600}
-td.td-credit{color:#15803d;font-weight:600}
-tr.no-txns td{text-align:center;padding:20px;color:#9ca3af;background:#fafafa}
-tr.ob-row td{background:#eff6ff;color:#1e40af;font-weight:700;border-bottom:2px solid #bfdbfe;font-size:10.5px}
-tr.cb-row td{background:#faf5ff;color:#6b21a8;font-weight:700;border-top:2px solid #e9d5ff;border-bottom:none;font-size:10.5px}
-.tb{display:inline-block;padding:2px 6px;border-radius:3px;font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
-.tb-deposit{background:#dbeafe;color:#1e40af}.tb-return{background:#dcfce7;color:#166534}
-.tb-investment{background:#f3e8ff;color:#7e22ce}.tb-withdrawal,.tb-debit{background:#fee2e2;color:#991b1b}
-.tb-platform_fee{background:#fef3c7;color:#92400e}.tb-override{background:#f1f5f9;color:#374151}
-.sb{display:inline-block;padding:2px 6px;border-radius:3px;font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
-.sb-active{background:#dcfce7;color:#166534}.sb-matured{background:#dbeafe;color:#1e40af}
-.sb-pending{background:#fef3c7;color:#92400e}.sb-paidout{background:#f3e8ff;color:#7e22ce}
-.footer{border-top:1px solid #e5e7eb;padding-top:11px;font-size:9px;color:#6b7280;line-height:1.7;margin-top:10px}
-.footer strong{color:#374151}
-.stamp{display:inline-block;border:2px solid #1f2937;color:#1f2937;padding:4px 11px;border-radius:3px;font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-top:10px}
-</style></head><body>
-<div class="no-print">
-  <span>SV Capital &mdash; Account Statement &nbsp;&middot;&nbsp; ${esc(inv.first_name)} ${esc(inv.last_name)} &nbsp;&middot;&nbsp; ${fromLabel} &ndash; ${toLabel}</span>
-  <button onclick="window.print()">Print / Save PDF</button>
-</div>
-<div class="wrap">
-  <div class="hdr">
-    <div class="hdr-brand">
-      <h1>SV Capital (Pty) Ltd</h1>
-      <p>FSCA Regulated Financial Services Provider</p>
-      <p style="margin-top:3px;font-size:10px;color:#9ca3af">www.svcapital.co.za</p>
-    </div>
-    <div class="hdr-right">
-      <div class="stmt-lbl">Document Type</div>
-      <div class="stmt-title">Account Statement</div>
-      <div class="stmt-meta">
-        Ref: <strong>${stmtRef}</strong><br>
-        Period: ${fromLabel} &ndash; ${toLabel}<br>
-        Issued: ${issuedAt}
-      </div>
-    </div>
-  </div>
+  const emptyRow = msg => '<tr><td colspan="8" class="empty-row">' + msg + '</td></tr>';
 
-  <div class="info-row">
-    <div class="info-box">
-      <div class="info-box-title">Client Details</div>
-      <dl class="info-grid">
-        <dt>Full Name</dt><dd>${esc(inv.first_name)} ${esc(inv.last_name)}</dd>
-        <dt>Investor ID</dt><dd>${esc(inv.id)}</dd>
-        <dt>Email</dt><dd>${esc(inv.email || '—')}</dd>
-        <dt>SA ID / Passport</dt><dd>${esc(inv.id_number || '—')}</dd>
-        ${inv.mobile ? `<dt>Mobile</dt><dd>${esc(inv.mobile)}</dd>` : ''}
-        ${fullAddr ? `<dt>Address</dt><dd style="white-space:pre-line">${esc(fullAddr)}</dd>` : ''}
-      </dl>
-    </div>
-    <div class="info-box">
-      <div class="info-box-title">Statement Details</div>
-      <dl class="info-grid">
-        <dt>From</dt><dd>${fromLabel}</dd>
-        <dt>To</dt><dd>${toLabel}</dd>
-        <dt>Reference</dt><dd style="font-family:monospace;font-size:10px">${stmtRef}</dd>
-        <dt>Issued</dt><dd>${issuedAt}</dd>
-        <dt>Active Investments</dt><dd>${portfolio.activeCount}</dd>
-        <dt>Portfolio Value</dt><dd style="font-weight:700;color:#1f2937">${fmt(portfolio.totalActive)}</dd>
-      </dl>
-    </div>
-  </div>
+  // Build CSV for download button
+  const csvRows = [
+    ['Date','Product','Amount','Return Earned','Pool Start Date','Pool End Date','Maturity Instruction','Status']
+  ].concat(investments.map(i => [
+    fmtDate(i.start_date || i.created_at),
+    PROD_LABELS[i.product_type] || i.pool_name || '',
+    parseFloat(i.amount || 0).toFixed(2),
+    parseFloat(i.actual_return || i.expected_return || 0).toFixed(2),
+    fmtDate(i.pool_start_date),
+    fmtDate(i.pool_end_date),
+    INSTR_LABELS[i.maturity_instruction] || i.maturity_instruction || '',
+    (STATUS_CFG[i.status] || {}).lbl || i.status || '',
+  ]));
+  const csvEsc  = v => '"' + String(v).replace(/"/g, '""') + '"';
+  const csvData = csvRows.map(r => r.map(csvEsc).join(',')).join('\r\n');
+  const csvB64  = btoa(unescape(encodeURIComponent(csvData)));
+  const csvName = 'SVC-Statement-' + inv.id + '-' + period.from.slice(0,10) + '-to-' + period.to.slice(0,10) + '.csv';
 
-  <div class="summary">
-    <div class="sum-card c-open"><div class="sum-lbl">Opening Balance</div><div class="sum-val">${fmt(openingBalance)}</div></div>
-    <div class="sum-card c-in"><div class="sum-lbl">Total Credits</div><div class="sum-val">${fmt(totalIn)}</div></div>
-    <div class="sum-card c-out"><div class="sum-lbl">Total Debits</div><div class="sum-val">${fmt(totalOut)}</div></div>
-    <div class="sum-card c-close"><div class="sum-lbl">Closing Balance</div><div class="sum-val">${fmt(closingBalance)}</div></div>
-  </div>
+  const activeRows  = activeInvests.length  ? buildRows(activeInvests)  : emptyRow('No active investments in this period');
+  const maturedRows = maturedInvests.length ? buildRows(maturedInvests) : emptyRow('No matured investments in this period');
+  const aCnt = activeInvests.length;
+  const mCnt = maturedInvests.length;
 
-  <div class="sec-hdr" style="margin-top:4px">Transaction History</div>
-  <table>
-    <thead>
-      <tr>
-        <th>Date</th><th>Type</th><th>Description</th><th>Reference</th>
-        <th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr class="ob-row">
-        <td colspan="6">Opening Balance &mdash; ${fromLabel}</td>
-        <td class="num">${fmt(openingBalance)}</td>
-      </tr>
-      ${txnRows}
-      <tr class="cb-row">
-        <td colspan="6">Closing Balance &mdash; ${toLabel}</td>
-        <td class="num">${fmt(closingBalance)}</td>
-      </tr>
-    </tbody>
-  </table>
+  const html = [
+    '<!DOCTYPE html>',
+    '<html lang="en"><head><meta charset="UTF-8">',
+    '<title>SV Capital — Investment Statement ' + fromLabel + ' to ' + toLabel + '</title>',
+    '<style>',
+    '*{box-sizing:border-box;margin:0;padding:0}',
+    'body{font-family:Arial,Helvetica,sans-serif;background:#fff;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:12px}',
+    '@page{size:A4 landscape;margin:12mm 14mm}',
+    '@media print{.no-print{display:none!important}.wrap{margin-top:0!important}}',
+    '.no-print{position:fixed;top:0;left:0;right:0;background:#1f2937;padding:9px 20px;display:flex;justify-content:space-between;align-items:center;z-index:99;gap:10px;flex-wrap:wrap}',
+    '.no-print span{color:#fff;font-size:12px;font-weight:600;flex:1}',
+    '.no-print .btn-row{display:flex;gap:8px}',
+    '.no-print button{border:none;padding:7px 16px;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer}',
+    '.btn-print{background:#eda5ff;color:#111}.btn-csv{background:#22c55e;color:#fff}',
+    '.wrap{max-width:1100px;margin:52px auto 32px;padding:24px 30px}',
+    '.hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:14px;border-bottom:3px solid #1f2937;margin-bottom:18px}',
+    '.hdr-brand h1{font-size:17px;font-weight:800;color:#1f2937}',
+    '.hdr-brand p{font-size:10px;color:#6b7280;margin-top:2px}',
+    '.hdr-right{text-align:right}',
+    '.stmt-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#9ca3af;margin-bottom:3px}',
+    '.stmt-title{font-size:20px;font-weight:800;color:#1f2937;margin-bottom:4px}',
+    '.stmt-meta{font-size:10px;color:#6b7280;line-height:1.6}',
+    '.info-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px}',
+    '.info-box{border:1.5px solid #e5e7eb;border-radius:7px;padding:12px 14px}',
+    '.info-box-title{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:#9ca3af;margin-bottom:7px}',
+    '.info-grid{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:11px}',
+    '.info-grid dt{color:#6b7280;font-weight:600;white-space:nowrap}',
+    '.info-grid dd{color:#111;font-weight:500}',
+    '.sec-hdr{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;padding:6px 10px;border-radius:5px;margin:18px 0 8px}',
+    '.sec-hdr.active-hdr{background:#dcfce7;color:#166534;border-left:3px solid #22c55e}',
+    '.sec-hdr.matured-hdr{background:#dbeafe;color:#1e40af;border-left:3px solid #3b82f6}',
+    'table{width:100%;border-collapse:collapse;margin-bottom:20px;font-size:11px}',
+    'thead tr{background:#f1f5f9}',
+    'th{padding:6px 8px;text-align:left;font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#374151;white-space:nowrap}',
+    'th.num{text-align:right}',
+    'td{padding:7px 8px;border-bottom:1px solid #f1f5f9;color:#374151;vertical-align:middle}',
+    'td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}',
+    'td.earn{color:#15803d;font-weight:700}',
+    'tr:last-child td{border-bottom:none}',
+    '.empty-row{text-align:center;padding:18px;color:#9ca3af;background:#fafafa;font-style:italic}',
+    '.sb{display:inline-block;padding:2px 7px;border-radius:3px;font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}',
+    '.sb-active{background:#dcfce7;color:#166534}.sb-matured{background:#dbeafe;color:#1e40af}',
+    '.sb-pending{background:#fef3c7;color:#92400e}.sb-paidout{background:#f3e8ff;color:#7e22ce}',
+    '.sb-cancelled{background:#f1f5f9;color:#6b7280}',
+    '.note{font-size:9.5px;color:#9ca3af;margin-bottom:14px}',
+    '.footer{border-top:1px solid #e5e7eb;padding-top:11px;font-size:9px;color:#6b7280;line-height:1.7;margin-top:8px}',
+    '.footer strong{color:#374151}',
+    '.stamp{display:inline-block;border:2px solid #1f2937;color:#1f2937;padding:4px 11px;border-radius:3px;font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-top:10px}',
+    '</style></head><body>',
+    '<div class="no-print">',
+    '  <span>SV Capital &mdash; Investment Statement &middot; ' + esc(inv.first_name) + ' ' + esc(inv.last_name) + ' &middot; ' + fromLabel + ' &ndash; ' + toLabel + '</span>',
+    '  <div class="btn-row">',
+    '    <button class="btn-csv" onclick="(function(){var a=document.createElement(\'a\');a.href=\'data:text/csv;base64,' + csvB64 + '\';a.download=\'' + csvName + '\';a.click()})()">&#11123; Download CSV</button>',
+    '    <button class="btn-print" onclick="window.print()">&#128438; Print / Save PDF</button>',
+    '  </div>',
+    '</div>',
+    '<div class="wrap">',
+    '  <div class="hdr">',
+    '    <div class="hdr-brand"><h1>SV Capital (Pty) Ltd</h1><p>FSCA Regulated Financial Services Provider</p><p style="margin-top:3px;font-size:10px;color:#9ca3af">www.svcapital.co.za</p></div>',
+    '    <div class="hdr-right"><div class="stmt-lbl">Document Type</div><div class="stmt-title">Investment Statement</div>',
+    '    <div class="stmt-meta">Ref: <strong>' + stmtRef + '</strong><br>Period: ' + fromLabel + ' &ndash; ' + toLabel + '<br>Issued: ' + issuedAt + '</div></div>',
+    '  </div>',
+    '  <div class="info-row">',
+    '    <div class="info-box"><div class="info-box-title">Client Details</div><dl class="info-grid">',
+    '      <dt>Full Name</dt><dd>' + esc(inv.first_name) + ' ' + esc(inv.last_name) + '</dd>',
+    '      <dt>Investor ID</dt><dd>' + esc(inv.id) + '</dd>',
+    '      <dt>Email</dt><dd>' + esc(inv.email || '—') + '</dd>',
+    '      <dt>SA ID / Passport</dt><dd>' + esc(inv.id_number || '—') + '</dd>',
+    (inv.mobile ? '      <dt>Mobile</dt><dd>' + esc(inv.mobile) + '</dd>' : ''),
+    (fullAddr   ? '      <dt>Address</dt><dd>' + esc(fullAddr) + '</dd>'  : ''),
+    '    </dl></div>',
+    '    <div class="info-box"><div class="info-box-title">Statement Details</div><dl class="info-grid">',
+    '      <dt>Period From</dt><dd>' + fromLabel + '</dd>',
+    '      <dt>Period To</dt><dd>' + toLabel + '</dd>',
+    '      <dt>Reference</dt><dd style="font-family:monospace;font-size:10px">' + stmtRef + '</dd>',
+    '      <dt>Issued</dt><dd>' + issuedAt + '</dd>',
+    '      <dt>Active Pools</dt><dd>' + aCnt + '</dd>',
+    '      <dt>Matured Pools</dt><dd>' + mCnt + '</dd>',
+    '    </dl></div>',
+    '  </div>',
+    '  <div class="sec-hdr active-hdr">Active Pools &mdash; ' + aCnt + ' investment' + (aCnt !== 1 ? 's' : '') + '</div>',
+    '  <table>' + tableHead + '<tbody>' + activeRows + '</tbody></table>',
+    '  <div class="sec-hdr matured-hdr">Matured Pools &mdash; ' + mCnt + ' investment' + (mCnt !== 1 ? 's' : '') + '</div>',
+    '  <table>' + tableHead + '<tbody>' + maturedRows + '</tbody></table>',
+    '  <p class="note">* Expected return shown where actual return has not yet been recorded.</p>',
+    '  <div class="footer">',
+    '    <strong>SV Capital (Pty) Ltd</strong> &mdash; FSCA Regulated Financial Services Provider.<br>',
+    '    This investment statement is prepared for <strong>' + esc(inv.first_name) + ' ' + esc(inv.last_name) + '</strong> (Account: ' + esc(inv.id) + ') and covers the period ' + fromLabel + ' to ' + toLabel + '. All amounts are in South African Rand (ZAR).<br>',
+    '    Returns marked * represent projected figures based on the pool rate; actual returns are confirmed at maturity. This document does not constitute a tax certificate.<br>',
+    '    <strong>Ref:</strong> ' + stmtRef + ' &middot; <strong>Issued:</strong> ' + issuedAt + ' &middot; <strong>Generated by:</strong> SV Capital Admin Console<br>',
+    '    <div class="stamp">SV Capital</div>',
+    '  </div>',
+    '</div>',
+    '</body></html>',
+  ].join('\n');
 
-  <div class="sec-hdr">Investment Portfolio${activeInvests.length > 0 ? ' (' + activeInvests.length + ' Active)' : ''}</div>
-  ${activeInvests.length ? `<table>
-    <thead>
-      <tr>
-        <th>Product / Pool</th><th class="num">Amount</th><th class="num">Rate</th>
-        <th>Invested</th><th>Maturity</th><th class="num">Expected Return</th><th>Status</th>
-      </tr>
-    </thead>
-    <tbody>${portfolioRows}</tbody>
-  </table>` : `<div style="text-align:center;padding:16px;color:#9ca3af;font-size:11px;background:#fafafa;border-radius:6px;margin-bottom:16px">No active investments as at ${toLabel}</div>`}
-
-  <div class="footer">
-    <strong>SV Capital (Pty) Ltd</strong> &mdash; FSCA Regulated Financial Services Provider.<br>
-    This account statement is prepared for <strong>${esc(inv.first_name)} ${esc(inv.last_name)}</strong> (Account: ${esc(inv.id)}) and covers the period ${fromLabel} to ${toLabel}. All amounts are in South African Rand (ZAR).<br>
-    This document does not constitute a tax certificate. Returns shown represent amounts credited to your SV Capital wallet during the statement period. Investments shown represent capital committed to SV Capital investment pools.<br>
-    <strong>Ref:</strong> ${stmtRef} &nbsp;&middot;&nbsp; <strong>Issued:</strong> ${issuedAt} &nbsp;&middot;&nbsp; <strong>Generated by:</strong> SV Capital Admin Console<br>
-    <div class="stamp">SV Capital</div>
-  </div>
-</div>
-</body></html>`;
-
-  const win = window.open('', '_blank', 'width=980,height=1020');
+  const win = window.open('', '_blank', 'width=1100,height=900');
   if (!win) { Toast.error('Pop-up blocked — allow pop-ups for this site and try again'); return; }
   win.document.write(html);
   win.document.close();
 }
+
 
 /* ═══════════════════════════════════════════════
    POOL CLOSE-OUT WIZARD

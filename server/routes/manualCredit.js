@@ -861,52 +861,33 @@ router.get('/account-statement', async (req, res) => {
     if (isNaN(fromDt.getTime()) || isNaN(toDt.getTime()))
       return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
 
-    const [invRes, allTxnRes, invstRes] = await Promise.all([
+    const [invRes, invstRes] = await Promise.all([
       pool.query('SELECT * FROM investors WHERE id = $1 LIMIT 1', [investor_id]),
       pool.query(
-        `SELECT id, created_at, type, amount, status, reference, description
-         FROM transactions
-         WHERE investor_id = $1 AND status = 'completed'
-         ORDER BY created_at ASC`,
-        [investor_id]
-      ),
-      pool.query(
         `SELECT i.id, i.amount, i.status, i.created_at,
-                i.start_date, i.end_date AS maturity_date,
+                COALESCE(i.start_date, i.created_at::date) AS start_date,
+                i.end_date AS maturity_date,
                 i.expected_return, i.actual_return, i.annual_rate,
-                p.name AS pool_name, p.product_type
+                p.name AS pool_name, p.product_type,
+                p.start_date AS pool_start_date, p.end_date AS pool_end_date,
+                mi.instruction AS maturity_instruction
          FROM investments i
          LEFT JOIN investment_pools p ON p.id = i.pool_id
+         LEFT JOIN LATERAL (
+           SELECT instruction FROM maturity_instructions
+           WHERE investment_id = i.id ORDER BY created_at DESC LIMIT 1
+         ) mi ON true
          WHERE i.investor_id = $1
+           AND COALESCE(i.start_date, i.created_at::date) <= $3
+           AND (i.end_date IS NULL OR i.end_date >= $2 OR i.status IN ('active','pending'))
          ORDER BY i.created_at ASC`,
-        [investor_id]
+        [investor_id, fromDt.toISOString().slice(0,10), toDt.toISOString().slice(0,10)]
       ),
     ]);
 
     if (!invRes.rows[0]) return res.status(404).json({ error: 'Investor not found' });
 
-    const inv     = invRes.rows[0];
-    const allTxns = allTxnRes.rows;
-
-    // Pre-period transactions → opening wallet balance
-    const preTxns = allTxns.filter(t => new Date(t.created_at) < fromDt);
-    const inTxns  = allTxns.filter(t => {
-      const d = new Date(t.created_at);
-      return d >= fromDt && d <= toDt;
-    });
-
-    const openingBalance = preTxns.reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
-
-    // Attach running balance to each in-period transaction
-    let running = openingBalance;
-    const transactions = inTxns.map(t => {
-      running += parseFloat(t.amount) || 0;
-      return { ...t, running_balance: parseFloat(running.toFixed(2)) };
-    });
-    const closingBalance = parseFloat(running.toFixed(2));
-
-    const activeInvests = invstRes.rows.filter(i => i.status === 'active');
-    const totalActive   = activeInvests.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+    const inv = invRes.rows[0];
 
     res.json({
       investor: {
@@ -918,14 +899,7 @@ router.get('/account-statement', async (req, res) => {
         address: inv.address, postal_code: inv.postal_code, province: inv.province,
       },
       period: { from: fromDt.toISOString(), to: toDt.toISOString() },
-      openingBalance: parseFloat(openingBalance.toFixed(2)),
-      closingBalance,
-      transactions,
       investments: invstRes.rows,
-      portfolio: {
-        totalActive: parseFloat(totalActive.toFixed(2)),
-        activeCount: activeInvests.length,
-      },
     });
   } catch (err) {
     console.error('[admin/account-statement]', err);
