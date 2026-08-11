@@ -12694,7 +12694,17 @@ function _openAccountStatementWindow(data) {
   };
   const getRate = i => {
     const r = parseFloat(i.annual_rate);
-    return r ? (r * 100).toFixed(2) + '% p.a.' : '—';
+    return r ? (r * 100).toFixed(2) + '%' : '—';
+  };
+  const calcRandReturn = i => {
+    const principal = parseFloat(i.amount) || 0;
+    const rate      = parseFloat(i.annual_rate) || 0;
+    const startMs   = new Date(i.start_date || i.created_at).getTime();
+    const endMs     = new Date(i.maturity_date || i.pool_end_date).getTime();
+    if (!principal || !rate || isNaN(startMs) || isNaN(endMs) || endMs <= startMs)
+      return parseFloat(i.actual_return || i.expected_return || 0);
+    const days = (endMs - startMs) / 86400000;
+    return principal * rate * (days / 365);
   };
 
   const buildActiveRows = rows => rows.map(i => {
@@ -12720,7 +12730,7 @@ function _openAccountStatementWindow(data) {
       '<td>' + esc(prod) + '</td>' +
       '<td class="num">' + fmt(i.amount) + '</td>' +
       '<td class="num earn">' + getRate(i) + '</td>' +
-      '<td class="num earn">' + fmt(i.actual_return || i.expected_return) + '</td>' +
+      '<td class="num earn">' + fmt(calcRandReturn(i)) + '</td>' +
       '<td>' + fmtDate(i.pool_start_date) + '</td>' +
       '<td>' + fmtDate(i.pool_end_date) + '</td>' +
       '<td>' + esc(getInstr(i)) + '</td>' +
@@ -12740,7 +12750,7 @@ function _openAccountStatementWindow(data) {
     PROD_LABELS[i.product_type] || i.pool_name || '',
     parseFloat(i.amount || 0).toFixed(2),
     getRate(i),
-    parseFloat(i.actual_return || i.expected_return || 0).toFixed(2),
+    calcRandReturn(i).toFixed(2),
     fmtDate(i.pool_start_date),
     fmtDate(i.pool_end_date),
     getInstr(i),
