@@ -2027,6 +2027,8 @@ async function viewInvestor(id) {
   const activeInvCount = invsts.filter(i=>i.status==='active').length;
   const totalReturns   = invsts.filter(i=>['matured','paid_out'].includes(i.status)).reduce((s,i)=>s+(parseFloat(i.actual_return)||parseFloat(i.expected_return)||0), 0);
   const totalDeposits  = txns.filter(t=>t.type==='deposit' && t.status==='completed').reduce((s,t)=>s+(parseFloat(t.amount)||0), 0);
+  const _stmtToday   = new Date().toISOString().slice(0, 10);
+  const _stmtFromDef = _stmtToday.slice(0, 7) + '-01';
 
   document.getElementById('invDetailBody').innerHTML = `
   <div class="tab-bar" style="display:flex;gap:4px;padding:4px;border-radius:10px;margin-bottom:16px;flex-wrap:wrap">
@@ -2434,6 +2436,28 @@ async function viewInvestor(id) {
 
   <!-- ── Statements ── -->
   <div id="invPanel-statements" style="display:none">
+    <!-- Account Statement -->
+    <div class="panel mb-16">
+      <div class="panel__header">
+        <span class="panel__title"><i class="fa-solid fa-file-lines" style="color:#eda5ff;margin-right:6px"></i>Account Statement</span>
+      </div>
+      <div class="panel__body">
+        <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px">Generate a full account statement for any date range — shows all transactions, a running wallet balance, and the active investment portfolio.</p>
+        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+          <div class="form-group" style="margin:0;flex:1;min-width:140px">
+            <label class="form-label">From</label>
+            <input type="date" class="form-control" id="stmtFromDate" value="${_stmtFromDef}">
+          </div>
+          <div class="form-group" style="margin:0;flex:1;min-width:140px">
+            <label class="form-label">To</label>
+            <input type="date" class="form-control" id="stmtToDate" value="${_stmtToday}">
+          </div>
+          <button class="btn btn--primary btn--sm" id="stmtGenBtn" onclick="_generateAccountStatement('${inv.id}')">
+            <i class="fa-solid fa-file-lines"></i> Generate Statement
+          </button>
+        </div>
+      </div>
+    </div>
     <!-- Tax Certificate -->
     <div class="panel mb-16">
       <div class="panel__header">
@@ -12613,6 +12637,256 @@ async function downloadInvestorStatement(stmtId, investorId, year, month, btn) {
       URL.revokeObjectURL(url);
     } catch (e) { Toast.error('Failed to download: ' + e.message); }
   });
+}
+
+async function _generateAccountStatement(investorId) {
+  const from = document.getElementById('stmtFromDate')?.value;
+  const to   = document.getElementById('stmtToDate')?.value;
+  if (!from || !to) { Toast.error('Please select a date range'); return; }
+  const btn  = document.getElementById('stmtGenBtn');
+  const orig = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading…'; }
+  try {
+    const data = await API._fetch('GET', 'admin/account-statement', null, { investor_id: investorId, from, to });
+    _openAccountStatementWindow(data);
+  } catch (e) {
+    Toast.error('Failed to generate statement: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+  }
+}
+
+function _openAccountStatementWindow(data) {
+  const { investor: inv, period, openingBalance, closingBalance, transactions, investments, portfolio } = data;
+
+  const fmt = n => 'R ' + Math.abs(parseFloat(n) || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtDate = s => s ? new Date(s).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+  const esc = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  const fromLabel = new Date(period.from).toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' });
+  const toLabel   = new Date(period.to).toLocaleDateString('en-ZA',   { day: 'numeric', month: 'long', year: 'numeric' });
+  const issuedAt  = new Date().toLocaleString('en-ZA', { dateStyle: 'long', timeStyle: 'short' });
+  const stmtRef   = `SVCAS-${new Date().getFullYear()}-${String(inv.id).replace(/\D/g,'').slice(-6) || String(inv.id).slice(-6).toUpperCase()}`;
+  const fullAddr  = [inv.street_address, inv.suburb, inv.address, inv.postal_code, inv.province].filter(Boolean).join(', ');
+
+  const TYPE_LABELS = {
+    deposit:'Deposit', withdrawal:'Withdrawal', investment:'Investment', reinvestment:'Reinvestment',
+    return:'Return', payout:'Payout', platform_fee:'Platform Fee',
+    debit:'Debit', referral_bonus:'Referral Bonus', balance_override:'Adjustment',
+  };
+  const TYPE_BADGE = {
+    deposit:'tb-deposit', withdrawal:'tb-withdrawal', investment:'tb-investment', reinvestment:'tb-investment',
+    return:'tb-return', payout:'tb-return', platform_fee:'tb-platform_fee',
+    debit:'tb-debit', referral_bonus:'tb-return', balance_override:'tb-override',
+  };
+  const PROD_LABELS = {
+    cattle:'Cattle Investment', short_term:'Short-Term Investment', solar:'Solar Investment',
+  };
+
+  // Compute totals for summary cards
+  let totalIn = 0, totalOut = 0;
+  for (const t of transactions) {
+    const amt = parseFloat(t.amount) || 0;
+    const isDebit = t.type === 'platform_fee' || amt < 0;
+    if (isDebit) totalOut += Math.abs(amt);
+    else if (amt > 0) totalIn += amt;
+  }
+
+  // Transaction rows
+  const txnRows = transactions.length ? transactions.map(t => {
+    const amt     = parseFloat(t.amount) || 0;
+    const isDebit = t.type === 'platform_fee' || amt < 0;
+    const label   = TYPE_LABELS[t.type] || (t.type || '—').replace(/_/g,' ');
+    const badge   = TYPE_BADGE[t.type]  || 'tb-override';
+    const debitAmt  = isDebit  ? fmt(Math.abs(amt)) : '';
+    const creditAmt = !isDebit && amt !== 0 ? fmt(amt) : '';
+    return `<tr>
+      <td>${fmtDate(t.created_at)}</td>
+      <td><span class="tb ${badge}">${esc(label)}</span></td>
+      <td class="td-desc">${esc(t.description || '—')}</td>
+      <td class="td-ref">${esc(t.reference || '—')}</td>
+      <td class="num td-debit">${debitAmt}</td>
+      <td class="num td-credit">${creditAmt}</td>
+      <td class="num">${fmt(t.running_balance)}</td>
+    </tr>`;
+  }).join('') : `<tr class="no-txns"><td colspan="7">No transactions recorded in this period</td></tr>`;
+
+  // Portfolio rows — active and pending investments only
+  const activeInvests = investments.filter(i => ['active','pending'].includes(i.status));
+  const portfolioRows = activeInvests.map(i => {
+    const badge  = { active:'sb-active', matured:'sb-matured', pending:'sb-pending', paid_out:'sb-paidout' }[i.status] || 'sb-pending';
+    const label  = { active:'Active', pending:'Pending', matured:'Matured', paid_out:'Paid Out' }[i.status] || i.status;
+    const prod   = PROD_LABELS[i.product_type] || i.pool_name || '—';
+    const rate   = i.annual_rate ? (parseFloat(i.annual_rate) * 100).toFixed(2) + '% p.a.' : '—';
+    const expRet = i.expected_return ? fmt(i.expected_return) : '—';
+    return `<tr>
+      <td>${esc(prod)}</td>
+      <td class="num">${fmt(i.amount)}</td>
+      <td class="num">${rate}</td>
+      <td>${fmtDate(i.created_at)}</td>
+      <td>${fmtDate(i.maturity_date)}</td>
+      <td class="num">${expRet}</td>
+      <td><span class="sb ${badge}">${esc(label)}</span></td>
+    </tr>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<title>SV Capital — Account Statement ${fromLabel} to ${toLabel}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,Helvetica,sans-serif;background:#fff;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:12px}
+@page{size:A4 portrait;margin:14mm 18mm}
+@media print{.no-print{display:none!important}.wrap{margin-top:0!important}}
+.no-print{position:fixed;top:0;left:0;right:0;background:#1f2937;padding:9px 20px;display:flex;justify-content:space-between;align-items:center;z-index:99;gap:10px}
+.no-print span{color:#fff;font-size:12px;font-weight:600}
+.no-print button{background:#eda5ff;color:#111;border:none;padding:7px 18px;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer}
+.wrap{max-width:800px;margin:52px auto 32px;padding:28px 32px}
+.hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:14px;border-bottom:3px solid #1f2937;margin-bottom:18px}
+.hdr-brand h1{font-size:17px;font-weight:800;color:#1f2937;letter-spacing:-0.3px}
+.hdr-brand p{font-size:10px;color:#6b7280;margin-top:2px}
+.hdr-right{text-align:right}
+.stmt-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#9ca3af;margin-bottom:3px}
+.stmt-title{font-size:22px;font-weight:800;color:#1f2937;margin-bottom:4px}
+.stmt-meta{font-size:10px;color:#6b7280;line-height:1.6}
+.info-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+.info-box{border:1.5px solid #e5e7eb;border-radius:7px;padding:12px 14px}
+.info-box-title{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:#9ca3af;margin-bottom:7px}
+.info-grid{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:11px}
+.info-grid dt{color:#6b7280;font-weight:600;white-space:nowrap}
+.info-grid dd{color:#111;font-weight:500}
+.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px}
+.sum-card{border-radius:7px;padding:11px 13px;text-align:center;border:1.5px solid #e5e7eb;background:#f9fafb}
+.c-open{background:#eff6ff;border-color:#bfdbfe}.c-in{background:#f0fdf4;border-color:#86efac}
+.c-out{background:#fff7ed;border-color:#fed7aa}.c-close{background:#faf5ff;border-color:#e9d5ff}
+.sum-lbl{font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#9ca3af;margin-bottom:4px}
+.c-open .sum-lbl{color:#1e40af}.c-in .sum-lbl{color:#166534}.c-out .sum-lbl{color:#9a3412}.c-close .sum-lbl{color:#6b21a8}
+.sum-val{font-size:13px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.c-open .sum-val{color:#1d4ed8}.c-in .sum-val{color:#15803d}.c-out .sum-val{color:#c2410c}.c-close .sum-val{color:#7e22ce}
+.sec-hdr{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#374151;margin:18px 0 7px;padding-bottom:5px;border-bottom:1.5px solid #e5e7eb}
+table{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:11px}
+thead tr{background:#f1f5f9}
+th{padding:6px 8px;text-align:left;font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#374151;white-space:nowrap}
+th.num,td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td{padding:6px 8px;border-bottom:1px solid #f1f5f9;color:#374151;vertical-align:middle}
+td.td-ref{font-size:9.5px;color:#9ca3af;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+td.td-desc{max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+td.td-debit{color:#dc2626;font-weight:600}
+td.td-credit{color:#15803d;font-weight:600}
+tr.no-txns td{text-align:center;padding:20px;color:#9ca3af;background:#fafafa}
+tr.ob-row td{background:#eff6ff;color:#1e40af;font-weight:700;border-bottom:2px solid #bfdbfe;font-size:10.5px}
+tr.cb-row td{background:#faf5ff;color:#6b21a8;font-weight:700;border-top:2px solid #e9d5ff;border-bottom:none;font-size:10.5px}
+.tb{display:inline-block;padding:2px 6px;border-radius:3px;font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+.tb-deposit{background:#dbeafe;color:#1e40af}.tb-return{background:#dcfce7;color:#166534}
+.tb-investment{background:#f3e8ff;color:#7e22ce}.tb-withdrawal,.tb-debit{background:#fee2e2;color:#991b1b}
+.tb-platform_fee{background:#fef3c7;color:#92400e}.tb-override{background:#f1f5f9;color:#374151}
+.sb{display:inline-block;padding:2px 6px;border-radius:3px;font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.sb-active{background:#dcfce7;color:#166534}.sb-matured{background:#dbeafe;color:#1e40af}
+.sb-pending{background:#fef3c7;color:#92400e}.sb-paidout{background:#f3e8ff;color:#7e22ce}
+.footer{border-top:1px solid #e5e7eb;padding-top:11px;font-size:9px;color:#6b7280;line-height:1.7;margin-top:10px}
+.footer strong{color:#374151}
+.stamp{display:inline-block;border:2px solid #1f2937;color:#1f2937;padding:4px 11px;border-radius:3px;font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-top:10px}
+</style></head><body>
+<div class="no-print">
+  <span>SV Capital &mdash; Account Statement &nbsp;&middot;&nbsp; ${esc(inv.first_name)} ${esc(inv.last_name)} &nbsp;&middot;&nbsp; ${fromLabel} &ndash; ${toLabel}</span>
+  <button onclick="window.print()">Print / Save PDF</button>
+</div>
+<div class="wrap">
+  <div class="hdr">
+    <div class="hdr-brand">
+      <h1>SV Capital (Pty) Ltd</h1>
+      <p>FSCA Regulated Financial Services Provider</p>
+      <p style="margin-top:3px;font-size:10px;color:#9ca3af">www.svcapital.co.za</p>
+    </div>
+    <div class="hdr-right">
+      <div class="stmt-lbl">Document Type</div>
+      <div class="stmt-title">Account Statement</div>
+      <div class="stmt-meta">
+        Ref: <strong>${stmtRef}</strong><br>
+        Period: ${fromLabel} &ndash; ${toLabel}<br>
+        Issued: ${issuedAt}
+      </div>
+    </div>
+  </div>
+
+  <div class="info-row">
+    <div class="info-box">
+      <div class="info-box-title">Client Details</div>
+      <dl class="info-grid">
+        <dt>Full Name</dt><dd>${esc(inv.first_name)} ${esc(inv.last_name)}</dd>
+        <dt>Investor ID</dt><dd>${esc(inv.id)}</dd>
+        <dt>Email</dt><dd>${esc(inv.email || '—')}</dd>
+        <dt>SA ID / Passport</dt><dd>${esc(inv.id_number || '—')}</dd>
+        ${inv.mobile ? `<dt>Mobile</dt><dd>${esc(inv.mobile)}</dd>` : ''}
+        ${fullAddr ? `<dt>Address</dt><dd style="white-space:pre-line">${esc(fullAddr)}</dd>` : ''}
+      </dl>
+    </div>
+    <div class="info-box">
+      <div class="info-box-title">Statement Details</div>
+      <dl class="info-grid">
+        <dt>From</dt><dd>${fromLabel}</dd>
+        <dt>To</dt><dd>${toLabel}</dd>
+        <dt>Reference</dt><dd style="font-family:monospace;font-size:10px">${stmtRef}</dd>
+        <dt>Issued</dt><dd>${issuedAt}</dd>
+        <dt>Active Investments</dt><dd>${portfolio.activeCount}</dd>
+        <dt>Portfolio Value</dt><dd style="font-weight:700;color:#1f2937">${fmt(portfolio.totalActive)}</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="summary">
+    <div class="sum-card c-open"><div class="sum-lbl">Opening Balance</div><div class="sum-val">${fmt(openingBalance)}</div></div>
+    <div class="sum-card c-in"><div class="sum-lbl">Total Credits</div><div class="sum-val">${fmt(totalIn)}</div></div>
+    <div class="sum-card c-out"><div class="sum-lbl">Total Debits</div><div class="sum-val">${fmt(totalOut)}</div></div>
+    <div class="sum-card c-close"><div class="sum-lbl">Closing Balance</div><div class="sum-val">${fmt(closingBalance)}</div></div>
+  </div>
+
+  <div class="sec-hdr" style="margin-top:4px">Transaction History</div>
+  <table>
+    <thead>
+      <tr>
+        <th>Date</th><th>Type</th><th>Description</th><th>Reference</th>
+        <th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="ob-row">
+        <td colspan="6">Opening Balance &mdash; ${fromLabel}</td>
+        <td class="num">${fmt(openingBalance)}</td>
+      </tr>
+      ${txnRows}
+      <tr class="cb-row">
+        <td colspan="6">Closing Balance &mdash; ${toLabel}</td>
+        <td class="num">${fmt(closingBalance)}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="sec-hdr">Investment Portfolio${activeInvests.length > 0 ? ' (' + activeInvests.length + ' Active)' : ''}</div>
+  ${activeInvests.length ? `<table>
+    <thead>
+      <tr>
+        <th>Product / Pool</th><th class="num">Amount</th><th class="num">Rate</th>
+        <th>Invested</th><th>Maturity</th><th class="num">Expected Return</th><th>Status</th>
+      </tr>
+    </thead>
+    <tbody>${portfolioRows}</tbody>
+  </table>` : `<div style="text-align:center;padding:16px;color:#9ca3af;font-size:11px;background:#fafafa;border-radius:6px;margin-bottom:16px">No active investments as at ${toLabel}</div>`}
+
+  <div class="footer">
+    <strong>SV Capital (Pty) Ltd</strong> &mdash; FSCA Regulated Financial Services Provider.<br>
+    This account statement is prepared for <strong>${esc(inv.first_name)} ${esc(inv.last_name)}</strong> (Account: ${esc(inv.id)}) and covers the period ${fromLabel} to ${toLabel}. All amounts are in South African Rand (ZAR).<br>
+    This document does not constitute a tax certificate. Returns shown represent amounts credited to your SV Capital wallet during the statement period. Investments shown represent capital committed to SV Capital investment pools.<br>
+    <strong>Ref:</strong> ${stmtRef} &nbsp;&middot;&nbsp; <strong>Issued:</strong> ${issuedAt} &nbsp;&middot;&nbsp; <strong>Generated by:</strong> SV Capital Admin Console<br>
+    <div class="stamp">SV Capital</div>
+  </div>
+</div>
+</body></html>`;
+
+  const win = window.open('', '_blank', 'width=980,height=1020');
+  if (!win) { Toast.error('Pop-up blocked — allow pop-ups for this site and try again'); return; }
+  win.document.write(html);
+  win.document.close();
 }
 
 /* ═══════════════════════════════════════════════

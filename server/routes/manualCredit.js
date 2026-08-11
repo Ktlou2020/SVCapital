@@ -844,4 +844,92 @@ router.get('/tax-cert', async (req, res) => {
   }
 });
 
+/* ════════════════════════════════════════════════════
+   GET /api/admin/account-statement
+   Full account statement for an investor over any date range.
+   Returns opening/closing balances, per-transaction running balance,
+   and the current investment portfolio.
+   ════════════════════════════════════════════════════ */
+router.get('/account-statement', async (req, res) => {
+  try {
+    const { investor_id, from, to } = req.query;
+    if (!investor_id || !from || !to)
+      return res.status(400).json({ error: 'investor_id, from and to are required' });
+
+    const fromDt = new Date(from + 'T00:00:00.000Z');
+    const toDt   = new Date(to   + 'T23:59:59.999Z');
+    if (isNaN(fromDt.getTime()) || isNaN(toDt.getTime()))
+      return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
+
+    const [invRes, allTxnRes, invstRes] = await Promise.all([
+      pool.query('SELECT * FROM investors WHERE id = $1 LIMIT 1', [investor_id]),
+      pool.query(
+        `SELECT id, created_at, type, amount, status, reference, description
+         FROM transactions
+         WHERE investor_id = $1 AND status = 'completed'
+         ORDER BY created_at ASC`,
+        [investor_id]
+      ),
+      pool.query(
+        `SELECT i.id, i.amount, i.status, i.created_at, i.maturity_date,
+                i.expected_return, i.actual_return,
+                p.name AS pool_name, p.product_type, p.annual_rate
+         FROM investments i
+         LEFT JOIN pools p ON p.id = i.pool_id
+         WHERE i.investor_id = $1
+         ORDER BY i.created_at ASC`,
+        [investor_id]
+      ),
+    ]);
+
+    if (!invRes.rows[0]) return res.status(404).json({ error: 'Investor not found' });
+
+    const inv     = invRes.rows[0];
+    const allTxns = allTxnRes.rows;
+
+    // Pre-period transactions → opening wallet balance
+    const preTxns = allTxns.filter(t => new Date(t.created_at) < fromDt);
+    const inTxns  = allTxns.filter(t => {
+      const d = new Date(t.created_at);
+      return d >= fromDt && d <= toDt;
+    });
+
+    const openingBalance = preTxns.reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+
+    // Attach running balance to each in-period transaction
+    let running = openingBalance;
+    const transactions = inTxns.map(t => {
+      running += parseFloat(t.amount) || 0;
+      return { ...t, running_balance: parseFloat(running.toFixed(2)) };
+    });
+    const closingBalance = parseFloat(running.toFixed(2));
+
+    const activeInvests = invstRes.rows.filter(i => i.status === 'active');
+    const totalActive   = activeInvests.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+
+    res.json({
+      investor: {
+        id: inv.id, first_name: inv.first_name, last_name: inv.last_name,
+        email: inv.email, id_number: inv.id_number,
+        mobile: inv.mobile || inv.phone,
+        wallet_balance: inv.wallet_balance,
+        street_address: inv.street_address, suburb: inv.suburb,
+        address: inv.address, postal_code: inv.postal_code, province: inv.province,
+      },
+      period: { from: fromDt.toISOString(), to: toDt.toISOString() },
+      openingBalance: parseFloat(openingBalance.toFixed(2)),
+      closingBalance,
+      transactions,
+      investments: invstRes.rows,
+      portfolio: {
+        totalActive: parseFloat(totalActive.toFixed(2)),
+        activeCount: activeInvests.length,
+      },
+    });
+  } catch (err) {
+    console.error('[admin/account-statement]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
