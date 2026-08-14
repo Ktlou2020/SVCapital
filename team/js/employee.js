@@ -468,14 +468,15 @@ function renderQuiz(mod) {
   let questions = [];
   try { questions = JSON.parse(mod.quiz||'[]'); } catch { questions=[]; }
   if (!questions.length) {
-    return `<div class="quiz-wrap">
-      <div class="quiz-title">Quick Knowledge Check</div>
-      <p class="text-muted">No quiz questions for this module.</p>
-      <div class="lesson-actions mt-2">
-        <button class="btn btn--success btn--lg" onclick="completeModule(${JSON.stringify(mod).replace(/"/g,"'")},100,${mod.xp_reward||50})">
-          <i class="fa-solid fa-check"></i> Mark Complete
-        </button>
-      </div></div>`;
+    // Auto-generate quiz if missing — replace content area with spinner then reload
+    setTimeout(() => _autoGenerateQuiz(mod), 50);
+    return `<div class="quiz-wrap" id="quiz-gen-wrap">
+      <div class="quiz-title">Generating Quiz…</div>
+      <p class="text-muted" style="display:flex;align-items:center;gap:10px">
+        <i class="fa-solid fa-spinner fa-spin" style="color:#eda5ff"></i>
+        Generating quiz questions for this module using AI — this takes a few seconds.
+      </p>
+    </div>`;
   }
 
   return `<div class="quiz-wrap">
@@ -505,6 +506,28 @@ function renderQuiz(mod) {
       </button>
     </div>
   </div>`;
+}
+
+async function _autoGenerateQuiz(mod) {
+  const token = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
+  try {
+    const res = await fetch(`/api/ai/generate-quiz/${mod.id}`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      credentials: 'include',
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const { questions } = await res.json();
+    // Patch the cached module so re-renders work without refetching
+    const cached = _readerModules.find(m => m.id === mod.id);
+    if (cached) cached.quiz = JSON.stringify(questions);
+    // Re-render the quiz now that we have questions
+    renderReader();
+  } catch (e) {
+    console.error('[employee] auto-generate quiz failed:', e);
+    const wrap = document.getElementById('quiz-gen-wrap');
+    if (wrap) wrap.innerHTML = `<div class="quiz-title">Quiz Unavailable</div><p class="text-muted">Could not generate quiz questions. <a href="#" onclick="startQuiz();return false">Try again</a> or contact your administrator.</p>`;
+  }
 }
 
 function startQuiz() { _readerMode='quiz'; _quizAnswers={}; _quizSubmitted=false; renderReader(); }

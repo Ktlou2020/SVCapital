@@ -11167,6 +11167,35 @@ async function backfillFicaFromKyc(btn) {
   }
 }
 
+async function backfillCourseQuizzes(btn) {
+  const resultEl = document.getElementById('quizBackfillResult');
+  if (!await Confirm.ask(
+    'Generate quizzes for all course modules missing them?',
+    { body: 'This will call Claude for each module that has no quiz questions and generate 3 questions per module. Only modules without quizzes are affected. Continue?', confirmLabel: 'Generate Quizzes' }
+  )) return;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generating — this may take a minute…';
+  resultEl.textContent = '';
+  try {
+    const data = await API._fetch('POST', 'ai/backfill-quizzes');
+    if (data.updated === 0 && !data.errors?.length) {
+      resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> ${data.message || 'All modules already have quizzes.'}</span>`;
+    } else {
+      const errHtml = data.errors?.length
+        ? `<br><span style="color:#f59e0b">${data.errors.length} error(s): ${data.errors.map(e => e.module).join(', ')}</span>`
+        : '';
+      resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> Generated quizzes for <strong>${data.updated}</strong> of <strong>${data.total}</strong> module(s).</span>${errHtml}`;
+    }
+    Toast.success(`Quiz backfill complete — ${data.updated} modules updated`);
+  } catch (e) {
+    resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Failed'}</span>`;
+    Toast.error(e.message || 'Quiz backfill failed');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-robot"></i> Generate Missing Quizzes';
+  }
+}
+
 async function reimportBankAccounts(btn) {
   const fileInput = document.getElementById('bankJsonFile');
   const resultEl  = document.getElementById('bankReimportResult');

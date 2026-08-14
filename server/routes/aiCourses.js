@@ -165,4 +165,129 @@ RULES:
   }
 });
 
+/* ── POST /api/ai/generate-quiz/:moduleId  — generate quiz for one module ── */
+router.post('/generate-quiz/:moduleId', requireAuth, async (req, res) => {
+  const { moduleId } = req.params;
+  try {
+    const { rows } = await pool.query(
+      `SELECT cm.*, ec.title AS course_title
+       FROM course_modules cm
+       JOIN employee_courses ec ON ec.id = cm.course_id
+       WHERE cm.id = $1`,
+      [moduleId]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Module not found' });
+    const mod = rows[0];
+
+    const prompt = `You are a professional L&D specialist for SV Capital, a South African alternative investment firm.
+Generate exactly 3 quiz questions for the following course module.
+
+Course: "${mod.course_title}"
+Module: "${mod.title}"
+Content:
+${(mod.content || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 3000)}
+
+Return ONLY valid JSON — an array of 3 objects:
+[
+  {
+    "question": "Clear question testing understanding of module content",
+    "options": ["Option A", "Option B", "Option C", "Option D"],
+    "correct": 1,
+    "explanation": "Why this answer is correct and how it applies at SV Capital"
+  }
+]
+Rules:
+- Vary the correct index (0-3) across questions — not always the same
+- Questions must be answerable from the module content only
+- Return ONLY the JSON array`;
+
+    const message = await client.messages.create({
+      model: 'claude-opus-5',
+      max_tokens: 1500,
+      messages: [{ role: 'user', content: prompt }],
+    });
+    const text = message.content.find(b => b.type === 'text')?.text || '';
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) throw new Error('Claude did not return a valid JSON array');
+    const questions = JSON.parse(jsonMatch[0]);
+    if (!Array.isArray(questions) || questions.length < 1) throw new Error('No questions returned');
+
+    await pool.query(
+      `UPDATE course_modules SET quiz = $2 WHERE id = $1`,
+      [moduleId, JSON.stringify(questions)]
+    );
+
+    res.json({ questions });
+  } catch (err) {
+    console.error('[ai-courses] generate-quiz error:', err.message);
+    res.status(500).json({ error: 'Quiz generation failed: ' + err.message });
+  }
+});
+
+/* ── POST /api/ai/backfill-quizzes  — generate quizzes for ALL modules missing them (admin) ── */
+router.post('/backfill-quizzes', requireAuth, async (req, res) => {
+  if (!['admin', 'director', 'ceo'].includes((req.user.role || '').toLowerCase())) {
+    return res.status(403).json({ error: 'Admin only' });
+  }
+  try {
+    const { rows: modules } = await pool.query(`
+      SELECT cm.*, ec.title AS course_title
+      FROM course_modules cm
+      JOIN employee_courses ec ON ec.id = cm.course_id
+      WHERE cm.quiz IS NULL OR cm.quiz::text = '[]' OR cm.quiz::text = 'null'
+      ORDER BY cm.course_id, cm.module_index
+    `);
+
+    if (!modules.length) return res.json({ updated: 0, message: 'All modules already have quizzes' });
+
+    let updated = 0;
+    const errors = [];
+    for (const mod of modules) {
+      try {
+        const prompt = `You are a professional L&D specialist for SV Capital, a South African alternative investment firm.
+Generate exactly 3 quiz questions for the following course module.
+
+Course: "${mod.course_title}"
+Module: "${mod.title}"
+Content:
+${(mod.content || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 3000)}
+
+Return ONLY valid JSON — an array of 3 objects:
+[
+  {
+    "question": "Clear question testing understanding of module content",
+    "options": ["Option A", "Option B", "Option C", "Option D"],
+    "correct": 1,
+    "explanation": "Why this answer is correct and how it applies at SV Capital"
+  }
+]
+Rules: vary correct index (0-3) across questions. Return ONLY the JSON array.`;
+
+        const message = await client.messages.create({
+          model: 'claude-opus-5',
+          max_tokens: 1500,
+          messages: [{ role: 'user', content: prompt }],
+        });
+        const text = message.content.find(b => b.type === 'text')?.text || '';
+        const jsonMatch = text.match(/\[[\s\S]*\]/);
+        if (!jsonMatch) throw new Error('No JSON array returned');
+        const questions = JSON.parse(jsonMatch[0]);
+        if (!Array.isArray(questions) || !questions.length) throw new Error('Empty questions array');
+
+        await pool.query(`UPDATE course_modules SET quiz = $2 WHERE id = $1`, [mod.id, JSON.stringify(questions)]);
+        updated++;
+        console.log(`[ai-courses] backfill: quiz added to module "${mod.title}"`);
+      } catch (e) {
+        errors.push({ module: mod.title, error: e.message });
+        console.error(`[ai-courses] backfill error for "${mod.title}":`, e.message);
+      }
+    }
+
+    res.json({ updated, total: modules.length, errors });
+  } catch (err) {
+    console.error('[ai-courses] backfill-quizzes error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

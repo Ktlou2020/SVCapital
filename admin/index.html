@@ -1690,6 +1690,16 @@
                             <div id="ficaBackfillResult" style="margin-top:10px;font-size:0.82rem"></div>
                           </div>
 
+                          <!-- Course quiz backfill -->
+                          <div style="background:var(--bg-secondary);border-radius:10px;padding:16px;margin-top:14px">
+                            <p style="font-weight:600;margin-bottom:6px">Generate Quizzes for All Courses</p>
+                            <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px">Finds all course modules that are missing quiz questions and generates 3 AI questions per module using Claude. Safe to run multiple times — only modules with no existing quiz are affected. May take a minute for large course libraries.</p>
+                            <button class="btn btn--secondary" onclick="backfillCourseQuizzes(this)">
+                              <i class="fa-solid fa-robot"></i> Generate Missing Quizzes
+                            </button>
+                            <div id="quizBackfillResult" style="margin-top:10px;font-size:0.82rem"></div>
+                          </div>
+
                           <!-- Bank account reimport -->
                           <div style="background:var(--bg-secondary);border-radius:10px;padding:16px;margin-top:14px">
                             <p style="font-weight:600;margin-bottom:6px">Re-import Bank Accounts from JSON</p>
@@ -4241,7 +4251,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=4"></script>
-<script src="js/admin.js?v=62"></script>
+<script src="js/admin.js?v=63"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>
