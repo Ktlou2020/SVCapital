@@ -8761,8 +8761,8 @@ async function confirmSaDeposit() {
   if (!sa || !amount || amount <= 0) { Toast.error('Enter a valid deposit amount'); return; }
 
   try {
-    const newBal = Math.round(((parseFloat(sa.wallet_balance) || 0) + amount) * 100) / 100;
-    await API._fetch('PATCH', `tables/sub_accounts/${saId}`, { wallet_balance: newBal });
+    // Do NOT credit wallet_balance here — EFT funds are unconfirmed until admin verifies receipt.
+    // Admin manually credits the balance once the bank transfer clears.
     await API._fetch('POST', 'tables/transactions', {
       investor_id:    PORTAL.investor?.id || DEMO_INVESTOR_ID,
       sub_account_id: saId,
@@ -8770,9 +8770,9 @@ async function confirmSaDeposit() {
       amount,
       status:         'pending',
       reference:      ref,
-      description:    `EFT deposit to ${sa.name} — pending confirmation`,
+      description:    `EFT deposit to ${sa.name} — awaiting admin confirmation`,
     });
-    Toast.success(`Deposit of ${Utils.rand(amount)} submitted for ${sa.name}. The admin team will confirm receipt.`);
+    Toast.success(`Deposit of ${Utils.rand(amount)} submitted for ${sa.name}. Your balance will be updated once we confirm receipt of the funds.`);
     Modal.close('saDepositModal');
     await loadSubAccounts();
   } catch (e) {
@@ -8790,7 +8790,7 @@ function _showSaNoFundsPrompt(sa, minNeeded) {
     : `Insufficient funds in ${sa.name}'s wallet`;
   document.getElementById('saNoFundsMsg').textContent = isEmpty
     ? `You need to deposit funds into ${sa.name}'s wallet before you can invest.`
-    : `The minimum investment plus the 1% platform fee requires ${Utils.rand(minNeeded)}. Current balance: ${Utils.rand(bal)}.`;
+    : `The cheapest open product requires a minimum of ${Utils.rand(minNeeded)}. The 1% platform fee is taken from your wallet amount (already included). Current balance: ${Utils.rand(bal)}.`;
   document.getElementById('saNoFundsBal').textContent   = Utils.rand(bal);
   document.getElementById('saNoFundsDepositBtn').onclick = () => {
     Modal.close('saNoFundsModal');
@@ -8804,9 +8804,8 @@ function openSaInvest(saId) {
   if (!sa) return;
   const bal      = parseFloat(sa.wallet_balance) || 0;
   const openPools = (PORTAL.pools || []).filter(p => p.status === 'open');
-  const minNeeded = openPools.length
-    ? Math.min(...openPools.map(p => parseFloat(p.min_investment) || 0))
-    : 0;
+  const poolMins  = openPools.map(p => parseFloat(p.min_investment)).filter(v => v > 0);
+  const minNeeded = poolMins.length ? Math.min(...poolMins) : 0;
   if (bal <= 0 || (minNeeded > 0 && bal < minNeeded)) { _showSaNoFundsPrompt(sa, minNeeded); return; }
 
   _pmSaId = saId;
