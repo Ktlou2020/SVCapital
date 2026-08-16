@@ -806,7 +806,6 @@
                 <option value="cattle">Cattle</option>
                 <option value="solar">Solar</option>
                 <option value="short_term">Short Term Investment</option>
-                <option value="delivery_bike">Delivery Bikes</option>
                 <option value="other">Other</option>
               </select>
               <input type="date" class="tbl-filter" id="invDateFrom" title="Start date from" style="font-size:0.8rem" />
@@ -2437,7 +2436,7 @@
                 <div class="hb-call info"><strong>Purpose of this handbook</strong> — Single source of truth for the entire SV Capital platform. All team members must refer here before making any change to the codebase, business logic, or infrastructure. When rules here conflict with tribal knowledge, this document wins.</div>
                 <div class="hb-subsection">
                   <div class="hb-sub-title">What the platform is</div>
-                  <div class="hb-entry" data-kw="sv capital platform investment fintech south africa overview"><div class="hb-entry-label">SV Capital</div><div class="hb-entry-val">A South African alternative investment platform connecting retail investors to products across cattle, solar energy, SMME lending, gridfarmer, delivery bikes, and short-term instruments. Investors deposit via card (Paystack) or EFT (Ozow), invest into pooled products, and receive returns at maturity.</div></div>
+                  <div class="hb-entry" data-kw="sv capital platform investment fintech south africa overview"><div class="hb-entry-label">SV Capital</div><div class="hb-entry-val">A South African alternative investment platform connecting retail investors to products across cattle, solar energy, SMME lending, gridfarmer, and short-term instruments. Investors deposit via card (Paystack) or EFT (Ozow), invest into pooled products, and receive returns at maturity.</div></div>
                   <div class="hb-entry" data-kw="production url live site railway"><div class="hb-entry-label">Production URL</div><div class="hb-entry-val"><code>https://svcapital-production.up.railway.app</code> — serves both the API and all frontend files.</div></div>
                   <div class="hb-entry" data-kw="staging url test environment"><div class="hb-entry-label">Staging URL</div><div class="hb-entry-val"><code>https://svcapital-staging.up.railway.app</code> — used for testing before production deploys.</div></div>
                 </div>
@@ -2832,14 +2831,13 @@
               <!-- PRODUCTS -->
               <div class="hb-section" id="hb-products">
                 <h2 class="hb-section-title"><span class="hb-icon"><i class="fa-solid fa-coins"></i></span>Investment Products</h2>
-                <div class="hb-entry" data-kw="product types cattle solar gridfarmer short term smme delivery bike 12j ilobola investment products minimum term partner beefcor moolalend">
+                <div class="hb-entry" data-kw="product types cattle solar gridfarmer short term smme 12j ilobola investment products minimum term partner beefcor moolalend">
                   <div class="hb-entry-val"><table class="hb-tbl"><thead><tr><th>Product Type</th><th>Label</th><th>Partner</th><th>Min. Investment</th><th>Term</th></tr></thead><tbody>
                     <tr><td><code>cattle</code></td><td>Cattle Investment</td><td>Beefcor</td><td>R 500</td><td>12 months</td></tr>
                     <tr><td><code>solar_7yr</code></td><td>Solar Investment (7yr)</td><td>—</td><td>R 10,000</td><td>84 months</td></tr>
                     <tr><td><code>solar_6yr</code></td><td>Solar Investment (6yr)</td><td>—</td><td>R 10,000</td><td>72 months</td></tr>
                     <tr><td><code>solar_5yr</code></td><td>Solar Investment (5yr)</td><td>—</td><td>R 10,000</td><td>60 months</td></tr>
                     <tr><td><code>short_term</code></td><td>Short Term Investment</td><td>MoolaLend</td><td>R 1,000</td><td>5 months</td></tr>
-                    <tr><td><code>delivery_bike</code></td><td>Delivery Bikes</td><td>—</td><td>R 3,100</td><td>18 months</td></tr>
                     <tr><td><code>cattle_12j</code></td><td>12J Cattle Investment</td><td>Beefcor</td><td>R 5,000</td><td>60 months</td></tr>
                     <tr><td><code>ilobola</code></td><td>iLobola</td><td>—</td><td>R 500</td><td>12 months</td></tr>
                     <tr><td><code>gridfarmer</code></td><td>GridFarmer</td><td>GridFarmer</td><td>R 17,000</td><td>12 months</td></tr>
@@ -3286,7 +3284,6 @@
             <option value="solar_6yr">Solar Investment (6yr)</option>
             <option value="solar_5yr">Solar Investment (5yr)</option>
             <option value="short_term">Short Term Investment</option>
-            <option value="delivery_bike">Delivery Bikes</option>
           </select>
         </div>
       </div>
@@ -3680,7 +3677,6 @@
             <option value="solar_6yr">Solar Investment (6yr)</option>
             <option value="solar_5yr">Solar Investment (5yr)</option>
             <option value="short_term">Short Term Investment</option>
-            <option value="delivery_bike">Delivery Bikes</option>
           </select>
         </div>
         <div class="form-group"><label class="form-label">Term (months)</label><input type="number" class="form-input" id="editPoolTerm" onchange="_autoCalcMaturityDate('editPoolOpenDate','editPoolTerm','editPoolMaturityDate')" /></div>
