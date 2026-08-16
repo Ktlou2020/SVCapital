@@ -96,24 +96,6 @@ const PRODUCTS = {
       { label: 'Pool Type', value: 'Time-based pool' },
     ]
   },
-  delivery: {
-    name: 'Delivery Bike Investment',
-    rate: 0.1205,
-    minInvest: 3100,
-    term: 18,
-    termUnit: 'months',
-    termYears: 1.5,
-    icon: 'fa-motorcycle',
-    color: '#f97316',
-    partner: 'OnFleet',
-    infoItems: [
-      { label: 'Partner', value: 'OnFleet Pty Ltd' },
-      { label: 'Sector', value: 'Logistics' },
-      { label: 'Platforms', value: 'Mr D, Takealot, UberEats' },
-      { label: 'Min. Fleet', value: '5 bikes per pool' },
-      { label: 'Pool Type', value: 'Targeted amount' },
-    ]
-  }
 };
 
 /* ─── Partner info profiles ─── */
@@ -190,7 +172,7 @@ const FAQ_DATA = {
   products: [
     {
       q: 'What investment products are available?',
-      a: 'SV Capital currently offers four investment products: Cattle Investment (12 months, min R500), Solar Investment (5, 6, or 7-year terms, min R10,000), Short-Term Investment (5 months, min R1,000), and Delivery Bike Investment (18 months, min R3,100).'
+      a: 'SV Capital currently offers three investment products: Cattle Investment (12 months, min R500), Solar Investment (5, 6, or 7-year terms, min R10,000), and Short-Term Investment (5 months, min R1,000).'
     },
     {
       q: 'Do I own the cattle or solar panels?',
@@ -299,24 +281,6 @@ const MODAL_DATA = {
       'Auto-reinvest option available at maturity'
     ]
   },
-  delivery: {
-    eyebrow: 'Delivery Bike Investment',
-    title: 'Ride the delivery revolution.',
-    desc: 'Invest in a fleet of delivery bikes leased to qualified riders operating on Mr D, Takealot, and UberEats. Weekly rental payments generate your returns as South Africa\'s last-mile delivery economy booms.',
-    stats: [
-      { label: 'Avg. Return', val: '12.05% p.a.' },
-      { label: 'Minimum', val: 'R3,100' },
-      { label: 'Term', val: '18 Months' }
-    ],
-    points: [
-      'Partner: OnFleet Pty Ltd, delivery fleet management',
-      'Bikes leased to qualified riders on Mr D, Takealot & UberEats',
-      'Weekly rental payments from riders',
-      'Minimum fleet of 5 bikes per pool for risk diversification',
-      'Targeted amount pool structure (not time-based)',
-      'Creates income opportunities for gig economy workers'
-    ]
-  }
 };
 
 /* ═══════════════════════════════════════════════
@@ -995,7 +959,6 @@ async function _applyLiveProductAverages() {
     cattle:   { types: ['cattle'], primary: 'cattle' },
     solar:    { types: ['solar_7yr', 'solar_6yr', 'solar_5yr'], primary: 'solar_7yr' },
     short:    { types: ['short_term', 'smme'], primary: 'short_term' },
-    delivery: { types: ['delivery_bike'], primary: 'delivery_bike' },
   };
 
   const fmtR = n => 'R' + Number(n || 0).toLocaleString('en-ZA');
