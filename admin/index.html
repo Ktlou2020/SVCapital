@@ -1700,6 +1700,16 @@
                             <div id="quizBackfillResult" style="margin-top:10px;font-size:0.82rem"></div>
                           </div>
 
+                          <!-- Investor demographics backfill -->
+                          <div style="background:var(--bg-secondary);border-radius:10px;padding:16px;margin-top:14px">
+                            <p style="font-weight:600;margin-bottom:6px">Backfill Investor Demographics</p>
+                            <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px">Fills in <strong>Gender</strong> (derived from SA ID number) and <strong>Heard About Us</strong> (parsed from the registration notes) for any investor missing those values. Only rows where the column is <code>NULL</code> are touched — safe to run multiple times.</p>
+                            <button class="btn btn--secondary" onclick="backfillInvestorDemographics(this)">
+                              <i class="fa-solid fa-person-circle-plus"></i> Backfill Gender &amp; Heard About Us
+                            </button>
+                            <div id="demographicsBackfillResult" style="margin-top:10px;font-size:0.82rem"></div>
+                          </div>
+
                           <!-- Bank account reimport -->
                           <div style="background:var(--bg-secondary);border-radius:10px;padding:16px;margin-top:14px">
                             <p style="font-weight:600;margin-bottom:6px">Re-import Bank Accounts from JSON</p>
@@ -4251,7 +4261,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=4"></script>
-<script src="js/admin.js?v=64"></script>
+<script src="js/admin.js?v=65"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>

@@ -11170,6 +11170,32 @@ async function backfillFicaFromKyc(btn) {
   }
 }
 
+async function backfillInvestorDemographics(btn) {
+  const resultEl = document.getElementById('demographicsBackfillResult');
+  if (!await Confirm.ask(
+    'Backfill investor demographics?',
+    { body: 'This will derive Gender from the stored SA ID number and parse Heard About Us from the registration notes, for any investor missing those values. Continue?', confirmLabel: 'Run Backfill' }
+  )) return;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Running…';
+  resultEl.textContent = '';
+  try {
+    const data = await API._fetch('POST', 'admin/backfill/investor-demographics');
+    if (data.gender_updated === 0 && data.heard_updated === 0) {
+      resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> ${data.message || 'Nothing to backfill — all investors already have these fields.'}</span>`;
+    } else {
+      resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> Checked <strong>${data.total_checked}</strong> investor(s) — Gender filled for <strong>${data.gender_updated}</strong>, Heard About Us filled for <strong>${data.heard_updated}</strong>.</span>`;
+    }
+    Toast.success(`Demographics backfill complete`);
+  } catch (e) {
+    resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Failed'}</span>`;
+    Toast.error(e.message || 'Backfill failed');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-person-circle-plus"></i> Backfill Gender &amp; Heard About Us';
+  }
+}
+
 async function backfillCourseQuizzes(btn) {
   const resultEl = document.getElementById('quizBackfillResult');
   if (!await Confirm.ask(

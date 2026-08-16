@@ -909,4 +909,67 @@ router.get('/account-statement', async (req, res) => {
   }
 });
 
+/* ─── POST /api/admin/backfill/investor-demographics ──────────────────────
+   Backfills gender (from SA ID number) and heard_about_us (parsed from
+   the notes column) for any investor missing those values.
+   Safe to run multiple times — only rows where the column is NULL are touched.
+   ─────────────────────────────────────────────────────────────────────────── */
+router.post('/backfill/investor-demographics', async (req, res) => {
+  try {
+    const { rows: investors } = await pool.query(`
+      SELECT id, id_number, notes, gender, heard_about_us
+      FROM investors
+      WHERE gender IS NULL OR heard_about_us IS NULL
+    `);
+
+    if (!investors.length) {
+      return res.json({ gender_updated: 0, heard_updated: 0, message: 'Nothing to backfill' });
+    }
+
+    let genderUpdated = 0;
+    let heardUpdated  = 0;
+
+    for (const inv of investors) {
+      let newGender = null;
+      let newHeard  = null;
+
+      // ── Derive gender from SA ID (13 digits, digit at index 6: 0-4 = Female, 5-9 = Male)
+      if (inv.gender === null && inv.id_number) {
+        const id = String(inv.id_number).replace(/\s/g, '');
+        if (/^\d{13}$/.test(id)) {
+          const d = parseInt(id[6], 10);
+          newGender = d >= 5 ? 'Male' : 'Female';
+        }
+      }
+
+      // ── Parse heard_about_us from notes column
+      // Format written by signup: "... Heard: <value>. FICA docs: ..."
+      // or "... Heard: other (<free text>). FICA docs: ..."
+      if (inv.heard_about_us === null && inv.notes) {
+        const match = inv.notes.match(/Heard:\s*([^.]+?)(?:\s*\.|$)/i);
+        if (match) {
+          newHeard = match[1].trim();
+        }
+      }
+
+      if (newGender !== null || newHeard !== null) {
+        await pool.query(
+          `UPDATE investors
+           SET gender         = COALESCE($2, gender),
+               heard_about_us = COALESCE($3, heard_about_us)
+           WHERE id = $1`,
+          [inv.id, newGender, newHeard]
+        );
+        if (newGender !== null) genderUpdated++;
+        if (newHeard  !== null) heardUpdated++;
+      }
+    }
+
+    res.json({ gender_updated: genderUpdated, heard_updated: heardUpdated, total_checked: investors.length });
+  } catch (err) {
+    console.error('[admin/backfill/investor-demographics]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
