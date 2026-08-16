@@ -1026,7 +1026,6 @@ async function _applyLiveProductAverages() {
     cattle:   ['cattle'],
     solar:    ['solar_7yr', 'solar_6yr', 'solar_5yr'],
     short:    ['short_term', 'smme'],
-    delivery: ['delivery_bike'],
   };
   const calcTabMap = { // calc tab data-calc values → product home key
     cattle:   'cattle',
@@ -1034,7 +1033,6 @@ async function _applyLiveProductAverages() {
     solar6:   'solar',
     solar5:   'solar',
     short:    'short',
-    delivery: 'delivery',
   };
 
   // A home key is visible only if at least one of its product_types has display_on_homepage === true
@@ -1247,7 +1245,7 @@ async function _applyTrackRecord() {
     data = (await r.json()).data || {};
   } catch (_) { return; }
 
-  const fam = { cattle: ['cattle'], solar: ['solar_7yr', 'solar_6yr', 'solar_5yr'], short: ['short_term', 'smme'], delivery: ['delivery_bike'] };
+  const fam = { cattle: ['cattle'], solar: ['solar_7yr', 'solar_6yr', 'solar_5yr'], short: ['short_term', 'smme'] };
   const rand = n => 'R' + Number(n || 0).toLocaleString('en-ZA');
 
   Object.keys(fam).forEach(key => {
