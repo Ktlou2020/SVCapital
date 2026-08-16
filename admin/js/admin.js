@@ -1413,15 +1413,17 @@ function bulkExportSelected() {
   const ids = [...selectedInvestors];
   if (!ids.length) return;
   const rows = STATE.investors.filter(i => ids.includes(i.id));
-  const headers = ['ID','First Name','Last Name','Email','Phone','Status','FICA Status','KYC Status','Wallet Balance','Created'];
+  const headers = ['ID','First Name','Last Name','Email','Phone','Gender','Heard About Us','Status','FICA Status','KYC Status','Wallet Balance','Created'];
   const csv = [
     headers.join(','),
     ...rows.map(r => [
       r.id,
-      `"${(r.first_name || '').replace(/"/g, '""')}"`,
-      `"${(r.last_name  || '').replace(/"/g, '""')}"`,
-      `"${(r.email      || '').replace(/"/g, '""')}"`,
-      `"${(r.phone      || '').replace(/"/g, '""')}"`,
+      `"${(r.first_name     || '').replace(/"/g, '""')}"`,
+      `"${(r.last_name      || '').replace(/"/g, '""')}"`,
+      `"${(r.email          || '').replace(/"/g, '""')}"`,
+      `"${(r.phone          || '').replace(/"/g, '""')}"`,
+      `"${(r.gender         || '').replace(/"/g, '""')}"`,
+      `"${(r.heard_about_us || '').replace(/"/g, '""')}"`,
       r.status        || '',
       r.fica_status   || '',
       r.kyc_status    || '',
@@ -8940,9 +8942,10 @@ function exportInvestorsCSV() {
   if (!STATE.investors.length) { Toast.error('Load investors first'); return; }
   const data = (filteredInvestors && filteredInvestors.length && filteredInvestors.length < STATE.investors.length)
     ? filteredInvestors : STATE.investors;
-  const headers = ['ID','First Name','Last Name','Email','Phone','FICA Status','Wallet Balance','Total Invested','Total Returns','Date Joined'];
+  const headers = ['ID','First Name','Last Name','Email','Phone','Gender','Heard About Us','FICA Status','Wallet Balance','Total Invested','Total Returns','Date Joined'];
   const rows = [headers, ...data.map(i => [
     i.id, i.first_name, i.last_name, i.email, i.phone || '',
+    i.gender || '', i.heard_about_us || '',
     i.fica_status, i.wallet_balance || 0, i.total_invested || 0, i.total_returns || 0,
     i.date_joined ? new Date(i.date_joined).toLocaleDateString('en-ZA') : '',
   ])];

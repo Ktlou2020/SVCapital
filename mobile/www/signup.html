@@ -1716,9 +1716,10 @@
 <script>
 'use strict';
 
-let currentStep  = 1;
-let selectedRisk = 'moderate';
-let clientType   = 'sa'; // 'sa' | 'intl'
+let currentStep   = 1;
+let selectedRisk  = 'moderate';
+let clientType    = 'sa'; // 'sa' | 'intl'
+let _derivedGender = null;
 
 const ficaFiles   = { id: null, address: null, selfie: null, bank: null, tax: null };
 const REQUIRED_DOCS = ['id', 'address', 'selfie'];
@@ -1930,6 +1931,7 @@ function validateSAID(id) {
   // Gender: digit 7 (index 6), 0–4 = female, 5–9 = male
   const genderDigit = parseInt(id[6], 10);
   const gender = genderDigit >= 5 ? 'Male' : 'Female';
+  _derivedGender = gender;
 
   // Citizenship: digit 11 (index 10), 0 = SA citizen, 1 = PR
   const citizenDigit = parseInt(id[10], 10);
@@ -2597,9 +2599,13 @@ async function _doSubmit(skippedFica) {
       idNumber, province,
       occupation:   '',
       role:         'investor',
-      referredBy:   referral || '',
-      riskProfile:  selectedRisk,
-      notes:        `${docNotes} Experience: ${v('investExp')}. Heard: ${v('hearAbout')}${v('hearAbout') === 'other' ? ' (' + v('hearAboutOther') + ')' : ''}. FICA docs: ${uploadedDocs.join(', ') || 'none'}.`,
+      referredBy:    referral || '',
+      riskProfile:   selectedRisk,
+      gender:        _derivedGender || undefined,
+      heardAboutUs:  v('hearAbout') === 'other'
+                       ? `Other: ${v('hearAboutOther')}`
+                       : v('hearAbout') || undefined,
+      notes:         `${docNotes} Experience: ${v('investExp')}. Heard: ${v('hearAbout')}${v('hearAbout') === 'other' ? ' (' + v('hearAboutOther') + ')' : ''}. FICA docs: ${uploadedDocs.join(', ') || 'none'}.`,
       termsAccepted: !!(document.getElementById('termsCheck')?.checked),
       ficaConsent:   !!(document.getElementById('ficaConsentCheck')?.checked),
       popiaAccepted: !!(document.getElementById('popiaCheck')?.checked),

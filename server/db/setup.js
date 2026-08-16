@@ -406,6 +406,9 @@ DO $$ BEGIN
   BEGIN ALTER TABLE investments ADD COLUMN eva_amount NUMERIC(12,2) DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
   -- System-generated tickets (AML checks etc — hidden from client view)
   BEGIN ALTER TABLE support_tickets ADD COLUMN is_system BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  -- Investor demographic fields for reporting
+  BEGIN ALTER TABLE investors ADD COLUMN gender TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE investors ADD COLUMN heard_about_us TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
 END $$;
 
 -- One-time backfill: seed each EXISTING employee's individual app access from
