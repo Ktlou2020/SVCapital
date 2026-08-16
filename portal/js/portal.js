@@ -6757,11 +6757,11 @@ const LEARN_MODULES = [
     icon: 'fa-building-columns', color: '#656565',
     keyPoints: [
       'SV Capital gives investors direct access to tangible South African alternative assets',
-      'Products include solar energy projects, cattle farming, and delivery-bike fleets',
+      'Products include solar energy projects and cattle farming',
       'Investment terms start from 5 months, each with a defined return rate and maturity date',
       'Every investment is backed by real, income-generating assets',
     ],
-    content: `SV Capital is a South African alternative investment platform that connects investors directly with real-economy projects generating above-inflation returns. Unlike unit trusts or share portfolios, your money is put to work in tangible assets — solar panels generating electricity, cattle being raised and sold at market, and delivery-bike fleets earning daily income.
+    content: `SV Capital is a South African alternative investment platform that connects investors directly with real-economy projects generating above-inflation returns. Unlike unit trusts or share portfolios, your money is put to work in tangible assets — solar panels generating electricity, and cattle being raised and sold at market.
 
 Each investment has a clearly defined term, starting from 5 months, and a set annual rate of return, so you know what to expect from the outset. Every product carries its own risk profile — from Low through to High — so you can match your investments to your appetite. Your capital is tracked in real time on this portal.
 
@@ -6845,7 +6845,7 @@ Because cattle depends on biological growth and market prices, it carries a high
       'A blended portfolio smooths your overall return over time',
       'Diversification is not just by product — also consider term length and entry date',
     ],
-    content: `Diversification means not putting all your eggs in one basket — a principle that applies as much to alternative investments as to traditional ones. By spreading your capital across products like solar, cattle, and delivery-bike fleets, you reduce the impact if any single investment underperforms.
+    content: `Diversification means not putting all your eggs in one basket — a principle that applies as much to alternative investments as to traditional ones. By spreading your capital across products like solar and cattle, you reduce the impact if any single investment underperforms.
 
 Equally important is timeline diversification. If all your investments mature at the same time, you face reinvestment risk. Staggering your investments across different start dates means you always have capital returning, which can be reinvested into new opportunities.
 
@@ -6874,7 +6874,7 @@ Understanding your own risk tolerance is key. If you can only commit capital for
 
 The 'Know Your Risk Profile' survey in Earn Rewards calibrates our recommendations to your personal appetite, and every product page shows its risk badge so you always know what you are taking on.`,
     quiz: [
-      { q: 'Which SV Capital product carries the lowest operational risk?', options: ['Cattle farming', 'Delivery bikes', 'Solar projects', 'None — they are equal'], correct: 2 },
+      { q: 'Which SV Capital product carries the lowest operational risk?', options: ['Cattle farming', 'Solar projects', 'Short-term lending', 'None — they are equal'], correct: 1 },
       { q: 'How do you see the risk level of each product?', options: ['A star rating', 'A risk profile from Low to High', 'A credit score', 'It is not shown'], correct: 1 },
       { q: 'Complete the sentence: "Higher potential returns always come with…"', options: ['Lower risk', 'More regulatory protection', 'Higher risk', 'Better liquidity'], correct: 2 },
     ],
@@ -7798,7 +7798,7 @@ const TOUR_STEPS = [
     position: 'right',
     icon: 'fa-store',
     title: 'Browse Investment Pools',
-    body: 'Explore open pools across solar, cattle, loans, and delivery bikes. Each shows its rate, term, and how much is still available.',
+    body: 'Explore open pools across solar, cattle, and loans. Each shows its rate, term, and how much is still available.',
   },
   {
     id: 'nav_maturity',

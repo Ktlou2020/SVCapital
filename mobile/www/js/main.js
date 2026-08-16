@@ -983,14 +983,12 @@ async function _applyLiveProductAverages() {
     cattle:   ['cattle'],
     solar:    ['solar_7yr', 'solar_6yr', 'solar_5yr'],
     short:    ['short_term', 'smme'],
-    delivery: ['delivery_bike'],
   };
   const calcTabMap = {
     cattle:   'cattle',
     solar7:   'solar',
     solar5:   'solar',
     short:    'short',
-    delivery: 'delivery',
   };
 
   const homeVisible = {};
@@ -1115,7 +1113,7 @@ async function _applyTrackRecord() {
     data = (await r.json()).data || {};
   } catch (_) { return; }
 
-  const fam = { cattle: ['cattle'], solar: ['solar_7yr', 'solar_6yr', 'solar_5yr'], short: ['short_term', 'smme'], delivery: ['delivery_bike'] };
+  const fam = { cattle: ['cattle'], solar: ['solar_7yr', 'solar_6yr', 'solar_5yr'], short: ['short_term', 'smme'] };
   const rand = n => 'R' + Number(n || 0).toLocaleString('en-ZA');
 
   Object.keys(fam).forEach(key => {
