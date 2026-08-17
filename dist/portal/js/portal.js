@@ -1530,6 +1530,15 @@ function initIdleAutoLogout() {
 document.addEventListener('DOMContentLoaded', async () => {
   _preloadLogo(); // warm logo cache for PDF generation
   Toast.init();
+  const _iMEl = document.getElementById('investModal');
+  if (_iMEl) {
+    new MutationObserver(() => {
+      if (!_iMEl.classList.contains('open') && _investModalPool && !_investConfirmed) {
+        SVC.track('svc_invest_modal_abandoned', { pool_id: _investModalPool.id, product_type: _investModalPool.product_type, fee_seen: _investFeeTracked, amount_entered: _investFeeTracked });
+        _investModalPool = null;
+      }
+    }).observe(_iMEl, { attributes: true, attributeFilter: ['class'] });
+  }
   initDarkMode();
   initPortalFormUX();
   initIdleAutoLogout();
@@ -3010,6 +3019,12 @@ let _pmAmount       = 0;       // base deposit amount entered by investor (ZAR)
 let _pmGateway      = null;    // 'paystack' | 'ozow' | 'eft'
 let _pmSaId         = null;    // null = main wallet; saId = credit sub-account instead
 
+// Invest modal drop-off tracking state
+let _investModalPool   = null;   // pool shown in the current invest modal session
+let _investConfirmed   = false;  // set true when confirmInvestment() is called
+let _investFeeTracked  = false;  // true once svc_invest_fee_shown has fired this session
+let _investOoBTracked  = false;  // true once over-budget svc_invest_insufficient_funds has fired
+
 /* ── helpers ─────────────────────────────────── */
 function _pmEl(id) { return document.getElementById(id); }
 
@@ -3268,7 +3283,7 @@ function launchPaystack() {
           }
         },
         onCancel: function() {
-          // User closed the Paystack popup without completing payment
+          SVC.track('svc_topup_cancelled', { amount: _pmAmount, currency: 'ZAR', gateway: 'paystack' });
           _pmShowOnly('pmStep2');
           _pmSetProgress(66);
           _pmSetStepLabel('Step 2 of 3 — Choose payment method');
@@ -4515,6 +4530,13 @@ function openInvestModal(poolId) {
 
   const invBtn = document.getElementById('investConfirmBtn');
   invBtn.onclick = () => _withBtn(invBtn, () => confirmInvestment(pool));
+  _investModalPool  = pool;
+  _investConfirmed  = false;
+  _investFeeTracked = false;
+  _investOoBTracked = false;
+  if (walletBal < _minPlusFee(pool)) {
+    SVC.track('svc_invest_insufficient_funds', { pool_id: pool.id, product_type: pool.product_type, stage: 'modal_open', wallet_bucket: _amtBucket(walletBal), shortfall_bucket: _amtBucket(_minPlusFee(pool) - walletBal) });
+  }
   Modal.open('investModal');
   if (pool.product_type === 'cattle') {
     _renderCattleHerdStatus('cattleHerdStatus', true); // true = compact mode
@@ -4539,6 +4561,10 @@ function _updateInvestCalc(amt, rate, termMonths, minInvest, walletBal) {
     if (feeTotEl) {
       feeTotEl.textContent = Utils.rand(totalNeeded, 2);
       feeTotEl.style.color = overBudget ? '#ef4444' : '#1a1a1a';
+    }
+    if (!_investFeeTracked) {
+      _investFeeTracked = true;
+      SVC.track('svc_invest_fee_shown', { pool_id: _investModalPool?.id, product_type: _investModalPool?.product_type, amount_bucket: _amtBucket(amt) });
     }
   } else {
     if (feeAmtEl) feeAmtEl.textContent = '—';
@@ -4571,6 +4597,10 @@ function _updateInvestCalc(amt, rate, termMonths, minInvest, walletBal) {
           </div>
         </div>`;
       if (confirmBtn) confirmBtn.disabled = true;
+      if (!_investOoBTracked) {
+        _investOoBTracked = true;
+        SVC.track('svc_invest_insufficient_funds', { pool_id: _investModalPool?.id, product_type: _investModalPool?.product_type, stage: 'amount_entry', wallet_bucket: _amtBucket(walletBal), shortfall_bucket: _amtBucket(totalNeeded - walletBal) });
+      }
     } else {
       banner.style.display = 'none';
       banner.innerHTML = '';
@@ -4580,6 +4610,7 @@ function _updateInvestCalc(amt, rate, termMonths, minInvest, walletBal) {
 }
 
 async function confirmInvestment(pool) {
+  _investConfirmed = true;
   const amount = parseFloat(document.getElementById('investAmount').value);
   if (!amount || amount < pool.min_investment) { Toast.error(`Minimum investment is ${Utils.rand(pool.min_investment)}`); return; }
 
