@@ -1114,6 +1114,19 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
     const [clean] = stripSensitive(table, rows, req.user?.empId, req.user?.role);
     res.status(201).json(clean);
 
+    // ── Audit log (fire-and-forget) ────────────────────────────────────────
+    setImmediate(() => {
+      const _actor = req.user || {};
+      const _actorName = [_actor.firstName, _actor.lastName].filter(Boolean).join(' ').trim() || _actor.email || 'Admin';
+      audit.log({
+        actorId: _actor.id, actorEmail: _actor.email, actorRole: _actor.role,
+        action: `${table}.created`,
+        entityType: table, entityId: rows[0]?.id ? String(rows[0].id) : null,
+        description: `${_actorName} created ${table} record`,
+        ip: req.ip, platform: 'admin',
+      });
+    });
+
     /* ── Wallet credit hook ─────────────────────────────────────────────
        When a completed deposit is created directly (e.g. admin top-up,
        or EFT marked completed), atomically increment wallet_balance.
@@ -1662,22 +1675,19 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
         const updated = rows[0];
         const actor   = req.user || {};
 
-        // Audit log key status changes
-        const auditMap = {
-          'kyc_documents:approved':    'kyc.approved',
-          'kyc_documents:rejected':    'kyc.rejected',
-          'transactions:completed':    'transaction.completed',
-          'transactions:rejected':     'transaction.rejected',
-          'investments:paid_out':      'investment.paid_out',
-          'investors:approved':        'investor.approved',
-        };
-        const auditKey = body.status ? `${table}:${body.status}` : (body.bank_account_status ? `${table}:${body.bank_account_status}` : null);
-        if (auditKey && auditMap[auditKey]) {
+        // Comprehensive audit log — every PATCH is recorded
+        const _auditFields = Object.keys(body).filter(k => !['updated_at', 'reviewed_at'].includes(k));
+        if (_auditFields.length) {
+          const _actorName = [actor.firstName, actor.lastName].filter(Boolean).join(' ').trim() || actor.email || 'Admin';
+          const _fieldSummary = _auditFields.length <= 3
+            ? _auditFields.map(k => `${k}=${JSON.stringify(body[k])}`).join(', ')
+            : `${_auditFields.slice(0, 2).map(k => `${k}=${JSON.stringify(body[k])}`).join(', ')} …+${_auditFields.length - 2} more`;
           await audit.log({
-            actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: auditMap[auditKey],
+            actorId: actor.id, actorEmail: actor.email, actorRole: actor.role,
+            action: `${table}.updated`,
             entityType: table, entityId: req.params.id,
-            description: `${auditMap[auditKey]} on ${table}#${req.params.id}`,
-            ip: req.ip,
+            description: `${_actorName} set ${_fieldSummary}`,
+            after: body, ip: req.ip, platform: 'admin',
           });
         }
 
@@ -2062,6 +2072,19 @@ router.delete('/:table/:id', requireAuth, validateTable, async (req, res) => {
     );
     if (result.rowCount === 0) return res.status(404).json({ error: 'Record not found.' });
     res.json({ success: true, deleted: req.params.id });
+
+    // ── Audit log (fire-and-forget) ────────────────────────────────────────
+    setImmediate(() => {
+      const _actor = req.user || {};
+      const _actorName = [_actor.firstName, _actor.lastName].filter(Boolean).join(' ').trim() || _actor.email || 'Admin';
+      audit.log({
+        actorId: _actor.id, actorEmail: _actor.email, actorRole: _actor.role,
+        action: `${table}.deleted`,
+        entityType: table, entityId: req.params.id,
+        description: `${_actorName} deleted ${table}#${req.params.id}`,
+        ip: req.ip, platform: 'admin',
+      });
+    });
   } catch (err) {
     console.error('[tables]', err);
     res.status(500).json({ error: 'Internal server error.' });
