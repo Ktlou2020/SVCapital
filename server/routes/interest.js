@@ -36,35 +36,39 @@ router.post('/interest/preview', requireAuth, requireRole('admin', 'director'), 
     // Normalized ref list for DB lookup
     const refList = [...new Set(rows.map(r => normalizeRef(r['Account Reference'])).filter(Boolean))];
 
-    // Match against sub-accounts AND investor main wallets using normalized pim_account_ref.
-    // UPPER(TRIM(...)) on the DB side ensures mismatched casing or accidental spaces never
-    // cause an account to go unmatched.
+    // Match CSV Account Reference directly against the platform account number (id) and,
+    // for sub-accounts, also against sa_reference — both are the same value in practice.
+    // UPPER(TRIM(...)) on the DB side ensures casing or whitespace differences never block a match.
     const [saResult, invResult] = await Promise.all([
       pool.query(
-        `SELECT id, wallet_balance, name, parent_investor_id, pim_account_ref
-         FROM sub_accounts WHERE UPPER(TRIM(pim_account_ref)) = ANY($1::text[])`,
+        `SELECT id, wallet_balance, name, parent_investor_id, sa_reference
+         FROM sub_accounts
+         WHERE UPPER(TRIM(id)) = ANY($1::text[]) OR UPPER(TRIM(sa_reference)) = ANY($1::text[])`,
         [refList]
       ),
       pool.query(
-        `SELECT id, first_name, last_name, wallet_balance, pim_account_ref
-         FROM investors WHERE UPPER(TRIM(pim_account_ref)) = ANY($1::text[])`,
+        `SELECT id, first_name, last_name, wallet_balance
+         FROM investors WHERE UPPER(TRIM(id)) = ANY($1::text[])`,
         [refList]
       ),
     ]);
 
     // Build lookup maps keyed by normalized ref.
-    // Also detect if two records share the same ref — that is a configuration error and
-    // must be flagged rather than silently crediting the wrong account.
+    // A sub-account row can match on either id or sa_reference; register both so the lookup hits.
+    // Detect if two different records match the same ref — flag as duplicate_ref instead of
+    // silently crediting the wrong account.
     const saMap = {}, saDupes = new Set();
     saResult.rows.forEach(r => {
-      const key = normalizeRef(r.pim_account_ref);
-      if (saMap[key]) saDupes.add(key);
-      else saMap[key] = r;
+      const keys = [...new Set([normalizeRef(r.id), normalizeRef(r.sa_reference)].filter(k => k && refList.includes(k)))];
+      keys.forEach(key => {
+        if (saMap[key]) saDupes.add(key);
+        else saMap[key] = r;
+      });
     });
 
     const invMap = {}, invDupes = new Set();
     invResult.rows.forEach(r => {
-      const key = normalizeRef(r.pim_account_ref);
+      const key = normalizeRef(r.id);
       if (invMap[key]) invDupes.add(key);
       else invMap[key] = r;
     });
