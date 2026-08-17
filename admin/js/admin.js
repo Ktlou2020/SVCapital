@@ -1899,7 +1899,7 @@ function viewSubAccount(saId) {
         <div class="info-row"><span class="info-row__label">Account Number</span><span class="info-row__value" style="font-family:monospace">${_esc(sa.sa_bank_number||'—')}</span></div>
         <div class="info-row"><span class="info-row__label">Account Type</span><span class="info-row__value">${_esc(sa.sa_bank_type||'—')}</span></div>
         ${sa.sa_bank_branch ? `<div class="info-row"><span class="info-row__label">Branch Code</span><span class="info-row__value" style="font-family:monospace">${_esc(sa.sa_bank_branch)}</span></div>` : ''}
-        <div class="info-row"><span class="info-row__label">Status</span><span class="info-row__value" style="color:${bankColor};font-weight:700">${bankLabel}</span></div>
+        <div class="info-row"><span class="info-row__label">Status</span><span class="info-row__value" style="color:${bankColor};font-weight:700">${bankLabel}${sa.sa_bank_reviewed_by ? `<span style="font-size:0.68rem;font-weight:400;color:var(--text-muted);margin-left:6px">by ${_esc(sa.sa_bank_reviewed_by)}</span>` : ''}</span></div>
       </div>` : `<div style="font-size:0.8rem;color:var(--text-muted)"><i class="fa-solid fa-circle-info" style="margin-right:6px"></i>No banking details on file — click Edit to add.</div>`}
     </div>
     <div style="background:rgba(237,165,255,0.08);border:1px solid rgba(237,165,255,0.2);border-radius:10px;padding:12px 14px">
@@ -2090,7 +2090,7 @@ async function viewInvestor(id) {
         <div style="font-family:monospace;font-size:0.78rem;color:var(--text-muted);margin:2px 0">${_esc(inv.id)||''}<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.id||"")},this)' title="Copy account number"><i class="fa-regular fa-copy"></i></button></div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
           ${Utils.statusBadge(inv.status)}
-          ${inv.kyc_status==='approved'?'<span class="badge badge--green"><i class="fa-solid fa-shield-check"></i> KYC Verified</span>':'<span class="badge badge--yellow">KYC Pending</span>'}
+          ${inv.kyc_status==='approved'?`<span class="badge badge--green"><i class="fa-solid fa-shield-check"></i> KYC Verified</span>${inv.fica_reviewed_by?`<span style="font-size:0.65rem;color:var(--text-muted);margin-left:2px">by ${_esc(inv.fica_reviewed_by)}</span>`:''}` : '<span class="badge badge--yellow">KYC Pending</span>'}
         </div>
       </div>
     </div>
@@ -2125,7 +2125,7 @@ async function viewInvestor(id) {
           <div class="info-row"><span class="info-row__label">Account Holder</span><span class="info-row__value">${bankHolder}</span></div>
           <div class="info-row"><span class="info-row__label">Account No.</span><span class="info-row__value" style="font-family:monospace">${bankMasked}</span></div>
           <div class="info-row"><span class="info-row__label">Branch Code</span><span class="info-row__value">${bankBranch}</span></div>
-          <div class="info-row"><span class="info-row__label">Status</span><span class="info-row__value"><span class="badge ${bCls[bStatus]}">${bLbl[bStatus]}</span></span></div>
+          <div class="info-row"><span class="info-row__label">Status</span><span class="info-row__value"><span class="badge ${bCls[bStatus]}">${bLbl[bStatus]}</span>${inv.bank_account_reviewed_by ? `<span style="font-size:0.7rem;color:var(--text-muted);margin-left:6px">by ${_esc(inv.bank_account_reviewed_by)}</span>` : ''}</span></div>
         </div>
         <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
           <button class="btn btn--secondary btn--sm" onclick='editBankDetails(${JSON.stringify(inv.id)})'><i class="fa-solid fa-pen-to-square"></i> Edit</button>
@@ -3056,7 +3056,7 @@ function renderWithdrawalsTable() {
             <button class="btn btn--success btn--sm" onclick='approveWithdrawal(${JSON.stringify(w.id)}, this)'><i class="fa-solid fa-check"></i> Approve</button>
             <button class="btn btn--danger btn--sm" onclick='rejectWithdrawalPrompt(${JSON.stringify(w.id)}, this)'><i class="fa-solid fa-xmark"></i> Reject</button>
           </div>
-        ` : Utils.statusBadge(w.status)}
+        ` : `<div>${Utils.statusBadge(w.status)}</div>${w.reviewed_by ? `<div style="font-size:0.68rem;color:var(--text-muted);margin-top:3px">by ${_esc(w.reviewed_by)}</div>` : ''}`}
       </td>
     </tr>`;
   };
