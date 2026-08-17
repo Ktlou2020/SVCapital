@@ -11706,6 +11706,25 @@ async function loadReconciliation() {
   }
 }
 
+let _reconcPage = 1;
+const _RECONC_PER_PAGE = 10;
+
+function _reconcPage_go(n) { _reconcPage = n; renderReconcTable(true); }
+
+function _reconcPager(total, current, perPage) {
+  const pages = Math.ceil(total / perPage);
+  if (pages <= 1) return '';
+  const btn = (n, label, disabled, active) =>
+    `<button onclick="_reconcPage_go(${n})" style="min-width:32px;padding:4px 9px;border-radius:6px;border:1px solid var(--border);background:${active?'#eda5ff':'var(--card-bg)'};color:${active?'#000':'var(--text)'};font-size:0.78rem;font-weight:${active?700:400};cursor:${disabled?'default':'pointer'};opacity:${disabled?.4:1}" ${disabled?'disabled':''}>${label}</button>`;
+  const parts = [btn(current-1,'‹', current===1, false)];
+  for (let p = 1; p <= pages; p++) {
+    if (p===1 || p===pages || Math.abs(p-current)<=1) parts.push(btn(p,p,false,p===current));
+    else if (Math.abs(p-current)===2) parts.push(`<span style="padding:0 4px;color:var(--text-muted)">…</span>`);
+  }
+  parts.push(btn(current+1,'›', current===pages, false));
+  return `<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">${parts.join('')}</div>`;
+}
+
 function _reconcRows() {
   return STATE.investors.map(inv => {
     const txns = STATE.transactions.filter(t => t.investor_id === inv.id);
@@ -11719,7 +11738,8 @@ function _reconcRows() {
   });
 }
 
-function renderReconcTable() {
+function renderReconcTable(keepPage) {
+  if (!keepPage) _reconcPage = 1;
   const search    = (document.getElementById('reconcSearch')?.value || '').toLowerCase();
   const discOnly  = document.getElementById('reconcDiscrepOnly')?.checked || false;
   const fmt = v => 'R ' + Math.abs(v).toLocaleString('en-ZA', {minimumFractionDigits:2,maximumFractionDigits:2});
@@ -11764,9 +11784,18 @@ function renderReconcTable() {
   if (!tbody) return;
   if (!rows.length) {
     tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:40px;color:#7a92a8">No records found</td></tr>`;
+    document.getElementById('reconcFooter').innerHTML = '';
     return;
   }
-  tbody.innerHTML = rows.map(r => {
+
+  const totalRows  = rows.length;
+  const totalPages = Math.ceil(totalRows / _RECONC_PER_PAGE);
+  if (_reconcPage > totalPages) _reconcPage = totalPages;
+  const pageRows = rows.slice((_reconcPage - 1) * _RECONC_PER_PAGE, _reconcPage * _RECONC_PER_PAGE);
+  const start    = (_reconcPage - 1) * _RECONC_PER_PAGE + 1;
+  const end      = Math.min(_reconcPage * _RECONC_PER_PAGE, totalRows);
+
+  tbody.innerHTML = pageRows.map(r => {
     const varColor = r.isDiscrepancy ? (r.variance < 0 ? 'color:#ef4444' : 'color:#f97316') : 'color:#22c55e';
     const statusBadge = r.isDiscrepancy
       ? `<span style="background:rgba(249,115,22,.15);color:#f97316;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700">⚠ Discrepancy</span>`
@@ -11786,7 +11815,11 @@ function renderReconcTable() {
   }).join('');
 
   const footer = document.getElementById('reconcFooter');
-  if (footer) footer.textContent = `${rows.length} investors shown · ${discCount} discrepancy${discCount!==1?'ies':''} · Variance tolerance R1.00`;
+  if (footer) footer.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <span style="color:var(--text-muted)">Showing ${start}–${end} of ${totalRows} investors · ${discCount} discrepanc${discCount!==1?'ies':'y'} · Variance tolerance R1.00</span>
+      ${_reconcPager(totalRows, _reconcPage, _RECONC_PER_PAGE)}
+    </div>`;
 }
 
 function openManualCreditModal(investorId, investorName) {
