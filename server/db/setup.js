@@ -1603,6 +1603,11 @@ async function autoSetup() {
         BEGIN ALTER TABLE employee_courses ADD COLUMN thumbnail_icon TEXT DEFAULT 'fa-book'; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE employee_courses ADD COLUMN thumbnail_color TEXT DEFAULT '#eda5ff'; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE investors ADD COLUMN pim_account_ref TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE investors ADD COLUMN fica_reviewed_by TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE investors ADD COLUMN bank_account_reviewed_by TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE transactions ADD COLUMN reviewed_by TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE transactions ADD COLUMN reviewed_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_reviewed_by TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
       END $$
     `);
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS gifts_firebase_id_idx ON gifts(firebase_id) WHERE firebase_id IS NOT NULL`).catch(() => {});

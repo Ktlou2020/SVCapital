@@ -1555,6 +1555,32 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
     if (body.fica_status && _FICA_NORM_MAP[body.fica_status]) body.fica_status = _FICA_NORM_MAP[body.fica_status];
     if (body.kyc_status  && _FICA_NORM_MAP[body.kyc_status])  body.kyc_status  = _FICA_NORM_MAP[body.kyc_status];
 
+    // Auto-inject reviewer identity whenever an approval or rejection is recorded
+    {
+      const _actor = req.user || {};
+      const _actorName = [_actor.firstName, _actor.lastName].filter(Boolean).join(' ').trim() || _actor.email || 'Admin';
+      const _isApproveDecline = v => v === 'approved' || v === 'rejected';
+      const _now = new Date().toISOString();
+
+      if (table === 'kyc_documents' && _isApproveDecline(body.status)) {
+        if (!body.reviewed_by)  body.reviewed_by  = _actorName;
+        if (!body.reviewed_at)  body.reviewed_at  = _now;
+      }
+      if (table === 'transactions' && (body.status === 'completed' || body.status === 'rejected')) {
+        body.reviewed_by  = _actorName;
+        body.reviewed_at  = _now;
+      }
+      if (table === 'investors' && _isApproveDecline(body.fica_status)) {
+        body.fica_reviewed_by = _actorName;
+      }
+      if (table === 'investors' && _isApproveDecline(body.bank_account_status)) {
+        body.bank_account_reviewed_by = _actorName;
+      }
+      if (table === 'sub_accounts' && _isApproveDecline(body.sa_bank_status)) {
+        body.sa_bank_reviewed_by = _actorName;
+      }
+    }
+
     const _badKey = Object.keys(body).find(k => !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(k));
     if (_badKey) return res.status(400).json({ error: 'Invalid field name: ' + _badKey });
 
