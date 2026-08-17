@@ -49,9 +49,13 @@ router.post('/interest/preview', requireAuth, requireRole('admin', 'director'), 
 
     let totalInterest = 0, toCredit = 0, unmatched = 0, skipped = 0;
 
+    // Strip R prefix and commas from currency values (handles both "R899.03" and "899.03")
+    const _amt = v => parseFloat((v || '').replace(/[R,\s]/g, '')) || 0;
+
     const items = rows.map(row => {
       const ref        = (row['Account Reference'] || '').trim();
-      const pimBalance = parseFloat(row['Balance']) || 0;
+      // Support both legacy "Balance" column and new "3PIM balance" column
+      const pimBalance = _amt(row['3PIM balance'] || row['Balance']);
       const clientName = (row['Client'] || '').trim();
 
       // Prefer sub-account match; fall back to investor main wallet
