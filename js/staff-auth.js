@@ -54,20 +54,20 @@
   let _rbacCache = null;
 
   const ROLE_PERMISSIONS = {
-    'CEO':                  ['employee', 'team', 'fund', 'admin', 'ifa', 'portal', 'director', 'accounting', 'pe_monitor', 'change_requests', 'moolalend'],
-    'Operations Manager':   ['employee', 'team', 'fund', 'admin', 'accounting', 'change_requests'],
-    'Finance Manager':      ['employee', 'team', 'fund', 'admin', 'accounting', 'pe_monitor', 'change_requests', 'moolalend'],
+    'CEO':                  ['employee', 'team', 'fund', 'admin', 'ifa', 'portal', 'director', 'accounting', 'pe_monitor', 'change_requests', 'moolalend', 'beefcor_recon'],
+    'Operations Manager':   ['employee', 'team', 'fund', 'admin', 'accounting', 'change_requests', 'beefcor_recon'],
+    'Finance Manager':      ['employee', 'team', 'fund', 'admin', 'accounting', 'pe_monitor', 'change_requests', 'moolalend', 'beefcor_recon'],
     'Tech Lead':            ['employee', 'team', 'fund', 'admin', 'accounting', 'change_requests'],
     'Investment Analyst':   ['employee', 'team', 'fund', 'pe_monitor', 'change_requests'],
     'Compliance Officer':   ['employee', 'admin', 'change_requests'],
     'Client Relations':     ['employee', 'portal', 'change_requests'],
     'Marketing':            ['employee', 'change_requests'],
     'Junior Analyst':       ['employee', 'change_requests'],
-    'Admin':                ['employee', 'admin', 'accounting', 'change_requests'],
+    'Admin':                ['employee', 'admin', 'accounting', 'change_requests', 'beefcor_recon'],
   };
 
   /* Level-based elevation (overrides role if level is executive) */
-  const EXECUTIVE_APPS = ['employee', 'team', 'fund', 'admin', 'ifa', 'portal', 'director', 'accounting', 'pe_monitor', 'change_requests', 'moolalend'];
+  const EXECUTIVE_APPS = ['employee', 'team', 'fund', 'admin', 'ifa', 'portal', 'director', 'accounting', 'pe_monitor', 'change_requests', 'moolalend', 'beefcor_recon'];
 
   /* Director-level check — executive level, CEO/COO/CTO/CFO titles,
      or a JWT role of 'director' or 'admin' all grant Director panel access */
@@ -147,6 +147,14 @@
       icon:        'fa-solid fa-briefcase',
       color:       '#3b82f6',
       path:        '/team/pe-monitor.html',
+      guard:       true,
+    },
+    beefcor_recon: {
+      label:       'BEEFCOR Checker',
+      description: 'Reconcile BEEFCOR placement invoices against batch CSVs — head count and mass',
+      icon:        'fa-solid fa-cow',
+      color:       '#22c55e',
+      path:        '/team/beefcor-recon.html',
       guard:       true,
     },
   };
@@ -317,7 +325,8 @@
     if (path.includes('/admin/'))           return 'admin';
     if (path.includes('/ifa/'))             return 'ifa';
     if (path.includes('/portal/'))          return 'portal';
-    if (path.includes('/team/accounting'))  return 'accounting';
+    if (path.includes('/team/accounting'))    return 'accounting';
+    if (path.includes('/team/beefcor-recon')) return 'beefcor_recon';
     return null;
   }
 
