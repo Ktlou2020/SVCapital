@@ -7752,7 +7752,7 @@ async function loadInvestFunnel() {
 function renderInvestFunnel(data, panel) {
   const { funnel = {}, conversion_rate = 0, fee_aversion_rate = 0,
           abandoned_breakdown = {}, insufficient_funds = [],
-          topup_cancelled = 0, by_product = [], daily_trend = [] } = data;
+          topup_cancelled = 0, by_product = [], daily_trend = [], by_pool = [] } = data;
 
   const { opened = 0, fee_shown = 0, confirmed = 0, abandoned = 0 } = funnel;
 
@@ -7871,7 +7871,45 @@ function renderInvestFunnel(data, panel) {
           <tbody>${productHtml}</tbody>
         </table>
       </div>
-    </div>`;
+    </div>
+
+    ${by_pool.length ? `
+    <div style="margin-top:18px">
+      <div style="font-size:0.8rem;font-weight:700;color:var(--text);margin-bottom:8px">Drop-off by pool</div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="border-bottom:2px solid var(--border)">
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:left;color:var(--text-muted)">Pool</th>
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:right;color:var(--text-muted)">Opened</th>
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:right;color:var(--text-muted)">Fee seen</th>
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:right;color:var(--text-muted)">Confirmed</th>
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:right;color:var(--text-muted)">Abandoned</th>
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:right;color:var(--text-muted)">Conv %</th>
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:right;color:var(--text-muted)">Drop %</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${by_pool.map(r => {
+              const conv     = r.opened > 0 ? Math.round(r.confirmed / r.opened * 100) : 0;
+              const dropRate = r.opened > 0 ? Math.round(r.abandoned / r.opened * 100) : 0;
+              const convCol  = conv >= 60 ? '#22c55e' : conv >= 30 ? '#fec24f' : '#ef4444';
+              const dropCol  = dropRate >= 60 ? '#ef4444' : dropRate >= 30 ? '#f97316' : '#fec24f';
+              return `<tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:6px 8px;font-size:0.78rem;color:var(--text);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.pool_name}">${r.pool_name}</td>
+                <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">${r.opened.toLocaleString()}</td>
+                <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">${r.fee_shown.toLocaleString()}</td>
+                <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">${r.confirmed.toLocaleString()}</td>
+                <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">${r.abandoned.toLocaleString()}</td>
+                <td style="padding:6px 8px;font-size:0.78rem;font-weight:700;color:${convCol};text-align:right">${conv}%</td>
+                <td style="padding:6px 8px;font-size:0.78rem;font-weight:700;color:${dropCol};text-align:right">${dropRate}%</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>` : ''}
+`;
 }
 
 async function loadSignupFriction() {
