@@ -7752,7 +7752,7 @@ async function loadInvestFunnel() {
 function renderInvestFunnel(data, panel) {
   const { funnel = {}, conversion_rate = 0, fee_aversion_rate = 0,
           abandoned_breakdown = {}, insufficient_funds = [],
-          topup_cancelled = 0, by_product = [], daily_trend = [], by_pool = [] } = data;
+          topup_cancelled = 0, by_product = [], daily_trend = [], by_pool = [], by_investor = [] } = data;
 
   const { opened = 0, fee_shown = 0, confirmed = 0, abandoned = 0 } = funnel;
 
@@ -7902,6 +7902,46 @@ function renderInvestFunnel(data, panel) {
                 <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">${r.confirmed.toLocaleString()}</td>
                 <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">${r.abandoned.toLocaleString()}</td>
                 <td style="padding:6px 8px;font-size:0.78rem;font-weight:700;color:${convCol};text-align:right">${conv}%</td>
+                <td style="padding:6px 8px;font-size:0.78rem;font-weight:700;color:${dropCol};text-align:right">${dropRate}%</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>` : ''}
+
+    ${by_investor.length ? `
+    <div style="margin-top:18px">
+      <div style="font-size:0.8rem;font-weight:700;color:var(--text);margin-bottom:8px">Drop-off by investor <span style="font-weight:400;color:var(--text-muted)">(top 25 by abandons)</span></div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="border-bottom:2px solid var(--border)">
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:left;color:var(--text-muted)">Investor</th>
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:left;color:var(--text-muted)">KYC</th>
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:right;color:var(--text-muted)">Total invested</th>
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:right;color:var(--text-muted)">Opened</th>
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:right;color:var(--text-muted)">Abandoned</th>
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:right;color:var(--text-muted)">Confirmed</th>
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:right;color:var(--text-muted)">After fee?</th>
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:right;color:var(--text-muted)">Drop %</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${by_investor.map(r => {
+              const dropRate  = r.opened > 0 ? Math.round(r.abandoned / r.opened * 100) : 0;
+              const dropCol   = dropRate >= 70 ? '#ef4444' : dropRate >= 40 ? '#f97316' : '#fec24f';
+              const kycColor  = r.kyc_status === 'verified' ? '#22c55e' : r.kyc_status === 'pending' ? '#fec24f' : 'var(--text-muted)';
+              const invested  = r.total_invested ? 'R ' + Number(r.total_invested).toLocaleString('en-ZA', {minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
+              const name      = r.investor_name || r.email || r.investor_id || '—';
+              return `<tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:6px 8px;font-size:0.78rem;color:var(--text);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.email || ''}">${name}</td>
+                <td style="padding:6px 8px;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;color:${kycColor}">${r.kyc_status || '—'}</td>
+                <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">${invested}</td>
+                <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">${r.opened}</td>
+                <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:#ef4444;font-weight:700">${r.abandoned}</td>
+                <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:#22c55e">${r.confirmed}</td>
+                <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:${r.abandoned_after_fee > 0 ? '#f97316' : 'var(--text-muted)'}">${r.abandoned_after_fee > 0 ? r.abandoned_after_fee + ' ⚠' : '0'}</td>
                 <td style="padding:6px 8px;font-size:0.78rem;font-weight:700;color:${dropCol};text-align:right">${dropRate}%</td>
               </tr>`;
             }).join('')}

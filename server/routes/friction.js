@@ -294,7 +294,7 @@ router.get('/invest-funnel/summary', requireAuth, requireRole('admin', 'director
   try {
     const days = Math.min(parseInt(req.query.days, 10) || 30, 365);
 
-    const [funnelRows, abandonRows, insuffRows, topupRows, productRows, trendRows, poolRows] = await Promise.all([
+    const [funnelRows, abandonRows, insuffRows, topupRows, productRows, trendRows, poolRows, investorRows] = await Promise.all([
       // Core invest funnel counts
       pool.query(`
         SELECT event_type, COUNT(*) AS cnt
@@ -356,6 +356,29 @@ router.get('/invest-funnel/summary', requireAuth, requireRole('admin', 'director
         GROUP BY day ORDER BY day
       `),
 
+      // Per-investor drop-off — join to investors for name/email
+      pool.query(`
+        SELECT
+          e.investor_id,
+          COALESCE(i.first_name || ' ' || i.last_name, i.email, e.investor_id) AS investor_name,
+          i.email,
+          i.kyc_status,
+          i.total_invested,
+          COUNT(*) FILTER (WHERE e.event_type = 'modal_opened') AS opened,
+          COUNT(*) FILTER (WHERE e.event_type = 'abandoned')    AS abandoned,
+          COUNT(*) FILTER (WHERE e.event_type = 'confirmed')    AS confirmed,
+          BOOL_OR(e.fee_seen = true AND e.event_type = 'abandoned') AS abandoned_after_fee
+        FROM invest_funnel_events e
+        LEFT JOIN investors i ON i.id = e.investor_id
+        WHERE e.investor_id IS NOT NULL
+          AND e.event_type IN ('modal_opened','abandoned','confirmed')
+          AND e.created_at >= NOW() - ($1 || ' days')::INTERVAL
+        GROUP BY e.investor_id, i.first_name, i.last_name, i.email, i.kyc_status, i.total_invested
+        HAVING COUNT(*) FILTER (WHERE e.event_type = 'abandoned') > 0
+        ORDER BY abandoned DESC, opened DESC
+        LIMIT 25
+      `, [days]),
+
       // Per-pool drop-off — join to investment_pools for name
       pool.query(`
         SELECT
@@ -399,6 +422,7 @@ router.get('/invest-funnel/summary', requireAuth, requireRole('admin', 'director
       by_product:         productRows.rows.map(r => ({ product_type: r.product_type, opened: parseInt(r.opened), confirmed: parseInt(r.confirmed) })),
       daily_trend:        trendRows.rows.map(r => ({ day: r.day, opened: parseInt(r.opened), confirmed: parseInt(r.confirmed), abandoned: parseInt(r.abandoned) })),
       by_pool:            poolRows.rows.map(r => ({ pool_id: r.pool_id, pool_name: r.pool_name, product_type: r.pool_product_type, opened: parseInt(r.opened), fee_shown: parseInt(r.fee_shown), confirmed: parseInt(r.confirmed), abandoned: parseInt(r.abandoned) })),
+      by_investor:        investorRows.rows.map(r => ({ investor_id: r.investor_id, investor_name: r.investor_name, email: r.email, kyc_status: r.kyc_status, total_invested: parseFloat(r.total_invested || 0), opened: parseInt(r.opened), abandoned: parseInt(r.abandoned), confirmed: parseInt(r.confirmed), abandoned_after_fee: Boolean(r.abandoned_after_fee) })),
     });
   } catch (err) {
     console.error('[invest-funnel] summary error:', err.message);
