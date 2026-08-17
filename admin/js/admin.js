@@ -11838,6 +11838,177 @@ function exportReconciliationCSV() {
 }
 
 /* ═══════════════════════════════════════════════
+   3PIM INTEREST DISTRIBUTION
+   ═══════════════════════════════════════════════ */
+let _interestPreviewData = null;
+
+function resetInterestForm() {
+  _interestPreviewData = null;
+  document.getElementById('interestUploadForm').style.display  = '';
+  document.getElementById('interestPreviewArea').style.display = 'none';
+  document.getElementById('interestHistoryArea').style.display = 'none';
+}
+
+async function previewInterestDistribution() {
+  const periodEl = document.getElementById('interestPeriod');
+  const fileEl   = document.getElementById('interestCsvFile');
+  const period   = periodEl?.value?.trim();
+  const file     = fileEl?.files?.[0];
+
+  if (!period)  { Toast.warning('Please select a period'); return; }
+  if (!file)    { Toast.warning('Please select a CSV file'); return; }
+
+  const csv_content = await file.text();
+  const btn = document.querySelector('#interestUploadForm .btn--primary');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Previewing…'; }
+
+  try {
+    const token = (typeof Auth !== 'undefined') ? Auth.getToken() : '';
+    const res   = await fetch('/api/admin/interest/preview', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ csv_content, period, csv_filename: file.name }),
+    });
+    const data = await res.json();
+    if (!res.ok) { Toast.error(data.error || 'Preview failed'); return; }
+
+    _interestPreviewData = { ...data, csv_filename: file.name };
+    renderInterestPreview(data);
+  } catch (e) {
+    Toast.error('Preview failed: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i> Preview'; }
+  }
+}
+
+function renderInterestPreview(data) {
+  const { summary, items, period } = data;
+  const fmt = n => 'R ' + Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  // Summary bar
+  const bar = document.getElementById('interestSummaryBar');
+  bar.innerHTML = `
+    <div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.25);border-radius:8px;padding:10px 16px;flex:1;min-width:130px">
+      <div style="font-size:1.3rem;font-weight:800;color:#22c55e">${summary.to_credit}</div>
+      <div style="font-size:0.72rem;color:var(--text-muted)">Accounts to credit</div>
+    </div>
+    <div style="background:rgba(237,165,255,.1);border:1px solid rgba(237,165,255,.25);border-radius:8px;padding:10px 16px;flex:1;min-width:130px">
+      <div style="font-size:1.3rem;font-weight:800;color:#eda5ff">${fmt(summary.total_interest)}</div>
+      <div style="font-size:0.72rem;color:var(--text-muted)">Total interest</div>
+    </div>
+    <div style="background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);border-radius:8px;padding:10px 16px;flex:1;min-width:130px">
+      <div style="font-size:1.3rem;font-weight:800;color:#f97316">${summary.unmatched}</div>
+      <div style="font-size:0.72rem;color:var(--text-muted)">Unmatched</div>
+    </div>
+    <div style="background:rgba(122,146,168,.1);border:1px solid rgba(122,146,168,.2);border-radius:8px;padding:10px 16px;flex:1;min-width:130px">
+      <div style="font-size:1.3rem;font-weight:800;color:var(--text-muted)">${summary.skipped}</div>
+      <div style="font-size:0.72rem;color:var(--text-muted)">Zero / negative (skipped)</div>
+    </div>
+  `;
+
+  // Table rows
+  const statusChip = s => {
+    const cfg = {
+      matched:  ['#22c55e', 'To credit'],
+      unmatched:['#ef4444', 'Unmatched'],
+      negative: ['#f97316', 'Negative Δ'],
+      zero:     ['#7a92a8', 'No change'],
+    };
+    const [col, label] = cfg[s] || ['#7a92a8', s];
+    return `<span style="background:${col}22;color:${col};border-radius:12px;padding:2px 8px;font-size:0.7rem;font-weight:700">${label}</span>`;
+  };
+
+  const tbody = document.getElementById('interestPreviewBody');
+  tbody.innerHTML = items.map(item => `
+    <tr style="border-bottom:1px solid var(--border)${item.status === 'unmatched' ? ';opacity:.6' : ''}">
+      <td style="padding:6px 8px;font-size:0.78rem;font-family:monospace;color:var(--text)">${item.account_reference}</td>
+      <td style="padding:6px 8px;font-size:0.78rem;color:var(--text)">${item.client_name_pim}</td>
+      <td style="padding:6px 8px;font-size:0.78rem;color:var(--text-muted)">${item.platform_name || '—'}</td>
+      <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text)">${item.pim_balance != null ? fmt(item.pim_balance) : '—'}</td>
+      <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">${item.platform_balance != null ? fmt(item.platform_balance) : '—'}</td>
+      <td style="padding:6px 8px;font-size:0.78rem;text-align:right;font-weight:700;color:${item.interest_amount > 0 ? '#22c55e' : item.interest_amount < 0 ? '#ef4444' : 'var(--text-muted)'}">${item.interest_amount != null ? fmt(item.interest_amount) : '—'}</td>
+      <td style="padding:6px 8px;text-align:center">${statusChip(item.status)}</td>
+    </tr>
+  `).join('');
+
+  const applyBtn = document.getElementById('interestApplyBtn');
+  if (applyBtn) applyBtn.textContent = `Apply ${fmt(summary.total_interest)} to ${summary.to_credit} accounts`;
+
+  document.getElementById('interestUploadForm').style.display  = 'none';
+  document.getElementById('interestPreviewArea').style.display = '';
+  document.getElementById('interestHistoryArea').style.display = 'none';
+}
+
+async function applyInterestDistribution() {
+  if (!_interestPreviewData) { Toast.warning('Run a preview first'); return; }
+  const { period, items, csv_filename } = _interestPreviewData;
+  const toCredit = items.filter(i => i.status === 'matched');
+
+  if (!toCredit.length) { Toast.warning('No accounts to credit'); return; }
+  if (!confirm(`Apply ${toCredit.length} interest credits for ${period}?\n\nThis cannot be undone.`)) return;
+
+  const btn = document.getElementById('interestApplyBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Applying…'; }
+
+  try {
+    const token = (typeof Auth !== 'undefined') ? Auth.getToken() : '';
+    const res   = await fetch('/api/admin/interest/apply', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ period, items, csv_filename }),
+    });
+    const data = await res.json();
+    if (!res.ok) { Toast.error(data.error || 'Apply failed'); return; }
+    Toast.success(`Done — ${data.accounts_credited} accounts credited with R ${Number(data.total_interest).toLocaleString('en-ZA', {minimumFractionDigits:2,maximumFractionDigits:2})} interest for ${period}`);
+    resetInterestForm();
+    loadInterestHistory();
+  } catch (e) {
+    Toast.error('Apply failed: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; }
+  }
+}
+
+async function loadInterestHistory() {
+  document.getElementById('interestUploadForm').style.display  = 'none';
+  document.getElementById('interestPreviewArea').style.display = 'none';
+  document.getElementById('interestHistoryArea').style.display = '';
+
+  const tbody = document.getElementById('interestHistoryBody');
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:#7a92a8"><i class="fa-solid fa-spinner fa-spin"></i></td></tr>';
+
+  try {
+    const token = (typeof Auth !== 'undefined') ? Auth.getToken() : '';
+    const res   = await fetch('/api/admin/interest', {
+      credentials: 'include',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    const rows = await res.json();
+    const fmt  = n => 'R ' + Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:#7a92a8">No distributions yet</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(r => `
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:7px 8px;font-weight:700;color:var(--text)">${r.period}</td>
+        <td style="padding:7px 8px;text-align:right;color:#22c55e;font-weight:700">${fmt(r.total_interest)}</td>
+        <td style="padding:7px 8px;text-align:right;color:var(--text)">${r.accounts_credited}</td>
+        <td style="padding:7px 8px;text-align:right;color:var(--text-muted)">${r.accounts_skipped}</td>
+        <td style="padding:7px 8px;text-align:right;color:${r.accounts_unmatched > 0 ? '#f97316' : 'var(--text-muted)'}">${r.accounts_unmatched}</td>
+        <td style="padding:7px 8px;color:var(--text-muted);font-size:0.78rem">${r.applied_by || '—'}</td>
+        <td style="padding:7px 8px;color:var(--text-muted);font-size:0.78rem">${r.applied_at ? new Date(r.applied_at).toLocaleDateString('en-ZA') : '—'}</td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:20px;color:#ef4444">${e.message}</td></tr>`;
+  }
+}
+
+/* ═══════════════════════════════════════════════
    ACCEPTED CLIENT DOCUMENTS
    ═══════════════════════════════════════════════ */
 let _acdRows = [];

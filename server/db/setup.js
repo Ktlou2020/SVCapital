@@ -943,6 +943,40 @@ CREATE INDEX IF NOT EXISTS ife_investor_idx ON invest_funnel_events(investor_id)
 CREATE INDEX IF NOT EXISTS ife_type_idx     ON invest_funnel_events(event_type);
 CREATE INDEX IF NOT EXISTS ife_created_idx  ON invest_funnel_events(created_at);
 
+CREATE TABLE IF NOT EXISTS interest_distributions (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  period              TEXT NOT NULL,
+  pim_file_name       TEXT,
+  total_interest      NUMERIC(18,2) DEFAULT 0,
+  accounts_credited   INT DEFAULT 0,
+  accounts_skipped    INT DEFAULT 0,
+  accounts_unmatched  INT DEFAULT 0,
+  applied_by          TEXT,
+  applied_at          TIMESTAMPTZ,
+  status              TEXT DEFAULT 'applied',
+  notes               TEXT,
+  created_at          TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS id_period_applied_idx ON interest_distributions(period) WHERE status = 'applied';
+
+CREATE TABLE IF NOT EXISTS interest_distribution_items (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  distribution_id   UUID REFERENCES interest_distributions(id) ON DELETE CASCADE,
+  sub_account_id    TEXT,
+  investor_id       TEXT,
+  account_reference TEXT NOT NULL,
+  client_name_pim   TEXT,
+  pim_balance       NUMERIC(18,2),
+  platform_balance  NUMERIC(18,2),
+  interest_amount   NUMERIC(18,2),
+  transaction_id    TEXT,
+  status            TEXT NOT NULL DEFAULT 'applied',
+  notes             TEXT,
+  created_at        TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idi_dist_idx ON interest_distribution_items(distribution_id);
+CREATE INDEX IF NOT EXISTS idi_sa_idx   ON interest_distribution_items(sub_account_id);
+
 CREATE TABLE IF NOT EXISTS totp_recovery_codes (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
