@@ -9,144 +9,136 @@
   <script>document.addEventListener('DOMContentLoaded', () => { StaffAuth.guard('beefcor_recon'); StaffAuth.injectWidget && StaffAuth.injectWidget(); });</script>
   <style>
     :root {
-      --bg:          #0d0f14;
-      --bg-card:     #13161e;
-      --bg-row:      #181c26;
-      --border:      rgba(255,255,255,.07);
-      --text:        #e2e8f0;
-      --text-muted:  #8892a4;
-      --accent:      #22c55e;
-      --accent-dim:  rgba(34,197,94,.12);
-      --red:         #ef4444;
-      --red-dim:     rgba(239,68,68,.12);
-      --amber:       #f59e0b;
-      --amber-dim:   rgba(245,158,11,.12);
-      --blue:        #3b82f6;
-      --purple:      #eda5ff;
+      --bg:         #0d0f14;
+      --bg-card:    #13161e;
+      --bg-row:     #181c26;
+      --border:     rgba(255,255,255,.07);
+      --text:       #e2e8f0;
+      --muted:      #8892a4;
+      --accent:     #22c55e;
+      --accent-dim: rgba(34,197,94,.12);
+      --red:        #ef4444;
+      --red-dim:    rgba(239,68,68,.12);
+      --amber:      #f59e0b;
+      --amber-dim:  rgba(245,158,11,.12);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; min-height: 100vh; }
 
-    /* ── Topbar ── */
-    .topbar { display: flex; align-items: center; gap: 12px; height: 52px; padding: 0 16px; background: var(--bg-card); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
-    .topbar-back { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 6px; color: var(--text-muted); text-decoration: none; transition: all .15s; }
-    .topbar-back:hover { color: var(--text); background: var(--bg-row); }
-    .topbar-logo { width: 28px; height: 28px; border-radius: 6px; background: var(--accent); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 13px; }
-    .topbar-title { font-size: 15px; font-weight: 600; color: var(--text); }
-    .topbar-sub { font-size: 12px; color: var(--text-muted); margin-left: auto; }
+    .topbar { display:flex; align-items:center; gap:12px; height:52px; padding:0 16px; background:var(--bg-card); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:100; }
+    .topbar-back { display:flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:6px; color:var(--muted); text-decoration:none; transition:all .15s; }
+    .topbar-back:hover { color:var(--text); background:var(--bg-row); }
+    .topbar-logo { width:28px; height:28px; border-radius:6px; background:var(--accent); display:flex; align-items:center; justify-content:center; color:#fff; font-size:13px; }
+    .topbar-title { font-size:15px; font-weight:600; }
+    .topbar-sub { font-size:12px; color:var(--muted); margin-left:auto; }
 
-    /* ── Layout ── */
-    .main { max-width: 980px; margin: 0 auto; padding: 28px 20px 60px; }
-    .page-header { margin-bottom: 24px; }
-    .page-header h1 { font-size: 22px; font-weight: 700; }
-    .page-header p { font-size: 13px; color: var(--text-muted); margin-top: 4px; line-height: 1.5; }
+    .main { max-width:980px; margin:0 auto; padding:28px 20px 60px; }
+    .page-header { margin-bottom:24px; }
+    .page-header h1 { font-size:22px; font-weight:700; }
+    .page-header p { font-size:13px; color:var(--muted); margin-top:4px; line-height:1.5; }
 
-    /* ── Drop zone ── */
-    .drop-zone {
-      border: 2px dashed rgba(34,197,94,.35);
-      border-radius: 12px;
-      padding: 40px 24px;
-      text-align: center;
-      cursor: pointer;
-      transition: all .2s;
-      background: rgba(34,197,94,.03);
-      margin-bottom: 20px;
-    }
-    .drop-zone:hover, .drop-zone.over { border-color: var(--accent); background: var(--accent-dim); }
-    .drop-zone i { font-size: 32px; color: var(--accent); margin-bottom: 12px; display: block; }
-    .drop-zone .dz-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
-    .drop-zone .dz-sub { font-size: 12px; color: var(--text-muted); }
-    .drop-zone input[type=file] { display: none; }
+    .drop-zone { border:2px dashed rgba(34,197,94,.35); border-radius:12px; padding:40px 24px; text-align:center; cursor:pointer; transition:all .2s; background:rgba(34,197,94,.03); margin-bottom:20px; }
+    .drop-zone:hover,.drop-zone.over { border-color:var(--accent); background:var(--accent-dim); }
+    .drop-zone i { font-size:32px; color:var(--accent); margin-bottom:12px; display:block; }
+    .drop-zone .dz-title { font-size:15px; font-weight:600; margin-bottom:4px; }
+    .drop-zone .dz-sub { font-size:12px; color:var(--muted); }
+    input[type=file] { display:none; }
 
-    /* ── File list ── */
-    .file-list { margin-bottom: 20px; display: flex; flex-direction: column; gap: 8px; }
-    .file-item {
-      display: flex; align-items: center; gap: 10px;
-      background: var(--bg-card); border: 1px solid var(--border);
-      border-radius: 8px; padding: 10px 14px;
-    }
-    .file-item .fi-icon { width: 30px; height: 30px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
-    .fi-pdf  { background: rgba(239,68,68,.15); color: var(--red); }
-    .fi-csv  { background: rgba(34,197,94,.15); color: var(--accent); }
-    .file-item .fi-name { flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .file-item .fi-batch { font-size: 11px; color: var(--accent); background: var(--accent-dim); border-radius: 4px; padding: 2px 6px; font-weight: 600; white-space: nowrap; }
-    .file-item .fi-batch.unmatched { color: var(--text-muted); background: rgba(255,255,255,.05); }
-    .file-item .fi-remove { color: var(--text-muted); cursor: pointer; padding: 4px; border-radius: 4px; border: none; background: none; }
-    .file-item .fi-remove:hover { color: var(--red); background: var(--red-dim); }
+    .file-list { margin-bottom:20px; display:flex; flex-direction:column; gap:8px; }
+    .file-item { display:flex; align-items:center; gap:10px; background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:10px 14px; }
+    .fi-icon { width:30px; height:30px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0; }
+    .fi-pdf { background:rgba(239,68,68,.15); color:var(--red); }
+    .fi-csv { background:rgba(34,197,94,.15); color:var(--accent); }
+    .fi-name { flex:1; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .fi-batch { font-size:11px; color:var(--accent); background:var(--accent-dim); border-radius:4px; padding:2px 6px; font-weight:600; white-space:nowrap; }
+    .fi-batch.unmatched { color:var(--muted); background:rgba(255,255,255,.05); }
+    .fi-remove { color:var(--muted); cursor:pointer; padding:4px; border-radius:4px; border:none; background:none; }
+    .fi-remove:hover { color:var(--red); background:var(--red-dim); }
 
-    /* ── Pairs ── */
-    .pairs-section { margin-bottom: 24px; }
-    .section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); margin-bottom: 10px; }
-    .pair-item {
-      display: flex; align-items: center; gap: 10px;
-      background: var(--bg-card); border: 1px solid var(--border);
-      border-radius: 8px; padding: 10px 14px; margin-bottom: 6px;
-    }
-    .pair-batch { font-size: 13px; font-weight: 700; color: var(--accent); min-width: 60px; font-family: monospace; }
-    .pair-files { flex: 1; display: flex; gap: 8px; flex-wrap: wrap; }
-    .pair-file { font-size: 11px; color: var(--text-muted); background: var(--bg-row); border-radius: 4px; padding: 2px 7px; }
-    .pair-file.pdf { color: var(--red); }
-    .pair-file.csv { color: var(--accent); }
-    .pair-warn { font-size: 11px; color: var(--amber); }
+    .section-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-bottom:10px; }
 
-    /* ── Controls ── */
-    .controls { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; flex-wrap: wrap; }
-    .tol-group { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
-    .tol-group input { width: 64px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; color: var(--text); font-size: 13px; text-align: center; }
-    .btn { padding: 9px 20px; border-radius: 8px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; transition: all .15s; display: flex; align-items: center; gap: 6px; }
-    .btn-primary { background: var(--accent); color: #0d1117; }
-    .btn-primary:hover { filter: brightness(1.1); }
-    .btn-primary:disabled { opacity: .45; cursor: not-allowed; filter: none; }
-    .btn-secondary { background: var(--bg-card); border: 1px solid var(--border); color: var(--text); }
-    .btn-secondary:hover { background: var(--bg-row); }
+    .pair-item { background:var(--bg-card); border:1px solid var(--border); border-radius:10px; margin-bottom:8px; overflow:hidden; }
+    .pair-header { display:flex; align-items:center; gap:10px; padding:10px 14px; }
+    .pair-batch { font-size:13px; font-weight:700; color:var(--accent); min-width:60px; font-family:monospace; }
+    .pair-files { flex:1; display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .pair-file { font-size:11px; color:var(--muted); background:var(--bg-row); border-radius:4px; padding:2px 7px; }
+    .pair-file.pdf { color:var(--red); }
+    .pair-file.csv { color:var(--accent); }
+    .pair-status { font-size:11px; white-space:nowrap; }
+    .pair-warn { color:var(--amber); }
+    .pair-ok   { color:var(--accent); }
 
-    /* ── Results ── */
-    .results-section { display: none; }
-    .results-section.visible { display: block; }
-    .summary-bar {
-      display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
-      background: var(--bg-card); border: 1px solid var(--border);
-      border-radius: 10px; padding: 14px 18px; margin-bottom: 16px;
-    }
-    .sum-item { display: flex; flex-direction: column; gap: 2px; }
-    .sum-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); }
-    .sum-value { font-size: 18px; font-weight: 700; }
-    .sum-divider { width: 1px; height: 30px; background: var(--border); }
-    .sum-exposure { margin-left: auto; text-align: right; }
+    /* Manual entry form — shows when PDF parsing fails */
+    .manual-form { border-top:1px solid var(--border); padding:12px 14px; background:rgba(245,158,11,.05); }
+    .manual-form .mf-label { font-size:11px; color:var(--amber); font-weight:600; margin-bottom:8px; display:flex; align-items:center; gap:5px; }
+    .manual-form .mf-fields { display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; }
+    .mf-field { display:flex; flex-direction:column; gap:3px; }
+    .mf-field label { font-size:10px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+    .mf-field input { background:var(--bg-row); border:1px solid var(--border); border-radius:6px; padding:6px 8px; color:var(--text); font-size:13px; width:110px; }
+    .mf-field input:focus { outline:none; border-color:var(--amber); }
+    .mf-field input.wide { width:140px; }
+    .mf-apply { padding:7px 14px; border-radius:6px; border:none; cursor:pointer; font-size:12px; font-weight:600; background:var(--amber); color:#1a0f00; transition:all .15s; display:flex; align-items:center; gap:4px; align-self:flex-end; }
+    .mf-apply:hover { filter:brightness(1.1); }
+    .mf-hint { font-size:10px; color:var(--muted); margin-top:6px; font-style:italic; }
 
-    .results-table-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid var(--border); }
-    .results-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .results-table th { background: var(--bg-row); color: var(--text-muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: 10px 14px; text-align: left; white-space: nowrap; }
-    .results-table td { padding: 11px 14px; border-top: 1px solid var(--border); vertical-align: top; }
-    .results-table tr:hover td { background: rgba(255,255,255,.02); }
-    .results-table .notes-row td { padding: 4px 14px 10px; border-top: none; color: var(--text-muted); font-size: 11px; }
+    .controls { display:flex; align-items:center; gap:12px; margin-bottom:28px; flex-wrap:wrap; }
+    .tol-group { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); }
+    .tol-group input { width:64px; background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:5px 8px; color:var(--text); font-size:13px; text-align:center; }
+    .btn { padding:9px 20px; border-radius:8px; border:none; cursor:pointer; font-size:13px; font-weight:600; transition:all .15s; display:flex; align-items:center; gap:6px; }
+    .btn-primary { background:var(--accent); color:#0d1117; }
+    .btn-primary:hover { filter:brightness(1.1); }
+    .btn-primary:disabled { opacity:.45; cursor:not-allowed; filter:none; }
+    .btn-secondary { background:var(--bg-card); border:1px solid var(--border); color:var(--text); }
+    .btn-secondary:hover { background:var(--bg-row); }
 
-    /* ── Verdict badges ── */
-    .verdict { display: inline-block; padding: 3px 10px; border-radius: 5px; font-size: 11px; font-weight: 800; letter-spacing: .04em; }
-    .verdict-PASS       { background: rgba(34,197,94,.15); color: #22c55e; }
-    .verdict-REVIEW     { background: var(--amber-dim); color: var(--amber); }
-    .verdict-FAIL       { background: var(--red-dim); color: var(--red); }
-    .verdict-INCOMPLETE { background: rgba(255,255,255,.07); color: var(--text-muted); }
+    .results-section { display:none; }
+    .results-section.visible { display:block; }
 
-    .var-pos { color: var(--red); }
-    .var-neg { color: var(--accent); }
-    .var-zero { color: var(--text-muted); }
+    .summary-bar { display:flex; align-items:center; gap:16px; flex-wrap:wrap; background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:14px 18px; margin-bottom:16px; }
+    .sum-item { display:flex; flex-direction:column; gap:2px; }
+    .sum-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
+    .sum-value { font-size:18px; font-weight:700; }
+    .sum-divider { width:1px; height:30px; background:var(--border); }
+    .sum-exposure { margin-left:auto; text-align:right; }
 
-    /* ── Footer note ── */
-    .footer-note { margin-top: 20px; font-size: 11px; color: var(--text-muted); line-height: 1.5; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; }
-    .footer-note strong { color: var(--text); }
+    .results-table-wrap { overflow-x:auto; border-radius:10px; border:1px solid var(--border); }
+    .results-table { width:100%; border-collapse:collapse; font-size:13px; }
+    .results-table th { background:var(--bg-row); color:var(--muted); font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; padding:10px 14px; text-align:left; white-space:nowrap; }
+    .results-table td { padding:11px 14px; border-top:1px solid var(--border); vertical-align:top; }
+    .results-table tr:hover td { background:rgba(255,255,255,.02); }
+    .results-table .notes-row td { padding:4px 14px 10px; border-top:none; color:var(--muted); font-size:11px; }
 
-    /* ── Spinner ── */
-    .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(0,0,0,.2); border-top-color: #0d1117; border-radius: 50%; animation: spin .7s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .empty-state { text-align: center; padding: 40px; color: var(--text-muted); }
-    .empty-state i { font-size: 28px; margin-bottom: 10px; display: block; opacity: .4; }
+    /* Inline manual entry inside results table */
+    .result-manual-row td { border-top:none; padding:0 14px 12px; }
+    .result-manual-form { display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; background:rgba(245,158,11,.07); border:1px solid rgba(245,158,11,.25); border-radius:8px; padding:10px 12px; }
+    .result-manual-form .rmf-hint { font-size:11px; color:var(--amber); margin-bottom:4px; width:100%; }
+    .rmf-field { display:flex; flex-direction:column; gap:3px; }
+    .rmf-field label { font-size:10px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+    .rmf-field input { background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:6px 8px; color:var(--text); font-size:13px; width:110px; }
+    .rmf-field input:focus { outline:none; border-color:var(--amber); }
+    .rmf-apply { padding:7px 14px; border-radius:6px; border:none; cursor:pointer; font-size:12px; font-weight:600; background:var(--amber); color:#1a0f00; transition:all .15s; align-self:flex-end; }
+    .rmf-apply:hover { filter:brightness(1.1); }
+
+    .verdict { display:inline-block; padding:3px 10px; border-radius:5px; font-size:11px; font-weight:800; letter-spacing:.04em; }
+    .verdict-PASS       { background:rgba(34,197,94,.15); color:#22c55e; }
+    .verdict-REVIEW     { background:var(--amber-dim); color:var(--amber); }
+    .verdict-FAIL       { background:var(--red-dim); color:var(--red); }
+    .verdict-INCOMPLETE { background:rgba(255,255,255,.07); color:var(--muted); }
+
+    .var-pos { color:var(--red); }
+    .var-neg { color:var(--accent); }
+
+    .footer-note { margin-top:20px; font-size:11px; color:var(--muted); line-height:1.5; background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:12px 16px; }
+    .footer-note strong { color:var(--text); }
+
+    .spinner { display:inline-block; width:14px; height:14px; border:2px solid rgba(0,0,0,.2); border-top-color:#0d1117; border-radius:50%; animation:spin .7s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
   </style>
 </head>
 <body>
 
 <div class="topbar">
-  <a href="hub.html" class="topbar-back" title="Back to Hub"><i class="fa-solid fa-arrow-left"></i></a>
+  <a href="hub.html" class="topbar-back"><i class="fa-solid fa-arrow-left"></i></a>
   <div class="topbar-logo"><i class="fa-solid fa-cow"></i></div>
   <span class="topbar-title">BEEFCOR Checker</span>
   <span class="topbar-sub">Placement Invoice Reconciliation</span>
@@ -156,27 +148,23 @@
 
   <div class="page-header">
     <h1>BEEFCOR Placement Checker</h1>
-    <p>Drop invoice PDFs and batch CSVs here. The tool auto-pairs them by batch number, then compares head count and total mass against what BEEFCOR billed. <strong>Hold payment on any FAIL or REVIEW until BEEFCOR explains the variance in writing.</strong></p>
+    <p>Drop invoice PDFs and batch CSVs. Files are auto-paired by batch number and compared for head count and mass. If the PDF is scanned (not a digital Sage export) the numbers can be entered manually. <strong>Hold payment on any FAIL or REVIEW until BEEFCOR explains the variance in writing.</strong></p>
   </div>
 
-  <!-- Drop zone -->
   <div class="drop-zone" id="dropZone">
     <input type="file" id="fileInput" multiple accept=".pdf,.csv,.xlsx" />
     <i class="fa-solid fa-file-arrow-up"></i>
     <div class="dz-title">Drop invoice PDFs and batch CSVs here</div>
-    <div class="dz-sub">Or click to browse — accepts .pdf and .csv files, any quantity</div>
+    <div class="dz-sub">Or click to browse — accepts .pdf and .csv, any quantity</div>
   </div>
 
-  <!-- File list -->
   <div class="file-list" id="fileList"></div>
 
-  <!-- Paired files -->
-  <div class="pairs-section" id="pairsSection" style="display:none">
+  <div id="pairsSection" style="display:none; margin-bottom:24px;">
     <div class="section-label">Detected Pairs</div>
     <div id="pairsList"></div>
   </div>
 
-  <!-- Controls -->
   <div class="controls">
     <button class="btn btn-primary" id="runBtn" disabled>
       <i class="fa-solid fa-play"></i> Run Check
@@ -187,11 +175,10 @@
       <span>%</span>
     </div>
     <button class="btn btn-secondary" id="clearBtn" style="display:none">
-      <i class="fa-solid fa-trash"></i> Clear
+      <i class="fa-solid fa-trash"></i> Clear all
     </button>
   </div>
 
-  <!-- Results -->
   <div class="results-section" id="resultsSection">
     <div class="section-label">Results</div>
     <div class="summary-bar" id="summaryBar"></div>
@@ -211,472 +198,392 @@
       </table>
     </div>
     <div class="footer-note">
-      <strong>What to do:</strong>
-      PASS → pay as normal.
-      REVIEW → counts agree but mass is outside tolerance — hold invoice and ask BEEFCOR to explain the variance in writing.
-      FAIL → head counts disagree — hold invoice.
-      INCOMPLETE → a document could not be parsed, check it by hand.
-      Mass tolerance default is <strong>0.05%</strong> (≈ 14 kg per 100 head) — well inside scale rounding noise and well below the 0.277% seen on IN074003.
+      <strong>PASS</strong> → pay as normal. &nbsp;
+      <strong>REVIEW</strong> → head counts agree but mass is outside tolerance — hold and ask BEEFCOR to explain in writing. &nbsp;
+      <strong>FAIL</strong> → head counts disagree — hold invoice. &nbsp;
+      <strong>INCOMPLETE</strong> → PDF could not be parsed (likely a scan); enter the invoice figures in the form below that row to complete the check.
+      Mass tolerance default is <strong>0.05%</strong> (≈ 14 kg per 100 head).
     </div>
   </div>
 
 </div>
 
-<!-- PDF.js -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs" type="module"></script>
 <script type="module">
 import * as pdfjsLib from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs';
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs';
 
-// ── Constants ────────────────────────────────────────────────────
-const VAT_RATE = 0.15;
-const NON_CATTLE = ['TRANSPORT', 'COMMISSION', 'ROUNDING', 'INSURANCE', 'LEVY'];
+// ── Constants ──────────────────────────────────────────────────────
+const VAT_RATE       = 0.15;
+const NON_CATTLE     = ['TRANSPORT','COMMISSION','ROUNDING','INSURANCE','LEVY'];
+const CATTLE_RE      = /(\d{1,4})\s*(?:x\s*)?CATTLE\s+([\d\s,]+(?:\.\d+)?)\s*KG/i;
+const MONEY_RE       = () => /-?\d{1,3}(?:[ ,]\d{3})*(?:\.\d{2})/g;
 
-// ── State ────────────────────────────────────────────────────────
-const files = []; // { file, type: 'pdf'|'csv', batchKey }
+// ── State ──────────────────────────────────────────────────────────
+const files        = [];   // { file, type:'pdf'|'csv', key }
+const manualInvoice = {};  // batchKey → { head, mass_kg, cattle_nett, invoice_no }
+let   lastResults  = [];
 
-// ── Utilities ────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────
 function batchKey(name) {
   let m = name.match(/BATCH(?:ES)?[^\d]{0,4}(\d{4,6})/i);
   if (m) return m[1];
-  const stripped = name.replace(/\bIN\s*\d{5,6}\b/gi, ' ').replace(/\bCN\s*\d{4,6}\b/gi, ' ');
-  const nums = [...stripped.matchAll(/\d{4,6}/g)].map(m => m[0]);
-  return nums.length ? nums[nums.length - 1] : null;
+  const s = name.replace(/\bIN\s*\d{5,6}\b/gi,' ').replace(/\bCN\s*\d{4,6}\b/gi,' ');
+  const ns = [...s.matchAll(/\d{4,6}/g)].map(m=>m[0]);
+  return ns.length ? ns[ns.length-1] : null;
 }
 
-function parseNum(s) {
-  return parseFloat(String(s).replace(/[^\d.\-]/g, '')) || 0;
+function parseNum(s) { return parseFloat(String(s).replace(/[^\d.\-]/g,'')) || 0; }
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 function randFmt(v) {
-  if (v === null || v === undefined) return '—';
-  return 'R ' + Math.abs(v).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (v===null||v===undefined) return '—';
+  return 'R ' + Math.abs(v).toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2});
 }
 
-function esc(s) {
-  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
-// ── PDF text extraction ───────────────────────────────────────────
+// ── PDF text extraction ────────────────────────────────────────────
 async function extractPdfText(file) {
   const buf = await file.arrayBuffer();
+  const data = new Uint8Array(buf);
   let pdf;
   try {
-    pdf = await pdfjsLib.getDocument({ data: buf }).promise;
-  } catch (e) {
-    if (e.name === 'PasswordException' || e.code === 1) {
-      pdf = await pdfjsLib.getDocument({ data: buf, password: '' }).promise;
+    pdf = await pdfjsLib.getDocument({ data }).promise;
+  } catch(e) {
+    if (e.name==='PasswordException'||e.code===1) {
+      pdf = await pdfjsLib.getDocument({ data, password:'' }).promise;
     } else throw e;
   }
-
-  const pageTexts = [];
-  for (let p = 1; p <= pdf.numPages; p++) {
-    const page = await pdf.getPage(p);
+  const lines = [];
+  for (let p=1; p<=pdf.numPages; p++) {
+    const page    = await pdf.getPage(p);
     const content = await page.getTextContent();
-    // Group items by y-coordinate to reconstruct lines
     const byY = new Map();
     for (const item of content.items) {
       if (!item.str) continue;
       const y = Math.round(item.transform[5]);
-      if (!byY.has(y)) byY.set(y, []);
-      byY.get(y).push({ x: item.transform[4], str: item.str });
+      if (!byY.has(y)) byY.set(y,[]);
+      byY.get(y).push({ x:item.transform[4], str:item.str });
     }
-    const ys = [...byY.keys()].sort((a, b) => b - a);
-    for (const y of ys) {
-      const row = byY.get(y).sort((a, b) => a.x - b.x).map(i => i.str).join(' ');
-      pageTexts.push(row);
-    }
+    [...byY.keys()].sort((a,b)=>b-a).forEach(y => {
+      lines.push(byY.get(y).sort((a,b)=>a.x-b.x).map(i=>i.str).join(' '));
+    });
   }
-  return pageTexts.join('\n');
+  return lines.join('\n');
 }
 
-// ── Invoice parser ────────────────────────────────────────────────
+// ── Invoice parser ─────────────────────────────────────────────────
 function parseInvoiceText(text, source) {
-  const CATTLE_RE = /(\d{1,4})\s*(?:x\s*)?CATTLE\s+([\d\s,]+(?:\.\d+)?)\s*KG/i;
-  const MONEY_RE  = /-?\d{1,3}(?:[ ,]\d{3})*(?:\.\d{2})/g;
-
-  const inv = {
-    source, invoice_no: null, batch_no: null,
-    head: null, mass_kg: null, cattle_nett: null,
-    transport: 0, commission: 0, total_incl_vat: null,
-    rate_per_kg: null, warnings: []
-  };
+  const inv = { source, invoice_no:null, batch_no:null, head:null, mass_kg:null,
+                cattle_nett:null, rate_per_kg:null, warnings:[] };
 
   const docNo = text.match(/\b(IN\d{6})\b/i);
   if (docNo) inv.invoice_no = docNo[1].toUpperCase();
 
-  const cattleM = text.match(CATTLE_RE);
-  if (cattleM) {
-    inv.head = parseInt(cattleM[1]);
-    inv.mass_kg = parseFloat(cattleM[2].replace(/[^\d.]/g, ''));
-
-    const lines = text.split('\n');
-    const idx = lines.findIndex(l => CATTLE_RE.test(l));
-    if (idx >= 0) {
-      for (const j of [idx, idx + 1]) {
-        if (j >= lines.length) continue;
-        if (NON_CATTLE.some(k => lines[j].toUpperCase().includes(k))) continue;
-        const vals = [...lines[j].matchAll(MONEY_RE)].map(m => m[0]);
-        if (vals.length) {
-          inv.cattle_nett = parseNum(vals[vals.length - 1]);
-          break;
-        }
+  const m = text.match(CATTLE_RE);
+  if (m) {
+    inv.head    = parseInt(m[1]);
+    inv.mass_kg = parseFloat(m[2].replace(/[^\d.]/g,''));
+    const ls  = text.split('\n');
+    const idx = ls.findIndex(l => CATTLE_RE.test(l));
+    if (idx>=0) {
+      for (const j of [idx, idx+1]) {
+        if (j>=ls.length) continue;
+        if (NON_CATTLE.some(k=>ls[j].toUpperCase().includes(k))) continue;
+        const vals = [...ls[j].matchAll(MONEY_RE())].map(v=>v[0]);
+        if (vals.length) { inv.cattle_nett = parseNum(vals[vals.length-1]); break; }
       }
-      if (inv.cattle_nett === null)
-        inv.warnings.push('cattle nett price not found — rand impact unavailable');
+      if (inv.cattle_nett===null) inv.warnings.push('cattle nett price not found — rand impact unavailable');
     }
   } else {
-    inv.warnings.push("no '<n> CATTLE <m>KG' line found");
+    inv.warnings.push("no '<n> CATTLE <m>KG' line found — PDF may be a scan");
   }
 
   for (const ln of text.split('\n')) {
-    const up = ln.toUpperCase();
-    const vals = [...ln.matchAll(MONEY_RE)].map(m => m[0]);
-    if (up.includes('TRANSPORT') && vals.length)  inv.transport  = parseNum(vals[vals.length - 1]);
-    if (up.includes('COMMISSION') && vals.length) inv.commission = parseNum(vals[vals.length - 1]);
+    const up = ln.toUpperCase(); const vals=[...ln.matchAll(MONEY_RE())].map(v=>v[0]);
+    if (up.includes('TRANSPORT')&&vals.length)  inv.transport=parseNum(vals[vals.length-1]);
+    if (up.includes('COMMISSION')&&vals.length) inv.commission=parseNum(vals[vals.length-1]);
   }
 
-  const totalM = text.match(/TOTAL\s+([\d ,]+\.\d{2})/i);
-  if (totalM) inv.total_incl_vat = parseNum(totalM[1]);
+  const tot = text.match(/TOTAL\s+([\d ,]+\.\d{2})/i);
+  if (tot) inv.total_incl_vat = parseNum(tot[1]);
 
   inv.batch_no = batchKey(source);
   if (!inv.batch_no) {
     for (const ln of text.split('\n')) {
       if (/SVC\d{3}|AGR\d{3}/.test(ln)) {
         const r = ln.match(/\b(\d{5})\b/);
-        if (r) { inv.batch_no = r[1]; break; }
+        if (r) { inv.batch_no=r[1]; break; }
       }
     }
   }
-
-  if (inv.cattle_nett && inv.mass_kg) inv.rate_per_kg = inv.cattle_nett / inv.mass_kg;
+  if (inv.cattle_nett&&inv.mass_kg) inv.rate_per_kg = inv.cattle_nett/inv.mass_kg;
   return inv;
 }
 
-// ── CSV parser ────────────────────────────────────────────────────
+// ── CSV parser ─────────────────────────────────────────────────────
 function parseSheetCsv(text, source) {
-  const sh = {
-    source, batch_no: null, owner: null,
-    head: 0, mass_kg: 0, unique_tags: 0,
-    events: {}, warnings: []
-  };
-
-  const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
-  if (lines.length < 2) { sh.warnings.push('empty sheet'); return sh; }
-
-  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, '').replace(/^﻿/, '').toLowerCase());
-
-  function col(...names) {
-    for (const n of names) {
-      const i = headers.indexOf(n.toLowerCase());
-      if (i >= 0) return i;
-    }
-    return -1;
+  const sh = { source, batch_no:null, owner:null, head:0, mass_kg:0, unique_tags:0, warnings:[] };
+  const lines = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
+  if (lines.length<2) { sh.warnings.push('empty sheet'); return sh; }
+  const headers = lines[0].split(',').map(h=>h.trim().replace(/^"|"$/g,'').replace(/^﻿/,'').toLowerCase());
+  const col = (...ns) => { for(const n of ns){ const i=headers.indexOf(n.toLowerCase()); if(i>=0)return i; } return -1; };
+  const iMass=col('mass','weight','mass kg'), iQty=col('qty total','quantity','qty');
+  const iTag=col('main tag id','tag','tag id'), iBatch=col('batch no','batch');
+  const iOwner=col('owner'), iEvent=col('event');
+  const tags=new Set();
+  for (const raw of lines.slice(1)) {
+    if (!raw.trim()) continue;
+    const v=raw.split(',').map(x=>x.trim().replace(/^"|"$/g,''));
+    if (iQty>=0&&v[iQty]) sh.head += parseInt(parseFloat(v[iQty]))||1; else sh.head+=1;
+    if (iMass>=0&&v[iMass]) sh.mass_kg += parseFloat(v[iMass].replace(/,/g,''))||0;
+    if (iTag>=0&&v[iTag]) tags.add(v[iTag].trim());
+    if (!sh.batch_no&&iBatch>=0&&v[iBatch]) { const bm=v[iBatch].match(/(\d{5})/); if(bm) sh.batch_no=bm[1]; }
+    if (!sh.owner&&iOwner>=0&&v[iOwner]) sh.owner=v[iOwner].trim();
   }
-
-  const iMass  = col('mass', 'weight', 'mass kg');
-  const iQty   = col('qty total', 'quantity', 'qty');
-  const iTag   = col('main tag id', 'tag', 'tag id');
-  const iBatch = col('batch no', 'batch');
-  const iOwner = col('owner');
-  const iEvent = col('event');
-
-  const tags = new Set();
-  for (const rawLine of lines.slice(1)) {
-    if (!rawLine.trim()) continue;
-    const vals = rawLine.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
-
-    if (iQty >= 0 && vals[iQty]) sh.head += (parseInt(parseFloat(vals[iQty])) || 1);
-    else sh.head += 1;
-
-    if (iMass >= 0 && vals[iMass]) sh.mass_kg += parseFloat(vals[iMass].replace(/,/g, '')) || 0;
-
-    if (iTag >= 0 && vals[iTag]) tags.add(vals[iTag].trim());
-
-    if (iEvent >= 0 && vals[iEvent]) {
-      const e = vals[iEvent].trim();
-      sh.events[e] = (sh.events[e] || 0) + 1;
-    }
-
-    if (!sh.batch_no && iBatch >= 0 && vals[iBatch]) {
-      const bm = vals[iBatch].match(/(\d{5})/);
-      if (bm) sh.batch_no = bm[1];
-    }
-    if (!sh.owner && iOwner >= 0 && vals[iOwner]) sh.owner = vals[iOwner].trim();
-  }
-
-  sh.mass_kg     = Math.round(sh.mass_kg * 100) / 100;
-  sh.unique_tags = tags.size;
-  if (!sh.batch_no) sh.batch_no = batchKey(source);
-
-  if (sh.unique_tags && sh.unique_tags !== sh.head)
-    sh.warnings.push(`${sh.head} rows but ${sh.unique_tags} unique tags — possible duplicate animal`);
-
+  sh.mass_kg=Math.round(sh.mass_kg*100)/100;
+  sh.unique_tags=tags.size;
+  if (!sh.batch_no) sh.batch_no=batchKey(source);
+  if (sh.unique_tags&&sh.unique_tags!==sh.head) sh.warnings.push(`${sh.head} rows but ${sh.unique_tags} unique tags — possible duplicate`);
   return sh;
 }
 
-// ── Reconcile ─────────────────────────────────────────────────────
+// ── Reconcile ──────────────────────────────────────────────────────
 function reconcile(inv, sh, massTolPct) {
-  const notes = [...inv.warnings, ...sh.warnings];
-  let head_var = null, mass_var = null, mass_pct = null;
-  let impact_ex = null, impact_in = null;
-  let verdict = 'PASS';
+  const notes=[...inv.warnings,...sh.warnings];
+  let head_var=null, mass_var=null, mass_pct=null, impact_ex=null, impact_in=null, verdict='PASS';
 
-  if (inv.head !== null && sh.head) {
-    head_var = inv.head - sh.head;
-    if (head_var !== 0) {
-      verdict = 'FAIL';
-      notes.push(`invoice bills ${inv.head} head, sheet lists ${sh.head} (${head_var > 0 ? '+' : ''}${head_var})`);
+  if (inv.head!==null&&sh.head) {
+    head_var=inv.head-sh.head;
+    if (head_var!==0) { verdict='FAIL'; notes.push(`invoice bills ${inv.head} head, sheet lists ${sh.head} (${head_var>0?'+':''}${head_var})`); }
+  }
+  if (inv.mass_kg!==null&&sh.mass_kg) {
+    mass_var=Math.round((inv.mass_kg-sh.mass_kg)*100)/100;
+    mass_pct=Math.round(mass_var/sh.mass_kg*10000*100)/100;
+    if (Math.abs(mass_pct)>massTolPct) {
+      if (verdict!=='FAIL') verdict='REVIEW';
+      const f=n=>n.toLocaleString('en-ZA',{minimumFractionDigits:1});
+      notes.push(`invoice bills ${f(inv.mass_kg)} kg, sheet totals ${f(sh.mass_kg)} kg (${mass_var>=0?'+':''}${mass_var.toFixed(1)} kg, ${mass_pct>=0?'+':''}${mass_pct.toFixed(3)}%)`);
     }
   }
-
-  if (inv.mass_kg !== null && sh.mass_kg) {
-    mass_var = Math.round((inv.mass_kg - sh.mass_kg) * 100) / 100;
-    mass_pct = Math.round(mass_var / sh.mass_kg * 10000 * 100) / 100;
-    if (Math.abs(mass_pct) > massTolPct) {
-      if (verdict !== 'FAIL') verdict = 'REVIEW';
-      const fmt = n => n.toLocaleString('en-ZA', { minimumFractionDigits: 1 });
-      notes.push(`invoice bills ${fmt(inv.mass_kg)} kg, sheet totals ${fmt(sh.mass_kg)} kg (${mass_var >= 0 ? '+' : ''}${mass_var.toFixed(1)} kg, ${mass_pct >= 0 ? '+' : ''}${mass_pct.toFixed(3)}%)`);
-    }
+  const rate=inv.rate_per_kg;
+  if (rate&&mass_var) { impact_ex=Math.round(mass_var*rate*100)/100; impact_in=Math.round(impact_ex*(1+VAT_RATE)*100)/100; }
+  if (head_var!==null&&head_var!==0&&rate&&inv.head) {
+    const ph=(inv.cattle_nett||0)/inv.head, ex=Math.round(head_var*ph*100)/100;
+    if (impact_ex===null||Math.abs(ex)>Math.abs(impact_ex)) { impact_ex=ex; impact_in=Math.round(ex*(1+VAT_RATE)*100)/100; }
   }
-
-  const rate = inv.rate_per_kg;
-  if (rate && mass_var) {
-    impact_ex = Math.round(mass_var * rate * 100) / 100;
-    impact_in = Math.round(impact_ex * (1 + VAT_RATE) * 100) / 100;
-  }
-
-  if (head_var !== null && head_var !== 0 && rate && inv.head) {
-    const per_head = (inv.cattle_nett || 0) / inv.head;
-    const ex = Math.round(head_var * per_head * 100) / 100;
-    if (impact_ex === null || Math.abs(ex) > Math.abs(impact_ex)) {
-      impact_ex = ex;
-      impact_in = Math.round(ex * (1 + VAT_RATE) * 100) / 100;
-    }
-  }
-
-  if (inv.head === null || !sh.head) verdict = 'INCOMPLETE';
-
-  return {
-    batch_no:       inv.batch_no || sh.batch_no,
-    invoice_no:     inv.invoice_no,
-    owner:          sh.owner,
-    invoice_head:   inv.head,
-    sheet_head:     sh.head || null,
-    head_var,
-    invoice_mass:   inv.mass_kg,
-    sheet_mass:     sh.mass_kg || null,
-    mass_var,
-    mass_var_pct:   mass_pct,
-    rate_per_kg:    rate ? Math.round(rate * 10000) / 10000 : null,
-    rand_impact_excl_vat: impact_ex,
-    rand_impact_incl_vat: impact_in,
-    verdict,
-    notes
-  };
+  if (inv.head===null||!sh.head) verdict='INCOMPLETE';
+  return { batch_no:inv.batch_no||sh.batch_no, invoice_no:inv.invoice_no, owner:sh.owner,
+    invoice_head:inv.head, sheet_head:sh.head||null, head_var,
+    invoice_mass:inv.mass_kg, sheet_mass:sh.mass_kg||null, mass_var, mass_var_pct:mass_pct,
+    rate_per_kg:rate?Math.round(rate*10000)/10000:null,
+    rand_impact_excl_vat:impact_ex, rand_impact_incl_vat:impact_in, verdict, notes };
 }
 
-// ── UI helpers ────────────────────────────────────────────────────
+// ── File list UI ───────────────────────────────────────────────────
 function renderFileList() {
-  const list = document.getElementById('fileList');
-  if (!files.length) { list.innerHTML = ''; return; }
-
-  list.innerHTML = files.map((f, i) => `
+  const el=document.getElementById('fileList');
+  el.innerHTML=files.map((f,i)=>`
     <div class="file-item">
-      <div class="fi-icon ${f.type === 'pdf' ? 'fi-pdf' : 'fi-csv'}">
-        <i class="fa-solid ${f.type === 'pdf' ? 'fa-file-pdf' : 'fa-file-csv'}"></i>
+      <div class="fi-icon ${f.type==='pdf'?'fi-pdf':'fi-csv'}">
+        <i class="fa-solid ${f.type==='pdf'?'fa-file-pdf':'fa-file-csv'}"></i>
       </div>
       <span class="fi-name" title="${esc(f.file.name)}">${esc(f.file.name)}</span>
-      ${f.key ? `<span class="fi-batch">Batch ${esc(f.key)}</span>` : `<span class="fi-batch unmatched">No batch #</span>`}
-      <button class="fi-remove" onclick="removeFile(${i})" title="Remove"><i class="fa-solid fa-xmark"></i></button>
-    </div>
-  `).join('');
+      ${f.key?`<span class="fi-batch">Batch ${esc(f.key)}</span>`:`<span class="fi-batch unmatched">No batch #</span>`}
+      <button class="fi-remove" onclick="removeFile(${i})"><i class="fa-solid fa-xmark"></i></button>
+    </div>`).join('');
 }
 
 function renderPairs() {
-  const pdfs = Object.fromEntries(files.filter(f => f.type === 'pdf' && f.key).map(f => [f.key, f]));
-  const csvs = Object.fromEntries(files.filter(f => f.type === 'csv' && f.key).map(f => [f.key, f]));
-  const allKeys = [...new Set([...Object.keys(pdfs), ...Object.keys(csvs)])].sort();
-
-  const pairsSection = document.getElementById('pairsSection');
-  const pairsList    = document.getElementById('pairsList');
-  const runBtn       = document.getElementById('runBtn');
-
-  if (!allKeys.length) { pairsSection.style.display = 'none'; runBtn.disabled = true; return; }
-
-  pairsSection.style.display = 'block';
-  const paired = allKeys.filter(k => pdfs[k] && csvs[k]);
-  runBtn.disabled = !paired.length;
-
-  pairsList.innerHTML = allKeys.map(k => {
-    const hasPdf = !!pdfs[k], hasCsv = !!csvs[k];
-    const complete = hasPdf && hasCsv;
+  const pdfs=Object.fromEntries(files.filter(f=>f.type==='pdf'&&f.key).map(f=>[f.key,f]));
+  const csvs=Object.fromEntries(files.filter(f=>f.type==='csv'&&f.key).map(f=>[f.key,f]));
+  const allKeys=[...new Set([...Object.keys(pdfs),...Object.keys(csvs)])].sort();
+  const ps=document.getElementById('pairsSection');
+  const pl=document.getElementById('pairsList');
+  if (!allKeys.length) { ps.style.display='none'; document.getElementById('runBtn').disabled=true; return; }
+  ps.style.display='block';
+  const paired=allKeys.filter(k=>pdfs[k]&&csvs[k]);
+  document.getElementById('runBtn').disabled=!paired.length;
+  pl.innerHTML=allKeys.map(k=>{
+    const hasPdf=!!pdfs[k], hasCsv=!!csvs[k], ok=hasPdf&&hasCsv;
+    const man=manualInvoice[k];
     return `
-      <div class="pair-item" style="${!complete ? 'opacity:.65' : ''}">
-        <span class="pair-batch">${esc(k)}</span>
-        <div class="pair-files">
-          ${hasPdf ? `<span class="pair-file pdf"><i class="fa-solid fa-file-pdf"></i> ${esc(pdfs[k].file.name)}</span>` : `<span class="pair-file" style="color:var(--red);opacity:.5"><i class="fa-solid fa-xmark"></i> no invoice PDF</span>`}
-          ${hasCsv ? `<span class="pair-file csv"><i class="fa-solid fa-file-csv"></i> ${esc(csvs[k].file.name)}</span>` : `<span class="pair-file" style="color:var(--amber);opacity:.5"><i class="fa-solid fa-xmark"></i> no batch CSV</span>`}
+      <div class="pair-item" style="${!ok?'opacity:.65':''}">
+        <div class="pair-header">
+          <span class="pair-batch">${esc(k)}</span>
+          <div class="pair-files">
+            ${hasPdf?`<span class="pair-file pdf"><i class="fa-solid fa-file-pdf"></i> ${esc(pdfs[k].file.name)}</span>`:`<span class="pair-file" style="color:var(--red);opacity:.5"><i class="fa-solid fa-xmark"></i> no invoice PDF</span>`}
+            ${hasCsv?`<span class="pair-file csv"><i class="fa-solid fa-file-csv"></i> ${esc(csvs[k].file.name)}</span>`:`<span class="pair-file" style="color:var(--amber);opacity:.5"><i class="fa-solid fa-xmark"></i> no batch CSV</span>`}
+            ${man?`<span class="pair-status pair-ok"><i class="fa-solid fa-pencil"></i> manual values set</span>`:''}
+          </div>
+          ${!ok?`<span class="pair-status pair-warn"><i class="fa-solid fa-triangle-exclamation"></i> incomplete</span>`:''}
         </div>
-        ${!complete ? '<span class="pair-warn"><i class="fa-solid fa-triangle-exclamation"></i> incomplete pair — will be skipped</span>' : ''}
-      </div>
-    `;
+      </div>`;
   }).join('');
 }
 
 function addFiles(newFiles) {
   for (const file of newFiles) {
-    const name = file.name.toLowerCase();
-    const type = name.endsWith('.pdf') ? 'pdf' : (name.endsWith('.csv') || name.endsWith('.xlsx') || name.endsWith('.xls')) ? 'csv' : null;
+    const n=file.name.toLowerCase();
+    const type=n.endsWith('.pdf')?'pdf':(n.endsWith('.csv')||n.endsWith('.xlsx')||n.endsWith('.xls'))?'csv':null;
     if (!type) continue;
-    const key = batchKey(file.name);
-    if (!files.find(f => f.file.name === file.name)) files.push({ file, type, key });
+    const key=batchKey(file.name);
+    if (!files.find(f=>f.file.name===file.name)) files.push({file,type,key});
   }
-  document.getElementById('clearBtn').style.display = files.length ? '' : 'none';
-  renderFileList();
-  renderPairs();
+  document.getElementById('clearBtn').style.display=files.length?'':'none';
+  renderFileList(); renderPairs();
   document.getElementById('resultsSection').classList.remove('visible');
 }
 
 window.removeFile = function(i) {
-  files.splice(i, 1);
-  document.getElementById('clearBtn').style.display = files.length ? '' : 'none';
-  renderFileList();
-  renderPairs();
+  files.splice(i,1);
+  document.getElementById('clearBtn').style.display=files.length?'':'none';
+  renderFileList(); renderPairs();
   document.getElementById('resultsSection').classList.remove('visible');
 };
 
-// ── Run reconciliation ────────────────────────────────────────────
+// ── Run ────────────────────────────────────────────────────────────
 document.getElementById('runBtn').addEventListener('click', async () => {
-  const btn = document.getElementById('runBtn');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Checking…';
-
-  const massTolPct = parseFloat(document.getElementById('massTol').value) || 0.05;
-
-  const pdfs = Object.fromEntries(files.filter(f => f.type === 'pdf' && f.key).map(f => [f.key, f]));
-  const csvs = Object.fromEntries(files.filter(f => f.type === 'csv' && f.key).map(f => [f.key, f]));
-  const paired = [...new Set([...Object.keys(pdfs), ...Object.keys(csvs)])].filter(k => pdfs[k] && csvs[k]).sort();
-
-  const results = [];
+  const btn=document.getElementById('runBtn');
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Checking…';
+  const massTolPct=parseFloat(document.getElementById('massTol').value)||0.05;
+  const pdfs=Object.fromEntries(files.filter(f=>f.type==='pdf'&&f.key).map(f=>[f.key,f]));
+  const csvs=Object.fromEntries(files.filter(f=>f.type==='csv'&&f.key).map(f=>[f.key,f]));
+  const paired=[...new Set([...Object.keys(pdfs),...Object.keys(csvs)])].filter(k=>pdfs[k]&&csvs[k]).sort();
+  const results=[];
   for (const k of paired) {
     try {
-      const pdfText  = await extractPdfText(pdfs[k].file);
-      const csvText  = await pdfs[k] && csvs[k] ? new Response(csvs[k].file).text() : '';
-      const csvContent = await csvs[k].file.text();
-      const inv  = parseInvoiceText(pdfText, pdfs[k].file.name);
-      const sh   = parseSheetCsv(csvContent, csvs[k].file.name);
+      let inv;
+      if (manualInvoice[k]) {
+        // Use manually entered invoice values
+        const mv=manualInvoice[k];
+        inv={ source:'manual', invoice_no:mv.invoice_no||null, batch_no:k,
+              head:mv.head, mass_kg:mv.mass_kg, cattle_nett:mv.cattle_nett||null,
+              rate_per_kg:mv.cattle_nett&&mv.mass_kg?mv.cattle_nett/mv.mass_kg:null, warnings:[] };
+      } else {
+        const pdfText=await extractPdfText(pdfs[k].file);
+        inv=parseInvoiceText(pdfText, pdfs[k].file.name);
+      }
+      const csvContent=await csvs[k].file.text();
+      const sh=parseSheetCsv(csvContent, csvs[k].file.name);
       results.push(reconcile(inv, sh, massTolPct));
-    } catch (e) {
-      results.push({
-        batch_no: k, invoice_no: null, owner: null,
-        invoice_head: null, sheet_head: null, head_var: null,
-        invoice_mass: null, sheet_mass: null, mass_var: null, mass_var_pct: null,
-        rate_per_kg: null, rand_impact_excl_vat: null, rand_impact_incl_vat: null,
-        verdict: 'INCOMPLETE', notes: [`parse error: ${e.message}`]
-      });
+    } catch(e) {
+      results.push({ batch_no:k, invoice_no:null, owner:null, invoice_head:null, sheet_head:null,
+        head_var:null, invoice_mass:null, sheet_mass:null, mass_var:null, mass_var_pct:null,
+        rate_per_kg:null, rand_impact_excl_vat:null, rand_impact_incl_vat:null,
+        verdict:'INCOMPLETE', notes:[`error: ${e.message}`] });
     }
   }
-
-  // Sort: FAIL first, REVIEW next, then by batch
-  results.sort((a, b) => {
-    const ord = {FAIL:0, REVIEW:1, INCOMPLETE:2, PASS:3};
-    return (ord[a.verdict] ?? 4) - (ord[b.verdict] ?? 4) || String(a.batch_no).localeCompare(String(b.batch_no));
+  results.sort((a,b)=>{
+    const o={FAIL:0,REVIEW:1,INCOMPLETE:2,PASS:3};
+    return (o[a.verdict]??4)-(o[b.verdict]??4)||String(a.batch_no).localeCompare(String(b.batch_no));
   });
-
+  lastResults=results;
   renderResults(results, massTolPct);
-
-  btn.disabled = false;
-  btn.innerHTML = '<i class="fa-solid fa-play"></i> Run Check';
+  btn.disabled=false; btn.innerHTML='<i class="fa-solid fa-play"></i> Run Check';
 });
 
+// ── Results ────────────────────────────────────────────────────────
 function renderResults(results, massTolPct) {
-  const section = document.getElementById('resultsSection');
-  const summaryBar = document.getElementById('summaryBar');
-  const tbody = document.getElementById('resultsTbody');
+  const section=document.getElementById('resultsSection');
+  const sumBar=document.getElementById('summaryBar');
+  const tbody=document.getElementById('resultsTbody');
 
-  const nFail = results.filter(r => r.verdict === 'FAIL').length;
-  const nRev  = results.filter(r => r.verdict === 'REVIEW').length;
-  const nPass = results.filter(r => r.verdict === 'PASS').length;
-  const exposure = results.filter(r => ['FAIL','REVIEW'].includes(r.verdict))
-    .reduce((s, r) => s + (r.rand_impact_incl_vat || 0), 0);
+  const nFail=results.filter(r=>r.verdict==='FAIL').length;
+  const nRev=results.filter(r=>r.verdict==='REVIEW').length;
+  const nPass=results.filter(r=>r.verdict==='PASS').length;
+  const nInc=results.filter(r=>r.verdict==='INCOMPLETE').length;
+  const exposure=results.filter(r=>['FAIL','REVIEW'].includes(r.verdict))
+    .reduce((s,r)=>s+(r.rand_impact_incl_vat||0),0);
 
-  summaryBar.innerHTML = `
-    <div class="sum-item">
-      <div class="sum-label">Batches</div>
-      <div class="sum-value">${results.length}</div>
-    </div>
+  sumBar.innerHTML=`
+    <div class="sum-item"><div class="sum-label">Batches</div><div class="sum-value">${results.length}</div></div>
     <div class="sum-divider"></div>
-    <div class="sum-item">
-      <div class="sum-label">FAIL</div>
-      <div class="sum-value" style="color:${nFail ? 'var(--red)' : 'var(--text-muted)'}">${nFail}</div>
-    </div>
-    <div class="sum-item">
-      <div class="sum-label">REVIEW</div>
-      <div class="sum-value" style="color:${nRev ? 'var(--amber)' : 'var(--text-muted)'}">${nRev}</div>
-    </div>
-    <div class="sum-item">
-      <div class="sum-label">PASS</div>
-      <div class="sum-value" style="color:var(--accent)">${nPass}</div>
-    </div>
+    <div class="sum-item"><div class="sum-label">FAIL</div><div class="sum-value" style="color:${nFail?'var(--red)':'var(--muted)'}">${nFail}</div></div>
+    <div class="sum-item"><div class="sum-label">REVIEW</div><div class="sum-value" style="color:${nRev?'var(--amber)':'var(--muted)'}">${nRev}</div></div>
+    <div class="sum-item"><div class="sum-label">PASS</div><div class="sum-value" style="color:var(--accent)">${nPass}</div></div>
+    ${nInc?`<div class="sum-item"><div class="sum-label">Incomplete</div><div class="sum-value" style="color:var(--muted)">${nInc}</div></div>`:''}
     <div class="sum-divider"></div>
     <div class="sum-item sum-exposure">
       <div class="sum-label">Flagged exposure (incl VAT)</div>
-      <div class="sum-value" style="color:${exposure > 0 ? 'var(--red)' : 'var(--text-muted)'}">${exposure ? 'R ' + Math.abs(exposure).toLocaleString('en-ZA', {minimumFractionDigits:2}) : '—'}</div>
-    </div>
-  `;
+      <div class="sum-value" style="color:${exposure>0?'var(--red)':'var(--muted)'}">${exposure?'R '+Math.abs(exposure).toLocaleString('en-ZA',{minimumFractionDigits:2}):'—'}</div>
+    </div>`;
 
-  tbody.innerHTML = results.map(r => {
-    const headCell = r.invoice_head !== null
-      ? `${r.invoice_head} / ${r.sheet_head ?? '?'}${r.head_var ? ` <span class="var-${r.head_var > 0 ? 'pos' : 'neg'}">(${r.head_var > 0 ? '+' : ''}${r.head_var})</span>` : ''}`
-      : '—';
-
-    const massCell = r.invoice_mass !== null
-      ? `${r.invoice_mass.toLocaleString('en-ZA', {minimumFractionDigits:1})} / ${(r.sheet_mass ?? 0).toLocaleString('en-ZA', {minimumFractionDigits:1})}${r.mass_var ? ` <span class="var-${r.mass_var > 0 ? 'pos' : 'neg'}">(${r.mass_var > 0 ? '+' : ''}${r.mass_var.toFixed(1)})</span>` : ''}` : '—';
-
-    const impCell = (r.rand_impact_incl_vat && r.verdict !== 'PASS')
+  tbody.innerHTML=results.map((r,ri) => {
+    const headCell=r.invoice_head!==null
+      ? `${r.invoice_head} / ${r.sheet_head??'?'}${r.head_var?` <span class="var-${r.head_var>0?'pos':'neg'}">(${r.head_var>0?'+':''}${r.head_var})</span>`:''}`
+      : `—`;
+    const massCell=r.invoice_mass!==null
+      ? `${r.invoice_mass.toLocaleString('en-ZA',{minimumFractionDigits:1})} / ${(r.sheet_mass??0).toLocaleString('en-ZA',{minimumFractionDigits:1})}${r.mass_var?` <span class="var-${r.mass_var>0?'pos':'neg'}">(${r.mass_var>0?'+':''}${r.mass_var.toFixed(1)})</span>`:''}`
+      : `—`;
+    const impCell=(r.rand_impact_incl_vat&&r.verdict!=='PASS')
       ? `<span style="color:var(--red)">${randFmt(r.rand_impact_incl_vat)}</span>` : '—';
+    const notesRow=r.notes.length
+      ? `<tr class="notes-row"><td colspan="6">${r.notes.map(n=>`<i class="fa-solid fa-circle-info" style="margin-right:4px;color:var(--amber)"></i>${esc(n)}`).join(' &nbsp; ')}</td></tr>` : '';
 
-    const notesRow = r.notes.length
-      ? `<tr class="notes-row"><td colspan="6">${r.notes.map(n => `<i class="fa-solid fa-circle-info" style="margin-right:4px;color:var(--amber)"></i>${esc(n)}`).join(' &nbsp; ')}</td></tr>` : '';
+    // Manual entry form for INCOMPLETE rows
+    const manualRow=r.verdict==='INCOMPLETE' ? `
+      <tr class="result-manual-row">
+        <td colspan="6">
+          <div class="result-manual-form" id="rmf-${ri}">
+            <div class="rmf-hint"><i class="fa-solid fa-triangle-exclamation" style="color:var(--amber)"></i> PDF could not be read automatically (likely a scan). Enter the invoice figures from the document:</div>
+            <div class="rmf-field"><label>Invoice No</label><input id="rmf-inv-${ri}" placeholder="IN074003" /></div>
+            <div class="rmf-field"><label>Head count</label><input id="rmf-head-${ri}" type="number" placeholder="116" /></div>
+            <div class="rmf-field"><label>Total mass (kg)</label><input id="rmf-mass-${ri}" type="number" step="0.1" placeholder="27665.0" /></div>
+            <div class="rmf-field"><label>Nett value (R)</label><input id="rmf-nett-${ri}" type="number" step="0.01" placeholder="1116686.64" style="width:130px" /></div>
+            <button class="rmf-apply" onclick="applyManual(${ri},'${esc(r.batch_no||'')}')"><i class="fa-solid fa-check"></i> Recheck</button>
+          </div>
+        </td>
+      </tr>` : '';
 
     return `
       <tr>
-        <td style="font-family:monospace;font-weight:700">${esc(r.batch_no || '—')}</td>
-        <td style="font-family:monospace">${esc(r.invoice_no || '—')}</td>
+        <td style="font-family:monospace;font-weight:700">${esc(r.batch_no||'—')}</td>
+        <td style="font-family:monospace">${esc(r.invoice_no||'—')}</td>
         <td>${headCell}</td>
         <td style="font-family:monospace">${massCell}</td>
         <td style="font-family:monospace">${impCell}</td>
         <td><span class="verdict verdict-${r.verdict}">${r.verdict}</span></td>
       </tr>
       ${notesRow}
-    `;
+      ${manualRow}`;
   }).join('');
 
   section.classList.add('visible');
-  section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  section.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
-// ── Drop zone wiring ──────────────────────────────────────────────
-const dropZone  = document.getElementById('dropZone');
-const fileInput = document.getElementById('fileInput');
+// ── Apply manual values ────────────────────────────────────────────
+window.applyManual = function(ri, batchNo) {
+  const inv_no = document.getElementById(`rmf-inv-${ri}`)?.value.trim() || null;
+  const head   = parseInt(document.getElementById(`rmf-head-${ri}`)?.value) || null;
+  const mass   = parseFloat(document.getElementById(`rmf-mass-${ri}`)?.value) || null;
+  const nett   = parseFloat(document.getElementById(`rmf-nett-${ri}`)?.value) || null;
 
-dropZone.addEventListener('click', () => fileInput.click());
-fileInput.addEventListener('change', e => { addFiles([...e.target.files]); fileInput.value = ''; });
+  if (!head || !mass) {
+    alert('Head count and total mass are required.'); return;
+  }
 
-dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('over'); });
-dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
-dropZone.addEventListener('drop', e => {
-  e.preventDefault(); dropZone.classList.remove('over');
-  addFiles([...e.dataTransfer.files]);
-});
-
-document.getElementById('clearBtn').addEventListener('click', () => {
-  files.length = 0;
-  renderFileList();
+  manualInvoice[batchNo] = { invoice_no:inv_no, head, mass_kg:mass, cattle_nett:nett };
   renderPairs();
+  document.getElementById('runBtn').click();
+};
+
+// ── Drop zone wiring ───────────────────────────────────────────────
+const dropZone=document.getElementById('dropZone');
+const fileInput=document.getElementById('fileInput');
+dropZone.addEventListener('click', ()=>fileInput.click());
+fileInput.addEventListener('change', e=>{ addFiles([...e.target.files]); fileInput.value=''; });
+dropZone.addEventListener('dragover', e=>{ e.preventDefault(); dropZone.classList.add('over'); });
+dropZone.addEventListener('dragleave', ()=>dropZone.classList.remove('over'));
+dropZone.addEventListener('drop', e=>{ e.preventDefault(); dropZone.classList.remove('over'); addFiles([...e.dataTransfer.files]); });
+
+document.getElementById('clearBtn').addEventListener('click', ()=>{
+  files.length=0; Object.keys(manualInvoice).forEach(k=>delete manualInvoice[k]);
+  renderFileList(); renderPairs();
   document.getElementById('resultsSection').classList.remove('visible');
-  document.getElementById('clearBtn').style.display = 'none';
+  document.getElementById('clearBtn').style.display='none';
 });
 </script>
 </body>
