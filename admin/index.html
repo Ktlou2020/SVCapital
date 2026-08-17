@@ -1429,6 +1429,92 @@
           </div>
         </div>
 
+        <!-- ══ FEE REVENUE ══ -->
+        <div class="grid-2 mb-16">
+          <div class="panel">
+            <div class="panel__header">
+              <span class="panel__title"><i class="fa-solid fa-coins" style="color:#fec24f;margin-right:8px"></i>Fee Revenue by Month</span>
+              <div style="display:flex;align-items:center;gap:8px">
+                <select id="revenueMonthsFilter" class="tbl-filter" style="font-size:0.78rem;padding:5px 8px" onchange="loadRevenueAnalytics()">
+                  <option value="6">Last 6 months</option>
+                  <option value="12" selected>Last 12 months</option>
+                  <option value="24">Last 24 months</option>
+                </select>
+                <button class="btn btn--secondary btn--sm" onclick="loadRevenueAnalytics()"><i class="fa-solid fa-rotate"></i></button>
+              </div>
+            </div>
+            <div class="panel__body"><div class="chart-wrap chart-wrap--md"><canvas id="revenueMonthlyChart"></canvas></div></div>
+          </div>
+          <div class="panel">
+            <div class="panel__header"><span class="panel__title">Fee Revenue by Product</span></div>
+            <div class="panel__body" id="revenueProductPanel"><div class="text-center text-muted" style="padding:20px">Loading…</div></div>
+          </div>
+        </div>
+
+        <!-- ══ MATURITY & REINVESTMENT ══ -->
+        <div class="panel mb-16">
+          <div class="panel__header">
+            <span class="panel__title"><i class="fa-solid fa-rotate" style="color:#65cc88;margin-right:8px"></i>Maturity &amp; Reinvestment Rate</span>
+            <button class="btn btn--secondary btn--sm" onclick="loadMaturityReinvestment()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+          </div>
+          <div class="panel__body" id="maturityReinvestPanel"><div class="text-center text-muted" style="padding:20px">Loading…</div></div>
+        </div>
+
+        <!-- ══ IFA PERFORMANCE ══ -->
+        <div class="panel mb-16">
+          <div class="panel__header">
+            <span class="panel__title"><i class="fa-solid fa-user-tie" style="color:#7a92a8;margin-right:8px"></i>IFA Performance</span>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn--secondary btn--sm" onclick="exportIfaCSV()"><i class="fa-solid fa-download"></i> CSV</button>
+              <button class="btn btn--secondary btn--sm" onclick="loadIfaPerformance()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+            </div>
+          </div>
+          <div class="panel__body" id="ifaPerformancePanel"><div class="text-center text-muted" style="padding:20px">Loading…</div></div>
+        </div>
+
+        <!-- ══ SUB-ACCOUNT ANALYTICS ══ -->
+        <div class="panel mb-16">
+          <div class="panel__header">
+            <span class="panel__title"><i class="fa-solid fa-layer-group" style="color:#eda5ff;margin-right:8px"></i>Sub-Account Analytics</span>
+            <button class="btn btn--secondary btn--sm" onclick="loadSubAccountAnalytics()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+          </div>
+          <div class="panel__body" id="subAccountAnalyticsPanel"><div class="text-center text-muted" style="padding:20px">Loading…</div></div>
+        </div>
+
+        <!-- ══ INTEREST DISTRIBUTION HISTORY ══ -->
+        <div class="panel mb-16">
+          <div class="panel__header">
+            <span class="panel__title"><i class="fa-solid fa-sack-dollar" style="color:#eda5ff;margin-right:8px"></i>Interest Distribution History</span>
+            <button class="btn btn--secondary btn--sm" onclick="loadInterestHistoryAnalytics()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+          </div>
+          <div class="panel__body" id="interestHistoryAnalyticsPanel"><div class="text-center text-muted" style="padding:20px">Loading…</div></div>
+        </div>
+
+        <!-- ══ WITHDRAWAL TRENDS ══ -->
+        <div class="panel mb-16">
+          <div class="panel__header">
+            <span class="panel__title"><i class="fa-solid fa-money-bill-transfer" style="color:#ff6b6b;margin-right:8px"></i>Withdrawal Trends</span>
+            <div style="display:flex;align-items:center;gap:8px">
+              <select id="withdrawalDaysFilter" class="tbl-filter" style="font-size:0.78rem;padding:5px 8px" onchange="loadWithdrawalTrends()">
+                <option value="30">Last 30 days</option>
+                <option value="90" selected>Last 90 days</option>
+                <option value="180">Last 180 days</option>
+                <option value="365">Last 365 days</option>
+              </select>
+              <button class="btn btn--secondary btn--sm" onclick="exportWithdrawalCSV()"><i class="fa-solid fa-download"></i> CSV</button>
+              <button class="btn btn--secondary btn--sm" onclick="loadWithdrawalTrends()"><i class="fa-solid fa-rotate"></i></button>
+            </div>
+          </div>
+          <div class="panel__body">
+            <div id="withdrawalSummaryPanel"><div class="text-center text-muted" style="padding:20px">Loading…</div></div>
+            <div class="chart-wrap chart-wrap--md" style="margin-top:16px"><canvas id="withdrawalTrendsChart"></canvas></div>
+            <div style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.06);padding-top:14px">
+              <div style="font-size:0.78rem;font-weight:600;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em">Recent Withdrawals</div>
+              <div id="withdrawalRecentPanel"></div>
+            </div>
+          </div>
+        </div>
+
       </div>
 
       <!-- ══════════════════════════════════
@@ -4358,7 +4444,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=4"></script>
-<script src="js/admin.js?v=72"></script>
+<script src="js/admin.js?v=73"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>

@@ -7090,6 +7090,12 @@ async function loadAnalytics() {
     renderCohortChart();
     renderMobileActivity();
     loadPersonas();
+    loadRevenueAnalytics();
+    loadMaturityReinvestment();
+    loadIfaPerformance();
+    loadSubAccountAnalytics();
+    loadInterestHistoryAnalytics();
+    loadWithdrawalTrends();
   } catch (e) {
     Toast.error('Failed to load analytics data');
     console.error('[loadAnalytics]', e);
@@ -13594,4 +13600,465 @@ function _initSSE() {
   }
 
   connect();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ANALYTICS ENHANCEMENTS
+   Fee Revenue · Maturity/Reinvestment · IFA Performance ·
+   Sub-Account Analytics · Interest History · Withdrawal Trends ·
+   CSV Export
+   ═══════════════════════════════════════════════════════════════ */
+
+function _exportCSV(rows, filename) {
+  if (!rows || !rows.length) return Toast.warning('No data to export');
+  const headers = Object.keys(rows[0]);
+  const csv = [
+    headers.join(','),
+    ...rows.map(r => headers.map(h => {
+      const v = r[h] == null ? '' : String(r[h]);
+      return v.includes(',') || v.includes('"') || v.includes('\n') ? `"${v.replace(/"/g, '""')}"` : v;
+    }).join(','))
+  ].join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
+function _fmtProductType(t) {
+  const map = { cattle: 'Cattle', solar_5yr: 'Solar 5yr', solar_6yr: 'Solar 6yr', solar_7yr: 'Solar 7yr', short_term: 'Short Term', smme: 'SMME', delivery_bikes: 'Delivery Bikes', unknown: 'Unknown' };
+  return map[t] || (t ? t.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '—');
+}
+
+function _fmtMonthLabel(isoDate) {
+  const d = new Date(isoDate);
+  return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()] + ' ' + String(d.getFullYear()).slice(2);
+}
+
+/* ── 1. Fee Revenue Analytics ───────────────────────────── */
+async function loadRevenueAnalytics() {
+  const panel = document.getElementById('revenueProductPanel');
+  if (!panel) return;
+  panel.innerHTML = '<div class="text-center text-muted" style="padding:20px">Loading…</div>';
+
+  const months = parseInt(document.getElementById('revenueMonthsFilter')?.value || '12');
+  try {
+    const res  = await fetch(`/api/analytics/revenue?months=${months}`, { headers: { Authorization: `Bearer ${AUTH.token}` } });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    const kpiHtml = `
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+        <div style="flex:1;min-width:110px;background:var(--card-bg);border-radius:8px;padding:12px;text-align:center;border:1px solid rgba(237,165,255,0.15)">
+          <div style="font-size:1.05rem;font-weight:700;color:#eda5ff">${Utils.rand(data.total_period)}</div>
+          <div style="font-size:0.68rem;color:var(--text-muted);margin-top:3px">Last ${months}mo Revenue</div>
+        </div>
+        <div style="flex:1;min-width:110px;background:var(--card-bg);border-radius:8px;padding:12px;text-align:center;border:1px solid rgba(254,194,79,0.15)">
+          <div style="font-size:1.05rem;font-weight:700;color:#fec24f">${Utils.rand(data.total_all_time)}</div>
+          <div style="font-size:0.68rem;color:var(--text-muted);margin-top:3px">All-Time Revenue</div>
+        </div>
+        <div style="flex:1;min-width:110px;background:var(--card-bg);border-radius:8px;padding:12px;text-align:center;border:1px solid rgba(101,204,136,0.15)">
+          <div style="font-size:1.05rem;font-weight:700;color:#65cc88">${data.count_period.toLocaleString()}</div>
+          <div style="font-size:0.68rem;color:var(--text-muted);margin-top:3px">Fee Transactions</div>
+        </div>
+      </div>`;
+
+    const prodRows = data.by_product.length
+      ? data.by_product.map(p => `<tr>
+          <td>${_fmtProductType(p.product_type)}</td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums">${p.count}</td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;color:#fec24f;font-weight:600">${Utils.rand(p.total)}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="3" class="text-muted" style="padding:12px">No fee data for period.</td></tr>';
+
+    panel.innerHTML = kpiHtml + `
+      <div style="overflow-x:auto">
+        <table class="data-table" style="font-size:0.8rem">
+          <thead><tr><th>Product</th><th style="text-align:right">Fees</th><th style="text-align:right">Revenue</th></tr></thead>
+          <tbody>${prodRows}</tbody>
+        </table>
+      </div>`;
+
+    const ctx = document.getElementById('revenueMonthlyChart');
+    if (ctx) {
+      if (STATE.charts.revenueMonthly) STATE.charts.revenueMonthly.destroy();
+      const opts = _chartDefaults();
+      opts.plugins.tooltip.callbacks = { label: c => ` ${Utils.rand(c.parsed.y)}` };
+      opts.scales.y.ticks.callback   = v => 'R' + (v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v);
+      STATE.charts.revenueMonthly = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels:   data.monthly.map(m => _fmtMonthLabel(m.month)),
+          datasets: [{ label: 'Monthly Fee Revenue', data: data.monthly.map(m => m.total), backgroundColor: 'rgba(237,165,255,0.7)', borderRadius: 5 }],
+        },
+        options: opts,
+      });
+    }
+  } catch (e) {
+    panel.innerHTML = `<p class="text-muted" style="padding:16px">Failed to load: ${e.message}</p>`;
+    console.error('[loadRevenueAnalytics]', e);
+  }
+}
+
+/* ── 2. Maturity & Reinvestment Rate ────────────────────── */
+async function loadMaturityReinvestment() {
+  const panel = document.getElementById('maturityReinvestPanel');
+  if (!panel) return;
+  panel.innerHTML = '<div class="text-center text-muted" style="padding:20px">Loading…</div>';
+  try {
+    const res  = await fetch('/api/analytics/maturity-reinvestment', { headers: { Authorization: `Bearer ${AUTH.token}` } });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    const rate      = (data.reinvestment_rate * 100).toFixed(1);
+    const rateColor = data.reinvestment_rate >= 0.5 ? '#65cc88' : data.reinvestment_rate >= 0.3 ? '#fec24f' : '#ff6b6b';
+
+    panel.innerHTML = `
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+        <div style="flex:1;min-width:120px;background:var(--card-bg);border-radius:8px;padding:14px;text-align:center;border:1px solid rgba(255,255,255,0.06)">
+          <div style="font-size:2rem;font-weight:700;color:${rateColor}">${rate}%</div>
+          <div style="font-size:0.68rem;color:var(--text-muted);margin-top:4px">Reinvestment Rate</div>
+        </div>
+        <div style="flex:1;min-width:120px;background:var(--card-bg);border-radius:8px;padding:14px;text-align:center;border:1px solid rgba(255,255,255,0.06)">
+          <div style="font-size:1.2rem;font-weight:700">${data.total_matured.toLocaleString()}</div>
+          <div style="font-size:0.68rem;color:var(--text-muted);margin-top:4px">Total Matured</div>
+        </div>
+        <div style="flex:1;min-width:120px;background:var(--card-bg);border-radius:8px;padding:14px;text-align:center;border:1px solid rgba(101,204,136,0.15)">
+          <div style="font-size:1.2rem;font-weight:700;color:#65cc88">${data.actual_reinvested.toLocaleString()}</div>
+          <div style="font-size:0.68rem;color:var(--text-muted);margin-top:4px">Actually Reinvested</div>
+        </div>
+        <div style="flex:1;min-width:120px;background:var(--card-bg);border-radius:8px;padding:14px;text-align:center;border:1px solid rgba(254,194,79,0.15)">
+          <div style="font-size:1.2rem;font-weight:700;color:#fec24f">${Utils.rand(data.reinvested_capital)}</div>
+          <div style="font-size:0.68rem;color:var(--text-muted);margin-top:4px">Reinvested Capital</div>
+        </div>
+        <div style="flex:1;min-width:120px;background:var(--card-bg);border-radius:8px;padding:14px;text-align:center;border:1px solid rgba(237,165,255,0.15)">
+          <div style="font-size:1.2rem;font-weight:700;color:#eda5ff">${data.elected_reinvest.toLocaleString()}</div>
+          <div style="font-size:0.68rem;color:var(--text-muted);margin-top:4px">Elected Reinvest</div>
+        </div>
+      </div>
+      <div class="chart-wrap chart-wrap--md"><canvas id="maturityReinvestChart"></canvas></div>`;
+
+    const ctx = document.getElementById('maturityReinvestChart');
+    if (ctx && data.monthly.length) {
+      if (STATE.charts.maturityReinvest) STATE.charts.maturityReinvest.destroy();
+      const opts = _chartDefaults();
+      opts.plugins.tooltip.callbacks = { label: c => ` ${c.dataset.label}: ${c.parsed.y}` };
+      STATE.charts.maturityReinvest = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels:   data.monthly.map(m => _fmtMonthLabel(m.month)),
+          datasets: [
+            { label: 'Matured',    data: data.monthly.map(m => m.matured),    backgroundColor: 'rgba(101,101,101,0.55)', borderRadius: 4 },
+            { label: 'Reinvested', data: data.monthly.map(m => m.reinvested), backgroundColor: 'rgba(101,204,136,0.7)',  borderRadius: 4 },
+          ],
+        },
+        options: opts,
+      });
+    }
+  } catch (e) {
+    if (document.getElementById('maturityReinvestPanel'))
+      document.getElementById('maturityReinvestPanel').innerHTML = `<p class="text-muted" style="padding:16px">Failed to load: ${e.message}</p>`;
+  }
+}
+
+/* ── 3. IFA Performance ─────────────────────────────────── */
+let _ifaAnalyticsData = null;
+
+async function loadIfaPerformance() {
+  const panel = document.getElementById('ifaPerformancePanel');
+  if (!panel) return;
+  panel.innerHTML = '<div class="text-center text-muted" style="padding:20px">Loading…</div>';
+  try {
+    const res  = await fetch('/api/analytics/ifa-performance', { headers: { Authorization: `Bearer ${AUTH.token}` } });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    _ifaAnalyticsData = data;
+
+    const summaryHtml = `
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+        <div style="background:var(--card-bg);border-radius:8px;padding:12px 18px;border:1px solid rgba(255,255,255,0.06)">
+          <div style="font-weight:600;font-size:1rem">${data.ifas.length}</div>
+          <div style="font-size:0.68rem;color:var(--text-muted)">IFAs on Platform</div>
+        </div>
+        <div style="background:var(--card-bg);border-radius:8px;padding:12px 18px;border:1px solid rgba(254,194,79,0.15)">
+          <div style="font-weight:600;font-size:1rem;color:#fec24f">${Utils.rand(data.total_aum_via_ifa)}</div>
+          <div style="font-size:0.68rem;color:var(--text-muted)">AUM via IFA</div>
+        </div>
+        <div style="background:var(--card-bg);border-radius:8px;padding:12px 18px;border:1px solid rgba(255,255,255,0.06)">
+          <div style="font-weight:600;font-size:1rem">${data.total_investors_via_ifa}</div>
+          <div style="font-size:0.68rem;color:var(--text-muted)">Investors via IFA</div>
+        </div>
+      </div>`;
+
+    if (!data.ifas.length) {
+      panel.innerHTML = summaryHtml + '<p class="text-muted" style="padding:8px">No IFAs found.</p>';
+      return;
+    }
+
+    const rows = data.ifas.map(ifa => `
+      <tr>
+        <td>
+          <div style="font-weight:500">${_esc(ifa.name || '—')}</div>
+          <div style="font-size:0.7rem;color:var(--text-muted)">${_esc(ifa.company || ifa.email || '')}</div>
+        </td>
+        <td style="text-align:center">${ifa.client_count}</td>
+        <td style="text-align:center">${ifa.active_investments}</td>
+        <td style="text-align:right;color:#fec24f;font-weight:600;font-variant-numeric:tabular-nums">${Utils.rand(ifa.total_aum)}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums">${Utils.rand(ifa.total_wallet)}</td>
+        <td style="text-align:center">${ifa.commission_rate}%</td>
+        <td><span class="status-badge status-badge--${ifa.status === 'active' ? 'success' : 'muted'}">${ifa.status}</span></td>
+      </tr>`).join('');
+
+    panel.innerHTML = summaryHtml + `
+      <div style="overflow-x:auto">
+        <table class="data-table" style="font-size:0.8rem">
+          <thead><tr>
+            <th>IFA</th>
+            <th style="text-align:center">Clients</th>
+            <th style="text-align:center">Active Investments</th>
+            <th style="text-align:right">Total AUM</th>
+            <th style="text-align:right">Wallet Pool</th>
+            <th style="text-align:center">Commission</th>
+            <th>Status</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  } catch (e) {
+    if (document.getElementById('ifaPerformancePanel'))
+      document.getElementById('ifaPerformancePanel').innerHTML = `<p class="text-muted" style="padding:16px">Failed to load: ${e.message}</p>`;
+  }
+}
+
+function exportIfaCSV() {
+  if (!_ifaAnalyticsData?.ifas?.length) return Toast.warning('Load IFA data first');
+  _exportCSV(_ifaAnalyticsData.ifas.map(r => ({
+    Name: r.name, Company: r.company || '', Email: r.email || '',
+    Clients: r.client_count, 'Active Investments': r.active_investments,
+    'Total AUM (R)': r.total_aum, 'Commission Rate': r.commission_rate + '%', Status: r.status,
+  })), `ifa-performance-${new Date().toISOString().slice(0,10)}.csv`);
+}
+
+/* ── 4. Sub-Account Analytics ───────────────────────────── */
+async function loadSubAccountAnalytics() {
+  const panel = document.getElementById('subAccountAnalyticsPanel');
+  if (!panel) return;
+  panel.innerHTML = '<div class="text-center text-muted" style="padding:20px">Loading…</div>';
+  try {
+    const res  = await fetch('/api/analytics/sub-accounts', { headers: { Authorization: `Bearer ${AUTH.token}` } });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    const kpis = [
+      { label: 'Total',          value: data.total,                  color: 'var(--text)' },
+      { label: 'Active',         value: data.active,                 color: '#65cc88' },
+      { label: 'Funded (>R0)',   value: data.funded,                 color: '#eda5ff' },
+      { label: 'Total Balance',  value: Utils.rand(data.total_balance),  color: '#fec24f' },
+      { label: 'Total Invested', value: Utils.rand(data.total_invested), color: '#7a92a8' },
+      { label: 'Avg Balance',    value: Utils.rand(data.avg_balance),    color: 'var(--text)' },
+    ];
+
+    const kpiHtml = `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+      ${kpis.map(k => `
+        <div style="flex:1;min-width:110px;background:var(--card-bg);border-radius:8px;padding:12px;text-align:center;border:1px solid rgba(255,255,255,0.05)">
+          <div style="font-size:1rem;font-weight:700;color:${k.color}">${k.value}</div>
+          <div style="font-size:0.67rem;color:var(--text-muted);margin-top:3px">${k.label}</div>
+        </div>`).join('')}
+    </div>`;
+
+    const typeRows = data.by_type.map(t => `
+      <tr>
+        <td>${_esc(t.type || '—')}</td>
+        <td style="text-align:center">${t.count}</td>
+        <td style="text-align:right;color:#fec24f;font-variant-numeric:tabular-nums">${Utils.rand(t.balance)}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums">${Utils.rand(t.invested)}</td>
+      </tr>`).join('');
+
+    panel.innerHTML = kpiHtml + `
+      <div style="overflow-x:auto">
+        <table class="data-table" style="font-size:0.8rem">
+          <thead><tr><th>Account Type</th><th style="text-align:center">Count</th><th style="text-align:right">Balance</th><th style="text-align:right">Invested</th></tr></thead>
+          <tbody>${typeRows || '<tr><td colspan="4" class="text-muted" style="padding:12px">No sub-accounts found.</td></tr>'}</tbody>
+        </table>
+      </div>
+      <div class="chart-wrap chart-wrap--md" style="margin-top:16px"><canvas id="subAccountMonthlyChart"></canvas></div>`;
+
+    const ctx = document.getElementById('subAccountMonthlyChart');
+    if (ctx && data.monthly_new.length) {
+      if (STATE.charts.subAccountMonthly) STATE.charts.subAccountMonthly.destroy();
+      const opts = _chartDefaults();
+      opts.plugins.tooltip.callbacks = { label: c => ` ${c.parsed.y} new sub-accounts` };
+      STATE.charts.subAccountMonthly = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels:   data.monthly_new.map(m => _fmtMonthLabel(m.month)),
+          datasets: [{ label: 'New Sub-Accounts', data: data.monthly_new.map(m => m.count), backgroundColor: 'rgba(237,165,255,0.6)', borderRadius: 4 }],
+        },
+        options: opts,
+      });
+    }
+  } catch (e) {
+    if (document.getElementById('subAccountAnalyticsPanel'))
+      document.getElementById('subAccountAnalyticsPanel').innerHTML = `<p class="text-muted" style="padding:16px">Failed to load: ${e.message}</p>`;
+  }
+}
+
+/* ── 5. Interest Distribution History ──────────────────── */
+async function loadInterestHistoryAnalytics() {
+  const panel = document.getElementById('interestHistoryAnalyticsPanel');
+  if (!panel) return;
+  panel.innerHTML = '<div class="text-center text-muted" style="padding:20px">Loading…</div>';
+  try {
+    const res  = await fetch('/api/analytics/interest-history', { headers: { Authorization: `Bearer ${AUTH.token}` } });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    const { summary, distributions } = data;
+    const summaryHtml = `
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+        <div style="flex:1;min-width:120px;background:var(--card-bg);border-radius:8px;padding:12px;text-align:center;border:1px solid rgba(237,165,255,0.15)">
+          <div style="font-size:1.1rem;font-weight:700;color:#eda5ff">${Utils.rand(summary.grand_total)}</div>
+          <div style="font-size:0.68rem;color:var(--text-muted);margin-top:3px">Total Interest Distributed</div>
+        </div>
+        <div style="flex:1;min-width:120px;background:var(--card-bg);border-radius:8px;padding:12px;text-align:center;border:1px solid rgba(255,255,255,0.06)">
+          <div style="font-size:1.1rem;font-weight:700">${summary.distribution_count}</div>
+          <div style="font-size:0.68rem;color:var(--text-muted);margin-top:3px">Distribution Runs</div>
+        </div>
+        <div style="flex:1;min-width:120px;background:var(--card-bg);border-radius:8px;padding:12px;text-align:center;border:1px solid rgba(101,204,136,0.15)">
+          <div style="font-size:1.1rem;font-weight:700;color:#65cc88">${summary.total_accounts_credited.toLocaleString()}</div>
+          <div style="font-size:0.68rem;color:var(--text-muted);margin-top:3px">Total Accounts Credited</div>
+        </div>
+      </div>`;
+
+    if (!distributions.length) {
+      panel.innerHTML = summaryHtml + '<p class="text-muted" style="padding:8px">No distributions yet.</p>';
+      return;
+    }
+
+    const rows = distributions.map(d => `
+      <tr>
+        <td style="font-family:monospace;font-weight:600">${_esc(d.period)}</td>
+        <td style="text-align:right;color:#eda5ff;font-weight:600;font-variant-numeric:tabular-nums">${Utils.rand(d.total_interest)}</td>
+        <td style="text-align:center">${d.accounts_credited}</td>
+        <td style="text-align:center;color:var(--text-muted)">${d.accounts_skipped}</td>
+        <td style="text-align:center;color:#ff6b6b">${d.accounts_unmatched}</td>
+        <td style="color:var(--text-muted);font-size:0.75rem">${d.applied_at ? new Date(d.applied_at).toLocaleDateString('en-ZA') : '—'}</td>
+      </tr>`).join('');
+
+    panel.innerHTML = summaryHtml + `
+      <div style="overflow-x:auto">
+        <table class="data-table" style="font-size:0.8rem">
+          <thead><tr>
+            <th>Period</th>
+            <th style="text-align:right">Interest</th>
+            <th style="text-align:center">Credited</th>
+            <th style="text-align:center">Skipped</th>
+            <th style="text-align:center">Unmatched</th>
+            <th>Applied</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  } catch (e) {
+    if (document.getElementById('interestHistoryAnalyticsPanel'))
+      document.getElementById('interestHistoryAnalyticsPanel').innerHTML = `<p class="text-muted" style="padding:16px">Failed to load: ${e.message}</p>`;
+  }
+}
+
+/* ── 6. Withdrawal Trends ───────────────────────────────── */
+let _withdrawalAnalyticsData = null;
+
+async function loadWithdrawalTrends() {
+  const summaryPanel = document.getElementById('withdrawalSummaryPanel');
+  const recentPanel  = document.getElementById('withdrawalRecentPanel');
+  if (!summaryPanel) return;
+  summaryPanel.innerHTML = '<div class="text-center text-muted" style="padding:20px">Loading…</div>';
+
+  const days = parseInt(document.getElementById('withdrawalDaysFilter')?.value || '90');
+  try {
+    const res  = await fetch(`/api/analytics/withdrawals?days=${days}`, { headers: { Authorization: `Bearer ${AUTH.token}` } });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    _withdrawalAnalyticsData = data;
+
+    const s              = data.summary;
+    const completionRate = s.total > 0 ? ((s.completed / s.total) * 100).toFixed(1) : '0.0';
+
+    const kpis = [
+      { label: 'Total Requests',   value: s.total,                         color: 'var(--text)' },
+      { label: 'Total Volume',     value: Utils.rand(s.total_volume),       color: '#fec24f' },
+      { label: 'Avg Amount',       value: Utils.rand(s.avg_amount),         color: '#7a92a8' },
+      { label: 'Completed',        value: s.completed,                      color: '#65cc88' },
+      { label: 'Pending',          value: s.pending,                        color: '#fec24f' },
+      { label: 'Rejected',         value: s.rejected,                       color: '#ff6b6b' },
+      { label: 'Completion Rate',  value: completionRate + '%',             color: '#65cc88' },
+    ];
+
+    summaryPanel.innerHTML = `<div style="display:flex;gap:10px;flex-wrap:wrap">
+      ${kpis.map(k => `
+        <div style="flex:1;min-width:100px;background:var(--card-bg);border-radius:8px;padding:12px;text-align:center;border:1px solid rgba(255,255,255,0.05)">
+          <div style="font-size:1rem;font-weight:700;color:${k.color}">${k.value}</div>
+          <div style="font-size:0.66rem;color:var(--text-muted);margin-top:3px">${k.label}</div>
+        </div>`).join('')}
+    </div>`;
+
+    const ctx = document.getElementById('withdrawalTrendsChart');
+    if (ctx) {
+      if (STATE.charts.withdrawalTrends) STATE.charts.withdrawalTrends.destroy();
+      const opts = _chartDefaults();
+      opts.plugins.tooltip.callbacks = { label: c => ` ${c.dataset.label}: ${c.dataset.label === 'Count' ? c.parsed.y : Utils.rand(c.parsed.y)}` };
+      opts.scales.y.ticks.callback   = v => 'R' + (v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v);
+
+      STATE.charts.withdrawalTrends = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels:   data.monthly.map(m => _fmtMonthLabel(m.month)),
+          datasets: [
+            { label: 'Volume', data: data.monthly.map(m => m.volume), backgroundColor: 'rgba(254,194,79,0.6)', borderRadius: 4 },
+            { label: 'Count',  data: data.monthly.map(m => m.count),  backgroundColor: 'rgba(122,146,168,0.5)', borderRadius: 4, yAxisID: 'y2' },
+          ],
+        },
+        options: {
+          ...opts,
+          scales: {
+            ...opts.scales,
+            y2: { position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#3d5268', font: { size: 10 } } },
+          },
+        },
+      });
+    }
+
+    if (recentPanel && data.recent.length) {
+      const rows = data.recent.map(w => `
+        <tr>
+          <td>${_esc(w.investor_name || '—')}</td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:600">${Utils.rand(Math.abs(w.amount))}</td>
+          <td><span class="status-badge status-badge--${w.status === 'completed' ? 'success' : w.status === 'pending' ? 'warning' : 'danger'}">${w.status}</span></td>
+          <td style="color:var(--text-muted);font-size:0.75rem">${new Date(w.created_at).toLocaleDateString('en-ZA')}</td>
+        </tr>`).join('');
+      recentPanel.innerHTML = `
+        <div style="overflow-x:auto">
+          <table class="data-table" style="font-size:0.8rem">
+            <thead><tr><th>Investor</th><th style="text-align:right">Amount</th><th>Status</th><th>Date</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+    } else if (recentPanel) {
+      recentPanel.innerHTML = '<p class="text-muted" style="padding:8px">No recent withdrawals.</p>';
+    }
+  } catch (e) {
+    if (summaryPanel) summaryPanel.innerHTML = `<p class="text-muted" style="padding:16px">Failed to load: ${e.message}</p>`;
+    console.error('[loadWithdrawalTrends]', e);
+  }
+}
+
+function exportWithdrawalCSV() {
+  if (!_withdrawalAnalyticsData?.recent?.length) return Toast.warning('Load withdrawal data first');
+  _exportCSV(_withdrawalAnalyticsData.recent.map(r => ({
+    Investor: r.investor_name || '',
+    'Amount (R)': Math.abs(r.amount),
+    Status: r.status,
+    Date: r.created_at ? new Date(r.created_at).toLocaleDateString('en-ZA') : '',
+  })), `withdrawals-${new Date().toISOString().slice(0,10)}.csv`);
 }
