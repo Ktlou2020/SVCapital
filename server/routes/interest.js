@@ -75,6 +75,9 @@ router.post('/interest/preview', requireAuth, requireRole('admin', 'director'), 
 
     let totalInterest = 0, toCredit = 0, unmatched = 0, skipped = 0;
 
+    // Strip R prefix and commas from currency values (handles both "R899.03" and "899.03")
+    const _amt = v => parseFloat((v || '').replace(/[R,\s]/g, '')) || 0;
+
     const items = rows.map(row => {
       const ref        = normalizeRef(row['Account Reference']);
       const pimBalance = parseAmt(row['3PIM balance'] || row['Balance']);
