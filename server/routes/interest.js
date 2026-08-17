@@ -1,6 +1,6 @@
 const express  = require('express');
 const router   = express.Router();
-const { pool } = require('../db');
+const pool = require('../db/pool');
 const { requireAuth, requireRole } = require('../middleware/auth');
 
 // Parse the 3PIM CSV export — handles simple comma-delimited format
