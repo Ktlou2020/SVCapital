@@ -923,6 +923,26 @@ CREATE INDEX IF NOT EXISTS friction_session_idx ON signup_friction_events(sessio
 CREATE INDEX IF NOT EXISTS friction_type_idx    ON signup_friction_events(event_type);
 CREATE INDEX IF NOT EXISTS friction_created_idx ON signup_friction_events(created_at);
 
+CREATE TABLE IF NOT EXISTS invest_funnel_events (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  investor_id      TEXT,
+  event_type       TEXT NOT NULL,
+  pool_id          TEXT,
+  product_type     TEXT,
+  stage            TEXT,
+  fee_seen         BOOLEAN,
+  amount_entered   BOOLEAN,
+  amount_bucket    TEXT,
+  wallet_bucket    TEXT,
+  shortfall_bucket TEXT,
+  gateway          TEXT,
+  platform         TEXT,
+  created_at       TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS ife_investor_idx ON invest_funnel_events(investor_id);
+CREATE INDEX IF NOT EXISTS ife_type_idx     ON invest_funnel_events(event_type);
+CREATE INDEX IF NOT EXISTS ife_created_idx  ON invest_funnel_events(created_at);
+
 CREATE TABLE IF NOT EXISTS totp_recovery_codes (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

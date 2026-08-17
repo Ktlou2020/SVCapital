@@ -1340,6 +1340,24 @@
           </div>
         </div>
 
+        <!-- Investment Funnel Drop-off -->
+        <div class="panel mb-16">
+          <div class="panel__header">
+            <span class="panel__title"><i class="fa-solid fa-filter-circle-xmark" style="color:var(--purple);margin-right:8px"></i>Investment Funnel Drop-off</span>
+            <div style="display:flex;align-items:center;gap:8px">
+              <select id="investFunnelDaysFilter" class="tbl-filter" style="font-size:0.78rem;padding:5px 8px">
+                <option value="7">Last 7 days</option>
+                <option value="30" selected>Last 30 days</option>
+                <option value="90">Last 90 days</option>
+              </select>
+              <button class="btn btn--secondary btn--sm" onclick="loadInvestFunnel()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+            </div>
+          </div>
+          <div class="panel__body" id="investFunnelPanel">
+            <div class="text-center text-muted" style="padding:20px">Loading…</div>
+          </div>
+        </div>
+
         <!-- Signup Friction Analysis -->
         <div class="panel mb-16">
           <div class="panel__header">
@@ -4257,7 +4275,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=4"></script>
-<script src="js/admin.js?v=65"></script>
+<script src="js/admin.js?v=66"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>

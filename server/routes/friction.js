@@ -242,4 +242,147 @@ router.get('/personas', requireAuth, requireRole('admin', 'director', 'staff'), 
   }
 });
 
+/* ═══════════════════════════════════════════════════════════
+   Investment Funnel Analytics
+   POST /invest-funnel          — authenticated, records one event
+   GET  /invest-funnel/summary  — admin only, returns aggregated stats
+   ═══════════════════════════════════════════════════════════ */
+
+const INVEST_FUNNEL_TYPES = new Set([
+  'modal_opened', 'fee_shown', 'insufficient_funds', 'over_budget',
+  'abandoned', 'confirmed', 'topup_cancelled',
+]);
+
+/* ── POST /api/analytics/invest-funnel ───────────────────── */
+router.post('/invest-funnel', requireAuth, async (req, res) => {
+  try {
+    const e = req.body || {};
+    if (!INVEST_FUNNEL_TYPES.has(e.event_type)) {
+      return res.status(400).json({ error: 'Invalid event_type' });
+    }
+    const investorId = req.user?.investor_id || req.user?.id || null;
+    await pool.query(
+      `INSERT INTO invest_funnel_events
+         (investor_id, event_type, pool_id, product_type, stage,
+          fee_seen, amount_entered, amount_bucket, wallet_bucket,
+          shortfall_bucket, gateway, platform, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW())`,
+      [
+        investorId,
+        String(e.event_type),
+        e.pool_id    ? String(e.pool_id).slice(0, 100)    : null,
+        e.product_type ? String(e.product_type).slice(0, 50) : null,
+        e.stage      ? String(e.stage).slice(0, 50)      : null,
+        e.fee_seen    != null ? Boolean(e.fee_seen)    : null,
+        e.amount_entered != null ? Boolean(e.amount_entered) : null,
+        e.amount_bucket   ? String(e.amount_bucket).slice(0, 20)   : null,
+        e.wallet_bucket   ? String(e.wallet_bucket).slice(0, 20)   : null,
+        e.shortfall_bucket ? String(e.shortfall_bucket).slice(0, 20) : null,
+        e.gateway    ? String(e.gateway).slice(0, 20)    : null,
+        e.platform   ? String(e.platform).slice(0, 20)   : null,
+      ],
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[invest-funnel] insert error:', err.message);
+    res.status(500).json({ error: 'Failed to record event' });
+  }
+});
+
+/* ── GET /api/analytics/invest-funnel/summary ───────────── */
+router.get('/invest-funnel/summary', requireAuth, requireRole('admin', 'director', 'staff'), async (req, res) => {
+  try {
+    const days = Math.min(parseInt(req.query.days, 10) || 30, 365);
+
+    const [funnelRows, abandonRows, insuffRows, topupRows, productRows, trendRows] = await Promise.all([
+      // Core invest funnel counts
+      pool.query(`
+        SELECT event_type, COUNT(*) AS cnt
+        FROM invest_funnel_events
+        WHERE event_type IN ('modal_opened','fee_shown','confirmed','abandoned')
+          AND created_at >= NOW() - ($1 || ' days')::INTERVAL
+        GROUP BY event_type
+      `, [days]),
+
+      // Abandoned breakdown: fee seen vs not
+      pool.query(`
+        SELECT
+          COUNT(*) FILTER (WHERE fee_seen = true)  AS with_fee,
+          COUNT(*) FILTER (WHERE fee_seen = false OR fee_seen IS NULL) AS without_fee
+        FROM invest_funnel_events
+        WHERE event_type = 'abandoned'
+          AND created_at >= NOW() - ($1 || ' days')::INTERVAL
+      `, [days]),
+
+      // Insufficient funds: at modal open vs during amount entry
+      pool.query(`
+        SELECT stage, COUNT(*) AS cnt
+        FROM invest_funnel_events
+        WHERE event_type IN ('insufficient_funds','over_budget')
+          AND created_at >= NOW() - ($1 || ' days')::INTERVAL
+        GROUP BY stage
+      `, [days]),
+
+      // Top-up cancelled
+      pool.query(`
+        SELECT COUNT(*) AS cancelled
+        FROM invest_funnel_events
+        WHERE event_type = 'topup_cancelled'
+          AND created_at >= NOW() - ($1 || ' days')::INTERVAL
+      `, [days]),
+
+      // Breakdown by product type (for confirmed investments)
+      pool.query(`
+        SELECT product_type,
+          COUNT(*) FILTER (WHERE event_type = 'modal_opened') AS opened,
+          COUNT(*) FILTER (WHERE event_type = 'confirmed')    AS confirmed
+        FROM invest_funnel_events
+        WHERE event_type IN ('modal_opened','confirmed')
+          AND product_type IS NOT NULL
+          AND created_at >= NOW() - ($1 || ' days')::INTERVAL
+        GROUP BY product_type
+        ORDER BY opened DESC
+        LIMIT 10
+      `, [days]),
+
+      // Daily trend (last 14 days)
+      pool.query(`
+        SELECT DATE(created_at) AS day,
+          COUNT(*) FILTER (WHERE event_type = 'modal_opened') AS opened,
+          COUNT(*) FILTER (WHERE event_type = 'confirmed')    AS confirmed,
+          COUNT(*) FILTER (WHERE event_type = 'abandoned')    AS abandoned
+        FROM invest_funnel_events
+        WHERE created_at >= NOW() - INTERVAL '14 days'
+        GROUP BY day ORDER BY day
+      `),
+    ]);
+
+    const byType = {};
+    funnelRows.rows.forEach(r => { byType[r.event_type] = parseInt(r.cnt); });
+
+    const opened    = byType.modal_opened || 0;
+    const feeShown  = byType.fee_shown    || 0;
+    const confirmed = byType.confirmed    || 0;
+    const abandoned = byType.abandoned    || 0;
+
+    res.json({
+      days,
+      funnel: { opened, fee_shown: feeShown, confirmed, abandoned },
+      conversion_rate:   opened > 0 ? parseFloat((confirmed / opened).toFixed(3)) : 0,
+      fee_aversion_rate: feeShown > 0 ? parseFloat(((abandonRows.rows[0]?.with_fee || 0) / feeShown).toFixed(3)) : 0,
+      abandoned_breakdown: {
+        fee_seen:     parseInt(abandonRows.rows[0]?.with_fee    || 0),
+        no_fee_seen:  parseInt(abandonRows.rows[0]?.without_fee || 0),
+      },
+      insufficient_funds: insuffRows.rows.map(r => ({ stage: r.stage, count: parseInt(r.cnt) })),
+      topup_cancelled:    parseInt(topupRows.rows[0]?.cancelled || 0),
+      by_product:         productRows.rows.map(r => ({ product_type: r.product_type, opened: parseInt(r.opened), confirmed: parseInt(r.confirmed) })),
+      daily_trend:        trendRows.rows.map(r => ({ day: r.day, opened: parseInt(r.opened), confirmed: parseInt(r.confirmed), abandoned: parseInt(r.abandoned) })),
+    });
+  } catch (err) {
+    console.error('[invest-funnel] summary error:', err.message);
+    res.status(500).json({ error: 'Failed to load invest funnel summary' });
+  }
+});
+
 module.exports = router;

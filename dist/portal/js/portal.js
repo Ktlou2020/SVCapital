@@ -1535,6 +1535,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     new MutationObserver(() => {
       if (!_iMEl.classList.contains('open') && _investModalPool && !_investConfirmed) {
         SVC.track('svc_invest_modal_abandoned', { pool_id: _investModalPool.id, product_type: _investModalPool.product_type, fee_seen: _investFeeTracked, amount_entered: _investFeeTracked });
+        _trackFunnel('abandoned', { pool_id: _investModalPool.id, product_type: _investModalPool.product_type, fee_seen: _investFeeTracked, amount_entered: _investFeeTracked });
         _investModalPool = null;
       }
     }).observe(_iMEl, { attributes: true, attributeFilter: ['class'] });
@@ -3025,6 +3026,17 @@ let _investConfirmed   = false;  // set true when confirmInvestment() is called
 let _investFeeTracked  = false;  // true once svc_invest_fee_shown has fired this session
 let _investOoBTracked  = false;  // true once over-budget svc_invest_insufficient_funds has fired
 
+function _trackFunnel(event_type, params = {}) {
+  const token = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
+  if (!token) return;
+  fetch('/api/analytics/invest-funnel', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    credentials: 'include',
+    body: JSON.stringify({ event_type, ...params }),
+  }).catch(() => {});
+}
+
 /* ── helpers ─────────────────────────────────── */
 function _pmEl(id) { return document.getElementById(id); }
 
@@ -3284,6 +3296,7 @@ function launchPaystack() {
         },
         onCancel: function() {
           SVC.track('svc_topup_cancelled', { amount: _pmAmount, currency: 'ZAR', gateway: 'paystack' });
+          _trackFunnel('topup_cancelled', { gateway: 'paystack', amount_bucket: _amtBucket(_pmAmount) });
           _pmShowOnly('pmStep2');
           _pmSetProgress(66);
           _pmSetStepLabel('Step 2 of 3 — Choose payment method');
@@ -4534,8 +4547,10 @@ function openInvestModal(poolId) {
   _investConfirmed  = false;
   _investFeeTracked = false;
   _investOoBTracked = false;
+  _trackFunnel('modal_opened', { pool_id: pool.id, product_type: pool.product_type, wallet_bucket: _amtBucket(walletBal) });
   if (walletBal < _minPlusFee(pool)) {
     SVC.track('svc_invest_insufficient_funds', { pool_id: pool.id, product_type: pool.product_type, stage: 'modal_open', wallet_bucket: _amtBucket(walletBal), shortfall_bucket: _amtBucket(_minPlusFee(pool) - walletBal) });
+    _trackFunnel('insufficient_funds', { pool_id: pool.id, product_type: pool.product_type, stage: 'modal_open', wallet_bucket: _amtBucket(walletBal), shortfall_bucket: _amtBucket(_minPlusFee(pool) - walletBal) });
   }
   Modal.open('investModal');
   if (pool.product_type === 'cattle') {
@@ -4565,6 +4580,7 @@ function _updateInvestCalc(amt, rate, termMonths, minInvest, walletBal) {
     if (!_investFeeTracked) {
       _investFeeTracked = true;
       SVC.track('svc_invest_fee_shown', { pool_id: _investModalPool?.id, product_type: _investModalPool?.product_type, amount_bucket: _amtBucket(amt) });
+      _trackFunnel('fee_shown', { pool_id: _investModalPool?.id, product_type: _investModalPool?.product_type, amount_bucket: _amtBucket(amt) });
     }
   } else {
     if (feeAmtEl) feeAmtEl.textContent = '—';
@@ -4600,6 +4616,7 @@ function _updateInvestCalc(amt, rate, termMonths, minInvest, walletBal) {
       if (!_investOoBTracked) {
         _investOoBTracked = true;
         SVC.track('svc_invest_insufficient_funds', { pool_id: _investModalPool?.id, product_type: _investModalPool?.product_type, stage: 'amount_entry', wallet_bucket: _amtBucket(walletBal), shortfall_bucket: _amtBucket(totalNeeded - walletBal) });
+        _trackFunnel('over_budget', { pool_id: _investModalPool?.id, product_type: _investModalPool?.product_type, stage: 'amount_entry', wallet_bucket: _amtBucket(walletBal), shortfall_bucket: _amtBucket(totalNeeded - walletBal) });
       }
     } else {
       banner.style.display = 'none';
@@ -4683,6 +4700,7 @@ async function confirmInvestment(pool) {
 
     SVC.track('purchase', { transaction_id: investmentId, value: amount, currency: 'ZAR', items: [{ item_id: pool.id, item_name: pool.name, item_category: pool.product_type, price: amount, quantity: 1 }] });
     SVC.track('svc_investment_created', { pool_id: pool.id, pool_name: pool.name, product_type: pool.product_type, amount, amount_bucket: _amtBucket(amount), term_months: pool.term_months, annual_rate: parseFloat(pool.annual_rate) || 0, wallet_balance_bucket: _amtBucket(PORTAL.investor?.wallet_balance), total_investments: PORTAL.investments.filter(i => i.investor_id === (PORTAL.investor?.id || DEMO_INVESTOR_ID)).length + 1 });
+    _trackFunnel('confirmed', { pool_id: pool.id, product_type: pool.product_type, amount_bucket: _amtBucket(amount) });
     if (_pmSaId) {
       SVC.track('svc_subaccount_invested', { sub_account_id: _pmSaId, amount: amount });
     }

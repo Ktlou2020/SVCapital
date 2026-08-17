@@ -7078,6 +7078,7 @@ async function loadAnalytics() {
     renderTxnFlowChart();
     renderConversionFunnel();
     _renderAnalyticsCharts();
+    loadInvestFunnel();
     loadSignupFriction();
     renderMaturityForecastChart();
     renderCohortChart();
@@ -7729,6 +7730,150 @@ function renderConversionFunnel() {
 /* ═══════════════════════════════════════════════
    SIGNUP FRICTION ANALYSIS
    ═══════════════════════════════════════════════ */
+async function loadInvestFunnel() {
+  const panel = document.getElementById('investFunnelPanel');
+  if (!panel) return;
+  panel.innerHTML = '<div class="text-center text-muted" style="padding:20px"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div>';
+  try {
+    const days = document.getElementById('investFunnelDaysFilter')?.value || 30;
+    const token = (typeof Auth !== 'undefined') ? Auth.getToken() : '';
+    const res = await fetch(`/api/analytics/invest-funnel/summary?days=${days}`, {
+      credentials: 'include',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    renderInvestFunnel(data, panel);
+  } catch (err) {
+    panel.innerHTML = '<div class="text-center text-muted" style="padding:20px">No funnel data yet — it will appear once investors use the marketplace.</div>';
+  }
+}
+
+function renderInvestFunnel(data, panel) {
+  const { funnel = {}, conversion_rate = 0, fee_aversion_rate = 0,
+          abandoned_breakdown = {}, insufficient_funds = [],
+          topup_cancelled = 0, by_product = [], daily_trend = [] } = data;
+
+  const { opened = 0, fee_shown = 0, confirmed = 0, abandoned = 0 } = funnel;
+
+  function pct(n, d) { return d > 0 ? Math.round(n / d * 100) : 0; }
+  function dropBadge(drop) {
+    if (!drop) return '';
+    const col = drop >= 40 ? '#ef4444' : drop >= 20 ? '#f97316' : '#fec24f';
+    return `<span style="font-size:0.68rem;color:${col};background:${col}18;padding:2px 6px;border-radius:4px;margin-left:8px">−${drop}% drop</span>`;
+  }
+
+  const steps = [
+    { label: 'Modal opened',  val: opened,    prev: null,    color: '#eda5ff' },
+    { label: 'Fee breakdown seen', val: fee_shown, prev: opened,  color: '#fec24f' },
+    { label: 'Confirmed',     val: confirmed, prev: fee_shown, color: '#22c55e' },
+    { label: 'Abandoned',     val: abandoned, prev: opened,  color: '#ef4444' },
+  ];
+  const maxVal = Math.max(...steps.map(s => s.val), 1);
+
+  const funnelHtml = steps.map(s => {
+    const barPct = Math.round(s.val / maxVal * 100);
+    const drop   = s.prev != null && s.prev > 0 ? Math.round((1 - s.val / s.prev) * 100) : 0;
+    return `
+      <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
+        <div style="width:130px;font-size:0.78rem;font-weight:600;color:var(--text);flex-shrink:0">${s.label}</div>
+        <div style="flex:1;height:8px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden">
+          <div style="height:100%;width:${barPct}%;background:${s.color};border-radius:4px;transition:width 0.6s ease"></div>
+        </div>
+        <div style="width:44px;text-align:right;font-size:0.82rem;font-weight:700;color:var(--text)">${s.val.toLocaleString()}</div>
+        <div style="width:80px">${s.prev != null && drop > 0 ? dropBadge(drop) : ''}</div>
+      </div>`;
+  }).join('');
+
+  const abFeeAversion = fee_aversion_rate > 0 ? `${Math.round(fee_aversion_rate * 100)}%` : '—';
+  const insufAtOpen   = (insufficient_funds.find(r => r.stage === 'modal_open')?.count   || 0).toLocaleString();
+  const insufAtAmount = (insufficient_funds.find(r => r.stage === 'amount_entry')?.count || 0).toLocaleString();
+
+  const productHtml = by_product.length
+    ? by_product.map(r => {
+        const conv = r.opened > 0 ? Math.round(r.confirmed / r.opened * 100) : 0;
+        const col  = conv >= 60 ? '#22c55e' : conv >= 30 ? '#fec24f' : '#ef4444';
+        return `<tr>
+          <td style="padding:6px 8px;font-size:0.78rem;color:var(--text)">${r.product_type || '—'}</td>
+          <td style="padding:6px 8px;font-size:0.78rem;text-align:right">${r.opened.toLocaleString()}</td>
+          <td style="padding:6px 8px;font-size:0.78rem;text-align:right">${r.confirmed.toLocaleString()}</td>
+          <td style="padding:6px 8px;font-size:0.78rem;font-weight:700;color:${col};text-align:right">${conv}%</td>
+        </tr>`;
+      }).join('')
+    : '<tr><td colspan="4" style="padding:12px;font-size:0.78rem;color:var(--text-muted);text-align:center">No data yet</td></tr>';
+
+  panel.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:18px">
+      <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;text-align:center">
+        <div style="font-size:1.5rem;font-weight:800;color:#eda5ff">${opened.toLocaleString()}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px">Modals opened</div>
+      </div>
+      <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;text-align:center">
+        <div style="font-size:1.5rem;font-weight:800;color:#22c55e">${Math.round(conversion_rate * 100)}%</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px">Open → Confirmed</div>
+      </div>
+      <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;text-align:center">
+        <div style="font-size:1.5rem;font-weight:800;color:#ef4444">${abFeeAversion}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px">Fee-aversion rate</div>
+      </div>
+      <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;text-align:center">
+        <div style="font-size:1.5rem;font-weight:800;color:#f97316">${topup_cancelled.toLocaleString()}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px">Top-up cancelled</div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:18px">
+      <div style="font-size:0.8rem;font-weight:700;color:var(--text);margin-bottom:8px">Invest modal funnel</div>
+      ${funnelHtml}
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px">
+      <div>
+        <div style="font-size:0.8rem;font-weight:700;color:var(--text);margin-bottom:8px">Abandoned: why they left</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.78rem;padding:7px 10px;background:rgba(239,68,68,0.07);border-radius:8px">
+            <span style="color:var(--text)">Saw fee, still left</span>
+            <strong style="color:#ef4444">${(abandoned_breakdown.fee_seen || 0).toLocaleString()}</strong>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.78rem;padding:7px 10px;background:var(--card-bg);border:1px solid var(--border);border-radius:8px">
+            <span style="color:var(--text)">Left before entering amount</span>
+            <strong style="color:#6b7280">${(abandoned_breakdown.no_fee_seen || 0).toLocaleString()}</strong>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:0.8rem;font-weight:700;color:var(--text);margin-bottom:8px">Insufficient funds wall</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.78rem;padding:7px 10px;background:rgba(249,115,22,0.07);border-radius:8px">
+            <span style="color:var(--text)">Wallet too low at modal open</span>
+            <strong style="color:#f97316">${insufAtOpen}</strong>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.78rem;padding:7px 10px;background:var(--card-bg);border:1px solid var(--border);border-radius:8px">
+            <span style="color:var(--text)">Typed more than wallet holds</span>
+            <strong style="color:#f97316">${insufAtAmount}</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div style="font-size:0.8rem;font-weight:700;color:var(--text);margin-bottom:8px">Conversion by product</div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="border-bottom:2px solid var(--border)">
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:left;color:var(--text-muted)">Product</th>
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:right;color:var(--text-muted)">Opened</th>
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:right;color:var(--text-muted)">Confirmed</th>
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:right;color:var(--text-muted)">Conv %</th>
+            </tr>
+          </thead>
+          <tbody>${productHtml}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
 async function loadSignupFriction() {
   const panel = document.getElementById('frictionPanel');
   if (!panel) return;
