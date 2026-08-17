@@ -1937,8 +1937,9 @@ async function _saveInvProfile(btn) {
       address:        document.getElementById('ipf-address').value.trim(),
       postal_code:    document.getElementById('ipf-postal_code').value.trim() || null,
       province:       document.getElementById('ipf-province').value,
-      occupation:   document.getElementById('ipf-occupation').value.trim(),
-      risk_profile: document.getElementById('ipf-risk_profile').value,
+      occupation:       document.getElementById('ipf-occupation').value.trim(),
+      risk_profile:     document.getElementById('ipf-risk_profile').value,
+      pim_account_ref:  document.getElementById('ipf-pim_account_ref').value.trim() || null,
     };
 
     // Merge JSONB profile fields, preserving existing keys
@@ -2137,6 +2138,7 @@ async function viewInvestor(id) {
         <div class="info-row"><span class="info-row__label">Next of Kin</span><span class="info-row__value">${_esc(invProfile.next_of_kin||'')||'—'}</span></div>
         <div class="info-row"><span class="info-row__label">Kin Contact</span><span class="info-row__value">${_esc(invProfile.kin_contact||'')||'—'}</span></div>
         <div class="info-row"><span class="info-row__label">Risk Profile</span><span class="info-row__value" style="text-transform:capitalize">${_esc(inv.risk_profile)||'—'}</span></div>
+        ${inv.pim_account_ref ? `<div class="info-row"><span class="info-row__label">3PIM Ref</span><span class="info-row__value" style="font-family:monospace">${_esc(inv.pim_account_ref)}</span></div>` : ''}
         <div class="info-row"><span class="info-row__label">Account Created</span><span class="info-row__value">${Utils.date(inv.date_joined)}</span></div>
       </div>
       <div style="margin-top:14px">
@@ -2201,6 +2203,10 @@ async function viewInvestor(id) {
           <select class="form-control" id="ipf-risk_profile">
             ${['','conservative','moderate','aggressive'].map(r=>`<option value="${r}" ${(inv.risk_profile||'')===r?'selected':''}>${r||'— Select —'}</option>`).join('')}
           </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">3PIM Account Reference <span style="font-size:0.7rem;color:var(--text-muted);font-weight:400">(FNB interest distribution matching)</span></label>
+          <input type="text" class="form-control" id="ipf-pim_account_ref" value="${_esc(inv.pim_account_ref||'')}" placeholder="e.g. S-1163">
         </div>
       </div>
       <div style="display:flex;gap:8px;margin-top:16px">
