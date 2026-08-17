@@ -1,6 +1,6 @@
 const express  = require('express');
 const router   = express.Router();
-const pool = require('../db/pool');
+const pool     = require('../db/pool');
 const { requireAuth, requireRole } = require('../middleware/auth');
 
 // Parse the 3PIM CSV export — handles simple comma-delimited format
@@ -17,7 +17,7 @@ function parsePimCsv(text) {
 }
 
 // POST /api/admin/interest/preview
-// Parse CSV, match sub-accounts, return preview without writing anything
+// Parse CSV, match sub-accounts AND investor wallets, return preview without writing anything
 router.post('/interest/preview', requireAuth, requireRole('admin', 'director'), async (req, res) => {
   try {
     const { csv_content, period } = req.body;
@@ -26,47 +26,68 @@ router.post('/interest/preview', requireAuth, requireRole('admin', 'director'), 
     const rows = parsePimCsv(csv_content);
     if (!rows.length) return res.status(400).json({ error: 'No data rows found in CSV' });
 
-    // Fetch all relevant sub-accounts in one query
     const refList = [...new Set(rows.map(r => r['Account Reference']).filter(Boolean))];
-    const saResult = await pool.query(
-      `SELECT sa.id, sa.wallet_balance, sa.name, sa.parent_investor_id
-       FROM sub_accounts sa WHERE sa.id = ANY($1::text[])`,
-      [refList]
-    );
-    const saMap = {};
+
+    // Match against sub-accounts and investor main wallets in parallel
+    const [saResult, invResult] = await Promise.all([
+      pool.query(
+        `SELECT id, wallet_balance, name, parent_investor_id
+         FROM sub_accounts WHERE id = ANY($1::text[])`,
+        [refList]
+      ),
+      pool.query(
+        `SELECT id, first_name, last_name, wallet_balance, pim_account_ref
+         FROM investors WHERE pim_account_ref = ANY($1::text[])`,
+        [refList]
+      ),
+    ]);
+
+    const saMap  = {};
     saResult.rows.forEach(r => { saMap[r.id] = r; });
+    const invMap = {};
+    invResult.rows.forEach(r => { invMap[r.pim_account_ref] = r; });
 
     let totalInterest = 0, toCredit = 0, unmatched = 0, skipped = 0;
 
     const items = rows.map(row => {
-      const ref         = (row['Account Reference'] || '').trim();
-      const pimBalance  = parseFloat(row['Balance']) || 0;
-      const clientName  = (row['Client'] || '').trim();
-      const sa          = saMap[ref];
+      const ref        = (row['Account Reference'] || '').trim();
+      const pimBalance = parseFloat(row['Balance']) || 0;
+      const clientName = (row['Client'] || '').trim();
 
-      if (!sa) {
+      // Prefer sub-account match; fall back to investor main wallet
+      const sa  = saMap[ref];
+      const inv = !sa ? invMap[ref] : null;
+
+      if (!sa && !inv) {
         unmatched++;
         return { account_reference: ref, client_name_pim: clientName, pim_balance: pimBalance,
                  platform_balance: null, interest_amount: null, status: 'unmatched',
-                 sub_account_id: null, investor_id: null, platform_name: null };
+                 match_type: null, sub_account_id: null, investor_id: null, platform_name: null };
       }
 
-      const platformBalance = parseFloat(sa.wallet_balance) || 0;
+      const platformBalance = parseFloat(sa ? sa.wallet_balance : inv.wallet_balance) || 0;
       const interest        = Math.round((pimBalance - platformBalance) * 100) / 100;
+
+      const matchType    = sa ? 'sub_account' : 'investor';
+      const subAccountId = sa ? sa.id : null;
+      const investorId   = sa ? sa.parent_investor_id : inv.id;
+      const platformName = sa ? sa.name : `${inv.first_name} ${inv.last_name}`.trim();
 
       if (interest <= 0) {
         skipped++;
         return { account_reference: ref, client_name_pim: clientName, pim_balance: pimBalance,
                  platform_balance: platformBalance, interest_amount: interest,
                  status: interest < 0 ? 'negative' : 'zero',
-                 sub_account_id: sa.id, investor_id: sa.parent_investor_id, platform_name: sa.name };
+                 match_type: matchType, sub_account_id: subAccountId,
+                 investor_id: investorId, platform_name: platformName };
       }
 
       totalInterest += interest;
       toCredit++;
       return { account_reference: ref, client_name_pim: clientName, pim_balance: pimBalance,
                platform_balance: platformBalance, interest_amount: interest, status: 'matched',
-               sub_account_id: sa.id, investor_id: sa.parent_investor_id, platform_name: sa.name };
+               match_type: matchType, sub_account_id: subAccountId,
+               investor_id: investorId, platform_name: platformName };
     });
 
     res.json({
@@ -87,7 +108,7 @@ router.post('/interest/preview', requireAuth, requireRole('admin', 'director'), 
 });
 
 // POST /api/admin/interest/apply
-// Atomically credit all matched sub-account wallets and record the distribution
+// Atomically credit matched sub-account wallets and/or investor main wallets
 router.post('/interest/apply', requireAuth, requireRole('admin', 'director'), async (req, res) => {
   try {
     const { period, items, csv_filename } = req.body;
@@ -101,10 +122,10 @@ router.post('/interest/apply', requireAuth, requireRole('admin', 'director'), as
     if (existing.rows.length)
       return res.status(409).json({ error: `Interest for period "${period}" has already been applied.` });
 
-    const toCredit = items.filter(i => i.status === 'matched' && i.interest_amount > 0);
+    const toCredit      = items.filter(i => i.status === 'matched' && i.interest_amount > 0);
     if (!toCredit.length) return res.status(400).json({ error: 'No accounts to credit' });
 
-    const appliedBy    = req.user?.id || req.user?.investor_id;
+    const appliedBy     = req.user?.id || req.user?.investor_id;
     const totalInterest = Math.round(toCredit.reduce((s, i) => s + i.interest_amount, 0) * 100) / 100;
 
     const client = await pool.connect();
@@ -122,31 +143,40 @@ router.post('/interest/apply', requireAuth, requireRole('admin', 'director'), as
       const distId = distResult.rows[0].id;
 
       for (const item of toCredit) {
-        const txRef = `INT-${period}-${item.sub_account_id}`;
+        const walletKey = item.sub_account_id || item.investor_id;
+        const txRef     = `INT-${period}-${walletKey}`;
+        const desc      = `Interest — ${period}`;
 
         const txResult = await client.query(
           `INSERT INTO transactions
              (id, investor_id, sub_account_id, type, amount, status, reference, description, transaction_date, created_at, updated_at)
            VALUES (gen_random_uuid(), $1, $2, 'interest', $3, 'completed', $4, $5, NOW(), NOW(), NOW())
            ON CONFLICT (reference) DO NOTHING RETURNING id`,
-          [item.investor_id, item.sub_account_id, item.interest_amount,
-           txRef, `3PIM interest — ${period}`]
+          [item.investor_id, item.sub_account_id || null, item.interest_amount, txRef, desc]
         );
         const txId = txResult.rows[0]?.id || null;
 
-        await client.query(
-          'UPDATE sub_accounts SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
-          [item.interest_amount, item.sub_account_id]
-        );
+        // Credit the right wallet
+        if (item.sub_account_id) {
+          await client.query(
+            'UPDATE sub_accounts SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
+            [item.interest_amount, item.sub_account_id]
+          );
+        } else {
+          await client.query(
+            'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
+            [item.interest_amount, item.investor_id]
+          );
+        }
 
         await client.query(
           `INSERT INTO interest_distribution_items
              (distribution_id, sub_account_id, investor_id, account_reference, client_name_pim,
-              pim_balance, platform_balance, interest_amount, transaction_id, status)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'applied')`,
-          [distId, item.sub_account_id, item.investor_id, item.account_reference,
+              pim_balance, platform_balance, interest_amount, transaction_id, status, notes)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'applied', $10)`,
+          [distId, item.sub_account_id || null, item.investor_id, item.account_reference,
            item.client_name_pim, item.pim_balance, item.platform_balance,
-           item.interest_amount, txId]
+           item.interest_amount, txId, item.match_type || null]
         );
       }
 
@@ -180,7 +210,7 @@ router.get('/interest', requireAuth, requireRole('admin', 'director', 'staff'), 
   }
 });
 
-// GET /api/admin/interest/:id — single distribution items
+// GET /api/admin/interest/:id — items for a single distribution
 router.get('/interest/:id', requireAuth, requireRole('admin', 'director', 'staff'), async (req, res) => {
   try {
     const { rows } = await pool.query(

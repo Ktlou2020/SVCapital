@@ -11919,12 +11919,18 @@ function renderInterestPreview(data) {
     return `<span style="background:${col}22;color:${col};border-radius:12px;padding:2px 8px;font-size:0.7rem;font-weight:700">${label}</span>`;
   };
 
+  const matchBadge = t => t === 'investor'
+    ? `<span style="background:#eda5ff22;color:#eda5ff;border-radius:10px;padding:1px 6px;font-size:0.65rem;font-weight:700;margin-left:4px">wallet</span>`
+    : t === 'sub_account'
+    ? `<span style="background:#7a92a822;color:#7a92a8;border-radius:10px;padding:1px 6px;font-size:0.65rem;font-weight:700;margin-left:4px">sub</span>`
+    : '';
+
   const tbody = document.getElementById('interestPreviewBody');
   tbody.innerHTML = items.map(item => `
     <tr style="border-bottom:1px solid var(--border)${item.status === 'unmatched' ? ';opacity:.6' : ''}">
       <td style="padding:6px 8px;font-size:0.78rem;font-family:monospace;color:var(--text)">${item.account_reference}</td>
       <td style="padding:6px 8px;font-size:0.78rem;color:var(--text)">${item.client_name_pim}</td>
-      <td style="padding:6px 8px;font-size:0.78rem;color:var(--text-muted)">${item.platform_name || '—'}</td>
+      <td style="padding:6px 8px;font-size:0.78rem;color:var(--text-muted)">${item.platform_name || '—'}${matchBadge(item.match_type)}</td>
       <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text)">${item.pim_balance != null ? fmt(item.pim_balance) : '—'}</td>
       <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">${item.platform_balance != null ? fmt(item.platform_balance) : '—'}</td>
       <td style="padding:6px 8px;font-size:0.78rem;text-align:right;font-weight:700;color:${item.interest_amount > 0 ? '#22c55e' : item.interest_amount < 0 ? '#ef4444' : 'var(--text-muted)'}">${item.interest_amount != null ? fmt(item.interest_amount) : '—'}</td>
