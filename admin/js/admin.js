@@ -9465,16 +9465,23 @@ const AUDIT_PG   = 50;
 async function loadAuditLog() {
   try {
     // Build server-side query params
-    const typeFilter  = document.getElementById('auditTypeFilter')?.value  || '';
-    const searchQ     = document.getElementById('auditSearchInput')?.value || '';
-    const dateFromVal = document.getElementById('auditDateFrom')?.value    || '';
-    const dateToVal   = document.getElementById('auditDateTo')?.value      || '';
+    const typeFilter   = document.getElementById('auditTypeFilter')?.value   || '';
+    const entityFilter = document.getElementById('auditEntityFilter')?.value || '';
+    const searchQ      = document.getElementById('auditSearchInput')?.value  || '';
+    const dateFromVal  = document.getElementById('auditDateFrom')?.value     || '';
+    const dateToVal    = document.getElementById('auditDateTo')?.value       || '';
 
     const params = { limit: AUDIT_PG, page: _auditPage, sort: 'created_at', order: 'desc' };
-    if (typeFilter)  params.event_type = typeFilter;
-    if (searchQ)     params.search     = searchQ;
-    if (dateFromVal) params.date_from  = dateFromVal;
-    if (dateToVal)   params.date_to    = dateToVal;
+    // Type filter: exact match for full action names, ILIKE search for suffix patterns (.updated etc)
+    if (typeFilter) {
+      if (typeFilter.startsWith('.')) params.search = typeFilter.slice(1);
+      else params.event_type = typeFilter;
+    }
+    if (entityFilter) params.entity_type = entityFilter;
+    // Text search overrides type-based search only if both are set and we need to combine
+    if (searchQ && !params.search) params.search = searchQ;
+    if (dateFromVal) params.date_from = dateFromVal;
+    if (dateToVal)   params.date_to   = dateToVal;
 
     const res = await API._fetch('GET', 'tables/audit_events', null, params);
     _auditEvents = res.data || [];
@@ -9482,12 +9489,14 @@ async function loadAuditLog() {
 
     // Wire filters once (guard against double-wiring)
     const typeF    = document.getElementById('auditTypeFilter');
+    const entityF  = document.getElementById('auditEntityFilter');
     const searchF  = document.getElementById('auditSearchInput');
     const dateFrom = document.getElementById('auditDateFrom');
     const dateTo   = document.getElementById('auditDateTo');
 
     const resetAndRender = () => { _auditPage = 1; loadAuditLog(); };
-    if (typeF   && !typeF._auditWired)   { typeF.addEventListener('change', resetAndRender);   typeF._auditWired = true; }
+    if (typeF   && !typeF._auditWired)   { typeF.addEventListener('change', resetAndRender);   typeF._auditWired   = true; }
+    if (entityF && !entityF._auditWired) { entityF.addEventListener('change', resetAndRender); entityF._auditWired = true; }
     if (searchF && !searchF._auditWired) { searchF.addEventListener('input', Utils.debounce(resetAndRender, 250)); searchF._auditWired = true; }
     if (dateFrom && !dateFrom._auditWired) { dateFrom.addEventListener('change', resetAndRender); dateFrom._auditWired = true; }
     if (dateTo   && !dateTo._auditWired)   { dateTo.addEventListener('change', resetAndRender);   dateTo._auditWired   = true; }
@@ -9534,6 +9543,13 @@ function renderAuditTable(res) {
     'withdrawal.approved': 'green', 'withdrawal.rejected': 'red',
     'withdrawal.submitted': 'blue',
   };
+  const _auditActionColor = (action) => {
+    if (actionColor[action]) return actionColor[action];
+    if (action.endsWith('.updated'))  return 'blue';
+    if (action.endsWith('.created'))  return 'green';
+    if (action.endsWith('.deleted'))  return 'red';
+    return 'grey';
+  };
 
   body.innerHTML = items.map(e => {
     const action      = e.event_type || '—';
@@ -9544,7 +9560,7 @@ function renderAuditTable(res) {
       : '—';
     const ip          = e.ip_address || '—';
     const desc        = e.description || '';
-    const badgeClass  = actionColor[action] || 'gray';
+    const badgeClass  = _auditActionColor(action);
 
     return `<tr>
       <td class="td-muted clip" style="font-size:0.75rem">${Utils.date(e.created_at)}</td>

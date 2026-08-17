@@ -2173,16 +2173,28 @@
                         <div class="tbl-search"><i class="fa-solid fa-magnifying-glass"></i><input type="text" placeholder="Search action, actor…" id="auditSearchInput" /></div>
                         <input type="date" class="tbl-filter" id="auditDateFrom" title="From date" />
                         <input type="date" class="tbl-filter" id="auditDateTo" title="To date" />
+                        <select class="tbl-filter" id="auditEntityFilter" title="Filter by table">
+                          <option value="">All tables</option>
+                          <option value="investors">investors</option>
+                          <option value="transactions">transactions</option>
+                          <option value="kyc_documents">kyc_documents</option>
+                          <option value="sub_accounts">sub_accounts</option>
+                          <option value="investments">investments</option>
+                          <option value="investment_pools">investment_pools</option>
+                          <option value="support_tickets">support_tickets</option>
+                        </select>
                         <select class="tbl-filter" id="auditTypeFilter">
                           <option value="">All Events</option>
                           <option value="user.login">Logins</option>
-                          <option value="kyc">KYC Actions</option>
-                          <option value="transaction">Transactions</option>
-                          <option value="investment">Investments</option>
-                          <option value="pool">Pool Events</option>
+                          <option value=".updated">Record Updates</option>
+                          <option value=".created">Record Creates</option>
+                          <option value=".deleted">Record Deletes</option>
+                          <option value="kyc.approved">KYC Approved</option>
+                          <option value="kyc.rejected">KYC Rejected</option>
+                          <option value="transaction.completed">Tx Completed</option>
+                          <option value="transaction.rejected">Tx Rejected</option>
                           <option value="withdrawal">Withdrawals</option>
                           <option value="aml">AML Events</option>
-                          <option value="support">Support Tickets</option>
                         </select>
                         <button class="btn btn--secondary btn--sm" onclick="loadAuditLog()"><i class="fa-solid fa-rotate"></i> Refresh</button>
                       </div>
