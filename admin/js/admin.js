@@ -1847,6 +1847,20 @@ function viewSubAccount(saId) {
       <div class="info-row"><span class="info-row__label">Wallet Balance</span><span class="info-row__value td-gold fw-700">${Utils.rand(parseFloat(sa.wallet_balance)||0)}</span></div>
       <div class="info-row"><span class="info-row__label">Total Invested</span><span class="info-row__value fw-700">${Utils.rand(totalInvested)}</span></div>
       <div class="info-row"><span class="info-row__label">Investments</span><span class="info-row__value">${activeInv} active / ${invCount} total</span></div>
+      <div class="info-row" style="align-items:flex-start">
+        <span class="info-row__label">3PIM Ref</span>
+        <span class="info-row__value" style="flex:1">
+          <span id="sa-pim-val" style="font-family:monospace">${_esc(sa.pim_account_ref||'—')}</span>
+          <button onclick="document.getElementById('sa-pim-edit').style.display='';document.getElementById('sa-pim-input').focus()" style="background:none;border:none;cursor:pointer;margin-left:6px;padding:0;opacity:0.6" title="Edit 3PIM reference"><i class="fa-solid fa-pen-to-square" style="font-size:0.7rem;color:var(--text-muted)"></i></button>
+          <div id="sa-pim-edit" style="display:none;margin-top:6px">
+            <div style="display:flex;gap:6px;align-items:center">
+              <input type="text" id="sa-pim-input" class="form-control" value="${_esc(sa.pim_account_ref||'')}" placeholder="e.g. S-111581" style="font-family:monospace;font-size:0.82rem;flex:1">
+              <button class="btn btn--primary btn--sm" onclick="saveSaPimRef('${_esc(sa.id)}')">Save</button>
+              <button class="btn btn--secondary btn--sm" onclick="document.getElementById('sa-pim-edit').style.display='none'">Cancel</button>
+            </div>
+          </div>
+        </span>
+      </div>
     </div>
 
     ${saDocs.length ? `
@@ -1895,6 +1909,27 @@ function viewSubAccount(saId) {
       <button class="btn btn--primary btn--sm" onclick="Modal.close('subAccountModal');viewInvestor('${sa.parent_investor_id}')"><i class="fa-solid fa-arrow-up-right-from-square" style="margin-right:6px"></i>View Parent Account</button>
     </div>`;
   Modal.open('subAccountModal');
+}
+
+async function saveSaPimRef(saId) {
+  const val = (document.getElementById('sa-pim-input')?.value || '').trim() || null;
+  try {
+    const res = await fetch(`/api/tables/sub_accounts/${saId}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${AUTH.token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pim_account_ref: val }),
+    });
+    if (!res.ok) throw new Error((await res.json()).error || 'Save failed');
+    const sa = (STATE.subAccounts || []).find(s => s.id === saId);
+    if (sa) sa.pim_account_ref = val;
+    const el = document.getElementById('sa-pim-val');
+    if (el) el.textContent = val || '—';
+    const editEl = document.getElementById('sa-pim-edit');
+    if (editEl) editEl.style.display = 'none';
+    Toast.success('3PIM reference saved');
+  } catch (e) {
+    Toast.error('Failed to save: ' + e.message);
+  }
 }
 
 function _invTab(name) {

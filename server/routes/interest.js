@@ -28,11 +28,11 @@ router.post('/interest/preview', requireAuth, requireRole('admin', 'director'), 
 
     const refList = [...new Set(rows.map(r => r['Account Reference']).filter(Boolean))];
 
-    // Match against sub-accounts and investor main wallets in parallel
+    // Match against sub-accounts (by pim_account_ref) and investor main wallets in parallel
     const [saResult, invResult] = await Promise.all([
       pool.query(
-        `SELECT id, wallet_balance, name, parent_investor_id
-         FROM sub_accounts WHERE id = ANY($1::text[])`,
+        `SELECT id, wallet_balance, name, parent_investor_id, pim_account_ref
+         FROM sub_accounts WHERE pim_account_ref = ANY($1::text[])`,
         [refList]
       ),
       pool.query(
@@ -43,7 +43,7 @@ router.post('/interest/preview', requireAuth, requireRole('admin', 'director'), 
     ]);
 
     const saMap  = {};
-    saResult.rows.forEach(r => { saMap[r.id] = r; });
+    saResult.rows.forEach(r => { saMap[r.pim_account_ref] = r; });
     const invMap = {};
     invResult.rows.forEach(r => { invMap[r.pim_account_ref] = r; });
 
