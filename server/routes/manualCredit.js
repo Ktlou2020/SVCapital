@@ -954,7 +954,7 @@ router.get('/account-statement', async (req, res) => {
     if (isNaN(fromDt.getTime()) || isNaN(toDt.getTime()))
       return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
 
-    const [invRes, invstRes] = await Promise.all([
+    const [invRes, invstRes, txnRes, openingRes] = await Promise.all([
       pool.query('SELECT * FROM investors WHERE id = $1 LIMIT 1', [investor_id]),
       pool.query(
         `SELECT i.id, i.amount, i.status, i.created_at,
@@ -978,6 +978,33 @@ router.get('/account-statement', async (req, res) => {
          ORDER BY i.created_at ASC`,
         [investor_id, fromDt.toISOString().slice(0,10), toDt.toISOString().slice(0,10)]
       ),
+      // All completed transactions in the period, ordered chronologically
+      pool.query(
+        `SELECT type, amount, description, reference,
+                COALESCE(transaction_date, created_at) AS txn_date
+         FROM transactions
+         WHERE investor_id = $1
+           AND status = 'completed'
+           AND COALESCE(transaction_date, created_at) >= $2
+           AND COALESCE(transaction_date, created_at) <= $3
+         ORDER BY COALESCE(transaction_date, created_at) ASC, created_at ASC`,
+        [investor_id, fromDt, toDt]
+      ),
+      // Opening balance = net effect of all completed transactions before the period
+      pool.query(
+        `SELECT COALESCE(SUM(
+           CASE
+             WHEN type IN ('deposit','return','payout','referral_bonus','matured_funds') THEN  amount
+             WHEN type IN ('withdrawal','fee','investment','reinvestment')               THEN -amount
+             ELSE 0
+           END
+         ), 0) AS opening_balance
+         FROM transactions
+         WHERE investor_id = $1
+           AND status = 'completed'
+           AND COALESCE(transaction_date, created_at) < $2`,
+        [investor_id, fromDt]
+      ),
     ]);
 
     if (!invRes.rows[0]) return res.status(404).json({ error: 'Investor not found' });
@@ -995,6 +1022,8 @@ router.get('/account-statement', async (req, res) => {
       },
       period: { from: fromDt.toISOString(), to: toDt.toISOString() },
       investments: invstRes.rows,
+      transactions: txnRes.rows,
+      opening_balance: parseFloat(openingRes.rows[0]?.opening_balance) || 0,
     });
   } catch (err) {
     console.error('[admin/account-statement]', err);
