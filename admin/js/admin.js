@@ -13227,7 +13227,7 @@ async function _generateAccountStatement(investorId) {
 }
 
 function _openAccountStatementWindow(data) {
-  const { investor: inv, period, investments } = data;
+  const { investor: inv, period, investments, transactions = [], opening_balance = 0 } = data;
 
   const fmt = n => 'R ' + Math.abs(parseFloat(n) || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtDate = s => s ? new Date(s).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
@@ -13383,6 +13383,15 @@ function _openAccountStatementWindow(data) {
     '.sb-pending{background:#fef3c7;color:#92400e}.sb-paidout{background:#f3e8ff;color:#7e22ce}',
     '.sb-cancelled{background:#f1f5f9;color:#6b7280}',
     '.note{font-size:9.5px;color:#9ca3af;margin-bottom:14px}',
+    '.sec-hdr.txn-hdr{background:#f5f3ff;color:#4c1d95;border-left:3px solid #eda5ff}',
+    '.txn-credit{color:#15803d;font-weight:700;text-align:right;white-space:nowrap}',
+    '.txn-debit{color:#b91c1c;font-weight:700;text-align:right;white-space:nowrap}',
+    '.txn-bal{font-weight:700;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}',
+    '.txn-type{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;display:inline-block;padding:2px 6px;border-radius:3px;white-space:nowrap}',
+    '.tt-deposit,.tt-matured_funds,.tt-return,.tt-payout,.tt-referral_bonus{background:#dcfce7;color:#166534}',
+    '.tt-investment,.tt-reinvestment{background:#ede9fe;color:#4c1d95}',
+    '.tt-withdrawal{background:#fee2e2;color:#991b1b}',
+    '.tt-fee{background:#fef3c7;color:#92400e}',
     '.footer{border-top:1px solid #e5e7eb;padding-top:11px;font-size:9px;color:#6b7280;line-height:1.7;margin-top:8px}',
     '.footer strong{color:#374151}',
     '.stamp{display:inline-block;border:2px solid #eda5ff;color:#eda5ff;padding:4px 11px;border-radius:3px;font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-top:10px}',
@@ -13426,6 +13435,51 @@ function _openAccountStatementWindow(data) {
     '  <div class="sec-hdr matured-hdr">Matured Pools &mdash; ' + mCnt + ' investment' + (mCnt !== 1 ? 's' : '') + '</div>',
     '  <table>' + maturedHead + '<tbody>' + maturedRows + '</tbody></table>',
     '  <p class="note">* Expected return shown where actual return has not yet been recorded.</p>',
+
+    // ── Transaction ledger ─────────────────────────────────────────────
+    (function() {
+      const DEBIT_TYPES = new Set(['investment', 'reinvestment', 'withdrawal', 'fee']);
+      const TYPE_LABELS = {
+        deposit: 'Deposit', withdrawal: 'Withdrawal', investment: 'Investment',
+        reinvestment: 'Reinvestment', matured_funds: 'Matured Funds',
+        return: 'Return', payout: 'Maturity Payout', fee: 'Platform Fee',
+        referral_bonus: 'Referral Bonus',
+      };
+      const r2 = n => Math.round((n || 0) * 100) / 100;
+      let runBal = r2(opening_balance);
+      const rows = transactions.map(t => {
+        const amt    = Math.abs(parseFloat(t.amount) || 0);
+        const isDebit = DEBIT_TYPES.has(t.type);
+        runBal = r2(runBal + (isDebit ? -amt : amt));
+        const balColor = runBal < 0 ? 'color:#b91c1c' : '';
+        const label  = TYPE_LABELS[t.type] || (t.type || '').replace(/_/g, ' ');
+        const desc   = (t.description || '').length > 55 ? t.description.slice(0, 55) + '…' : (t.description || '—');
+        const credit = isDebit ? '' : `<td class="txn-credit">R ${amt.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td></td>`;
+        const debit  = isDebit ? `<td></td><td class="txn-debit">R ${amt.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>` : '';
+        return `<tr>
+          <td>${fmtDate(t.txn_date)}</td>
+          <td><span class="txn-type tt-${esc(t.type || '')}">${esc(label)}</span></td>
+          <td style="font-size:10px;color:#6b7280;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(desc)}</td>
+          ${isDebit ? debit : credit}
+          <td class="txn-bal" style="${balColor}">R ${Math.abs(runBal).toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}${runBal < 0 ? ' Dr' : ''}</td>
+        </tr>`;
+      }).join('');
+      const closingBal = runBal;
+      const openFmt  = `R ${Math.abs(opening_balance).toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}${opening_balance < 0 ? ' Dr' : ''}`;
+      const closeFmt = `R ${Math.abs(closingBal).toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}${closingBal < 0 ? ' Dr' : ''}`;
+      if (!transactions.length) return '  <div class="sec-hdr txn-hdr">Transaction Ledger — No transactions in this period</div>';
+      return [
+        `  <div class="sec-hdr txn-hdr">Transaction Ledger — ${transactions.length} transaction${transactions.length !== 1 ? 's' : ''}</div>`,
+        '  <table>',
+        '  <thead><tr><th>Date</th><th>Type</th><th>Description</th><th class="num">Credit</th><th class="num">Debit</th><th class="num">Balance</th></tr></thead>',
+        '  <tbody>',
+        `  <tr style="background:#f8fafc"><td colspan="3" style="font-size:10px;font-weight:700;color:#374151">Opening Balance — ${fromLabel}</td><td></td><td></td><td class="txn-bal">${openFmt}</td></tr>`,
+        rows,
+        `  <tr style="background:#f1f5f9;border-top:2px solid #e5e7eb"><td colspan="3" style="font-size:10px;font-weight:700;color:#374151">Closing Balance — ${toLabel}</td><td></td><td></td><td class="txn-bal" style="${closingBal < 0 ? 'color:#b91c1c' : 'color:#15803d'}">${closeFmt}</td></tr>`,
+        '  </tbody></table>',
+      ].join('\n');
+    })(),
+
     '  <div class="footer">',
     '    <strong>SV Capital (Pty) Ltd</strong> &mdash; FSCA Regulated Financial Services Provider.<br>',
     '    This investment statement is prepared for <strong>' + esc(inv.first_name) + ' ' + esc(inv.last_name) + '</strong> (Account: ' + esc(inv.id) + ') and covers the period ' + fromLabel + ' to ' + toLabel + '. All amounts are in South African Rand (ZAR).<br>',
