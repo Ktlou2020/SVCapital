@@ -1307,6 +1307,28 @@
       ══════════════════════════════════ -->
       <div class="view" id="view-analytics">
 
+        <!-- Analytics page header -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+          <div>
+            <div style="font-size:1.1rem;font-weight:700;color:var(--text)">Analytics</div>
+            <div style="font-size:0.73rem;color:var(--text-muted);margin-top:2px" id="an-last-refreshed"></div>
+          </div>
+          <button class="btn btn--ghost btn--sm" onclick="loadAnalytics()"><i class="fa-solid fa-rotate" style="margin-right:6px"></i>Refresh All</button>
+        </div>
+
+        <!-- KPI Tiles row -->
+        <div class="stats-row mb-16">
+          <div class="stat-card stat-card--gold"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-landmark"></i></div></div><div class="stat-card__value" id="an-total-aum">—</div><div class="stat-card__label">Total AUM</div></div>
+          <div class="stat-card stat-card--green"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-chart-line"></i></div></div><div class="stat-card__value" id="an-active-capital">—</div><div class="stat-card__label">Active Capital</div></div>
+          <div class="stat-card stat-card--blue"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-users"></i></div></div><div class="stat-card__value" id="an-total-investors">—</div><div class="stat-card__label">Total Investors</div></div>
+          <div class="stat-card stat-card--purple"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-hand-holding-dollar"></i></div></div><div class="stat-card__value" id="an-returns-ytd">—</div><div class="stat-card__label">Returns YTD</div></div>
+          <div class="stat-card stat-card--gold"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-sack-dollar"></i></div></div><div class="stat-card__value" id="an-platform-revenue">—</div><div class="stat-card__label">Platform Revenue</div></div>
+          <div class="stat-card stat-card--green"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-circle-check"></i></div></div><div class="stat-card__value" id="an-active-inv-count">—</div><div class="stat-card__label">Active Investments</div></div>
+        </div>
+
+        <!-- Section: Capital & Growth -->
+        <div style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:14px"><i class="fa-solid fa-chart-area" style="margin-right:6px;color:var(--orange)"></i>Capital &amp; Growth</div>
+
         <!-- Real-data charts row 1 -->
         <div class="grid-2 mb-16">
           <div class="panel">
@@ -1331,6 +1353,9 @@
           </div>
         </div>
 
+        <!-- Section: Investor Segments -->
+        <div style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);border-bottom:1px solid var(--border);padding-bottom:6px;margin:18px 0 14px"><i class="fa-solid fa-users-viewfinder" style="margin-right:6px;color:var(--purple)"></i>Investor Segments</div>
+
         <div class="stats-row">
           <div class="stat-card stat-card--gold" style="cursor:pointer" onclick="navigate('investments',document.querySelector('[data-view=investments]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-percent"></i></div></div><div class="stat-card__value" id="an-cattle-return">—</div><div class="stat-card__label">Avg Cattle Return</div></div>
           <div class="stat-card stat-card--green" style="cursor:pointer" onclick="navigate('products',document.querySelector('[data-view=products]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-bolt"></i></div></div><div class="stat-card__value">R500</div><div class="stat-card__label">Lowest Min. Investment</div></div>
@@ -1348,6 +1373,9 @@
             <div class="panel__body"><div class="chart-wrap chart-wrap--md"><canvas id="provinceChart"></canvas></div></div>
           </div>
         </div>
+
+        <!-- Section: Funnels & Behaviour -->
+        <div style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);border-bottom:1px solid var(--border);padding-bottom:6px;margin:18px 0 14px"><i class="fa-solid fa-filter" style="margin-right:6px;color:#f59e0b"></i>Funnels &amp; Behaviour</div>
 
         <div class="panel mb-16">
           <div class="panel__header">
@@ -1395,6 +1423,9 @@
           </div>
         </div>
 
+        <!-- Section: Risk & Transactions -->
+        <div style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);border-bottom:1px solid var(--border);padding-bottom:6px;margin:18px 0 14px"><i class="fa-solid fa-shield-halved" style="margin-right:6px;color:#ef4444"></i>Risk &amp; Transactions</div>
+
         <div class="grid-2 mt-16">
           <div class="panel">
             <div class="panel__header"><span class="panel__title">Risk Profile Breakdown</span></div>
@@ -1405,6 +1436,9 @@
             <div class="panel__body"><div class="chart-wrap chart-wrap--md"><canvas id="txnFlowChart"></canvas></div></div>
           </div>
         </div>
+
+        <!-- Section: Maturity & Retention -->
+        <div style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);border-bottom:1px solid var(--border);padding-bottom:6px;margin:18px 0 14px"><i class="fa-solid fa-rotate" style="margin-right:6px;color:#65cc88"></i>Maturity &amp; Retention</div>
 
         <!-- Maturity Forecast -->
         <div class="panel mb-16">
@@ -1425,6 +1459,9 @@
             <div class="chart-wrap chart-wrap--md"><canvas id="cohortChart"></canvas></div>
           </div>
         </div>
+
+        <!-- Section: Engagement -->
+        <div style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);border-bottom:1px solid var(--border);padding-bottom:6px;margin:18px 0 14px"><i class="fa-solid fa-mobile-screen-button" style="margin-right:6px;color:#3b82f6"></i>Engagement</div>
 
         <!-- Mobile App Activity -->
         <div class="panel mb-16">
@@ -1447,6 +1484,9 @@
             <div class="text-center text-muted" style="padding:20px">Loading personas…</div>
           </div>
         </div>
+
+        <!-- Section: Revenue -->
+        <div style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);border-bottom:1px solid var(--border);padding-bottom:6px;margin:18px 0 14px"><i class="fa-solid fa-coins" style="margin-right:6px;color:#fec24f"></i>Revenue</div>
 
         <!-- ══ FEE REVENUE ══ -->
         <div class="grid-2 mb-16">
@@ -1478,6 +1518,9 @@
           </div>
           <div class="panel__body" id="maturityReinvestPanel"><div class="text-center text-muted" style="padding:20px">Loading…</div></div>
         </div>
+
+        <!-- Section: Operations & Reporting -->
+        <div style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);border-bottom:1px solid var(--border);padding-bottom:6px;margin:18px 0 14px"><i class="fa-solid fa-gauge-high" style="margin-right:6px;color:#7a92a8"></i>Operations &amp; Reporting</div>
 
         <!-- ══ IFA PERFORMANCE ══ -->
         <div class="panel mb-16">
@@ -4490,7 +4533,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=4"></script>
-<script src="js/admin.js?v=81"></script>
+<script src="js/admin.js?v=82"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>

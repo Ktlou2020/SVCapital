@@ -7113,6 +7113,7 @@ async function loadAnalytics() {
     const minEl = document.querySelectorAll('#view-analytics .stat-card__value')[1];
     if (minEl && minEl.textContent === 'R500') minEl.textContent = lowestMin < Infinity ? Utils.rand(lowestMin, 0) : 'R500';
 
+    _renderAnalyticsKPIs();
     renderProductVolChart();
     renderProvinceChart();
     renderRiskChart();
@@ -10985,42 +10986,67 @@ function renderAnAumChart() {
   if (!ctx) return;
 
   const buckets = _lastNMonths(12);
-  // Running cumulative sum of deposit transactions
-  const monthTotals = buckets.map(b => {
-    return STATE.transactions
-      .filter(t => {
-        if (t.type !== 'deposit' || t.status !== 'completed') return false;
-        const d = new Date(t.created_at || t.transaction_date || 0);
-        return d.getFullYear() === b.year && d.getMonth() === b.month;
-      })
-      .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
-  });
 
-  // Running cumulative AUM
+  const monthDeposits = buckets.map(b =>
+    STATE.transactions
+      .filter(t => t.type === 'deposit' && t.status === 'completed' &&
+        new Date(t.created_at || t.transaction_date || 0).getFullYear() === b.year &&
+        new Date(t.created_at || t.transaction_date || 0).getMonth() === b.month)
+      .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0)
+  );
+
+  const monthWithdrawals = buckets.map(b =>
+    STATE.transactions
+      .filter(t => t.type === 'withdrawal' && t.status === 'completed' &&
+        new Date(t.created_at || t.transaction_date || 0).getFullYear() === b.year &&
+        new Date(t.created_at || t.transaction_date || 0).getMonth() === b.month)
+      .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0)
+  );
+
+  // Running net cumulative AUM
   let running = 0;
-  const aumData = monthTotals.map(v => { running += v; return running; });
+  const aumData = monthDeposits.map((d, i) => { running += d - monthWithdrawals[i]; return Math.max(0, running); });
 
   if (STATE.charts.anAum) STATE.charts.anAum.destroy();
   const opts = _chartDefaults();
-  opts.plugins.tooltip.callbacks = { label: c => ` ${Utils.rand(c.parsed.y)}` };
-  opts.scales.y.ticks.callback = v => 'R' + (v / 1000).toFixed(0) + 'k';
+  opts.plugins.tooltip.callbacks = { label: c => ` ${c.dataset.label}: ${Utils.rand(c.parsed.y)}` };
+  opts.scales.y.ticks.callback = v => 'R' + (v >= 1000000 ? (v/1000000).toFixed(1)+'M' : (v/1000).toFixed(0)+'k');
+  opts.scales.y1 = { position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#3d5268', font: { size: 10 }, callback: v => 'R' + (v/1000).toFixed(0)+'k' } };
 
   STATE.charts.anAum = new Chart(ctx, {
-    type: 'line',
+    type: 'bar',
     data: {
       labels: buckets.map(b => b.label),
-      datasets: [{
-        label: 'Cumulative AUM (deposits)',
-        data: aumData,
-        borderColor: '#fec24f',
-        backgroundColor: (c) => {
-          const g = c.chart.ctx.createLinearGradient(0, 0, 0, 220);
-          g.addColorStop(0, 'rgba(254,194,79,0.2)');
-          g.addColorStop(1, 'rgba(254,194,79,0)');
-          return g;
+      datasets: [
+        {
+          label: 'Net Cumulative AUM',
+          data: aumData,
+          type: 'line',
+          borderColor: '#fec24f',
+          backgroundColor: (c) => {
+            const g = c.chart.ctx.createLinearGradient(0, 0, 0, 220);
+            g.addColorStop(0, 'rgba(254,194,79,0.15)');
+            g.addColorStop(1, 'rgba(254,194,79,0)');
+            return g;
+          },
+          fill: true, tension: 0.4, borderWidth: 2.5, pointRadius: 3, pointBackgroundColor: '#fec24f',
+          yAxisID: 'y', order: 1
         },
-        fill: true, tension: 0.4, borderWidth: 2.5, pointRadius: 3, pointBackgroundColor: '#fec24f'
-      }]
+        {
+          label: 'Deposits',
+          data: monthDeposits,
+          backgroundColor: 'rgba(34,197,94,0.55)',
+          borderRadius: 4,
+          yAxisID: 'y1', order: 2
+        },
+        {
+          label: 'Withdrawals',
+          data: monthWithdrawals,
+          backgroundColor: 'rgba(239,68,68,0.55)',
+          borderRadius: 4,
+          yAxisID: 'y1', order: 3
+        }
+      ]
     },
     options: opts
   });
@@ -11049,7 +11075,9 @@ function renderAnNewInvChart() {
       datasets: [{
         label: 'New Investors',
         data: counts,
-        backgroundColor: 'rgba(101,101,101,0.7)',
+        backgroundColor: 'rgba(237,165,255,0.75)',
+        borderColor: '#eda5ff',
+        borderWidth: 1,
         borderRadius: 5
       }]
     },
@@ -11117,6 +11145,45 @@ function renderAnStatusChart() {
       }
     }
   });
+}
+
+// KPI headline tiles at the top of the analytics view
+function _renderAnalyticsKPIs() {
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+
+  // Net AUM = deposits - withdrawals
+  const totalAUM = STATE.transactions
+    .filter(t => t.status === 'completed' && (t.type === 'deposit' || t.type === 'withdrawal'))
+    .reduce((s, t) => s + (t.type === 'deposit' ? 1 : -1) * Math.abs(parseFloat(t.amount) || 0), 0);
+
+  // Active Capital = sum of amounts of active investments
+  const activeCapital = STATE.investments
+    .filter(i => i.status === 'active')
+    .reduce((s, i) => s + Math.abs(parseFloat(i.amount) || 0), 0);
+
+  // Returns YTD = return + payout transactions since Jan 1 this year
+  const ytdStart = new Date(new Date().getFullYear(), 0, 1).getTime();
+  const returnsYTD = STATE.transactions
+    .filter(t => t.status === 'completed' && (t.type === 'return' || t.type === 'payout') &&
+      new Date(t.transaction_date || t.created_at || 0).getTime() >= ytdStart)
+    .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
+
+  // Platform Revenue = all completed fee transactions
+  const platformRevenue = STATE.transactions
+    .filter(t => t.status === 'completed' && t.type === 'fee')
+    .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
+
+  const activeInvCount = STATE.investments.filter(i => i.status === 'active').length;
+
+  set('an-total-aum',       Utils.rand(Math.max(0, totalAUM), 0));
+  set('an-active-capital',  Utils.rand(activeCapital, 0));
+  set('an-total-investors', STATE.investors.length.toLocaleString());
+  set('an-returns-ytd',     Utils.rand(returnsYTD, 0));
+  set('an-platform-revenue',Utils.rand(platformRevenue, 0));
+  set('an-active-inv-count',activeInvCount.toLocaleString());
+
+  const tsEl = document.getElementById('an-last-refreshed');
+  if (tsEl) tsEl.textContent = 'Last refreshed ' + new Date().toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' });
 }
 
 // Chart rendering triggered from loadAnalytics after data loads
