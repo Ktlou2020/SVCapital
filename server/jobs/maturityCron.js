@@ -345,12 +345,24 @@ async function reinvestAmount(client, inv, amount, productType, sourcePoolName) 
        target.annual_rate, termMonths, newExpReturn, target.product_type]
     );
 
+    // Bookkeeping credit: shows the matured funds arriving back before being reinvested.
+    // No wallet update — money goes straight into the new investment, net wallet change = R0.
+    await client.query(
+      `INSERT INTO transactions
+         (id, investor_id, sub_account_id, type, amount, status, reference, description, investment_id, transaction_date, created_at, updated_at)
+       VALUES (gen_random_uuid(),$1,$2,'matured_funds',$3,'completed',$4,$5,$6,NOW(),NOW(),NOW())
+       ON CONFLICT (reference) DO NOTHING`,
+      [inv.investor_id, inv.sub_account_id || null, amt, 'MATF-' + inv.id,
+       `Matured Funds — ${sourcePoolName}`, inv.id]
+    );
+
     const verb = switched ? 'switch' : 'reinvestment';
     await client.query(
       `INSERT INTO transactions
-         (id, investor_id, type, amount, status, reference, description, investment_id, pool_id, transaction_date, created_at, updated_at)
-       VALUES (gen_random_uuid(),$1,'reinvestment',$2,'completed',$3,$4,$5,$6,NOW(),NOW(),NOW())`,
-      [inv.investor_id, amt, 'REINV-' + inv.id, `Maturity ${verb} — ${sourcePoolName} → ${target.name}`, newInvId, target.id]
+         (id, investor_id, sub_account_id, type, amount, status, reference, description, investment_id, pool_id, transaction_date, created_at, updated_at)
+       VALUES (gen_random_uuid(),$1,$2,'reinvestment',$3,'completed',$4,$5,$6,$7,NOW(),NOW(),NOW())`,
+      [inv.investor_id, inv.sub_account_id || null, amt, 'REINV-' + inv.id,
+       `Maturity ${verb} — ${sourcePoolName} → ${target.name}`, newInvId, target.id]
     );
 
     await client.query(

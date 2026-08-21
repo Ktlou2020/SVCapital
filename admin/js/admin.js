@@ -6376,7 +6376,7 @@ function renderTxnTable() {
     return;
   }
 
-  const typeColors = { deposit: 'green', withdrawal: 'red', investment: 'blue', reinvestment: 'purple', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple' };
+  const typeColors = { deposit: 'green', withdrawal: 'red', investment: 'blue', reinvestment: 'purple', return: 'gold', payout: 'green', matured_funds: 'green', fee: 'orange', referral_bonus: 'purple' };
 
   body.innerHTML = page.map(t => {
     const isPendingDeposit = t.type === 'deposit' && t.status === 'pending';
