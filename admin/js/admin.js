@@ -11456,6 +11456,38 @@ async function backfillFicaFromKyc(btn) {
   }
 }
 
+async function backfillMaturedFunds(btn, dryRun) {
+  const resultEl = document.getElementById('maturedFundsBackfillResult');
+  if (!dryRun && !await Confirm.ask(
+    'Backfill Matured Funds transactions?',
+    { body: 'This will insert missing "Matured Funds" credit entries for all historical reinvestments. Wallet balances are NOT changed — this only adds statement records. Continue?', confirmLabel: 'Apply Backfill' }
+  )) return;
+  btn.disabled = true;
+  const origLabel = btn.innerHTML;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> ' + (dryRun ? 'Scanning…' : 'Applying…');
+  resultEl.textContent = '';
+  try {
+    const data = await API._fetch('POST', 'admin/backfill-matured-funds', { dry_run: dryRun });
+    if (dryRun) {
+      if (!data.would_insert) {
+        resultEl.innerHTML = '<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> All reinvestments already have paired Matured Funds entries — nothing to backfill.</span>';
+      } else {
+        const preview = data.rows.map(r => `<li><strong>${r.investor_id}</strong> — ${r.pool_name}, R${Number(r.amount).toFixed(2)} (${new Date(r.date).toLocaleDateString('en-ZA')})</li>`).join('');
+        resultEl.innerHTML = `<div style="color:#f59e0b;margin-bottom:6px"><i class="fa-solid fa-eye"></i> <strong>${data.would_insert}</strong> reinvestment${data.would_insert !== 1 ? 's' : ''} missing a Matured Funds entry:</div><ul style="margin:0 0 0 16px;font-size:0.78rem;max-height:180px;overflow-y:auto">${preview}</ul><div style="margin-top:6px;font-size:0.77rem;color:var(--text-muted)">Click <em>Apply Backfill</em> to create these records.</div>`;
+      }
+    } else {
+      resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> Inserted <strong>${data.inserted}</strong> Matured Funds record${data.inserted !== 1 ? 's' : ''} (${data.skipped} already existed).</span>`;
+      Toast.success(`Matured Funds backfill complete — ${data.inserted} record${data.inserted !== 1 ? 's' : ''} inserted`);
+    }
+  } catch (e) {
+    resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Failed'}</span>`;
+    Toast.error(e.message || 'Backfill failed');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = origLabel;
+  }
+}
+
 async function backfillInvestorDemographics(btn) {
   const resultEl = document.getElementById('demographicsBackfillResult');
   if (!await Confirm.ask(

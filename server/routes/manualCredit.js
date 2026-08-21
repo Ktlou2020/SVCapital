@@ -337,6 +337,99 @@ router.post('/reconcile-wallet', async (req, res) => {
   }
 });
 
+/* ─── POST /api/admin/backfill-matured-funds ─────────────────────────────────
+   One-shot: creates missing "Matured Funds" credit transactions for all
+   historical reinvestments that were processed before this bookkeeping entry
+   was introduced. Each reinvestment transaction (reference REINV-*) gets a
+   paired matured_funds credit (reference MATF-*) if one doesn't already exist.
+
+   Body: { dry_run: true }  — preview only, no writes
+         {}                 — apply the backfill
+   ─────────────────────────────────────────────────────────────────────── */
+router.post('/backfill-matured-funds', async (req, res) => {
+  const { dry_run } = req.body || {};
+  try {
+    // Find all reinvestment transactions that have no paired matured_funds entry.
+    const { rows: missing } = await pool.query(`
+      SELECT
+        t.id                                           AS reinv_txn_id,
+        t.investor_id,
+        t.sub_account_id,
+        t.amount,
+        t.transaction_date,
+        t.created_at,
+        REPLACE(t.reference, 'REINV-', '')             AS original_inv_id,
+        'MATF-' || REPLACE(t.reference, 'REINV-', '') AS matf_ref,
+        COALESCE(
+          (SELECT pool_name FROM investments
+            WHERE id = REPLACE(t.reference, 'REINV-', '')),
+          'previous investment'
+        )                                              AS pool_name
+      FROM transactions t
+      WHERE t.type = 'reinvestment'
+        AND t.reference LIKE 'REINV-%'
+        AND NOT EXISTS (
+          SELECT 1 FROM transactions t2
+          WHERE t2.reference = 'MATF-' || REPLACE(t.reference, 'REINV-', '')
+        )
+      ORDER BY t.created_at
+    `);
+
+    if (dry_run || !missing.length) {
+      return res.json({
+        dry_run: !!dry_run,
+        would_insert: missing.length,
+        rows: missing.map(r => ({
+          investor_id:     r.investor_id,
+          sub_account_id:  r.sub_account_id,
+          amount:          parseFloat(r.amount),
+          original_inv_id: r.original_inv_id,
+          matf_ref:        r.matf_ref,
+          pool_name:       r.pool_name,
+          date:            r.transaction_date || r.created_at,
+        })),
+      });
+    }
+
+    // Apply backfill — each INSERT is idempotent via ON CONFLICT.
+    let inserted = 0;
+    for (const r of missing) {
+      const { rowCount } = await pool.query(`
+        INSERT INTO transactions
+          (id, investor_id, sub_account_id, type, amount, status, reference,
+           description, investment_id, transaction_date, created_at, updated_at)
+        VALUES
+          (gen_random_uuid(), $1, $2, 'matured_funds', $3, 'completed', $4,
+           $5, $6, $7, $7, NOW())
+        ON CONFLICT (reference) DO NOTHING
+      `, [
+        r.investor_id,
+        r.sub_account_id || null,
+        parseFloat(r.amount),
+        r.matf_ref,
+        `Matured Funds — ${r.pool_name}`,
+        r.original_inv_id,
+        r.transaction_date || r.created_at,
+      ]);
+      if (rowCount) inserted++;
+    }
+
+    setImmediate(() => audit.log({
+      actorId:    req.user.id,
+      actorEmail: req.user.email,
+      action:     'admin.backfill_matured_funds',
+      entityType: 'transactions',
+      description: `Backfilled ${inserted} missing matured_funds credit transactions for historical reinvestments.`,
+      ip:         req.ip,
+    }).catch(() => {}));
+
+    res.json({ success: true, inserted, skipped: missing.length - inserted });
+  } catch (err) {
+    console.error('/admin/backfill-matured-funds error:', err.message);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
 /* ─── POST /api/admin/pools/fix-product-type ──────────────────────────────────
    One-shot: renames product_type = 'smme' → 'short_term' across investment_pools,
    investments, and products tables immediately, without requiring a server restart.
