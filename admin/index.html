@@ -1281,6 +1281,25 @@
           </div>
         </div>
 
+        <!-- Data Fixes panel -->
+        <div class="panel mb-16">
+          <div class="panel__header">
+            <span class="panel__title"><i class="fa-solid fa-wrench" style="color:#f59e0b;margin-right:6px"></i>Data Fixes</span>
+            <span style="font-size:0.72rem;color:var(--text-muted)">One-shot corrections — all are idempotent</span>
+          </div>
+          <div class="panel__body" style="display:flex;flex-direction:column;gap:14px">
+            <div style="background:var(--bg-secondary);border-radius:10px;padding:16px">
+              <p style="font-weight:600;margin-bottom:4px">Backfill Matured Funds Transactions</p>
+              <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px">Creates missing <code>matured_funds</code> credit entries for historical reinvestments. Safe to run multiple times.</p>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn btn--ghost btn--sm" onclick="backfillMaturedFunds(this,true)"><i class="fa-solid fa-eye" style="margin-right:6px"></i>Preview</button>
+                <button class="btn btn--primary btn--sm" onclick="backfillMaturedFunds(this,false)"><i class="fa-solid fa-play" style="margin-right:6px"></i>Apply</button>
+              </div>
+              <div id="maturedFundsBackfillResult" style="margin-top:12px;font-size:0.82rem"></div>
+            </div>
+          </div>
+        </div>
+
       </div>
 
       <!-- ══════════════════════════════════
@@ -1805,7 +1824,7 @@
                                 <i class="fa-solid fa-circle-plus"></i> Apply Backfill
                               </button>
                             </div>
-                            <div id="maturedFundsBackfillResult" style="margin-top:10px;font-size:0.82rem"></div>
+                            <div id="maturedFundsBackfillResultMig" style="margin-top:10px;font-size:0.82rem"></div>
                           </div>
 
                           <!-- Course quiz backfill -->
@@ -4471,7 +4490,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=4"></script>
-<script src="js/admin.js?v=80"></script>
+<script src="js/admin.js?v=81"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>
