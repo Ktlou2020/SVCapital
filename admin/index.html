@@ -1793,6 +1793,21 @@
                             <div id="ficaBackfillResult" style="margin-top:10px;font-size:0.82rem"></div>
                           </div>
 
+                          <!-- Matured Funds backfill -->
+                          <div style="background:var(--bg-secondary);border-radius:10px;padding:16px;margin-top:14px">
+                            <p style="font-weight:600;margin-bottom:6px">Backfill Matured Funds Transactions</p>
+                            <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px">Finds all historical reinvestments that are missing the paired "Matured Funds" credit entry (processed before this was introduced) and creates the missing records. Wallet balances are <strong>not</strong> changed — this is a statement/audit-trail fix only. Safe to run multiple times.</p>
+                            <div style="display:flex;gap:10px;flex-wrap:wrap">
+                              <button class="btn btn--secondary" onclick="backfillMaturedFunds(this, true)">
+                                <i class="fa-solid fa-magnifying-glass"></i> Preview (dry run)
+                              </button>
+                              <button class="btn btn--secondary" style="background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.3);color:#22c55e" onclick="backfillMaturedFunds(this, false)">
+                                <i class="fa-solid fa-circle-plus"></i> Apply Backfill
+                              </button>
+                            </div>
+                            <div id="maturedFundsBackfillResult" style="margin-top:10px;font-size:0.82rem"></div>
+                          </div>
+
                           <!-- Course quiz backfill -->
                           <div style="background:var(--bg-secondary);border-radius:10px;padding:16px;margin-top:14px">
                             <p style="font-weight:600;margin-bottom:6px">Generate Quizzes for All Courses</p>
@@ -4444,7 +4459,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=4"></script>
-<script src="js/admin.js?v=78"></script>
+<script src="js/admin.js?v=79"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>
