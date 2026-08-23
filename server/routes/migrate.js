@@ -168,12 +168,28 @@ router.post('/run',
         const kycMapped  = KYC_STATUS_MAP[u.kycStatus] || 'pending';
         const status     = u.status === 'ACTIVE' ? 'active' : u.status === 'ARCHIVED' ? 'archived' : 'suspended';
 
+        // "How did you hear about us" — try every field name the old platform may have used
+        const heardAboutUs = (
+          u.heardAboutUs || u.heard_about_us || u.howDidYouHearAboutUs ||
+          u.how_did_you_hear || u.referralSource || u.referral_source ||
+          u.acquisitionSource || u.acquisition_source || null
+        );
+
+        // Gender — derive from SA ID if not already present on the object
+        let gender = u.gender || null;
+        if (!gender && u.identityNumber) {
+          const idStr = String(u.identityNumber).replace(/\s/g, '');
+          if (/^\d{13}$/.test(idStr)) {
+            gender = parseInt(idStr[6], 10) >= 5 ? 'Male' : 'Female';
+          }
+        }
+
         await pool.query(`
           INSERT INTO investors
             (id, first_name, last_name, email, phone, id_number, date_of_birth,
              kyc_status, fica_status, status, wallet_balance, total_invested, risk_profile,
-             occupation, notes, address, province, date_joined, updated_at)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,NOW())
+             occupation, notes, address, province, date_joined, gender, heard_about_us, updated_at)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,NOW())
           ON CONFLICT (id) DO UPDATE SET
             first_name=EXCLUDED.first_name, last_name=EXCLUDED.last_name, email=EXCLUDED.email,
             phone=EXCLUDED.phone, id_number=EXCLUDED.id_number, date_of_birth=EXCLUDED.date_of_birth,
@@ -182,6 +198,8 @@ router.post('/run',
             risk_profile=EXCLUDED.risk_profile, occupation=EXCLUDED.occupation,
             notes=EXCLUDED.notes, address=EXCLUDED.address, province=EXCLUDED.province,
             date_joined=COALESCE(EXCLUDED.date_joined, investors.date_joined),
+            gender=COALESCE(investors.gender, EXCLUDED.gender),
+            heard_about_us=COALESCE(investors.heard_about_us, EXCLUDED.heard_about_us),
             updated_at=NOW()
         `, [
           id, firstName, lastName, (u.email||'').toLowerCase().trim(), u.phone_number||'',
@@ -193,6 +211,7 @@ router.post('/run',
           u.employmentStatus || null, notes,
           addr?.fullAddress || null, addr?.province?.trim() || null,
           u.created_time ? new Date(u.created_time) : new Date(),
+          gender, heardAboutUs,
         ]);
       }
     );
