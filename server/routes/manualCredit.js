@@ -1165,4 +1165,103 @@ router.post('/reverse/migration-demographics', requireAuth, requireRole('admin',
   }
 });
 
+/* ─── POST /api/admin/restore/investor-statuses ───────────────────────────
+   Recovers kyc_status, fica_status, and investor status from tables that
+   were NOT overwritten by the migration re-import:
+     - kyc_documents: if any document is 'approved' → mark investor approved
+     - investments + wallet: if investor has activity → mark status active
+   Safe to run multiple times (only upgrades, never downgrades statuses).
+   Body: { dry_run: true } — preview counts without writing
+   ─────────────────────────────────────────────────────────────────────────── */
+router.post('/restore/investor-statuses', async (req, res) => {
+  try {
+    const dryRun = !!req.body?.dry_run;
+
+    // Count investors with approved KYC docs whose kyc/fica status is not yet approved
+    const { rows: kycRows } = await pool.query(`
+      SELECT i.id
+      FROM investors i
+      WHERE (i.kyc_status != 'approved' OR i.fica_status != 'approved')
+        AND EXISTS (
+          SELECT 1 FROM kyc_documents kd
+          WHERE kd.investor_id = i.id AND kd.status = 'approved'
+        )
+    `);
+
+    // Count investors with activity (positive wallet/investment) whose status is not active
+    const { rows: statusRows } = await pool.query(`
+      SELECT i.id
+      FROM investors i
+      WHERE i.status != 'active'
+        AND (
+          i.wallet_balance > 0
+          OR i.total_invested > 0
+          OR EXISTS (SELECT 1 FROM investments inv WHERE inv.investor_id = i.id)
+          OR EXISTS (SELECT 1 FROM transactions tx WHERE tx.investor_id = i.id AND tx.status = 'completed')
+        )
+    `);
+
+    let kycRestored = 0, statusRestored = 0;
+
+    if (!dryRun) {
+      // Restore kyc_status and fica_status from approved kyc_documents
+      const { rowCount: kc } = await pool.query(`
+        UPDATE investors i
+        SET
+          kyc_status       = 'approved',
+          fica_status      = 'approved',
+          fica_approved_at = COALESCE(i.fica_approved_at,
+            (SELECT MAX(reviewed_at) FROM kyc_documents WHERE investor_id = i.id AND status = 'approved'),
+            NOW()
+          ),
+          updated_at = NOW()
+        WHERE (i.kyc_status != 'approved' OR i.fica_status != 'approved')
+          AND EXISTS (
+            SELECT 1 FROM kyc_documents kd
+            WHERE kd.investor_id = i.id AND kd.status = 'approved'
+          )
+      `);
+      kycRestored = kc;
+
+      // Restore status to active for investors with any completed activity
+      const { rowCount: sc } = await pool.query(`
+        UPDATE investors i
+        SET status = 'active', updated_at = NOW()
+        WHERE i.status != 'active'
+          AND (
+            i.wallet_balance > 0
+            OR i.total_invested > 0
+            OR EXISTS (SELECT 1 FROM investments inv WHERE inv.investor_id = i.id)
+            OR EXISTS (SELECT 1 FROM transactions tx WHERE tx.investor_id = i.id AND tx.status = 'completed')
+          )
+      `);
+      statusRestored = sc;
+
+      setImmediate(() => audit.log({
+        actorId:    req.user.id,
+        actorEmail: req.user.email,
+        action:     'investors.restore_statuses',
+        entityType: 'investors',
+        description: `Restored investor statuses from KYC docs and activity: ${kycRestored} KYC/FICA restored, ${statusRestored} status set to active`,
+        ip:         req.ip,
+      }).catch(() => {}));
+    } else {
+      kycRestored  = kycRows.length;
+      statusRestored = statusRows.length;
+    }
+
+    res.json({
+      dry_run: dryRun,
+      kyc_fica_restored: kycRestored,
+      status_restored:   statusRestored,
+      message: dryRun
+        ? `Preview: ${kycRestored} investor(s) would have KYC/FICA restored, ${statusRestored} would be set active`
+        : `Done: ${kycRestored} investor(s) had KYC/FICA restored from documents, ${statusRestored} had status set to active`,
+    });
+  } catch (err) {
+    console.error('[restore/investor-statuses]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

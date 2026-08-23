@@ -1328,6 +1328,17 @@
               </div>
               <div id="reverseMigrationResult" style="margin-top:12px;font-size:0.82rem"></div>
             </div>
+
+            <!-- Restore Investor Statuses from KYC Docs & Activity -->
+            <div style="background:var(--bg-secondary);border-radius:10px;padding:16px;border:1px solid rgba(237,165,255,0.2)">
+              <p style="font-weight:600;margin-bottom:4px"><i class="fa-solid fa-shield-check" style="color:#eda5ff;margin-right:6px"></i>Restore KYC / Status from Documents &amp; Activity</p>
+              <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px">Re-derives <strong>kyc_status</strong> and <strong>fica_status</strong> from the KYC documents table (untouched by the migration), and restores <strong>status = active</strong> for any investor with a wallet balance, investments, or completed transactions. Safely upgrades — never downgrades.</p>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn btn--sm btn--ghost" onclick="previewRestoreInvestorStatuses(this)"><i class="fa-solid fa-eye" style="margin-right:6px"></i>Preview</button>
+                <button class="btn btn--sm btn--primary" onclick="restoreInvestorStatuses(this)"><i class="fa-solid fa-shield-check" style="margin-right:6px"></i>Restore Statuses</button>
+              </div>
+              <div id="restoreStatusResult" style="margin-top:12px;font-size:0.82rem"></div>
+            </div>
           </div>
         </div>
 
@@ -4576,7 +4587,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=4"></script>
-<script src="js/admin.js?v=86"></script>
+<script src="js/admin.js?v=87"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>
