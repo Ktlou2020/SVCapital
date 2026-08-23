@@ -189,7 +189,6 @@ router.post('/run',
             risk_profile=EXCLUDED.risk_profile, occupation=EXCLUDED.occupation,
             notes=EXCLUDED.notes, address=EXCLUDED.address, province=EXCLUDED.province,
             date_joined=COALESCE(EXCLUDED.date_joined, investors.date_joined),
-            heard_about_us=COALESCE(investors.heard_about_us, EXCLUDED.heard_about_us),
             updated_at=NOW()
         `, [
           id, firstName, lastName, (u.email||'').toLowerCase().trim(), u.phone_number||'',

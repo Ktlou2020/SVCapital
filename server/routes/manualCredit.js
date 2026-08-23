@@ -1094,6 +1094,54 @@ router.post('/backfill/investor-demographics', async (req, res) => {
   }
 });
 
+/* ─── POST /api/admin/import/heard-about-us ───────────────────────────────
+   Accepts the same `users` JSON array from the old platform export and
+   ONLY updates heard_about_us for matching investors — nothing else is touched.
+   Safe to run multiple times — COALESCE means existing values are never overwritten.
+   ─────────────────────────────────────────────────────────────────────────── */
+router.post('/import/heard-about-us', requireAuth, requireRole('admin', 'director'), async (req, res) => {
+  try {
+    const { users } = req.body;
+    if (!Array.isArray(users) || !users.length) {
+      return res.status(400).json({ error: 'Body must contain a non-empty `users` array' });
+    }
+
+    let updated = 0, skipped = 0, notFound = 0;
+
+    for (const u of users) {
+      const id = u.userAccountNumber;
+      if (!id) { skipped++; continue; }
+
+      const heard = (
+        u.heardAboutUs || u.heard_about_us || u.howDidYouHearAboutUs ||
+        u.how_did_you_hear || u.referralSource || u.referral_source ||
+        u.acquisitionSource || u.acquisition_source || null
+      );
+
+      if (!heard) { skipped++; continue; }
+
+      const { rowCount } = await pool.query(
+        `UPDATE investors
+         SET heard_about_us = $2
+         WHERE id = $1 AND heard_about_us IS NULL`,
+        [id, heard]
+      );
+
+      if (rowCount > 0) updated++;
+      else skipped++;  // either not found or already had a value
+    }
+
+    await audit.log(req.user, 'import_heard_about_us', 'investors', null,
+      { updated, skipped, total: users.length });
+
+    res.json({ updated, skipped, total: users.length,
+      message: `Updated heard_about_us for ${updated} investor(s). ${skipped} skipped (already set or no value in export).` });
+  } catch (err) {
+    console.error('[import/heard-about-us]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 /* ─── POST /api/admin/reverse/migration-demographics ──────────────────────
    Clears gender and heard_about_us for ALL investors, undoing what the
    re-import set. Does NOT restore other fields (notes, address, occupation)
