@@ -9920,7 +9920,7 @@ function openCalcModal() {
   const sel = document.getElementById('calcPoolSelect');
   if (sel) {
     sel.innerHTML = '<option value="">— Custom rate —</option>' +
-      (PORTAL.pools || []).filter(p => p.status === 'open').map(p =>
+      (PORTAL.pools || []).filter(p => p.status === 'open' && p.product_type !== 'delivery_bikes' && p.product_type !== 'delivery_bike').map(p =>
         `<option value="${p.id}" data-rate="${p.annual_rate}" data-term="${p.term_months}">${p.name} — ${Utils.pct(p.annual_rate)} p.a.</option>`
       ).join('');
   }
