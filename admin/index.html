@@ -1298,6 +1298,17 @@
               <div id="maturedFundsBackfillResult" style="margin-top:12px;font-size:0.82rem"></div>
             </div>
 
+            <!-- Import Heard About Us from export file -->
+            <div style="background:var(--bg-secondary);border-radius:10px;padding:16px">
+              <p style="font-weight:600;margin-bottom:4px">Import "Heard About Us" from Export File</p>
+              <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px">Upload the original platform export JSON. Only <strong>heard_about_us</strong> is updated — no other investor fields are touched. Existing values are never overwritten.</p>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                <input type="file" id="heardImportFile" accept=".json" style="font-size:0.8rem;color:var(--text-muted)">
+                <button class="btn btn--primary btn--sm" onclick="importHeardAboutUs(this)"><i class="fa-solid fa-file-import" style="margin-right:6px"></i>Import</button>
+              </div>
+              <div id="heardImportResult" style="margin-top:12px;font-size:0.82rem"></div>
+            </div>
+
             <!-- Investor Demographics Backfill -->
             <div style="background:var(--bg-secondary);border-radius:10px;padding:16px">
               <p style="font-weight:600;margin-bottom:4px">Backfill Investor Demographics</p>
@@ -4565,7 +4576,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=4"></script>
-<script src="js/admin.js?v=85"></script>
+<script src="js/admin.js?v=86"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>

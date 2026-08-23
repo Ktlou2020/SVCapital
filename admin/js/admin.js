@@ -11639,6 +11639,42 @@ async function backfillMaturedFunds(btn, dryRun) {
   }
 }
 
+async function importHeardAboutUs(btn) {
+  const fileInput = document.getElementById('heardImportFile');
+  const resultEl  = document.getElementById('heardImportResult');
+  if (!fileInput?.files?.length) {
+    Toast.error('Please choose a JSON export file first');
+    return;
+  }
+  const file = fileInput.files[0];
+  let parsed;
+  try {
+    parsed = JSON.parse(await file.text());
+  } catch (e) {
+    resultEl.innerHTML = `<span style="color:#ef4444">Invalid JSON: ${e.message}</span>`;
+    return;
+  }
+  const users = parsed.users || (Array.isArray(parsed) ? parsed : null);
+  if (!users) {
+    resultEl.innerHTML = `<span style="color:#ef4444">File must contain a "users" array (same format as the original migration export).</span>`;
+    return;
+  }
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Importing…';
+  resultEl.textContent = '';
+  try {
+    const data = await API._fetch('POST', 'admin/import/heard-about-us', { users });
+    resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> ${data.message}</span>`;
+    Toast.success(`Heard About Us imported for ${data.updated} investor(s)`);
+  } catch (e) {
+    resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Failed'}</span>`;
+    Toast.error(e.message || 'Import failed');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-file-import" style="margin-right:6px"></i>Import';
+  }
+}
+
 async function reverseMigrationDemographics(btn) {
   const resultEl = document.getElementById('reverseMigrationResult');
   if (!await Confirm.ask(
