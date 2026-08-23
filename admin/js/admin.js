@@ -7116,6 +7116,8 @@ async function loadAnalytics() {
     _renderAnalyticsKPIs();
     renderProductVolChart();
     renderProvinceChart();
+    renderGenderChart();
+    renderHeardAboutChart();
     renderRiskChart();
     renderTxnFlowChart();
     renderConversionFunnel();
@@ -7533,6 +7535,88 @@ function renderProvinceChart() {
       responsive: true, maintainAspectRatio: false,
       plugins: { legend: { position: 'right', labels: { color: '#7a92a8', font: { size: 10 }, boxWidth: 10, padding: 8 } } }
     }
+  });
+}
+
+// Normalise free-text "how heard" values into clean category labels
+function _normalizeHeardSource(raw) {
+  const s = (raw || '').toLowerCase().trim();
+  if (!s || s === 'null' || s === 'undefined') return null;
+  if (s.includes('friend') || s.includes('family') || s.includes('word of mouth') || s.includes('colleague') || s.includes('referral')) return 'Friend / Family / Referral';
+  if (s.includes('social') || s.includes('instagram') || s.includes('facebook') || s.includes('twitter') || s.includes('tiktok') || s.includes('linkedin')) return 'Social Media';
+  if (s.includes('financial advisor') || s.includes('ifa') || s.includes('advisor') || s.includes('broker')) return 'Financial Advisor (IFA)';
+  if (s.includes('online') || s.includes('search') || s.includes('google') || s.includes('advertising') || s.includes('advert') || s.includes('internet')) return 'Online / Search / Ads';
+  if (s.includes('email') || s.includes('newsletter') || s.includes('mailer')) return 'Email / Newsletter';
+  if (s.includes('event') || s.includes('conference') || s.includes('expo') || s.includes('seminar') || s.includes('webinar')) return 'Event / Conference';
+  if (s.includes('radio') || s.includes('podcast') || s.includes('tv ') || s.includes('television') || s.includes('media')) return 'Radio / TV / Podcast';
+  if (s.includes('other')) return 'Other';
+  const clean = raw.trim();
+  return clean.length > 35 ? clean.substring(0, 32) + '…' : clean;
+}
+
+function renderGenderChart() {
+  const ctx = document.getElementById('genderChart');
+  if (!ctx) return;
+  const counts = { Male: 0, Female: 0, Unknown: 0 };
+  STATE.investors.forEach(i => {
+    const g = (i.gender || '').trim();
+    if (g === 'Male') counts.Male++;
+    else if (g === 'Female') counts.Female++;
+    else counts.Unknown++;
+  });
+  const total = STATE.investors.length || 1;
+  if (STATE.charts.gender) STATE.charts.gender.destroy();
+  STATE.charts.gender = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Male', 'Female', 'Unknown'],
+      datasets: [{
+        data: [counts.Male, counts.Female, counts.Unknown],
+        backgroundColor: ['#3b82f6', '#eda5ff', '#4b5563'],
+        borderColor: 'var(--dark-2)', borderWidth: 3, hoverOffset: 4
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { color: '#7a92a8', font: { size: 10 }, boxWidth: 10, padding: 10 } },
+        tooltip: { backgroundColor: 'rgba(13,17,23,0.95)', titleColor: '#e8edf2', bodyColor: '#7a92a8',
+          callbacks: { label: c => ` ${c.label}: ${c.parsed} (${Math.round(c.parsed / total * 100)}%)` } }
+      }
+    }
+  });
+}
+
+function renderHeardAboutChart() {
+  const ctx = document.getElementById('heardAboutChart');
+  if (!ctx) return;
+  const counts = {};
+  STATE.investors.forEach(i => {
+    // Prefer top-level column; fall back to JSONB quest answer
+    const raw = (i.heard_about_us || (i.investor_profile && i.investor_profile.heard_via) || '').trim();
+    const label = _normalizeHeardSource(raw);
+    if (!label) return;
+    counts[label] = (counts[label] || 0) + 1;
+  });
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  if (!sorted.length) return;
+  const palette = ['#eda5ff', '#22c55e', '#fec24f', '#3b82f6', '#f97316', '#ef4444', '#65cc88', '#7a92a8', '#a78bfa', '#fb923c'];
+  if (STATE.charts.heardAbout) STATE.charts.heardAbout.destroy();
+  const opts = _chartDefaults();
+  opts.indexAxis = 'y';
+  opts.plugins.tooltip.callbacks = { label: c => ` ${c.parsed.x} investor${c.parsed.x !== 1 ? 's' : ''}` };
+  STATE.charts.heardAbout = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: sorted.map(([k]) => k),
+      datasets: [{
+        label: 'Investors',
+        data: sorted.map(([, v]) => v),
+        backgroundColor: sorted.map((_, i) => palette[i % palette.length]),
+        borderRadius: 4
+      }]
+    },
+    options: opts
   });
 }
 
