@@ -1307,6 +1307,16 @@
               </div>
               <div id="demographicsBackfillResult" style="margin-top:12px;font-size:0.82rem"></div>
             </div>
+
+            <!-- Reverse Migration Demographics -->
+            <div style="background:var(--bg-secondary);border-radius:10px;padding:16px;border:1px solid rgba(239,68,68,0.2)">
+              <p style="font-weight:600;margin-bottom:4px;color:#ef4444"><i class="fa-solid fa-rotate-left" style="margin-right:6px"></i>Clear "Heard About Us" (Undo Import)</p>
+              <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px">Sets <strong>Heard About Us</strong> back to blank for every investor. Use this to undo what the migration re-import populated. Gender and all other fields are not affected.</p>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn btn--sm" style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.4);color:#ef4444" onclick="reverseMigrationDemographics(this)"><i class="fa-solid fa-rotate-left" style="margin-right:6px"></i>Clear Heard About Us</button>
+              </div>
+              <div id="reverseMigrationResult" style="margin-top:12px;font-size:0.82rem"></div>
+            </div>
           </div>
         </div>
 
@@ -4555,7 +4565,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=4"></script>
-<script src="js/admin.js?v=84"></script>
+<script src="js/admin.js?v=85"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>
