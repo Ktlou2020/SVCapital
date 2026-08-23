@@ -1113,6 +1113,7 @@ router.post('/import/heard-about-us', requireAuth, requireRole('admin', 'directo
       if (!id) { skipped++; continue; }
 
       const heard = (
+        u.WhereDidYouHearAboutUs ||
         u.heardAboutUs || u.heard_about_us || u.howDidYouHearAboutUs ||
         u.how_did_you_hear || u.referralSource || u.referral_source ||
         u.acquisitionSource || u.acquisition_source || null
