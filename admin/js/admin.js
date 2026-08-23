@@ -11639,6 +11639,28 @@ async function backfillMaturedFunds(btn, dryRun) {
   }
 }
 
+async function reverseMigrationDemographics(btn) {
+  const resultEl = document.getElementById('reverseMigrationResult');
+  if (!await Confirm.ask(
+    'Clear Heard About Us for all investors?',
+    { body: 'This will set Heard About Us to blank for every investor. Use this to undo a migration re-import. Gender and all other fields are NOT affected. Continue?', confirmLabel: 'Clear Fields', danger: true }
+  )) return;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Clearing…';
+  resultEl.textContent = '';
+  try {
+    const data = await API._fetch('POST', 'admin/reverse/migration-demographics');
+    resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> ${data.message}</span>`;
+    Toast.success('Demographics cleared');
+  } catch (e) {
+    resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Failed'}</span>`;
+    Toast.error(e.message || 'Failed');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-rotate-left" style="margin-right:6px"></i>Clear Heard About Us';
+  }
+}
+
 async function backfillInvestorDemographics(btn) {
   const resultEl = document.getElementById('demographicsBackfillResult');
   if (!await Confirm.ask(

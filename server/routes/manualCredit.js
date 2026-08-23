@@ -1094,4 +1094,27 @@ router.post('/backfill/investor-demographics', async (req, res) => {
   }
 });
 
+/* ─── POST /api/admin/reverse/migration-demographics ──────────────────────
+   Clears gender and heard_about_us for ALL investors, undoing what the
+   re-import set. Does NOT restore other fields (notes, address, occupation)
+   — those require a database backup restore if they were manually edited.
+   ─────────────────────────────────────────────────────────────────────────── */
+router.post('/reverse/migration-demographics', requireAuth, requireRole('admin', 'director'), async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      UPDATE investors
+      SET heard_about_us = NULL
+      WHERE heard_about_us IS NOT NULL
+      RETURNING id
+    `);
+    const count = rows.length;
+    await audit.log(req.user, 'reverse_migration_demographics', 'investors', null,
+      { cleared: count });
+    res.json({ cleared: count, message: `Cleared heard_about_us for ${count} investor(s).` });
+  } catch (err) {
+    console.error('[reverse/migration-demographics]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
