@@ -7548,7 +7548,7 @@ function _normalizeHeardSource(raw) {
   if (s.includes('online') || s.includes('search') || s.includes('google') || s.includes('advertising') || s.includes('advert') || s.includes('internet')) return 'Online / Search / Ads';
   if (s.includes('email') || s.includes('newsletter') || s.includes('mailer')) return 'Email / Newsletter';
   if (s.includes('event') || s.includes('conference') || s.includes('expo') || s.includes('seminar') || s.includes('webinar')) return 'Event / Conference';
-  if (s.includes('radio') || s.includes('podcast') || s.includes('tv ') || s.includes('television') || s.includes('media')) return 'Radio / TV / Podcast';
+  if (s.includes('radio') || s.includes('podcast') || s.includes('tv ') || s.includes('television') || s.includes('kaya') || s.includes('media')) return 'Radio / TV / Podcast';
   if (s.includes('other')) return 'Other';
   const clean = raw.trim();
   return clean.length > 35 ? clean.substring(0, 32) + '…' : clean;
