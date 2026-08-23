@@ -11723,6 +11723,44 @@ async function backfillInvestorDemographics(btn) {
   }
 }
 
+async function previewRestoreInvestorStatuses(btn) {
+  const resultEl = document.getElementById('restoreStatusResult');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Checking…';
+  resultEl.textContent = '';
+  try {
+    const data = await API._fetch('POST', 'admin/restore/investor-statuses', { dry_run: true });
+    resultEl.innerHTML = `<span style="color:#f59e0b"><i class="fa-solid fa-circle-info" style="margin-right:6px"></i>Preview: <strong>${data.kyc_fica_restored}</strong> investor(s) would have KYC/FICA restored from documents, <strong>${data.status_restored}</strong> would be set to active.</span>`;
+  } catch (e) {
+    resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Preview failed'}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-eye" style="margin-right:6px"></i>Preview';
+  }
+}
+
+async function restoreInvestorStatuses(btn) {
+  const resultEl = document.getElementById('restoreStatusResult');
+  if (!await Confirm.ask(
+    'Restore investor KYC and status from documents?',
+    { body: 'This will:\n• Set kyc_status and fica_status to "approved" for any investor with an approved KYC document on file\n• Set status to "active" for any investor with a wallet balance, investments, or completed transactions\n\nThis only upgrades statuses — it never downgrades them. Continue?', confirmLabel: 'Restore Statuses' }
+  )) return;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Restoring…';
+  resultEl.textContent = '';
+  try {
+    const data = await API._fetch('POST', 'admin/restore/investor-statuses');
+    resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle" style="margin-right:6px"></i>Done: <strong>${data.kyc_fica_restored}</strong> investor(s) had KYC/FICA restored from documents, <strong>${data.status_restored}</strong> had status set to active.</span>`;
+    Toast.success('Investor statuses restored');
+  } catch (e) {
+    resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Failed'}</span>`;
+    Toast.error(e.message || 'Restore failed');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-shield-check" style="margin-right:6px"></i>Restore Statuses';
+  }
+}
+
 async function backfillCourseQuizzes(btn) {
   const resultEl = document.getElementById('quizBackfillResult');
   if (!await Confirm.ask(
