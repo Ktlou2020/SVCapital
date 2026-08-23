@@ -1297,6 +1297,16 @@
               </div>
               <div id="maturedFundsBackfillResult" style="margin-top:12px;font-size:0.82rem"></div>
             </div>
+
+            <!-- Investor Demographics Backfill -->
+            <div style="background:var(--bg-secondary);border-radius:10px;padding:16px">
+              <p style="font-weight:600;margin-bottom:4px">Backfill Investor Demographics</p>
+              <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px">Derives <strong>Gender</strong> from each investor's SA ID number and extracts <strong>Heard About Us</strong> from registration notes. Only fills rows that are currently <code>NULL</code> — safe to run multiple times.</p>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn btn--primary btn--sm" onclick="backfillInvestorDemographics(this)"><i class="fa-solid fa-person-circle-plus" style="margin-right:6px"></i>Run Backfill</button>
+              </div>
+              <div id="demographicsBackfillResult" style="margin-top:12px;font-size:0.82rem"></div>
+            </div>
           </div>
         </div>
 
@@ -4545,7 +4555,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=4"></script>
-<script src="js/admin.js?v=83"></script>
+<script src="js/admin.js?v=84"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>
