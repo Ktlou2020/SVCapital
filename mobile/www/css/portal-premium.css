@@ -797,7 +797,13 @@
 .level-step__reward { font-size: 0.6rem; font-weight: 800; }
 
 /* ── Quest Categories ───────────────────────────────────────── */
-.quest-category { }
+/* Separate the first quest category from the pending-quest groups above it.
+   .pending-group:last-child zeroes its own margin-bottom, so without this the
+   "Profile & Compliance" header sits flush against the card above it.
+   Categories already carry mb-24 between themselves, so only the top gap is
+   added here and it is cancelled between adjacent categories. */
+.quest-category { margin-top: 32px; }
+.quest-category + .quest-category { margin-top: 0; }
 .quest-category__header {
   display: flex;
   align-items: center;
