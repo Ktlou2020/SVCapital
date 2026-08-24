@@ -153,11 +153,34 @@ use the upload key. **Never commit `key.properties` or `*.jks` to git.**
 4. `npm run sync`
 5. Open Xcode: `npm run open:ios`
 6. Select your **Team** in Signing & Capabilities tab
-7. Confirm **Bundle Identifier** is `co.za.svcapital.app`
+7. Confirm **Bundle Identifier** is `co.za.svcapital.app` — or just run `npm run check:ios`
 8. Enable **Push Notifications** capability (+ toggle in Signing & Capabilities)
 9. Enable **Associated Domains** capability → add `applinks:svcapital.co.za`
-10. **Product → Archive** → Validate → **Distribute App → App Store Connect**
-11. In App Store Connect: add screenshots (6.7" required), fill metadata, submit for review
+10. **Before archiving, run `npm run check:ios`** — see below
+11. **Product → Archive** → Validate → **Distribute App → App Store Connect**
+12. In App Store Connect: add screenshots (6.7" required), fill metadata, submit for review
+
+#### Verify the project before archiving
+
+```bash
+npm run check:ios
+```
+
+`mobile/ios/` is gitignored and generated, so it drifts from `ios-config/` without
+warning. Xcode only rejects a wrong bundle identifier or a reused build number at
+**upload** — after you have waited through a full archive and sign. This runs the
+same comparison in a second, beforehand, and checks:
+
+- bundle identifier matches `ios-config` (resolving `$(PRODUCT_BUNDLE_IDENTIFIER)`
+  through `project.pbxproj`, and flagging a value that differs between build
+  configurations)
+- marketing version matches, and the build number is at least the template's
+- `capacitor.config.json` `appId` agrees with the template
+- `PrivacyInfo.xcprivacy` is present (required for App Store submission)
+
+`open:ios` and `run:ios` run it as a warning — they never block, since you need
+Xcode open to fix what it reports. Run `npm run check:ios` directly for a hard
+exit code, e.g. in CI.
 
 #### App Store review notes
 - The app requires login — provide Apple a demo investor account in the review notes
