@@ -451,7 +451,7 @@ function navigate(view, btnEl) {
     comms: loadComms,
     compliance: loadCompliance,
     reconciliation: loadReconciliation,
-    'platform-fees': () => loadPlatformFees('month'),
+    'platform-fees': () => loadPlatformFees('all'),
     terms: loadTermsEditor,
     opsconsole: loadOpsConsole,
     feedback: () => loadFeedback('pending'),
