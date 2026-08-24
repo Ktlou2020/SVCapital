@@ -72,6 +72,11 @@ const Confirm = {
   }
 };
 
+/* ─── Auth token helper ─── */
+function _getToken() {
+  return (typeof Auth !== 'undefined' ? Auth.getToken() : null) || localStorage.getItem('svc_token') || '';
+}
+
 /* ─── Copy to clipboard ─── */
 async function copyToClipboard(text, btn) {
   try {
@@ -1917,7 +1922,7 @@ async function saveSaPimRef(saId) {
   try {
     const res = await fetch(`/api/tables/sub_accounts/${saId}`, {
       method: 'PATCH',
-      headers: { Authorization: `Bearer ${AUTH.token}`, 'Content-Type': 'application/json' },
+      headers: { Authorization: `Bearer ${_getToken()}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ pim_account_ref: val }),
     });
     if (!res.ok) throw new Error((await res.json()).error || 'Save failed');
@@ -7147,7 +7152,7 @@ async function loadPersonas() {
   if (!panel) return;
   panel.innerHTML = '<div class="text-center text-muted" style="padding:20px">Loading…</div>';
   try {
-    const res = await fetch('/api/analytics/personas', { headers: { Authorization: `Bearer ${AUTH.token}` } });
+    const res = await fetch('/api/analytics/personas', { headers: { Authorization: `Bearer ${_getToken()}` } });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
     _renderPersonas(data);
@@ -14029,7 +14034,7 @@ async function loadRevenueAnalytics() {
 
   const months = parseInt(document.getElementById('revenueMonthsFilter')?.value || '12');
   try {
-    const res  = await fetch(`/api/analytics/revenue?months=${months}`, { headers: { Authorization: `Bearer ${AUTH.token}` } });
+    const res  = await fetch(`/api/analytics/revenue?months=${months}`, { headers: { Authorization: `Bearer ${_getToken()}` } });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
 
@@ -14092,7 +14097,7 @@ async function loadMaturityReinvestment() {
   if (!panel) return;
   panel.innerHTML = '<div class="text-center text-muted" style="padding:20px">Loading…</div>';
   try {
-    const res  = await fetch('/api/analytics/maturity-reinvestment', { headers: { Authorization: `Bearer ${AUTH.token}` } });
+    const res  = await fetch('/api/analytics/maturity-reinvestment', { headers: { Authorization: `Bearer ${_getToken()}` } });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
 
@@ -14155,7 +14160,7 @@ async function loadIfaPerformance() {
   if (!panel) return;
   panel.innerHTML = '<div class="text-center text-muted" style="padding:20px">Loading…</div>';
   try {
-    const res  = await fetch('/api/analytics/ifa-performance', { headers: { Authorization: `Bearer ${AUTH.token}` } });
+    const res  = await fetch('/api/analytics/ifa-performance', { headers: { Authorization: `Bearer ${_getToken()}` } });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
     _ifaAnalyticsData = data;
@@ -14231,7 +14236,7 @@ async function loadSubAccountAnalytics() {
   if (!panel) return;
   panel.innerHTML = '<div class="text-center text-muted" style="padding:20px">Loading…</div>';
   try {
-    const res  = await fetch('/api/analytics/sub-accounts', { headers: { Authorization: `Bearer ${AUTH.token}` } });
+    const res  = await fetch('/api/analytics/sub-accounts', { headers: { Authorization: `Bearer ${_getToken()}` } });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
 
@@ -14295,7 +14300,7 @@ async function loadInterestHistoryAnalytics() {
   if (!panel) return;
   panel.innerHTML = '<div class="text-center text-muted" style="padding:20px">Loading…</div>';
   try {
-    const res  = await fetch('/api/analytics/interest-history', { headers: { Authorization: `Bearer ${AUTH.token}` } });
+    const res  = await fetch('/api/analytics/interest-history', { headers: { Authorization: `Bearer ${_getToken()}` } });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
 
@@ -14362,7 +14367,7 @@ async function loadWithdrawalTrends() {
 
   const days = parseInt(document.getElementById('withdrawalDaysFilter')?.value || '90');
   try {
-    const res  = await fetch(`/api/analytics/withdrawals?days=${days}`, { headers: { Authorization: `Bearer ${AUTH.token}` } });
+    const res  = await fetch(`/api/analytics/withdrawals?days=${days}`, { headers: { Authorization: `Bearer ${_getToken()}` } });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
     _withdrawalAnalyticsData = data;
@@ -14475,7 +14480,7 @@ async function loadPlatformFees(period = 'month') {
   _pfRenderLoading();
   try {
     const res  = await fetch(`/api/analytics/platform-fees?period=${period}`, {
-      headers: { Authorization: `Bearer ${AUTH.token}` }
+      headers: { Authorization: `Bearer ${_getToken()}` }
     });
     _pfData = await res.json();
     _pfFiltered = [...(_pfData.transactions || [])];
@@ -14498,7 +14503,7 @@ function loadPlatformFeesCustom() {
   });
   _pfRenderLoading();
   fetch(`/api/analytics/platform-fees?from=${from}&to=${to}`, {
-    headers: { Authorization: `Bearer ${AUTH.token}` }
+    headers: { Authorization: `Bearer ${_getToken()}` }
   })
     .then(r => r.json())
     .then(data => {
