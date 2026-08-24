@@ -1642,7 +1642,18 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
     // For transaction completion use a conditional UPDATE inside a DB transaction
     // to prevent race-condition double-credits AND ensure the wallet credit is
     // atomic with the status change (both succeed or both roll back).
-    let rows, _skipWalletCredit = false, _withdrawalRefundDone = false;
+    /* _didCompleteNow is true only when this request actually transitioned the
+       row into 'completed' (the conditional UPDATE below matched). It is the
+       correct trigger for one-time side effects like the confirmation email.
+
+       It replaces _skipWalletCredit, which conflated two opposite situations:
+       "no transition happened" and "the credit was applied". The email block
+       keyed off that flag, so it emailed on a no-op re-save of an already
+       completed deposit and stayed silent on the genuine completion — exactly
+       backwards. (The flag dates from when the email block also credited the
+       wallet; the credit moved into the transaction and the guard was left
+       behind.) */
+    let rows, _didCompleteNow = false, _withdrawalRefundDone = false;
     if (table === 'transactions' && body.status === 'completed') {
       const dbClient = await pool.connect();
       try {
@@ -1655,7 +1666,7 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
           await dbClient.query('ROLLBACK');
           const { rows: existing } = await pool.query('SELECT * FROM transactions WHERE id = $1', [req.params.id]);
           if (!existing[0]) return res.status(404).json({ error: 'Record not found.' });
-          _skipWalletCredit = true;
+          // Already completed — this request changed nothing, so no side effects.
           rows = existing;
         } else {
           const u = updated[0];
@@ -1666,7 +1677,6 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
               'UPDATE investors SET total_returns = COALESCE(total_returns,0) + $1, updated_at = NOW() WHERE id = $2',
               [parseFloat(u.amount), u.investor_id]
             );
-            _skipWalletCredit = true;
           } else if (u.investor_id &&
               (u.type === 'deposit' || u.type === 'payout' || u.type === 'referral_bonus')) {
             if (u.sub_account_id && u.type === 'deposit') {
@@ -1680,9 +1690,9 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
                 [parseFloat(u.amount), u.investor_id]
               );
             }
-            _skipWalletCredit = true; // prevent double-credit in the setImmediate email block
           }
           await dbClient.query('COMMIT');
+          _didCompleteNow = true;
           rows = updated;
         }
       } catch (txErr) {
@@ -1733,16 +1743,25 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
           });
         }
 
-        // Deposit confirmed → email investor (wallet already credited synchronously above)
-        if (table === 'transactions' && body.status === 'completed' && !_skipWalletCredit &&
+        // Deposit confirmed → email + SMS the investor, once, on the transition
+        // into completed. Gateway deposits never reach this route: payments.js
+        // creates them already completed and sends their own notification.
+        if (table === 'transactions' && _didCompleteNow &&
             updated.investor_id && updated.type === 'deposit') {
           const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [updated.investor_id]);
           if (inv[0]) {
             const gateway = updated.description?.includes('Paystack') ? 'Paystack'
                           : updated.description?.includes('Ozow')     ? 'Ozow'
                           : 'EFT';
-            await emailService.sendDepositConfirmed(inv[0], updated.amount, updated.reference || updated.id, gateway);
-            await smsService.sendDepositConfirmed(inv[0].phone, inv[0].first_name, updated.amount);
+            // Non-blocking, and independent of each other: this hook block runs
+            // many more notifications after this one, and an awaited throw here
+            // would skip all of them.
+            await Promise.allSettled([
+              emailService.sendDepositConfirmed(inv[0], updated.amount, updated.reference || updated.id, gateway)
+                .catch(e => { console.error('[deposit email]', e.message); throw e; }),
+              smsService.sendDepositConfirmed(inv[0].phone, inv[0].first_name, updated.amount)
+                .catch(e => { console.error('[deposit sms]', e.message); throw e; }),
+            ]);
           }
         }
 
