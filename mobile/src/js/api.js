@@ -31,7 +31,7 @@ function _showSessionExpiredOverlay() {
       <div style="font-size:2.5rem;margin-bottom:16px">🔒</div>
       <div style="color:#fff;font-weight:800;font-size:1.1rem;margin-bottom:8px">Session Expired</div>
       <div style="color:#9ca3af;font-size:0.85rem;line-height:1.6;margin-bottom:24px">Your session has expired. Please log in again to continue.</div>
-      <button id="_svcSessionExpiredBtn" style="background:#fec24f;color:#000;border:none;border-radius:12px;padding:14px 32px;font-weight:800;font-size:0.95rem;cursor:pointer;width:100%">Log In Again</button>
+      <button id="_svcSessionExpiredBtn" style="background:linear-gradient(135deg,#fec24f,#ff5229);color:#fff;border:none;border-radius:12px;padding:14px 32px;font-weight:800;font-size:0.95rem;cursor:pointer;width:100%;box-shadow:0 6px 18px rgba(255,82,41,0.28)">Log In Again</button>
     </div>`;
   document.body.appendChild(el);
   document.getElementById('_svcSessionExpiredBtn').addEventListener('click', function () {
@@ -116,10 +116,16 @@ const Auth = {
    * Calling Auth.clear() logs out from both auth systems.
    */
   clear() {
-    ['svc_token', 'svc_user', 'svc_portal_cache'].forEach(k => {
+    ['svc_token', 'svc_user'].forEach(k => {
       localStorage.removeItem(k);
       sessionStorage.removeItem(k);
     });
+    // On native, preserve the portal data cache so the UI renders instantly on re-login.
+    // The cache is validated against the current investor's JWT before use in portal.js.
+    if (!window.__SVC_NATIVE__) {
+      localStorage.removeItem('svc_portal_cache');
+    }
+    sessionStorage.removeItem('svc_portal_cache');
     // Also clear staffSession so StaffAuth pages redirect to login
     localStorage.removeItem('staffSession');
   },
@@ -258,15 +264,18 @@ const API = {
     };
     if (body && method !== 'GET') opts.body = JSON.stringify(body);
 
-    // 12-second timeout — prevents hangs when Railway server is cold-starting
+    // 35-second timeout — covers Railway cold-start (~30 s)
     const controller = new AbortController();
-    const tId = setTimeout(() => controller.abort(), 12000);
+    const tId = setTimeout(() => controller.abort(), 35000);
     let r;
     try {
       r = await fetch(url, { ...opts, signal: controller.signal });
-    } finally {
+    } catch (fetchErr) {
       clearTimeout(tId);
+      if (fetchErr.name === 'AbortError') throw new Error('Request timed out — server may be waking up, please try again');
+      throw fetchErr;
     }
+    clearTimeout(tId);
 
     // Handle 401 — try silent token refresh before giving up
     if (r.status === 401) {
@@ -490,8 +499,16 @@ const Utils = {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   },
 
+  /* Product color/icon cache — populated from GET /api/products so admin changes flow everywhere */
+  _productCache: {},
+  setProductCache(products) {
+    if (!Array.isArray(products)) return;
+    products.forEach(p => { if (p.product_type) this._productCache[p.product_type] = p; });
+  },
+
   /* Product display info */
   productInfo(type) {
+    // Product colours use the SV Capital CI palette; each product has a unique colour.
     const map = {
       cattle:         { label: 'Cattle Investment',       icon: 'fa-cow',        color: '#fec24f', badgeClass: 'badge--gold' },
       solar:          { label: 'Solar Investment',        icon: 'fa-solar-panel', color: '#65ed00', badgeClass: 'badge--green' },
@@ -504,11 +521,24 @@ const Utils = {
       delivery_bike:  { label: 'Delivery Bikes',          icon: 'fa-motorcycle',  color: '#fec24f', badgeClass: 'badge--orange' },
       other:          { label: 'Other',                   icon: 'fa-circle',      color: '#656565', badgeClass: 'badge--gray' },
     };
-    return map[type] || { label: type, icon: 'fa-circle', color: '#656565', badgeClass: 'badge--gray' };
+    const KNOWN_CI = new Set(['cattle','solar','solar_5yr','solar_6yr','solar_7yr','short_term','smme','delivery_bike','delivery_bikes','gridfarmer']);
+    const base = map[type] || { label: type || 'Other', icon: 'fa-circle', color: '#656565', badgeClass: 'badge--gray' };
+    const cached = this._productCache[type];
+    if (!cached) return base;
+    return {
+      ...base,
+      label:      cached.label      || base.label,
+      icon:       cached.icon       || base.icon,
+      color:      KNOWN_CI.has(type) ? base.color : (cached.color || base.color),
+      badgeClass: cached.badge_class || base.badgeClass,
+    };
   },
 
+  // SV Capital CI palette assignable to products (white is reserved/excluded).
   ciProductPalette: ['#fec24f', '#ff5229', '#ffe86a', '#ffb782', '#fec24f', '#eda5ff', '#65ed00', '#0096ff', '#656565', '#303030'],
 
+  // Resolve a product's colour: known types use their CI colour from productInfo;
+  // custom/new products use their admin-assigned `color`, else a palette fallback.
   productColor(product) {
     const type = (product && product.product_type) || product;
     const KNOWN = ['cattle', 'solar', 'solar_5yr', 'solar_6yr', 'solar_7yr', 'short_term', 'smme', 'delivery_bike', 'delivery_bikes'];
@@ -650,10 +680,10 @@ const Toast = {
       setTimeout(() => toast.remove(), 300);
     }, duration);
   },
-  success: (msg) => Toast.show(msg, 'success'),
-  error:   (msg) => Toast.show(msg, 'error'),
-  info:    (msg) => Toast.show(msg, 'info'),
-  warning: (msg) => Toast.show(msg, 'warning'),
+  success: (msg) => Toast.show(msg, 'success', 5000),
+  error:   (msg) => Toast.show(msg, 'error',   6000),
+  info:    (msg) => Toast.show(msg, 'info',    5000),
+  warning: (msg) => Toast.show(msg, 'warning', 6000),
 };
 
 /* ═══════════════════════════════════════════════

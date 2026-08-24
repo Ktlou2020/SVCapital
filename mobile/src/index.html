@@ -1,0 +1,3069 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Favicon -->
+  <link rel="icon" type="image/x-icon" href="../assets/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png" />
+  <link rel="apple-touch-icon" sizes="192x192" href="../assets/logo-192.png" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>SV Capital — Investor Portal</title>
+  <meta name="theme-color" content="#FF9B0C" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="SV Capital" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script src="https://js.paystack.co/v2/inline.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+  <link rel="stylesheet" href="../css/admin.css" />
+  <link rel="stylesheet" href="/css/portal.css?v=2" />
+  <link rel="stylesheet" href="/css/ci-theme.css" />
+  <!-- sv-intelligence hidden -->
+  <link rel="stylesheet" href="/css/portal-premium.css?v=4" />
+  <!-- Payment modal must retain dark theme — isolate from ci-theme overrides -->
+  <style>
+    #topUpModal.modal-overlay { background: rgba(0,0,0,0.82) !important; }
+    #paymentModalBox {
+      background: #303030 !important;
+      border: 1px solid rgba(255,155,12,0.25) !important;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.55) !important;
+      color: var(--white, #f0f4ff) !important;
+    }
+    #paymentModalBox * { box-sizing: border-box; }
+    #pmAmount, #pmAmount::placeholder { font-size: 2.8rem; font-weight: 900; color: #f0f4ff; }
+  </style>
+  <!-- Google Analytics 4 -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-5LEPWC7EFP"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-5LEPWC7EFP', {
+      send_page_view: true,
+      cookie_flags: 'SameSite=None;Secure',
+      anonymize_ip: false
+    });
+  </script>
+  <script src="../js/analytics.js"></script>
+
+  <!-- ── Capacitor native config injected by build.js ── -->
+  <script>
+    window.__SVC_NATIVE__ = true;
+    window.__SVC_API_BASE__ = 'https://svcapital-production.up.railway.app/api/';
+  </script>
+  <script src="/js/native.js"></script>
+  <link rel="stylesheet" href="/css/mobile-app.css?v=25">
+  <!-- Kill viewFadeIn animation synchronously before first paint — prevents Android WebView blank screen -->
+  <script>
+  (function(){
+    var s=document.createElement('style');
+    s.textContent='@keyframes viewFadeIn{from{opacity:1;transform:none}to{opacity:1;transform:none}}@-webkit-keyframes viewFadeIn{from{opacity:1;transform:none}to{opacity:1;transform:none}}.view{animation:none!important;-webkit-animation:none!important;transform:none!important}.view.active{animation:none!important;-webkit-animation:none!important;opacity:1!important;transform:none!important}';
+    document.head.appendChild(s);
+  })();
+  </script>
+</head>
+<body>
+<!-- Native loading: handled by Capacitor SplashScreen (native overlay).
+     _nativeCover stays hidden in native mode to avoid Android compositing bugs.
+     portal.js calls window.__SVC_HIDE_COVER() after data loads, which hides
+     the native splash via SplashScreen.hide(). -->
+<div id="_nativeCover" style="display:none"></div>
+<script>(function(){
+  // Non-native web only: show a minimal loading indicator
+  if(window.__SVC_NATIVE__)return;
+})();</script>
+
+
+<div class="app-layout">
+
+  <!-- ═══ SIDEBAR ═══ -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar__brand">
+      <a href="../index.html" class="sv-portal-logo" title="SV Capital — Home">
+        <img src="assets/sv-capital-logo-horizontal-white-text.png" alt="SV Capital" style="display:block;height:44px;width:auto;max-width:220px">
+        <div class="brand-text">
+          <span class="brand-role">Investor Portal</span>
+        </div>
+      </a>
+    </div>
+
+    <nav class="sidebar__nav">
+      <!-- Primary: 6 core items always visible -->
+      <button class="nav-item active" data-view="overview" onclick="navigate('overview', this)">
+        <i class="fa-solid fa-table-cells-large"></i> Portfolio Overview
+      </button>
+      <button class="nav-item" data-view="marketplace" onclick="navigate('marketplace', this)">
+        <i class="fa-solid fa-box-open"></i> Invest
+      </button>
+      <button class="nav-item" data-view="wallet" onclick="navigate('wallet', this)">
+        <i class="fa-solid fa-wallet"></i> Wallet
+      </button>
+      <button class="nav-item" data-view="investments" onclick="navigate('investments', this)">
+        <i class="fa-solid fa-chart-line"></i> My Investments
+      </button>
+      <button class="nav-item" data-view="support" onclick="navigate('support', this)">
+        <i class="fa-solid fa-headset"></i> Support
+      </button>
+      <button class="nav-item" data-view="profile" onclick="navigate('profile', this)">
+        <i class="fa-solid fa-user-circle"></i> My Profile
+      </button>
+
+      <!-- More toggle -->
+      <button class="nav-item nav-more-toggle" id="navMoreToggle" onclick="toggleNavMore()" style="margin-top:6px;opacity:0.7;font-size:0.82rem">
+        <i class="fa-solid fa-ellipsis"></i> More
+        <i class="fa-solid fa-chevron-down" id="navMoreChevron" style="margin-left:auto;font-size:0.7rem;transition:transform 0.2s"></i>
+      </button>
+
+      <!-- Secondary: everything else, collapsed by default -->
+      <div id="navMoreSection" style="display:none;border-top:1px solid rgba(255,255,255,0.07);padding-top:6px;margin-top:2px">
+        <button class="nav-item" data-view="transactions" onclick="navigate('transactions', this)">
+          <i class="fa-solid fa-arrows-rotate"></i> Transactions
+        </button>
+        <button class="nav-item" data-view="analytics" onclick="navigate('analytics', this)">
+          <i class="fa-solid fa-chart-column"></i> Analytics
+        </button>
+        <button class="nav-item" data-view="maturity" onclick="navigate('maturity', this)">
+          <i class="fa-solid fa-hourglass-end"></i> When Investment Ends
+        </button>
+        <button class="nav-item" data-view="documents" onclick="navigate('documents', this)">
+          <i class="fa-solid fa-folder-open"></i> Documents &amp; Legal
+        </button>
+        <!-- Statement tab hidden on mobile. Kept in the DOM (not deleted) because the
+             in-page statement buttons resolve it via querySelector('[data-view=statement]')
+             and pass it to navigate(); removing it would pass null. -->
+        <button class="nav-item" data-view="statement" style="display:none" onclick="navigate('statement', this)">
+          <i class="fa-solid fa-file-invoice"></i> My Statement
+        </button>
+        <button class="nav-item" data-view="subaccounts" onclick="navigate('subaccounts', this)">
+          <i class="fa-solid fa-layer-group"></i> My Accounts
+          <span class="nav-badge" id="subacctsBadge" style="display:none"></span>
+        </button>
+        <button class="nav-item" data-view="learn" onclick="navigate('learn', this)">
+          <i class="fa-solid fa-graduation-cap"></i> Learning Hub
+        </button>
+        <button class="nav-item" data-view="quests" onclick="navigate('quests', this)" id="navQuests">
+          <i class="fa-solid fa-trophy"></i> Earn Rewards
+          <span class="xp-nav-badge" id="xpNavBadge" style="display:none"></span>
+        </button>
+        <button class="nav-item" data-view="gifts" onclick="navigate('gifts', this)">
+          <i class="fa-solid fa-gift"></i> Send a Gift
+          <span class="nav-badge" id="giftsBadge" style="display:none"></span>
+        </button>
+        <button class="nav-item" data-view="policies" onclick="navigate('policies', this)">
+          <i class="fa-solid fa-file-shield"></i> Platform Policies
+        </button>
+      </div>
+      <!-- Referral nav hidden — feature not yet live -->
+      <button class="nav-item" data-view="referral" onclick="navigate('referral', this)" style="display:none">
+        <i class="fa-solid fa-share-nodes"></i> Refer &amp; Earn
+      </button>
+    </nav>
+
+    <div class="sidebar__footer">
+      <div class="sidebar-user">
+        <div class="sidebar-user__avatar">TK</div>
+        <div class="sidebar-user__info">
+          <span class="user-name">Thabo Khumalo</span>
+          <span class="user-role">INV-002 · Active</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Mobile sidebar backdrop -->
+  <div id="sidebarBackdrop" class="sidebar-backdrop" onclick="closeSidebar()"></div>
+
+  <!-- ═══ MAIN ═══ -->
+  <div class="main-content">
+    <header class="topbar">
+      <div class="topbar__left">
+        <button class="topbar-btn sidebar-toggle-btn" onclick="toggleSidebar()" title="Menu" id="sidebarToggleBtn" aria-label="Open navigation menu">
+          <i class="fa-solid fa-bars"></i>
+        </button>
+        <div>
+          <div class="topbar__title" id="topbarTitle">Portfolio Overview</div>
+          <div class="topbar__breadcrumb" id="topbarGreeting">Welcome back</div>
+        </div>
+      </div>
+      <div class="topbar__actions">
+        <button class="topbar-btn" title="Command palette (Ctrl+K)" onclick="openPortalCmd()" aria-label="Command palette" style="font-size:0.72rem;font-weight:700;letter-spacing:0.04em;padding:0 10px;gap:5px;display:flex;align-items:center;opacity:0.7">
+          <i class="fa-solid fa-magnifying-glass" style="font-size:0.85rem"></i><span style="display:none" class="hide-mobile">⌘K</span>
+        </button>
+        <button class="topbar-btn" title="Take a tour" onclick="startTour()" id="tourBtn" style="position:relative;display:none">
+          <i class="fa-solid fa-map"></i>
+          <span class="tour-btn-pulse"></span>
+        </button>
+        <div style="position:relative">
+          <button class="topbar-btn" title="Notifications" onclick="toggleNotifPanel()" id="notifBtn" aria-label="Open notifications">
+            <i class="fa-solid fa-bell"></i>
+            <span class="notif-dot" id="notifDot"></span>
+          </button>
+          <!-- Notification dropdown -->
+          <div id="notifPanel" style="display:none;position:absolute;top:calc(100% + 8px);right:0;width:320px;background:#fff;border:1px solid rgba(0,0,0,0.09);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,0.13);z-index:999;overflow:hidden">
+            <div id="notifPanelHeader" style="padding:14px 18px 10px;border-bottom:1px solid rgba(0,0,0,0.07);display:flex;align-items:center;justify-content:space-between">
+              <span id="notifPanelTitle" style="font-size:0.88rem;font-weight:800;color:#1a1a1a">Notifications</span>
+              <button onclick="markAllRead()" style="font-size:0.7rem;color:#ff9b0c;font-weight:700;background:none;border:none;cursor:pointer">Mark all read</button>
+            </div>
+            <div id="notifList" style="max-height:340px;overflow-y:auto">
+              <div id="notifEmpty" style="padding:24px 18px;text-align:center;color:#999;font-size:0.82rem">Loading…</div>
+            </div>
+            <div id="notifPanelFooter" style="padding:10px 18px;border-top:1px solid rgba(0,0,0,0.07);text-align:center">
+              <button onclick="navigate('support', document.querySelector('[data-view=support]'));toggleNotifPanel()" style="font-size:0.78rem;color:#ff9b0c;font-weight:600;background:none;border:none;cursor:pointer">View all in Support →</button>
+            </div>
+          </div>
+        </div>
+        <a href="../index.html" class="btn btn--secondary btn--sm" target="_blank">
+          <i class="fa-solid fa-globe"></i> Website
+        </a>
+        <button class="btn btn--secondary btn--sm" title="Sign Out" onclick="Auth.logout('../login.html')">
+          <i class="fa-solid fa-arrow-right-from-bracket"></i> Sign Out
+        </button>
+      </div>
+    </header>
+
+    <main class="page-content">
+
+      <!-- ══════════════════════════════════
+           VIEW: PORTFOLIO OVERVIEW
+      ══════════════════════════════════ -->
+      <div class="view active" id="view-overview">
+
+        <!-- Welcome Banner -->
+        <div class="welcome-banner" id="welcomeBanner">
+          <div class="welcome-info">
+            <div class="welcome-greeting" id="welcomeGreeting">Good morning</div>
+            <div class="welcome-name" id="welcomeName">—</div>
+            <div class="welcome-chips">
+              <span class="welcome-chip welcome-chip--green" id="wchipFica" style="display:none">
+                <i class="fa-solid fa-shield-halved"></i> Identity Verified
+              </span>
+              <span class="welcome-chip welcome-chip--teal" id="wchipId">
+                <i class="fa-solid fa-id-card"></i> <span id="wchipIdText">—</span>
+              </span>
+              <span class="welcome-chip welcome-chip--orange" id="wchipSince">
+                <i class="fa-solid fa-calendar-star"></i> <span id="wchipSinceText">Member</span>
+              </span>
+              <span class="welcome-chip welcome-chip--gray" id="wchipNext" style="display:none">
+                <i class="fa-solid fa-hourglass-half"></i> <span id="wchipNextText">Next maturity</span>
+              </span>
+            </div>
+          </div>
+          <div class="welcome-actions">
+            <button class="btn btn--primary btn--sm" onclick="navigate('marketplace', document.querySelector('[data-view=marketplace]'))">
+              <i class="fa-solid fa-plus"></i> Invest
+            </button>
+            <button class="btn btn--secondary btn--sm" onclick="navigate('wallet', document.querySelector('[data-view=wallet]'))">
+              <i class="fa-solid fa-wallet"></i> Add Funds
+            </button>
+          </div>
+        </div>
+
+        <!-- XP Progress Bar (below welcome banner) -->
+        <div class="xp-progress-bar-wrap" id="xpProgressWrap" onclick="navigate('quests', document.querySelector('[data-view=quests]'))" style="cursor:pointer;display:none">
+          <div class="xp-progress-left">
+            <span class="xp-level-pill" id="xpLevelPill"><i class="fa-solid fa-seedling"></i> Seed</span>
+          </div>
+          <div class="xp-progress-track">
+            <div class="xp-progress-fill" id="xpProgressFill" style="width:0%"></div>
+          </div>
+          <div class="xp-progress-right" id="xpProgressLabel">0 XP</div>
+          <div class="xp-progress-next" id="xpProgressNext"></div>
+        </div>
+
+        <!-- Onboarding Wizard (single Getting Started panel) -->
+        <div id="onboardingWizard" style="display:none;margin-bottom:20px">
+          <div class="panel" style="border:1.5px solid rgba(255,155,12,0.3);background:linear-gradient(135deg,rgba(255,155,12,0.06),rgba(255,82,41,0.04))">
+            <div class="panel__header">
+              <span class="panel__title"><i class="fa-solid fa-rocket" style="color:#FF9B0C;margin-right:8px"></i>Getting Started</span>
+              <button onclick="dismissOnboarding()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.8rem">Dismiss</button>
+            </div>
+            <div class="panel__body">
+              <div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px">Complete these steps to start earning returns:</div>
+              <div id="wizardSteps" style="display:flex;flex-direction:column;gap:8px"></div>
+              <div style="margin-top:14px;height:6px;border-radius:3px;background:rgba(0,0,0,0.08);overflow:hidden">
+                <div id="wizardProgressBar" style="height:100%;background:linear-gradient(90deg,#FF9B0C,#FF5229);border-radius:3px;transition:width 0.4s ease;width:0%"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Hero KPI Banner -->
+        <div class="portfolio-hero">
+          <div class="portfolio-hero__left">
+            <div class="portfolio-hero__label">Total Portfolio Value</div>
+            <div class="portfolio-hero__value" id="pov-total">—</div>
+            <div class="portfolio-hero__return" id="pov-return">
+              <i class="fa-solid fa-arrow-trend-up"></i> <span>—</span>
+            </div>
+          </div>
+          <div class="portfolio-hero__right">
+            <div class="portfolio-hero__chart" style="height:180px;width:100%">
+              <canvas id="portfolioTrendChart"></canvas>
+            </div>
+          </div>
+          <div class="portfolio-hero__stats">
+            <div class="ph-stat" style="cursor:pointer" onclick="navigate('investments', document.querySelector('[data-view=investments]'))" title="My Investments">
+              <span class="ph-stat__label">Invested</span>
+              <span class="ph-stat__value" id="pov-invested">—</span>
+            </div>
+            <div class="ph-stat" style="cursor:pointer" onclick="navigate('wallet', document.querySelector('[data-view=wallet]'))" title="Wallet">
+              <span class="ph-stat__label">Wallet</span>
+              <span class="ph-stat__value" id="pov-wallet">—</span>
+            </div>
+            <div class="ph-stat" style="cursor:pointer" onclick="navigate('transactions', document.querySelector('[data-view=transactions]'))" title="Transactions">
+              <span class="ph-stat__label">Returns Earned</span>
+              <span class="ph-stat__value text-green" id="pov-returns">—</span>
+            </div>
+            <div class="ph-stat" style="cursor:pointer" onclick="navigate('investments', document.querySelector('[data-view=investments]'))" title="My Investments">
+              <span class="ph-stat__label">Active Investments</span>
+              <span class="ph-stat__value" id="pov-active">—</span>
+            </div>
+            <div class="ph-stat" style="cursor:pointer" onclick="navigate('quests', document.querySelector('[data-view=quests]'))" title="Earn Rewards">
+              <span class="ph-stat__label">Rewards &amp; XP</span>
+              <span class="ph-stat__value" id="pov-rewards" style="color:#ff9b0c">—</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-layout grid-layout--sidebar mt-16">
+          <div>
+            <!-- Active investments -->
+            <div class="table-card mb-20">
+              <div class="table-card__header">
+                <div><div class="table-card__title">My Active Investments</div></div>
+                <button class="btn btn--primary btn--sm" onclick="navigate('marketplace', document.querySelector('[data-view=marketplace]'))">
+                  <i class="fa-solid fa-plus"></i> Invest More
+                </button>
+              </div>
+              <div id="overviewInvestmentsBody" class="ov-list">
+                <div style="padding:20px 16px;display:flex;flex-direction:column;gap:10px">
+                  <span class="skeleton" style="width:70%;height:14px;display:block;border-radius:4px"></span>
+                  <span class="skeleton" style="width:50%;height:14px;display:block;border-radius:4px"></span>
+                  <span class="skeleton" style="width:60%;height:14px;display:block;border-radius:4px"></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Recent transactions -->
+            <div class="table-card">
+              <div class="table-card__header">
+                <div><div class="table-card__title">Recent Activity</div></div>
+                <button class="btn btn--secondary btn--sm" onclick="navigate('transactions', document.querySelector('[data-view=transactions]'))">View All</button>
+              </div>
+              <div id="overviewTxnBody" class="ov-list">
+                <div style="padding:20px 16px;display:flex;flex-direction:column;gap:10px">
+                  <span class="skeleton" style="width:65%;height:14px;display:block;border-radius:4px"></span>
+                  <span class="skeleton" style="width:45%;height:14px;display:block;border-radius:4px"></span>
+                  <span class="skeleton" style="width:75%;height:14px;display:block;border-radius:4px"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <!-- Allocation chart -->
+            <div class="panel mb-16">
+              <div class="panel__header"><span class="panel__title">Portfolio Allocation</span></div>
+              <div class="panel__body">
+                <div class="chart-wrap chart-wrap--md"><canvas id="allocationChart"></canvas></div>
+                <div id="allocationList" style="margin-top:12px"></div>
+              </div>
+            </div>
+
+            <!-- Quick actions -->
+            <div class="panel mb-16">
+              <div class="panel__header"><span class="panel__title">Quick Actions</span></div>
+              <div class="panel__body" style="display:flex;flex-direction:column;gap:8px">
+                <button class="btn btn--primary btn--full" onclick="navigate('marketplace', document.querySelector('[data-view=marketplace]'))">
+                  <i class="fa-solid fa-plus"></i> Invest in a Pool
+                </button>
+                <button class="btn btn--secondary btn--full" onclick="navigate('wallet', document.querySelector('[data-view=wallet]'))">
+                  <i class="fa-solid fa-plus"></i> Top Up Wallet
+                </button>
+                <button class="btn btn--secondary btn--full" onclick="navigate('maturity', document.querySelector('[data-view=maturity]'))">
+                  <i class="fa-solid fa-hourglass-end"></i> Submit Maturity Instruction
+                </button>
+                <button class="btn btn--secondary btn--full" onclick="navigate('support', document.querySelector('[data-view=support]'))">
+                  <i class="fa-solid fa-headset"></i> Contact Support
+                </button>
+              </div>
+            </div>
+
+            <!-- Performance Panel -->
+            <div class="perf-panel mb-16" id="perfPanel">
+              <div class="perf-panel__header">
+                <span class="perf-panel__title">Performance</span>
+                <span style="font-size:0.68rem;color:#9ca3af">All time</span>
+              </div>
+              <div class="perf-panel__body" id="perfPanelBody">
+                <div class="perf-row">
+                  <div class="perf-row__label">
+                    <i style="background:rgba(255,155,12,0.1);color:#ff9b0c"><i class="fa-solid fa-coins fa-sm"></i></i>
+                    Total Invested
+                  </div>
+                  <span class="perf-row__value neutral" id="perf-invested">—</span>
+                </div>
+                <div class="perf-row">
+                  <div class="perf-row__label">
+                    <i style="background:rgba(34,197,94,0.1);color:#22c55e"><i class="fa-solid fa-chart-line fa-sm"></i></i>
+                    Returns Earned
+                  </div>
+                  <span class="perf-row__value positive" id="perf-returns">—</span>
+                </div>
+                <div class="perf-row">
+                  <div class="perf-row__label">
+                    <i style="background:rgba(47,140,155,0.1);color:#656565"><i class="fa-solid fa-percent fa-sm"></i></i>
+                    Effective Rate
+                  </div>
+                  <span class="perf-row__value positive" id="perf-rate">—</span>
+                </div>
+                <div class="perf-row">
+                  <div class="perf-row__label">
+                    <i style="background:rgba(237,165,255,0.1);color:#eda5ff"><i class="fa-solid fa-layer-group fa-sm"></i></i>
+                    Active Pools
+                  </div>
+                  <span class="perf-row__value neutral" id="perf-pools">—</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Trust badge -->
+            <div class="panel" style="background:rgba(255,155,12,0.04);border-color:rgba(255,155,12,0.20)">
+              <div class="panel__body text-center" style="padding:16px">
+                <i class="fa-solid fa-shield-halved" style="font-size:1.5rem;color:var(--gold);margin-bottom:8px;display:block"></i>
+                <div style="font-size:0.78rem;font-weight:700;color:#1a1a1a;margin-bottom:4px">Managed by SV Capital</div>
+                <div style="font-size:0.7rem;color:#6b7280;line-height:1.5">This investment is not a regulated financial product under the FSCA. Capital is at risk.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: MY INVESTMENTS
+      ══════════════════════════════════ -->
+      <div class="view" id="view-investments">
+        <div class="stats-row" style="grid-template-columns:repeat(4,1fr)">
+          <div class="stat-card stat-card--gold" style="cursor:pointer" onclick="navigate('analytics',document.querySelector('[data-view=analytics]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-coins"></i></div></div><div class="stat-card__value" id="mi-capital">—</div><div class="stat-card__label">Capital Deployed</div></div>
+          <div class="stat-card stat-card--green" style="cursor:pointer" onclick="navigate('analytics',document.querySelector('[data-view=analytics]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-chart-line"></i></div></div><div class="stat-card__value" id="mi-expected">—</div><div class="stat-card__label">Target Returns</div></div>
+          <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="navigate('transactions',document.querySelector('[data-view=transactions]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-check-double"></i></div></div><div class="stat-card__value" id="mi-earned">—</div><div class="stat-card__label">Returns Earned</div></div>
+          <div class="stat-card stat-card--purple" style="cursor:pointer" onclick="navigate('investments',document.querySelector('[data-view=investments]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-layer-group"></i></div></div><div class="stat-card__value" id="mi-count">—</div><div class="stat-card__label">Total Investments</div></div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+          <div class="tab-bar" style="margin-bottom:0">
+            <button class="tab-btn active" onclick="filterMyInvestments('all', this)">All</button>
+            <button class="tab-btn" onclick="filterMyInvestments('active', this)">Active</button>            <button class="tab-btn" onclick="filterMyInvestments('matured', this)">Matured</button>
+          </div>
+          <div id="myInvProductFilter" class="prod-type-filter"><!-- populated by populateMyInvProductFilter() --></div>
+        </div>
+
+        <div id="myInvestmentsGrid" class="grid-3">
+          <div class="text-center text-muted" style="grid-column:1/-1;padding:32px">Loading...</div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: ANALYTICS
+      ══════════════════════════════════ -->
+      <div class="view" id="view-analytics">
+
+        <!-- KPI tiles -->
+        <div class="stats-row" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px">
+          <div class="stat-card stat-card--gold" style="cursor:pointer" onclick="navigate('investments',document.querySelector('[data-view=investments]'))">
+            <div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-arrow-trend-up"></i></div></div>
+            <div class="stat-card__value" id="an-moic">—</div>
+            <div class="stat-card__label">Portfolio MOIC</div>
+          </div>
+          <div class="stat-card stat-card--green" style="cursor:pointer" onclick="navigate('investments',document.querySelector('[data-view=investments]'))">
+            <div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-percent"></i></div></div>
+            <div class="stat-card__value" id="an-irr">—</div>
+            <div class="stat-card__label">Annualised Return</div>
+          </div>
+          <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="navigate('marketplace',document.querySelector('[data-view=marketplace]'))">
+            <div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-trophy"></i></div></div>
+            <div class="stat-card__value" id="an-best">—</div>
+            <div class="stat-card__label">Best Performing Pool</div>
+          </div>
+          <div class="stat-card stat-card--purple" style="cursor:pointer" onclick="navigate('investments',document.querySelector('[data-view=investments]'))">
+            <div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-calendar-days"></i></div></div>
+            <div class="stat-card__value" id="an-avgdays">—</div>
+            <div class="stat-card__label">Avg Holding Period</div>
+          </div>
+        </div>
+
+        <div class="grid-layout grid-layout--sidebar">
+          <div>
+            <!-- Investment timeline -->
+            <div class="panel">
+              <div class="panel__header">
+                <span class="panel__title"><i class="fa-solid fa-timeline" style="color:#eda5ff;margin-right:6px"></i>Investment Timeline</span>
+                <button class="btn btn--secondary btn--sm" onclick="exportAnalyticsCSV()"><i class="fa-solid fa-download"></i> Export CSV</button>
+              </div>
+              <div class="panel__body" style="padding:12px">
+                <div id="analyticsTimelineBody" class="atl-list">
+                  <div class="text-center text-muted" style="padding:24px">Loading…</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <!-- Allocation by pool doughnut -->
+            <div class="panel mb-16">
+              <div class="panel__header"><span class="panel__title">Allocation by Pool</span></div>
+              <div class="panel__body">
+                <div style="display:flex;justify-content:center;padding:8px 0">
+                  <div style="width:200px;height:200px;position:relative"><canvas id="analyticsAllocChart"></canvas></div>
+                </div>
+                <div id="analyticsAllocList" style="margin-top:12px"></div>
+              </div>
+            </div>
+
+            <!-- Wealth projector -->
+            <div class="panel" style="background:linear-gradient(135deg,rgba(255,155,12,0.06),rgba(237,165,255,0.04));border-color:rgba(255,155,12,0.2)">
+              <div class="panel__header"><span class="panel__title"><i class="fa-solid fa-calculator" style="color:#FF9B0C;margin-right:6px"></i>Wealth Projector</span></div>
+              <div class="panel__body">
+                <div class="form-group" style="margin-bottom:10px">
+                  <label class="form-label" style="font-size:0.75rem">Capital (R)</label>
+                  <input type="number" class="form-input" id="wpCapital" value="50000" min="1000" step="1000" oninput="updateWealthProjection()">
+                </div>
+                <div class="form-group" style="margin-bottom:10px">
+                  <label class="form-label" style="font-size:0.75rem">Annual Rate (%)</label>
+                  <input type="number" class="form-input" id="wpRate" value="14" min="1" max="50" step="0.5" oninput="updateWealthProjection()">
+                </div>
+                <div class="form-group" style="margin-bottom:14px">
+                  <label class="form-label" style="font-size:0.75rem">Term (months)</label>
+                  <input type="number" class="form-input" id="wpMonths" value="12" min="1" max="120" step="1" oninput="updateWealthProjection()">
+                </div>
+                <div id="wpResult" style="background:rgba(255,155,12,0.08);border:1px solid rgba(255,155,12,0.2);border-radius:10px;padding:14px">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                    <span style="font-size:0.75rem;color:var(--text-muted)">Target Return</span>
+                    <span style="font-size:1.05rem;font-weight:800;color:#22c55e" id="wpReturn">—</span>
+                  </div>
+                  <div style="display:flex;justify-content:space-between;align-items:center">
+                    <span style="font-size:0.75rem;color:var(--text-muted)">Total Value</span>
+                    <span style="font-size:1.05rem;font-weight:800;color:#FF9B0C" id="wpTotal">—</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: TRANSACTIONS
+      ══════════════════════════════════ -->
+      <div class="view" id="view-transactions">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+          <div class="tab-bar" style="margin-bottom:0" id="txnTabBar">
+            <button class="tab-btn active" id="txnTab1" onclick="_switchTxnTab('all',this)"><i class="fa-solid fa-list"></i> All Transactions</button>
+            <button class="tab-btn" id="txnTab2" onclick="_switchTxnTab('returns',this)"><i class="fa-solid fa-chart-line"></i> Return History</button>
+          </div>
+          <!-- Statement entry point hidden on mobile -->
+          <button class="btn btn--secondary btn--sm" style="white-space:nowrap;display:none" onclick="navigate('statement', document.querySelector('[data-view=statement]'))">
+            <i class="fa-solid fa-file-invoice"></i> Get Transactions Statement
+          </button>
+        </div>
+        <div id="txnAllTab">
+          <!-- Summary strip -->
+          <div class="txn-summary" id="txnSummary"></div>
+          <!-- Filter pills -->
+          <div class="txn-filter-scroll">
+            <div class="txn-filter-pills" id="txnFilterPills">
+              <button class="txn-pill active" data-type="" onclick="_setTxnFilter('',this)">All</button>
+              <button class="txn-pill" data-type="deposit" onclick="_setTxnFilter('deposit',this)">Deposits</button>
+              <button class="txn-pill" data-type="investment" onclick="_setTxnFilter('investment',this)">Investments</button>
+              <button class="txn-pill" data-type="reinvestment" onclick="_setTxnFilter('reinvestment',this)">Reinvestments</button>
+              <button class="txn-pill" data-type="return" onclick="_setTxnFilter('return',this)">Returns</button>
+              <button class="txn-pill" data-type="payout" onclick="_setTxnFilter('payout',this)">Payouts</button>
+              <button class="txn-pill" data-type="withdrawal" onclick="_setTxnFilter('withdrawal',this)">Withdrawals</button>
+              <button class="txn-pill" data-type="gift_received" onclick="_setTxnFilter('gift_received',this)">Gifts</button>
+            </div>
+          </div>
+          <!-- Card list -->
+          <div id="myTxnBody" class="txn-list">
+            <div class="text-center text-muted" style="padding:32px">Loading…</div>
+          </div>
+        </div>
+        <div id="txnReturnsTab" style="display:none"></div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: WALLET
+      ══════════════════════════════════ -->
+      <div class="view" id="view-wallet">
+        <!-- Wallet Sub-Tabs -->
+        <div class="tab-bar mb-20">
+          <button class="tab-btn active" id="walletSubTab1" onclick="_switchWalletTab('overview',this)"><i class="fa-solid fa-wallet"></i> Wallet Overview</button>
+          <button class="tab-btn" id="walletSubTab2" onclick="_switchWalletTab('recurring',this)"><i class="fa-solid fa-rotate"></i> Recurring Investments<span class="nav-badge" id="recurringActiveBadge" style="display:none;margin-left:6px">●</span></button>
+        </div>
+
+        <!-- Overview sub-tab -->
+        <div id="walletOverviewTab">
+        <div class="grid-layout grid-layout--sidebar">
+          <div>
+            <div class="wallet-card mb-20">
+              <div class="wallet-card__label">Available Balance</div>
+              <div class="wallet-card__value" id="walletBalance">—</div>
+              <div class="wallet-card__sub">Funds are available to invest immediately</div>
+              <div class="wallet-card__actions">
+                <button class="btn btn--primary" onclick="openTopUpModal()"><i class="fa-solid fa-plus"></i> Top Up</button>
+                <button class="btn btn--secondary" onclick="openWithdrawalModal()"><i class="fa-solid fa-arrow-up-from-bracket"></i> Withdraw</button>
+                <button class="btn btn--secondary" onclick="navigate('marketplace', document.querySelector('[data-view=marketplace]'))"><i class="fa-solid fa-chart-line"></i> Invest Now</button>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel__header"><span class="panel__title">Recent Wallet Activity</span></div>
+              <div id="walletActivity" style="padding:16px">Loading...</div>
+            </div>
+          </div>
+
+          <div>
+            <div class="panel mb-16">
+              <div class="panel__header"><span class="panel__title">How to Top Up</span></div>
+              <div class="panel__body">
+                <div class="info-list">
+                  <div class="info-row"><span class="info-row__label">Bank</span><span class="info-row__value">First National Bank (FNB)</span></div>
+                  <div class="info-row"><span class="info-row__label">Account Name</span><span class="info-row__value">Smartvest Financial Services</span></div>
+                  <div class="info-row"><span class="info-row__label">Account No.</span><span class="info-row__value">63058190794</span></div>
+                  <div class="info-row"><span class="info-row__label">Reference</span><span class="info-row__value text-gold" id="walletEftRef">—</span></div>
+                </div>
+                <div style="font-size:0.75rem;color:#6b7280;margin-top:12px;padding:10px;background:#F0F2F5;border-radius:6px">
+                  <i class="fa-solid fa-circle-info" style="color:var(--blue)"></i> 
+                  EFT payments reflect within 1-2 business days. Always use your investor ID as reference.
+                </div>
+              </div>
+            </div>
+
+            <!-- Auto Top-Up card -->
+            <div class="panel mb-16" id="autoTopUpCard">
+              <div style="padding:16px;color:#9ca3af;font-size:0.82rem">Loading auto top-up…</div>
+            </div>
+
+            <!-- Paystack gateway card -->
+            <div class="panel mb-16" style="cursor:pointer;border-color:rgba(0,0,0,0.08);transition:border-color 0.2s" onmouseover="this.style.borderColor='rgba(0,195,247,0.4)'" onmouseout="this.style.borderColor='rgba(0,0,0,0.08)'" onclick="openTopUpModal('paystack')">
+              <div class="panel__body" style="padding:16px">
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+                  <div style="width:42px;height:42px;border-radius:9px;background:#00C3F7;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                    <svg width="24" height="18" viewBox="0 0 120 80" fill="none"><rect width="120" height="24" rx="4" fill="white"/><rect y="32" width="120" height="16" rx="4" fill="white" opacity="0.7"/><rect y="56" width="80" height="16" rx="4" fill="white" opacity="0.4"/></svg>
+                  </div>
+                  <div>
+                    <div style="font-size:0.9rem;font-weight:800;color:#1a1a1a">Pay via Paystack</div>
+                    <div style="font-size:0.72rem;color:#6b7280">Card · Instant EFT · Mobile Money</div>
+                  </div>
+                  <span style="margin-left:auto;background:rgba(34,197,94,0.12);color:#22c55e;font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:20px;border:1px solid rgba(34,197,94,0.25);white-space:nowrap">SAME DAY</span>
+                </div>
+                <button class="btn btn--primary btn--full" style="font-size:0.82rem;padding:9px 14px;pointer-events:none">
+                  <i class="fa-solid fa-bolt"></i> Pay Instantly
+                </button>
+              </div>
+            </div>
+
+            <!-- Ozow gateway card — hidden -->
+            <div class="panel mb-16" style="display:none">
+              <div class="panel__body" style="padding:16px">
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+                  <div style="width:42px;height:42px;border-radius:9px;background:linear-gradient(135deg,#6C3FC5,#9B59F5);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                    <span style="color:#fff;font-size:1rem;font-weight:900">Oz</span>
+                  </div>
+                  <div>
+                    <div style="font-size:0.9rem;font-weight:800;color:#1a1a1a">Pay via Ozow</div>
+                    <div style="font-size:0.72rem;color:#6b7280">Direct EFT from any SA bank</div>
+                  </div>
+                  <span style="margin-left:auto;background:rgba(34,197,94,0.12);color:#22c55e;font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:20px;border:1px solid rgba(34,197,94,0.25);white-space:nowrap">SAME DAY</span>
+                </div>
+                <button class="btn btn--secondary btn--full" style="font-size:0.82rem;padding:9px 14px;pointer-events:none">
+                  <i class="fa-solid fa-building-columns"></i> Pay via Ozow
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+        </div><!-- end walletOverviewTab -->
+
+        <!-- Recurring Investments sub-tab -->
+        <div id="walletRecurringTab" style="display:none">
+          <div id="recurringStatusCard" class="wallet-card mb-20">
+            <!-- rendered by _renderRecurringTab() -->
+          </div>
+          <div class="panel">
+            <div class="panel__header">
+              <span class="panel__title">Active Recurring Investments</span>
+              <button class="btn btn--secondary btn--sm" onclick="openRecurringModal()"><i class="fa-solid fa-pen"></i> Manage</button>
+            </div>
+            <div class="panel__body" id="recurringInvestmentsList"><!-- rendered by JS --></div>
+          </div>
+        </div><!-- end walletRecurringTab -->
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: MARKETPLACE (Browse Pools)
+      ══════════════════════════════════ -->
+      <div class="view" id="view-marketplace">
+        <div class="mkt-hero mb-16">
+          <div class="mkt-hero__icon"><i class="fa-solid fa-layer-group"></i></div>
+          <h2 class="mkt-hero__title">Investment Products</h2>
+          <p class="mkt-hero__sub">Choose a product to see its details, factsheets and open pools — then invest.</p>
+        </div>
+
+        <!-- Risk filter bar -->
+        <div class="mkt-filter-bar mb-16" id="marketRiskTabBar">
+          <div class="mkt-filter-bar__label"><i class="fa-solid fa-shield-halved"></i> Filter by risk</div>
+          <div class="mkt-risk-pills">
+            <button class="mkt-risk-pill active" data-risk="all" onclick="filterMarket('all')">All</button>
+            <button class="mkt-risk-pill mkt-risk-pill--con" data-risk="Low" onclick="filterMarket('Low')">Low</button>
+            <button class="mkt-risk-pill mkt-risk-pill--mod" data-risk="Medium" onclick="filterMarket('Medium')">Medium</button>
+            <button class="mkt-risk-pill mkt-risk-pill--modhigh" data-risk="Medium-High" onclick="filterMarket('Medium-High')">Medium-High</button>
+            <button class="mkt-risk-pill mkt-risk-pill--agg" data-risk="High" onclick="filterMarket('High')">High</button>
+          </div>
+          <button class="mkt-calc-btn" onclick="openCalcModal()">
+            <i class="fa-solid fa-calculator"></i> Calculate Returns
+          </button>
+          <button class="mkt-calc-btn mkt-invest-now-btn" onclick="openInvestNowPicker()" style="margin-top:8px">
+            <i class="fa-solid fa-bolt"></i> Invest Now
+          </button>
+          <select id="marketRiskSelect" style="display:none">
+            <option value="all"></option><option value="risk_conservative"></option><option value="risk_moderate"></option><option value="risk_aggressive"></option>
+          </select>
+        </div>
+
+        <!-- Wallet balance strip -->
+        <div class="mkt-wallet-strip mb-16" id="mktWalletStrip" style="display:none">
+          <i class="fa-solid fa-wallet"></i>
+          <span>Wallet available: <strong id="mktWalletBal">—</strong></span>
+          <button class="btn btn--sm" onclick="navigate('wallet',document.querySelector('[data-view=wallet]'))" style="background:#FF8215;color:#fff;border:none;font-weight:700">
+            <i class="fa-solid fa-plus"></i> Top Up
+          </button>
+        </div>
+
+        <div class="grid-3" id="marketplaceGrid">
+          <div class="text-center text-muted" style="grid-column:1/-1;padding:32px">Loading...</div>
+        </div>
+
+        <!-- Risk Disclaimer -->
+        <div class="risk-banner mt-20">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          <p><strong>Risk Warning:</strong> Alternative investments carry risk. Returns are not guaranteed and past performance is not indicative of future results. Your capital is locked for the full term. Please read the full product documentation before investing and consult a financial advisor if needed.</p>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: MATURITY INSTRUCTIONS
+      ══════════════════════════════════ -->
+      <div class="view" id="view-maturity">
+        <!-- Page header -->
+        <div class="maturity-header">
+          <div class="maturity-header__icon"><i class="fa-solid fa-hourglass-end"></i></div>
+          <div>
+            <div class="maturity-header__title">Maturity Instructions</div>
+            <div class="maturity-header__sub">Decide what happens to each investment when its term ends</div>
+          </div>
+        </div>
+
+        <!-- Deadline notice -->
+        <div class="maturity-notice">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          <div>
+            <div class="maturity-notice__title">Instruction Deadline</div>
+            <div class="maturity-notice__text">All maturity instructions must be submitted <strong>before 5:00 PM on the last day of your investment term</strong>. If no instruction is received, your funds will be automatically reinvested into the same product.</div>
+          </div>
+        </div>
+
+        <div id="maturityInvestments">
+          <div class="empty-state"><i class="fa-solid fa-hourglass-half"></i><p>Loading matured investments...</p></div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: PROFILE
+      ══════════════════════════════════ -->
+      <div class="view" id="view-profile">
+        <!-- Profile hero -->
+        <div class="profile-hero" id="profileHero">
+          <div class="profile-hero__avatar" id="profileHeroAvatar">—</div>
+          <div class="profile-hero__name" id="profileHeroName">—</div>
+          <div class="profile-hero__email" id="profileHeroEmail">—</div>
+          <div class="profile-hero__chips">
+            <div class="profile-hero__chip"><i class="fa-solid fa-fingerprint"></i><span id="profileHeroId">—</span></div>
+            <div class="profile-hero__chip"><i class="fa-solid fa-calendar-day"></i><span id="profileHeroJoined">—</span></div>
+            <div class="profile-hero__chip" id="profileHeroStatusChip"><i class="fa-solid fa-circle-check"></i><span id="profileHeroStatus">Active</span></div>
+          </div>
+        </div>
+        <div class="grid-layout grid-layout--sidebar">
+          <div>
+            <div class="panel mb-16">
+              <div class="panel__header">
+                <span class="panel__title">Personal Information</span>
+                <button class="btn btn--primary btn--sm" onclick="saveProfile()"><i class="fa-solid fa-save"></i> Save</button>
+              </div>
+              <div class="panel__body">
+                <div class="form-row form-row--2">
+                  <div class="form-group"><label class="form-label">First Name</label><input type="text" class="form-input" id="profFirstName" /></div>
+                  <div class="form-group"><label class="form-label">Last Name</label><input type="text" class="form-input" id="profLastName" /></div>
+                </div>
+                <div class="form-group"><label class="form-label">Email</label><input type="email" class="form-input" id="profEmail" /></div>
+                <div class="form-group"><label class="form-label">Phone</label><input type="text" class="form-input" id="profPhone" /></div>
+                <div class="form-row form-row--2">
+                  <div class="form-group"><label class="form-label">City</label><input type="text" class="form-input" id="profCity" /></div>
+                  <div class="form-group"><label class="form-label">Province</label>
+                    <select class="form-select" id="profProvince">
+                      <option value="">Select province</option>
+                      <option>Eastern Cape</option><option>Free State</option><option>Gauteng</option>
+                      <option>KwaZulu-Natal</option><option>Limpopo</option><option>Mpumalanga</option>
+                      <option>North West</option><option>Northern Cape</option><option>Western Cape</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Risk Profile</label>
+                  <div style="display:flex;gap:10px;margin-top:4px">
+                    <label style="display:flex;align-items:center;gap:6px;font-size:0.82rem;cursor:pointer"><input type="radio" name="riskProf" value="conservative"> Conservative</label>
+                    <label style="display:flex;align-items:center;gap:6px;font-size:0.82rem;cursor:pointer"><input type="radio" name="riskProf" value="moderate"> Moderate</label>
+                    <label style="display:flex;align-items:center;gap:6px;font-size:0.82rem;cursor:pointer" ><input type="radio" name="riskProf" value="aggressive" checked> Aggressive</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Risk Profile Card -->
+            <div class="panel mb-16" id="riskProfileCard">
+              <div class="panel__header">
+                <span class="panel__title"><i class="fa-solid fa-shield-halved" style="color:var(--gold)"></i> Risk Profile</span>
+                <button class="btn btn--primary btn--sm" onclick="openRiskQuestionnaire()">
+                  <i class="fa-solid fa-clipboard-question"></i> <span id="riskProfileBtnLabel">Take Questionnaire</span>
+                </button>
+              </div>
+              <div class="panel__body">
+                <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px">
+                  <div id="riskProfileBadgeWrap">
+                    <span class="badge badge--gray" id="riskProfileBadge">Not assessed</span>
+                  </div>
+                  <div style="font-size:0.8rem;color:var(--text-muted)" id="riskProfileDesc">Complete the questionnaire to determine your risk appetite and get tailored pool recommendations.</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel" id="kycStatusPanel">
+              <div class="panel__header">
+                <span class="panel__title"><i class="fa-solid fa-id-card" style="color:#FF9B0C;margin-right:6px"></i>KYC/FICA Status</span>
+                <button class="btn btn--primary btn--sm" onclick="openKycUploadModal()"><i class="fa-solid fa-cloud-arrow-up"></i> Upload Document</button>
+              </div>
+              <div class="panel__body" id="kycStatusBody">
+                <div style="text-align:center;padding:20px;color:#6b7280;font-size:0.85rem">Loading KYC/FICA status…</div>
+              </div>
+            </div>
+
+            <!-- Statement Archive — hidden on mobile (statements are not offered in the app) -->
+            <div class="panel" id="statementArchivePanel" style="display:none">
+              <div class="panel__header">
+                <span class="panel__title"><i class="fa-solid fa-file-invoice" style="color:var(--gold);margin-right:6px"></i>Monthly Statements</span>
+                <button class="btn btn--ghost btn--sm" onclick="_loadStatementArchive()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+              </div>
+              <div class="panel__body" id="statementArchiveBody">
+                <div style="color:var(--text-muted);font-size:0.82rem;text-align:center;padding:12px 0">Loading statements…</div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="panel mb-16">
+              <div class="panel__header"><span class="panel__title">Account Summary</span></div>
+              <div class="panel__body">
+                <div class="info-list">
+                  <div class="info-row"><span class="info-row__label">Investor ID</span><span class="info-row__value text-gold" id="profSummaryId">—</span></div>
+                  <div class="info-row"><span class="info-row__label">Member Since</span><span class="info-row__value" id="profSummaryJoined">—</span></div>
+                  <div class="info-row"><span class="info-row__label">Account Status</span><span class="info-row__value" id="profSummaryStatus">—</span></div>
+                  <div class="info-row"><span class="info-row__label">KYC/FICA Status</span><span class="info-row__value" id="profSummaryFica">—</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel mb-16" id="bankDetailsPanelWrapper">
+              <div class="panel__header">
+                <span class="panel__title">Linked Bank Account</span>
+                <button class="btn btn--ghost btn--sm" onclick="openBankDetailsModal()"><i class="fa-solid fa-pen"></i> Update</button>
+              </div>
+              <div class="panel__body" id="bankDetailsPanel">
+                <div style="color:var(--text-muted);font-size:0.82rem;text-align:center;padding:12px 0">Loading bank details…</div>
+              </div>
+            </div>
+
+            <div class="panel mb-16">
+              <div class="panel__header"><span class="panel__title">Security</span></div>
+              <div class="panel__body" style="display:flex;flex-direction:column;gap:8px">
+                <!-- 2FA status row -->
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--ci-bg-light,#F7F8FA);border-radius:8px;border:1px solid rgba(0,0,0,0.06)">
+                  <div style="display:flex;align-items:center;gap:10px">
+                    <i class="fa-solid fa-mobile-screen-button" style="color:var(--gold);font-size:1rem"></i>
+                    <div>
+                      <div style="font-size:0.82rem;font-weight:700;color:#1a1a1a">Two-Factor Authentication</div>
+                      <div id="twoFAStatusText" style="font-size:0.72rem;color:var(--text-muted)">Loading…</div>
+                    </div>
+                  </div>
+                  <span id="twoFAStatusBadge" style="display:none"></span>
+                </div>
+                <div id="loginHistorySection" style="margin-top:12px">
+                  <div style="font-size:0.78rem;font-weight:700;color:#374151;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
+                    <span><i class="fa-solid fa-clock-rotate-left" style="color:var(--gold);margin-right:6px"></i>Recent Logins</span>
+                  </div>
+                  <div id="loginHistoryList" style="font-size:0.75rem;color:var(--text-muted)">Loading…</div>
+                </div>
+                <button class="btn btn--secondary btn--full" onclick="openChangePasswordModal()"><i class="fa-solid fa-key"></i> Change Password</button>
+                <button class="btn btn--secondary btn--full" id="twoFAToggleBtn" onclick="toggle2FA()"><i class="fa-solid fa-mobile"></i> <span id="twoFAToggleLabel">Loading…</span></button>
+                <button class="btn btn--secondary btn--sm" onclick="Auth.signOutAll()" style="margin-top:8px"><i class="fa-solid fa-right-from-bracket"></i> Sign Out All Devices</button>
+                <!-- Push notifications toggle -->
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--ci-bg-light,#F7F8FA);border-radius:8px;border:1px solid rgba(0,0,0,0.06)">
+                  <div style="display:flex;align-items:center;gap:10px">
+                    <i class="fa-solid fa-bell" style="color:var(--gold);font-size:1rem"></i>
+                    <div>
+                      <div style="font-size:0.82rem;font-weight:700;color:#1a1a1a">Push Notifications</div>
+                      <div id="pushNotifStatusText" style="font-size:0.72rem;color:var(--text-muted)">Enable to receive investment alerts</div>
+                    </div>
+                  </div>
+                  <label style="position:relative;display:inline-block;width:42px;height:24px;flex-shrink:0">
+                    <input type="checkbox" id="pushNotifToggle" onchange="togglePushNotifications(this.checked)" style="opacity:0;width:0;height:0">
+                    <span style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#ccc;border-radius:24px;transition:.3s" id="pushNotifSlider"></span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Recurring investments managed via Wallet → Recurring tab -->
+
+            <div class="panel">
+              <div class="panel__header"><span class="panel__title">Privacy &amp; Data (POPIA)</span></div>
+              <div class="panel__body" style="display:flex;flex-direction:column;gap:8px">
+                <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:4px">In terms of POPIA, you have the right to access and delete all personal data we hold about you.</div>
+                <button class="btn btn--secondary btn--full" onclick="downloadMyData()"><i class="fa-solid fa-download"></i> Export My Data (POPIA)</button>
+                <button class="btn btn--full" style="background:rgba(239,68,68,0.06);color:#ef4444;border:1px solid rgba(239,68,68,0.25);border-radius:8px;padding:9px 14px;font-size:0.85rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px" onclick="openDeleteAccountModal()"><i class="fa-solid fa-trash-can"></i> Request Account Deletion</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: SUPPORT
+      ══════════════════════════════════ -->
+      <div class="view" id="view-support">
+        <!-- Support hero -->
+        <div class="support-hero">
+          <div class="support-hero__icon"><i class="fa-solid fa-headset"></i></div>
+          <div class="support-hero__title">How can we help?</div>
+          <div class="support-hero__sub">Our team typically replies within a few hours. Reach us instantly below or log a ticket.</div>
+          <div class="support-hero__actions">
+            <a href="https://api.whatsapp.com/send?phone=27760842102" target="_blank" class="support-quick support-quick--whatsapp">
+              <i class="fa-brands fa-whatsapp"></i><span>WhatsApp</span>
+            </a>
+            <a href="mailto:enquiry@svcapital.co.za" class="support-quick support-quick--email">
+              <i class="fa-solid fa-envelope"></i><span>Email Us</span>
+            </a>
+          </div>
+        </div>
+        <div class="grid-layout grid-layout--sidebar">
+          <div>
+            <div class="panel mb-16">
+              <div class="panel__header"><span class="panel__title">Submit a Support Ticket</span></div>
+              <div class="panel__body">
+                <div class="form-group"><label class="form-label">Subject *</label><input type="text" class="form-input" id="tktSubject" placeholder="Describe your issue briefly" /></div>
+                <div class="form-row form-row--2">
+                  <div class="form-group"><label class="form-label">Category</label>
+                    <select class="form-select" id="tktCategory">
+                      <option value="investment_query">Investment Query</option>
+                      <option value="payout_issue">Payout Issue</option>
+                      <option value="fica_kyc">KYC/FICA</option>
+                      <option value="technical">Technical</option>
+                      <option value="general">General</option>
+                      <option value="complaint">Complaint</option>
+                    </select>
+                  </div>
+                  <div class="form-group"><label class="form-label">Priority</label>
+                    <select class="form-select" id="tktPriority">
+                      <option value="low">Low</option>
+                      <option value="medium" selected>Medium</option>
+                      <option value="high">High</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-group"><label class="form-label">Message *</label><textarea class="form-textarea" id="tktMessage" rows="5" placeholder="Please describe your issue in detail..."></textarea></div>
+                <!-- Attachment -->
+                <div class="form-group">
+                  <label class="form-label"><i class="fa-solid fa-paperclip" style="color:var(--gold)"></i> Attachment (optional)</label>
+                  <label for="tktAttachFile" style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--ci-bg-light,#F0F2F5);border:1.5px dashed rgba(0,0,0,0.15);border-radius:8px;cursor:pointer;transition:border-color 0.2s" onmouseover="this.style.borderColor='rgba(255,155,12,0.5)'" onmouseout="this.style.borderColor='rgba(0,0,0,0.15)'">
+                    <i class="fa-solid fa-cloud-arrow-up" style="color:#ff9b0c;font-size:1.1rem"></i>
+                    <div>
+                      <div style="font-size:0.82rem;font-weight:700;color:#303030">Upload a file</div>
+                      <div style="font-size:0.7rem;color:#6b7280">PNG, JPG, PDF, DOC — max 10 MB</div>
+                    </div>
+                    <input type="file" id="tktAttachFile" accept="image/*,.pdf,.doc,.docx" style="display:none" onchange="handleTicketAttachment(this)" />
+                  </label>
+                  <div id="tktAttachStatus" style="display:none;align-items:center;gap:8px;margin-top:6px;padding:7px 12px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:6px">
+                    <i class="fa-solid fa-paperclip" style="color:#22c55e;font-size:0.8rem"></i>
+                    <span id="tktAttachName" style="font-size:0.78rem;color:#303030;font-weight:600;flex:1"></span>
+                    <button onclick="removeTicketAttachment()" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:0.72rem;font-weight:700;padding:0 4px" title="Remove"><i class="fa-solid fa-xmark"></i></button>
+                  </div>
+                </div>
+                <button class="btn btn--primary btn--full" onclick="submitTicket(this)"><i class="fa-solid fa-paper-plane"></i> Submit Ticket</button>
+              </div>
+            </div>
+
+            <!-- My tickets -->
+            <div class="panel" id="myTicketsPanel">
+              <div class="panel__header"><span class="panel__title">My Support Tickets</span></div>
+              <div id="myTicketsBody" style="padding:8px">Loading...</div>
+            </div>
+
+            <!-- Ticket conversation view (hidden until a ticket is selected) -->
+            <div class="panel" id="ticketConversationPanel" style="display:none">
+              <div class="panel__header" style="display:flex;align-items:center;gap:10px">
+                <button onclick="closeTicketConversation()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:1rem;padding:0" title="Back to tickets"><i class="fa-solid fa-arrow-left"></i></button>
+                <span class="panel__title" id="convTicketSubject">Conversation</span>
+                <span id="convTicketStatus" style="margin-left:auto"></span>
+              </div>
+              <div id="ticketConversationThread" style="padding:16px;display:flex;flex-direction:column;gap:12px;max-height:420px;overflow-y:auto"></div>
+              <div style="padding:12px 16px;border-top:1px solid rgba(0,0,0,0.07)">
+                <textarea id="ticketReplyInput" class="form-textarea" rows="3" placeholder="Type your reply…" style="resize:vertical;margin-bottom:8px"></textarea>
+                <button class="btn btn--primary btn--full" onclick="sendTicketReply()"><i class="fa-solid fa-paper-plane"></i> Send Reply</button>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="panel mb-16" style="background:#F7F8FA">
+              <div class="panel__header"><span class="panel__title">Contact Us</span></div>
+              <div class="panel__body" style="display:flex;flex-direction:column;gap:12px">
+                <a href="mailto:enquiry@svcapital.co.za" class="btn btn--secondary btn--full">
+                  <i class="fa-solid fa-envelope"></i> enquiry@svcapital.co.za
+                </a>
+                <a href="https://api.whatsapp.com/send?phone=27760842102" target="_blank" class="btn btn--success btn--full">
+                  <i class="fa-brands fa-whatsapp"></i> WhatsApp Support
+                </a>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel__header"><span class="panel__title">FAQ</span></div>
+              <div class="panel__body" id="portalFaqBody">
+                <div class="faq-quick-item"><button class="faq-quick-q" onclick="toggleQuickFaq(this)">Can I withdraw early?<i class="fa-solid fa-chevron-down"></i></button><div class="faq-quick-a">Early withdrawals are not permitted. Funds are locked for the full term. You can store funds in your wallet before investing.</div></div>
+                <div class="faq-quick-item"><button class="faq-quick-q" onclick="toggleQuickFaq(this)">When do I receive returns?<i class="fa-solid fa-chevron-down"></i></button><div class="faq-quick-a">Returns are paid at maturity for cattle and short-term investments. Solar returns are distributed annually.</div></div>
+                <div class="faq-quick-item"><button class="faq-quick-q" onclick="toggleQuickFaq(this)">How do I submit a maturity instruction?<i class="fa-solid fa-chevron-down"></i></button><div class="faq-quick-a">Go to Maturity Instructions in the sidebar. You must submit before 5:00 PM on your maturity date.</div></div>
+                <div class="faq-quick-item"><button class="faq-quick-q" onclick="toggleQuickFaq(this)">Is my money safe?<i class="fa-solid fa-chevron-down"></i></button><div class="faq-quick-a">All funds are managed by SmartVest Financial Services, an FSCA-regulated FSP (License #52449). SV Capital conducts rigorous due diligence on all investment partners.</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: REFER & EARN
+      ══════════════════════════════════ -->
+      <div class="view" id="view-referral">
+        <div class="referral-hero mb-20">
+          <div class="referral-hero__icon"><i class="fa-solid fa-gift"></i></div>
+          <div>
+            <h2 class="referral-hero__title">Earn R250 for every friend you refer</h2>
+            <p class="referral-hero__sub">Share your unique referral code. When your friend signs up, gets FICA/KYC-approved, and makes their first investment, you both get rewarded.</p>
+          </div>
+        </div>
+
+        <div class="grid-layout grid-layout--sidebar">
+          <div>
+            <div class="panel mb-16">
+              <div class="panel__header"><span class="panel__title">Your Referral Code</span></div>
+              <div class="panel__body text-center" style="padding:28px">
+                <div class="referral-code" id="referralCode">THA002</div>
+                <p style="font-size:0.78rem;color:#6b7280;margin:12px 0">Share this code or your personal link</p>
+                <div class="referral-link-box">
+                  <span id="referralLink">https://svcapital.co.za?ref=THA002</span>
+                  <button class="btn btn--secondary btn--sm" onclick="copyReferralLink()"><i class="fa-solid fa-copy"></i> Copy</button>
+                </div>
+                <div style="display:flex;gap:10px;margin-top:16px;justify-content:center">
+                  <button class="btn btn--primary" onclick="shareReferral('whatsapp')"><i class="fa-brands fa-whatsapp"></i> Share on WhatsApp</button>
+                  <button class="btn btn--secondary" onclick="shareReferral('copy')"><i class="fa-solid fa-link"></i> Copy Link</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel__header"><span class="panel__title">How It Works</span></div>
+              <div class="panel__body">
+                <div style="display:flex;flex-direction:column;gap:16px">
+                  <div class="ref-step"><div class="ref-step__num">1</div><div><strong>Share your code</strong><p>Send your referral link or code to a friend via WhatsApp, email, or social media.</p></div></div>
+                  <div class="ref-step"><div class="ref-step__num">2</div><div><strong>Friend signs up</strong><p>They register on the SV Capital app and complete FICA/KYC verification.</p></div></div>
+                  <div class="ref-step"><div class="ref-step__num">3</div><div><strong>First investment</strong><p>Once they make their first investment, both of you receive R250 as a referral bonus.</p></div></div>
+                  <div class="ref-step"><div class="ref-step__num">4</div><div><strong>Earn unlimited</strong><p>There's no limit. The more you refer, the more you earn.</p></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="ref-stats-grid">
+              <div class="ref-stat">
+                <div class="ref-stat__icon" style="background:rgba(255,130,21,0.14);color:#FF8215"><i class="fa-solid fa-user-group"></i></div>
+                <div class="ref-stat__value" id="refStatTotal">—</div>
+                <div class="ref-stat__label">Total Referred</div>
+              </div>
+              <div class="ref-stat">
+                <div class="ref-stat__icon" style="background:rgba(59,130,246,0.14);color:#3b82f6"><i class="fa-solid fa-circle-check"></i></div>
+                <div class="ref-stat__value" id="refStatApproved">—</div>
+                <div class="ref-stat__label">KYC/FICA Approved</div>
+              </div>
+              <div class="ref-stat">
+                <div class="ref-stat__icon" style="background:rgba(237,165,255,0.14);color:#eda5ff"><i class="fa-solid fa-chart-line"></i></div>
+                <div class="ref-stat__value" id="refStatInvested">—</div>
+                <div class="ref-stat__label">Invested</div>
+              </div>
+              <div class="ref-stat">
+                <div class="ref-stat__icon" style="background:rgba(34,197,94,0.14);color:#22c55e"><i class="fa-solid fa-coins"></i></div>
+                <div class="ref-stat__value text-green" id="refStatBonuses">—</div>
+                <div class="ref-stat__label">Bonuses Earned</div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel__header"><span class="panel__title">Who You've Referred</span></div>
+              <div class="panel__body" style="padding:12px">
+                <div id="referredInvestorsBody" class="ref-people-list">
+                  <div class="text-center text-muted" style="padding:16px">Loading…</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel" style="background:rgba(255,155,12,0.04);border-color:rgba(255,155,12,0.20)">
+              <div class="panel__header"><span class="panel__title">Terms & Conditions</span></div>
+              <div class="panel__body" style="font-size:0.75rem;color:#6b7280;line-height:1.7">
+                <ul style="list-style:disc;padding-left:16px;display:flex;flex-direction:column;gap:6px">
+                  <li>Referral bonus paid when referred investor completes FICA/KYC and makes first investment.</li>
+                  <li>Both referrer and referred investor receive R250 each.</li>
+                  <li>Bonus is credited to your SV Capital wallet.</li>
+                  <li>Referrer must be an active, FICA/KYC-approved investor.</li>
+                  <li>Self-referrals are not permitted.</li>
+                  <li>SV Capital reserves the right to modify the programme at any time.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: DOCUMENTS
+      ══════════════════════════════════ -->
+      <div class="view" id="view-documents">
+
+        <!-- Section 0: FICA / KYC Documents -->
+        <div class="panel mb-20">
+          <div class="panel__header">
+            <div>
+              <div class="panel__title"><i class="fa-solid fa-id-card" style="color:#FF9B0C"></i> KYC/FICA Documents</div>
+              <div style="font-size:0.75rem;color:#6b7280;margin-top:2px">South African law requires identity verification before investing</div>
+            </div>
+            <button class="btn btn--primary btn--sm" onclick="openKycUploadModal()"><i class="fa-solid fa-cloud-arrow-up"></i> Upload Document</button>
+          </div>
+          <div class="panel__body" id="kycDocsList">
+            <div style="text-align:center;padding:20px;color:#6b7280;font-size:0.85rem">Loading documents…</div>
+          </div>
+        </div>
+
+        <!-- Section 1: Investment Certificates -->
+        <div class="panel mb-20">
+          <div class="panel__header">
+            <div>
+              <div class="panel__title"><i class="fa-solid fa-certificate" style="color:var(--gold)"></i> Investment Certificates</div>
+              <div style="font-size:0.75rem;color:#6b7280;margin-top:2px">Download a certificate for each active investment</div>
+            </div>
+          </div>
+          <div class="panel__body" style="padding:12px">
+            <div id="docCertificatesBody" class="doc-list">
+              <div class="text-center text-muted" style="padding:24px">Loading…</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 2: Deposit Receipts -->
+        <div class="panel mb-20">
+          <div class="panel__header">
+            <div>
+              <div class="panel__title"><i class="fa-solid fa-receipt" style="color:#22c55e"></i> Deposit Receipts</div>
+              <div style="font-size:0.75rem;color:#6b7280;margin-top:2px">Download a receipt for recent deposits</div>
+            </div>
+          </div>
+          <div class="panel__body" style="padding:12px">
+            <div id="docReceiptsBody" class="doc-list">
+              <div class="text-center text-muted" style="padding:24px">Loading…</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 3: Account Statement — hidden on mobile (statements are not offered in the app) -->
+        <div class="panel" style="display:none">
+          <div class="panel__header">
+            <span class="panel__title"><i class="fa-solid fa-file-invoice" style="color:#22c55e"></i> Account Statement</span>
+          </div>
+          <div class="panel__body">
+            <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:16px">Generate a full statement with date range, portfolio summary, investments, transactions, and performance analysis.</p>
+            <button class="btn btn--primary" onclick="navigate('statement', document.querySelector('[data-view=statement]'))">
+              <i class="fa-solid fa-file-invoice"></i> Open Statement Generator
+            </button>
+          </div>
+        </div>
+      </div><!-- end view-documents -->
+
+      <!-- ══════════════════════════════════
+           VIEW: MY STATEMENT
+      ══════════════════════════════════ -->
+      <div class="view" id="view-statement">
+
+        <!-- Page header -->
+        <div class="stmt-pg-header">
+          <h2 class="stmt-pg-title">Account Statement</h2>
+          <p class="stmt-pg-sub">Generate a premium PDF statement of your investments and transactions</p>
+        </div>
+
+        <!-- Two-column layout: options + sidebar -->
+        <div id="stmtLayout" class="stmt-layout">
+
+          <!-- ── Left: Options panel ── -->
+          <div class="stmt-options-card">
+            <!-- Header band -->
+            <div class="stmt-options-header">
+              <div class="stmt-opt-icon">
+                <i class="fa-solid fa-sliders"></i>
+              </div>
+              <span class="stmt-options-title">Statement Options</span>
+            </div>
+
+            <div class="stmt-options-body">
+
+              <!-- Date range -->
+              <div class="stmt-field-group">
+                <div class="stmt-field-label">Statement Period</div>
+                <div class="stmt-date-row">
+                  <div>
+                    <label class="stmt-input-label">From</label>
+                    <input type="date" id="stmtFrom" class="stmt-date-input">
+                  </div>
+                  <div>
+                    <label class="stmt-input-label">To</label>
+                    <input type="date" id="stmtTo" class="stmt-date-input">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Include sections -->
+              <div class="stmt-field-group">
+                <div class="stmt-field-label">Include Sections</div>
+                <div class="stmt-check-grid">
+                  <label class="stmt-check-tile">
+                    <input type="checkbox" id="stmtIncPortfolio" checked>
+                    <span>Portfolio Summary</span>
+                  </label>
+                  <label class="stmt-check-tile">
+                    <input type="checkbox" id="stmtIncInvestments" checked>
+                    <span>Investment Details</span>
+                  </label>
+                  <label class="stmt-check-tile">
+                    <input type="checkbox" id="stmtIncTransactions" checked>
+                    <span>Transaction Ledger</span>
+                  </label>
+                  <label class="stmt-check-tile">
+                    <input type="checkbox" id="stmtIncPerformance" checked>
+                    <span>Performance Analysis</span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Currency -->
+              <div class="stmt-field-group">
+                <div class="stmt-field-label">Currency</div>
+                <select id="stmtCurrency" class="stmt-select">
+                  <option value="ZAR">ZAR — South African Rand</option>
+                </select>
+              </div>
+
+              <!-- Action buttons -->
+              <div class="stmt-btn-row">
+                <button onclick="generateStatement()" class="stmt-btn-primary">
+                  <i class="fa-solid fa-file-arrow-down"></i> Generate &amp; Preview
+                </button>
+                <button onclick="printStatement()" title="Print / Save as PDF" class="stmt-btn-ghost">
+                  <i class="fa-solid fa-print"></i>
+                </button>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- ── Right: Stats sidebar ── -->
+          <div id="stmtSidebar" class="stmt-sidebar">
+
+            <!-- Portfolio snapshot -->
+            <div class="stmt-sidebar-card">
+              <div class="stmt-sidebar-card__hdr">Portfolio Snapshot</div>
+              <div class="stmt-sidebar-card__body">
+                <div id="stmtQuickStats">
+                  <div class="stmt-empty-snap">
+                    <i class="fa-solid fa-chart-pie"></i>
+                    <span>Data loads automatically…</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- FSCA badge -->
+            <div class="stmt-badge-card">
+              <div class="stmt-badge-icon">
+                <i class="fa-solid fa-shield-halved"></i>
+              </div>
+              <div>
+                <div class="stmt-badge-title">FSCA Regulated</div>
+                <div class="stmt-badge-sub">SmartVest Financial Services (Pty) Ltd · FSP License #52449. Statements generated from verified account data.</div>
+              </div>
+            </div>
+
+            <!-- Tips -->
+            <div class="stmt-tips-card">
+              <div class="stmt-tips-hdr">
+                <i class="fa-solid fa-lightbulb"></i> Pro Tips
+              </div>
+              <ul class="stmt-tips-list">
+                <li>Use <strong>Ctrl + P</strong> or the Print button to save as PDF</li>
+                <li>Set paper size to <strong>A4</strong> and enable <strong>Background Graphics</strong></li>
+                <li>Statement includes all investments regardless of date range</li>
+              </ul>
+            </div>
+
+            <div class="panel mt-16">
+              <div class="panel__header">
+                <span class="panel__title"><i class="fa-solid fa-file-invoice" style="color:#22c55e"></i> Investment Income Certificate</span>
+              </div>
+              <div class="panel__body">
+                <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px">
+                  Download your annual investment income certificate. Covers the South African tax year (1 March – 28 February).
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Tax Year (ending February)</label>
+                  <select class="form-select" id="taxYearSelect">
+                    <option value="2025">March 2024 – February 2025</option>
+                    <option value="2024">March 2023 – February 2024</option>
+                    <option value="2023">March 2022 – February 2023</option>
+                  </select>
+                </div>
+                <div style="display:flex;gap:10px;flex-wrap:wrap">
+                  <button class="btn btn--success" style="flex:1;min-width:160px" onclick="generateTaxCertificate()">
+                    <i class="fa-solid fa-file-arrow-down"></i> Preview / Print Certificate
+                  </button>
+                  <button class="btn btn--secondary" style="flex:1;min-width:130px" onclick="generateTaxCertificate();setTimeout(()=>downloadTaxCertPDF(_lastTaxCertHTML),200)">
+                    <i class="fa-solid fa-file-pdf"></i> Download PDF
+                  </button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ── Statement Preview ── -->
+        <div id="statementPreview" style="display:none;margin-top:32px">
+          <div class="stmt-preview-bar">
+            <div class="stmt-preview-bar__left">
+              <i class="fa-solid fa-file-invoice stmt-preview-icon"></i>
+              <span class="stmt-preview-title">Statement Preview</span>
+              <span class="stmt-preview-badge">Ready</span>
+            </div>
+            <div class="stmt-preview-bar__right">
+              <button onclick="printStatement()" class="stmt-btn-ghost-sm">
+                <i class="fa-solid fa-print"></i> Print / Save PDF
+              </button>
+              <button onclick="generateStatement()" class="stmt-btn-primary-sm">
+                <i class="fa-solid fa-rotate"></i> Refresh
+              </button>
+            </div>
+          </div>
+          <!-- The rendered statement document -->
+          <div id="statementDocument" class="stmt-doc-wrapper">
+            <!-- Populated by generateStatement() -->
+          </div>
+        </div>
+
+      </div><!-- end view-statement -->
+
+      <!-- ══════════════════════════════════
+           VIEW: EARN REWARDS (QUESTS)
+      ══════════════════════════════════ -->
+      <div class="view" id="view-quests">
+        <!-- XP Hero -->
+        <div class="xp-hero" id="questXpHero">
+          <div class="xp-hero__left">
+            <div class="xp-hero__level-icon" id="questLevelIcon"><i class="fa-solid fa-seedling"></i></div>
+            <div>
+              <div class="xp-hero__level-name" id="questLevelName">Seed</div>
+              <div class="xp-hero__xp" id="questXpVal">0 XP</div>
+            </div>
+          </div>
+          <div class="xp-hero__center">
+            <div class="xp-hero__track-wrap">
+              <div class="xp-hero__track-bar" id="questXpBar" style="width:0%"></div>
+            </div>
+            <div class="xp-hero__track-label" id="questXpTrackLabel">0 XP to next level</div>
+          </div>
+          <div class="xp-hero__right">
+            <div class="xp-hero__earned">
+              <div class="xp-hero__earned-label">Quests Done</div>
+              <div class="xp-hero__earned-val" id="questRewardsEarned">0 Quests</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Rewards Stats Row -->
+        <div class="rewards-stats-row" id="rewardsStatsRow" style="display:none">
+          <div class="rewards-stat">
+            <div class="rewards-stat__val" id="rwStatXP">0 XP</div>
+            <div class="rewards-stat__label">Total XP Earned</div>
+          </div>
+          <div class="rewards-stat">
+            <div class="rewards-stat__val" id="rwStatLevel">Seed</div>
+            <div class="rewards-stat__label">Current Level</div>
+          </div>
+          <div class="rewards-stat">
+            <div class="rewards-stat__val" id="rwStatCash" style="color:#22c55e">0</div>
+            <div class="rewards-stat__label">Quests Completed</div>
+          </div>
+          <div class="rewards-stat">
+            <div class="rewards-stat__val" id="rwStatRef" style="color:#ff9b0c">R0</div>
+            <div class="rewards-stat__label">Referral Bonuses</div>
+          </div>
+          <div class="rewards-stat">
+            <div class="rewards-stat__val" id="rwStatTotal" style="color:#D4AF37">0 / 7</div>
+            <div class="rewards-stat__label">Levels Reached</div>
+          </div>
+        </div>
+
+        <!-- Level Track -->
+        <div class="level-track" id="levelTrack">
+          <!-- rendered by JS -->
+        </div>
+
+        <!-- Quest Categories -->
+        <div id="questCategories">
+          <!-- rendered by JS -->
+        </div>
+
+        <!-- Referral Rewards History -->
+        <div id="rewardsReferralSection" class="panel mt-20" style="display:none">
+          <div class="panel__header">
+            <span class="panel__title"><i class="fa-solid fa-gift" style="color:#ff9b0c;margin-right:6px"></i>Referral Rewards History</span>
+            <button class="btn btn--secondary btn--sm" onclick="navigate('referral',document.querySelector('[data-view=referral]'))">
+              <i class="fa-solid fa-share-nodes"></i> Refer &amp; Earn
+            </button>
+          </div>
+          <div id="rewardsReferralList" style="padding:0 16px 8px"></div>
+        </div>
+        <!-- Leave Feedback card -->
+        <div class="rw-feedback-card" id="feedbackCard">
+          <div class="rw-feedback-card__header">
+            <div class="rw-feedback-card__icon">
+              <i class="fa-solid fa-star"></i>
+            </div>
+            <div>
+              <div class="rw-feedback-card__title">Leave Us a Review</div>
+              <div class="rw-feedback-card__sub">Share your experience · Earn <strong class="rw-xp-accent">+50 XP</strong></div>
+            </div>
+          </div>
+          <div class="rw-feedback-card__body" id="feedbackFormWrap">
+            <div id="feedbackStarRow" class="rw-star-row">
+              <span class="fb-star" data-v="1" onclick="setFbStar(1)">★</span>
+              <span class="fb-star" data-v="2" onclick="setFbStar(2)">★</span>
+              <span class="fb-star" data-v="3" onclick="setFbStar(3)">★</span>
+              <span class="fb-star" data-v="4" onclick="setFbStar(4)">★</span>
+              <span class="fb-star" data-v="5" onclick="setFbStar(5)">★</span>
+            </div>
+            <textarea id="feedbackBody" rows="4" placeholder="Tell us about your experience with SV Capital… (min 20 characters)" class="rw-input"></textarea>
+            <input id="feedbackProductLabel" placeholder="e.g. Cattle since 2022 (optional)" class="rw-input rw-input--mt" />
+            <button class="btn btn--primary" style="width:100%;margin-top:12px" id="feedbackSubmitBtn" onclick="submitFeedback()">
+              <i class="fa-solid fa-paper-plane"></i> Submit Feedback
+            </button>
+            <p id="feedbackMsg" style="margin-top:8px;font-size:0.8rem;text-align:center;display:none"></p>
+          </div>
+          <div id="feedbackSubmitted" class="rw-feedback-submitted" style="display:none">
+            <i class="fa-solid fa-circle-check rw-feedback-submitted__icon"></i>
+            <div class="rw-feedback-submitted__title">Thank you for your feedback!</div>
+            <div class="rw-feedback-submitted__sub" id="feedbackSubmittedStatus">Your review is pending approval.</div>
+          </div>
+        </div>
+      </div><!-- end view-quests -->
+
+      <!-- ══════════════════════════════════
+           VIEW: LEARNING HUB
+      ══════════════════════════════════ -->
+      <div class="view" id="view-learn">
+        <!-- Dark hero banner -->
+        <div class="learn-hero">
+          <div class="learn-hero__title">Learning Hub</div>
+          <div class="learn-hero__sub" id="learnTrackLabel">Your personalised learning track</div>
+          <div class="learn-hero__xp-pill">Complete modules to earn <span class="learn-hero__xp-amt">+50 XP</span> each</div>
+        </div>
+        <div id="learnContent">
+          <!-- rendered by JS -->
+        </div>
+      </div><!-- end view-learn -->
+
+      <!-- ══════════════════════════════════
+           VIEW: SUB ACCOUNTS
+      ══════════════════════════════════ -->
+      <div class="view" id="view-subaccounts">
+        <div class="sa-view-header">
+          <div class="sa-view-title">My Accounts</div>
+          <div class="sa-view-sub">Business · Trust · Stokvel · Minor — each with their own wallet, investments and FICA</div>
+          <button class="btn btn--primary sa-view-add-btn" onclick="openCreateSubAccountModal()">
+            <i class="fa-solid fa-plus"></i> Add Account
+          </button>
+        </div>
+
+        <!-- Empty state — type showcase -->
+        <div id="subacctsEmpty">
+          <div class="sa-empty-intro">You don't have any sub-accounts yet. Choose a type to get started:</div>
+          <div class="sa-type-showcase">
+            <div class="sa-type-tile" onclick="openCreateSubAccountModal('business')" style="--tile-color:#303030;--tile-bg:linear-gradient(135deg,#303030,#656565)">
+              <i class="fa-solid fa-building sa-type-tile__icon"></i>
+              <div class="sa-type-tile__label">Business</div>
+              <div class="sa-type-tile__desc">Invest through your registered company</div>
+            </div>
+            <div class="sa-type-tile" onclick="openCreateSubAccountModal('trust')" style="--tile-color:#eda5ff;--tile-bg:linear-gradient(135deg,#0096ff,#eda5ff)">
+              <i class="fa-solid fa-scale-balanced sa-type-tile__icon"></i>
+              <div class="sa-type-tile__label">Trust</div>
+              <div class="sa-type-tile__desc">Grow assets in a family or business trust</div>
+            </div>
+            <div class="sa-type-tile" onclick="openCreateSubAccountModal('stokvel')" style="--tile-color:#65ed00;--tile-bg:linear-gradient(135deg,#303030,#65ed00)">
+              <i class="fa-solid fa-people-group sa-type-tile__icon"></i>
+              <div class="sa-type-tile__label">Stokvel</div>
+              <div class="sa-type-tile__desc">Community savings club investing together</div>
+            </div>
+            <div class="sa-type-tile sa-type-tile--minor" onclick="openCreateSubAccountModal('minor')" style="--tile-color:#ff9b0c;--tile-bg:linear-gradient(135deg,#ff5229,#fec24f)">
+              <i class="fa-solid fa-child-reaching sa-type-tile__icon"></i>
+              <div class="sa-type-tile__label">Minor 🌟</div>
+              <div class="sa-type-tile__desc">Start your child's investment journey today</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Account cards grid -->
+        <div id="subacctsGrid" class="sa-cards-grid" style="display:none"></div>
+      </div><!-- end view-subaccounts -->
+
+      <!-- ══════════════════════════════════
+           VIEW: PLATFORM POLICIES
+      ══════════════════════════════════ -->
+      <div class="view" id="view-policies">
+        <div class="policies-header">
+          <div class="policies-header__icon"><i class="fa-solid fa-file-shield"></i></div>
+          <div>
+            <div class="policies-header__title">Platform Policies</div>
+            <div class="policies-header__sub">Legal documents, rights, and compliance information</div>
+          </div>
+        </div>
+        <div id="policiesContent">
+          <!-- rendered by renderPoliciesView() -->
+        </div>
+      </div><!-- end view-policies -->
+
+      <!-- ══════════════════════════════════
+           VIEW: SEND A GIFT
+      ══════════════════════════════════ -->
+      <div class="view" id="view-gifts">
+        <!-- Compose section -->
+        <div class="gift-compose-wrap">
+
+          <!-- Left: Form -->
+          <div class="gift-form-panel">
+            <div class="gift-form-header">
+              <div class="gift-form-icon"><i class="fa-solid fa-gift"></i></div>
+              <div>
+                <div class="gift-form-title">Send an Investment Gift</div>
+                <div class="gift-form-sub">Give someone the gift of growing wealth</div>
+              </div>
+            </div>
+
+            <!-- Amount selector -->
+            <div class="gift-field-group">
+              <label class="gift-label">Gift Amount</label>
+              <div class="gift-presets">
+                <button class="gift-preset" onclick="setGiftAmount(100)">R100</button>
+                <button class="gift-preset" onclick="setGiftAmount(250)">R250</button>
+                <button class="gift-preset" onclick="setGiftAmount(500)">R500</button>
+                <button class="gift-preset" onclick="setGiftAmount(1000)">R1 000</button>
+                <button class="gift-preset" onclick="setGiftAmount(2500)">R2 500</button>
+              </div>
+              <div class="gift-input-row">
+                <span class="gift-currency">R</span>
+                <input id="giftAmount" type="number" min="50" step="50" placeholder="Custom amount"
+                  oninput="updateGiftPreview()" class="gift-input" />
+              </div>
+              <div class="gift-hint" id="giftBalanceHint"></div>
+            </div>
+
+            <!-- Recipient -->
+            <div class="gift-field-group">
+              <label class="gift-label">Recipient Email</label>
+              <div style="position:relative">
+                <input id="giftRecipientEmail" type="email" placeholder="friend@example.com"
+                  oninput="onGiftEmailInput()" class="gift-input" />
+                <div class="gift-recipient-status" id="giftRecipientStatus"></div>
+              </div>
+              <input id="giftRecipientName" type="text" placeholder="Recipient name (optional)"
+                oninput="updateGiftPreview()" class="gift-input" style="margin-top:8px" />
+            </div>
+
+            <!-- Message -->
+            <div class="gift-field-group">
+              <label class="gift-label">Personal Message <span style="color:var(--text-muted);font-weight:400">(optional)</span></label>
+              <textarea id="giftMessage" rows="4" maxlength="280" placeholder="Write a heartfelt message..."
+                oninput="updateGiftPreview();document.getElementById('giftCharCount').textContent=this.value.length+'/280'"
+                class="gift-textarea"></textarea>
+              <div style="text-align:right;font-size:0.72rem;color:var(--text-muted);margin-top:3px" id="giftCharCount">0/280</div>
+            </div>
+
+            <button class="btn btn--primary gift-send-btn" id="giftSendBtn" onclick="sendGift()">
+              <i class="fa-solid fa-paper-plane"></i> Send Gift
+            </button>
+          </div>
+
+          <!-- Right: Live gift card preview -->
+          <div class="gift-preview-panel">
+            <div class="gift-card-label">Preview</div>
+            <div class="gift-card" id="giftCardPreview">
+              <div class="gift-card__glow"></div>
+              <div class="gift-card__brand">
+                <span class="gift-card__brand-mark">SV</span>
+                <span class="gift-card__brand-name">SV CAPITAL</span>
+                <i class="fa-solid fa-gift gift-card__brand-icon"></i>
+              </div>
+              <div class="gift-card__label-row">Investment Gift</div>
+              <div class="gift-card__amount" id="previewAmount">R—</div>
+              <div class="gift-card__divider"></div>
+              <div class="gift-card__to" id="previewTo">To: —</div>
+              <div class="gift-card__message" id="previewMessage"></div>
+              <div class="gift-card__from" id="previewFrom">From: —</div>
+              <div class="gift-card__footer"><i class="fa-solid fa-seedling"></i> Venture Beyond the Ordinary</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tabs: Sent / Received -->
+        <div class="gift-history-tabs">
+          <button class="gift-tab active" id="giftTabSent" onclick="switchGiftTab('sent')">
+            <i class="fa-solid fa-paper-plane"></i> Gifts Sent
+          </button>
+          <button class="gift-tab" id="giftTabReceived" onclick="switchGiftTab('received')">
+            <i class="fa-solid fa-inbox"></i> Gifts Received
+          </button>
+        </div>
+
+        <div id="giftHistorySent" class="gift-history-panel">
+          <div class="gift-history-empty" id="giftSentEmpty" style="display:none">
+            <i class="fa-solid fa-gift" style="font-size:2rem;color:var(--text-muted);margin-bottom:10px"></i>
+            <div>No gifts sent yet. Send your first investment gift above!</div>
+          </div>
+          <div id="giftSentList"></div>
+        </div>
+
+        <div id="giftHistoryReceived" class="gift-history-panel" style="display:none">
+          <div class="gift-history-empty" id="giftReceivedEmpty" style="display:none">
+            <i class="fa-solid fa-inbox" style="font-size:2rem;color:var(--text-muted);margin-bottom:10px"></i>
+            <div>No gifts received yet.</div>
+          </div>
+          <div id="giftReceivedList"></div>
+        </div>
+      </div><!-- end view-gifts -->
+
+      <!-- ══ SURVEY MODAL ══ -->
+      <div class="modal-overlay" id="surveyModal" onclick="if(event.target===this)closeSurveyModal()">
+        <div class="modal-box survey-modal-box" id="surveyModalBox">
+          <button class="modal-close" aria-label="Close" onclick="closeSurveyModal()"><i class="fa-solid fa-xmark"></i></button>
+          <div id="surveyModalContent"></div>
+        </div>
+      </div>
+
+      <!-- ══ LEVEL-UP CELEBRATION MODAL ══ -->
+      <div class="modal-overlay" id="levelUpModal">
+        <div class="modal-box levelup-modal-box" id="levelUpBox">
+          <div class="levelup-confetti" id="levelupConfetti"></div>
+          <div class="levelup-icon" id="levelupIcon"><i class="fa-solid fa-trophy"></i></div>
+          <div class="levelup-title">Level Up!</div>
+          <div class="levelup-level" id="levelupLevel">Sprout</div>
+          <div class="levelup-reward" id="levelupReward">You've earned <strong>R50</strong> added to your wallet!</div>
+          <div class="levelup-xp" id="levelupXP"></div>
+          <button class="btn btn--primary" onclick="closeLevelUpModal()">Awesome! 🎉</button>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<!-- Mobile toggle -->
+<button class="mobile-toggle" onclick="document.getElementById('sidebar').classList.toggle('open')">
+  <i class="fa-solid fa-bars"></i>
+</button>
+
+<!-- ════════════════════════════════════════════════════
+     PAYMENT GATEWAY MODAL  (3-step flow)
+     Step 1 — Enter amount
+     Step 2 — Choose gateway (Paystack / Ozow / EFT)
+     Step 3 — Processing / confirmation
+════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="topUpModal" onclick="if(event.target===this)closePaymentModal()">
+  <div id="paymentModalBox" style="max-width:520px;width:min(520px,95vw);background:#1a1d23;border:1px solid rgba(255,155,12,0.25);border-radius:16px;padding:0;overflow-y:auto;max-height:90vh;position:relative;box-shadow:0 24px 60px rgba(0,0,0,0.55);transform:scale(1) translateY(0)">
+
+    <!-- ── Modal header ── -->
+    <div style="padding:20px 24px 16px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:space-between;background:#141720;border-radius:16px 16px 0 0;position:sticky;top:0;z-index:2">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="width:36px;height:36px;border-radius:9px;background:linear-gradient(135deg,#FF9B0C,#FF5229);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <i class="fa-solid fa-wallet" style="color:#fff;font-size:0.9rem"></i>
+        </div>
+        <div>
+          <div style="font-size:1rem;font-weight:800;color:#f0f4ff">Top Up Wallet</div>
+          <div style="font-size:0.72rem;color:#9ca3af" id="pmStepLabel">Step 1 of 3 — Enter amount</div>
+        </div>
+      </div>
+      <button onclick="closePaymentModal()" style="width:32px;height:32px;border-radius:8px;background:#252933;border:1px solid rgba(255,255,255,0.1);color:#9ca3af;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.2s" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#9ca3af'">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <!-- Step indicator bar -->
+    <div style="display:flex;height:3px;background:#252933">
+      <div id="pmProgressBar" style="height:100%;background:linear-gradient(90deg,#FF9B0C,#FF5229);border-radius:0 2px 2px 0;transition:width 0.4s ease;width:33%"></div>
+    </div>
+
+    <!-- ══ STEP 1: Amount ══ -->
+    <div id="pmStep1" style="display:block;padding:28px 24px;background:#1a1d23">
+
+      <div style="text-align:center;margin-bottom:24px">
+        <div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:8px">Amount to deposit</div>
+        <div style="display:flex;align-items:center;justify-content:center;gap:0">
+          <span style="font-size:2.8rem;font-weight:900;color:#f0f4ff;line-height:1;margin-right:4px">R</span>
+          <input type="text" inputmode="numeric" pattern="[0-9]*" id="pmAmount" placeholder="0"
+            style="font-size:2.8rem;font-weight:900;color:#f0f4ff;background:transparent;border:none;outline:none;width:180px;text-align:left;font-family:inherit;line-height:1"
+            oninput="this.value=this.value.replace(/[^0-9]/g,'');updateAmountPreview()" />
+        </div>
+        <div id="pmAmountHint" style="font-size:0.75rem;color:#9ca3af;margin-top:4px">Minimum deposit: R100</div>
+      </div>
+
+      <!-- Quick amount chips -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:24px">
+        <button onclick="setAmount(500)"  class="pm-chip">R500</button>
+        <button onclick="setAmount(1000)" class="pm-chip">R1,000</button>
+        <button onclick="setAmount(2500)" class="pm-chip">R2,500</button>
+        <button onclick="setAmount(5000)" class="pm-chip">R5,000</button>
+        <button onclick="setAmount(10000)" class="pm-chip">R10,000</button>
+        <button onclick="setAmount(25000)" class="pm-chip">R25,000</button>
+        <button onclick="setAmount(50000)" class="pm-chip">R50,000</button>
+        <button onclick="setAmount(100000)" class="pm-chip">R100,000</button>
+      </div>
+
+      <!-- Info strip -->
+      <div style="background:#252933;border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:12px 14px;font-size:0.75rem;color:#9ca3af;display:flex;gap:10px;align-items:flex-start;margin-bottom:24px">
+        <i class="fa-solid fa-circle-info" style="color:#FF9B0C;margin-top:1px;flex-shrink:0"></i>
+        <span>Funds are credited to your SV Capital wallet. You can invest immediately after successful payment. All transactions are secured and FSCA regulated.</span>
+      </div>
+
+      <button onclick="goToStep2()" style="width:100%;padding:14px;background:linear-gradient(135deg,#FF9B0C,#FF5229);color:#fff;border:none;border-radius:10px;font-size:0.95rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 16px rgba(255,155,12,0.28);transition:opacity 0.2s" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
+        Continue <i class="fa-solid fa-arrow-right"></i>
+      </button>
+    </div>
+
+    <!-- ══ STEP 2: Choose gateway ══ -->
+    <div id="pmStep2" style="display:none;padding:28px 24px;background:#1a1d23">
+
+      <div style="text-align:center;margin-bottom:6px">
+        <div style="font-size:0.8rem;color:#9ca3af">Wallet credit amount</div>
+        <div style="font-size:2rem;font-weight:900;color:#f0f4ff" id="pmAmountDisplay">R0</div>
+      </div>
+
+      <div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#9ca3af;margin-bottom:14px;margin-top:20px">Select payment method</div>
+
+      <!-- Paystack option -->
+      <div class="pm-gateway-card" id="gwPaystack" onclick="selectGateway('paystack')" style="margin-bottom:12px;background:#252933;border-color:rgba(255,255,255,0.1)">
+        <div style="display:flex;align-items:center;gap:14px">
+          <div style="width:48px;height:48px;border-radius:10px;background:#00C3F7;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <svg width="28" height="20" viewBox="0 0 120 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect width="120" height="24" rx="4" fill="white"/>
+              <rect y="32" width="120" height="16" rx="4" fill="white" opacity="0.7"/>
+              <rect y="56" width="80" height="16" rx="4" fill="white" opacity="0.4"/>
+            </svg>
+          </div>
+          <div style="flex:1">
+            <div style="font-size:0.95rem;font-weight:800;color:#f0f4ff">Paystack</div>
+            <div style="font-size:0.75rem;color:#9ca3af;margin-top:1px">Card, Instant EFT, Mobile Money · Same day</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+            <span style="background:rgba(34,197,94,0.12);color:#22c55e;font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:20px;border:1px solid rgba(34,197,94,0.25)">INSTANT</span>
+            <span style="background:rgba(255,155,12,0.1);color:var(--gold);font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:20px;border:1px solid rgba(255,155,12,0.2)">RECOMMENDED</span>
+          </div>
+        </div>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.07);display:flex;gap:8px;flex-wrap:wrap">
+          <span class="pm-method-pill"><i class="fa-solid fa-credit-card"></i> Visa / Mastercard</span>
+          <span class="pm-method-pill"><i class="fa-solid fa-building-columns"></i> Instant EFT</span>
+          <span class="pm-method-pill"><i class="fa-solid fa-mobile-screen"></i> Mobile Money</span>
+        </div>
+      </div>
+
+      <!-- Ozow option — hidden -->
+      <div class="pm-gateway-card" id="gwOzow" style="display:none">
+        <div style="display:flex;align-items:center;gap:14px">
+          <div style="width:48px;height:48px;border-radius:10px;background:linear-gradient(135deg,#6C3FC5,#9B59F5);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <span style="color:#fff;font-size:1.1rem;font-weight:900;letter-spacing:-1px">Oz</span>
+          </div>
+          <div style="flex:1">
+            <div style="font-size:0.95rem;font-weight:800;color:#f0f4ff">Ozow</div>
+            <div style="font-size:0.75rem;color:#9ca3af;margin-top:1px">Instant EFT direct from your bank · Same day</div>
+          </div>
+          <div>
+            <span style="background:rgba(34,197,94,0.12);color:#22c55e;font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:20px;border:1px solid rgba(34,197,94,0.25)">INSTANT</span>
+          </div>
+        </div>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.07);display:flex;gap:8px;flex-wrap:wrap">
+          <span class="pm-method-pill"><i class="fa-solid fa-building-columns"></i> All SA Banks</span>
+          <span class="pm-method-pill"><i class="fa-solid fa-lock"></i> Bank-grade security</span>
+          <span class="pm-method-pill"><i class="fa-solid fa-bolt"></i> Zero-click EFT</span>
+        </div>
+      </div>
+
+      <!-- Manual EFT option -->
+      <div class="pm-gateway-card" id="gwEft" onclick="selectGateway('eft')" style="background:#252933;border-color:rgba(255,255,255,0.1)">
+        <div style="display:flex;align-items:center;gap:14px">
+          <div style="width:48px;height:48px;border-radius:10px;background:var(--dark-4);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <i class="fa-solid fa-building-columns" style="color:var(--text-muted);font-size:1.2rem"></i>
+          </div>
+          <div style="flex:1">
+            <div style="font-size:0.95rem;font-weight:800;color:#f0f4ff">Manual EFT</div>
+            <div style="font-size:0.75rem;color:#9ca3af;margin-top:1px">Transfer directly to SmartVest bank account · 1–2 business days</div>
+          </div>
+          <span style="background:rgba(255,255,255,0.06);color:var(--text-muted);font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:20px;border:1px solid var(--border)">STANDARD</span>
+        </div>
+      </div>
+
+      <!-- Fee breakdown strip (shown dynamically for Paystack / Ozow) -->
+      <div id="pmFeeSummary" style="display:none;background:#141720;border:1px solid rgba(255,155,12,0.2);border-radius:10px;padding:12px 14px;margin-bottom:16px;margin-top:16px"></div>
+
+      <div style="display:flex;gap:10px;margin-top:16px">
+        <button onclick="goToStep1()" style="padding:12px 20px;background:#252933;color:#9ca3af;border:1px solid rgba(255,255,255,0.1);border-radius:10px;font-size:0.85rem;font-weight:600;cursor:pointer;transition:all 0.2s" onmouseover="this.style.color='#f0f4ff'" onmouseout="this.style.color='#9ca3af'">
+          <i class="fa-solid fa-arrow-left"></i> Back
+        </button>
+        <button onclick="proceedPayment()" id="pmProceedBtn" style="flex:1;padding:12px 20px;background:linear-gradient(135deg,#FF9B0C,#FF5229);color:#fff;border:none;border-radius:10px;font-size:0.9rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 16px rgba(255,155,12,0.25);transition:opacity 0.2s" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
+          <i class="fa-solid fa-lock"></i> Proceed to Payment
+        </button>
+      </div>
+
+    </div>
+
+    <!-- ══ STEP 3: EFT bank details (shown when EFT chosen) ══ -->
+    <div id="pmStep3Eft" style="display:none;padding:28px 24px;background:#1a1d23">
+
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+        <div style="width:36px;height:36px;border-radius:8px;background:var(--dark-4);border:1px solid var(--border);display:flex;align-items:center;justify-content:center">
+          <i class="fa-solid fa-building-columns" style="color:var(--text-muted)"></i>
+        </div>
+        <div>
+          <div style="font-size:0.9rem;font-weight:800;color:#f0f4ff">Manual EFT Details</div>
+          <div style="font-size:0.73rem;color:#9ca3af">Transfer <span id="eftAmountDisplay" style="color:#FF9B0C;font-weight:700">R0</span> to the account below</div>
+        </div>
+      </div>
+
+      <div style="background:#252933;border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;margin-bottom:16px">
+        <div class="info-list">
+          <div class="info-row"><span class="info-row__label">Bank</span><span class="info-row__value">First National Bank (FNB)</span></div>
+          <div class="info-row"><span class="info-row__label">Account Name</span><span class="info-row__value">Smartvest Financial Services</span></div>
+          <div class="info-row"><span class="info-row__label">Account No.</span><span class="info-row__value">63058190794</span></div>
+          <div class="info-row"><span class="info-row__label">Account Type</span><span class="info-row__value">Cheque</span></div>
+          <div class="info-row"><span class="info-row__label">Reference</span>
+            <span class="info-row__value" style="display:flex;align-items:center;gap:6px">
+              <span id="eftReference" style="color:#FF9B0C;font-weight:700">INV-002</span>
+              <button onclick="copyEftRef()" style="background:#1a1d23;border:1px solid rgba(255,255,255,0.1);color:#9ca3af;border-radius:5px;padding:2px 8px;font-size:0.68rem;cursor:pointer" title="Copy reference">
+                <i class="fa-solid fa-copy"></i>
+              </button>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div style="background:rgba(255,193,7,0.07);border:1px solid rgba(255,193,7,0.2);border-radius:10px;padding:12px 14px;font-size:0.75rem;color:#9ca3af;display:flex;gap:8px;margin-bottom:16px">
+        <i class="fa-solid fa-triangle-exclamation" style="color:#f59e0b;margin-top:1px;flex-shrink:0"></i>
+        <span id="eftRefHint">Always use your <strong style="color:#f0f4ff">Investor ID as the payment reference</strong> so we can match your deposit. Funds reflect within 1–2 business days.</span>
+      </div>
+
+      <!-- Email proof of payment option -->
+      <div style="background:rgba(47,140,155,0.08);border:1px solid rgba(47,140,155,0.25);border-radius:10px;padding:12px 14px;font-size:0.75rem;color:#9ca3af;display:flex;gap:8px;align-items:flex-start;margin-bottom:16px">
+        <i class="fa-solid fa-envelope" style="color:#656565;margin-top:2px;flex-shrink:0"></i>
+        <span>Alternatively, you can email your proof of payment to <a href="mailto:enquiry@svcapital.co.za" style="color:#656565;font-weight:700;text-decoration:underline">enquiry@svcapital.co.za</a> — include your Investor ID in the subject line for faster processing.</span>
+      </div>
+
+      <!-- Proof of payment upload -->
+      <div style="margin-bottom:16px">
+        <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#9ca3af;margin-bottom:8px">
+          <i class="fa-solid fa-paperclip" style="color:#FF9B0C"></i> Attach Proof of Payment (optional but recommended)
+        </div>
+        <label for="eftProofFile" style="display:flex;align-items:center;justify-content:center;gap:10px;padding:14px;background:#252933;border:1.5px dashed rgba(255,255,255,0.15);border-radius:10px;cursor:pointer;transition:border-color 0.2s" onmouseover="this.style.borderColor='rgba(255,155,12,0.5)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.15)'">
+          <i class="fa-solid fa-cloud-arrow-up" style="color:#FF9B0C;font-size:1.2rem"></i>
+          <div>
+            <div style="font-size:0.82rem;font-weight:700;color:#f0f4ff">Upload proof of payment</div>
+            <div style="font-size:0.7rem;color:#6b7280">PNG, JPG, or PDF — max 5MB</div>
+          </div>
+          <input type="file" id="eftProofFile" accept="image/*,.pdf" style="display:none" onchange="handleEftProofFile(this)" />
+        </label>
+        <div id="eftProofStatus" style="font-size:0.72rem;color:#9ca3af;margin-top:6px;display:none">
+          <i class="fa-solid fa-check" style="color:#22c55e"></i> <span id="eftProofFileName"></span>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px">
+        <button onclick="goToStep2()" style="padding:12px 20px;background:#252933;color:#9ca3af;border:1px solid rgba(255,255,255,0.1);border-radius:10px;font-size:0.85rem;font-weight:600;cursor:pointer" onmouseover="this.style.color='#f0f4ff'" onmouseout="this.style.color='#9ca3af'">
+          <i class="fa-solid fa-arrow-left"></i> Back
+        </button>
+        <button onclick="confirmEftDeposit()" style="flex:1;padding:12px 20px;background:linear-gradient(135deg,#FF9B0C,#FF5229);color:#fff;border:none;border-radius:10px;font-size:0.9rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 16px rgba(255,155,12,0.25)">
+          <i class="fa-solid fa-check"></i> I've Made the Transfer
+        </button>
+      </div>
+    </div>
+
+    <!-- ══ STEP 3: Processing spinner ══ -->
+    <div id="pmStep3Processing" style="display:none;padding:48px 24px;text-align:center;background:#1a1d23">
+      <div style="width:64px;height:64px;border:3px solid #252933;border-top-color:#ff9b0c;border-radius:50%;animation:pmSpin 0.8s linear infinite;margin:0 auto 20px"></div>
+      <div style="font-size:1rem;font-weight:800;color:#f0f4ff;margin-bottom:8px" id="pmProcessingTitle">Processing payment…</div>
+      <div style="font-size:0.82rem;color:#9ca3af" id="pmProcessingSubtitle">Please wait, do not close this window</div>
+    </div>
+
+    <!-- ══ STEP 3: Success ══ -->
+    <div id="pmStep3Success" style="display:none;padding:40px 24px;text-align:center;background:#1a1d23">
+      <div style="width:72px;height:72px;border-radius:50%;background:rgba(34,197,94,0.12);border:2px solid rgba(34,197,94,0.3);display:flex;align-items:center;justify-content:center;margin:0 auto 20px">
+        <i class="fa-solid fa-check" style="font-size:1.8rem;color:#22c55e"></i>
+      </div>
+      <div style="font-size:1.2rem;font-weight:900;color:#f0f4ff;margin-bottom:8px">Payment Successful!</div>
+      <div style="font-size:0.85rem;color:#9ca3af;margin-bottom:6px" id="pmSuccessAmount"></div>
+      <div style="font-size:0.78rem;color:#6b7280;margin-bottom:28px" id="pmSuccessRef"></div>
+      <button onclick="closePaymentModal()" style="width:100%;padding:13px;background:linear-gradient(135deg,#FF9B0C,#FF5229);color:#fff;border:none;border-radius:10px;font-size:0.9rem;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(255,155,12,0.25)">
+        Done — View Wallet
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<style>
+/* ── Toggle switch styles ─────────────────────────────────────── */
+#pushNotifToggle:checked + #pushNotifSlider { background: #ff9b0c !important; }
+#pushNotifSlider::before { content:'';position:absolute;width:18px;height:18px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.3s; }
+#pushNotifToggle:checked + #pushNotifSlider::before { transform:translateX(18px); }
+#recurringToggleSlider::before { content:'';position:absolute;width:20px;height:20px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.3s; }
+.recurring-toggle-on { background: #ff9b0c !important; }
+.recurring-toggle-on::before { transform:translateX(22px) !important; }
+
+/* ── Ticket conversation chat bubbles ──────────────────────────── */
+.chat-bubble { padding:10px 14px; border-radius:12px; max-width:85%; font-size:0.84rem; line-height:1.5; }
+.chat-bubble--investor { background:linear-gradient(135deg,#FF9B0C,#FF5229); color:#fff; align-self:flex-end; border-bottom-right-radius:4px; }
+.chat-bubble--admin { background:var(--ci-bg-light,#F7F8FA); border:1px solid rgba(0,0,0,0.08); color:#1a1a1a; align-self:flex-start; border-bottom-left-radius:4px; }
+.chat-bubble-wrap { display:flex; flex-direction:column; gap:3px; }
+.chat-bubble-wrap--investor { align-items:flex-end; }
+.chat-bubble-wrap--admin { align-items:flex-start; }
+.chat-bubble-meta { font-size:0.68rem; color:var(--text-muted); padding:0 4px; }
+
+/* ── Payment modal component styles ─────────────────────────────── */
+/* Keep payment modal dark regardless of CI theme overrides */
+#paymentModalBox .info-row__label { color: #9ca3af !important; }
+#paymentModalBox .info-row__value { color: #f0f4ff !important; }
+#paymentModalBox .info-list .info-row { border-color: rgba(255,255,255,0.06) !important; }
+#paymentModalBox .pm-gateway-card { background: #252933 !important; border-color: rgba(255,255,255,0.1) !important; }
+#paymentModalBox .pm-gateway-card:hover { background: #2e3340 !important; border-color: rgba(255,155,12,0.4) !important; }
+#paymentModalBox .pm-gateway-card.selected { background: rgba(255,155,12,0.07) !important; border-color: #ff9b0c !important; box-shadow: 0 0 0 1px rgba(255,155,12,0.3) !important; }
+#paymentModalBox .pm-method-pill { color: #9ca3af !important; background: #1a1d23 !important; border-color: rgba(255,255,255,0.08) !important; }
+.pm-chip {
+  padding: 8px 4px;
+  background: #252933;
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 8px;
+  color: #9ca3af;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s;
+  font-family: inherit;
+}
+.pm-chip:hover, .pm-chip.active {
+  background: rgba(255,155,12,0.10);
+  border-color: rgba(255,155,12,0.35);
+  color: #FF9B0C;
+}
+.pm-gateway-card {
+  background: #252933;
+  border: 1.5px solid rgba(255,255,255,0.10);
+  border-radius: 12px;
+  padding: 16px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+.pm-gateway-card:hover {
+  border-color: rgba(255,155,12,0.4);
+  background: #2e3340;
+}
+.pm-gateway-card.selected {
+  border-color: #ff9b0c;
+  background: rgba(255,155,12,0.07);
+  box-shadow: 0 0 0 1px rgba(255,155,12,0.3);
+}
+.pm-method-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #9ca3af;
+  background: #1a1d23;
+  border: 1px solid rgba(255,255,255,0.08);
+  padding: 3px 8px;
+  border-radius: 20px;
+}
+@keyframes pmSpin {
+  to { transform: rotate(360deg); }
+}
+</style>
+
+<!-- Invest Modal -->
+<div class="modal-overlay" id="investModal" onclick="if(event.target===this)Modal.close('investModal')">
+  <div class="modal">
+    <div class="modal__header">
+      <span class="modal__title" id="investModalTitle">Invest Now</span>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('investModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body" id="investModalBody">Loading...</div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('investModal')">Cancel</button>
+      <button class="btn btn--primary" id="investConfirmBtn"><i class="fa-solid fa-coins"></i> Confirm Investment</button>
+    </div>
+  </div>
+</div>
+
+<!-- Maturity Instruction Modal -->
+<div class="modal-overlay" id="maturityModal" onclick="if(event.target===this)Modal.close('maturityModal')">
+  <div class="modal">
+    <div class="modal__header">
+      <span class="modal__title">Submit Maturity Instruction</span>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('maturityModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body" id="maturityModalBody">Loading...</div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('maturityModal')">Cancel</button>
+      <button class="btn btn--primary" id="maturityConfirmBtn"><i class="fa-solid fa-paper-plane"></i> Submit Instruction</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ══ TOUR OVERLAY ══ -->
+<div id="tourOverlay" style="display:none">
+  <div id="tourSpotlight" style="display:none"></div>
+  <div id="tourTooltip">
+    <div class="tour-tooltip-inner" id="tourTooltipInner">
+      <div class="tour-step-badge" id="tourStepBadge">Step 1 of 10</div>
+      <div class="tour-icon" id="tourIcon" style="display:none"><i class="fa-solid fa-hand-wave"></i></div>
+      <div class="tour-title" id="tourTitle">Welcome!</div>
+      <div class="tour-body"  id="tourBody">Let us show you around.</div>
+      <div class="tour-dots"  id="tourDots"></div>
+      <div class="tour-actions">
+        <button class="tour-skip-btn" onclick="skipTour()">Skip tour</button>
+        <div style="display:flex;gap:8px">
+          <button class="tour-prev-btn" id="tourPrevBtn" onclick="prevTourStep()" style="display:none">
+            <i class="fa-solid fa-arrow-left"></i>
+          </button>
+          <button class="tour-next-btn" id="tourNextBtn" onclick="nextTourStep()">
+            Next <i class="fa-solid fa-arrow-right"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ FIRST DEPOSIT PROMPT ══ -->
+<div class="modal-overlay" id="depositPromptModal" style="display:none">
+  <div class="deposit-prompt-box">
+    <button class="modal-close" aria-label="Close" onclick="dismissDepositPrompt(false)" style="position:absolute;top:14px;right:14px">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+    <div class="deposit-prompt-emoji">💰</div>
+    <div class="deposit-prompt-title">Start earning today</div>
+    <div class="deposit-prompt-sub">Fund your wallet to unlock access to all investment pools</div>
+    <div class="deposit-prompt-stats">
+      <div class="dp-stat"><div class="dp-stat__val">14–18%</div><div class="dp-stat__label">Returns p.a.</div></div>
+      <div class="dp-stat-divider"></div>
+      <div class="dp-stat"><div class="dp-stat__val">4+</div><div class="dp-stat__label">Products</div></div>
+      <div class="dp-stat-divider"></div>
+      <div class="dp-stat"><div class="dp-stat__val">R1,000</div><div class="dp-stat__label">Min. invest</div></div>
+    </div>
+    <div class="deposit-prompt-products" id="depositPromptProducts"></div>
+    <button class="btn btn--primary deposit-prompt-cta" onclick="goFundWallet()">
+      <i class="fa-solid fa-wallet"></i> Fund My Wallet
+    </button>
+    <button class="deposit-prompt-later" onclick="dismissDepositPrompt(false)">Remind me later</button>
+    <button class="deposit-prompt-never" onclick="dismissDepositPrompt(true)">Don't show again</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     SUB ACCOUNTS MODALS
+     ═══════════════════════════════════════════════ -->
+
+<!-- Create Sub Account Modal -->
+<div class="modal-overlay" id="createSaModal" onclick="if(event.target===this)Modal.close('createSaModal')">
+  <div class="modal modal--lg">
+    <div class="modal__header">
+      <div>
+        <span class="modal__title">Open a Sub-Account</span>
+        <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px" id="saCreateStepLbl">Step 1 of 3</div>
+      </div>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('createSaModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="sa-create-progress"><div class="sa-create-progress__fill" id="saCreateProg" style="width:33%"></div></div>
+
+    <!-- Step 1: Choose type -->
+    <div id="saStep1" class="modal__body">
+      <div class="sa-step-title">What type of account do you need?</div>
+      <div class="sa-type-grid">
+        <button class="sa-type-btn" data-type="business" onclick="saSelectType('business')">
+          <i class="fa-solid fa-building" style="color:#656565"></i>
+          <strong>Business</strong>
+          <span>Invest through your registered company or CC</span>
+        </button>
+        <button class="sa-type-btn" data-type="trust" onclick="saSelectType('trust')">
+          <i class="fa-solid fa-scale-balanced" style="color:#eda5ff"></i>
+          <strong>Trust</strong>
+          <span>Family or business trust investments</span>
+        </button>
+        <button class="sa-type-btn" data-type="stokvel" onclick="saSelectType('stokvel')">
+          <i class="fa-solid fa-people-group" style="color:#22c55e"></i>
+          <strong>Stokvel</strong>
+          <span>Community savings club account</span>
+        </button>
+        <button class="sa-type-btn sa-type-btn--minor" data-type="minor" onclick="saSelectType('minor')">
+          <i class="fa-solid fa-child-reaching" style="color:#ff9b0c"></i>
+          <strong>Minor 🌟</strong>
+          <span>Investment account for a child (under 18)</span>
+        </button>
+      </div>
+    </div>
+    <div class="modal__footer" id="saStep1Footer">
+      <button class="btn btn--secondary" onclick="Modal.close('createSaModal')">Cancel</button>
+      <button class="btn btn--primary" id="saStep1Next" disabled onclick="saStep1Next()">Next <i class="fa-solid fa-arrow-right"></i></button>
+    </div>
+
+    <!-- Step 2: Details -->
+    <div id="saStep2" class="modal__body" style="display:none">
+      <div class="sa-step-title" id="saStep2TypeLabel">Account Details</div>
+      <div class="sa-step-subtitle"><i class="fa-solid" id="saStep2TypeIcon"></i> Please fill in the details below</div>
+      <div id="saStep2Fields"></div>
+    </div>
+    <div class="modal__footer" id="saStep2Footer" style="display:none">
+      <button class="btn btn--secondary" onclick="_saShowCreateStep(1)"><i class="fa-solid fa-arrow-left"></i> Back</button>
+      <button class="btn btn--primary" onclick="saStep2Next()">Review <i class="fa-solid fa-arrow-right"></i></button>
+    </div>
+
+    <!-- Step 3: Review & confirm -->
+    <div id="saStep3" class="modal__body" style="display:none">
+      <div class="sa-step-title">Review & Confirm</div>
+      <div id="saStep3Review"></div>
+    </div>
+    <div class="modal__footer" id="saStep3Footer" style="display:none">
+      <button class="btn btn--secondary" onclick="_saShowCreateStep(2)"><i class="fa-solid fa-arrow-left"></i> Back</button>
+      <button class="btn btn--primary" id="saCreateBtn" onclick="saConfirmCreate()"><i class="fa-solid fa-check"></i> Create Account</button>
+    </div>
+  </div>
+</div>
+
+<!-- Sub Account Detail Modal -->
+<div class="modal-overlay sa-detail-overlay" id="saDetailModal" onclick="if(event.target===this)Modal.close('saDetailModal')">
+  <div class="sa-detail-sheet">
+    <div class="sa-detail-drag-bar"></div>
+    <div class="sa-detail-scroll" id="saDetailBody"></div>
+  </div>
+</div>
+
+<!-- Sub Account Wallet Transfer Modal -->
+<div class="modal-overlay" id="saTransferModal" onclick="if(event.target===this)Modal.close('saTransferModal')">
+  <div class="modal" style="max-width:440px">
+    <div class="modal__header">
+      <div>
+        <span class="modal__title"><i class="fa-solid fa-arrow-right-arrow-left" style="color:var(--gold);margin-right:8px"></i>Transfer to Jar</span>
+        <div style="font-size:0.75rem;color:var(--text-muted)">Move funds from your wallet to <strong id="saTransferSaName"></strong></div>
+      </div>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('saTransferModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <input type="hidden" id="saTransferSaId">
+
+      <!-- Wallet balance info -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--ci-bg-light,#F7F8FA);border-radius:10px;margin-bottom:16px">
+        <div style="font-size:0.82rem;color:var(--text-muted)">Your wallet balance</div>
+        <div style="font-size:0.95rem;font-weight:800;color:#1a1a1a" id="saTransferWalletBal">—</div>
+      </div>
+
+      <!-- Amount input -->
+      <div class="form-group">
+        <label class="form-label">Amount to Transfer (ZAR) <span style="color:#ef4444">*</span></label>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:1.1rem;font-weight:700;color:#6b7280">R</span>
+          <input type="number" class="form-input" id="saTransferAmount" min="10" step="10" placeholder="e.g. 500" style="flex:1" oninput="updateSaTransferHint()">
+        </div>
+        <div id="saTransferHint" style="font-size:0.72rem;color:#9ca3af;margin-top:4px">Minimum R10. Funds move instantly.</div>
+      </div>
+
+      <!-- Quick amounts -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:16px">
+        <button class="pm-chip" onclick="setSaTransferAmount(100)">R100</button>
+        <button class="pm-chip" onclick="setSaTransferAmount(250)">R250</button>
+        <button class="pm-chip" onclick="setSaTransferAmount(500)">R500</button>
+        <button class="pm-chip" onclick="setSaTransferAmount(1000)">R1 000</button>
+      </div>
+
+      <div style="padding:10px 14px;background:rgba(255,155,12,0.06);border:1px solid rgba(255,155,12,0.2);border-radius:8px;font-size:0.78rem;color:var(--text-muted)">
+        <i class="fa-solid fa-circle-info" style="color:var(--gold)"></i>
+        Funds are transferred instantly from your SV Capital wallet. No fees apply.
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('saTransferModal')">Cancel</button>
+      <button class="btn btn--primary" id="saTransferBtn" onclick="saveWalletTransfer()">
+        <i class="fa-solid fa-arrow-right-arrow-left"></i> Transfer
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Sub Account Deposit Modal -->
+<div class="modal-overlay" id="saDepositModal" onclick="if(event.target===this)Modal.close('saDepositModal')">
+  <div class="modal">
+    <div class="modal__header">
+      <div>
+        <span class="modal__title" id="saDepositTitle">Deposit</span>
+        <div style="font-size:0.75rem;color:var(--text-muted)" id="saDepositSubtitle"></div>
+      </div>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('saDepositModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <input type="hidden" id="saDepositSaId" />
+      <div class="info-row mb-16"><span class="info-row__label">Current Balance</span><span class="info-row__value text-gold" id="saDepositBalanceLbl">—</span></div>
+      <div class="form-group">
+        <label class="form-label">Deposit Amount (R) <span style="color:#ef4444">*</span></label>
+        <input type="number" class="form-input" id="saDepositAmount" placeholder="e.g. 5000" min="100" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Bank Reference (optional)</label>
+        <input type="text" class="form-input" id="saDepositRef" placeholder="Your bank reference or proof of payment reference" />
+      </div>
+      <div class="info-box" style="background:rgba(255,155,12,0.08);border:1px solid rgba(255,155,12,0.2);border-radius:10px;padding:12px 14px;font-size:0.8rem;color:var(--text-muted)">
+        <i class="fa-solid fa-circle-info" style="color:#ff9b0c"></i>
+        EFT deposits are recorded as pending and credited once the admin team confirms receipt. Please use the account name as your payment reference.
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('saDepositModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="confirmSaDeposit()"><i class="fa-solid fa-paper-plane"></i> Submit Deposit</button>
+    </div>
+  </div>
+</div>
+
+<!-- Sub Account FICA Upload Modal -->
+<!-- ── Factsheet Viewer Modal ── -->
+<div class="modal-overlay" id="factsheetModal" onclick="if(event.target===this)Modal.close('factsheetModal')">
+  <div class="modal modal--md">
+    <div class="modal__header">
+      <span class="modal__title" id="fsModalTitle">Product Factsheets</span>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('factsheetModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body" id="fsModalBody" style="min-height:120px"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="saFicaModal" onclick="if(event.target===this)Modal.close('saFicaModal')">
+  <div class="modal modal--lg">
+    <div class="modal__header">
+      <span class="modal__title">Upload FICA Document</span>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('saFicaModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <div class="sa-section-title mb-8">Account: <strong id="saFicaAccountName"></strong></div>
+      <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:16px">Required documents for this account type:</div>
+      <ul class="sa-fica-doc-list" id="saFicaDocList" style="margin:0 0 20px;padding-left:18px;font-size:0.82rem;color:var(--text-muted);line-height:1.9"></ul>
+      <div class="form-group">
+        <label class="form-label">Document Type <span style="color:#ef4444">*</span></label>
+        <select class="form-select" id="saFicaDocType">
+          <option value="">Select document type…</option>
+          <option value="registration_certificate">Registration Certificate</option>
+          <option value="tax_clearance">Tax Clearance Certificate</option>
+          <option value="trust_deed">Trust Deed</option>
+          <option value="letters_of_authority">Letters of Authority</option>
+          <option value="stokvel_constitution">Stokvel Constitution</option>
+          <option value="birth_certificate">Birth Certificate</option>
+          <option value="id_document">ID Document</option>
+          <option value="proof_of_guardianship">Proof of Guardianship</option>
+          <option value="bank_statement">Bank Statement</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Upload File (PDF, JPG, PNG — max 5 MB)</label>
+        <input type="file" class="form-input" id="saFicaFileInput" accept=".pdf,.jpg,.jpeg,.png" onchange="saFicaFileChange(this)" />
+        <div id="saFicaFilePreview" style="display:none;margin-top:8px;font-size:0.82rem;color:#22c55e;font-weight:600"></div>
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('saFicaModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="submitSaFica()"><i class="fa-solid fa-upload"></i> Submit Document</button>
+    </div>
+  </div>
+</div>
+
+<!-- Savings Goal Modal -->
+<div class="modal-overlay" id="saGoalModal" onclick="if(event.target===this)Modal.close('saGoalModal')">
+  <div class="modal">
+    <div class="modal__header">
+      <span class="modal__title">Set Savings Goal 🎯</span>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('saGoalModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <input type="hidden" id="saGoalSaId" />
+      <div class="form-group">
+        <label class="form-label">Goal Amount (R)</label>
+        <input type="number" class="form-input" id="saGoalAmount" placeholder="e.g. 50000" min="100" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">What are they saving for?</label>
+        <input type="text" class="form-input" id="saGoalLabel" placeholder="e.g. University, First Car, Gap Year…" />
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('saGoalModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="saveSaGoal()"><i class="fa-solid fa-flag"></i> Save Goal</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bank Details Modal -->
+<div class="modal-overlay" id="bankDetailsModal" onclick="if(event.target===this)Modal.close('bankDetailsModal')">
+  <div class="modal">
+    <div class="modal__header">
+      <div>
+        <span class="modal__title">Linked Bank Account</span>
+        <div style="font-size:0.75rem;color:var(--text-muted)">Your payout bank account — must be in your name</div>
+      </div>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('bankDetailsModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <div class="info-box" style="background:rgba(255,155,12,0.08);border:1px solid rgba(255,155,12,0.2);border-radius:10px;padding:12px 14px;font-size:0.8rem;color:var(--text-muted);margin-bottom:16px">
+        <i class="fa-solid fa-circle-info" style="color:#ff9b0c"></i>
+        Bank details must be verified by our team before withdrawals can be processed. You will be notified once approved.
+      </div>
+      <div class="form-row form-row--2">
+        <div class="form-group">
+          <label class="form-label">Bank Name <span style="color:#ef4444">*</span></label>
+          <select class="form-select" id="bdBankName">
+            <option value="">Select bank…</option>
+            <option>ABSA</option>
+            <option>Capitec Bank</option>
+            <option>First National Bank</option>
+            <option>Investec</option>
+            <option>Nedbank</option>
+            <option>Standard Bank</option>
+            <option>TymeBank</option>
+            <option>African Bank</option>
+            <option>Discovery Bank</option>
+            <option>Bidvest Bank</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Account Type <span style="color:#ef4444">*</span></label>
+          <select class="form-select" id="bdAccountType">
+            <option value="current">Cheque / Current</option>
+            <option value="savings">Savings</option>
+            <option value="transmission">Transmission</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Account Holder Name <span style="color:#ef4444">*</span></label>
+        <input type="text" class="form-input" id="bdAccountHolder" placeholder="Full name as it appears on bank account" />
+      </div>
+      <div class="form-row form-row--2">
+        <div class="form-group">
+          <label class="form-label">Account Number <span style="color:#ef4444">*</span></label>
+          <input type="text" class="form-input" id="bdAccountNumber" placeholder="e.g. 62012345678" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Branch Code <span style="color:#ef4444">*</span></label>
+          <input type="text" class="form-input" id="bdBranchCode" placeholder="e.g. 632005" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Proof of Bank Account <span style="color:#ef4444">*</span></label>
+        <input type="file" class="form-input" id="bdProofFile" accept="image/*,application/pdf" />
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:5px">Upload a bank confirmation letter or a stamped/official statement showing your name, account number and branch code. Our team will review and approve it before your bank account is verified.</div>
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('bankDetailsModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="saveBankDetails()"><i class="fa-solid fa-floppy-disk"></i> Save Bank Details</button>
+    </div>
+  </div>
+</div>
+
+<!-- Sub-Account No Funds Prompt -->
+<div class="modal-overlay" id="saNoFundsModal" onclick="if(event.target===this)Modal.close('saNoFundsModal')">
+  <div class="modal" style="margin-top:auto;margin-bottom:0;border-radius:24px 24px 0 0;padding-bottom:env(safe-area-inset-bottom,16px)">
+    <div style="width:40px;height:4px;background:rgba(0,0,0,0.12);border-radius:2px;margin:12px auto 0"></div>
+    <div style="text-align:center;padding:24px 24px 28px">
+      <div style="font-size:3.5rem;margin-bottom:14px;line-height:1">🪙</div>
+      <div id="saNoFundsTitle" style="font-size:1.05rem;font-weight:800;color:#1a1a1a;margin-bottom:8px">Wallet is empty</div>
+      <div id="saNoFundsMsg" style="font-size:0.82rem;color:#6b7280;line-height:1.5;margin-bottom:8px">Add funds before investing.</div>
+      <div id="saNoFundsBal" style="font-size:1.8rem;font-weight:800;color:#9ca3af;margin-bottom:28px">R0.00</div>
+      <button class="btn btn--primary btn--full" id="saNoFundsDepositBtn" style="background:linear-gradient(135deg,#ff5229,#fec24f);border:none;font-size:1rem;padding:14px;margin-bottom:10px">
+        <i class="fa-solid fa-wallet"></i> Add Funds Now
+      </button>
+      <button style="width:100%;background:none;border:none;color:#9ca3af;font-size:0.85rem;padding:8px;cursor:pointer" onclick="Modal.close('saNoFundsModal')">Maybe Later</button>
+    </div>
+  </div>
+</div>
+
+<!-- Sub-Account Banking Details Modal -->
+<div class="modal-overlay" id="saBankModal" onclick="if(event.target===this)Modal.close('saBankModal')">
+  <div class="modal">
+    <div class="modal__header">
+      <div>
+        <span class="modal__title">Sub-Account Banking Details</span>
+        <div style="font-size:0.75rem;color:var(--text-muted)">Banking account for this sub-account — pending admin verification</div>
+      </div>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('saBankModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <div class="form-row form-row--2">
+        <div class="form-group">
+          <label class="form-label">Bank Name <span style="color:#ef4444">*</span></label>
+          <select class="form-select" id="saBankName">
+            <option value="">Select bank…</option>
+            <option>ABSA</option>
+            <option>Capitec Bank</option>
+            <option>First National Bank</option>
+            <option>Investec</option>
+            <option>Nedbank</option>
+            <option>Standard Bank</option>
+            <option>TymeBank</option>
+            <option>African Bank</option>
+            <option>Discovery Bank</option>
+            <option>Bidvest Bank</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Account Type</label>
+          <select class="form-select" id="saBankType">
+            <option value="current">Cheque / Current</option>
+            <option value="savings">Savings</option>
+            <option value="cheque">Cheque</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Account Holder Name <span style="color:#ef4444">*</span></label>
+        <input type="text" class="form-input" id="saBankHolder" placeholder="Full name as it appears on bank account" />
+      </div>
+      <div class="form-row form-row--2">
+        <div class="form-group">
+          <label class="form-label">Account Number <span style="color:#ef4444">*</span></label>
+          <input type="text" class="form-input" id="saBankNumber" placeholder="e.g. 62012345678" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Branch Code</label>
+          <input type="text" class="form-input" id="saBankBranch" placeholder="e.g. 632005" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Proof of Bank Account <span style="color:#ef4444">*</span></label>
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px">Bank statement, cancelled cheque, or confirmation letter (PDF, JPG, PNG)</div>
+        <input type="file" class="form-input" id="saBankProof" accept=".pdf,.jpg,.jpeg,.png" />
+      </div>
+      <div style="background:rgba(254,194,79,0.08);border:1px solid rgba(254,194,79,0.2);border-radius:10px;padding:10px 14px;font-size:0.78rem;color:var(--text-muted);margin-top:4px">
+        <i class="fa-solid fa-circle-info" style="color:#fec24f;margin-right:6px"></i>
+        Banking details will be reviewed and approved by the admin team before they can be used for withdrawals.
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('saBankModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="saveSaBankDetails()"><i class="fa-solid fa-floppy-disk"></i> Submit for Approval</button>
+    </div>
+  </div>
+</div>
+
+<!-- Withdrawal Modal -->
+<div class="modal-overlay" id="withdrawalModal" onclick="if(event.target===this)Modal.close('withdrawalModal')">
+  <div class="modal">
+    <div class="modal__header">
+      <div>
+        <span class="modal__title">Withdraw Funds</span>
+        <div style="font-size:0.75rem;color:var(--text-muted)">Transfer your wallet balance to your bank account</div>
+      </div>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('withdrawalModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <div id="withdrawalModalContent">Loading…</div>
+    </div>
+    <div class="modal__footer" id="withdrawalModalFooter" style="display:none">
+      <button class="btn btn--secondary" onclick="Modal.close('withdrawalModal')">Cancel</button>
+      <button class="btn btn--primary" id="withdrawalConfirmBtn" onclick="confirmWithdrawal()"><i class="fa-solid fa-paper-plane"></i> Request Withdrawal</button>
+    </div>
+  </div>
+</div>
+
+<!-- 2FA Setup Modal -->
+<div class="modal-overlay" id="twoFAModal" onclick="if(event.target===this)Modal.close('twoFAModal')">
+  <div class="modal">
+    <div class="modal__header">
+      <div>
+        <span class="modal__title">Set Up Two-Factor Authentication</span>
+        <div style="font-size:0.75rem;color:var(--text-muted)">Protect your account with an authenticator app</div>
+      </div>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('twoFAModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body" id="twoFAModalBody">Loading…</div>
+    <div class="modal__footer" id="twoFAModalFooter"></div>
+  </div>
+</div>
+
+<!-- Disable 2FA Modal -->
+<div class="modal-overlay" id="disable2FAModal" onclick="if(event.target===this)Modal.close('disable2FAModal')">
+  <div class="modal">
+    <div class="modal__header">
+      <span class="modal__title">Disable Two-Factor Authentication</span>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('disable2FAModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <div class="info-box" style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:10px;padding:12px 14px;font-size:0.82rem;color:#ef4444;margin-bottom:16px">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        Disabling 2FA will reduce the security of your account.
+      </div>
+      <div class="form-group">
+        <label class="form-label">Enter your 6-digit authenticator code to confirm</label>
+        <input type="text" class="form-input" id="disable2FACode" inputmode="numeric" maxlength="6" placeholder="000000" style="text-align:center;font-size:1.3rem;letter-spacing:0.2em;font-weight:700" />
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('disable2FAModal')">Cancel</button>
+      <button class="btn btn--danger" onclick="confirmDisable2FA()"><i class="fa-solid fa-lock-open"></i> Disable 2FA</button>
+    </div>
+  </div>
+</div>
+
+<!-- Risk Profile Questionnaire Modal -->
+<div class="modal-overlay" id="riskModal" onclick="if(event.target===this)Modal.close('riskModal')">
+  <div class="modal" style="max-width:560px">
+    <div class="modal__header">
+      <div>
+        <span class="modal__title"><i class="fa-solid fa-shield-halved" style="color:#FF9B0C;margin-right:8px"></i>Risk Profile Questionnaire</span>
+        <div style="font-size:0.75rem;color:var(--text-muted)">5 questions — takes about 2 minutes</div>
+      </div>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('riskModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body" style="display:flex;flex-direction:column;gap:18px">
+
+      <!-- Q1 -->
+      <div class="risk-q">
+        <div class="risk-q__label">1. What is your investment horizon?</div>
+        <div class="risk-q__options">
+          <label class="risk-opt"><input type="radio" name="rq1" value="1"> Under 1 year</label>
+          <label class="risk-opt"><input type="radio" name="rq1" value="2"> 1–3 years</label>
+          <label class="risk-opt"><input type="radio" name="rq1" value="3"> 3+ years</label>
+        </div>
+      </div>
+
+      <!-- Q2 -->
+      <div class="risk-q">
+        <div class="risk-q__label">2. If your portfolio dropped 20%, what would you do?</div>
+        <div class="risk-q__options">
+          <label class="risk-opt"><input type="radio" name="rq2" value="1"> I'd sell to stop losses</label>
+          <label class="risk-opt"><input type="radio" name="rq2" value="2"> I'd hold and wait</label>
+          <label class="risk-opt"><input type="radio" name="rq2" value="3"> I'd invest more</label>
+        </div>
+      </div>
+
+      <!-- Q3 -->
+      <div class="risk-q">
+        <div class="risk-q__label">3. What is your primary investment objective?</div>
+        <div class="risk-q__options">
+          <label class="risk-opt"><input type="radio" name="rq3" value="1"> Preserve my capital</label>
+          <label class="risk-opt"><input type="radio" name="rq3" value="2"> Balanced growth</label>
+          <label class="risk-opt"><input type="radio" name="rq3" value="3"> Maximise returns</label>
+        </div>
+      </div>
+
+      <!-- Q4 -->
+      <div class="risk-q">
+        <div class="risk-q__label">4. How would you describe your investment experience?</div>
+        <div class="risk-q__options">
+          <label class="risk-opt"><input type="radio" name="rq4" value="1"> New to investing</label>
+          <label class="risk-opt"><input type="radio" name="rq4" value="2"> Some experience</label>
+          <label class="risk-opt"><input type="radio" name="rq4" value="3"> Experienced investor</label>
+        </div>
+      </div>
+
+      <!-- Q5 -->
+      <div class="risk-q">
+        <div class="risk-q__label">5. What are your liquidity needs?</div>
+        <div class="risk-q__options">
+          <label class="risk-opt"><input type="radio" name="rq5" value="1"> I may need funds within 6 months</label>
+          <label class="risk-opt"><input type="radio" name="rq5" value="2"> Unlikely to need funds soon</label>
+          <label class="risk-opt"><input type="radio" name="rq5" value="3"> Long-term, committed capital</label>
+        </div>
+      </div>
+
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('riskModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="submitRiskQuestionnaire()"><i class="fa-solid fa-chart-simple"></i> See My Profile</button>
+    </div>
+  </div>
+</div>
+
+<style>
+.risk-q { background: var(--ci-bg-light, #F7F8FA); border-radius: 10px; padding: 14px 16px; }
+.risk-q__label { font-size: 0.85rem; font-weight: 700; color: #1a1a1a; margin-bottom: 10px; }
+.risk-q__options { display: flex; flex-direction: column; gap: 8px; }
+.risk-opt { display: flex; align-items: center; gap: 10px; font-size: 0.82rem; color: #374151; cursor: pointer; padding: 8px 12px; border-radius: 8px; border: 1.5px solid transparent; transition: border-color 0.15s, background 0.15s; }
+.risk-opt:hover { background: rgba(255,155,12,0.06); border-color: rgba(255,155,12,0.3); }
+.risk-opt input[type=radio] { accent-color: #FF9B0C; width: 15px; height: 15px; flex-shrink: 0; }
+.risk-opt:has(input:checked) { background: rgba(255,155,12,0.08); border-color: #FF9B0C; font-weight: 600; }
+</style>
+
+<!-- Invest Now — Product Picker Modal -->
+<div class="modal-overlay" id="investNowPickerModal" onclick="if(event.target===this)Modal.close('investNowPickerModal')">
+  <div class="modal" style="max-width:480px">
+    <div class="modal__header">
+      <div>
+        <span class="modal__title"><i class="fa-solid fa-bolt" style="color:#ff9b0c;margin-right:8px"></i>Choose a Product</span>
+        <div style="font-size:0.75rem;color:var(--text-muted)">Select the investment product you'd like to invest in</div>
+      </div>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('investNowPickerModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body" id="investNowPickerBody" style="display:flex;flex-direction:column;gap:10px;padding-bottom:8px">
+      <!-- populated by openInvestNowPicker() -->
+    </div>
+  </div>
+</div>
+
+<!-- Investment Calculator Modal -->
+<div class="modal-overlay" id="calcModal" onclick="if(event.target===this)Modal.close('calcModal')">
+  <div class="modal" style="max-width:520px">
+    <div class="modal__header">
+      <div>
+        <span class="modal__title"><i class="fa-solid fa-calculator" style="color:#FF9B0C;margin-right:8px"></i>Investment Calculator</span>
+        <div style="font-size:0.75rem;color:var(--text-muted)">See what your investment could earn</div>
+      </div>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('calcModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body" style="display:flex;flex-direction:column;gap:14px">
+
+      <!-- Pool selector -->
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">Investment Pool (optional)</label>
+        <select class="form-input" id="calcPoolSelect" onchange="calcLoadPool()">
+          <option value="">— Custom rate —</option>
+        </select>
+      </div>
+
+      <!-- Amount input + range slider -->
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">Investment Amount</label>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+          <span style="font-size:1rem;font-weight:700;color:#6b7280">R</span>
+          <input type="number" class="form-input" id="calcAmount" value="50000" min="1000" max="1000000" step="1000"
+            oninput="calcSyncSlider(this.value);updateCalc()" style="flex:1">
+        </div>
+        <input type="range" id="calcAmountSlider" min="1000" max="1000000" step="1000" value="50000"
+          style="width:100%;accent-color:#FF9B0C"
+          oninput="calcSyncAmount(this.value);updateCalc()">
+        <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:#9ca3af;margin-top:2px">
+          <span>R1,000</span><span>R1,000,000</span>
+        </div>
+      </div>
+
+      <!-- Rate + Term row -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Annual Rate (%)</label>
+          <input type="number" class="form-input" id="calcRate" value="14" min="0" max="100" step="0.1"
+            oninput="updateCalc()" id="calcRate">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Term (months)</label>
+          <select class="form-input" id="calcTerm" onchange="updateCalc()">
+            <option value="6">6 months</option>
+            <option value="12" selected>12 months</option>
+            <option value="18">18 months</option>
+            <option value="24">24 months</option>
+            <option value="36">36 months</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Results card -->
+      <div style="background:linear-gradient(135deg,rgba(255,155,12,0.08),rgba(255,82,41,0.05));border:1px solid rgba(255,155,12,0.25);border-radius:12px;padding:18px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;text-align:center;margin-bottom:14px">
+          <div>
+            <div style="font-size:0.68rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">Monthly Returns</div>
+            <div id="calcMonthly" style="font-size:1.1rem;font-weight:700;color:#22c55e">—</div>
+          </div>
+          <div>
+            <div style="font-size:0.68rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">Effective Annual Yield</div>
+            <div id="calcYield" style="font-size:1.1rem;font-weight:700;color:#6b7280">—</div>
+          </div>
+          <div>
+            <div style="font-size:0.68rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">Total Returns Earned</div>
+            <div id="calcReturn" style="font-size:1.55rem;font-weight:800;color:#FF9B0C">—</div>
+          </div>
+          <div>
+            <div style="font-size:0.68rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">Total Payout at Maturity</div>
+            <div id="calcTotal" style="font-size:1.55rem;font-weight:800;color:#303030">—</div>
+          </div>
+        </div>
+        <!-- Capital vs Returns visual bar -->
+        <div style="margin-top:4px">
+          <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:#6b7280;margin-bottom:4px">
+            <span><span style="display:inline-block;width:10px;height:10px;background:#303030;border-radius:2px;margin-right:4px"></span>Capital</span>
+            <span><span style="display:inline-block;width:10px;height:10px;background:#FF9B0C;border-radius:2px;margin-right:4px"></span>Returns</span>
+          </div>
+          <div style="height:10px;border-radius:6px;overflow:hidden;background:#e5e7eb;display:flex">
+            <div id="calcBarCapital" style="background:#303030;transition:width 0.4s ease;height:100%"></div>
+            <div id="calcBarInterest" style="background:#FF9B0C;transition:width 0.4s ease;height:100%"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="calcCTABar" style="display:none;text-align:center">
+        <button class="btn btn--primary btn--full" id="calcInvestNowBtn" onclick="calcGoInvest()">
+          <i class="fa-solid fa-coins"></i> Invest Now
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Recurring Investment Modal -->
+<div class="modal-overlay" id="recurringModal" onclick="if(event.target===this)Modal.close('recurringModal')">
+  <div class="modal">
+    <div class="modal__header">
+      <div>
+        <span class="modal__title"><i class="fa-solid fa-rotate" style="color:var(--gold);margin-right:8px"></i>Recurring Investment</span>
+        <div style="font-size:0.75rem;color:var(--text-muted)">Automatically invest on your chosen day each month</div>
+      </div>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('recurringModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--ci-bg-light,#F7F8FA);border-radius:10px;margin-bottom:16px">
+        <div>
+          <div style="font-size:0.88rem;font-weight:700;color:#1a1a1a">Enable Recurring Investment</div>
+          <div style="font-size:0.75rem;color:var(--text-muted)">Toggle to activate automatic monthly investment</div>
+        </div>
+        <label style="position:relative;display:inline-block;width:48px;height:26px;flex-shrink:0">
+          <input type="checkbox" id="recurringEnabledToggle" style="opacity:0;width:0;height:0">
+          <span style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#ccc;border-radius:26px;transition:.3s;display:block" id="recurringToggleSlider" onclick="document.getElementById('recurringEnabledToggle').checked=!document.getElementById('recurringEnabledToggle').checked;updateRecurringToggleStyle()"></span>
+        </label>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Monthly Investment Amount (ZAR) <span style="color:#ef4444">*</span></label>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:1.1rem;font-weight:700;color:#6b7280">R</span>
+          <input type="number" class="form-input" id="recurringAmount" min="100" step="100" placeholder="e.g. 5000" style="flex:1">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Product Type <span style="color:#ef4444">*</span></label>
+        <select class="form-select" id="recurringProductSelect">
+          <option value="">Select a product…</option>
+          <option value="cattle">Cattle Finance</option>
+          <option value="solar_7yr">Solar Energy — 7 Year</option>
+          <option value="solar_6yr">Solar Energy — 6 Year</option>
+          <option value="solar_5yr">Solar Energy — 5 Year</option>
+          <option value="short_term">Short Term Investment</option>
+          <option value="smme">SMME Finance</option>
+          <option value="other">Other</option>
+        </select>
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px">Funds will automatically be allocated to any open pool for this product type.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Day of Month <span style="color:#ef4444">*</span></label>
+        <select class="form-select" id="recurringDay">
+          <option value="1">1st</option>
+          <option value="2">2nd</option>
+          <option value="3">3rd</option>
+          <option value="4">4th</option>
+          <option value="5">5th</option>
+          <option value="7">7th</option>
+          <option value="10">10th</option>
+          <option value="14">14th</option>
+          <option value="15">15th</option>
+          <option value="20">20th</option>
+          <option value="25">25th</option>
+          <option value="28">28th</option>
+        </select>
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px">Investment will be processed from your wallet on this day each month.</div>
+      </div>
+      <div style="padding:10px 14px;background:rgba(255,155,12,0.06);border:1px solid rgba(255,155,12,0.2);border-radius:8px;font-size:0.78rem;color:var(--text-muted)">
+        <i class="fa-solid fa-circle-info" style="color:var(--gold)"></i>
+        If no open pool is available for the selected product on your chosen day, the investment will be skipped until the next month. Ensure your wallet is funded in advance.
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('recurringModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="_withBtn(this, saveRecurringInvestment)"><i class="fa-solid fa-floppy-disk"></i> Save Settings</button>
+    </div>
+  </div>
+</div>
+
+<!-- Auto Top-Up Modal -->
+<div class="modal-overlay" id="autoTopUpModal" onclick="if(event.target===this)Modal.close('autoTopUpModal')">
+  <div class="modal" style="max-width:460px">
+    <div class="modal__header">
+      <div>
+        <span class="modal__title"><i class="fa-solid fa-rotate" style="color:var(--gold);margin-right:8px"></i>Auto Wallet Top-Up</span>
+        <div style="font-size:0.75rem;color:var(--text-muted)">Automatically charge your saved card each month</div>
+      </div>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('autoTopUpModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <!-- Enable toggle -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--ci-bg-light,#F7F8FA);border-radius:10px;margin-bottom:16px">
+        <div>
+          <div style="font-size:0.88rem;font-weight:700;color:#1a1a1a">Enable Auto Top-Up</div>
+          <div style="font-size:0.75rem;color:var(--text-muted)">Charge your saved card on the selected day each month</div>
+        </div>
+        <label style="position:relative;display:inline-block;width:48px;height:26px;flex-shrink:0">
+          <input type="checkbox" id="atuEnabled" style="opacity:0;width:0;height:0">
+          <span style="position:absolute;cursor:pointer;inset:0;background:#ccc;border-radius:26px;transition:.3s;display:block"
+                onclick="const cb=document.getElementById('atuEnabled');cb.checked=!cb.checked;this.style.background=cb.checked?'#ff9b0c':'#ccc'"></span>
+        </label>
+      </div>
+
+      <!-- Amount -->
+      <div class="form-group">
+        <label class="form-label">Top-Up Amount (ZAR) <span style="color:#ef4444">*</span></label>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:1.1rem;font-weight:700;color:#6b7280">R</span>
+          <input type="number" class="form-input" id="atuAmount" min="50" step="50" placeholder="e.g. 1000" style="flex:1" oninput="updateAutoTopUpFee()">
+        </div>
+        <div style="font-size:0.72rem;color:#9ca3af;margin-top:4px">Minimum R50. Enter the amount you want credited to your wallet — gateway fees are added on top.</div>
+        <div id="atuFeeBreakdown" style="display:none;margin-top:8px;padding:8px 10px;background:rgba(255,155,12,0.06);border:1px solid rgba(255,155,12,0.2);border-radius:8px;font-size:0.75rem">
+          <div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="color:var(--text-muted)">Wallet credit</span><span id="atuFeeNet" style="font-weight:600;color:#1a1a1a"></span></div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="color:var(--text-muted)">Paystack fee (2.9% + R1)</span><span id="atuFeeAmt" style="color:#ef4444"></span></div>
+          <div style="display:flex;justify-content:space-between;border-top:1px solid rgba(0,0,0,0.1);padding-top:6px;margin-top:4px"><span style="font-weight:700;color:#1a1a1a">Total card charge</span><span id="atuFeeGross" style="font-weight:700;color:#1a1a1a"></span></div>
+        </div>
+      </div>
+
+      <!-- Day of month -->
+      <div class="form-group">
+        <label class="form-label">Day of Month <span style="color:#ef4444">*</span></label>
+        <select class="form-select" id="atuDay">
+          <option value="1">1st</option>
+          <option value="2">2nd</option>
+          <option value="3">3rd</option>
+          <option value="4">4th</option>
+          <option value="5">5th</option>
+          <option value="6">6th</option>
+          <option value="7">7th</option>
+          <option value="8">8th</option>
+          <option value="9">9th</option>
+          <option value="10">10th</option>
+          <option value="11">11th</option>
+          <option value="12">12th</option>
+          <option value="13">13th</option>
+          <option value="14">14th</option>
+          <option value="15">15th</option>
+          <option value="16">16th</option>
+          <option value="17">17th</option>
+          <option value="18">18th</option>
+          <option value="19">19th</option>
+          <option value="20">20th</option>
+          <option value="21">21st</option>
+          <option value="22">22nd</option>
+          <option value="23">23rd</option>
+          <option value="24">24th</option>
+          <option value="25">25th</option>
+          <option value="26">26th</option>
+          <option value="27">27th</option>
+          <option value="28">28th</option>
+          <option value="29">29th</option>
+          <option value="30">30th</option>
+          <option value="31">31st</option>
+        </select>
+        <div style="font-size:0.72rem;color:#9ca3af;margin-top:4px">For months with fewer days, the charge runs on the last day of that month.</div>
+      </div>
+
+      <div style="padding:10px 14px;background:rgba(255,155,12,0.06);border:1px solid rgba(255,155,12,0.2);border-radius:8px;font-size:0.78rem;color:var(--text-muted)">
+        <i class="fa-solid fa-circle-info" style="color:var(--gold)"></i>
+        Your saved Paystack card will be charged automatically. If the charge fails, auto top-up will be paused and you will be notified.
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('autoTopUpModal')">Cancel</button>
+      <button class="btn btn--primary" id="atuSaveBtn" onclick="_withBtn(this, saveAutoTopUp)"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Account Deletion Confirmation Modal -->
+<div class="modal-overlay" id="deleteAccountModal" onclick="if(event.target===this)Modal.close('deleteAccountModal')">
+  <div class="modal" style="max-width:480px">
+    <div class="modal__header">
+      <div>
+        <span class="modal__title" style="color:#ef4444"><i class="fa-solid fa-triangle-exclamation" style="margin-right:8px"></i>Request Account Deletion</span>
+        <div style="font-size:0.75rem;color:var(--text-muted)">This action cannot be undone</div>
+      </div>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('deleteAccountModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:10px;padding:14px;font-size:0.82rem;color:#b91c1c;margin-bottom:16px;line-height:1.6">
+        <i class="fa-solid fa-triangle-exclamation" style="margin-right:6px"></i>
+        <strong>Warning:</strong> Requesting account deletion will close your account, cancel all active investments, and permanently delete your personal data. Active investments must be settled first.
+      </div>
+      <div style="font-size:0.82rem;color:#374151;margin-bottom:12px">To confirm, type <strong>DELETE MY ACCOUNT</strong> in the box below:</div>
+      <div class="form-group">
+        <input type="text" class="form-input" id="deleteAccountConfirmInput" placeholder="Type: DELETE MY ACCOUNT" style="font-size:0.9rem" />
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('deleteAccountModal')">Cancel</button>
+      <button class="btn btn--danger" onclick="confirmAccountDeletion()"><i class="fa-solid fa-trash-can"></i> Delete My Account</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── KYC Upload Modal ───────────────────────────────────────────── -->
+<div class="modal-overlay" id="kycUploadModal" onclick="if(event.target===this)Modal.close('kycUploadModal')">
+  <div class="modal" style="max-width:480px;width:95vw">
+    <div class="modal__header">
+      <span class="modal__title"><i class="fa-solid fa-id-card" style="color:#FF9B0C;margin-right:8px"></i>Upload KYC Document</span>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('kycUploadModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <p style="font-size:0.82rem;color:#6b7280;margin-bottom:16px">
+        Upload a clear photo or scan of your identity document. Files are reviewed by the SV Capital compliance team within 1–2 business days.
+      </p>
+      <div class="form-group">
+        <label class="form-label">Document Type <span style="color:#ef4444">*</span></label>
+        <select class="form-select" id="kycDocType">
+          <option value="">— Select document type —</option>
+          <option value="id_document">South African ID / Passport</option>
+          <option value="proof_of_address">Proof of Address (bank statement, utility bill)</option>
+          <option value="proof_of_bank">Proof of Bank Account (confirmation letter / statement)</option>
+          <option value="selfie">Selfie / Liveness Photo</option>
+          <option value="tax_certificate">Tax Certificate (IT3b)</option>
+          <option value="other">Other Supporting Document</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Select File <span style="color:#ef4444">*</span></label>
+        <div id="kycDropZone" style="border:2px dashed rgba(255,155,12,0.35);border-radius:10px;padding:24px 16px;text-align:center;cursor:pointer;transition:all 0.2s;background:rgba(255,155,12,0.03)" onclick="document.getElementById('kycFileInput').click()" ondragover="event.preventDefault();this.style.borderColor='#FF9B0C'" ondragleave="this.style.borderColor='rgba(255,155,12,0.35)'" ondrop="_kycHandleDrop(event)">
+          <i class="fa-solid fa-cloud-arrow-up" style="font-size:1.8rem;color:#FF9B0C;margin-bottom:8px;display:block"></i>
+          <div style="font-size:0.85rem;font-weight:600;color:#1a1a1a">Click to browse or drag & drop</div>
+          <div style="font-size:0.72rem;color:#9ca3af;margin-top:4px">JPG, PNG or PDF · Max 10 MB</div>
+        </div>
+        <input type="file" id="kycFileInput" accept="image/*,.pdf" style="display:none" onchange="_kycFileSelected(this.files[0])">
+        <div id="kycFileStatus" style="display:none;margin-top:10px;padding:10px 12px;background:rgba(34,197,94,0.07);border:1px solid rgba(34,197,94,0.25);border-radius:8px;display:flex;align-items:center;gap:10px">
+          <i class="fa-solid fa-file-check" style="color:#22c55e;font-size:1rem"></i>
+          <span id="kycFileName" style="font-size:0.82rem;color:#1a1a1a;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+          <button onclick="_kycClearFile()" style="background:none;border:none;color:#9ca3af;cursor:pointer;padding:0 4px;font-size:0.8rem">✕</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes <span style="font-size:0.72rem;color:#9ca3af">(optional)</span></label>
+        <textarea class="form-textarea" id="kycNotes" rows="2" placeholder="e.g. Front side of green ID book, issued 2018"></textarea>
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('kycUploadModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="submitKycDocument()" id="kycSubmitBtn">
+        <i class="fa-solid fa-paper-plane"></i> Submit for Review
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ COMMAND PALETTE ══ -->
+<div id="portalCmdOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:10000;align-items:flex-start;justify-content:center;padding-top:80px" onclick="if(event.target===this)closePortalCmd()">
+  <div style="background:#303030;border:1px solid rgba(255,155,12,0.25);border-radius:16px;width:100%;max-width:560px;box-shadow:0 24px 64px rgba(0,0,0,0.55);overflow:hidden">
+    <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid rgba(255,255,255,0.07)">
+      <i class="fa-solid fa-magnifying-glass" style="color:rgba(255,255,255,0.4);font-size:0.9rem"></i>
+      <input id="portalCmdInput" type="text" placeholder="Search views and actions…" autocomplete="off"
+        style="flex:1;background:none;border:none;outline:none;font-size:0.95rem;color:#fff;font-family:inherit"
+        oninput="renderPortalCmdResults(this.value)"
+        onkeydown="portalCmdKeyNav(event)">
+      <span style="font-size:0.7rem;color:rgba(255,255,255,0.25);white-space:nowrap">ESC to close</span>
+    </div>
+    <div id="portalCmdList" style="max-height:380px;overflow-y:auto;padding:8px 0"></div>
+  </div>
+</div>
+
+<!-- ══ MOBILE BOTTOM NAV ══ -->
+<nav class="mbn" id="mobileBottomNav" aria-label="Main navigation">
+  <div class="mbn-inner">
+    <button class="mbn-item active" data-view="overview" onclick="navigate('overview', this)" aria-label="Portfolio">
+      <i class="fa-solid fa-chart-pie"></i>
+      <span>Portfolio</span>
+    </button>
+    <button class="mbn-item" data-view="marketplace" onclick="navigate('marketplace', this)" aria-label="Invest">
+      <i class="fa-solid fa-layer-group"></i>
+      <span>Invest</span>
+    </button>
+    <button class="mbn-item" data-view="wallet" onclick="navigate('wallet', this)" aria-label="Wallet">
+      <i class="fa-solid fa-wallet"></i>
+      <span>Wallet</span>
+    </button>
+    <button class="mbn-item" data-view="support" onclick="navigate('support', this)" aria-label="Support">
+      <i class="fa-solid fa-headset"></i>
+      <span>Support</span>
+    </button>
+    <button class="mbn-item" data-view="profile" onclick="navigate('profile', this)" aria-label="Profile">
+      <i class="fa-solid fa-user-circle"></i>
+      <span>Profile</span>
+    </button>
+  </div>
+</nav>
+
+<script src="../js/api.js?v=10"></script>
+<script src="js/portal.js?v=34"></script>
+<!-- sv-intelligence.js hidden -->
+<script>
+if ('serviceWorker' in navigator && !window.__SVC_NATIVE__) {
+  // Web only. In the native app the assets are already local; a service worker
+  // there serves stale cached JS/CSS (cache-first) and races network vs cache,
+  // causing content to flash then disappear. native.js unregisters it instead.
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/portal/sw.js', { scope: '/portal/' })
+      .then(r => { window._swReg = r; console.log('[SW] Registered'); })
+      .catch(e => console.warn('[SW] Registration failed:', e));
+  });
+}
+</script>
+</body>
+</html>

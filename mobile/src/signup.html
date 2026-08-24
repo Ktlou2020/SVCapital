@@ -1,0 +1,2761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="icon" type="image/x-icon" href="assets/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
+  <link rel="apple-touch-icon" sizes="192x192" href="assets/logo-192.png" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>SV Capital — Create Account</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --orange:        #FF8215;
+      --orange-dark:   #E56200;
+      --orange-light:  #FF9B0C;
+      --orange-pale:   rgba(255,130,21,0.08);
+      --teal:          #656565;
+      --green:         #22C55E;
+      --red:           #EF4444;
+      --text-h:        #1a1a1a;
+      --text-body:     #303030;
+      --text-muted:    #6b7280;
+      --text-dim:      #9ca3af;
+      --bg:            #F7F8FA;
+      --bg-white:      #FFFFFF;
+      --border:        rgba(0,0,0,0.09);
+      --border-md:     rgba(0,0,0,0.13);
+      --shadow:        0 4px 20px rgba(0,0,0,0.09);
+      --shadow-lg:     0 20px 60px rgba(0,0,0,0.14);
+      --radius:        12px;
+      --radius-lg:     18px;
+      --font:          'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
+      --serif:         'Poppins', Georgia, serif;
+    }
+
+    /* Desktop: full-height split layout */
+    html { min-height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--text-body);
+      font-family: var(--font);
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+      display: flex;
+    }
+
+    .signup-layout {
+      display: flex;
+      min-height: 100vh;
+      width: 100%;
+      align-items: stretch;
+    }
+
+    /* ── Left Brand Panel ── */
+    .signup-left {
+      flex: 1;
+      background: linear-gradient(145deg, #2a2a2a 0%, #1a1a1a 60%, #222222 100%);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 64px 72px 80px;
+      position: relative;
+      min-width: 0;
+    }
+
+    .signup-left::before {
+      content: '';
+      position: absolute;
+      top: -100px; right: -100px;
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, rgba(255,130,21,0.10) 0%, transparent 65%);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+
+    .signup-left::after {
+      content: '';
+      position: absolute;
+      bottom: -80px; left: -80px;
+      width: 400px; height: 400px;
+      background: radial-gradient(circle, rgba(101,101,101,0.10) 0%, transparent 65%);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+
+    .brand-logo {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 64px;
+      position: relative;
+      z-index: 1;
+      text-decoration: none;
+    }
+
+    .brand-logo img { height: 56px; width: auto; }
+    .brand-logo-text { display: flex; flex-direction: column; gap: 1px; }
+    .brand-logo-text .name {
+      font-size: 1.3rem; font-weight: 900; color: #fff;
+      letter-spacing: -0.03em;
+    }
+    .brand-logo-text .tagline {
+      font-size: 0.68rem; color: rgba(255,255,255,0.5);
+      font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase;
+    }
+
+    .signup-headline {
+      font-family: var(--serif);
+      font-size: clamp(2rem, 3vw, 2.8rem);
+      color: #fff;
+      line-height: 1.18;
+      margin-bottom: 20px;
+      position: relative; z-index: 1;
+    }
+    .signup-headline em { color: #FF9B0C; font-style: italic; }
+
+    .signup-sub {
+      font-size: 0.95rem;
+      color: rgba(255,255,255,0.65);
+      line-height: 1.65;
+      max-width: 400px;
+      margin-bottom: 48px;
+      position: relative; z-index: 1;
+    }
+
+    .signup-benefits {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      position: relative; z-index: 1;
+    }
+
+    .benefit-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .benefit-icon {
+      width: 38px; height: 38px;
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      font-size: 0.9rem;
+    }
+
+    .benefit-text { font-size: 0.88rem; color: rgba(255,255,255,0.8); font-weight: 500; }
+    .benefit-text strong { color: #fff; font-weight: 700; }
+
+    .fica-left-info {
+      margin-top: 40px;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 14px;
+      padding: 20px 24px;
+      position: relative; z-index: 1;
+      max-width: 400px;
+    }
+    .fica-left-info__title {
+      font-size: 0.78rem;
+      font-weight: 800;
+      color: #FF9B0C;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 12px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .fica-left-info__list { display: flex; flex-direction: column; gap: 10px; }
+    .fica-left-info__item {
+      display: flex; align-items: flex-start; gap: 10px;
+      font-size: 0.8rem; color: rgba(255,255,255,0.75);
+    }
+    .fica-left-info__item i { color: #22c55e; flex-shrink: 0; margin-top: 2px; }
+
+    .left-footer {
+      margin-top: auto;
+      padding-top: 40px;
+      font-size: 0.72rem;
+      color: rgba(255,255,255,0.3);
+      display: flex; gap: 20px;
+      position: relative; z-index: 1;
+    }
+    .left-footer a { color: rgba(255,255,255,0.4); text-decoration: none; }
+    .left-footer a:hover { color: rgba(255,255,255,0.7); }
+
+    /* ── Right Form Panel ── */
+    .signup-right {
+      width: 560px;
+      flex-shrink: 0;
+      background: var(--bg-white);
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      padding: 48px 48px 48px;
+    }
+
+    .form-header { margin-bottom: 28px; }
+    .form-header h2 {
+      font-size: 1.6rem; font-weight: 900; color: var(--text-h);
+      letter-spacing: -0.03em; margin-bottom: 6px;
+    }
+    .form-header p { font-size: 0.88rem; color: var(--text-muted); }
+    .form-header p a { color: var(--orange); font-weight: 600; text-decoration: none; }
+    .draft-status {
+      margin-top: 12px;
+      min-height: 20px;
+      font-size: 0.74rem;
+      color: var(--text-dim);
+      transition: color 0.2s ease, opacity 0.2s ease;
+    }
+    .draft-status--saved { color: var(--teal); }
+
+    /* Progress Steps */
+    .form-steps {
+      display: flex;
+      align-items: center;
+      margin-bottom: 28px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .form-step {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .step-num {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      background: #e5e7eb;
+      color: var(--text-dim);
+      font-size: 0.72rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      transition: all 0.25s;
+    }
+
+    @keyframes step-pulse {
+      0%   { box-shadow: 0 0 0 0   rgba(255,130,21,0.45), 0 2px 8px rgba(255,130,21,0.35); }
+      60%  { box-shadow: 0 0 0 6px rgba(255,130,21,0),    0 2px 8px rgba(255,130,21,0.35); }
+      100% { box-shadow: 0 0 0 0   rgba(255,130,21,0),    0 2px 8px rgba(255,130,21,0.35); }
+    }
+    .form-step.active .step-num {
+      background: linear-gradient(135deg, #FF9B0C, #FF5229);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(255,130,21,0.35);
+      animation: step-pulse 1.8s ease-out infinite;
+    }
+    .form-step.done .step-num { background: #22c55e; color: #fff; }
+
+    .step-label {
+      font-size: 0.7rem; font-weight: 600;
+      color: var(--text-dim); white-space: nowrap;
+    }
+    .form-step.active .step-label { color: var(--orange); font-weight: 700; }
+    .form-step.done .step-label  { color: #22c55e; }
+
+    .step-line {
+      flex: 1; min-width: 20px; max-width: 40px;
+      height: 2px; background: #e5e7eb;
+      margin: 0 6px; transition: background 0.3s;
+    }
+    .step-line.done { background: #22c55e; }
+
+    /* Form Groups */
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+    .form-grid--full { grid-template-columns: 1fr; }
+
+    .form-group {
+      display: flex; flex-direction: column; gap: 5px;
+      margin-bottom: 14px;
+    }
+    .form-group:last-child { margin-bottom: 0; }
+
+    .form-label {
+      font-size: 0.73rem; font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .form-label span { color: var(--red); }
+
+    .form-input {
+      width: 100%; padding: 11px 13px;
+      border: 1.5px solid var(--border-md);
+      border-radius: 9px;
+      font-size: 0.88rem; font-family: var(--font);
+      color: var(--text-h); background: var(--bg-white);
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      -webkit-appearance: none;
+      appearance: none;
+      box-sizing: border-box;
+    }
+    .form-input:focus {
+      border-color: var(--orange);
+      box-shadow: 0 0 0 3px rgba(255,130,21,0.10);
+    }
+    .form-input.error {
+      border-color: var(--red);
+      box-shadow: 0 0 0 3px rgba(239,68,68,0.08);
+    }
+    .form-input::placeholder { color: var(--text-dim); }
+
+    .form-select {
+      width: 100%; padding: 11px 13px;
+      border: 1.5px solid var(--border-md);
+      border-radius: 9px;
+      font-size: 0.88rem; font-family: var(--font);
+      color: var(--text-h); background: var(--bg-white);
+      outline: none; cursor: pointer;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b7280' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 13px center;
+      padding-right: 34px;
+    }
+    .form-select:focus {
+      border-color: var(--orange);
+      box-shadow: 0 0 0 3px rgba(255,130,21,0.10);
+    }
+
+    .input-icon-wrap { position: relative; }
+    .input-icon-wrap .form-input { padding-left: 48px !important; }
+    .input-icon-wrap .icon {
+      position: absolute; left: 16px; top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-dim); font-size: 0.82rem; pointer-events: none;
+      z-index: 1;
+    }
+    .input-toggle {
+      position: absolute; right: 12px; top: 50%;
+      transform: translateY(-50%);
+      background: none; border: none; color: var(--text-dim);
+      cursor: pointer; font-size: 0.82rem; padding: 4px;
+      line-height: 1;
+    }
+
+    .field-hint  { font-size: 0.69rem; color: var(--text-dim); margin-top: 2px; }
+    .field-error { font-size: 0.69rem; color: var(--red);      margin-top: 2px; display: none; }
+
+    /* Password strength */
+    .pw-strength { margin-top: 5px; }
+    .pw-strength-bar { height: 4px; border-radius: 2px; background: #e5e7eb; overflow: hidden; margin-bottom: 4px; }
+    .pw-strength-fill { height: 100%; border-radius: 2px; transition: width 0.3s, background 0.3s; width: 0; }
+    .pw-strength-label { font-size: 0.67rem; font-weight: 600; color: var(--text-dim); }
+
+    /* Checkbox */
+    .checkbox-group {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 12px 13px;
+      background: var(--bg);
+      border-radius: 9px;
+      border: 1.5px solid var(--border);
+      cursor: pointer;
+      transition: border-color 0.2s;
+      margin-bottom: 10px;
+      user-select: none;
+    }
+    .checkbox-group:has(input:checked) {
+      border-color: rgba(255,130,21,0.4);
+      background: rgba(255,130,21,0.04);
+    }
+    .checkbox-group input[type="checkbox"] {
+      width: 18px; height: 18px;
+      accent-color: var(--orange);
+      flex-shrink: 0; margin-top: 1px; cursor: pointer;
+    }
+    .checkbox-label { font-size: 0.79rem; color: var(--text-body); line-height: 1.5; }
+    .checkbox-label a { color: var(--orange); font-weight: 600; text-decoration: none; }
+
+    /* Risk profile cards */
+    .risk-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+    .risk-card {
+      border: 1.5px solid var(--border-md);
+      border-radius: 10px; padding: 14px 10px;
+      cursor: pointer; transition: all 0.2s;
+      text-align: center; user-select: none;
+    }
+    .risk-card:hover  { border-color: var(--orange); }
+    .risk-card.selected { border-color: var(--orange); background: rgba(255,130,21,0.05); }
+    .risk-card input { display: none; }
+    .risk-icon { font-size: 1.3rem; margin-bottom: 5px; }
+    .risk-name { font-size: 0.76rem; font-weight: 700; color: var(--text-h); margin-bottom: 2px; }
+    .risk-desc { font-size: 0.63rem; color: var(--text-dim); line-height: 1.4; }
+
+    /* FICA Upload Cards */
+    .fica-section-title {
+      font-size: 0.72rem; font-weight: 800;
+      color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.07em;
+      margin-bottom: 12px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .fica-section-title span {
+      background: rgba(255,130,21,0.1); color: var(--orange);
+      font-size: 0.65rem; padding: 2px 8px; border-radius: 20px;
+      border: 1px solid rgba(255,130,21,0.2);
+    }
+
+    .fica-upload-card {
+      border: 1.5px dashed var(--border-md);
+      border-radius: 12px; padding: 20px 16px;
+      text-align: center; cursor: pointer;
+      transition: all 0.2s; background: var(--bg);
+      position: relative; margin-bottom: 12px;
+    }
+    .fica-upload-card:hover, .fica-upload-card.dragover {
+      border-color: var(--orange); background: rgba(255,130,21,0.04);
+    }
+    .fica-upload-card.uploaded {
+      border-style: solid; border-color: #22c55e;
+      background: rgba(34,197,94,0.04);
+    }
+    .fica-upload-card.required-missing {
+      border-color: var(--red); background: rgba(239,68,68,0.03);
+    }
+    .fica-upload-card__icon { font-size: 1.6rem; margin-bottom: 8px; display: block; }
+    .fica-upload-card__title {
+      font-size: 0.85rem; font-weight: 700; color: var(--text-h); margin-bottom: 3px;
+    }
+    .fica-upload-card__sub {
+      font-size: 0.72rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 10px;
+    }
+    .fica-upload-card__accepted {
+      font-size: 0.65rem; color: var(--text-dim); margin-bottom: 12px;
+    }
+    .fica-upload-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 16px;
+      background: #fff; border: 1.5px solid var(--border-md);
+      border-radius: 8px; font-size: 0.78rem; font-weight: 600;
+      color: var(--text-body); cursor: pointer; font-family: var(--font);
+      transition: all 0.2s;
+    }
+    .fica-upload-btn:hover { border-color: var(--orange); color: var(--orange); }
+    .fica-upload-card.uploaded .fica-upload-btn {
+      background: rgba(34,197,94,0.08);
+      border-color: rgba(34,197,94,0.35);
+      color: #16a34a;
+    }
+    .fica-file-status {
+      font-size: 0.72rem; color: #16a34a; margin-top: 8px;
+      display: none; align-items: center; justify-content: center; gap: 5px;
+    }
+    .fica-upload-card.uploaded .fica-file-status { display: flex; }
+    .fica-remove-btn {
+      background: none; border: none; color: #ef4444; cursor: pointer;
+      font-size: 0.68rem; padding: 0 2px; font-family: var(--font);
+      text-decoration: underline;
+    }
+
+    .fica-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    .fica-progress-bar {
+      height: 6px; background: #e5e7eb; border-radius: 3px;
+      overflow: hidden; margin-bottom: 6px;
+    }
+    .fica-progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #FF9B0C, #22c55e);
+      border-radius: 3px; transition: width 0.4s ease; width: 0%;
+    }
+    .fica-progress-label { font-size: 0.7rem; color: var(--text-muted); margin-bottom: 16px; }
+
+    .fica-required-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 0.62rem; font-weight: 700;
+      background: rgba(239,68,68,0.08); color: #b91c1c;
+      padding: 2px 7px; border-radius: 20px;
+      border: 1px solid rgba(239,68,68,0.2);
+    }
+    .fica-optional-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 0.62rem; font-weight: 700;
+      background: rgba(107,114,128,0.08); color: #6b7280;
+      padding: 2px 7px; border-radius: 20px;
+      border: 1px solid rgba(0,0,0,0.08);
+    }
+
+    /* Selfie card */
+    .selfie-card {
+      background: linear-gradient(135deg, rgba(47,140,155,0.06) 0%, rgba(255,130,21,0.04) 100%);
+      border: 1.5px dashed rgba(47,140,155,0.30);
+      border-radius: 12px; padding: 24px 20px;
+      text-align: center; cursor: pointer;
+      transition: all 0.2s; position: relative;
+    }
+    .selfie-card:hover { border-color: var(--teal); }
+    .selfie-card.uploaded { border-style: solid; border-color: #22c55e; }
+
+    /* FICA info banner */
+    .fica-info-banner {
+      background: rgba(47,140,155,0.06);
+      border: 1px solid rgba(47,140,155,0.20);
+      border-radius: 10px; padding: 14px 16px; margin-bottom: 20px;
+      display: flex; gap: 12px; align-items: flex-start;
+    }
+    .fica-info-banner i { color: var(--teal); flex-shrink: 0; margin-top: 2px; }
+    .fica-info-banner p { font-size: 0.78rem; color: #1a3a4a; line-height: 1.55; }
+    .fica-info-banner strong { color: #0d2535; }
+
+    /* Buttons */
+    .btn-primary {
+      width: 100%; padding: 13px 24px; min-height: 48px;
+      background: linear-gradient(135deg, #FF9B0C, #FF5229);
+      color: #fff; border: none; border-radius: 10px;
+      font-size: 0.92rem; font-weight: 700; font-family: var(--font);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      box-shadow: 0 4px 18px rgba(255,130,21,0.28);
+      transition: opacity 0.2s, transform 0.1s; letter-spacing: 0.01em;
+    }
+    .btn-primary:hover { opacity: 0.92; transform: translateY(-1px); }
+    .btn-primary:active { transform: translateY(0); }
+    .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+
+    .btn-secondary {
+      width: 100%; padding: 12px 24px; min-height: 48px;
+      background: transparent; color: var(--text-muted);
+      border: 1.5px solid var(--border-md);
+      border-radius: 10px; font-size: 0.88rem; font-weight: 600;
+      font-family: var(--font); cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      transition: all 0.2s;
+    }
+    .btn-secondary:hover { border-color: var(--orange); color: var(--orange); }
+
+    .btn-row { display: flex; gap: 12px; margin-top: 24px; margin-bottom: 8px; }
+
+    /* Success screen */
+    .success-screen { display: none; text-align: center; padding: 24px 0; }
+    .success-icon {
+      width: 80px; height: 80px; border-radius: 50%;
+      background: rgba(34,197,94,0.10); border: 2px solid rgba(34,197,94,0.25);
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 24px;
+    }
+    .success-icon i { font-size: 2rem; color: #22c55e; }
+    .success-title { font-size: 1.5rem; font-weight: 900; color: var(--text-h); margin-bottom: 10px; letter-spacing: -0.02em; }
+    .success-sub {
+      font-size: 0.88rem; color: var(--text-muted); line-height: 1.6;
+      margin-bottom: 24px; max-width: 340px; margin-left: auto; margin-right: auto;
+    }
+
+    .success-steps {
+      display: flex; flex-direction: column; gap: 10px;
+      text-align: left; max-width: 360px; margin: 0 auto 28px;
+    }
+    .success-step {
+      display: flex; align-items: center; gap: 12px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 10px; padding: 12px 14px;
+    }
+    .success-step__num {
+      width: 26px; height: 26px; border-radius: 50%;
+      background: linear-gradient(135deg, #FF9B0C, #FF5229);
+      color: #fff; font-size: 0.72rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .success-step__text { font-size: 0.8rem; color: var(--text-body); }
+    .success-step__text strong { color: var(--text-h); display: block; margin-bottom: 1px; }
+
+    /* Divider */
+    .divider { display: flex; align-items: center; gap: 12px; margin: 18px 0; }
+    .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border-md); }
+    .divider span { font-size: 0.74rem; color: var(--text-dim); font-weight: 600; }
+
+    /* Info strip */
+    .info-strip {
+      display: flex; gap: 10px; align-items: flex-start;
+      background: #f0f9ff; border: 1px solid rgba(47,140,155,0.2);
+      border-radius: 10px; padding: 12px 14px; margin-bottom: 18px;
+    }
+    .info-strip i { color: var(--teal); flex-shrink: 0; margin-top: 1px; font-size: 0.85rem; }
+    .info-strip p { font-size: 0.77rem; color: #303030; line-height: 1.5; }
+
+    /* Referral badge */
+    .referral-strip {
+      background: rgba(237,165,255,0.06); border: 1px solid rgba(237,165,255,0.2);
+      border-radius: 10px; padding: 10px 14px;
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 18px; font-size: 0.78rem; color: #6b21a8; font-weight: 600;
+    }
+
+    /* Steps */
+    #step1, #step2, #step3, #step4 { display: none; }
+    #step1 { display: block; }
+
+    /* ── Responsive ── */
+    @media (max-width: 960px) {
+      /* Allow page to scroll naturally — no internal scroll container on mobile */
+      html, body { height: auto; display: block; }
+      .signup-layout { display: block; }
+      .signup-left  { display: none; }
+      .signup-right {
+        width: 100%; max-width: 560px; margin: 0 auto;
+        padding: 40px 28px;
+        max-height: none; overflow-y: visible;
+      }
+    }
+
+    @media (max-width: 540px) {
+      .signup-right { padding: 28px 16px; }
+      .form-header h2 { font-size: 1.35rem; }
+      .form-grid { grid-template-columns: 1fr; }
+      .btn-row { flex-wrap: wrap; }
+      .btn-row .btn-secondary { max-width: 100% !important; }
+      /* Step indicator: shrink labels on narrow screens */
+      .step-label { font-size: 0.6rem; letter-spacing: 0; }
+      .step-line  { min-width: 8px; max-width: 20px; margin: 0 4px; }
+    }
+
+    @media (max-width: 400px) {
+      /* Hide step labels on very small phones — numbers are enough */
+      .step-label { display: none; }
+      .step-line  { min-width: 6px; max-width: 14px; margin: 0 3px; }
+      .risk-grid  { grid-template-columns: 1fr; }
+      .fica-grid  { grid-template-columns: 1fr; }
+    }
+
+    /* ─── Social proof stats ─── */
+    .social-proof-stats {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 0; margin-top: 36px;
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 14px; overflow: hidden;
+      position: relative; z-index: 1;
+    }
+    .sp-stat {
+      padding: 16px 10px; text-align: center;
+      border-right: 1px solid rgba(255,255,255,0.10);
+      background: rgba(255,255,255,0.03);
+    }
+    .sp-stat:last-child { border-right: none; }
+    .sp-stat__num {
+      font-size: 1.4rem; font-weight: 900; color: #FF9B0C;
+      letter-spacing: -0.03em; font-family: var(--serif);
+      line-height: 1.1; margin-bottom: 5px;
+    }
+    .sp-stat__label {
+      font-size: 0.6rem; color: rgba(255,255,255,0.45);
+      font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+      line-height: 1.35;
+    }
+
+    /* ─── SA ID validation indicator ─── */
+    .id-validation {
+      display: flex; align-items: flex-start; gap: 8px;
+      padding: 9px 12px; border-radius: 8px; margin-top: 5px;
+      font-size: 0.73rem; line-height: 1.45; transition: all 0.2s;
+    }
+    .id-validation--valid { background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.22); color: #16a34a; }
+    .id-validation--error { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.22); color: #b91c1c; }
+    .id-validation--info  { background: rgba(47,140,155,0.07); border: 1px solid rgba(47,140,155,0.20); color: #1a3a4a; }
+    .id-validation i { flex-shrink: 0; margin-top: 1px; }
+    .id-validation__body { display: flex; flex-direction: column; gap: 3px; }
+    .id-validation__main { font-weight: 600; }
+    .id-validation__chips { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 2px; }
+    .id-chip {
+      display: inline-flex; align-items: center; gap: 3px;
+      padding: 2px 7px; border-radius: 20px; font-size: 0.66rem; font-weight: 700;
+    }
+    .id-chip--orange { background: rgba(255,130,21,0.12); border: 1px solid rgba(255,130,21,0.25); color: #c96000; }
+    .id-chip--teal   { background: rgba(47,140,155,0.12); border: 1px solid rgba(47,140,155,0.25); color: #656565; }
+    .id-chip--purple { background: rgba(237,165,255,0.10); border: 1px solid rgba(237,165,255,0.25); color: #eda5ff; }
+
+    /* ─── Step slide transitions ─── */
+    @keyframes stepSlideRight {
+      from { opacity: 0; transform: translateX(28px); }
+      to   { opacity: 1; transform: none; }
+    }
+    @keyframes stepSlideLeft {
+      from { opacity: 0; transform: translateX(-28px); }
+      to   { opacity: 1; transform: none; }
+    }
+    .step-enter-fwd  { animation: stepSlideRight 0.30s cubic-bezier(0.22,1,0.36,1) both; }
+    .step-enter-back { animation: stepSlideLeft  0.30s cubic-bezier(0.22,1,0.36,1) both; }
+
+    /* ─── FICA file preview thumbnails ─── */
+    .fica-thumb-wrap {
+      display: none; justify-content: center; align-items: center;
+      margin: 8px auto 0; width: 68px; height: 68px;
+      border-radius: 8px; overflow: hidden;
+      border: 2px solid rgba(34,197,94,0.35);
+      background: #f1f5f9;
+    }
+    .fica-upload-card.uploaded .fica-thumb-wrap { display: flex; }
+    .fica-thumb-img { width: 100%; height: 100%; object-fit: cover; display: none; }
+    .fica-thumb-img.loaded { display: block; }
+    .fica-thumb-pdf {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      font-size: 1.5rem; color: #ef4444; gap: 2px;
+      display: none;
+    }
+    .fica-thumb-pdf.show { display: flex; }
+    .fica-thumb-pdf span { font-size: 0.55rem; font-weight: 800; color: #ef4444; letter-spacing: 0.05em; }
+
+    /* ─── Return estimate widget ─── */
+    .return-estimate {
+      background: linear-gradient(135deg, rgba(255,155,12,0.06) 0%, rgba(34,197,94,0.05) 100%);
+      border: 1px solid rgba(255,130,21,0.18); border-radius: 12px;
+      padding: 16px 18px; margin-top: 16px;
+    }
+    .return-estimate__header {
+      font-size: 0.7rem; font-weight: 800; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 14px;
+      display: flex; align-items: center; gap: 7px;
+    }
+    .return-estimate__header i { color: var(--orange); }
+    .return-estimate__row {
+      display: grid; grid-template-columns: 100px 1fr 70px;
+      align-items: center; gap: 10px; margin-bottom: 10px;
+    }
+    .return-estimate__label { font-size: 0.73rem; color: var(--text-muted); }
+    .return-estimate__slider { width: 100%; accent-color: var(--orange); }
+    .return-estimate__val { font-size: 0.8rem; font-weight: 700; color: var(--text-h); text-align: right; }
+    .return-estimate__result {
+      background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.22);
+      border-radius: 8px; padding: 10px 14px;
+      display: flex; justify-content: space-between; align-items: center;
+      margin-top: 6px;
+    }
+    .return-estimate__result-label { font-size: 0.72rem; color: var(--text-muted); line-height: 1.4; }
+    .return-estimate__result-val   { font-size: 1.05rem; font-weight: 900; color: #16a34a; letter-spacing: -0.02em; }
+    .return-estimate__disclaimer {
+      font-size: 0.63rem; color: var(--text-dim); margin-top: 6px; text-align: center;
+    }
+
+    /* ─── Animated success checkmark ─── */
+    .check-svg { width: 80px; height: 80px; margin: 0 auto 24px; display: block; }
+    .check-circle {
+      fill: none; stroke: #22c55e; stroke-width: 2;
+      stroke-dasharray: 157; stroke-dashoffset: 157;
+      transform-origin: center; transform: rotate(-90deg);
+      animation: drawCircle 0.65s cubic-bezier(0.65,0,0.45,1) 0.25s forwards;
+    }
+    .check-tick {
+      fill: none; stroke: #22c55e; stroke-width: 3;
+      stroke-linecap: round; stroke-linejoin: round;
+      stroke-dasharray: 34; stroke-dashoffset: 34;
+      animation: drawTick 0.40s ease-out 0.95s forwards;
+    }
+    @keyframes drawCircle { to { stroke-dashoffset: 0; } }
+    @keyframes drawTick   { to { stroke-dashoffset: 0; } }
+    @keyframes successPop {
+      0%   { opacity: 0; transform: scale(0.7); }
+      60%  { transform: scale(1.08); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+    .success-screen.visible { animation: successPop 0.5s cubic-bezier(0.22,1,0.36,1) both; }
+    .success-confetti { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999; }
+
+    /* ─── Citizenship toggle ─── */
+    .citizen-toggle {
+      display: flex; border: 1.5px solid var(--border-md);
+      border-radius: 10px; overflow: hidden; margin-bottom: 16px;
+    }
+    .citizen-toggle__btn {
+      flex: 1; padding: 11px 8px;
+      background: var(--bg); border: none; font-family: var(--font);
+      font-size: 0.8rem; font-weight: 600; cursor: pointer;
+      color: var(--text-muted); transition: all 0.2s;
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+    }
+    .citizen-toggle__btn.active { background: linear-gradient(135deg, #FF9B0C, #FF5229); color: #fff; }
+    .citizen-toggle__btn:not(.active):hover { color: var(--orange); background: rgba(255,130,21,0.04); }
+
+    /* ─── Phone prefix ─── */
+    .phone-prefix-wrap { display: flex; }
+    .phone-prefix-select {
+      flex-shrink: 0; width: 100px;
+      padding: 11px 4px 11px 11px;
+      border: 1.5px solid var(--border-md); border-right: none;
+      border-radius: 9px 0 0 9px;
+      font-family: var(--font); font-size: 0.8rem; font-weight: 600;
+      color: var(--text-h); background: var(--bg);
+      outline: none; cursor: pointer; appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236b7280' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 6px center;
+      transition: border-color 0.2s;
+    }
+    .phone-prefix-wrap .form-input { border-radius: 0 9px 9px 0; flex: 1; }
+    .phone-prefix-wrap:focus-within .phone-prefix-select,
+    .phone-prefix-wrap:focus-within .form-input { border-color: var(--orange); }
+    .phone-prefix-wrap .form-input:focus { box-shadow: none; }
+    .phone-prefix-wrap:focus-within { box-shadow: 0 0 0 3px rgba(255,130,21,0.10); border-radius: 9px; }
+
+    /* ─── International client info ─── */
+    .intl-info-banner {
+      background: rgba(47,140,155,0.07); border: 1px solid rgba(47,140,155,0.22);
+      border-radius: 10px; padding: 11px 14px;
+      display: flex; gap: 10px; align-items: flex-start;
+      margin-bottom: 16px; font-size: 0.77rem; color: #1a3a4a; line-height: 1.5;
+    }
+    .intl-info-banner i { color: var(--teal); flex-shrink: 0; margin-top: 2px; }
+
+    /* ─── International waitlist panel ─── */
+    .intl-waitlist-panel { display: none; }
+    .intl-waitlist-hero {
+      text-align: center; padding: 28px 0 24px;
+    }
+    .intl-waitlist-hero__icon {
+      width: 72px; height: 72px; border-radius: 50%;
+      background: linear-gradient(135deg, rgba(47,140,155,0.12), rgba(255,130,21,0.10));
+      border: 1.5px solid rgba(47,140,155,0.22);
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 18px; font-size: 2rem;
+    }
+    .intl-waitlist-hero__title {
+      font-size: 1.35rem; font-weight: 900; color: var(--text-h);
+      letter-spacing: -0.025em; margin-bottom: 10px;
+    }
+    .intl-waitlist-hero__sub {
+      font-size: 0.86rem; color: var(--text-muted);
+      line-height: 1.65; max-width: 380px; margin: 0 auto;
+    }
+    .intl-waitlist-benefits {
+      display: flex; flex-direction: column; gap: 10px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 12px; padding: 16px 18px; margin: 20px 0 24px;
+    }
+    .intl-waitlist-benefit {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 0.8rem; color: var(--text-body);
+    }
+    .intl-waitlist-benefit i { color: var(--orange); flex-shrink: 0; width: 14px; }
+    .intl-waitlist-success {
+      display: none; text-align: center; padding: 16px 0;
+    }
+    .intl-waitlist-success__icon {
+      width: 64px; height: 64px; border-radius: 50%;
+      background: rgba(34,197,94,0.10); border: 2px solid rgba(34,197,94,0.25);
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 16px;
+    }
+    .intl-waitlist-success__icon i { font-size: 1.6rem; color: #22c55e; }
+    .intl-waitlist-success__title { font-size: 1.2rem; font-weight: 900; color: var(--text-h); margin-bottom: 8px; }
+    .intl-waitlist-success__sub { font-size: 0.84rem; color: var(--text-muted); line-height: 1.6; }
+  </style>
+  <!-- Google Analytics 4 -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-5LEPWC7EFP"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-5LEPWC7EFP', {
+      send_page_view: true,
+      cookie_flags: 'SameSite=None;Secure',
+      anonymize_ip: false
+    });
+  </script>
+  <script src="/js/analytics.js"></script>
+
+  <!-- ── Capacitor native config injected by build.js ── -->
+  <script>
+    window.__SVC_NATIVE__ = true;
+    window.__SVC_API_BASE__ = 'https://svcapital-production.up.railway.app/api/';
+  </script>
+  <script src="/js/native.js"></script>
+  <link rel="stylesheet" href="/css/mobile-app.css?v=8">
+  <!-- Kill viewFadeIn animation synchronously before first paint — prevents Android WebView blank screen -->
+  <script>
+  (function(){
+    var s=document.createElement('style');
+    s.textContent='@keyframes viewFadeIn{from{opacity:1;transform:none}to{opacity:1;transform:none}}@-webkit-keyframes viewFadeIn{from{opacity:1;transform:none}to{opacity:1;transform:none}}.view{animation:none!important;-webkit-animation:none!important;transform:none!important}.view.active{animation:none!important;-webkit-animation:none!important;opacity:1!important;transform:none!important}';
+    document.head.appendChild(s);
+  })();
+  </script>
+</head>
+<body>
+
+<div class="signup-layout">
+
+  <!-- ── LEFT BRAND PANEL ── -->
+  <div class="signup-left">
+    <a href="index.html" class="brand-logo">
+      <img src="assets/full-colour-logo-horizontal-white-text.png" alt="SV Capital" id="brandLogoImg">
+      <div class="brand-logo-text">
+        <span class="tagline">Investor Portal</span>
+      </div>
+    </a>
+
+    <h1 class="signup-headline">
+      Start building<br>
+      <em>real wealth</em><br>
+      today.
+    </h1>
+
+    <p class="signup-sub">
+      Join 3,000+ South Africans earning inflation-beating returns through real, tangible asset investments — starting from just <strong style="color:#FF9B0C">R500</strong>.
+    </p>
+
+    <div class="signup-benefits">
+      <div class="benefit-item">
+        <div class="benefit-icon" style="background:rgba(255,155,12,0.12)">
+          <i class="fa-solid fa-chart-line" style="color:#FF9B0C"></i>
+        </div>
+        <div class="benefit-text"><strong>14–21% p.a. returns</strong> on alternative asset classes</div>
+      </div>
+      <div class="benefit-item">
+        <div class="benefit-icon" style="background:rgba(34,197,94,0.12)">
+          <i class="fa-solid fa-shield-halved" style="color:#22c55e"></i>
+        </div>
+        <div class="benefit-text"><strong>FSCA regulated</strong> — FSP License #52449</div>
+      </div>
+      <div class="benefit-item">
+        <div class="benefit-icon" style="background:rgba(47,140,155,0.12)">
+          <i class="fa-solid fa-bolt" style="color:#656565"></i>
+        </div>
+        <div class="benefit-text"><strong>Same-day funding</strong> via Paystack</div>
+      </div>
+      <div class="benefit-item">
+        <div class="benefit-icon" style="background:rgba(237,165,255,0.12)">
+          <i class="fa-solid fa-users" style="color:#eda5ff"></i>
+        </div>
+        <div class="benefit-text"><strong>Refer &amp; earn</strong> R250 bonus on every referral</div>
+      </div>
+    </div>
+
+    <!-- Social proof stats -->
+    <div class="social-proof-stats">
+      <div class="sp-stat">
+        <div class="sp-stat__num" id="spInvestors">3 000+</div>
+        <div class="sp-stat__label">Active<br>Investors</div>
+      </div>
+      <div class="sp-stat">
+        <div class="sp-stat__num" id="spAUM">R250M+</div>
+        <div class="sp-stat__label">Assets Under<br>Management</div>
+      </div>
+      <div class="sp-stat">
+        <div class="sp-stat__num" id="spReturns">17%</div>
+        <div class="sp-stat__label">Average<br>Annual Return</div>
+      </div>
+    </div>
+
+    <div class="fica-left-info">
+      <div class="fica-left-info__title">
+        <i class="fa-solid fa-id-card"></i> What is FICA?
+      </div>
+      <div class="fica-left-info__list">
+        <div class="fica-left-info__item">
+          <i class="fa-solid fa-check-circle"></i>
+          <span>FICA (Financial Intelligence Centre Act) verification is required by law for all South African financial platforms.</span>
+        </div>
+        <div class="fica-left-info__item">
+          <i class="fa-solid fa-check-circle"></i>
+          <span>It protects investors and prevents money laundering. Your documents are encrypted and never shared with third parties.</span>
+        </div>
+        <div class="fica-left-info__item">
+          <i class="fa-solid fa-check-circle"></i>
+          <span>Once your FICA documents are submitted, they will be reviewed within <strong style="color:#FF9B0C">1–2 business days</strong>. You'll be notified by email once verified.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="left-footer">
+      <span>© <script>document.write(new Date().getFullYear())</script> SmartVest Financial Services (Pty) Ltd</span>
+      <a href="popia.html" target="_blank">Privacy Policy</a>
+      <a href="terms.html" target="_blank">Terms of Use</a>
+    </div>
+  </div>
+
+  <!-- ── RIGHT FORM PANEL ── -->
+  <div class="signup-right">
+
+    <div class="form-header">
+      <h2>Create your account</h2>
+      <p>Already have an account? <a href="login.html">Sign in here</a></p>
+      <div class="draft-status" id="draftStatus" aria-live="polite"></div>
+    </div>
+
+    <!-- Step Indicator -->
+    <div class="form-steps" id="formSteps">
+      <div class="form-step active" id="stepIndicator1">
+        <div class="step-num">1</div>
+        <span class="step-label">Personal</span>
+      </div>
+      <div class="step-line" id="stepLine1"></div>
+      <div class="form-step" id="stepIndicator2">
+        <div class="step-num">2</div>
+        <span class="step-label">Security</span>
+      </div>
+      <div class="step-line" id="stepLine2"></div>
+      <div class="form-step" id="stepIndicator3">
+        <div class="step-num">3</div>
+        <span class="step-label">Profile</span>
+      </div>
+      <div class="step-line" id="stepLine3"></div>
+      <div class="form-step" id="stepIndicator4">
+        <div class="step-num">4</div>
+        <span class="step-label">FICA</span>
+      </div>
+    </div>
+
+    <!-- Global error banner -->
+    <div id="formError" style="display:none;background:#fef2f2;border:1px solid rgba(239,68,68,0.30);border-radius:10px;padding:12px 14px;font-size:0.82rem;color:#b91c1c;margin-bottom:14px">
+      <i class="fa-solid fa-circle-exclamation"></i>
+      <span id="formErrorMsg" style="margin-left:6px">Please fix the errors above.</span>
+    </div>
+
+    <!-- ══ INTERNATIONAL WAITLIST PANEL ══ -->
+    <div class="intl-waitlist-panel" id="intlWaitlistPanel">
+
+      <!-- Citizenship selector (repeated so it stays visible) -->
+      <div class="citizen-toggle">
+        <button type="button" class="citizen-toggle__btn" id="btnCitizenSA2">
+          🇿🇦 South African / SA Resident
+        </button>
+        <button type="button" class="citizen-toggle__btn active" id="btnCitizenIntl2">
+          🌍 International Client
+        </button>
+      </div>
+
+      <div id="intlWaitlistForm">
+        <div class="intl-waitlist-hero">
+          <div class="intl-waitlist-hero__icon">🌍</div>
+          <h3 class="intl-waitlist-hero__title">We're expanding globally!</h3>
+          <p class="intl-waitlist-hero__sub">
+            SV Capital is currently available to South African residents only. We're working hard to bring our platform to more countries — leave your details and we'll notify you the moment we launch in your country.
+          </p>
+        </div>
+
+        <div class="intl-waitlist-benefits">
+          <div class="intl-waitlist-benefit">
+            <i class="fa-solid fa-bell"></i>
+            <span>Be the <strong>first to know</strong> when we launch in your country</span>
+          </div>
+          <div class="intl-waitlist-benefit">
+            <i class="fa-solid fa-gift"></i>
+            <span><strong>Early access bonus</strong> reserved for waitlist members</span>
+          </div>
+          <div class="intl-waitlist-benefit">
+            <i class="fa-solid fa-chart-line"></i>
+            <span>Access <strong>14–21% p.a. returns</strong> on alternative assets</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="wlFullName">Full Name <span>*</span></label>
+          <div class="input-icon-wrap">
+            <i class="icon fa-solid fa-user"></i>
+            <input type="text" class="form-input" id="wlFullName" placeholder="Your full name" autocomplete="name" />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="wlEmail">Email Address <span>*</span></label>
+          <div class="input-icon-wrap">
+            <i class="icon fa-solid fa-envelope"></i>
+            <input type="email" class="form-input" id="wlEmail" placeholder="you@example.com" autocomplete="email" />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="wlCountry">Country of Residence <span>*</span></label>
+          <select class="form-select" id="wlCountry">
+            <option value="">Select your country</option>
+            <optgroup label="Southern Africa">
+              <option>Zimbabwe</option><option>Namibia</option><option>Botswana</option>
+              <option>Zambia</option><option>Mozambique</option><option>Lesotho</option><option>Eswatini</option>
+            </optgroup>
+            <optgroup label="Other Africa">
+              <option>Kenya</option><option>Nigeria</option><option>Ghana</option><option>Tanzania</option>
+              <option>Uganda</option><option>Rwanda</option><option>Ethiopia</option>
+              <option>Egypt</option><option>Morocco</option>
+            </optgroup>
+            <optgroup label="Europe">
+              <option>United Kingdom</option><option>Germany</option><option>Netherlands</option>
+              <option>France</option><option>Portugal</option><option>Spain</option>
+              <option>Italy</option><option>Switzerland</option><option>Sweden</option><option>Belgium</option>
+            </optgroup>
+            <optgroup label="Americas &amp; Pacific">
+              <option>United States</option><option>Canada</option><option>Australia</option><option>New Zealand</option>
+            </optgroup>
+            <optgroup label="Middle East &amp; Asia">
+              <option>United Arab Emirates</option><option>Saudi Arabia</option><option>Qatar</option>
+              <option>India</option><option>China</option><option>Singapore</option>
+            </optgroup>
+          </select>
+        </div>
+
+        <button type="button" class="btn-primary" id="btnWaitlistSubmit" style="margin-top:8px">
+          <span id="wlBtnText"><i class="fa-solid fa-paper-plane"></i> Join the Waitlist</span>
+          <span id="wlBtnSpinner" style="display:none"><i class="fa-solid fa-spinner fa-spin"></i> Submitting…</span>
+        </button>
+
+        <p style="font-size:0.71rem;color:var(--text-dim);text-align:center;margin-top:12px;line-height:1.5">
+          We respect your privacy. Your details will only be used to notify you about our international launch.
+        </p>
+      </div>
+
+      <div class="intl-waitlist-success" id="intlWaitlistSuccess">
+        <div class="intl-waitlist-success__icon">
+          <i class="fa-solid fa-check"></i>
+        </div>
+        <h3 class="intl-waitlist-success__title">You're on the list!</h3>
+        <p class="intl-waitlist-success__sub">
+          Thanks for your interest in SV Capital.<br>
+          We'll send you an email at <strong id="wlConfirmEmail"></strong> as soon as we're available in your country.
+        </p>
+        <div style="margin-top:20px;padding:14px 16px;background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.20);border-radius:10px;font-size:0.78rem;color:#16a34a;display:flex;gap:10px;align-items:center">
+          <i class="fa-solid fa-circle-check"></i>
+          <span>Keep an eye on your inbox — we're expanding fast!</span>
+        </div>
+      </div>
+
+    </div><!-- /intlWaitlistPanel -->
+
+    <!-- ══ STEP 1: Personal Info ══ -->
+    <div id="step1">
+
+      <!-- Citizenship selector -->
+      <div class="citizen-toggle">
+        <button type="button" class="citizen-toggle__btn active" id="btnCitizenSA">
+          🇿🇦 South African / SA Resident
+        </button>
+        <button type="button" class="citizen-toggle__btn" id="btnCitizenIntl">
+          🌍 International Client
+        </button>
+      </div>
+
+      <div class="info-strip" id="infoStripSA">
+        <i class="fa-solid fa-circle-info"></i>
+        <p>Your details are kept private and secure. We use them only for account verification and FSCA compliance.</p>
+      </div>
+      <div class="intl-info-banner" id="infoStripIntl" style="display:none">
+        <i class="fa-solid fa-earth-africa"></i>
+        <span>International clients are welcome. We accept passport-based KYC verification for non-SA residents. Your documents will be reviewed by our compliance team within 1–3 business days.</span>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label" for="firstName">First Name <span>*</span></label>
+          <input type="text" class="form-input" id="firstName" placeholder="Thabo" autocomplete="given-name" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="lastName">Last Name <span>*</span></label>
+          <input type="text" class="form-input" id="lastName" placeholder="Khumalo" autocomplete="family-name" />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="email">Email Address <span>*</span></label>
+        <div class="input-icon-wrap">
+          <i class="icon fa-solid fa-envelope"></i>
+          <input type="email" class="form-input" id="email" placeholder="thabo@example.co.za" autocomplete="email" />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="phone">Phone Number <span>*</span></label>
+        <div class="phone-prefix-wrap">
+          <select class="phone-prefix-select" id="phoneDialCode" aria-label="Country dial code">
+            <optgroup label="Southern Africa">
+              <option value="+27" selected>🇿🇦 +27</option>
+              <option value="+263">🇿🇼 +263</option>
+              <option value="+264">🇳🇦 +264</option>
+              <option value="+267">🇧🇼 +267</option>
+              <option value="+260">🇿🇲 +260</option>
+              <option value="+258">🇲🇿 +258</option>
+              <option value="+266">🇱🇸 +266</option>
+              <option value="+268">🇸🇿 +268</option>
+            </optgroup>
+            <optgroup label="Other Africa">
+              <option value="+254">🇰🇪 +254</option>
+              <option value="+234">🇳🇬 +234</option>
+              <option value="+233">🇬🇭 +233</option>
+              <option value="+255">🇹🇿 +255</option>
+              <option value="+256">🇺🇬 +256</option>
+              <option value="+250">🇷🇼 +250</option>
+              <option value="+251">🇪🇹 +251</option>
+              <option value="+20">🇪🇬 +20</option>
+              <option value="+212">🇲🇦 +212</option>
+            </optgroup>
+            <optgroup label="Europe">
+              <option value="+44">🇬🇧 +44</option>
+              <option value="+49">🇩🇪 +49</option>
+              <option value="+31">🇳🇱 +31</option>
+              <option value="+33">🇫🇷 +33</option>
+              <option value="+351">🇵🇹 +351</option>
+              <option value="+34">🇪🇸 +34</option>
+              <option value="+39">🇮🇹 +39</option>
+              <option value="+41">🇨🇭 +41</option>
+              <option value="+46">🇸🇪 +46</option>
+              <option value="+32">🇧🇪 +32</option>
+            </optgroup>
+            <optgroup label="Americas &amp; Pacific">
+              <option value="+1">🇺🇸 +1</option>
+              <option value="+61">🇦🇺 +61</option>
+              <option value="+64">🇳🇿 +64</option>
+            </optgroup>
+            <optgroup label="Middle East &amp; Asia">
+              <option value="+971">🇦🇪 +971</option>
+              <option value="+966">🇸🇦 +966</option>
+              <option value="+974">🇶🇦 +974</option>
+              <option value="+91">🇮🇳 +91</option>
+              <option value="+86">🇨🇳 +86</option>
+              <option value="+65">🇸🇬 +65</option>
+            </optgroup>
+          </select>
+          <input type="tel" class="form-input" id="phone" placeholder="71 234 5678" autocomplete="tel" inputmode="tel" />
+        </div>
+        <div class="field-hint" id="phoneHint">Enter your number without the leading 0 — e.g. 71 234 5678</div>
+      </div>
+
+      <!-- SA ID (for SA citizens / permanent residents) -->
+      <div id="saIdGroup">
+        <div class="form-group">
+          <label class="form-label" for="idNumber">South African ID Number <span>*</span></label>
+          <div class="input-icon-wrap">
+            <i class="icon fa-solid fa-id-card"></i>
+            <input type="text" class="form-input" id="idNumber" placeholder="8001015009087"
+                   maxlength="13" autocomplete="off" inputmode="numeric" />
+          </div>
+          <div id="idValidation" style="display:none"></div>
+          <div class="field-hint" id="idHint">Your 13-digit RSA ID number — required for FICA verification.</div>
+        </div>
+      </div>
+
+      <!-- Passport block (for international clients) -->
+      <div id="passportGroup" style="display:none">
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label" for="passportNumber">Passport Number <span>*</span></label>
+            <div class="input-icon-wrap">
+              <i class="icon fa-solid fa-passport"></i>
+              <input type="text" class="form-input" id="passportNumber" placeholder="e.g. A12345678"
+                     maxlength="20" autocomplete="off" style="text-transform:uppercase" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="passportExpiry">Passport Expiry <span>*</span></label>
+            <input type="date" class="form-input" id="passportExpiry" autocomplete="off" />
+            <div class="field-hint">Passport must not be expired.</div>
+          </div>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label" for="nationality">Nationality <span>*</span></label>
+            <select class="form-select" id="nationality">
+              <option value="">Select nationality</option>
+              <optgroup label="Southern Africa">
+                <option>Zimbabwean</option><option>Namibian</option><option>Batswana</option>
+                <option>Zambian</option><option>Mozambican</option><option>Basotho</option><option>Swazi</option>
+              </optgroup>
+              <optgroup label="Other Africa">
+                <option>Kenyan</option><option>Nigerian</option><option>Ghanaian</option>
+                <option>Tanzanian</option><option>Ugandan</option><option>Rwandan</option>
+                <option>Ethiopian</option><option>Egyptian</option><option>Moroccan</option>
+              </optgroup>
+              <optgroup label="Europe">
+                <option>British</option><option>German</option><option>Dutch</option><option>French</option>
+                <option>Portuguese</option><option>Spanish</option><option>Italian</option>
+                <option>Swiss</option><option>Swedish</option><option>Belgian</option>
+              </optgroup>
+              <optgroup label="Americas &amp; Pacific">
+                <option>American</option><option>Canadian</option><option>Australian</option><option>New Zealander</option>
+              </optgroup>
+              <optgroup label="Middle East &amp; Asia">
+                <option>Emirati</option><option>Saudi Arabian</option><option>Qatari</option>
+                <option>Indian</option><option>Chinese</option><option>Singaporean</option>
+              </optgroup>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="countryResidence">Country of Residence <span>*</span></label>
+            <select class="form-select" id="countryResidence">
+              <option value="">Select country</option>
+              <optgroup label="Southern Africa">
+                <option>Zimbabwe</option><option>Namibia</option><option>Botswana</option>
+                <option>Zambia</option><option>Mozambique</option><option>Lesotho</option><option>Eswatini</option>
+              </optgroup>
+              <optgroup label="Other Africa">
+                <option>Kenya</option><option>Nigeria</option><option>Ghana</option><option>Tanzania</option>
+                <option>Uganda</option><option>Rwanda</option><option>Ethiopia</option>
+                <option>Egypt</option><option>Morocco</option>
+              </optgroup>
+              <optgroup label="Europe">
+                <option>United Kingdom</option><option>Germany</option><option>Netherlands</option>
+                <option>France</option><option>Portugal</option><option>Spain</option>
+                <option>Italy</option><option>Switzerland</option><option>Sweden</option><option>Belgium</option>
+              </optgroup>
+              <optgroup label="Americas &amp; Pacific">
+                <option>United States</option><option>Canada</option><option>Australia</option><option>New Zealand</option>
+              </optgroup>
+              <optgroup label="Middle East &amp; Asia">
+                <option>United Arab Emirates</option><option>Saudi Arabia</option><option>Qatar</option>
+                <option>India</option><option>China</option><option>Singapore</option>
+              </optgroup>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label" for="city">City <span>*</span></label>
+          <input type="text" class="form-input" id="city" placeholder="Search your city…" autocomplete="off" list="sa-cities-list" />
+          <datalist id="sa-cities-list">
+            <option value="Johannesburg"><option value="Cape Town"><option value="Durban"><option value="Pretoria"><option value="Gqeberha (Port Elizabeth)"><option value="Bloemfontein"><option value="East London"><option value="Polokwane"><option value="Mbombela (Nelspruit)"><option value="Kimberley">
+            <option value="Sandton"><option value="Randburg"><option value="Roodepoort"><option value="Soweto"><option value="Centurion"><option value="Midrand"><option value="Boksburg"><option value="Benoni"><option value="Springs"><option value="Germiston"><option value="Alberton"><option value="Edenvale"><option value="Kempton Park"><option value="Krugersdorp"><option value="Vanderbijlpark"><option value="Vereeniging"><option value="Tembisa"><option value="Brakpan"><option value="Randfontein"><option value="Westonaria"><option value="Ekurhuleni">
+            <option value="Stellenbosch"><option value="Paarl"><option value="Worcester"><option value="Somerset West"><option value="Strand"><option value="Bellville"><option value="Brackenfell"><option value="George"><option value="Mossel Bay"><option value="Knysna"><option value="Oudtshoorn"><option value="Hermanus"><option value="Robertson"><option value="Swellendam"><option value="Beaufort West"><option value="Atlantis"><option value="Mitchells Plain"><option value="Khayelitsha"><option value="Jeffreys Bay"><option value="Langebaan"><option value="Saldanha">
+            <option value="Pietermaritzburg"><option value="Richards Bay"><option value="Empangeni"><option value="Newcastle"><option value="Ladysmith"><option value="Pinetown"><option value="Umhlanga"><option value="Ballito"><option value="Margate"><option value="Port Shepstone"><option value="Tongaat">
+            <option value="Makhanda (Grahamstown)"><option value="Komani (Queenstown)"><option value="Bhisho"><option value="Uitenhage"><option value="Graaff-Reinet"><option value="Aliwal North"><option value="Port Alfred"><option value="Butterworth"><option value="Mthatha">
+            <option value="Welkom"><option value="Bethlehem"><option value="Kroonstad"><option value="Sasolburg"><option value="Parys"><option value="Harrismith"><option value="Phuthaditjhaba">
+            <option value="Tzaneen"><option value="Phalaborwa"><option value="Makhado (Louis Trichardt)"><option value="Musina"><option value="Thohoyandou"><option value="Mokopane"><option value="Lephalale"><option value="Lebowakgomo"><option value="Bela-Bela">
+            <option value="eMalahleni (Witbank)"><option value="Middelburg"><option value="Secunda"><option value="Standerton"><option value="Ermelo"><option value="Piet Retief">
+            <option value="Rustenburg"><option value="Potchefstroom"><option value="Klerksdorp"><option value="Mahikeng (Mafikeng)"><option value="Brits"><option value="Lichtenburg">
+            <option value="Upington"><option value="De Aar"><option value="Springbok"><option value="Alexander Bay"><option value="Kuruman"><option value="Colesberg">
+          </datalist>
+        </div>
+        <div class="form-group" id="saProvinceGroup">
+          <label class="form-label" for="province">Province <span>*</span></label>
+          <select class="form-select" id="province">
+            <option value="">Select province</option>
+            <option>Gauteng</option>
+            <option>Western Cape</option>
+            <option>KwaZulu-Natal</option>
+            <option>Eastern Cape</option>
+            <option>Limpopo</option>
+            <option>Mpumalanga</option>
+            <option>North West</option>
+            <option>Free State</option>
+            <option>Northern Cape</option>
+          </select>
+        </div>
+        <div class="form-group" id="intlRegionGroup" style="display:none">
+          <label class="form-label" for="region">State / Region <span>*</span></label>
+          <input type="text" class="form-input" id="region" placeholder="State or Province" autocomplete="address-level1" />
+        </div>
+      </div>
+
+      <div class="form-group" id="referralGroup" style="display:none">
+        <label class="form-label" for="referralCode">Referral Code
+          <span style="color:var(--text-dim);font-weight:400;text-transform:none;letter-spacing:0">(optional)</span>
+        </label>
+        <div class="input-icon-wrap">
+          <i class="icon fa-solid fa-gift"></i>
+          <input type="text" class="form-input" id="referralCode" placeholder="e.g. THA002" autocomplete="off" />
+        </div>
+      </div>
+
+      <div class="btn-row" style="margin-top:8px">
+        <button type="button" class="btn-primary" id="btnStep1Next">
+          Continue <i class="fa-solid fa-arrow-right"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- ══ STEP 2: Security ══ -->
+    <div id="step2">
+      <div class="form-group">
+        <label class="form-label" for="password">Create Password <span>*</span></label>
+        <div class="input-icon-wrap" style="position:relative">
+          <i class="icon fa-solid fa-lock"></i>
+          <input type="password" class="form-input" id="password"
+                 placeholder="Min 8 characters" autocomplete="new-password" />
+          <button type="button" class="input-toggle" id="btnPwToggle" aria-label="Show password">
+            <i class="fa-solid fa-eye"></i>
+          </button>
+        </div>
+        <div class="pw-strength">
+          <div class="pw-strength-bar"><div class="pw-strength-fill" id="pwFill"></div></div>
+          <div class="pw-strength-label" id="pwLabel">Enter a password</div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="passwordConfirm">Confirm Password <span>*</span></label>
+        <div class="input-icon-wrap" style="position:relative">
+          <i class="icon fa-solid fa-lock-open"></i>
+          <input type="password" class="form-input" id="passwordConfirm"
+                 placeholder="Re-enter password" autocomplete="new-password" />
+          <button type="button" class="input-toggle" id="btnPwToggle2" aria-label="Show confirm password">
+            <i class="fa-solid fa-eye"></i>
+          </button>
+        </div>
+      </div>
+
+      <div style="background:#f8fafc;border:1px solid rgba(0,0,0,0.06);border-radius:10px;padding:14px 16px;margin-bottom:18px">
+        <div style="font-size:0.71rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px">Password requirements</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div id="req-len"><i class="fa-solid fa-circle fa-xs" style="color:#d1d5db;margin-right:6px"></i><span style="font-size:0.77rem;color:var(--text-muted)">At least 8 characters</span></div>
+          <div id="req-upper"><i class="fa-solid fa-circle fa-xs" style="color:#d1d5db;margin-right:6px"></i><span style="font-size:0.77rem;color:var(--text-muted)">One uppercase letter</span></div>
+          <div id="req-num"><i class="fa-solid fa-circle fa-xs" style="color:#d1d5db;margin-right:6px"></i><span style="font-size:0.77rem;color:var(--text-muted)">One number</span></div>
+          <div id="req-special"><i class="fa-solid fa-circle fa-xs" style="color:#d1d5db;margin-right:6px"></i><span style="font-size:0.77rem;color:var(--text-muted)">One special character (!@#$...)</span></div>
+        </div>
+      </div>
+
+      <label class="checkbox-group">
+        <input type="checkbox" id="termsCheck" />
+        <div class="checkbox-label">
+          I agree to SV Capital's <a href="terms.html" target="_blank">Terms of Use</a> and <a href="popia.html" target="_blank">Privacy Policy</a>. I understand that my investments are subject to market risk.
+        </div>
+      </label>
+
+      <label class="checkbox-group">
+        <input type="checkbox" id="ficaConsentCheck" />
+        <div class="checkbox-label">
+          <span id="ficaConsentText">I confirm that I am a South African citizen or permanent resident, and I consent to FICA / FAIS identity verification as required by the Financial Intelligence Centre Act.</span>
+        </div>
+      </label>
+
+      <label class="checkbox-group">
+        <input type="checkbox" id="popiaCheck" />
+        <div class="checkbox-label">
+          I consent to my personal information being processed as described in SV Capital's <a href="popia.html" target="_blank">POPIA Privacy Notice</a>.
+        </div>
+      </label>
+
+      <div class="btn-row">
+        <button type="button" class="btn-secondary" id="btnStep2Back" style="max-width:110px">
+          <i class="fa-solid fa-arrow-left"></i> Back
+        </button>
+        <button type="button" class="btn-primary" id="btnStep2Next">
+          Continue <i class="fa-solid fa-arrow-right"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- ══ STEP 3: Investment Profile ══ -->
+    <div id="step3">
+      <div class="info-strip">
+        <i class="fa-solid fa-chart-pie"></i>
+        <p>Your risk profile helps us personalise your investment recommendations. You can update this at any time in your portal settings.</p>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Investment Risk Profile <span>*</span></label>
+        <div class="risk-grid">
+          <label class="risk-card" id="rc-conservative">
+            <input type="radio" name="riskProfile" value="conservative" />
+            <div class="risk-icon">🛡️</div>
+            <div class="risk-name">Conservative</div>
+            <div class="risk-desc">Lower risk, stable returns. Capital preservation focused.</div>
+          </label>
+          <label class="risk-card selected" id="rc-moderate">
+            <input type="radio" name="riskProfile" value="moderate" checked />
+            <div class="risk-icon">⚖️</div>
+            <div class="risk-name">Moderate</div>
+            <div class="risk-desc">Balanced approach. Good returns with managed risk.</div>
+          </label>
+          <label class="risk-card" id="rc-aggressive">
+            <input type="radio" name="riskProfile" value="aggressive" />
+            <div class="risk-icon">🚀</div>
+            <div class="risk-name">Aggressive</div>
+            <div class="risk-desc">Higher risk tolerance seeking maximum growth.</div>
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-top:14px">
+        <label class="form-label" for="investExp">Investment Experience <span>*</span></label>
+        <select class="form-select" id="investExp">
+          <option value="">Select your experience level</option>
+          <option value="none">None — this is my first investment</option>
+          <option value="beginner">Beginner — I've invested in unit trusts / savings</option>
+          <option value="intermediate">Intermediate — I actively invest in stocks or property</option>
+          <option value="experienced">Experienced — I have a diverse investment portfolio</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="hearAbout">How did you hear about us? <span>*</span></label>
+        <select class="form-select" id="hearAbout" onchange="toggleHearAboutOther(this.value)">
+          <option value="">Select an option</option>
+          <option value="social_media">Social Media</option>
+          <option value="friend">Friend / Family Referral</option>
+          <option value="google">Google Search</option>
+          <option value="radio">Radio / TV</option>
+          <option value="advisor">Financial Advisor</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="form-group" id="hearAboutOtherGroup" style="display:none">
+        <label class="form-label" for="hearAboutOther">Please tell us more <span>*</span></label>
+        <input type="text" class="form-input" id="hearAboutOther" placeholder="How did you find out about SV Capital?" maxlength="200" autocomplete="off" />
+      </div>
+
+      <!-- Return estimate widget -->
+
+      <div class="btn-row">
+        <button type="button" class="btn-secondary" id="btnStep3Back" style="max-width:110px">
+          <i class="fa-solid fa-arrow-left"></i> Back
+        </button>
+        <button type="button" class="btn-primary" id="btnStep3Next">
+          Continue — Upload FICA Docs <i class="fa-solid fa-arrow-right"></i>
+        </button>
+      </div>
+
+      <div class="divider"><span>Regulated &amp; Secure</span></div>
+
+      <div style="display:flex;justify-content:center;align-items:center;gap:20px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:6px;font-size:0.71rem;color:var(--text-dim)">
+          <i class="fa-solid fa-shield-halved" style="color:#22c55e"></i> FSCA Regulated
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:0.71rem;color:var(--text-dim)">
+          <i class="fa-solid fa-lock" style="color:#656565"></i> 256-bit SSL Encrypted
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:0.71rem;color:var(--text-dim)">
+          <i class="fa-solid fa-eye-slash" style="color:#eda5ff"></i> POPIA Compliant
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ STEP 4: FICA / KYC Documents ══ -->
+    <div id="step4">
+
+      <div class="fica-info-banner">
+        <i class="fa-solid fa-shield-halved"></i>
+        <p>
+          <strong>FICA Verification Required</strong><br>
+          South African law requires us to verify your identity before you can invest. Upload clear photos or scans of the documents below. Your files are encrypted — once submitted, your FICA documents will be reviewed within <strong>1–2 business days</strong>.
+        </p>
+      </div>
+
+      <div class="fica-progress-bar"><div class="fica-progress-fill" id="ficaProgressFill"></div></div>
+      <div class="fica-progress-label" id="ficaProgressLabel">Upload at least 2 required documents to continue</div>
+
+      <!-- Required Documents -->
+      <div class="fica-section-title">
+        Required Documents <span>REQUIRED</span>
+      </div>
+
+      <!-- ID Document -->
+      <div class="fica-upload-card" id="card-id">
+        <input type="file" id="fileId" accept="image/*,.pdf" style="display:none" />
+        <i class="fica-upload-card__icon fa-solid fa-id-card" style="color:#FF8215"></i>
+        <div class="fica-upload-card__title">South African ID / Passport</div>
+        <div class="fica-upload-card__sub">Upload both sides of your ID card, or your passport's photo page.</div>
+        <div class="fica-upload-card__accepted">Accepted: JPG, PNG, PDF — Max 10MB</div>
+        <button type="button" class="fica-upload-btn" id="uploadBtn-id">
+          <i class="fa-solid fa-cloud-arrow-up"></i> Choose File
+        </button>
+        <div class="fica-thumb-wrap" id="thumb-id">
+          <img class="fica-thumb-img" id="thumbImg-id" alt="" />
+          <div class="fica-thumb-pdf" id="thumbPdf-id"><i class="fa-solid fa-file-pdf"></i><span>PDF</span></div>
+        </div>
+        <div class="fica-file-status" id="status-id">
+          <i class="fa-solid fa-check-circle" style="color:#22c55e"></i>
+          <span id="filename-id"></span>
+          <button type="button" class="fica-remove-btn" id="removeBtn-id">Remove</button>
+        </div>
+        <span class="fica-required-badge" style="position:absolute;top:10px;right:10px">
+          <i class="fa-solid fa-asterisk" style="font-size:0.5rem"></i> Required
+        </span>
+      </div>
+
+      <!-- Proof of Address -->
+      <div class="fica-upload-card" id="card-address">
+        <input type="file" id="fileAddress" accept="image/*,.pdf" style="display:none" />
+        <i class="fica-upload-card__icon fa-solid fa-house" style="color:#656565"></i>
+        <div class="fica-upload-card__title">Proof of Address</div>
+        <div class="fica-upload-card__sub">Bank statement, utility bill or municipal account — not older than 3 months.</div>
+        <div class="fica-upload-card__accepted">Accepted: JPG, PNG, PDF — Max 10MB</div>
+        <button type="button" class="fica-upload-btn" id="uploadBtn-address">
+          <i class="fa-solid fa-cloud-arrow-up"></i> Choose File
+        </button>
+        <div class="fica-thumb-wrap" id="thumb-address">
+          <img class="fica-thumb-img" id="thumbImg-address" alt="" />
+          <div class="fica-thumb-pdf" id="thumbPdf-address"><i class="fa-solid fa-file-pdf"></i><span>PDF</span></div>
+        </div>
+        <div class="fica-file-status" id="status-address">
+          <i class="fa-solid fa-check-circle" style="color:#22c55e"></i>
+          <span id="filename-address"></span>
+          <button type="button" class="fica-remove-btn" id="removeBtn-address">Remove</button>
+        </div>
+        <span class="fica-required-badge" style="position:absolute;top:10px;right:10px">
+          <i class="fa-solid fa-asterisk" style="font-size:0.5rem"></i> Required
+        </span>
+      </div>
+
+      <!-- Selfie / Liveness -->
+      <div class="selfie-card fica-upload-card" id="card-selfie">
+        <input type="file" id="fileSelfie" accept="image/*" capture="user" style="display:none" />
+        <span class="fica-required-badge" style="position:absolute;top:10px;right:10px">
+          <i class="fa-solid fa-asterisk" style="font-size:0.5rem"></i> Required
+        </span>
+        <i class="fica-upload-card__icon fa-solid fa-camera" style="color:#eda5ff"></i>
+        <div class="fica-upload-card__title">Selfie / Liveness Photo</div>
+        <div class="fica-upload-card__sub">Take a clear photo of yourself holding your ID document. This confirms you are the account holder.</div>
+        <div class="fica-upload-card__accepted">Accepted: JPG, PNG — Max 10MB &nbsp;|&nbsp; <strong style="color:#1a1a1a">No sunglasses or hats</strong></div>
+        <button type="button" class="fica-upload-btn" id="uploadBtn-selfie">
+          <i class="fa-solid fa-camera"></i> Take / Upload Selfie
+        </button>
+        <div class="fica-thumb-wrap" id="thumb-selfie">
+          <img class="fica-thumb-img" id="thumbImg-selfie" alt="" />
+          <div class="fica-thumb-pdf" id="thumbPdf-selfie"><i class="fa-solid fa-file-pdf"></i><span>PDF</span></div>
+        </div>
+        <div class="fica-file-status" id="status-selfie">
+          <i class="fa-solid fa-check-circle" style="color:#22c55e"></i>
+          <span id="filename-selfie"></span>
+          <button type="button" class="fica-remove-btn" id="removeBtn-selfie">Remove</button>
+        </div>
+      </div>
+
+      <!-- Optional Documents -->
+      <div class="fica-section-title" style="margin-top:20px">
+        Additional Documents
+        <span style="background:rgba(107,114,128,0.1);color:#6b7280;font-size:0.65rem;padding:2px 8px;border-radius:20px;border:1px solid rgba(0,0,0,0.08)">OPTIONAL</span>
+      </div>
+
+      <div class="fica-grid">
+        <!-- Bank Account -->
+        <div class="fica-upload-card" id="card-bank" style="padding:16px 12px">
+          <input type="file" id="fileBank" accept="image/*,.pdf" style="display:none" />
+          <i class="fica-upload-card__icon fa-solid fa-building-columns" style="color:#656565;font-size:1.3rem"></i>
+          <div class="fica-upload-card__title" style="font-size:0.78rem">Bank Account Proof</div>
+          <div class="fica-upload-card__sub" style="font-size:0.68rem">Bank statement with your name and account number visible.</div>
+          <button type="button" class="fica-upload-btn" id="uploadBtn-bank" style="font-size:0.72rem;padding:6px 12px">
+            <i class="fa-solid fa-upload"></i> Upload
+          </button>
+          <div class="fica-file-status" id="status-bank">
+            <i class="fa-solid fa-check-circle" style="color:#22c55e"></i>
+            <span id="filename-bank" style="font-size:0.68rem;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+            <button type="button" class="fica-remove-btn" id="removeBtn-bank">✕</button>
+          </div>
+        </div>
+
+        <!-- SARS Tax -->
+        <div class="fica-upload-card" id="card-tax" style="padding:16px 12px">
+          <input type="file" id="fileTax" accept="image/*,.pdf" style="display:none" />
+          <i class="fica-upload-card__icon fa-solid fa-file-invoice" style="color:#f59e0b;font-size:1.3rem"></i>
+          <div class="fica-upload-card__title" style="font-size:0.78rem">SARS Tax Document</div>
+          <div class="fica-upload-card__sub" style="font-size:0.68rem">Tax clearance or income tax registration letter.</div>
+          <button type="button" class="fica-upload-btn" id="uploadBtn-tax" style="font-size:0.72rem;padding:6px 12px">
+            <i class="fa-solid fa-upload"></i> Upload
+          </button>
+          <div class="fica-file-status" id="status-tax">
+            <i class="fa-solid fa-check-circle" style="color:#22c55e"></i>
+            <span id="filename-tax" style="font-size:0.68rem;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+            <button type="button" class="fica-remove-btn" id="removeBtn-tax">✕</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tip -->
+      <div style="background:rgba(255,193,7,0.06);border:1px solid rgba(255,193,7,0.20);border-radius:10px;padding:12px 14px;font-size:0.74rem;color:#6b7280;display:flex;gap:10px;align-items:flex-start;margin-top:16px;margin-bottom:8px">
+        <i class="fa-solid fa-lightbulb" style="color:#f59e0b;flex-shrink:0;margin-top:1px"></i>
+        <span>Upload clear, well-lit photos. All pages of multi-page documents are required. Documents must show your full name, ID number, and date — not older than 3 months for address proof.</span>
+      </div>
+
+      <div class="btn-row">
+        <button type="button" class="btn-secondary" id="btnStep4Back" style="max-width:110px">
+          <i class="fa-solid fa-arrow-left"></i> Back
+        </button>
+        <button type="button" class="btn-primary" id="submitBtn">
+          <span id="submitBtnText"><i class="fa-solid fa-user-plus"></i> Create Account &amp; Submit FICA</span>
+          <span id="submitSpinner" style="display:none"><i class="fa-solid fa-spinner fa-spin"></i> Creating account…</span>
+        </button>
+      </div>
+
+      <p style="font-size:0.71rem;color:var(--text-dim);text-align:center;margin-top:12px;line-height:1.5">
+        You can also skip FICA upload now and submit documents later via your investor portal.<br>
+        <button type="button" id="btnSkipFica" style="background:none;border:none;color:var(--orange);font-weight:600;cursor:pointer;font-size:0.71rem;font-family:inherit;text-decoration:underline">
+          Skip for now — submit FICA documents later
+        </button>
+      </p>
+
+    </div><!-- /step4 -->
+
+    <!-- ══ SUCCESS ══ -->
+    <div class="success-screen" id="successScreen">
+      <svg class="check-svg" viewBox="0 0 52 52" xmlns="http://www.w3.org/2000/svg">
+        <circle class="check-circle" cx="26" cy="26" r="25"/>
+        <path class="check-tick" d="M14 27l8 8 16-16"/>
+      </svg>
+      <h3 class="success-title">Account Created!</h3>
+      <p class="success-sub" id="successMsg">Welcome to SV Capital. Your account has been created successfully.</p>
+
+      <div class="success-steps">
+        <div class="success-step">
+          <div class="success-step__num">1</div>
+          <div class="success-step__text">
+            <strong>Check your email</strong>
+            We've sent a welcome email with your investor ID and next steps.
+          </div>
+        </div>
+        <div class="success-step">
+          <div class="success-step__num">2</div>
+          <div class="success-step__text">
+            <strong>FICA Review (1–2 business days)</strong>
+            Our compliance team will review your uploaded documents and notify you.
+          </div>
+        </div>
+        <div class="success-step">
+          <div class="success-step__num">3</div>
+          <div class="success-step__text">
+            <strong>Fund your wallet &amp; invest</strong>
+            Once approved, top up via Paystack and start earning returns.
+          </div>
+        </div>
+      </div>
+
+      <a href="login.html" class="btn-primary" style="text-decoration:none;margin-bottom:12px">
+        <i class="fa-solid fa-arrow-right-to-bracket"></i> Sign In to Your Portal
+      </a>
+    </div>
+
+  </div><!-- /signup-right -->
+</div><!-- /signup-layout -->
+
+<script src="js/api.js"></script>
+<script>
+'use strict';
+
+let currentStep   = 1;
+let selectedRisk  = 'moderate';
+let clientType    = 'sa'; // 'sa' | 'intl'
+let _derivedGender = null;
+
+const ficaFiles   = { id: null, address: null, selfie: null, bank: null, tax: null };
+const REQUIRED_DOCS = ['id', 'address', 'selfie'];
+const SIGNUP_DRAFT_KEY = 'svcapital_signup_draft_v2';
+let _draftStatusTimer = null;
+
+/* ── Signup Friction Tracker ── */
+const _FT = (function() {
+  const SESSION_ID = (Math.random().toString(36).slice(2) + Date.now().toString(36)).slice(0, 32);
+  const ENDPOINT   = (window.__SVC_API_BASE__ || '/api/') + 'analytics/signup-friction';
+  let _queue = [];
+  const _stepEnterAt = {};
+  let _complete = false;
+
+  function _device() {
+    const w = window.innerWidth;
+    return w < 768 ? 'mobile' : w < 1024 ? 'tablet' : 'desktop';
+  }
+
+  function _flush() {
+    if (!_queue.length) return;
+    const payload = JSON.stringify({ events: [..._queue] });
+    _queue = [];
+    try {
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon(ENDPOINT, new Blob([payload], { type: 'application/json' }));
+      } else {
+        fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload, keepalive: true }).catch(() => {});
+      }
+    } catch (_) {}
+  }
+
+  function _push(type, data) {
+    _queue.push(Object.assign({ session_id: SESSION_ID, event_type: type }, data));
+    if (['submit_success', 'submit_error', 'page_abandon'].includes(type)) _flush();
+  }
+
+  setInterval(_flush, 5000);
+  window.addEventListener('beforeunload', () => {
+    if (!_complete) _push('page_abandon', { step: currentStep, device_type: _device() });
+    _flush();
+  });
+
+  return {
+    stepEntered(step) {
+      _stepEnterAt[step] = performance.now();
+      _push('step_view', { step, device_type: _device() });
+    },
+    stepAdvanced(fromStep) {
+      const ms = _stepEnterAt[fromStep] != null ? Math.round(performance.now() - _stepEnterAt[fromStep]) : null;
+      _push('step_advance', { step: fromStep, time_on_step_ms: ms, client_type: clientType });
+    },
+    stepBacked(fromStep) {
+      _push('step_back', { step: fromStep });
+    },
+    validationError(step, msg) {
+      _push('validation_error', { step, error_message: String(msg).slice(0, 200), client_type: clientType });
+    },
+    ficaUploaded(docType) {
+      _push('fica_upload', { step: 4, field_name: docType });
+    },
+    ficaSkipped() {
+      _push('skip_fica', { step: 4 });
+    },
+    submitAttempted() {
+      _push('submit_attempt', { step: 4, device_type: _device() });
+    },
+    submitSuccess() {
+      _complete = true;
+      _push('submit_success', { step: 4, device_type: _device(), client_type: clientType });
+    },
+    submitFailed(msg) {
+      _push('submit_error', { step: 4, error_message: String(msg).slice(0, 200) });
+    },
+  };
+}());
+
+/* ── Bootstrap ── */
+window.addEventListener('DOMContentLoaded', () => {
+  _FT.stepEntered(1);
+  prefillReferral();
+  initSocialProofCounters();
+  initReturnEstimate();
+  bindDraftAutosave();
+  restoreDraft();
+
+  // Citizenship toggle (both the in-step1 toggle and the waitlist panel toggle)
+  document.getElementById('btnCitizenSA').addEventListener('click',    () => toggleCitizenship('sa'));
+  document.getElementById('btnCitizenIntl').addEventListener('click',  () => toggleCitizenship('intl'));
+  document.getElementById('btnCitizenSA2').addEventListener('click',   () => toggleCitizenship('sa'));
+  document.getElementById('btnCitizenIntl2').addEventListener('click', () => toggleCitizenship('intl'));
+
+  // Waitlist submit
+  document.getElementById('btnWaitlistSubmit').addEventListener('click', submitIntlWaitlist);
+
+  // Phone dial code — update placeholder + format hint
+  document.getElementById('phoneDialCode').addEventListener('change', e => {
+    const isSA = e.target.value === '+27';
+    const phoneInput = document.getElementById('phone');
+    if (phoneInput) phoneInput.placeholder = isSA ? '71 234 5678' : '1234 5678';
+    const hint = document.getElementById('phoneHint');
+    if (hint) hint.textContent = isSA
+      ? 'Enter your number without the leading 0 — e.g. 71 234 5678'
+      : 'Enter your local number without country code';
+  });
+
+  // Hide broken logo image gracefully
+  const logo = document.getElementById('brandLogoImg');
+  if (logo) logo.addEventListener('error', () => { logo.style.display = 'none'; });
+
+  // Step 1 — SA ID validator + phone formatter
+  document.getElementById('btnStep1Next').addEventListener('click', () => goToStep(2, 'fwd'));
+  document.getElementById('idNumber').addEventListener('input', e => {
+    e.target.value = e.target.value.replace(/\D/g, '').slice(0, 13);
+    validateSAID(e.target.value);
+    clearIdDuplicateError();
+  });
+  document.getElementById('idNumber').addEventListener('blur', () => checkIdDuplicate());
+  document.getElementById('phone').addEventListener('input', e => formatSAPhone(e.target));
+
+  // Step 2
+  document.getElementById('password').addEventListener('input', e => checkPasswordStrength(e.target.value));
+  document.getElementById('btnPwToggle').addEventListener('click', function() { togglePw('password', this); });
+  document.getElementById('btnPwToggle2').addEventListener('click', function() { togglePw('passwordConfirm', this); });
+  document.getElementById('btnStep2Back').addEventListener('click', () => goToStep(1, 'back'));
+  document.getElementById('btnStep2Next').addEventListener('click', () => goToStep(3, 'fwd'));
+
+  // Step 3 — risk cards
+  ['conservative', 'moderate', 'aggressive'].forEach(r => {
+    document.getElementById(`rc-${r}`).addEventListener('click', () => selectRisk(r));
+  });
+  document.getElementById('btnStep3Back').addEventListener('click', () => goToStep(2, 'back'));
+  document.getElementById('btnStep3Next').addEventListener('click', () => goToStep(4, 'fwd'));
+
+  // Step 4
+  document.getElementById('btnStep4Back').addEventListener('click', () => goToStep(3, 'back'));
+  document.getElementById('submitBtn').addEventListener('click', submitRegistration);
+  document.getElementById('btnSkipFica').addEventListener('click', skipFicaAndSubmit);
+
+  // FICA upload cards
+  ['id', 'address', 'selfie', 'bank', 'tax'].forEach(wireUploadCard);
+});
+
+/* ── Social proof animated counters ── */
+function initSocialProofCounters() {
+  function animateCounter(el, from, to, suffix, duration) {
+    if (!el) return;
+    const start = performance.now();
+    function tick(now) {
+      const p = Math.min((now - start) / duration, 1);
+      const ease = 1 - Math.pow(1 - p, 3);
+      el.textContent = Math.round(from + (to - from) * ease).toLocaleString('en-ZA') + suffix;
+      if (p < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+
+  const io = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (!e.isIntersecting) return;
+      io.disconnect();
+      animateCounter(document.getElementById('spInvestors'), 0, 3200, '+', 1800);
+      setTimeout(() => animateCounter(document.getElementById('spAUM'),      0, 250, 'M+', 1600), 150);
+      setTimeout(() => animateCounter(document.getElementById('spReturns'),  0, 17,  '%',  1400), 300);
+    });
+  }, { threshold: 0.3 });
+
+  const stats = document.querySelector('.social-proof-stats');
+  if (stats) io.observe(stats);
+}
+
+/* ── SA ID number validation ── */
+function validateSAID(id) {
+  const box  = document.getElementById('idValidation');
+  const hint = document.getElementById('idHint');
+  if (!box) return;
+
+  if (id.length === 0) {
+    box.style.display = 'none';
+    if (hint) hint.style.display = '';
+    return;
+  }
+
+  if (hint) hint.style.display = 'none';
+  box.style.display = 'block';
+
+  if (id.length < 13) {
+    box.className = 'id-validation id-validation--info';
+    box.innerHTML = `<i class="fa-solid fa-circle-info"></i><div class="id-validation__body"><span class="id-validation__main">${id.length}/13 digits entered</span></div>`;
+    return;
+  }
+
+  if (!/^\d{13}$/.test(id)) {
+    box.className = 'id-validation id-validation--error';
+    box.innerHTML = `<i class="fa-solid fa-circle-xmark"></i><div class="id-validation__body"><span class="id-validation__main">ID number must contain only digits.</span></div>`;
+    return;
+  }
+
+  // Parse date of birth
+  const yy = parseInt(id.slice(0, 2), 10);
+  const mm = parseInt(id.slice(2, 4), 10);
+  const dd = parseInt(id.slice(4, 6), 10);
+  const currentYear = new Date().getFullYear() % 100;
+  const century = yy <= currentYear ? 2000 : 1900;
+  const birthYear = century + yy;
+  const dob = new Date(birthYear, mm - 1, dd);
+  const dobOk = dob.getMonth() === (mm - 1) && dob.getDate() === dd;
+
+  // Gender: digit 7 (index 6), 0–4 = female, 5–9 = male
+  const genderDigit = parseInt(id[6], 10);
+  const gender = genderDigit >= 5 ? 'Male' : 'Female';
+  _derivedGender = gender;
+
+  // Citizenship: digit 11 (index 10), 0 = SA citizen, 1 = PR
+  const citizenDigit = parseInt(id[10], 10);
+  const citizen = citizenDigit === 0 ? 'SA Citizen' : citizenDigit === 1 ? 'Permanent Resident' : null;
+
+  // Luhn algorithm
+  let sum = 0, alt = false;
+  for (let i = id.length - 1; i >= 0; i--) {
+    let n = parseInt(id[i], 10);
+    if (alt) { n *= 2; if (n > 9) n -= 9; }
+    sum += n;
+    alt = !alt;
+  }
+  const luhnOk = sum % 10 === 0;
+
+  if (!dobOk || !luhnOk || !citizen) {
+    box.className = 'id-validation id-validation--error';
+    box.innerHTML = `<i class="fa-solid fa-circle-xmark"></i><div class="id-validation__body"><span class="id-validation__main">This does not appear to be a valid SA ID number.</span></div>`;
+    return;
+  }
+
+  const age = Math.floor((Date.now() - dob.getTime()) / (365.25 * 24 * 3600 * 1000));
+  const dobStr = dob.toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' });
+
+  box.className = 'id-validation id-validation--valid';
+  box.innerHTML = `
+    <i class="fa-solid fa-circle-check"></i>
+    <div class="id-validation__body">
+      <span class="id-validation__main">Valid SA ID number</span>
+      <div class="id-validation__chips">
+        <span class="id-chip id-chip--orange"><i class="fa-solid fa-cake-candles"></i> ${dobStr} (${age} yrs)</span>
+        <span class="id-chip id-chip--teal"><i class="fa-solid fa-${gender === 'Male' ? 'mars' : 'venus'}"></i> ${gender}</span>
+        <span class="id-chip id-chip--purple"><i class="fa-solid fa-passport"></i> ${citizen}</span>
+      </div>
+    </div>`;
+}
+
+/* ── Hear about us — Other field ── */
+function toggleHearAboutOther(val) {
+  const grp = document.getElementById('hearAboutOtherGroup');
+  const inp = document.getElementById('hearAboutOther');
+  if (grp) grp.style.display = val === 'other' ? '' : 'none';
+  if (inp) {
+    inp.required = val === 'other';
+    if (val !== 'other') inp.value = '';
+  }
+}
+
+/* ── Duplicate ID check ── */
+let _idDuplicateBlocked = false;
+
+function clearIdDuplicateError() {
+  _idDuplicateBlocked = false;
+}
+
+async function checkIdDuplicate() {
+  const raw = v('idNumber').replace(/\D/g, '');
+  if (raw.length !== 13) return;
+  try {
+    const res  = await fetch(`/api/auth/check-id?id_number=${raw}`);
+    const data = await res.json();
+    if (data.exists) {
+      _idDuplicateBlocked = true;
+      const box = document.getElementById('idValidation');
+      if (box) {
+        box.style.display = 'block';
+        box.className = 'id-validation id-validation--error';
+        box.innerHTML = `<i class="fa-solid fa-circle-exclamation"></i><div class="id-validation__body">
+          <span class="id-validation__main">This ID number is already registered.</span>
+          <span class="id-validation__sub">You already have an account — <a href="/login.html" style="color:inherit;font-weight:700">Log in</a> or <a href="/forgot-password.html" style="color:inherit;font-weight:700">reset your password</a>.</span>
+        </div>`;
+      }
+    } else {
+      _idDuplicateBlocked = false;
+    }
+  } catch { /* network error — server will catch duplicate at submit */ }
+}
+
+/* ── Citizenship toggle ── */
+function toggleCitizenship(type) {
+  clientType = type;
+  const isSA = type === 'sa';
+
+  ['btnCitizenSA', 'btnCitizenSA2'].forEach(id =>
+    document.getElementById(id)?.classList.toggle('active', isSA));
+  ['btnCitizenIntl', 'btnCitizenIntl2'].forEach(id =>
+    document.getElementById(id)?.classList.toggle('active', !isSA));
+
+  const waitlistPanel = document.getElementById('intlWaitlistPanel');
+  const formSteps     = document.getElementById('formSteps');
+  const step1         = document.getElementById('step1');
+
+  if (!isSA) {
+    // International users see the waitlist panel only — registration not yet available
+    if (waitlistPanel) waitlistPanel.style.display = 'block';
+    if (formSteps) formSteps.style.display = 'none';
+    if (step1) step1.style.display = 'none';
+    hideError();
+    return;
+  }
+
+  // SA / resident: show the normal registration form
+  if (waitlistPanel) waitlistPanel.style.display = 'none';
+  if (formSteps) formSteps.style.display = '';
+  if (step1) step1.style.display = 'block';
+
+  document.getElementById('infoStripSA').style.display     = '';
+  document.getElementById('infoStripIntl').style.display   = 'none';
+  document.getElementById('saIdGroup').style.display       = '';
+  document.getElementById('passportGroup').style.display   = 'none';
+  document.getElementById('saProvinceGroup').style.display = '';
+  document.getElementById('intlRegionGroup').style.display = 'none';
+
+  document.getElementById('phoneDialCode').value = '+27';
+  const ph = document.getElementById('phone');
+  if (ph) ph.placeholder = '71 234 5678';
+  const hint = document.getElementById('phoneHint');
+  if (hint) hint.textContent = 'Enter your number without the leading 0 — e.g. 71 234 5678';
+
+  const ct = document.getElementById('ficaConsentText');
+  if (ct) ct.textContent = 'I confirm that I am a South African citizen or permanent resident, and I consent to FICA / FAIS identity verification as required by the Financial Intelligence Centre Act.';
+
+  const idVal = document.getElementById('idValidation');
+  if (idVal) { idVal.style.display = 'none'; idVal.innerHTML = ''; }
+  const idHint = document.getElementById('idHint');
+  if (idHint) idHint.style.display = '';
+
+  hideError();
+  persistDraft();
+}
+
+/* ── International waitlist submit ── */
+async function submitIntlWaitlist() {
+  const fullName = document.getElementById('wlFullName')?.value?.trim() || '';
+  const email    = document.getElementById('wlEmail')?.value?.trim() || '';
+  const country  = document.getElementById('wlCountry')?.value || '';
+
+  if (!fullName) { showWlError('Please enter your full name.'); return; }
+  if (!email || !email.includes('@')) { showWlError('Please enter a valid email address.'); return; }
+  if (!country) { showWlError('Please select your country of residence.'); return; }
+
+  const btn     = document.getElementById('btnWaitlistSubmit');
+  const btnText = document.getElementById('wlBtnText');
+  const spinner = document.getElementById('wlBtnSpinner');
+  btn.disabled          = true;
+  btnText.style.display = 'none';
+  spinner.style.display = 'inline-flex';
+
+  try {
+    const res  = await fetch((window.__SVC_API_BASE__ || '/api/') + 'waitlist/international', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ full_name: fullName, email, country }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Submission failed.');
+
+    // Show success
+    document.getElementById('intlWaitlistForm').style.display = 'none';
+    document.getElementById('wlConfirmEmail').textContent = email;
+    document.getElementById('intlWaitlistSuccess').style.display = 'block';
+    hideError();
+  } catch (err) {
+    btn.disabled          = false;
+    btnText.style.display = 'inline-flex';
+    spinner.style.display = 'none';
+    showWlError(err.message || 'Could not submit. Please try again.');
+  }
+}
+
+function showWlError(msg) {
+  const el = document.getElementById('formError');
+  document.getElementById('formErrorMsg').textContent = msg;
+  el.style.display = 'block';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+/* ── SA phone number formatter ── */
+function formatSAPhone(input) {
+  const dialCode = document.getElementById('phoneDialCode')?.value || '+27';
+  if (dialCode !== '+27') return; // no auto-format for international
+  let raw = input.value.replace(/\D/g, '').slice(0, 10);
+  if (raw.length > 6)      input.value = raw.slice(0, 3) + ' ' + raw.slice(3, 6) + ' ' + raw.slice(6);
+  else if (raw.length > 3) input.value = raw.slice(0, 3) + ' ' + raw.slice(3);
+  else                     input.value = raw;
+}
+
+/* ── Return estimate widget ── */
+function initReturnEstimate() {
+  const slider  = document.getElementById('reSlider');
+  const rSlider = document.getElementById('reRateSlider');
+  const amtEl   = document.getElementById('reAmount');
+  const rateEl  = document.getElementById('reRate');
+  const resEl   = document.getElementById('reResult');
+  if (!slider || !rSlider) return;
+
+  function fmt(n) { return 'R' + Math.round(n).toLocaleString('en-ZA'); }
+  function update() {
+    const amt  = parseFloat(slider.value);
+    const rate = parseFloat(rSlider.value) / 100;
+    amtEl.textContent  = fmt(amt);
+    rateEl.textContent = `${rSlider.value}% p.a.`;
+    resEl.textContent  = '+' + fmt(amt * rate);
+  }
+
+  slider.addEventListener('input',  update);
+  rSlider.addEventListener('input', update);
+  update();
+}
+
+/* ── Wire a FICA upload card ── */
+function wireUploadCard(docType) {
+  const cap   = docType.charAt(0).toUpperCase() + docType.slice(1);
+  const card  = document.getElementById(`card-${docType}`);
+  const input = document.getElementById(`file${cap}`);
+  const upBtn = document.getElementById(`uploadBtn-${docType}`);
+  const rmBtn = document.getElementById(`removeBtn-${docType}`);
+  if (!card || !input) return;
+
+  card.addEventListener('click', () => input.click());
+  input.addEventListener('change', e => handleFicaFile(e.target, docType));
+  upBtn?.addEventListener('click', e => { e.stopPropagation(); input.click(); });
+  rmBtn?.addEventListener('click', e => { e.stopPropagation(); removeFile(docType); });
+
+  card.addEventListener('dragover',  e => { e.preventDefault(); card.classList.add('dragover'); });
+  card.addEventListener('dragleave', () => card.classList.remove('dragover'));
+  card.addEventListener('drop',      e => onDrop(e, docType));
+}
+
+/* ── Step Navigation ── */
+function goToStep(n, dir) {
+  if (n > currentStep && !validateStep(currentStep)) return;
+
+  if (dir === 'back') _FT.stepBacked(currentStep);
+  else                _FT.stepAdvanced(currentStep);
+
+  [1, 2, 3, 4].forEach(i => {
+    document.getElementById(`step${i}`).style.display = 'none';
+  });
+
+  const nextEl = document.getElementById(`step${n}`);
+  nextEl.style.display = 'block';
+  const animClass = dir === 'back' ? 'step-enter-back' : 'step-enter-fwd';
+  nextEl.classList.remove('step-enter-fwd', 'step-enter-back');
+  void nextEl.offsetWidth; // reflow to restart animation
+  nextEl.classList.add(animClass);
+  nextEl.addEventListener('animationend', () => nextEl.classList.remove(animClass), { once: true });
+
+  currentStep = n;
+  _FT.stepEntered(n);
+  updateStepIndicators(n);
+  persistDraft();
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  if (n === 4) updateFicaProgress();
+}
+
+function updateStepIndicators(n) {
+  [1, 2, 3, 4].forEach(i => {
+    const ind = document.getElementById(`stepIndicator${i}`);
+    if (!ind) return;
+    ind.classList.toggle('done',   i < n);
+    ind.classList.toggle('active', i === n);
+    const num = ind.querySelector('.step-num');
+    if (i < n) {
+      num.innerHTML = '<i class="fa-solid fa-check" style="font-size:0.6rem"></i>';
+    } else {
+      num.textContent = i;
+    }
+  });
+  [1, 2, 3].forEach(i => {
+    const line = document.getElementById(`stepLine${i}`);
+    if (line) line.classList.toggle('done', i < n);
+  });
+}
+
+/* ── Validation ── */
+function validateStep(n) {
+  hideError();
+
+  if (n === 1) {
+    const firstName = v('firstName'), lastName = v('lastName'),
+          email     = v('email'),     phone    = v('phone');
+
+    if (!firstName) return showError('Please enter your first name.');
+    if (!lastName)  return showError('Please enter your last name.');
+    if (!email || !email.includes('@') || !email.includes('.'))
+      return showError('Please enter a valid email address.');
+    if (!phone || phone.replace(/\D/g, '').length < 6)
+      return showError('Please enter a valid phone number.');
+
+    if (clientType === 'sa') {
+      const idNumber = v('idNumber');
+      const idClean  = idNumber.replace(/[\s\-]/g, '');
+      if (!idClean || idClean.length !== 13 || !/^\d{13}$/.test(idClean))
+        return showError('Please enter a valid 13-digit South African ID number.');
+      if (_idDuplicateBlocked)
+        return showError('This ID number is already registered. Please log in or reset your password.');
+    } else {
+      const passport = v('passportNumber');
+      const expiry   = v('passportExpiry');
+      const nat      = v('nationality');
+      const country  = v('countryResidence');
+      if (!passport || passport.length < 5)
+        return showError('Please enter a valid passport number.');
+      if (!expiry)
+        return showError('Please enter your passport expiry date.');
+      if (new Date(expiry) < new Date())
+        return showError('Your passport has expired — please use a valid, unexpired passport.');
+      if (!nat)     return showError('Please select your nationality.');
+      if (!country) return showError('Please select your country of residence.');
+    }
+
+    if (!v('city')) return showError('Please enter your city.');
+    if (clientType === 'sa' && !v('province'))
+      return showError('Please select your province.');
+    if (clientType !== 'sa' && !v('region'))
+      return showError('Please enter your state or region.');
+  }
+
+  if (n === 2) {
+    const pw    = v('password'), pw2 = v('passwordConfirm'),
+          terms = document.getElementById('termsCheck').checked,
+          fica  = document.getElementById('ficaConsentCheck').checked,
+          popia = document.getElementById('popiaCheck').checked;
+
+    if (!pw || pw.length < 8) return showError('Password must be at least 8 characters.');
+    if (pw !== pw2)            return showError('Passwords do not match. Please try again.');
+    if (!terms) return showError('Please accept the Terms of Use to continue.');
+    if (!fica)  return showError('Please confirm your FICA consent to continue.');
+    if (!popia) return showError('Please confirm your POPIA consent to continue.');
+  }
+
+  if (n === 3) {
+    if (!selectedRisk)  return showError('Please select an investment risk profile.');
+    if (!v('investExp')) return showError('Please select your investment experience level.');
+    if (!v('hearAbout')) return showError('Please tell us how you heard about us.');
+    if (v('hearAbout') === 'other' && !v('hearAboutOther'))
+      return showError('Please describe how you heard about us.');
+  }
+
+  return true;
+}
+
+function v(id) { return document.getElementById(id)?.value?.trim() || ''; }
+
+function showError(msg) {
+  _FT.validationError(currentStep, msg);
+  const el = document.getElementById('formError');
+  document.getElementById('formErrorMsg').textContent = msg;
+  el.style.display = 'block';
+  const panel = document.querySelector('.signup-right');
+  if (panel) panel.scrollTo({ top: 0, behavior: 'smooth' });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  return false;
+}
+function hideError() { document.getElementById('formError').style.display = 'none'; }
+
+function showDraftStatus(message, saved = false) {
+  const el = document.getElementById('draftStatus');
+  if (!el) return;
+  el.textContent = message || '';
+  el.classList.toggle('draft-status--saved', !!saved);
+  clearTimeout(_draftStatusTimer);
+  if (message) {
+    _draftStatusTimer = setTimeout(() => {
+      el.textContent = '';
+      el.classList.remove('draft-status--saved');
+    }, 2200);
+  }
+}
+
+function draftValue(id) {
+  return document.getElementById(id)?.value || '';
+}
+
+function persistDraft() {
+  const payload = {
+    clientType,
+    selectedRisk,
+    fields: {
+      firstName: draftValue('firstName'),
+      lastName: draftValue('lastName'),
+      email: draftValue('email'),
+      phoneDialCode: draftValue('phoneDialCode'),
+      phone: draftValue('phone'),
+      idNumber: draftValue('idNumber'),
+      passportNumber: draftValue('passportNumber'),
+      passportExpiry: draftValue('passportExpiry'),
+      nationality: draftValue('nationality'),
+      countryResidence: draftValue('countryResidence'),
+      city: draftValue('city'),
+      province: draftValue('province'),
+      region: draftValue('region'),
+      referralCode: draftValue('referralCode'),
+      investExp: draftValue('investExp'),
+      hearAbout: draftValue('hearAbout'),
+      termsCheck: !!document.getElementById('termsCheck')?.checked,
+      ficaConsentCheck: !!document.getElementById('ficaConsentCheck')?.checked,
+      popiaCheck: !!document.getElementById('popiaCheck')?.checked,
+    }
+  };
+
+  try {
+    localStorage.setItem(SIGNUP_DRAFT_KEY, JSON.stringify(payload));
+    showDraftStatus('Draft saved locally', true);
+  } catch (_) {}
+}
+
+function restoreDraft() {
+  try {
+    const raw = localStorage.getItem(SIGNUP_DRAFT_KEY);
+    if (!raw) return;
+    const draft = JSON.parse(raw);
+    const fields = draft.fields || {};
+
+    if (draft.clientType === 'intl' || draft.clientType === 'sa') toggleCitizenship(draft.clientType);
+
+    Object.entries(fields).forEach(([id, value]) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (el.type === 'checkbox') el.checked = !!value;
+      else if (value != null) el.value = value;
+    });
+
+    if (draft.selectedRisk) selectRisk(draft.selectedRisk);
+    showDraftStatus('Restored your saved details', true);
+  } catch (_) {}
+}
+
+function clearDraft() {
+  try { localStorage.removeItem(SIGNUP_DRAFT_KEY); } catch (_) {}
+}
+
+function bindDraftAutosave() {
+  const ids = [
+    'firstName','lastName','email','phoneDialCode','phone','idNumber','passportNumber','passportExpiry',
+    'nationality','countryResidence','city','province','region','referralCode',
+    'investExp','hearAbout','termsCheck','ficaConsentCheck','popiaCheck'
+  ];
+
+  ids.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const evt = el.tagName === 'SELECT' || el.type === 'checkbox' ? 'change' : 'input';
+    el.addEventListener(evt, persistDraft);
+  });
+}
+
+/* ── Risk Profile ── */
+function selectRisk(risk) {
+  selectedRisk = risk;
+  ['conservative', 'moderate', 'aggressive'].forEach(r =>
+    document.getElementById(`rc-${r}`)?.classList.toggle('selected', r === risk)
+  );
+}
+
+/* ── Password Strength ── */
+function checkPasswordStrength(pw) {
+  const fill  = document.getElementById('pwFill');
+  const label = document.getElementById('pwLabel');
+
+  const checks = {
+    len:     pw.length >= 8,
+    upper:   /[A-Z]/.test(pw),
+    num:     /\d/.test(pw),
+    special: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pw),
+  };
+
+  Object.entries(checks).forEach(([key, ok]) => {
+    const req  = document.getElementById(`req-${key}`);
+    if (!req) return;
+    req.querySelector('i').style.color   = ok ? '#22c55e' : '#d1d5db';
+    req.querySelector('span').style.color = ok ? '#303030' : 'var(--text-muted)';
+  });
+
+  const score  = Object.values(checks).filter(Boolean).length;
+  const colors = ['', '#ef4444', '#f59e0b', '#22c55e', '#22c55e'];
+  const labels = ['', 'Weak', 'Fair', 'Good', 'Strong'];
+
+  fill.style.width      = (score * 25) + '%';
+  fill.style.background = colors[score] || '#e5e7eb';
+  label.textContent     = score > 0 ? labels[score] : 'Enter a password';
+  label.style.color     = colors[score] || 'var(--text-dim)';
+}
+
+/* ── Toggle Password Visibility ── */
+function togglePw(inputId, btn) {
+  const input = document.getElementById(inputId);
+  const icon  = btn.querySelector('i');
+  if (input.type === 'password') {
+    input.type = 'text';
+    icon.className = 'fa-solid fa-eye-slash';
+  } else {
+    input.type = 'password';
+    icon.className = 'fa-solid fa-eye';
+  }
+}
+
+/* ── FICA File Upload ── */
+function handleFicaFile(input, docType) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 10 * 1024 * 1024) {
+    alert('File too large. Maximum file size is 10MB.');
+    input.value = '';
+    return;
+  }
+  ficaFiles[docType] = file;
+  _FT.ficaUploaded(docType);
+
+  const card   = document.getElementById(`card-${docType}`);
+  const status = document.getElementById(`status-${docType}`);
+  const nameEl = document.getElementById(`filename-${docType}`);
+
+  card?.classList.add('uploaded');
+  card?.classList.remove('required-missing');
+  if (nameEl) nameEl.textContent = file.name;
+  if (status) status.style.display = 'flex';
+
+  showFilePreview(file, docType);
+  updateFicaProgress();
+}
+
+function showFilePreview(file, docType) {
+  const thumbImg = document.getElementById(`thumbImg-${docType}`);
+  const thumbPdf = document.getElementById(`thumbPdf-${docType}`);
+  if (!thumbImg && !thumbPdf) return;
+
+  if (file.type === 'application/pdf') {
+    if (thumbImg) thumbImg.classList.remove('loaded');
+    if (thumbPdf) thumbPdf.classList.add('show');
+  } else if (file.type.startsWith('image/')) {
+    if (thumbPdf) thumbPdf.classList.remove('show');
+    const reader = new FileReader();
+    reader.onload = e => {
+      if (thumbImg) {
+        thumbImg.src = e.target.result;
+        thumbImg.classList.add('loaded');
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+}
+
+function removeFile(docType) {
+  ficaFiles[docType] = null;
+
+  const cap    = docType.charAt(0).toUpperCase() + docType.slice(1);
+  const card   = document.getElementById(`card-${docType}`);
+  const status = document.getElementById(`status-${docType}`);
+  const input  = document.getElementById(`file${cap}`);
+
+  card?.classList.remove('uploaded');
+  if (status) status.style.display = 'none';
+  if (input)  input.value = '';
+
+  // Clear preview
+  const thumbImg = document.getElementById(`thumbImg-${docType}`);
+  const thumbPdf = document.getElementById(`thumbPdf-${docType}`);
+  if (thumbImg) { thumbImg.src = ''; thumbImg.classList.remove('loaded'); }
+  if (thumbPdf) thumbPdf.classList.remove('show');
+
+  updateFicaProgress();
+}
+
+function updateFicaProgress() {
+  const uploaded = REQUIRED_DOCS.filter(k => ficaFiles[k] !== null).length;
+  const total    = REQUIRED_DOCS.length;
+  const fill     = document.getElementById('ficaProgressFill');
+  const label    = document.getElementById('ficaProgressLabel');
+
+  if (fill)  fill.style.width = Math.round((uploaded / total) * 100) + '%';
+  if (label) {
+    if (uploaded === total) {
+      label.textContent = '✓ All required documents uploaded — you can now create your account';
+      label.style.color = '#16a34a';
+    } else {
+      label.textContent = `${uploaded} of ${total} required documents uploaded — ${total - uploaded} more needed`;
+      label.style.color = 'var(--text-muted)';
+    }
+  }
+}
+
+function onDrop(e, docType) {
+  e.preventDefault();
+  document.getElementById(`card-${docType}`)?.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  if (file.size > 10 * 1024 * 1024) { alert('File too large. Max 10MB.'); return; }
+
+  ficaFiles[docType] = file;
+  const card   = document.getElementById(`card-${docType}`);
+  const status = document.getElementById(`status-${docType}`);
+  const nameEl = document.getElementById(`filename-${docType}`);
+
+  card?.classList.add('uploaded');
+  card?.classList.remove('required-missing', 'dragover');
+  if (nameEl) nameEl.textContent = file.name;
+  if (status) status.style.display = 'flex';
+
+  showFilePreview(file, docType);
+  updateFicaProgress();
+}
+
+/* ── Submit Registration ── */
+async function submitRegistration() {
+  if (window.SVC) SVC.track('svc_signup_attempted', {});
+  hideError();
+
+  const missingDocs = REQUIRED_DOCS.filter(k => ficaFiles[k] === null);
+  if (missingDocs.length > 0) {
+    missingDocs.forEach(k => document.getElementById(`card-${k}`)?.classList.add('required-missing'));
+    const labels = { id: 'ID / Passport', address: 'Proof of Address', selfie: 'Selfie / Liveness Photo' };
+    return showError(`Please upload the following required documents: ${missingDocs.map(k => labels[k]).join(', ')}.`);
+  }
+
+  _doSubmit(false);
+}
+
+async function skipFicaAndSubmit() {
+  hideError();
+  const confirmed = confirm(
+    'Are you sure you want to skip FICA document upload?\n\n' +
+    'You will not be able to invest until your documents have been submitted and approved. ' +
+    'You can upload them later in your investor portal.'
+  );
+  if (!confirmed) return;
+  _FT.ficaSkipped();
+  _doSubmit(true);
+}
+
+async function _doSubmit(skippedFica) {
+  _FT.submitAttempted();
+  const btn     = document.getElementById('submitBtn');
+  const btnText = document.getElementById('submitBtnText');
+  const spinner = document.getElementById('submitSpinner');
+
+  btn.disabled          = true;
+  btnText.style.display = 'none';
+  spinner.style.display = 'inline-flex';
+
+  const firstName = v('firstName'), lastName = v('lastName'),
+        email     = v('email'),     password  = v('password'),
+        referral  = v('referralCode').toUpperCase();
+
+  const dialCode   = document.getElementById('phoneDialCode')?.value || '+27';
+  const phoneRaw   = v('phone');
+  const fullPhone  = dialCode + ' ' + phoneRaw;
+
+  const isSA       = clientType === 'sa';
+  const idNumber   = isSA ? v('idNumber') : v('passportNumber');
+  const province   = isSA ? v('province') : (v('countryResidence') + (v('region') ? ', ' + v('region') : ''));
+  const docNotes   = isSA
+    ? `DocType: SA ID.`
+    : `DocType: Passport. Nationality: ${v('nationality')}. Country: ${v('countryResidence')}. Expiry: ${v('passportExpiry')}.`;
+
+  const uploadedDocs = Object.entries(ficaFiles).filter(([, f]) => f !== null).map(([k]) => k);
+
+  try {
+    const regData = await Auth.register({
+      email, password, firstName, lastName,
+      phone: fullPhone,
+      idNumber, province,
+      occupation:   '',
+      role:         'investor',
+      referredBy:    referral || '',
+      riskProfile:   selectedRisk,
+      gender:        _derivedGender || undefined,
+      heardAboutUs:  v('hearAbout') === 'other'
+                       ? `Other: ${v('hearAboutOther')}`
+                       : v('hearAbout') || undefined,
+      notes:         `${docNotes} Experience: ${v('investExp')}. Heard: ${v('hearAbout')}${v('hearAbout') === 'other' ? ' (' + v('hearAboutOther') + ')' : ''}. FICA docs: ${uploadedDocs.join(', ') || 'none'}.`,
+      termsAccepted: !!(document.getElementById('termsCheck')?.checked),
+      ficaConsent:   !!(document.getElementById('ficaConsentCheck')?.checked),
+      popiaAccepted: !!(document.getElementById('popiaCheck')?.checked),
+    });
+
+    const assignedId = regData.user.investorId;
+
+    if (!skippedFica && uploadedDocs.length > 0) {
+      const DOC_TYPE_MAP = {
+        id: 'id_document', address: 'proof_of_address',
+        selfie: 'selfie', bank: 'proof_of_bank', tax: 'tax',
+      };
+      const readFile = file => new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload  = e => res(e.target.result);
+        r.onerror = () => rej(new Error('Could not read file'));
+        r.readAsDataURL(file);
+      });
+      await Promise.allSettled(
+        Object.entries(ficaFiles)
+          .filter(([, f]) => f !== null)
+          .map(async ([key, file]) => {
+            const fileData = await readFile(file);
+            return API.kyc.create({
+              investor_id: assignedId,
+              doc_type:    DOC_TYPE_MAP[key] || 'other',
+              status:      'pending',
+              file_name:   file.name,
+              file_data:   fileData,
+              notes:       `Submitted at registration.`,
+            });
+          })
+      );
+    }
+
+    if (!skippedFica) {
+      await API.tickets.create({
+        investor_id: assignedId,
+        subject: `FICA Documents Submitted — ${firstName} ${lastName}`,
+        category: 'kyc', priority: 'high', status: 'open',
+        message: `New investor ${firstName} ${lastName} (${assignedId}) submitted FICA docs: ${uploadedDocs.join(', ')}.`,
+      }).catch(() => {});
+    }
+
+    document.getElementById('step4').style.display = 'none';
+    document.getElementById('formSteps').style.display = 'none';
+    const successScreen = document.getElementById('successScreen');
+    successScreen.style.display = 'block';
+    requestAnimationFrame(() => successScreen.classList.add('visible'));
+    document.getElementById('successMsg').textContent =
+      `Welcome, ${firstName}! Your investor account has been created. ` +
+      (skippedFica
+        ? 'Please upload your FICA documents in your portal to start investing.'
+        : 'Your FICA documents have been submitted. Our compliance team will review them within 1–2 business days and notify you by email.');
+
+    clearDraft();
+    _FT.submitSuccess();
+    launchConfetti();
+
+    // Auto-claim gift if signup was triggered by a gift link
+    const giftToken = new URLSearchParams(window.location.search).get('gift');
+    if (giftToken) {
+      try {
+        const gr = await API._fetch('POST', `gifts/claim/${giftToken}`);
+        if (gr.success) {
+          document.getElementById('successMsg').textContent +=
+            ` 🎁 A gift of ${gr.senderName ? `from ${gr.senderName} ` : ''}has been added to your wallet!`;
+        }
+      } catch (_) {}
+    }
+
+    setTimeout(() => {
+      window.location.href = window.__SVC_NATIVE__ ? '/index.html' : '/portal/index.html';
+    }, 4000);
+
+  } catch (err) {
+    console.error('Registration error:', err);
+    _FT.submitFailed(err.message || 'unknown');
+    btn.disabled          = false;
+    btnText.style.display = 'inline-flex';
+    spinner.style.display = 'none';
+    showError(err.message || 'Registration failed — please check your details and try again.');
+  }
+}
+
+/* ── Confetti burst on success ── */
+function launchConfetti() {
+  const canvas = document.createElement('canvas');
+  canvas.className = 'success-confetti';
+  document.body.appendChild(canvas);
+  const ctx = canvas.getContext('2d');
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+
+  const colors = ['#FF8215','#FF9B0C','#22C55E','#656565','#eda5ff','#f59e0b'];
+  const pieces = Array.from({ length: 90 }, () => ({
+    x: Math.random() * canvas.width,
+    y: -Math.random() * 200 - 20,
+    r: Math.random() * 7 + 3,
+    d: Math.random() * 80 + 40,
+    color: colors[Math.floor(Math.random() * colors.length)],
+    tilt: Math.random() * 20 - 10,
+    vx: (Math.random() - 0.5) * 2,
+    vy: Math.random() * 2 + 1.5,
+    rot: Math.random() * Math.PI * 2,
+    rotV: (Math.random() - 0.5) * 0.12,
+    alpha: 1,
+    shape: Math.random() > 0.5 ? 'rect' : 'circle',
+  }));
+
+  let frame = 0;
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    pieces.forEach(p => {
+      ctx.save();
+      ctx.globalAlpha = p.alpha;
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.fillStyle = p.color;
+      if (p.shape === 'rect') ctx.fillRect(-p.r, -p.r / 2, p.r * 2, p.r);
+      else { ctx.beginPath(); ctx.arc(0, 0, p.r, 0, Math.PI * 2); ctx.fill(); }
+      ctx.restore();
+      p.x  += p.vx;
+      p.y  += p.vy;
+      p.vy += 0.03;
+      p.rot += p.rotV;
+      if (frame > 80) p.alpha -= 0.012;
+    });
+    frame++;
+    if (frame < 200 && pieces.some(p => p.alpha > 0)) requestAnimationFrame(draw);
+    else canvas.remove();
+  }
+  requestAnimationFrame(draw);
+}
+
+/* ── Pre-fill referral code from URL ── */
+function prefillReferral() {
+  const params = new URLSearchParams(window.location.search);
+  const ref    = params.get('ref') || params.get('referral');
+  if (!ref) return;
+
+  const input = document.getElementById('referralCode');
+  if (input) {
+    input.value = ref.toUpperCase();
+    const strip = document.createElement('div');
+    strip.className = 'referral-strip';
+    strip.innerHTML = `<i class="fa-solid fa-gift"></i> Referral code <strong>${ref.toUpperCase()}</strong> applied — you'll both earn R250 bonus!`;
+    document.getElementById('referralGroup').before(strip);
+  }
+}
+</script>
+</body>
+</html>

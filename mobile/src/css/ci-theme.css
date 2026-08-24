@@ -1,0 +1,807 @@
+/* ═══════════════════════════════════════════════════════════════════
+   SV CAPITAL — Corporate Identity Theme Override
+   Transforms dark-luxury theme → official CI (white/light, orange/teal)
+   Applied on top of admin.css for the portal and admin console
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ─── CI Color Tokens (override dark variables) ─── */
+:root {
+  /* Brand Primary — exact CI manual values */
+  --ci-orange:         #fec24f;   /* CI Manual primary orange */
+  --ci-orange-dark:    #ff5229;   /* CI Manual deep orange-red */
+  --ci-orange-light:   #ffb782;   /* CI Manual salmon */
+  --ci-orange-pale:    rgba(254,194,79,0.08);
+  --ci-orange-border:  rgba(254,194,79,0.25);
+  --ci-orange-shadow:  0 4px 20px rgba(254,194,79,0.22);
+
+  /* Brand Teal */
+  --ci-teal:           #656565;
+  --ci-teal-dark:      #656565;
+  --ci-teal-light:     #656565;
+  --ci-teal-pale:      rgba(47,140,155,0.08);
+  --ci-teal-border:    rgba(47,140,155,0.25);
+  --ci-teal-shadow:    0 4px 20px rgba(47,140,155,0.18);
+
+  /* Brand Green */
+  --ci-green:          #22C55E;
+  --ci-green-dark:     #16A34A;
+  --ci-green-pale:     rgba(34,197,94,0.09);
+
+  /* Supplemental */
+  --ci-blue:           #656565;
+  --ci-purple:         #eda5ff;
+  --ci-red:            #EF4444;
+  --ci-yellow:         #F59E0B;
+
+  /* Text */
+  --ci-text-h:         #1a1a1a;
+  --ci-text-body:      #303030;
+  --ci-text-muted:     #6b7280;
+  --ci-text-dim:       #9ca3af;
+
+  /* Backgrounds */
+  --ci-bg:             #F7F8FA;
+  --ci-bg-white:       #FFFFFF;
+  --ci-bg-light:       #F0F2F5;
+  --ci-bg-card:        #FFFFFF;
+
+  /* Borders */
+  --ci-border:         rgba(0,0,0,0.08);
+  --ci-border-md:      rgba(0,0,0,0.12);
+
+  /* Shadows */
+  --ci-shadow-sm:      0 1px 4px rgba(0,0,0,0.07);
+  --ci-shadow:         0 4px 16px rgba(0,0,0,0.09);
+  --ci-shadow-lg:      0 12px 40px rgba(0,0,0,0.12);
+
+  /* Sidebar */
+  --ci-sidebar-bg:     #FFFFFF;
+  --ci-sidebar-border: rgba(0,0,0,0.07);
+
+  /* Gradients */
+  --ci-gradient-brand: linear-gradient(135deg, #fec24f 0%, #FF6421 60%, #FF5229 100%);
+  --ci-gradient-teal:  linear-gradient(135deg, #656565 0%, #656565 100%);
+  --ci-gradient-hero:  linear-gradient(135deg, #1a3a4a 0%, #0d2535 100%);
+  --ci-gradient-warm:  linear-gradient(135deg, #FFE86A 0%, #FFB782 100%);
+  --ci-gradient-vivid: linear-gradient(135deg, #65ED00 0%, #656565 100%);
+
+  /* Keep gold remapped to CI orange for accent colours */
+  --gold:        var(--ci-orange);
+  --gold-light:  var(--ci-orange-light);
+  --gold-dark:   var(--ci-orange-dark);
+  --gold-glow:   var(--ci-orange-pale);
+  --border-gold: var(--ci-orange-border);
+}
+
+
+/* ─── SIDEBAR (light) ─── */
+.sidebar {
+  background: var(--ci-bg-white) !important;
+  border-right: 1px solid var(--ci-border) !important;
+  box-shadow: 2px 0 12px rgba(0,0,0,0.06) !important;
+}
+
+.sidebar__brand {
+  border-bottom: 1px solid var(--ci-border) !important;
+  padding: 18px 20px 16px !important;
+}
+
+/* Use real logo in sidebar brand */
+.brand-logo {
+  background: var(--ci-gradient-brand) !important;
+  color: #fff !important;
+}
+
+/* Logo container upgrade */
+.sidebar__brand .sv-logo-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+}
+
+.brand-text .brand-name {
+  color: var(--ci-text-h) !important;
+  font-weight: 900 !important;
+  font-size: 1rem !important;
+}
+
+.brand-text .brand-role {
+  color: var(--ci-orange) !important;
+  font-size: 0.68rem !important;
+}
+
+/* Nav labels */
+.nav-section-label {
+  color: var(--ci-text-dim) !important;
+  font-size: 0.63rem !important;
+}
+
+/* Nav items */
+.nav-item {
+  color: var(--ci-text-muted) !important;
+  border-left: 3px solid transparent !important;
+  transition: all 0.2s ease !important;
+}
+
+.nav-item:hover {
+  color: var(--ci-orange) !important;
+  background: var(--ci-orange-pale) !important;
+}
+
+.nav-item.active {
+  color: var(--ci-orange) !important;
+  background: var(--ci-orange-pale) !important;
+  border-left-color: var(--ci-orange) !important;
+  font-weight: 700 !important;
+}
+
+/* Sidebar user footer */
+.sidebar__footer {
+  border-top: 1px solid var(--ci-border) !important;
+}
+
+.sidebar-user__avatar {
+  background: var(--ci-gradient-brand) !important;
+  color: #fff !important;
+}
+
+.sidebar-user__info .user-name {
+  color: var(--ci-text-h) !important;
+}
+
+.sidebar-user__info .user-role {
+  color: var(--ci-text-muted) !important;
+}
+
+/* ─── TOP BAR (light) ─── */
+.topbar {
+  background: var(--ci-bg-white) !important;
+  border-bottom: 1px solid var(--ci-border) !important;
+  box-shadow: 0 1px 8px rgba(0,0,0,0.06) !important;
+}
+
+.topbar__title {
+  color: var(--ci-text-h) !important;
+  font-size: 1.1rem !important;
+  font-weight: 800 !important;
+}
+
+.topbar__breadcrumb {
+  color: var(--ci-text-muted) !important;
+}
+
+.topbar__search {
+  background: var(--ci-bg-light) !important;
+  border: 1px solid var(--ci-border) !important;
+}
+
+.topbar__search input {
+  color: var(--ci-text-body) !important;
+}
+
+.topbar__search input::placeholder {
+  color: var(--ci-text-dim) !important;
+}
+
+.topbar-btn {
+  background: var(--ci-bg-light) !important;
+  border: 1px solid var(--ci-border) !important;
+  color: var(--ci-text-muted) !important;
+}
+
+.topbar-btn:hover {
+  color: var(--ci-orange) !important;
+  border-color: var(--ci-orange-border) !important;
+  background: var(--ci-orange-pale) !important;
+}
+
+/* ─── STAT CARDS (light) ─── */
+.stat-card {
+  background: var(--ci-bg-white) !important;
+  border: 1px solid var(--ci-border) !important;
+  box-shadow: var(--ci-shadow-sm) !important;
+}
+
+.stat-card__value {
+  color: var(--ci-text-h) !important;
+}
+
+.stat-card__label {
+  color: var(--ci-text-muted) !important;
+}
+
+.stat-card__icon {
+  background: var(--ci-orange-pale) !important;
+  color: var(--ci-orange) !important;
+}
+
+/* ─── SECTION HEADERS ─── */
+.section-header {
+  border-bottom: 1px solid var(--ci-border) !important;
+}
+
+.section-title {
+  color: var(--ci-text-h) !important;
+  font-weight: 800 !important;
+}
+
+/* ─── DATA CARDS / PANEL ─── */
+.card, .panel, .widget {
+  background: var(--ci-bg-white) !important;
+  border: 1px solid var(--ci-border) !important;
+  box-shadow: var(--ci-shadow-sm) !important;
+}
+
+/* ─── DATA TABLE (light) ─── */
+.data-table th {
+  background: var(--ci-bg-light) !important;
+  color: var(--ci-text-muted) !important;
+  border-bottom: 1px solid var(--ci-border-md) !important;
+}
+
+.data-table td {
+  border-bottom: 1px solid var(--ci-border) !important;
+  color: var(--ci-text-body) !important;
+}
+
+.data-table tbody tr:hover {
+  background: var(--ci-bg-light) !important;
+}
+
+.td-muted {
+  color: var(--ci-text-muted) !important;
+}
+
+.td-strong {
+  color: var(--ci-text-h) !important;
+  font-weight: 700 !important;
+}
+
+.td-gold {
+  color: var(--ci-orange) !important;
+  font-weight: 700 !important;
+}
+
+/* ─── BUTTONS ─── */
+.btn--primary {
+  background: var(--ci-gradient-brand) !important;
+  color: #fff !important;
+  border: none !important;
+  box-shadow: var(--ci-orange-shadow) !important;
+}
+
+.btn--primary:hover {
+  opacity: 0.9 !important;
+  box-shadow: 0 6px 24px rgba(254,194,79,0.30) !important;
+  transform: translateY(-1px) !important;
+}
+
+.btn--secondary {
+  background: var(--ci-bg-white) !important;
+  color: var(--ci-text-body) !important;
+  border: 1px solid var(--ci-border-md) !important;
+}
+
+.btn--secondary:hover {
+  border-color: var(--ci-orange-border) !important;
+  color: var(--ci-orange) !important;
+  background: var(--ci-orange-pale) !important;
+}
+
+.btn--teal {
+  background: var(--ci-gradient-teal) !important;
+  color: #fff !important;
+  border: none !important;
+}
+
+/* ─── BADGES (remap gold → orange) ─── */
+.badge-gold {
+  background: var(--ci-orange-pale) !important;
+  color: var(--ci-orange-dark) !important;
+  border: 1px solid var(--ci-orange-border) !important;
+}
+
+/* ─── POOL CARDS (light) ─── */
+.pool-card {
+  background: var(--ci-bg-white) !important;
+  border: 1px solid var(--ci-border) !important;
+  box-shadow: var(--ci-shadow-sm) !important;
+}
+
+.pool-card:hover {
+  box-shadow: var(--ci-shadow) !important;
+  border-color: var(--ci-orange-border) !important;
+}
+
+.pool-card__name {
+  color: var(--ci-text-h) !important;
+}
+
+.pool-card__rate {
+  color: var(--ci-orange) !important;
+}
+
+/* ─── INVESTMENT CARDS ─── */
+.investment-card {
+  background: var(--ci-bg-white) !important;
+  border: 1px solid var(--ci-border) !important;
+}
+
+.investment-card__title {
+  color: var(--ci-text-h) !important;
+}
+
+/* ─── MODALS ─── */
+.modal-overlay {
+  background: rgba(0,0,0,0.45) !important;
+  backdrop-filter: blur(4px) !important;
+}
+
+/* White CI theme applies to standard modals only — NOT the dark payment modal */
+.modal:not(#paymentModalBox) {
+  background: var(--ci-bg-white) !important;
+  border: 1px solid var(--ci-border) !important;
+  box-shadow: var(--ci-shadow-lg) !important;
+}
+
+.modal__header {
+  border-bottom: 1px solid var(--ci-border) !important;
+  background: var(--ci-bg-light) !important;
+}
+
+.modal__title {
+  color: var(--ci-text-h) !important;
+  font-weight: 800 !important;
+}
+
+.modal__footer {
+  border-top: 1px solid var(--ci-border) !important;
+  background: var(--ci-bg-light) !important;
+}
+
+/* ─── PAYMENT MODAL — always dark, immune to CI white override ─── */
+#topUpModal.modal-overlay {
+  background: rgba(0,0,0,0.80) !important;
+  backdrop-filter: blur(8px) !important;
+}
+#paymentModalBox,
+#paymentModalBox > div {
+  background: #1a1d23 !important;
+  color: #f0f4ff !important;
+}
+#paymentModalBox .pm-gateway-card {
+  background: #252933 !important;
+  border-color: rgba(255,255,255,0.10) !important;
+}
+#paymentModalBox .pm-gateway-card.selected {
+  background: rgba(254,194,79,0.09) !important;
+  border-color: #fec24f !important;
+}
+#paymentModalBox .pm-chip {
+  background: #252933 !important;
+  border-color: rgba(255,255,255,0.10) !important;
+  color: #9ca3af !important;
+}
+#paymentModalBox .pm-chip.active,
+#paymentModalBox .pm-chip:hover {
+  background: rgba(254,194,79,0.12) !important;
+  border-color: rgba(254,194,79,0.40) !important;
+  color: #fec24f !important;
+}
+#paymentModalBox .info-row__label { color: #9ca3af !important; }
+#paymentModalBox .info-row__value { color: #f0f4ff !important; }
+#paymentModalBox input[type="number"] { color: #000 !important; }
+
+/* ─── FORM CONTROLS ─── */
+.form-label {
+  color: var(--ci-text-muted) !important;
+  font-size: 0.78rem !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+}
+
+.form-control {
+  background: var(--ci-bg-light) !important;
+  border: 1px solid var(--ci-border-md) !important;
+  color: var(--ci-text-body) !important;
+}
+
+.form-control:focus {
+  border-color: var(--ci-orange) !important;
+  box-shadow: 0 0 0 3px var(--ci-orange-pale) !important;
+}
+
+/* ─── TOAST (CI orange) ─── */
+.toast {
+  background: var(--ci-bg-white) !important;
+  border: 1px solid var(--ci-border) !important;
+  color: var(--ci-text-body) !important;
+  box-shadow: var(--ci-shadow) !important;
+}
+
+.toast--success { border-left: 4px solid var(--ci-green) !important; }
+.toast--error   { border-left: 4px solid var(--ci-red) !important; }
+.toast--info    { border-left: 4px solid var(--ci-teal) !important; }
+
+/* ─── PORTFOLIO HERO (portal) ─── */
+.portfolio-hero {
+  background: var(--ci-gradient-hero) !important;
+}
+
+/* ─── INFO ROWS ─── */
+.info-row {
+  border-bottom: 1px solid var(--ci-border) !important;
+}
+
+.info-row__label {
+  color: var(--ci-text-muted) !important;
+}
+
+.info-row__value {
+  color: var(--ci-text-h) !important;
+}
+
+/* ─── CHART containers ─── */
+.chart-card, .chart-wrap {
+  background: var(--ci-bg-white) !important;
+  border: 1px solid var(--ci-border) !important;
+}
+/* Portfolio hero chart lives on a dark background — don't apply white override */
+.portfolio-hero .chart-wrap,
+.portfolio-hero .portfolio-hero__chart,
+.portfolio-hero canvas {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* ─── Scrollbar (light) ─── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--ci-bg-light); }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: var(--ci-orange); }
+
+/* ─── Page‑level background ─── */
+.page-content {
+  background: var(--ci-bg) !important;
+}
+
+/* ─── Fix dark CSS vars used in inline styles on light background ─── */
+/* These selectors override any element that uses the dark --var() tokens
+   in inline styles, ensuring they render correctly on the light CI theme. */
+
+/* table-card (white in CI) */
+.table-card {
+  background: var(--ci-bg-white) !important;
+  border: 1px solid var(--ci-border) !important;
+}
+.table-card__title { color: var(--ci-text-h) !important; }
+.table-card__sub   { color: var(--ci-text-muted) !important; }
+.table-card__footer { color: var(--ci-text-muted) !important; border-top: 1px solid var(--ci-border) !important; }
+
+/* Tab bar */
+.tab-bar {
+  background: var(--ci-bg-light) !important;
+}
+.tab-btn { color: var(--ci-text-muted) !important; }
+.tab-btn.active {
+  background: var(--ci-bg-white) !important;
+  color: var(--ci-orange) !important;
+  box-shadow: var(--ci-shadow-sm) !important;
+}
+.tab-btn:hover:not(.active) { color: var(--ci-orange) !important; }
+
+/* tbl-search / tbl-filter on white bg */
+.tbl-search {
+  background: var(--ci-bg-light) !important;
+  border: 1px solid var(--ci-border) !important;
+}
+.tbl-search input { color: var(--ci-text-body) !important; }
+.tbl-filter {
+  background: var(--ci-bg-light) !important;
+  border: 1px solid var(--ci-border) !important;
+  color: var(--ci-text-muted) !important;
+}
+
+/* Empty state on white panels */
+.empty-state { color: var(--ci-text-muted) !important; }
+.empty-state i { color: var(--ci-text-dim) !important; }
+
+/* pool-stat on pool cards */
+.pool-stat  { background: var(--ci-bg-light) !important; }
+.pool-stat__label { color: var(--ci-text-dim) !important; }
+.pool-stat__value { color: var(--ci-text-h) !important; }
+
+/* Market pool card inner stats */
+.mps { background: var(--ci-bg-light) !important; }
+.mps__label { color: var(--ci-text-dim) !important; }
+.mps__value { color: var(--ci-text-h) !important; }
+
+/* my-inv-card on white */
+.my-inv-card {
+  background: var(--ci-bg-white) !important;
+  border: 1px solid var(--ci-border) !important;
+}
+.my-inv-card:hover { border-color: var(--ci-orange-border) !important; }
+.my-inv-card__name    { color: var(--ci-text-h) !important; }
+.my-inv-card__partner { color: var(--ci-text-dim) !important; }
+.my-inv-progress__label { color: var(--ci-text-muted) !important; }
+
+/* mic-stat on white */
+.mic-stat { background: var(--ci-bg-light) !important; }
+.mic-stat__label { color: var(--ci-text-dim) !important; }
+.mic-stat__value { color: var(--ci-text-h) !important; }
+.mic-stat__value--gold  { color: var(--ci-orange) !important; }
+.mic-stat__value--green { color: var(--ci-green) !important; }
+
+/* Progress bars on white panels */
+.progress-bar { background: var(--ci-bg-light) !important; }
+.progress-fill { background: var(--ci-gradient-brand) !important; }
+.progress-fill--green { background: linear-gradient(90deg, #16a34a, #22c55e) !important; }
+.progress-fill--blue  { background: linear-gradient(90deg, #656565, #656565) !important; }
+
+/* Market pool card text */
+.market-pool-card__title   { color: var(--ci-text-h) !important; }
+.market-pool-card__partner { color: var(--ci-text-dim) !important; }
+.market-pool-card__rate    { color: var(--ci-orange) !important; }
+.market-pool-card__rate-label { color: var(--ci-text-dim) !important; }
+.pool-card__progress-label { color: var(--ci-text-muted) !important; }
+
+/* Section-banner: title + sub over brand gradient always white */
+.section-banner__title { color: #fff !important; }
+.section-banner__sub   { color: rgba(255,255,255,0.85) !important; }
+
+/* Support / FAQ / ticket items on white panels */
+.faq-quick-q { color: var(--ci-text-body) !important; }
+.faq-quick-q i { color: var(--ci-orange) !important; }
+.faq-quick-a { color: var(--ci-text-muted) !important; }
+.my-ticket-subject  { color: var(--ci-text-h) !important; }
+.my-ticket-meta     { color: var(--ci-text-dim) !important; }
+.my-ticket-response { background: var(--ci-bg-light) !important; border-left-color: var(--ci-orange) !important; color: var(--ci-text-body) !important; }
+
+/* Referral hero on dark-ish bg — keep text white */
+.referral-hero__title { color: #ffffff !important; }
+.referral-hero__sub   { color: rgba(255,255,255,0.80) !important; }
+.ref-step p { color: rgba(255,255,255,0.70) !important; }
+
+/* Maturity card */
+.maturity-card {
+  background: var(--ci-bg-white) !important;
+  border: 1px solid var(--ci-orange-border) !important;
+}
+.maturity-card__name   { color: var(--ci-text-h) !important; }
+.maturity-card__detail { color: var(--ci-text-muted) !important; }
+.maturity-card__payout-value { color: var(--ci-orange) !important; }
+.maturity-card__payout-label { color: var(--ci-text-dim) !important; }
+
+/* td utility helpers — re-map for CI white */
+.td-strong { color: var(--ci-text-h) !important; }
+.td-muted  { color: var(--ci-text-muted) !important; }
+.td-gold   { color: var(--ci-orange) !important; }
+.td-green  { color: var(--ci-green) !important; }
+.td-red    { color: #ef4444 !important; }
+
+/* text-gold on white panels */
+.text-gold  { color: var(--ci-orange) !important; }
+.text-muted { color: var(--ci-text-muted) !important; }
+.text-green { color: var(--ci-green) !important; }
+
+/* wallet activity items (inside panels on white bg) */
+#walletActivity > div {
+  border-bottom: 1px solid var(--ci-border) !important;
+}
+
+/* Payment amount input — ensure visible on dark modal bg */
+#paymentModalBox input[type="number"] {
+  color: #f0f4ff !important;
+  background: transparent !important;
+}
+
+/* Maturity view info panel on white */
+#view-maturity .panel__body {
+  color: var(--ci-text-body) !important;
+}
+
+/* form inputs in light portals */
+.form-input, .form-select, .form-textarea {
+  background: var(--ci-bg-light) !important;
+  border: 1px solid var(--ci-border-md) !important;
+  color: var(--ci-text-body) !important;
+}
+.form-input:focus, .form-select:focus, .form-textarea:focus {
+  border-color: var(--ci-orange) !important;
+  background: var(--ci-bg-white) !important;
+}
+.form-input::placeholder, .form-textarea::placeholder {
+  color: var(--ci-text-dim) !important;
+}
+.form-label { color: var(--ci-text-muted) !important; }
+
+/* Modal body text on white modal */
+.modal__body { color: var(--ci-text-body) !important; }
+.modal__title { color: var(--ci-text-h) !important; }
+
+/* info-row values inside white panels */
+.panel .info-row__label { color: var(--ci-text-muted) !important; }
+.panel .info-row__value { color: var(--ci-text-h) !important; }
+.panel .info-row { border-bottom: 1px solid var(--ci-border) !important; }
+
+/* ─── Section banners ─── */
+.section-banner {
+  background: var(--ci-gradient-brand) !important;
+}
+
+/* ─── Nav badge count ─── */
+.nav-badge {
+  background: var(--ci-red) !important;
+}
+
+/* ─── Mobile toggle (CI orange) ─── */
+.mobile-toggle {
+  background: var(--ci-gradient-brand) !important;
+  color: #fff !important;
+}
+
+/* ─── Risk banner ─── */
+.risk-banner {
+  background: rgba(47,140,155,0.07) !important;
+  border: 1px solid var(--ci-teal-border) !important;
+  color: var(--ci-teal-dark) !important;
+}
+
+/* ─── FSCA compliance badge ─── */
+.fsca-badge {
+  border: 1px solid var(--ci-orange-border) !important;
+  background: var(--ci-bg-white) !important;
+}
+
+.fsca-badge .fsca-title {
+  color: var(--ci-text-h) !important;
+}
+
+/* ─── Wallet card ─── */
+.wallet-card {
+  background: var(--ci-gradient-teal) !important;
+}
+
+/* ─── Progress bars ─── */
+.progress-bar__fill {
+  background: var(--ci-gradient-brand) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   COMPREHENSIVE TEXT VISIBILITY FIXES
+   Overrides dark CSS variable leaks on light CI background
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Map dark variables to light values globally */
+:root {
+  --white:       #1a1a1a !important;
+  --text:        #303030 !important;
+  --text-muted:  #6b7280 !important;
+  --text-dim:    #9ca3af !important;
+  --surface:     #ffffff !important;
+  --dark-2:      #f7f8fa !important;
+  --dark-3:      #f0f2f5 !important;
+  --dark-4:      #e5e7eb !important;
+  --border:      rgba(0,0,0,0.08) !important;
+  --bg:          #f7f8fa !important;
+}
+
+/* Panel text — headings, labels, values on white panels */
+.panel__title { color: #1a1a1a !important; font-weight: 800 !important; }
+.panel__body  { color: #303030 !important; }
+
+/* Pool cards text */
+.pool-card__partner { color: #6b7280 !important; }
+.pool-card__stats .pool-stat__value { color: #1a1a1a !important; }
+
+/* Inline dark-var style overrides for JS-generated content */
+[style*="color:var(--white)"],
+[style*="color: var(--white)"] { color: #1a1a1a !important; }
+
+[style*="color:var(--text)"],
+[style*="color: var(--text)"] { color: #303030 !important; }
+
+[style*="color:var(--text-muted)"],
+[style*="color: var(--text-muted)"] { color: #6b7280 !important; }
+
+[style*="color:var(--text-dim)"],
+[style*="color: var(--text-dim)"] { color: #9ca3af !important; }
+
+[style*="background:var(--dark-3)"],
+[style*="background: var(--dark-3)"] { background: #f0f2f5 !important; }
+
+[style*="background:var(--dark-4)"],
+[style*="background: var(--dark-4)"] { background: #e5e7eb !important; }
+
+[style*="border-color:var(--border)"],
+[style*="border-color: var(--border)"] { border-color: rgba(0,0,0,0.08) !important; }
+
+/* investCalcPreview dark bg → light */
+#investCalcPreview { background: #f0f2f5 !important; border: 1px solid rgba(0,0,0,0.08) !important; }
+#investCalcPreview [style*="color:var(--white)"],
+#investCalcPreview [style*="color:var(--text-dim)"] { color: #1a1a1a !important; }
+#ic-invested, #ic-returns, #ic-total { color: #1a1a1a !important; }
+
+/* viewInvestor detail panel inside modal */
+#invDetailBody .panel { background: #f0f2f5 !important; }
+#invDetailBody .panel__title { color: #1a1a1a !important; }
+#invDetailBody [style*="color:var(--white)"] { color: #1a1a1a !important; }
+#invDetailBody [style*="font-size:1.1rem"] { color: #1a1a1a !important; }
+
+/* viewTicket panel inside modal */
+#ticketModalBody .panel { background: #f0f2f5 !important; border: 1px solid rgba(0,0,0,0.08) !important; }
+#ticketModalBody .panel__body { color: #303030 !important; }
+
+/* Pool cards admin — text visibility */
+.pool-card__name { color: #1a1a1a !important; }
+.pool-card__partner { color: #6b7280 !important; }
+.pool-stat__value--gold { color: var(--ci-orange) !important; }
+
+/* Open Pools Widget on dashboard */
+#openPoolsWidget [style*="color:var(--white)"],
+#openPoolsWidget [style*="color:var(--text-dim)"] { color: #1a1a1a !important; }
+
+/* Pending actions widget */
+#pendingActionsWidget [style*="color:var(--text)"] { color: #303030 !important; }
+
+/* Maturity instruction inner panel */
+#view-maturity .panel { background: rgba(254,194,79,0.04) !important; }
+
+/* Support view on portal */
+#view-support .panel { background: #ffffff !important; }
+
+/* Pools page heading */
+#view-pools h2 { color: #1a1a1a !important; }
+#view-pools p { color: #6b7280 !important; }
+
+/* Inline styles generated by JS that use dark vars */
+.my-inv-card [style*="color:var(--text-dim)"] { color: #9ca3af !important; }
+.my-inv-card [style*="color:var(--gold)"] { color: var(--ci-orange) !important; }
+
+/* Statement view - all text on white bg */
+#view-statement { color: #303030 !important; }
+
+/* Avatar on dark panels */
+.avatar--gold { background: var(--ci-gradient-brand) !important; color: #fff !important; }
+
+/* Notification panel — open/close animation */
+#notifPanel, #adminNotifPanel {
+  opacity: 0;
+  transform: translateY(-6px) scale(0.98);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  pointer-events: none;
+}
+#notifPanel.notif-panel--open, #adminNotifPanel.notif-panel--open {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+/* Notification panel items */
+.notif-item { background: transparent !important; }
+.notif-item.unread { background: rgba(254,194,79,0.04) !important; }
+.notif-title { color: #1a1a1a !important; font-weight: 700 !important; }
+.notif-sub { color: #6b7280 !important; font-size: 0.75rem !important; }
+.notif-time { color: #9ca3af !important; font-size: 0.68rem !important; }
+.notif-icon { border-radius: 50% !important; width: 36px !important; height: 36px !important; display: flex !important; align-items: center !important; justify-content: center !important; flex-shrink: 0 !important; }
+.notif-body { flex: 1 !important; }
+.notif-item { display: flex !important; align-items: flex-start !important; gap: 12px !important; padding: 12px 18px !important; border-bottom: 1px solid rgba(0,0,0,0.05) !important; cursor: pointer !important; transition: background 0.15s !important; }
+.notif-item:hover { background: rgba(254,194,79,0.03) !important; }
+.notif-dot { position: absolute !important; top: 6px !important; right: 6px !important; width: 8px !important; height: 8px !important; background: #ef4444 !important; border-radius: 50% !important; display: none !important; }
+.notif-dot.has-unread { display: block !important; }
+
+/* Page/view headings inside page-content */
+.page-content h2 { color: #1a1a1a !important; }
+.page-content p { color: #6b7280 !important; }
+
+/* Table card footer pagination buttons */
+.page-btn { color: #6b7280 !important; background: #f0f2f5 !important; border: 1px solid rgba(0,0,0,0.08) !important; }
+.page-btn.active { background: var(--ci-gradient-brand) !important; color: #fff !important; border-color: transparent !important; }
+
+/* Dropdown/select text */
+select option { color: #303030 !important; background: #fff !important; }
+
+
