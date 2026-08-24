@@ -187,7 +187,16 @@ function main() {
   for (const n of notes) console.log(`[check:ios] note: ${n}`);
 
   if (!problems.length) {
-    console.log('[check:ios] OK — safe to archive.');
+    /* Deliberately not "safe to archive". This compares the project against the
+       repo template and cannot see App Store Connect, so it passed a 4.0.9/8
+       configuration that Apple then rejected outright: 4.0.9 was already released,
+       which closes the train to every build number. Claiming safety for something
+       only Apple can adjudicate is worse than saying nothing. */
+    console.log('[check:ios] OK — project matches ios-config.');
+    console.log('[check:ios] Not checked (App Store Connect only knows these):');
+    console.log('[check:ios]   · a released version is a closed train and rejects any build (90186)');
+    console.log('[check:ios]   · build numbers already used within this train (90062)');
+    console.log('[check:ios] If either bites, bump the version in ios-config and re-copy.');
     return 0;
   }
 
