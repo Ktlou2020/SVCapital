@@ -50,6 +50,27 @@ function resolveSetting(pbx, name) {
   return { value: uniq[0] || null, ambiguous: uniq.length > 1, all: uniq };
 }
 
+/* Map a build setting to its value per build configuration.
+   In a pbxproj each configuration is an XCBuildConfiguration block holding a
+   buildSettings dict followed by `name = Debug;` / `name = Release;`. Splitting on
+   the isa marker yields one chunk per configuration containing both, which avoids
+   brace-matching the nested dict.
+
+   Naming the configuration matters: **Archive uses Release**, so when the
+   identifier differs per configuration that is the one that decides where a build
+   is delivered. Reporting only "they differ" leaves you guessing which to fix. */
+function settingByConfig(pbx, name) {
+  if (!pbx) return [];
+  const out = [];
+  const chunks = pbx.split('isa = XCBuildConfiguration;').slice(1);
+  for (const c of chunks) {
+    const v = c.match(new RegExp(`${name}\\s*=\\s*"?([^;"\\n]+)"?\\s*;`));
+    const n = c.match(/\bname\s*=\s*"?([^;"\n]+)"?\s*;/);
+    if (v) out.push({ config: n ? n[1].trim() : '(unnamed)', value: v[1].trim() });
+  }
+  return out;
+}
+
 function deref(raw, pbx) {
   if (!raw) return { value: raw, via: null, ambiguous: false };
   const m = raw.match(/^\$\((.+)\)$/);
@@ -118,10 +139,22 @@ function main() {
      carries a literal identifier the plist check above never consults the pbxproj,
      which would let a project pass with a correct plist and a build still signed
      against the wrong app. */
-  const pbid = resolveSetting(pbx, 'PRODUCT_BUNDLE_IDENTIFIER');
+  const pbid    = resolveSetting(pbx, 'PRODUCT_BUNDLE_IDENTIFIER');
+  const perCfg  = settingByConfig(pbx, 'PRODUCT_BUNDLE_IDENTIFIER');
   if (pbx) {
     if (pbid.ambiguous) {
-      problems.push(`PRODUCT_BUNDLE_IDENTIFIER differs between build configurations: ${pbid.all.join(', ')}`);
+      const detail = perCfg.length
+        ? perCfg.map(c => `${c.config}="${c.value}"`).join(', ')
+        : pbid.all.join(', ');
+      problems.push(`PRODUCT_BUNDLE_IDENTIFIER differs between build configurations: ${detail}`);
+      const bad = perCfg.filter(c => c.value !== want.id);
+      for (const c of bad) {
+        const isRelease = /release/i.test(c.config);
+        problems.push(
+          `  → ${c.config} is "${c.value}", must be "${want.id}"` +
+          (isRelease ? '  ** Archive uses this configuration — it is what sent the build to the wrong app **' : '')
+        );
+      }
     } else if (!pbid.value) {
       notes.push('PRODUCT_BUNDLE_IDENTIFIER not found in project.pbxproj');
     } else if (pbid.value !== want.id) {
@@ -164,6 +197,12 @@ function main() {
   console.error('[check:ios] Fix in Xcode (target App):');
   console.error('[check:ios]   Signing & Capabilities → Bundle Identifier');
   console.error('[check:ios]   General → Version / Build');
+  if (pbid.ambiguous) {
+    console.error('[check:ios] Because the identifier differs per configuration, set it for ALL of them:');
+    console.error('[check:ios]   Build Settings → search "Product Bundle Identifier"');
+    console.error('[check:ios]   expand the row and set every configuration (Debug and Release)');
+    console.error('[check:ios]   Signing & Capabilities edits only the selected configuration.');
+  }
   console.error('[check:ios] Or copy the template in, from an up-to-date checkout:');
   console.error('[check:ios]   cp ios-config/App/App/Info.plist ios/App/App/');
   return 1;
