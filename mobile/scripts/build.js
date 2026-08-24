@@ -38,6 +38,42 @@ function copyDir(src, dest) {
   }
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+   GUARD: mobile/www/ is no longer a disposable build artifact.
+   It is committed to git and has diverged substantially from portal/ — it
+   carries mobile-only UI (transaction filter pills, the in-app factsheet
+   viewer, the native service worker and its cache version) plus fixes that
+   exist nowhere else. mobile/src/ only overlays native.js, css/ and js/api.js,
+   so a regeneration does NOT restore any of that.
+
+   Regenerating discards, at minimum:
+     index.html  js/portal.js  css/portal.css  css/portal-premium.css
+     sw.js  manifest.json  assets/full-colour-logo-horizontal-white-text.png
+   (21 files differ; manifest.json and that asset are deleted outright.)
+
+   This matters because `npm run open:ios` / `run:ios` call `sync`, which calls
+   this script — so opening Xcode used to silently wipe the app first.
+
+   Default is now a no-op when www/ is populated. Pass --force (or set
+   SVC_FORCE_REBUILD=1) to re-derive from portal/, and expect to reapply the
+   mobile-only work by hand afterwards.
+   ───────────────────────────────────────────────────────────────────────── */
+const FORCE = process.argv.includes('--force') || process.env.SVC_FORCE_REBUILD === '1';
+const wwwPopulated = fs.existsSync(WWW) && fs.readdirSync(WWW).length > 0;
+
+if (wwwPopulated && !FORCE) {
+  console.log('[build] mobile/www/ is present and hand-maintained — skipping regeneration.');
+  console.log('[build] It has diverged from portal/; rebuilding would DISCARD mobile-only work.');
+  console.log('[build] Native config is already injected in the committed files, so `cap sync` is safe.');
+  console.log('[build] To re-derive from portal/ anyway: npm run build:force');
+  process.exit(0);
+}
+
+if (wwwPopulated && FORCE) {
+  console.warn('[build] --force: wiping mobile/www/ and re-deriving from portal/.');
+  console.warn('[build] Mobile-only files listed above will be lost. Ensure they are committed first.');
+}
+
 // Clean www
 fs.rmSync(WWW, { recursive: true, force: true });
 fs.mkdirSync(WWW, { recursive: true });

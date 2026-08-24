@@ -5,6 +5,7 @@
   "private": true,
   "scripts": {
     "build": "node scripts/build.js",
+    "build:force": "node scripts/build.js --force",
     "sync": "npm run build && npx cap sync",
     "open:android": "npm run sync && npx cap open android",
     "open:ios": "npm run sync && npx cap open ios",
