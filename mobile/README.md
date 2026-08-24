@@ -188,6 +188,16 @@ same comparison in a second, beforehand, and checks:
 - `capacitor.config.json` `appId` agrees with the template
 - `PrivacyInfo.xcprivacy` is present (required for App Store submission)
 
+**What it cannot check:** anything that lives only on Apple's servers. It compares
+your project against the repo template, so it cannot know which marketing versions
+App Store Connect considers closed, or which build numbers already exist there.
+Two rules are enforced only at upload:
+
+- a marketing version whose build was **approved for sale** is a closed train and
+  accepts no further uploads at any build number (error 90186) — bump
+  `CFBundleShortVersionString`
+- within a train, the build number must strictly increase (error 90062)
+
 `open:ios` and `run:ios` run it as a warning — they never block, since you need
 Xcode open to fix what it reports. Run `npm run check:ios` directly for a hard
 exit code, e.g. in CI.

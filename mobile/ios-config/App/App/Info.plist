@@ -14,12 +14,23 @@
     <string>co.za.svcapital.app</string>
     <!-- The Xcode project (mobile/ios/, gitignored) is the source of truth for
          these at archive time; the values here only seed a fresh `cap add ios`.
-         App Store Connect requires CFBundleVersion to strictly increase within a
-         CFBundleShortVersionString: 4.0.9 already has builds 4-7 uploaded. -->
+
+         Two separate App Store Connect rules apply:
+
+         1. A marketing version (CFBundleShortVersionString) whose build has been
+            approved for sale is a CLOSED train - it accepts no further uploads at
+            any build number (error 90186). 4.0.9 build 7 was sale-approved, so
+            4.0.9 is closed and 4.1.0 is the next open train.
+         2. Within a train, CFBundleVersion must strictly increase (error 90062).
+
+         Build numbers ran 79, 83, 84, 85 and were then reset to 4-7 for 4.0.9,
+         which is what made "what is the next build number" ambiguous. Continuing
+         from the all-time high instead of restarting keeps them monotonic across
+         trains so the question stays unambiguous. -->
     <key>CFBundleVersion</key>
-    <string>8</string>
+    <string>86</string>
     <key>CFBundleShortVersionString</key>
-    <string>4.0.9</string>
+    <string>4.1.0</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>
