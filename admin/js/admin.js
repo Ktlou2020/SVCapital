@@ -2071,6 +2071,13 @@ async function viewInvestor(id) {
   const activeInvCount = invsts.filter(i=>i.status==='active').length;
   const totalReturns   = invsts.filter(i=>['matured','paid_out'].includes(i.status)).reduce((s,i)=>s+(parseFloat(i.actual_return)||parseFloat(i.expected_return)||0), 0);
   const totalDeposits  = txns.filter(t=>t.type==='deposit' && t.status==='completed').reduce((s,t)=>s+(parseFloat(t.amount)||0), 0);
+  const invSubAccounts = (STATE.subAccounts || []).filter(sa => sa.parent_investor_id === id);
+  const saWallet   = invSubAccounts.reduce((s, sa) => s + (parseFloat(sa.wallet_balance) || 0), 0);
+  const saInvested = invSubAccounts.reduce((s, sa) => {
+    const saInvs = invsts.filter(i => i.sub_account_id === sa.id);
+    const computed = saInvs.reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
+    return s + (computed > 0 ? computed : (parseFloat(sa.total_invested) || 0));
+  }, 0);
   const _stmtToday   = new Date().toISOString().slice(0, 10);
   const _stmtFromDef = _stmtToday.slice(0, 7) + '-01';
 
@@ -2084,6 +2091,7 @@ async function viewInvestor(id) {
     <button class="tab-btn inv-tab-btn"        id="invTab-activity"      onclick="_invTab('activity');_loadInvestorActivity('${inv.id}')"><i class="fa-solid fa-mobile-screen" style="margin-right:5px"></i>Activity</button>
     <button class="tab-btn inv-tab-btn"        id="invTab-admin"         onclick="_invTab('admin')"><i class="fa-solid fa-shield-halved" style="margin-right:5px"></i>Admin</button>
     <button class="tab-btn inv-tab-btn"        id="invTab-statements"    onclick="_invTab('statements');_loadInvestorStatements('${inv.id}')"><i class="fa-solid fa-file-lines" style="margin-right:5px"></i>Statements</button>
+    ${invSubAccounts.length ? `<button class="tab-btn inv-tab-btn" id="invTab-subaccounts" onclick="_invTab('subaccounts')"><i class="fa-solid fa-users" style="margin-right:5px"></i>Sub-accounts (${invSubAccounts.length})</button>` : ''}
     <button class="tab-btn inv-tab-btn"        id="invTab-comms"         onclick="_invTab('comms')"><i class="fa-solid fa-envelope" style="margin-right:5px"></i>Comms</button>
   </div>
 
@@ -2122,6 +2130,11 @@ async function viewInvestor(id) {
         <div style="font-size:1.05rem;font-weight:800;color:#656565">${invsts.length}<span style="font-size:0.72rem;font-weight:400"> (${activeInvCount} active)</span></div>
         <div style="font-size:0.72rem;color:var(--text-muted)">Investments</div>
       </div>
+      ${invSubAccounts.length ? `<div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center;cursor:pointer" onclick="_invTab('subaccounts')" title="View sub-accounts">
+        <div style="font-size:1.05rem;font-weight:800;color:#eda5ff">${invSubAccounts.length}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted)">Sub-accounts</div>
+        <div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px;white-space:nowrap">W ${Utils.rand(saWallet)} · I ${Utils.rand(saInvested)}</div>
+      </div>` : ''}
     </div>
     <div class="panel mb-12">
       <div class="panel__header"><span class="panel__title"><i class="fa-solid fa-building-columns" style="color:var(--orange);margin-right:6px"></i>Bank Account</span></div>
@@ -2548,6 +2561,40 @@ async function viewInvestor(id) {
       </div>
     </div>
   </div>
+
+  ${invSubAccounts.length ? `
+  <!-- ── Sub-Accounts ── -->
+  <div id="invPanel-subaccounts" style="display:none">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+      <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center">
+        <div style="font-size:1.05rem;font-weight:800;color:#fec24f">${Utils.rand(saWallet)}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted)">Total Sub-Account Wallet</div>
+      </div>
+      <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center">
+        <div style="font-size:1.05rem;font-weight:800;color:#eda5ff">${Utils.rand(saInvested)}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted)">Total Sub-Account Invested</div>
+      </div>
+    </div>
+    <table class="data-table">
+      <thead><tr><th>Name</th><th>Type</th><th>Wallet</th><th>Invested</th><th>KYC</th><th></th></tr></thead>
+      <tbody>
+        ${invSubAccounts.map(sa => {
+          const saInvs = invsts.filter(i => i.sub_account_id === sa.id);
+          const computed = saInvs.reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
+          const invested = computed > 0 ? computed : (parseFloat(sa.total_invested) || 0);
+          const kycCls = sa.kyc_status === 'approved' ? 'badge--green' : sa.kyc_status === 'under_review' ? 'badge--yellow' : 'badge--grey';
+          return `<tr>
+            <td style="font-weight:600">${_esc(sa.name)}</td>
+            <td style="font-size:0.78rem;text-transform:capitalize">${(sa.account_type||'').replace(/_/g,' ')}</td>
+            <td style="font-weight:700;font-variant-numeric:tabular-nums">${Utils.rand(sa.wallet_balance)}</td>
+            <td style="font-weight:700;font-variant-numeric:tabular-nums">${Utils.rand(invested)}</td>
+            <td><span class="badge ${kycCls}">${sa.kyc_status||'pending'}</span></td>
+            <td><button class="btn btn--ghost btn--sm" onclick="Modal.close('investorDetailModal');viewSubAccount('${sa.id}')"><i class="fa-solid fa-arrow-right"></i></button></td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>` : ''}
   `;
   // Modal already opened above while data was loading
   const ta = document.getElementById('invNewNoteTA');
