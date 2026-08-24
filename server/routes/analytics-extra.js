@@ -353,14 +353,14 @@ router.get('/platform-fees', requireAuth, _admin, async (req, res) => {
       `, dateParams),
 
       pool.query(`
-        SELECT COALESCE(i.first_name || ' ' || i.last_name, i.email, t.investor_id) AS investor_name,
+        SELECT MAX(COALESCE(i.first_name || ' ' || i.last_name, i.email, t.investor_id)) AS investor_name,
                COUNT(*) AS count,
                SUM(ABS(t.amount)) AS total
         FROM transactions t
         LEFT JOIN investors i ON i.id = t.investor_id
         WHERE ${feeFilter}
           ${dateClause}
-        GROUP BY investor_name ORDER BY total DESC LIMIT 10
+        GROUP BY t.investor_id ORDER BY total DESC LIMIT 10
       `, dateParams),
     ]);
 
