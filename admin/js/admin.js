@@ -2629,8 +2629,18 @@ async function depositToInvestor(investorId, investorName, currentBalance) {
 
 async function _recalcInvestorWallet(investorId, investorName, btn) {
   if (!await Confirm.ask('Recalculate Wallet Balance?', {
-    body: `This will recompute ${investorName}'s wallet balance from all completed transactions (deposits, returns, payouts minus withdrawals and fees). The current balance will be overwritten. This cannot be undone.`,
-    confirmLabel: 'Recalculate',
+    // The old wording promised a full recompute "from all completed transactions
+    // (deposits, returns, payouts minus withdrawals and fees)". The endpoint does
+    // NOT do that — see broadcast.js POST /admin/recalculate-wallet/:investorId, which
+    // sets wallet_balance to the SUM of completed deposits whose reference matches
+    // ADMIN-DEP-% and nothing else. Returns, payouts, maturity credits, referral
+    // bonuses, gateway top-ups and withdrawals are all ignored, and any imported
+    // opening balance is destroyed. Describe what it actually does.
+    body: `<strong>This does not recompute from full transaction history.</strong><br><br>
+It overwrites ${investorName}'s wallet with the total of admin-created manual deposits only (reference <code>ADMIN-DEP-*</code>).<br><br>
+Everything else is <strong>ignored and lost</strong>: gateway top-ups, returns, payouts, maturity credits, referral bonuses, gifts, withdrawals, and any imported opening balance.<br><br>
+Only use this for an investor whose balance should equal their admin deposits and nothing more. This cannot be undone.`,
+    confirmLabel: 'Overwrite with admin deposits',
   })) return;
   await _withBtn(btn, async () => {
     try {
