@@ -228,7 +228,9 @@ mobile/
 ├── package.json          — Capacitor dependencies
 ├── capacitor.config.json — App ID, plugins, server config
 ├── README.md             — This file
-├── www/                  — Built web assets (generated, gitignored)
+├── src/                  — Mobile-owned source. Mirrors the www/ layout and
+│                           wins over portal/ + root js|css|assets/. EDIT HERE.
+├── www/                  — Built web assets (generated — do NOT edit by hand)
 ├── android/              — Android native project (generated, gitignored)
 ├── ios/                  — iOS native project (generated, gitignored)
 ├── android-config/       — Config files to copy into android/
@@ -237,6 +239,26 @@ mobile/
 │   ├── icons/icon.svg    — Master app icon (1024×1024)
 │   └── splash/splash.svg — Master splash (2732×2732)
 └── scripts/
-    ├── build.js          — Copies portal/ → www/ + injects native config
+    ├── build.js          — Builds www/ from portal/ + mobile/src/
     └── gen-icons.js      — Generates all icon + splash PNG sizes
 ```
+
+### Where to edit web code
+
+`build.js` wipes and rebuilds `www/` on every run (and `npm run open:ios`,
+`run:ios`, `open:android`, `run:android` all call it via `sync`). Layers, later
+wins:
+
+1. `portal/` — the web portal
+2. root `js/`, `css/`, `assets/` — shared libraries
+3. **`mobile/src/`** — mobile-owned files, mirroring the `www/` layout
+4. Idempotent HTML patches (native config, loading cover)
+
+**Edit `mobile/src/`, never `mobile/www/`.** A hand edit in `www/` is destroyed
+by the next build. To make a file mobile-specific, copy it into `mobile/src/` at
+the same relative path — it then shadows the shared copy, no allow-list needed.
+
+Note that the files in `mobile/src/` are forks: `css/style.css`, `css/admin.css`,
+`js/main.js`, `js/staff-auth.js` and others no longer track their `portal/`
+counterparts, so web-side fixes to those do not reach the app. Delete a file from
+`mobile/src/` to hand it back to the shared layer.
