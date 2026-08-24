@@ -5880,12 +5880,17 @@ function editPool(id) {
   _syncPoolTargetType('edit');
   document.getElementById('editPoolTerm').value        = pool.term_months || 12;
   document.getElementById('editPoolTarget').value      = pool.target_amount || 0;
-  document.getElementById('editPoolRaised').value      = pool.raised_amount || 0;
+  // Show the live figures the server aggregates from actual investments, not the
+  // stored columns — those go stale as soon as anyone invests. This also stops the
+  // save handler below from writing the stale value straight back: it reads these
+  // inputs, so populating them with 0 permanently zeroed raised_amount and
+  // investor_count on every pool edit, which is self-perpetuating.
+  document.getElementById('editPoolRaised').value      = pool.live_raised ?? pool.raised_amount ?? 0;
   document.getElementById('editPoolMin').value         = pool.min_investment || 500;
   document.getElementById('editPoolRate').value        = pool.annual_rate || 0;
   document.getElementById('editPoolActualRate').value  = pool.actual_rate || 0;
   document.getElementById('editPoolPartner').value     = pool.partner_name || '';
-  document.getElementById('editPoolInvCount').value    = pool.investor_count || 0;
+  document.getElementById('editPoolInvCount').value    = pool.live_investor_count ?? pool.investor_count ?? 0;
   // Convert ISO dates to YYYY-MM-DD for date inputs
   const toDateVal = iso => { try { return iso ? new Date(iso).toISOString().split('T')[0] : ''; } catch { return ''; } };
   document.getElementById('editPoolOpenDate').value    = toDateVal(pool.start_date);

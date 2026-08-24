@@ -4048,7 +4048,7 @@ async function _renderProductTrackRecord(type, color) {
         <span style="font-weight:700;color:${rateColor};font-size:0.85rem">${p.actual_rate > 0 ? (p.actual_rate * 100).toFixed(2) + '%' : '—'}</span>
         ${p.benchmark_rate > 0 ? `<div style="font-size:0.68rem;color:var(--text-muted)">target ${(p.benchmark_rate * 100).toFixed(2)}%</div>` : ''}
       </td>
-      <td style="text-align:right;font-size:0.82rem;font-variant-numeric:tabular-nums">${p.raised_amount > 0 ? Utils.rand(p.raised_amount) : '—'}</td>
+      <td style="text-align:right;font-size:0.82rem;font-variant-numeric:tabular-nums">${(p.live_raised ?? p.raised_amount ?? 0) > 0 ? Utils.rand(p.live_raised ?? p.raised_amount) : '—'}</td>
       <td style="text-align:center;font-size:0.78rem;color:var(--text-muted)">${p.ended ? Utils.date(p.ended) : '—'}</td>
       <td style="text-align:center"><span style="font-size:0.7rem;font-weight:700;color:${statusColor};background:${statusColor}18;border-radius:20px;padding:2px 9px">${statusLabel}</span></td>
     </tr>`;
@@ -4165,7 +4165,7 @@ function _marketPoolCardHtml(pool, idx, walletBal, waitlist, investorId) {
 
     // Capacity progress bar
     const maxCap = parseFloat(pool.max_capacity) || 0;
-    const curInv = parseFloat(pool.current_invested) || parseFloat(pool.raised_amount) || 0;
+    const curInv = parseFloat(pool.current_invested) || parseFloat(pool.live_raised) || parseFloat(pool.raised_amount) || 0;
     let capacityBarHtml = '';
     if (maxCap > 0) {
       const capPct = Math.min(100, Math.round((curInv / maxCap) * 100));
@@ -4301,7 +4301,7 @@ function _marketPoolCardHtml(pool, idx, walletBal, waitlist, investorId) {
               ${timePct !== null ? `<div class="mpc2-progress__track"><div class="mpc2-progress__fill" style="width:${timePct}%;background:linear-gradient(90deg,${barColor},${barColor}aa)"></div></div>` : ''}`;
           })() : `
             <div class="mpc2-progress__labels">
-              <span>${Utils.rand(pool.raised_amount)} raised</span>
+              <span>${Utils.rand(pool.live_raised ?? pool.raised_amount ?? 0)} raised</span>
               <span style="font-weight:700;color:${pct >= 90 ? '#ef4444' : pct >= 60 ? '#fec24f' : pi.color}">${pct}% funded</span>
             </div>
             <div class="mpc2-progress__track">
