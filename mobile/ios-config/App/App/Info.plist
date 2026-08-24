@@ -8,12 +8,18 @@
     <string>SV Capital</string>
     <key>CFBundleName</key>
     <string>SVCapital</string>
+    <!-- Must match capacitor.config.json appId. co.za.svcapital.investor is a
+         separate, never-released App Store Connect record and must not be used. -->
     <key>CFBundleIdentifier</key>
-    <string>co.za.svcapital.investor</string>
+    <string>co.za.svcapital.app</string>
+    <!-- The Xcode project (mobile/ios/, gitignored) is the source of truth for
+         these at archive time; the values here only seed a fresh `cap add ios`.
+         App Store Connect requires CFBundleVersion to strictly increase within a
+         CFBundleShortVersionString: 4.0.9 already has builds 4-7 uploaded. -->
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>8</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.0</string>
+    <string>4.0.9</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>
