@@ -171,9 +171,13 @@ warning. Xcode only rejects a wrong bundle identifier or a reused build number a
 **upload** — after you have waited through a full archive and sign. This runs the
 same comparison in a second, beforehand, and checks:
 
-- bundle identifier matches `ios-config` (resolving `$(PRODUCT_BUNDLE_IDENTIFIER)`
-  through `project.pbxproj`, and flagging a value that differs between build
-  configurations)
+- bundle identifier in `Info.plist` matches `ios-config` (resolving
+  `$(PRODUCT_BUNDLE_IDENTIFIER)` through `project.pbxproj` when the plist holds a
+  placeholder, and flagging a value that differs between build configurations)
+- `PRODUCT_BUNDLE_IDENTIFIER` in `project.pbxproj`, checked separately — this is
+  what Xcode uses to pick the signing profile, so it decides which App Store
+  Connect record a build is delivered to. Both must be right: a correct plist with
+  a stale build setting still signs against the wrong app.
 - marketing version matches, and the build number is at least the template's
 - `capacitor.config.json` `appId` agrees with the template
 - `PrivacyInfo.xcprivacy` is present (required for App Store submission)

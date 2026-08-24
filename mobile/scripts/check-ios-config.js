@@ -112,6 +112,23 @@ function main() {
     notes.push(`build ${gotBuild} is ahead of the template's ${wantBuild} — fine, but consider updating ios-config`);
   }
 
+  /* PRODUCT_BUNDLE_IDENTIFIER is checked independently of the plist. Xcode uses it
+     to pick the signing certificate and provisioning profile, so it decides which
+     App Store Connect record a build is actually delivered to. When Info.plist
+     carries a literal identifier the plist check above never consults the pbxproj,
+     which would let a project pass with a correct plist and a build still signed
+     against the wrong app. */
+  const pbid = resolveSetting(pbx, 'PRODUCT_BUNDLE_IDENTIFIER');
+  if (pbx) {
+    if (pbid.ambiguous) {
+      problems.push(`PRODUCT_BUNDLE_IDENTIFIER differs between build configurations: ${pbid.all.join(', ')}`);
+    } else if (!pbid.value) {
+      notes.push('PRODUCT_BUNDLE_IDENTIFIER not found in project.pbxproj');
+    } else if (pbid.value !== want.id) {
+      problems.push(`PRODUCT_BUNDLE_IDENTIFIER is "${pbid.value}" — expected "${want.id}" (this is what signing and delivery use)`);
+    }
+  }
+
   // capacitor.config.json is the other place the identifier is declared.
   if (fs.existsSync(CAPCONFIG)) {
     try {
@@ -132,6 +149,7 @@ function main() {
   console.log(`             bundle id  ${w(got.id.value).padEnd(28)} expected ${w(want.id)}${got.id.via ? `   (via $(${got.id.via}))` : ''}`);
   console.log(`             version    ${w(got.version.value).padEnd(28)} expected ${w(want.version)}`);
   console.log(`             build      ${w(got.build.value).padEnd(28)} expected >= ${w(want.build)}`);
+  if (pbx) console.log(`             signing id ${w(pbid.ambiguous ? pbid.all.join(' / ') : pbid.value).padEnd(28)} expected ${w(want.id)}   (PRODUCT_BUNDLE_IDENTIFIER)`);
 
   for (const n of notes) console.log(`[check:ios] note: ${n}`);
 
