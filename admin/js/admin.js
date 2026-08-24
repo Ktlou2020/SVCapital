@@ -5127,6 +5127,12 @@ async function viewPoolInvestors(poolId) {
                 ? `<div style="font-size:0.72rem;font-weight:700;color:#eda5ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${r.sub_account_id}">${r.sub_account_name||'Sub Account'}</div><div style="font-size:0.62rem;color:var(--text-muted);font-family:monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.sub_account_type||''}</div>`
                 : `<span style="font-family:monospace;font-size:0.75rem;color:var(--gold)">${r.investor_id}</span>`;
               const isCancelled = r.investment_status === 'cancelled';
+              // Returns are posted on the pool (actual_rate); they are not written back
+              // to each investment's annual_rate. Fall back to the pool's achieved rate
+              // so a posted return is visible here. parseFloat first — annual_rate comes
+              // back as the string "0.0000", which is truthy and rendered a misleading
+              // 0.00% instead of falling through.
+              const effRate = parseFloat(r.annual_rate) || parseFloat(pool.actual_rate) || 0;
               return `<tr style="cursor:pointer;${isCancelled ? 'opacity:0.5;' : ''}" onclick="viewInvestor('${r.investor_id}');Modal.close('poolInvestorsModal')">
                 <td><div class="td-strong clip">${name}</div><div class="td-muted clip" style="font-size:0.7rem">${r.email||''}</div></td>
                 <td class="clip">${acctCell}</td>
@@ -5135,7 +5141,7 @@ async function viewPoolInvestors(poolId) {
                 <td class="clip" style="font-size:0.78rem;color:#f97316">${Utils.rand(r.platform_fee)}</td>
                 <td class="clip" style="font-size:0.78rem;color:#eda5ff">${r.eva_contribution > 0 ? Utils.rand(r.eva_contribution) : '—'}</td>
                 <td class="clip" style="font-size:0.82rem;font-weight:700;color:#22c55e">${Utils.rand(r.net_amount)}</td>
-                <td class="td-green clip">${r.annual_rate ? Utils.pct(r.annual_rate) : '—'}</td>
+                <td class="td-green clip">${effRate > 0 ? Utils.pct(effRate) : '—'}</td>
                 <td><span class="badge ${statusColor[r.investment_status]||'badge--gray'}">${r.investment_status||'—'}</span></td>
                 <td class="td-muted clip">${Utils.date(r.start_date)}</td>
                 <td class="clip">
