@@ -313,14 +313,16 @@ router.get('/platform-fees', requireAuth, _admin, async (req, res) => {
     // Breakdown granularity
     const truncUnit = (period === 'week' || period === 'month') ? 'day' : 'month';
 
+    // Match fees by type OR by reference pattern (FEE-...) — catches all recording paths
+    const feeFilter = `(t.type IN ('fee', 'platform_fee') OR t.reference LIKE 'FEE-%') AND t.status != 'cancelled'`;
+
     const [summaryRow, breakdownRows, txnRows, topRows] = await Promise.all([
       pool.query(`
         SELECT COUNT(*) AS count,
                COALESCE(SUM(ABS(t.amount)), 0) AS total,
                COALESCE(AVG(ABS(t.amount)), 0) AS avg
         FROM transactions t
-        WHERE t.type IN ('fee', 'platform_fee')
-          AND t.status = 'completed'
+        WHERE ${feeFilter}
           ${dateClause}
       `, dateParams),
 
@@ -329,8 +331,7 @@ router.get('/platform-fees', requireAuth, _admin, async (req, res) => {
                COUNT(*) AS count,
                SUM(ABS(t.amount)) AS total
         FROM transactions t
-        WHERE t.type IN ('fee', 'platform_fee')
-          AND t.status = 'completed'
+        WHERE ${feeFilter}
           ${dateClause}
         GROUP BY 1 ORDER BY 1
       `, dateParams),
@@ -345,8 +346,7 @@ router.get('/platform-fees', requireAuth, _admin, async (req, res) => {
         LEFT JOIN pools p ON p.id = t.pool_id
         LEFT JOIN investments inv ON inv.id = t.investment_id
         LEFT JOIN pools p2 ON p2.id = inv.pool_id
-        WHERE t.type IN ('fee', 'platform_fee')
-          AND t.status = 'completed'
+        WHERE ${feeFilter}
           ${dateClause}
         ORDER BY t.created_at DESC
         LIMIT 500
@@ -358,8 +358,7 @@ router.get('/platform-fees', requireAuth, _admin, async (req, res) => {
                SUM(ABS(t.amount)) AS total
         FROM transactions t
         LEFT JOIN investors i ON i.id = t.investor_id
-        WHERE t.type IN ('fee', 'platform_fee')
-          AND t.status = 'completed'
+        WHERE ${feeFilter}
           ${dateClause}
         GROUP BY investor_name ORDER BY total DESC LIMIT 10
       `, dateParams),
