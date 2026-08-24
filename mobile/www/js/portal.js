@@ -58,16 +58,55 @@ const _safeUrl = u => (typeof u === 'string' && /^https?:\/\//i.test(u)) ? u : '
 
 let _fsDocCache = [];
 function _openFsDoc(i) {
-  const url = (_fsDocCache[i] || {}).file_url;
+  const doc = _fsDocCache[i] || {};
+  const url = doc.file_url;
   if (!url) return;
+
+  // Capacitor WebView blocks window.open on both Android and iOS.
+  // Use a full-screen iframe overlay instead.
+  if (window.__SVC_NATIVE__) {
+    _openFsOverlay(url, doc.file_name || 'Document');
+    return;
+  }
+
+  // Web: open in new tab
   if (/^https?:\/\//i.test(url)) { window.open(url, '_blank', 'noopener'); return; }
   try {
     const [header, b64] = url.split(',');
     const mime = header.match(/:(.*?);/)?.[1] || 'application/pdf';
     const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
     const objUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));
-    window.open(objUrl, '_blank', 'noopener');
+    const win = window.open(objUrl, '_blank', 'noopener');
+    if (!win) _openFsOverlay(url, doc.file_name || 'Document');
   } catch (_) { if (typeof Toast !== 'undefined') Toast.error('Could not open document'); }
+}
+
+function _openFsOverlay(url, name) {
+  document.getElementById('_fsNativeOverlay')?.remove();
+
+  // Decode base-64 data URIs to blob URLs so the iframe can display them
+  let iframeSrc = url;
+  if (/^data:/i.test(url)) {
+    try {
+      const [header, b64] = url.split(',');
+      const mime = header.match(/:(.*?);/)?.[1] || 'application/pdf';
+      const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+      iframeSrc = URL.createObjectURL(new Blob([bytes], { type: mime }));
+    } catch (_) { iframeSrc = url; }
+  }
+
+  const isHttps = /^https?:\/\//i.test(url);
+  const overlay = document.createElement('div');
+  overlay.id = '_fsNativeOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#1a1a1a;display:flex;flex-direction:column;-webkit-overflow-scrolling:touch';
+  overlay.innerHTML = `
+    <div style="background:#1a1a1a;padding:12px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,0.5)">
+      <button onclick="document.getElementById('_fsNativeOverlay').remove()" style="background:rgba(255,255,255,0.1);color:#fff;border:1px solid rgba(255,255,255,0.2);padding:8px 14px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer;flex-shrink:0"><i class="fa-solid fa-arrow-left"></i> Back</button>
+      <span style="color:#fff;font-size:0.82rem;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(name)}</span>
+      ${isHttps ? `<a href="${_esc(url)}" target="_blank" rel="noopener" style="color:#eda5ff;font-size:0.75rem;white-space:nowrap;flex-shrink:0"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>` : ''}
+    </div>
+    <iframe src="${iframeSrc}" style="flex:1;width:100%;border:none;background:#fff" allow="fullscreen" loading="lazy"></iframe>`;
+  document.body.appendChild(overlay);
 }
 
 /* ─── Partner info profiles ─── */
