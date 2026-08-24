@@ -2531,7 +2531,7 @@ html body.dark-mode .invest-guide-strip {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 0;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--border);
   cursor: pointer;
   transition: background 0.1s;
