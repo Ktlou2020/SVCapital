@@ -213,7 +213,15 @@ function main() {
     console.error('[check:ios]   Signing & Capabilities edits only the selected configuration.');
   }
   console.error('[check:ios] Or copy the template in, from an up-to-date checkout:');
-  console.error('[check:ios]   cp ios-config/App/App/Info.plist ios/App/App/');
+  /* Printed relative to the caller's cwd, not to mobile/. npm run works from any
+     subdirectory because npm walks up to find package.json, so this hint was
+     regularly shown to someone standing somewhere the relative path did not
+     resolve from. Falls back to absolute when that is shorter or clearer. */
+  const rel = p => {
+    const r = path.relative(process.cwd(), p);
+    return !r || r.startsWith('..') && r.length > p.length ? p : (r.startsWith('.') ? r : r);
+  };
+  console.error(`[check:ios]   cp "${rel(TEMPLATE)}" "${rel(path.dirname(PROJECT))}/"`);
   return 1;
 }
 
