@@ -12760,8 +12760,8 @@ const PORTAL_CMD_ITEMS = [
   { label: 'Documents',                icon: 'fa-folder-open',     group: 'Navigate', action: () => navigate('documents',     document.querySelector('[data-view=documents]')) },
   // Account Statement hidden — statements are not offered on mobile
   { label: 'Top Up Wallet',            icon: 'fa-plus',            group: 'Actions',  action: () => openTopUpModal() },
-  { label: 'Download Tax Certificate', icon: 'fa-file-shield',     group: 'Actions',  action: () => { navigate('documents', document.querySelector('[data-view=documents]')); } },
-  { label: 'Download Statement PDF',   icon: 'fa-file-pdf',        group: 'Actions',  action: () => downloadStatement() },
+  // Download Tax Certificate hidden — tax certificates are not offered on mobile
+  // Download Statement PDF hidden — called downloadStatement() directly, bypassing navigation
   { label: 'Export Analytics CSV',     icon: 'fa-table',           group: 'Actions',  action: () => exportAnalyticsCSV() },
   { label: 'Submit Maturity Instruction', icon: 'fa-check-circle', group: 'Actions',  action: () => navigate('maturity', document.querySelector('[data-view=maturity]')) },
   { label: 'Sign Out',                 icon: 'fa-arrow-right-from-bracket', group: 'Actions', action: () => { if (!window.__SVC_NATIVE__) localStorage.removeItem('svc_portal_cache'); sessionStorage.removeItem('svc_portal_cache'); localStorage.removeItem('svc_user'); sessionStorage.clear(); Auth.logout('../login.html'); } },
