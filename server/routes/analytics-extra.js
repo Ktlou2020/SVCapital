@@ -290,4 +290,114 @@ router.get('/withdrawals', requireAuth, _admin, async (req, res) => {
   }
 });
 
+/* ── GET /api/analytics/platform-fees ───────────────────── */
+router.get('/platform-fees', requireAuth, _admin, async (req, res) => {
+  try {
+    const { period = 'month', from, to } = req.query;
+
+    // Build date filter
+    let dateClause = '';
+    let dateParams = [];
+    if (from && to) {
+      dateClause = `AND t.created_at >= $1::date AND t.created_at < ($2::date + INTERVAL '1 day')`;
+      dateParams = [from, to];
+    } else if (period === 'week') {
+      dateClause = `AND t.created_at >= DATE_TRUNC('week', NOW())`;
+    } else if (period === 'month') {
+      dateClause = `AND t.created_at >= DATE_TRUNC('month', NOW())`;
+    } else if (period === 'year') {
+      dateClause = `AND t.created_at >= DATE_TRUNC('year', NOW())`;
+    }
+    // period === 'all' → no date filter
+
+    // Breakdown granularity
+    const truncUnit = (period === 'week' || period === 'month') ? 'day' : 'month';
+
+    const [summaryRow, breakdownRows, txnRows, topRows] = await Promise.all([
+      pool.query(`
+        SELECT COUNT(*) AS count,
+               COALESCE(SUM(ABS(t.amount)), 0) AS total,
+               COALESCE(AVG(ABS(t.amount)), 0) AS avg
+        FROM transactions t
+        WHERE t.type IN ('fee', 'platform_fee')
+          AND t.status = 'completed'
+          ${dateClause}
+      `, dateParams),
+
+      pool.query(`
+        SELECT DATE_TRUNC('${truncUnit}', t.created_at) AS period,
+               COUNT(*) AS count,
+               SUM(ABS(t.amount)) AS total
+        FROM transactions t
+        WHERE t.type IN ('fee', 'platform_fee')
+          AND t.status = 'completed'
+          ${dateClause}
+        GROUP BY 1 ORDER BY 1
+      `, dateParams),
+
+      pool.query(`
+        SELECT t.id, t.amount, t.created_at, t.reference, t.description,
+               t.investment_id, t.pool_id,
+               COALESCE(i.first_name || ' ' || i.last_name, i.email, t.investor_id) AS investor_name,
+               COALESCE(p.name, p2.name) AS pool_name
+        FROM transactions t
+        LEFT JOIN investors i ON i.id = t.investor_id
+        LEFT JOIN pools p ON p.id = t.pool_id
+        LEFT JOIN investments inv ON inv.id = t.investment_id
+        LEFT JOIN pools p2 ON p2.id = inv.pool_id
+        WHERE t.type IN ('fee', 'platform_fee')
+          AND t.status = 'completed'
+          ${dateClause}
+        ORDER BY t.created_at DESC
+        LIMIT 500
+      `, dateParams),
+
+      pool.query(`
+        SELECT COALESCE(i.first_name || ' ' || i.last_name, i.email, t.investor_id) AS investor_name,
+               COUNT(*) AS count,
+               SUM(ABS(t.amount)) AS total
+        FROM transactions t
+        LEFT JOIN investors i ON i.id = t.investor_id
+        WHERE t.type IN ('fee', 'platform_fee')
+          AND t.status = 'completed'
+          ${dateClause}
+        GROUP BY investor_name ORDER BY total DESC LIMIT 10
+      `, dateParams),
+    ]);
+
+    const s = summaryRow.rows[0];
+    res.json({
+      period,
+      summary: {
+        count: parseInt(s?.count || 0),
+        total: parseFloat(s?.total || 0),
+        avg:   parseFloat(s?.avg   || 0),
+      },
+      breakdown: breakdownRows.rows.map(r => ({
+        period: r.period,
+        count:  parseInt(r.count),
+        total:  parseFloat(r.total || 0),
+      })),
+      transactions: txnRows.rows.map(r => ({
+        id:            r.id,
+        amount:        parseFloat(r.amount || 0),
+        created_at:    r.created_at,
+        reference:     r.reference,
+        description:   r.description,
+        investment_id: r.investment_id,
+        pool_name:     r.pool_name || '—',
+        investor_name: r.investor_name || '—',
+      })),
+      top_investors: topRows.rows.map(r => ({
+        investor_name: r.investor_name || '—',
+        count:  parseInt(r.count),
+        total:  parseFloat(r.total || 0),
+      })),
+    });
+  } catch (err) {
+    console.error('[analytics-extra] platform-fees error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

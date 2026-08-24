@@ -446,6 +446,7 @@ function navigate(view, btnEl) {
     comms: loadComms,
     compliance: loadCompliance,
     reconciliation: loadReconciliation,
+    'platform-fees': () => loadPlatformFees('month'),
     terms: loadTermsEditor,
     opsconsole: loadOpsConsole,
     feedback: () => loadFeedback('pending'),
@@ -14445,4 +14446,228 @@ function exportWithdrawalCSV() {
     Status: r.status,
     Date: r.created_at ? new Date(r.created_at).toLocaleDateString('en-ZA') : '',
   })), `withdrawals-${new Date().toISOString().slice(0,10)}.csv`);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PLATFORM FEES VIEW
+   ═══════════════════════════════════════════════════════════ */
+
+let _pfData = null;
+let _pfFiltered = [];
+let _pfPage = 1;
+const _PF_PG = 50;
+
+async function loadPlatformFees(period = 'month') {
+  // Highlight active tab
+  ['week','month','year','all'].forEach(p => {
+    const btn = document.getElementById(`pfTab-${p}`);
+    if (!btn) return;
+    btn.className = p === period
+      ? 'btn btn--sm btn--primary'
+      : 'btn btn--sm';
+  });
+  // Clear custom date inputs when using a preset tab
+  const pfFrom = document.getElementById('pfFrom');
+  const pfTo   = document.getElementById('pfTo');
+  if (pfFrom) pfFrom.value = '';
+  if (pfTo)   pfTo.value   = '';
+
+  _pfRenderLoading();
+  try {
+    const res  = await fetch(`/api/analytics/platform-fees?period=${period}`, {
+      headers: { Authorization: `Bearer ${AUTH.token}` }
+    });
+    _pfData = await res.json();
+    _pfFiltered = [...(_pfData.transactions || [])];
+    _pfPage = 1;
+    _pfRender(_pfData, period);
+  } catch (e) {
+    Toast.error('Failed to load platform fees data');
+    console.error('[loadPlatformFees]', e);
+  }
+}
+
+function loadPlatformFeesCustom() {
+  const from = document.getElementById('pfFrom')?.value;
+  const to   = document.getElementById('pfTo')?.value;
+  if (!from || !to) { Toast.warning('Select both a From and To date'); return; }
+  // Deactivate preset tabs
+  ['week','month','year','all'].forEach(p => {
+    const btn = document.getElementById(`pfTab-${p}`);
+    if (btn) btn.className = 'btn btn--sm';
+  });
+  _pfRenderLoading();
+  fetch(`/api/analytics/platform-fees?from=${from}&to=${to}`, {
+    headers: { Authorization: `Bearer ${AUTH.token}` }
+  })
+    .then(r => r.json())
+    .then(data => {
+      _pfData = data;
+      _pfFiltered = [...(data.transactions || [])];
+      _pfPage = 1;
+      _pfRender(data, 'custom');
+    })
+    .catch(e => { Toast.error('Failed to load platform fees'); console.error(e); });
+}
+
+function _pfRenderLoading() {
+  const b = document.getElementById('pfBody');
+  if (b) b.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</td></tr>`;
+  ['pf-total','pf-count','pf-avg'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '…'; });
+}
+
+function _pfRender(data, period) {
+  const s = data.summary || {};
+
+  // KPIs
+  const el = id => document.getElementById(id);
+  if (el('pf-total')) el('pf-total').textContent = Utils.rand(s.total || 0);
+  if (el('pf-count')) el('pf-count').textContent = (s.count || 0).toLocaleString();
+  if (el('pf-avg'))   el('pf-avg').textContent   = Utils.rand(s.avg   || 0);
+
+  // Breakdown title
+  const titles = { week: 'Daily Breakdown — This Week', month: 'Daily Breakdown — This Month', year: 'Monthly Breakdown — This Year', all: 'Monthly Breakdown — All Time', custom: 'Breakdown for Selected Period' };
+  if (el('pfBreakdownTitle')) el('pfBreakdownTitle').textContent = titles[period] || 'Period Breakdown';
+
+  // Chart
+  _pfDrawChart(data.breakdown || [], period);
+
+  // Top investors
+  const topBody = el('pfTopBody');
+  if (topBody) {
+    if (!data.top_investors?.length) {
+      topBody.innerHTML = `<tr><td colspan="3" style="text-align:center;padding:24px;color:var(--text-muted)">No data</td></tr>`;
+    } else {
+      topBody.innerHTML = data.top_investors.map(r => `
+        <tr>
+          <td class="clip" style="font-size:0.82rem">${r.investor_name}</td>
+          <td style="text-align:right;color:var(--text-muted);font-size:0.8rem">${r.count}</td>
+          <td style="text-align:right;font-weight:700;color:#eda5ff;font-size:0.82rem">${Utils.rand(r.total)}</td>
+        </tr>`).join('');
+    }
+  }
+
+  // Transaction table
+  _pfRenderTable();
+}
+
+function _pfFilter() {
+  if (!_pfData) return;
+  const q = (document.getElementById('pfSearch')?.value || '').toLowerCase();
+  _pfFiltered = (_pfData.transactions || []).filter(r =>
+    !q || `${r.investor_name} ${r.reference} ${r.pool_name}`.toLowerCase().includes(q)
+  );
+  _pfPage = 1;
+  _pfRenderTable();
+}
+
+function _pfRenderTable() {
+  const body = document.getElementById('pfBody');
+  const foot = document.getElementById('pfFooter');
+  const pag  = document.getElementById('pfPagination');
+  if (!body) return;
+
+  const total = _pfFiltered.length;
+  const start = (_pfPage - 1) * _PF_PG;
+  const page  = _pfFiltered.slice(start, start + _PF_PG);
+
+  if (!page.length) {
+    body.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-muted)">
+      <i class="fa-solid fa-percent" style="font-size:1.6rem;display:block;margin-bottom:8px;opacity:.35"></i>
+      No fee transactions found
+    </td></tr>`;
+    if (foot) foot.textContent = '0 transactions';
+    if (pag)  pag.innerHTML = '';
+    return;
+  }
+
+  body.innerHTML = page.map(r => `
+    <tr>
+      <td class="td-strong clip">${r.investor_name}</td>
+      <td class="td-muted clip" style="font-size:0.8rem">${r.pool_name}</td>
+      <td class="td-muted" style="font-size:0.75rem">${r.reference || '—'}</td>
+      <td class="td-red fw-700">${Utils.rand(Math.abs(r.amount))}</td>
+      <td class="td-muted">${Utils.date(r.created_at)}</td>
+    </tr>`).join('');
+
+  if (foot) foot.textContent = `${start + 1}–${Math.min(start + _PF_PG, total)} of ${total} transactions`;
+
+  // Pagination
+  if (pag) {
+    const pages = Math.ceil(total / _PF_PG);
+    if (pages <= 1) { pag.innerHTML = ''; return; }
+    const btn = (n, label, disabled, active) =>
+      `<button onclick="_pfPage=${n};_pfRenderTable()" class="page-btn${active?' active':''}" ${disabled?'disabled':''}>${label}</button>`;
+    const parts = [btn(_pfPage - 1, '‹ Prev', _pfPage === 1, false)];
+    parts.push(`<span class="page-btn active" style="cursor:default;min-width:60px;text-align:center">${_pfPage} / ${pages}</span>`);
+    parts.push(btn(_pfPage + 1, 'Next ›', _pfPage === pages, false));
+    pag.innerHTML = parts.join('');
+  }
+}
+
+function _pfDrawChart(breakdown, period) {
+  const canvas  = document.getElementById('pfChart');
+  const emptyEl = document.getElementById('pfChartEmpty');
+  if (!canvas) return;
+
+  if (!breakdown.length) {
+    canvas.style.display = 'none';
+    if (emptyEl) emptyEl.style.display = 'block';
+    return;
+  }
+  canvas.style.display = 'block';
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  const W = canvas.offsetWidth || 600;
+  const H = 160;
+  canvas.width  = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+
+  const vals   = breakdown.map(r => r.total);
+  const maxVal = Math.max(...vals, 1);
+  const pad    = { top: 10, bot: 32, left: 6, right: 6 };
+  const n      = breakdown.length;
+  const barW   = Math.max(4, Math.floor((W - pad.left - pad.right) / n) - 3);
+  const slotW  = (W - pad.left - pad.right) / n;
+  const chartH = H - pad.top - pad.bot;
+
+  breakdown.forEach((r, i) => {
+    const h   = Math.max(2, (r.total / maxVal) * chartH);
+    const x   = pad.left + i * slotW + (slotW - barW) / 2;
+    const y   = pad.top + chartH - h;
+
+    ctx.fillStyle = '#eda5ff';
+    ctx.globalAlpha = 0.85;
+    ctx.beginPath();
+    ctx.roundRect(x, y, barW, h, [3, 3, 0, 0]);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // Label every N bars to avoid crowding
+    const skip = n > 20 ? 7 : n > 10 ? 3 : n > 7 ? 2 : 1;
+    if (i % skip === 0) {
+      const d = new Date(r.period);
+      const label = (period === 'week' || period === 'month' || period === 'custom')
+        ? d.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })
+        : d.toLocaleDateString('en-ZA', { month: 'short', year: '2-digit' });
+      ctx.fillStyle = '#7a92a8';
+      ctx.font = '9px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(label, x + barW / 2, H - 6);
+    }
+  });
+}
+
+function exportPlatformFeesCSV() {
+  if (!_pfFiltered.length) { Toast.warning('Load platform fees data first'); return; }
+  _exportCSV(_pfFiltered.map(r => ({
+    Date:            r.created_at ? new Date(r.created_at).toLocaleDateString('en-ZA') : '',
+    Investor:        r.investor_name || '',
+    Pool:            r.pool_name || '',
+    Reference:       r.reference || '',
+    'Amount (R)':    Math.abs(r.amount),
+    Description:     r.description || '',
+  })), `platform-fees-${new Date().toISOString().slice(0,10)}.csv`);
 }

@@ -93,6 +93,9 @@
         <i class="fa-solid fa-scale-balanced"></i> Reconciliation
         <span class="nav-badge" id="reconcBadge" style="display:none;background:#f97316">!</span>
       </button>
+      <button class="nav-item" data-view="platform-fees" onclick="navigate('platform-fees', this)">
+        <i class="fa-solid fa-percent"></i> Platform Fees
+      </button>
 
       <div class="nav-section-label">Operations</div>
       <button class="nav-item" data-view="opsconsole" onclick="navigate('opsconsole', this)">
@@ -2546,6 +2549,82 @@
         </div>
       </div>
 
+      <!-- ─────────────────────── PLATFORM FEES ──────────────────────── -->
+      <div class="view" id="view-platform-fees">
+        <!-- Period tabs -->
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:20px">
+          <div style="display:flex;gap:6px;background:var(--bg-secondary);border:1px solid var(--border);border-radius:10px;padding:4px">
+            <button id="pfTab-week"  class="btn btn--sm" onclick="loadPlatformFees('week')"  style="border-radius:7px;font-size:0.78rem">This Week</button>
+            <button id="pfTab-month" class="btn btn--sm btn--primary" onclick="loadPlatformFees('month')" style="border-radius:7px;font-size:0.78rem">This Month</button>
+            <button id="pfTab-year"  class="btn btn--sm" onclick="loadPlatformFees('year')"  style="border-radius:7px;font-size:0.78rem">This Year</button>
+            <button id="pfTab-all"   class="btn btn--sm" onclick="loadPlatformFees('all')"   style="border-radius:7px;font-size:0.78rem">All Time</button>
+          </div>
+          <span style="color:var(--text-muted);font-size:0.8rem;margin:0 4px">or</span>
+          <input type="date" id="pfFrom" class="form-input" style="height:30px;font-size:0.78rem;width:130px" title="From">
+          <input type="date" id="pfTo"   class="form-input" style="height:30px;font-size:0.78rem;width:130px" title="To">
+          <button class="btn btn--secondary btn--sm" onclick="loadPlatformFeesCustom()"><i class="fa-solid fa-filter"></i> Apply</button>
+          <button class="btn btn--secondary btn--sm" style="margin-left:auto" onclick="exportPlatformFeesCSV()"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
+        </div>
+
+        <!-- KPI cards -->
+        <div class="stats-row" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px">
+          <div class="stat-card stat-card--purple"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-coins"></i></div></div><div class="stat-card__value" id="pf-total">—</div><div class="stat-card__label">Total Fees Collected</div></div>
+          <div class="stat-card stat-card--blue"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-hashtag"></i></div></div><div class="stat-card__value" id="pf-count">—</div><div class="stat-card__label">Fee Transactions</div></div>
+          <div class="stat-card stat-card--gold"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-chart-line"></i></div></div><div class="stat-card__value" id="pf-avg">—</div><div class="stat-card__label">Average Fee</div></div>
+        </div>
+
+        <!-- Breakdown + Top Investors -->
+        <div style="display:grid;grid-template-columns:1fr 340px;gap:16px;margin-bottom:20px" id="pfBreakdownRow">
+          <!-- Period breakdown bar chart -->
+          <div class="table-card" style="padding:0">
+            <div class="table-card__header"><div class="table-card__title" id="pfBreakdownTitle">Period Breakdown</div></div>
+            <div style="padding:16px 16px 8px">
+              <canvas id="pfChart" style="width:100%;max-height:180px"></canvas>
+              <div id="pfChartEmpty" style="display:none;text-align:center;padding:40px 0;color:var(--text-muted);font-size:0.85rem"><i class="fa-solid fa-chart-bar" style="font-size:1.6rem;margin-bottom:8px;display:block;opacity:.4"></i>No fee data for this period</div>
+            </div>
+          </div>
+          <!-- Top investors by fees paid -->
+          <div class="table-card" style="padding:0">
+            <div class="table-card__header"><div class="table-card__title">Top Investors by Fees</div></div>
+            <div style="overflow-x:auto">
+              <table class="data-table">
+                <thead><tr><th>Investor</th><th style="text-align:right">#</th><th style="text-align:right">Total</th></tr></thead>
+                <tbody id="pfTopBody"><tr><td colspan="3" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Individual fee transactions table -->
+        <div class="table-card">
+          <div class="table-card__header">
+            <div>
+              <div class="table-card__title">Fee Transactions</div>
+              <div class="table-card__sub" id="pfTableSub">1% platform fee deducted on each investment</div>
+            </div>
+            <div class="table-card__controls">
+              <div class="tbl-search"><i class="fa-solid fa-magnifying-glass"></i><input type="text" id="pfSearch" placeholder="Search investor, ref, pool…" oninput="_pfFilter()"></div>
+            </div>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead><tr>
+                <th style="width:22%">Investor</th>
+                <th style="width:22%">Pool</th>
+                <th style="width:18%">Reference</th>
+                <th style="width:10%">Amount</th>
+                <th style="width:12%">Date</th>
+              </tr></thead>
+              <tbody id="pfBody"><tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</td></tr></tbody>
+            </table>
+          </div>
+          <div class="table-card__footer">
+            <span id="pfFooter">—</span>
+            <div class="pagination" id="pfPagination"></div>
+          </div>
+        </div>
+      </div>
+
       <!-- ══════════════════════════════════
            VIEW: HANDBOOK
       ══════════════════════════════════ -->
@@ -4587,7 +4666,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=4"></script>
-<script src="js/admin.js?v=88"></script>
+<script src="js/admin.js?v=89"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>
