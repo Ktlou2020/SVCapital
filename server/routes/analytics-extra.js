@@ -343,9 +343,9 @@ router.get('/platform-fees', requireAuth, _admin, async (req, res) => {
                COALESCE(p.name, p2.name) AS pool_name
         FROM transactions t
         LEFT JOIN investors i ON i.id = t.investor_id
-        LEFT JOIN pools p ON p.id = t.pool_id
+        LEFT JOIN investment_pools p ON p.id = t.pool_id
         LEFT JOIN investments inv ON inv.id = t.investment_id
-        LEFT JOIN pools p2 ON p2.id = inv.pool_id
+        LEFT JOIN investment_pools p2 ON p2.id = inv.pool_id
         WHERE ${feeFilter}
           ${dateClause}
         ORDER BY t.created_at DESC
