@@ -3716,6 +3716,30 @@ function renderMarketplace() {
   const banner = document.querySelector('#view-marketplace .section-banner__title');
   if (_selectedProductType) { if (banner) banner.textContent = 'Product Details'; renderProductDetailView(_selectedProductType); }
   else { if (banner) banner.textContent = 'Investment Products'; renderProductsGrid(); }
+
+  // Sub-account context banner
+  let saBanner = document.getElementById('mktSaContextBanner');
+  if (_pmSaId) {
+    const _sa = (PORTAL.subAccounts || []).find(s => s.id === _pmSaId);
+    if (_sa) {
+      if (!saBanner) {
+        saBanner = document.createElement('div');
+        saBanner.id = 'mktSaContextBanner';
+        saBanner.style.cssText = 'margin-bottom:14px;padding:10px 14px;border-radius:10px;background:rgba(237,165,255,0.1);border:1px solid rgba(237,165,255,0.3);display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:0.83rem';
+        const grid = document.getElementById('marketplaceGrid');
+        if (grid) grid.before(saBanner);
+      }
+      saBanner.innerHTML = `<span style="display:flex;align-items:center;gap:8px"><i class="fa-solid fa-wallet" style="color:#eda5ff"></i> Investing from sub-account <strong style="color:#eda5ff">${_esc(_sa.name)}</strong> &mdash; available: <strong>${Utils.rand(parseFloat(_sa.wallet_balance)||0)}</strong></span><button class="btn btn--ghost btn--sm" style="white-space:nowrap" onclick="_cancelSaInvestMode()"><i class="fa-solid fa-xmark"></i> Cancel</button>`;
+      saBanner.style.display = 'flex';
+    }
+  } else if (saBanner) {
+    saBanner.style.display = 'none';
+  }
+}
+
+function _cancelSaInvestMode() {
+  _pmSaId = null;
+  renderMarketplace();
 }
 
 // Count of open/waitlist/filling pools for a product type
@@ -3730,11 +3754,12 @@ function renderProductsGrid() {
   const grid = document.getElementById('marketplaceGrid');
   if (!grid) return;
   const strip = document.getElementById('mktWalletStrip');
-  const walletBal = parseFloat(PORTAL.investor?.wallet_balance) || 0;
+  const _saGrid = _pmSaId ? (PORTAL.subAccounts || []).find(s => s.id === _pmSaId) : null;
+  const walletBal = _saGrid ? (parseFloat(_saGrid.wallet_balance) || 0) : (parseFloat(PORTAL.investor?.wallet_balance) || 0);
   if (strip) {
     strip.style.display = 'flex';
     const balEl = document.getElementById('mktWalletBal');
-    if (balEl) { balEl.textContent = Utils.rand(walletBal); balEl.style.color = walletBal >= 500 ? 'var(--green)' : 'var(--gold)'; }
+    if (balEl) { balEl.textContent = (_saGrid ? _saGrid.name + ': ' : '') + Utils.rand(walletBal); balEl.style.color = walletBal >= 500 ? 'var(--green)' : 'var(--gold)'; }
   }
 
   // First-time explainer strip — for users who have never invested
@@ -3928,7 +3953,8 @@ async function renderProductDetailView(type) {
 
   // Pools
   const poolsGrid = document.getElementById('productPoolsGrid');
-  const walletBal = parseFloat(PORTAL.investor?.wallet_balance) || 0;
+  const _saDetail = _pmSaId ? (PORTAL.subAccounts || []).find(s => s.id === _pmSaId) : null;
+  const walletBal = _saDetail ? (parseFloat(_saDetail.wallet_balance) || 0) : (parseFloat(PORTAL.investor?.wallet_balance) || 0);
   const waitlist = PORTAL.waitlist || [];
   const investorId = PORTAL.investor?.id;
   const ranked = _rankMarketPools(open, walletBal);
@@ -8283,6 +8309,15 @@ async function loadSubAccounts() {
     const res = await API._fetch('GET', 'tables/sub_accounts', null, { parent_investor_id: myId, limit: 200 });
     const all = res.data || (Array.isArray(res) ? res : []);
     PORTAL.subAccounts = all.filter(a => a.parent_investor_id === myId || a.investor_id === myId);
+    // Derive total_invested from actual investment records — more reliable than the DB field
+    // which may be stale if investments were created before the column was maintained.
+    if (Array.isArray(PORTAL.investments)) {
+      PORTAL.subAccounts.forEach(sa => {
+        const invs = PORTAL.investments.filter(i => i.sub_account_id === sa.id);
+        const computed = invs.reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
+        if (computed > 0) sa.total_invested = computed;
+      });
+    }
   } catch (e) {
     console.warn('loadSubAccounts:', e);
     PORTAL.subAccounts = [];
