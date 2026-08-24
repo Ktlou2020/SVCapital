@@ -14482,12 +14482,14 @@ async function loadPlatformFees(period = 'month') {
     const res  = await fetch(`/api/analytics/platform-fees?period=${period}`, {
       headers: { Authorization: `Bearer ${_getToken()}` }
     });
-    _pfData = await res.json();
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `Server error ${res.status}`);
+    _pfData = data;
     _pfFiltered = [...(_pfData.transactions || [])];
     _pfPage = 1;
     _pfRender(_pfData, period);
   } catch (e) {
-    Toast.error('Failed to load platform fees data');
+    Toast.error(`Failed to load platform fees: ${e.message}`);
     console.error('[loadPlatformFees]', e);
   }
 }
@@ -14505,14 +14507,14 @@ function loadPlatformFeesCustom() {
   fetch(`/api/analytics/platform-fees?from=${from}&to=${to}`, {
     headers: { Authorization: `Bearer ${_getToken()}` }
   })
-    .then(r => r.json())
+    .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || `Server error ${r.status}`); return d; })
     .then(data => {
       _pfData = data;
       _pfFiltered = [...(data.transactions || [])];
       _pfPage = 1;
       _pfRender(data, 'custom');
     })
-    .catch(e => { Toast.error('Failed to load platform fees'); console.error(e); });
+    .catch(e => { Toast.error(`Failed to load platform fees: ${e.message}`); console.error(e); });
 }
 
 function _pfRenderLoading() {
