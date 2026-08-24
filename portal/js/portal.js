@@ -1485,8 +1485,13 @@ function initIdleAutoLogout() {
 
   const doAutoLogout = () => {
     removeOverlay();
-    localStorage.removeItem('svc_portal_cache');
+    // Idle timeout is the SAME user stepping away — keep the portal cache so the
+    // dashboard paints instantly when they log back in instead of sitting on
+    // "Loading…" through a Railway cold start. The cache is validated against the
+    // new JWT's investorId before it is rendered (see DOMContentLoaded), so it can
+    // never be shown to a different user. Explicit Sign Out still clears it.
     localStorage.removeItem('svc_user');
+    sessionStorage.removeItem('svc_portal_cache');
     sessionStorage.clear();
     Auth.logout('../login.html?reason=timeout');
   };
@@ -1562,8 +1567,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Immediately populate greeting from cached user so name never stays "Loading..."
   try {
     const cached = JSON.parse(localStorage.getItem('svc_user') || '{}') || {};
-    const firstName = cached.firstName || cached.first_name || cached.name?.split(' ')[0] || '';
-    const lastName  = cached.lastName  || cached.last_name  || cached.name?.split(' ').slice(1).join(' ') || '';
+    let firstName = cached.firstName || cached.first_name || cached.name?.split(' ')[0] || '';
+    let lastName  = cached.lastName  || cached.last_name  || cached.name?.split(' ').slice(1).join(' ') || '';
+    // Fallback: read the name from the portal data cache. svc_user is cleared on
+    // idle-timeout logout while the portal cache survives, so without this the
+    // greeting and avatar stay at "—"/"?" for the whole cold start after re-login.
+    if (!firstName) {
+      try {
+        const pc = JSON.parse(localStorage.getItem('svc_portal_cache') || 'null');
+        if (pc?.investor) {
+          firstName = pc.investor.first_name || '';
+          lastName  = pc.investor.last_name  || '';
+        }
+      } catch (_) {}
+    }
     const nameEl = document.getElementById('welcomeName');
     // Always replace "Loading..." — use cached name if available, otherwise a neutral dash
     if (nameEl) nameEl.textContent = firstName ? `${firstName} ${lastName}`.trim() : '—';
@@ -1590,15 +1607,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     const raw = localStorage.getItem('svc_portal_cache');
     if (raw) {
       const c = JSON.parse(raw);
-      if (c && c.cachedAt) {
-        PORTAL.investor     = c.investor     || null;
-        PORTAL.investments  = c.investments  || [];
-        PORTAL.transactions = c.transactions || [];
-        PORTAL.pools        = c.pools        || [];
-        PORTAL.waitlist     = c.waitlist     || [];
-        try { renderOverview(); } catch (_) {}
-        if (window.__SVC_HIDE_COVER) window.__SVC_HIDE_COVER();
-        _cacheRendered = true;
+      if (c && c.cachedAt && c.investor) {
+        // Validate the cache belongs to the currently logged-in investor. On a
+        // shared browser a cache left behind by a previous session must never be
+        // rendered to whoever logs in next.
+        let _cacheOk = true;
+        try {
+          const _tok = Auth.getToken();
+          if (_tok) {
+            const _p = JSON.parse(atob(_tok.split('.')[1]));
+            const _jwtInvId = _p.investorId || null;
+            if (_jwtInvId && c.investor.id && _jwtInvId !== c.investor.id) {
+              _cacheOk = false; // cache belongs to a different investor
+              localStorage.removeItem('svc_portal_cache');
+            }
+          }
+        } catch (_) {}
+
+        if (_cacheOk) {
+          PORTAL.investor     = c.investor     || null;
+          PORTAL.investments  = c.investments  || [];
+          PORTAL.transactions = c.transactions || [];
+          PORTAL.pools        = c.pools        || [];
+          PORTAL.waitlist     = c.waitlist     || [];
+          try { renderOverview(); } catch (_) {}
+          if (window.__SVC_HIDE_COVER) window.__SVC_HIDE_COVER();
+          _cacheRendered = true;
+        }
       }
     }
   } catch (_) {}
