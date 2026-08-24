@@ -2177,14 +2177,28 @@ const _TXN_ICON = {
   investment:     { icon: 'fa-seedling',           color: '#eda5ff' },
   reinvestment:   { icon: 'fa-rotate',             color: '#eda5ff' },
   return:         { icon: 'fa-arrow-trend-up',     color: '#22c55e' },
+  interest:       { icon: 'fa-arrow-trend-up',     color: '#22c55e' },
   payout:         { icon: 'fa-circle-check',       color: '#22c55e' },
-  fee:            { icon: 'fa-minus-circle',        color: '#f97316' },
+  payout_all:     { icon: 'fa-circle-check',       color: '#22c55e' },
+  fee:            { icon: 'fa-minus-circle',       color: '#f97316' },
+  platform_fee:   { icon: 'fa-minus-circle',       color: '#f97316' },
   referral_bonus: { icon: 'fa-gift',               color: '#eda5ff' },
   gift_sent:      { icon: 'fa-paper-plane',        color: '#f97316' },
   gift_received:  { icon: 'fa-envelope-open-text', color: '#22c55e' },
   reward:         { icon: 'fa-star',               color: '#fec24f' },
 };
-const _txnIsPositive = t => !['withdrawal', 'fee', 'investment', 'reinvestment', 'gift_sent'].includes(t.type);
+const _txnIsPositive = t => !['withdrawal', 'fee', 'platform_fee', 'investment', 'reinvestment', 'gift_sent'].includes(t.type);
+
+// Type groups for the filter pills — maps each pill value to all DB types it covers
+const _TXN_TYPE_GROUPS = {
+  deposit:      ['deposit'],
+  investment:   ['investment'],
+  reinvestment: ['reinvestment'],
+  return:       ['return', 'interest', 'referral_bonus', 'reward'],
+  payout:       ['payout', 'payout_all', 'maturity_payout', 'capital_return'],
+  withdrawal:   ['withdrawal'],
+  gift_received:['gift_received', 'gift'],
+};
 
 function _txnCardHTML(t) {
   const ti   = _TXN_ICON[t.type] || { icon: 'fa-circle-dot', color: '#9ca3af' };
@@ -2584,8 +2598,6 @@ async function loadMyTransactions() {
   if (txnBody && !PORTAL.transactions.length) txnBody.innerHTML = _skeletonRows(5, 6);
   if (!PORTAL.transactions.length) await loadPortalData();
   renderMyTxnTable();
-
-  document.getElementById('myTxnTypeFilter').addEventListener('change', renderMyTxnTable);
 }
 
 function _setTxnFilter(type, btn) {
@@ -2600,7 +2612,8 @@ function renderMyTxnTable() {
   const body = document.getElementById('myTxnBody');
   if (!body) return;
   const filter = (document.getElementById('myTxnTypeFilter') || {}).value || '';
-  const items = filter ? PORTAL.transactions.filter(t => t.type === filter) : PORTAL.transactions;
+  const matchTypes = filter ? (_TXN_TYPE_GROUPS[filter] || [filter]) : null;
+  const items = matchTypes ? PORTAL.transactions.filter(t => matchTypes.includes(t.type)) : PORTAL.transactions;
   const sorted = [...items].sort((a, b) => new Date(b.transaction_date || b.created_at || 0) - new Date(a.transaction_date || a.created_at || 0));
 
   if (!sorted.length) {
