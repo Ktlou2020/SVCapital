@@ -11,6 +11,37 @@ const audit   = require('../services/audit');
 
 router.use(requireAuth, requireRole('admin', 'director'));
 
+/* ─────────────────────────────────────────────────────────────────────────
+   CASH_MOVEMENT — the single definition of which transaction types move money
+   into or out of a wallet. Both the wallet reconciliation and the statement
+   opening balance derive from this, so they cannot drift apart again; they
+   previously disagreed about `investment` and `fee`, meaning one of them was
+   wrong on every run.
+
+   `return` is deliberately absent. A return is an ACCRUAL: interestCron
+   (jobs/interestCron.js:71) credits investors.total_returns and leaves
+   wallet_balance alone. The cash only reaches the wallet later, at maturity,
+   as a `payout`. Counting both would pay the same money twice.
+
+   matured_funds and reinvestment are a matched bookkeeping pair written at
+   maturity (jobs/maturityCron.js:351,361) with no wallet movement — the money
+   goes straight into the new investment. Both are listed so they cancel to
+   zero; including either one alone invents or destroys money.
+   ───────────────────────────────────────────────────────────────────────── */
+const CASH_CREDIT_TYPES = ['deposit', 'payout', 'interest', 'gift_received', 'referral_bonus', 'matured_funds'];
+const CASH_DEBIT_TYPES  = ['withdrawal', 'investment', 'reinvestment', 'fee', 'platform_fee', 'gift_sent'];
+
+const _list = arr => arr.map(t => `'${t}'`).join(',');
+
+/* SQL CASE expression for the signed cash effect of a transaction row.
+   `p` prefixes the column names for queries that alias the table. */
+const cashMovementSQL = (p = '') => `
+  CASE
+    WHEN ${p}type IN (${_list(CASH_CREDIT_TYPES)}) THEN  ${p}amount
+    WHEN ${p}type IN (${_list(CASH_DEBIT_TYPES)})  THEN -${p}amount
+    ELSE 0
+  END`;
+
 router.post('/manual-credit', async (req, res) => {
   try {
     const { investorId, amount, notes } = req.body;
@@ -287,25 +318,15 @@ router.post('/reconcile-wallet', async (req, res) => {
     const whereClause = investor_id ? 'AND i.investor_id = $1' : '';
     const params      = investor_id ? [investor_id] : [];
 
-    /* Credits: deposits, returns, payouts, referral bonuses.
-       Debits: ONLY withdrawals (money actually leaving the system).
-       investment/platform_fee transactions are NOT subtracted — wallet_balance
-       is already decremented via direct SQL at invest time; subtracting them
-       again from transaction history would double-count every investment. */
+    /* Uses the shared CASH_MOVEMENT definition above — see the note there for
+       why `return` is excluded and why matured_funds/reinvestment are paired. */
     const { rows } = await pool.query(`
       SELECT
         i.investor_id,
-        COALESCE(SUM(
-          CASE
-            WHEN i.type IN ('deposit','return','payout','referral_bonus') AND i.status = 'completed'
-              THEN  i.amount
-            WHEN i.type = 'withdrawal' AND i.status = 'completed'
-              THEN -i.amount
-            ELSE 0
-          END
-        ), 0) AS computed_balance
+        COALESCE(SUM(${cashMovementSQL('i.')}), 0) AS computed_balance
       FROM transactions i
       WHERE i.sub_account_id IS NULL
+        AND i.status = 'completed'
         ${whereClause}
       GROUP BY i.investor_id
     `, params);
@@ -990,15 +1011,10 @@ router.get('/account-statement', async (req, res) => {
          ORDER BY COALESCE(transaction_date, created_at) ASC, created_at ASC`,
         [investor_id, fromDt, toDt]
       ),
-      // Opening balance = net effect of all completed transactions before the period
+      // Opening balance = net cash effect of all completed transactions before the
+      // period, using the shared CASH_MOVEMENT definition above.
       pool.query(
-        `SELECT COALESCE(SUM(
-           CASE
-             WHEN type IN ('deposit','return','payout','referral_bonus','matured_funds') THEN  amount
-             WHEN type IN ('withdrawal','fee','investment','reinvestment')               THEN -amount
-             ELSE 0
-           END
-         ), 0) AS opening_balance
+        `SELECT COALESCE(SUM(${cashMovementSQL()}), 0) AS opening_balance
          FROM transactions
          WHERE investor_id = $1
            AND status = 'completed'
