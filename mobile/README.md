@@ -2,7 +2,7 @@
 
 Capacitor-based native wrapper for the SV Capital Investor Portal.
 
-**App ID:** `co.za.svcapital.investor`  
+**App ID:** `co.za.svcapital.app`  
 **Platforms:** iOS (App Store) + Android (Google Play)
 
 ---
@@ -78,11 +78,11 @@ node scripts/gen-icons.js
 
 #### Android
 1. Create a Firebase project at https://console.firebase.google.com
-2. Add Android app with package `co.za.svcapital.investor`
+2. Add Android app with package `co.za.svcapital.app`
 3. Download `google-services.json` → place at `android/app/google-services.json`
 
 #### iOS
-1. Add iOS app with bundle ID `co.za.svcapital.investor`
+1. Add iOS app with bundle ID `co.za.svcapital.app`
 2. Download `GoogleService-Info.plist` → place at `ios/App/App/GoogleService-Info.plist`
 3. Enable Push Notifications capability in Xcode
 
@@ -137,7 +137,7 @@ use the upload key. **Never commit `key.properties` or `*.jks` to git.**
 **Prerequisites:** Mac with Xcode 15+, Apple Developer account ($99/year at developer.apple.com)
 
 #### One-time setup
-1. Enrol in Apple Developer Programme and create an App ID `co.za.svcapital.investor` in [App Store Connect](https://appstoreconnect.apple.com)
+1. Enrol in Apple Developer Programme and create an App ID `co.za.svcapital.app` in [App Store Connect](https://appstoreconnect.apple.com)
 2. Create a new app listing: **Finance** category, **4+** age rating
 3. Add Privacy Policy URL: `https://svcapital.co.za/popia.html`
 
@@ -153,7 +153,7 @@ use the upload key. **Never commit `key.properties` or `*.jks` to git.**
 4. `npm run sync`
 5. Open Xcode: `npm run open:ios`
 6. Select your **Team** in Signing & Capabilities tab
-7. Confirm **Bundle Identifier** is `co.za.svcapital.investor`
+7. Confirm **Bundle Identifier** is `co.za.svcapital.app`
 8. Enable **Push Notifications** capability (+ toggle in Signing & Capabilities)
 9. Enable **Associated Domains** capability → add `applinks:svcapital.co.za`
 10. **Product → Archive** → Validate → **Distribute App → App Store Connect**
