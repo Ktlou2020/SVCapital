@@ -1107,10 +1107,68 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
     const cols   = keys.join(', ');
     const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
 
-    const { rows } = await pool.query(
-      `INSERT INTO ${table} (${cols}) VALUES (${placeholders}) RETURNING *`,
-      values
-    );
+    /* ── Money-moving inserts are atomic ────────────────────────────────
+       A completed deposit/payout/referral_bonus must credit the wallet, and a
+       completed return must accrue to total_returns. Both used to run in a
+       setImmediate hook after the row was already committed and the 201 already
+       sent, so a crash or a failing UPDATE in between left a completed
+       transaction with no matching balance change and no error surfaced to the
+       caller. The PUT path solved this with a DB transaction; the insert path
+       now does the same, so the row and its balance effect commit together or
+       not at all.
+
+       This is the only place these types are credited on insert. The direct-SQL
+       writers (payments.js, manualCredit.js, maturityCron.js, payoutCron.js,
+       gifts.js, interest.js) do not pass through this route and apply their own
+       effects, so there is no overlap between them and this hook.
+    ──────────────────────────────────────────────────────────────────── */
+    const _moneyTypes = ['deposit', 'payout', 'referral_bonus', 'return'];
+    const _isMoneyInsert = table === 'transactions' && body.status === 'completed' &&
+      body.investor_id && _moneyTypes.includes(body.type);
+
+    let rows;
+    if (_isMoneyInsert) {
+      const dbClient = await pool.connect();
+      try {
+        await dbClient.query('BEGIN');
+        const ins = await dbClient.query(
+          `INSERT INTO ${table} (${cols}) VALUES (${placeholders}) RETURNING *`,
+          values
+        );
+        const c   = ins.rows[0];
+        const amt = parseFloat(c.amount);
+        if (c.type === 'return') {
+          // Accrual, not cash — matches jobs/interestCron.js:71
+          await dbClient.query(
+            'UPDATE investors SET total_returns = COALESCE(total_returns,0) + $1, updated_at = NOW() WHERE id = $2',
+            [amt, c.investor_id]
+          );
+        } else if (c.sub_account_id && c.type === 'deposit') {
+          await dbClient.query(
+            'UPDATE sub_accounts SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
+            [amt, c.sub_account_id]
+          );
+        } else {
+          await dbClient.query(
+            'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
+            [amt, c.investor_id]
+          );
+        }
+        await dbClient.query('COMMIT');
+        rows = ins.rows;
+      } catch (txErr) {
+        await dbClient.query('ROLLBACK').catch(() => {});
+        throw txErr;
+      } finally {
+        dbClient.release();
+      }
+    } else {
+      const r = await pool.query(
+        `INSERT INTO ${table} (${cols}) VALUES (${placeholders}) RETURNING *`,
+        values
+      );
+      rows = r.rows;
+    }
     const [clean] = stripSensitive(table, rows, req.user?.empId, req.user?.role);
     res.status(201).json(clean);
 
@@ -1127,54 +1185,10 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
       });
     });
 
-    /* ── Wallet credit hook ─────────────────────────────────────────────
-       When a completed deposit is created directly (e.g. admin top-up,
-       or EFT marked completed), atomically increment wallet_balance.
-       Paystack/Ozow deposits are credited via payments.js creditWallet()
-       which is idempotent, so double-credits are prevented there.
-       This hook covers non-gateway deposits created via the tables API.
-    ───────────────────────────────────────────────────────────────────── */
-    /* `return` is an ACCRUAL, not a wallet credit. jobs/interestCron.js:71 writes
-       return rows and credits investors.total_returns, leaving wallet_balance
-       alone — the cash reaches the wallet later as a `payout` at maturity. This
-       hook used to credit the wallet for the same type, so an identical row meant
-       different money depending on which code path created it. It now accrues,
-       matching interestCron. */
-    if (table === 'transactions' && clean.status === 'completed' && clean.investor_id &&
-        clean.type === 'return') {
-      setImmediate(async () => {
-        try {
-          await pool.query(
-            'UPDATE investors SET total_returns = COALESCE(total_returns,0) + $1, updated_at = NOW() WHERE id = $2',
-            [parseFloat(clean.amount), clean.investor_id]
-          );
-        } catch (err) {
-          console.error('[return accrual] error:', err.message);
-        }
-      });
-    }
-
-    if (table === 'transactions' && clean.status === 'completed' && clean.investor_id &&
-        (clean.type === 'deposit' || clean.type === 'payout' || clean.type === 'referral_bonus')) {
-      setImmediate(async () => {
-        try {
-          if (clean.sub_account_id && clean.type === 'deposit') {
-            // Route deposit credit to the sub-account wallet when sub_account_id is set
-            await pool.query(
-              'UPDATE sub_accounts SET wallet_balance = wallet_balance + $1 WHERE id = $2',
-              [parseFloat(clean.amount), clean.sub_account_id]
-            );
-          } else {
-            await pool.query(
-              'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
-              [parseFloat(clean.amount), clean.investor_id]
-            );
-          }
-        } catch (err) {
-          console.error('[wallet hook] credit error:', err.message);
-        }
-      });
-    }
+    /* The wallet-credit and return-accrual hooks that used to live here now run
+       inside the insert transaction above, so the row and its balance effect are
+       atomic. Do not re-add a post-response hook for these types — it would
+       credit a second time on top of the transactional write. */
 
     /* ── FICA deposit hook ──────────────────────────────────────────────
        When a completed deposit transaction is created, trigger an
