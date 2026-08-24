@@ -178,6 +178,12 @@ same comparison in a second, beforehand, and checks:
   what Xcode uses to pick the signing profile, so it decides which App Store
   Connect record a build is delivered to. Both must be right: a correct plist with
   a stale build setting still signs against the wrong app.
+- the identifier **per build configuration**, named. Debug and Release can hold
+  different values, and **Archive uses Release** — so a project can build and run
+  correctly all day and still upload to the wrong app. Fix these under
+  **Build Settings → Product Bundle Identifier**, expanding the row and setting
+  every configuration; the Signing & Capabilities field edits only the one
+  currently selected.
 - marketing version matches, and the build number is at least the template's
 - `capacitor.config.json` `appId` agrees with the template
 - `PrivacyInfo.xcprivacy` is present (required for App Store submission)
