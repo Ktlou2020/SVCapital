@@ -1134,8 +1134,28 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
        which is idempotent, so double-credits are prevented there.
        This hook covers non-gateway deposits created via the tables API.
     ───────────────────────────────────────────────────────────────────── */
+    /* `return` is an ACCRUAL, not a wallet credit. jobs/interestCron.js:71 writes
+       return rows and credits investors.total_returns, leaving wallet_balance
+       alone — the cash reaches the wallet later as a `payout` at maturity. This
+       hook used to credit the wallet for the same type, so an identical row meant
+       different money depending on which code path created it. It now accrues,
+       matching interestCron. */
     if (table === 'transactions' && clean.status === 'completed' && clean.investor_id &&
-        (clean.type === 'deposit' || clean.type === 'return' || clean.type === 'payout' || clean.type === 'referral_bonus')) {
+        clean.type === 'return') {
+      setImmediate(async () => {
+        try {
+          await pool.query(
+            'UPDATE investors SET total_returns = COALESCE(total_returns,0) + $1, updated_at = NOW() WHERE id = $2',
+            [parseFloat(clean.amount), clean.investor_id]
+          );
+        } catch (err) {
+          console.error('[return accrual] error:', err.message);
+        }
+      });
+    }
+
+    if (table === 'transactions' && clean.status === 'completed' && clean.investor_id &&
+        (clean.type === 'deposit' || clean.type === 'payout' || clean.type === 'referral_bonus')) {
       setImmediate(async () => {
         try {
           if (clean.sub_account_id && clean.type === 'deposit') {
@@ -1625,8 +1645,16 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
           rows = existing;
         } else {
           const u = updated[0];
-          if (u.investor_id &&
-              (u.type === 'deposit' || u.type === 'return' || u.type === 'payout' || u.type === 'referral_bonus')) {
+          // `return` accrues to total_returns rather than crediting the wallet —
+          // see the note on the insert-side hook above.
+          if (u.investor_id && u.type === 'return') {
+            await dbClient.query(
+              'UPDATE investors SET total_returns = COALESCE(total_returns,0) + $1, updated_at = NOW() WHERE id = $2',
+              [parseFloat(u.amount), u.investor_id]
+            );
+            _skipWalletCredit = true;
+          } else if (u.investor_id &&
+              (u.type === 'deposit' || u.type === 'payout' || u.type === 'referral_bonus')) {
             if (u.sub_account_id && u.type === 'deposit') {
               await dbClient.query(
                 'UPDATE sub_accounts SET wallet_balance = wallet_balance + $1 WHERE id = $2',
