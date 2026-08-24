@@ -575,7 +575,7 @@ function submitQuiz(modId, questionsJson, xpReward) {
     <div class="lesson-actions mt-2" style="justify-content:center">
       ${pass
         ? `<button class="btn btn--success btn--lg" onclick="completeModuleNow('${modId}',${score},${xpReward})">
-             <i class="fa-solid fa-arrow-right"></i> Continue
+             <i class="fa-solid fa-arrow-right"></i> ${_readerModIdx >= _readerModules.length - 1 ? 'Complete Course' : 'Continue'}
            </button>`
         : `<button class="btn btn--primary" onclick="startQuiz()">
              <i class="fa-solid fa-rotate"></i> Retry Quiz
@@ -650,9 +650,10 @@ async function completeModule(mod, score, xpReward) {
 }
 
 function showCourseCelebration(course, certId) {
+  // Close the reader first so renderCourses() updates the card to "Done"
+  closeCourseReader();
   launchConfetti();
   showToast(`🎉 Course complete! "${course.title}" finished. Certificate issued!`, 'success');
-  // Show certificate
   openCertificate(certId, course);
 }
 
