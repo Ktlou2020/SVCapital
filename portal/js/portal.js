@@ -1896,14 +1896,22 @@ function renderOverview(skipCharts) {
   if (!inv) return;
 
   const totalInvested = PORTAL.investments.filter(i => i.status === 'active').reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
-  const maturedInvs   = PORTAL.investments.filter(i => i.status === 'matured');
-  const totalMatured  = maturedInvs.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
-  const totalRet      = maturedInvs.reduce((s, i) => {
+  // Returns are posted by setting the pool's actual_rate, which the server joins onto
+  // each investment as pool_actual_rate — and that happens while the pool is still
+  // active. Gating this on status === 'matured' meant a posted return stayed invisible
+  // here until the pool matured, even though My Investments and the statement already
+  // counted it off the same field. Count anything matured OR carrying a posted rate.
+  const earningInvs   = PORTAL.investments.filter(i =>
+    i.status !== 'cancelled' &&
+    (i.status === 'matured' || (parseFloat(i.pool_actual_rate) || 0) > 0)
+  );
+  const totalEarnBase = earningInvs.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+  const totalRet      = earningInvs.reduce((s, i) => {
     const ar = parseFloat(i.pool_actual_rate) || 0;
     return s + (ar > 0 ? (parseFloat(i.amount) || 0) * ar : (parseFloat(i.expected_return) || (parseFloat(i.amount) || 0) * (parseFloat(i.annual_rate) || 0)));
   }, 0);
   const totalValue    = totalInvested + (parseFloat(inv.wallet_balance) || 0);
-  const returnPct     = totalMatured > 0 ? (totalRet / totalMatured * 100).toFixed(1) : '0';
+  const returnPct     = totalEarnBase > 0 ? (totalRet / totalEarnBase * 100).toFixed(1) : '0';
   const activeCount = PORTAL.investments.filter(i => i.status === 'active').length;
   const firstName   = inv.first_name || 'Investor';
 
