@@ -2249,9 +2249,12 @@ const _TXN_TYPE_GROUPS = {
   investment:   ['investment'],
   reinvestment: ['reinvestment'],
   return:       ['return', 'interest', 'referral_bonus', 'reward'],
-  payout:       ['payout', 'payout_all', 'maturity_payout', 'capital_return'],
+  // matured_funds is the capital-back credit the server pairs with a reinvestment
+  // (reference MATF-*, server/routes/manualCredit.js) — it belongs under Payouts.
+  payout:       ['payout', 'payout_all', 'maturity_payout', 'capital_return', 'matured_funds'],
   withdrawal:   ['withdrawal'],
-  gift_received:['gift_received', 'gift'],
+  // Pill is labelled "Gifts", so it covers gifts sent as well as received.
+  gift_received:['gift_received', 'gift', 'gift_sent'],
 };
 
 function _txnCardHTML(t) {
@@ -2654,9 +2657,14 @@ async function loadMyTransactions() {
   renderMyTxnTable();
 }
 
+// Active transaction-type filter. Held in JS rather than in a hidden <select>:
+// that select only ever contained <option value="">, so assigning any real type
+// to it was silently ignored by the browser and the filter always read back as
+// "" — every pill behaved like "All".
+let _txnFilterType = '';
+
 function _setTxnFilter(type, btn) {
-  const sel = document.getElementById('myTxnTypeFilter');
-  if (sel) sel.value = type;
+  _txnFilterType = type || '';
   document.querySelectorAll('#txnFilterPills .txn-pill').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
   renderMyTxnTable();
@@ -2665,7 +2673,7 @@ function _setTxnFilter(type, btn) {
 function renderMyTxnTable() {
   const body = document.getElementById('myTxnBody');
   if (!body) return;
-  const filter = (document.getElementById('myTxnTypeFilter') || {}).value || '';
+  const filter = _txnFilterType;
   const matchTypes = filter ? (_TXN_TYPE_GROUPS[filter] || [filter]) : null;
   const items = matchTypes ? PORTAL.transactions.filter(t => matchTypes.includes(t.type)) : PORTAL.transactions;
   const sorted = [...items].sort((a, b) => new Date(b.transaction_date || b.created_at || 0) - new Date(a.transaction_date || a.created_at || 0));

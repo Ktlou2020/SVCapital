@@ -137,7 +137,10 @@
         <button class="nav-item" data-view="documents" onclick="navigate('documents', this)">
           <i class="fa-solid fa-folder-open"></i> Documents &amp; Legal
         </button>
-        <button class="nav-item" data-view="statement" onclick="navigate('statement', this)">
+        <!-- Statement tab hidden on mobile. Kept in the DOM (not deleted) because the
+             in-page statement buttons resolve it via querySelector('[data-view=statement]')
+             and pass it to navigate(); removing it would pass null. -->
+        <button class="nav-item" data-view="statement" style="display:none" onclick="navigate('statement', this)">
           <i class="fa-solid fa-file-invoice"></i> My Statement
         </button>
         <button class="nav-item" data-view="subaccounts" onclick="navigate('subaccounts', this)">
@@ -587,7 +590,6 @@
               <button class="txn-pill" data-type="gift_received" onclick="_setTxnFilter('gift_received',this)">Gifts</button>
             </div>
           </div>
-          <select id="myTxnTypeFilter" style="display:none"><option value=""></option></select>
           <!-- Card list -->
           <div id="myTxnBody" class="txn-list">
             <div class="text-center text-muted" style="padding:32px">Loading…</div>
