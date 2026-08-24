@@ -1516,7 +1516,10 @@ function initIdleAutoLogout() {
 
   const doAutoLogout = () => {
     removeOverlay();
-    localStorage.removeItem('svc_portal_cache');
+    // On native, preserve the portal cache so the UI renders instantly after re-login.
+    // The cache is validated against the new JWT in DOMContentLoaded before use.
+    if (!window.__SVC_NATIVE__) localStorage.removeItem('svc_portal_cache');
+    sessionStorage.removeItem('svc_portal_cache');
     localStorage.removeItem('svc_user');
     sessionStorage.clear();
     Auth.logout('../login.html?reason=timeout');
@@ -1591,11 +1594,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Immediately populate greeting from cached user so name never stays "Loading..."
   try {
-    const cached = JSON.parse(localStorage.getItem('svc_user') || '{}') || {};
-    const firstName = cached.firstName || cached.first_name || cached.name?.split(' ')[0] || '';
-    const lastName  = cached.lastName  || cached.last_name  || cached.name?.split(' ').slice(1).join(' ') || '';
+    let firstName = '', lastName = '';
+    const user = JSON.parse(localStorage.getItem('svc_user') || 'null');
+    if (user) {
+      firstName = user.firstName || user.first_name || user.name?.split(' ')[0] || '';
+      lastName  = user.lastName  || user.last_name  || user.name?.split(' ').slice(1).join(' ') || '';
+    }
+    // Fallback: read name from portal data cache (survives idle-timeout logout on native)
+    if (!firstName) {
+      try {
+        const pc = JSON.parse(localStorage.getItem('svc_portal_cache') || 'null');
+        if (pc?.investor) {
+          firstName = pc.investor.first_name || '';
+          lastName  = pc.investor.last_name  || '';
+        }
+      } catch (_) {}
+    }
     const nameEl = document.getElementById('welcomeName');
-    // Always replace "Loading..." — use cached name if available, otherwise a neutral dash
     if (nameEl) nameEl.textContent = firstName ? `${firstName} ${lastName}`.trim() : '—';
     const greetEl = document.getElementById('topbarGreeting');
     if (greetEl) greetEl.textContent = firstName ? `${_timeGreeting()}, ${firstName} 👋` : _timeGreeting();
@@ -12741,7 +12756,7 @@ const PORTAL_CMD_ITEMS = [
   { label: 'Download Statement PDF',   icon: 'fa-file-pdf',        group: 'Actions',  action: () => downloadStatement() },
   { label: 'Export Analytics CSV',     icon: 'fa-table',           group: 'Actions',  action: () => exportAnalyticsCSV() },
   { label: 'Submit Maturity Instruction', icon: 'fa-check-circle', group: 'Actions',  action: () => navigate('maturity', document.querySelector('[data-view=maturity]')) },
-  { label: 'Sign Out',                 icon: 'fa-arrow-right-from-bracket', group: 'Actions', action: () => { localStorage.removeItem('svc_portal_cache'); localStorage.removeItem('svc_user'); sessionStorage.clear(); Auth.logout('../login.html'); } },
+  { label: 'Sign Out',                 icon: 'fa-arrow-right-from-bracket', group: 'Actions', action: () => { if (!window.__SVC_NATIVE__) localStorage.removeItem('svc_portal_cache'); sessionStorage.removeItem('svc_portal_cache'); localStorage.removeItem('svc_user'); sessionStorage.clear(); Auth.logout('../login.html'); } },
 ];
 
 let _portalCmdActive = -1;
