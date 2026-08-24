@@ -633,7 +633,7 @@ function renderWalletReadinessPanel() {
         <div style="font-size:0.78rem;color:var(--text-muted);margin-top:5px;line-height:1.55">${subcopy}</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
           <button class="btn btn--primary btn--sm" onclick="${ctaAction}"><i class="fa-solid fa-arrow-right"></i> ${ctaLabel}</button>
-          <button class="btn btn--secondary btn--sm" onclick="navigate('statement', document.querySelector('[data-view=statement]'))"><i class="fa-solid fa-file-invoice"></i> Statement</button>
+          <!-- Statement button removed — statements are not offered on mobile -->
         </div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px">
@@ -10886,7 +10886,7 @@ function _renderReceiptsTable() {
     .slice(0, 20);
 
   if (!deposits.length) {
-    body.innerHTML = `<tr><td colspan="6" style="padding:28px"><div class="empty-state" style="padding:0;border:none;background:transparent"><i class="fa-solid fa-receipt"></i><div class="empty-state__title">No deposit receipts yet</div><div class="empty-state__sub">As soon as your first wallet top-up is completed, the receipt will appear here for download.</div><div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px"><button class="btn btn--primary btn--sm" onclick="openTopUpModal()"><i class="fa-solid fa-plus"></i> Top up wallet</button><button class="btn btn--secondary btn--sm" onclick="navigate('statement', document.querySelector('[data-view=statement]'))"><i class="fa-solid fa-file-invoice"></i> Generate statement</button></div></div></td></tr>`;
+    body.innerHTML = `<tr><td colspan="6" style="padding:28px"><div class="empty-state" style="padding:0;border:none;background:transparent"><i class="fa-solid fa-receipt"></i><div class="empty-state__title">No deposit receipts yet</div><div class="empty-state__sub">As soon as your first wallet top-up is completed, the receipt will appear here for download.</div><div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px"><button class="btn btn--primary btn--sm" onclick="openTopUpModal()"><i class="fa-solid fa-plus"></i> Top up wallet</button></div></div></td></tr>`;
     return;
   }
 
@@ -12758,7 +12758,7 @@ const PORTAL_CMD_ITEMS = [
   { label: 'Support',                  icon: 'fa-headset',         group: 'Navigate', action: () => navigate('support',       document.querySelector('[data-view=support]')) },
   // Refer & Earn hidden — referral programme not yet live
   { label: 'Documents',                icon: 'fa-folder-open',     group: 'Navigate', action: () => navigate('documents',     document.querySelector('[data-view=documents]')) },
-  { label: 'Account Statement',        icon: 'fa-file-invoice',    group: 'Navigate', action: () => navigate('statement',     document.querySelector('[data-view=statement]')) },
+  // Account Statement hidden — statements are not offered on mobile
   { label: 'Top Up Wallet',            icon: 'fa-plus',            group: 'Actions',  action: () => openTopUpModal() },
   { label: 'Download Tax Certificate', icon: 'fa-file-shield',     group: 'Actions',  action: () => { navigate('documents', document.querySelector('[data-view=documents]')); } },
   { label: 'Download Statement PDF',   icon: 'fa-file-pdf',        group: 'Actions',  action: () => downloadStatement() },
