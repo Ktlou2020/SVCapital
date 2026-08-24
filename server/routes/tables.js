@@ -1863,6 +1863,22 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
           const approvedSet = new Set(approvedDocs.map(d => d.doc_type));
           const hasBankDoc  = BANK_ALIASES.some(t => approvedSet.has(t));
           const allApproved = approvedSet.has('id_document') && approvedSet.has('proof_of_address') && hasBankDoc;
+          // Note the individual doc approval on any open KYC/FICA support tickets
+          const _docLabel = (updated.doc_type || 'document').replace(/_/g, ' ');
+          await pool.query(
+            `UPDATE support_tickets
+                SET admin_response = CASE
+                      WHEN admin_response IS NULL OR admin_response = ''
+                        THEN $2
+                      ELSE admin_response || E'\n' || $2
+                    END,
+                    updated_at = NOW()
+              WHERE investor_id = $1
+                AND status IN ('open', 'in_progress', 'under_review')
+                AND category IN ('fica_submission', 'kyc_submission', 'fica', 'kyc', 'document_verification')`,
+            [updated.investor_id, `[System] KYC document approved: ${_docLabel} — ${new Date().toLocaleDateString('en-ZA')}`]
+          ).catch(() => {});
+
           if (allApproved) {
             await pool.query(
               `UPDATE investors
@@ -1876,6 +1892,23 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
             ).catch(() => {});
             const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [updated.investor_id]);
             if (inv[0]) await emailService.sendKycApproved(inv[0]);
+
+            // Auto-resolve all open KYC/FICA support tickets — no need to approve twice
+            await pool.query(
+              `UPDATE support_tickets
+                  SET status         = 'resolved',
+                      admin_response = CASE
+                        WHEN admin_response IS NULL OR admin_response = ''
+                          THEN $2
+                        ELSE admin_response || E'\n' || $2
+                      END,
+                      responded_at   = NOW(),
+                      updated_at     = NOW()
+                WHERE investor_id = $1
+                  AND status IN ('open', 'in_progress', 'under_review')
+                  AND category IN ('fica_submission', 'kyc_submission', 'fica', 'kyc', 'document_verification')`,
+              [updated.investor_id, '[System] All KYC/FICA documents have been verified and approved. Account is now active.']
+            ).catch(() => {});
           }
         }
 
