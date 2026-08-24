@@ -5,11 +5,12 @@
   "private": true,
   "scripts": {
     "build": "node scripts/build.js",
+    "check:ios": "node scripts/check-ios-config.js",
     "sync": "npm run build && npx cap sync",
     "open:android": "npm run sync && npx cap open android",
-    "open:ios": "npm run sync && npx cap open ios",
+    "open:ios": "npm run sync && node scripts/check-ios-config.js --warn && npx cap open ios",
     "run:android": "npm run sync && npx cap run android",
-    "run:ios": "npm run sync && npx cap run ios",
+    "run:ios": "npm run sync && node scripts/check-ios-config.js --warn && npx cap run ios",
     "add:android": "npx cap add android",
     "add:ios": "npx cap add ios"
   },
