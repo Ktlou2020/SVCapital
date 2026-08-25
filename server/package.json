@@ -9,6 +9,7 @@
     "check:webhook": "node scripts/check-webhook-chain.cjs",
     "check:resilience": "node scripts/check-resilience.cjs",
     "check:shutdown": "node scripts/check-shutdown.cjs",
+    "check:assets": "node scripts/check-asset-caching.cjs",
     "migrate": "node db/migrate.js",
     "seed": "node db/seed.js"
   },
