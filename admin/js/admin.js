@@ -7010,7 +7010,16 @@ async function viewTicket(id) {
             try {
               const existing = await API._fetch('GET', `tables/transactions?investor_id=${encodeURIComponent(tkt.investor_id)}&reference=${encodeURIComponent(ref)}`);
               pendingTxn = (existing?.data ?? []).find(t => t.reference === ref && t.type === 'deposit') || null;
-            } catch (_) {}
+            } catch (lookupErr) {
+              /* A failed lookup is not the same as "no pending transaction". Swallowing it
+                 left pendingTxn null, which sends the flow into the create branch and
+                 inserts a SECOND deposit for the same reference — a duplicate credit, or a
+                 unique-constraint failure part-way through an approval. Fail closed; the
+                 admin can retry, and retrying is harmless. */
+              console.error('[eft] pending transaction lookup failed:', lookupErr.message);
+              Toast.error('Could not check for an existing deposit — approval stopped so nothing is double-credited. Please try again.');
+              return;
+            }
 
             if (pendingTxn) {
               await API._fetch('PATCH', `tables/transactions/${pendingTxn.id}`, {
@@ -13908,7 +13917,13 @@ async function savePoolCloseout(btn) {
             subject: 'Your investment has matured',
             message: `Your investment has matured at an actual return rate of ${(rate * 100).toFixed(2)}%. Please log in to your portal to view your maturity instruction options.`,
           });
-        } catch (_) {}
+          } catch (notifyErr) {
+            /* The pool update above already succeeded, so this is not a total failure — but
+               swallowing it meant investors were never told their money had matured while
+               the admin saw success. Report precisely what did and did not happen. */
+            console.error('[maturity] investor notification failed:', notifyErr.message);
+            Toast.warning('Pool marked matured, but the investor notification did not send. Notify them from Comms.');
+          }
       }
       Toast.success('Pool finalised — status set to matured');
       Modal.close('poolCloseoutModal');
