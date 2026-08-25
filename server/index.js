@@ -339,9 +339,12 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
   // Payout processing is now consolidated into the maturity engine (maturityCron).
   // The standalone payoutCron has been retired.
 
-  // Start monthly statement cron (1st of month, 07:00 SAST)
-  const { startStatementCron } = require('./jobs/statementCron');
-  startStatementCron();
+  // Monthly statement email DISABLED. Statements were removed from the portal and
+  // the apps, so emailing them was the only remaining path and it ran without
+  // anyone choosing it. Re-enable by uncommenting both lines below; the job is
+  // untouched and runMonthlyStatements can still be called directly.
+  // const { startStatementCron } = require('./jobs/statementCron');
+  // startStatementCron();
 
   // Start monthly director report cron (1st of month, 07:00 UTC / 09:00 SAST)
   const { startDirectorReportCron } = require('./jobs/directorReportCron');
