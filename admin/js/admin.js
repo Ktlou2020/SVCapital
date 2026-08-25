@@ -2069,7 +2069,10 @@ async function viewInvestor(id) {
   const avatarColor= _invAvatarColor(`${inv.first_name} ${inv.last_name}`);
   const totalInvested  = invsts.filter(i=>i.status==='active').reduce((s,i) => s+(parseFloat(i.amount)||0), 0);
   const activeInvCount = invsts.filter(i=>i.status==='active').length;
-  const totalReturns   = invsts.filter(i=>['matured','paid_out'].includes(i.status)).reduce((s,i)=>s+(parseFloat(i.actual_return)||parseFloat(i.expected_return)||0), 0);
+  // Shared definition — see Utils.investmentReturn in js/api.js. This tile used to
+  // count only matured/paid_out investments, so a pool with a posted actual_rate
+  // showed R0.00 here while the investor saw the real figure in the app.
+  const totalReturns   = Utils.totalReturns(invsts);
   const totalDeposits  = txns.filter(t=>t.type==='deposit' && t.status==='completed').reduce((s,t)=>s+(parseFloat(t.amount)||0), 0);
   const invSubAccounts = (STATE.subAccounts || []).filter(sa => sa.parent_investor_id === id);
   const saWallet   = invSubAccounts.reduce((s, sa) => s + (parseFloat(sa.wallet_balance) || 0), 0);

@@ -430,6 +430,54 @@ const Utils = {
     return 'R' + n.toFixed(0);
   },
 
+
+  /* ─────────────────────────────────────────────────────────────────────
+     RETURNS EARNED — the single definition.
+
+     This figure was previously derived independently on every surface, so
+     the app, the statement and the admin console each showed a different
+     number for the same money. They disagreed on both the formula and the
+     field names, and drifted further apart with every edit.
+
+     Precedence, most authoritative first:
+       1. cancelled            → 0, nothing was earned
+       2. recorded actual      → actual_return, the realised figure written
+                                 back when the investment closed
+       3. posted pool rate     → amount × pool_actual_rate. Returns are posted
+                                 by setting the pool's actual_rate, which the
+                                 server joins onto each investment; the
+                                 per-investment annual_rate is commonly 0.
+       4. recorded expectation → expected_return
+       5. per-investment rate  → amount × annual_rate
+
+     Accepts both the raw DB names (actual_return, expected_return) and the
+     portal's normalised aliases (…_amount), because admin reads the former
+     and the portal rewrites to the latter in loadPortalData.
+     ───────────────────────────────────────────────────────────────────── */
+  investmentReturn(inv) {
+    if (!inv || inv.status === 'cancelled') return 0;
+    const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
+    const pick = (a, b) => (inv[a] != null ? inv[a] : inv[b]);
+
+    const amount = num(inv.amount);
+    const actual = num(pick('actual_return', 'actual_return_amount'));
+    if (actual > 0) return actual;
+
+    const rate = num(inv.pool_actual_rate);
+    if (rate > 0) return amount * rate;
+
+    const expected = num(pick('expected_return', 'expected_return_amount'));
+    if (expected > 0) return expected;
+
+    return amount * num(pick('annual_rate', 'expected_return_rate'));
+  },
+
+  /* Returns earned across a set of investments. Use this rather than a local
+     reduce so every surface reports the same total. */
+  totalReturns(list) {
+    return (Array.isArray(list) ? list : []).reduce((s, i) => s + Utils.investmentReturn(i), 0);
+  },
+
   /* Format percentage */
   pct(rate, decimals = 2) {
     return (Number(rate) * 100).toFixed(decimals) + '%';
