@@ -11,36 +11,8 @@ const audit   = require('../services/audit');
 
 router.use(requireAuth, requireRole('admin', 'director'));
 
-/* ─────────────────────────────────────────────────────────────────────────
-   CASH_MOVEMENT — the single definition of which transaction types move money
-   into or out of a wallet. Both the wallet reconciliation and the statement
-   opening balance derive from this, so they cannot drift apart again; they
-   previously disagreed about `investment` and `fee`, meaning one of them was
-   wrong on every run.
-
-   `return` is deliberately absent. A return is an ACCRUAL: interestCron
-   (jobs/interestCron.js:71) credits investors.total_returns and leaves
-   wallet_balance alone. The cash only reaches the wallet later, at maturity,
-   as a `payout`. Counting both would pay the same money twice.
-
-   matured_funds and reinvestment are a matched bookkeeping pair written at
-   maturity (jobs/maturityCron.js:351,361) with no wallet movement — the money
-   goes straight into the new investment. Both are listed so they cancel to
-   zero; including either one alone invents or destroys money.
-   ───────────────────────────────────────────────────────────────────────── */
-const CASH_CREDIT_TYPES = ['deposit', 'payout', 'interest', 'gift_received', 'referral_bonus', 'matured_funds'];
-const CASH_DEBIT_TYPES  = ['withdrawal', 'investment', 'reinvestment', 'fee', 'platform_fee', 'gift_sent'];
-
-const _list = arr => arr.map(t => `'${t}'`).join(',');
-
-/* SQL CASE expression for the signed cash effect of a transaction row.
-   `p` prefixes the column names for queries that alias the table. */
-const cashMovementSQL = (p = '') => `
-  CASE
-    WHEN ${p}type IN (${_list(CASH_CREDIT_TYPES)}) THEN  ${p}amount
-    WHEN ${p}type IN (${_list(CASH_DEBIT_TYPES)})  THEN -${p}amount
-    ELSE 0
-  END`;
+/* Cash-movement definition — single source in services/ledger.js */
+const { cashMovementSQL } = require('../services/ledger');
 
 router.post('/manual-credit', async (req, res) => {
   try {

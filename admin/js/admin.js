@@ -2406,8 +2406,8 @@ async function viewInvestor(id) {
           <div style="font-size:0.83rem;font-weight:600;color:var(--text);margin-bottom:4px">Restore Wallet After Re-import</div>
           <div style="font-size:0.77rem;color:var(--text-muted)">Sets wallet balance to the sum of admin-created manual deposits (ADMIN-DEP-* transactions only). Use this if a data migration overwrote the live balance — historical Firebase transactions are intentionally excluded to avoid double-counting.</div>
         </div>
-        <button class="btn btn--warning btn--sm" style="flex-shrink:0" onclick='_recalcInvestorWallet(${JSON.stringify(inv.id)},${JSON.stringify(inv.first_name + " " + inv.last_name)},this)'>
-          <i class="fa-solid fa-calculator"></i> Recalculate Wallet
+        <button class="btn btn--secondary btn--sm" style="flex-shrink:0" onclick='_recalcInvestorWallet(${JSON.stringify(inv.id)},${JSON.stringify(inv.first_name + " " + inv.last_name)},this)'>
+          <i class="fa-solid fa-magnifying-glass-chart"></i> Wallet Report
         </button>
       </div>
     </div>
@@ -2631,30 +2631,44 @@ async function depositToInvestor(investorId, investorName, currentBalance) {
 }
 
 async function _recalcInvestorWallet(investorId, investorName, btn) {
-  if (!await Confirm.ask('Recalculate Wallet Balance?', {
-    // The old wording promised a full recompute "from all completed transactions
-    // (deposits, returns, payouts minus withdrawals and fees)". The endpoint does
-    // NOT do that — see broadcast.js POST /admin/recalculate-wallet/:investorId, which
-    // sets wallet_balance to the SUM of completed deposits whose reference matches
-    // ADMIN-DEP-% and nothing else. Returns, payouts, maturity credits, referral
-    // bonuses, gateway top-ups and withdrawals are all ignored, and any imported
-    // opening balance is destroyed. Describe what it actually does.
-    body: `<strong>This does not recompute from full transaction history.</strong><br><br>
-It overwrites ${investorName}'s wallet with the total of admin-created manual deposits only (reference <code>ADMIN-DEP-*</code>).<br><br>
-Everything else is <strong>ignored and lost</strong>: gateway top-ups, returns, payouts, maturity credits, referral bonuses, gifts, withdrawals, and any imported opening balance.<br><br>
-Only use this for an investor whose balance should equal their admin deposits and nothing more. This cannot be undone.`,
-    confirmLabel: 'Overwrite with admin deposits',
-  })) return;
+  /* This used to overwrite the wallet with the total of admin manual deposits,
+     discarding everything else with no undo. The endpoint is now read-only, so
+     there is nothing to confirm — it reports and changes nothing. */
   await _withBtn(btn, async () => {
     try {
-      const res = await API._fetch('POST', `admin/recalculate-wallet/${investorId}`);
-      const newBal = Utils.rand(res.new_balance);
-      Toast.success(`Wallet recalculated — new balance: ${newBal}`);
-      const inv = STATE.investors.find(i => i.id === investorId);
-      if (inv) inv.wallet_balance = res.new_balance;
-      Modal.close('investorDetailModal');
-      await loadInvestors();
-    } catch (e) { Toast.error('Recalculation failed: ' + (e.message || 'unknown error')); }
+      const r = await API._fetch('GET', `admin/wallet-report/${investorId}`);
+      const rows = (r.by_type || [])
+        .map(t => `<tr><td style="padding:3px 10px 3px 0">${t.type}</td>`
+                + `<td style="padding:3px 10px 3px 0;color:var(--text-muted)">${t.status}</td>`
+                + `<td style="padding:3px 10px 3px 0;text-align:right">${t.count}</td>`
+                + `<td style="padding:3px 0;text-align:right">${Utils.rand(t.total)}</td></tr>`)
+        .join('') || '<tr><td colspan="4" style="color:var(--text-muted)">No transactions</td></tr>';
+
+      const diff = r.difference;
+      const diffColour = Math.abs(diff) < 0.01 ? '#22c55e' : '#f59e0b';
+
+      await Confirm.ask(`Wallet report — ${investorName}`, {
+        body: `
+          <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:0.9rem;margin-bottom:14px">
+            <span style="color:var(--text-muted)">Stored balance</span>
+            <strong>${Utils.rand(r.stored_balance)}</strong>
+            <span style="color:var(--text-muted)">Ledger total</span>
+            <span>${Utils.rand(r.ledger_total)}</span>
+            <span style="color:var(--text-muted)">Difference</span>
+            <strong style="color:${diffColour}">${Utils.rand(diff)}</strong>
+          </div>
+          <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:14px">${r.note}</div>
+          <div style="font-size:0.8rem;margin-bottom:6px"><strong>Transactions by type</strong></div>
+          <div style="max-height:240px;overflow:auto"><table style="width:100%;font-size:0.8rem">${rows}</table></div>
+          <div style="font-size:0.78rem;color:var(--text-muted);margin-top:12px">
+            Nothing was changed. The old action overwrote this wallet with
+            ${Utils.rand(r.admin_deposits_only)} — the total of admin manual deposits only.
+          </div>`,
+        confirmLabel: 'Close',
+      });
+    } catch (e) {
+      Toast.error('Could not load wallet report: ' + (e.message || 'unknown error'));
+    }
   });
 }
 

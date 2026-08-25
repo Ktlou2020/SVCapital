@@ -6,6 +6,7 @@
 
 const router      = require('express').Router();
 const pool        = require('../db/pool');
+const { cashMovementSQL } = require('../services/ledger');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const smsService  = require('../services/sms');
 const pushService = require('../services/pushService');
@@ -386,37 +387,83 @@ router.get('/investor-statements/:id/pdf', async (req, res) => {
   }
 });
 
-/* ─── POST /api/admin/recalculate-wallet/:investorId ─────────────────── */
-router.post('/recalculate-wallet/:investorId', requireAuth, requireRole('admin', 'director'), async (req, res) => {
+/* ─── GET|POST /api/admin/wallet-report/:investorId ───────────────────────
+   READ-ONLY. Reports what the wallet holds and what the ledger says. Writes
+   nothing.
+
+   This replaces a destructive endpoint that set wallet_balance to the SUM of
+   completed deposits matching ADMIN-DEP-% and discarded everything else —
+   gateway top-ups, payouts, interest, gifts, withdrawals and any imported
+   opening balance — with no undo. The wallet audit found that no ledger sum can
+   correctly rebuild a balance anyway: almost every write path already applies
+   its effect to wallet_balance directly, so summing the ledger and overwriting
+   double-counts. The column is authoritative; this is here to inspect it.
+
+   The old POST path is deliberately kept and mapped to the same read-only
+   handler. Admin clients are cached, so a stale one will still call POST — it
+   now returns a report instead of destroying a balance.
+   ──────────────────────────────────────────────────────────────────────── */
+const _walletReport = async (req, res) => {
   try {
     const { investorId } = req.params;
 
-    // Only sum admin-created manual deposits (ADMIN-DEP-* references).
-    // Historical Firebase transactions are already baked into the imported
-    // wallet_balance and must not be double-counted.
-    const { rows: [calc] } = await pool.query(`
-      SELECT COALESCE(SUM(amount), 0) AS admin_deposits
-      FROM transactions
-      WHERE investor_id = $1
-        AND type = 'deposit'
-        AND status = 'completed'
-        AND reference LIKE 'ADMIN-DEP-%'
-    `, [investorId]);
+    const [invRes, adminDepRes, ledgerRes, byTypeRes] = await Promise.all([
+      pool.query(
+        'SELECT id, first_name, last_name, wallet_balance FROM investors WHERE id = $1',
+        [investorId]),
+      // What the removed endpoint would have written, shown so the damage it
+      // would have done is visible rather than hypothetical.
+      pool.query(`SELECT COALESCE(SUM(amount), 0) AS total
+                    FROM transactions
+                   WHERE investor_id = $1 AND type = 'deposit' AND status = 'completed'
+                     AND reference LIKE 'ADMIN-DEP-%'`, [investorId]),
+      pool.query(`SELECT COALESCE(SUM(${cashMovementSQL()}), 0) AS total
+                    FROM transactions
+                   WHERE investor_id = $1 AND status = 'completed'
+                     AND sub_account_id IS NULL`, [investorId]),
+      pool.query(`SELECT type, status, COUNT(*)::int AS count,
+                         COALESCE(SUM(amount), 0) AS total
+                    FROM transactions
+                   WHERE investor_id = $1
+                   GROUP BY type, status
+                   ORDER BY type, status`, [investorId]),
+    ]);
 
-    const adminDeposits = Math.max(0, parseFloat(calc.admin_deposits) || 0);
-
-    const { rows: [inv] } = await pool.query(
-      'UPDATE investors SET wallet_balance = $1, updated_at = NOW() WHERE id = $2 RETURNING id, first_name, last_name, wallet_balance',
-      [adminDeposits, investorId]
-    );
-
+    const inv = invRes.rows[0];
     if (!inv) return res.status(404).json({ error: 'Investor not found' });
 
-    res.json({ ok: true, investor_id: investorId, new_balance: adminDeposits });
+    const stored        = parseFloat(inv.wallet_balance) || 0;
+    const ledgerTotal   = parseFloat(ledgerRes.rows[0].total) || 0;
+    const adminDeposits = parseFloat(adminDepRes.rows[0].total) || 0;
+
+    res.json({
+      ok: true,
+      read_only: true,
+      wrote: false,
+      investor_id:   inv.id,
+      investor_name: `${inv.first_name || ''} ${inv.last_name || ''}`.trim(),
+      stored_balance: stored,
+      ledger_total:   ledgerTotal,
+      difference:     Math.round((stored - ledgerTotal) * 100) / 100,
+      admin_deposits_only: adminDeposits,
+      by_type: byTypeRes.rows.map(r => ({
+        type: r.type, status: r.status,
+        count: r.count, total: parseFloat(r.total) || 0,
+      })),
+      note: 'wallet_balance is authoritative and maintained incrementally by each '
+          + 'write path. A difference here is expected where a movement was applied '
+          + 'directly without a matching completed transaction row, and is not by '
+          + 'itself evidence of an error.',
+    });
   } catch (e) {
-    console.error('[recalculate-wallet]', e.message);
+    console.error('[wallet-report]', e.message);
     res.status(500).json({ error: e.message });
   }
-});
+};
+
+router.get ('/wallet-report/:investorId',      requireAuth, requireRole('admin', 'director'), _walletReport);
+router.post('/wallet-report/:investorId',      requireAuth, requireRole('admin', 'director'), _walletReport);
+// Retired destructive route — now read-only, so a cached admin client cannot overwrite a wallet.
+router.post('/recalculate-wallet/:investorId', requireAuth, requireRole('admin', 'director'), _walletReport);
 
 module.exports = router;
