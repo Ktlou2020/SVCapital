@@ -231,7 +231,24 @@ router.post('/paystack/webhook', async (req, res) => {
       aml.checkDeposit(pool, investorId, creditAmt, reference).catch(e => console.error('[aml]', e.message));
     }
   } catch (err) {
-    console.error('[payments/webhook] creditWallet error:', err.message);
+    /* Last line of defence for a payment the customer has already made. Paystack
+       has taken their money and this is the path that credits it; if it throws
+       here the money is gone from their card and absent from their wallet, and
+       nothing retries once Paystack stops. It used to end at console.error, so a
+       failure was invisible unless somebody happened to be tailing Railway logs
+       at that moment. Persist it where it can be found, with enough detail to
+       credit by hand. */
+    console.error('[payments/webhook] creditWallet FAILED — customer charged, wallet NOT credited:',
+      { reference, investorId, creditAmt, error: err.message });
+    audit.log({
+      actorEmail:  'system',
+      action:      'payment.webhook_credit_failed',
+      entityType:  'transactions',
+      entityId:    reference,
+      description: `Paystack charge.success could not be credited. Investor ${investorId}, `
+                 + `R${creditAmt}, ref ${reference}. Reason: ${err.message}. `
+                 + `Customer has been charged — credit manually after confirming no duplicate.`,
+    }).catch(e => console.error('[payments/webhook] audit write failed:', e.message));
   }
 });
 
