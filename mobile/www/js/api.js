@@ -533,6 +533,114 @@ const Utils = {
     return null;
   },
 
+  /* The rate to show for an investment.
+
+     Returns are posted by setting the pool's actual_rate and are deliberately
+     not written back onto the investment row, so annual_rate stays 0 on
+     anything still running. The server joins the pool's figure on as
+     pool_actual_rate — use it when the investment carries none of its own.
+
+     Postgres returns NUMERIC as a string, so a zero rate arrives as "0.0000",
+     which is truthy. `rate ? pct(rate) : '—'` therefore renders a confident
+     0.00% rather than a dash: the admin investments list showed exactly that
+     while the pool view beside it showed the real 2.13%.
+
+     Returns null when neither figure exists, so callers can show a dash and
+     mean it. */
+  effectiveRate(inv) {
+    if (!inv) return null;
+    const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
+
+    const own = num(inv.annual_rate != null ? inv.annual_rate : inv.expected_return_rate);
+    if (own > 0) return own;
+
+    const posted = num(inv.pool_actual_rate);
+    if (posted > 0) return posted;
+
+    return null;
+  },
+
+  /* What a maturity instruction actually means, in words and figures.
+
+     The admin detail view rendered the raw enum — "PAYOUT_CUSTOM" — which says
+     the client wants a custom amount but not what the amount is, nor what
+     happens to the rest. For a switch it named no product. Those are the two
+     instructions where the enum alone is useless.
+
+     Returns { label, detail, payout, remainder } where payout/remainder are
+     numbers or null when not yet knowable (no posted return means the total is
+     still an estimate). */
+  maturityPlan(inv, productLabel) {
+    if (!inv) return null;
+    const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
+    const instr = inv.maturity_instruction || 'pending';
+
+    const capital = num(inv.amount);
+    const rate    = Utils.effectiveRate(inv);
+    // Only a posted rate gives a real total; otherwise the value at maturity
+    // is a target, and saying "remainder R X" against a target would be a
+    // figure nobody has committed to.
+    const total   = rate != null ? capital * (1 + rate) : null;
+    const custom  = num(inv.custom_payout_amount);
+    const target  = productLabel || inv.switch_product_type || null;
+
+    const LABELS = {
+      pending:        'Awaiting instruction',
+      reinvest:       'Reinvest',
+      payout_all:     'Pay out all',
+      payout_return:  'Pay out returns only',
+      payout_custom:  'Custom payout',
+      switch_product: 'Switch product',
+      custom_switch:  'Custom payout & switch',
+    };
+    const label = LABELS[instr] || String(instr).replace(/_/g, ' ');
+
+    const plan = { label, detail: '', payout: null, remainder: null };
+
+    switch (instr) {
+      case 'payout_all':
+        plan.payout = total;
+        plan.detail = total != null ? `Capital and returns paid out — ${Utils.rand(total)}` : 'Capital and returns paid out';
+        break;
+      case 'payout_return':
+        plan.payout    = total != null ? total - capital : null;
+        plan.remainder = capital;
+        plan.detail    = total != null
+          ? `${Utils.rand(total - capital)} paid out, ${Utils.rand(capital)} capital reinvested`
+          : 'Returns paid out, capital reinvested';
+        break;
+      case 'reinvest':
+        plan.remainder = total;
+        plan.detail    = total != null ? `${Utils.rand(total)} rolled into the next pool` : 'Rolled into the next pool';
+        break;
+      case 'switch_product':
+        plan.remainder = total;
+        plan.detail    = target
+          ? `${total != null ? Utils.rand(total) + ' ' : ''}switched into ${target}`
+          : 'Switched into another product — none chosen yet';
+        break;
+      case 'payout_custom':
+        plan.payout    = custom || null;
+        plan.remainder = total != null && custom ? Math.max(0, total - custom) : null;
+        plan.detail    = custom
+          ? `${Utils.rand(custom)} paid out` + (plan.remainder != null ? `, ${Utils.rand(plan.remainder)} reinvested` : ', remainder reinvested')
+          : 'Custom payout — no amount set yet';
+        break;
+      case 'custom_switch':
+        plan.payout    = custom || null;
+        plan.remainder = total != null && custom ? Math.max(0, total - custom) : null;
+        plan.detail    = custom
+          ? `${Utils.rand(custom)} paid out` +
+            (plan.remainder != null ? `, ${Utils.rand(plan.remainder)}` : ', remainder') +
+            (target ? ` switched into ${target}` : ' switched — no product chosen yet')
+          : 'Custom payout & switch — no amount set yet';
+        break;
+      default:
+        plan.detail = 'The client has not chosen what happens at maturity.';
+    }
+    return plan;
+  },
+
   /* Same, aggregated over a set of investments — a client can hold several in
      one pool. The rate is the total posted return over the capital that
      actually earned it, so an investment still awaiting its posting does not

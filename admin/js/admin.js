@@ -2333,7 +2333,7 @@ async function viewInvestor(id) {
             <td title="${_esc(pi.label)}"><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
             <td class="td-muted">${Utils.date(i.start_date||i.created_at)}</td>
             <td class="td-gold fw-700">${Utils.rand(i.amount)}</td>
-            <td class="td-green">${i.annual_rate?Utils.pct(i.annual_rate):'—'}</td>
+            <td class="td-green">${(() => { const _r = Utils.effectiveRate(i); return _r != null ? Utils.pct(_r) : '—'; })()}</td>
             <td>${Utils.statusBadge(i.status)}</td>
             <td class="td-muted">${Utils.date(i.end_date)}</td>
             <td><button class="btn btn--sm" style="background:rgba(237,165,255,.1);color:#eda5ff;border:1px solid rgba(237,165,255,.25)" onclick='openMoveInvestment(${JSON.stringify(i.id)},${JSON.stringify(i.pool_id)})' title="Move to different pool"><i class="fa-solid fa-right-left"></i></button></td>
@@ -5175,7 +5175,8 @@ async function viewPoolInvestors(poolId) {
               // so a posted return is visible here. parseFloat first — annual_rate comes
               // back as the string "0.0000", which is truthy and rendered a misleading
               // 0.00% instead of falling through.
-              const effRate = parseFloat(r.annual_rate) || parseFloat(pool.actual_rate) || 0;
+              // Same precedence as the investments list, from one definition.
+              const effRate = Utils.effectiveRate({ ...r, pool_actual_rate: r.pool_actual_rate ?? pool.actual_rate }) || 0;
               return `<tr style="cursor:pointer;${isCancelled ? 'opacity:0.5;' : ''}" onclick="viewInvestor('${r.investor_id}');Modal.close('poolInvestorsModal')">
                 <td><div class="td-strong clip">${name}</div><div class="td-muted clip" style="font-size:0.7rem">${r.email||''}</div></td>
                 <td class="clip">${acctCell}</td>
@@ -6066,7 +6067,7 @@ function renderInvestmentsTable() {
       }</td>
       <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
       <td class="td-gold fw-700">${Utils.rand(i.amount)}</td>
-      <td class="td-green">${i.annual_rate?Utils.pct(i.annual_rate):'—'}</td>
+      <td class="td-green">${(() => { const _r = Utils.effectiveRate(i); return _r != null ? Utils.pct(_r) : '—'; })()}</td>
       <td>${Utils.statusBadge(i.status)}</td>
       <td class="td-muted">${Utils.date(i.end_date)}</td>
       <td>
@@ -6174,6 +6175,16 @@ function viewInvestmentDetail(id) {
   const email = inv.investor_email || invRecord?.email || '—';
 
   document.getElementById('invDetailTitle').textContent = `Investment — ${inv.pool_name}`;
+  /* Returns are posted on the pool, not written back to the investment, so the
+     rate and the value at maturity both have to be derived. */
+  const _invRate   = Utils.effectiveRate(inv);
+  const _invReturn = _invRate != null ? (parseFloat(inv.amount) || 0) * _invRate
+                                      : (inv.expected_return != null ? parseFloat(inv.expected_return) : null);
+  const _switchLbl = inv.switch_product_type
+    ? (Utils.productInfo(inv.switch_product_type)?.label || inv.switch_product_type)
+    : null;
+  const _matPlan   = Utils.maturityPlan(inv, _switchLbl);
+
   document.getElementById('invDetailBody').innerHTML = `
     <div class="grid-2 mb-16" style="gap:12px">
       <div class="info-row"><span class="info-row__label">Investor</span><span class="info-row__value td-strong">${_esc(inv.investor_name)}</span></div>
@@ -6181,27 +6192,63 @@ function viewInvestmentDetail(id) {
       <div class="info-row"><span class="info-row__label">Pool</span><span class="info-row__value">${_esc(inv.pool_name)}</span></div>
       <div class="info-row"><span class="info-row__label">Product</span><span class="info-row__value"><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></span></div>
       <div class="info-row"><span class="info-row__label">Invested Amount</span><span class="info-row__value td-gold fw-700">${Utils.rand(inv.amount)}</span></div>
-      <div class="info-row"><span class="info-row__label">Target Return</span><span class="info-row__value td-green">${Utils.rand(inv.expected_return)}</span></div>
-      <div class="info-row"><span class="info-row__label">Return Rate</span><span class="info-row__value">${Utils.pct(inv.annual_rate)} p.a.</span></div>
+      <div class="info-row"><span class="info-row__label">${_invRate != null && _invRate > 0 && !inv.annual_rate ? 'Return (posted)' : 'Target Return'}</span><span class="info-row__value td-green">${_invReturn != null ? Utils.rand(_invReturn) : '—'}</span></div>
+      <div class="info-row"><span class="info-row__label">Return Rate</span><span class="info-row__value">${_invRate != null ? Utils.pct(_invRate) + ' p.a.' : '—'}</span></div>
       <div class="info-row"><span class="info-row__label">Status</span><span class="info-row__value">${Utils.statusBadge(inv.status)}</span></div>
       <div class="info-row"><span class="info-row__label">Investment Date</span><span class="info-row__value td-muted">${Utils.date(inv.start_date)}</span></div>
       <div class="info-row"><span class="info-row__label">Maturity Date</span><span class="info-row__value td-muted">${Utils.date(inv.end_date)}</span></div>
       <div class="info-row"><span class="info-row__label">Payout Date</span><span class="info-row__value td-muted">${Utils.date(inv.payout_date) || 'Pending'}</span></div>
-      <div class="info-row"><span class="info-row__label">Maturity Instruction</span><span class="info-row__value">${Utils.statusBadge(inv.maturity_instruction || 'pending')}</span></div>
+      <div class="info-row"><span class="info-row__label">Maturity Instruction</span><span class="info-row__value">${_esc(_matPlan.label)}</span></div>
+    </div>
+
+    <!-- The enum alone does not say how much or into what. For a custom payout
+         or a switch that is the whole question. -->
+    <div class="panel" style="padding:12px;margin-bottom:14px;border-left:3px solid var(--gold)">
+      <div style="font-size:0.72rem;font-weight:700;color:var(--text-muted);letter-spacing:0.04em;margin-bottom:6px">AT MATURITY</div>
+      <div style="font-size:0.86rem;font-weight:600;margin-bottom:${_matPlan.payout != null || _matPlan.remainder != null ? '8px' : '0'}">${_esc(_matPlan.detail)}</div>
+      ${_matPlan.payout != null || _matPlan.remainder != null ? `
+      <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:0.78rem">
+        ${_matPlan.payout != null ? `<div><span style="color:var(--text-muted)">Paid to wallet</span> <strong style="color:#22c55e">${Utils.rand(_matPlan.payout)}</strong></div>` : ''}
+        ${_matPlan.remainder != null ? `<div><span style="color:var(--text-muted)">Carried forward</span> <strong style="color:var(--gold)">${Utils.rand(_matPlan.remainder)}</strong></div>` : ''}
+      </div>` : ''}
+      ${_invRate == null ? `<div style="font-size:0.68rem;color:var(--text-muted);margin-top:6px">No return posted on this pool yet — figures shown are capital only.</div>` : ''}
     </div>
 
     <div class="panel" style="padding:14px;margin-bottom:14px;background:var(--ci-bg-light,#F7F8FA)">
       <div style="font-size:0.8rem;font-weight:700;color:#1a1a1a;margin-bottom:8px"><i class="fa-solid fa-user-pen" style="color:var(--gold);margin-right:6px"></i>Set instruction on behalf of client</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <select id="admMatInstruction" class="form-select" style="flex:1;min-width:180px">
+        <select id="admMatInstruction" class="form-select" style="flex:1;min-width:180px" onchange="_admMatToggle()">
           <option value="reinvest"${inv.maturity_instruction === 'reinvest' ? ' selected' : ''}>Reinvest into next pool</option>
           <option value="payout_all"${inv.maturity_instruction === 'payout_all' ? ' selected' : ''}>Pay out all (capital + returns)</option>
           <option value="payout_return"${inv.maturity_instruction === 'payout_return' ? ' selected' : ''}>Pay out returns only</option>
+          <option value="payout_custom"${inv.maturity_instruction === 'payout_custom' ? ' selected' : ''}>Custom payout (rest reinvested)</option>
           <option value="switch_product"${inv.maturity_instruction === 'switch_product' ? ' selected' : ''}>Switch product</option>
+          <option value="custom_switch"${inv.maturity_instruction === 'custom_switch' ? ' selected' : ''}>Custom payout &amp; switch the rest</option>
         </select>
         <button class="btn btn--primary btn--sm" onclick='adminSetInstruction(${JSON.stringify(inv.id)})'>
           <i class="fa-solid fa-check"></i> Set Instruction
         </button>
+      </div>
+
+      <!-- The two custom instructions are meaningless without their companion
+           field, and the server refuses them without it. Shown only when the
+           chosen instruction actually needs them. -->
+      <div id="admMatAmountWrap" style="margin-top:8px;display:${(inv.maturity_instruction === 'payout_custom' || inv.maturity_instruction === 'custom_switch') ? '' : 'none'}">
+        <label class="form-label" style="font-size:0.72rem">Amount to pay out (R)</label>
+        <input type="number" id="admMatAmount" class="form-input" step="0.01" min="0"
+               placeholder="Amount" value="${inv.custom_payout_amount || ''}">
+        <div style="font-size:0.68rem;color:var(--text-muted);margin-top:3px">
+          Capped at capital plus any posted return${(() => { const _r = Utils.effectiveRate(inv); const _t = (parseFloat(inv.amount)||0) * (1 + (_r || 0)); return _r != null ? ` — about ${Utils.rand(_t)}` : ''; })()}.
+        </div>
+      </div>
+      <div id="admMatProductWrap" style="margin-top:8px;display:${(inv.maturity_instruction === 'switch_product' || inv.maturity_instruction === 'custom_switch') ? '' : 'none'}">
+        <label class="form-label" style="font-size:0.72rem">Switch into product</label>
+        <select id="admMatProduct" class="form-select">
+          ${(STATE.products || []).map(pr => {
+            const pt = pr.product_type || pr.id;
+            return `<option value="${_esc(pt)}"${inv.switch_product_type === pt ? ' selected' : ''}>${_esc(pr.label || pt)}</option>`;
+          }).join('') || '<option value="">No products available</option>'}
+        </select>
       </div>
       <div style="font-size:0.7rem;color:var(--text-muted);margin-top:6px">Admin submissions bypass the 17:00 client cut-off.</div>
     </div>
@@ -6223,13 +6270,38 @@ function viewInvestmentDetail(id) {
   Modal.open('investorDetailModal');
 }
 
+/* Show only the companion fields the chosen instruction actually needs. */
+function _admMatToggle() {
+  const v = document.getElementById('admMatInstruction')?.value || '';
+  const amt  = document.getElementById('admMatAmountWrap');
+  const prod = document.getElementById('admMatProductWrap');
+  if (amt)  amt.style.display  = (v === 'payout_custom' || v === 'custom_switch') ? '' : 'none';
+  if (prod) prod.style.display = (v === 'switch_product' || v === 'custom_switch') ? '' : 'none';
+}
+
 async function adminSetInstruction(id) {
   const sel = document.getElementById('admMatInstruction');
   const instruction = sel && sel.value;
   if (!instruction) return;
+
+  /* payout_custom and custom_switch carry an amount; switch_product and
+     custom_switch carry a target. The server rejects the combination without
+     them, so send them with the instruction rather than as a second write. */
+  const needsAmount  = instruction === 'payout_custom'  || instruction === 'custom_switch';
+  const needsProduct = instruction === 'switch_product' || instruction === 'custom_switch';
+  const amount  = needsAmount  ? parseFloat(document.getElementById('admMatAmount')?.value || '') : null;
+  const product = needsProduct ? (document.getElementById('admMatProduct')?.value || null) : null;
+
+  if (needsAmount && (!amount || amount <= 0)) { Toast.error('Enter a payout amount greater than zero'); return; }
+  if (needsProduct && !product)                { Toast.error('Choose a product to switch into');        return; }
+
   try {
     // Uses the dedicated endpoint; staff role bypasses the 17:00 client cut-off.
-    await API._fetch('POST', `investments/${id}/instruction`, { instruction });
+    await API._fetch('POST', `investments/${id}/instruction`, {
+      instruction,
+      custom_payout_amount: amount,
+      switch_product_type:  product,
+    });
     Toast.success('Maturity instruction set on behalf of the client');
     Modal.close('investorDetailModal');
     await loadInvestments();
