@@ -24,9 +24,9 @@
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
-  <link rel="stylesheet" href="../css/admin.css" />
+  <link rel="stylesheet" href="../css/admin.css?v=1" />
   <link rel="stylesheet" href="/css/portal.css?v=3" />
-  <link rel="stylesheet" href="/css/ci-theme.css" />
+  <link rel="stylesheet" href="/css/ci-theme.css?v=1" />
   <!-- sv-intelligence hidden -->
   <link rel="stylesheet" href="/css/portal-premium.css?v=4" />
   <!-- Payment modal must retain dark theme — isolate from ci-theme overrides -->
@@ -53,14 +53,14 @@
       anonymize_ip: false
     });
   </script>
-  <script src="../js/analytics.js"></script>
+  <script src="../js/analytics.js?v=1"></script>
 
   <!-- ── Capacitor native config injected by build.js ── -->
   <script>
     window.__SVC_NATIVE__ = true;
     window.__SVC_API_BASE__ = 'https://svcapital-production.up.railway.app/api/';
   </script>
-  <script src="/js/native.js"></script>
+  <script src="/js/native.js?v=1"></script>
   <link rel="stylesheet" href="/css/mobile-app.css?v=25">
   <!-- Kill viewFadeIn animation synchronously before first paint — prevents Android WebView blank screen -->
   <script>

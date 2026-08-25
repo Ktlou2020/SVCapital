@@ -310,17 +310,50 @@ app.use((req, res, next) => {
 
 /* ─── Static Frontend Files ─── */
 const STATIC_DIR = path.join(__dirname, '..');
+/* ─── Immutable caching for version-stamped assets ─────────────────────────
+   The HTML references its scripts and styles with a version query string
+   (js/portal.js?v=98) and CLAUDE.md requires that number to be bumped with
+   every change. That makes any URL carrying a ?v= immutable by construction:
+   its content cannot change without the URL changing too.
+
+   Without this, every one of those assets was served no-cache, so each launch
+   spent a conditional round-trip to Railway before a line of JS could run —
+   on portal.js that is 168KB gzipped gated behind a request that also has to
+   wait out a cold start. The version discipline was already being paid for
+   and bought nothing.
+
+   Deliberately keyed on the query string being present rather than on the
+   file extension: a request for the same file without a version still
+   revalidates, so the mobile service worker's unversioned precache entries
+   and any stray direct link keep their old behaviour and cannot get stuck on
+   a year-old copy.
+   ──────────────────────────────────────────────────────────────────────── */
+const IMMUTABLE_MAX_AGE = 31536000;   // one year, the maximum worth expressing
+
+app.use((req, res, next) => {
+  if (req.method === 'GET' && req.query && req.query.v && /\.(js|css)$/i.test(req.path)) {
+    res.locals._versionedAsset = true;
+  }
+  next();
+});
+
 app.use(express.static(STATIC_DIR, {
   index: 'index.html',
   setHeaders: (res, filePath) => {
-    // HTML files: always revalidate
+    // HTML files: always revalidate — they carry the version pointers, so a
+    // cached copy would keep pointing at superseded assets.
     if (/\.html$/.test(filePath)) {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
-    // JS and CSS files: revalidate (etag-based, no long cache)
     } else if (/\.(js|css)$/.test(filePath)) {
-      res.setHeader('Cache-Control', 'no-cache');
+      if (res.locals && res.locals._versionedAsset) {
+        // Version-stamped: cache hard, the next bump changes the URL.
+        res.setHeader('Cache-Control', `public, max-age=${IMMUTABLE_MAX_AGE}, immutable`);
+      } else {
+        // Unversioned: revalidate (etag-based, no long cache)
+        res.setHeader('Cache-Control', 'no-cache');
+      }
     // Static assets (images, fonts): cache for 1 day
     } else if (/\.(png|jpg|jpeg|gif|svg|ico|woff2?)$/.test(filePath)) {
       res.setHeader('Cache-Control', 'public, max-age=86400');
