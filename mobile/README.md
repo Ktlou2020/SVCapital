@@ -50,18 +50,27 @@ npm run add:ios      # macOS only
 
 ### 2. Copy native configs
 
-After running `cap add android` / `cap add ios`, copy these files into the generated projects:
+After running `cap add android` / `cap add ios`:
 
 ```bash
-# Android
-cp -r android-config/app/src/main/res/*               android/app/src/main/res/
-cp    android-config/app/src/main/AndroidManifest.xml  android/app/src/main/
-cp    android-config/variables.gradle                   android/variables.gradle
+# Android — one command, safe to re-run
+npm run apply:android
 
 # iOS — copy Info.plist and Privacy Manifest into Xcode project
 cp ios-config/App/App/Info.plist        ios/App/App/
 cp ios-config/App/App/PrivacyInfo.xcprivacy  ios/App/App/
 ```
+
+`apply:android` copies `res/`, `AndroidManifest.xml` and `variables.gradle`, then edits
+`android/app/build.gradle`: the guarded keystore loader, `signingConfigs` as a direct child
+of `android { }`, `signingConfig signingConfigs.release` on the release buildType, and the
+version from `android-config/version.json`. It reports what it changed and does nothing to
+anything already correct. `npm run open:android` and `npm run run:android` invoke it for you.
+
+> **Why a script and not a `cp`:** in the stock Capacitor `build.gradle`, `aaptOptions` sits
+> *inside* `defaultConfig` — so adding `signingConfigs` "after aaptOptions" lands it one level
+> too deep. Groovy resolves owner-first, so it still works and reports nothing. `npm run
+> check:android` detects this by brace depth; `apply:android` moves it back.
 
 > **Note:** `PrivacyInfo.xcprivacy` (Apple Privacy Manifest) is **required** for App Store
 > submissions since May 2024. After copying it, open Xcode → project navigator → right-click
@@ -112,12 +121,22 @@ cp android-config/uploadkeystore.jks android/app/uploadkeystore.jks
 cp android-config/key.properties.template android/key.properties
 # Then fill in the real storePassword, keyAlias, keyPassword values.
 
-# 3. Apply signing config to android/app/build.gradle
-# See android-config/signing-config.gradle.patch for exactly what to add/change.
+# 3. Wire the signing config into android/app/build.gradle
+npm run apply:android
 ```
 
-After editing `android/app/build.gradle`, the `release` build type will automatically
-use the upload key. **Never commit `key.properties` or `*.jks` to git.**
+Steps 1 and 2 are manual because neither file can be committed. Step 3 is not — see
+`android-config/signing-config.gradle.patch` for what it writes and why.
+
+**Never commit `key.properties` or `*.jks` to git.** If a keystore password is ever pasted
+somewhere it shouldn't be — a chat, a ticket, a log — rotate the upload key rather than
+hoping it went unread.
+
+#### Versioning
+
+`android-config/version.json` is the single source of truth; `apply:android` writes it into
+`build.gradle`. Bump `versionCode` for **every** upload — Play rejects a reused one, and only
+Play knows what has been used, so no local check can catch it.
 
 #### Build & upload
 
