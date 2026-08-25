@@ -93,13 +93,41 @@ app.use(cors({
 /* ─── Body & Cookie parsers ─── */
 // Raw body capture for Paystack webhook HMAC verification (must come before express.json)
 app.use('/api/payments/paystack/webhook', (req, res, next) => {
+  const MAX_WEBHOOK_BYTES = 1024 * 1024;   // Paystack payloads are a few KB
   const chunks = [];
-  req.on('data', chunk => chunks.push(chunk));
+  let size = 0;
+  let done  = false;
+  const finish = (err) => {
+    if (done) return;
+    done = true;
+    next(err);
+  };
+
+  req.on('data', chunk => {
+    if (done) return;
+    size += chunk.length;
+    if (size > MAX_WEBHOOK_BYTES) {
+      const err = new Error('Webhook payload too large');
+      err.status = 413;
+      return finish(err);
+    }
+    chunks.push(chunk);
+  });
+  /* Without these the request hangs forever on a dropped connection: no
+     response is ever sent and the handler below never runs. */
+  req.on('error', finish);
+  req.on('aborted', () => finish(new Error('Webhook request aborted')));
   req.on('end', () => {
+    if (done) return;
     const raw = Buffer.concat(chunks).toString('utf8');
     req.rawBody = raw;
     try { req.body = JSON.parse(raw || '{}'); } catch (_) { req.body = {}; }
-    next();
+    /* body-parser gates on req._body, not req.body. Without this flag the
+       global express.json() below re-reads a stream we have already drained
+       and throws "stream is not readable", so the webhook route never runs
+       and a real charge.success never credits the wallet. */
+    req._body = true;
+    finish();
   });
 });
 // Routes that embed base64 file data — raised body limit

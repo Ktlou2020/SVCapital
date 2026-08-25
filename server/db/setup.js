@@ -1848,9 +1848,19 @@ Withdraw at maturity or roll over to a new cycle',
       return;
     }
 
-    // First-time setup: COO account missing — password required
+    /* COO row missing. On a database that already holds users this is not a
+       first-time boot — the account was renamed or removed — and throwing here
+       aborts auto-setup on every single container start. Only a genuinely
+       empty users table needs COO_PASSWORD. */
     const cooPassword = process.env.COO_PASSWORD;
-    if (!cooPassword) throw new Error('[setup] COO_PASSWORD env var must be set before seeding the database');
+    if (!cooPassword) {
+      const { rows: c } = await pool.query('SELECT COUNT(*)::int AS n FROM users');
+      if (c[0].n > 0) {
+        console.warn(`⚠️  COO account not found but ${c[0].n} users exist — skipping seed. Set COO_PASSWORD to provision one.`);
+        return;
+      }
+      throw new Error('[setup] COO_PASSWORD env var must be set before seeding the database');
+    }
 
     console.log('🌱 Provisioning COO account…');
     const cooHash = await bcrypt.hash(cooPassword, 12);
