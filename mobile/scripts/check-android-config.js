@@ -107,6 +107,35 @@ function main() {
     notes.push('google-services.json missing from android/app/ — push notifications will not work');
   }
 
+  /* Release signing. A misplaced signingConfigs block still works — Groovy
+     closures resolve owner-first, so a call nested one level too deep falls
+     through to the android extension anyway — but it reads as though signing
+     were an aapt option, and the block below it is easy to get wrong. What
+     actually matters is that the release buildType references the config:
+     without that line the AAB is unsigned, debug builds are unaffected, and
+     nothing says a word until Play rejects the upload. */
+  if (gradle) {
+    const androidBlock = gradle.slice(gradle.indexOf('android {'));
+    const sigIdx  = androidBlock.indexOf('signingConfigs');
+    const aaptIdx = androidBlock.indexOf('aaptOptions');
+
+    if (sigIdx === -1) {
+      problems.push('no signingConfigs block in android/app/build.gradle — see android-config/signing-config.gradle.patch');
+    } else if (aaptIdx !== -1 && sigIdx > aaptIdx) {
+      // Crude but sufficient: is there a closing brace at aaptOptions' indent
+      // between the two? If not, signingConfigs is still inside it.
+      const between = androidBlock.slice(aaptIdx, sigIdx);
+      const closed  = /\n\s{4,8}\}\s*\n/.test(between);
+      if (!closed) {
+        notes.push('signingConfigs appears to be nested inside aaptOptions — it works, but it belongs directly inside android { }');
+      }
+    }
+
+    if (!/buildTypes[\s\S]{0,400}release[\s\S]{0,200}signingConfig\s+signingConfigs\.release/.test(gradle)) {
+      problems.push('release buildType does not set signingConfig signingConfigs.release — the release AAB will be unsigned and Play will reject it');
+    }
+  }
+
   const show = v => (v == null ? '(unset)' : String(v));
   console.log('[check:android] Android project vs android-config');
   for (const key of ['minSdkVersion', 'compileSdkVersion', 'targetSdkVersion']) {

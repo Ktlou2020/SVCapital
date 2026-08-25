@@ -12,6 +12,10 @@ def keystoreProperties = new Properties()
 keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 
 // ── ADD inside the `android { ... }` block ──
+// Directly inside it — a sibling of defaultConfig / buildTypes / aaptOptions,
+// NOT nested within any of them. Groovy resolves owner-first, so a block one
+// level too deep still works and gives no error, which makes it easy to leave
+// somewhere misleading. npm run check:android flags it.
 signingConfigs {
     release {
         keyAlias     keystoreProperties['keyAlias']
@@ -22,6 +26,9 @@ signingConfigs {
 }
 
 // ── UPDATE the existing buildTypes block inside `android { ... }` ──
+// The signingConfig line below is the one that actually matters. Without it
+// the release AAB is unsigned; debug builds are unaffected and nothing
+// complains until Play rejects the upload.
 buildTypes {
     release {
         signingConfig signingConfigs.release
@@ -29,3 +36,15 @@ buildTypes {
         proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
     }
 }
+
+// ── VERSIONING (android/app/build.gradle, inside defaultConfig) ──
+// Play requires versionCode to be strictly higher than anything already
+// uploaded to the track. Only Play knows what has been used, so bump it for
+// every upload and never reuse one.
+//
+//     versionCode 87          // was 86
+//     versionName "5.2"
+//
+// Keep versionName aligned with the iOS CFBundleShortVersionString in
+// mobile/ios-config/App/App/Info.plist, or the two stores will describe the
+// same release differently.
