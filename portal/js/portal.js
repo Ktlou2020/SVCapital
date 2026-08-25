@@ -1016,6 +1016,15 @@ function _timeGreeting() {
 function _animateNum(el, target, prefix = '', suffix = '', duration = 900) {
   if (!el) return;
   const safeTarget = (target == null || isNaN(Number(target))) ? 0 : Number(target);
+  /* Reduced motion: land on the value immediately. Besides the motion itself,
+     the count-up rewrites textContent every frame — inside a live region that
+     is a screen reader reading a balance sixty times a second. */
+  if (Utils.reducedMotion && Utils.reducedMotion()) {
+    el.textContent = prefix + Number(safeTarget).toLocaleString('en-US',
+      { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + suffix;
+    el.dataset.animated = safeTarget;
+    return;
+  }
   const start = parseFloat(el.dataset.animated || 0);
   const startTime = performance.now();
   const step = (now) => {

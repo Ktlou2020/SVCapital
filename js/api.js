@@ -511,6 +511,14 @@ const Utils = {
     return 'later';
   },
 
+  /* True when the viewer has asked for reduced motion. Consulted before any
+     animated count-up or chart transition; also stops a screen reader being fed
+     every intermediate frame of an animating balance. */
+  reducedMotion() {
+    try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; }
+    catch (_) { return false; }
+  },
+
   /* Format percentage */
   pct(rate, decimals = 2) {
     return (Number(rate) * 100).toFixed(decimals) + '%';
@@ -752,6 +760,12 @@ const Toast = {
   init() {
     this.container = document.createElement('div');
     this.container.className = 'toast-container';
+    /* Toasts are the primary feedback channel — every confirmation and every
+       failure arrives here — and until now they announced nothing to a screen
+       reader. polite so routine confirmations wait for a pause; individual
+       error toasts carry role="alert" below, which interrupts. */
+    this.container.setAttribute('aria-live', 'polite');
+    this.container.setAttribute('aria-atomic', 'false');
     document.body.appendChild(this.container);
   },
   show(message, type = 'info', duration, opts = {}) {
@@ -763,6 +777,8 @@ const Toast = {
     const icons = { success: 'fa-check-circle', error: 'fa-circle-xmark', info: 'fa-circle-info', warning: 'fa-triangle-exclamation' };
     const toast = document.createElement('div');
     toast.className = `toast toast--${type}`;
+    // Failures should not wait for a pause in speech.
+    if (type === 'error' || type === 'warning') toast.setAttribute('role', 'alert');
     const icon = document.createElement('i');
     icon.className = `fa-solid ${icons[type] || icons.info}`;
     const msg = document.createElement('span');

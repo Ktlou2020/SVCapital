@@ -94,7 +94,18 @@ async function runMonthlyStatements() {
   }
 }
 
+/* Disabled. Client statements were removed from the portal and both apps, so this
+   email was the only remaining delivery path and it fired on a schedule nobody was
+   choosing. Guarded here as well as at the call site in server/index.js, so
+   re-adding that call alone does not silently resume sending.
+
+   Set STATEMENT_EMAILS_ENABLED=true to arm it again. runMonthlyStatements is
+   exported unchanged and can still be invoked directly for a one-off run. */
 function startStatementCron() {
+  if (process.env.STATEMENT_EMAILS_ENABLED !== 'true') {
+    console.log('[statementCron] disabled — set STATEMENT_EMAILS_ENABLED=true to schedule it');
+    return;
+  }
   // Run on the 1st of every month at 07:00 SAST (05:00 UTC)
   cron.schedule('0 5 1 * *', runMonthlyStatements, { timezone: 'UTC' });
   console.log('[statementCron] Monthly statement cron scheduled (1st of month, 07:00 SAST)');

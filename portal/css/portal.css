@@ -2234,3 +2234,22 @@ body:not(.dark-mode) .prod-type-tile:hover:not(.active) {
     grid-template-columns: 1fr 1fr !important;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Reduced motion
+   Honours the viewer's OS-level setting. Animation is decorative
+   here — count-ups, view transitions, toast slide-ins, chart
+   tweens — so it is removed rather than shortened. Kept to a
+   near-zero duration rather than `none` so animationend and
+   transitionend listeners still fire and nothing waits forever.
+   ───────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
