@@ -5688,7 +5688,7 @@ async function loadUnmergeInvestments() {
 
   itemsEl.innerHTML = invs.map(i => {
     const name = i.investor_name || i.investor_id || '—';
-    const amt  = Utils.fmtCcy(i.amount);
+    const amt  = Utils.rand(i.amount);
     const date = i.start_date ? new Date(i.start_date).toLocaleDateString('en-ZA') : '—';
     return `<label style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-bottom:1px solid var(--border);cursor:pointer;font-size:0.83rem">
       <input type="checkbox" class="unmerge-inv-cb" value="${_esc(i.id)}" checked style="width:15px;height:15px;accent-color:#eda5ff">
@@ -5814,7 +5814,7 @@ async function loadMoveInvestmentsList() {
   itemsEl.innerHTML = invs.map(i => {
     const name  = i.investor_name || i.investor_id || '—';
     const saId  = i.sub_account_id || '—';
-    const amt   = Utils.fmtCcy(i.amount);
+    const amt   = Utils.rand(i.amount);
     const edate = i.end_date ? new Date(i.end_date).toLocaleDateString('en-ZA') : '—';
     const rate  = i.annual_rate ? `${Number(i.annual_rate).toFixed(2)}%` : '0%';
     return `<label style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-bottom:1px solid var(--border);cursor:pointer;font-size:0.82rem">
