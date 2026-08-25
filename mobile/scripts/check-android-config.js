@@ -15,8 +15,24 @@
  *   node scripts/check-android-config.js --warn   always exit 0, print loudly
  */
 
-const fs   = require('fs');
-const path = require('path');
+const fs     = require('fs');
+const path   = require('path');
+const blocks = require('./gradle-blocks');
+
+/* Name of the innermost block enclosing `pos`, for the error message — knowing
+   signingConfigs landed inside defaultConfig is what makes the fix obvious. */
+function enclosingBlockName(src, pos, from) {
+  const stack = [];
+  const NAME = /([A-Za-z_$][\w$]*)\s*\{$/;
+  for (let i = from; i < pos; i++) {
+    if (src[i] === '{') {
+      const m = NAME.exec(src.slice(Math.max(0, i - 60), i + 1));
+      stack.push(m ? m[1] : null);
+    } else if (src[i] === '}') stack.pop();
+  }
+  for (let i = stack.length - 1; i >= 0; i--) if (stack[i]) return stack[i];
+  return null;
+}
 
 const WARN_ONLY = process.argv.includes('--warn');
 const MOBILE    = path.resolve(__dirname, '..');
@@ -109,30 +125,40 @@ function main() {
 
   /* Release signing. A misplaced signingConfigs block still works — Groovy
      closures resolve owner-first, so a call nested one level too deep falls
-     through to the android extension anyway — but it reads as though signing
-     were an aapt option, and the block below it is easy to get wrong. What
-     actually matters is that the release buildType references the config:
-     without that line the AAB is unsigned, debug builds are unaffected, and
-     nothing says a word until Play rejects the upload. */
+     through to the android extension anyway — but nothing reports it, and the
+     next person to move code around loses signing silently.
+
+     This is checked by brace depth, not by looking for a closing brace between
+     aaptOptions and signingConfigs: that heuristic passes the exact case it
+     was written to catch, because aaptOptions *does* close. The block still
+     open is defaultConfig. */
   if (gradle) {
-    const androidBlock = gradle.slice(gradle.indexOf('android {'));
-    const sigIdx  = androidBlock.indexOf('signingConfigs');
-    const aaptIdx = androidBlock.indexOf('aaptOptions');
+    const android = blocks.findAndroidBlock(gradle);
+    if (!android) {
+      problems.push('could not find the `android { }` block in android/app/build.gradle');
+    } else {
+      const direct = blocks.findChildBlock(gradle, 'signingConfigs', android.open, android.end);
+      const any    = blocks.findAnyBlock(gradle, 'signingConfigs', android.open, android.end);
 
-    if (sigIdx === -1) {
-      problems.push('no signingConfigs block in android/app/build.gradle — see android-config/signing-config.gradle.patch');
-    } else if (aaptIdx !== -1 && sigIdx > aaptIdx) {
-      // Crude but sufficient: is there a closing brace at aaptOptions' indent
-      // between the two? If not, signingConfigs is still inside it.
-      const between = androidBlock.slice(aaptIdx, sigIdx);
-      const closed  = /\n\s{4,8}\}\s*\n/.test(between);
-      if (!closed) {
-        notes.push('signingConfigs appears to be nested inside aaptOptions — it works, but it belongs directly inside android { }');
+      if (!any) {
+        problems.push('no signingConfigs block in android/app/build.gradle — see android-config/signing-config.gradle.patch');
+      } else if (!direct) {
+        const inside = enclosingBlockName(gradle, any.open, android.open);
+        problems.push(
+          `signingConfigs is nested ${any.depth} level${any.depth === 1 ? '' : 's'} too deep` +
+          (inside ? ` (inside ${inside})` : '') +
+          ' — it belongs directly inside android { }. Groovy resolves owner-first so it still ' +
+          'works today, which is why nothing has complained. Run `npm run apply:android` to move it.');
       }
-    }
 
-    if (!/buildTypes[\s\S]{0,400}release[\s\S]{0,200}signingConfig\s+signingConfigs\.release/.test(gradle)) {
-      problems.push('release buildType does not set signingConfig signingConfigs.release — the release AAB will be unsigned and Play will reject it');
+      // The line that actually decides whether the AAB is signed.
+      const bt  = blocks.findChildBlock(gradle, 'buildTypes', android.open, android.end);
+      const rel = bt && blocks.findChildBlock(gradle, 'release', bt.open, bt.end);
+      if (!rel) {
+        problems.push('could not find buildTypes.release in android/app/build.gradle');
+      } else if (!/signingConfig\s+signingConfigs\.release/.test(gradle.slice(rel.open, rel.end))) {
+        problems.push('release buildType does not set signingConfig signingConfigs.release — the release AAB will be unsigned and Play will reject it');
+      }
     }
   }
 

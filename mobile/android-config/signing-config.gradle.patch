@@ -1,34 +1,53 @@
 // ─── SIGNING CONFIGURATION ──────────────────────────────────────────────────
-// Apply this to: android/app/build.gradle
+// You should not need to apply this by hand. `npm run apply:android` writes
+// all of it into android/app/build.gradle, in the right places, and is safe to
+// re-run. This file is the reference for what it writes and why.
 //
-// 1. Place uploadkeystore.jks in android/app/
-// 2. Place key.properties (filled from key.properties.template) in android/
-// 3. Add the blocks below to android/app/build.gradle
+// What you DO still have to do yourself, because neither can be committed:
+//
+//   1. cp android-config/uploadkeystore.jks android/app/uploadkeystore.jks
+//   2. cp android-config/key.properties.template android/key.properties
+//      …then fill in the real storePassword, keyAlias, keyPassword.
+//
+// Verify with `npm run check:android` before building.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── ADD at the TOP of android/app/build.gradle (before the `android {` block) ──
+// ── ABOVE the `android { }` block ──
+// Guarded on exists(): a missing key.properties must not break debug builds or
+// a fresh clone. A bare FileInputStream throws.
 def keystorePropertiesFile = rootProject.file("key.properties")
 def keystoreProperties = new Properties()
-keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
 
-// ── ADD inside the `android { ... }` block ──
-// Directly inside it — a sibling of defaultConfig / buildTypes / aaptOptions,
-// NOT nested within any of them. Groovy resolves owner-first, so a block one
-// level too deep still works and gives no error, which makes it easy to leave
-// somewhere misleading. npm run check:android flags it.
+// ── DIRECTLY inside `android { }` ──
+// A sibling of defaultConfig / buildTypes — NOT nested within either.
+//
+// This is the step that has gone wrong before. In the stock Capacitor
+// build.gradle, aaptOptions sits INSIDE defaultConfig, so adding this block
+// "after aaptOptions" lands it one level too deep. Groovy closures resolve
+// owner-first, so the call still falls through to the android extension: it
+// works, nothing errors, and nothing warns. The only symptom appears later,
+// when someone moves code and signing silently stops applying.
+//
+// `npm run check:android` now detects this by brace depth and names the block
+// it ended up inside. `npm run apply:android` moves it back.
 signingConfigs {
     release {
-        keyAlias     keystoreProperties['keyAlias']
-        keyPassword  keystoreProperties['keyPassword']
-        storeFile    file(keystoreProperties['storeFile'])
-        storePassword keystoreProperties['storePassword']
+        if (keystorePropertiesFile.exists()) {
+            keyAlias      keystoreProperties['keyAlias']
+            keyPassword   keystoreProperties['keyPassword']
+            storeFile     file(keystoreProperties['storeFile'])
+            storePassword keystoreProperties['storePassword']
+        }
     }
 }
 
-// ── UPDATE the existing buildTypes block inside `android { ... }` ──
-// The signingConfig line below is the one that actually matters. Without it
-// the release AAB is unsigned; debug builds are unaffected and nothing
-// complains until Play rejects the upload.
+// ── UPDATE the existing buildTypes block inside `android { }` ──
+// The signingConfig line below is the one that actually decides whether the
+// AAB is signed. Without it the release build is unsigned; debug builds are
+// unaffected and nothing complains until Play rejects the upload.
 buildTypes {
     release {
         signingConfig signingConfigs.release
@@ -37,14 +56,16 @@ buildTypes {
     }
 }
 
-// ── VERSIONING (android/app/build.gradle, inside defaultConfig) ──
+// ── VERSIONING ──
+// Set in android-config/version.json, written into defaultConfig by
+// apply:android. android/ is gitignored, so version.json is the only copy that
+// survives a fresh checkout.
+//
 // Play requires versionCode to be strictly higher than anything already
-// uploaded to the track. Only Play knows what has been used, so bump it for
-// every upload and never reuse one.
+// uploaded to the track. Only Play knows what has been used — bump it for
+// every upload and never reuse one. check:android cannot verify this.
 //
-//     versionCode 87          // was 86
-//     versionName "5.2"
-//
-// Keep versionName aligned with the iOS CFBundleShortVersionString in
-// mobile/ios-config/App/App/Info.plist, or the two stores will describe the
-// same release differently.
+// versionName is the user-visible string. It currently differs from the iOS
+// CFBundleShortVersionString in mobile/ios-config/App/App/Info.plist; see the
+// README before changing either, because an approved iOS marketing version is
+// a closed train and cannot accept further uploads.
