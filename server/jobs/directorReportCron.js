@@ -74,7 +74,11 @@ async function runDirectorReport() {
 }
 
 function startDirectorReportCron() {
-  cron.schedule('0 7 1 * *', runDirectorReport, { timezone: 'UTC' });
+  cron.schedule('0 7 1 * *', () => {
+    // Passed bare, a rejection from this async fn is an unhandled
+    // rejection, which ends the process on Node 20.
+    runDirectorReport().catch(e => console.error('[directorReport] cron error:', e.message));
+  }, { timezone: 'UTC' });
   console.log('[directorReportCron] Scheduled: 1st of month at 07:00 UTC (09:00 SAST)');
 }
 

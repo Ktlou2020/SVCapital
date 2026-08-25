@@ -59,7 +59,11 @@ async function runWithdrawalAlert() {
 
 function startWithdrawalAlertCron() {
   // 10:00, 13:00, 16:00 SAST (UTC+2) = 08:00, 11:00, 14:00 UTC
-  cron.schedule('0 8,11,14 * * *', runWithdrawalAlert, { timezone: 'UTC' });
+  cron.schedule('0 8,11,14 * * *', () => {
+    // Passed bare, a rejection from this async fn is an unhandled
+    // rejection, which ends the process on Node 20.
+    runWithdrawalAlert().catch(e => console.error('[withdrawalAlertCron] cron error:', e.message));
+  }, { timezone: 'UTC' });
   console.log('[withdrawalAlertCron] Scheduled: 10:00, 13:00, 16:00 SAST daily');
 }
 

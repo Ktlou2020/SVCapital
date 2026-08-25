@@ -42,8 +42,10 @@ async function runChangeRequestSummary() {
 }
 
 function startChangeRequestSummaryCron() {
-  cron.schedule('0 8 * * *', async () => {
-    await runChangeRequestSummary();
+  cron.schedule('0 8 * * *', () => {
+    // Unguarded, a rejection here is an unhandled rejection, which ends the
+    // process on Node 20 — a failed summary e-mail must not restart the app.
+    runChangeRequestSummary().catch(e => console.error('[change-requests] cron error:', e.message));
   }, { timezone: 'Africa/Johannesburg' });
   console.log('[change-requests] scheduled: daily at 08:00 SAST — change request summary');
 }

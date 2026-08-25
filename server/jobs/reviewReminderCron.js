@@ -69,8 +69,9 @@ async function runReviewReminders() {
 }
 
 function startReviewReminderCron() {
-  cron.schedule('0 8 * * *', async () => {
-    await runReviewReminders();
+  cron.schedule('0 8 * * *', () => {
+    // See changeRequestSummaryCron — an unguarded rejection ends the process.
+    runReviewReminders().catch(e => console.error('[pe-reviews] cron error:', e.message));
   }, { timezone: 'Africa/Johannesburg' });
   console.log('[pe-reviews] scheduled: daily at 08:00 SAST — review reminders');
 }

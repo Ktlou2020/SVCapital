@@ -141,7 +141,11 @@ async function runPayoutProcessing() {
 
 function startPayoutCron() {
   // Daily at 05:30 UTC (07:30 SAST)
-  cron.schedule('30 5 * * *', runPayoutProcessing, { timezone: 'UTC' });
+  cron.schedule('30 5 * * *', () => {
+    // Passed bare, a rejection from this async fn is an unhandled
+    // rejection, which ends the process on Node 20.
+    runPayoutProcessing().catch(e => console.error('[payoutCron] cron error:', e.message));
+  }, { timezone: 'UTC' });
   console.log('[payoutCron] Scheduled: daily at 05:30 UTC (07:30 SAST)');
 }
 

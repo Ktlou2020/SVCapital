@@ -107,7 +107,11 @@ function startStatementCron() {
     return;
   }
   // Run on the 1st of every month at 07:00 SAST (05:00 UTC)
-  cron.schedule('0 5 1 * *', runMonthlyStatements, { timezone: 'UTC' });
+  cron.schedule('0 5 1 * *', () => {
+    // Passed bare, a rejection from this async fn is an unhandled
+    // rejection, which ends the process on Node 20.
+    runMonthlyStatements().catch(e => console.error('[statementCron] cron error:', e.message));
+  }, { timezone: 'UTC' });
   console.log('[statementCron] Monthly statement cron scheduled (1st of month, 07:00 SAST)');
 }
 

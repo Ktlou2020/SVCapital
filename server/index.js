@@ -234,18 +234,39 @@ app.use('/api/change-requests',require('./routes/changeRequests'));
    (Railway healthcheck kills the container on any non-2xx response.)
    ──────────────────────────────────────────────────────────────────────── */
 app.get('/api/health', async (req, res) => {
+  let db = false, dbError = null;
   try {
     const pool = require('./db/pool');
     await pool.query('SELECT 1');
-    res.status(200).json({
-      status: 'ok',
-      db:     true,
-      ts:     new Date().toISOString(),
-      env:    process.env.NODE_ENV || 'development',
-    });
+    db = true;
   } catch (err) {
-    console.error('[health] DB check failed:', err.message);
-    return res.status(503).json({ status: 'error', db: false });
+    dbError = err.message;
+    console.error('[health] DB check failed (still reporting 200 — liveness, not readiness):', err.message);
+  }
+  /* Deliberately 200 even when the database is unreachable. This path is wired
+     to railway.toml healthcheckPath, and Railway kills the container on any
+     non-2xx. Restarting the app cannot fix a database that is down — it just
+     drops every in-flight request, empties the connection pool and comes back
+     to the same failure, which is a restart loop rather than a recovery. Use
+     /api/health/ready for the readiness signal that is allowed to fail. */
+  res.status(200).json({
+    status: db ? 'ok' : 'degraded',
+    db,
+    ...(dbError ? { dbError } : {}),
+    ts:  new Date().toISOString(),
+    env: process.env.NODE_ENV || 'development',
+  });
+});
+
+/* Readiness — same checks, but honest status codes. Safe for uptime monitors
+   and load balancers because nothing here can terminate the container. */
+app.get('/api/health/ready', async (req, res) => {
+  try {
+    const pool = require('./db/pool');
+    await pool.query('SELECT 1');
+    res.status(200).json({ status: 'ok', db: true, ts: new Date().toISOString() });
+  } catch (err) {
+    res.status(503).json({ status: 'error', db: false, dbError: err.message });
   }
 });
 
@@ -418,8 +439,24 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
 });
 
 /* ─── Graceful Shutdown ─── */
-async function shutdown(signal) {
+let _shuttingDown = false;
+
+async function shutdown(signal, code = 0) {
+  // SIGTERM followed by SIGKILL, or a signal during an exception shutdown,
+  // would otherwise call server.close() twice and error on the second pass.
+  if (_shuttingDown) return;
+  _shuttingDown = true;
+
+  const mb  = n => Math.round(n / 1048576);
+  const mem = process.memoryUsage();
   console.log(`\n[${signal}] Graceful shutdown initiated…`);
+  /* Printed so a restart can be attributed after the fact rather than guessed
+     at. A container that dies seconds after boot with low rss was stopped by
+     the platform (deploy, replica cycle, eviction); one that dies with rss up
+     against the plan's memory limit is being killed for memory. Without this
+     line every restart looks identical in the log. */
+  console.log(`[shutdown] uptime ${Math.round(process.uptime())}s · rss ${mb(mem.rss)}MB · heap ${mb(mem.heapUsed)}/${mb(mem.heapTotal)}MB`);
+
   server.close(async () => {
     console.log('[shutdown] HTTP server closed');
     try {
@@ -429,13 +466,35 @@ async function shutdown(signal) {
     } catch (e) {
       console.error('[shutdown] DB pool close error:', e.message);
     }
-    process.exit(0);
+    process.exit(code);
   });
   // Force exit after 15 seconds if shutdown stalls
-  setTimeout(() => { console.error('[shutdown] Forced exit after timeout'); process.exit(1); }, 15000);
+  setTimeout(() => { console.error('[shutdown] Forced exit after timeout'); process.exit(code || 1); }, 15000);
 }
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT',  () => shutdown('SIGINT'));
+
+/* ─── Process-level failure handling ───────────────────────────────────────
+   Node 20 terminates the process on an unhandled promise rejection. This
+   service fires a lot of promises it never awaits — cron ticks, e-mail sends,
+   AML checks, webhook follow-up — so one stray rejection in a background job
+   takes down every in-flight request and Railway restarts the container.
+   A background failure is not a reason to drop live traffic: log it loudly,
+   with a stack, and keep serving.
+
+   An uncaught exception is a different case — the process may be in an
+   inconsistent state — so there we do exit, but say why first and drain
+   cleanly instead of dying mid-request.
+   ──────────────────────────────────────────────────────────────────────── */
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection] a background promise rejected and was not caught:');
+  console.error(reason instanceof Error ? (reason.stack || reason.message) : reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err?.stack || err?.message || err);
+  shutdown('uncaughtException', 1);
+});
 
 module.exports = app;
