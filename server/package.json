@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
+    "check:webhook": "node scripts/check-webhook-chain.cjs",
     "migrate": "node db/migrate.js",
     "seed": "node db/seed.js"
   },
