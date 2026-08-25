@@ -41,13 +41,22 @@ function validateInstruction(instruction, amount, productType) {
   return null;
 }
 
+const rand = v => `R${Number(v || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
 /* The UI caps the custom payout at capital + posted return, and only once a
    return has actually been posted. Mirror that here so the cap is not merely a
-   suggestion made by an input element the caller controls. */
-function payoutExceedsInvestment(inv, amount) {
+   suggestion made by an input element the caller controls.
+   Returns the ceiling, or null when no return has been posted and so no cap
+   applies — the caller needs the figure to say what went wrong. */
+function investmentCeiling(inv) {
   const posted = Number(inv.actual_return_amount ?? inv.actual_return ?? 0);
-  if (!posted) return false;                       // no posted return yet — no ceiling
-  const ceiling = Number(inv.amount || 0) + posted;
+  if (!posted) return null;
+  return Number(inv.amount || 0) + posted;
+}
+
+function payoutExceedsInvestment(inv, amount) {
+  const ceiling = investmentCeiling(inv);
+  if (ceiling === null) return false;
   return Number(amount) > ceiling + 0.005;         // tolerate cent rounding
 }
 
@@ -101,7 +110,11 @@ router.post('/:id/instruction', requireAuth, async (req, res) => {
 
     if (NEEDS_AMOUNT.includes(instruction) && payoutExceedsInvestment(inv, custom_payout_amount)) {
       await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'Payout amount exceeds the value of this investment.' });
+      // Name both figures: "exceeds the value" alone leaves the client guessing
+      // what the ceiling is and re-typing until something sticks.
+      return res.status(400).json({
+        error: `${rand(custom_payout_amount)} is more than this investment is worth (${rand(investmentCeiling(inv))}).`,
+      });
     }
 
     await client.query(
@@ -214,10 +227,17 @@ router.post('/pool/:poolId/instruction', requireAuth, async (req, res) => {
     }
 
     if (NEEDS_AMOUNT.includes(instruction)) {
-      const over = invs.find(i => payoutExceedsInvestment(i, custom_payout_amount));
-      if (over) {
+      const blocked = invs.filter(i => payoutExceedsInvestment(i, custom_payout_amount));
+      if (blocked.length) {
         await client.query('ROLLBACK');
-        return res.status(400).json({ error: 'Payout amount exceeds the value of one of these investments.' });
+        /* Name the smallest ceiling, and restate that the amount lands on each
+           investment. That per-investment behaviour is the reason the number
+           looked reasonable to whoever typed it, so the error is the right
+           place to say it rather than leaving them to re-type blind. */
+        const smallest = Math.min(...blocked.map(investmentCeiling));
+        return res.status(400).json({
+          error: `${rand(custom_payout_amount)} is applied to each investment. The smallest in this pool is worth ${rand(smallest)}, so it cannot pay out that much.`,
+        });
       }
     }
 
