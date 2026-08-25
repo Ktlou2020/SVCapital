@@ -1796,7 +1796,7 @@ function renderMyInvestmentCards() {
           <div class="mic-stat"><span class="mic-stat__label">Start Date</span><span class="mic-stat__value">${Utils.date(_invStartDate)}</span></div>
           <div class="mic-stat"><span class="mic-stat__label">Maturity Date</span><span class="mic-stat__value">${Utils.date(inv.maturity_date)}</span></div>
           ${isPaidOut ? `
-          <div class="mic-stat"><span class="mic-stat__label">Return Rate</span><span class="mic-stat__value">${Utils.pct(inv.annual_rate || inv.expected_return_rate)}</span></div>
+          <div class="mic-stat"><span class="mic-stat__label">Return Rate</span><span class="mic-stat__value">${(() => { const _r = Utils.effectiveRate(inv); return _r != null ? Utils.pct(_r) : '—'; })()}</span></div>
           <div class="mic-stat"><span class="mic-stat__label">Capital + Return</span><span class="mic-stat__value" style="color:var(--green)">${Utils.rand(totalAmount + totalReturn)}</span></div>
           ` : posted ? `
           <div class="mic-stat"><span class="mic-stat__label">Actual Rate</span><span class="mic-stat__value" style="color:var(--green)">${Utils.pct(posted.rate)}</span></div>
@@ -7827,7 +7827,7 @@ function generateInvestmentCertificate(invId) {
         <tr><td style="padding:6px 0;color:#6b7280">Investor ID</td><td style="font-weight:700">${investor.id}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Investment Pool</td><td style="font-weight:700">${inv.pool_name||pool.name||'—'}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Amount Invested</td><td style="font-weight:700;color:#fec24f;font-size:16px">${Utils.rand(inv.amount)}</td></tr>
-        <tr><td style="padding:6px 0;color:#6b7280">Annual Rate</td><td style="font-weight:700">${Utils.pct(inv.annual_rate||inv.expected_return_rate)}</td></tr>
+        <tr><td style="padding:6px 0;color:#6b7280">Annual Rate</td><td style="font-weight:700">${(() => { const _r = Utils.effectiveRate({ ...inv, pool_actual_rate: inv.pool_actual_rate ?? pool.actual_rate }); return _r != null ? Utils.pct(_r) : '—'; })()}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Target Return</td><td style="font-weight:700;color:#22c55e">${Utils.rand(inv.expected_return_amount||inv.expected_return)}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Investment Date</td><td style="font-weight:700">${Utils.date(inv.investment_date||inv.start_date)}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Maturity Date</td><td style="font-weight:700">${Utils.date(inv.maturity_date||inv.end_date)}</td></tr>
@@ -9157,8 +9157,11 @@ function _renderAnalyticsKPIs() {
     : 0;
   // Weighted-average annual rate across all investments (contracted rate × amount)
   const totalAmt = all.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+  // effectiveRate, not annual_rate: a pool-level posted return leaves the
+  // investment's own rate at "0.0000" (truthy), which zeroed its contribution
+  // and dragged the whole weighted average down.
   const weightedRate = totalAmt > 0
-    ? all.reduce((s, i) => s + (parseFloat(i.annual_rate || i.expected_return_rate || 0)) * (parseFloat(i.amount) || 0), 0) / totalAmt
+    ? all.reduce((s, i) => s + (Utils.effectiveRate(i) || 0) * (parseFloat(i.amount) || 0), 0) / totalAmt
     : 0;
   const irr = weightedRate > 0 ? weightedRate
     : (moic > 0 && avgDays > 0 ? (Math.pow(moic, 365 / avgDays) - 1) : 0);
@@ -9295,11 +9298,15 @@ function _renderAnalyticsTimeline() {
     const days    = (!isNaN(start) && !isNaN(end)) ? Math.max(0, Math.round((end - start) / 86400000)) : (i.term_days || '—');
     const status  = (pool.status === 'matured' || pool.status === 'paid_out') ? 'matured' : (i.status || pool.status);
     const sc      = statusMeta(status);
-    const isMatured   = status === 'matured' || status === 'paid_out';
-    const actualRate  = parseFloat(pool.actual_rate || i.pool_actual_rate || 0);
-    const targetRate  = parseFloat(pool.annual_rate || i.annual_rate || i.expected_return_rate || 0);
-    const rateVal     = isMatured && actualRate > 0 ? actualRate : targetRate;
-    const rateLbl     = isMatured && actualRate > 0 ? 'Return Achieved' : 'Target Return';
+    // Returns are posted while a pool is still running, not only once it
+    // matures — gating this on isMatured hid a real, posted figure behind the
+    // target rate on every active investment.
+    const _num        = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
+    const actualRate  = _num(i.pool_actual_rate) || _num(pool.actual_rate);
+    const targetRate  = _num(pool.annual_rate) || _num(i.annual_rate) || _num(i.expected_return_rate);
+    const posted      = actualRate > 0;
+    const rateVal     = posted ? actualRate : targetRate;
+    const rateLbl     = posted ? 'Return Achieved' : 'Target Return';
     return `
       <div class="atl-card">
         <div class="atl-card__head">
@@ -9308,7 +9315,7 @@ function _renderAnalyticsTimeline() {
         </div>
         <div class="atl-card__figures">
           <div><span class="atl-card__k">Invested</span><span class="atl-card__v">R ${capital.toLocaleString('en-ZA')}</span></div>
-          <div><span class="atl-card__k">${rateLbl}</span><span class="atl-card__v" style="color:${isMatured && actualRate > 0 ? '#eda5ff' : '#16a34a'}">${Utils.pct(rateVal)}</span></div>
+          <div><span class="atl-card__k">${rateLbl}</span><span class="atl-card__v" style="color:${posted ? '#eda5ff' : '#16a34a'}">${Utils.pct(rateVal)}</span></div>
           <div><span class="atl-card__k">Duration</span><span class="atl-card__v">${typeof days === 'number' ? days + ' d' : days}</span></div>
         </div>
         <div class="atl-card__dates">
@@ -9331,7 +9338,7 @@ function updateWealthProjection() {
 }
 
 function exportAnalyticsCSV() {
-  const rows = [['Pool', 'Invested (R)', 'Target Return (% p.a.)', 'Start', 'End', 'Days', 'Status']];
+  const rows = [['Pool', 'Invested (R)', 'Return (% p.a.)', 'Rate Basis', 'Start', 'End', 'Days', 'Status']];
   PORTAL.investments.forEach(i => {
     const pool = (PORTAL.pools || []).find(p => p.id === i.pool_id) || {};
     const fmt = v => v ? new Date(v).toLocaleDateString('en-ZA') : '';
@@ -9343,7 +9350,14 @@ function exportAnalyticsCSV() {
     const status = (pool.status === 'matured' || pool.status === 'paid_out') ? 'matured' : (i.status || pool.status || '');
     rows.push([
       pool.name || i.pool_name || '', parseFloat(i.amount) || 0,
-      Utils.pct(pool.annual_rate || i.annual_rate || i.expected_return_rate || 0),
+      ...(() => {
+        // Mirror the timeline card beside it: a posted return wins over the
+        // target, and the basis is named so the two columns can't be confused.
+        const n = v => { const x = parseFloat(v); return Number.isFinite(x) ? x : 0; };
+        const actual = n(i.pool_actual_rate) || n(pool.actual_rate);
+        if (actual > 0) return [Utils.pct(actual), 'Achieved'];
+        return [Utils.pct(n(pool.annual_rate) || n(i.annual_rate) || n(i.expected_return_rate)), 'Target'];
+      })(),
       fmt(startVal), fmt(endVal), days, status,
     ]);
   });

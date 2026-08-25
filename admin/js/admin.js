@@ -924,7 +924,10 @@ function renderRecentInvestments() {
       </div></td>
       <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
       <td class="td-gold fw-700 clip">${Utils.rand(inv.amount)}</td>
-      <td class="td-green clip">${Utils.pct(inv.annual_rate || inv.expected_return_rate)}</td>
+      <td class="td-green clip">${(() => {
+        const _r = Utils.effectiveRate({ ...inv, pool_actual_rate: inv.pool_actual_rate ?? pool?.actual_rate });
+        return _r != null ? Utils.pct(_r) : '—';
+      })()}</td>
       <td>${Utils.statusBadge(inv.status)}</td>
       <td class="td-muted clip">${Utils.date(inv.start_date || inv.created_at)}</td>
     </tr>`;
@@ -5092,7 +5095,7 @@ async function viewPoolInvestors(poolId) {
     });
     if (!res.ok) throw new Error('Failed to load');
     const { investors, summary } = await res.json();
-    _poolInvestorsSnapshot = { investors, summary, poolName: pool.name };
+    _poolInvestorsSnapshot = { investors, summary, poolName: pool.name, poolActualRate: pool.actual_rate };
 
     const statusColor = { active:'badge--green', matured:'badge--purple', paid_out:'badge--blue', cancelled:'badge--red' };
 
@@ -5219,7 +5222,7 @@ function downloadPoolCsv() {
     Toast.error('No data to export');
     return;
   }
-  const { investors, poolName } = _poolInvestorsSnapshot;
+  const { investors, poolName, poolActualRate } = _poolInvestorsSnapshot;
   const PLATFORM_FEE_PCT = 0.01;
 
   const headers = ['Investor','Email','Account ID','Sub Account','Gross Amount','Upfront Fee','Platform Fee','EVA','Net Amount','Annual Rate','Status','Start Date','Maturity Date','Maturity Instruction','Source'];
@@ -5240,7 +5243,10 @@ function downloadPoolCsv() {
       platformFee.toFixed(2),
       (r.eva_contribution || 0).toFixed(2),
       (r.net_amount || 0).toFixed(2),
-      r.annual_rate ? (parseFloat(r.annual_rate) * 100).toFixed(2) + '%' : '0.00%',
+      (() => {
+        const _r = Utils.effectiveRate({ ...r, pool_actual_rate: r.pool_actual_rate ?? poolActualRate });
+        return _r != null ? (_r * 100).toFixed(2) + '%' : '';
+      })(),
       r.investment_status || '',
       r.start_date ? r.start_date.slice(0, 10) : '',
       r.end_date   ? r.end_date.slice(0, 10)   : '',
@@ -5817,7 +5823,10 @@ async function loadMoveInvestmentsList() {
     const saId  = i.sub_account_id || '—';
     const amt   = Utils.rand(i.amount);
     const edate = i.end_date ? new Date(i.end_date).toLocaleDateString('en-ZA') : '—';
-    const rate  = i.annual_rate ? `${Number(i.annual_rate).toFixed(2)}%` : '0%';
+    // Was Number(annual_rate).toFixed(2) + '%' — the rate is a fraction, so
+    // 0.0213 rendered as "0.02%" instead of 2.13%. Utils.pct does the ×100.
+    const _r    = Utils.effectiveRate(i);
+    const rate  = _r != null ? Utils.pct(_r) : '—';
     return `<label style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-bottom:1px solid var(--border);cursor:pointer;font-size:0.82rem">
       <input type="checkbox" class="move-inv-cb" value="${_esc(i.id)}" checked style="width:15px;height:15px;accent-color:#eda5ff;flex-shrink:0">
       <span style="min-width:120px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(name)}">${_esc(name)}</span>
@@ -6025,8 +6034,11 @@ async function loadInvestments() {
 function renderInvestmentStats() {
   const d = STATE.investments;
   const active = d.filter(i => i.status === 'active');
-  const withRate = active.filter(i => i.annual_rate > 0);
-  const avgRate = withRate.length ? withRate.reduce((s,i) => s+(parseFloat(i.annual_rate)||0), 0) / withRate.length : 0;
+  // Rated on the effective rate, not annual_rate alone: an investment whose
+  // return is posted at pool level carries 0 of its own and was being dropped
+  // from the average entirely.
+  const withRate = active.map(i => Utils.effectiveRate(i)).filter(r => r != null && r > 0);
+  const avgRate = withRate.length ? withRate.reduce((s, r) => s + r, 0) / withRate.length : 0;
   const activeCapital = active.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
   document.getElementById('inv-total').textContent = d.length.toLocaleString();
   document.getElementById('inv-active').textContent = active.length.toLocaleString();
@@ -6192,7 +6204,7 @@ function viewInvestmentDetail(id) {
       <div class="info-row"><span class="info-row__label">Pool</span><span class="info-row__value">${_esc(inv.pool_name)}</span></div>
       <div class="info-row"><span class="info-row__label">Product</span><span class="info-row__value"><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></span></div>
       <div class="info-row"><span class="info-row__label">Invested Amount</span><span class="info-row__value td-gold fw-700">${Utils.rand(inv.amount)}</span></div>
-      <div class="info-row"><span class="info-row__label">${_invRate != null && _invRate > 0 && !inv.annual_rate ? 'Return (posted)' : 'Target Return'}</span><span class="info-row__value td-green">${_invReturn != null ? Utils.rand(_invReturn) : '—'}</span></div>
+      <div class="info-row"><span class="info-row__label">${_invRate != null && _invRate > 0 && !(parseFloat(inv.annual_rate) > 0) ? 'Return (posted)' : 'Target Return'}</span><span class="info-row__value td-green">${_invReturn != null ? Utils.rand(_invReturn) : '—'}</span></div>
       <div class="info-row"><span class="info-row__label">Return Rate</span><span class="info-row__value">${_invRate != null ? Utils.pct(_invRate) + ' p.a.' : '—'}</span></div>
       <div class="info-row"><span class="info-row__label">Status</span><span class="info-row__value">${Utils.statusBadge(inv.status)}</span></div>
       <div class="info-row"><span class="info-row__label">Investment Date</span><span class="info-row__value td-muted">${Utils.date(inv.start_date)}</span></div>
@@ -9584,7 +9596,7 @@ function exportInvestmentsCSV() {
   const headers = ['ID','Investor ID','Pool','Product','Amount','Rate','Status','Start Date','End Date','Maturity Instruction'];
   const rows = [headers, ...STATE.investments.map(i => [
     i.id, i.investor_id, i.pool_name||'', i.product_type, i.amount,
-    i.annual_rate||'', i.status, Utils.date(i.start_date), Utils.date(i.end_date), i.maturity_instruction||''
+    Utils.effectiveRate(i) ?? '', i.status, Utils.date(i.start_date), Utils.date(i.end_date), i.maturity_instruction||''
   ])];
   _downloadCSV(rows, `investments-${new Date().toISOString().slice(0,10)}.csv`);
   Toast.success(`Exported ${STATE.investments.length} investments`);
@@ -11055,7 +11067,8 @@ function _buildTimelineEvents(inv, invsts, txns) {
   invsts.forEach(i => {
     const poolLabel = i.pool_name || i.pool_id || 'Pool';
     const amt = Utils.rand(i.amount || 0);
-    const rate = i.annual_rate ? ` at ${Utils.pct(i.annual_rate)}` : '';
+    const _r   = Utils.effectiveRate(i);
+    const rate = _r != null ? ` at ${Utils.pct(_r)}` : '';
     if (i.start_date || i.investment_date) {
       events.push({ date: i.start_date || i.investment_date, icon: 'fa-seedling', color: '#fec24f', text: `Investment started — ${poolLabel} ${amt}${rate}` });
     }
@@ -13750,12 +13763,12 @@ function _openAccountStatementWindow(data) {
     return { reinvest:'Reinvest', withdraw:'Withdraw', partial_withdraw:'Partial Withdraw', rollover:'Roll Over' }[raw] || (raw ? raw.replace(/_/g,' ') : '—');
   };
   const getRate = i => {
-    const r = parseFloat(i.annual_rate);
-    return r ? (r * 100).toFixed(2) + '%' : '—';
+    const r = Utils.effectiveRate(i);
+    return r != null ? (r * 100).toFixed(2) + '%' : '—';
   };
   const calcRandReturn = i => {
     const principal = parseFloat(i.amount) || 0;
-    const rate      = parseFloat(i.annual_rate) || 0;
+    const rate      = Utils.effectiveRate(i) || 0;
     const startMs   = new Date(i.start_date || i.created_at).getTime();
     const endMs     = new Date(i.maturity_date || i.pool_end_date).getTime();
     if (!principal || !rate || isNaN(startMs) || isNaN(endMs) || endMs <= startMs)
