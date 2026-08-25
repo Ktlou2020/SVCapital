@@ -136,6 +136,12 @@ const post = (p, body) => new Promise(resolve => {
   // written before the third failed.
   r = await post(`/api/investments/pool/${POOL}/instruction`, { instruction: 'payout_custom', custom_payout_amount: 1500 });
   check('rejects when one investment cannot take the amount', r.status === 400, `HTTP ${r.status} ${JSON.stringify(r.body)}`);
+  // The message has to be actionable: "exceeds the value" alone leaves the
+  // client re-typing blind, and does not explain why 1500 looked reasonable.
+  const plain = t => String(t || '').replace(/[\s\u00a0\u202f]/g, '');
+  check('names the amount that was refused', plain(r.body.error).includes('R1500,00'), r.body.error);
+  check('names the smallest ceiling in the pool (INV-1 at 1100)', plain(r.body.error).includes('R1100,00'), r.body.error);
+  check('explains that the amount lands on each investment', /each investment/i.test(r.body.error || ''), r.body.error);
   s = await state();
   check('ALL-OR-NOTHING: no investment changed on that rejection',
     s.filter(i => i.investor_id !== OTHER).every(i => i.maturity_instruction === 'reinvest')
@@ -183,6 +189,16 @@ const post = (p, body) => new Promise(resolve => {
   s = await state();
   check('single investment: refuses payout_custom with no amount', r.status === 400, `HTTP ${r.status}`);
   check('single investment: nothing written on refusal',
+    s.find(i => i.id === 'INV-1').maturity_instruction === 'reinvest', JSON.stringify(s));
+
+  // ── over-ceiling on a single investment names both figures ───────────────
+  await seed();
+  r = await post('/api/investments/INV-1/instruction', { instruction: 'payout_custom', custom_payout_amount: 5000 });
+  check('single investment: over-ceiling refused', r.status === 400, `HTTP ${r.status} ${JSON.stringify(r.body)}`);
+  check('single investment: names the amount and the ceiling',
+    plain(r.body.error).includes('R5000,00') && plain(r.body.error).includes('R1100,00'), r.body.error);
+  s = await state();
+  check('single investment: nothing written when over ceiling',
     s.find(i => i.id === 'INV-1').maturity_instruction === 'reinvest', JSON.stringify(s));
 
   // ── ownership ────────────────────────────────────────────────────────────
