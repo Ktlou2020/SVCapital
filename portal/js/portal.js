@@ -3017,7 +3017,7 @@ function updateAutoTopUpFee() {
   const rawFee = _pmFee(net);
   const fee    = Math.min(rawFee, 800);
   const gross  = Math.round((net + fee) * 100) / 100;
-  const fmt    = v => 'R ' + v.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    const fmt    = v => Utils.rand(v);   // was a hand-rolled 'R 1 234.56' — one formatter now
   bd.style.display = 'block';
   document.getElementById('atuFeeNet').textContent   = fmt(net);
   document.getElementById('atuFeeAmt').textContent   = '+ ' + fmt(Math.round(fee * 100) / 100);
@@ -3211,7 +3211,7 @@ function updateAmountPreview() {
     hint.textContent = raw > 0 && raw < 100 ? 'Amount too low — minimum is R100' : 'Minimum deposit: R100';
     hint.style.color = raw > 0 && raw < 100 ? '#ef4444' : 'var(--text-muted)';
   } else {
-    hint.textContent = `R${raw.toLocaleString('en-ZA')} will be credited to your SV Capital wallet`;
+    hint.textContent = `${Utils.rand(raw)} will be credited to your SV Capital wallet`;
     hint.style.color = '#22c55e';
   }
 }
@@ -3230,15 +3230,15 @@ function _pmUpdateFeeSummary() {
   strip.innerHTML = `
     <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.07)">
       <span style="color:#9ca3af;font-size:0.78rem">Deposit amount</span>
-      <span style="color:#f0f4ff;font-weight:600;font-size:0.78rem">R${_pmAmount.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+      <span style="color:#f0f4ff;font-weight:600;font-size:0.78rem">${Utils.rand(_pmAmount)}</span>
     </div>
     <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.07)">
       <span style="color:#9ca3af;font-size:0.78rem">Gateway fee (2.9% + R1)</span>
-      <span style="color:#fec24f;font-weight:600;font-size:0.78rem">+ R${fee.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+      <span style="color:#fec24f;font-weight:600;font-size:0.78rem">+ ${Utils.rand(fee)}</span>
     </div>
     <div style="display:flex;justify-content:space-between;padding:8px 0">
       <span style="color:#f0f4ff;font-size:0.82rem;font-weight:700">Total charged to you</span>
-      <span style="color:#fec24f;font-size:0.88rem;font-weight:900">R${total.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+      <span style="color:#fec24f;font-size:0.88rem;font-weight:900">${Utils.rand(total)}</span>
     </div>
     <div style="font-size:0.69rem;color:#6b7280;margin-top:2px">
       <i class="fa-solid fa-circle-info" style="color:#6b7280"></i>
@@ -3255,7 +3255,7 @@ function goToStep2() {
     return;
   }
   _pmAmount = raw;
-  _pmEl('pmAmountDisplay').textContent = `R${raw.toLocaleString('en-ZA')}`;
+  _pmEl('pmAmountDisplay').textContent = `${Utils.rand(raw)}`;
 
   // If a gateway was pre-selected from the wallet card, highlight it
   if (_pmGateway) {
@@ -3401,7 +3401,7 @@ function launchPaystack() {
 /* ── EFT (manual) ───────────────────────────── */
 function showEftDetails() {
   const investorId = _pmInvestorId();
-  _pmEl('eftAmountDisplay').textContent = `R${_pmAmount.toLocaleString('en-ZA')}`;
+  _pmEl('eftAmountDisplay').textContent = `${Utils.rand(_pmAmount)}`;
 
   let eftRef = investorId;
   let hintHtml = 'Always use your <strong style="color:#f0f4ff">Investor ID as the payment reference</strong> so we can match your deposit. Funds reflect within 1–2 business days.';
@@ -3472,7 +3472,7 @@ async function confirmEftDeposit() {
     const investorId   = _pmInvestorId();
     const investorName = _pmInvestorName();
     const amount       = _pmAmount;
-    let description = `EFT wallet top-up of R${amount.toLocaleString('en-ZA',{minimumFractionDigits:2})} submitted by ${investorName} (${investorId}). Reference: ${ref}.`;
+    let description = `EFT wallet top-up of ${Utils.rand(amount)} submitted by ${investorName} (${investorId}). Reference: ${ref}.`;
 
     if (_eftProofFile && _eftProofBase64) {
       description += `\n\nProof of payment attached: ${_eftProofFile.name} (${(_eftProofFile.size/1024).toFixed(1)} KB).`;
@@ -3484,7 +3484,7 @@ async function confirmEftDeposit() {
       id:            Utils.genId('TKT'),
       investor_id:   investorId,
       investor_name: investorName,
-      subject:       `EFT Proof of Payment — ${investorName} — R${amount.toLocaleString('en-ZA')} — ${ref}`,
+      subject:       `EFT Proof of Payment — ${investorName} — ${Utils.rand(amount)} — ${ref}`,
       category:      'payment_proof',
       priority:      'high',
       status:        'open',
@@ -3515,10 +3515,10 @@ async function _showDepositSuccess(gateway, reference) {
   _pmSetStepLabel('Complete');
   const isGateway = gateway === 'paystack';
   const fee = isGateway ? _pmFee(_pmAmount) : 0;
-  const fmtBase = `R${_pmAmount.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmtBase = `${Utils.rand(_pmAmount)}`;
   _pmEl('pmSuccessAmount').innerHTML =
     `<strong style="color:#22c55e">${fmtBase}</strong> successfully credited to your wallet` +
-    (fee > 0 ? `<br><span style="font-size:0.75rem;color:#6b7280">R${fee.toFixed(2)} gateway fee charged by Paystack</span>` : '');
+    (fee > 0 ? `<br><span style="font-size:0.75rem;color:#6b7280">${Utils.rand(fee)} gateway fee charged by Paystack</span>` : '');
   _pmEl('pmSuccessRef').textContent = `Reference: ${reference}`;
   showSuccessOverlay({ title: 'Payment Received!', subtitle: `${fmtBase} added to your wallet` });
   await loadPortalData();
@@ -3544,7 +3544,7 @@ async function _recordDeposit(gateway, reference, status, showSuccess = true) {
 
   const depositDesc = status === 'pending'
     ? `Wallet top-up via ${gatewayLabel} — pending confirmation`
-    : `Wallet top-up via ${gatewayLabel} — R${_pmAmount.toLocaleString('en-ZA')} credited to wallet`;
+    : `Wallet top-up via ${gatewayLabel} — ${Utils.rand(_pmAmount)} credited to wallet`;
 
   try {
     // 1. Record the deposit transaction (base wallet-credit amount)
@@ -3606,7 +3606,7 @@ async function _recordDeposit(gateway, reference, status, showSuccess = true) {
         _pmShowOnly('pmStep3Success');
         _pmSetProgress(100);
         _pmSetStepLabel('Complete');
-        const fmtBase = `R${_pmAmount.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        const fmtBase = `${Utils.rand(_pmAmount)}`;
         _pmEl('pmSuccessAmount').textContent = `${fmtBase} deposit registered — awaiting bank confirmation`;
         _pmEl('pmSuccessRef').textContent = `Reference: ${reference}`;
         await loadPortalData();
@@ -6466,7 +6466,7 @@ function renderQuestView() {
     if (rwXP)   rwXP.textContent   = xp.toLocaleString('en-ZA') + ' XP';
     if (rwLvl)  rwLvl.innerHTML    = `<i class="fa-solid ${lvl.icon}" style="margin-right:4px"></i>${lvl.label}`;
     if (rwCash) rwCash.textContent = completedCount;
-    if (rwRef)  rwRef.textContent  = `R${referralBonuses.toFixed(2)}`;
+    if (rwRef)  rwRef.textContent  = `${Utils.rand(referralBonuses)}`;
     if (rwTot)  rwTot.textContent  = `${XP_LEVELS.filter(l => l.min > 0 && xp >= l.min).length} / ${XP_LEVELS.length - 1}`;
   }
 
