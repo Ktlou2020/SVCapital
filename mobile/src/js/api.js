@@ -499,6 +499,45 @@ const Utils = {
     return amount * num(pick('annual_rate', 'expected_return_rate'));
   },
 
+  /* The declared return, or null when nothing has been declared yet.
+
+     investmentReturn above always answers with a number, falling back to the
+     target rate quoted when the investment was taken out. That is right for
+     totals, but wrong for telling a client what they have actually earned: a
+     projection shown as an earned figure is a promise nobody made.
+
+     Only the first two steps of that precedence count as posted — an explicit
+     actual_return, or the pool's actual_rate joined on as pool_actual_rate.
+     Returns are posted while the pool is still active, not at maturity, so
+     this is what makes them visible on an investment that has not closed.
+
+     Returning null rather than zero lets callers tell "nothing posted yet"
+     from "posted, and it was zero". */
+  postedReturn(inv) {
+    if (!inv || inv.status === 'cancelled') return null;
+    const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
+
+    const amount = num(inv.amount);
+    const actual = num(inv.actual_return != null ? inv.actual_return : inv.actual_return_amount);
+    if (actual > 0) return { amount: actual, rate: amount > 0 ? actual / amount : 0 };
+
+    const rate = num(inv.pool_actual_rate);
+    if (rate > 0) return { amount: amount * rate, rate };
+
+    return null;
+  },
+
+  /* Same, aggregated over a set of investments — a client can hold several in
+     one pool. The rate is the total posted return over the capital that
+     actually earned it, so an investment still awaiting its posting does not
+     drag the percentage down. */
+  postedReturnTotal(list) {
+    const posted = (list || []).map(i => ({ inv: i, p: Utils.postedReturn(i) })).filter(x => x.p);
+    if (!posted.length) return null;
+    const amount  = posted.reduce((s, x) => s + x.p.amount, 0);
+    const capital = posted.reduce((s, x) => s + (parseFloat(x.inv.amount) || 0), 0);
+    return { amount, rate: capital > 0 ? amount / capital : 0, count: posted.length };
+  },
   /* Returns earned across a set of investments. Use this rather than a local
      reduce so every surface reports the same total. */
   totalReturns(list) {

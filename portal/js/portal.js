@@ -2627,6 +2627,12 @@ function renderMyInvestmentCards() {
     const multiple = group.length > 1;
     const totalAmount = group.reduce((s, i) => s + (i.amount || 0), 0);
     const totalReturn = group.reduce((s, i) => s + (i.actual_return_amount || i.expected_return_amount || 0), 0);
+    /* Returns are posted by setting the pool's actual rate, and that happens
+       while the pool is still active. The stats below only showed return
+       figures once the investment had matured, so a client whose returns had
+       already been declared saw nothing here — sometimes for months. null when
+       nothing has been posted, which is what keeps a projection off the card. */
+    const posted = Utils.postedReturnTotal(group);
     const uid = 'pool_' + (inv.pool_id || inv.id);
     const _poolRec = inv.pool_id ? (PORTAL.pools || []).find(p => p.id === inv.pool_id) : null;
     const _poolInvStart = _poolRec?.investment_start_date || (_poolRec?.end_date ? (() => { const _d = new Date(_poolRec.end_date); _d.setDate(_d.getDate() + 1); return _d.toISOString().split('T')[0]; })() : null);
@@ -2668,6 +2674,9 @@ function renderMyInvestmentCards() {
           ${isPaidOut ? `
           <div class="mic-stat"><span class="mic-stat__label">Return Rate</span><span class="mic-stat__value">${Utils.pct(inv.annual_rate || inv.expected_return_rate)}</span></div>
           <div class="mic-stat"><span class="mic-stat__label">Capital + Return</span><span class="mic-stat__value" style="color:var(--green)">${Utils.rand(totalAmount + totalReturn)}</span></div>
+          ` : posted ? `
+          <div class="mic-stat"><span class="mic-stat__label">Actual Rate</span><span class="mic-stat__value" style="color:var(--green)">${Utils.pct(posted.rate)}</span></div>
+          <div class="mic-stat"><span class="mic-stat__label">Returns Earned</span><span class="mic-stat__value" style="color:var(--green)">${Utils.rand(posted.amount)}</span></div>
           ` : ''}
         </div>
 
