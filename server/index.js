@@ -430,7 +430,10 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
   // the first real user request is never cold. Works on all Railway plan tiers.
   const http = require('http');
   emailQueueCron.schedule('*/4 * * * *', () => {
-    const req = http.get(`http://localhost:${PORT}/api/health`, res => {
+    // agent:false — the default global agent pools the socket between pings.
+    // A fresh socket that closes with the response is one fewer connection
+    // for shutdown to reason about, and this ping has no need of pooling.
+    const req = http.get({ host: 'localhost', port: PORT, path: '/api/health', agent: false }, res => {
       res.resume(); // drain response body so socket is freed
     });
     req.on('error', () => {}); // ignore — server may be mid-restart
@@ -468,8 +471,26 @@ async function shutdown(signal, code = 0) {
     }
     process.exit(code);
   });
-  // Force exit after 15 seconds if shutdown stalls
-  setTimeout(() => { console.error('[shutdown] Forced exit after timeout'); process.exit(code || 1); }, 15000);
+
+  /* Node 20's server.close() already drops *idle* keep-alive sockets, but it
+     still waits indefinitely for any connection in the middle of a request —
+     a slow client, a half-sent request, a stalled upstream. One of those is
+     enough that the callback above never runs, so the pool is never drained,
+     Postgres logs "connection reset by peer", and the platform SIGKILLs us
+     mid-shutdown. Measured: 15s and no callback with one such socket open,
+     against 3s and a clean close with this backstop.
+     Give real in-flight work three seconds, then take the rest. */
+  server.closeIdleConnections?.();
+  setTimeout(() => {
+    if (server.closeAllConnections) {
+      console.warn('[shutdown] forcing remaining connections closed');
+      server.closeAllConnections();
+    }
+  }, 3000).unref();
+
+  /* Below the platform's stop grace period, observed between three and ten
+     seconds — the old 15s timer could never fire before the SIGKILL. */
+  setTimeout(() => { console.error('[shutdown] Forced exit after timeout'); process.exit(code || 1); }, 8000);
 }
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));
