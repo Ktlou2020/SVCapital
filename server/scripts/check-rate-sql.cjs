@@ -40,11 +40,40 @@ const POOL_ID = 'CHK-POOL-RATE';
 const INV_ID  = 'CHK-INVESTOR-RATE';
 const INVST   = 'CHK-INVESTMENT-RATE';
 
+/* Build the schema from scratch, the way the other check scripts do, so this
+   runs against an empty database and does not depend on the order the checks
+   are run in — several of them drop and recreate `investments`. The column
+   types matter: annual_rate must be NUMERIC, because the bug is that Postgres
+   returns NUMERIC as a string. */
+async function schema() {
+  await pool.query('DROP TABLE IF EXISTS investments, investors, sub_accounts, investment_pools CASCADE');
+  await pool.query(`
+    CREATE TABLE investment_pools (
+      id TEXT PRIMARY KEY, name TEXT, product_type TEXT, status TEXT,
+      annual_rate NUMERIC(8,4) DEFAULT 0, actual_rate NUMERIC(8,4) DEFAULT 0,
+      start_date DATE, end_date DATE
+    );
+    CREATE TABLE investors (
+      id TEXT PRIMARY KEY, first_name TEXT, last_name TEXT, email TEXT,
+      phone TEXT, kyc_status TEXT
+    );
+    CREATE TABLE sub_accounts (
+      id TEXT PRIMARY KEY, name TEXT, account_type TEXT
+    );
+    CREATE TABLE investments (
+      id TEXT PRIMARY KEY, investor_id TEXT, pool_id TEXT, pool_name TEXT,
+      sub_account_id TEXT, amount NUMERIC(18,2) DEFAULT 0,
+      annual_rate NUMERIC(8,4) DEFAULT 0, expected_return NUMERIC(18,2) DEFAULT 0,
+      actual_return NUMERIC(18,2) DEFAULT 0, eva_amount NUMERIC(18,2) DEFAULT 0,
+      status TEXT, start_date DATE, end_date DATE, product_type TEXT,
+      maturity_instruction TEXT, is_reinvestment BOOLEAN DEFAULT false
+    );`);
+}
+
 async function seed() {
-  await cleanup();
   await pool.query(
     `INSERT INTO investment_pools (id, name, product_type, status, annual_rate, actual_rate, start_date, end_date)
-     VALUES ($1, 'Short Term Investment - March 2026', 'other', 'open', 0.0500, 0.0213, '2026-03-31', '2026-08-31')`,
+     VALUES ($1, 'Short Term Investment - March 2026', 'short_term', 'active', 0.0500, 0.0213, '2026-03-31', '2026-08-31')`,
     [POOL_ID]);
   await pool.query(
     `INSERT INTO investors (id, first_name, last_name, email)
@@ -53,19 +82,18 @@ async function seed() {
   // The whole point: annual_rate is 0.0000 on the row, not NULL. Postgres
   // hands that back as the string "0.0000", which is truthy in JS.
   await pool.query(
-    `INSERT INTO investments (id, investor_id, pool_id, amount, annual_rate, status, start_date, end_date, product_type)
-     VALUES ($1, $2, $3, 24744.77, 0.0000, 'active', '2026-03-31', '2026-08-31', 'other')`,
+    `INSERT INTO investments (id, investor_id, pool_id, pool_name, amount, annual_rate, status, start_date, end_date, product_type)
+     VALUES ($1, $2, $3, 'Short Term Investment - March 2026', 24744.77, 0.0000, 'active', '2026-03-31', '2026-08-31', 'short_term')`,
     [INVST, INV_ID, POOL_ID]);
 }
 
 async function cleanup() {
-  await pool.query('DELETE FROM investments WHERE id = $1', [INVST]);
-  await pool.query('DELETE FROM investors   WHERE id = $1', [INV_ID]);
-  await pool.query('DELETE FROM investment_pools WHERE id = $1', [POOL_ID]);
+  await pool.query('DROP TABLE IF EXISTS investments, investors, sub_accounts, investment_pools CASCADE');
 }
 
 (async () => {
   try {
+    await schema();
     await seed();
     console.log('\nseeded: R24,744.77 · investment rate 0.0000 · pool posted 2.13%\n');
 
