@@ -2677,7 +2677,8 @@ async function reconcileInvestorWallet(investorId, btn) {
     try {
       const resultEl = document.getElementById(`invReconcileResult-${investorId}`);
       // Dry-run first to show what would change
-      const preview = await API._fetch('POST', 'admin/reconcile-wallet', { investor_id: investorId, dry_run: true });
+      // Reporting is the default now — no flag needed to avoid writing.
+      const preview = await API._fetch('POST', 'admin/reconcile-wallet', { investor_id: investorId });
       if (!preview.diffs || !preview.diffs[0]) {
         if (resultEl) resultEl.innerHTML = `<span style="color:var(--text-muted)">No transactions found.</span>`;
         Toast.info('No completed transactions found to reconcile.');
@@ -2690,12 +2691,27 @@ async function reconcileInvestorWallet(investorId, btn) {
         return;
       }
       const confirmed = await Confirm.ask('Reconcile wallet balance?', {
-        body: `Current: ${Utils.rand(d.current)} → Computed from transactions: ${Utils.rand(d.computed)} (${d.diff > 0 ? '+' : ''}${Utils.rand(d.diff)}). This will overwrite the current balance.`,
+        body: `Current: ${Utils.rand(d.current)} → Computed from transactions: ${Utils.rand(d.computed)} (${d.diff > 0 ? '+' : ''}${Utils.rand(d.diff)}). This will overwrite the current balance.`
+          + (d.migrated_rows > 0
+              ? `<br><br><strong style="color:#f59e0b">This investor has ${d.migrated_rows} migrated transaction(s).</strong> Their wallet includes an imported opening balance the ledger does not restate, so this will be refused.`
+              : `<br><br><span style="color:var(--text-muted)">wallet_balance is maintained incrementally by each write path — a ledger sum is a cross-check, not a source of truth.</span>`),
         confirmLabel: 'Apply',
         danger: d.computed < 0,
       });
       if (!confirmed) return;
-      await API._fetch('POST', 'admin/reconcile-wallet', { investor_id: investorId });
+      // apply:true is now required — without it the endpoint reports and writes nothing.
+      const applied = await API._fetch('POST', 'admin/reconcile-wallet', { investor_id: investorId, apply: true });
+      const row = (applied.diffs || [])[0] || {};
+      if (row.blocked) {
+        if (resultEl) resultEl.innerHTML = `<span style="color:#f59e0b"><i class="fa-solid fa-triangle-exclamation"></i> Not applied</span>`;
+        await Confirm.ask('Not reconciled', { body: row.blocked, confirmLabel: 'Close' });
+        return;
+      }
+      if (!row.applied) {
+        if (resultEl) resultEl.innerHTML = `<span style="color:var(--text-muted)">No change applied.</span>`;
+        Toast.info('Nothing was changed.');
+        return;
+      }
       if (resultEl) resultEl.innerHTML = `<span style="color:#fec24f"><i class="fa-solid fa-check"></i> Adjusted ${d.diff > 0 ? '+' : ''}${Utils.rand(d.diff)} → ${Utils.rand(d.computed)}</span>`;
       Toast.success(`Wallet reconciled. New balance: ${Utils.rand(d.computed)}`);
       const inv = STATE.investors.find(i => i.id === investorId);
@@ -7013,12 +7029,12 @@ async function viewTicket(id) {
                 reference:   ref,
               });
             }
-            // Safeguard: reconcile the investor's wallet balance from completed
-            // transactions. The PATCH/POST hooks credit the wallet synchronously,
-            // but a transient DB error between the two queries can leave the
-            // transaction marked completed while the wallet_balance is unchanged.
-            // Reconcile is a no-op if the balance is already correct.
-            await API._fetch('POST', 'admin/reconcile-wallet', { investor_id: tkt.investor_id }).catch(() => {});
+            // The reconcile-from-ledger safeguard that used to run here is gone. It
+            // guarded a race where the transaction was marked completed but the wallet
+            // credit failed — both tables-API paths now apply the row and the credit in
+            // one DB transaction, so that race is closed. The safeguard itself overwrote
+            // wallet_balance from a ledger sum, which would have discarded an imported
+            // opening balance.
           }
           await API.tickets.update(id, {
             status:         'resolved',

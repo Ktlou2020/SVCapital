@@ -279,23 +279,50 @@ router.post('/backfill/fica-from-kyc', async (req, res) => {
    Body: { investor_id: 'S-XXXXXX' }  — single investor
          { all: true }                 — every investor (slow, use with care)
    ─────────────────────────────────────────────────────────────────────── */
+/* ─── POST /api/admin/reconcile-wallet ───────────────────────────────────
+   Compares wallet_balance against the ledger. READ-ONLY unless the caller
+   explicitly opts in to a write for one named investor.
+
+   Three things were wrong with the previous behaviour:
+
+     · dry_run was opt-in, so omitting it wrote. The safe call was the longer
+       one to type.
+     · all:true without dry_run rewrote EVERY investor's wallet in a single
+       request, with no audit trail.
+     · it overwrote using a from-zero sum of the ledger, which cannot
+       reconstruct a balance whose opening figure was imported rather than
+       accumulated - see services/ledger.js and the wallet audit.
+
+   Now: reporting is the default, writes require apply:true plus a single
+   investor_id, mass writes are refused outright, and a write is blocked when
+   the investor carries migrated rows, because their wallet_balance already
+   contains an imported opening figure that the ledger does not restate.
+   ──────────────────────────────────────────────────────────────────────── */
 router.post('/reconcile-wallet', async (req, res) => {
-  const { investor_id, all, dry_run } = req.body || {};
+  const { investor_id, all, apply } = req.body || {};
   if (!investor_id && !all) {
     return res.status(400).json({ error: 'Provide investor_id or all:true' });
   }
+  // Writing is never implied. dry_run is accepted and ignored so that a stale
+  // admin client sending dry_run:true still gets a report, and one omitting it
+  // no longer writes by accident.
+  const wantsWrite = apply === true;
+  if (wantsWrite && !investor_id) {
+    return res.status(400).json({
+      error: 'apply:true requires a single investor_id. Mass reconciliation is not permitted.',
+    });
+  }
+
   try {
-    /* Compute correct wallet balance = sum of credits minus sum of debits
-       across all completed transactions for the investor. */
     const whereClause = investor_id ? 'AND i.investor_id = $1' : '';
     const params      = investor_id ? [investor_id] : [];
 
-    /* Uses the shared CASH_MOVEMENT definition above — see the note there for
-       why `return` is excluded and why matured_funds/reinvestment are paired. */
+    /* Shared cash-movement definition — services/ledger.js */
     const { rows } = await pool.query(`
       SELECT
         i.investor_id,
-        COALESCE(SUM(${cashMovementSQL('i.')}), 0) AS computed_balance
+        COALESCE(SUM(${cashMovementSQL('i.')}), 0) AS computed_balance,
+        COUNT(*) FILTER (WHERE i.id LIKE 'TXN-MIGR-%')::int AS migrated_rows
       FROM transactions i
       WHERE i.sub_account_id IS NULL
         AND i.status = 'completed'
@@ -305,25 +332,61 @@ router.post('/reconcile-wallet', async (req, res) => {
 
     let updated = 0;
     const diffs = [];
+
     for (const r of rows) {
       const computed = parseFloat(r.computed_balance);
       const { rows: cur } = await pool.query(
         'SELECT id, wallet_balance FROM investors WHERE id = $1', [r.investor_id]
       );
       if (!cur[0]) continue;
-      const current = parseFloat(cur[0].wallet_balance);
-      const diff    = Math.round((computed - current) * 100) / 100;
-      diffs.push({ investor_id: r.investor_id, current, computed, diff });
-      if (!dry_run && Math.abs(diff) >= 0.01) {
-        await pool.query(
-          'UPDATE investors SET wallet_balance = $1, updated_at = NOW() WHERE id = $2',
-          [computed, r.investor_id]
-        );
-        updated++;
+      const current  = parseFloat(cur[0].wallet_balance);
+      const diff     = Math.round((computed - current) * 100) / 100;
+      const migrated = r.migrated_rows > 0;
+
+      // Shape kept as { investor_id, current, computed, diff } — the admin
+      // console reads diffs[0] and would break otherwise.
+      const row = { investor_id: r.investor_id, current, computed, diff, migrated_rows: r.migrated_rows };
+
+      if (wantsWrite && Math.abs(diff) >= 0.01) {
+        if (migrated) {
+          row.applied = false;
+          row.blocked = 'This investor has migrated transactions, so wallet_balance includes '
+                      + 'an imported opening figure the ledger does not restate. Overwriting '
+                      + 'would discard it.';
+        } else {
+          await pool.query(
+            'UPDATE investors SET wallet_balance = $1, updated_at = NOW() WHERE id = $2',
+            [computed, r.investor_id]
+          );
+          updated++;
+          row.applied = true;
+          setImmediate(() => audit.log({
+            actorId:     req.user && req.user.id,
+            actorEmail:  req.user && req.user.email,
+            action:      'wallet.reconciled',
+            entityType:  'investors',
+            entityId:    r.investor_id,
+            description: `Wallet reconciled from ledger: ${current} -> ${computed} (${diff >= 0 ? '+' : ''}${diff})`,
+            ip:          req.ip,
+          }).catch(() => {}));
+        }
+      } else {
+        row.applied = false;
       }
+      diffs.push(row);
     }
 
-    res.json({ success: true, checked: rows.length, updated, diffs });
+    res.json({
+      success:   true,
+      read_only: !wantsWrite,
+      checked:   rows.length,
+      updated,
+      diffs,
+      note: wantsWrite
+        ? 'wallet_balance is maintained incrementally by each write path. A ledger sum is a '
+        + 'cross-check, not a source of truth; apply it only when the difference is understood.'
+        : 'Report only — nothing was changed. Send apply:true with a single investor_id to write.',
+    });
   } catch (err) {
     console.error('/admin/reconcile-wallet error:', err.message);
     res.status(500).json({ error: 'Internal server error.' });
