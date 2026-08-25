@@ -1929,15 +1929,11 @@ function renderOverview(skipCharts) {
   // active. Gating this on status === 'matured' meant a posted return stayed invisible
   // here until the pool matured, even though My Investments and the statement already
   // counted it off the same field. Count anything matured OR carrying a posted rate.
-  const earningInvs   = PORTAL.investments.filter(i =>
-    i.status !== 'cancelled' &&
-    (i.status === 'matured' || (parseFloat(i.pool_actual_rate) || 0) > 0)
-  );
+  // Returns earned, via the shared definition in js/api.js so this tile, My
+  // Investments, the statement and the admin console cannot drift apart again.
+  const earningInvs   = (PORTAL.investments || []).filter(i => i.status !== 'cancelled');
   const totalEarnBase = earningInvs.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
-  const totalRet      = earningInvs.reduce((s, i) => {
-    const ar = parseFloat(i.pool_actual_rate) || 0;
-    return s + (ar > 0 ? (parseFloat(i.amount) || 0) * ar : (parseFloat(i.expected_return) || (parseFloat(i.amount) || 0) * (parseFloat(i.annual_rate) || 0)));
-  }, 0);
+  const totalRet      = Utils.totalReturns(earningInvs);
   const totalValue    = totalInvested + (parseFloat(inv.wallet_balance) || 0);
   const returnPct     = totalEarnBase > 0 ? (totalRet / totalEarnBase * 100).toFixed(1) : '0';
   const activeCount = PORTAL.investments.filter(i => i.status === 'active').length;
@@ -2497,7 +2493,7 @@ function renderMyInvestmentStats() {
   const d = PORTAL.investments;
   document.getElementById('mi-capital').textContent  = Utils.rand(d.filter(i => !i.is_reinvestment).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0));
   document.getElementById('mi-expected').textContent = Utils.rand(d.reduce((s, i) => s + (parseFloat(i.expected_return_amount) || 0), 0));
-  document.getElementById('mi-earned').textContent   = Utils.rand(d.reduce((s, i) => s + (parseFloat(i.amount) || 0) * (parseFloat(i.pool_actual_rate) || 0), 0));
+  document.getElementById('mi-earned').textContent   = Utils.rand(Utils.totalReturns(d));
   document.getElementById('mi-count').textContent    = d.length;
 }
 
@@ -5540,7 +5536,7 @@ function updateStmtQuickStats() {
   const transactions = PORTAL.transactions || [];
   const investor     = PORTAL.investor     || {};
   const totalInvested = investments.filter(i => !i.is_reinvestment).reduce((s, i) => s + (Number(i.amount) || 0), 0);
-  const totalReturns  = investments.reduce((s, i) => s + (Number(i.amount) || 0) * (Number(i.pool_actual_rate) || 0), 0);
+  const totalReturns  = Utils.totalReturns(investments);
   const walletBal     = Number(investor.wallet_balance) || 0;
   const totalValue    = totalInvested + walletBal + totalReturns;
 
@@ -11444,7 +11440,7 @@ function downloadSaStatement(saId, saName) {
       if (!byProduct[p]) byProduct[p] = { count: 0, capital: 0, returns: 0 };
       byProduct[p].count++;
       if (!inv.is_reinvestment) byProduct[p].capital += Number(inv.amount) || 0;
-      byProduct[p].returns += (Number(inv.amount) || 0) * (Number(inv.pool_actual_rate) || 0);
+      byProduct[p].returns += Utils.investmentReturn(inv);
     });
     const perfRows = Object.entries(byProduct).map(([prod, d]) => {
       const pct  = d.capital > 0 ? ((d.returns / d.capital) * 100).toFixed(2) : '0.00';
