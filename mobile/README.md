@@ -160,6 +160,25 @@ use the upload key. **Never commit `key.properties` or `*.jks` to git.**
 11. **Product → Archive** → Validate → **Distribute App → App Store Connect**
 12. In App Store Connect: add screenshots (6.7" required), fill metadata, submit for review
 
+#### Verify the Android project before building
+
+```bash
+npm run check:android
+```
+
+`android/` is gitignored and generated, so it drifts from `android-config/` the
+same way `ios/` does. Checks the SDK levels against the template — **`targetSdk`
+carries a Google Play deadline, after which Play stops accepting updates built
+against an older target** — plus `applicationId` against `capacitor.config.json`
+(it decides which Play listing a build belongs to), `strings.xml` `package_name`,
+and whether `google-services.json` is present for push.
+
+It reports `versionCode` but cannot judge it: Play requires it to strictly
+increase and only Play knows what has already been uploaded.
+
+`open:android` and `run:android` run it as a warning; run it directly for a hard
+exit code.
+
 #### Verify the project before archiving
 
 ```bash
