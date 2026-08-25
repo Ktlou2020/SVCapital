@@ -1017,7 +1017,12 @@ router.get('/account-statement', async (req, res) => {
                 COALESCE(i.start_date, i.created_at::date) AS start_date,
                 i.end_date AS maturity_date,
                 i.expected_return, i.actual_return,
-                COALESCE(i.annual_rate, p.annual_rate) AS annual_rate,
+                -- COALESCE alone fell through only on NULL, so an investment
+                -- carrying a stored 0.0000 beat the pool's rate and the
+                -- statement quoted 0.00%. NULLIF makes a zero fall through
+                -- too, and the pool's *posted* return outranks its target.
+                COALESCE(NULLIF(i.annual_rate, 0), NULLIF(p.actual_rate, 0), p.annual_rate) AS annual_rate,
+                p.actual_rate AS pool_actual_rate,
                 i.payout_option,
                 p.name AS pool_name, p.product_type,
                 p.start_date AS pool_start_date, p.end_date AS pool_end_date,

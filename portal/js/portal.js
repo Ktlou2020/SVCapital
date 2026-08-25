@@ -3251,7 +3251,7 @@ function _renderCertificatesTable() {
       <td class="td-strong">${_esc(inv.pool_name) || '—'}</td>
       <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
       <td class="td-gold fw-700">${Utils.rand(inv.amount)}</td>
-      <td>${Utils.pct(inv.expected_return_rate || inv.annual_rate)}</td>
+      <td>${(() => { const _r = Utils.effectiveRate(inv); return _r != null ? Utils.pct(_r) : '—'; })()}</td>
       <td class="td-muted">${Utils.date(inv.investment_date || inv.start_date)}</td>
       <td class="td-muted">${Utils.date(inv.maturity_date || inv.end_date)}</td>
       <td>${Utils.statusBadge(inv.status)}</td>

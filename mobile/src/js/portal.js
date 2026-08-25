@@ -3334,7 +3334,7 @@ function _renderCertificatesTable() {
       <div class="doc-card__meta">
         <span><i class="fa-solid fa-calendar-day"></i> ${Utils.date(inv.investment_date || inv.start_date)}</span>
         <span><i class="fa-solid fa-flag-checkered"></i> ${Utils.date(inv.maturity_date || inv.end_date)}</span>
-        <span><i class="fa-solid fa-percent"></i> ${Utils.pct(inv.expected_return_rate || inv.annual_rate)}</span>
+        <span><i class="fa-solid fa-percent"></i> ${(() => { const _r = Utils.effectiveRate(inv); return _r != null ? Utils.pct(_r) : '—'; })()}</span>
         <span class="doc-card__status">${Utils.statusBadge(inv.status)}</span>
       </div>
       <div class="doc-card__actions">

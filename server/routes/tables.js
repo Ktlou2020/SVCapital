@@ -670,6 +670,7 @@ router.get('/investment_pools/:id/all-investments', requireAuth, async (req, res
         i.amount, i.status, i.start_date, i.end_date, i.annual_rate,
         i.term_months, i.product_type, i.payout_option, i.notes,
         i.maturity_instruction, i.is_reinvestment, i.created_at,
+        ip.actual_rate AS pool_actual_rate,
         inv.first_name || ' ' || inv.last_name AS investor_name,
         inv.email AS investor_email
       FROM investments i
@@ -786,10 +787,12 @@ router.get('/investment_pools/:id/investors', requireAuth, async (req, res) => {
         i.phone,
         i.kyc_status,
         sa.name         AS sub_account_name,
-        sa.account_type AS sub_account_type
+        sa.account_type AS sub_account_type,
+        ip.actual_rate  AS pool_actual_rate
       FROM investments inv
       LEFT JOIN investors i ON i.id = inv.investor_id
       LEFT JOIN sub_accounts sa ON sa.id = inv.sub_account_id
+      LEFT JOIN investment_pools ip ON ip.id = inv.pool_id
       WHERE inv.pool_id = $1
          OR (
            inv.pool_id IS NULL
@@ -854,7 +857,8 @@ router.get('/:table/:id', requireAuth, validateTable, async (req, res) => {
     let rows;
     if (table === 'investments') {
       const r = await pool.query(
-        `SELECT i.*, COALESCE(ip.product_type, i.product_type) AS product_type
+        `SELECT i.*, COALESCE(ip.product_type, i.product_type) AS product_type,
+                ip.actual_rate AS pool_actual_rate
          FROM investments i
          LEFT JOIN investment_pools ip ON ip.id = i.pool_id
          WHERE i.${key} = $1 LIMIT 1`,
