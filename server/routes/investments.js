@@ -17,13 +17,50 @@ const { requireAuth } = require('../middleware/auth');
 const VALID_INSTRUCTIONS = ['payout_all', 'payout_return', 'payout_custom', 'reinvest', 'switch_product', 'custom_switch'];
 const STAFF_ROLES = ['admin', 'director', 'fund_manager', 'staff'];
 
+// Instructions that are meaningless without their companion field. Saving
+// 'payout_custom' with no amount, or 'switch_product' with no target, leaves an
+// investment that says pay out / switch but cannot say how much or into what.
+const NEEDS_AMOUNT  = ['payout_custom', 'custom_switch'];
+const NEEDS_PRODUCT = ['switch_product', 'custom_switch'];
+
+/* Returns an error string, or null when the combination is coherent. */
+function validateInstruction(instruction, amount, productType) {
+  if (!VALID_INSTRUCTIONS.includes(instruction)) return 'Invalid instruction.';
+
+  if (NEEDS_AMOUNT.includes(instruction)) {
+    const n = Number(amount);
+    if (!Number.isFinite(n) || n <= 0) return 'A payout amount greater than zero is required for this instruction.';
+  } else if (amount != null && amount !== '') {
+    const n = Number(amount);
+    if (!Number.isFinite(n) || n < 0) return 'Invalid payout amount.';
+  }
+
+  if (NEEDS_PRODUCT.includes(instruction) && !productType) {
+    return 'A product to switch into is required for this instruction.';
+  }
+  return null;
+}
+
+/* The UI caps the custom payout at capital + posted return, and only once a
+   return has actually been posted. Mirror that here so the cap is not merely a
+   suggestion made by an input element the caller controls. */
+function payoutExceedsInvestment(inv, amount) {
+  const posted = Number(inv.actual_return_amount ?? inv.actual_return ?? 0);
+  if (!posted) return false;                       // no posted return yet — no ceiling
+  const ceiling = Number(inv.amount || 0) + posted;
+  return Number(amount) > ceiling + 0.005;         // tolerate cent rounding
+}
+
 router.post('/:id/instruction', requireAuth, async (req, res) => {
   const { id } = req.params;
-  const { instruction } = req.body || {};
+  const { instruction, custom_payout_amount, switch_product_type } = req.body || {};
 
-  if (!VALID_INSTRUCTIONS.includes(instruction)) {
-    return res.status(400).json({ error: 'Invalid instruction.' });
-  }
+  /* The companion fields used to be a second request (PATCH tables/investments)
+     issued after this one. Between the two the investment read 'payout_custom'
+     with no amount, and if the second call failed it stayed that way. They are
+     part of the instruction, so they are written with it. */
+  const invalid = validateInstruction(instruction, custom_payout_amount, switch_product_type);
+  if (invalid) return res.status(400).json({ error: invalid });
 
   const client = await pool.connect();
   try {
@@ -62,9 +99,24 @@ router.post('/:id/instruction', requireAuth, async (req, res) => {
       }
     }
 
+    if (NEEDS_AMOUNT.includes(instruction) && payoutExceedsInvestment(inv, custom_payout_amount)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Payout amount exceeds the value of this investment.' });
+    }
+
     await client.query(
-      'UPDATE investments SET maturity_instruction = $1, updated_at = NOW() WHERE id = $2',
-      [instruction, id]
+      `UPDATE investments
+          SET maturity_instruction = $1,
+              custom_payout_amount = $2,
+              switch_product_type  = $3,
+              updated_at           = NOW()
+        WHERE id = $4`,
+      [
+        instruction,
+        NEEDS_AMOUNT.includes(instruction)  ? Number(custom_payout_amount) : null,
+        NEEDS_PRODUCT.includes(instruction) ? switch_product_type          : null,
+        id,
+      ]
     );
     await client.query('COMMIT');
 
@@ -100,6 +152,126 @@ router.post('/:id/instruction', requireAuth, async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     console.error('[investments/instruction] error:', err.message);
+    res.status(500).json({ error: 'Internal server error.' });
+  } finally {
+    client.release();
+  }
+});
+
+/* ═══════════════════════════════════════════════════════════
+   POST /api/investments/pool/:poolId/instruction
+     Body: { instruction, custom_payout_amount?, switch_product_type?, investor_id? }
+
+   Applies one instruction to every active investment the caller holds in a
+   pool, in a single transaction.
+
+   The portal used to do this client-side: Promise.all over the investments,
+   one or two requests each, no transaction. A failure partway left some
+   investments carrying the new instruction and the rest on the old one, on
+   the setting that decides whether the money pays out or reinvests — and the
+   client saw a single generic error with no way to tell which had taken. It
+   also sent one confirmation e-mail per investment for one decision.
+
+   All-or-nothing: if any investment in the set fails a check, none change.
+   ═══════════════════════════════════════════════════════════ */
+router.post('/pool/:poolId/instruction', requireAuth, async (req, res) => {
+  const { poolId } = req.params;
+  const { instruction, custom_payout_amount, switch_product_type, investor_id } = req.body || {};
+
+  const invalid = validateInstruction(instruction, custom_payout_amount, switch_product_type);
+  if (invalid) return res.status(400).json({ error: invalid });
+
+  const isStaff    = STAFF_ROLES.includes(req.user.role);
+  const investorId = isStaff ? (investor_id || req.user.investorId) : req.user.investorId;
+  if (!investorId) return res.status(403).json({ error: 'Forbidden.' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Lock every row up front so a concurrent single-investment update cannot
+    // interleave and leave the pool split across two instructions.
+    const { rows: invs } = await client.query(
+      `SELECT *, (end_date::timestamp + interval '15 hours') <= NOW() AS past_cutoff
+         FROM investments
+        WHERE pool_id = $1 AND investor_id = $2 AND status = 'active'
+        ORDER BY id
+          FOR UPDATE`,
+      [poolId, investorId]
+    );
+
+    if (!invs.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'No active investments found in this pool.' });
+    }
+
+    if (!isStaff && invs.some(i => i.end_date && i.past_cutoff)) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({
+        error: 'Instructions close at 17:00 (SA time) on the maturity date. Please contact support.',
+        code: 'INSTRUCTION_CUTOFF',
+      });
+    }
+
+    if (NEEDS_AMOUNT.includes(instruction)) {
+      const over = invs.find(i => payoutExceedsInvestment(i, custom_payout_amount));
+      if (over) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Payout amount exceeds the value of one of these investments.' });
+      }
+    }
+
+    // Re-stating the predicate rather than passing ids: the rows are already
+    // locked by the SELECT above, so this touches exactly that set.
+    const { rowCount } = await client.query(
+      `UPDATE investments
+          SET maturity_instruction = $1,
+              custom_payout_amount = $2,
+              switch_product_type  = $3,
+              updated_at           = NOW()
+        WHERE pool_id = $4 AND investor_id = $5 AND status = 'active'`,
+      [
+        instruction,
+        NEEDS_AMOUNT.includes(instruction)  ? Number(custom_payout_amount) : null,
+        NEEDS_PRODUCT.includes(instruction) ? switch_product_type          : null,
+        poolId,
+        investorId,
+      ]
+    );
+
+    await client.query('COMMIT');
+
+    audit.log({
+      actorId: req.user.id || req.user.investorId, actorEmail: req.user.email, actorRole: req.user.role,
+      action: 'investment.instruction_set_pool', entityType: 'investment_pools', entityId: poolId,
+      description: `Maturity instruction set to '${instruction}' for ${rowCount} investment(s) in pool ${poolId}${isStaff ? ' by staff on behalf of investor' : ''}`,
+      platform: req.headers['x-platform'] || null,
+    }).catch(() => {});
+
+    // One decision, one e-mail — previously one per investment in the pool.
+    const _poolName = invs[0].pool_name || poolId;
+    const _endDate  = invs[0].end_date;
+    setImmediate(async () => {
+      try {
+        const { rows: [investor] } = await pool.query(
+          'SELECT first_name, last_name, email FROM investors WHERE id = $1',
+          [investorId]
+        );
+        if (investor && investor.email) {
+          email.sendMaturityInstructionConfirmed(investor, {
+            poolName: _poolName,
+            endDate:  _endDate,
+            instruction,
+            onBehalf: isStaff,
+          }).catch(() => {});
+        }
+      } catch (_) {}
+    });
+
+    res.json({ success: true, instruction, updated: rowCount, onBehalf: isStaff });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[investments/pool-instruction] error:', err.message);
     res.status(500).json({ error: 'Internal server error.' });
   } finally {
     client.release();

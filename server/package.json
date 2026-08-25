@@ -10,6 +10,7 @@
     "check:resilience": "node scripts/check-resilience.cjs",
     "check:shutdown": "node scripts/check-shutdown.cjs",
     "check:assets": "node scripts/check-asset-caching.cjs",
+    "check:maturity": "node scripts/check-maturity-instruction.cjs",
     "migrate": "node db/migrate.js",
     "seed": "node db/seed.js"
   },
