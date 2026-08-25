@@ -391,16 +391,30 @@ router.post('/register', registerLimiter, async (req, res) => {
         first_name: firstName.trim(),
       }).catch(err => console.error('[email] welcome failed:', err.message)));
 
-      // Referral bonus: create transaction for referrer if referred by a valid referral code
+      /* Referral reward — XP, not cash.
+
+         This used to write a pending R500 referral_bonus transaction, while
+         the signup page advertised R250 and the portal advertised R250. The
+         referral programme rewards points only, so the money transaction is
+         gone and the referrer is awarded XP against the same level ladder the
+         quests use. Existing referral_bonus rows are left untouched: they are
+         history, and some may already have been paid. */
       if (referredBy) {
         const { rows: referrers } = await pool.query(
-          'SELECT id FROM investors WHERE referral_code = $1 LIMIT 1', [referredBy]
+          'SELECT id, xp_points FROM investors WHERE referral_code = $1 LIMIT 1', [referredBy]
         ).catch(() => ({ rows: [] }));
         if (referrers[0]) {
-          await pool.query(`
-            INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, referred_investor_id, transaction_date, created_at)
-            VALUES (gen_random_uuid(), $1, 'referral_bonus', 500, 'pending', $2, $3, $4, NOW(), NOW())
-          `, [referrers[0].id, 'REF-' + Date.now(), `Referral bonus — ${firstName.trim()} ${lastName.trim()} joined`, invId]).catch(() => {});
+          try {
+            const { getLevelForXP, REFERRAL_XP } = require('./quests');
+            const newXP = (referrers[0].xp_points || 0) + REFERRAL_XP;
+            await pool.query(
+              'UPDATE investors SET xp_points = $1, xp_level = $2, updated_at = NOW() WHERE id = $3',
+              [newXP, getLevelForXP(newXP).id, referrers[0].id]
+            );
+            console.log(`[referral] +${REFERRAL_XP}XP to ${referrers[0].id} — ${firstName.trim()} ${lastName.trim()} joined`);
+          } catch (e) {
+            console.error('[referral] XP award failed:', e.message);
+          }
         }
       }
     }
