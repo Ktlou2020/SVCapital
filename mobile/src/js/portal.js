@@ -56,6 +56,80 @@ const DEMO_INVESTOR_ID = (() => {
 const _esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const _safeUrl = u => (typeof u === 'string' && /^https?:\/\//i.test(u)) ? u : '#';
 
+/* ── Stale data notice ──────────────────────────────────────────────────────
+   The portal renders from localStorage the moment it opens so a repeat launch
+   is never a blank screen, and there is deliberately no TTL on that cache.
+   The hazard is what happens when the background refresh then fails: the
+   wallet balance, investments and transactions on screen are whatever was
+   last saved — possibly days old — presented identically to live figures.
+   That is how "my deposit is missing" support tickets start. Say plainly how
+   old the numbers are and give a way to try again.
+   ─────────────────────────────────────────────────────────────────────── */
+let _cacheStampedAt = null;   // cachedAt of the data currently on screen, or null if live
+
+function _relativeAge(ts) {
+  const mins = Math.floor((Date.now() - ts) / 60000);
+  if (mins < 1)  return 'a moment ago';
+  if (mins < 60) return `${mins} minute${mins === 1 ? '' : 's'} ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24)  return `${hrs} hour${hrs === 1 ? '' : 's'} ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `${days} day${days === 1 ? '' : 's'} ago`;
+  return `on ${new Date(ts).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+}
+
+function _staleBannerEl() {
+  let el = document.getElementById('staleDataBanner');
+  if (el) return el;
+  const host = document.querySelector('main.page-content');
+  if (!host) return null;
+  el = document.createElement('div');
+  el.id = 'staleDataBanner';
+  el.className = 'stale-banner';
+  // role=status so the notice is announced without stealing focus mid-task.
+  el.setAttribute('role', 'status');
+  el.setAttribute('aria-live', 'polite');
+  el.hidden = true;
+  host.insertBefore(el, host.firstChild);
+  return el;
+}
+
+function showStaleDataNotice() {
+  // Nothing cached means the tables already show their own "could not reach
+  // server" row — a second warning about stale figures would be untrue.
+  if (!_cacheStampedAt) return;
+  const el = _staleBannerEl();
+  if (!el) return;
+  el.innerHTML = `
+    <i class="fa-solid fa-triangle-exclamation stale-banner__icon" aria-hidden="true"></i>
+    <span class="stale-banner__text">These figures were last updated <strong>${_esc(_relativeAge(_cacheStampedAt))}</strong> — we couldn't reach the server, so they may be out of date.</span>
+    <button type="button" class="stale-banner__retry" onclick="retryPortalRefresh(this)">Try again</button>`;
+  el.hidden = false;
+}
+
+function clearStaleDataNotice() {
+  const el = document.getElementById('staleDataBanner');
+  if (el) el.hidden = true;
+}
+
+async function retryPortalRefresh(btn) {
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i> Checking…';
+  }
+  try {
+    await loadPortalData();
+  } finally {
+    // loadPortalData clears the notice itself on success. If it failed it has
+    // already re-shown it, which rebuilds this button — so only restore the
+    // label when the node is somehow still ours.
+    if (btn && btn.isConnected) {
+      btn.disabled = false;
+      btn.textContent = 'Try again';
+    }
+  }
+}
+
 let _fsDocCache = [];
 function _openFsDoc(i) {
   const doc = _fsDocCache[i] || {};
@@ -1667,6 +1741,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           PORTAL.transactions = c.transactions || [];
           PORTAL.pools        = c.pools        || [];
           PORTAL.waitlist     = c.waitlist     || [];
+          _cacheStampedAt     = c.cachedAt;
           try { renderOverview(); } catch (_) {}
           if (window.__SVC_HIDE_COVER) window.__SVC_HIDE_COVER();
           _cacheRendered = true;
@@ -1887,6 +1962,10 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
       localStorage.setItem('svc_portal_cache', JSON.stringify(_safeCache));
     } catch (_) {}
 
+    // Data on screen is now live — retire any stale notice from a failed refresh.
+    _cacheStampedAt = null;
+    clearStaleDataNotice();
+
     renderOverview(_opts.skipCharts);
     renderOnboardingWizard();
     updateStmtQuickStats();
@@ -1921,7 +2000,11 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
     if (_ib && (!PORTAL.investments.length || _ib.textContent.includes('Loading'))) _ib.innerHTML = _retryDiv;
     if (_tb && (!PORTAL.transactions.length || _tb.textContent.includes('Loading'))) _tb.innerHTML = _retryDiv;
     if (window.__SVC_HIDE_COVER) window.__SVC_HIDE_COVER();
-    Toast.error('Could not connect to server — tap "Tap to retry" to reload');
+    /* When the cache populated the tables, neither retry row above replaces
+       anything and the only signal was a toast that disappears seconds later,
+       leaving stale money figures looking current. This notice persists. */
+    showStaleDataNotice();
+    Toast.error('Could not connect to server — showing your last saved data');
   }
 }
 

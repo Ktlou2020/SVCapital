@@ -2253,3 +2253,48 @@ body:not(.dark-mode) .prod-type-tile:hover:not(.active) {
     scroll-behavior: auto !important;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Stale data notice
+   Shown only when the background refresh failed and the figures
+   on screen came from the local cache. Amber rather than red:
+   nothing has gone wrong with the money, the numbers are just
+   old, and the wording says so. Sits above the view so it stays
+   put when the user navigates between tabs.
+   ───────────────────────────────────────────────────────────── */
+.stale-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  border-left-width: 3px;
+  border-radius: var(--radius-md);
+  background: rgba(245, 158, 11, 0.10);
+  color: var(--text);
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+.stale-banner[hidden] { display: none; }
+
+.stale-banner__icon { color: #f59e0b; flex-shrink: 0; }
+.stale-banner__text { flex: 1 1 260px; min-width: 0; }
+.stale-banner__text strong { color: var(--text); white-space: nowrap; }
+
+.stale-banner__retry {
+  flex-shrink: 0;
+  padding: 7px 14px;
+  border: 1px solid rgba(245, 158, 11, 0.55);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.stale-banner__retry:hover:not(:disabled) { background: rgba(245, 158, 11, 0.18); }
+.stale-banner__retry:focus-visible { outline: 2px solid #f59e0b; outline-offset: 2px; }
+.stale-banner__retry:disabled { opacity: 0.65; cursor: default; }
