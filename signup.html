@@ -906,7 +906,7 @@
         <div class="benefit-icon" style="background:rgba(237,165,255,0.12)">
           <i class="fa-solid fa-users" style="color:#eda5ff"></i>
         </div>
-        <div class="benefit-text"><strong>Refer &amp; earn</strong> R250 bonus on every referral</div>
+        <div class="benefit-text"><strong>Refer &amp; earn</strong> 100 XP for every friend who joins</div>
       </div>
     </div>
 
@@ -2815,7 +2815,7 @@ function prefillReferral() {
     input.value = ref.toUpperCase();
     const strip = document.createElement('div');
     strip.className = 'referral-strip';
-    strip.innerHTML = `<i class="fa-solid fa-gift"></i> Referral code <strong>${ref.toUpperCase()}</strong> applied — you'll both earn R250 bonus!`;
+    strip.innerHTML = `<i class="fa-solid fa-gift"></i> Referral code <strong>${ref.toUpperCase()}</strong> applied — they'll earn 100 XP when you join!`;
     document.getElementById('referralGroup').before(strip);
   }
 }

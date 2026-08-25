@@ -157,13 +157,22 @@ router.get('/my', requireAuth, async (req, res) => {
   if (!investorId) return res.status(400).json({ error: 'No investorId on token.' });
 
   try {
-    const [cmpRes, invRes] = await Promise.all([
+    const [cmpRes, invRes, refRes] = await Promise.all([
       pool.query(
         'SELECT quest_id, completed_at, xp_awarded, data FROM quest_completions WHERE investor_id = $1',
         [investorId]
       ),
       pool.query(
         'SELECT xp_points, xp_level, investor_profile FROM investors WHERE id = $1',
+        [investorId]
+      ),
+      /* The portal cannot see who signed up under this investor's code — it
+         only ever loads its own investor — so the Refer Your First Friend
+         condition is unknowable client-side. Send the count with the quests. */
+      pool.query(
+        `SELECT COUNT(*)::int AS n FROM investors
+          WHERE referred_by IS NOT NULL AND referred_by <> ''
+            AND referred_by = (SELECT referral_code FROM investors WHERE id = $1)`,
         [investorId]
       ),
     ]);
@@ -183,6 +192,7 @@ router.get('/my', requireAuth, async (req, res) => {
       quests:      QUESTS,
       levels:      XP_LEVELS,
       profile,
+      referralCount: refRes.rows[0]?.n || 0,
     });
   } catch (err) {
     console.error('[Quests GET] error:', err.message);
@@ -214,17 +224,66 @@ router.post('/complete', requireAuth, async (req, res) => {
       return res.status(409).json({ error: 'Quest already completed.' });
     }
 
-    // Milestone verification — server-side check of underlying condition
-    if (quest.category === 'milestone' || questId.startsWith('milestone')) {
-      const { rows: invRows } = await pool.query(
-        'SELECT COALESCE(SUM(amount),0) as total FROM investments WHERE investor_id=$1 AND status=$2',
-        [investorId, 'active']
+    /* ── Milestone verification ──────────────────────────────────────────
+       These badges read as lifetime achievements — "R50,000 Invested", "Join
+       the R50k club" — so they are earned once and kept. The check used to
+       sum only status='active', which meant an investor whose investments had
+       matured could no longer claim one, and an already-claimed badge was
+       simply unreachable for anyone whose money had cycled.
+
+       Two sources, whichever is higher:
+         investors.total_invested — only ever incremented when an investment is
+           made, never reduced at maturity, so it is already a lifetime total
+           and it is the figure the portal itself shows.
+         SUM over investments — the ledger, excluding cancelled, which covers
+           investors migrated in without a running total.
+       Taking the greater of the two cannot invent a milestone: both are
+       evidence of money actually invested.
+       ─────────────────────────────────────────────────────────────────── */
+    const MILESTONE_AMOUNTS = { milestone_10k: 10000, milestone_50k: 50000, milestone_100k: 100000, milestone_250k: 250000 };
+
+    if (MILESTONE_AMOUNTS[questId]) {
+      const { rows } = await pool.query(
+        `SELECT GREATEST(
+                  COALESCE((SELECT total_invested FROM investors WHERE id = $1), 0),
+                  COALESCE((SELECT SUM(amount) FROM investments
+                             WHERE investor_id = $1 AND COALESCE(status,'') <> 'cancelled'), 0)
+                ) AS lifetime`,
+        [investorId]
       );
-      const total = parseFloat(invRows[0].total);
-      const milestoneAmounts = { milestone_10k: 10000, milestone_50k: 50000, milestone_100k: 100000, milestone_250k: 250000 };
-      const required = milestoneAmounts[questId];
-      if (required && total < required) {
+      const lifetime = parseFloat(rows[0].lifetime) || 0;
+      if (lifetime < MILESTONE_AMOUNTS[questId]) {
         return res.status(403).json({ error: 'Milestone requirement not met.' });
+      }
+    }
+
+    /* Set Maturity Instructions — met once any investment carries one. Nothing
+       verified this before, and nothing ever asked to complete it either, so
+       the badge was unreachable however many instructions were set. */
+    if (questId === 'set_maturity') {
+      const { rows } = await pool.query(
+        `SELECT 1 FROM investments
+          WHERE investor_id = $1 AND maturity_instruction IS NOT NULL
+            AND maturity_instruction <> '' LIMIT 1`,
+        [investorId]
+      );
+      if (!rows.length) {
+        return res.status(403).json({ error: 'No maturity instruction has been set yet.' });
+      }
+    }
+
+    /* Refer Your First Friend — met once somebody has registered against this
+       investor's referral code. Same story: never verified, never requested. */
+    if (questId === 'first_referral') {
+      const { rows } = await pool.query(
+        `SELECT 1 FROM investors
+          WHERE referred_by IS NOT NULL AND referred_by <> ''
+            AND referred_by = (SELECT referral_code FROM investors WHERE id = $1)
+          LIMIT 1`,
+        [investorId]
+      );
+      if (!rows.length) {
+        return res.status(403).json({ error: 'No referral has signed up yet.' });
       }
     }
 
@@ -312,4 +371,13 @@ router.post('/complete', requireAuth, async (req, res) => {
   }
 });
 
+/* Referring is rewarded in XP, not cash. Exported so the registration route
+   awards it using this file's level thresholds rather than a second copy of
+   them — the duplicate-definition habit is what put three different milestone
+   maps in the portal and left two badges permanently locked. */
+const REFERRAL_XP = 100;
+
 module.exports = router;
+module.exports.XP_LEVELS     = XP_LEVELS;
+module.exports.getLevelForXP = getLevelForXP;
+module.exports.REFERRAL_XP   = REFERRAL_XP;

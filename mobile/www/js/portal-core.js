@@ -4207,25 +4207,52 @@ async function loadQuestData() {
 }
 
 /* ─── Check milestone conditions and auto-claim if met ─── */
+/* One definition of what each milestone requires.
+
+   These badges are lifetime achievements — "R50,000 Invested", "Join the R50k
+   club" — not statements about a current balance, so they count every
+   investment the client has ever made, excluding only cancelled ones. An
+   investor whose money has matured and cycled keeps what they earned.
+   investors.total_invested is itself cumulative (only ever incremented, never
+   reduced at maturity); the ledger sum is a fallback for investors migrated in
+   without one.
+
+   This map used to be written out three times. That is how set_maturity came
+   to be hardcoded false in one copy and missing from the other two, and
+   first_referral with it — so neither badge could ever unlock, however many
+   instructions were set or friends referred. */
+function _milestoneConditions() {
+  const inv     = PORTAL.investor     || {};
+  const invests = PORTAL.investments   || [];
+  const txns    = PORTAL.transactions  || [];
+  const quests  = PORTAL.quests        || {};
+
+  const lifetime = invests.filter(i => i.status !== 'cancelled');
+  const stored   = parseFloat(inv.total_invested) || 0;
+  const ledger   = lifetime.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+  const totalInvested = Math.max(stored, ledger);
+
+  const productTypes = new Set(lifetime.map(i => i.product_type).filter(Boolean));
+
+  return {
+    first_topup:      txns.some(t => t.type === 'deposit'),
+    first_investment: lifetime.length > 0,
+    diversify:        productTypes.size >= 2,
+    milestone_10k:    totalInvested >= 10000,
+    milestone_50k:    totalInvested >= 50000,
+    milestone_100k:   totalInvested >= 100000,
+    // Met as soon as any investment carries an instruction.
+    set_maturity:     lifetime.some(i => i.maturity_instruction),
+    /* The portal only ever loads its own investor, so it cannot see who signed
+       up under this referral code. The count arrives with the quests. */
+    first_referral:   (quests.referralCount || 0) > 0,
+  };
+}
+
 async function _autoClaimMilestones() {
   if (!PORTAL.quests || !PORTAL.investor) return;
   const completed = new Set(PORTAL.quests.completedIds || []);
-  const inv       = PORTAL.investor;
-  const invests   = PORTAL.investments;
-  const txns      = PORTAL.transactions;
-  const totalInvested = parseFloat(inv.total_invested) || 0;
-
-  const productTypes = new Set(invests.filter(i => i.status === 'active' || i.status === 'paid_out')
-    .map(i => i.product_type).filter(Boolean));
-
-  const milestoneConditions = {
-    first_topup:    txns.some(t => t.type === 'deposit'),
-    first_investment: invests.length > 0,
-    diversify:      productTypes.size >= 2,
-    milestone_10k:  totalInvested >= 10000,
-    milestone_50k:  totalInvested >= 50000,
-    milestone_100k: totalInvested >= 100000,
-  };
+  const milestoneConditions = _milestoneConditions();
 
   for (const [questId, met] of Object.entries(milestoneConditions)) {
     if (met && !completed.has(questId)) {
@@ -4294,19 +4321,7 @@ function _updateXPNavBadge() {
   const inv       = PORTAL.investor;
   const invests   = PORTAL.investments;
   const txns      = PORTAL.transactions;
-  const totalInvested = parseFloat(inv?.total_invested) || 0;
-
-  const productTypes = new Set(invests.filter(i => i.status === 'active' || i.status === 'paid_out')
-    .map(i => i.product_type).filter(Boolean));
-
-  const milestones = {
-    first_topup:    txns.some(t => t.type === 'deposit'),
-    first_investment: invests.length > 0,
-    diversify:      productTypes.size >= 2,
-    milestone_10k:  totalInvested >= 10000,
-    milestone_50k:  totalInvested >= 50000,
-    milestone_100k: totalInvested >= 100000,
-  };
+  const milestones = _milestoneConditions();
 
   const readyCount = q.quests.filter(quest => {
     if (completed.has(quest.id)) return false;
@@ -4419,19 +4434,7 @@ function renderQuestView() {
   const inv       = PORTAL.investor;
   const invests   = PORTAL.investments;
   const txns      = PORTAL.transactions;
-  const totalInv  = parseFloat(inv?.total_invested) || 0;
-  const productTypes = new Set(invests.filter(i => i.status === 'active' || i.status === 'paid_out').map(i => i.product_type).filter(Boolean));
-
-  const milestones = {
-    first_topup:    txns.some(t => t.type === 'deposit'),
-    first_investment: invests.length > 0,
-    diversify:      productTypes.size >= 2,
-    milestone_10k:  totalInv >= 10000,
-    milestone_50k:  totalInv >= 50000,
-    milestone_100k: totalInv >= 100000,
-    set_maturity:   false,   // can't auto-detect without loading maturity_instructions
-    first_referral: false,
-  };
+  const milestones = _milestoneConditions();
 
   // ── Helper: build a single quest card HTML
   function _qCard(quest, cat) {
@@ -7109,26 +7112,39 @@ async function loadReferralDashboard() {
   const inv  = PORTAL.investor;
   const code = inv?.referral_code || '';
 
-  // Show real referral code + link
+  /* The link used to point at /register, which is not a route — it fell
+     through to the SPA catch-all and served the landing page, so nobody
+     clicking a referral link ever reached the signup form. The page is
+     /signup, and it reads ?ref= to pre-fill the code. */
   const codeEl = document.getElementById('referralCode');
   const linkEl = document.getElementById('referralLink');
   if (codeEl) codeEl.textContent = code || '—';
-  const refLink = code ? `${window.location.origin}/register?ref=${code}` : '—';
+  const refLink = code ? `${window.location.origin}/signup?ref=${code}` : '—';
   if (linkEl) linkEl.textContent = refLink;
 
-  // Find who referred by this investor's code
-  const all      = PORTAL.investors || [];
-  const referred = code ? all.filter(i => i.referred_by === code) : [];
-  const approved = referred.filter(i => !['pending_fica', 'suspended'].includes(i.status));
-  const invested = referred.filter(i => (i.total_invested || 0) > 0);
-  const bonuses  = (PORTAL.transactions || []).filter(t => t.type === 'referral_bonus');
-  const totalBonus = bonuses.reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+  /* Who signed up under this code has to come from the server. This used to
+     filter PORTAL.investors, which the investor portal never populates — an
+     investor only ever loads their own record — so every stat read zero no
+     matter how many people had joined. */
+  let referred = [], approved = 0, invested = 0, points = 0;
+  let POINTS_PER_REFERRAL = 100;
+  try {
+    const r = await API._fetch('GET', 'referrals/my');
+    referred = r?.referrals    || [];
+    approved = r?.approved     || 0;
+    invested = r?.invested     || 0;
+    points   = r?.pointsEarned || 0;
+    POINTS_PER_REFERRAL = r?.pointsPerReferral || POINTS_PER_REFERRAL;
+  } catch (e) {
+    console.warn('[referrals] could not load:', e.message);
+  }
 
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
   set('refStatTotal',    referred.length);
-  set('refStatApproved', approved.length);
-  set('refStatInvested', invested.length);
-  set('refStatBonuses',  Utils.rand(totalBonus));
+  set('refStatApproved', approved);
+  set('refStatInvested', invested);
+  // Points, not rand — referring earns XP towards the next level, not cash.
+  set('refStatBonuses',  points ? `${points} XP` : '0 XP');
 
   const body = document.getElementById('referredInvestorsBody');
   if (!body) return;
@@ -7137,21 +7153,17 @@ async function loadReferralDashboard() {
     return;
   }
   body.innerHTML = referred.map(r => {
-    const bonusTx = (PORTAL.transactions || []).find(t =>
-      t.type === 'referral_bonus' &&
-      (t.referred_investor_id === r.id || Math.abs(new Date(t.created_at) - new Date(r.date_joined||r.created_at)) < 86400000 * 7)
-    );
-    const bonusCell = bonusTx
-      ? `<span style="font-weight:700;color:#22c55e">${Utils.rand(bonusTx.amount||0)}</span>`
-      : `<span style="color:#fec24f">Pending</span>`;
+    // Every signup earns the same points; there is no per-referral cash to
+    // chase up, so nothing here is ever "pending".
+    const bonusCell = `<span style="font-weight:700;color:#22c55e">+${POINTS_PER_REFERRAL} XP</span>`;
     return `
     <tr>
-      <td><div style="font-weight:600;font-size:0.82rem;color:#1a1a1a">${_esc(r.first_name)} ${_esc(r.last_name)}</div></td>
-      <td>${Utils.statusBadge(r.fica_status || r.status)}</td>
-      <td>${(r.total_invested || 0) > 0
+      <td><div style="font-weight:600;font-size:0.82rem;color:#1a1a1a">${_esc(r.firstName)} ${_esc(r.lastName)}</div></td>
+      <td>${Utils.statusBadge(r.status)}</td>
+      <td>${r.invested
         ? `<span class="badge badge--green">Invested</span>`
         : `<span class="badge badge--gray">Not yet</span>`}</td>
-      <td style="font-size:0.75rem;color:#6b7280">${Utils.date(r.date_joined)}</td>
+      <td style="font-size:0.75rem;color:#6b7280">${Utils.date(r.joinedAt)}</td>
       <td>${bonusCell}</td>
     </tr>
   `}).join('');
