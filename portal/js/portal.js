@@ -5310,15 +5310,16 @@ async function submitMaturityInstruction(inv) {
   if ((type === 'switch_product' || type === 'custom_switch') && !switchProductType) { Toast.error('Please select a product to switch into'); return; }
 
   try {
-    // Set the instruction via the dedicated endpoint FIRST — it enforces the
-    // 17:00 SAST maturity-day cutoff and rejects late submissions.
-    await API._fetch('POST', 'investments/' + inv.id + '/instruction', { instruction: type });
-
-    // Persist any auxiliary fields (custom amount / product switch).
-    const extra = {};
-    if (customAmt)          extra.custom_payout_amount = customAmt;
-    if (switchProductType)  extra.switch_product_type  = switchProductType;
-    if (Object.keys(extra).length) await API.investments.update(inv.id, extra);
+    // One request, one transaction. The custom amount and switch target used to
+    // be a second PATCH sent after this call: between the two the investment
+    // read "pay out a custom amount" with no amount, and if the PATCH failed it
+    // stayed that way. The endpoint enforces the 17:00 SAST cutoff and now
+    // writes the companion fields alongside the instruction.
+    await API._fetch('POST', 'investments/' + inv.id + '/instruction', {
+      instruction:          type,
+      custom_payout_amount: customAmt,
+      switch_product_type:  switchProductType,
+    });
 
     Toast.success('Maturity instruction saved successfully!');
     SVC.track('svc_maturity_instruction', { investment_id: inv.id, action: type });
@@ -5434,14 +5435,20 @@ async function submitPoolMaturityInstruction(poolId) {
   if ((type === 'switch_product' || type === 'custom_switch') && !switchProductType) { Toast.error('Please select a product to switch into'); return; }
 
   try {
-    await Promise.all(poolInvs.map(async inv => {
-      await API._fetch('POST', 'investments/' + inv.id + '/instruction', { instruction: type });
-      const extra = {};
-      if (customAmt)         extra.custom_payout_amount = customAmt;
-      if (switchProductType) extra.switch_product_type  = switchProductType;
-      if (Object.keys(extra).length) await API.investments.update(inv.id, extra);
-    }));
-    Toast.success(`Maturity instruction applied to all ${poolInvs.length} investments!`);
+    /* One request, applied to the whole pool inside a single transaction.
+       This was Promise.all over the investments with one or two writes each
+       and no transaction: a failure partway left some carrying the new
+       instruction and the rest on the old one — on the setting that decides
+       whether the money pays out or reinvests — reported as one generic error
+       with no way to tell which had taken. It also sent one confirmation
+       e-mail per investment for a single decision. */
+    const r = await API._fetch('POST', 'investments/pool/' + poolId + '/instruction', {
+      instruction:          type,
+      custom_payout_amount: customAmt,
+      switch_product_type:  switchProductType,
+    });
+    const n = r?.updated ?? poolInvs.length;
+    Toast.success(`Maturity instruction applied to ${n} investment${n === 1 ? '' : 's'}!`);
     SVC.track('svc_pool_maturity_instruction', { pool_id: poolId, action: type });
     Modal.close('maturityModal');
     PORTAL.investments = [];
