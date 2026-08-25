@@ -7,6 +7,7 @@
     "build": "node scripts/build.js",
     "check:ios": "node scripts/check-ios-config.js",
     "check:android": "node scripts/check-android-config.js",
+    "check:api": "node scripts/check-shared-api.cjs",
     "sync": "npm run build && npx cap sync",
     "open:android": "npm run sync && node scripts/check-android-config.js --warn && npx cap open android",
     "open:ios": "npm run sync && node scripts/check-ios-config.js --warn && npx cap open ios",

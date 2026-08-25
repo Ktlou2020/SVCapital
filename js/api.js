@@ -17,6 +17,32 @@ function _svcPlatform() {
   return 'web';
 }
 
+/* ─── Session-expired overlay (native app only) ───
+   The web portal answers an expired session by navigating to the login page.
+   A native app cannot: the redirect lands mid-load and the user is left
+   looking at a white screen with no explanation. Show a modal instead.
+   Defined unconditionally but only ever called under __SVC_NATIVE__, so it
+   costs the web bundle a few lines and nothing at runtime. */
+function _showSessionExpiredOverlay() {
+  // Hide the loading cover first, or it sits on top of this.
+  if (window.__SVC_HIDE_COVER) window.__SVC_HIDE_COVER();
+  if (document.getElementById('_svcSessionExpired')) return;
+  const el = document.createElement('div');
+  el.id = '_svcSessionExpired';
+  el.style.cssText = 'position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,0.88);display:flex;align-items:center;justify-content:center;padding:32px;box-sizing:border-box';
+  el.innerHTML = `
+    <div style="background:#303030;border-radius:20px;padding:32px 24px;text-align:center;max-width:320px;width:100%">
+      <div style="font-size:2.5rem;margin-bottom:16px">🔒</div>
+      <div style="color:#fff;font-weight:800;font-size:1.1rem;margin-bottom:8px">Session Expired</div>
+      <div style="color:#9ca3af;font-size:0.85rem;line-height:1.6;margin-bottom:24px">Your session has expired. Please log in again to continue.</div>
+      <button id="_svcSessionExpiredBtn" style="background:linear-gradient(135deg,#fec24f,#ff5229);color:#fff;border:none;border-radius:12px;padding:14px 32px;font-weight:800;font-size:0.95rem;cursor:pointer;width:100%;box-shadow:0 6px 18px rgba(255,82,41,0.28)">Log In Again</button>
+    </div>`;
+  document.body.appendChild(el);
+  document.getElementById('_svcSessionExpiredBtn').addEventListener('click', function () {
+    try { Auth.logout('/login.html'); } catch (_) { window.location.href = '/login.html'; }
+  });
+}
+
 /* ─── API Base URL ─── */
 // In Capacitor native context, window.__SVC_API_BASE__ is injected by mobile/scripts/build.js
 // Otherwise fall back to the relative /api/ path (web / PWA)
@@ -191,6 +217,8 @@ const Auth = {
       await fetch(`${_API_BASE}auth/logout`, { method: 'POST', credentials: 'include' });
     } catch (_) {}
     Auth.clear(); // clears svc_token, svc_user, staffSession
+    // Native app polls in the background; stop it so no request fires post-logout.
+    if (typeof window !== 'undefined' && window._stopPolling) window._stopPolling();
     // Also call StaffAuth.clearSession() if the library is loaded on this page
     if (typeof StaffAuth !== 'undefined' && typeof StaffAuth.clearSession === 'function') {
       StaffAuth.clearSession();
@@ -261,7 +289,12 @@ const API = {
         }
       } catch (_) {}
       Auth.clear();
-      if (!window.location.pathname.includes('login')) window.location.href = '/login.html';
+      if (window.__SVC_NATIVE__) {
+        // Native: a redirect here lands mid-load and shows a white screen.
+        _showSessionExpiredOverlay();
+      } else if (!window.location.pathname.includes('login')) {
+        window.location.href = '/login.html';
+      }
       throw new Error('Session expired — please log in again.');
     }
 
