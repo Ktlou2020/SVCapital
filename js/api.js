@@ -478,6 +478,39 @@ const Utils = {
     return (Array.isArray(list) ? list : []).reduce((s, i) => s + Utils.investmentReturn(i), 0);
   },
 
+
+  /* ─────────────────────────────────────────────────────────────────────
+     MATURITY OUTCOME — what happens to this investment on its maturity date.
+
+     Missing or 'pending' means no instruction was given, and the default is
+     automatic reinvestment for another full term. That is the highest-stakes
+     default in the product, so it is stated explicitly rather than left blank.
+     Instructions close at 5pm on the maturity date.
+     ───────────────────────────────────────────────────────────────────── */
+  maturityOutcome(inv) {
+    const raw = (inv && inv.maturity_instruction) || 'pending';
+    const map = {
+      payout_all:    { label: 'Pays out in full',       decided: true  },
+      payout_return: { label: 'Returns paid out',       decided: true  },
+      payout_custom: { label: 'Custom payout',          decided: true  },
+      reinvest:      { label: 'Reinvests',              decided: true  },
+      switch_product:{ label: 'Switches product',       decided: true  },
+      custom_switch: { label: 'Custom switch',          decided: true  },
+      pending:       { label: 'Will auto-reinvest',     decided: false },
+    };
+    return map[raw] || map.pending;
+  },
+
+  /* Urgency of a maturity date, for colour and emphasis.
+     'due' 0 days · 'urgent' 1-2 · 'soon' 3-7 · 'later' beyond · null undated */
+  maturityUrgency(days) {
+    if (days == null) return null;
+    if (days <= 0) return 'due';
+    if (days <= 2) return 'urgent';
+    if (days <= 7) return 'soon';
+    return 'later';
+  },
+
   /* Format percentage */
   pct(rate, decimals = 2) {
     return (Number(rate) * 100).toFixed(decimals) + '%';

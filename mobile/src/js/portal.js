@@ -2006,7 +2006,9 @@ function renderOverview(skipCharts) {
     const nextEl = document.getElementById('wchipNext');
     const nextTxt = document.getElementById('wchipNextText');
     if (nextEl && nextTxt && days !== null) {
-      nextTxt.textContent = `Payout in ${days}d`;
+      // Was hardcoded to "Payout", which is wrong whenever the instruction is to
+      // reinvest — and wrong by default, since no instruction means auto-reinvest.
+      nextTxt.textContent = `${Utils.maturityOutcome(upcoming[0]).label} in ${days}d`;
       nextEl.style.display = 'inline-flex';
     }
   }
@@ -2212,6 +2214,17 @@ function renderOverviewInvestments() {
     const pi    = Utils.productInfo(inv.product_type);
     const days  = Utils.daysRemaining(inv.maturity_date);
     const daysStr = days != null ? `${days}d left` : Utils.date(inv.maturity_date || inv.end_date);
+    const _mo = Utils.maturityOutcome(inv);
+    const _mu = Utils.maturityUrgency(days);
+    // No instruction means the money is auto-committed for another full term, so
+    // say so on the card. Escalates inside the last week.
+    const _matLine = (_mu && _mu !== 'later')
+      ? `<div style="font-size:0.68rem;font-weight:700;margin-top:2px;color:${(_mu==='due'||_mu==='urgent')?'#ef4444':'#f59e0b'}">`
+        + `${days <= 0 ? 'Matures today' : days === 1 ? 'Matures tomorrow' : `Matures in ${days} days`}`
+        + ` · ${_mo.label}</div>`
+      : (!_mo.decided
+          ? `<div style="font-size:0.68rem;color:var(--gold);margin-top:2px">${_mo.label} — tap to choose</div>`
+          : '');
     const iconBg  = `rgba(${_hexToRgb(pi.color)},0.12)`;
     return `<div class="ov-inv-card" onclick="viewInvestmentDetail('${_esc(inv.id)}')">
       <div class="ov-inv-card__icon" style="background:${iconBg}">
@@ -2220,6 +2233,7 @@ function renderOverviewInvestments() {
       <div class="ov-inv-card__main">
         <div class="ov-inv-card__name">${_esc(inv.pool_name || inv.pool_id || 'Investment')}</div>
         <div class="ov-inv-card__meta">${_esc(pi.label)} · matures ${daysStr}</div>
+        ${_matLine}
       </div>
       <div class="ov-inv-card__right">
         <div class="ov-inv-card__amount">${Utils.rand(inv.amount)}</div>
