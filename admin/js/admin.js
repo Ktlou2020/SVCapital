@@ -6784,6 +6784,7 @@ async function loadSupport() {
     STATE.tickets = tktRes.data || [];
     if (!STATE.investors.length) STATE.investors = invRes.data || [];
     renderTicketStats();
+    _syncTicketCategoryOptions();
     renderTicketsTable();
     setupTicketFilters();
     document.getElementById('ticketBadge').textContent = _supportTickets().filter(t => ['open', 'in_progress'].includes(t.status)).length;
@@ -6804,11 +6805,44 @@ function renderTicketStats() {
   document.getElementById('tkt-urgent').textContent      = d.filter(t => ['high', 'urgent'].includes(t.priority)).length;
 }
 
+/* Categories are not a fixed list — tickets raised by the system carry values
+   the New Ticket modal never offers (payment_proof, fica_kyc). Build the
+   options from the tickets actually loaded so the filter can never offer a
+   category with nothing behind it, or miss one that exists. */
+const _CAT_ACRONYMS = { kyc: 'KYC', fica: 'FICA', aml: 'AML', eft: 'EFT', pop: 'POP' };
+
+function _ticketCategoryLabel(cat) {
+  return String(cat).split(/[_\s]+/).filter(Boolean)
+    .map(w => _CAT_ACRONYMS[w.toLowerCase()] || w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+}
+
+function _syncTicketCategoryOptions() {
+  const sel = document.getElementById('ticketCategoryFilter');
+  if (!sel) return;
+  const cats = [...new Set(_supportTickets().map(t => (t.category || '').trim()).filter(Boolean))]
+    .sort((a, b) => _ticketCategoryLabel(a).localeCompare(_ticketCategoryLabel(b)));
+
+  const signature = cats.join('|');
+  if (sel._catSig === signature) return;      // nothing changed — keep the DOM as is
+  sel._catSig = signature;
+
+  const previous = sel.value;
+  sel.innerHTML = '<option value="">All Categories</option>' +
+    cats.map(c => `<option value="${_esc(c)}">${_esc(_ticketCategoryLabel(c))}</option>`).join('');
+  // A reload can retire the selected category; fall back to All rather than filtering to nothing.
+  sel.value = cats.includes(previous) ? previous : '';
+}
+
 function renderTicketsTable() {
   const body = document.getElementById('ticketsBody');
   const stFilter = document.getElementById('ticketStatusFilter').value;
   const prFilter = document.getElementById('ticketPriorityFilter').value;
-  const items = _supportTickets().filter(t => (!stFilter || t.status === stFilter) && (!prFilter || t.priority === prFilter));
+  const catFilter = document.getElementById('ticketCategoryFilter')?.value || '';
+  const items = _supportTickets().filter(t =>
+    (!stFilter  || t.status   === stFilter) &&
+    (!prFilter  || t.priority === prFilter) &&
+    (!catFilter || (t.category || '').trim() === catFilter));
 
   if (!items.length) { body.innerHTML = '<tr><td colspan="8" class="text-center text-muted" style="padding:32px">No tickets found</td></tr>'; return; }
 
@@ -6835,6 +6869,8 @@ function renderTicketsTable() {
 function setupTicketFilters() {
   const sf = document.getElementById('ticketStatusFilter');
   const pf = document.getElementById('ticketPriorityFilter');
+  const cf = document.getElementById('ticketCategoryFilter');
+  if (cf && !cf._wired) { cf._wired = true; cf.addEventListener('change', renderTicketsTable); }
   if (sf && sf._wired) return;
   if (sf) { sf._wired = true; sf.addEventListener('change', renderTicketsTable); }
   if (pf && !pf._wired) { pf._wired = true; pf.addEventListener('change', renderTicketsTable); }
