@@ -10259,8 +10259,18 @@ async function submitKycDocument() {
     });
     // Reflect that documents are now being checked (unless already fully verified)
     if (inv && inv.kyc_status !== 'approved' && inv.fica_status !== 'approved') {
-      await API._fetch('PATCH', `tables/investors/${inv.id}`, { kyc_status: 'in_progress', fica_status: 'in_progress' }).catch(() => {});
-      Object.assign(inv, { kyc_status: 'in_progress', fica_status: 'in_progress' });
+      /* The documents themselves uploaded fine above; only this status flag is at
+         risk. It used to swallow the failure AND update local state regardless, so the
+         investor saw "verification in progress" while the server still had them as not
+         started — and their KYC gates whether they can invest at all. Only reflect
+         locally what the server actually accepted. */
+      try {
+        await API._fetch('PATCH', `tables/investors/${inv.id}`, { kyc_status: 'in_progress', fica_status: 'in_progress' });
+        Object.assign(inv, { kyc_status: 'in_progress', fica_status: 'in_progress' });
+      } catch (statusErr) {
+        console.error('[kyc] status update failed:', statusErr.message);
+        Toast.warning('Documents uploaded. Your verification status will refresh shortly.');
+      }
     }
     Toast.success('Document submitted! The compliance team will review it within 1–2 business days.');
     SVC.track('svc_kyc_uploaded', { doc_type: docType });
