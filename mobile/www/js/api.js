@@ -6,8 +6,8 @@
 'use strict';
 
 /* ─── Platform tag for analytics/audit (ios | android | web) ───
-   Sent as the X-Platform header so the server can record which platform
-   each request came from (powers admin "Mobile App Activity"). */
+   Sent as the X-Platform header so the server records which platform each
+   request came from (powers admin "Mobile App Activity"). */
 function _svcPlatform() {
   try {
     if (window.Capacitor && typeof window.Capacitor.getPlatform === 'function') {
@@ -17,10 +17,14 @@ function _svcPlatform() {
   return 'web';
 }
 
-/* ─── Session-expired overlay (native app only) ─── */
+/* ─── Session-expired overlay (native app only) ───
+   The web portal answers an expired session by navigating to the login page.
+   A native app cannot: the redirect lands mid-load and the user is left
+   looking at a white screen with no explanation. Show a modal instead.
+   Defined unconditionally but only ever called under __SVC_NATIVE__, so it
+   costs the web bundle a few lines and nothing at runtime. */
 function _showSessionExpiredOverlay() {
-  // Hide loading cover immediately — must happen before anything else so
-  // the white cover isn't blocking the overlay.
+  // Hide the loading cover first, or it sits on top of this.
   if (window.__SVC_HIDE_COVER) window.__SVC_HIDE_COVER();
   if (document.getElementById('_svcSessionExpired')) return;
   const el = document.createElement('div');
@@ -120,12 +124,6 @@ const Auth = {
       localStorage.removeItem(k);
       sessionStorage.removeItem(k);
     });
-    // On native, preserve the portal data cache so the UI renders instantly on re-login.
-    // The cache is validated against the current investor's JWT before use in portal.js.
-    if (!window.__SVC_NATIVE__) {
-      localStorage.removeItem('svc_portal_cache');
-    }
-    sessionStorage.removeItem('svc_portal_cache');
     // Also clear staffSession so StaffAuth pages redirect to login
     localStorage.removeItem('staffSession');
   },
@@ -215,12 +213,12 @@ const Auth = {
    */
   async logout(redirectTo = '/login.html') {
     if (typeof window !== 'undefined' && window.SVC) SVC.track('svc_logout', {});
-    // Stop background polling so no further API calls fire after logout
-    if (typeof window !== 'undefined' && window._stopPolling) window._stopPolling();
     try {
       await fetch(`${_API_BASE}auth/logout`, { method: 'POST', credentials: 'include' });
     } catch (_) {}
     Auth.clear(); // clears svc_token, svc_user, staffSession
+    // Native app polls in the background; stop it so no request fires post-logout.
+    if (typeof window !== 'undefined' && window._stopPolling) window._stopPolling();
     // Also call StaffAuth.clearSession() if the library is loaded on this page
     if (typeof StaffAuth !== 'undefined' && typeof StaffAuth.clearSession === 'function') {
       StaffAuth.clearSession();
@@ -264,18 +262,18 @@ const API = {
     };
     if (body && method !== 'GET') opts.body = JSON.stringify(body);
 
-    // 35-second timeout — covers Railway cold-start (~30 s)
-    const controller = new AbortController();
-    const tId = setTimeout(() => controller.abort(), 35000);
+    // Abort after 35 s so Railway cold-starts don't leave the UI hanging indefinitely
+    const _ctrl = new AbortController();
+    const _tid  = setTimeout(() => _ctrl.abort(), 35000);
     let r;
     try {
-      r = await fetch(url, { ...opts, signal: controller.signal });
+      r = await fetch(url, { ...opts, signal: _ctrl.signal });
     } catch (fetchErr) {
-      clearTimeout(tId);
+      clearTimeout(_tid);
       if (fetchErr.name === 'AbortError') throw new Error('Request timed out — server may be waking up, please try again');
       throw fetchErr;
     }
-    clearTimeout(tId);
+    clearTimeout(_tid);
 
     // Handle 401 — try silent token refresh before giving up
     if (r.status === 401) {
@@ -292,8 +290,7 @@ const API = {
       } catch (_) {}
       Auth.clear();
       if (window.__SVC_NATIVE__) {
-        // Native app: show a dismissible overlay so the user sees a clear message
-        // instead of a jarring white screen during a mid-load redirect.
+        // Native: a redirect here lands mid-load and shows a white screen.
         _showSessionExpiredOverlay();
       } else if (!window.location.pathname.includes('login')) {
         window.location.href = '/login.html';
@@ -450,11 +447,20 @@ const API = {
 const Utils = {
   /* Format South African Rand */
   rand(amount, decimals = 2) {
-    if (amount == null || isNaN(amount)) return 'R0';
+    if (amount == null || isNaN(amount)) return 'R0.00';
     return 'R' + Number(amount).toLocaleString('en-US', {
       minimumFractionDigits: decimals,
       maximumFractionDigits: decimals
     });
+  },
+
+  /* Abbreviated Rand for compact tiles — R61.1M, R1.2B, R950K */
+  randShort(amount) {
+    const n = Number(amount) || 0;
+    if (n >= 1e9)  return 'R' + (n / 1e9).toFixed(1) + 'B';
+    if (n >= 1e6)  return 'R' + (n / 1e6).toFixed(1) + 'M';
+    if (n >= 1e3)  return 'R' + (n / 1e3).toFixed(1) + 'K';
+    return 'R' + n.toFixed(0);
   },
 
 
@@ -538,6 +544,7 @@ const Utils = {
     const capital = posted.reduce((s, x) => s + (parseFloat(x.inv.amount) || 0), 0);
     return { amount, rate: capital > 0 ? amount / capital : 0, count: posted.length };
   },
+
   /* Returns earned across a set of investments. Use this rather than a local
      reduce so every surface reports the same total. */
   totalReturns(list) {
@@ -590,10 +597,18 @@ const Utils = {
     return (Number(rate) * 100).toFixed(decimals) + '%';
   },
 
-  /* Format date */
+  /* Format date.
+     - Pure date strings (YYYY-MM-DD) are parsed as LOCAL midnight so a date
+       like 2026-07-31 isn't shifted to 30 Jul by the UTC-midnight/SAST bug.
+     - Full timestamps (contain T or Z) are passed to new Date() normally so
+       the UTC value is converted to local time correctly
+       (e.g. 2026-07-30T22:00:00Z → 31 Jul SAST). */
   date(str) {
     if (!str) return '—';
-    return new Date(str).toLocaleDateString('en-ZA', {
+    const s = String(str);
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const d = m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(s);
+    return d.toLocaleDateString('en-ZA', {
       day: '2-digit', month: 'short', year: 'numeric'
     });
   },
@@ -634,9 +649,8 @@ const Utils = {
     products.forEach(p => { if (p.product_type) this._productCache[p.product_type] = p; });
   },
 
-  /* Product display info */
+  /* Product display info — checks API cache first, falls back to static map */
   productInfo(type) {
-    // Product colours use the SV Capital CI palette; each product has a unique colour.
     const map = {
       cattle:         { label: 'Cattle Investment',       icon: 'fa-cow',        color: '#fec24f', badgeClass: 'badge--gold' },
       solar:          { label: 'Solar Investment',        icon: 'fa-solar-panel', color: '#65ed00', badgeClass: 'badge--green' },
@@ -647,9 +661,12 @@ const Utils = {
       smme:           { label: 'Short Term Investment',   icon: 'fa-bolt',        color: '#ff5229', badgeClass: 'badge--orange' },
       delivery_bikes: { label: 'Delivery Bikes',          icon: 'fa-motorcycle',  color: '#fec24f', badgeClass: 'badge--orange' },
       delivery_bike:  { label: 'Delivery Bikes',          icon: 'fa-motorcycle',  color: '#fec24f', badgeClass: 'badge--orange' },
+      cattle_12j:     { label: '12J Cattle Investment',   icon: 'fa-cow',         color: '#fec24f', badgeClass: 'badge--gold'   },
+      ilobola:        { label: 'iLobola',                 icon: 'fa-heart',       color: '#eda5ff', badgeClass: 'badge--purple' },
+      gridfarmer:     { label: 'GridFarmer',              icon: 'fa-seedling',    color: '#65ed00', badgeClass: 'badge--green'  },
       other:          { label: 'Other',                   icon: 'fa-circle',      color: '#656565', badgeClass: 'badge--gray' },
     };
-    const KNOWN_CI = new Set(['cattle','solar','solar_5yr','solar_6yr','solar_7yr','short_term','smme','delivery_bike','delivery_bikes','gridfarmer']);
+    const KNOWN_CI = new Set(['cattle','solar','solar_5yr','solar_6yr','solar_7yr','short_term','smme','delivery_bike','delivery_bikes','cattle_12j','ilobola','gridfarmer']);
     const base = map[type] || { label: type || 'Other', icon: 'fa-circle', color: '#656565', badgeClass: 'badge--gray' };
     const cached = this._productCache[type];
     if (!cached) return base;
@@ -662,14 +679,11 @@ const Utils = {
     };
   },
 
-  // SV Capital CI palette assignable to products (white is reserved/excluded).
   ciProductPalette: ['#fec24f', '#ff5229', '#ffe86a', '#ffb782', '#fec24f', '#eda5ff', '#65ed00', '#0096ff', '#656565', '#303030'],
 
-  // Resolve a product's colour: known types use their CI colour from productInfo;
-  // custom/new products use their admin-assigned `color`, else a palette fallback.
   productColor(product) {
     const type = (product && product.product_type) || product;
-    const KNOWN = ['cattle', 'solar', 'solar_5yr', 'solar_6yr', 'solar_7yr', 'short_term', 'smme', 'delivery_bike', 'delivery_bikes'];
+    const KNOWN = ['cattle', 'solar', 'solar_5yr', 'solar_6yr', 'solar_7yr', 'short_term', 'smme', 'delivery_bike', 'delivery_bikes', 'cattle_12j', 'ilobola'];
     if (KNOWN.includes(type)) return this.productInfo(type).color;
     if (product && product.color) return product.color;
     return this.productInfo(type).color;
@@ -713,7 +727,30 @@ const Utils = {
       waived:           ['badge--gray',   'Waived'],
     };
     const [cls, label] = map[status] || ['badge--gray', status];
-    return `<span class="badge ${cls}">${label}</span>`;
+    return `<span class="badge ${cls}" style="text-transform:uppercase;letter-spacing:0.04em">${label}</span>`;
+  },
+
+  /* FICA/KYC status badge — handles both internal values and external provider values */
+  ficaBadge(status) {
+    const FICA_LABEL = {
+      // Internal canonical values
+      approved:    ['badge--green',  '<i class="fa-solid fa-shield-check" style="margin-right:4px"></i>KYC Verified'],
+      verified:    ['badge--green',  '<i class="fa-solid fa-shield-check" style="margin-right:4px"></i>KYC Verified'],
+      rejected:    ['badge--red',    'Rejected'],
+      submitted:   ['badge--blue',   'Pending Review'],
+      in_progress: ['badge--blue',   'Pending Review'],
+      pending:     ['badge--orange', 'Pending Review'],
+      not_started: ['badge--gray',   'No FICA Uploaded'],
+      // External / Firebase-imported capitalised values
+      Approved:    ['badge--green',  '<i class="fa-solid fa-shield-check" style="margin-right:4px"></i>KYC Verified'],
+      Verified:    ['badge--green',  '<i class="fa-solid fa-shield-check" style="margin-right:4px"></i>KYC Verified'],
+      Unverified:  ['badge--gray',   'No FICA Uploaded'],
+      Outstanding: ['badge--orange', 'Pending Review'],
+      Pending:     ['badge--orange', 'Pending Review'],
+      Declined:    ['badge--red',    'Rejected'],
+    };
+    const [cls, label] = FICA_LABEL[String(status || '').trim()] || ['badge--gray', 'No FICA Uploaded'];
+    return `<span class="badge ${cls}" style="text-transform:uppercase;letter-spacing:0.04em">${label}</span>`;
   },
 
   /* Priority badge */
@@ -745,10 +782,27 @@ const Utils = {
     return Math.min(100, Math.round((raised / pool.target_amount) * 100));
   },
 
-  /* Days remaining */
+  /* Days remaining — treats a date-only string (YYYY-MM-DD) as expiring at
+     23:58 local time on that day so pools stay open all day until close. */
   daysRemaining(dateStr) {
     if (!dateStr) return null;
-    const diff = new Date(dateStr) - Date.now();
+    let d;
+    if (typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      // If end_date is today's local date return 0 so callers show "Closing today".
+      // Math.ceil on a sub-day fraction would otherwise return 1 all day.
+      const now = new Date();
+      const todayStr = now.getFullYear() + '-' +
+        String(now.getMonth() + 1).padStart(2, '0') + '-' +
+        String(now.getDate()).padStart(2, '0');
+      if (dateStr === todayStr) return 0;
+      // Use local-date constructor — new Date('YYYY-MM-DD') parses as UTC midnight
+      // which shifts the calendar day backward in UTC+ zones like SAST.
+      const [y, mo, dy] = dateStr.split('-').map(Number);
+      d = new Date(y, mo - 1, dy, 23, 58, 0, 0);
+    } else {
+      d = new Date(dateStr);
+    }
+    const diff = d - Date.now();
     return Math.max(0, Math.ceil(diff / 86400000));
   },
 
@@ -757,7 +811,8 @@ const Utils = {
     return (pool && pool.target_type) === 'date';
   },
 
-  /* Date-target fill — fraction of the open→close window that has elapsed (0–100). */
+  /* Date-target fill — fraction of the open→close window that has elapsed (0–100).
+     Used to show a countdown progress bar for date-targeted pools. */
   poolDateProgressPct(pool) {
     const end   = pool && pool.end_date ? new Date(pool.end_date).getTime() : null;
     if (!end) return 0;
@@ -786,9 +841,10 @@ const Toast = {
     this.container.setAttribute('aria-atomic', 'false');
     document.body.appendChild(this.container);
   },
-  show(message, type = 'info', duration = 4000) {
+  show(message, type = 'info', duration, opts = {}) {
+    const defaults = { success: 6500, error: 12000, warning: 8000, info: 4000 };
+    const ms = duration ?? defaults[type] ?? 4000;
     if (!this.container) this.init();
-    // Cap at 4 visible toasts — remove oldest when exceeded
     const existing = this.container.querySelectorAll('.toast');
     if (existing.length >= 4) existing[0].remove();
     const icons = { success: 'fa-check-circle', error: 'fa-circle-xmark', info: 'fa-circle-info', warning: 'fa-triangle-exclamation' };
@@ -801,25 +857,41 @@ const Toast = {
     const msg = document.createElement('span');
     msg.className = 'toast__msg';
     msg.textContent = message;
+    toast.append(icon, msg);
+    let timer;
+    const startTimer = () => {
+      timer = setTimeout(() => {
+        toast.style.animation = 'none';
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(100%)';
+        toast.style.transition = '0.3s ease';
+        setTimeout(() => toast.remove(), 300);
+      }, ms);
+    };
+    if (opts.action) {
+      const actionBtn = document.createElement('button');
+      actionBtn.style.cssText = 'background:none;border:1px solid currentColor;cursor:pointer;color:inherit;opacity:0.9;margin-left:10px;padding:2px 10px;font-size:0.76rem;border-radius:4px;line-height:1.5;font-weight:700;white-space:nowrap;flex-shrink:0';
+      actionBtn.textContent = opts.action.label;
+      actionBtn.addEventListener('click', () => { clearTimeout(timer); toast.remove(); opts.action.callback(); });
+      toast.appendChild(actionBtn);
+    }
     const dismiss = document.createElement('button');
-    dismiss.setAttribute('style', 'background:none;border:none;cursor:pointer;color:inherit;opacity:0.5;margin-left:4px;padding:0 2px;font-size:0.9rem;line-height:1');
+    dismiss.setAttribute('style', 'background:none;border:none;cursor:pointer;color:inherit;opacity:0.5;margin-left:6px;padding:0 2px;font-size:0.9rem;line-height:1;flex-shrink:0');
     dismiss.title = 'Dismiss';
     dismiss.textContent = '×';
-    dismiss.addEventListener('click', () => toast.remove());
-    toast.append(icon, msg, dismiss);
+    dismiss.addEventListener('click', () => { clearTimeout(timer); toast.remove(); });
+    toast.appendChild(dismiss);
+    toast.addEventListener('mouseenter', () => clearTimeout(timer));
+    toast.addEventListener('mouseleave', () => startTimer());
     this.container.appendChild(toast);
-    setTimeout(() => {
-      toast.style.animation = 'none';
-      toast.style.opacity = '0';
-      toast.style.transform = 'translateX(100%)';
-      toast.style.transition = '0.3s ease';
-      setTimeout(() => toast.remove(), 300);
-    }, duration);
+    startTimer();
   },
-  success: (msg) => Toast.show(msg, 'success', 5000),
-  error:   (msg) => Toast.show(msg, 'error',   6000),
-  info:    (msg) => Toast.show(msg, 'info',    5000),
-  warning: (msg) => Toast.show(msg, 'warning', 6000),
+  success: (msg, ms, opts) => Toast.show(msg, 'success', ms, opts),
+  error:   (msg, ms, opts) => Toast.show(msg, 'error',   ms, opts),
+  info:    (msg, ms, opts) => Toast.show(msg, 'info',     ms, opts),
+  warning: (msg, ms, opts) => Toast.show(msg, 'warning',  ms, opts),
+  warn:    (msg, ms, opts) => Toast.show(msg, 'warning',  ms, opts),
+  action:  (msg, label, callback, type = 'success') => Toast.show(msg, type, 8000, { action: { label, callback } }),
 };
 
 /* ═══════════════════════════════════════════════
@@ -866,6 +938,18 @@ const Modal = {
       m.classList.remove('open');
     });
     document.body.style.overflow = '';
+  },
+  openInline(html) {
+    let el = document.getElementById('_inlineModal');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = '_inlineModal';
+      el.className = 'modal-overlay';
+      el.addEventListener('click', function(e) { if (e.target === el) Modal.close('_inlineModal'); });
+      document.body.appendChild(el);
+    }
+    el.innerHTML = `<div class="modal" style="max-width:460px">${html}</div>`;
+    Modal.open('_inlineModal');
   }
 };
 
