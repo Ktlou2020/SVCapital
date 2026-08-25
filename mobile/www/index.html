@@ -312,11 +312,11 @@
           </div>
           <div class="portfolio-hero__stats">
             <div class="ph-stat" style="cursor:pointer" onclick="navigate('investments', document.querySelector('[data-view=investments]'))" title="My Investments">
-              <span class="ph-stat__label">Invested</span>
+              <span class="ph-stat__label">Invested · Locked</span>
               <span class="ph-stat__value" id="pov-invested">—</span>
             </div>
             <div class="ph-stat" style="cursor:pointer" onclick="navigate('wallet', document.querySelector('[data-view=wallet]'))" title="Wallet">
-              <span class="ph-stat__label">Wallet</span>
+              <span class="ph-stat__label">Wallet · Available</span>
               <span class="ph-stat__value" id="pov-wallet">—</span>
             </div>
             <div class="ph-stat" style="cursor:pointer" onclick="navigate('transactions', document.querySelector('[data-view=transactions]'))" title="Transactions">
@@ -616,7 +616,7 @@
             <div class="wallet-card mb-20">
               <div class="wallet-card__label">Available Balance</div>
               <div class="wallet-card__value" id="walletBalance">—</div>
-              <div class="wallet-card__sub">Funds are available to invest immediately</div>
+              <div class="wallet-card__sub">Yours to invest or withdraw at any time</div>
               <div class="wallet-card__actions">
                 <button class="btn btn--primary" onclick="openTopUpModal()"><i class="fa-solid fa-plus"></i> Top Up</button>
                 <button class="btn btn--secondary" onclick="openWithdrawalModal()"><i class="fa-solid fa-arrow-up-from-bracket"></i> Withdraw</button>
@@ -1057,7 +1057,7 @@
             <div class="panel">
               <div class="panel__header"><span class="panel__title">FAQ</span></div>
               <div class="panel__body" id="portalFaqBody">
-                <div class="faq-quick-item"><button class="faq-quick-q" onclick="toggleQuickFaq(this)">Can I withdraw early?<i class="fa-solid fa-chevron-down"></i></button><div class="faq-quick-a">Early withdrawals are not permitted. Funds are locked for the full term. You can store funds in your wallet before investing.</div></div>
+                <div class="faq-quick-item"><button class="faq-quick-q" onclick="toggleQuickFaq(this)">Can I withdraw early?<i class="fa-solid fa-chevron-down"></i></button><div class="faq-quick-a">It depends which money you mean. <strong>Your wallet balance is yours to withdraw at any time</strong> — request it from the Wallet page and it is paid to your verified bank account. <strong>Money already placed in an investment is locked until that investment matures</strong> and cannot be released early. When an investment matures its value returns to your wallet, and from there you can withdraw it or invest it again.</div></div>
                 <div class="faq-quick-item"><button class="faq-quick-q" onclick="toggleQuickFaq(this)">When do I receive returns?<i class="fa-solid fa-chevron-down"></i></button><div class="faq-quick-a">Returns are paid at maturity for cattle and short-term investments. Solar returns are distributed annually.</div></div>
                 <div class="faq-quick-item"><button class="faq-quick-q" onclick="toggleQuickFaq(this)">How do I submit a maturity instruction?<i class="fa-solid fa-chevron-down"></i></button><div class="faq-quick-a">Go to Maturity Instructions in the sidebar. You must submit before 5:00 PM on your maturity date.</div></div>
                 <div class="faq-quick-item"><button class="faq-quick-q" onclick="toggleQuickFaq(this)">Is my money safe?<i class="fa-solid fa-chevron-down"></i></button><div class="faq-quick-a">All funds are managed by SmartVest Financial Services, an FSCA-regulated FSP (License #52449). SV Capital conducts rigorous due diligence on all investment partners.</div></div>
@@ -3050,7 +3050,7 @@
   </div>
 </nav>
 
-<script src="../js/api.js?v=11"></script>
+<script src="../js/api.js?v=12"></script>
 <script src="js/portal.js?v=34"></script>
 <!-- sv-intelligence.js hidden -->
 <script>

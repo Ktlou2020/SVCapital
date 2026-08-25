@@ -1978,7 +1978,9 @@ function renderOverview(skipCharts) {
     const nextEl = document.getElementById('wchipNext');
     const nextTxt = document.getElementById('wchipNextText');
     if (nextEl && nextTxt && days !== null) {
-      nextTxt.textContent = `Payout in ${days}d`;
+      // Was hardcoded to "Payout", which is wrong whenever the instruction is to
+      // reinvest — and wrong by default, since no instruction means auto-reinvest.
+      nextTxt.textContent = `${Utils.maturityOutcome(upcoming[0]).label} in ${days}d`;
       nextEl.style.display = 'inline-flex';
     }
   }
@@ -2164,6 +2166,29 @@ function dismissOnboarding() {
   if (wizard) wizard.style.display = 'none';
 }
 
+/* Countdown + pending outcome for one maturing investment.
+   Without an instruction the money is automatically committed to another full
+   term, so that outcome is stated on the row rather than left for the investor
+   to discover afterwards. Emphasis escalates as the 5pm deadline approaches. */
+function _maturityNote(inv, days) {
+  const o = Utils.maturityOutcome(inv);
+  const urgency = Utils.maturityUrgency(days);
+  const link = (text, colour, weight) =>
+    `<a href="#" onclick="navigate('maturity', document.querySelector('[data-view=maturity]'));return false"` +
+    ` style="color:${colour};font-weight:${weight};text-decoration:none">${text}</a>`;
+
+  if (!urgency || urgency === 'later') {
+    return `<div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px">` +
+      (o.decided ? o.label : link(o.label + ' — choose', 'var(--gold)', 600)) + `</div>`;
+  }
+  const tone = (urgency === 'due' || urgency === 'urgent') ? '#ef4444' : '#f59e0b';
+  const when = days <= 0 ? 'Matures today' : days === 1 ? 'Matures tomorrow' : `Matures in ${days} days`;
+  return `<div style="font-size:0.72rem;font-weight:700;color:${tone};margin-top:3px">${when}</div>
+    <div style="font-size:0.7rem;margin-top:1px">` +
+    (o.decided ? `<span style="color:var(--text-muted)">${o.label}</span>`
+               : link(o.label + ' — change it', tone, 700)) + `</div>`;
+}
+
 function renderOverviewInvestments() {
   const body = document.getElementById('overviewInvestmentsBody');
   if (!body) return;
@@ -2187,7 +2212,10 @@ function renderOverviewInvestments() {
       <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
       <td class="td-gold fw-700">${Utils.rand(inv.amount)}</td>
       <td class="td-muted">${Utils.date(inv.investment_date || inv.start_date)}</td>
-      <td class="td-muted">${Utils.date(inv.maturity_date || inv.end_date)}</td>
+      <td class="td-muted">
+        <div>${Utils.date(inv.maturity_date || inv.end_date)}</div>
+        ${_maturityNote(inv, days)}
+      </td>
       <td>${Utils.statusBadge(inv.status)}</td>
     </tr>`;
   }).join('');
