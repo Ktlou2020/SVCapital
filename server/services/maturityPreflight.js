@@ -138,8 +138,15 @@ async function runMaturityPreflight(db, { horizonDays = 14 } = {}) {
        ORDER BY end_date ASC NULLS LAST, created_at ASC
        LIMIT 1`, [pt]);
 
+    /* Capital plus the POSTED return, which is what actually moves — not
+       expected_return, which the engine no longer pays. On the migrated pools
+       expected_return is 0 across the board, so using it understated the
+       figure by the entire return: R6.07m reported against R6.65m real. The
+       number people size a decision on has to be the number that moves. */
     const incoming = round2(willRoll.filter(m => (m.product_type || 'general') === pt)
-      .reduce((s, m) => s + num(m.amount) + num(m.expected_return), 0));
+      .reduce((s, m) => s + num(m.amount) + (postedReturn({
+        amount: m.amount, actualReturn: m.actual_return,
+        poolActualRate: m.pool_actual_rate }) || 0), 0));
 
     if (!t) {
       result.reinvestTargets.push({ productType: pt, poolId: null, incoming });
