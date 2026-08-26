@@ -49,10 +49,12 @@ function extractRow(marker, endMarker) {
 
 const LIST_ROW = extractRow('`<tr tabindex="0" style="cursor:pointer"', '</tr>`');
 const TAB_ROW  = extractRow('`<tr style="cursor:pointer" onclick=\'viewInvestmentDetail(', '</tr>`');
+const POOL_ROW = extractRow('`<tr style="cursor:pointer;${isCancelled', '</tr>`');
 
 ok('the All Investments row template was found', !!LIST_ROW);
 ok('the investor-tab row template was found', !!TAB_ROW);
-if (!LIST_ROW || !TAB_ROW) { console.log(`\n${pass} passed, ${fail} failed`); process.exit(1); }
+ok('the pool-investors row template was found', !!POOL_ROW);
+if (!LIST_ROW || !TAB_ROW || !POOL_ROW) { console.log(`\n${pass} passed, ${fail} failed`); process.exit(1); }
 
 /* Evaluate a template against a stub environment to get real HTML. */
 function renderRow(tpl, extraVars) {
@@ -67,6 +69,7 @@ function renderRow(tpl, extraVars) {
     investDate: '2026-03-31',
     Utils: {
       date: () => '31 Mar 2026', rand: v => 'R ' + v,
+      pct: v => (Number(v) * 100).toFixed(2) + '%',
       statusBadge: () => '<span class="badge">ACTIVE</span>',
       productInfo: () => ({ label: 'Short Term Investment', badgeClass: 'badge--orange', icon: 'fa-bolt' }),
       rateCell: () => '<span>2.13%</span>',
@@ -81,17 +84,33 @@ function renderRow(tpl, extraVars) {
 
 const listHtml = renderRow(LIST_ROW);
 const tabHtml  = renderRow(TAB_ROW, { id: 'S-1105' });
+/* The pool-investors row is a different shape: its record is one investment
+   joined to its investor, and the id that matters is investment_id. */
+const poolHtml = renderRow(POOL_ROW, {
+  isCancelled: false,
+  _currentPoolId: 'POOL-1',
+  r: { investment_id: 'INV-1', investor_id: 'S-1105', email: 'saki@example.test',
+       amount: '147380.00', upfront_fee: 0, platform_fee: '1473.80', eva_contribution: 0,
+       net_amount: '147380.00', investment_status: 'active', start_date: '2026-03-01',
+       is_reinvestment: false, maturity_instruction: 'payout_all' },
+  name: 'Saki Makume',
+  acctCell: '<span>S-111105</span>',
+  effRate: 0.1183,
+  statusColor: { active: 'badge--green' },
+});
 
 const page = `<!doctype html><meta charset="utf-8"><body>
 <table id="list"><tbody>${listHtml}</tbody></table>
 <table id="tab"><tbody>${tabHtml}</tbody></table>
+<table id="pool"><tbody>${poolHtml}</tbody></table>
 <script>
 window.__fired = [];
-function viewInvestmentDetail(id, backTo){ window.__fired.push('detail:' + id + (backTo ? '|back=' + backTo : '')); }
+function viewInvestmentDetail(id, backTo, backKind){ window.__fired.push('detail:' + id + (backTo ? '|back=' + backTo : '') + (backKind ? '|kind=' + backKind : '')); }
 function viewInvestor(id){ window.__fired.push('investor:' + id); }
 function viewPoolInvestors(id){ window.__fired.push('pool:' + id); }
 function openMoveInvestment(id, poolId){ window.__fired.push('move:' + id); }
 function _invUpdateBulkBar(){ window.__fired.push('bulkbar'); }
+var Modal = { close: function(id){ window.__fired.push('close:' + id); }, open: function(id){ window.__fired.push('open:' + id); } };
 
 function clickAndReport(label, sel, within) {
   window.__fired = [];
@@ -110,6 +129,8 @@ var results = [
   clickAndReport('list:eyebutton', 'button',               '#list'),
   clickAndReport('tab:row',        'td:nth-child(1)',      '#tab'),
   clickAndReport('tab:movebutton', 'button',               '#tab'),
+  clickAndReport('pool:row',       'td:nth-child(3)',      '#pool'),
+  clickAndReport('pool:investorcell','td:nth-child(1)',     '#pool'),
 ];
 document.title = 'RESULTS' + JSON.stringify(results);
 <\/script></body>`;
@@ -161,6 +182,20 @@ ok('and passes the investor back-reference, so there is a way back',
 ok('clicking Move to pool does NOT also open the detail',
    fired('tab:movebutton').includes('move:INV-1') && !fired('tab:movebutton').some(f => f.startsWith('detail:')),
    JSON.stringify(fired('tab:movebutton')));
+
+console.log('\nPool investors list');
+ok('clicking the row opens the INVESTMENT, not the investor',
+   fired('pool:row').some(f => f.startsWith('detail:INV-1')) &&
+   !fired('pool:row').some(f => f.startsWith('investor:')),
+   JSON.stringify(fired('pool:row')));
+ok('the way back is the pool it was opened from',
+   fired('pool:row').some(f => f.includes('|back=POOL-1') && f.includes('|kind=pool')),
+   JSON.stringify(fired('pool:row')));
+ok('and the pool list closes behind it',
+   fired('pool:row').includes('close:poolInvestorsModal'), JSON.stringify(fired('pool:row')));
+ok('the investor cell behaves the same as the rest of the row',
+   fired('pool:investorcell').some(f => f.startsWith('detail:INV-1')),
+   JSON.stringify(fired('pool:investorcell')));
 
 fs.rmSync(dir, { recursive: true, force: true });
 console.log(`\n${pass} passed, ${fail} failed`);
