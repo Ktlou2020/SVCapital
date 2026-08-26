@@ -343,10 +343,28 @@ async function reinvestAmount(client, inv, amount, productType, sourcePoolName) 
   const amt = round2(amount);
   if (amt <= 0) return;
   try {
+    /* The end_date floor is what stops a stale pool capturing every rollover.
+       Without it the filter was status='open' alone, and the ordering is
+       end_date ASC — so the pool that closed longest ago sorted FIRST and won.
+       Matured funds landed in a pool that had closed in September 2024.
+
+       A pool cannot be relied on to leave 'open' by itself: the cycler only
+       considers pools that closed within the last 60 days, so anything staler
+       stays open forever and keeps winning.
+
+       CURRENT_DATE, not a strict future date: the intended target is the pool
+       closing at this month-end, and on the maturity night that pool's
+       end_date IS today. 23:00 SAST is 21:00 UTC the same day, so the server's
+       CURRENT_DATE has not rolled over and today's pool still qualifies.
+
+       If nothing qualifies, `target` is null and the amount is paid to the
+       wallet with a description saying why — visible and spendable, rather
+       than buried in a pool that is finished. */
     const { rows: targets } = await client.query(
       `SELECT * FROM investment_pools
         WHERE status = 'open'
           AND product_type = $1
+          AND (end_date IS NULL OR end_date >= CURRENT_DATE)
           AND (max_investment IS NULL OR COALESCE(current_invested,0) < max_investment)
         ORDER BY end_date ASC NULLS LAST, created_at ASC
         LIMIT 1`,
