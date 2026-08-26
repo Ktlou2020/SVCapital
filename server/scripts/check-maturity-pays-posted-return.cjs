@@ -121,13 +121,9 @@ async function ensureSchema() {
 }
 
 async function seed() {
-  /* Stale pools left 'open' past their close date capture the reinvest target
-     query, which orders by end_date ASC with no floor. The seeded demo pools
-     are exactly that shape, so neutralise them or this test measures the
-     wrong thing. */
-  await pool.query(
-    `UPDATE investment_pools SET status='active'
-      WHERE status='open' AND end_date IS NOT NULL AND end_date < CURRENT_DATE`);
+  /* The seeded demo pools include several left 'open' years past their close
+     date. They are deliberately NOT cleaned up here: the target query must
+     reject them on its own, which is what the stale-pool assertions check. */
   await pool.query(`DELETE FROM transactions WHERE investor_id LIKE 'INV-MAT%'`);
   await pool.query(`DELETE FROM investments  WHERE investor_id LIKE 'INV-MAT%'`);
   await pool.query(`DELETE FROM investors    WHERE id LIKE 'INV-MAT%'`);
@@ -158,6 +154,16 @@ async function seed() {
   /* A pool whose rate has NOT been posted. Its investment must be held back,
      not paid at the projection. */
   await maturingPool('POOL-MAT-NR', 'Unposted - August 2026',   'short_term', 0);
+
+  /* A stale pool: closed long ago, still sitting 'open'. Because the target
+     query orders by end_date ASC, this sorts FIRST and used to win every
+     rollover. It must now be rejected outright. */
+  await pool.query(`
+    INSERT INTO investment_pools
+      (id, name, product_type, status, annual_rate, actual_rate, term_months,
+       start_date, end_date, maturity_date, min_investment, current_invested, raised_amount)
+    VALUES ('POOL-MAT-STALE','Short Term - September 2024','short_term','open',
+            0.12, 0, 6, CURRENT_DATE - 900, CURRENT_DATE - 720, CURRENT_DATE - 540, 1000, 0, 0)`);
 
   /* The pool a reinvestment should roll into — open, current, same product. */
   await pool.query(`
@@ -245,8 +251,40 @@ const returnsOf = async id =>
           `rolled ${rand(ri.amount)}; posted would be ${rand(100000 + POSTED_ST)}, ` +
           `projected ${rand(100000 + PROJECTED)}`);
       ok('into a pool that is still open for funds', ri.pool_id === 'POOL-MAT-SEP',
-         `went to ${ri.pool_id} — the target query has no end_date filter and orders by ` +
-         `end_date ASC, so the most stale open pool wins`);
+         `went to ${ri.pool_id}`);
+      ok('and not into the stale pool that sorts ahead of it',
+         ri.pool_id !== 'POOL-MAT-STALE',
+         'a pool closed 720 days ago is still "open" and sorts first under end_date ASC');
+      ok('nor any of the seeded pools left open past their close date',
+         !['POOL-003', 'POOL-005', 'POOL-007'].includes(ri.pool_id),
+         `went to ${ri.pool_id}`);
+    }
+
+    console.log('\nthe target query rejects a closed pool but keeps today\'s');
+    {
+      /* The floor is CURRENT_DATE, not tomorrow: on the maturity night the
+         intended target is the pool closing that very day. Assert both edges
+         against the same query the engine runs. */
+      const target = async productType => (await pool.query(
+        `SELECT id FROM investment_pools
+          WHERE status = 'open' AND product_type = $1
+            AND (end_date IS NULL OR end_date >= CURRENT_DATE)
+            AND (max_investment IS NULL OR COALESCE(current_invested,0) < max_investment)
+          ORDER BY end_date ASC NULLS LAST, created_at ASC LIMIT 1`, [productType])).rows[0];
+
+      await pool.query(
+        `INSERT INTO investment_pools (id, name, product_type, status, annual_rate, term_months,
+           start_date, end_date, min_investment)
+         VALUES ('POOL-MAT-TODAY','Closes Today','edge_case','open',0.1,6,
+                 CURRENT_DATE - 30, CURRENT_DATE, 1000)`);
+      const today = await target('edge_case');
+      ok('a pool closing TODAY still qualifies', today && today.id === 'POOL-MAT-TODAY',
+         'the engine runs at 23:00 SAST = 21:00 UTC, so today\'s pool is the intended target');
+
+      await pool.query(`UPDATE investment_pools SET end_date = CURRENT_DATE - 1 WHERE id='POOL-MAT-TODAY'`);
+      const yesterday = await target('edge_case');
+      ok('the same pool one day later does not', !yesterday,
+         `still selected ${yesterday && yesterday.id}`);
     }
 
     console.log('\nposting the rate releases what was held back');
