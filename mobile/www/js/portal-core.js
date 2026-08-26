@@ -1664,8 +1664,23 @@ async function loadMyInvestments() {
 
 function renderMyInvestmentStats() {
   const d = PORTAL.investments;
-  document.getElementById('mi-capital').textContent  = Utils.rand(d.filter(i => !i.is_reinvestment).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0));
+
+  /* Capital Deployed is present tense: money at work right now.
+
+     It was `!is_reinvestment` across every status, which answers neither
+     question cleanly and errs in both directions at once — it counted capital
+     from investments that matured or paid out years ago, while excluding
+     reinvestments, which are deployed capital. A rolled-over investment is
+     working money whatever funded it.
+
+     Active only, so nothing is double-counted: when an investment matures and
+     rolls over, the original leaves this figure as the reinvestment enters. */
+  document.getElementById('mi-capital').textContent = Utils.rand(
+    d.filter(i => i.status === 'active')
+     .reduce((s, i) => s + (parseFloat(i.amount) || 0), 0));
+
   // Earned means declared. 0 here is a true statement, not a missing figure.
+  // Cumulative across the portfolio, which is what "earned" implies.
   document.getElementById('mi-earned').textContent   = Utils.rand(Utils.earnedReturns(d));
   document.getElementById('mi-count').textContent    = d.length;
 }
@@ -1750,7 +1765,9 @@ function renderMyInvestmentCards() {
     return;
   }
 
-  const groups = _groupInvsByPool(items);
+  // Soonest maturity first — what a client needs to act on comes first, not
+  // whatever order the API happened to return.
+  const groups = _groupInvsByPool(items).sort((a, b) => Utils.byGroupMaturity(a, b));
 
   grid.innerHTML = groups.map(group => {
     const inv = group[0];
@@ -3382,7 +3399,8 @@ async function loadMaturity() {
   let html = '';
 
   if (active.length) {
-    const activeGroups = _groupInvsByPool(active);
+    // Soonest first — the section is called Upcoming Maturities.
+    const activeGroups = _groupInvsByPool(active).sort((a, b) => Utils.byGroupMaturity(a, b));
     html += `
       <div class="mc2-section-header">
         <span class="mc2-section-header__icon"><i class="fa-solid fa-hourglass-half"></i></span>
@@ -3518,7 +3536,8 @@ async function loadMaturity() {
   }
 
   if (matured.length) {
-    const maturedGroups = _groupInvsByPool(matured);
+    // Most recently matured first — for these, latest is what matters.
+    const maturedGroups = _groupInvsByPool(matured).sort((a, b) => Utils.byGroupMaturity(a, b));
     if (active.length) {
       html += `<div class="mc2-section-divider">
         <div class="mc2-section-divider__line"></div>
