@@ -7537,18 +7537,77 @@ async function viewTicket(id) {
 /* ═══════════════════════════════════════════════
    ANALYTICS
    ═══════════════════════════════════════════════ */
+const ANALYTICS_PAGE_LIMIT = 5000;
+
+/* Every figure on this page is computed in the browser from these three
+   lists. They are fetched one page deep, so past ANALYTICS_PAGE_LIMIT rows the
+   arithmetic silently runs on a subset: the charts still draw, the KPIs still
+   look plausible, and they are wrong. The API returns `total` alongside the
+   rows and nothing was comparing the two.
+
+   This does not fix the underlying problem — aggregates belong in SQL, the way
+   analytics-extra.js already does it — but it stops the page presenting a
+   partial answer as a complete one. */
+function _analyticsTruncation(loadedVsTotal) {
+  const el = document.getElementById('an-truncation');
+  if (!el) return;
+  const short = loadedVsTotal.filter(t => Number.isFinite(t.total) && t.loaded < t.total);
+  if (!short.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+
+  el.style.display = '';
+  el.innerHTML = `
+    <div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.35);border-radius:8px;padding:12px 14px">
+      <div style="font-weight:700;color:#ef4444">
+        <i class="fa-solid fa-circle-exclamation" style="margin-right:6px"></i>
+        These figures are incomplete — do not report them
+      </div>
+      <div style="margin-top:6px;font-size:0.82rem">
+        This page reads one page of each table and computes everything in the browser.
+        ${short.map(t => `<div><strong>${_esc(t.label)}</strong>: using
+          ${t.loaded.toLocaleString('en-US')} of ${t.total.toLocaleString('en-US')} rows
+          — ${(t.total - t.loaded).toLocaleString('en-US')} excluded</div>`).join('')}
+      </div>
+      <div style="margin-top:6px;font-size:0.78rem;color:var(--text-muted)">
+        Every total, average and chart below is derived from the rows that were read.
+        The panels fed by server-side queries (revenue, maturity, IFA, sub-accounts,
+        interest history, withdrawals) are unaffected.
+      </div>
+    </div>`;
+}
+
 async function loadAnalytics() {
   try {
+    let counts = null;
     if (!STATE.investors.length || !STATE.investments.length) {
       const [invRes, invstRes, txnRes] = await Promise.all([
-        API.investors.list({ limit: 5000 }),
-        API.investments.list({ limit: 5000 }),
-        API.transactions.list({ limit: 5000 })
+        API.investors.list({ limit: ANALYTICS_PAGE_LIMIT }),
+        API.investments.list({ limit: ANALYTICS_PAGE_LIMIT }),
+        API.transactions.list({ limit: ANALYTICS_PAGE_LIMIT })
       ]);
       STATE.investors = invRes.data || [];
       STATE.investments = invstRes.data || [];
       STATE.transactions = txnRes.data || [];
+      counts = [
+        { label: 'Investors',    loaded: STATE.investors.length,    total: Number(invRes.total) },
+        { label: 'Investments',  loaded: STATE.investments.length,  total: Number(invstRes.total) },
+        { label: 'Transactions', loaded: STATE.transactions.length, total: Number(txnRes.total) },
+      ];
+    } else {
+      /* Served from cache, so the totals are unknown — and cache filled by
+         another view may be smaller still. A limit=1 read returns the count
+         without the rows, which is the same count the list call already runs. */
+      const [i, v, t] = await Promise.all([
+        API.investors.list({ limit: 1 }),
+        API.investments.list({ limit: 1 }),
+        API.transactions.list({ limit: 1 }),
+      ]);
+      counts = [
+        { label: 'Investors',    loaded: STATE.investors.length,    total: Number(i.total) },
+        { label: 'Investments',  loaded: STATE.investments.length,  total: Number(v.total) },
+        { label: 'Transactions', loaded: STATE.transactions.length, total: Number(t.total) },
+      ];
     }
+    _analyticsTruncation(counts);
 
     const now = Date.now();
     const thirtyDays = 30 * 86400000;
