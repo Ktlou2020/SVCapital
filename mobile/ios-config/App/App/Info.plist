@@ -12,25 +12,34 @@
          separate, never-released App Store Connect record and must not be used. -->
     <key>CFBundleIdentifier</key>
     <string>co.za.svcapital.app</string>
-    <!-- The Xcode project (mobile/ios/, gitignored) is the source of truth for
-         these at archive time; the values here only seed a fresh `cap add ios`.
+    <!-- DO NOT EDIT THESE BY HAND. They are written from mobile/version.json by
+         `npm run apply:ios`, which is also where Android reads versionName, so
+         the two stores cannot describe one release differently again. They did:
+         Android was on 5.2 while this file still said 4.1.0.
+
+         The Xcode project (mobile/ios/, gitignored) is the source of truth at
+         archive time; the values here seed a fresh `cap add ios` and are what
+         check:ios compares the project against.
 
          Two separate App Store Connect rules apply:
 
          1. A marketing version (CFBundleShortVersionString) whose build has been
             approved for sale is a CLOSED train - it accepts no further uploads at
             any build number (error 90186). 4.0.9 build 7 was sale-approved, so
-            4.0.9 is closed and 4.1.0 is the next open train.
+            4.0.9 is closed. 4.1.0 was the next open train and was never shipped;
+            moving to 5.2 to match Android abandons it. Anything uploaded under
+            4.1.0 stays there and cannot be promoted.
          2. Within a train, CFBundleVersion must strictly increase (error 90062).
 
          Build numbers ran 79, 83, 84, 85 and were then reset to 4-7 for 4.0.9,
          which is what made "what is the next build number" ambiguous. Continuing
          from the all-time high instead of restarting keeps them monotonic across
-         trains so the question stays unambiguous. -->
+         trains so the question stays unambiguous - which is why opening the 5.2
+         train goes to 87 rather than back to 1. -->
     <key>CFBundleVersion</key>
-    <string>86</string>
+    <string>87</string>
     <key>CFBundleShortVersionString</key>
-    <string>4.1.0</string>
+    <string>5.2</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>

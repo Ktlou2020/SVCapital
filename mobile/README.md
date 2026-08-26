@@ -56,15 +56,16 @@ After running `cap add android` / `cap add ios`:
 # Android — one command, safe to re-run
 npm run apply:android
 
-# iOS — copy Info.plist and Privacy Manifest into Xcode project
-cp ios-config/App/App/Info.plist        ios/App/App/
+# iOS — set the version, then copy Info.plist and the Privacy Manifest in
+npm run apply:ios
+cp ios-config/App/App/Info.plist             ios/App/App/
 cp ios-config/App/App/PrivacyInfo.xcprivacy  ios/App/App/
 ```
 
 `apply:android` copies `res/`, `AndroidManifest.xml` and `variables.gradle`, then edits
 `android/app/build.gradle`: the guarded keystore loader, `signingConfigs` as a direct child
 of `android { }`, `signingConfig signingConfigs.release` on the release buildType, and the
-version from `android-config/version.json`. It reports what it changed and does nothing to
+version from `mobile/version.json`. It reports what it changed and does nothing to
 anything already correct. `npm run open:android` and `npm run run:android` invoke it for you.
 
 > **Why a script and not a `cp`:** in the stock Capacitor `build.gradle`, `aaptOptions` sits
@@ -134,9 +135,35 @@ hoping it went unread.
 
 #### Versioning
 
-`android-config/version.json` is the single source of truth; `apply:android` writes it into
-`build.gradle`. Bump `versionCode` for **every** upload — Play rejects a reused one, and only
+`mobile/version.json` is the single source of truth for **both** stores:
+
+| field | Android | iOS |
+|---|---|---|
+| `versionName` | `versionName` | `CFBundleShortVersionString` |
+| `androidVersionCode` | `versionCode` | — |
+| `iosBuildNumber` | — | `CFBundleVersion` |
+
+`npm run apply:android` and `npm run apply:ios` write it into the projects; `npm run
+check:version` verifies the two stores agree. It lives at the top level because iOS and
+Android drifted while their versions were in unrelated files — Android reached 5.2 while
+`ios-config/Info.plist` still said 4.1.0, and nothing noticed.
+
+Bump `androidVersionCode` for **every** Play upload — Play rejects a reused one, and only
 Play knows what has been used, so no local check can catch it.
+
+**iOS has two rules that bite at upload, not at build:**
+
+- A marketing version whose build was approved for sale is a **closed train** — it rejects
+  any further upload at any build number (error 90186). Changing `versionName` opens a new
+  train and abandons the old one; anything uploaded under it stays there.
+- Within a train, `CFBundleVersion` must **strictly increase** (error 90062).
+
+Build numbers are kept monotonic *across* trains here, so "what is the next build number"
+has one answer. That is why opening the 5.2 train went to 87, not back to 1.
+
+The Xcode project — not `Info.plist` — is what actually ships. If it sets
+`MARKETING_VERSION` / `CURRENT_PROJECT_VERSION` in build settings, change them there too;
+`npm run check:ios` compares the two.
 
 #### Build & upload
 
@@ -162,8 +189,9 @@ Play knows what has been used, so no local check can catch it.
 
 #### Build & submit
 1. `npm run add:ios` (first time only — generates `ios/` folder)
-2. Copy native configs:
+2. Set the version and copy native configs:
    ```bash
+   npm run apply:ios
    cp ios-config/App/App/Info.plist             ios/App/App/
    cp ios-config/App/App/PrivacyInfo.xcprivacy  ios/App/App/
    ```

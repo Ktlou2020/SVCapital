@@ -163,7 +163,7 @@ function inspect(text) {
   };
 }
 
-const wantVersion = JSON.parse(fs.readFileSync(path.join(MOBILE, 'android-config', 'version.json'), 'utf8'));
+const wantVersion = require('./version').readVersion();
 
 console.log('\nfrom a stock Capacitor build.gradle');
 const fromStock = withProject(STOCK, (root) => {
@@ -173,7 +173,7 @@ const fromStock = withProject(STOCK, (root) => {
   const i = inspect(text);
   ok('signingConfigs is a direct child of android { }', i.isDirect, `depth ${i.directDepth}`);
   ok('release buildType sets signingConfig signingConfigs.release', i.signsRelease);
-  ok(`versionCode is ${wantVersion.versionCode}`, i.versionCode === String(wantVersion.versionCode), `got ${i.versionCode}`);
+  ok(`versionCode is ${wantVersion.androidVersionCode}`, i.versionCode === String(wantVersion.androidVersionCode), `got ${i.versionCode}`);
   ok(`versionName is ${JSON.stringify(wantVersion.versionName)}`, i.versionName === wantVersion.versionName, `got ${JSON.stringify(i.versionName)}`);
   ok('the keystore loader is guarded against a missing key.properties', i.guardedLoader);
   ok('check:android accepts the result', run('check-android-config.js').code === 0);
