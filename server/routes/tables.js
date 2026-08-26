@@ -14,6 +14,7 @@ const pool   = require('../db/pool');
 const { v4: uuidv4 } = require('uuid');
 const { requireAuth } = require('../middleware/auth');
 const emailService = require('../services/email');
+const { KYC_TICKET_MATCH, KYC_TICKET_OPEN } = require('../services/kycTickets');
 const smsService   = require('../services/sms');
 const audit        = require('../services/audit');
 
@@ -1975,8 +1976,8 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
                       END,
                       updated_at = NOW()
                 WHERE investor_id = $1
-                  AND status IN ('open', 'in_progress', 'under_review')
-                  AND category IN ('fica_submission', 'kyc_submission', 'fica', 'kyc', 'document_verification')`,
+                  AND ${KYC_TICKET_OPEN}
+                  AND ${KYC_TICKET_MATCH}`,
               [updated.investor_id, `[System] KYC document approved: ${_docLabel} — ${new Date().toLocaleDateString('en-ZA')}`]
             );
 
@@ -2011,8 +2012,8 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
                         responded_at   = NOW(),
                         updated_at     = NOW()
                   WHERE investor_id = $1
-                    AND status IN ('open', 'in_progress', 'under_review')
-                    AND category IN ('fica_submission', 'kyc_submission', 'fica', 'kyc', 'document_verification')`,
+                    AND ${KYC_TICKET_OPEN}
+                    AND ${KYC_TICKET_MATCH}`,
                 [updated.investor_id, '[System] All KYC/FICA documents have been verified and approved. Account is now active.']
               );
             }
