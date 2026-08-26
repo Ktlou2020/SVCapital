@@ -514,7 +514,12 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
       query = `
         SELECT id, investor_id, doc_type, status, file_url, file_name, notes,
                reviewed_by, reviewed_at, submitted_at, created_at, updated_at,
-               sub_account_id, investor_name, reviewed_date, expiry_date, doc_subtype
+               sub_account_id, investor_name, reviewed_date, expiry_date, doc_subtype,
+               -- Whether a file is stored, without shipping the blob. The list
+               -- omits file_data by design, and the console read that absence as
+               -- "no file" — so every document held this way told staff the
+               -- investor must re-upload, and hid the review buttons entirely.
+               (file_data IS NOT NULL AND file_data <> '') AS has_file_data
         FROM kyc_documents
         ${where}
         ${orderClause}
@@ -1943,52 +1948,94 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
           const approvedSet = new Set(approvedDocs.map(d => d.doc_type));
           const hasBankDoc  = BANK_ALIASES.some(t => approvedSet.has(t));
           const allApproved = approvedSet.has('id_document') && approvedSet.has('proof_of_address') && hasBankDoc;
-          // Note the individual doc approval on any open KYC/FICA support tickets
           const _docLabel = (updated.doc_type || 'document').replace(/_/g, ' ');
-          await pool.query(
-            `UPDATE support_tickets
-                SET admin_response = CASE
-                      WHEN admin_response IS NULL OR admin_response = ''
-                        THEN $2
-                      ELSE admin_response || E'\n' || $2
-                    END,
-                    updated_at = NOW()
-              WHERE investor_id = $1
-                AND status IN ('open', 'in_progress', 'under_review')
-                AND category IN ('fica_submission', 'kyc_submission', 'fica', 'kyc', 'document_verification')`,
-            [updated.investor_id, `[System] KYC document approved: ${_docLabel} — ${new Date().toLocaleDateString('en-ZA')}`]
-          ).catch(() => {});
 
-          if (allApproved) {
-            await pool.query(
-              `UPDATE investors
-                  SET fica_status       = 'approved',
-                      kyc_status        = 'approved',
-                      status            = CASE WHEN status IN ('pending','pending_fica','fica_submitted') THEN 'active' ELSE status END,
-                      fica_approved_at  = COALESCE(fica_approved_at, NOW()),
-                      updated_at        = NOW()
-                WHERE id = $1 AND fica_status != 'approved'`,
-              [updated.investor_id]
-            ).catch(() => {});
-            const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [updated.investor_id]);
-            if (inv[0]) await emailService.sendKycApproved(inv[0]);
+          /* One transaction for everything an approval changes.
 
-            // Auto-resolve all open KYC/FICA support tickets — no need to approve twice
-            await pool.query(
+             These were separate queries, each with .catch(() => {}). Any one of
+             them could fail and leave the rest applied with nobody told: the
+             document approved while the support ticket stayed open, or the
+             investor promoted while the ticket said nothing. "Approved here but
+             not there" was a normal outcome, not an edge case.
+
+             Now they commit together or not at all, and a failure is logged
+             rather than swallowed. Every statement is idempotent, so re-running
+             an approval repairs a record rather than corrupting it. */
+          const kycClient = await pool.connect();
+          try {
+            await kycClient.query('BEGIN');
+
+            // Note the individual doc approval on any open KYC/FICA ticket.
+            await kycClient.query(
               `UPDATE support_tickets
-                  SET status         = 'resolved',
-                      admin_response = CASE
+                  SET admin_response = CASE
                         WHEN admin_response IS NULL OR admin_response = ''
                           THEN $2
                         ELSE admin_response || E'\n' || $2
                       END,
-                      responded_at   = NOW(),
-                      updated_at     = NOW()
+                      updated_at = NOW()
                 WHERE investor_id = $1
                   AND status IN ('open', 'in_progress', 'under_review')
                   AND category IN ('fica_submission', 'kyc_submission', 'fica', 'kyc', 'document_verification')`,
-              [updated.investor_id, '[System] All KYC/FICA documents have been verified and approved. Account is now active.']
-            ).catch(() => {});
+              [updated.investor_id, `[System] KYC document approved: ${_docLabel} — ${new Date().toLocaleDateString('en-ZA')}`]
+            );
+
+            if (allApproved) {
+              /* COALESCE, not `fica_status != 'approved'`.
+                 fica_status was added by an ALTER with DEFAULT 'pending', and a
+                 default only applies to new rows — every investor predating that
+                 migration holds NULL. `NULL != 'approved'` is NULL, which is not
+                 true, so those investors were never promoted however many
+                 documents were approved. They still received the approval email,
+                 because that runs outside this statement. */
+              await kycClient.query(
+                `UPDATE investors
+                    SET fica_status       = 'approved',
+                        kyc_status        = 'approved',
+                        status            = CASE WHEN status IN ('pending','pending_fica','fica_submitted') THEN 'active' ELSE status END,
+                        fica_approved_at  = COALESCE(fica_approved_at, NOW()),
+                        updated_at        = NOW()
+                  WHERE id = $1 AND COALESCE(fica_status, '') <> 'approved'`,
+                [updated.investor_id]
+              );
+
+              // Auto-resolve all open KYC/FICA support tickets — no need to approve twice
+              await kycClient.query(
+                `UPDATE support_tickets
+                    SET status         = 'resolved',
+                        admin_response = CASE
+                          WHEN admin_response IS NULL OR admin_response = ''
+                            THEN $2
+                          ELSE admin_response || E'\n' || $2
+                        END,
+                        responded_at   = NOW(),
+                        updated_at     = NOW()
+                  WHERE investor_id = $1
+                    AND status IN ('open', 'in_progress', 'under_review')
+                    AND category IN ('fica_submission', 'kyc_submission', 'fica', 'kyc', 'document_verification')`,
+                [updated.investor_id, '[System] All KYC/FICA documents have been verified and approved. Account is now active.']
+              );
+            }
+
+            await kycClient.query('COMMIT');
+          } catch (kycErr) {
+            await kycClient.query('ROLLBACK').catch(() => {});
+            // Loud, because the alternative is a record that disagrees with
+            // itself and no way to know which approvals need redoing.
+            console.error(`[kyc] approval side effects failed for ${updated.investor_id} (doc ${updated.id}):`, kycErr.message);
+          } finally {
+            kycClient.release();
+          }
+
+          /* The email is sent only after the record actually says approved —
+             it used to go out even when the promote had silently done nothing. */
+          if (allApproved) {
+            const { rows: inv } = await pool.query(
+              `SELECT * FROM investors WHERE id = $1 AND fica_status = 'approved'`,
+              [updated.investor_id]
+            );
+            if (inv[0]) await emailService.sendKycApproved(inv[0]).catch(e =>
+              console.error('[kyc] approval email failed:', e.message));
           }
         }
 

@@ -2074,6 +2074,45 @@ async function autoSetup() {
 
     });
 
+    await step("11. Promote investors whose documents", async () => {
+      /* 11. Promote investors who have all three KYC documents approved but were
+             never marked approved themselves.
+
+             The promote on approval ran `WHERE fica_status != 'approved'`.
+             fica_status came from an ALTER with DEFAULT 'pending', and a default
+             applies only to new rows, so every investor predating it holds NULL —
+             and `NULL != 'approved'` is NULL, not true. Those investors had their
+             documents approved, received the approval email, and stayed
+             unverified on the record.
+
+             The approval path is fixed; this repairs the ones already stranded.
+             Idempotent: the WHERE clause excludes anyone already approved. */
+      try {
+        const { rows: [{ n }] } = await pool.query(`SELECT COUNT(*)::int AS n FROM investors WHERE fica_status IS NULL`);
+        if (n > 0) console.log(`ℹ️  ${n} investor(s) have a NULL fica_status — a default only applied to new rows.`);
+
+        const { rowCount } = await pool.query(`
+          UPDATE investors inv
+             SET fica_status      = 'approved',
+                 kyc_status       = 'approved',
+                 status           = CASE WHEN inv.status IN ('pending','pending_fica','fica_submitted')
+                                         THEN 'active' ELSE inv.status END,
+                 fica_approved_at = COALESCE(inv.fica_approved_at, NOW()),
+                 updated_at       = NOW()
+           WHERE COALESCE(inv.fica_status, '') <> 'approved'
+             AND EXISTS (SELECT 1 FROM kyc_documents d WHERE d.investor_id = inv.id
+                          AND d.status = 'approved' AND d.doc_type = 'id_document')
+             AND EXISTS (SELECT 1 FROM kyc_documents d WHERE d.investor_id = inv.id
+                          AND d.status = 'approved' AND d.doc_type = 'proof_of_address')
+             AND EXISTS (SELECT 1 FROM kyc_documents d WHERE d.investor_id = inv.id
+                          AND d.status = 'approved' AND d.doc_type IN ('proof_of_bank','bank_statement'))
+        `);
+        if (rowCount > 0) console.log(`✅ Promoted ${rowCount} investor(s) whose documents were all approved but were never marked verified.`);
+      } catch (kycErr) {
+        console.warn('⚠️  KYC promote backfill skipped:', kycErr.message);
+      }
+    });
+
   } catch (err) {
     // Anything outside a step — the runner itself, or a connection that dies
     // mid-setup. Still not fatal, but reported alongside the rest.

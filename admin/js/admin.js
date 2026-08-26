@@ -3801,7 +3801,10 @@ function renderKYCTable() {
       <td>${Utils.statusBadge(k.status)}</td>
       <td class="td-muted">${Utils.date(k.submitted_at || k.submitted_date || k.created_at)}${kExpLabel}</td>
       <td>
-        ${k.file_data || k.file_url || k.attachment_data
+        ${/* has_file_data is a server-side boolean: the list query deliberately
+              omits the blob, so reading k.file_data here was always undefined
+              and every stored document read as "no file". */''}
+        ${k.has_file_data || k.file_data || k.file_url || k.attachment_data
           ? `<div style="display:flex;gap:4px;flex-wrap:wrap">
                <button class="btn btn--secondary btn--sm" title="Side-by-side review" onclick='openKycReview(${JSON.stringify(k.id)})'><i class="fa-solid fa-magnifying-glass"></i></button>
                <button class="btn btn--secondary btn--sm" title="Open document in new tab" onclick='viewFicaDocument(${JSON.stringify(k.id)})'><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
