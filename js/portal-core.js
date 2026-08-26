@@ -1222,13 +1222,11 @@ function renderOverview(skipCharts) {
 
   const retEl2 = document.getElementById('pov-return');
   if (retEl2) {
-    // With nothing posted there is no earned figure to quote. Saying so beats
-    // quoting the benchmark here — the target has its own tile, labelled as an
-    // illustration.
-    const _tgt = Utils.targetReturns(earningInvs);
+    // Only posted returns appear against a holding. A benchmark belongs on the
+    // pool, before investing — quoting it here reads as money in hand.
     retEl2.innerHTML = totalRet > 0
       ? `<i class="fa-solid fa-arrow-trend-up"></i> <span>+${returnPct}% return posted · ${Utils.rand(totalRet)} earned</span>`
-      : `<i class="fa-solid fa-bullseye"></i> <span>${_tgt > 0 ? `${Utils.rand(_tgt)} target` : 'No returns posted yet'} · for illustration</span>`;
+      : `<i class="fa-solid fa-hourglass-half"></i> <span>No returns posted yet</span>`;
   }
 
   const invEl = document.getElementById('pov-invested');
@@ -1667,7 +1665,6 @@ async function loadMyInvestments() {
 function renderMyInvestmentStats() {
   const d = PORTAL.investments;
   document.getElementById('mi-capital').textContent  = Utils.rand(d.filter(i => !i.is_reinvestment).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0));
-  document.getElementById('mi-expected').textContent = Utils.rand(Utils.targetReturns(d));
   // Earned means declared. 0 here is a true statement, not a missing figure.
   document.getElementById('mi-earned').textContent   = Utils.rand(Utils.earnedReturns(d));
   document.getElementById('mi-count').textContent    = d.length;
@@ -1763,7 +1760,8 @@ function renderMyInvestmentCards() {
     const isPaidOut = inv.status === 'matured' || inv.status === 'paid_out';
     const multiple = group.length > 1;
     const totalAmount = group.reduce((s, i) => s + (i.amount || 0), 0);
-    const totalReturn = group.reduce((s, i) => s + (i.actual_return_amount || i.expected_return_amount || 0), 0);
+    // Posted only — the benchmark fallback here showed an unearned figure.
+    const totalReturn = Utils.earnedReturns(group);
     /* Returns are posted by setting the pool's actual rate, and that happens
        while the pool is still active. The stats below only showed return
        figures once the investment had matured, so a client whose returns had
@@ -3409,7 +3407,10 @@ async function loadMaturity() {
         : 50;
 
       const totalAmount  = group.reduce((s, i) => s + (i.amount || 0), 0);
-      const totalReturn  = group.reduce((s, i) => s + (i.expected_return || i.expected_return_amount || 0), 0);
+      // Posted only. This said "Expected return" and showed a benchmark on an
+      // investment that had earned nothing.
+      const _postedTot   = Utils.postedReturnTotal(group);
+      const totalReturn  = _postedTot ? _postedTot.amount : 0;
       const productLabel = Utils.productInfo ? (Utils.productInfo(inv.product_type)||{}).label : inv.product_type;
 
       // Pool-level instruction state
@@ -3471,7 +3472,7 @@ async function loadMaturity() {
             </div>
             <div class="mc2__stat">
               <div class="mc2__stat-val mc2__stat-val--gold">${totalReturn ? '+' + Utils.rand(totalReturn) : '—'}</div>
-              <div class="mc2__stat-lbl">Expected return</div>
+              <div class="mc2__stat-lbl">Return posted</div>
             </div>
             <div class="mc2__stat">
               <div class="mc2__stat-val">${Utils.date(inv.maturity_date)}</div>
@@ -3535,7 +3536,9 @@ async function loadMaturity() {
     html += maturedGroups.map(group => {
       const inv         = group[0];
       const totalAmount = group.reduce((s, i) => s + (i.amount || 0), 0);
-      const totalReturn = group.reduce((s, i) => s + (i.actual_return_amount || i.expected_return_amount || 0), 0);
+      // A matured investment with no return recorded has earned nothing on
+      // record — quoting its benchmark instead would invent the figure.
+      const totalReturn = Utils.earnedReturns(group);
       const total       = totalAmount + totalReturn;
       const color       = _maturityProductColor(inv.product_type);
       const icon        = _maturityProductIcon(inv.product_type);
@@ -3698,7 +3701,9 @@ async function openMaturityModal(investmentId) {
 
 async function submitMaturityInstruction(inv) {
   const type              = document.getElementById('matInstructionType').value;
-  const total             = inv.amount + (inv.actual_return_amount || inv.expected_return_amount);
+  // Capital plus what has actually been declared. A benchmark must not raise
+  // the amount a client may request; the server enforces the real ceiling.
+  const total             = (parseFloat(inv.amount) || 0) + Utils.earnedReturns([inv]);
   const needsCustom       = (type === 'payout_custom' || type === 'custom_switch');
   const customAmt         = needsCustom ? parseFloat(document.getElementById('matCustomAmount')?.value || 0) : null;
   const switchProductType = (type === 'switch_product' || type === 'custom_switch') ? (document.getElementById('matSwitchProductType')?.value || null) : null;
@@ -3968,7 +3973,6 @@ function updateStmtQuickStats() {
   const totalInvested = investments.filter(i => !i.is_reinvestment).reduce((s, i) => s + (Number(i.amount) || 0), 0);
   // Earned, not projected — a target return must never move portfolio value.
   const totalReturns  = Utils.earnedReturns(investments);
-  const targetReturns = Utils.targetReturns(investments);
   const walletBal     = Number(investor.wallet_balance) || 0;
   const totalValue    = Utils.portfolioValue(investments, walletBal);
 
@@ -3987,7 +3991,6 @@ function updateStmtQuickStats() {
     ${qsr('Total Transactions', transactions.length)}
     ${qsr('Capital Deployed', Utils.rand(totalInvested, 2))}
     ${qsr('Returns Earned', Utils.rand(totalReturns, 2))}
-    ${targetReturns > 0 ? qsr('Target Return (illustrative)', Utils.rand(targetReturns, 2)) : ''}
     ${qsr('Portfolio Value', Utils.rand(totalValue, 2))}
   </div>`;
 }
@@ -4060,8 +4063,7 @@ function generateStatement() {
   // paid-out investments' actual return amounts when no such transactions exist yet.
   const _txnReturns  = transactions.filter(t => (t.type === 'return' || t.type === 'payout') && t.status !== 'cancelled').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
   const totalReturns = _txnReturns > 0 ? _txnReturns
-    : allInvestments.filter(i => ['paid_out', 'matured'].includes(i.status) && _inPeriod(i.maturity_date || i.investment_date))
-                    .reduce((s, i) => s + (i.actual_return_amount || i.expected_return_amount || 0), 0);
+    : Utils.earnedReturns(allInvestments.filter(i => ['paid_out', 'matured'].includes(i.status) && _inPeriod(i.maturity_date || i.investment_date)));
   const activeInv     = allInvestments.filter(i => i.status === 'active').length;
   const totalCapital  = allInvestments.reduce((s, i) => s + (Number(i.amount) || 0), 0);
 
@@ -7848,10 +7850,17 @@ function generateInvestmentCertificate(invId) {
           // "Annual Rate" is the contracted figure. Once a return is posted it
           // is no longer what this row is showing, so the label follows it.
           const _b = Utils.rateBasis({ ...inv, pool_actual_rate: inv.pool_actual_rate ?? pool.actual_rate });
-          const _label = _b && _b.posted ? 'Return Achieved' : 'Annual Rate';
-          return `<tr><td style="padding:6px 0;color:#6b7280">${_label}</td><td style="font-weight:700">${_b ? Utils.pct(_b.rate) : '—'}</td></tr>`;
+          // Only a posted rate is stated. The contracted benchmark belongs on
+          // the pool listing, not on a certificate of what is held.
+          return _b && _b.posted
+            ? `<tr><td style="padding:6px 0;color:#6b7280">Return Achieved</td><td style="font-weight:700">${Utils.pct(_b.rate)}</td></tr>`
+            : '';
         })()}
-        <tr><td style="padding:6px 0;color:#6b7280">Target Return</td><td style="font-weight:700;color:#22c55e">${Utils.rand(inv.expected_return_amount||inv.expected_return)}</td></tr>
+        ${(() => {
+          // A certificate states facts. Only a posted return goes on it.
+          const _p = Utils.postedReturn({ ...inv, pool_actual_rate: inv.pool_actual_rate ?? pool.actual_rate });
+          return _p ? `<tr><td style="padding:6px 0;color:#6b7280">Return Posted</td><td style="font-weight:700;color:#22c55e">${Utils.rand(_p.amount)}</td></tr>` : '';
+        })()}
         <tr><td style="padding:6px 0;color:#6b7280">Investment Date</td><td style="font-weight:700">${Utils.date(inv.investment_date||inv.start_date)}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Maturity Date</td><td style="font-weight:700">${Utils.date(inv.maturity_date||inv.end_date)}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Status</td><td>${Utils.statusBadge(inv.status)}</td></tr>
@@ -8204,8 +8213,7 @@ function downloadSaStatement(saId, saName) {
   const totalDeposits = transactions.filter(t => t.type === 'deposit' && t.status !== 'cancelled').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
   const _saTxnReturns = transactions.filter(t => (t.type === 'return' || t.type === 'payout') && t.status !== 'cancelled').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
   const totalReturns  = _saTxnReturns > 0 ? _saTxnReturns
-    : investments.filter(i => ['paid_out', 'matured'].includes(i.status))
-                 .reduce((s, i) => s + (i.actual_return_amount || i.expected_return_amount || 0), 0);
+    : Utils.earnedReturns(investments.filter(i => ['paid_out', 'matured'].includes(i.status)));
   const totalInvested = totalDeposits;
   const activeInv     = investments.filter(i => i.status === 'active').length;
 
@@ -8577,7 +8585,7 @@ async function _downloadTaxCert(year) {
       doc.setFont(undefined,'bold'); doc.text('Matured Investments', 14, y); y += lh;
       doc.setFont(undefined,'normal');
       data.investments.forEach(inv => {
-        const ret = parseFloat(inv.actual_return || inv.expected_return || 0);
+        const ret = Utils.earnedReturns([inv]);
         doc.text(`• ${inv.pool_name || 'Investment'} — Return: ${fmt(ret)} — Matured: ${new Date(inv.end_date).toLocaleDateString('en-ZA')}`, 14, y); y += lh;
         if (y > 270) { doc.addPage(); y = 20; }
       });

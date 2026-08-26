@@ -702,8 +702,10 @@ const Utils = {
   /* ─────────────────────────────────────────────────────────────────────
      EARNED vs TARGET — the two are not interchangeable.
 
-     A target return is the benchmark the pool is aiming at. It is shown to
-     clients for ILLUSTRATION and must never move portfolio value.
+     A target return is the benchmark the pool is aiming at. It belongs on the
+     POOL, where a client sees it before investing. It is never shown against
+     money already held — there is deliberately no helper here that sums
+     targets across investments, because every caller of one would be wrong.
 
      An earned return is money actually declared: an investment's realised
      actual_return, or the rate posted on its pool. Only this moves portfolio
@@ -720,19 +722,6 @@ const Utils = {
     return (Array.isArray(list) ? list : []).reduce((s, i) => {
       const p = Utils.postedReturn(i);
       return s + (p ? p.amount : 0);
-    }, 0);
-  },
-
-  /* The illustrative benchmark: what the investment is aiming at. Excludes
-     anything already posted, since that is no longer a target. */
-  targetReturns(list) {
-    return (Array.isArray(list) ? list : []).reduce((s, i) => {
-      if (!i || i.status === 'cancelled') return s;
-      if (Utils.postedReturn(i)) return s;          // posted — not a target any more
-      const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
-      const expected = num(i.expected_return != null ? i.expected_return : i.expected_return_amount);
-      if (expected > 0) return s + expected;
-      return s + num(i.amount) * num(i.annual_rate != null ? i.annual_rate : i.expected_return_rate);
     }, 0);
   },
 

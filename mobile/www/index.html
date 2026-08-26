@@ -454,7 +454,7 @@
       <div class="view" id="view-investments">
         <div class="stats-row" style="grid-template-columns:repeat(4,1fr)">
           <div class="stat-card stat-card--gold" style="cursor:pointer" onclick="navigate('analytics',document.querySelector('[data-view=analytics]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-coins"></i></div></div><div class="stat-card__value" id="mi-capital">—</div><div class="stat-card__label">Capital Deployed</div></div>
-          <div class="stat-card stat-card--green" style="cursor:pointer" onclick="navigate('analytics',document.querySelector('[data-view=analytics]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-chart-line"></i></div></div><div class="stat-card__value" id="mi-expected">—</div><div class="stat-card__label" title="The benchmark this pool aims at. Shown for illustration — it is not money earned and does not affect your portfolio value.">Target Return <span style="opacity:.6;font-weight:400">· illustrative</span></div></div>
+          
           <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="navigate('transactions',document.querySelector('[data-view=transactions]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-check-double"></i></div></div><div class="stat-card__value" id="mi-earned">—</div><div class="stat-card__label" title="Returns actually posted on your investments. Only this affects your portfolio value.">Returns Earned</div></div>
           <div class="stat-card stat-card--purple" style="cursor:pointer" onclick="navigate('investments',document.querySelector('[data-view=investments]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-layer-group"></i></div></div><div class="stat-card__value" id="mi-count">—</div><div class="stat-card__label">Total Investments</div></div>
         </div>
@@ -3050,9 +3050,9 @@
   </div>
 </nav>
 
-<script src="../js/api.js?v=19"></script>
-<script src="../js/portal-core.js?v=6"></script>
-<script src="js/portal.js?v=39"></script>
+<script src="../js/api.js?v=20"></script>
+<script src="../js/portal-core.js?v=7"></script>
+<script src="js/portal.js?v=40"></script>
 <!-- sv-intelligence.js hidden -->
 <script>
 if ('serviceWorker' in navigator && !window.__SVC_NATIVE__) {
