@@ -44,7 +44,7 @@ const html  = fs.readFileSync(path.join(ROOT, 'admin', 'index.html'), 'utf8');
 
 console.log('\nthe page compares what it read against what exists');
 {
-  const i = admin.indexOf('async function loadAnalytics()');
+  const i = admin.indexOf('async function loadAnalytics(');
   const body = admin.slice(i, admin.indexOf('\n}\n', i));
   ok('loadAnalytics was found', i > -1);
   ok('it records totals from the fetch it just made',

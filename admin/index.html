@@ -1418,12 +1418,16 @@
             <div style="font-size:1.1rem;font-weight:700;color:var(--text)">Analytics</div>
             <div style="font-size:0.73rem;color:var(--text-muted);margin-top:2px" id="an-last-refreshed"></div>
           </div>
-          <button class="btn btn--ghost btn--sm" onclick="loadAnalytics()"><i class="fa-solid fa-rotate" style="margin-right:6px"></i>Refresh All</button>
+          <button class="btn btn--ghost btn--sm" onclick="loadAnalytics(true)"><i class="fa-solid fa-rotate" style="margin-right:6px"></i>Refresh All</button>
         </div>
 
         <!-- Shown only when a table was read past its page limit, i.e. when
              every figure below is computed on a partial dataset. -->
         <div id="an-truncation" style="display:none;margin-bottom:16px"></div>
+
+        <!-- Shown only when a panel threw. Each renders independently, so one
+             failure is one empty card rather than a half-drawn page. -->
+        <div id="an-panel-errors" style="display:none;margin-bottom:16px"></div>
 
         <!-- KPI Tiles row -->
         <div class="stats-row mb-16">
@@ -4730,7 +4734,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=17"></script>
-<script src="js/admin.js?v=118"></script>
+<script src="js/admin.js?v=119"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>

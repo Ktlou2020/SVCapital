@@ -7539,6 +7539,55 @@ async function viewTicket(id) {
    ═══════════════════════════════════════════════ */
 const ANALYTICS_PAGE_LIMIT = 5000;
 
+/* When the three lists were last actually read, not when the page last drew.
+   The two are different whenever STATE is served from cache, and it was the
+   drawing time being shown — so hours-old figures reported themselves as just
+   refreshed, which is worse than showing nothing. */
+let _analyticsFetchedAt = 0;
+const ANALYTICS_STALE_MS = 2 * 60 * 1000;
+
+function _analyticsAgeLabel() {
+  if (!_analyticsFetchedAt) return '';
+  const at   = new Date(_analyticsFetchedAt);
+  const secs = Math.round((Date.now() - _analyticsFetchedAt) / 1000);
+  const age  = secs < 60 ? 'just now'
+             : secs < 3600 ? `${Math.round(secs / 60)} min ago`
+             : `${Math.round(secs / 3600)} h ago`;
+  return `Data as of ${at.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })} · ${age}`;
+}
+
+/* Render one panel without letting it take the others down.
+   These were 21 bare calls in a single try: a synchronous throw skipped every
+   call after it and an async rejection was never caught at all, so one broken
+   panel produced a silently half-drawn page. */
+async function _analyticsPanel(label, fn) {
+  try { await fn(); return null; }
+  catch (e) {
+    console.error(`[analytics] ${label} failed:`, e);
+    return { label, message: (e && e.message) || String(e) };
+  }
+}
+
+function _analyticsPanelErrors(failures) {
+  const el = document.getElementById('an-panel-errors');
+  if (!el) return;
+  if (!failures.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = '';
+  el.innerHTML = `
+    <div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.35);border-radius:8px;padding:12px 14px">
+      <div style="font-weight:700;color:#f59e0b">
+        <i class="fa-solid fa-triangle-exclamation" style="margin-right:6px"></i>
+        ${failures.length} panel${failures.length === 1 ? '' : 's'} did not load
+      </div>
+      <div style="margin-top:6px;font-size:0.82rem">
+        ${failures.map(f => `<div><strong>${_esc(f.label)}</strong> — ${_esc(f.message)}</div>`).join('')}
+      </div>
+      <div style="margin-top:6px;font-size:0.78rem;color:var(--text-muted)">
+        Everything else on this page loaded normally. Details are in the browser console.
+      </div>
+    </div>`;
+}
+
 /* Every figure on this page is computed in the browser from these three
    lists. They are fetched one page deep, so past ANALYTICS_PAGE_LIMIT rows the
    arithmetic silently runs on a subset: the charts still draw, the KPIs still
@@ -7575,10 +7624,15 @@ function _analyticsTruncation(loadedVsTotal) {
     </div>`;
 }
 
-async function loadAnalytics() {
+async function loadAnalytics(force) {
   try {
     let counts = null;
-    if (!STATE.investors.length || !STATE.investments.length) {
+    /* Previously this fetched only when STATE was empty, so the page loaded
+       once per session and then showed whatever was true at login — for as
+       long as the tab stayed open. Now it refetches when the data is older
+       than ANALYTICS_STALE_MS, and Refresh All forces it regardless. */
+    const stale = !_analyticsFetchedAt || (Date.now() - _analyticsFetchedAt) > ANALYTICS_STALE_MS;
+    if (force || stale || !STATE.investors.length || !STATE.investments.length) {
       const [invRes, invstRes, txnRes] = await Promise.all([
         API.investors.list({ limit: ANALYTICS_PAGE_LIMIT }),
         API.investments.list({ limit: ANALYTICS_PAGE_LIMIT }),
@@ -7587,6 +7641,7 @@ async function loadAnalytics() {
       STATE.investors = invRes.data || [];
       STATE.investments = invstRes.data || [];
       STATE.transactions = txnRes.data || [];
+      _analyticsFetchedAt = Date.now();
       counts = [
         { label: 'Investors',    loaded: STATE.investors.length,    total: Number(invRes.total) },
         { label: 'Investments',  loaded: STATE.investments.length,  total: Number(invstRes.total) },
@@ -7629,28 +7684,37 @@ async function loadAnalytics() {
     const minEl = document.querySelectorAll('#view-analytics .stat-card__value')[1];
     if (minEl && minEl.textContent === 'R500') minEl.textContent = lowestMin < Infinity ? Utils.rand(lowestMin, 0) : 'R500';
 
-    _renderAnalyticsKPIs();
-    renderProductVolChart();
-    renderProvinceChart();
-    renderGenderChart();
-    renderHeardAboutChart();
-    renderRiskChart();
-    renderTxnFlowChart();
-    renderConversionFunnel();
-    _renderAnalyticsCharts();
-    loadInvestFunnel();
-    loadSignupFriction();
-    renderMaturityForecastChart();
-    renderCohortChart();
-    renderMobileActivity();
-    loadPersonas();
-    loadRevenueAnalytics();
-    loadMaturityReinvestment();
-    loadIfaPerformance();
-    loadSubAccountAnalytics();
-    loadInterestHistoryAnalytics();
-    loadWithdrawalTrends();
+    /* Each panel renders on its own. One that throws is one empty card and a
+       named line at the top, not twenty panels that never ran. */
+    const panels = [
+      ['Headline KPIs',        _renderAnalyticsKPIs],
+      ['Product volume',       renderProductVolChart],
+      ['Province',             renderProvinceChart],
+      ['Gender',               renderGenderChart],
+      ['How they heard',       renderHeardAboutChart],
+      ['Risk profile',         renderRiskChart],
+      ['Transaction flow',     renderTxnFlowChart],
+      ['Conversion funnel',    renderConversionFunnel],
+      ['Charts',               _renderAnalyticsCharts],
+      ['Invest funnel',        loadInvestFunnel],
+      ['Signup friction',      loadSignupFriction],
+      ['Maturity forecast',    renderMaturityForecastChart],
+      ['Cohorts',              renderCohortChart],
+      ['Mobile activity',      renderMobileActivity],
+      ['Personas',             loadPersonas],
+      ['Revenue',              loadRevenueAnalytics],
+      ['Maturity & reinvestment', loadMaturityReinvestment],
+      ['IFA performance',      loadIfaPerformance],
+      ['Sub-accounts',         loadSubAccountAnalytics],
+      ['Interest history',     loadInterestHistoryAnalytics],
+      ['Withdrawal trends',    loadWithdrawalTrends],
+    ];
+    const failures = (await Promise.all(
+      panels.map(([label, fn]) => _analyticsPanel(label, fn))
+    )).filter(Boolean);
+    _analyticsPanelErrors(failures);
   } catch (e) {
+    /* Only the data read reaches here now — a panel failure cannot. */
     Toast.error('Failed to load analytics data');
     console.error('[loadAnalytics]', e);
   }
@@ -11795,8 +11859,10 @@ function _renderAnalyticsKPIs() {
   set('an-platform-revenue',Utils.rand(platformRevenue, 0));
   set('an-active-inv-count',activeInvCount.toLocaleString());
 
+  /* The age of the DATA, not of this render. new Date() here reported cached
+     figures as freshly refreshed. */
   const tsEl = document.getElementById('an-last-refreshed');
-  if (tsEl) tsEl.textContent = 'Last refreshed ' + new Date().toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' });
+  if (tsEl) tsEl.textContent = _analyticsAgeLabel();
 }
 
 // Chart rendering triggered from loadAnalytics after data loads
