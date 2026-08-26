@@ -1267,7 +1267,13 @@ async function loadInvestors() {
     renderInvestorsTable();
     setupInvestorFilters();
     _setRefreshLabel('investorsRefreshed', 'investors');
-  } catch (e) { Toast.error('Failed to load investors'); }
+  } catch (e) {
+    // Say what actually failed. This read 'Failed to load investors' and
+    // discarded the reason, so a 403, a 500 and a render bug all looked
+    // identical and none could be diagnosed without devtools.
+    console.error('[load investors]', e);
+    Toast.error(`Failed to load investors` + (e && e.message ? ` — ${e.message}` : ''));
+  }
 }
 
 function updateBulkBar() {
@@ -4537,7 +4543,13 @@ async function loadProducts() {
     const res = await API.products.list({ limit: 200 });
     STATE.products = (res.data || []).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
     renderProductsGrid();
-  } catch (e) { Toast.error('Failed to load products'); }
+  } catch (e) {
+    // Say what actually failed. This read 'Failed to load products' and
+    // discarded the reason, so a 403, a 500 and a render bug all looked
+    // identical and none could be diagnosed without devtools.
+    console.error('[load products]', e);
+    Toast.error(`Failed to load products` + (e && e.message ? ` — ${e.message}` : ''));
+  }
 }
 
 function renderProductsGrid() {
@@ -4826,7 +4838,13 @@ async function loadPools() {
         STATE.products = (r.data || []).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
       }).catch(() => {});
     }
-  } catch (e) { Toast.error('Failed to load pools'); }
+  } catch (e) {
+    // Say what actually failed. This read 'Failed to load pools' and
+    // discarded the reason, so a 403, a 500 and a render bug all looked
+    // identical and none could be diagnosed without devtools.
+    console.error('[load pools]', e);
+    Toast.error(`Failed to load pools` + (e && e.message ? ` — ${e.message}` : ''));
+  }
 }
 
 function filterPools(status, btn) {
@@ -6031,7 +6049,13 @@ async function loadInvestments() {
     renderInvestmentStats();
     renderInvestmentsTable();
     setupInvestmentFilters();
-  } catch (e) { Toast.error('Failed to load investments'); }
+  } catch (e) {
+    // Say what actually failed. This read 'Failed to load investments' and
+    // discarded the reason, so a 403, a 500 and a render bug all looked
+    // identical and none could be diagnosed without devtools.
+    console.error('[load investments]', e);
+    Toast.error(`Failed to load investments` + (e && e.message ? ` — ${e.message}` : ''));
+  }
 }
 
 function renderInvestmentStats() {
@@ -6480,7 +6504,13 @@ async function loadMaturity() {
 
     filteredMaturity = [...STATE.maturity];
     _applyMaturityFilters();
-  } catch (e) { Toast.error('Failed to load maturity instructions'); }
+  } catch (e) {
+    // Say what actually failed. This read 'Failed to load maturity instructions' and
+    // discarded the reason, so a 403, a 500 and a render bug all looked
+    // identical and none could be diagnosed without devtools.
+    console.error('[load maturity instructions]', e);
+    Toast.error(`Failed to load maturity instructions` + (e && e.message ? ` — ${e.message}` : ''));
+  }
 }
 
 function renderMaturityTable() {
@@ -6591,7 +6621,13 @@ async function loadTransactions() {
     renderTxnStats();
     renderTxnTable();
     setupTxnFilters();
-  } catch (e) { Toast.error('Failed to load transactions'); }
+  } catch (e) {
+    // Say what actually failed. This read 'Failed to load transactions' and
+    // discarded the reason, so a 403, a 500 and a render bug all looked
+    // identical and none could be diagnosed without devtools.
+    console.error('[load transactions]', e);
+    Toast.error(`Failed to load transactions` + (e && e.message ? ` — ${e.message}` : ''));
+  }
 }
 
 function renderTxnStats() {
@@ -6926,7 +6962,13 @@ async function loadSupport() {
     renderTicketsTable();
     setupTicketFilters();
     document.getElementById('ticketBadge').textContent = _supportTickets().filter(t => ['open', 'in_progress'].includes(t.status)).length;
-  } catch (e) { Toast.error('Failed to load support tickets'); }
+  } catch (e) {
+    // Say what actually failed. This read 'Failed to load support tickets' and
+    // discarded the reason, so a 403, a 500 and a render bug all looked
+    // identical and none could be diagnosed without devtools.
+    console.error('[load support tickets]', e);
+    Toast.error(`Failed to load support tickets` + (e && e.message ? ` — ${e.message}` : ''));
+  }
 }
 
 const _SUPPORT_EXCLUDED_CATS = new Set(['bank_verification', 'bank verification']);
@@ -8702,7 +8744,13 @@ async function loadSettings() {
     STATE.settings = res.data || [];
     renderSettings();
     await tfa_loadStatus(); // load 2FA status alongside platform settings
-  } catch (e) { Toast.error('Failed to load settings'); }
+  } catch (e) {
+    // Say what actually failed. This read 'Failed to load settings' and
+    // discarded the reason, so a 403, a 500 and a render bug all looked
+    // identical and none could be diagnosed without devtools.
+    console.error('[load settings]', e);
+    Toast.error(`Failed to load settings` + (e && e.message ? ` — ${e.message}` : ''));
+  }
 }
 
 async function tfa_loadStatus() {
@@ -9875,7 +9923,13 @@ async function loadAuditLog() {
     if (searchF && !searchF._auditWired) { searchF.addEventListener('input', Utils.debounce(resetAndRender, 250)); searchF._auditWired = true; }
     if (dateFrom && !dateFrom._auditWired) { dateFrom.addEventListener('change', resetAndRender); dateFrom._auditWired = true; }
     if (dateTo   && !dateTo._auditWired)   { dateTo.addEventListener('change', resetAndRender);   dateTo._auditWired   = true; }
-  } catch (e) { Toast.error('Failed to load audit log'); }
+  } catch (e) {
+    // Say what actually failed. This read 'Failed to load audit log' and
+    // discarded the reason, so a 403, a 500 and a render bug all looked
+    // identical and none could be diagnosed without devtools.
+    console.error('[load audit log]', e);
+    Toast.error(`Failed to load audit log` + (e && e.message ? ` — ${e.message}` : ''));
+  }
 }
 
 function _auditPrevPage() {
