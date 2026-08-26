@@ -297,6 +297,14 @@ const snapshot = async () => (await pool.query(`
          !(rp.affected || []).some(a => a.issue === 'no_instruction'),
          'choosing nothing is a default, not a fault — but it is still worth seeing by name');
 
+      ok('one client with two distinct problems gets two rows, not one',
+         (() => {
+           const byInvestor = {};
+           for (const a of rp.affected || []) (byInvestor[a.investorId] ||= []).push(a.issue);
+           return Object.values(byInvestor).every(issues => new Set(issues).size === issues.length);
+         })(),
+         'the same issue must not be listed twice for one person, but different issues must be');
+
       ok('the worst appears first',
          (rp.affected || []).length < 2 ||
          (rp.affected[0].severity === 'STOP' || !rp.affected.some(a => a.severity === 'STOP')),

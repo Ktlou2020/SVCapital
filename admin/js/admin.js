@@ -12214,9 +12214,15 @@ async function runMaturityPreflight(btn) {
             <div class="td-muted" style="font-size:0.68rem;margin-top:3px">${_esc(a.detail)}</div></td>
       </tr>`).join('');
 
+    /* One person can have two distinct problems — a custom payout with no
+       amount whose product also has no open pool, say. Both rows are real and
+       both need action, so they are not merged; but the heading must not read
+       as a headcount when it is a count of issues. */
+    const _people = new Set((r.affected || []).map(a => a.investorId)).size;
     const affectedBlock = (r.affected || []).length ? `
       <p style="font-weight:600;margin:16px 0 6px">Clients needing attention
-        <span class="td-muted" style="font-weight:400">(${r.affected.length})</span>
+        <span class="td-muted" style="font-weight:400">(${r.affected.length} issue${r.affected.length === 1 ? '' : 's'}${
+          _people !== r.affected.length ? ` across ${_people} client${_people === 1 ? '' : 's'}` : ''})</span>
         <button class="btn btn--ghost btn--sm" style="margin-left:8px" onclick="_preflightExportCsv()">
           <i class="fa-solid fa-file-csv"></i> CSV</button></p>
       <div style="overflow-x:auto"><table class="table" style="font-size:0.78rem">

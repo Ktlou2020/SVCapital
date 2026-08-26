@@ -101,7 +101,10 @@ const H    = s => console.log(`\n${s}\n${'─'.repeat(s.length)}`);
     }
 
     if ((r.affected || []).length) {
-      H(`Clients needing attention (${r.affected.length})`);
+      /* Issues, not people — one client can appear twice with two problems. */
+      const people = new Set(r.affected.map(a => a.investorId)).size;
+      H(`Clients needing attention (${r.affected.length} issue${r.affected.length === 1 ? '' : 's'}` +
+        `${people !== r.affected.length ? ` across ${people} client${people === 1 ? '' : 's'}` : ''})`);
       for (const a of r.affected) {
         console.log(`  ${a.severity.padEnd(9)} ${a.name}  <${a.email || 'no email'}>  ${a.investorId}`);
         console.log(`            ${a.poolName} · ${money(a.amount)} + ${money(a.postedReturn)} return · ` +
