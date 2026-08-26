@@ -55,6 +55,53 @@ if (!Utils || typeof Utils.effectiveRate !== 'function') {
   process.exit(1);
 }
 
+/* ── 0. Precedence: a posted return outranks the contracted target ─── */
+console.log('\nrateBasis — which of the three figures wins');
+
+// payoutInvestment writes actual_return and never touches annual_rate, so
+// annual_rate is a target for the whole life of the investment. The pool card
+// has always said "Achieved" once a rate is posted; the investments list
+// showed the contracted 13.00% for the same investment.
+const CONTRACTED_ONLY = { amount: '5000.00', annual_rate: '0.1300' };
+const POOL_POSTED     = { amount: '5000.00', annual_rate: '0.1300', pool_actual_rate: '0.0213' };
+const PAID_OUT        = { amount: '5000.00', annual_rate: '0.1300', pool_actual_rate: '0.0213', actual_return: '400.00' };
+
+ok('a contracted rate with nothing posted is a TARGET',
+   (() => { const b = Utils.rateBasis(CONTRACTED_ONLY); return b && b.rate === 0.13 && b.posted === false; })(),
+   JSON.stringify(Utils.rateBasis(CONTRACTED_ONLY)));
+
+ok('a posted pool return beats the contracted rate, and is marked posted',
+   (() => { const b = Utils.rateBasis(POOL_POSTED); return b && b.rate === 0.0213 && b.posted === true; })(),
+   `got ${JSON.stringify(Utils.rateBasis(POOL_POSTED))} — the list showed 13.00% while the pool said Achieved`);
+
+ok('this investment\'s own realised return beats even the pool figure',
+   (() => { const b = Utils.rateBasis(PAID_OUT); return b && Math.abs(b.rate - 0.08) < 1e-9 && b.posted === true; })(),
+   JSON.stringify(Utils.rateBasis(PAID_OUT)));
+
+eq('nothing anywhere is null', Utils.rateBasis({ amount: '1000', annual_rate: '0.0000' }), null);
+eq('rateBasis(null) does not throw', Utils.rateBasis(null), null);
+
+// The whole point of the change: pool and list must agree about one investment.
+{
+  const poolRow = { pool_actual_rate: '0.0213', annual_rate: '0.1300' };   // the pool card's input
+  const invRow  = POOL_POSTED;                                             // the list's input
+  const a = Utils.rateBasis(poolRow), b = Utils.rateBasis(invRow);
+  ok('the pool card and the investments list report the same rate',
+     a && b && a.rate === b.rate && a.posted === b.posted,
+     `pool ${JSON.stringify(a)} vs list ${JSON.stringify(b)}`);
+}
+
+console.log('\nrateCell — how it renders');
+ok('a posted return is tinted with the brand purple and says so',
+   /#eda5ff/.test(Utils.rateCell(POOL_POSTED)) && /Return achieved/.test(Utils.rateCell(POOL_POSTED)),
+   Utils.rateCell(POOL_POSTED));
+ok('a target is green and labelled as a target',
+   /#22c55e/.test(Utils.rateCell(CONTRACTED_ONLY)) && /Target return/.test(Utils.rateCell(CONTRACTED_ONLY)),
+   Utils.rateCell(CONTRACTED_ONLY));
+ok('nothing at all renders a dash', /—/.test(Utils.rateCell({ amount: '1', annual_rate: '0.0000' })));
+ok('the only purple used is the canonical #eda5ff',
+   !/#(?!eda5ff)[0-9a-f]*(?:[89ab][0-9a-f]{2}ff|purple)/i.test(Utils.rateCell(POOL_POSTED)));
+
 /* ── 1. effectiveRate ──────────────────────────────────────────────── */
 console.log('\neffectiveRate — the figure to show');
 
@@ -63,8 +110,15 @@ console.log('\neffectiveRate — the figure to show');
 eq('posted pool rate wins when the investment carries "0.0000"',
    Utils.effectiveRate({ amount: '24744.77', annual_rate: '0.0000', pool_actual_rate: '0.0213' }), 0.0213);
 
-eq('the investment\'s own rate wins when it has one',
-   Utils.effectiveRate({ annual_rate: '0.0348', pool_actual_rate: '0.0213' }), 0.0348);
+// Deliberately the other way round. annual_rate is the CONTRACTED rate —
+// payoutInvestment never writes it — so a posted pool return supersedes it.
+// This assertion previously expected 0.0348 and encoded the bug: the pool card
+// said "Achieved 2.13%" while the list beside it said 3.48%.
+eq('a posted pool return outranks the contracted rate',
+   Utils.effectiveRate({ annual_rate: '0.0348', pool_actual_rate: '0.0213' }), 0.0213);
+
+eq('the contracted rate is used when the pool has posted nothing',
+   Utils.effectiveRate({ annual_rate: '0.0348', pool_actual_rate: '0.0000' }), 0.0348);
 
 eq('nothing anywhere returns null, so a dash means a dash',
    Utils.effectiveRate({ amount: '20000', annual_rate: '0.0000' }), null);
@@ -170,8 +224,7 @@ function renderCell(file, needle, row, varName) {
 }
 
 const CELLS = [
-  ['admin/js/admin.js',  '<td class="td-green">${(() => { const _r = Utils.effectiveRate(i)', 'i',   'admin list + investor detail tab'],
-  ['portal/js/portal.js', '<td>${(() => { const _r = Utils.effectiveRate(inv)',               'inv', 'web portal investments table'],
+  ['portal/js/portal.js', '<td>${(() => { const _r = Utils.effectiveRate(inv)', 'inv', 'web portal investments table'],
 ];
 for (const [file, needle, varName, label] of CELLS) {
   const hit  = renderCell(file, needle, JACENTER, varName);
@@ -183,6 +236,18 @@ for (const [file, needle, varName, label] of CELLS) {
      !dash.error && String(dash.value).includes('—'),
      dash.error || `got ${JSON.stringify(dash.value)}`);
 }
+
+// The admin cells go through Utils.rateCell, so assert on its output directly.
+ok('admin list + investor detail tab renders 2.13%, not 0.00%',
+   Utils.rateCell(JACENTER).includes('2.13%'), Utils.rateCell(JACENTER));
+ok('admin list + investor detail tab renders a dash when nothing is posted',
+   Utils.rateCell(NO_RATE).includes('—'), Utils.rateCell(NO_RATE));
+ok('and the admin cells actually call it',
+   (() => {
+     const src = fs.readFileSync(path.join(ROOT, 'admin/js/admin.js'), 'utf8');
+     return (src.match(/Utils\.rateCell\(/g) || []).length >= 3;
+   })(),
+   'the dashboard, the investments list and the investor tab must all use it');
 
 /* ── 4. The 100× bug in the move-investment picker ─────────────────── */
 console.log('\nunit — the move picker printed a fraction as a percentage');

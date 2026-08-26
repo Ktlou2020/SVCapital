@@ -533,31 +533,66 @@ const Utils = {
     return null;
   },
 
-  /* The rate to show for an investment.
+  /* The rate to show for an investment, and whether it is a real return or
+     still a target.
 
-     Returns are posted by setting the pool's actual_rate and are deliberately
-     not written back onto the investment row, so annual_rate stays 0 on
-     anything still running. The server joins the pool's figure on as
-     pool_actual_rate — use it when the investment carries none of its own.
+     Three fields, three different meanings, and it matters which wins:
+
+       investments.annual_rate      the CONTRACTED rate — a target
+       investments.actual_return    the realised rand amount, written at payout
+       investment_pools.actual_rate the posted achieved rate, set at pool level
+
+     payoutInvestment writes actual_return and never touches annual_rate, so
+     annual_rate is a target for the whole life of the investment. A posted
+     return therefore has to outrank it: a pool that has declared 2.13% is
+     showing what was earned, while the investment's 13.00% is still only what
+     was promised. The pool card has always said "Achieved" in that case; this
+     list said 13.00%, and the two disagreed about the same investment.
+
+     Returns are posted while a pool is still running, not at maturity, so this
+     applies to active investments too.
 
      Postgres returns NUMERIC as a string, so a zero rate arrives as "0.0000",
-     which is truthy. `rate ? pct(rate) : '—'` therefore renders a confident
-     0.00% rather than a dash: the admin investments list showed exactly that
-     while the pool view beside it showed the real 2.13%.
+     which is truthy — `rate ? pct(rate) : '—'` renders a confident 0.00%.
+     Every comparison here is numeric for that reason.
 
-     Returns null when neither figure exists, so callers can show a dash and
-     mean it. */
-  effectiveRate(inv) {
+     Returns null when there is no figure at all, so a caller can show a dash
+     and mean it. */
+  rateBasis(inv) {
     if (!inv) return null;
     const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
 
-    const own = num(inv.annual_rate != null ? inv.annual_rate : inv.expected_return_rate);
-    if (own > 0) return own;
+    // 1. What this investment actually earned, if it has been paid out.
+    const amount = num(inv.amount);
+    const actual = num(inv.actual_return != null ? inv.actual_return : inv.actual_return_amount);
+    if (actual > 0 && amount > 0) return { rate: actual / amount, posted: true };
 
-    const posted = num(inv.pool_actual_rate);
-    if (posted > 0) return posted;
+    // 2. What the pool posted. Supersedes the contracted target.
+    const poolActual = num(inv.pool_actual_rate);
+    if (poolActual > 0) return { rate: poolActual, posted: true };
+
+    // 3. What was promised.
+    const target = num(inv.annual_rate != null ? inv.annual_rate : inv.expected_return_rate);
+    if (target > 0) return { rate: target, posted: false };
 
     return null;
+  },
+
+  /* The rate alone, for callers that only render a number. */
+  effectiveRate(inv) {
+    const b = Utils.rateBasis(inv);
+    return b ? b.rate : null;
+  },
+
+  /* One cell, rendered the same way everywhere: the figure, tinted purple and
+     labelled when it is a posted return rather than a target. */
+  rateCell(inv) {
+    const b = Utils.rateBasis(inv);
+    if (!b) return '<span title="No rate on the investment and none posted on the pool">—</span>';
+    const title = b.posted
+      ? 'Return achieved — posted on the pool, supersedes the contracted rate'
+      : 'Target return — contracted rate, nothing posted yet';
+    return `<span style="color:${b.posted ? '#eda5ff' : '#22c55e'}" title="${title}">${Utils.pct(b.rate)}</span>`;
   },
 
   /* What a maturity instruction actually means, in words and figures.
