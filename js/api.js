@@ -725,6 +725,55 @@ const Utils = {
     }, 0);
   },
 
+  /* Every maturity instruction the server accepts, in words. The portal had
+     its own map covering four of the six, so a client who chose a custom
+     payout was shown the raw enum with the underscores swapped for spaces. */
+  INSTRUCTION_LABELS: {
+    reinvest:       'Reinvest',
+    payout_all:     'Pay out all',
+    payout_return:  'Pay out returns only',
+    payout_custom:  'Custom payout',
+    switch_product: 'Switch product',
+    custom_switch:  'Custom payout & switch',
+  },
+
+  instructionLabel(key) {
+    if (!key || key === 'pending') return null;
+    return Utils.INSTRUCTION_LABELS[key] || String(key).replace(/_/g, ' ');
+  },
+
+  /* Whether a maturity instruction is set, across the investments a client
+     holds in one pool.
+
+     'pending' counts as unset — it is the column's default, not a choice.
+
+     The portal decided this with `new Set(...).size === 1`, which reports a
+     pool as fully set when only one of three investments has an instruction:
+     the other two contribute nothing to the set, so it still has one member.
+     A client would be told their instruction was in place when most of the
+     money had none. setCount vs total is what distinguishes those. */
+  maturityInstructionState(group) {
+    const list = (Array.isArray(group) ? group : [group]).filter(Boolean);
+    const total = list.length;
+    const set = list.filter(i => Utils.instructionLabel(i.maturity_instruction));
+    const unique = [...new Set(set.map(i => i.maturity_instruction))];
+
+    if (!total || !set.length)
+      return { state: 'none', total, setCount: 0, instruction: null, label: 'No instruction set' };
+
+    if (unique.length > 1)
+      return { state: 'mixed', total, setCount: set.length, instruction: null,
+               label: `Mixed — ${set.length} of ${total} set` };
+
+    const instruction = unique[0];
+    if (set.length < total)
+      return { state: 'partial', total, setCount: set.length, instruction,
+               label: `${Utils.instructionLabel(instruction)} — ${set.length} of ${total} set` };
+
+    return { state: 'all', total, setCount: total, instruction,
+             label: Utils.instructionLabel(instruction) };
+  },
+
   /* ─────────────────────────────────────────────────────────────────────
      ORDERING HOLDINGS — soonest maturity first.
 
