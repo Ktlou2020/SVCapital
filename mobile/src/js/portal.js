@@ -790,6 +790,11 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
       PORTAL.investor = { id: resolvedId };
     }
 
+    // Belt and braces: the server excludes cancelled investments for clients,
+    // but a cached bundle or a stale response must not put one back on screen.
+    // A cancelled investment is an administrative record, not a holding.
+    myInvests = myInvests.filter(i => (i.status || '') !== 'cancelled');
+
     PORTAL.investments  = myInvests.map(inv => ({
       ...inv,
       // Normalise DB column names to the aliases used throughout the portal

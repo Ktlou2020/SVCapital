@@ -356,6 +356,15 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
           conditions.push('1=0'); // no investor linked — return nothing
         }
       }
+
+      /* A cancelled investment is an administrative record, not a holding. It
+         was showing on the client's own dashboard as a card. Excluded here
+         rather than filtered in the UI so it never reaches the browser at all
+         and no surface can reintroduce it by forgetting the filter.
+         Staff roles are unaffected — admin still sees every record. */
+      if (table === 'investments') {
+        conditions.push(`COALESCE(status, '') <> 'cancelled'`);
+      }
     }
 
     // IFAs only see their assigned clients' data
@@ -893,6 +902,12 @@ router.get('/:table/:id', requireAuth, validateTable, async (req, res) => {
       const ownerCol = INVESTOR_COLS[table];
       const rowOwner = table === 'investors' ? rows[0].id : rows[0][ownerCol];
       if (rowOwner !== investorId) {
+        return res.status(404).json({ error: 'Record not found.' });
+      }
+      // Same rule as the list: a client cannot fetch a cancelled investment
+      // directly either. 404, matching what a non-existent record returns —
+      // nothing here should confirm that the record exists.
+      if (table === 'investments' && rows[0].status === 'cancelled') {
         return res.status(404).json({ error: 'Record not found.' });
       }
     }

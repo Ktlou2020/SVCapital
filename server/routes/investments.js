@@ -86,6 +86,15 @@ router.post('/:id/instruction', requireAuth, async (req, res) => {
         await client.query('ROLLBACK');
         return res.status(403).json({ error: 'Forbidden.' });
       }
+      /* A cancelled investment is not a holding — clients cannot see it and
+         must not be able to act on it either. The pool-level route already
+         filters on status = 'active'; this single-investment path did not,
+         so a stale page or a direct call could still set an instruction on
+         money that had been refunded. 404, matching what the read returns. */
+      if (inv.status === 'cancelled') {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Investment not found.' });
+      }
       // Cutoff: 17:00 SAST on the maturity (end_date) day = 15:00 UTC that date.
       if (inv.end_date) {
         const { rows: [chk] } = await client.query(
