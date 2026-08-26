@@ -725,6 +725,55 @@ const Utils = {
     }, 0);
   },
 
+  /* ─────────────────────────────────────────────────────────────────────
+     ORDERING HOLDINGS — soonest maturity first.
+
+     The cards came out in whatever order the API returned, which is neither
+     chronological nor stable, so the thing a client most needs to act on
+     could sit anywhere on the page.
+
+     Three buckets, because a plain ascending sort puts everything already
+     matured at the top, ahead of what is actually coming up:
+
+       0  still to mature  → ascending, soonest first
+       1  already matured  → descending, most recent first
+       2  no usable date   → last
+
+     A missing or unparseable date yields NaN from Date, and NaN comparisons
+     are all false, which makes a sort order arbitrary and unstable rather
+     than merely wrong. Bucket 2 keeps those rows in one predictable place.
+     ───────────────────────────────────────────────────────────────────── */
+  maturitySortKey(inv, now) {
+    const raw = inv && (inv.maturity_date || inv.end_date);
+    const t = raw ? new Date(raw).getTime() : NaN;
+    if (!Number.isFinite(t)) return { bucket: 2, time: 0 };
+
+    // Maturity dates are date-only, so compare against the start of today —
+    // something maturing today is still upcoming, not already past.
+    const ref = Number.isFinite(now) ? now : Date.now();
+    const startOfToday = Math.floor(ref / 86400000) * 86400000;
+
+    return t >= startOfToday ? { bucket: 0, time: t } : { bucket: 1, time: -t };
+  },
+
+  /* Comparator for investments. Stable within a bucket. */
+  byMaturity(a, b, now) {
+    const ka = Utils.maturitySortKey(a, now);
+    const kb = Utils.maturitySortKey(b, now);
+    return ka.bucket !== kb.bucket ? ka.bucket - kb.bucket : ka.time - kb.time;
+  },
+
+  /* The same ordering over groups of investments — a client can hold several
+     in one pool, and the group is placed by whichever matures first. */
+  byGroupMaturity(ga, gb, now) {
+    const earliest = g => (Array.isArray(g) ? g : [g])
+      .map(i => Utils.maturitySortKey(i, now))
+      .sort((x, y) => (x.bucket !== y.bucket ? x.bucket - y.bucket : x.time - y.time))[0]
+      || { bucket: 2, time: 0 };
+    const ka = earliest(ga), kb = earliest(gb);
+    return ka.bucket !== kb.bucket ? ka.bucket - kb.bucket : ka.time - kb.time;
+  },
+
   /* Portfolio value: capital at work, plus the wallet, plus what has actually
      been earned. One definition — it was computed five different ways across
      the portal, and two of them wrote the same element with different
