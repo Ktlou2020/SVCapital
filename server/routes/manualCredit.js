@@ -76,6 +76,167 @@ router.post('/manual-credit', async (req, res) => {
   }
 });
 
+/* ─────────────────────────────────────────────────────────────
+   POST /api/admin/eft-approve
+
+   Approve an EFT proof-of-payment ticket and credit the wallet.
+
+   The console used to do this in three calls: look up the pending
+   transaction, PATCH it to completed, then resolve the ticket. A failure
+   between the second and third left the wallet credited and the ticket open,
+   with the investor told nothing.
+
+   The amount came from a regex over the ticket SUBJECT — a display string.
+   That is wrong twice over. It is fragile: "R505,50" has its comma stripped
+   and becomes R50 550, a hundredfold over-credit, because South African
+   formatting uses the comma as a decimal separator. And it is the wrong
+   number anyway — it is what the client typed, not what arrived in the bank.
+   A client who paid R505 and typed R500 was credited R500 and the R5 went
+   nowhere.
+
+   So: the amount is taken from the pending transaction row, a NUMERIC column,
+   and the admin confirms or corrects it against the proof of payment before
+   anything is credited. Any correction requires a reason and is recorded.
+   ───────────────────────────────────────────────────────────────── */
+router.post('/eft-approve', async (req, res) => {
+  const { ticket_id, amount, reason } = req.body || {};
+
+  const approved = parseFloat(amount);
+  if (!ticket_id) return res.status(400).json({ error: 'ticket_id is required.' });
+  if (!Number.isFinite(approved) || approved <= 0) {
+    return res.status(400).json({ error: 'A positive amount is required.' });
+  }
+  // Two decimals of rand. Anything finer is a typo, not a payment.
+  if (Math.round(approved * 100) !== Number((approved * 100).toFixed(0))) {
+    return res.status(400).json({ error: 'Amount may not have more than two decimal places.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: [ticket] } = await client.query(
+      'SELECT * FROM support_tickets WHERE id = $1 FOR UPDATE', [ticket_id]);
+    if (!ticket) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Ticket not found.' });
+    }
+    if (ticket.category !== 'payment_proof') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'This ticket is not an EFT proof of payment.' });
+    }
+    if (!ticket.investor_id) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Ticket has no investor attached.' });
+    }
+
+    // The portal pre-creates a pending deposit when the investor submits proof.
+    // Its amount column is the declared figure — a number, not a parsed string.
+    const refMatch = String(ticket.subject || '').match(/EFT-[\w]+/);
+    const reference = refMatch ? refMatch[0] : ticket.id;
+
+    const { rows: [pending] } = await client.query(
+      `SELECT * FROM transactions
+        WHERE investor_id = $1 AND reference = $2 AND type = 'deposit'
+        ORDER BY created_at DESC LIMIT 1
+          FOR UPDATE`,
+      [ticket.investor_id, reference]);
+
+    const declared = pending ? parseFloat(pending.amount) : null;
+    const adjusted = declared !== null && Math.abs(declared - approved) >= 0.005;
+
+    /* A correction has to be explained. Without that the audit row records a
+       number changing and nothing about why, which is not a trail. */
+    if (adjusted && !String(reason || '').trim()) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: `The amount differs from the R${declared.toFixed(2)} the investor declared. A reason is required to change it.`,
+        code: 'REASON_REQUIRED', declared,
+      });
+    }
+
+    const note = `EFT wallet top-up approved by admin. Ref: ${reference}` +
+      (adjusted ? ` · Amount corrected from R${declared.toFixed(2)} to R${approved.toFixed(2)} — ${String(reason).trim()}` : '');
+
+    let credited = false;
+    if (pending) {
+      /* `status <> 'completed'` is what stops a double credit: a retry, a
+         double-click or a replayed request updates nothing and credits
+         nothing. */
+      const { rows: [done] } = await client.query(
+        `UPDATE transactions
+            SET status = 'completed', amount = $1, description = $2, updated_at = NOW()
+          WHERE id = $3 AND status <> 'completed'
+        RETURNING *`,
+        [approved, note, pending.id]);
+      credited = !!done;
+    } else {
+      await client.query(
+        `INSERT INTO transactions
+           (id, investor_id, sub_account_id, type, amount, status, reference, description, created_at, updated_at)
+         VALUES (gen_random_uuid(), $1, $2, 'deposit', $3, 'completed', $4, $5, NOW(), NOW())`,
+        [ticket.investor_id, ticket.sub_account_id || null, approved, reference, note]);
+      credited = true;
+    }
+
+    if (credited) {
+      // Same split the tables API applies: a sub-account deposit credits the
+      // sub-account, everything else the investor.
+      if (pending && pending.sub_account_id) {
+        await client.query(
+          'UPDATE sub_accounts SET wallet_balance = wallet_balance + $1 WHERE id = $2',
+          [approved, pending.sub_account_id]);
+      } else if (!pending && ticket.sub_account_id) {
+        await client.query(
+          'UPDATE sub_accounts SET wallet_balance = wallet_balance + $1 WHERE id = $2',
+          [approved, ticket.sub_account_id]);
+      } else {
+        await client.query(
+          'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
+          [approved, ticket.investor_id]);
+      }
+    }
+
+    await client.query(
+      `UPDATE support_tickets
+          SET status = 'resolved', responded_at = NOW(), updated_at = NOW(),
+              admin_response = $2
+        WHERE id = $1`,
+      [ticket_id,
+       `Your EFT deposit of R${approved.toFixed(2)} has been approved and credited to your wallet.` +
+       (adjusted ? ` The amount was corrected from the R${declared.toFixed(2)} submitted to match your proof of payment.` : '')]);
+
+    await client.query('COMMIT');
+
+    /* Written after the commit deliberately: an audit row must record what
+       actually happened, and a failure to write it must not undo a credit the
+       investor can already see. audit.log never throws. */
+    await audit.log({
+      actorId: req.user?.id || null,
+      actorEmail: req.user?.email || null,
+      actorRole: req.user?.role || null,
+      action: adjusted ? 'eft_deposit_approved_amount_corrected' : 'eft_deposit_approved',
+      entityType: 'support_ticket',
+      entityId: ticket_id,
+      description: adjusted
+        ? `EFT approved for ${ticket.investor_id} at R${approved.toFixed(2)} — corrected from the R${declared.toFixed(2)} declared. Reason: ${String(reason).trim()}`
+        : `EFT approved for ${ticket.investor_id} at R${approved.toFixed(2)} as declared.`,
+      before: { declared_amount: declared, reference, ticket_status: ticket.status },
+      after:  { approved_amount: approved, adjusted, reason: adjusted ? String(reason).trim() : null, credited },
+      ip: req.ip || null,
+      platform: 'admin',
+    });
+
+    return res.json({ ok: true, credited, declared, approved, adjusted, reference });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[eft-approve]', err);
+    return res.status(500).json({ error: 'Approval failed — nothing was credited. ' + err.message });
+  } finally {
+    client.release();
+  }
+});
+
 /* ─── POST /api/admin/reset-2fa ─── */
 router.post('/reset-2fa', async (req, res) => {
   try {

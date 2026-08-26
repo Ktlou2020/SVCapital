@@ -4046,6 +4046,91 @@ function _openDocumentData(rawData, fileName) {
   a.click();
 }
 
+/* Confirm — and if necessary correct — an EFT amount before crediting.
+ *
+ * The declared figure is what the investor typed into the portal. It is not
+ * necessarily what reached the bank: one client paid R505 and entered R500.
+ * The proof of payment is the evidence, so the person looking at it decides
+ * the number, and a change has to be explained.
+ *
+ * Resolves { amount, reason } or null if cancelled.
+ */
+function _eftConfirmAmount({ declared, name, ref, fileName }) {
+  return new Promise(resolve => {
+    const dec = Number(declared);
+    const fmt = n => 'R' + Number(n).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    const el = document.createElement('div');
+    el.className = 'modal-overlay';
+    el.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:20px';
+    el.innerHTML = `
+      <div class="modal" style="max-width:520px;width:100%;background:var(--bg-card,#1c1c1e);border-radius:16px;padding:22px">
+        <div style="font-weight:800;font-size:1.05rem;margin-bottom:4px">Confirm EFT amount</div>
+        <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:16px">
+          Check the figure against the proof of payment${fileName ? ` — <strong>${_esc(fileName)}</strong>` : ''}.
+          The investor's wallet is credited with the amount you confirm here.
+        </div>
+
+        <div class="info-list" style="margin-bottom:14px">
+          <div class="info-row"><span class="info-row__label">Investor</span><span class="info-row__value td-strong">${_esc(name || '—')}</span></div>
+          <div class="info-row"><span class="info-row__label">Reference</span><span class="info-row__value" style="font-family:monospace;font-size:0.78rem">${_esc(ref || '—')}</span></div>
+          <div class="info-row"><span class="info-row__label">Investor declared</span><span class="info-row__value td-gold fw-700">${fmt(dec)}</span></div>
+        </div>
+
+        <label class="form-label" for="eftAmt">Amount to credit</label>
+        <input id="eftAmt" class="form-input" type="number" step="0.01" min="0.01" value="${dec.toFixed(2)}"
+               style="font-size:1.15rem;font-weight:800;letter-spacing:.01em">
+
+        <div id="eftDiff" style="display:none;margin-top:10px;padding:10px 12px;border-radius:9px;
+             background:rgba(254,194,79,.12);border:1px solid rgba(254,194,79,.3);font-size:0.8rem">
+          <div style="color:#fec24f;font-weight:700" id="eftDiffLine"></div>
+          <label class="form-label" style="margin-top:8px" for="eftReason">Reason for the change <span style="color:#ff5229">*</span></label>
+          <input id="eftReason" class="form-input" type="text" placeholder="e.g. proof of payment shows R505,00 — client entered R500,00">
+        </div>
+
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px">
+          <button class="btn btn--secondary btn--sm" id="eftCancel">Cancel</button>
+          <button class="btn btn--primary btn--sm" id="eftGo">Approve &amp; Credit</button>
+        </div>
+      </div>`;
+    document.body.appendChild(el);
+
+    const amtEl    = el.querySelector('#eftAmt');
+    const diffEl   = el.querySelector('#eftDiff');
+    const diffLine = el.querySelector('#eftDiffLine');
+    const reasonEl = el.querySelector('#eftReason');
+    const goEl     = el.querySelector('#eftGo');
+
+    const close = v => { el.remove(); resolve(v); };
+
+    const sync = () => {
+      const v = parseFloat(amtEl.value);
+      const changed = Number.isFinite(v) && Math.abs(v - dec) >= 0.005;
+      diffEl.style.display = changed ? 'block' : 'none';
+      if (changed) {
+        const d = v - dec;
+        diffLine.textContent = `${d > 0 ? 'Crediting' : 'Crediting'} ${fmt(v)} — ${d > 0 ? fmt(d) + ' more' : fmt(-d) + ' less'} than declared.`;
+      }
+      goEl.textContent = Number.isFinite(v) && v > 0 ? `Approve & Credit ${fmt(v)}` : 'Approve & Credit';
+    };
+    amtEl.addEventListener('input', sync);
+    sync();
+
+    goEl.addEventListener('click', () => {
+      const v = parseFloat(amtEl.value);
+      if (!Number.isFinite(v) || v <= 0) { Toast.error('Enter an amount greater than zero.'); amtEl.focus(); return; }
+      if (Math.round(v * 100) / 100 !== v) { Toast.error('Amounts are in rands and cents — two decimals at most.'); amtEl.focus(); return; }
+      const changed = Math.abs(v - dec) >= 0.005;
+      const reason  = changed ? (reasonEl.value || '').trim() : '';
+      if (changed && !reason) { Toast.error('Say why the amount is being changed — it goes on the audit trail.'); reasonEl.focus(); return; }
+      close({ amount: v, reason });
+    });
+    el.querySelector('#eftCancel').addEventListener('click', () => close(null));
+    el.addEventListener('click', e => { if (e.target === el) close(null); });
+    setTimeout(() => amtEl.select(), 50);
+  });
+}
+
 function _openTicketDoc(ticketId, fileName) {
   const data = _ticketDocCache[ticketId];
   if (!data) { Toast.error('No file data available. Please ask the investor to re-upload.'); return; }
@@ -7206,75 +7291,73 @@ async function viewTicket(id) {
       let confirmMsg, invUpdate = null;
 
       if (isPaymentProof) {
-        // Parse amount from subject: "EFT Proof of Payment — Name — R10 000 — EFT-..."
-        const amtMatch = (tkt.subject || '').match(/R([\d\s,]+)/);
-        const rawAmt   = amtMatch ? amtMatch[1].replace(/[\s,]/g, '') : null;
-        const amount   = rawAmt ? parseFloat(rawAmt) : null;
+        /* The declared amount comes from the pending deposit row — a NUMERIC
+           column — not from a regex over the ticket subject. That regex read
+           "R505,50" as 50550, because it stripped the comma South African
+           formatting uses as a decimal separator: a hundredfold over-credit.
+           It also broke on any investor name containing " R ". */
         const refMatch = (tkt.subject || '').match(/EFT-[\w]+/);
         const ref      = refMatch ? refMatch[0] : (tkt.id || '');
-
-        if (approve && (!amount || amount <= 0)) {
-          Toast.error('Could not parse EFT amount from ticket subject. Please verify manually.');
+        let declared = null;
+        try {
+          const res = await API._fetch('GET',
+            `tables/transactions?investor_id=${encodeURIComponent(tkt.investor_id)}&reference=${encodeURIComponent(ref)}`);
+          const p = (res?.data ?? []).find(t => t.reference === ref && t.type === 'deposit');
+          if (p) declared = parseFloat(p.amount);
+        } catch (e) {
+          Toast.error('Could not read the submitted amount — approval stopped. ' + (e.message || ''));
           return;
         }
-        confirmMsg = approve
-          ? `Credit R${amount?.toLocaleString('en-ZA', { minimumFractionDigits: 2 })} to ${tktInvName}'s wallet? This cannot be undone.`
-          : 'Decline this EFT deposit? The investor will be notified to resubmit proof.';
-        if (!await Confirm.ask(approve ? 'Approve EFT Deposit' : 'Decline EFT Deposit', { body: confirmMsg, confirmLabel: approve ? 'Approve & Credit' : 'Decline', danger: !approve })) return;
-        try {
-          if (approve) {
-            // The portal pre-creates a pending transaction when the investor submits EFT proof.
-            // Updating it (not inserting) avoids a UNIQUE constraint violation on `reference`.
-            let pendingTxn = null;
-            try {
-              const existing = await API._fetch('GET', `tables/transactions?investor_id=${encodeURIComponent(tkt.investor_id)}&reference=${encodeURIComponent(ref)}`);
-              pendingTxn = (existing?.data ?? []).find(t => t.reference === ref && t.type === 'deposit') || null;
-            } catch (lookupErr) {
-              /* A failed lookup is not the same as "no pending transaction". Swallowing it
-                 left pendingTxn null, which sends the flow into the create branch and
-                 inserts a SECOND deposit for the same reference — a duplicate credit, or a
-                 unique-constraint failure part-way through an approval. Fail closed; the
-                 admin can retry, and retrying is harmless. */
-              console.error('[eft] pending transaction lookup failed:', lookupErr.message);
-              Toast.error('Could not check for an existing deposit — approval stopped so nothing is double-credited. Please try again.');
-              return;
-            }
+        const amount = declared;
+        if (!approve) {
+          if (!await Confirm.ask('Decline EFT Deposit', {
+            body: 'Decline this EFT deposit? The investor will be notified to resubmit proof.',
+            confirmLabel: 'Decline', danger: true })) return;
+          try {
+            await API.tickets.update(id, {
+              status: 'resolved',
+              admin_response: document.getElementById('ticketResponse').value ||
+                'Your EFT proof of payment was declined. Please resubmit with a clear, complete proof of payment.',
+              responded_at: new Date().toISOString(),
+            });
+            Toast.success('Declined — investor will be notified');
+            Modal.close('ticketModal');
+            await loadSupport();
+          } catch (e) { Toast.error('Action failed: ' + (e.message || 'Unknown error')); }
+          return;
+        }
 
-            if (pendingTxn) {
-              await API._fetch('PATCH', `tables/transactions/${pendingTxn.id}`, {
-                status:      'completed',
-                amount:      amount,
-                description: `EFT wallet top-up approved by admin. Ref: ${ref}`,
-              });
-            } else {
-              await API.transactions.create({
-                id:          Utils.genId('TXN'),
-                investor_id: tkt.investor_id,
-                type:        'deposit',
-                amount:      amount,
-                status:      'completed',
-                description: `EFT wallet top-up approved by admin. Ref: ${ref}`,
-                reference:   ref,
-              });
-            }
-            // The reconcile-from-ledger safeguard that used to run here is gone. It
-            // guarded a race where the transaction was marked completed but the wallet
-            // credit failed — both tables-API paths now apply the row and the credit in
-            // one DB transaction, so that race is closed. The safeguard itself overwrote
-            // wallet_balance from a ledger sum, which would have discarded an imported
-            // opening balance.
-          }
-          await API.tickets.update(id, {
-            status:         'resolved',
-            admin_response: document.getElementById('ticketResponse').value ||
-              (approve ? `Your EFT deposit of R${amount?.toLocaleString('en-ZA', { minimumFractionDigits: 2 })} has been approved and credited to your wallet.`
-                       : 'Your EFT proof of payment was declined. Please resubmit with a clear, complete proof of payment.'),
-            responded_at:   new Date().toISOString(),
+        /* Confirm the amount against the proof before crediting anything.
+
+           A client who paid R505 and typed R500 was credited R500, and the R5
+           went nowhere — the console asked "Credit R500?" and offered only yes
+           or no. The figure is now editable, a change has to be explained, and
+           both are recorded. */
+        const confirmed = await _eftConfirmAmount({
+          declared, name: tktInvName, ref,
+          fileName: tkt.attachment_filename || tkt.proof_filename || null,
+        });
+        if (!confirmed) return;
+
+        try {
+          /* One server call. This used to be a lookup, a PATCH and a ticket
+             update from the browser: a failure between the last two left the
+             wallet credited and the ticket open, with the investor told
+             nothing. The endpoint does all of it in one transaction. */
+          const out = await API._fetch('POST', 'admin/eft-approve', {
+            ticket_id: id,
+            amount:    confirmed.amount,
+            reason:    confirmed.reason || null,
           });
-          Toast.success(approve ? `R${amount?.toLocaleString('en-ZA', { minimumFractionDigits: 2 })} credited to wallet — ticket resolved` : 'Declined — investor will be notified');
+          Toast.success(
+            out.adjusted
+              ? `R${out.approved.toLocaleString('en-ZA', { minimumFractionDigits: 2 })} credited — corrected from R${Number(out.declared).toLocaleString('en-ZA', { minimumFractionDigits: 2 })}`
+              : `R${out.approved.toLocaleString('en-ZA', { minimumFractionDigits: 2 })} credited to wallet — ticket resolved`);
           Modal.close('ticketModal');
           await Promise.all([loadSupport(), loadInvestors()]);
-        } catch (e) { Toast.error('Action failed: ' + (e.message || 'Unknown error')); }
+        } catch (e) {
+          Toast.error('Approval failed — nothing was credited. ' + (e.message || 'Unknown error'));
+        }
         return;
       }
 
