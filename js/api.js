@@ -689,9 +689,69 @@ const Utils = {
   },
 
   /* Returns earned across a set of investments. Use this rather than a local
-     reduce so every surface reports the same total. */
+     reduce so every surface reports the same total.
+
+     NOTE: this falls back to the contracted rate, so on an investment with
+     nothing posted it answers with a PROJECTION. That is right for "what is
+     this worth at maturity" and wrong for anything labelled earned or for
+     portfolio value — use earnedReturns for those. */
   totalReturns(list) {
     return (Array.isArray(list) ? list : []).reduce((s, i) => s + Utils.investmentReturn(i), 0);
+  },
+
+  /* ─────────────────────────────────────────────────────────────────────
+     EARNED vs TARGET — the two are not interchangeable.
+
+     A target return is the benchmark the pool is aiming at. It is shown to
+     clients for ILLUSTRATION and must never move portfolio value.
+
+     An earned return is money actually declared: an investment's realised
+     actual_return, or the rate posted on its pool. Only this moves portfolio
+     value.
+
+     Before these existed, one helper served both and the fallback chain
+     reached the contracted rate, so a client who invested yesterday was told
+     he had earned a full year's return and his portfolio value included it.
+     ───────────────────────────────────────────────────────────────────── */
+
+  /* Money actually declared. Always a number — 0 means nothing posted yet,
+     which is a true statement about earnings. */
+  earnedReturns(list) {
+    return (Array.isArray(list) ? list : []).reduce((s, i) => {
+      const p = Utils.postedReturn(i);
+      return s + (p ? p.amount : 0);
+    }, 0);
+  },
+
+  /* The illustrative benchmark: what the investment is aiming at. Excludes
+     anything already posted, since that is no longer a target. */
+  targetReturns(list) {
+    return (Array.isArray(list) ? list : []).reduce((s, i) => {
+      if (!i || i.status === 'cancelled') return s;
+      if (Utils.postedReturn(i)) return s;          // posted — not a target any more
+      const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
+      const expected = num(i.expected_return != null ? i.expected_return : i.expected_return_amount);
+      if (expected > 0) return s + expected;
+      return s + num(i.amount) * num(i.annual_rate != null ? i.annual_rate : i.expected_return_rate);
+    }, 0);
+  },
+
+  /* Portfolio value: capital at work, plus the wallet, plus what has actually
+     been earned. One definition — it was computed five different ways across
+     the portal, and two of them wrote the same element with different
+     formulas, so the hero figure depended on which rendered last. */
+  portfolioValue(investments, walletBalance) {
+    const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
+    const list = Array.isArray(investments) ? investments : [];
+
+    /* Once an investment is paid out, its capital AND its return have moved
+       into the wallet — counting either here would add the same money twice.
+       A matured investment that has not been paid out yet is still held, so
+       it and its declared return do count. */
+    const held = list.filter(i => i && (i.status === 'active' || i.status === 'matured'));
+
+    const capital = held.reduce((s, i) => s + num(i.amount), 0);
+    return capital + num(walletBalance) + Utils.earnedReturns(held);
   },
 
 

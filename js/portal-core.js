@@ -1200,10 +1200,14 @@ function renderOverview(skipCharts) {
   // Returns earned, via the shared definition in js/api.js so this tile, My
   // Investments, the statement and the admin console cannot drift apart again.
   const earningInvs   = (PORTAL.investments || []).filter(i => i.status !== 'cancelled');
-  const totalEarnBase = earningInvs.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
-  const totalRet      = Utils.totalReturns(earningInvs);
-  const totalValue    = totalInvested + (parseFloat(inv.wallet_balance) || 0);
-  const returnPct     = totalEarnBase > 0 ? (totalRet / totalEarnBase * 100).toFixed(1) : '0';
+  // Earned, not projected: only a declared return moves this figure or the
+  // portfolio value beside it. The target is illustrative and shown separately.
+  const totalRet      = Utils.earnedReturns(earningInvs);
+  const earnedBase    = earningInvs
+    .filter(i => Utils.postedReturn(i))
+    .reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+  const totalValue    = Utils.portfolioValue(PORTAL.investments, inv.wallet_balance);
+  const returnPct     = earnedBase > 0 ? (totalRet / earnedBase * 100).toFixed(1) : '0';
   const activeCount = PORTAL.investments.filter(i => i.status === 'active').length;
   const firstName   = inv.first_name || 'Investor';
 
@@ -1217,7 +1221,15 @@ function renderOverview(skipCharts) {
   if (totEl) _animateNum(totEl, totalValue, 'R ', '', 1100);
 
   const retEl2 = document.getElementById('pov-return');
-  if (retEl2) retEl2.innerHTML = `<i class="fa-solid fa-arrow-trend-up"></i> <span>+${returnPct}% effective return · ${Utils.rand(totalRet)} earned</span>`;
+  if (retEl2) {
+    // With nothing posted there is no earned figure to quote. Saying so beats
+    // quoting the benchmark here — the target has its own tile, labelled as an
+    // illustration.
+    const _tgt = Utils.targetReturns(earningInvs);
+    retEl2.innerHTML = totalRet > 0
+      ? `<i class="fa-solid fa-arrow-trend-up"></i> <span>+${returnPct}% return posted · ${Utils.rand(totalRet)} earned</span>`
+      : `<i class="fa-solid fa-bullseye"></i> <span>${_tgt > 0 ? `${Utils.rand(_tgt)} target` : 'No returns posted yet'} · for illustration</span>`;
+  }
 
   const invEl = document.getElementById('pov-invested');
   if (invEl) _animateNum(invEl, totalInvested, 'R ', '', 900);
@@ -1655,8 +1667,9 @@ async function loadMyInvestments() {
 function renderMyInvestmentStats() {
   const d = PORTAL.investments;
   document.getElementById('mi-capital').textContent  = Utils.rand(d.filter(i => !i.is_reinvestment).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0));
-  document.getElementById('mi-expected').textContent = Utils.rand(d.reduce((s, i) => s + (parseFloat(i.expected_return_amount) || 0), 0));
-  document.getElementById('mi-earned').textContent   = Utils.rand(Utils.totalReturns(d));
+  document.getElementById('mi-expected').textContent = Utils.rand(Utils.targetReturns(d));
+  // Earned means declared. 0 here is a true statement, not a missing figure.
+  document.getElementById('mi-earned').textContent   = Utils.rand(Utils.earnedReturns(d));
   document.getElementById('mi-count').textContent    = d.length;
 }
 
@@ -1889,9 +1902,10 @@ function _refreshWalletUI(balance) {
   // Overview total portfolio value (invested + wallet + returns)
   const inv = PORTAL.investor;
   if (inv) {
-    const liveInvested = PORTAL.investments.filter(i => i.status === 'active').reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
-    const liveReturns  = PORTAL.transactions.filter(t => t.type === 'return' && t.status === 'completed').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
-    const totalValue   = liveInvested + balance + liveReturns;
+    // Through the shared definition. This element is also written by
+    // renderPortfolioHero; the two used different formulas, so which figure a
+    // client saw depended on which rendered last.
+    const totalValue   = Utils.portfolioValue(PORTAL.investments, balance);
     const povTotal = document.getElementById('pov-total');
     if (povTotal) povTotal.textContent = Utils.rand(totalValue);
   }
@@ -3952,9 +3966,11 @@ function updateStmtQuickStats() {
   const transactions = PORTAL.transactions || [];
   const investor     = PORTAL.investor     || {};
   const totalInvested = investments.filter(i => !i.is_reinvestment).reduce((s, i) => s + (Number(i.amount) || 0), 0);
-  const totalReturns  = Utils.totalReturns(investments);
+  // Earned, not projected — a target return must never move portfolio value.
+  const totalReturns  = Utils.earnedReturns(investments);
+  const targetReturns = Utils.targetReturns(investments);
   const walletBal     = Number(investor.wallet_balance) || 0;
-  const totalValue    = totalInvested + walletBal + totalReturns;
+  const totalValue    = Utils.portfolioValue(investments, walletBal);
 
   if (investments.length === 0 && transactions.length === 0) {
     previewEl.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-muted)">
@@ -3971,6 +3987,7 @@ function updateStmtQuickStats() {
     ${qsr('Total Transactions', transactions.length)}
     ${qsr('Capital Deployed', Utils.rand(totalInvested, 2))}
     ${qsr('Returns Earned', Utils.rand(totalReturns, 2))}
+    ${targetReturns > 0 ? qsr('Target Return (illustrative)', Utils.rand(targetReturns, 2)) : ''}
     ${qsr('Portfolio Value', Utils.rand(totalValue, 2))}
   </div>`;
 }

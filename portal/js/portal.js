@@ -3324,7 +3324,10 @@ function downloadStatement() {
     : PORTAL.investments.filter(i => ['paid_out', 'matured'].includes(i.status) && new Date(i.maturity_date || i.investment_date) >= from90)
                         .reduce((s, i) => s + (i.actual_return_amount || i.expected_return_amount || 0), 0);
   const walletBal     = Number(investor.wallet_balance) || 0;
-  const portfolioVal  = totalInvested + walletBal + totalReturns;
+  // Portfolio value is a point-in-time figure and moves only on posted
+  // returns — totalReturns above is period-scoped and falls back to expected
+  // amounts, so it must not feed this.
+  const portfolioVal  = Utils.portfolioValue(PORTAL.investments, walletBal);
 
   const periodLabel = `${from90.toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' })} – ${now.toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' })}`;
 
