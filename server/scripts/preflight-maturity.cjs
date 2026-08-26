@@ -100,6 +100,19 @@ const H    = s => console.log(`\n${s}\n${'─'.repeat(s.length)}`);
       console.log(`  ${String(v).padStart(4)}  ${k === 'none' ? '(none — defaults to reinvest)' : k}`);
     }
 
+    if ((r.affected || []).length) {
+      H(`Clients needing attention (${r.affected.length})`);
+      for (const a of r.affected) {
+        console.log(`  ${a.severity.padEnd(9)} ${a.name}  <${a.email || 'no email'}>  ${a.investorId}`);
+        console.log(`            ${a.poolName} · ${money(a.amount)} + ${money(a.postedReturn)} return · ` +
+                    `instruction ${a.instruction || '(none)'}`);
+        console.log(`            ${a.detail}`);
+      }
+    }
+    if ((r.noInstruction || []).length) {
+      console.log(`\n  ${r.noInstruction.length} investor(s) chose no instruction and will be auto-reinvested.`);
+    }
+
     H('Findings');
     const order = { STOP: 0, ATTENTION: 1, OK: 2 };
     for (const f of [...r.findings].sort((a, b) => order[a.level] - order[b.level])) {

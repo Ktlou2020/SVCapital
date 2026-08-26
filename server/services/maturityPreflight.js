@@ -80,7 +80,7 @@ async function runMaturityPreflight(db, { horizonDays = 14 } = {}) {
            i.maturity_instruction, i.custom_payout_amount, i.switch_product_type,
            i.maturity_alert_sent_at, i.maturity_3day_alert_sent_at,
            p.actual_rate AS pool_actual_rate, p.status AS pool_status, p.name AS pool_real_name,
-           inv.email, inv.phone
+           inv.email, inv.phone, inv.first_name, inv.last_name
       FROM investments i
       JOIN investors inv ON inv.id = i.investor_id
       LEFT JOIN investment_pools p ON p.id = i.pool_id
@@ -312,6 +312,64 @@ async function runMaturityPreflight(db, { horizonDays = 14 } = {}) {
     add(ATTENTION, 'instructions',
       `${badSwitch.length} switch instruction(s) name no target product — they fall back to the same product.`);
   }
+
+  /* ── Who, by name ────────────────────────────────────────────────
+     Counts say how much is wrong; they do not say who to call. Every finding
+     that resolves to specific people is listed here with the investor, the
+     investment and the money involved, so the report can be acted on rather
+     than only read.
+
+     Admin/director only — this is the same endpoint that already reports
+     investors' capital, and the CLI needs a production DATABASE_URL. */
+  const person = m => ({
+    investorId: m.investor_id,
+    name: [m.first_name, m.last_name].filter(Boolean).join(' ') || m.investor_id,
+    email: m.email || '',
+    phone: m.phone || '',
+    investmentId: m.id,
+    poolId: m.pool_id,
+    poolName: m.pool_real_name || m.pool_name || '',
+    amount: round2(num(m.amount)),
+    postedReturn: round2(postedReturn({
+      amount: m.amount, actualReturn: m.actual_return, poolActualRate: m.pool_actual_rate }) || 0),
+    instruction: m.maturity_instruction || null,
+    productType: m.product_type || null,
+  });
+
+  const affected = [];
+  for (const m of badCustom) {
+    affected.push({ ...person(m), issue: 'custom_payout_no_amount', severity: STOP,
+      detail: 'A custom payout with no amount — the custom portion computes to zero, so the ' +
+              'whole balance rolls over instead of paying out.' });
+  }
+  for (const m of badSwitch) {
+    affected.push({ ...person(m), issue: 'switch_no_target', severity: ATTENTION,
+      detail: 'A switch instruction naming no target product — it falls back to the same product.' });
+  }
+  /* Rollovers with nowhere to go. Resolved through the same target lookup the
+     engine uses, so this names exactly the people whose money becomes cash. */
+  for (const m of willRoll) {
+    const pt = targetProductType(m);
+    const t = await resolveTarget(pt);
+    if (!t) {
+      affected.push({ ...person(m), issue: 'rollover_to_wallet', severity: ATTENTION,
+        targetProductType: pt,
+        detail: `Expects to roll over, but no open pool has product_type "${pt}" — ` +
+                'the money is paid to the wallet instead.' });
+    } else if (sweptTypes.has(pt)) {
+      affected.push({ ...person(m), issue: 'rollover_target_swept', severity: STOP,
+        targetProductType: pt, intendedPoolId: t.id, intendedPoolName: t.name,
+        detail: `Expects "${t.name}", but the 23:00 cycle closes it before the payout — ` +
+                'the money lands in a successor created moments earlier.' });
+    }
+  }
+  affected.sort((a, b) => (a.severity === STOP ? 0 : 1) - (b.severity === STOP ? 0 : 1)
+                       || b.amount - a.amount);
+  result.affected = affected;
+
+  /* Listed separately: not an error, but 163 people being auto-reinvested is
+     worth seeing by name before it happens, not only as a count. */
+  result.noInstruction = missing.map(person);
 
   /* ── Anything blocking the pool status flip ──────────────────────── */
   for (const [poolId] of byPool) {

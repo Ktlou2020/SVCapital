@@ -12084,6 +12084,34 @@ async function backfillFicaFromKyc(btn) {
    undo. The checks live server-side in services/maturityPreflight.js, shared
    with the CLI, so this only renders.
    ═══════════════════════════════════════════════ */
+let _preflightAffected = null;
+
+/* The list is a worklist — someone has to phone these people or edit their
+   instruction, and that happens outside the console. */
+function _preflightExportCsv() {
+  if (!_preflightAffected) { Toast.error('Run the pre-flight first'); return; }
+  const rows = [
+    ...(_preflightAffected.affected || []),
+    ...(_preflightAffected.noInstruction || []).map(p => ({
+      ...p, issue: 'no_instruction', severity: 'ATTENTION',
+      detail: 'No maturity instruction chosen — will be auto-reinvested.' })),
+  ];
+  if (!rows.length) { Toast.error('Nothing to export'); return; }
+  const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const csv = [
+    'severity,issue,investor,account,email,phone,pool,investment_id,amount,posted_return,instruction,detail',
+    ...rows.map(a => [a.severity, a.issue, a.name, a.investorId, a.email, a.phone, a.poolName,
+      a.investmentId, a.amount, a.postedReturn, a.instruction || '', a.detail].map(esc).join(',')),
+  ].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `maturity-preflight-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+  Toast.success(`${rows.length} row(s) exported`);
+}
+
 async function runMaturityPreflight(btn) {
   const resultEl = document.getElementById('preflightResult');
   const days = document.getElementById('preflightDays')?.value || 14;
@@ -12164,6 +12192,43 @@ async function runMaturityPreflight(btn) {
         `<li>${_esc(s.name)} <span class="td-muted">(${_esc(s.productType || '—')}, closed ${Utils.date(s.endDate)}, ${s.daysClosed} days ago)</span>${
           s.beyondCyclerWindow ? ' <span style="color:#f59e0b">— will never self-clear</span>' : ''}</li>`).join('')}</ul>` : '';
 
+    /* Counts do not tell you who to call. */
+    _preflightAffected = { affected: r.affected || [], noInstruction: r.noInstruction || [] };
+    const ISSUE_LABEL = {
+      custom_payout_no_amount: 'Custom payout has no amount',
+      switch_no_target:        'Switch names no target product',
+      rollover_to_wallet:      'Rollover has nowhere to go',
+      rollover_target_swept:   'Rollover target closes before the payout',
+    };
+    const affectedRows = (r.affected || []).map(a => `
+      <tr>
+        <td><div class="td-strong clip">${_esc(a.name)}</div>
+            <div class="td-muted clip" style="font-size:0.7rem">${_esc(a.email)}</div></td>
+        <td class="clip" style="font-family:monospace;font-size:0.7rem">${_esc(a.investorId)}</td>
+        <td class="clip">${_esc(a.poolName)}</td>
+        <td style="text-align:right">${Utils.rand(a.amount)}
+            <div class="td-muted" style="font-size:0.68rem">+${Utils.rand(a.postedReturn)} return</div></td>
+        <td>${_esc(a.instruction || '(none)')}</td>
+        <td><span class="badge ${a.severity === 'STOP' ? 'badge--red' : 'badge--orange'}"
+             style="font-size:0.65rem">${_esc(ISSUE_LABEL[a.issue] || a.issue)}</span>
+            <div class="td-muted" style="font-size:0.68rem;margin-top:3px">${_esc(a.detail)}</div></td>
+      </tr>`).join('');
+
+    const affectedBlock = (r.affected || []).length ? `
+      <p style="font-weight:600;margin:16px 0 6px">Clients needing attention
+        <span class="td-muted" style="font-weight:400">(${r.affected.length})</span>
+        <button class="btn btn--ghost btn--sm" style="margin-left:8px" onclick="_preflightExportCsv()">
+          <i class="fa-solid fa-file-csv"></i> CSV</button></p>
+      <div style="overflow-x:auto"><table class="table" style="font-size:0.78rem">
+        <thead><tr><th>Investor</th><th>Account</th><th>Pool</th>
+          <th style="text-align:right">Amount</th><th>Instruction</th><th>Issue</th></tr></thead>
+        <tbody>${affectedRows}</tbody></table></div>` : '';
+
+    const noInstrBlock = (r.noInstruction || []).length ? `
+      <p style="margin:14px 0 0;color:var(--text-muted)">
+        ${r.noInstruction.length} investor(s) chose no instruction and will be auto-reinvested —
+        included in the CSV.</p>` : '';
+
     resultEl.innerHTML = `
       ${verdict}
       <p style="font-weight:600;margin-bottom:6px">Maturing in the next ${_esc(r.horizonDays)} days —
@@ -12181,6 +12246,8 @@ async function runMaturityPreflight(btn) {
         <span class="td-muted" style="font-weight:400">(${r.totals.rollingOver} of ${r.totals.investments} roll over)</span></p>
       <ul style="margin:0 0 0 18px">${targets}</ul>
       ${stale}
+      ${affectedBlock}
+      ${noInstrBlock}
       <p style="font-weight:600;margin:16px 0 6px">Findings</p>
       ${findingRows}
       <p class="td-muted" style="margin-top:12px;font-size:0.72rem">
