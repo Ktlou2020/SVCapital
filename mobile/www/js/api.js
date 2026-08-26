@@ -831,11 +831,21 @@ const Utils = {
     const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
     const list = Array.isArray(investments) ? investments : [];
 
-    /* Once an investment is paid out, its capital AND its return have moved
-       into the wallet — counting either here would add the same money twice.
-       A matured investment that has not been paid out yet is still held, so
-       it and its declared return do count. */
-    const held = list.filter(i => i && (i.status === 'active' || i.status === 'matured'));
+    /* Active only.
+
+       Capital leaves an investment on maturity by one of two routes: paid out
+       to the wallet, or rolled into a new pool as a reinvestment. Either way it
+       is already counted somewhere else — in wallet_balance, or as the active
+       investment it became. The matured row is a record of what happened, not a
+       second pile of money.
+
+       This counted matured rows as held too, on the reasoning that a matured
+       investment awaiting payout is still owed. That is true in isolation and
+       wrong in aggregate: rollover is the normal path here, so every rolled-over
+       investment was counted twice. One real portfolio showed R392,320.45
+       against R35,593.23 of active capital, R9.46 in the wallet and R17,475.49
+       earned — R339,242.27 of double-counted capital. */
+    const held = list.filter(i => i && i.status === 'active');
 
     const capital = held.reduce((s, i) => s + num(i.amount), 0);
     return capital + num(walletBalance) + Utils.earnedReturns(held);

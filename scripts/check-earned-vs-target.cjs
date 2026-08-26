@@ -78,10 +78,20 @@ console.log('\nportfolio value moves only on posted returns');
   // here would add the same money twice.
   eqN('a paid-out investment is not counted again — the money is in the wallet',
       Utils.portfolioValue([REALISED], wallet), 5000);
-  // matured but unpaid: still held, so it and its declared return do count.
+  /* Matured: the capital has left, either to the wallet or into a rollover.
+     This previously asserted the opposite — that a matured investment is still
+     held — and that reasoning double-counted every rollover, which is the
+     normal path. A real portfolio read R392,320.45 against R35,593.23 of
+     active capital because of it. */
   const MATURED = { amount: '10000.00', annual_rate: '0.0000', pool_actual_rate: '0.0500', status: 'matured' };
-  eqN('a matured but unpaid investment still counts, with its declared return',
-      Utils.portfolioValue([MATURED], wallet), 10000 + 500 + 5000);
+  eqN('a matured investment is not counted as capital still at work',
+      Utils.portfolioValue([MATURED], wallet), 5000);
+
+  // The shape that caused it: one active investment plus its matured parent.
+  const ROLLED_PARENT = { amount: '30000.00', annual_rate: '0.0000', pool_actual_rate: '0.0500', status: 'matured' };
+  const ROLLOVER      = { amount: '31500.00', annual_rate: '0.0000', status: 'active', is_reinvestment: true };
+  eqN('a rollover counts once, not twice',
+      Utils.portfolioValue([ROLLED_PARENT, ROLLOVER], 0), 31500);
   eqN('a cancelled investment contributes nothing',
       Utils.portfolioValue([CANCELLED], wallet), 5000);
   eqN('no wallet, no investments, no value', Utils.portfolioValue([], 0), 0);
