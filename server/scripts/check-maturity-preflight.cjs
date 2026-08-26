@@ -148,6 +148,58 @@ const snapshot = async () => (await pool.query(`
       ok('the open, current pool is named', t && t.poolId === 'PF-TARGET', `got ${t && t.poolId}`);
     }
 
+    console.log('\nit names the destination per maturing pool, not just per product');
+    {
+      const p = r.pools.find(x => x.poolId === 'PF-POSTED');
+      ok('the maturing pool says what it rolls into',
+         p && p.rollsInto && p.rollsInto.length === 1 && p.rollsInto[0].poolId === 'PF-TARGET',
+         JSON.stringify(p && p.rollsInto));
+    }
+
+    console.log('\na similarly named successor does NOT receive a rollover');
+    {
+      /* The trap this exists to catch. "Cattle Investment - August 2026" looks
+         like the obvious successor to "Cattle Investment - August 2025", but
+         the engine matches product_type and never reads the name. A migrated
+         pool carrying product_type 'other' finds nothing, however the open
+         pool is titled. */
+      await pool.query(`
+        INSERT INTO investment_pools (id,name,product_type,status,annual_rate,term_months,
+            start_date,end_date,min_investment)
+        VALUES ('PF-LOOKALIKE','Migrated Product - September 2026','pf_real','open',0.12,6,
+                CURRENT_DATE, CURRENT_DATE+30, 1000)`);
+      await pool.query(`
+        INSERT INTO investment_pools (id,name,product_type,status,annual_rate,actual_rate,term_months,
+            start_date,end_date,maturity_date,min_investment)
+        VALUES ('PF-MIGRATED','Migrated Product - August 2026','other','active',0.12,0.05,6,
+                CURRENT_DATE-190, CURRENT_DATE-1, CURRENT_DATE, 1000)`);
+      await pool.query(`
+        INSERT INTO investments (id,investor_id,pool_id,pool_name,amount,status,start_date,end_date,
+            annual_rate,term_months,expected_return,actual_return,product_type,maturity_instruction)
+        VALUES ('PF-3','PF-A','PF-MIGRATED','Migrated Product - August 2026',200000,'active',
+                CURRENT_DATE-190, CURRENT_DATE-1, 0.12, 6, 0, 0, 'other', 'reinvest')`);
+
+      const r2 = await runMaturityPreflight(pool, { horizonDays: 14 });
+      const mig = r2.pools.find(x => x.poolId === 'PF-MIGRATED');
+      ok('the lookalike pool is not offered as the destination',
+         mig && mig.rollsInto[0] && mig.rollsInto[0].poolId !== 'PF-LOOKALIKE',
+         `offered ${mig && mig.rollsInto[0] && mig.rollsInto[0].poolId}`);
+      ok('it says the money goes to wallets instead',
+         mig && mig.rollsInto[0] && mig.rollsInto[0].toWallet === true,
+         JSON.stringify(mig && mig.rollsInto));
+      ok('and the finding names the pool and the reason',
+         r2.findings.some(f => /PF-MIGRATED/.test(f.message) && /product_type only/.test(f.message)),
+         JSON.stringify(r2.findings.filter(f => /PF-MIGRATED/.test(f.message))));
+
+      /* And once the product types agree, it lands where you would expect. */
+      await pool.query(`UPDATE investment_pools SET product_type='other' WHERE id='PF-LOOKALIKE'`);
+      const r3 = await runMaturityPreflight(pool, { horizonDays: 14 });
+      const mig3 = r3.pools.find(x => x.poolId === 'PF-MIGRATED');
+      ok('matching product_type is what makes the succession work',
+         mig3 && mig3.rollsInto[0] && mig3.rollsInto[0].poolId === 'PF-LOOKALIKE',
+         `got ${mig3 && mig3.rollsInto[0] && mig3.rollsInto[0].poolId}`);
+    }
+
     console.log('\nit notices the things that need a person');
     ok('a custom payout with no amount is a STOP',
        r.findings.some(f => f.level === 'STOP' && /custom-payout/.test(f.message)));

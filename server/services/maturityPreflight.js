@@ -30,6 +30,19 @@ function postedReturn({ amount, actualReturn, poolActualRate }) {
 }
 
 const num = v => Number(v) || 0;
+
+/* Which pool an investment's rollover will actually look for.
+   The engine matches on product_type and nothing else — maturityCron passes
+   inv.product_type (or switch_product_type for a switch) into a query whose
+   only predicate is `product_type = $1`. Pool NAMES play no part, so a pool
+   called "Cattle Investment - August 2026" does not receive a rollover from
+   "Cattle Investment - August 2025" unless their product_type values match.
+   That is the trap worth naming out loud: the names imply a succession the
+   engine cannot see. */
+const targetProductType = m =>
+  (['switch_product', 'custom_switch'].includes(m.maturity_instruction)
+    ? (m.switch_product_type || m.product_type)
+    : m.product_type) || 'general';
 /* Round every rand figure that leaves this module. 100000 * 0.07 is
    7000.000000000001 in binary floating point, and a report about money should
    never show that. */
@@ -126,8 +139,11 @@ async function runMaturityPreflight(db, { horizonDays = 14 } = {}) {
   const willRoll = maturing.filter(m => (m.maturity_instruction || 'reinvest') !== 'payout_all');
   result.totals.rollingOver = willRoll.length;
 
-  for (const pt of [...new Set(maturing.map(m => m.product_type || 'general'))]) {
-    /* The exact query the engine runs, floor included. */
+  /* The exact query the engine runs, floor included. Cached: a pool's
+     investments almost always share one product type. */
+  const targetCache = new Map();
+  const resolveTarget = async pt => {
+    if (targetCache.has(pt)) return targetCache.get(pt);
     const { rows: [t] } = await db.query(`
       SELECT id, name, end_date, current_invested, max_investment
         FROM investment_pools
@@ -137,13 +153,46 @@ async function runMaturityPreflight(db, { horizonDays = 14 } = {}) {
          AND (max_investment IS NULL OR COALESCE(current_invested,0) < max_investment)
        ORDER BY end_date ASC NULLS LAST, created_at ASC
        LIMIT 1`, [pt]);
+    targetCache.set(pt, t || null);
+    return t || null;
+  };
+
+  /* Per maturing pool, name the pool its rollovers actually land in. The
+     aggregate below answers "how much"; this answers "from here, to where",
+     which is the question anyone actually asks of a succession. */
+  for (const entry of result.pools) {
+    const list = byPool.get(entry.poolId) || [];
+    const rolling = list.filter(m => (m.maturity_instruction || 'reinvest') !== 'payout_all');
+    entry.rollsInto = [];
+    for (const pt of [...new Set(rolling.map(targetProductType))]) {
+      const t = await resolveTarget(pt);
+      entry.rollsInto.push({
+        productType: pt,
+        poolId: t ? t.id : null,
+        poolName: t ? t.name : null,
+        endDate: t ? t.end_date : null,
+        toWallet: !t,
+        count: rolling.filter(m => targetProductType(m) === pt).length,
+      });
+    }
+    if (entry.rollsInto.some(x => x.toWallet)) {
+      const types = entry.rollsInto.filter(x => x.toWallet).map(x => x.productType).join(', ');
+      add(ATTENTION, 'reinvest-target',
+        `${entry.poolId} "${entry.poolName}": its rollovers look for an open pool of ` +
+        `product_type "${types}" and find none, so they become wallet payouts. The engine ` +
+        'matches on product_type only — a similarly named pool does not receive them.');
+    }
+  }
+
+  for (const pt of [...new Set(maturing.map(targetProductType))]) {
+    const t = await resolveTarget(pt);
 
     /* Capital plus the POSTED return, which is what actually moves — not
        expected_return, which the engine no longer pays. On the migrated pools
        expected_return is 0 across the board, so using it understated the
        figure by the entire return: R6.07m reported against R6.65m real. The
        number people size a decision on has to be the number that moves. */
-    const incoming = round2(willRoll.filter(m => (m.product_type || 'general') === pt)
+    const incoming = round2(willRoll.filter(m => targetProductType(m) === pt)
       .reduce((s, m) => s + num(m.amount) + (postedReturn({
         amount: m.amount, actualReturn: m.actual_return,
         poolActualRate: m.pool_actual_rate }) || 0), 0));

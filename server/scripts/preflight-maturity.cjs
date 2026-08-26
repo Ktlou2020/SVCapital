@@ -65,6 +65,11 @@ const H    = s => console.log(`\n${s}\n${'─'.repeat(s.length)}`);
       } else {
         console.log('     no actual rate posted — HELD BACK until it is entered');
       }
+      for (const x of (p.rollsInto || [])) {
+        console.log(x.toWallet
+          ? `     rolls into: NOTHING — no open "${x.productType}" pool; ${x.count} rollover(s) become wallet payouts`
+          : `     rolls into: ${x.poolName} (${x.poolId}), closing ${day(x.endDate)} — ${x.count} rollover(s)`);
+      }
     }
 
     H('2. Where reinvested money will go');
