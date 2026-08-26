@@ -466,6 +466,14 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
   const { startChangeRequestSummaryCron } = require('./jobs/changeRequestSummaryCron');
   startChangeRequestSummaryCron();
 
+  /* KYC reconciliation — hourly. Corrects investors whose documents are all
+     approved but whose record is not, and KYC tickets left open for investors
+     already verified. The approval path keeps these in step going forward;
+     this catches anything that drifts anyway, so a failure repairs itself
+     instead of only being logged. */
+  const { startKycReconcile } = require('./jobs/kycReconcileCron');
+  startKycReconcile();
+
   // Email queue processor — runs every 2 minutes
   const emailQueueCron = require('node-cron');
   const { processQueue } = require('./services/emailQueue');

@@ -180,6 +180,76 @@ async function schema() {
        /WHERE id = \$1 AND fica_status = 'approved'[\s\S]{0,200}sendKycApproved/.test(tables),
        'it used to send even when the promote had done nothing');
 
+    /* ── 4. The category predicate, and the reconciliation ──────────── */
+    console.log('\nevery KYC ticket matches, whatever it is called');
+    const { KYC_TICKET_MATCH, KYC_TICKET_OPEN, isKycTicketCategory } =
+      require(path.join(ROOT, 'server', 'services', 'kycTickets'));
+
+    await pool.query(`DELETE FROM support_tickets`);
+    await pool.query(`INSERT INTO support_tickets (id, investor_id, category, status) VALUES
+      ('C1','S-11766','fica_kyc','open'),
+      ('C2','S-11766','fica_submission','open'),
+      ('C3','S-11766','kyc_submission','in_progress'),
+      ('C4','S-11766','document_verification','open'),
+      ('C5','S-11766','fica_upload','open'),
+      ('C6','S-11766','bank_verification','open'),
+      ('C7','S-11766','withdrawal','open')`);
+
+    const matched = (await pool.query(
+      `SELECT id FROM support_tickets WHERE ${KYC_TICKET_OPEN} AND ${KYC_TICKET_MATCH} ORDER BY id`
+    )).rows.map(r => r.id);
+
+    ok('the portal quick-ticket category fica_kyc matches',
+       matched.includes('C1'),
+       'this is the one the enumerated list missed — those tickets stayed open forever');
+    ok('the previously listed categories still match',
+       ['C2','C3','C4'].every(id => matched.includes(id)), JSON.stringify(matched));
+    ok('a category nobody has added yet would match too',
+       matched.includes('C5'), 'fica_upload is not in any list');
+    ok('bank verification is left alone — its own approval flow',
+       !matched.includes('C6'), JSON.stringify(matched));
+    ok('an unrelated ticket is left alone', !matched.includes('C7'), JSON.stringify(matched));
+
+    ok('the JS form agrees with the SQL form',
+       ['fica_kyc','fica_submission','kyc_submission','document_verification','fica_upload']
+         .every(isKycTicketCategory) &&
+       !isKycTicketCategory('bank_verification') && !isKycTicketCategory('withdrawal') &&
+       !isKycTicketCategory(null));
+
+    ok('no enumerated category list survives in the route',
+       !/category IN \('fica_submission'/.test(tables),
+       'a list has to be updated whenever a category is added, and nothing makes anyone');
+
+    console.log('\nreconciliation repairs drift rather than only logging it');
+    {
+      // An investor whose documents are all approved but whose record is not,
+      // and a KYC ticket left open for someone already verified.
+      await pool.query(`UPDATE investors SET fica_status = NULL, status = 'pending' WHERE id = 'S-11766'`);
+      await pool.query(`UPDATE kyc_documents SET status='approved' WHERE id IN ('K1','K2')`);
+      await pool.query(`INSERT INTO kyc_documents (id, investor_id, doc_type, status)
+                        VALUES ('K3','S-11766','proof_of_bank','approved') ON CONFLICT (id) DO NOTHING`);
+
+      process.env.DATABASE_URL = process.env.DATABASE_URL; // unchanged; job uses the same pool
+      const { runKycReconcile } = require(path.join(ROOT, 'server', 'jobs', 'kycReconcileCron'));
+      const res = await runKycReconcile();
+
+      ok('it promotes the investor the approval path missed', res.promoted === 1, JSON.stringify(res));
+      const inv = (await pool.query(`SELECT fica_status, status FROM investors WHERE id='S-11766'`)).rows[0];
+      ok('and the record now says approved and active',
+         inv.fica_status === 'approved' && inv.status === 'active', JSON.stringify(inv));
+      ok('it resolves the KYC tickets, fica_kyc included', res.resolved >= 5, JSON.stringify(res));
+
+      const left = (await pool.query(
+        `SELECT id, status FROM support_tickets ORDER BY id`)).rows;
+      const byId = Object.fromEntries(left.map(r => [r.id, r.status]));
+      ok('bank verification and unrelated tickets stay open',
+         byId.C6 === 'open' && byId.C7 === 'open', JSON.stringify(byId));
+
+      const second = await runKycReconcile();
+      ok('a second run finds nothing — it is idempotent',
+         second.promoted === 0 && second.resolved === 0, JSON.stringify(second));
+    }
+
     console.log(`\n${pass} passed, ${fail} failed`);
   } catch (err) {
     console.error('\n  ✗ threw:', err.message);
