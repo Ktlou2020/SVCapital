@@ -66,9 +66,14 @@ const H    = s => console.log(`\n${s}\n${'─'.repeat(s.length)}`);
         console.log('     no actual rate posted — HELD BACK until it is entered');
       }
       for (const x of (p.rollsInto || [])) {
-        console.log(x.toWallet
-          ? `     rolls into: NOTHING — no open "${x.productType}" pool; ${x.count} rollover(s) become wallet payouts`
-          : `     rolls into: ${x.poolName} (${x.poolId}), closing ${day(x.endDate)} — ${x.count} rollover(s)`);
+        if (x.toWallet) {
+          console.log(`     rolls into: NOTHING — no open "${x.productType}" pool; ${x.count} rollover(s) become wallet payouts`);
+        } else if (x.willBeSwept) {
+          console.log(`     rolls into: NOT ${x.poolName} — the 23:00 cycle closes it first;`);
+          console.log(`                 ${x.count} rollover(s) land in a successor created moments earlier`);
+        } else {
+          console.log(`     rolls into: ${x.poolName} (${x.poolId}), closing ${day(x.endDate)} — ${x.count} rollover(s)`);
+        }
       }
     }
 

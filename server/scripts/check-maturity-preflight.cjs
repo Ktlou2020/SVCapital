@@ -200,6 +200,64 @@ const snapshot = async () => (await pool.query(`
          `got ${mig3 && mig3.rollsInto[0] && mig3.rollsInto[0].poolId}`);
     }
 
+    console.log('\nit warns when the 23:00 cycle will move the target out from under the payout');
+    {
+      /* cycleExpiredPools runs first inside the same job, and cycling anything
+         closes every other open pool of that product type. A report that names
+         a destination without accounting for that is confidently wrong. */
+      /* Isolate: any OTHER cattle/short_term pool still awaiting a cycle would
+         also sweep, and then this measures the wrong cause. Sibling checks in
+         the suite leave exactly such pools behind, so stamp them first —
+         PF-SWEEPER must be the only pending cycle. */
+      await pool.query(
+        `UPDATE investment_pools SET cycled_at = NOW()
+          WHERE product_type IN ('cattle','short_term') AND cycled_at IS NULL`);
+      await pool.query(`
+        INSERT INTO investment_pools (id,name,product_type,status,annual_rate,term_months,
+            start_date,end_date,maturity_date,min_investment,cycled_at)
+        VALUES ('PF-SWEEPER','Cattle - July 2026','cattle','active',0.16,12,
+                CURRENT_DATE-90, CURRENT_DATE-10, CURRENT_DATE+270, 500, NULL)`);
+      await pool.query(`
+        INSERT INTO investment_pools (id,name,product_type,status,annual_rate,term_months,
+            start_date,end_date,maturity_date,min_investment,cycled_at)
+        VALUES ('PF-CT-TARGET','Cattle - August 2026','cattle','open',0.16,12,
+                CURRENT_DATE-30, CURRENT_DATE+20, CURRENT_DATE+380, 500, NOW())`);
+      await pool.query(`
+        INSERT INTO investment_pools (id,name,product_type,status,annual_rate,actual_rate,term_months,
+            start_date,end_date,maturity_date,min_investment,cycled_at)
+        VALUES ('PF-CT-MAT','Cattle - August 2025','cattle','active',0.16,0.1223,12,
+                CURRENT_DATE-360, CURRENT_DATE-1, CURRENT_DATE, 500, NOW())`);
+      await pool.query(`
+        INSERT INTO investments (id,investor_id,pool_id,pool_name,amount,status,start_date,end_date,
+            annual_rate,term_months,expected_return,actual_return,product_type,maturity_instruction)
+        VALUES ('PF-CT-1','PF-A','PF-CT-MAT','Cattle - August 2025',3970430.15,'active',
+                CURRENT_DATE-360, CURRENT_DATE-1, 0.16, 12, 0, 0, 'cattle', 'reinvest')`);
+
+      const rs = await runMaturityPreflight(pool, { horizonDays: 14 });
+      const ct = rs.pools.find(x => x.poolId === 'PF-CT-MAT');
+      ok('the pool due to be cycled is identified',
+         (rs.pendingCycle || []).some(p => p.poolId === 'PF-SWEEPER'),
+         JSON.stringify(rs.pendingCycle));
+      ok('the destination is flagged as one the payout will not reach',
+         ct && ct.rollsInto[0] && ct.rollsInto[0].willBeSwept === true,
+         JSON.stringify(ct && ct.rollsInto));
+      ok('and it is a STOP, not a footnote',
+         rs.findings.some(f => f.level === 'STOP' && /PF-CT-MAT/.test(f.message) &&
+                               /will NOT reach/.test(f.message)),
+         JSON.stringify(rs.findings.filter(f => f.level === 'STOP').map(f => f.message)));
+      ok('the finding names the pool that causes it and what to do',
+         rs.findings.some(f => /PF-SWEEPER/.test(f.message) && /cycled_at/.test(f.message)));
+
+      /* Cycling that pool — or stamping cycled_at — removes the hazard. */
+      await pool.query(`UPDATE investment_pools SET cycled_at = NOW() WHERE id='PF-SWEEPER'`);
+      const rs2 = await runMaturityPreflight(pool, { horizonDays: 14 });
+      const ct2 = rs2.pools.find(x => x.poolId === 'PF-CT-MAT');
+      ok('once that pool is cycled, the destination stands',
+         ct2 && ct2.rollsInto[0] && ct2.rollsInto[0].willBeSwept === false &&
+         ct2.rollsInto[0].poolId === 'PF-CT-TARGET',
+         JSON.stringify(ct2 && ct2.rollsInto));
+    }
+
     console.log('\nit notices the things that need a person');
     ok('a custom payout with no amount is a STOP',
        r.findings.some(f => f.level === 'STOP' && /custom-payout/.test(f.message)));

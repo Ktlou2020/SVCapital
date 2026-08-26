@@ -158,6 +158,17 @@ const statusOf = async id => (await pool.query(
 
     /* ── Case 2: another pool of the same product is due to cycle ──── */
     await seed({ withCyclablePool: true });
+
+    /* Ask the pre-flight what it thinks will happen BEFORE running the job,
+       then run the job. A report that predicts the wrong destination is worse
+       than no report — someone reads "rolls into X", sees the money land in Y,
+       and stops trusting the tool. */
+    const { runMaturityPreflight } = require(path.join(ROOT, 'server', 'services', 'maturityPreflight.js'));
+    const predicted = await runMaturityPreflight(pool, { horizonDays: 14 });
+    const predictedEntry = predicted.pools.find(p => p.poolId === 'RT-MATURING');
+    const predictedSwept = !!(predictedEntry && predictedEntry.rollsInto[0]
+                              && predictedEntry.rollsInto[0].willBeSwept);
+
     {
       const log = console.log; console.log = quiet;
       await cycleExpiredPools();          // runs FIRST, exactly as the cron does
@@ -185,6 +196,14 @@ const statusOf = async id => (await pool.query(
     ok('money still moved — this misroutes, it does not lose',
        (await wallet()) === 0 && !!b,
        `wallet holds ${await wallet()}`);
+
+    console.log('\nand the pre-flight predicted it, before it happened');
+    ok('it flagged the destination as one the payout would not reach',
+       predictedSwept === true,
+       'the report named a destination the money never reached');
+    ok('the prediction matches where the money actually went',
+       predictedSwept === (b && successor && b.pool_id === successor.id),
+       `predicted swept=${predictedSwept}, actually landed in ${b && b.pool_id}`);
 
     console.log('\nthe timing itself');
     {

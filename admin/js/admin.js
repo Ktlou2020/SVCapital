@@ -12116,6 +12116,8 @@ async function runMaturityPreflight(btn) {
         <td>${(p.rollsInto || []).length
               ? (p.rollsInto || []).map(x => x.toWallet
                   ? `<div style="color:#f59e0b">→ wallet payouts<div style="font-size:0.68rem">no open "${_esc(x.productType)}" pool · ${x.count} rollover(s)</div></div>`
+                  : x.willBeSwept
+                  ? `<div style="color:#ef4444">→ NOT ${_esc(x.poolName)}<div style="font-size:0.68rem">the 23:00 cycle closes it first · ${x.count} rollover(s)</div></div>`
                   : `<div>→ ${_esc(x.poolName)}<div class="td-muted" style="font-size:0.68rem">closes ${Utils.date(x.endDate)} · ${x.count} rollover(s)</div></div>`).join('')
               : '<span class="td-muted">nothing rolls over</span>'}</td>
       </tr>`).join('');
