@@ -1,11 +1,12 @@
 #!/usr/bin/env node
-/* The rule: a target return is illustrative and must never move portfolio
- * value. Only a posted return does.
+/* The rule: a benchmark belongs on the POOL, where a client sees it before
+ * investing. Nothing shown against money already held may be a projection —
+ * only what has actually been posted.
  *
- * What it was: one helper served both, and its fallback chain reached the
- * contracted rate. So a client who invested yesterday at 12% was told he had
- * already EARNED a full year's return, and his portfolio value included it.
- * The same investment reported three different figures on three screens.
+ * What it was: one helper served both meanings, and its fallback chain reached
+ * the contracted rate. So a client who invested yesterday at 12% was told he
+ * had already EARNED a full year's return, and his portfolio value included
+ * it. The same investment reported three different figures on three screens.
  *
  * Run: node scripts/check-earned-vs-target.cjs
  */
@@ -59,12 +60,11 @@ eqN('a cancelled investment earns nothing', Utils.earnedReturns([CANCELLED]), 0)
 eqN('earned over a mixed portfolio',
     Utils.earnedReturns([FRESH, POSTED, REALISED, CANCELLED]), 24744.77 * 0.0213 + 1504.75);
 
-console.log('\ntarget is the illustration');
-eqN('the benchmark shows as a target', Utils.targetReturns([FRESH]), 178.22);
-eqN('once posted it is no longer a target', Utils.targetReturns([POSTED]), 0);
-eqN('a cancelled investment has no target', Utils.targetReturns([CANCELLED]), 0);
-ok('earned and target never double-count the same investment',
-   Utils.targetReturns([POSTED]) === 0 && Utils.earnedReturns([POSTED]) > 0);
+console.log('\nno helper sums targets across holdings');
+// Deliberately absent. Every caller of such a helper would be showing a
+// projection against money already held, which is the thing being removed.
+ok('Utils has no targetReturns', typeof Utils.targetReturns === 'undefined',
+   'a helper with that name invites exactly the misuse this removed');
 
 console.log('\nportfolio value moves only on posted returns');
 {
@@ -123,6 +123,40 @@ for (const rel of FILES) {
   const shared     = (core.match(/Utils\.portfolioValue\(/g) || []).length;
   ok('every portfolio-value computation in portal-core goes through the helper',
      shared >= 2, `found ${shared} call(s) for ${povWriters} references to #pov-total`);
+}
+
+/* ── The rule itself: benchmark on the pool, never on a holding ─────── */
+console.log('\nno benchmark appears against money already held');
+{
+  const core = fs.readFileSync(path.join(ROOT, 'js', 'portal-core.js'), 'utf8');
+
+  // The labels that used to quote a benchmark on an investment the client owns.
+  for (const [label, gone] of [
+    ['the "Expected return" card stat', /mc2__stat-lbl">Expected return</],
+    ['the Target Return tile write',    /getElementById\('mi-expected'\)/],
+    ['the certificate\'s Target Return row', />Target Return</],
+    ['the statement\'s target row',      /Target Return \(illustrative\)/],
+  ]) {
+    ok(`${label} is gone`, !gone.test(core), 'still present in portal-core.js');
+  }
+
+  // No total may fall back to a benchmark when nothing was actually recorded.
+  const bad = core.split('\n')
+    .map((l, i) => [l, i + 1])
+    .filter(([l]) => !/^\s*(\/\/|\*|\/\*)/.test(l))
+    .filter(([l]) => /(actual_return\w*)\s*\|\|\s*\w*\.?expected_return/.test(l))
+    .map(([l, i]) => `js/portal-core.js:${i}: ${l.trim().slice(0, 90)}`);
+  ok('no total falls back from an actual return to a benchmark', bad.length === 0, bad.join('\n      '));
+}
+
+console.log('\nbut the pool keeps its benchmark — that is where it belongs');
+{
+  const core = fs.readFileSync(path.join(ROOT, 'js', 'portal-core.js'), 'utf8');
+  ok('the marketplace pool card still shows the benchmark rate',
+     /Utils\.pct\(pool\.annual_rate\)\} benchmark/.test(core),
+     'a client must be able to see what a pool aims at before investing');
+  ok('the pool listing still shows its target rate',
+     /target \$\{\(p\.benchmark_rate \* 100\)/.test(core));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
