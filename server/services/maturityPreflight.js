@@ -163,6 +163,34 @@ async function runMaturityPreflight(db, { horizonDays = 14 } = {}) {
     return targetCache.get(pt);
   };
 
+  /* The 23:00 job runs cycleExpiredPools() BEFORE it pays anything, and when
+     that cycles a pool it also runs
+
+         UPDATE investment_pools SET status='active'
+          WHERE product_type = $1 AND status='open' AND id <> <new successor>
+
+     closing every other open pool of that product type — including the one
+     these rollovers are aimed at. So the target resolved above is the target
+     as things stand, not as they will be when the money actually moves.
+
+     These are the pools that will be cycled tonight, by the cycler's own
+     selection. Any product type appearing here has its rollover target
+     replaced before the payout. */
+  const { rows: pendingCycle } = await db.query(`
+    SELECT id, name, product_type, status, end_date
+      FROM investment_pools
+     WHERE end_date IS NOT NULL
+       AND end_date < CURRENT_DATE
+       AND end_date >= CURRENT_DATE - INTERVAL '60 days'
+       AND cycled_at IS NULL
+       AND product_type IN ('cattle','short_term')
+       AND COALESCE(status, '') <> 'closed'
+     ORDER BY end_date`);
+  const sweptTypes = new Set(pendingCycle.map(p => p.product_type));
+  result.pendingCycle = pendingCycle.map(p => ({
+    poolId: p.id, name: p.name, productType: p.product_type,
+    status: p.status, endDate: p.end_date }));
+
   /* Per maturing pool, name the pool its rollovers actually land in. The
      aggregate below answers "how much"; this answers "from here, to where",
      which is the question anyone actually asks of a succession. */
@@ -178,8 +206,22 @@ async function runMaturityPreflight(db, { horizonDays = 14 } = {}) {
         poolName: t ? t.name : null,
         endDate: t ? t.end_date : null,
         toWallet: !t,
+        /* Marked, not silently corrected: the successor the cycler will open
+           does not exist yet, so naming it would be a guess. What is certain
+           is that this destination will not be the one. */
+        willBeSwept: !!t && sweptTypes.has(pt),
         count: rolling.filter(m => targetProductType(m) === pt).length,
       });
+    }
+    for (const x of entry.rollsInto.filter(x => x.willBeSwept)) {
+      const causes = pendingCycle.filter(p => p.product_type === x.productType)
+        .map(p => `${p.id} (closed ${dateOnly(p.end_date)})`).join(', ');
+      add(STOP, 'reinvest-target',
+        `${entry.poolId} "${entry.poolName}": its ${x.count} rollover(s) will NOT reach ` +
+        `"${x.poolName}". The 23:00 job cycles ${causes} first, and cycling closes every other ` +
+        `open "${x.productType}" pool — so the money lands in a successor created moments earlier, ` +
+        'on a different close date and term. Cycle that pool now, or set its cycled_at, ' +
+        'so tonight\'s run has nothing to sweep.');
     }
     if (entry.rollsInto.some(x => x.toWallet)) {
       const types = entry.rollsInto.filter(x => x.toWallet).map(x => x.productType).join(', ');
