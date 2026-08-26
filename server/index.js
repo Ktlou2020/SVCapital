@@ -262,10 +262,23 @@ app.get('/api/health', async (req, res) => {
 /* Readiness — same checks, but honest status codes. Safe for uptime monitors
    and load balancers because nothing here can terminate the container. */
 app.get('/api/health/ready', async (req, res) => {
+  /* Include the last auto-setup result. A step that fails to apply leaves the
+     schema incomplete, and until now the only trace was one line in the boot
+     log — long scrolled away by the time anything went wrong. Reported, not
+     fatal: a mostly-migrated database still serves most traffic, so this stays
+     200 and says what is missing rather than taking the service down. */
+  let setup = null;
+  try { setup = require('./db/setup').lastResult(); } catch (_) {}
+
   try {
     const pool = require('./db/pool');
     await pool.query('SELECT 1');
-    res.status(200).json({ status: 'ok', db: true, ts: new Date().toISOString() });
+    res.status(200).json({
+      status: 'ok', db: true, ts: new Date().toISOString(),
+      ...(setup && setup.ok === false
+        ? { setup: 'incomplete', setupFailures: setup.failures, setupAt: setup.at }
+        : { setup: setup && setup.ok === true ? 'ok' : 'unknown' }),
+    });
   } catch (err) {
     res.status(503).json({ status: 'error', db: false, dbError: err.message });
   }
