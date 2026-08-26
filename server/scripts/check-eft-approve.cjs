@@ -195,6 +195,50 @@ const wallet = async () =>
     ok('and the approval goes through the single endpoint',
        /API\._fetch\('POST', 'admin\/eft-approve'/.test(admin));
 
+    /* ── The audit row must survive an actor it cannot link ─────────── */
+    console.log('\nthe audit row survives an actor that is not a users UUID');
+    {
+      await pool.query(`DROP TABLE IF EXISTS audit_events`);
+      await pool.query(`CREATE TABLE audit_events (
+        id TEXT PRIMARY KEY, event_type TEXT NOT NULL, entity_type TEXT, entity_id TEXT,
+        user_id UUID, user_email TEXT, actor_role TEXT, description TEXT,
+        ip_address TEXT, metadata JSONB, platform TEXT, created_at TIMESTAMPTZ DEFAULT NOW())`);
+
+      delete require.cache[require.resolve(path.join(ROOT, 'server', 'services', 'audit'))];
+      delete require.cache[require.resolve(path.join(ROOT, 'server', 'db', 'pool'))];
+      const audit = require(path.join(ROOT, 'server', 'services', 'audit'));
+
+      // 'E1-EMPLOYEE' is not a UUID. Staff authenticated by empId look like
+      // this, and the whole row used to be dropped on the failed cast.
+      await audit.log({
+        actorId: 'E1-EMPLOYEE', actorEmail: 'ops@svcapital.co.za', actorRole: 'admin',
+        action: 'eft_deposit_approved_amount_corrected',
+        entityType: 'support_ticket', entityId: 'TK-B',
+        description: 'EFT approved at R505.00 — corrected from R500.00.',
+        before: { declared_amount: 500 }, after: { approved_amount: 505, reason: 'proof shows R505,00' },
+      });
+
+      const rows = (await pool.query(`SELECT * FROM audit_events`)).rows;
+      ok('the event is recorded even though the actor cannot be linked', rows.length === 1,
+         `${rows.length} row(s) — a non-UUID actor used to lose the event entirely`);
+      if (rows[0]) {
+        ok('the link is dropped, not the row', rows[0].user_id === null);
+        ok('who did it is still known',
+           rows[0].user_email === 'ops@svcapital.co.za' && rows[0].actor_role === 'admin');
+        ok('and the unlinkable id is kept verbatim',
+           rows[0].metadata && rows[0].metadata.actor_ref === 'E1-EMPLOYEE',
+           JSON.stringify(rows[0].metadata));
+        ok('both amounts and the reason are on the row',
+           String(rows[0].metadata.before.declared_amount) === '500' &&
+           String(rows[0].metadata.after.approved_amount) === '505' &&
+           /R505,00/.test(rows[0].metadata.after.reason), JSON.stringify(rows[0].metadata));
+      }
+
+      const src = fs.readFileSync(path.join(ROOT, 'server', 'services', 'audit.js'), 'utf8');
+      ok('the service retries without the link before giving up',
+         /recorded "\$\{action\}" without an actor link/.test(src));
+    }
+
     console.log(`\n${pass} passed, ${fail} failed`);
   } catch (err) {
     console.error('\n  ✗ threw:', err.message);
