@@ -1841,11 +1841,41 @@ function renderMyInvestmentCards() {
           </div>
         ` : ''}
 
-        ${inv.status === 'active' ? `
-          <button class="btn btn--secondary btn--full btn--sm" onclick='${multiple ? `openPoolMaturityModal(${JSON.stringify(inv.pool_id)})` : `openMaturityModal(${JSON.stringify(inv.id)})`}' style="margin-top:6px;font-size:0.76rem">
-            <i class="fa-solid fa-hourglass-half"></i> Set Maturity Instruction
-          </button>
-        ` : ''}
+        ${inv.status === 'active' ? (() => {
+          /* The button read "Set Maturity Instruction" whether or not one was
+             already set, so the only way to find out was to open the modal —
+             one investment at a time. State first, then an action that says
+             what it will do. */
+          const st = Utils.maturityInstructionState(group);
+          const call = multiple
+            ? `openPoolMaturityModal(${JSON.stringify(inv.pool_id)})`
+            : `openMaturityModal(${JSON.stringify(inv.id)})`;
+
+          const CUE = {
+            all:     { icon: 'fa-circle-check',           color: '#22c55e', lead: 'Instruction set' },
+            partial: { icon: 'fa-circle-half-stroke',     color: '#fec24f', lead: 'Partly set' },
+            mixed:   { icon: 'fa-circle-half-stroke',     color: '#fec24f', lead: 'Instructions differ' },
+            none:    { icon: 'fa-triangle-exclamation',   color: '#fec24f', lead: 'No instruction set' },
+          }[st.state];
+
+          // Only chase the client when the decision is actually close.
+          const urgent = st.state !== 'all' && days !== null && days <= 30;
+          const colour = st.state === 'all' ? CUE.color : (urgent ? '#ff5229' : CUE.color);
+
+          return `
+          <div style="display:flex;align-items:center;gap:7px;margin-top:8px;padding:7px 10px;border-radius:8px;
+                      background:${colour}14;border:1px solid ${colour}33;font-size:0.74rem">
+            <i class="fa-solid ${urgent && st.state !== 'all' ? 'fa-triangle-exclamation' : CUE.icon}" style="color:${colour}"></i>
+            <span style="color:var(--text-muted)">${CUE.lead}</span>
+            ${st.state === 'all' || st.state === 'partial' || st.state === 'mixed'
+              ? `<span style="margin-left:auto;color:${colour};font-weight:700;text-align:right">${_esc(st.label)}</span>`
+              : `<span style="margin-left:auto;color:${colour};font-weight:700">${urgent ? `${days} day${days === 1 ? '' : 's'} left` : 'Optional for now'}</span>`}
+          </div>
+          <button class="btn btn--secondary btn--full btn--sm" onclick='${call}' style="margin-top:6px;font-size:0.76rem">
+            <i class="fa-solid ${st.state === 'none' ? 'fa-hourglass-half' : 'fa-pen-to-square'}"></i>
+            ${st.state === 'none' ? 'Set Maturity Instruction' : 'Change Maturity Instruction'}
+          </button>`;
+        })() : ''}
       </div>
     `;
   }).join('');
@@ -3384,9 +3414,9 @@ function _maturityProductColor(type) {
 }
 
 function _maturityInstructionLabel(key) {
-  const map = { reinvest: 'Reinvest on maturity', payout_all: 'Full cash payout',
-    partial_reinvest: 'Partial reinvest', switch_product: 'Switch product' };
-  return map[key] || (key || '').replace(/_/g,' ');
+  // One map, in js/api.js. This one covered four of the six the server
+  // accepts, so a client who chose a custom payout saw "payout custom".
+  return Utils.instructionLabel(key) || 'Not set';
 }
 
 async function loadMaturity() {
@@ -3431,15 +3461,15 @@ async function loadMaturity() {
       const totalReturn  = _postedTot ? _postedTot.amount : 0;
       const productLabel = Utils.productInfo ? (Utils.productInfo(inv.product_type)||{}).label : inv.product_type;
 
-      // Pool-level instruction state
-      const allInstrs   = group.map(i => i.maturity_instruction).filter(Boolean);
-      const uniqueInstrs = [...new Set(allInstrs)];
-      const poolInstr   = uniqueInstrs.length === 1 ? uniqueInstrs[0] : null;
-      const hasMixed    = uniqueInstrs.length > 1;
-      const instrSet    = !!poolInstr || hasMixed;
-      const instrLabel  = hasMixed
-        ? `Mixed — ${allInstrs.length} of ${group.length} set`
-        : (poolInstr ? _maturityInstructionLabel(poolInstr) : 'No instruction set yet');
+      /* Pool-level instruction state, from the shared definition. The local
+         version used `new Set(...).size === 1`, which called a pool fully set
+         when one of three investments had an instruction — the other two
+         contribute nothing to the set, so it still had one member. */
+      const _instrState = Utils.maturityInstructionState(group);
+      const poolInstr   = _instrState.instruction;
+      const hasMixed    = _instrState.state === 'mixed';
+      const instrSet    = _instrState.state !== 'none';
+      const instrLabel  = _instrState.state === 'none' ? 'No instruction set yet' : _instrState.label;
 
       const modalCall = multiple
         ? `openPoolMaturityModal(${JSON.stringify(inv.pool_id)})`
@@ -3561,14 +3591,12 @@ async function loadMaturity() {
       const total       = totalAmount + totalReturn;
       const color       = _maturityProductColor(inv.product_type);
       const icon        = _maturityProductIcon(inv.product_type);
-      const allInstrs   = group.map(i => i.maturity_instruction).filter(Boolean);
-      const uniqueInstrs = [...new Set(allInstrs)];
-      const poolInstr   = uniqueInstrs.length === 1 ? uniqueInstrs[0] : null;
-      const hasMixed    = uniqueInstrs.length > 1;
-      const instrSet    = !!poolInstr || hasMixed;
-      const instrLabel  = hasMixed
-        ? `Mixed — ${allInstrs.length} of ${group.length} set`
-        : (poolInstr ? _maturityInstructionLabel(poolInstr) : 'Awaiting instruction');
+      // Shared definition — see the note in the active section above.
+      const _instrState2 = Utils.maturityInstructionState(group);
+      const poolInstr   = _instrState2.instruction;
+      const hasMixed    = _instrState2.state === 'mixed';
+      const instrSet    = _instrState2.state !== 'none';
+      const instrLabel  = _instrState2.state === 'none' ? 'Awaiting instruction' : _instrState2.label;
 
       return `
       <div class="mc2 mc2--matured">
@@ -3763,9 +3791,9 @@ async function openPoolMaturityModal(poolId) {
   const isDeliveryBike = (first.product_type || '').includes('delivery_bike');
   const totalAmount    = poolInvs.reduce((s, i) => s + (i.amount || 0), 0);
 
-  const allInstrs    = poolInvs.map(i => i.maturity_instruction).filter(Boolean);
-  const uniqueInstrs = [...new Set(allInstrs)];
-  let   existing     = uniqueInstrs.length === 1 ? uniqueInstrs[0] : '';
+  // Preselects the dropdown. Same semantics as before — an instruction when
+  // one choice covers the pool or part of it, blank when they differ.
+  let   existing     = Utils.maturityInstructionState(poolInvs).instruction || '';
   if (isDeliveryBike && (existing === 'reinvest' || !existing)) existing = 'payout_all';
 
   const allProductTypes = [...new Set(
