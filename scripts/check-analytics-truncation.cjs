@@ -83,6 +83,10 @@ const page = `<!doctype html><meta charset="utf-8"><body>
 <div id="an-truncation" style="display:none"></div>
 <script>
 const _esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+/* The banner's wording depends on whether the headline tiles came from SQL or
+   fell back to browser sums, so the flag has to exist here too. Both states
+   are exercised below. */
+let _analyticsKpisFromServer = true;
 ${fn}
 var el = document.getElementById('an-truncation');
 function probe(counts) {
@@ -103,6 +107,10 @@ var results = {
                   {label:'Transactions',loaded:5000,total:NaN}]),
   clears: probe([{label:'Investors',loaded:10,total:10}]),
 };
+_analyticsKpisFromServer = true;
+results.kpisFromSql = probe([{label:'Transactions',loaded:5000,total:9000}]);
+_analyticsKpisFromServer = false;
+results.kpisFromBrowser = probe([{label:'Transactions',loaded:5000,total:9000}]);
 document.title = 'RESULTS' + JSON.stringify(results);
 <\/script></body>`;
 
@@ -144,6 +152,14 @@ ok('an unknown total raises no false alarm',
    r.unknown.shown === false, JSON.stringify(r.unknown));
 ok('the banner clears once the read is complete again',
    r.clears.shown === false, JSON.stringify(r.clears));
+
+console.log('\nit distinguishes the tiles that are safe from the ones that are not');
+ok('when the tiles come from SQL it says they are correct',
+   /headline tiles are computed in SQL over every row and are correct/.test(r.kpisFromSql.text),
+   r.kpisFromSql.text.slice(0, 220));
+ok('when they fell back to browser sums it says they are affected too',
+   /headline tiles fell back to browser sums and are affected too/.test(r.kpisFromBrowser.text),
+   r.kpisFromBrowser.text.slice(0, 220));
 
 console.log('\nit says what is NOT affected, so the whole page is not distrusted');
 ok('the server-side panels are named as unaffected',

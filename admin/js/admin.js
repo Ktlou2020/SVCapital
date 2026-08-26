@@ -7544,6 +7544,9 @@ const ANALYTICS_PAGE_LIMIT = 5000;
    drawing time being shown — so hours-old figures reported themselves as just
    refreshed, which is worse than showing nothing. */
 let _analyticsFetchedAt = 0;
+/* Whether the headline tiles came from SQL (all rows) or from the browser
+   sums (one page). It changes what the truncation banner can honestly say. */
+let _analyticsKpisFromServer = false;
 const ANALYTICS_STALE_MS = 2 * 60 * 1000;
 
 function _analyticsAgeLabel() {
@@ -7617,7 +7620,10 @@ function _analyticsTruncation(loadedVsTotal) {
           — ${(t.total - t.loaded).toLocaleString('en-US')} excluded</div>`).join('')}
       </div>
       <div style="margin-top:6px;font-size:0.78rem;color:var(--text-muted)">
-        Every total, average and chart below is derived from the rows that were read.
+        The charts and per-category breakdowns below are derived from the rows that were read.
+        ${_analyticsKpisFromServer
+          ? 'The six headline tiles are computed in SQL over every row and are correct.'
+          : '<strong>The headline tiles fell back to browser sums and are affected too.</strong>'}
         The panels fed by server-side queries (revenue, maturity, IFA, sub-accounts,
         interest history, withdrawals) are unaffected.
       </div>
@@ -7662,8 +7668,6 @@ async function loadAnalytics(force) {
         { label: 'Transactions', loaded: STATE.transactions.length, total: Number(t.total) },
       ];
     }
-    _analyticsTruncation(counts);
-
     const now = Date.now();
     const thirtyDays = 30 * 86400000;
     const newInvestors = STATE.investors.filter(i => now - new Date(i.date_joined) < thirtyDays).length;
@@ -7671,18 +7675,26 @@ async function loadAnalytics(force) {
     document.getElementById('an-monthlynew').textContent = newInvestors;
     document.getElementById('an-referrals').textContent = referred;
 
-    // Live analytics stat cards
-    const cattlePools = STATE.pools.filter(p => (p.product_type || '').toLowerCase().includes('cattle') && p.annual_rate > 0);
+    /* Achieved, not contracted. This averaged annual_rate — the benchmark —
+       and presented it as the cattle return, which is the projected figure the
+       rest of the platform stopped showing. actual_rate is what the pool
+       really did; a pool with none posted has no achieved rate to average, so
+       it is excluded rather than counted as zero. */
+    const cattlePools = STATE.pools.filter(p =>
+      (p.product_type || '').toLowerCase().includes('cattle') && parseFloat(p.actual_rate) > 0);
     const avgCattleRate = cattlePools.length
-      ? (cattlePools.reduce((s, p) => s + (parseFloat(p.annual_rate) || 0), 0) / cattlePools.length * 100).toFixed(2) + '%'
+      ? (cattlePools.reduce((s, p) => s + (parseFloat(p.actual_rate) || 0), 0) / cattlePools.length * 100).toFixed(2) + '%'
       : '—';
     const lowestMin = STATE.pools.filter(p => p.status === 'open' && p.min_investment > 0)
       .reduce((min, p) => Math.min(min, parseFloat(p.min_investment) || Infinity), Infinity);
 
     const cattleEl = document.getElementById('an-cattle-return');
     if (cattleEl) cattleEl.textContent = avgCattleRate;
-    const minEl = document.querySelectorAll('#view-analytics .stat-card__value')[1];
-    if (minEl && minEl.textContent === 'R500') minEl.textContent = lowestMin < Infinity ? Utils.rand(lowestMin, 0) : 'R500';
+    /* By id. This used to take the second .stat-card__value in the view and
+       only overwrite it if it still read the literal "R500" — so any layout
+       change silently moved the target, and any real value of R500 froze it. */
+    const minEl = document.getElementById('an-min-investment');
+    if (minEl) minEl.textContent = lowestMin < Infinity ? Utils.rand(lowestMin, 0) : '—';
 
     /* Each panel renders on its own. One that throws is one empty card and a
        named line at the top, not twenty panels that never ran. */
@@ -7712,6 +7724,11 @@ async function loadAnalytics(force) {
     const failures = (await Promise.all(
       panels.map(([label, fn]) => _analyticsPanel(label, fn))
     )).filter(Boolean);
+    /* After the panels, not before: the KPI panel decides whether the headline
+       tiles came from SQL or fell back to browser sums, and the banner's
+       wording depends on which. Rendering it first would describe the previous
+       run. */
+    _analyticsTruncation(counts);
     _analyticsPanelErrors(failures);
   } catch (e) {
     /* Only the data read reaches here now — a panel failure cannot. */
@@ -11825,7 +11842,36 @@ function renderAnStatusChart() {
 }
 
 // KPI headline tiles at the top of the analytics view
-function _renderAnalyticsKPIs() {
+/* The six headline tiles, from SQL over every row.
+   They used to be summed in the browser from three lists fetched one page
+   deep, so past 5,000 rows they were quietly wrong — Total Investors most
+   plainly, since it read the length of the fetched array and would sit at
+   exactly 5,000 forever.
+
+   Falls back to the old client-side sums if the endpoint is unreachable, and
+   says so, because a stale-but-labelled number beats a blank tile. */
+async function _renderAnalyticsKPIs() {
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  try {
+    const k = await API._fetch('GET', 'analytics/kpis');
+    set('an-total-aum',        Utils.rand(k.total_aum, 0));
+    set('an-active-capital',   Utils.rand(k.active_capital, 0));
+    set('an-total-investors',  Number(k.total_investors).toLocaleString());
+    set('an-returns-ytd',      Utils.rand(k.returns_ytd, 0));
+    set('an-platform-revenue', Utils.rand(k.platform_revenue, 0));
+    set('an-active-inv-count', Number(k.active_investments).toLocaleString());
+    _analyticsKpisFromServer = true;
+    const tsEl = document.getElementById('an-last-refreshed');
+    if (tsEl) tsEl.textContent = _analyticsAgeLabel();
+    return;
+  } catch (e) {
+    console.warn('[analytics] KPI endpoint unavailable, falling back to browser sums:', e.message);
+    _analyticsKpisFromServer = false;
+  }
+  return _renderAnalyticsKPIsFromState();
+}
+
+function _renderAnalyticsKPIsFromState() {
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
 
   // Net AUM = deposits - withdrawals

@@ -5,6 +5,70 @@ const { requireAuth, requireRole } = require('../middleware/auth');
 
 const _admin = requireRole('admin', 'director', 'staff');
 
+/* ── GET /api/analytics/kpis ────────────────────────────────
+   The six headline tiles, computed over EVERY row.
+
+   They were summed in the browser from three lists fetched one page deep at
+   5,000 rows, so past that they were quietly wrong — and "Total Investors"
+   was the plainest case of all: it read the length of the fetched array, so a
+   platform with more than 5,000 investors reported exactly 5,000.
+
+   Same definitions as the client used, so the numbers do not move for anyone
+   under the page limit — only for those over it, where they become correct:
+
+     Total AUM         completed deposits less completed withdrawals, at 0
+     Active Capital    amount of investments with status 'active'
+     Total Investors   every investor row
+     Returns YTD       completed return + payout since 1 Jan, Johannesburg
+     Platform Revenue  completed fee transactions
+     Active Investments count of them
+
+   ABS() throughout because a fee is stored negative — the platform fee must
+   read negative in a ledger, but it is revenue when totalled.
+   ─────────────────────────────────────────────────────────── */
+router.get('/kpis', requireAuth, _admin, async (req, res) => {
+  try {
+    const { rows: [k] } = await pool.query(`
+      SELECT
+        GREATEST(0, COALESCE((
+          SELECT SUM(CASE WHEN type = 'deposit' THEN ABS(amount) ELSE -ABS(amount) END)
+            FROM transactions
+           WHERE status = 'completed' AND type IN ('deposit','withdrawal')), 0)) AS total_aum,
+
+        COALESCE((SELECT SUM(ABS(amount)) FROM investments
+                   WHERE status = 'active'), 0)                                  AS active_capital,
+
+        (SELECT COUNT(*) FROM investors)                                         AS total_investors,
+
+        COALESCE((
+          SELECT SUM(ABS(amount)) FROM transactions
+           WHERE status = 'completed' AND type IN ('return','payout')
+             AND COALESCE(transaction_date, created_at)
+                 >= DATE_TRUNC('year', NOW() AT TIME ZONE 'Africa/Johannesburg')
+        ), 0)                                                                    AS returns_ytd,
+
+        COALESCE((SELECT SUM(ABS(amount)) FROM transactions
+                   WHERE status = 'completed' AND type IN ('fee','platform_fee')), 0)
+                                                                                 AS platform_revenue,
+
+        (SELECT COUNT(*) FROM investments WHERE status = 'active')               AS active_investments
+    `);
+
+    return res.json({
+      total_aum:          Number(k.total_aum),
+      active_capital:     Number(k.active_capital),
+      total_investors:    Number(k.total_investors),
+      returns_ytd:        Number(k.returns_ytd),
+      platform_revenue:   Number(k.platform_revenue),
+      active_investments: Number(k.active_investments),
+      computed_at:        new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('[analytics/kpis]', err);
+    return res.status(500).json({ error: 'Failed to compute KPIs: ' + err.message });
+  }
+});
+
 /* ── GET /api/analytics/revenue ─────────────────────────── */
 router.get('/revenue', requireAuth, _admin, async (req, res) => {
   try {
