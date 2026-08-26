@@ -200,11 +200,12 @@ const snapshot = async () => (await pool.query(`
          `got ${mig3 && mig3.rollsInto[0] && mig3.rollsInto[0].poolId}`);
     }
 
-    console.log('\nit warns when the 23:00 cycle will move the target out from under the payout');
+    console.log('\na pool awaiting a cycle no longer diverts the rollover target');
     {
-      /* cycleExpiredPools runs first inside the same job, and cycling anything
-         closes every other open pool of that product type. A report that names
-         a destination without accounting for that is confidently wrong. */
+      /* cycleExpiredPools runs first inside the same job. It used to deploy
+         every other open pool of the product type, current ones included,
+         which moved the rollover target before any money left. Fixed at
+         source; this holds the line from the reporting side. */
       /* Isolate: any OTHER cattle/short_term pool still awaiting a cycle would
          also sweep, and then this measures the wrong cause. Sibling checks in
          the suite leave exactly such pools behind, so stamp them first —
@@ -235,27 +236,18 @@ const snapshot = async () => (await pool.query(`
 
       const rs = await runMaturityPreflight(pool, { horizonDays: 14 });
       const ct = rs.pools.find(x => x.poolId === 'PF-CT-MAT');
-      ok('the pool due to be cycled is identified',
+      ok('the pool due to be cycled is still reported',
          (rs.pendingCycle || []).some(p => p.poolId === 'PF-SWEEPER'),
          JSON.stringify(rs.pendingCycle));
-      ok('the destination is flagged as one the payout will not reach',
-         ct && ct.rollsInto[0] && ct.rollsInto[0].willBeSwept === true,
+      ok('but the destination stands — the sweep no longer takes it',
+         ct && ct.rollsInto[0] && ct.rollsInto[0].poolId === 'PF-CT-TARGET',
          JSON.stringify(ct && ct.rollsInto));
-      ok('and it is a STOP, not a footnote',
-         rs.findings.some(f => f.level === 'STOP' && /PF-CT-MAT/.test(f.message) &&
-                               /will NOT reach/.test(f.message)),
+      ok('and no STOP is raised about it',
+         !rs.findings.some(f => f.level === 'STOP' && /will NOT reach/.test(f.message)),
          JSON.stringify(rs.findings.filter(f => f.level === 'STOP').map(f => f.message)));
-      ok('the finding names the pool that causes it and what to do',
-         rs.findings.some(f => /PF-SWEEPER/.test(f.message) && /cycled_at/.test(f.message)));
-
-      /* Cycling that pool — or stamping cycled_at — removes the hazard. */
-      await pool.query(`UPDATE investment_pools SET cycled_at = NOW() WHERE id='PF-SWEEPER'`);
-      const rs2 = await runMaturityPreflight(pool, { horizonDays: 14 });
-      const ct2 = rs2.pools.find(x => x.poolId === 'PF-CT-MAT');
-      ok('once that pool is cycled, the destination stands',
-         ct2 && ct2.rollsInto[0] && ct2.rollsInto[0].willBeSwept === false &&
-         ct2.rollsInto[0].poolId === 'PF-CT-TARGET',
-         JSON.stringify(ct2 && ct2.rollsInto));
+      ok('nobody is listed as having their target swept',
+         !(rs.affected || []).some(a => a.issue === 'rollover_target_swept'),
+         'that class cannot occur now that the sweep only deploys closed pools');
     }
 
     console.log('\nit names the clients behind each finding, not just a count');

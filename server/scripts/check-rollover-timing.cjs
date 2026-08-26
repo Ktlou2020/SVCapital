@@ -18,12 +18,16 @@
  *      exactly the kind of boundary worth executing rather than reasoning about.
  *
  *   2. Does cycleExpiredPools, which runs FIRST, take the target away?
- *      When it cycles any pool it also runs
- *          UPDATE investment_pools SET status='active'
- *           WHERE product_type = $1 AND status='open' AND id <> <new successor>
- *      which closes every other open pool of that product type — including the
- *      one the rollovers were meant for. That runs BEFORE the payout in the
- *      same 23:00 job.
+ *      It used to. Cycling any pool also deployed every OTHER open pool of
+ *      that product type — the current month-end one included — before a cent
+ *      moved, so R3.9m of rollovers would have landed in a successor minted
+ *      moments earlier, on a different close date and term. The sweep now
+ *      only deploys pools that have passed their own close date, so a pool
+ *      still inside its fundraising window survives it.
+ *
+ *      Both halves are held here: the current pool keeps its rollovers, and
+ *      the sweep still deploys pools that really have closed — narrowing it
+ *      must not turn it off.
  *
  * Needs a database: DATABASE_URL=… DATABASE_SSL=false node server/scripts/check-rollover-timing.cjs
  */
@@ -166,8 +170,10 @@ const statusOf = async id => (await pool.query(
     const { runMaturityPreflight } = require(path.join(ROOT, 'server', 'services', 'maturityPreflight.js'));
     const predicted = await runMaturityPreflight(pool, { horizonDays: 14 });
     const predictedEntry = predicted.pools.find(p => p.poolId === 'RT-MATURING');
-    const predictedSwept = !!(predictedEntry && predictedEntry.rollsInto[0]
-                              && predictedEntry.rollsInto[0].willBeSwept);
+    const predictedSwept  = !!(predictedEntry && predictedEntry.rollsInto[0]
+                               && predictedEntry.rollsInto[0].willBeSwept);
+    const predictedTarget = predictedEntry && predictedEntry.rollsInto[0]
+                              && predictedEntry.rollsInto[0].poolId;
 
     {
       const log = console.log; console.log = quiet;
@@ -182,28 +188,54 @@ const statusOf = async id => (await pool.query(
         WHERE id LIKE 'RT-STALE-CYC-%' AND status='open'`)).rows[0];
 
     console.log('\nwhen the cycler has something to cycle first');
-    ok('the cycler opens a successor for the stale pool', !!successor,
+    ok('the cycler still opens a successor for the stale pool', !!successor,
        'nothing was cycled — the fixture is not exercising the path');
-    ok('and closes the intended target as a side effect',
-       targetStatus === 'active',
-       `RT-TARGET is "${targetStatus}" — expected the sweep to set it active`);
-    ok('so the rollover lands in the NEW successor, not the pool you expected',
-       b && successor && b.pool_id === successor.id,
-       b ? `landed in ${b.pool_id}${successor ? `, successor is ${successor.id}` : ''}` : 'nothing rolled over');
-    if (b && successor) {
-      console.log(`      → "${successor.name}", closing ${String(successor.end_date).slice(0, 10)}`);
-    }
-    ok('money still moved — this misroutes, it does not lose',
-       (await wallet()) === 0 && !!b,
-       `wallet holds ${await wallet()}`);
+    ok('but it leaves the current pool open',
+       targetStatus === 'open',
+       `RT-TARGET is "${targetStatus}" — the sweep must only deploy pools past their close date`);
+    ok('so the rollover reaches the pool it was meant for',
+       b && b.pool_id === 'RT-TARGET',
+       b ? `landed in ${b.pool_id}${successor ? `, successor was ${successor.id}` : ''}` : 'nothing rolled over');
+    ok('and not the successor minted moments earlier',
+       !!successor && b && b.pool_id !== successor.id,
+       `successor ${successor && successor.id}, landed ${b && b.pool_id}`);
+    ok('money moved', (await wallet()) === 0 && !!b, `wallet holds ${await wallet()}`);
 
-    console.log('\nand the pre-flight predicted it, before it happened');
-    ok('it flagged the destination as one the payout would not reach',
-       predictedSwept === true,
-       'the report named a destination the money never reached');
+    console.log('\nand the pre-flight said so beforehand');
+    ok('it named the intended pool, without a sweep warning',
+       predictedTarget === 'RT-TARGET' && predictedSwept !== true,
+       `predicted target=${predictedTarget}, swept flag=${predictedSwept}`);
     ok('the prediction matches where the money actually went',
-       predictedSwept === (b && successor && b.pool_id === successor.id),
-       `predicted swept=${predictedSwept}, actually landed in ${b && b.pool_id}`);
+       predictedTarget === (b && b.pool_id),
+       `predicted ${predictedTarget}, actually ${b && b.pool_id}`);
+
+    console.log('\nthe sweep still does the job it was there for');
+    {
+      /* Narrowing it must not turn it off. The invariant is still "only the
+         newest successor stays open for this product" — a pool that has
+         genuinely passed its close date is deployed, exactly as before. */
+      await pool.query(`DELETE FROM investment_pools WHERE id LIKE 'RT-SWEEP%'`);
+      await pool.query(`
+        INSERT INTO investment_pools (id,name,product_type,status,annual_rate,term_months,
+            start_date,end_date,maturity_date,min_investment,cycled_at)
+        VALUES
+         ('RT-SWEEP-PAST','Cattle - stale but open','cattle','open',0.16,12,
+          CURRENT_DATE-120, CURRENT_DATE-5, CURRENT_DATE+240, 500, NOW()),
+         ('RT-SWEEP-NOW','Cattle - current and open','cattle','open',0.16,12,
+          CURRENT_DATE-5, CURRENT_DATE+25, CURRENT_DATE+360, 500, NOW()),
+         ('RT-SWEEP-TRIGGER','Cattle - due a cycle','cattle','active',0.16,12,
+          CURRENT_DATE-100, CURRENT_DATE-9, CURRENT_DATE+260, 500, NULL)`);
+      const log2 = console.log; console.log = quiet;
+      await cycleExpiredPools();
+      console.log = log2;
+
+      ok('an open pool past its close date is deployed',
+         await statusOf('RT-SWEEP-PAST') === 'active',
+         `RT-SWEEP-PAST is "${await statusOf('RT-SWEEP-PAST')}" — the sweep must still close these`);
+      ok('an open pool still inside its window is left alone',
+         await statusOf('RT-SWEEP-NOW') === 'open',
+         `RT-SWEEP-NOW is "${await statusOf('RT-SWEEP-NOW')}"`);
+    }
 
     console.log('\nthe timing itself');
     {
@@ -229,7 +261,7 @@ const statusOf = async id => (await pool.query(
     await pool.query(`DELETE FROM investments WHERE investor_id LIKE 'RT-%' OR pool_id LIKE 'RT-%'`).catch(() => {});
     await pool.query(`DELETE FROM transactions WHERE investor_id LIKE 'RT-%'`).catch(() => {});
     await pool.query(`DELETE FROM investors WHERE id LIKE 'RT-%'`).catch(() => {});
-    await pool.query(`DELETE FROM investment_pools WHERE id LIKE 'RT-%'`).catch(() => {});
+    await pool.query(`DELETE FROM investment_pools WHERE id LIKE 'RT-%' OR id LIKE 'RT-SWEEP%'`).catch(() => {});
     await pool.end();
     process.exit(fail ? 1 : 0);
   }
