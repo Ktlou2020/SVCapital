@@ -207,6 +207,8 @@ router.post('/interest/apply', requireAuth, requireRole('admin', 'director'), as
       );
       const distId = distResult.rows[0].id;
 
+      let alreadyCredited = 0;
+      let creditedTotal   = 0;
       for (const item of toCredit) {
         const walletKey = item.sub_account_id || item.investor_id;
         const txRef     = `INT-${period}-${walletKey}`;
@@ -221,6 +223,34 @@ router.post('/interest/apply', requireAuth, requireRole('admin', 'director'), as
         );
         const txId = txResult.rows[0]?.id || null;
 
+        /* The INSERT is the guard, so the credit has to depend on it.
+
+           ON CONFLICT DO NOTHING already stopped a duplicate transaction row,
+           but the credit below ran either way — so a reference that already
+           existed left the wallet credited twice against a single ledger row.
+           A straight re-apply is blocked upstream by the partial unique index
+           on interest_distributions(period) WHERE status = 'applied', which is
+           what has been holding this up; the moment a period moves out from
+           under that index — a run voided, a status corrected by hand — the
+           money doubles and nothing says so.
+
+           interestCron.js does the same job and gates on rowCount, calling the
+           INSERT "the idempotency gate". This is that, applied here. */
+        if (!txId) {
+          alreadyCredited++;
+          await client.query(
+            `INSERT INTO interest_distribution_items
+               (distribution_id, sub_account_id, investor_id, account_reference, client_name_pim,
+                pim_balance, platform_balance, interest_amount, transaction_id, status, notes)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL, 'skipped_duplicate', $9)`,
+            [distId, item.sub_account_id || null, item.investor_id, item.account_reference,
+             item.client_name_pim, item.pim_balance, item.platform_balance,
+             item.interest_amount,
+             `Already credited under ${txRef} — wallet left unchanged.`]
+          );
+          continue;
+        }
+
         // Credit the correct wallet by DB ID — never by name or reference string
         if (item.sub_account_id) {
           await client.query(
@@ -234,6 +264,8 @@ router.post('/interest/apply', requireAuth, requireRole('admin', 'director'), as
           );
         }
 
+        creditedTotal += Number(item.interest_amount) || 0;
+
         await client.query(
           `INSERT INTO interest_distribution_items
              (distribution_id, sub_account_id, investor_id, account_reference, client_name_pim,
@@ -245,9 +277,23 @@ router.post('/interest/apply', requireAuth, requireRole('admin', 'director'), as
         );
       }
 
+      /* The stored row was written before the loop, from toCredit.length. If
+         anything was skipped as already-credited, that figure overstates both
+         the count and the money — correct it from what actually happened. */
+      const creditedCount = toCredit.length - alreadyCredited;
+      await client.query(
+        `UPDATE interest_distributions
+            SET accounts_credited = $2,
+                accounts_skipped  = COALESCE(accounts_skipped, 0) + $3,
+                total_interest    = $4
+          WHERE id = $1`,
+        [distId, creditedCount, alreadyCredited, Math.round(creditedTotal * 100) / 100]);
+
       await client.query('COMMIT');
-      res.json({ success: true, distribution_id: distId, accounts_credited: toCredit.length,
-                 total_interest: totalInterest });
+      res.json({ success: true, distribution_id: distId,
+                 accounts_credited: creditedCount,
+                 accounts_already_credited: alreadyCredited,
+                 total_interest: Math.round(creditedTotal * 100) / 100 });
     } catch (err) {
       await client.query('ROLLBACK');
       throw err;
