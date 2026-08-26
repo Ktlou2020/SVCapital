@@ -12038,6 +12038,115 @@ async function backfillFicaFromKyc(btn) {
   }
 }
 
+/* ═══════════════════════════════════════════════
+   MATURITY PRE-FLIGHT
+   Reports what the maturity engine will do on its next run. Read-only —
+   the endpoint writes nothing, so there is no confirm step and nothing to
+   undo. The checks live server-side in services/maturityPreflight.js, shared
+   with the CLI, so this only renders.
+   ═══════════════════════════════════════════════ */
+async function runMaturityPreflight(btn) {
+  const resultEl = document.getElementById('preflightResult');
+  const days = document.getElementById('preflightDays')?.value || 14;
+  const origLabel = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Checking…';
+  resultEl.innerHTML = '';
+  try {
+    const r = await API._fetch('GET', `admin/maturity-preflight?days=${encodeURIComponent(days)}`);
+
+    if (r.nothingDue) {
+      resultEl.innerHTML = `<span style="color:var(--text-muted)"><i class="fa-solid fa-circle-check"></i> Nothing matures in the next ${_esc(r.horizonDays)} days.</span>`;
+      return;
+    }
+
+    const LEVEL = {
+      STOP:      { colour: '#ef4444', icon: 'fa-circle-exclamation', label: 'STOP' },
+      ATTENTION: { colour: '#f59e0b', icon: 'fa-triangle-exclamation', label: 'ATTENTION' },
+      OK:        { colour: '#22c55e', icon: 'fa-circle-check', label: 'OK' },
+    };
+    const order = { STOP: 0, ATTENTION: 1, OK: 2 };
+
+    const verdict = r.summary.verdict === 'blocked'
+      ? `<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:12px;margin-bottom:14px">
+           <strong style="color:#ef4444">${r.summary.stops} thing(s) will not happen as intended.</strong>
+           <div style="color:var(--text-muted);margin-top:4px">Plus ${r.summary.attentions} worth a look.</div>
+         </div>`
+      : r.summary.verdict === 'review'
+      ? `<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:12px;margin-bottom:14px">
+           <strong style="color:#f59e0b">No blockers.</strong>
+           <span style="color:var(--text-muted)">${r.summary.attentions} thing(s) worth a look before the run.</span>
+         </div>`
+      : `<div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:8px;padding:12px;margin-bottom:14px">
+           <strong style="color:#22c55e">Everything this can check is in place.</strong>
+         </div>`;
+
+    const poolRows = r.pools.map(p => `
+      <tr>
+        <td><div class="td-strong clip">${_esc(p.poolName || p.poolId)}</div>
+            <div class="td-muted clip" style="font-size:0.7rem;font-family:monospace">${_esc(p.poolId)}</div></td>
+        <td style="text-align:right">${p.count}</td>
+        <td style="text-align:right">${Utils.rand(p.capital)}</td>
+        <td>${Utils.date(p.maturesOn)}</td>
+        <td>${p.ratePosted
+              ? `<span style="color:#eda5ff;font-weight:700">${(p.actualRate * 100).toFixed(2)}%</span>`
+              : '<span style="color:#ef4444;font-weight:700">not posted</span>'}</td>
+        <td style="text-align:right">${p.ratePosted
+              ? `<strong>${Utils.rand(p.postedTotal)}</strong>
+                 <div class="td-muted" style="font-size:0.68rem">projection was ${Utils.rand(p.projected)}</div>`
+              : '<span style="color:var(--text-muted)">held back</span>'}</td>
+      </tr>`).join('');
+
+    const findingRows = [...r.findings].sort((a, b) => order[a.level] - order[b.level]).map(f => {
+      const L = LEVEL[f.level] || LEVEL.OK;
+      return `<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--border)">
+        <i class="fa-solid ${L.icon}" style="color:${L.colour};margin-top:2px"></i>
+        <div><span style="color:${L.colour};font-weight:700;font-size:0.7rem;letter-spacing:.04em">${L.label}</span>
+             <div>${_esc(f.message)}</div></div>
+      </div>`;
+    }).join('');
+
+    const targets = r.reinvestTargets.map(t => t.poolId
+      ? `<li>${_esc(t.productType)} → <strong>${_esc(t.poolName)}</strong> <span class="td-muted">(${_esc(t.poolId)}, closes ${Utils.date(t.endDate)})</span></li>`
+      : `<li>${_esc(t.productType)} → <span style="color:#f59e0b">no open pool — about ${Utils.rand(t.incoming)} becomes wallet payouts</span></li>`
+    ).join('');
+
+    const stale = r.stalePools.length ? `
+      <p style="font-weight:600;margin:16px 0 6px">Pools left open past their close date</p>
+      <p style="color:var(--text-muted);font-size:0.78rem;margin-bottom:6px">They no longer capture rollovers, but they still show as open.</p>
+      <ul style="margin:0 0 0 18px">${r.stalePools.map(s =>
+        `<li>${_esc(s.name)} <span class="td-muted">(${_esc(s.productType || '—')}, closed ${Utils.date(s.endDate)}, ${s.daysClosed} days ago)</span>${
+          s.beyondCyclerWindow ? ' <span style="color:#f59e0b">— will never self-clear</span>' : ''}</li>`).join('')}</ul>` : '';
+
+    resultEl.innerHTML = `
+      ${verdict}
+      <p style="font-weight:600;margin-bottom:6px">Maturing in the next ${_esc(r.horizonDays)} days —
+        ${r.totals.investments} investment(s), ${Utils.rand(r.totals.capital)} of capital</p>
+      <div style="overflow-x:auto">
+        <table class="table" style="font-size:0.78rem">
+          <thead><tr>
+            <th>Pool</th><th style="text-align:right">Investments</th><th style="text-align:right">Capital</th>
+            <th>Matures</th><th>Actual rate</th><th style="text-align:right">Returns to pay</th>
+          </tr></thead>
+          <tbody>${poolRows}</tbody>
+        </table>
+      </div>
+      <p style="font-weight:600;margin:16px 0 6px">Where rollovers go
+        <span class="td-muted" style="font-weight:400">(${r.totals.rollingOver} of ${r.totals.investments} roll over)</span></p>
+      <ul style="margin:0 0 0 18px">${targets}</ul>
+      ${stale}
+      <p style="font-weight:600;margin:16px 0 6px">Findings</p>
+      ${findingRows}
+      <p class="td-muted" style="margin-top:12px;font-size:0.72rem">
+        Checked ${Utils.date(r.generatedAt)} · server time zone ${_esc(r.timeZone)} · nothing was changed.</p>`;
+  } catch (e) {
+    resultEl.innerHTML = `<span style="color:#ef4444"><i class="fa-solid fa-circle-exclamation"></i> Pre-flight failed: ${_esc(e.message || 'Unknown error')}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = origLabel;
+  }
+}
+
 async function backfillMaturedFunds(btn, dryRun) {
   const resultEl = document.getElementById('maturedFundsBackfillResult');
   if (!dryRun && !await Confirm.ask(
