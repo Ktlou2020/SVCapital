@@ -6035,9 +6035,18 @@ function editPool(id) {
   _populateProductTypeDropdowns();
   const editTypeSel = document.getElementById('editPoolType');
   if (pool.product_type && editTypeSel && !Array.from(editTypeSel.options).some(o => o.value === pool.product_type)) {
-    editTypeSel.insertAdjacentHTML('beforeend', `<option value="${pool.product_type}">${pool.product_type}</option>`);
+    editTypeSel.insertAdjacentHTML('beforeend', `<option value="${_esc(pool.product_type)}">${_esc(pool.product_type)} (unmapped)</option>`);
   }
-  document.getElementById('editPoolType').value        = pool.product_type || 'cattle';
+  /* A pool with no product type must SAY it has none. This used to read
+     `pool.product_type || 'cattle'`, so a migrated pool with an empty
+     product_type displayed "Cattle Investment" — and because the save writes
+     whatever the field shows, opening the modal and pressing Save silently
+     retyped the pool as cattle. On a short-term pool that is simply wrong, and
+     product_type is what the maturity engine matches rollovers on. */
+  if (editTypeSel && !pool.product_type && !Array.from(editTypeSel.options).some(o => o.value === '')) {
+    editTypeSel.insertAdjacentHTML('afterbegin', '<option value="">— not set —</option>');
+  }
+  document.getElementById('editPoolType').value        = pool.product_type || '';
   document.getElementById('editPoolTargetType').value  = pool.target_type || 'amount';
   _syncPoolTargetType('edit');
   document.getElementById('editPoolTerm').value        = pool.term_months || 12;
@@ -6079,6 +6088,15 @@ function editPool(id) {
 async function saveEditPool(btn) {
   const id = document.getElementById('editPoolId').value;
   if (!id) return;
+
+  /* Leaving this blank is legal but has a consequence worth stating once:
+     rollovers are matched on product_type and nothing else, so an unset pool
+     sends its matured investments to wallets rather than into a successor. */
+  if (!document.getElementById('editPoolType').value && !await Confirm.ask(
+    'Save without a product type?', {
+      body: 'This pool has no product type. The maturity engine matches rollovers on product type alone — ' +
+            'not on the pool name — so investments here pay out to wallets instead of rolling into the next pool. Save anyway?',
+      confirmLabel: 'Save anyway' })) return;
 
   const maxCapVal2 = document.getElementById('editPoolMaxCapacity').value;
   const updates = {
