@@ -401,7 +401,10 @@ router.post('/backfill/fica-from-kyc', async (req, res) => {
              status           = CASE WHEN status IN ('pending','pending_fica','fica_submitted','inactive') THEN 'active' ELSE status END,
              updated_at       = NOW()
        WHERE kyc_status = 'approved'
-         AND fica_status <> 'approved'
+         -- COALESCE: this endpoint exists to repair investors whose fica_status
+         -- is out of step, and NULL is the commonest way for it to be. Without
+         -- this it skipped exactly the rows it was written to fix.
+         AND COALESCE(fica_status, '') <> 'approved'
     `);
 
     // fica_status approved → ensure kyc_status is also approved
@@ -411,7 +414,7 @@ router.post('/backfill/fica-from-kyc', async (req, res) => {
              status      = CASE WHEN status IN ('pending','pending_fica','fica_submitted','inactive') THEN 'active' ELSE status END,
              updated_at  = NOW()
        WHERE fica_status = 'approved'
-         AND kyc_status <> 'approved'
+         AND COALESCE(kyc_status, '') <> 'approved'
     `);
 
     const total = fromKyc + fromFica;
@@ -1399,7 +1402,7 @@ router.post('/restore/investor-statuses', async (req, res) => {
     const { rows: kycRows } = await pool.query(`
       SELECT i.id
       FROM investors i
-      WHERE (i.kyc_status != 'approved' OR i.fica_status != 'approved')
+      WHERE (COALESCE(i.kyc_status, '') <> 'approved' OR COALESCE(i.fica_status, '') <> 'approved')
         AND EXISTS (
           SELECT 1 FROM kyc_documents kd
           WHERE kd.investor_id = i.id AND kd.status = 'approved'
@@ -1410,7 +1413,7 @@ router.post('/restore/investor-statuses', async (req, res) => {
     const { rows: statusRows } = await pool.query(`
       SELECT i.id
       FROM investors i
-      WHERE i.status != 'active'
+      WHERE COALESCE(i.status, '') <> 'active'
         AND (
           i.wallet_balance > 0
           OR i.total_invested > 0
@@ -1433,7 +1436,7 @@ router.post('/restore/investor-statuses', async (req, res) => {
             NOW()
           ),
           updated_at = NOW()
-        WHERE (i.kyc_status != 'approved' OR i.fica_status != 'approved')
+        WHERE (COALESCE(i.kyc_status, '') <> 'approved' OR COALESCE(i.fica_status, '') <> 'approved')
           AND EXISTS (
             SELECT 1 FROM kyc_documents kd
             WHERE kd.investor_id = i.id AND kd.status = 'approved'
@@ -1445,7 +1448,7 @@ router.post('/restore/investor-statuses', async (req, res) => {
       const { rowCount: sc } = await pool.query(`
         UPDATE investors i
         SET status = 'active', updated_at = NOW()
-        WHERE i.status != 'active'
+        WHERE COALESCE(i.status, '') <> 'active'
           AND (
             i.wallet_balance > 0
             OR i.total_invested > 0

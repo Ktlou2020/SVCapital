@@ -31,7 +31,7 @@ async function runFicaSweep() {
       FROM investors
       WHERE last_auto_fica_check IS NOT NULL
         AND last_auto_fica_check < NOW() - INTERVAL '1 year'
-        AND status != 'suspended'
+        AND COALESCE(status, '') <> 'suspended'
       ORDER BY last_auto_fica_check ASC
       LIMIT $1
     `, [BATCH_LIMIT]);
@@ -44,7 +44,7 @@ async function runFicaSweep() {
         SELECT i.id, i.email, i.first_name, i.last_name, i.id_number, i.nationality, i.kyc_status, i.fica_status, i.fica_last_checked_at, i.fica_resubmit_requested_at
         FROM investors i
         WHERE i.last_auto_fica_check IS NULL
-          AND i.status != 'suspended'
+          AND COALESCE(i.status, '') <> 'suspended'
           AND EXISTS (
             SELECT 1 FROM transactions t
             WHERE t.investor_id = i.id

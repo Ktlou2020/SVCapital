@@ -153,7 +153,9 @@ router.get('/sub-accounts', requireAuth, _admin, async (req, res) => {
         SELECT
           COUNT(*) AS total,
           COUNT(*) FILTER (WHERE status = 'active') AS active,
-          COUNT(*) FILTER (WHERE status != 'active') AS dormant,
+          -- COALESCE: a NULL status is neither active nor dormant otherwise, so
+          -- active + dormant did not add up to total.
+          COUNT(*) FILTER (WHERE COALESCE(status, '') <> 'active') AS dormant,
           COUNT(*) FILTER (WHERE wallet_balance > 0) AS funded,
           COALESCE(SUM(wallet_balance), 0) AS total_balance,
           COALESCE(SUM(total_invested), 0) AS total_invested,
@@ -314,7 +316,7 @@ router.get('/platform-fees', requireAuth, _admin, async (req, res) => {
     const truncUnit = (period === 'week' || period === 'month') ? 'day' : 'month';
 
     // Match fees by type OR by reference pattern (FEE-...) — catches all recording paths
-    const feeFilter = `(t.type IN ('fee', 'platform_fee') OR t.reference LIKE 'FEE-%') AND t.status != 'cancelled'`;
+    const feeFilter = `(t.type IN ('fee', 'platform_fee') OR t.reference LIKE 'FEE-%') AND COALESCE(t.status, '') <> 'cancelled'`;
 
     const [summaryRow, breakdownRows, txnRows, topRows] = await Promise.all([
       pool.query(`
