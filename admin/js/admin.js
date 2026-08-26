@@ -12170,6 +12170,76 @@ async function runMaturityPreflight(btn) {
   }
 }
 
+/* ═══════════════════════════════════════════════
+   REMAP POOL PRODUCT TYPE
+   The pool and its investments carry product_type separately, and the maturity
+   engine reads the investments'. This sets both together, or previews it.
+   ═══════════════════════════════════════════════ */
+async function remapPoolProductType(btn, dryRun) {
+  const resultEl = document.getElementById('remapResult');
+  const poolId = document.getElementById('remapPoolId').value.trim();
+  const productType = document.getElementById('remapProductType').value;
+  if (!poolId)      { Toast.error('Enter a pool ID'); return; }
+  if (!productType) { Toast.error('Choose a product type'); return; }
+
+  if (!dryRun && !await Confirm.ask('Apply this remap?', {
+    body: `This rewrites product_type on pool ${poolId} AND every investment in it. ` +
+          'Run the preview first and read what it says about where rollovers will land. Continue?',
+    confirmLabel: 'Apply Remap', danger: true })) return;
+
+  const origLabel = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${dryRun ? 'Previewing…' : 'Applying…'}`;
+  resultEl.innerHTML = '';
+  try {
+    const r = await API._fetch('POST', 'admin/pools/remap-product-type',
+      { pool_id: poolId, product_type: productType, dry_run: dryRun });
+
+    if (r.note && !r.applied && !r.investments_changing && !r.pool_changes) {
+      resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> ${_esc(r.note)}</span>`;
+      return;
+    }
+
+    const rows = (r.breakdown || []).map(b =>
+      `<tr><td><code>${_esc(b.current_type)}</code></td><td>${_esc(b.status)}</td>
+           <td style="text-align:right">${b.n}</td>
+           <td style="text-align:right">${Utils.rand(b.capital)}</td></tr>`).join('');
+
+    const after = r.rollover_after || {};
+    const afterLine = after.poolId
+      ? `<span style="color:#22c55e">rollovers would go to <strong>${_esc(after.poolName)}</strong> (${_esc(after.poolId)})</span>`
+      : `<span style="color:#f59e0b">${_esc(after.note || 'no open pool of that type')}</span>`;
+    const before = r.rollover_before || {};
+    const beforeLine = before.poolId
+      ? `${_esc(before.poolName)} (${_esc(before.poolId)})`
+      : `<span style="color:var(--text-muted)">${_esc(before.note || 'nothing')}</span>`;
+
+    resultEl.innerHTML = `
+      <div style="background:${r.applied ? 'rgba(34,197,94,.1)' : 'rgba(237,165,255,.08)'};
+                  border:1px solid ${r.applied ? 'rgba(34,197,94,.3)' : 'rgba(237,165,255,.3)'};
+                  border-radius:8px;padding:12px;margin-bottom:10px">
+        <strong>${r.applied ? 'Applied.' : 'Preview only — nothing changed.'}</strong>
+        <div style="margin-top:4px">${_esc(r.pool.name)} · <code>${_esc(r.pool.product_type_before || '(empty)')}</code>
+          → <code style="color:#eda5ff">${_esc(r.pool.product_type_after)}</code></div>
+        <div style="margin-top:4px;color:var(--text-muted)">
+          ${r.applied ? `${r.investments_updated} investment(s) updated` : `${r.investments_changing} investment(s) would change`}
+          of ${r.investments_total} in the pool.</div>
+      </div>
+      <div style="overflow-x:auto"><table class="table" style="font-size:0.78rem">
+        <thead><tr><th>Current product_type</th><th>Status</th><th style="text-align:right">Count</th><th style="text-align:right">Capital</th></tr></thead>
+        <tbody>${rows}</tbody></table></div>
+      <p style="margin-top:10px">Rollovers now: ${beforeLine}</p>
+      <p>Rollovers after: ${afterLine}</p>`;
+
+    if (r.applied) Toast.success(`Remapped — ${r.investments_updated} investment(s) updated`);
+  } catch (e) {
+    resultEl.innerHTML = `<span style="color:#ef4444"><i class="fa-solid fa-circle-exclamation"></i> ${_esc(e.message || 'Unknown error')}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = origLabel;
+  }
+}
+
 async function backfillMaturedFunds(btn, dryRun) {
   const resultEl = document.getElementById('maturedFundsBackfillResult');
   if (!dryRun && !await Confirm.ask(

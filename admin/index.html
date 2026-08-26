@@ -1323,6 +1323,35 @@
           </div>
           <div class="panel__body" style="display:flex;flex-direction:column;gap:14px">
             <div style="background:var(--bg-secondary);border-radius:10px;padding:16px">
+              <p style="font-weight:600;margin-bottom:4px">Remap Pool Product Type</p>
+              <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px">
+                Sets <code>product_type</code> on a pool <strong>and every investment in it</strong>, together.
+                The maturity engine matches rollovers on the investment's product type alone — never on the pool
+                name — so correcting only the pool reroutes nothing. Preview first: it shows what changes and
+                where rollovers would land afterwards.
+              </p>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+                <input class="form-input" id="remapPoolId" placeholder="Pool ID (e.g. POOL-MIGR-…)" style="flex:1;min-width:260px;font-family:monospace;font-size:0.8rem">
+                <select class="form-select" id="remapProductType" style="width:auto">
+                  <option value="">Product type…</option>
+                  <option value="cattle">cattle</option>
+                  <option value="short_term">short_term</option>
+                  <option value="solar_5yr">solar_5yr</option>
+                  <option value="solar_6yr">solar_6yr</option>
+                  <option value="solar_7yr">solar_7yr</option>
+                </select>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn btn--secondary" onclick="remapPoolProductType(this, true)">
+                  <i class="fa-solid fa-magnifying-glass"></i> Preview (dry run)
+                </button>
+                <button class="btn btn--secondary" style="background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.3);color:#ef4444" onclick="remapPoolProductType(this, false)">
+                  <i class="fa-solid fa-arrow-right-arrow-left"></i> Apply Remap
+                </button>
+              </div>
+              <div id="remapResult" style="margin-top:10px;font-size:0.82rem"></div>
+            </div>
+            <div style="background:var(--bg-secondary);border-radius:10px;padding:16px">
               <p style="font-weight:600;margin-bottom:4px">Backfill Matured Funds Transactions</p>
               <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px">Creates missing <code>matured_funds</code> credit entries for historical reinvestments. Safe to run multiple times.</p>
               <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -4697,7 +4726,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=17"></script>
-<script src="js/admin.js?v=111"></script>
+<script src="js/admin.js?v=112"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>

@@ -31,6 +31,23 @@ function postedReturn({ amount, actualReturn, poolActualRate }) {
 
 const num = v => Number(v) || 0;
 
+/* The pool a rollover of `productType` would land in — the exact query
+   maturityCron's reinvestAmount runs, floor included. Exported so the
+   pre-flight and the product-type remap both answer "where would this go?"
+   from one definition rather than two that can drift. */
+async function resolveRolloverTarget(db, productType) {
+  const { rows: [t] } = await db.query(`
+    SELECT id, name, end_date, current_invested, max_investment
+      FROM investment_pools
+     WHERE status = 'open'
+       AND product_type = $1
+       AND (end_date IS NULL OR end_date >= CURRENT_DATE)
+       AND (max_investment IS NULL OR COALESCE(current_invested,0) < max_investment)
+     ORDER BY end_date ASC NULLS LAST, created_at ASC
+     LIMIT 1`, [productType]);
+  return t || null;
+}
+
 /* Which pool an investment's rollover will actually look for.
    The engine matches on product_type and nothing else — maturityCron passes
    inv.product_type (or switch_product_type for a switch) into a query whose
@@ -139,22 +156,11 @@ async function runMaturityPreflight(db, { horizonDays = 14 } = {}) {
   const willRoll = maturing.filter(m => (m.maturity_instruction || 'reinvest') !== 'payout_all');
   result.totals.rollingOver = willRoll.length;
 
-  /* The exact query the engine runs, floor included. Cached: a pool's
-     investments almost always share one product type. */
+  /* Cached: a pool's investments almost always share one product type. */
   const targetCache = new Map();
   const resolveTarget = async pt => {
-    if (targetCache.has(pt)) return targetCache.get(pt);
-    const { rows: [t] } = await db.query(`
-      SELECT id, name, end_date, current_invested, max_investment
-        FROM investment_pools
-       WHERE status = 'open'
-         AND product_type = $1
-         AND (end_date IS NULL OR end_date >= CURRENT_DATE)
-         AND (max_investment IS NULL OR COALESCE(current_invested,0) < max_investment)
-       ORDER BY end_date ASC NULLS LAST, created_at ASC
-       LIMIT 1`, [pt]);
-    targetCache.set(pt, t || null);
-    return t || null;
+    if (!targetCache.has(pt)) targetCache.set(pt, await resolveRolloverTarget(db, pt));
+    return targetCache.get(pt);
   };
 
   /* Per maturing pool, name the pool its rollovers actually land in. The
@@ -321,4 +327,7 @@ function dateOnly(d) {
   return d ? new Date(d).toISOString().slice(0, 10) : '—';
 }
 
-module.exports = { runMaturityPreflight, postedReturn, LEVELS: { STOP, ATTENTION, OK } };
+module.exports = {
+  runMaturityPreflight, postedReturn, resolveRolloverTarget, targetProductType,
+  LEVELS: { STOP, ATTENTION, OK },
+};

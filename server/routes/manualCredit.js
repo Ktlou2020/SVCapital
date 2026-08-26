@@ -255,6 +255,131 @@ router.get('/maturity-preflight', async (req, res) => {
   }
 });
 
+/* ─── POST /api/admin/pools/remap-product-type ─────────────────────────
+   Set a pool's product_type AND its investments' product_type together.
+
+   These are two columns and the maturity engine reads the second one:
+   reinvestAmount is handed inv.product_type, and its target query's only
+   predicate is `product_type = $1`. Correcting the pool alone therefore
+   reroutes nothing, which is exactly the trap the migrated pools fell into —
+   named "Cattle Investment", carrying 'other' on every investment, rolling
+   over into nothing.
+
+   DRY RUN BY DEFAULT. dry_run must be explicitly false to write, because the
+   apply path rewrites every investment in the pool.
+   ──────────────────────────────────────────────────────────────────── */
+router.post('/pools/remap-product-type', async (req, res) => {
+  const { pool_id, product_type, dry_run } = req.body || {};
+  const dryRun = dry_run !== false;
+  const target = String(product_type || '').trim();
+
+  if (!pool_id) return res.status(400).json({ error: 'pool_id is required.' });
+  if (!target)  return res.status(400).json({ error: 'product_type is required.' });
+  if (!/^[a-z0-9_]+$/.test(target)) {
+    return res.status(400).json({ error: 'product_type must be lower-case letters, digits and underscores.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    const { rows: [target_pool] } = await client.query(
+      'SELECT id, name, product_type, status FROM investment_pools WHERE id = $1', [pool_id]);
+    if (!target_pool) {
+      return res.status(404).json({ error: 'Pool not found.' });
+    }
+
+    /* Only a product type the platform already uses. A typo here would route
+       every rollover in the pool to a product that does not exist, which
+       silently means "to wallets" — the failure being fixed. */
+    const { rows: known } = await client.query(
+      `SELECT DISTINCT product_type FROM investment_pools
+        WHERE product_type IS NOT NULL AND product_type <> '' AND id <> $1`, [pool_id]);
+    const allowed = new Set(known.map(k => k.product_type));
+    if (!allowed.has(target)) {
+      return res.status(400).json({
+        error: `No other pool uses product_type "${target}". Existing types: ` +
+               `${[...allowed].sort().join(', ') || '(none)'}.`,
+        allowed: [...allowed].sort(),
+      });
+    }
+
+    /* What is actually in there, by status — the apply rewrites all of it, so
+       show all of it rather than only the rows that matter for routing. */
+    const { rows: breakdown } = await client.query(
+      `SELECT COALESCE(NULLIF(product_type, ''), '(empty)') AS current_type,
+              COALESCE(status, '(no status)')               AS status,
+              COUNT(*)::int                                  AS n,
+              COALESCE(SUM(amount), 0)                       AS capital
+         FROM investments WHERE pool_id = $1
+        GROUP BY 1, 2 ORDER BY 1, 2`, [pool_id]);
+
+    const { rows: [{ n: wouldChange }] } = await client.query(
+      `SELECT COUNT(*)::int n FROM investments
+        WHERE pool_id = $1 AND COALESCE(product_type, '') <> $2`, [pool_id, target]);
+
+    const { resolveRolloverTarget } = require('../services/maturityPreflight');
+    const before_target = await resolveRolloverTarget(client, target_pool.product_type || '');
+    const after_target  = await resolveRolloverTarget(client, target);
+
+    const plan = {
+      dry_run: dryRun,
+      pool: { id: target_pool.id, name: target_pool.name, status: target_pool.status,
+              product_type_before: target_pool.product_type || '', product_type_after: target },
+      pool_changes: (target_pool.product_type || '') !== target,
+      investments_total: breakdown.reduce((s, b) => s + b.n, 0),
+      investments_changing: wouldChange,
+      breakdown,
+      rollover_before: before_target
+        ? { poolId: before_target.id, poolName: before_target.name }
+        : { poolId: null, note: `no open pool of product_type "${target_pool.product_type || '(empty)'}" — rollovers become wallet payouts` },
+      rollover_after: after_target
+        ? { poolId: after_target.id, poolName: after_target.name, endDate: after_target.end_date }
+        : { poolId: null, note: `no open pool of product_type "${target}" either — rollovers would STILL become wallet payouts` },
+    };
+
+    if (!plan.pool_changes && wouldChange === 0) {
+      return res.json({ ...plan, applied: false, note: 'Nothing to change — already set.' });
+    }
+    if (dryRun) return res.json({ ...plan, applied: false });
+
+    await client.query('BEGIN');
+    const poolRes = await client.query(
+      `UPDATE investment_pools SET product_type = $2, updated_at = NOW() WHERE id = $1`,
+      [pool_id, target]);
+    const invRes = await client.query(
+      `UPDATE investments SET product_type = $2, updated_at = NOW()
+        WHERE pool_id = $1 AND COALESCE(product_type, '') <> $2`,
+      [pool_id, target]);
+    await client.query('COMMIT');
+
+    await audit.log({
+      actorId: req.user?.id || null,
+      actorEmail: req.user?.email || null,
+      actorRole: req.user?.role || null,
+      action: 'pool_product_type_remapped',
+      entityType: 'investment_pool',
+      entityId: pool_id,
+      description: `Product type of "${target_pool.name}" changed from ` +
+        `"${target_pool.product_type || '(empty)'}" to "${target}"; ` +
+        `${invRes.rowCount} investment(s) updated to match.`,
+      before: { product_type: target_pool.product_type || '',
+                rollover_target: plan.rollover_before.poolId },
+      after:  { product_type: target, investments_updated: invRes.rowCount,
+                rollover_target: plan.rollover_after.poolId },
+      ip: req.ip || null,
+      platform: 'admin',
+    });
+
+    return res.json({ ...plan, applied: true,
+      pools_updated: poolRes.rowCount, investments_updated: invRes.rowCount });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[remap-product-type]', err);
+    return res.status(500).json({ error: 'Remap failed — nothing was changed. ' + err.message });
+  } finally {
+    client.release();
+  }
+});
+
 /* ─── POST /api/admin/reset-2fa ─── */
 router.post('/reset-2fa', async (req, res) => {
   try {
