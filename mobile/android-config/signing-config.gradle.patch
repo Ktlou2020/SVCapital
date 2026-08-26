@@ -57,15 +57,15 @@ buildTypes {
 }
 
 // ── VERSIONING ──
-// Set in android-config/version.json, written into defaultConfig by
-// apply:android. android/ is gitignored, so version.json is the only copy that
-// survives a fresh checkout.
+// Set in mobile/version.json — shared with iOS — and written into defaultConfig
+// by apply:android. android/ is gitignored, so version.json is the only copy
+// that survives a fresh checkout.
 //
 // Play requires versionCode to be strictly higher than anything already
 // uploaded to the track. Only Play knows what has been used — bump it for
 // every upload and never reuse one. check:android cannot verify this.
 //
-// versionName is the user-visible string. It currently differs from the iOS
-// CFBundleShortVersionString in mobile/ios-config/App/App/Info.plist; see the
-// README before changing either, because an approved iOS marketing version is
-// a closed train and cannot accept further uploads.
+// versionName is the user-visible string, shared with the iOS
+// CFBundleShortVersionString. Changing it opens a new iOS train and abandons
+// the old one — an approved marketing version is closed and cannot accept
+// further uploads. See the README before changing it.

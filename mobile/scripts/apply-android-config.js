@@ -29,6 +29,7 @@
 const fs   = require('fs');
 const path = require('path');
 const blocks = require('./gradle-blocks');
+const { readVersion } = require('./version');
 
 const MOBILE  = path.join(__dirname, '..');
 const CONFIG  = path.join(MOBILE, 'android-config');
@@ -159,21 +160,16 @@ if (!gradle.includes('keystorePropertiesFile')) {
   }
 }
 
-/* 2d. version, from android-config/version.json. */
+/* 2d. version, from mobile/version.json — shared with iOS. */
 {
-  const vPath = path.join(CONFIG, 'version.json');
-  if (!fs.existsSync(vPath)) die('missing android-config/version.json.');
-  const v = JSON.parse(fs.readFileSync(vPath, 'utf8'));
-  if (!Number.isInteger(v.versionCode) || v.versionCode < 1)
-    die(`version.json has an invalid versionCode: ${JSON.stringify(v.versionCode)}`);
-  if (typeof v.versionName !== 'string' || !v.versionName.trim())
-    die(`version.json has an invalid versionName: ${JSON.stringify(v.versionName)}`);
+  let v;
+  try { v = readVersion(); } catch (e) { die(e.message); }
 
   const curCode = (gradle.match(/versionCode\s+(\d+)/) || [])[1];
   const curName = (gradle.match(/versionName\s+"([^"]*)"/) || [])[1];
-  if (curCode !== String(v.versionCode)) {
-    gradle = gradle.replace(/versionCode\s+\d+/, `versionCode ${v.versionCode}`);
-    changes.push(`versionCode ${curCode} → ${v.versionCode}`);
+  if (curCode !== String(v.androidVersionCode)) {
+    gradle = gradle.replace(/versionCode\s+\d+/, `versionCode ${v.androidVersionCode}`);
+    changes.push(`versionCode ${curCode} → ${v.androidVersionCode}`);
   }
   if (curName !== v.versionName) {
     gradle = gradle.replace(/versionName\s+"[^"]*"/, `versionName "${v.versionName}"`);
