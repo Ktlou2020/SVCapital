@@ -237,6 +237,24 @@ router.post('/eft-approve', async (req, res) => {
   }
 });
 
+/* ─── GET /api/admin/maturity-preflight ───────────────────────────────
+   What the maturity engine will do on its next run, while there is still
+   time to change it. Read-only: every statement inside is a SELECT, and the
+   route writes nothing and audits nothing because nothing happens.
+
+   Admin/director only, via the router-level guard at the top of this file.
+   ──────────────────────────────────────────────────────────────────── */
+router.get('/maturity-preflight', async (req, res) => {
+  try {
+    const { runMaturityPreflight } = require('../services/maturityPreflight');
+    const report = await runMaturityPreflight(pool, { horizonDays: req.query.days });
+    return res.json(report);
+  } catch (err) {
+    console.error('[maturity-preflight]', err);
+    return res.status(500).json({ error: 'Pre-flight failed: ' + err.message });
+  }
+});
+
 /* ─── POST /api/admin/reset-2fa ─── */
 router.post('/reset-2fa', async (req, res) => {
   try {
