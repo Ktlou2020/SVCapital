@@ -31,6 +31,43 @@ const { cycleExpiredPools } = require('./poolCyclerCron');
 const round2 = n => Math.round((Number(n) || 0) * 100) / 100;
 
 /* ────────────────────────────────────────────────────────────
+   postedReturnFor — the return an investment has actually earned,
+   or null when nothing has been posted yet.
+
+   This used to be:
+
+     parseFloat(inv.actual_return) || parseFloat(inv.expected_return) || 0
+
+   which paid expected_return — the projection computed from the contracted
+   rate when the investment was created. Returns are not posted on the
+   investment; they are posted on the POOL, as investment_pools.actual_rate,
+   which is what the admin close-out writes. investments.actual_return is only
+   written by interestCron, and interestCron is disabled ("Interest is credited
+   at maturity only"). So the posted rate never reached the money path: a pool
+   that earned 7% and a pool that earned 4% both paid out the projected figure.
+
+   actual_rate is the return FOR THE POOL'S PERIOD, already — not per annum.
+   It is not prorated over term_months. This is the same rule Utils.postedReturn
+   applies in the portal, so what an investor is shown and what they are paid
+   now come from one definition.
+
+   Returns null — not 0 — when nothing is posted, so the caller can refuse
+   rather than pay a number nobody stands behind. A pool that genuinely
+   returned zero cannot currently be told apart from one whose rate has not
+   been entered (the column defaults to 0), so that case needs an explicit
+   decision rather than a guess.
+   ──────────────────────────────────────────────────────────── */
+function postedReturnFor(inv) {
+  const recorded = parseFloat(inv.actual_return) || 0;
+  if (recorded > 0) return round2(recorded);
+
+  const rate = parseFloat(inv.pool_actual_rate) || 0;
+  if (rate > 0) return round2((parseFloat(inv.amount) || 0) * rate);
+
+  return null;
+}
+
+/* ────────────────────────────────────────────────────────────
    23:00 — mark matured, mature the pools, execute payouts.
    Reinvest instructions roll into the open pool closing at month-end.
    ──────────────────────────────────────────────────────────── */
@@ -44,9 +81,11 @@ async function runMaturityProcessing() {
 
   // Find investments maturing now that still need processing.
   const { rows: investments } = await pool.query(`
-    SELECT i.*, inv.email, inv.first_name, inv.last_name, inv.phone
+    SELECT i.*, inv.email, inv.first_name, inv.last_name, inv.phone,
+           p.actual_rate AS pool_actual_rate
     FROM investments i
     JOIN investors inv ON inv.id = i.investor_id
+    LEFT JOIN investment_pools p ON p.id = i.pool_id
     WHERE i.status = 'active'
       AND i.end_date IS NOT NULL
       AND i.end_date <= NOW()
@@ -54,7 +93,18 @@ async function runMaturityProcessing() {
   `);
 
   let processed = 0, reinvestPending = 0;
+  const awaitingRate = [];
   for (const inv of investments) {
+    /* Nothing posted, nothing paid. Leaving maturity_processed_at NULL means
+       this investment is picked up again on the next nightly run, so posting
+       the rate is all that is needed to release it. A late correct payment is
+       recoverable; a wrong credit already spent is not. */
+    const postedReturn = postedReturnFor(inv);
+    if (postedReturn === null) {
+      awaitingRate.push(inv);
+      continue;
+    }
+
     // FIX 6: Each investment gets its own client + transaction.
     const client = await pool.connect();
     try {
@@ -76,7 +126,7 @@ async function runMaturityProcessing() {
       }
 
       const principal    = parseFloat(inv.amount) || 0;
-      const actualReturn = parseFloat(inv.actual_return) || parseFloat(inv.expected_return) || 0;
+      const actualReturn = postedReturn;   // posted, never projected — see postedReturnFor
       const gross        = round2(principal + actualReturn);
       const rawInstruction = inv.maturity_instruction || 'reinvest';
       // Delivery bike investments without an explicit non-reinvest instruction pay out to wallet
@@ -204,7 +254,27 @@ async function runMaturityProcessing() {
     }
   }
 
-  console.log(`[maturity] done — ${processed} matured (${reinvestPending} reinvested/rolled)`);
+  if (awaitingRate.length) {
+    /* Loud, and grouped by pool — the fix is one close-out per pool, not one
+       action per investor. warn rather than log so it stands out in Railway. */
+    const byPool = {};
+    for (const inv of awaitingRate) {
+      const k = inv.pool_id || '(no pool)';
+      byPool[k] = byPool[k] || { n: 0, capital: 0, name: inv.pool_name || '' };
+      byPool[k].n++;
+      byPool[k].capital += parseFloat(inv.amount) || 0;
+    }
+    console.warn(
+      `[maturity] HELD BACK — ${awaitingRate.length} matured investment(s) have no posted ` +
+      `return and were NOT paid. Post the actual rate on the pool; they settle on the next run.`);
+    for (const [poolId, v] of Object.entries(byPool)) {
+      console.warn(`[maturity]   ${poolId} ${v.name} — ${v.n} investment(s), ` +
+                   `R${v.capital.toFixed(2)} of capital waiting`);
+    }
+  }
+
+  console.log(`[maturity] done — ${processed} matured (${reinvestPending} reinvested/rolled)` +
+              (awaitingRate.length ? `, ${awaitingRate.length} held back awaiting a posted rate` : ''));
   return processed;
 }
 

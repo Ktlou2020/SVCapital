@@ -45,17 +45,15 @@ const verdict = (level, line) => {
   console.log(`  ${level.padEnd(9)} ${line}`);
 };
 
-/* The posted return, by the convention the platform actually uses.
-   server/routes/products.js:236: short_term actual_rate is the TOTAL PERIOD
-   return; every other product's is PER ANNUM and prorates over the term. */
-function postedReturn({ amount, actualReturn, poolActualRate, productType, termMonths }) {
-  const amt = Number(amount) || 0;
-  const ar  = Number(actualReturn) || 0;
+/* The posted return. actual_rate is the achieved return for the pool's period
+   already — for every product. It is not annualised and is not prorated over
+   term_months. Same rule as Utils.postedReturn and as the maturity engine. */
+function postedReturn({ amount, actualReturn, poolActualRate }) {
+  const ar = Number(actualReturn) || 0;
   if (ar > 0) return ar;
   const rate = Number(poolActualRate) || 0;
   if (rate <= 0) return null;                       // nothing posted yet
-  const term = Number(termMonths) || 12;
-  return productType === 'short_term' ? amt * rate : amt * rate * (term / 12);
+  return (Number(amount) || 0) * rate;
 }
 
 (async () => {
@@ -113,7 +111,9 @@ function postedReturn({ amount, actualReturn, poolActualRate, productType, termM
 
     /* ── 2. Has the actual rate been posted ──────────────────────────── */
     H('2. Has the actual return been posted');
-    console.log('  Returns are posted on the pool as actual_rate (the close-out wizard).');
+    console.log('  Returns are posted on the pool as actual_rate (the close-out wizard), as the');
+    console.log('  achieved return for that pool\'s period. An unposted rate is not paid at the');
+    console.log('  projection — the investment is held back until someone enters it.');
     for (const [poolId, list] of byPool) {
       const p = list[0];
       const rate = Number(p.pool_actual_rate) || 0;
@@ -122,20 +122,18 @@ function postedReturn({ amount, actualReturn, poolActualRate, productType, termM
 
       if (!p.pool_id) { verdict('ATTENTION', 'investments with no pool attached — cannot check a posted rate'); continue; }
       if (rate <= 0) {
-        verdict('STOP', `${poolId}: no actual_rate posted. The engine will pay the PROJECTED ` +
-          `${rand(projected)} on ${rand(capital)} of capital.`);
+        verdict('STOP', `${poolId}: no actual_rate posted. ${list.length} investment(s) holding ` +
+          `${rand(capital)} of capital will be HELD BACK and paid nothing until it is entered. ` +
+          'Post it on the pool close-out; they settle on the next nightly run.');
         continue;
       }
       const posted = list.reduce((s, x) => s + (postedReturn({
-        amount: x.amount, actualReturn: x.actual_return, poolActualRate: p.pool_actual_rate,
-        productType: x.product_type, termMonths: x.term_months }) || 0), 0);
-      const basis = p.product_type === 'short_term' ? 'period' : 'p.a., prorated over the term';
-      console.log(`  ${poolId}: actual_rate ${pct(rate)} (${basis})`);
-      console.log(`     posted return ${rand(posted)}  ·  projected ${rand(projected)}  ` +
-                  `·  difference ${rand(posted - projected)}`);
-      verdict('STOP',
-        `${poolId}: the engine pays expected_return and never reads actual_rate, so it will ` +
-        `pay ${rand(projected)}, not the posted ${rand(posted)} (see maturityCron.js:79).`);
+        amount: x.amount, actualReturn: x.actual_return,
+        poolActualRate: p.pool_actual_rate }) || 0), 0);
+      console.log(`  ${poolId}: actual_rate ${pct(rate)} for the period`);
+      console.log(`     will pay ${rand(posted)} in returns on ${rand(capital)} of capital` +
+                  `  ·  projection was ${rand(projected)}  ·  difference ${rand(posted - projected)}`);
+      verdict('OK', `${poolId}: the posted return is what will be paid.`);
     }
 
     /* ── 3. Where reinvested money will actually go ──────────────────── */
