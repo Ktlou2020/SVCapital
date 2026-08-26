@@ -258,6 +258,51 @@ const snapshot = async () => (await pool.query(`
          JSON.stringify(ct2 && ct2.rollsInto));
     }
 
+    console.log('\nit names the clients behind each finding, not just a count');
+    {
+      /* A count tells you how much is wrong; it does not tell you who to
+         phone. Every finding that resolves to specific people has to name
+         them, with enough to act on. */
+      const rp = await runMaturityPreflight(pool, { horizonDays: 14 });
+      const byIssue = i => (rp.affected || []).filter(a => a.issue === i);
+
+      const custom = byIssue('custom_payout_no_amount');
+      ok('the custom-payout client is named', custom.length === 1, JSON.stringify(custom));
+      if (custom[0]) {
+        /* PF-2 is the payout_custom fixture: Ben, on the pool whose rate has
+           not been posted. */
+        ok('with the details needed to contact them',
+           custom[0].name === 'Ben Unposted' && custom[0].email === 'ben@example.test' &&
+           custom[0].investorId === 'PF-B' && custom[0].investmentId === 'PF-2',
+           JSON.stringify(custom[0]));
+        ok('and the capital at stake',
+           custom[0].amount === 50000, `amount=${custom[0].amount}`);
+        ok('with no return figure invented for an unposted pool',
+           custom[0].postedReturn === 0,
+           `postedReturn=${custom[0].postedReturn} — the pool has no actual_rate`);
+        ok('marked STOP, because it silently changes what they receive',
+           custom[0].severity === 'STOP', custom[0].severity);
+      }
+
+      ok('a rollover with nowhere to go names its investor',
+         byIssue('rollover_to_wallet').every(a => a.name && a.investorId && a.targetProductType),
+         JSON.stringify(byIssue('rollover_to_wallet')));
+
+      ok('nobody without an issue appears in the list',
+         !(rp.affected || []).some(a => a.investmentId === 'PF-1'),
+         'PF-1 has a posted rate, a valid instruction and a target — it is not an issue');
+
+      ok('the auto-reinvested are listed separately, not mixed in',
+         Array.isArray(rp.noInstruction) &&
+         !(rp.affected || []).some(a => a.issue === 'no_instruction'),
+         'choosing nothing is a default, not a fault — but it is still worth seeing by name');
+
+      ok('the worst appears first',
+         (rp.affected || []).length < 2 ||
+         (rp.affected[0].severity === 'STOP' || !rp.affected.some(a => a.severity === 'STOP')),
+         JSON.stringify((rp.affected || []).map(a => a.severity)));
+    }
+
     console.log('\nit notices the things that need a person');
     ok('a custom payout with no amount is a STOP',
        r.findings.some(f => f.level === 'STOP' && /custom-payout/.test(f.message)));
