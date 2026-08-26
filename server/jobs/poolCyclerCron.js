@@ -157,13 +157,34 @@ async function cycleExpiredPools() {
         ]
       );
 
-      // Requirement: once a pool "closes" (a newer pool opens for fundraising),
-      // the previously-open pool of this product is deployed → status 'active'.
-      // Only the newly-opened successor stays 'open'.
+      /* Once a pool closes, the PREVIOUS fundraising pool of this product is
+         deployed → status 'active'. Only the newly-opened successor stays
+         'open'.
+
+         "Previous" means one that has passed its own close date. Without that
+         qualification this closed every open pool of the product type, and a
+         pool still inside its fundraising window is not previous to anything —
+         it is the one currently taking money, and the one maturing
+         investments are about to roll into.
+
+         That is not hypothetical. Cycling a pool that closed a fortnight ago
+         would, at 23:00 and before any payout ran, close the current
+         month-end pool and leave a freshly minted successor as the only open
+         one. R3.9m of cattle rollovers would have landed in a pool nobody
+         chose, on a different close date and term.
+
+         A NULL end_date is left alone deliberately: it has not demonstrably
+         ended, so closing it would be a guess. It sorts last in the rollover
+         target query anyway (`end_date ASC NULLS LAST`), so it only wins when
+         nothing dated qualifies. */
       await client.query(
         `UPDATE investment_pools
             SET status = 'active', updated_at = NOW()
-          WHERE product_type = $1 AND status = 'open' AND id <> $2`,
+          WHERE product_type = $1
+            AND status = 'open'
+            AND id <> $2
+            AND end_date IS NOT NULL
+            AND end_date < CURRENT_DATE`,
         [p.product_type, newId]
       );
 
