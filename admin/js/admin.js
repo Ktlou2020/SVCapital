@@ -5289,7 +5289,13 @@ async function viewPoolInvestors(poolId) {
               // 0.00% instead of falling through.
               // Same precedence as the investments list, from one definition.
               const effRate = Utils.effectiveRate({ ...r, pool_actual_rate: r.pool_actual_rate ?? pool.actual_rate }) || 0;
-              return `<tr style="cursor:pointer;${isCancelled ? 'opacity:0.5;' : ''}" onclick="viewInvestor('${r.investor_id}');Modal.close('poolInvestorsModal')">
+              /* The row is one INVESTMENT, so it opens that investment — not
+                 the investor, which is what it used to do and which lost the
+                 row you clicked. Back returns to this pool, not to the
+                 investor, because that is where you came from.
+                 Only ids go into the attribute; a pool name could contain a
+                 quote and would terminate it. */
+              return `<tr style="cursor:pointer;${isCancelled ? 'opacity:0.5;' : ''}" onclick="viewInvestmentDetail('${r.investment_id}','${_currentPoolId}','pool');Modal.close('poolInvestorsModal')">
                 <td><div class="td-strong clip">${name}</div><div class="td-muted clip" style="font-size:0.7rem">${r.email||''}</div></td>
                 <td class="clip">${acctCell}</td>
                 <td class="td-gold fw-700 clip">${Utils.rand(r.amount)}</td>
@@ -6325,7 +6331,11 @@ let _investorInvestments = [];
    the investor view replaces that view — without a return path the close
    button drops the user out of the investor entirely and they have to search
    for them again. */
-async function viewInvestmentDetail(id, backTo) {
+/* backKind says what `backTo` refers to: 'investor' (the default, an investor
+   id) or 'pool' (a pool id). The pool investors list needed the second — its
+   rows are investments, and returning to the investor from there drops you
+   somewhere you were not. */
+async function viewInvestmentDetail(id, backTo, backKind) {
   let inv = STATE.investments.find(i => i.id === id)
          || _investorInvestments.find(i => i.id === id);
 
@@ -6346,16 +6356,31 @@ async function viewInvestmentDetail(id, backTo) {
       if (bodyEl) bodyEl.innerHTML = `<div class="text-center text-muted" style="padding:40px">
         <i class="fa-solid fa-triangle-exclamation" style="font-size:1.6rem;display:block;margin-bottom:10px;opacity:.4"></i>
         Could not load this investment.
-        ${backTo ? `<div style="margin-top:14px"><button class="btn btn--secondary btn--sm" onclick="viewInvestor('${backTo}')">Back to investor</button></div>` : ''}
+        ${backTo ? `<div style="margin-top:14px">${_backControl(backTo, backKind)}</div>` : ''}
       </div>`;
       return;
     }
   }
 
-  _renderInvestmentDetail(inv, backTo);
+  _renderInvestmentDetail(inv, backTo, backKind);
 }
 
-function _renderInvestmentDetail(inv, backTo) {
+/* One definition of the back button, so the failure path and the rendered
+   detail cannot offer different ways out. */
+function _backControl(backTo, backKind) {
+  if (!backTo) return '';
+  if (backKind === 'pool') {
+    const pool = (STATE.pools || []).find(p => p.id === backTo);
+    return `<button class="btn btn--secondary btn--sm" onclick="Modal.close('investorDetailModal');viewPoolInvestors('${backTo}')">
+      <i class="fa-solid fa-arrow-left" style="margin-right:6px"></i>Back to ${_esc(pool?.name || 'pool')}
+    </button>`;
+  }
+  return `<button class="btn btn--secondary btn--sm" onclick="viewInvestor('${backTo}')">
+    <i class="fa-solid fa-arrow-left" style="margin-right:6px"></i>Back to ${_esc(_investorName || 'investor')}
+  </button>`;
+}
+
+function _renderInvestmentDetail(inv, backTo, backKind) {
   const id = inv.id;
   const pi = Utils.productInfo(inv.product_type);
   const invRecord = STATE.investors.find(i => i.id === inv.investor_id);
@@ -6377,11 +6402,7 @@ function _renderInvestmentDetail(inv, backTo) {
     : '';
 
   document.getElementById('invDetailBody').innerHTML = `
-    ${backTo ? `<div class="mb-12">
-      <button class="btn btn--secondary btn--sm" onclick="viewInvestor('${backTo}')">
-        <i class="fa-solid fa-arrow-left" style="margin-right:6px"></i>Back to ${_investorName || 'investor'}
-      </button>
-    </div>` : ''}
+    ${backTo ? `<div class="mb-12">${_backControl(backTo, backKind)}</div>` : ''}
     <div class="grid-2 mb-16" style="gap:12px">
       <div class="info-row"><span class="info-row__label">Investor</span><span class="info-row__value td-strong">${_esc(inv.investor_name)}</span></div>
       <div class="info-row"><span class="info-row__label">Email</span><span class="info-row__value td-muted">${_esc(email)}</span></div>
