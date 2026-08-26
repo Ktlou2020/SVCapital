@@ -12095,6 +12095,11 @@ async function runMaturityPreflight(btn) {
               ? `<strong>${Utils.rand(p.postedTotal)}</strong>
                  <div class="td-muted" style="font-size:0.68rem">projection was ${Utils.rand(p.projected)}</div>`
               : '<span style="color:var(--text-muted)">held back</span>'}</td>
+        <td>${(p.rollsInto || []).length
+              ? (p.rollsInto || []).map(x => x.toWallet
+                  ? `<div style="color:#f59e0b">→ wallet payouts<div style="font-size:0.68rem">no open "${_esc(x.productType)}" pool · ${x.count} rollover(s)</div></div>`
+                  : `<div>→ ${_esc(x.poolName)}<div class="td-muted" style="font-size:0.68rem">closes ${Utils.date(x.endDate)} · ${x.count} rollover(s)</div></div>`).join('')
+              : '<span class="td-muted">nothing rolls over</span>'}</td>
       </tr>`).join('');
 
     const findingRows = [...r.findings].sort((a, b) => order[a.level] - order[b.level]).map(f => {
@@ -12126,7 +12131,7 @@ async function runMaturityPreflight(btn) {
         <table class="table" style="font-size:0.78rem">
           <thead><tr>
             <th>Pool</th><th style="text-align:right">Investments</th><th style="text-align:right">Capital</th>
-            <th>Matures</th><th>Actual rate</th><th style="text-align:right">Returns to pay</th>
+            <th>Matures</th><th>Actual rate</th><th style="text-align:right">Returns to pay</th><th>Rolls into</th>
           </tr></thead>
           <tbody>${poolRows}</tbody>
         </table>
