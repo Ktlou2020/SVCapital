@@ -1521,503 +1521,586 @@ async function autoSetup() {
     return;
   }
 
+  /* Each step runs on its own.
+
+     This used to be one long try/catch: the first statement to throw skipped
+     every step after it, and the catch logged one line and resolved as though
+     nothing had happened. A container could boot for months with half its
+     schema missing and the only trace was a single line in the deploy log.
+
+     Worse, two `return`s in the COO step exited autoSetup outright. On any
+     database where the COO account already exists — which is every production
+     boot — steps 4 through 10 never ran at all. Those are not seeds; they are
+     migrations: the end_date backfill, the smme → short_term rename, the
+     cattle_cycles backfill. Wrapping each step in its own function is what
+     makes those `return`s mean "this step is done" rather than "abandon the
+     rest of the setup".
+
+     A failed step is recorded and the rest continue, because a partial schema
+     is worse than a partial seed and the two used to fail together. */
+  const failures = [];
+
+  const step = async (name, fn) => {
+    try {
+      await fn();
+    } catch (err) {
+      failures.push({ name, message: err.message });
+      console.error(`❌ [setup] step failed — ${name}: ${err.message}`);
+    }
+  };
+
   try {
     console.log('🔄 Running auto-setup (migrate + seed if empty)…');
 
-    // 1. Create all tables
-    await pool.query(SCHEMA);
-    console.log('✅ Schema ready.');
+    await step("1. Create all tables", async () => {
+      // 1. Create all tables
+      await pool.query(SCHEMA);
+      console.log('✅ Schema ready.');
+    });
 
-    // 1b. Add new columns to existing tables (safe — IF NOT EXISTS)
-    await pool.query(`
-      DO $$ BEGIN
-        BEGIN ALTER TABLE investors ADD COLUMN last_auto_fica_check TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE investors ADD COLUMN fica_auto_status TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE investors ADD COLUMN xp_points INT DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE investors ADD COLUMN xp_level TEXT DEFAULT 'seed'; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE investors ADD COLUMN investor_profile JSONB DEFAULT '{}'; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE support_tickets ADD COLUMN investor_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE support_tickets ADD COLUMN investor_email TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE support_tickets ADD COLUMN admin_response TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE support_tickets ADD COLUMN proof_attached BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE support_tickets ADD COLUMN proof_filename TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE support_tickets ADD COLUMN file_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE kyc_documents ADD COLUMN sub_account_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE kyc_documents ADD COLUMN file_data TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE kyc_documents ADD COLUMN investor_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE kyc_documents ADD COLUMN reviewed_date TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE transactions ADD COLUMN sub_account_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE investments ADD COLUMN sub_account_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE audit_events ADD COLUMN actor_role TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE audit_events ADD COLUMN actor_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE audit_events ADD COLUMN platform TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE investment_pools ADD COLUMN cycled_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE investment_pools ADD COLUMN source_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        -- Merge legacy 'paid_out' status into 'matured' (pools + investments)
-        BEGIN UPDATE investment_pools SET status = 'matured' WHERE status = 'paid_out'; EXCEPTION WHEN others THEN NULL; END;
-        BEGIN UPDATE investments      SET status = 'matured' WHERE status = 'paid_out'; EXCEPTION WHEN others THEN NULL; END;
-        BEGIN ALTER TABLE investors ADD COLUMN fica_status TEXT DEFAULT 'pending'; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE maturity_instructions ADD COLUMN investor_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE maturity_instructions ADD COLUMN pool_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE maturity_instructions ADD COLUMN instruction_type TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE maturity_instructions ADD COLUMN custom_payout_amount NUMERIC(18,2) DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE maturity_instructions ADD COLUMN submitted_date TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE maturity_instructions ADD COLUMN total_payout NUMERIC(18,2) DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE maturity_instructions ADD COLUMN reinvest_pool_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE investments ADD COLUMN switch_product_type TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE investments ADD COLUMN custom_payout_amount NUMERIC(18,2); EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE cattle_animals ADD COLUMN dim_tag TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE cattle_animals ADD COLUMN extra_colour_tag TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_holder TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_number TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_branch TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_type TEXT DEFAULT 'current'; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_status TEXT DEFAULT 'none'; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_reference TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE sub_accounts ADD COLUMN pim_account_ref TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE products ADD COLUMN sector TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE transactions ADD COLUMN date_updated TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE push_tokens ADD COLUMN app_version TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE push_tokens ADD COLUMN device_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE gifts ADD COLUMN gift_card_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE gifts ADD COLUMN product_type TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE gifts ADD COLUMN firebase_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE investment_pools ADD COLUMN admin_notes TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE kyc_documents ADD COLUMN expiry_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE kyc_documents ADD COLUMN doc_subtype TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE solar_projects ADD COLUMN documents_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE solar_projects ADD COLUMN foxess_device_sn TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE employee_courses ADD COLUMN role_target TEXT DEFAULT 'all'; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE employee_courses ADD COLUMN department TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE employee_courses ADD COLUMN difficulty TEXT DEFAULT 'intermediate'; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE employee_courses ADD COLUMN estimated_minutes INT DEFAULT 30; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE employee_courses ADD COLUMN kpi_dimension TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE employee_courses ADD COLUMN kpi_boost_points INT DEFAULT 5; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE employee_courses ADD COLUMN modules_count INT DEFAULT 3; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE employee_courses ADD COLUMN quiz_questions INT DEFAULT 3; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE employee_courses ADD COLUMN pass_score INT DEFAULT 60; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE employee_courses ADD COLUMN status TEXT DEFAULT 'active'; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE employee_courses ADD COLUMN ai_generated BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE employee_courses ADD COLUMN learning_objectives TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE employee_courses ADD COLUMN thumbnail_icon TEXT DEFAULT 'fa-book'; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE employee_courses ADD COLUMN thumbnail_color TEXT DEFAULT '#eda5ff'; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE investors ADD COLUMN pim_account_ref TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE investors ADD COLUMN fica_reviewed_by TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE investors ADD COLUMN bank_account_reviewed_by TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE transactions ADD COLUMN reviewed_by TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE transactions ADD COLUMN reviewed_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
-        BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_reviewed_by TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-      END $$
-    `);
-    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS gifts_firebase_id_idx ON gifts(firebase_id) WHERE firebase_id IS NOT NULL`).catch(() => {});
+    await step("1b. Add new columns to existing", async () => {
+      // 1b. Add new columns to existing tables (safe — IF NOT EXISTS)
+      await pool.query(`
+        DO $$ BEGIN
+          BEGIN ALTER TABLE investors ADD COLUMN last_auto_fica_check TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investors ADD COLUMN fica_auto_status TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investors ADD COLUMN xp_points INT DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investors ADD COLUMN xp_level TEXT DEFAULT 'seed'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investors ADD COLUMN investor_profile JSONB DEFAULT '{}'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE support_tickets ADD COLUMN investor_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE support_tickets ADD COLUMN investor_email TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE support_tickets ADD COLUMN admin_response TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE support_tickets ADD COLUMN proof_attached BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE support_tickets ADD COLUMN proof_filename TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE support_tickets ADD COLUMN file_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE kyc_documents ADD COLUMN sub_account_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE kyc_documents ADD COLUMN file_data TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE kyc_documents ADD COLUMN investor_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE kyc_documents ADD COLUMN reviewed_date TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE transactions ADD COLUMN sub_account_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investments ADD COLUMN sub_account_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE audit_events ADD COLUMN actor_role TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE audit_events ADD COLUMN actor_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE audit_events ADD COLUMN platform TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investment_pools ADD COLUMN cycled_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investment_pools ADD COLUMN source_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          -- Merge legacy 'paid_out' status into 'matured' (pools + investments)
+          BEGIN UPDATE investment_pools SET status = 'matured' WHERE status = 'paid_out'; EXCEPTION WHEN others THEN NULL; END;
+          BEGIN UPDATE investments      SET status = 'matured' WHERE status = 'paid_out'; EXCEPTION WHEN others THEN NULL; END;
+          BEGIN ALTER TABLE investors ADD COLUMN fica_status TEXT DEFAULT 'pending'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE maturity_instructions ADD COLUMN investor_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE maturity_instructions ADD COLUMN pool_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE maturity_instructions ADD COLUMN instruction_type TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE maturity_instructions ADD COLUMN custom_payout_amount NUMERIC(18,2) DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE maturity_instructions ADD COLUMN submitted_date TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE maturity_instructions ADD COLUMN total_payout NUMERIC(18,2) DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE maturity_instructions ADD COLUMN reinvest_pool_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investments ADD COLUMN switch_product_type TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investments ADD COLUMN custom_payout_amount NUMERIC(18,2); EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE cattle_animals ADD COLUMN dim_tag TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE cattle_animals ADD COLUMN extra_colour_tag TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_holder TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_number TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_branch TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_type TEXT DEFAULT 'current'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_status TEXT DEFAULT 'none'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_reference TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE sub_accounts ADD COLUMN pim_account_ref TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE products ADD COLUMN sector TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE transactions ADD COLUMN date_updated TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE push_tokens ADD COLUMN app_version TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE push_tokens ADD COLUMN device_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE gifts ADD COLUMN gift_card_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE gifts ADD COLUMN product_type TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE gifts ADD COLUMN firebase_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investment_pools ADD COLUMN admin_notes TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE kyc_documents ADD COLUMN expiry_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE kyc_documents ADD COLUMN doc_subtype TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE solar_projects ADD COLUMN documents_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE solar_projects ADD COLUMN foxess_device_sn TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE employee_courses ADD COLUMN role_target TEXT DEFAULT 'all'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE employee_courses ADD COLUMN department TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE employee_courses ADD COLUMN difficulty TEXT DEFAULT 'intermediate'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE employee_courses ADD COLUMN estimated_minutes INT DEFAULT 30; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE employee_courses ADD COLUMN kpi_dimension TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE employee_courses ADD COLUMN kpi_boost_points INT DEFAULT 5; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE employee_courses ADD COLUMN modules_count INT DEFAULT 3; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE employee_courses ADD COLUMN quiz_questions INT DEFAULT 3; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE employee_courses ADD COLUMN pass_score INT DEFAULT 60; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE employee_courses ADD COLUMN status TEXT DEFAULT 'active'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE employee_courses ADD COLUMN ai_generated BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE employee_courses ADD COLUMN learning_objectives TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE employee_courses ADD COLUMN thumbnail_icon TEXT DEFAULT 'fa-book'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE employee_courses ADD COLUMN thumbnail_color TEXT DEFAULT '#eda5ff'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investors ADD COLUMN pim_account_ref TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investors ADD COLUMN fica_reviewed_by TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investors ADD COLUMN bank_account_reviewed_by TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE transactions ADD COLUMN reviewed_by TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE transactions ADD COLUMN reviewed_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_reviewed_by TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        END $$
+      `);
+      await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS gifts_firebase_id_idx ON gifts(firebase_id) WHERE firebase_id IS NOT NULL`).catch(() => {});
 
-    // Backfill sa_reference for existing sub-accounts that don't have one
-    await pool.query(`
-      UPDATE sub_accounts
-      SET sa_reference = 'SA-' || UPPER(SUBSTRING(MD5(id) FOR 6))
-      WHERE sa_reference IS NULL OR sa_reference = ''
-    `).catch(() => {});
-    console.log('✅ Investor FICA + gamification columns ready.');
+      // Backfill sa_reference for existing sub-accounts that don't have one
+      await pool.query(`
+        UPDATE sub_accounts
+        SET sa_reference = 'SA-' || UPPER(SUBSTRING(MD5(id) FOR 6))
+        WHERE sa_reference IS NULL OR sa_reference = ''
+      `).catch(() => {});
+      console.log('✅ Investor FICA + gamification columns ready.');
 
-    // 1b2. Seed default products (idempotent — only inserts missing product types)
-    await seedProducts();
+      // 1b2. Seed default products (idempotent — only inserts missing product types)
+      await seedProducts();
 
-    // Backfill partner_name for existing products
-    await pool.query(`
-      UPDATE products SET partner_name = 'Beefcor'            WHERE product_type = 'cattle'                        AND (partner_name IS NULL OR partner_name = '');
-      UPDATE products SET partner_name = 'The Solar Experts'  WHERE product_type IN ('solar_7yr','solar_6yr','solar_5yr') AND (partner_name IS NULL OR partner_name = '');
-      UPDATE products SET partner_name = 'MoolaLend'          WHERE product_type IN ('short_term','smme')          AND (partner_name IS NULL OR partner_name = '');
-    `).catch(() => {});
+      // Backfill partner_name for existing products
+      await pool.query(`
+        UPDATE products SET partner_name = 'Beefcor'            WHERE product_type = 'cattle'                        AND (partner_name IS NULL OR partner_name = '');
+        UPDATE products SET partner_name = 'The Solar Experts'  WHERE product_type IN ('solar_7yr','solar_6yr','solar_5yr') AND (partner_name IS NULL OR partner_name = '');
+        UPDATE products SET partner_name = 'MoolaLend'          WHERE product_type IN ('short_term','smme')          AND (partner_name IS NULL OR partner_name = '');
+      `).catch(() => {});
 
-    // Upsert cattle_12j product (safe on existing deployments)
-    await pool.query(`
-      INSERT INTO products
-        (id, product_type, label, headline, description, key_details,
-         min_investment, term_months, benchmark_rate, performance_fee_pct,
-         risk_profile, risk_color, icon, color, badge_class, partner_name, sort_order)
-      VALUES
-        ('PROD-CATTLE_12J', 'cattle_12j', '12J Cattle Investment', 'Tax-efficient cattle returns.',
-         'Section 12J tax-incentivised cattle investment. Partner with Beefcor''s feedlot to grow returns while qualifying for a full SARS income tax deduction on invested capital.',
-         'Full SARS Section 12J income tax deduction on invested capital
-Cattle enter feedlot at 200–230kg and are raised to 450–500kg
-Returns determined by weight gain and market price per kilogram
-Beefcor guarantees 99% cattle survival rate
-Minimum 5-year holding period for 12J tax benefit',
-         5000, 60, 0.13, 0.20, 'Medium-High', '#fec24f', 'fa-cow', '#fec24f', 'badge--gold', 'Beefcor', 9)
-      ON CONFLICT (product_type) DO NOTHING
-    `).catch(() => {});
+      // Upsert cattle_12j product (safe on existing deployments)
+      await pool.query(`
+        INSERT INTO products
+          (id, product_type, label, headline, description, key_details,
+           min_investment, term_months, benchmark_rate, performance_fee_pct,
+           risk_profile, risk_color, icon, color, badge_class, partner_name, sort_order)
+        VALUES
+          ('PROD-CATTLE_12J', 'cattle_12j', '12J Cattle Investment', 'Tax-efficient cattle returns.',
+           'Section 12J tax-incentivised cattle investment. Partner with Beefcor''s feedlot to grow returns while qualifying for a full SARS income tax deduction on invested capital.',
+           'Full SARS Section 12J income tax deduction on invested capital
+  Cattle enter feedlot at 200–230kg and are raised to 450–500kg
+  Returns determined by weight gain and market price per kilogram
+  Beefcor guarantees 99% cattle survival rate
+  Minimum 5-year holding period for 12J tax benefit',
+           5000, 60, 0.13, 0.20, 'Medium-High', '#fec24f', 'fa-cow', '#fec24f', 'badge--gold', 'Beefcor', 9)
+        ON CONFLICT (product_type) DO NOTHING
+      `).catch(() => {});
 
-    // Upsert iLobola product (safe on existing deployments)
-    await pool.query(`
-      INSERT INTO products
-        (id, product_type, label, headline, description, key_details,
-         min_investment, term_months, benchmark_rate, performance_fee_pct,
-         risk_profile, risk_color, icon, color, badge_class, sort_order)
-      VALUES
-        ('PROD-ILOBOLA', 'ilobola', 'iLobola', 'Save for what matters most.',
-         'A dedicated savings and growth vehicle designed to help you accumulate funds for lobola. Earn competitive returns while working toward one of life''s most meaningful milestones.',
-         'Purpose-built savings vehicle for lobola preparation
-Competitive fixed returns over a defined term
-Flexible contribution amounts
-Withdraw at maturity or roll over to a new cycle',
-         500, 12, 0.13, 0.20, 'Low-Medium', '#22c55e', 'fa-heart', '#eda5ff', 'badge--purple', 10)
-      ON CONFLICT (product_type) DO NOTHING
-    `).catch(() => {});
+      // Upsert iLobola product (safe on existing deployments)
+      await pool.query(`
+        INSERT INTO products
+          (id, product_type, label, headline, description, key_details,
+           min_investment, term_months, benchmark_rate, performance_fee_pct,
+           risk_profile, risk_color, icon, color, badge_class, sort_order)
+        VALUES
+          ('PROD-ILOBOLA', 'ilobola', 'iLobola', 'Save for what matters most.',
+           'A dedicated savings and growth vehicle designed to help you accumulate funds for lobola. Earn competitive returns while working toward one of life''s most meaningful milestones.',
+           'Purpose-built savings vehicle for lobola preparation
+  Competitive fixed returns over a defined term
+  Flexible contribution amounts
+  Withdraw at maturity or roll over to a new cycle',
+           500, 12, 0.13, 0.20, 'Low-Medium', '#22c55e', 'fa-heart', '#eda5ff', 'badge--purple', 10)
+        ON CONFLICT (product_type) DO NOTHING
+      `).catch(() => {});
 
-    // Update short_term key_details to include receivables financing bullet
-    await pool.query(`
-      UPDATE products
-      SET key_details = 'Capital deployed to vetted SMMEs\nReturns from SMME receivables financing & asset-backed loans\nShort investment cycles\nAsset-backed where possible'
-      WHERE product_type = 'short_term'
-        AND key_details NOT LIKE '%receivables%'
-    `).catch(() => {});
+      // Update short_term key_details to include receivables financing bullet
+      await pool.query(`
+        UPDATE products
+        SET key_details = 'Capital deployed to vetted SMMEs\nReturns from SMME receivables financing & asset-backed loans\nShort investment cycles\nAsset-backed where possible'
+        WHERE product_type = 'short_term'
+          AND key_details NOT LIKE '%receivables%'
+      `).catch(() => {});
 
-    await seedTestimonials();
+      await seedTestimonials();
+    });
 
-    // 1c. Performance indexes (each wrapped individually so one failure won't abort the rest)
-    const indexes = [
-      'CREATE INDEX IF NOT EXISTS idx_transactions_investor_id ON transactions(investor_id)',
-      'CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type)',
-      'CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions(created_at DESC)',
-      'CREATE INDEX IF NOT EXISTS idx_investments_investor_id ON investments(investor_id)',
-      'CREATE INDEX IF NOT EXISTS idx_investments_status ON investments(status)',
-      'CREATE INDEX IF NOT EXISTS idx_investments_pool_id ON investments(pool_id)',
-      'CREATE INDEX IF NOT EXISTS idx_investments_end_date ON investments(end_date)',
-      'CREATE INDEX IF NOT EXISTS idx_transactions_investment_id ON transactions(investment_id)',
-      'CREATE INDEX IF NOT EXISTS idx_support_tickets_investor_id ON support_tickets(investor_id)',
-      'CREATE INDEX IF NOT EXISTS idx_support_tickets_status ON support_tickets(status)',
-      'CREATE INDEX IF NOT EXISTS idx_kyc_documents_investor_id ON kyc_documents(investor_id)',
-      'CREATE INDEX IF NOT EXISTS idx_audit_events_actor_id ON audit_events(actor_id)',
-      'CREATE INDEX IF NOT EXISTS idx_audit_events_created_at ON audit_events(created_at DESC)',
-      'CREATE INDEX IF NOT EXISTS idx_investors_status ON investors(status)',
-      'CREATE INDEX IF NOT EXISTS idx_investors_fica_status ON investors(fica_status)',
-      'CREATE INDEX IF NOT EXISTS idx_investment_waitlist_pool_id ON investment_waitlist(pool_id)',
-      'CREATE INDEX IF NOT EXISTS idx_investment_waitlist_investor_id ON investment_waitlist(investor_id)',
-    ];
-    for (const sql of indexes) {
+    await step("1c. Performance indexes each wrapped individually", async () => {
+      // 1c. Performance indexes (each wrapped individually so one failure won't abort the rest)
+      const indexes = [
+        'CREATE INDEX IF NOT EXISTS idx_transactions_investor_id ON transactions(investor_id)',
+        'CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type)',
+        'CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions(created_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_investments_investor_id ON investments(investor_id)',
+        'CREATE INDEX IF NOT EXISTS idx_investments_status ON investments(status)',
+        'CREATE INDEX IF NOT EXISTS idx_investments_pool_id ON investments(pool_id)',
+        'CREATE INDEX IF NOT EXISTS idx_investments_end_date ON investments(end_date)',
+        'CREATE INDEX IF NOT EXISTS idx_transactions_investment_id ON transactions(investment_id)',
+        'CREATE INDEX IF NOT EXISTS idx_support_tickets_investor_id ON support_tickets(investor_id)',
+        'CREATE INDEX IF NOT EXISTS idx_support_tickets_status ON support_tickets(status)',
+        'CREATE INDEX IF NOT EXISTS idx_kyc_documents_investor_id ON kyc_documents(investor_id)',
+        'CREATE INDEX IF NOT EXISTS idx_audit_events_actor_id ON audit_events(actor_id)',
+        'CREATE INDEX IF NOT EXISTS idx_audit_events_created_at ON audit_events(created_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_investors_status ON investors(status)',
+        'CREATE INDEX IF NOT EXISTS idx_investors_fica_status ON investors(fica_status)',
+        'CREATE INDEX IF NOT EXISTS idx_investment_waitlist_pool_id ON investment_waitlist(pool_id)',
+        'CREATE INDEX IF NOT EXISTS idx_investment_waitlist_investor_id ON investment_waitlist(investor_id)',
+      ];
+      for (const sql of indexes) {
+        try {
+          await pool.query(sql);
+        } catch (idxErr) {
+          console.warn('⚠️  Index creation warning:', idxErr.message);
+        }
+      }
+      console.log('✅ Performance indexes ready.');
+    });
+
+    await step("1d. Upgrade transactions reference to UNIQUE", async () => {
+      // 1d. Upgrade transactions.reference to UNIQUE if the existing index is plain
+      // (required so ON CONFLICT (reference) DO NOTHING works in payments.js + interestCron.js)
       try {
-        await pool.query(sql);
+        const { rows: idxInfo } = await pool.query(`
+          SELECT ix.indisunique FROM pg_class t
+          JOIN pg_index ix ON t.oid = ix.indrelid
+          JOIN pg_class i  ON i.oid = ix.indexrelid
+          WHERE t.relname = 'transactions' AND i.relname = 'idx_transactions_reference'
+        `);
+        if (!idxInfo[0]?.indisunique) {
+          await pool.query('DROP INDEX IF EXISTS idx_transactions_reference');
+          await pool.query('CREATE UNIQUE INDEX idx_transactions_reference ON transactions(reference)');
+          console.log('✅ transactions.reference index upgraded to UNIQUE.');
+        }
       } catch (idxErr) {
-        console.warn('⚠️  Index creation warning:', idxErr.message);
+        console.warn('⚠️  Could not upgrade transactions.reference to UNIQUE:', idxErr.message);
       }
-    }
-    console.log('✅ Performance indexes ready.');
+    });
 
-    // 1d. Upgrade transactions.reference to UNIQUE if the existing index is plain
-    // (required so ON CONFLICT (reference) DO NOTHING works in payments.js + interestCron.js)
-    try {
-      const { rows: idxInfo } = await pool.query(`
-        SELECT ix.indisunique FROM pg_class t
-        JOIN pg_index ix ON t.oid = ix.indrelid
-        JOIN pg_class i  ON i.oid = ix.indexrelid
-        WHERE t.relname = 'transactions' AND i.relname = 'idx_transactions_reference'
-      `);
-      if (!idxInfo[0]?.indisunique) {
-        await pool.query('DROP INDEX IF EXISTS idx_transactions_reference');
-        await pool.query('CREATE UNIQUE INDEX idx_transactions_reference ON transactions(reference)');
-        console.log('✅ transactions.reference index upgraded to UNIQUE.');
+    await step("1e. Repair users investor id for", async () => {
+      // 1e. Repair users.investor_id for accounts where it is null OR points to a
+      // non-existent investor record (e.g. stale demo value like 'INV-001').
+      // When this is wrong the JWT carries a bad investorId, the server scopes every
+      // query to that phantom ID (WHERE 1=0 equivalent), and the portal shows nothing.
+      // Runs on every boot; is a no-op once all rows are correct.
+      try {
+        const { rowCount } = await pool.query(`
+          UPDATE users u
+          SET    investor_id = i.id
+          FROM   investors i
+          WHERE  LOWER(u.email) = LOWER(i.email)
+            AND  u.role = 'investor'
+            AND  (
+              u.investor_id IS NULL
+              OR NOT EXISTS (SELECT 1 FROM investors WHERE id = u.investor_id)
+            )
+        `);
+        if (rowCount > 0) {
+          console.log(`✅ Repaired users.investor_id for ${rowCount} account(s).`);
+        }
+      } catch (backfillErr) {
+        console.warn('⚠️  investor_id repair warning:', backfillErr.message);
       }
-    } catch (idxErr) {
-      console.warn('⚠️  Could not upgrade transactions.reference to UNIQUE:', idxErr.message);
-    }
+    });
 
-    // 1e. Repair users.investor_id for accounts where it is null OR points to a
-    // non-existent investor record (e.g. stale demo value like 'INV-001').
-    // When this is wrong the JWT carries a bad investorId, the server scopes every
-    // query to that phantom ID (WHERE 1=0 equivalent), and the portal shows nothing.
-    // Runs on every boot; is a no-op once all rows are correct.
-    try {
-      const { rowCount } = await pool.query(`
-        UPDATE users u
-        SET    investor_id = i.id
-        FROM   investors i
-        WHERE  LOWER(u.email) = LOWER(i.email)
-          AND  u.role = 'investor'
-          AND  (
-            u.investor_id IS NULL
-            OR NOT EXISTS (SELECT 1 FROM investors WHERE id = u.investor_id)
-          )
-      `);
-      if (rowCount > 0) {
-        console.log(`✅ Repaired users.investor_id for ${rowCount} account(s).`);
+    await step("2a. Always seed PE portfolio companies", async () => {
+      // 2a. Always seed PE portfolio companies (idempotent — ON CONFLICT DO UPDATE)
+      try {
+        await pool.query(`
+          INSERT INTO pe_companies
+            (id, name, sector, status, aum_amount, entry_date, description)
+          VALUES
+            ('peco-hb-svc-2025',       'Hillermann Brothers Properties Proprietary Limited', 'Property',      'portfolio', 300000000, '2025-07-01', 'Property holding company partnered with SV Capital.'),
+            ('peco-sas-svc-2025',      'Scientific Aquatic Services Pty Ltd',                'Other',         'portfolio', 1000,       '2025-07-01', 'Aquatic services company partnered with SV Capital.'),
+            ('peco-gma-svc-2025',      'GM Associates Proprietary Limited',                  'Other',         'portfolio', 50000000,   '2025-07-01', 'Associates firm partnered with SV Capital.'),
+            ('peco-edelsenz-svc-2025', 'EdelSenz Proprietary Limited',                       'Other',         'portfolio', 25000000,   '2025-08-01', 'Technology and services company partnered with SV Capital.'),
+            ('peco-steelstudio-svc-2026','New Steel Studio Proprietary Limited',             'Manufacturing', 'portfolio', NULL,       '2026-08-01', 'Steel manufacturing company partnered with SV Capital.')
+          ON CONFLICT (id) DO UPDATE SET
+            name       = EXCLUDED.name,
+            sector     = EXCLUDED.sector,
+            status     = EXCLUDED.status,
+            aum_amount = EXCLUDED.aum_amount,
+            entry_date = EXCLUDED.entry_date,
+            description = EXCLUDED.description
+        `);
+        await pool.query(`
+          INSERT INTO pe_fees
+            (id, company_id, period_start, period_end, amount, status, due_date, notes)
+          VALUES
+            ('pefee-hb-2025-07',          'peco-hb-svc-2025',          '2025-07-01','2025-07-31', 10400, 'invoiced', '2025-08-01', 'Monthly management fee — 51% SVC R5304 | 49% partner R5096'),
+            ('pefee-sas-2025-07',         'peco-sas-svc-2025',         '2025-07-01','2025-07-31', 40000, 'invoiced', '2025-08-01', 'Monthly management fee — 51% SVC R20400 | 49% partner R19600'),
+            ('pefee-gma-2025-07',         'peco-gma-svc-2025',         '2025-07-01','2025-07-31', 40000, 'invoiced', '2025-08-01', 'Monthly management fee — 51% SVC R20400 | 49% partner R19600'),
+            ('pefee-edelsenz-2025-08',    'peco-edelsenz-svc-2025',    '2025-08-01','2025-08-31', 6500,  'invoiced', '2025-09-01', 'Monthly management fee — 51% SVC R3315 | 49% partner R3185'),
+            ('pefee-steelstudio-2026-08', 'peco-steelstudio-svc-2026', '2026-08-01','2026-08-31', 10500, 'invoiced', '2026-09-01', 'Monthly management fee — 51% SVC R5355 | 49% partner R5145')
+          ON CONFLICT (id) DO UPDATE SET
+            company_id   = EXCLUDED.company_id,
+            period_start = EXCLUDED.period_start,
+            period_end   = EXCLUDED.period_end,
+            amount       = EXCLUDED.amount,
+            status       = EXCLUDED.status,
+            due_date     = EXCLUDED.due_date,
+            notes        = EXCLUDED.notes
+        `);
+        console.log('✅ PE portfolio companies seeded.');
+      } catch (peErr) {
+        console.warn('⚠️  PE portfolio seed warning:', peErr.message);
       }
-    } catch (backfillErr) {
-      console.warn('⚠️  investor_id repair warning:', backfillErr.message);
-    }
 
-    // 2a. Always seed PE portfolio companies (idempotent — ON CONFLICT DO UPDATE)
-    try {
-      await pool.query(`
-        INSERT INTO pe_companies
-          (id, name, sector, status, aum_amount, entry_date, description)
-        VALUES
-          ('peco-hb-svc-2025',       'Hillermann Brothers Properties Proprietary Limited', 'Property',      'portfolio', 300000000, '2025-07-01', 'Property holding company partnered with SV Capital.'),
-          ('peco-sas-svc-2025',      'Scientific Aquatic Services Pty Ltd',                'Other',         'portfolio', 1000,       '2025-07-01', 'Aquatic services company partnered with SV Capital.'),
-          ('peco-gma-svc-2025',      'GM Associates Proprietary Limited',                  'Other',         'portfolio', 50000000,   '2025-07-01', 'Associates firm partnered with SV Capital.'),
-          ('peco-edelsenz-svc-2025', 'EdelSenz Proprietary Limited',                       'Other',         'portfolio', 25000000,   '2025-08-01', 'Technology and services company partnered with SV Capital.'),
-          ('peco-steelstudio-svc-2026','New Steel Studio Proprietary Limited',             'Manufacturing', 'portfolio', NULL,       '2026-08-01', 'Steel manufacturing company partnered with SV Capital.')
-        ON CONFLICT (id) DO UPDATE SET
-          name       = EXCLUDED.name,
-          sector     = EXCLUDED.sector,
-          status     = EXCLUDED.status,
-          aum_amount = EXCLUDED.aum_amount,
-          entry_date = EXCLUDED.entry_date,
-          description = EXCLUDED.description
-      `);
-      await pool.query(`
-        INSERT INTO pe_fees
-          (id, company_id, period_start, period_end, amount, status, due_date, notes)
-        VALUES
-          ('pefee-hb-2025-07',          'peco-hb-svc-2025',          '2025-07-01','2025-07-31', 10400, 'invoiced', '2025-08-01', 'Monthly management fee — 51% SVC R5304 | 49% partner R5096'),
-          ('pefee-sas-2025-07',         'peco-sas-svc-2025',         '2025-07-01','2025-07-31', 40000, 'invoiced', '2025-08-01', 'Monthly management fee — 51% SVC R20400 | 49% partner R19600'),
-          ('pefee-gma-2025-07',         'peco-gma-svc-2025',         '2025-07-01','2025-07-31', 40000, 'invoiced', '2025-08-01', 'Monthly management fee — 51% SVC R20400 | 49% partner R19600'),
-          ('pefee-edelsenz-2025-08',    'peco-edelsenz-svc-2025',    '2025-08-01','2025-08-31', 6500,  'invoiced', '2025-09-01', 'Monthly management fee — 51% SVC R3315 | 49% partner R3185'),
-          ('pefee-steelstudio-2026-08', 'peco-steelstudio-svc-2026', '2026-08-01','2026-08-31', 10500, 'invoiced', '2026-09-01', 'Monthly management fee — 51% SVC R5355 | 49% partner R5145')
-        ON CONFLICT (id) DO UPDATE SET
-          company_id   = EXCLUDED.company_id,
-          period_start = EXCLUDED.period_start,
-          period_end   = EXCLUDED.period_end,
-          amount       = EXCLUDED.amount,
-          status       = EXCLUDED.status,
-          due_date     = EXCLUDED.due_date,
-          notes        = EXCLUDED.notes
-      `);
-      console.log('✅ PE portfolio companies seeded.');
-    } catch (peErr) {
-      console.warn('⚠️  PE portfolio seed warning:', peErr.message);
-    }
+      // 2b-pre. Seed standard SV Capital courses (idempotent — ON CONFLICT DO NOTHING)
+      await seedStandardCourses(pool);
+    });
 
-    // 2b-pre. Seed standard SV Capital courses (idempotent — ON CONFLICT DO NOTHING)
-    await seedStandardCourses(pool);
+    await step("2b. Ensure change requests app key", async () => {
+      // 2b. Ensure change_requests app key is in every employee's app_access array
+      try {
+        await pool.query(`
+          UPDATE employees
+          SET app_access = array_append(app_access, 'change_requests')
+          WHERE app_access IS NOT NULL
+            AND NOT (app_access @> ARRAY['change_requests']::TEXT[])
+        `);
+        console.log('✅ change_requests app access ensured for all employees.');
+      } catch (crErr) {
+        console.warn('⚠️  change_requests access patch warning:', crErr.message);
+      }
+    });
 
-    // 2b. Ensure change_requests app key is in every employee's app_access array
-    try {
-      await pool.query(`
-        UPDATE employees
-        SET app_access = array_append(app_access, 'change_requests')
-        WHERE app_access IS NOT NULL
-          AND NOT (app_access @> ARRAY['change_requests']::TEXT[])
-      `);
-      console.log('✅ change_requests app access ensured for all employees.');
-    } catch (crErr) {
-      console.warn('⚠️  change_requests access patch warning:', crErr.message);
-    }
+    await step("2c. Grant moolalend access to CEOs", async () => {
+      // 2c. Grant moolalend access to CEOs, Finance Managers, and Executives
+      try {
+        await pool.query(`
+          UPDATE employees
+          SET app_access = array_append(app_access, 'moolalend')
+          WHERE app_access IS NOT NULL
+            AND NOT (app_access @> ARRAY['moolalend']::TEXT[])
+            AND (level = 'executive' OR role IN ('CEO', 'Finance Manager'))
+        `);
+        console.log('✅ moolalend app access granted to eligible employees.');
+      } catch (mlErr) {
+        console.warn('⚠️  moolalend access patch warning:', mlErr.message);
+      }
+    });
 
-    // 2c. Grant moolalend access to CEOs, Finance Managers, and Executives
-    try {
-      await pool.query(`
-        UPDATE employees
-        SET app_access = array_append(app_access, 'moolalend')
-        WHERE app_access IS NOT NULL
-          AND NOT (app_access @> ARRAY['moolalend']::TEXT[])
-          AND (level = 'executive' OR role IN ('CEO', 'Finance Manager'))
-      `);
-      console.log('✅ moolalend app access granted to eligible employees.');
-    } catch (mlErr) {
-      console.warn('⚠️  moolalend access patch warning:', mlErr.message);
-    }
+    await step("2d. Migrate change requests id from", async () => {
+      // 2d. Migrate change_requests.id from UUID to TEXT if created before fix
+      try {
+        await pool.query(`
+          DO $$
+          BEGIN
+            IF EXISTS (
+              SELECT 1 FROM information_schema.columns
+              WHERE table_name = 'change_requests'
+                AND column_name = 'id'
+                AND data_type = 'uuid'
+            ) THEN
+              ALTER TABLE change_requests ALTER COLUMN id TYPE TEXT;
+            END IF;
+          END $$;
+        `);
+      } catch (migrErr) {
+        console.warn('⚠️  change_requests id migration warning:', migrErr.message);
+      }
+    });
 
-    // 2d. Migrate change_requests.id from UUID to TEXT if created before fix
-    try {
-      await pool.query(`
-        DO $$
-        BEGIN
-          IF EXISTS (
-            SELECT 1 FROM information_schema.columns
-            WHERE table_name = 'change_requests'
-              AND column_name = 'id'
-              AND data_type = 'uuid'
-          ) THEN
-            ALTER TABLE change_requests ALTER COLUMN id TYPE TEXT;
-          END IF;
-        END $$;
-      `);
-    } catch (migrErr) {
-      console.warn('⚠️  change_requests id migration warning:', migrErr.message);
-    }
+    await step("2. Ensure the COO account exists", async () => {
+      // 2. Ensure the COO account exists — upsert so existing users are never wiped
+      const { rows: existing } = await pool.query(
+        "SELECT id FROM users WHERE email = 'coo@svcapital.co.za' LIMIT 1"
+      );
 
-    // 2. Ensure the COO account exists — upsert so existing users are never wiped
-    const { rows: existing } = await pool.query(
-      "SELECT id FROM users WHERE email = 'coo@svcapital.co.za' LIMIT 1"
-    );
-
-    if (existing.length > 0) {
-      const { rows: count } = await pool.query('SELECT COUNT(*) FROM users');
-      console.log(`✅ Database already provisioned (${count[0].count} users) — skipping seed.`);
-      return;
-    }
-
-    /* COO row missing. On a database that already holds users this is not a
-       first-time boot — the account was renamed or removed — and throwing here
-       aborts auto-setup on every single container start. Only a genuinely
-       empty users table needs COO_PASSWORD. */
-    const cooPassword = process.env.COO_PASSWORD;
-    if (!cooPassword) {
-      const { rows: c } = await pool.query('SELECT COUNT(*)::int AS n FROM users');
-      if (c[0].n > 0) {
-        console.warn(`⚠️  COO account not found but ${c[0].n} users exist — skipping seed. Set COO_PASSWORD to provision one.`);
+      if (existing.length > 0) {
+        const { rows: count } = await pool.query('SELECT COUNT(*) FROM users');
+        console.log(`✅ Database already provisioned (${count[0].count} users) — skipping seed.`);
         return;
       }
-      throw new Error('[setup] COO_PASSWORD env var must be set before seeding the database');
-    }
 
-    console.log('🌱 Provisioning COO account…');
-    const cooHash = await bcrypt.hash(cooPassword, 12);
-
-    await pool.query(`
-      INSERT INTO users (email, password_hash, role, first_name, last_name)
-      VALUES ('coo@svcapital.co.za', $1, 'director', 'COO', 'SV Capital')
-      ON CONFLICT (email) DO UPDATE SET
-        password_hash = EXCLUDED.password_hash,
-        role          = 'director',
-        is_active     = true
-    `, [cooHash]);
-
-    // 4. Seed investment pools (operational reference data — not personal)
-    await pool.query(`
-      INSERT INTO investment_pools
-        (id, name, product_type, status, target_amount, raised_amount,
-         min_investment, annual_rate, term_months, start_date, end_date,
-         description, risk_level, investor_count)
-      VALUES
-        ('POOL-001','Cattle Finance Q1 2024','cattle','closed',2000000,1980000,5000,0.1483,6,
-         '2024-01-01','2024-07-01','6-month cattle finance cycle — Limpopo region.','medium',8),
-        ('POOL-002','Solar Energy 7-Year','solar','open',5000000,3250000,10000,0.2140,84,
-         '2024-03-01','2031-03-01','Premium 7-year solar PPA — guaranteed offtake.','low',12),
-        ('POOL-003','SMME Short-Term Q2','smme','open',1000000,870000,1000,0.1392,5,
-         '2024-04-01','2024-09-01','Short-term SMME bridge lending.','high',15),
-        ('POOL-004','Delivery Bikes Cycle 3','delivery_bikes','open',1500000,1100000,2500,0.1600,12,
-         '2024-02-01','2025-02-01','E-commerce delivery fleet.','medium',10),
-        ('POOL-005','Cattle Finance Q2 2024','cattle','open',2500000,1200000,5000,0.1500,6,
-         '2024-07-01','2025-01-01','Second cattle cycle — Mpumalanga herd.','medium',5),
-        ('POOL-006','Solar Energy 5-Year','solar','open',3000000,750000,10000,0.0641,60,
-         '2024-06-01','2029-06-01','Community solar energy 5-year PPA.','low',7),
-        ('POOL-007','SMME Q3 Batch','smme','open',800000,400000,1000,0.1392,5,
-         '2024-08-01','2025-01-01','Q3 SMME lending pool.','high',9),
-        ('POOL-008','Solar 6-Year Premium','solar','open',4000000,500000,10000,0.1553,72,
-         '2024-09-01','2030-09-01','6-year solar with mid-term liquidity window.','low',3),
-        ('POOL-009','Cattle Q3 — Karoo Region','cattle','open',1800000,200000,5000,0.1483,6,
-         '2024-10-01','2025-04-01','Karoo region cattle cycle.','medium',2),
-        ('POOL-010','Delivery Bikes Cycle 4','delivery_bikes','open',2000000,100000,2500,0.1800,12,
-         '2024-11-01','2025-11-01','Expanded fleet — last-mile logistics.','medium',1)
-      ON CONFLICT (id) DO NOTHING
-    `);
-
-    // 5. Seed platform settings
-    await pool.query(`
-      INSERT INTO platform_settings (key, value, description) VALUES
-        ('platform_name',       'SV Capital',                    'Platform display name'),
-        ('company_name',        'SmartVest Financial Services',  'Legal company name'),
-        ('fsp_number',          'FSP #52449',                    'FSCA FSP licence number'),
-        ('support_email',       'support@svcapital.co.za',       'Support email address'),
-        ('min_investment',      '1000',                          'Global minimum investment (ZAR)'),
-        ('kyc_required',        'true',                          'KYC required before investment'),
-        ('maintenance_mode',    'false',                         'Maintenance mode'),
-        ('currency',            'ZAR',                           'Platform currency'),
-        ('eva_rate',            '0.15',                          'EVA rate — % of net-VAT upfront fee allocated to the referring employee'),
-        ('resend_emails_enabled','true',                         'Set to false to suppress all outbound Resend emails (maintenance / testing)')
-      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
-    `);
-
-    // 6. Seed COO employee record (for team/login.html staff portal access)
-    await pool.query(`
-      INSERT INTO employees
-        (id, first_name, last_name, email, role, level, department,
-         status, id_number, avatar_initials, avatar_color, xp_points, hire_date)
-      VALUES
-        ('EMP-COO-001', 'COO', 'SV Capital', 'coo@svcapital.co.za',
-         'CEO', 'executive', 'Executive',
-         'active', '0000000009001', 'CO', '#eda5ff', 0, NOW())
-      ON CONFLICT (email) DO UPDATE SET
-        role = 'CEO', level = 'executive', department = 'Executive',
-        status = 'active', id_number = '0000000009001',
-        avatar_initials = 'CO', avatar_color = '#eda5ff'
-    `);
-
-    // 7. Backfill investments.end_date to match pool's canonical maturity_date.
-    //    The portal previously computed end_date client-side (today + term_months),
-    //    causing each investor in the same pool to have a different maturity date.
-    try {
-      const { rowCount } = await pool.query(`
-        UPDATE investments i
-        SET end_date = ip.maturity_date
-        FROM investment_pools ip
-        WHERE ip.id = i.pool_id
-          AND ip.maturity_date IS NOT NULL
-          AND i.status IN ('active', 'waitlist')
-          AND (i.end_date IS DISTINCT FROM ip.maturity_date)
-      `);
-      if (rowCount > 0) console.log(`✅ Backfilled maturity dates for ${rowCount} investment(s).`);
-    } catch (bfErr) {
-      console.warn('⚠️  Maturity date backfill skipped:', bfErr.message);
-    }
-
-    // 8. Migrate product_type 'smme' → 'short_term' everywhere.
-    //    SMME products are now unified under the Short Term Investment type.
-    //    Safe to run repeatedly — WHERE clause prevents no-op re-runs.
-    try {
-      const { rowCount: poolRows } = await pool.query(`
-        UPDATE investment_pools SET product_type = 'short_term' WHERE product_type = 'smme'
-      `);
-      const { rowCount: invRows } = await pool.query(`
-        UPDATE investments SET product_type = 'short_term' WHERE product_type = 'smme'
-      `);
-      const { rowCount: prodRows } = await pool.query(`
-        UPDATE products SET product_type = 'short_term' WHERE product_type = 'smme'
-      `).catch(() => ({ rowCount: 0 }));
-      const total = poolRows + invRows + prodRows;
-      if (total > 0) console.log(`✅ Migrated smme→short_term: ${poolRows} pools, ${invRows} investments, ${prodRows} products.`);
-    } catch (bfErr) {
-      console.warn('⚠️  smme→short_term migration skipped:', bfErr.message);
-    }
-
-    // 9. Backfill cattle_cycles.cycle_start_date from invoice_date.
-    //    "Invoice Date_" in the import CSV is the cycle start date — previously
-    //    it only populated invoice_date; now we also copy it to cycle_start_date.
-    try {
-      const { rowCount } = await pool.query(`
-        UPDATE cattle_cycles
-        SET cycle_start_date = invoice_date
-        WHERE invoice_date IS NOT NULL
-          AND cycle_start_date IS NULL
-      `);
-      if (rowCount > 0) console.log(`✅ Backfilled cycle_start_date for ${rowCount} cattle cycle(s).`);
-    } catch (bfErr) {
-      console.warn('⚠️  Cattle cycle start date backfill skipped:', bfErr.message);
-    }
-
-    // 10. Fix Bike Fleet Investment 22 maturity date (UTC save bug: 31 Jul stored as 30 Jul).
-    //     Corrects the pool and propagates to all active investments in that pool.
-    try {
-      const { rowCount: poolFix } = await pool.query(`
-        UPDATE investment_pools
-           SET maturity_date = '2026-07-31', updated_at = NOW()
-         WHERE name ILIKE '%Bike Fleet Investment 22%'
-           AND maturity_date = '2026-07-30'
-      `);
-      if (poolFix > 0) {
-        const { rowCount: invFix } = await pool.query(`
-          UPDATE investments i
-             SET end_date = '2026-07-31', updated_at = NOW()
-            FROM investment_pools ip
-           WHERE ip.id = i.pool_id
-             AND ip.name ILIKE '%Bike Fleet Investment 22%'
-             AND i.end_date = '2026-07-30'
-        `);
-        console.log(`✅ Fixed Bike Fleet Investment 22 maturity date: ${poolFix} pool(s), ${invFix} investment(s).`);
+      /* COO row missing. On a database that already holds users this is not a
+         first-time boot — the account was renamed or removed — and throwing here
+         aborts auto-setup on every single container start. Only a genuinely
+         empty users table needs COO_PASSWORD. */
+      const cooPassword = process.env.COO_PASSWORD;
+      if (!cooPassword) {
+        const { rows: c } = await pool.query('SELECT COUNT(*)::int AS n FROM users');
+        if (c[0].n > 0) {
+          console.warn(`⚠️  COO account not found but ${c[0].n} users exist — skipping seed. Set COO_PASSWORD to provision one.`);
+          return;
+        }
+        throw new Error('[setup] COO_PASSWORD env var must be set before seeding the database');
       }
-    } catch (bfErr) {
-      console.warn('⚠️  Bike Fleet Investment 22 maturity fix skipped:', bfErr.message);
-    }
 
-    console.log('✅ Provisioning complete — COO account ready.');
+      console.log('🌱 Provisioning COO account…');
+      const cooHash = await bcrypt.hash(cooPassword, 12);
+
+      await pool.query(`
+        INSERT INTO users (email, password_hash, role, first_name, last_name)
+        VALUES ('coo@svcapital.co.za', $1, 'director', 'COO', 'SV Capital')
+        ON CONFLICT (email) DO UPDATE SET
+          password_hash = EXCLUDED.password_hash,
+          role          = 'director',
+          is_active     = true
+      `, [cooHash]);
+    });
+
+    await step("4. Seed investment pools operational reference", async () => {
+      // 4. Seed investment pools (operational reference data — not personal)
+      await pool.query(`
+        INSERT INTO investment_pools
+          (id, name, product_type, status, target_amount, raised_amount,
+           min_investment, annual_rate, term_months, start_date, end_date,
+           description, risk_level, investor_count)
+        VALUES
+          ('POOL-001','Cattle Finance Q1 2024','cattle','closed',2000000,1980000,5000,0.1483,6,
+           '2024-01-01','2024-07-01','6-month cattle finance cycle — Limpopo region.','medium',8),
+          ('POOL-002','Solar Energy 7-Year','solar','open',5000000,3250000,10000,0.2140,84,
+           '2024-03-01','2031-03-01','Premium 7-year solar PPA — guaranteed offtake.','low',12),
+          ('POOL-003','SMME Short-Term Q2','smme','open',1000000,870000,1000,0.1392,5,
+           '2024-04-01','2024-09-01','Short-term SMME bridge lending.','high',15),
+          ('POOL-004','Delivery Bikes Cycle 3','delivery_bikes','open',1500000,1100000,2500,0.1600,12,
+           '2024-02-01','2025-02-01','E-commerce delivery fleet.','medium',10),
+          ('POOL-005','Cattle Finance Q2 2024','cattle','open',2500000,1200000,5000,0.1500,6,
+           '2024-07-01','2025-01-01','Second cattle cycle — Mpumalanga herd.','medium',5),
+          ('POOL-006','Solar Energy 5-Year','solar','open',3000000,750000,10000,0.0641,60,
+           '2024-06-01','2029-06-01','Community solar energy 5-year PPA.','low',7),
+          ('POOL-007','SMME Q3 Batch','smme','open',800000,400000,1000,0.1392,5,
+           '2024-08-01','2025-01-01','Q3 SMME lending pool.','high',9),
+          ('POOL-008','Solar 6-Year Premium','solar','open',4000000,500000,10000,0.1553,72,
+           '2024-09-01','2030-09-01','6-year solar with mid-term liquidity window.','low',3),
+          ('POOL-009','Cattle Q3 — Karoo Region','cattle','open',1800000,200000,5000,0.1483,6,
+           '2024-10-01','2025-04-01','Karoo region cattle cycle.','medium',2),
+          ('POOL-010','Delivery Bikes Cycle 4','delivery_bikes','open',2000000,100000,2500,0.1800,12,
+           '2024-11-01','2025-11-01','Expanded fleet — last-mile logistics.','medium',1)
+        ON CONFLICT (id) DO NOTHING
+      `);
+    });
+
+    await step("5. Seed platform settings", async () => {
+      // 5. Seed platform settings
+      await pool.query(`
+        INSERT INTO platform_settings (key, value, description) VALUES
+          ('platform_name',       'SV Capital',                    'Platform display name'),
+          ('company_name',        'SmartVest Financial Services',  'Legal company name'),
+          ('fsp_number',          'FSP #52449',                    'FSCA FSP licence number'),
+          ('support_email',       'support@svcapital.co.za',       'Support email address'),
+          ('min_investment',      '1000',                          'Global minimum investment (ZAR)'),
+          ('kyc_required',        'true',                          'KYC required before investment'),
+          ('maintenance_mode',    'false',                         'Maintenance mode'),
+          ('currency',            'ZAR',                           'Platform currency'),
+          ('eva_rate',            '0.15',                          'EVA rate — % of net-VAT upfront fee allocated to the referring employee'),
+          ('resend_emails_enabled','true',                         'Set to false to suppress all outbound Resend emails (maintenance / testing)')
+        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+      `);
+    });
+
+    await step("6. Seed COO employee record for", async () => {
+      // 6. Seed COO employee record (for team/login.html staff portal access)
+      await pool.query(`
+        INSERT INTO employees
+          (id, first_name, last_name, email, role, level, department,
+           status, id_number, avatar_initials, avatar_color, xp_points, hire_date)
+        VALUES
+          ('EMP-COO-001', 'COO', 'SV Capital', 'coo@svcapital.co.za',
+           'CEO', 'executive', 'Executive',
+           'active', '0000000009001', 'CO', '#eda5ff', 0, NOW())
+        ON CONFLICT (email) DO UPDATE SET
+          role = 'CEO', level = 'executive', department = 'Executive',
+          status = 'active', id_number = '0000000009001',
+          avatar_initials = 'CO', avatar_color = '#eda5ff'
+      `);
+    });
+
+    await step("7. Backfill investments end date to", async () => {
+      // 7. Backfill investments.end_date to match pool's canonical maturity_date.
+      //    The portal previously computed end_date client-side (today + term_months),
+      //    causing each investor in the same pool to have a different maturity date.
+      try {
+        const { rowCount } = await pool.query(`
+          UPDATE investments i
+          SET end_date = ip.maturity_date
+          FROM investment_pools ip
+          WHERE ip.id = i.pool_id
+            AND ip.maturity_date IS NOT NULL
+            AND i.status IN ('active', 'waitlist')
+            AND (i.end_date IS DISTINCT FROM ip.maturity_date)
+        `);
+        if (rowCount > 0) console.log(`✅ Backfilled maturity dates for ${rowCount} investment(s).`);
+      } catch (bfErr) {
+        console.warn('⚠️  Maturity date backfill skipped:', bfErr.message);
+      }
+    });
+
+    await step("8. Migrate product type smme short", async () => {
+      // 8. Migrate product_type 'smme' → 'short_term' everywhere.
+      //    SMME products are now unified under the Short Term Investment type.
+      //    Safe to run repeatedly — WHERE clause prevents no-op re-runs.
+      try {
+        const { rowCount: poolRows } = await pool.query(`
+          UPDATE investment_pools SET product_type = 'short_term' WHERE product_type = 'smme'
+        `);
+        const { rowCount: invRows } = await pool.query(`
+          UPDATE investments SET product_type = 'short_term' WHERE product_type = 'smme'
+        `);
+        const { rowCount: prodRows } = await pool.query(`
+          UPDATE products SET product_type = 'short_term' WHERE product_type = 'smme'
+        `).catch(() => ({ rowCount: 0 }));
+        const total = poolRows + invRows + prodRows;
+        if (total > 0) console.log(`✅ Migrated smme→short_term: ${poolRows} pools, ${invRows} investments, ${prodRows} products.`);
+      } catch (bfErr) {
+        console.warn('⚠️  smme→short_term migration skipped:', bfErr.message);
+      }
+    });
+
+    await step("9. Backfill cattle cycles cycle start", async () => {
+      // 9. Backfill cattle_cycles.cycle_start_date from invoice_date.
+      //    "Invoice Date_" in the import CSV is the cycle start date — previously
+      //    it only populated invoice_date; now we also copy it to cycle_start_date.
+      try {
+        const { rowCount } = await pool.query(`
+          UPDATE cattle_cycles
+          SET cycle_start_date = invoice_date
+          WHERE invoice_date IS NOT NULL
+            AND cycle_start_date IS NULL
+        `);
+        if (rowCount > 0) console.log(`✅ Backfilled cycle_start_date for ${rowCount} cattle cycle(s).`);
+      } catch (bfErr) {
+        console.warn('⚠️  Cattle cycle start date backfill skipped:', bfErr.message);
+      }
+    });
+
+    await step("10. Fix Bike Fleet Investment 22", async () => {
+      // 10. Fix Bike Fleet Investment 22 maturity date (UTC save bug: 31 Jul stored as 30 Jul).
+      //     Corrects the pool and propagates to all active investments in that pool.
+      try {
+        const { rowCount: poolFix } = await pool.query(`
+          UPDATE investment_pools
+             SET maturity_date = '2026-07-31', updated_at = NOW()
+           WHERE name ILIKE '%Bike Fleet Investment 22%'
+             AND maturity_date = '2026-07-30'
+        `);
+        if (poolFix > 0) {
+          const { rowCount: invFix } = await pool.query(`
+            UPDATE investments i
+               SET end_date = '2026-07-31', updated_at = NOW()
+              FROM investment_pools ip
+             WHERE ip.id = i.pool_id
+               AND ip.name ILIKE '%Bike Fleet Investment 22%'
+               AND i.end_date = '2026-07-30'
+          `);
+          console.log(`✅ Fixed Bike Fleet Investment 22 maturity date: ${poolFix} pool(s), ${invFix} investment(s).`);
+        }
+      } catch (bfErr) {
+        console.warn('⚠️  Bike Fleet Investment 22 maturity fix skipped:', bfErr.message);
+      }
+
+    });
 
   } catch (err) {
+    // Anything outside a step — the runner itself, or a connection that dies
+    // mid-setup. Still not fatal, but reported alongside the rest.
+    failures.push({ name: 'auto-setup', message: err.message });
     console.error('❌ Auto-setup error:', err.message);
-    // Don't crash the server — log the error and continue
   }
+
+  /* Say plainly what the schema is. The server still boots either way — a
+     database that is 90% migrated serves most traffic, and refusing to start
+     would turn a partial problem into an outage — but "some of this did not
+     apply" must not be something you have to go looking for. */
+  if (failures.length) {
+    console.error(`\n❌ [setup] ${failures.length} step${failures.length === 1 ? '' : 's'} did not apply:`);
+    for (const f of failures) console.error(`   · ${f.name} — ${f.message}`);
+    console.error('   The server is starting anyway. Whatever those steps add is MISSING.\n');
+  } else {
+    console.log('✅ [setup] all steps applied.');
+  }
+
+  _lastResult = { ok: failures.length === 0, failures, at: new Date().toISOString() };
+  return _lastResult;
 }
+
+/* The outcome of the last run, for the readiness endpoint. A log line scrolls
+   away; a health check does not. */
+let _lastResult = { ok: null, failures: [], at: null };
+autoSetup.lastResult = () => _lastResult;
 
 /* ─────────────────────────────────────────────────────────────
    Standard SV Capital course library — seeded once, idempotent
