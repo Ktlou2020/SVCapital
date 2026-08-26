@@ -924,10 +924,7 @@ function renderRecentInvestments() {
       </div></td>
       <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
       <td class="td-gold fw-700 clip">${Utils.rand(inv.amount)}</td>
-      <td class="td-green clip">${(() => {
-        const _r = Utils.effectiveRate({ ...inv, pool_actual_rate: inv.pool_actual_rate ?? pool?.actual_rate });
-        return _r != null ? Utils.pct(_r) : '—';
-      })()}</td>
+      <td class="clip">${Utils.rateCell({ ...inv, pool_actual_rate: inv.pool_actual_rate ?? pool?.actual_rate })}</td>
       <td>${Utils.statusBadge(inv.status)}</td>
       <td class="td-muted clip">${Utils.date(inv.start_date || inv.created_at)}</td>
     </tr>`;
@@ -2036,6 +2033,7 @@ async function viewInvestor(id) {
       API._fetch('GET', 'tables/transactions', null, { investor_id: id, limit: 2000 }),
     ]);
     if (invstRes?.data?.length) invsts = invstRes.data;
+    _investorInvestments = invsts;
     if (txnRes?.data?.length)  txns   = txnRes.data;
   } catch (_) { /* fall back to STATE data already set above */ }
 
@@ -2331,15 +2329,15 @@ async function viewInvestor(id) {
         <thead style="position:sticky;top:0;z-index:1"><tr><th style="min-width:160px">Pool</th><th style="min-width:130px">Product</th><th>Date Invested</th><th>Amount</th><th>Rate</th><th>Status</th><th>Maturity</th><th></th></tr></thead>
         <tbody>${invsts.length ? invsts.map(i => {
           const pi = Utils.productInfo(i.product_type);
-          return `<tr>
+          return `<tr style="cursor:pointer" onclick='viewInvestmentDetail(${JSON.stringify(i.id)},${JSON.stringify(id)})' title="Open investment detail">
             <td class="td-strong" title="${_esc(i.pool_name||'')}">${_esc(i.pool_name)||'—'}</td>
             <td title="${_esc(pi.label)}"><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
             <td class="td-muted">${Utils.date(i.start_date||i.created_at)}</td>
             <td class="td-gold fw-700">${Utils.rand(i.amount)}</td>
-            <td class="td-green">${(() => { const _r = Utils.effectiveRate(i); return _r != null ? Utils.pct(_r) : '—'; })()}</td>
+            <td>${Utils.rateCell(i)}</td>
             <td>${Utils.statusBadge(i.status)}</td>
             <td class="td-muted">${Utils.date(i.end_date)}</td>
-            <td><button class="btn btn--sm" style="background:rgba(237,165,255,.1);color:#eda5ff;border:1px solid rgba(237,165,255,.25)" onclick='openMoveInvestment(${JSON.stringify(i.id)},${JSON.stringify(i.pool_id)})' title="Move to different pool"><i class="fa-solid fa-right-left"></i></button></td>
+            <td><button class="btn btn--sm" style="background:rgba(237,165,255,.1);color:#eda5ff;border:1px solid rgba(237,165,255,.25)" onclick='event.stopPropagation();openMoveInvestment(${JSON.stringify(i.id)},${JSON.stringify(i.pool_id)})' title="Move to different pool"><i class="fa-solid fa-right-left"></i></button></td>
           </tr>`;
         }).join(''):'<tr><td colspan="8" class="text-center text-muted" style="padding:16px">No investments on record</td></tr>'}</tbody>
       </table>
@@ -4989,7 +4987,12 @@ function renderPoolsGrid() {
         </div>
 
         <div class="pool-card__stats">
-          <div class="pool-stat"><span class="pool-stat__label">${p.actual_rate > 0 ? 'Achieved' : 'Rate'}</span><span class="pool-stat__value pool-stat__value--gold">${Utils.pct(p.actual_rate > 0 ? p.actual_rate : p.annual_rate)}</span></div>
+          ${(() => {
+            // Through the same helper as the investments list, so the pool and
+            // the investments inside it cannot disagree about the same figure.
+            const _b = Utils.rateBasis({ pool_actual_rate: p.actual_rate, annual_rate: p.annual_rate });
+            return `<div class="pool-stat"><span class="pool-stat__label">${_b && _b.posted ? 'Achieved' : 'Rate'}</span><span class="pool-stat__value pool-stat__value--gold">${_b ? Utils.pct(_b.rate) : '—'}</span></div>`;
+          })()}
           <div class="pool-stat" style="cursor:pointer" onclick='viewPoolInvestors(${JSON.stringify(p.id)})' title="Click to view investors">
             <span class="pool-stat__label">Investors</span>
             <span class="pool-stat__value" style="color:var(--gold);text-decoration:underline dotted">${p.live_investor_count ?? p.investor_count ?? 0}</span>
@@ -6066,24 +6069,24 @@ function renderInvestmentsTable() {
     const investor   = STATE.investors.find(inv => inv.id === i.investor_id);
     const invName    = i.investor_name || (investor ? `${investor.first_name} ${investor.last_name}` : '—');
     const investDate = i.start_date || i.created_at;
-    return `<tr tabindex="0">
-      <td style="width:36px;text-align:center"><input type="checkbox" class="inv-select-cb" value="${i.id}" onchange="_invUpdateBulkBar()" /></td>
+    return `<tr tabindex="0" style="cursor:pointer" onclick='viewInvestmentDetail(${JSON.stringify(i.id)})' title="Open investment detail">
+      <td style="width:36px;text-align:center" onclick="event.stopPropagation()"><input type="checkbox" class="inv-select-cb" value="${i.id}" onchange="_invUpdateBulkBar()" /></td>
       <td>
-        <div class="td-strong clip" style="cursor:pointer" onclick="viewInvestor('${i.investor_id}')">${invName}</div>
+        <div class="td-strong clip" style="cursor:pointer" onclick="event.stopPropagation();viewInvestor('${i.investor_id}')">${invName}</div>
         <div class="clip" style="font-size:0.7rem;font-family:monospace;color:var(--text-muted)">${i.investor_id||'—'}</div>
       </td>
       <td class="td-muted clip">${Utils.date(investDate)}</td>
       <td>${i.pool_id
-        ? `<div class="td-strong clip" style="cursor:pointer;color:var(--gold)" onclick="viewPoolInvestors('${i.pool_id}')" title="${_esc(i.pool_name||i.pool_id)}">${i.pool_name||i.pool_id}</div>`
+        ? `<div class="td-strong clip" style="cursor:pointer;color:var(--gold)" onclick="event.stopPropagation();viewPoolInvestors('${i.pool_id}')" title="${_esc(i.pool_name||i.pool_id)}">${i.pool_name||i.pool_id}</div>`
         : `<div class="td-muted clip">—</div>`
       }</td>
       <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
       <td class="td-gold fw-700">${Utils.rand(i.amount)}</td>
-      <td class="td-green">${(() => { const _r = Utils.effectiveRate(i); return _r != null ? Utils.pct(_r) : '—'; })()}</td>
+      <td>${Utils.rateCell(i)}</td>
       <td>${Utils.statusBadge(i.status)}</td>
       <td class="td-muted">${Utils.date(i.end_date)}</td>
       <td>
-        <button class="btn btn--secondary btn--sm" onclick='viewInvestmentDetail(${JSON.stringify(i.id)})'><i class="fa-solid fa-eye"></i></button>
+        <button class="btn btn--secondary btn--sm" onclick='event.stopPropagation();viewInvestmentDetail(${JSON.stringify(i.id)})'><i class="fa-solid fa-eye"></i></button>
       </td>
     </tr>`;
   }).join('');
@@ -6179,9 +6182,51 @@ function setupInvestmentFilters() {
   if (sortSel) sortSel.addEventListener('change', filter);
 }
 
-function viewInvestmentDetail(id) {
-  const inv = STATE.investments.find(i => i.id === id);
-  if (!inv) return;
+/* Investments belonging to the investor whose detail modal is open. That list
+   comes from its own API call and is not necessarily a subset of
+   STATE.investments, which is paged — so a row clicked there can be absent
+   from STATE entirely. */
+let _investorInvestments = [];
+
+/* Open the investment detail.
+
+   backTo, when given an investor id, renders a way back. This modal reuses
+   investorDetailModal's own title and body elements, so opening it from inside
+   the investor view replaces that view — without a return path the close
+   button drops the user out of the investor entirely and they have to search
+   for them again. */
+async function viewInvestmentDetail(id, backTo) {
+  let inv = STATE.investments.find(i => i.id === id)
+         || _investorInvestments.find(i => i.id === id);
+
+  if (!inv) {
+    // Not in either cache — fetch the one record. The single-record endpoint
+    // joins the pool's posted rate on, so the rate resolves the same way here
+    // as it does in the list.
+    const titleEl = document.getElementById('invDetailTitle');
+    const bodyEl  = document.getElementById('invDetailBody');
+    if (titleEl) titleEl.textContent = 'Investment';
+    if (bodyEl)  bodyEl.innerHTML = '<div style="text-align:center;padding:48px"><i class="fa-solid fa-spinner fa-spin fa-2x" style="color:var(--text-muted)"></i></div>';
+    Modal.open('investorDetailModal');
+    try {
+      const res = await API._fetch('GET', `tables/investments/${encodeURIComponent(id)}`);
+      inv = res?.data || res;
+    } catch (_) { /* handled below */ }
+    if (!inv || !inv.id) {
+      if (bodyEl) bodyEl.innerHTML = `<div class="text-center text-muted" style="padding:40px">
+        <i class="fa-solid fa-triangle-exclamation" style="font-size:1.6rem;display:block;margin-bottom:10px;opacity:.4"></i>
+        Could not load this investment.
+        ${backTo ? `<div style="margin-top:14px"><button class="btn btn--secondary btn--sm" onclick="viewInvestor('${backTo}')">Back to investor</button></div>` : ''}
+      </div>`;
+      return;
+    }
+  }
+
+  _renderInvestmentDetail(inv, backTo);
+}
+
+function _renderInvestmentDetail(inv, backTo) {
+  const id = inv.id;
   const pi = Utils.productInfo(inv.product_type);
   const invRecord = STATE.investors.find(i => i.id === inv.investor_id);
   const email = inv.investor_email || invRecord?.email || '—';
@@ -6197,7 +6242,16 @@ function viewInvestmentDetail(id) {
     : null;
   const _matPlan   = Utils.maturityPlan(inv, _switchLbl);
 
+  const _investorName = inv.investor_name || invRecord
+    ? _esc(inv.investor_name || `${invRecord?.first_name || ''} ${invRecord?.last_name || ''}`.trim())
+    : '';
+
   document.getElementById('invDetailBody').innerHTML = `
+    ${backTo ? `<div class="mb-12">
+      <button class="btn btn--secondary btn--sm" onclick="viewInvestor('${backTo}')">
+        <i class="fa-solid fa-arrow-left" style="margin-right:6px"></i>Back to ${_investorName || 'investor'}
+      </button>
+    </div>` : ''}
     <div class="grid-2 mb-16" style="gap:12px">
       <div class="info-row"><span class="info-row__label">Investor</span><span class="info-row__value td-strong">${_esc(inv.investor_name)}</span></div>
       <div class="info-row"><span class="info-row__label">Email</span><span class="info-row__value td-muted">${_esc(email)}</span></div>

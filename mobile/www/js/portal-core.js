@@ -7827,7 +7827,13 @@ function generateInvestmentCertificate(invId) {
         <tr><td style="padding:6px 0;color:#6b7280">Investor ID</td><td style="font-weight:700">${investor.id}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Investment Pool</td><td style="font-weight:700">${inv.pool_name||pool.name||'—'}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Amount Invested</td><td style="font-weight:700;color:#fec24f;font-size:16px">${Utils.rand(inv.amount)}</td></tr>
-        <tr><td style="padding:6px 0;color:#6b7280">Annual Rate</td><td style="font-weight:700">${(() => { const _r = Utils.effectiveRate({ ...inv, pool_actual_rate: inv.pool_actual_rate ?? pool.actual_rate }); return _r != null ? Utils.pct(_r) : '—'; })()}</td></tr>
+        ${(() => {
+          // "Annual Rate" is the contracted figure. Once a return is posted it
+          // is no longer what this row is showing, so the label follows it.
+          const _b = Utils.rateBasis({ ...inv, pool_actual_rate: inv.pool_actual_rate ?? pool.actual_rate });
+          const _label = _b && _b.posted ? 'Return Achieved' : 'Annual Rate';
+          return `<tr><td style="padding:6px 0;color:#6b7280">${_label}</td><td style="font-weight:700">${_b ? Utils.pct(_b.rate) : '—'}</td></tr>`;
+        })()}
         <tr><td style="padding:6px 0;color:#6b7280">Target Return</td><td style="font-weight:700;color:#22c55e">${Utils.rand(inv.expected_return_amount||inv.expected_return)}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Investment Date</td><td style="font-weight:700">${Utils.date(inv.investment_date||inv.start_date)}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Maturity Date</td><td style="font-weight:700">${Utils.date(inv.maturity_date||inv.end_date)}</td></tr>
