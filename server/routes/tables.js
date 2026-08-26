@@ -969,7 +969,13 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
     // concurrent POST requests cannot both pass the balance check and both
     // deduct — the second request blocks until the first commits.
     let _investmentWalletDeducted = false;
-    if (table === 'investments' && req.user.role === 'investor') {
+    /* Every role, not only investors.
+       Staff-created investments used to skip this and settle later with
+       `GREATEST(0, wallet_balance - required)`, which clamps instead of
+       failing: a R500 wallet funded a R10,000 investment, the balance went to
+       zero and the R9,600 shortfall simply vanished. Nothing errored, and
+       total_invested recorded the full amount as though it had been paid. */
+    if (table === 'investments') {
       const rawAmount = parseFloat(body.amount) || 0;
       if (rawAmount <= 0) return res.status(400).json({ error: 'Investment amount must be greater than zero.' });
 
@@ -999,20 +1005,32 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
         }
       }
 
-      const walletLabel = body.sub_account_id ? 'this sub-account' : 'your wallet';
+      /* Staff act on someone else's money, so "your wallet" reads wrong to
+         them — and to a client reading it back off a support ticket. */
+      const walletLabel = body.sub_account_id
+        ? 'this sub-account'
+        : (req.user.role === 'investor' ? 'your wallet' : "this investor's wallet");
 
       const _invClient = await pool.connect();
       try {
         await _invClient.query('BEGIN');
         let walletBal = 0;
         if (body.sub_account_id) {
-          const { rows: sa } = await _invClient.query(
-            'SELECT wallet_balance FROM sub_accounts WHERE id=$1 AND parent_investor_id=$2 FOR UPDATE',
-            [body.sub_account_id, req.user.investorId]
-          );
+          /* An investor may only spend from a sub-account they own. Staff act
+             on any, so the ownership predicate is theirs alone — applying it
+             to staff would have made every staff POST a 403. */
+          const _asInvestor = req.user.role === 'investor';
+          const { rows: sa } = _asInvestor
+            ? await _invClient.query(
+                'SELECT wallet_balance FROM sub_accounts WHERE id=$1 AND parent_investor_id=$2 FOR UPDATE',
+                [body.sub_account_id, req.user.investorId])
+            : await _invClient.query(
+                'SELECT wallet_balance FROM sub_accounts WHERE id=$1 FOR UPDATE',
+                [body.sub_account_id]);
           if (!sa[0]) {
             await _invClient.query('ROLLBACK');
-            return res.status(403).json({ error: 'Forbidden.' });
+            return res.status(_asInvestor ? 403 : 404).json({
+              error: _asInvestor ? 'Forbidden.' : 'Sub-account not found.' });
           }
           walletBal = parseFloat(sa[0].wallet_balance) || 0;
         } else {
@@ -1417,28 +1435,21 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
           const platformFee    = isReinvestment ? 0 : Math.round(investAmt * 0.01 * 100) / 100;
           const totalDeduct    = investAmt + platformFee;
 
-          // Deduct wallet + total_invested — skip if already done atomically in the
-          // affordability transaction above (investor-role POSTs only).
+          /* The affordability transaction above now runs for every role and
+             deducts under a row lock, so this should never fire. It used to be
+             the settlement path for staff-created investments, using
+             GREATEST(0, …) — which clamps rather than fails, so a wallet short
+             of the amount silently went to zero and the shortfall disappeared.
+
+             Kept as a guard rather than deleted: if some future path reaches
+             here without having settled, the honest outcome is a loud failure,
+             not a quiet overdraft. */
           if (!_investmentWalletDeducted) {
-            if (clean.sub_account_id) {
-              await pool.query(
-                `UPDATE sub_accounts
-                   SET wallet_balance = GREATEST(0, wallet_balance - $1),
-                       total_invested = COALESCE(total_invested, 0) + $2,
-                       updated_at     = NOW()
-                 WHERE id = $3`,
-                [totalDeduct, investAmt, clean.sub_account_id]
-              );
-            } else {
-              await pool.query(
-                `UPDATE investors
-                   SET wallet_balance  = GREATEST(0, wallet_balance - $1),
-                       total_invested  = COALESCE(total_invested, 0) + $2,
-                       updated_at      = NOW()
-                 WHERE id = $3`,
-                [totalDeduct, investAmt, clean.investor_id]
-              );
-            }
+            console.error(`[investments] ${clean.id} was created without a settled wallet deduction ` +
+                          `(investor ${clean.investor_id}, R${totalDeduct}). Nothing was deducted.`);
+            return res.status(500).json({
+              error: 'Investment could not be settled against a wallet. Nothing was charged — please retry.',
+            });
           }
 
           // Record the platform fee — skipped for reinvestments (no fee charged)
