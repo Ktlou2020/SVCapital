@@ -109,7 +109,7 @@ router.get(
         FROM investors
         WHERE last_auto_fica_check IS NOT NULL
           AND last_auto_fica_check < NOW() - INTERVAL '1 year'
-          AND status != 'suspended'
+          AND COALESCE(status, '') <> 'suspended'
         ORDER BY last_auto_fica_check ASC
         LIMIT 100
       `);
@@ -125,7 +125,7 @@ router.get(
               AND t.type = 'deposit'
               AND t.status = 'completed'
           )
-          AND i.status != 'suspended'
+          AND COALESCE(i.status, '') <> 'suspended'
         LIMIT 100
       `);
 

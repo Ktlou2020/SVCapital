@@ -466,11 +466,11 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
         LEFT JOIN (
           SELECT
             pool_id,
-            COUNT(DISTINCT CASE WHEN status != 'cancelled' AND sub_account_id IS NOT NULL THEN 'sa:' || sub_account_id
-                                WHEN status != 'cancelled' THEN 'inv:' || investor_id END) AS live_investor_count,
+            COUNT(DISTINCT CASE WHEN COALESCE(status, '') <> 'cancelled' AND sub_account_id IS NOT NULL THEN 'sa:' || sub_account_id
+                                WHEN COALESCE(status, '') <> 'cancelled' THEN 'inv:' || investor_id END) AS live_investor_count,
             SUM(CASE WHEN status IN ('active','matured','paid_out') THEN amount ELSE 0 END) AS live_raised,
             SUM(CASE WHEN status = 'active'  THEN amount ELSE 0 END)            AS live_active_amount,
-            COUNT(CASE WHEN status != 'cancelled' THEN 1 END)                   AS live_investment_count
+            COUNT(CASE WHEN COALESCE(status, '') <> 'cancelled' THEN 1 END)     AS live_investment_count
           FROM investments
           WHERE pool_id IS NOT NULL
           GROUP BY pool_id
@@ -478,11 +478,11 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
         LEFT JOIN (
           SELECT
             pool_name,
-            COUNT(DISTINCT CASE WHEN status != 'cancelled' AND sub_account_id IS NOT NULL THEN 'sa:' || sub_account_id
-                                WHEN status != 'cancelled' THEN 'inv:' || investor_id END) AS live_investor_count,
+            COUNT(DISTINCT CASE WHEN COALESCE(status, '') <> 'cancelled' AND sub_account_id IS NOT NULL THEN 'sa:' || sub_account_id
+                                WHEN COALESCE(status, '') <> 'cancelled' THEN 'inv:' || investor_id END) AS live_investor_count,
             SUM(CASE WHEN status IN ('active','matured','paid_out') THEN amount ELSE 0 END) AS live_raised,
             SUM(CASE WHEN status = 'active'  THEN amount ELSE 0 END)            AS live_active_amount,
-            COUNT(CASE WHEN status != 'cancelled' THEN 1 END)                   AS live_investment_count
+            COUNT(CASE WHEN COALESCE(status, '') <> 'cancelled' THEN 1 END)     AS live_investment_count
           FROM investments
           WHERE pool_name IS NOT NULL
           GROUP BY pool_name

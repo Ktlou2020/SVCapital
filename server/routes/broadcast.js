@@ -64,9 +64,11 @@ async function _sendEmail(to, subject, message) {
 /* ── Helper: query investors by segment ─────────────────────── */
 async function _getInvestors(segment) {
   let rows;
-  const _notArchived = `i.status != 'archived'`;
+  // COALESCE: an investor whose status is NULL is not archived, but
+  // `NULL != 'archived'` is NULL — they were silently left out of every send.
+  const _notArchived = `COALESCE(i.status, '') <> 'archived'`;
   if (segment === 'all') {
-    const res = await pool.query(`SELECT id, first_name, last_name, email, phone FROM investors WHERE email IS NOT NULL AND email <> '' AND status != 'archived' ORDER BY first_name`);
+    const res = await pool.query(`SELECT id, first_name, last_name, email, phone FROM investors WHERE email IS NOT NULL AND email <> '' AND COALESCE(status, '') <> 'archived' ORDER BY first_name`);
     rows = res.rows;
   } else if (segment === 'active') {
     const res = await pool.query(`
@@ -82,7 +84,7 @@ async function _getInvestors(segment) {
       SELECT id, first_name, last_name, email, phone
       FROM investors
       WHERE (fica_status = 'pending' OR kyc_status = 'pending')
-        AND email IS NOT NULL AND email <> '' AND status != 'archived'
+        AND email IS NOT NULL AND email <> '' AND COALESCE(status, '') <> 'archived'
       ORDER BY first_name
     `);
     rows = res.rows;
@@ -109,7 +111,7 @@ async function _getInvestors(segment) {
     const res = await pool.query(`
       SELECT id, first_name, last_name, email, phone
       FROM investors
-      WHERE wallet_balance > 0 AND email IS NOT NULL AND email <> '' AND status != 'archived'
+      WHERE wallet_balance > 0 AND email IS NOT NULL AND email <> '' AND COALESCE(status, '') <> 'archived'
       ORDER BY first_name
     `);
     rows = res.rows;
