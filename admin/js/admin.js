@@ -700,31 +700,60 @@ document.addEventListener('DOMContentLoaded', async () => {
 /* ═══════════════════════════════════════════════
    DASHBOARD
    ═══════════════════════════════════════════════ */
+/* The four tables the dashboard totals, and the tiles it totals them into.
+   Used by the first load and by the 30-second refresh, so the two cannot
+   disagree about what was read or what it adds up to. */
+const DASH_SOURCES = [
+  { key: 'investors',    label: 'Investors',    load: () => API.investors.list({ limit: 10000 }) },
+  { key: 'pools',        label: 'Pools',        load: () => API.pools.list({ limit: 1000 }) },
+  { key: 'investments',  label: 'Investments',  load: () => API.investments.list({ limit: 5000 }) },
+  { key: 'transactions', label: 'Transactions', load: () => API.transactions.list({ limit: 5000 }) },
+];
+
+async function _refreshDashboardTotals() {
+  /* allSettled, not all: four independent reads, and one failing query used to
+     blank the entire dashboard. Showing three of four sources and naming the
+     missing one beats showing nothing. */
+  const settled = await Promise.allSettled(DASH_SOURCES.map(s => s.load()));
+
+  const failedSources = [], counts = [];
+  settled.forEach((r, i) => {
+    const s = DASH_SOURCES[i];
+    if (r.status === 'fulfilled') {
+      STATE[s.key] = r.value?.data || [];
+      counts.push({ label: s.label, loaded: STATE[s.key].length, total: Number(r.value?.total) });
+    } else {
+      /* Emptied so the rest of the page still renders, and named in the banner:
+         a tile reading R0.00 because its query failed must not be mistaken for
+         one reading R0.00 because the figure is genuinely zero. */
+      STATE[s.key] = [];
+      failedSources.push(s.label);
+      console.error(`[dashboard] ${s.label} failed to load:`, r.reason?.message || r.reason);
+    }
+  });
+
+  _dashboardTruncation(counts);
+  _dashboardLoadErrors(failedSources);
+
+  // KPI cards — computed from the live tables, not denormalised investor fields.
+  const totalInvested = STATE.investments.filter(i => i.status === 'active').reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+  const totalReturns  = STATE.transactions.filter(t => t.type === 'return' && t.status === 'completed').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+  const activePools   = STATE.pools.filter(p => ['open', 'active', 'filling'].includes(p.status)).length;
+
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  set('ds-investors', STATE.investors.length);
+  set('ds-invested',  Utils.rand(totalInvested));
+  set('ds-returns',   Utils.rand(totalReturns));
+  set('ds-pools',     activePools);
+
+  return { counts, failedSources };
+}
+
 async function loadDashboard() {
   _showLoadingBar();
   try {
-    const [invRes, poolRes, invstRes, txnRes] = await Promise.all([
-      API.investors.list({ limit: 10000 }),
-      API.pools.list({ limit: 1000 }),
-      API.investments.list({ limit: 5000 }),
-      API.transactions.list({ limit: 5000 })
-    ]);
-
-    STATE.investors = invRes.data || [];
-    STATE.pools = poolRes.data || [];
-    STATE.investments = invstRes.data || [];
-    STATE.transactions = txnRes.data || [];
-
-    // KPI cards — compute from live tables, not denormalized investor fields
-    const totalInvested = STATE.investments.filter(i => i.status === 'active').reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
-    const totalReturns  = STATE.transactions.filter(t => t.type === 'return' && t.status === 'completed').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
-    const activePools = STATE.pools.filter(p => ['open', 'active', 'filling'].includes(p.status)).length;
+    await _refreshDashboardTotals();
     const nonArchived = STATE.investors.filter(i => i.status !== 'archived');
-
-    document.getElementById('ds-investors').textContent = STATE.investors.length;
-    document.getElementById('ds-invested').textContent = Utils.rand(totalInvested);
-    document.getElementById('ds-returns').textContent = Utils.rand(totalReturns);
-    document.getElementById('ds-pools').textContent = activePools;
 
     // Second KPI row
     const ficaApproved = nonArchived.filter(i => i.fica_status === 'approved' || i.kyc_status === 'approved').length;
@@ -851,28 +880,15 @@ async function loadDashboard() {
     if (!window._dashRefreshTimer) {
       window._dashRefreshTimer = setInterval(async () => {
         if (STATE.currentView !== 'dashboard') return;
-        try {
-          const [invRes, poolRes, invstRes, txnRes] = await Promise.all([
-            API.investors.list({ limit: 5000 }),
-            API.pools.list({ limit: 1000 }),
-            API.investments.list({ limit: 5000 }),
-            API.transactions.list({ limit: 5000 })
-          ]);
-          STATE.investors = invRes.data || [];
-          STATE.pools = poolRes.data || [];
-          STATE.investments = invstRes.data || [];
-          STATE.transactions = txnRes.data || [];
-          const nonArchived = STATE.investors.filter(i => i.status !== 'archived');
-          const totalInvested = STATE.investments.filter(i => i.status === 'active').reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
-          const totalReturns  = STATE.transactions.filter(t => t.type === 'return' && t.status === 'completed').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
-          const activePools = STATE.pools.filter(p => ['open', 'active', 'filling'].includes(p.status)).length;
-          document.getElementById('ds-investors').textContent = STATE.investors.length;
-          document.getElementById('ds-invested').textContent = Utils.rand(totalInvested);
-          document.getElementById('ds-returns').textContent = Utils.rand(totalReturns);
-          document.getElementById('ds-pools').textContent = activePools;
-          renderPendingActions();
-          updateSidebarBadges();
-        } catch (_) {}
+        /* The same path as the first load. This was a second copy of the load
+           and the four sums, with its own investor limit of 5000 against the
+           first load's 10000 — so the investor count could change 30 seconds
+           after opening the page without anything having changed in the data.
+           It also rewrote the tiles without touching the banners, which would
+           have left a truncation warning describing a load that had since been
+           replaced. One path, one set of numbers, banners kept in step. */
+        try { await _refreshDashboardTotals(); renderPendingActions(); updateSidebarBadges(); }
+        catch (err) { console.error('[dashboard] auto-refresh failed:', err?.message || err); }
       }, 30000);
     }
 
@@ -7668,11 +7684,16 @@ function _analyticsPanelErrors(failures) {
    This does not fix the underlying problem — aggregates belong in SQL, the way
    analytics-extra.js already does it — but it stops the page presenting a
    partial answer as a complete one. */
-function _analyticsTruncation(loadedVsTotal) {
-  const el = document.getElementById('an-truncation');
-  if (!el) return;
+/* The banner itself, shared. Two pages read a capped page of the same tables
+   and total it in the browser, so both need this — and two copies of a warning
+   about wrong numbers is how one of them ends up saying something the other
+   stopped being true. `tail` is the only part that differs: what on THIS page
+   is affected and what is not. */
+function _renderTruncationBanner(elId, loadedVsTotal, tail) {
+  const el = document.getElementById(elId);
+  if (!el) return false;
   const short = loadedVsTotal.filter(t => Number.isFinite(t.total) && t.loaded < t.total);
-  if (!short.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  if (!short.length) { el.style.display = 'none'; el.innerHTML = ''; return false; }
 
   el.style.display = '';
   el.innerHTML = `
@@ -7687,15 +7708,59 @@ function _analyticsTruncation(loadedVsTotal) {
           ${t.loaded.toLocaleString('en-US')} of ${t.total.toLocaleString('en-US')} rows
           — ${(t.total - t.loaded).toLocaleString('en-US')} excluded</div>`).join('')}
       </div>
-      <div style="margin-top:6px;font-size:0.78rem;color:var(--text-muted)">
-        The charts and per-category breakdowns below are derived from the rows that were read.
-        ${_analyticsKpisFromServer
-          ? 'The six headline tiles are computed in SQL over every row and are correct.'
-          : '<strong>The headline tiles fell back to browser sums and are affected too.</strong>'}
-        The panels fed by server-side queries (revenue, maturity, IFA, sub-accounts,
-        interest history, withdrawals) are unaffected.
+      ${tail ? `<div style="margin-top:6px;font-size:0.78rem;color:var(--text-muted)">${tail}</div>` : ''}
+    </div>`;
+  return true;
+}
+
+function _analyticsTruncation(loadedVsTotal) {
+  return _renderTruncationBanner('an-truncation', loadedVsTotal, `
+    The charts and per-category breakdowns below are derived from the rows that were read.
+    ${_analyticsKpisFromServer
+      ? 'The six headline tiles are computed in SQL over every row and are correct.'
+      : '<strong>The headline tiles fell back to browser sums and are affected too.</strong>'}
+    The panels fed by server-side queries (revenue, maturity, IFA, sub-accounts,
+    interest history, withdrawals) are unaffected.`);
+}
+
+/* The dashboard totals Active Invested off investments and Returns off
+   transactions, both from a capped page. Transactions is the one that bites
+   first — every investment writes several rows (deposit, investment, fee,
+   matured_funds, reinvestment, payout), so that table crosses its cap long
+   before the others do, and the Returns tile simply stops growing with no
+   symptom. The API has returned the true count all along; nothing looked. */
+/* A source that failed to load is not a source that returned nothing, and the
+   tiles cannot tell you which. Named here so R0.00 is never read as a fact
+   when it is really a missing answer. */
+function _dashboardLoadErrors(failedSources) {
+  const el = document.getElementById('ds-load-errors');
+  if (!el) return false;
+  if (!failedSources.length) { el.style.display = 'none'; el.innerHTML = ''; return false; }
+
+  el.style.display = '';
+  el.innerHTML = `
+    <div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.35);border-radius:8px;padding:12px 14px">
+      <div style="font-weight:700;color:#ef4444">
+        <i class="fa-solid fa-triangle-exclamation" style="margin-right:6px"></i>
+        ${failedSources.map(_esc).join(' and ')} could not be loaded
+      </div>
+      <div style="margin-top:6px;font-size:0.82rem">
+        Tiles fed by ${failedSources.length === 1 ? 'it' : 'them'} are showing zero because the
+        data is missing, not because the figure is zero. Everything else on this page loaded
+        normally.
+        <button class="btn btn--secondary btn--sm" style="margin-left:8px" onclick="loadDashboard()">
+          <i class="fa-solid fa-rotate"></i> Retry
+        </button>
       </div>
     </div>`;
+  return true;
+}
+
+function _dashboardTruncation(loadedVsTotal) {
+  return _renderTruncationBanner('ds-truncation', loadedVsTotal, `
+    Total Investors, Active Invested and Returns are summed in the browser from the
+    rows above, so any tile fed by a short table understates. Counts of pools and
+    the KYC percentages are unaffected.`);
 }
 
 /* ═══════════════════════════════════════════════
