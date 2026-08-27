@@ -2076,10 +2076,32 @@ async function viewInvestor(id) {
   const avatarColor= _invAvatarColor(`${inv.first_name} ${inv.last_name}`);
   const totalInvested  = invsts.filter(i=>i.status==='active').reduce((s,i) => s+(parseFloat(i.amount)||0), 0);
   const activeInvCount = invsts.filter(i=>i.status==='active').length;
-  // Shared definition — see Utils.investmentReturn in js/api.js. This tile used to
-  // count only matured/paid_out investments, so a pool with a posted actual_rate
-  // showed R0.00 here while the investor saw the real figure in the app.
-  const totalReturns   = Utils.totalReturns(invsts);
+
+  /* The figure the client sees at the top of their overview, from the same
+     helper that renders it there — active capital, plus the wallet, plus what
+     has actually been posted. Computed rather than restated so the two cannot
+     drift: whoever changes portfolioValue changes both screens at once.
+
+     Support answering "what does your app show?" was previously reading four
+     separate tiles and adding them up by hand, which does not reproduce this
+     number — the client's total counts earned returns on ACTIVE holdings only,
+     while the Returns Earned tile beside it is a lifetime figure. */
+  const portfolioValue = Utils.portfolioValue(invsts, inv.wallet_balance);
+
+  /* Earned, not projected. This was Utils.totalReturns, whose own comment says
+     it falls back to the contracted rate and so must not be used for anything
+     labelled earned. On an investment with no posted rate it answered with a
+     projection, so this tile showed money the client had not been told they
+     had earned — and the client's own screen, which uses earnedReturns, showed
+     a smaller number. That gap is why the two screens disagreed.
+
+     Scope matches the client's badge: every non-cancelled investment, so a
+     matured pool's declared return still counts toward a lifetime total. */
+  const earningInvs    = invsts.filter(i => (i.status || '') !== 'cancelled');
+  const totalReturns   = Utils.earnedReturns(earningInvs);
+  const earnedBase     = earningInvs.filter(i => Utils.postedReturn(i))
+                                    .reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+  const returnPct      = earnedBase > 0 ? (totalReturns / earnedBase * 100).toFixed(1) : '0';
   const totalDeposits  = txns.filter(t=>t.type==='deposit' && t.status==='completed').reduce((s,t)=>s+(parseFloat(t.amount)||0), 0);
   const invSubAccounts = (STATE.subAccounts || []).filter(sa => sa.parent_investor_id === id);
   const saWallet   = invSubAccounts.reduce((s, sa) => s + (parseFloat(sa.wallet_balance) || 0), 0);
@@ -2116,6 +2138,21 @@ async function viewInvestor(id) {
           ${Utils.statusBadge(inv.status)}
           ${inv.kyc_status==='approved'?`<span class="badge badge--green"><i class="fa-solid fa-shield-check"></i> KYC Verified</span>${inv.fica_reviewed_by?`<span style="font-size:0.65rem;color:var(--text-muted);margin-left:2px">by ${_esc(inv.fica_reviewed_by)}</span>`:''}` : '<span class="badge badge--yellow">KYC Pending</span>'}
         </div>
+      </div>
+    </div>
+    <!-- The client's own headline figure, rendered from the same helper and
+         labelled the same, so a support call can be answered by reading one
+         number off this screen instead of reconstructing it from the tiles. -->
+    <div style="background:var(--bg-secondary);border-radius:10px;padding:14px 16px;margin-bottom:10px">
+      <div style="font-size:0.68rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted)">Total Portfolio Value</div>
+      <div style="font-size:1.7rem;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums;margin-top:2px">${Utils.rand(portfolioValue)}</div>
+      <div style="font-size:0.72rem;font-weight:700;margin-top:4px;color:${totalReturns > 0 ? '#22c55e' : 'var(--text-muted)'}">
+        ${totalReturns > 0
+          ? `<i class="fa-solid fa-arrow-trend-up"></i> +${returnPct}% return posted &middot; ${Utils.rand(totalReturns)} earned`
+          : '<i class="fa-solid fa-hourglass-half"></i> No returns posted yet'}
+      </div>
+      <div style="font-size:0.66rem;color:var(--text-muted);margin-top:5px">
+        What the client sees on their overview — active capital + wallet + posted returns.
       </div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px">
