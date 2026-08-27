@@ -1438,6 +1438,28 @@
           <div class="stat-card stat-card--gold"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-sack-dollar"></i></div></div><div class="stat-card__value" id="an-platform-revenue">—</div><div class="stat-card__label">Platform Revenue</div></div>
           <div class="stat-card stat-card--green"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-circle-check"></i></div></div><div class="stat-card__value" id="an-active-inv-count">—</div><div class="stat-card__label">Active Investments</div></div>
         </div>
+        <div style="font-size:0.72rem;color:var(--text-muted);margin:-10px 0 18px">
+          Cumulative and as of now — these are not scoped by the period selected below.
+        </div>
+
+        <!-- Period performance: flows only, against the period immediately before -->
+        <div class="panel mb-16">
+          <div class="panel__header">
+            <span class="panel__title"><i class="fa-solid fa-arrow-trend-up" style="color:#eda5ff;margin-right:6px"></i>Period Performance</span>
+            <div style="display:flex;gap:8px;align-items:center">
+              <select id="an-period-days" class="form-select" style="width:auto;padding:5px 9px;font-size:0.78rem" onchange="loadPeriodKpis()">
+                <option value="7">Last 7 days</option>
+                <option value="30" selected>Last 30 days</option>
+                <option value="90">Last 90 days</option>
+                <option value="365">Last 12 months</option>
+              </select>
+            </div>
+          </div>
+          <div class="panel__body">
+            <div style="font-size:0.76rem;color:var(--text-muted);margin-bottom:12px" id="an-period-window">—</div>
+            <div id="an-period-metrics" class="stats-row"></div>
+          </div>
+        </div>
 
         <!-- Section: Capital & Growth -->
         <div style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:14px"><i class="fa-solid fa-chart-area" style="margin-right:6px;color:var(--orange)"></i>Capital &amp; Growth</div>
@@ -4734,7 +4756,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=17"></script>
-<script src="js/admin.js?v=120"></script>
+<script src="js/admin.js?v=121"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>

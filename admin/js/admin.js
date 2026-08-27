@@ -7630,6 +7630,76 @@ function _analyticsTruncation(loadedVsTotal) {
     </div>`;
 }
 
+/* ═══════════════════════════════════════════════
+   PERIOD PERFORMANCE
+   Flows only — money and records that MOVED inside the window — against the
+   window immediately before it. The cumulative tiles above are stocks and are
+   deliberately not scoped by this selector; conflating the two is how a
+   dashboard ends up reporting "Active Capital, last 30 days, up 12%", which
+   is not a fact about anything.
+   ═══════════════════════════════════════════════ */
+const AN_PERIOD_METRICS = [
+  { key: 'net_deposits',     label: 'Net Deposits',     money: true,  good: 'up',
+    hint: 'Deposits less withdrawals, completed only' },
+  { key: 'platform_revenue', label: 'Platform Revenue', money: true,  good: 'up',
+    hint: 'Completed fees' },
+  { key: 'returns_paid',     label: 'Returns Paid',     money: true,  good: null,
+    hint: 'Returns and payouts to investors' },
+  { key: 'new_investors',    label: 'New Investors',    money: false, good: 'up',
+    hint: 'By join date' },
+  { key: 'new_investments',  label: 'New Investments',  money: false, good: 'up',
+    hint: 'By creation date' },
+];
+
+async function loadPeriodKpis() {
+  const wrap = document.getElementById('an-period-metrics');
+  const win  = document.getElementById('an-period-window');
+  if (!wrap) return;
+  const days = document.getElementById('an-period-days')?.value || 30;
+  wrap.innerHTML = '<div class="text-center text-muted" style="padding:18px;width:100%">Loading…</div>';
+  try {
+    const r = await API._fetch('GET', `analytics/kpis/period?days=${encodeURIComponent(days)}`);
+    const d = s => Utils.date(s);
+    if (win) {
+      win.innerHTML = `${d(r.range.from)} – ${d(r.range.to)} ` +
+        `<span style="opacity:.7">vs ${d(r.range.prior_from)} – ${d(r.range.prior_to)}</span>`;
+    }
+
+    wrap.innerHTML = AN_PERIOD_METRICS.map(m => {
+      const v = r.flows[m.key] || {};
+      const fmt = x => m.money ? Utils.rand(x, 0) : Number(x || 0).toLocaleString();
+      /* A percentage needs a base. Against a zero prior there is no rate of
+         change to state, so the prior is shown and the arrow withheld. */
+      const pct = v.change_pct;
+      let delta;
+      if (pct === null || pct === undefined) {
+        delta = `<span style="color:var(--text-muted)">no prior activity</span>`;
+      } else {
+        const up = v.change > 0, flat = v.change === 0;
+        /* Returns Paid has no good direction — more paid out is not a win or a
+           loss on its own — so it is shown without a verdict colour. */
+        const colour = flat || !m.good ? 'var(--text-muted)'
+                     : (up === (m.good === 'up')) ? '#22c55e' : '#ef4444';
+        const icon = flat ? 'fa-minus' : up ? 'fa-arrow-up' : 'fa-arrow-down';
+        delta = `<span style="color:${colour}"><i class="fa-solid ${icon}" style="margin-right:4px"></i>` +
+                `${Math.abs(pct).toFixed(1)}%</span>` +
+                `<span style="color:var(--text-muted)"> vs ${fmt(v.prior)}</span>`;
+      }
+      return `<div class="stat-card" title="${_esc(m.hint)}">
+        <div class="stat-card__value">${fmt(v.current)}</div>
+        <div class="stat-card__label">${_esc(m.label)}</div>
+        <div style="font-size:0.72rem;margin-top:6px">${delta}</div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    if (win) win.textContent = '';
+    wrap.innerHTML = `<div style="padding:14px;width:100%;color:#ef4444;font-size:0.82rem">
+      <i class="fa-solid fa-circle-exclamation" style="margin-right:6px"></i>
+      Could not load period performance: ${_esc(e.message || 'Unknown error')}</div>`;
+    throw e;   // so the panel wrapper names it in the failure list
+  }
+}
+
 async function loadAnalytics(force) {
   try {
     let counts = null;
@@ -7700,6 +7770,7 @@ async function loadAnalytics(force) {
        named line at the top, not twenty panels that never ran. */
     const panels = [
       ['Headline KPIs',        _renderAnalyticsKPIs],
+      ['Period performance',   loadPeriodKpis],
       ['Product volume',       renderProductVolChart],
       ['Province',             renderProvinceChart],
       ['Gender',               renderGenderChart],
