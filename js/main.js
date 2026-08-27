@@ -165,6 +165,10 @@ const FAQ_DATA = {
       a: 'Yes! The SV Capital app is available on both the Apple App Store and Google Play Store. It gives you real-time visibility into your portfolio, pool progress, and payout tracking — all from your phone.'
     },
     {
+      q: 'What fees does SV Capital charge?',
+      a: 'A platform fee of 1% of your investment amount is charged once, at the time you invest. It covers running the platform — account administration, payment processing, reporting and support. The amount you enter when investing is the total that leaves your wallet: if you apply R1 010, then R1 000 goes into the pool and R10 is the platform fee. It shows as a separate fee line on your transaction history. No platform fee is charged when a matured investment is reinvested — the full matured amount rolls over. Each product also carries its own fees, set out in clause 9 of the Terms of Use.'
+    },
+    {
       q: 'Can I withdraw my funds early?',
       a: 'Early withdrawals are not permitted. Your funds are locked in until the end of the investment term. If you\'re unsure about committing, you can store funds in your wallet until you\'re ready. At maturity, you have multiple payout options including reinvest, partial payout, or full withdrawal.'
     }
