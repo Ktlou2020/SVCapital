@@ -5,6 +5,125 @@ const { requireAuth, requireRole } = require('../middleware/auth');
 
 const _admin = requireRole('admin', 'director', 'staff');
 
+/* ── GET /api/analytics/kpis/period ─────────────────────────
+   The same figures over a date range, against the range immediately before it.
+
+   The distinction this endpoint exists to enforce: some of these are FLOWS and
+   some are STOCKS, and mixing them is how a dashboard misleads.
+
+     FLOWS   money or records that moved during a window. Net deposits,
+             returns paid, platform revenue, new investors, new investments.
+             A range scopes them; a prior-period comparison means something.
+
+     STOCKS  what is true right now. Active capital, active investments,
+             total investors. A date range does not scope them, and
+             "Active Capital, last 30 days, up 12%" is not a fact about
+             anything — so they are returned separately and labelled as of now.
+
+   Boundaries are Johannesburg days: `from` starts at 00:00 SAST, `to` ends at
+   24:00 SAST, so a range never half-includes a local day. The prior period is
+   the same number of days ending the instant `from` begins — no gap, no
+   overlap.
+   ─────────────────────────────────────────────────────────── */
+router.get('/kpis/period', requireAuth, _admin, async (req, res) => {
+  try {
+    const TZ = 'Africa/Johannesburg';
+    const isDate = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''));
+    const days = Math.min(1826, Math.max(1, parseInt(req.query.days, 10) || 30));
+
+    const explicit = isDate(req.query.from) && isDate(req.query.to);
+    if ((req.query.from || req.query.to) && !explicit) {
+      return res.status(400).json({ error: 'from and to must both be YYYY-MM-DD.' });
+    }
+    if (explicit && req.query.from > req.query.to) {
+      return res.status(400).json({ error: 'from must not be after to.' });
+    }
+
+    /* A local date becomes an instant by anchoring it to the zone, so a day
+       boundary is midnight in Johannesburg rather than in UTC. `to` is
+       inclusive to the caller, hence +1 day and a half-open comparison. */
+    const anchor = d => `((${d})::timestamp AT TIME ZONE '${TZ}')`;
+    const today  = `((NOW() AT TIME ZONE '${TZ}')::date)`;
+
+    const params = explicit ? [req.query.from, req.query.to] : [days];
+    const F = explicit ? anchor('$1::date')       : anchor(`${today} - ($1::int - 1)`);
+    const T = explicit ? anchor('$2::date + 1')   : anchor(`${today} + 1`);
+    const SPAN = `(${T} - ${F})`;
+    const PF   = `(${F} - ${SPAN})`;   // prior period: same length, ending
+    const PT   = F;                    // exactly where this one begins
+
+    const when = 'COALESCE(transaction_date, created_at)';
+    /* Flows only: things that MOVED inside the window. */
+    const flows = (a, b, prefix) => `
+      COALESCE((SELECT SUM(CASE WHEN type = 'deposit' THEN ABS(amount) ELSE -ABS(amount) END)
+                  FROM transactions
+                 WHERE status = 'completed' AND type IN ('deposit','withdrawal')
+                   AND ${when} >= ${a} AND ${when} < ${b}), 0)        AS ${prefix}_net_deposits,
+      COALESCE((SELECT SUM(ABS(amount)) FROM transactions
+                 WHERE status = 'completed' AND type IN ('return','payout')
+                   AND ${when} >= ${a} AND ${when} < ${b}), 0)        AS ${prefix}_returns_paid,
+      COALESCE((SELECT SUM(ABS(amount)) FROM transactions
+                 WHERE status = 'completed' AND type IN ('fee','platform_fee')
+                   AND ${when} >= ${a} AND ${when} < ${b}), 0)        AS ${prefix}_platform_revenue,
+      (SELECT COUNT(*) FROM investors
+        WHERE COALESCE(date_joined, created_at) >= ${a}
+          AND COALESCE(date_joined, created_at) <  ${b})              AS ${prefix}_new_investors,
+      (SELECT COUNT(*) FROM investments
+        WHERE created_at >= ${a} AND created_at < ${b})               AS ${prefix}_new_investments`;
+
+    const { rows: [r] } = await pool.query(`
+      SELECT ${F} AS period_from, ${T} AS period_to,
+             ${PF} AS prior_from, ${PT} AS prior_to,
+             ${flows(F, T, 'cur')},
+             ${flows(PF, PT, 'pri')},
+             /* Stocks: true right now, deliberately untouched by the range. */
+             COALESCE((SELECT SUM(ABS(amount)) FROM investments WHERE status = 'active'), 0)
+                                                                      AS active_capital,
+             (SELECT COUNT(*) FROM investments WHERE status = 'active') AS active_investments,
+             (SELECT COUNT(*) FROM investors)                           AS total_investors
+    `, params);
+
+    const n = v => Number(v) || 0;
+    const round2 = v => Math.round(n(v) * 100) / 100;
+    const metric = key => {
+      const current = round2(r[`cur_${key}`]);
+      const prior   = round2(r[`pri_${key}`]);
+      return {
+        current, prior, change: round2(current - prior),
+        /* No percentage against a zero base. "Up 100%" from nothing is not a
+           rate of change, it is a first occurrence, and rendering it as growth
+           is the most common way these dashboards flatter themselves. */
+        change_pct: prior === 0 ? null : round2(((current - prior) / Math.abs(prior)) * 100),
+      };
+    };
+
+    return res.json({
+      range: {
+        from: r.period_from, to: r.period_to,
+        prior_from: r.prior_from, prior_to: r.prior_to,
+        days: explicit ? null : days, explicit, timezone: TZ,
+      },
+      flows: {
+        net_deposits:     metric('net_deposits'),
+        returns_paid:     metric('returns_paid'),
+        platform_revenue: metric('platform_revenue'),
+        new_investors:    metric('new_investors'),
+        new_investments:  metric('new_investments'),
+      },
+      stocks: {
+        active_capital:     round2(r.active_capital),
+        active_investments: n(r.active_investments),
+        total_investors:    n(r.total_investors),
+        note: 'As of now — a date range does not scope these.',
+      },
+      computed_at: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('[analytics/kpis/period]', err);
+    return res.status(500).json({ error: 'Failed to compute period KPIs: ' + err.message });
+  }
+});
+
 /* ── GET /api/analytics/kpis ────────────────────────────────
    The six headline tiles, computed over EVERY row.
 
