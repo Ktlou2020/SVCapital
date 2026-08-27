@@ -1355,6 +1355,52 @@ function clearInvestorSelection() {
   updateBulkBar();
 }
 
+/* ─────────────────────────────────────────────────────────────
+   BULK ACTIONS — a bulk operation almost never fails as a unit.
+
+   Several of these ran Promise.all, or a bare loop with no per-item catch.
+   Both turn a partial result into a total one: seventeen investors approved
+   and three refused reported as "Bulk approval failed", with the local table
+   never updated — so the console showed them still pending while the server
+   had already approved them. On KYC and FICA that is a regulated action
+   silently disagreeing with what the operator was told.
+
+   Run every item, keep the outcomes apart, and say what actually happened.
+   The withdrawals bulk already worked this way; this generalises it and adds
+   the names, because "3 failed" without saying which cannot be acted on.
+   ───────────────────────────────────────────────────────────── */
+async function _bulkRun(items, worker, { sequential = false, label = i => String(i) } = {}) {
+  const succeeded = [], failed = [];
+  const attempt = async item => {
+    try { await worker(item); succeeded.push(item); }
+    catch (err) { failed.push({ item, label: label(item), message: err?.message || String(err) }); }
+  };
+  /* Sequential where each item makes dependent calls or reports progress;
+     parallel otherwise, matching how these already behaved. */
+  if (sequential) { for (const item of items) await attempt(item); }
+  else await Promise.all(items.map(attempt));
+  return { succeeded, failed };
+}
+
+function _bulkReport(noun, verb, { succeeded, failed }) {
+  const n = succeeded.length;
+  if (!failed.length) {
+    Toast.success(`${n} ${noun}${n === 1 ? '' : 's'} ${verb}`);
+    return true;
+  }
+  const names = failed.slice(0, 3).map(f => f.label).filter(Boolean).join(', ');
+  const more  = failed.length > 3 ? ` and ${failed.length - 3} more` : '';
+  Toast.error(`${n} ${verb}, ${failed.length} failed${names ? ` — ${names}${more}` : ''}`);
+  console.error('[bulk] failures:', failed.map(f => `${f.label || f.item}: ${f.message}`));
+  return false;
+}
+
+/* The label a failure is reported under. An id tells the operator nothing. */
+const _investorLabel = id => {
+  const i = STATE.investors.find(x => x.id === id);
+  return i ? (`${i.first_name || ''} ${i.last_name || ''}`.trim() || id) : id;
+};
+
 async function bulkSendLoginInvites() {
   const ids = [...selectedInvestors];
   if (!ids.length) return;
@@ -1395,19 +1441,28 @@ async function bulkArchiveInvestors() {
     return inv ? { id: inv.id, status: inv.status } : null;
   }).filter(Boolean);
   try {
-    await Promise.all(ids.map(id => API.investors.update(id, { status: 'archived' })));
+    const archived = await _bulkRun(ids, id => API.investors.update(id, { status: 'archived' }),
+                                    { label: _investorLabel });
     ids.forEach(id => { const inv = STATE.investors.find(i => i.id === id); if (inv) inv.status = 'archived'; });
     selectedInvestors.clear();
+    archived.failed.forEach(f => selectedInvestors.add(f.item));
     renderInvestorsTable();
     renderInvestorStats();
     updateBulkBar();
-    Toast.action(`${ids.length} investor${ids.length !== 1 ? 's' : ''} archived`, 'Undo', async () => {
+    if (archived.failed.length) _bulkReport('investor', 'archived', archived);
+    /* Undo offered only for what was archived — offering to undo a failure
+       would restore rows that never moved and report success for doing so. */
+    if (archived.succeeded.length) Toast.action(`${archived.succeeded.length} investor${archived.succeeded.length !== 1 ? 's' : ''} archived`, 'Undo', async () => {
       try {
-        await Promise.all(snapshot.map(s => API.investors.update(s.id, { status: s.status || 'active' })));
-        snapshot.forEach(s => { const inv = STATE.investors.find(i => i.id === s.id); if (inv) inv.status = s.status || 'active'; });
+        /* Restore only what actually came back. A partial undo reported as a
+           complete one leaves rows archived that the operator believes are not. */
+        const toRestore = snapshot.filter(s => archived.succeeded.includes(s.id));
+        const undone = await _bulkRun(toRestore, s => API.investors.update(s.id, { status: s.status || 'active' }),
+                                      { label: s => _investorLabel(s.id) });
+        undone.succeeded.forEach(s => { const inv = STATE.investors.find(i => i.id === s.id); if (inv) inv.status = s.status || 'active'; });
         renderInvestorsTable();
         renderInvestorStats();
-        Toast.success('Archive undone');
+        _bulkReport('investor', 'restored', undone);
       } catch (ue) { Toast.error('Undo failed: ' + ue.message); }
     });
   } catch (e) { Toast.error('Archive failed: ' + (e.message || 'unknown error')); }
@@ -1425,15 +1480,21 @@ async function bulkApproveFica() {
     confirmClass: 'btn--success',
   })) return;
   try {
-    await Promise.all(ids.map(id => API.investors.update(id, { fica_status: 'approved', kyc_status: 'approved' })));
-    ids.forEach(id => {
+    const res = await _bulkRun(ids, id => API.investors.update(id, { fica_status: 'approved', kyc_status: 'approved' }),
+                               { label: _investorLabel });
+    /* Only the ones that actually landed. Marking all of them approved locally
+       after a partial run is what made the table disagree with the server. */
+    res.succeeded.forEach(id => {
       const inv = STATE.investors.find(i => i.id === id);
       if (inv) { inv.fica_status = 'approved'; inv.kyc_status = 'approved'; }
     });
+    /* Anything that failed stays selected, so a retry does not need the
+       operator to work out which ones to tick again. */
     selectedInvestors.clear();
+    res.failed.forEach(f => selectedInvestors.add(f.item));
     renderInvestorsTable();
     updateBulkBar();
-    Toast.success(`FICA approved for ${ids.length} investor${ids.length !== 1 ? 's' : ''}`);
+    _bulkReport('investor', 'FICA approved', res);
   } catch (e) { Toast.error('Bulk FICA approval failed: ' + (e.message || 'unknown error')); }
 }
 
@@ -3278,18 +3339,14 @@ async function _bulkApplyWithdrawalStatus() {
     danger: status === 'rejected',
   })) return;
 
-  let done = 0, failed = 0;
-  await Promise.all(ids.map(async (id) => {
-    try {
-      await API._fetch('PATCH', `tables/transactions/${id}`, { status });
-      done++;
-    } catch {
-      failed++;
-    }
-  }));
-
-  if (failed) Toast.error(`${done} updated, ${failed} failed`);
-  else Toast.success(`${done} withdrawal${done > 1 ? 's' : ''} marked as ${status}`);
+  /* Already ran per item; moved onto the shared runner so a failure is named
+     rather than only counted — "3 failed" cannot be acted on. */
+  const res = await _bulkRun(ids, id => API._fetch('PATCH', `tables/transactions/${id}`, { status }),
+    { label: id => {
+        const t = (STATE.transactions || []).find(x => x.id === id);
+        return t ? (t.investor_name || _investorLabel(t.investor_id) || id) : id;
+      } });
+  _bulkReport('withdrawal', `marked as ${labelMap[status] || status}`, res);
 
   await loadWithdrawals();
 }
@@ -6310,14 +6367,16 @@ async function bulkTriggerPayout() {
   const checked = [...document.querySelectorAll('.inv-select-cb:checked')].map(cb => cb.value);
   if (!checked.length) return Toast.error('Select at least one investment');
   if (!await Confirm.ask(`Mark ${checked.length} investment(s) matured?`, { body: 'These investments will be marked as matured.', confirmLabel: 'Mark Matured' })) return;
-  let done = 0;
-  for (const id of checked) {
-    try {
-      await API.investments.update(id, { status: 'matured', payout_date: new Date().toISOString() });
-      done++;
-    } catch(e) { console.error('payout error', id, e.message); }
-  }
-  Toast.success(`${done} investment(s) marked as matured`);
+  /* Failures used to go to the console only, under a toast that read like a
+     clean run. Marking an investment matured is the step that releases a
+     payout, so one that silently did not happen is not a detail. */
+  const res = await _bulkRun(checked,
+    id => API.investments.update(id, { status: 'matured', payout_date: new Date().toISOString() }),
+    { sequential: true, label: id => {
+        const iv = STATE.investments.find(x => x.id === id);
+        return iv ? (iv.investor_name || iv.pool_name || id) : id;
+      } });
+  _bulkReport('investment', 'marked matured', res);
   loadInvestments && loadInvestments();
 }
 
@@ -10268,19 +10327,37 @@ async function bulkApproveKyc() {
   try {
     const reviewedBy = _getAdminName();
     const reviewedDate = new Date().toISOString();
-    for (let i = 0; i < ids.length; i++) {
-      await API.kyc.update(ids[i], { status: 'approved', reviewed_by: reviewedBy, reviewed_at: reviewedDate });
-      // Sync investor record so status/badges reflect approval
-      const doc = STATE.kyc.find(k => k.id === ids[i]);
+    let seen = 0;
+
+    /* Per document, not per batch. This loop had no per-item catch: document
+       seven failing threw out of the whole run, so one to six were approved on
+       the server, eight onward were never attempted, and the operator was told
+       "Bulk approve failed" — for a run that had approved six people's KYC.
+
+       The two calls stay in this order deliberately. If the investor PATCH
+       fails after the document is approved, the failure is reported against
+       that document rather than swallowed, because a document marked approved
+       while the investor record still reads pending is a split state someone
+       has to go and look at. */
+    const res = await _bulkRun(ids, async id => {
+      await API.kyc.update(id, { status: 'approved', reviewed_by: reviewedBy, reviewed_at: reviewedDate });
+      const doc = STATE.kyc.find(k => k.id === id);
       if (doc?.investor_id) {
-        await API._fetch('PATCH', `tables/investors/${doc.investor_id}`, { kyc_status: 'approved', fica_status: 'approved', status: 'active' });
+        await API._fetch('PATCH', `tables/investors/${doc.investor_id}`,
+          { kyc_status: 'approved', fica_status: 'approved', status: 'active' });
       }
-      if ((i + 1) % 5 === 0) Toast.info(`Processing ${i + 1}/${total}...`);
-    }
+      if (++seen % 5 === 0) Toast.info(`Processing ${seen}/${total}...`);
+    }, { sequential: true, label: id => {
+      const doc = STATE.kyc.find(k => k.id === id);
+      return doc ? (_investorLabel(doc.investor_id) || id) : id;
+    } });
+
+    /* Failures stay selected so a retry does not need them re-found by hand. */
     _kycSelected.clear();
-    Toast.success(`${ids.length} document(s) approved — investor records updated`);
+    res.failed.forEach(f => _kycSelected.add(f.item));
+    _bulkReport('document', 'approved', res);
     await loadKYC();
-  } catch (e) { Toast.error('Bulk approve failed'); }
+  } catch (e) { Toast.error('Bulk approve failed: ' + (e.message || 'unknown error')); }
   finally {
     if (approveBtn) approveBtn.disabled = false;
     if (rejectBtn)  rejectBtn.disabled  = false;
@@ -10320,10 +10397,18 @@ async function _executeBulkKycReject(reason, shouldEmail) {
   try {
     const reviewedBy  = _getAdminName();
     const reviewedAt  = new Date().toISOString();
-    for (let i = 0; i < ids.length; i++) {
-      await API.kyc.update(ids[i], { status: 'rejected', notes: reason || 'Rejected by admin.', reviewed_by: reviewedBy, reviewed_at: reviewedAt });
+    let seen = 0;
+    /* Per document, same as approve. This loop had no per-item catch either:
+       one failure part-way through left the documents before it rejected and
+       their investors emailed, the ones after it untouched, and the operator
+       told the whole run had failed.
+
+       The email keeps its own .catch — a notification that does not send is
+       not a reason to call the rejection itself unsuccessful. */
+    const res = await _bulkRun(ids, async id => {
+      await API.kyc.update(id, { status: 'rejected', notes: reason || 'Rejected by admin.', reviewed_by: reviewedBy, reviewed_at: reviewedAt });
       if (shouldEmail) {
-        const doc = STATE.kyc.find(k => k.id === ids[i]);
+        const doc = STATE.kyc.find(k => k.id === id);
         const inv = doc?.investor_id ? STATE.investors.find(i2 => i2.id === doc.investor_id) : null;
         if (inv?.email) {
           const DOC_LABELS = { id_document: 'Identity Document', proof_of_address: 'Proof of Address', proof_of_bank: 'Proof of Bank Account' };
@@ -10335,12 +10420,17 @@ async function _executeBulkKycReject(reason, shouldEmail) {
           }).catch(() => {});
         }
       }
-      if ((i + 1) % 5 === 0) Toast.info(`Processing ${i + 1}/${total}...`);
-    }
+      if (++seen % 5 === 0) Toast.info(`Processing ${seen}/${total}...`);
+    }, { sequential: true, label: id => {
+      const doc = STATE.kyc.find(k => k.id === id);
+      return doc ? (_investorLabel(doc.investor_id) || id) : id;
+    } });
+
     _kycSelected.clear();
-    Toast.success(`${total} document(s) rejected${shouldEmail ? ' — investors notified' : ''}`);
+    res.failed.forEach(f => _kycSelected.add(f.item));
+    _bulkReport('document', `rejected${shouldEmail ? ' and notified' : ''}`, res);
     await loadKYC();
-  } catch (e) { Toast.error('Bulk reject failed'); }
+  } catch (e) { Toast.error('Bulk reject failed: ' + (e.message || 'unknown error')); }
   finally {
     if (approveBtn) approveBtn.disabled = false;
     if (rejectBtn)  rejectBtn.disabled  = false;
