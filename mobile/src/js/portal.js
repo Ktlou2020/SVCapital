@@ -1834,9 +1834,12 @@ function buildStatementHTML(opts) {
     return `<span style="display:inline-flex;align-items:center;gap:3px;background:${b};color:${c};border:1px solid ${br};font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;text-transform:uppercase;letter-spacing:0.05em;white-space:nowrap"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0;display:inline-block"></span>${l}</span>`;
   }
 
-  const INSTR_LABEL = { reinvest:'Reinvest', switch:'Switch', payout:'Payout', payout_return:'Payout Returns', reinvest_all:'Reinvest All', payout_all:'Payout All' };
-  const INSTR_COLOR = { reinvest:'#1d4ed8', switch:'#6d28d9', payout:'#9f1239', payout_return:'#9f1239', reinvest_all:'#1d4ed8', payout_all:'#9f1239' };
-  const INSTR_BG    = { reinvest:'#eff6ff', switch:'#fdf4ff', payout:'#fff1f2', payout_return:'#fff1f2', reinvest_all:'#eff6ff', payout_all:'#fff1f2' };
+  /* Every instruction the server accepts needs an entry. instrPill falls back
+     to the raw key, so a missing one showed the client the literal string
+     "custom_switch" on their own investment. */
+  const INSTR_LABEL = { reinvest:'Reinvest', switch:'Switch', payout:'Payout', payout_return:'Payout Returns', reinvest_all:'Reinvest All', payout_all:'Payout All', payout_custom:'Custom Payout', switch_product:'Switch Product', custom_switch:'Payout + Switch', switch_amount:'Switch + Reinvest' };
+  const INSTR_COLOR = { reinvest:'#1d4ed8', switch:'#6d28d9', payout:'#9f1239', payout_return:'#9f1239', reinvest_all:'#1d4ed8', payout_all:'#9f1239', payout_custom:'#9f1239', switch_product:'#6d28d9', custom_switch:'#6d28d9', switch_amount:'#6d28d9' };
+  const INSTR_BG    = { reinvest:'#eff6ff', switch:'#fdf4ff', payout:'#fff1f2', payout_return:'#fff1f2', reinvest_all:'#eff6ff', payout_all:'#fff1f2', payout_custom:'#fff1f2', switch_product:'#fdf4ff', custom_switch:'#fdf4ff', switch_amount:'#fdf4ff' };
 
   function instrPill(instr) {
     if (!instr) return '<span style="color:#9ca3af;font-size:10px">—</span>';

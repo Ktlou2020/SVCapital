@@ -5149,6 +5149,7 @@ function renderPoolsGrid() {
             payout_custom:  'Payout Custom',
             switch_product: 'Switch Product',
             custom_switch:  'Custom Switch',
+            switch_amount:  'Switch Amount + Reinvest',
           };
           const rows = Object.entries(sm).map(([k, v]) =>
             `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0">
@@ -6441,24 +6442,32 @@ function _renderInvestmentDetail(inv, backTo, backKind) {
           <option value="payout_custom"${inv.maturity_instruction === 'payout_custom' ? ' selected' : ''}>Custom payout (rest reinvested)</option>
           <option value="switch_product"${inv.maturity_instruction === 'switch_product' ? ' selected' : ''}>Switch product</option>
           <option value="custom_switch"${inv.maturity_instruction === 'custom_switch' ? ' selected' : ''}>Custom payout &amp; switch the rest</option>
+          <option value="switch_amount"${inv.maturity_instruction === 'switch_amount' ? ' selected' : ''}>Switch an amount &amp; reinvest the rest</option>
         </select>
         <button class="btn btn--primary btn--sm" onclick='adminSetInstruction(${JSON.stringify(inv.id)})'>
           <i class="fa-solid fa-check"></i> Set Instruction
         </button>
       </div>
 
-      <!-- The two custom instructions are meaningless without their companion
+      <!-- The custom instructions are meaningless without their companion
            field, and the server refuses them without it. Shown only when the
-           chosen instruction actually needs them. -->
-      <div id="admMatAmountWrap" style="margin-top:8px;display:${(inv.maturity_instruction === 'payout_custom' || inv.maturity_instruction === 'custom_switch') ? '' : 'none'}">
-        <label class="form-label" style="font-size:0.72rem">Amount to pay out (R)</label>
+           chosen instruction actually needs them.
+
+           The amount label is not fixed text: on payout_custom and
+           custom_switch the amount is PAID OUT, on switch_amount it is MOVED
+           INTO another product. One label saying "pay out" for all three would
+           have someone type the switch figure into a payout field and get the
+           opposite of what they meant. -->
+      <div id="admMatAmountWrap" style="margin-top:8px;display:${(inv.maturity_instruction === 'payout_custom' || inv.maturity_instruction === 'custom_switch' || inv.maturity_instruction === 'switch_amount') ? '' : 'none'}">
+        <label class="form-label" style="font-size:0.72rem" id="admMatAmountLabel">${inv.maturity_instruction === 'switch_amount' ? 'Amount to switch (R)' : 'Amount to pay out (R)'}</label>
         <input type="number" id="admMatAmount" class="form-input" step="0.01" min="0"
                placeholder="Amount" value="${inv.custom_payout_amount || ''}">
-        <div style="font-size:0.68rem;color:var(--text-muted);margin-top:3px">
+        <div style="font-size:0.68rem;color:var(--text-muted);margin-top:3px" id="admMatAmountHint">
+          ${inv.maturity_instruction === 'switch_amount' ? 'Moved into the product below; the balance reinvests where it is. Both legs are fee-free.' : 'Paid to the wallet; the balance is reinvested or switched.'}
           Capped at capital plus any posted return${(() => { const _r = Utils.effectiveRate(inv); const _t = (parseFloat(inv.amount)||0) * (1 + (_r || 0)); return _r != null ? ` — about ${Utils.rand(_t)}` : ''; })()}.
         </div>
       </div>
-      <div id="admMatProductWrap" style="margin-top:8px;display:${(inv.maturity_instruction === 'switch_product' || inv.maturity_instruction === 'custom_switch') ? '' : 'none'}">
+      <div id="admMatProductWrap" style="margin-top:8px;display:${(inv.maturity_instruction === 'switch_product' || inv.maturity_instruction === 'custom_switch' || inv.maturity_instruction === 'switch_amount') ? '' : 'none'}">
         <label class="form-label" style="font-size:0.72rem">Switch into product</label>
         <select id="admMatProduct" class="form-select">
           ${(STATE.products || []).map(pr => {
@@ -6488,12 +6497,32 @@ function _renderInvestmentDetail(inv, backTo, backKind) {
 }
 
 /* Show only the companion fields the chosen instruction actually needs. */
+/* Kept in one place: which instructions carry which companion field, and what
+   the amount MEANS. The meaning is the part worth centralising — switch_amount
+   moves its amount into a product while the other two pay theirs out, and a
+   form that called both "pay out" would invite the exact mistake the split
+   instruction exists to avoid. */
+const ADM_NEEDS_AMOUNT  = ['payout_custom', 'custom_switch', 'switch_amount'];
+const ADM_NEEDS_PRODUCT = ['switch_product', 'custom_switch', 'switch_amount'];
+const ADM_AMOUNT_SWITCHES = ['switch_amount'];
+
 function _admMatToggle() {
   const v = document.getElementById('admMatInstruction')?.value || '';
   const amt  = document.getElementById('admMatAmountWrap');
   const prod = document.getElementById('admMatProductWrap');
-  if (amt)  amt.style.display  = (v === 'payout_custom' || v === 'custom_switch') ? '' : 'none';
-  if (prod) prod.style.display = (v === 'switch_product' || v === 'custom_switch') ? '' : 'none';
+  const lbl  = document.getElementById('admMatAmountLabel');
+  const hint = document.getElementById('admMatAmountHint');
+  if (amt)  amt.style.display  = ADM_NEEDS_AMOUNT.includes(v)  ? '' : 'none';
+  if (prod) prod.style.display = ADM_NEEDS_PRODUCT.includes(v) ? '' : 'none';
+
+  const switches = ADM_AMOUNT_SWITCHES.includes(v);
+  if (lbl) lbl.textContent = switches ? 'Amount to switch (R)' : 'Amount to pay out (R)';
+  if (hint) {
+    const cap = hint.textContent.replace(/^[\s\S]*?(Capped at)/, '$1');
+    hint.textContent = (switches
+      ? 'Moved into the product below; the balance reinvests where it is. Both legs are fee-free. '
+      : 'Paid to the wallet; the balance is reinvested or switched. ') + cap;
+  }
 }
 
 async function adminSetInstruction(id) {
@@ -6501,15 +6530,17 @@ async function adminSetInstruction(id) {
   const instruction = sel && sel.value;
   if (!instruction) return;
 
-  /* payout_custom and custom_switch carry an amount; switch_product and
-     custom_switch carry a target. The server rejects the combination without
-     them, so send them with the instruction rather than as a second write. */
-  const needsAmount  = instruction === 'payout_custom'  || instruction === 'custom_switch';
-  const needsProduct = instruction === 'switch_product' || instruction === 'custom_switch';
+  /* Some instructions carry an amount, some a target, switch_amount both. The
+     server rejects the combination without them, so send them with the
+     instruction rather than as a second write. */
+  const needsAmount  = ADM_NEEDS_AMOUNT.includes(instruction);
+  const needsProduct = ADM_NEEDS_PRODUCT.includes(instruction);
   const amount  = needsAmount  ? parseFloat(document.getElementById('admMatAmount')?.value || '') : null;
   const product = needsProduct ? (document.getElementById('admMatProduct')?.value || null) : null;
 
-  if (needsAmount && (!amount || amount <= 0)) { Toast.error('Enter a payout amount greater than zero'); return; }
+  if (needsAmount && (!amount || amount <= 0)) {
+    Toast.error(`Enter a ${ADM_AMOUNT_SWITCHES.includes(instruction) ? 'switch' : 'payout'} amount greater than zero`); return;
+  }
   if (needsProduct && !product)                { Toast.error('Choose a product to switch into');        return; }
 
   try {

@@ -55,7 +55,7 @@ async function _sendPush(investorId, payload) {
 
 /* ─── Input Validation ─── */
 const NUMERIC_FIELDS = new Set(['amount','wallet_balance','total_invested','total_returns','annual_rate','max_capacity','current_invested','recurring_amount','xp_points']);
-const STATUS_FIELDS  = { status: ['active','inactive','suspended','pending','pending_fica','fica_submitted','matured','paid_out','cancelled','rejected','failed','open','filling','closed','resolved','in_review','completed','waitlist','in_progress','waiting_investor','submitted','approved','expired','archived'], fica_status: ['pending','approved','rejected','not_started','submitted','in_progress'], bank_account_status: ['none','pending','approved','rejected'], maturity_instruction: ['payout_all','payout_return','payout_custom','reinvest','switch_product','custom_switch','pending'] };
+const STATUS_FIELDS  = { status: ['active','inactive','suspended','pending','pending_fica','fica_submitted','matured','paid_out','cancelled','rejected','failed','open','filling','closed','resolved','in_review','completed','waitlist','in_progress','waiting_investor','submitted','approved','expired','archived'], fica_status: ['pending','approved','rejected','not_started','submitted','in_progress'], bank_account_status: ['none','pending','approved','rejected'], maturity_instruction: ['payout_all','payout_return','payout_custom','reinvest','switch_product','custom_switch','switch_amount','pending'] };
 const TABLE_STATUS_OVERRIDES = {
   pe_companies:    ['prospect','deal_flow','due_diligence','approved','portfolio','exited','declined'],
   pe_fees:         ['projected','invoiced','paid','overdue','waived'],

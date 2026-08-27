@@ -60,6 +60,32 @@ const targetProductType = m =>
   (['switch_product', 'custom_switch'].includes(m.maturity_instruction)
     ? (m.switch_product_type || m.product_type)
     : m.product_type) || 'general';
+
+/* switch_amount is the one instruction that rolls into TWO products — the
+   named amount switches, the balance stays put. Every grouping below goes
+   through this rather than targetProductType, or the report would name one
+   target and stay silent about the other: exactly the half-covered answer
+   this pre-flight exists to prevent.
+
+   Deduped, because a switch_amount whose target equals its own product type
+   is a single destination however it was written. */
+const targetProductTypes = m =>
+  (m.maturity_instruction === 'switch_amount'
+    ? [...new Set([(m.switch_product_type || m.product_type) || 'general',
+                   m.product_type || 'general'])]
+    : [targetProductType(m)]);
+
+/* How much of a maturity is heading for one product type. For every other
+   instruction that is the whole gross; for switch_amount it splits, and
+   sizing both halves as the full amount would double-count the money. */
+const legShare = (m, pt, gross) => {
+  if (m.maturity_instruction !== 'switch_amount') return gross;
+  const custom = Math.max(0, Math.min(gross, num(m.custom_payout_amount)));
+  const switchTo = (m.switch_product_type || m.product_type) || 'general';
+  const stayIn   = m.product_type || 'general';
+  if (switchTo === stayIn) return gross;          // both legs land in one place
+  return pt === switchTo ? custom : round2(gross - custom);
+};
 /* Round every rand figure that leaves this module. 100000 * 0.07 is
    7000.000000000001 in binary floating point, and a report about money should
    never show that. */
@@ -196,7 +222,7 @@ async function runMaturityPreflight(db, { horizonDays = 14 } = {}) {
     const list = byPool.get(entry.poolId) || [];
     const rolling = list.filter(m => (m.maturity_instruction || 'reinvest') !== 'payout_all');
     entry.rollsInto = [];
-    for (const pt of [...new Set(rolling.map(targetProductType))]) {
+    for (const pt of [...new Set(rolling.flatMap(targetProductTypes))]) {
       const t = await resolveTarget(pt);
       entry.rollsInto.push({
         productType: pt,
@@ -204,7 +230,7 @@ async function runMaturityPreflight(db, { horizonDays = 14 } = {}) {
         poolName: t ? t.name : null,
         endDate: t ? t.end_date : null,
         toWallet: !t,
-        count: rolling.filter(m => targetProductType(m) === pt).length,
+        count: rolling.filter(m => targetProductTypes(m).includes(pt)).length,
       });
     }
     if (entry.rollsInto.some(x => x.toWallet)) {
@@ -216,7 +242,7 @@ async function runMaturityPreflight(db, { horizonDays = 14 } = {}) {
     }
   }
 
-  for (const pt of [...new Set(maturing.map(targetProductType))]) {
+  for (const pt of [...new Set(maturing.flatMap(targetProductTypes))]) {
     const t = await resolveTarget(pt);
 
     /* Capital plus the POSTED return, which is what actually moves — not
@@ -224,10 +250,16 @@ async function runMaturityPreflight(db, { horizonDays = 14 } = {}) {
        expected_return is 0 across the board, so using it understated the
        figure by the entire return: R6.07m reported against R6.65m real. The
        number people size a decision on has to be the number that moves. */
-    const incoming = round2(willRoll.filter(m => targetProductType(m) === pt)
-      .reduce((s, m) => s + num(m.amount) + (postedReturn({
-        amount: m.amount, actualReturn: m.actual_return,
-        poolActualRate: m.pool_actual_rate }) || 0), 0));
+    const incoming = round2(willRoll.filter(m => targetProductTypes(m).includes(pt))
+      .reduce((s, m) => {
+        const gross = num(m.amount) + (postedReturn({
+          amount: m.amount, actualReturn: m.actual_return,
+          poolActualRate: m.pool_actual_rate }) || 0);
+        /* Only the share heading HERE. A switch_amount counted at full gross
+           under both of its targets would report more money arriving than
+           matured. */
+        return s + legShare(m, pt, gross);
+      }, 0));
 
     if (!t) {
       result.reinvestTargets.push({ productType: pt, poolId: null, incoming });
@@ -277,9 +309,9 @@ async function runMaturityPreflight(db, { horizonDays = 14 } = {}) {
   }
   const missing   = maturing.filter(m => !m.maturity_instruction);
   const badCustom = maturing.filter(m =>
-    ['payout_custom', 'custom_switch'].includes(m.maturity_instruction) && !(num(m.custom_payout_amount) > 0));
+    ['payout_custom', 'custom_switch', 'switch_amount'].includes(m.maturity_instruction) && !(num(m.custom_payout_amount) > 0));
   const badSwitch = maturing.filter(m =>
-    ['switch_product', 'custom_switch'].includes(m.maturity_instruction) && !m.switch_product_type);
+    ['switch_product', 'custom_switch', 'switch_amount'].includes(m.maturity_instruction) && !m.switch_product_type);
   result.instructions = { counts, missing: missing.length, badCustom: badCustom.length, badSwitch: badSwitch.length };
 
   if (missing.length) {
@@ -288,9 +320,17 @@ async function runMaturityPreflight(db, { horizonDays = 14 } = {}) {
       'automatically — right only if that is the agreed default.');
   }
   if (badCustom.length) {
+    /* The failure differs by instruction and both are silent. On payout_custom
+       and custom_switch the amount computes to zero and the whole balance
+       rolls over instead of paying out; on switch_amount the switch leg is
+       zero and everything reinvests where it already is, so the switch the
+       client asked for simply never happens. */
+    const splits = badCustom.filter(m => m.maturity_instruction === 'switch_amount').length;
     add(STOP, 'instructions',
-      `${badCustom.length} custom-payout instruction(s) have no amount set. The custom portion ` +
-      'computes to zero, so the whole balance rolls over instead of paying out.');
+      `${badCustom.length} instruction(s) carrying an amount have none set. ` +
+      (splits ? `${splits} of them switch an amount into another product, which becomes zero — ` +
+                'the whole balance reinvests where it is and no switch happens. ' : '') +
+      'The rest compute a zero custom portion, so the whole balance rolls over instead of paying out.');
   }
   if (badSwitch.length) {
     add(ATTENTION, 'instructions',
@@ -323,8 +363,11 @@ async function runMaturityPreflight(db, { horizonDays = 14 } = {}) {
   const affected = [];
   for (const m of badCustom) {
     affected.push({ ...person(m), issue: 'custom_payout_no_amount', severity: STOP,
-      detail: 'A custom payout with no amount — the custom portion computes to zero, so the ' +
-              'whole balance rolls over instead of paying out.' });
+      detail: m.maturity_instruction === 'switch_amount'
+        ? 'A split switch with no amount — the switch leg computes to zero, so the whole ' +
+          'balance reinvests into the same product and no switch happens.'
+        : 'A custom payout with no amount — the custom portion computes to zero, so the ' +
+          'whole balance rolls over instead of paying out.' });
   }
   for (const m of badSwitch) {
     affected.push({ ...person(m), issue: 'switch_no_target', severity: ATTENTION,
@@ -333,13 +376,17 @@ async function runMaturityPreflight(db, { horizonDays = 14 } = {}) {
   /* Rollovers with nowhere to go. Resolved through the same target lookup the
      engine uses, so this names exactly the people whose money becomes cash. */
   for (const m of willRoll) {
-    const pt = targetProductType(m);
-    const t = await resolveTarget(pt);
-    if (!t) {
+    /* Both legs of a split, or the report would clear a client whose switch
+       target has a pool while the half staying put has none — half the money
+       quietly becoming cash under an all-clear. */
+    for (const pt of targetProductTypes(m)) {
+      const t = await resolveTarget(pt);
+      if (t) continue;
+      const split = targetProductTypes(m).length > 1;
       affected.push({ ...person(m), issue: 'rollover_to_wallet', severity: ATTENTION,
         targetProductType: pt,
-        detail: `Expects to roll over, but no open pool has product_type "${pt}" — ` +
-                'the money is paid to the wallet instead.' });
+        detail: `Expects to roll over${split ? ` the "${pt}" half of a split` : ''}, but no ` +
+                `open pool has product_type "${pt}" — the money is paid to the wallet instead.` });
     }
   }
   affected.sort((a, b) => (a.severity === STOP ? 0 : 1) - (b.severity === STOP ? 0 : 1)
@@ -407,6 +454,7 @@ function dateOnly(d) {
 }
 
 module.exports = {
-  runMaturityPreflight, postedReturn, resolveRolloverTarget, targetProductType,
+  runMaturityPreflight, postedReturn, resolveRolloverTarget,
+  targetProductType, targetProductTypes, legShare,
   LEVELS: { STOP, ATTENTION, OK },
 };
