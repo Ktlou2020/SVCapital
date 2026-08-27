@@ -33,6 +33,13 @@ router.get('/config', requireAuth, (req, res) => {
 async function creditWallet(investorId, amount, reference, actorEmail = null, source = 'paystack', subAccountId = null) {
   const client = await pool.connect();
   let investor;
+  /* Where the money ACTUALLY went, as opposed to where it was asked to go.
+     Everything after the transaction — the confirmation email, the log line,
+     the returned value — must use this. Using the requested id told an
+     investor their deposit had been credited to a sub-account that had not
+     received it, and in the wrong-owner case named an account belonging to
+     somebody else. */
+  let creditedSubAccountId = null;
   try {
     await client.query('BEGIN');
 
@@ -57,16 +64,78 @@ async function creditWallet(investorId, amount, reference, actorEmail = null, so
       return { alreadyProcessed: true };
     }
 
-    // Route credit: sub-account wallet takes priority when sub_account_id is present
+    /* Route the credit: a sub-account takes it when one is named AND resolves.
+
+       This used to credit whatever id it was handed, discarding the UPDATE
+       result. Two things followed. An id matching no row credited nothing
+       while the ledger row above was already written as a COMPLETED deposit —
+       money paid, nothing moved, and no way to tell success from silence. And
+       an id belonging to someone else's sub-account credited that account,
+       with the transaction still recording the payer as investor_id.
+
+       The id is not trustworthy. The Paystack webhook reads it from
+       data.metadata.sub_account_id; the webhook is HMAC-verified, but Paystack
+       is echoing what the browser set at initiation and there is no
+       server-side initiate route to validate it. sub_accounts is in
+       ALLOWED_TABLES, so one deleted between payment and webhook is enough.
+
+       So: resolve it against this investor, and fall back to their own wallet
+       when it does not resolve. Refusing outright would be worse — the money
+       has already been taken, and a deposit with nowhere to go is not
+       something to discover later from a support ticket. */
+    let creditedTo = 'investor';
+    let routingNote = null;
+
     if (subAccountId) {
-      await client.query(
-        'UPDATE sub_accounts SET wallet_balance = wallet_balance + $1 WHERE id = $2',
-        [parseFloat(amount), subAccountId]
+      const { rows: [sa] } = await client.query(
+        `SELECT id, name FROM sub_accounts
+          WHERE id = $1 AND parent_investor_id = $2 AND COALESCE(status, '') <> 'closed'
+          FOR UPDATE`,
+        [subAccountId, investorId]
       );
-    } else {
+      if (sa) {
+        creditedTo = 'sub_account';
+        creditedSubAccountId = sa.id;
+      } else {
+        routingNote = `sub-account ${subAccountId} did not resolve for ${investorId} — ` +
+                      'credited to the main wallet instead';
+        console.warn(`[payments] ${reference}: ${routingNote}`);
+      }
+    }
+
+    /* rowCount on both branches. A credit that applied to nothing must not
+       reach COMMIT looking like one that worked. */
+    const credit = creditedTo === 'sub_account'
+      ? await client.query(
+          'UPDATE sub_accounts SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
+          [parseFloat(amount), subAccountId])
+      : await client.query(
+          'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
+          [parseFloat(amount), investorId]);
+
+    if (!credit.rowCount) {
+      await client.query('ROLLBACK');
+      throw new Error(
+        `Deposit ${reference}: credit of R${amount} applied to no wallet ` +
+        `(${creditedTo === 'sub_account' ? `sub-account ${subAccountId}` : `investor ${investorId}`}). ` +
+        'Nothing was recorded — the payment needs to be credited by hand.');
+    }
+
+    /* If it was rerouted, say so on the row itself. The investor sees the
+       money in their main wallet rather than the sub-account they chose, and
+       the reason should be on the record rather than only in a log line. */
+    if (routingNote) {
+      /* Replace the description rather than append to it. It was written
+         before the destination was known and says "credited to sub-account";
+         appending would leave the row contradicting itself. */
       await client.query(
-        'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
-        [parseFloat(amount), investorId]
+        `UPDATE transactions
+            SET sub_account_id = NULL,
+                description = $2
+          WHERE reference = $1`,
+        [reference,
+         `Top-up via ${sourceLabel} — R${Number(amount).toLocaleString('en-ZA')} credited to wallet ` +
+         '(routed to main wallet — the sub-account selected was not found on this account)']
       );
     }
 
@@ -81,9 +150,9 @@ async function creditWallet(investorId, amount, reference, actorEmail = null, so
   // Email + SMS confirmation (non-blocking)
   Promise.resolve().then(async () => {
     let subAccount = null;
-    if (subAccountId) {
+    if (creditedSubAccountId) {
       try {
-        const saRes = await pool.query('SELECT name, sa_reference FROM sub_accounts WHERE id = $1', [subAccountId]);
+        const saRes = await pool.query('SELECT name, sa_reference FROM sub_accounts WHERE id = $1', [creditedSubAccountId]);
         if (saRes.rows[0]) subAccount = { name: saRes.rows[0].name, reference: saRes.rows[0].sa_reference };
       } catch (_) {}
     }
@@ -102,8 +171,8 @@ async function creditWallet(investorId, amount, reference, actorEmail = null, so
     description: `Paystack deposit R${amount} credited to ${investorId}`,
   }).catch(() => {});
 
-  console.log(`[payments] Credited R${amount} to ${subAccountId ? `sub-account ${subAccountId}` : `investor ${investorId}`}, ref: ${reference}`);
-  return { alreadyProcessed: false, amount, investorId, subAccountId };
+  console.log(`[payments] Credited R${amount} to ${creditedSubAccountId ? `sub-account ${creditedSubAccountId}` : `investor ${investorId}`}, ref: ${reference}`);
+  return { alreadyProcessed: false, amount, investorId, subAccountId: creditedSubAccountId };
 }
 
 /* ──────────────────────────────────────────────────────────
@@ -427,11 +496,20 @@ router.post('/wallet-transfer', requireAuth, async (req, res) => {
         return res.status(400).json({ error: 'Insufficient wallet balance' });
       }
 
-      // Credit sub-account wallet
-      await client.query(
+      /* Credit the sub-account — and check it landed. The debit above is
+         guarded by rowCount; this was not, so a sub-account deleted between
+         the ownership check earlier in this route and this statement would
+         take the money out of the investor's wallet and put it nowhere. The
+         ownership SELECT is not FOR UPDATE, so that window is real. */
+      const { rowCount: credited } = await client.query(
         `UPDATE sub_accounts SET wallet_balance = wallet_balance + $1, updated_at=NOW() WHERE id=$2`,
         [amountNum, sub_account_id]
       );
+      if (!credited) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          error: 'That sub-account is no longer available. Nothing was transferred.' });
+      }
 
       // Debit transaction for parent wallet
       await client.query(
@@ -465,3 +543,8 @@ router.post('/wallet-transfer', requireAuth, async (req, res) => {
 });
 
 module.exports = router;
+/* Exposed for tests. A router is a function, so this rides along without
+   changing how the module is mounted — and it means the deposit-routing check
+   drives the shipped helper rather than a transcription of it, which is where
+   a test quietly stops describing the code. */
+module.exports.creditWallet = creditWallet;
