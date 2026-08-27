@@ -318,15 +318,41 @@ async function creditWallet(client, inv, amount, returnPortion, description, ref
   const amt = round2(amount);
   if (amt <= 0) return;
   const ref = reference || ('MAT-' + inv.id);
-  await client.query(
-    'UPDATE investors SET wallet_balance = wallet_balance + $1, total_returns = COALESCE(total_returns,0) + $2, updated_at = NOW() WHERE id = $3',
-    [amt, round2(returnPortion || 0), inv.investor_id]
-  );
+  const ret = round2(returnPortion || 0);
+
+  /* Back to the account the money came from.
+
+     A sub-account has its own wallet, and investing from one debits it —
+     tables.js locks the sub_accounts row and takes capital plus fee from it.
+     This credited `investors` unconditionally, so capital and return both
+     landed in the PARENT's wallet: the sub-account was left permanently short
+     by everything it had invested, with total_returns still at zero however
+     much it had earned.
+
+     Every other money path on the platform already splits this way — deposits,
+     manual credits, EFT approvals, interest distribution, withdrawals and the
+     invest deduction all write sub_accounts.wallet_balance when there is one.
+     Maturity was the only one that did not. */
+  if (inv.sub_account_id) {
+    await client.query(
+      'UPDATE sub_accounts SET wallet_balance = wallet_balance + $1, total_returns = COALESCE(total_returns,0) + $2, updated_at = NOW() WHERE id = $3',
+      [amt, ret, inv.sub_account_id]
+    );
+  } else {
+    await client.query(
+      'UPDATE investors SET wallet_balance = wallet_balance + $1, total_returns = COALESCE(total_returns,0) + $2, updated_at = NOW() WHERE id = $3',
+      [amt, ret, inv.investor_id]
+    );
+  }
+
+  /* The row carries the sub-account too, or the sub-account's own statement
+     never shows the money arriving — the flow would be invisible from the
+     account it belongs to. */
   await client.query(
     `INSERT INTO transactions
-       (id, investor_id, type, amount, status, reference, description, investment_id, transaction_date, created_at, updated_at)
-     VALUES (gen_random_uuid(),$1,'payout',$2,'completed',$3,$4,$5,NOW(),NOW(),NOW())`,
-    [inv.investor_id, amt, ref, description, inv.id]
+       (id, investor_id, sub_account_id, type, amount, status, reference, description, investment_id, transaction_date, created_at, updated_at)
+     VALUES (gen_random_uuid(),$1,$2,'payout',$3,'completed',$4,$5,$6,NOW(),NOW(),NOW())`,
+    [inv.investor_id, inv.sub_account_id || null, amt, ref, description, inv.id]
   );
 }
 
@@ -423,12 +449,16 @@ async function reinvestAmount(client, inv, amount, productType, sourcePoolName) 
     const switched     = target.product_type !== inv.product_type;
 
     await client.query(
+      /* sub_account_id carries forward. Without it a rollover silently moved a
+         sub-account's capital to the parent as a parent-level holding, and
+         nothing in the new row said where it had come from — the link was
+         simply gone, with no way to reconstruct it afterwards. */
       `INSERT INTO investments
-         (id, investor_id, pool_id, pool_name, amount, status, start_date, end_date,
+         (id, investor_id, sub_account_id, pool_id, pool_name, amount, status, start_date, end_date,
           annual_rate, term_months, expected_return, actual_return, product_type,
           maturity_instruction, is_reinvestment, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,'active',$6,$7,$8,$9,$10,0,$11,'reinvest',true,NOW(),NOW())`,
-      [newInvId, inv.investor_id, target.id, target.name, amt,
+       VALUES ($1,$2,$3,$4,$5,$6,'active',$7,$8,$9,$10,$11,0,$12,'reinvest',true,NOW(),NOW())`,
+      [newInvId, inv.investor_id, inv.sub_account_id || null, target.id, target.name, amt,
        startDate.toISOString().slice(0,10), endDate.toISOString().slice(0,10),
        target.annual_rate, termMonths, newExpReturn, target.product_type]
     );
