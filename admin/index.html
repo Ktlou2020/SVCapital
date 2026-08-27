@@ -239,6 +239,12 @@
           </button>
         </div>
 
+        <!-- Both hidden until they have something to say. A short table or a
+             failed source makes the tiles below wrong in ways the tiles
+             themselves cannot show. -->
+        <div id="ds-load-errors" style="display:none;margin-bottom:12px"></div>
+        <div id="ds-truncation" style="display:none;margin-bottom:12px"></div>
+
         <div class="stats-row" id="dashStats">
           <div class="stat-card stat-card--gold" style="cursor:pointer" onclick="navigate('investors', document.querySelector('[data-view=investors]'))">
             <div class="stat-card__header">
@@ -4756,7 +4762,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=17"></script>
-<script src="js/admin.js?v=123"></script>
+<script src="js/admin.js?v=124"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>

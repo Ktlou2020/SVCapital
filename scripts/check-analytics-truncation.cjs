@@ -74,10 +74,23 @@ if (!CHROME) {
   process.exit(fail ? 1 : 0);
 }
 
-/* Run the real function against a real DOM. */
-const i = admin.indexOf('function _analyticsTruncation(');
-const fn = admin.slice(i, admin.indexOf('\n}\n', i) + 3);
-ok('the banner function was found', i > -1);
+/* Run the real functions against a real DOM.
+
+   Both of them: _analyticsTruncation is now a thin caller over the shared
+   _renderTruncationBanner, which the dashboard uses too. Extracting only the
+   caller would inject a function whose helper is undefined, so the page throws
+   and reports nothing — which is exactly how this check failed when the two
+   were split apart. Pull every function the banner needs. */
+const slice = name => {
+  const at = admin.indexOf(`function ${name}(`);
+  return at > -1 ? admin.slice(at, admin.indexOf('\n}\n', at) + 3) : '';
+};
+const shared = slice('_renderTruncationBanner');
+const caller = slice('_analyticsTruncation');
+const fn = shared + '\n' + caller;
+ok('the banner function was found', caller !== '');
+ok('and the shared renderer it delegates to', shared !== '',
+   'the dashboard uses the same renderer — a second copy is how one goes stale');
 
 const page = `<!doctype html><meta charset="utf-8"><body>
 <div id="an-truncation" style="display:none"></div>
