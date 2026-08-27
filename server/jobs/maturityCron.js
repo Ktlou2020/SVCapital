@@ -15,6 +15,9 @@
              · reinvest       → whole amount reinvested (same product)
              · switch_product → whole amount switched into another product
              · custom_switch  → custom amount to wallet, remainder switched into another product
+             · switch_amount  → named amount switched into another product, remainder
+                                reinvested (same product) — the only instruction that
+                                splits a maturity across two products, both fee-free
        The pool cycler then opens the NEXT month's fundraising pool at 00:01.
    Also: runMaturityAlerts sends 30-day / 7-day advance warnings.
    ═══════════════════════════════════════════════════════════ */
@@ -168,6 +171,26 @@ async function runMaturityProcessing() {
           // Pay out a custom amount; switch the remainder into another product.
           await creditWallet(client, inv, custom, Math.min(actualReturn, custom), `Maturity custom payout — ${poolName}`);
           await reinvestAmount(client, inv, round2(gross - custom), switchType, poolName);
+          reinvestPending++;
+          break;
+        }
+
+        case 'switch_amount': {
+          /* Split the maturity across two products: the named amount switches,
+             the balance stays where it is. The only instruction that puts a
+             named amount into a PRODUCT rather than the wallet.
+
+             Both legs go through reinvestAmount, so both are fee-free. Doing
+             this by paying the balance out and re-investing it from the wallet
+             would cost the client the 1% platform fee on that balance, which
+             is the whole reason this instruction exists.
+
+             `custom` is already clamped to [0, gross], and reinvestAmount
+             returns early on a non-positive amount — so custom == gross
+             degenerates to switch_product and custom == 0 to reinvest, both
+             without writing an empty investment. */
+          await reinvestAmount(client, inv, custom, switchType, poolName, '-S');
+          await reinvestAmount(client, inv, round2(gross - custom), inv.product_type, poolName, '-R');
           reinvestPending++;
           break;
         }
@@ -365,7 +388,19 @@ async function creditWallet(client, inv, amount, returnPortion, description, ref
    All writes go through `client` so they participate in the caller's
    transaction (FIX 6, FIX 7, FIX 8, FIX 9).
    ──────────────────────────────────────────────────────────── */
-async function reinvestAmount(client, inv, amount, productType, sourcePoolName) {
+/* `leg` distinguishes two rollovers made from the SAME investment in one
+   transaction — switch_amount splits a maturity across two products.
+
+   It is not cosmetic. transactions.reference carries a UNIQUE index, and the
+   REINV- insert below has no ON CONFLICT clause, so a second call for the same
+   investment would throw, roll the whole maturity back, and leave
+   maturity_processed_at unset — the investment retried every night, its pool
+   never marked matured. The new investment id derives from Date.now(), which
+   two calls in the same millisecond share, so that needs separating too.
+
+   Leave it empty for the single-rollover instructions: their references keep
+   the exact form they have always had, so nothing already written moves. */
+async function reinvestAmount(client, inv, amount, productType, sourcePoolName, leg = '') {
   const amt = round2(amount);
   if (amt <= 0) return;
   try {
@@ -404,7 +439,7 @@ async function reinvestAmount(client, inv, amount, productType, sourcePoolName) 
       await creditWallet(
         client, inv, amt, 0,
         `Maturity payout — ${sourcePoolName} (no open ${productType || ''} pool to reinvest into)`,
-        'MAT-FALLBACK-' + inv.id
+        'MAT-FALLBACK-' + inv.id + leg
       );
       console.log(`[maturity] no open ${productType} pool — paid R${amt} to wallet for ${inv.investor_id}`);
       return;
@@ -422,7 +457,7 @@ async function reinvestAmount(client, inv, amount, productType, sourcePoolName) 
       await creditWallet(
         client, inv, amt, 0,
         `Maturity payout — ${sourcePoolName} (target pool not found)`,
-        'MAT-FALLBACK-' + inv.id
+        'MAT-FALLBACK-' + inv.id + leg
       );
       return;
     }
@@ -435,7 +470,7 @@ async function reinvestAmount(client, inv, amount, productType, sourcePoolName) 
       await creditWallet(
         client, inv, amt, 0,
         `Maturity payout — ${sourcePoolName} (pool at capacity)`,
-        'MAT-FALLBACK-' + inv.id
+        'MAT-FALLBACK-' + inv.id + leg
       );
       console.log(`[maturity] pool ${target.id} at capacity — paid R${amt} to wallet for ${inv.investor_id}`);
       return;
@@ -445,7 +480,7 @@ async function reinvestAmount(client, inv, amount, productType, sourcePoolName) 
     const startDate    = new Date();
     const endDate      = new Date(startDate); endDate.setMonth(endDate.getMonth() + termMonths);
     const newExpReturn = round2(amt * (parseFloat(target.annual_rate) || 0) * (termMonths / 12));
-    const newInvId     = 'INV-RI-' + Date.now() + '-' + String(inv.investor_id).replace(/[^A-Z0-9]/gi, '').slice(-6);
+    const newInvId     = 'INV-RI-' + Date.now() + leg + '-' + String(inv.investor_id).replace(/[^A-Z0-9]/gi, '').slice(-6);
     const switched     = target.product_type !== inv.product_type;
 
     await client.query(
@@ -470,7 +505,7 @@ async function reinvestAmount(client, inv, amount, productType, sourcePoolName) 
          (id, investor_id, sub_account_id, type, amount, status, reference, description, investment_id, transaction_date, created_at, updated_at)
        VALUES (gen_random_uuid(),$1,$2,'matured_funds',$3,'completed',$4,$5,$6,NOW(),NOW(),NOW())
        ON CONFLICT (reference) DO NOTHING`,
-      [inv.investor_id, inv.sub_account_id || null, amt, 'MATF-' + inv.id,
+      [inv.investor_id, inv.sub_account_id || null, amt, 'MATF-' + inv.id + leg,
        `Matured Funds — ${sourcePoolName}`, inv.id]
     );
 
@@ -479,7 +514,7 @@ async function reinvestAmount(client, inv, amount, productType, sourcePoolName) 
       `INSERT INTO transactions
          (id, investor_id, sub_account_id, type, amount, status, reference, description, investment_id, pool_id, transaction_date, created_at, updated_at)
        VALUES (gen_random_uuid(),$1,$2,'reinvestment',$3,'completed',$4,$5,$6,$7,NOW(),NOW(),NOW())`,
-      [inv.investor_id, inv.sub_account_id || null, amt, 'REINV-' + inv.id,
+      [inv.investor_id, inv.sub_account_id || null, amt, 'REINV-' + inv.id + leg,
        `Maturity ${verb} — ${sourcePoolName} → ${target.name}`, newInvId, target.id]
     );
 

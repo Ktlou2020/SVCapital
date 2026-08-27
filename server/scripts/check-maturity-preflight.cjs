@@ -304,8 +304,16 @@ const snapshot = async () => (await pool.query(`
     }
 
     console.log('\nit notices the things that need a person');
-    ok('a custom payout with no amount is a STOP',
-       r.findings.some(f => f.level === 'STOP' && /custom-payout/.test(f.message)));
+    /* Asserted on the section and the issue key, not the sentence. The prose
+       has to change as instructions are added — switch_amount made "custom
+       payout" the wrong blanket term for a message now covering three — and a
+       check that fails on rewording says nothing about whether the STOP fired. */
+    ok('an instruction with no amount is a STOP',
+       r.findings.some(f => f.level === 'STOP' && f.section === 'instructions' && /amount/.test(f.message)),
+       JSON.stringify(r.findings.filter(f => f.section === 'instructions')));
+    ok('and the client is named with the issue',
+       (r.affected || []).some(a => a.issue === 'custom_payout_no_amount' && a.severity === 'STOP'),
+       JSON.stringify((r.affected || []).map(a => a.issue)));
     ok('stale open pools are reported',
        r.stalePools.length > 0 && r.findings.some(f => /past their close date/.test(f.message)));
     ok('the verdict is blocked while a STOP stands', r.summary.verdict === 'blocked', r.summary.verdict);

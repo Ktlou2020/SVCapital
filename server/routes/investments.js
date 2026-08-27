@@ -14,14 +14,22 @@ const audit  = require('../services/audit');
 const email  = require('../services/email');
 const { requireAuth } = require('../middleware/auth');
 
-const VALID_INSTRUCTIONS = ['payout_all', 'payout_return', 'payout_custom', 'reinvest', 'switch_product', 'custom_switch'];
+const VALID_INSTRUCTIONS = ['payout_all', 'payout_return', 'payout_custom', 'reinvest', 'switch_product', 'custom_switch', 'switch_amount'];
 const STAFF_ROLES = ['admin', 'director', 'fund_manager', 'staff'];
 
 // Instructions that are meaningless without their companion field. Saving
 // 'payout_custom' with no amount, or 'switch_product' with no target, leaves an
 // investment that says pay out / switch but cannot say how much or into what.
-const NEEDS_AMOUNT  = ['payout_custom', 'custom_switch'];
-const NEEDS_PRODUCT = ['switch_product', 'custom_switch'];
+const NEEDS_AMOUNT  = ['payout_custom', 'custom_switch', 'switch_amount'];
+const NEEDS_PRODUCT = ['switch_product', 'custom_switch', 'switch_amount'];
+
+/* What the amount MEANS differs, and the error text has to say which.
+   On payout_custom and custom_switch the amount is paid to the wallet; on
+   switch_amount it is moved into another product and nothing is paid out.
+   Calling it a "payout amount" there would describe the opposite of what the
+   instruction does. */
+const AMOUNT_IS_SWITCH = ['switch_amount'];
+const amountNoun = i => (AMOUNT_IS_SWITCH.includes(i) ? 'switch amount' : 'payout amount');
 
 /* Returns an error string, or null when the combination is coherent. */
 function validateInstruction(instruction, amount, productType) {
@@ -29,10 +37,10 @@ function validateInstruction(instruction, amount, productType) {
 
   if (NEEDS_AMOUNT.includes(instruction)) {
     const n = Number(amount);
-    if (!Number.isFinite(n) || n <= 0) return 'A payout amount greater than zero is required for this instruction.';
+    if (!Number.isFinite(n) || n <= 0) return `A ${amountNoun(instruction)} greater than zero is required for this instruction.`;
   } else if (amount != null && amount !== '') {
     const n = Number(amount);
-    if (!Number.isFinite(n) || n < 0) return 'Invalid payout amount.';
+    if (!Number.isFinite(n) || n < 0) return `Invalid ${amountNoun(instruction)}.`;
   }
 
   if (NEEDS_PRODUCT.includes(instruction) && !productType) {
@@ -245,7 +253,7 @@ router.post('/pool/:poolId/instruction', requireAuth, async (req, res) => {
            place to say it rather than leaving them to re-type blind. */
         const smallest = Math.min(...blocked.map(investmentCeiling));
         return res.status(400).json({
-          error: `${rand(custom_payout_amount)} is applied to each investment. The smallest in this pool is worth ${rand(smallest)}, so it cannot pay out that much.`,
+          error: `${rand(custom_payout_amount)} is applied to each investment. The smallest in this pool is worth ${rand(smallest)}, so it cannot ${AMOUNT_IS_SWITCH.includes(instruction) ? 'switch' : 'pay out'} that much.`,
         });
       }
     }

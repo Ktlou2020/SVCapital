@@ -1034,6 +1034,7 @@ function sendMaturityInstructionConfirmed(investor, { poolName, endDate, instruc
     reinvest:      'Reinvest in full (roll over)',
     switch_product:'Switch to a different product',
     custom_switch: 'Custom switch arrangement',
+    switch_amount: 'Switch an amount, reinvest the rest',
   };
   const label = LABELS[instruction] || instruction;
 
