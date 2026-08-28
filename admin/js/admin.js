@@ -746,6 +746,10 @@ async function _refreshDashboardTotals() {
 
   _dashboardKpisFromServer = !!(k && Number.isFinite(Number(k.total_investors)));
 
+  /* Shared with the pending-actions widget and the sidebar badges, which used
+     to count these themselves — three definitions of the same queue. */
+  STATE.dashboardCounts = _dashboardKpisFromServer ? k : null;
+
   if (_dashboardKpisFromServer) {
     set('ds-investors', k.total_investors);
     set('ds-invested',  Utils.rand(k.active_capital));
@@ -782,19 +786,27 @@ async function loadDashboard() {
     const _k = _dash.kpis;
     const _set2 = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
 
+    /* Declared once and used by the tile, the welcome strip and the badges.
+       Moving this row to SQL removed the const the strip further down was
+       already reading, so loadDashboard threw ReferenceError before it reached
+       the charts, the pending-actions widget or the activity feed — the tiles
+       rendered and everything below them silently did not. */
+    const pendingKycCount = _k ? _k.pending_kyc
+      : nonArchived.filter(i => {
+          const fs = i.fica_status; const ks = i.kyc_status;
+          return fs === 'pending' || fs === 'in_progress' || fs === 'submitted' || ks === 'pending';
+        }).length;
+
     if (_k) {
       _set2('ds-fica-rate',           `${_k.fica_rate}%`);
-      _set2('ds-pending-kyc',          _k.pending_kyc);
+      _set2('ds-pending-kyc',          pendingKycCount);
       _set2('ds-upcoming-maturities',  _k.upcoming_maturities);
       _set2('ds-pending-withdrawals',  _k.pending_withdrawals);
     } else {
       const ficaApproved = nonArchived.filter(i => i.fica_status === 'approved' || i.kyc_status === 'approved').length;
       _set2('ds-fica-rate', `${nonArchived.length ? Math.round((ficaApproved / nonArchived.length) * 100) : 0}%`);
 
-      _set2('ds-pending-kyc', nonArchived.filter(i => {
-        const fs = i.fica_status; const ks = i.kyc_status;
-        return fs === 'pending' || fs === 'in_progress' || fs === 'submitted' || ks === 'pending';
-      }).length);
+      _set2('ds-pending-kyc', pendingKycCount);
 
       /* end_date, with maturity_date only as a fallback. This read
          i.maturity_date alone — a column that lives on investment_pools and
@@ -863,20 +875,28 @@ async function loadDashboard() {
       _setTrend('ds-trend-returns', _trendPct(retThis, retLast));
     })();
 
-    // Badge counts (reuse pendingKycCount computed above for consistency)
-    document.getElementById('kycBadge').textContent = pendingKycCount;
+    /* Badges are written once, by updateSidebarBadges, from the server counts.
+       They were also set here — a third definition alongside the widget's and
+       the sidebar's — which meant the page briefly showed a browser-derived
+       number before overwriting it with the real one. */
 
-    // Fetch ticket count for welcome strip
+    // Tickets are still fetched: the welcome strip lists them, and STATE.tickets
+    // backs the fallback when the server counts are unavailable.
     let openTickets = 0;
     let tickets = [];
     try {
       const tktRes = await API.tickets.list({ limit: 50 });
       tickets = tktRes.data || [];
       STATE.tickets = tickets;
-      openTickets = tickets.filter(t => t.status === 'open' || t.status === 'in_progress').length;
-      const tktBadge = document.getElementById('ticketBadge');
-      if (tktBadge) { tktBadge.textContent = openTickets; tktBadge.style.display = openTickets > 0 ? '' : 'none'; }
-    } catch (_) {}
+      openTickets = STATE.dashboardCounts
+        ? STATE.dashboardCounts.open_tickets
+        : tickets.filter(t => t.status === 'open' || t.status === 'in_progress').length;
+    } catch (err) {
+      /* Was catch (_) {} — a failure here left the strip silently empty and the
+         count at zero, indistinguishable from having no open tickets. */
+      console.error('[dashboard] tickets failed to load:', err?.message || err);
+      openTickets = STATE.dashboardCounts ? STATE.dashboardCounts.open_tickets : 0;
+    }
 
     // Build dynamic notification panel
     loadAdminNotifications(STATE.investors, STATE.transactions, tickets);
@@ -937,22 +957,33 @@ async function loadDashboard() {
   }
 }
 
+/* The same counts as the pending-actions widget, from the same place.
+
+   They were computed here a second time, independently. A badge saying 3 above
+   a widget saying 5 is worse than either being wrong alone, because it makes
+   both untrustworthy and there is nothing on screen to say which to believe. */
 function updateSidebarBadges() {
-  const _nonArchived = STATE.investors.filter(i => i.status !== 'archived');
-  const pendingKyc = _nonArchived.filter(i => {
-    const fs = i.fica_status; const ks = i.kyc_status;
-    return fs === 'pending' || fs === 'in_progress' || fs === 'submitted' || ks === 'pending';
-  }).length;
+  const c = STATE.dashboardCounts || null;
+
+  const pendingKyc = c ? c.pending_kyc
+    : STATE.investors.filter(i => i.status !== 'archived').filter(i => {
+        const fs = i.fica_status; const ks = i.kyc_status;
+        return fs === 'pending' || fs === 'in_progress' || fs === 'submitted' || ks === 'pending';
+      }).length;
   const kycBadge = document.getElementById('kycBadge');
   if (kycBadge) kycBadge.textContent = pendingKyc;
 
-  const pendingWith = STATE.transactions.filter(t => t.type === 'withdrawal' && t.status === 'pending').length;
+  const pendingWith = c ? c.pending_withdrawals
+    : STATE.transactions.filter(t => t.type === 'withdrawal' && t.status === 'pending').length;
   const withBadge = document.getElementById('withdrawalBadge');
   if (withBadge) { withBadge.textContent = pendingWith; withBadge.style.display = pendingWith > 0 ? '' : 'none'; }
 
-  const openTkts = STATE.tickets ? STATE.tickets.filter(t => ['open','in_progress'].includes(t.status)).length : 0;
+  const openTkts = c ? c.open_tickets
+    : (STATE.tickets ? STATE.tickets.filter(t => ['open','in_progress'].includes(t.status)).length : 0);
   const tktBadge = document.getElementById('ticketBadge');
-  if (tktBadge) tktBadge.textContent = openTkts;
+  /* Hidden at zero like the withdrawals badge, rather than showing a 0 that
+     reads as a live queue with nothing in it. */
+  if (tktBadge) { tktBadge.textContent = openTkts; tktBadge.style.display = openTkts > 0 ? '' : 'none'; }
 }
 
 function renderRecentInvestments() {
@@ -1012,19 +1043,47 @@ function renderPendingActions() {
   const el = document.getElementById('pendingActionsWidget');
   const actions = [];
 
-  const pendingFica = STATE.investors.filter(i => i.status === 'pending_fica' || i.fica_status === 'submitted').length;
+  /* Counted over whole tables when the server answered.
+
+     These decide whether anyone opens a queue today, and every one was taken
+     from a capped page. The cap keeps the most RECENT rows, which inverts
+     what these counts are for: the item sitting unactioned longest is the
+     first to fall outside the window, and it is the one most needing
+     attention. A queue that quietly stops reporting its oldest entries is
+     worse than one reporting nothing.
+
+     The fallbacks below are kept, and each is now at least a correct
+     expression over whatever was loaded. */
+  const c = STATE.dashboardCounts || null;
+
+  const pendingFica = c ? c.pending_fica
+    : STATE.investors.filter(i => i.status === 'pending_fica' || i.fica_status === 'submitted').length;
   if (pendingFica) actions.push({ icon: 'fa-id-card', color: 'var(--orange)', text: `${pendingFica} FICA review(s) pending`, sub: 'Review identity documents before investors can fund or invest.', view: 'kyc', cta: 'Open KYC', priority: 1 });
 
-  const pendingWithdrawals = STATE.transactions.filter(t => t.type === 'withdrawal' && t.status === 'pending').length;
+  const pendingWithdrawals = c ? c.pending_withdrawals
+    : STATE.transactions.filter(t => t.type === 'withdrawal' && t.status === 'pending').length;
   if (pendingWithdrawals) actions.push({ icon: 'fa-arrow-up-from-bracket', color: '#ef4444', text: `${pendingWithdrawals} withdrawal request(s) waiting`, sub: 'Approve or reject payouts to keep cash movement on time.', view: 'withdrawals', cta: 'Review withdrawals', priority: 2 });
 
-  const openSupport = (STATE.tickets || []).filter(t => t.status === 'open' || t.status === 'in_progress').length;
+  /* STATE.tickets is fetched with limit 50, so this counted open tickets among
+     the fifty most recent — a far tighter cap than the 5,000 on the other
+     tables, and one a growing support queue passes quickly. */
+  const openSupport = c ? c.open_tickets
+    : (STATE.tickets || []).filter(t => t.status === 'open' || t.status === 'in_progress').length;
   if (openSupport) actions.push({ icon: 'fa-headset', color: 'var(--blue)', text: `${openSupport} support ticket(s) need replies`, sub: 'Resolve investor questions before they become complaints or churn risk.', view: 'support', cta: 'Open support', priority: 3 });
 
-  const noInstruction = STATE.investments.filter(i => i.status === 'matured' && i.maturity_instruction === 'pending').length;
+  /* NULL, '' and the literal 'pending' all mean "never chose"; this counted
+     only the third. An investor who simply never answered carries NULL, so the
+     commonest case was the one missed — and matured investments started long
+     ago, so under the date-DESC cap they are also the first rows dropped. Two
+     independent reasons this read low, both of which hid work that was due. */
+  const noInstruction = c ? c.missing_instructions
+    : STATE.investments.filter(i => i.status === 'matured' &&
+        !['reinvest','payout_all','payout_return','payout_custom','switch_product','custom_switch','switch_amount']
+          .includes(i.maturity_instruction || '')).length;
   if (noInstruction) actions.push({ icon: 'fa-hourglass-end', color: 'var(--red)', text: `${noInstruction} maturity instruction(s) missing`, sub: 'Investors are waiting to reinvest or pay out matured capital.', view: 'maturity', cta: 'Review maturities', priority: 4 });
 
-  const pendingTransactions = STATE.transactions.filter(t => t.status === 'pending' && t.type !== 'withdrawal').length;
+  const pendingTransactions = c ? c.pending_transactions
+    : STATE.transactions.filter(t => t.status === 'pending' && t.type !== 'withdrawal').length;
   if (pendingTransactions) actions.push({ icon: 'fa-arrows-rotate', color: 'var(--green)', text: `${pendingTransactions} transaction(s) pending`, sub: 'Clear deposits, returns and reconciliations to keep reporting current.', view: 'transactions', cta: 'Open transactions', priority: 5 });
 
   actions.sort((a, b) => a.priority - b.priority);

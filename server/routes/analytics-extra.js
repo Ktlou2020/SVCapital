@@ -243,7 +243,36 @@ router.get('/dashboard', requireAuth, _admin, async (req, res) => {
             AND end_date <= CURRENT_DATE + 90)                                  AS upcoming_maturities,
 
         (SELECT COUNT(*) FROM transactions
-          WHERE type = 'withdrawal' AND status = 'pending')                     AS pending_withdrawals
+          WHERE type = 'withdrawal' AND status = 'pending')                     AS pending_withdrawals,
+
+        /* ── The pending-actions widget and the sidebar badges ──────────
+           These are the counts that decide whether anyone looks at a queue
+           today, and every one of them was taken from a capped page.
+
+           The cap keeps the most RECENT rows, which inverts the usefulness of
+           these particular counts: the item that has been sitting unactioned
+           longest is the first to fall outside the window, and it is the one
+           most needing attention. A queue that quietly stops reporting its
+           oldest entries is worse than one that reports nothing. */
+
+        (SELECT COUNT(*) FROM investors
+          WHERE COALESCE(status,'') = 'pending_fica'
+             OR COALESCE(fica_status,'') = 'submitted')                         AS pending_fica,
+
+        (SELECT COUNT(*) FROM support_tickets
+          WHERE COALESCE(status,'') IN ('open','in_progress'))                  AS open_tickets,
+
+        /* NULL, '' and the literal 'pending' all mean "never chose", and the
+           browser counted only the third. An investor who simply never
+           answered carries NULL, so the commonest case was the one missed —
+           and matured investments started long ago, so they are also the first
+           rows the cap discards. Two independent reasons this read low. */
+        (SELECT COUNT(*) FROM investments
+          WHERE status = 'matured'
+            AND COALESCE(NULLIF(maturity_instruction, ''), 'pending') = 'pending') AS missing_instructions,
+
+        (SELECT COUNT(*) FROM transactions
+          WHERE status = 'pending' AND COALESCE(type,'') <> 'withdrawal')       AS pending_transactions
     `);
 
     const n = v => Number(v) || 0;
@@ -261,6 +290,10 @@ router.get('/dashboard', requireAuth, _admin, async (req, res) => {
       pending_kyc:         n(d.pending_kyc),
       upcoming_maturities: n(d.upcoming_maturities),
       pending_withdrawals: n(d.pending_withdrawals),
+      pending_fica:        n(d.pending_fica),
+      open_tickets:        n(d.open_tickets),
+      missing_instructions: n(d.missing_instructions),
+      pending_transactions: n(d.pending_transactions),
       computed_at:         new Date().toISOString(),
     });
   } catch (err) {
