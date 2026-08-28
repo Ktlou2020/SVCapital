@@ -199,6 +199,50 @@ const legs = async () => (await pool.query(
     }
 
     /* ── The pre-flight must see both halves ──────────────────────── */
+    /* The shared plan helper describes the instruction to the client and to
+       the admin modal. It was written before switch_amount existed, so the
+       instruction fell through to the default — "The client has not chosen
+       what happens at maturity" — on an investment where they very much had. */
+    console.log('\nthe maturity plan describes the split');
+    {
+      const vm2 = require('vm'), fsx = require('fs');
+      const apiSrc = fsx.readFileSync(path.join(ROOT, 'js', 'api.js'), 'utf8');
+      const sb = { window: {}, document: { addEventListener() {}, getElementById: () => null, querySelector: () => null },
+        localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+        fetch: () => Promise.reject(new Error('no network')),
+        console: { log() {}, warn() {}, error() {} }, navigator: { userAgent: 'check' },
+        location: { origin: '', href: '', hostname: 'localhost' },
+        setTimeout, clearTimeout, setInterval, clearInterval, Date, Math, JSON, Number, String, Array, Object };
+      sb.globalThis = sb; sb.self = sb; vm2.createContext(sb);
+      vm2.runInContext(apiSrc + '\n;globalThis.__U = Utils;', sb);
+      const U = sb.__U;
+
+      const inv = { amount: 10000, pool_actual_rate: 0.0213,
+                    maturity_instruction: 'switch_amount', custom_payout_amount: 4000 };
+      const plan = U.maturityPlan(inv, 'Cattle Investment');
+
+      ok('it is named, not printed as a raw enum',
+         plan.label === 'Switch an amount, reinvest the rest', plan.label);
+      ok('and not treated as no instruction at all',
+         !/has not chosen/.test(plan.detail), plan.detail);
+      ok('the switched amount and its target are stated',
+         /R4,000\.00 switched into Cattle Investment/.test(plan.detail), plan.detail);
+      ok('and the balance is described as staying invested',
+         /R6,213\.00 reinvested where it is/.test(plan.detail), plan.detail);
+      ok('nothing is reported as paid to the wallet',
+         plan.payout === null,
+         'both legs stay invested — a payout figure here would tell the client money is coming that is not');
+
+      const noTarget = U.maturityPlan({ ...inv, }, null);
+      ok('a missing target is called out rather than glossed',
+         /no product chosen yet/.test(noTarget.detail), noTarget.detail);
+
+      const noAmount = U.maturityPlan({ amount: 10000, pool_actual_rate: 0.0213,
+                                        maturity_instruction: 'switch_amount' }, 'Cattle Investment');
+      ok('a missing amount is called out too',
+         /no amount set yet/.test(noAmount.detail), noAmount.detail);
+    }
+
     console.log('\nthe pre-flight reports both destinations');
     const pf = require(path.join(ROOT, 'server', 'services', 'maturityPreflight.js'));
     {

@@ -6636,7 +6636,7 @@ function _renderInvestmentDetail(inv, backTo, backKind) {
       <div class="info-row"><span class="info-row__label">Product</span><span class="info-row__value"><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></span></div>
       <div class="info-row"><span class="info-row__label">Invested Amount</span><span class="info-row__value td-gold fw-700">${Utils.rand(inv.amount)}</span></div>
       <div class="info-row"><span class="info-row__label">${_invRate != null && _invRate > 0 && !(parseFloat(inv.annual_rate) > 0) ? 'Return (posted)' : 'Target Return'}</span><span class="info-row__value td-green">${_invReturn != null ? Utils.rand(_invReturn) : '—'}</span></div>
-      <div class="info-row"><span class="info-row__label">Return Rate</span><span class="info-row__value">${_invRate != null ? Utils.pct(_invRate) + ' p.a.' : '—'}</span></div>
+      <div class="info-row"><span class="info-row__label">Return Rate</span><span class="info-row__value">${Utils.rateLabel(inv)}</span></div>
       <div class="info-row"><span class="info-row__label">Status</span><span class="info-row__value">${Utils.statusBadge(inv.status)}</span></div>
       <div class="info-row"><span class="info-row__label">Investment Date</span><span class="info-row__value td-muted">${Utils.date(inv.start_date)}</span></div>
       <div class="info-row"><span class="info-row__label">Maturity Date</span><span class="info-row__value td-muted">${Utils.date(inv.end_date)}</span></div>
