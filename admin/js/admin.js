@@ -732,55 +732,88 @@ async function _refreshDashboardTotals() {
     }
   });
 
-  _dashboardTruncation(counts);
   _dashboardLoadErrors(failedSources);
 
-  // KPI cards — computed from the live tables, not denormalised investor fields.
-  const totalInvested = STATE.investments.filter(i => i.status === 'active').reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
-  const totalReturns  = STATE.transactions.filter(t => t.type === 'return' && t.status === 'completed').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
-  const activePools   = STATE.pools.filter(p => ['open', 'active', 'filling'].includes(p.status)).length;
-
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-  set('ds-investors', STATE.investors.length);
-  set('ds-invested',  Utils.rand(totalInvested));
-  set('ds-returns',   Utils.rand(totalReturns));
-  set('ds-pools',     activePools);
 
-  return { counts, failedSources };
+  /* Counted in SQL over every row, so the caps above cannot make a tile wrong.
+     The rows are still read — the lists, charts and pending-action widgets are
+     built from them — but the headline figures no longer depend on how many
+     came back. */
+  let k = null;
+  try { k = await API._fetch('GET', 'analytics/dashboard'); }
+  catch (err) { console.error('[dashboard] server figures unavailable:', err?.message || err); }
+
+  _dashboardKpisFromServer = !!(k && Number.isFinite(Number(k.total_investors)));
+
+  if (_dashboardKpisFromServer) {
+    set('ds-investors', k.total_investors);
+    set('ds-invested',  Utils.rand(k.active_capital));
+    set('ds-returns',   Utils.rand(k.returns_total));
+    set('ds-pools',     k.active_pools);
+  } else {
+    /* Fallback: the browser sums, which are only as complete as the page that
+       was read. The truncation banner says so rather than leaving them to be
+       quoted as though they were whole. */
+    const totalInvested = STATE.investments.filter(i => i.status === 'active').reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+    const totalReturns  = STATE.transactions.filter(t => t.type === 'return' && t.status === 'completed').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+    const activePools   = STATE.pools.filter(p => ['open', 'active', 'filling'].includes(p.status)).length;
+    set('ds-investors', STATE.investors.length);
+    set('ds-invested',  Utils.rand(totalInvested));
+    set('ds-returns',   Utils.rand(totalReturns));
+    set('ds-pools',     activePools);
+  }
+
+  /* After the tiles, so the banner describes the load that produced what is on
+     screen — and knows whether the headline figures came from SQL. */
+  _dashboardTruncation(counts);
+
+  return { counts, failedSources, kpis: k };
 }
 
 async function loadDashboard() {
   _showLoadingBar();
   try {
-    await _refreshDashboardTotals();
+    const _dash = await _refreshDashboardTotals();
     const nonArchived = STATE.investors.filter(i => i.status !== 'archived');
 
-    // Second KPI row
-    const ficaApproved = nonArchived.filter(i => i.fica_status === 'approved' || i.kyc_status === 'approved').length;
-    const ficaRate = nonArchived.length ? Math.round((ficaApproved / nonArchived.length) * 100) : 0;
-    const dsRate = document.getElementById('ds-fica-rate');
-    if (dsRate) dsRate.textContent = `${ficaRate}%`;
+    /* Second KPI row — from SQL when it is available, for the same reason as
+       the first: these are counts over whole tables, not over a page. */
+    const _k = _dash.kpis;
+    const _set2 = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
 
-    const pendingKycCount = nonArchived.filter(i => {
-      const fs = i.fica_status; const ks = i.kyc_status;
-      return fs === 'pending' || fs === 'in_progress' || fs === 'submitted' || ks === 'pending';
-    }).length;
-    const dsPendKyc = document.getElementById('ds-pending-kyc');
-    if (dsPendKyc) dsPendKyc.textContent = pendingKycCount;
+    if (_k) {
+      _set2('ds-fica-rate',           `${_k.fica_rate}%`);
+      _set2('ds-pending-kyc',          _k.pending_kyc);
+      _set2('ds-upcoming-maturities',  _k.upcoming_maturities);
+      _set2('ds-pending-withdrawals',  _k.pending_withdrawals);
+    } else {
+      const ficaApproved = nonArchived.filter(i => i.fica_status === 'approved' || i.kyc_status === 'approved').length;
+      _set2('ds-fica-rate', `${nonArchived.length ? Math.round((ficaApproved / nonArchived.length) * 100) : 0}%`);
 
-    const in90Days = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
-    const now90 = new Date();
-    const upcomingMaturities = STATE.investments.filter(i => {
-      if (i.status !== 'active' || !i.maturity_date) return false;
-      const md = new Date(i.maturity_date);
-      return md >= now90 && md <= in90Days;
-    }).length;
-    const dsUpcoming = document.getElementById('ds-upcoming-maturities');
-    if (dsUpcoming) dsUpcoming.textContent = upcomingMaturities;
+      _set2('ds-pending-kyc', nonArchived.filter(i => {
+        const fs = i.fica_status; const ks = i.kyc_status;
+        return fs === 'pending' || fs === 'in_progress' || fs === 'submitted' || ks === 'pending';
+      }).length);
 
-    const pendingWithdrawals = (STATE.transactions || []).filter(t => t.type === 'withdrawal' && t.status === 'pending').length;
-    const dsPendWd = document.getElementById('ds-pending-withdrawals');
-    if (dsPendWd) dsPendWd.textContent = pendingWithdrawals;
+      /* end_date, with maturity_date only as a fallback. This read
+         i.maturity_date alone — a column that lives on investment_pools and
+         does not exist on investments — so `!i.maturity_date` was true for
+         every row and the tile read 0 no matter how many were maturing. Three
+         days before a month-end run, the tile meant to show what is coming was
+         the one guaranteed to show nothing. */
+      const in90Days = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+      const now90 = new Date();
+      _set2('ds-upcoming-maturities', STATE.investments.filter(i => {
+        const raw = i.end_date || i.maturity_date;
+        if (i.status !== 'active' || !raw) return false;
+        const md = new Date(raw);
+        return md >= now90 && md <= in90Days;
+      }).length);
+
+      _set2('ds-pending-withdrawals',
+        (STATE.transactions || []).filter(t => t.type === 'withdrawal' && t.status === 'pending').length);
+    }
 
     // Real month-over-month trend calculations
     (() => {
@@ -7909,11 +7942,19 @@ function _dashboardLoadErrors(failedSources) {
   return true;
 }
 
+/* Whether the headline tiles came from SQL. The banner has to say which,
+   because a short read means something different in each case. */
+let _dashboardKpisFromServer = false;
+
 function _dashboardTruncation(loadedVsTotal) {
   return _renderTruncationBanner('ds-truncation', loadedVsTotal, `
-    Total Investors, Active Invested and Returns are summed in the browser from the
-    rows above, so any tile fed by a short table understates. Counts of pools and
-    the KYC percentages are unaffected.`);
+    ${_dashboardKpisFromServer
+      ? 'The four headline tiles are counted in SQL over every row and are correct. ' +
+        'The lists, charts and pending-action widgets below are built from the rows that ' +
+        'were read, so those are the ones to treat as partial.'
+      : '<strong>The server figures were unavailable, so the headline tiles fell back to ' +
+        'browser sums and are affected too.</strong> Everything on this page is derived ' +
+        'from the rows that were read.'}`);
 }
 
 /* ═══════════════════════════════════════════════

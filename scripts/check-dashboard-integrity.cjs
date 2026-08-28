@@ -65,6 +65,9 @@ function runBanners(fnNames) {
     _esc: s => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])),
     _analyticsKpisFromServer: true,
+    /* The dashboard banner's wording depends on whether the tiles came from
+       SQL, so the flag has to exist here. Both states are exercised below. */
+    _dashboardKpisFromServer: true,
     console, Number, String, Math, JSON, Array, Object,
   };
   vm.createContext(sandbox);
@@ -145,6 +148,66 @@ function runBanners(fnNames) {
       ]);
       ok('an unknown total is not treated as a shortfall', unknown.shown === false);
       void els;
+    }
+
+    console.log('\nthe headline tiles are counted in SQL, not summed in the browser');
+    {
+      ok('the dashboard asks the server for them',
+         /await API\._fetch\('GET', 'analytics\/dashboard'\)/.test(SRC),
+         'a browser sum over a capped page cannot be right past the cap');
+      ok('and uses them when they arrive',
+         /if \(_dashboardKpisFromServer\) \{[\s\S]{0,200}?set\('ds-investors', k\.total_investors\)/.test(SRC));
+      ok('falling back to browser sums when they do not',
+         /\} else \{[\s\S]{0,900}?set\('ds-investors', STATE\.investors\.length\)/.test(SRC));
+      ok('the fallback is flagged rather than silent',
+         /server figures unavailable/.test(SRC));
+      ok('the second KPI row comes from the same place',
+         /_set2\('ds-upcoming-maturities',\s*_k\.upcoming_maturities\)/.test(SRC));
+
+      const api = fs.readFileSync(path.join(ROOT, 'server', 'routes', 'analytics-extra.js'), 'utf8');
+      const ep  = api.slice(api.indexOf("router.get('/dashboard'"), api.indexOf("router.get('/revenue'"));
+      ok('the endpoint exists and is admin-gated',
+         /router\.get\('\/dashboard', requireAuth, _admin/.test(ep));
+      ok('it counts every investor, not a page of them',
+         /SELECT COUNT\(\*\) FROM investors\)\s+AS total_investors/.test(ep));
+      ok('Returns keeps the tile\'s own definition, not the analytics one',
+         /type = 'return'\)[\s\S]{0,40}?AS returns_total/.test(ep),
+         'the analytics figure also counts payouts and is scoped to the year — a different question');
+      ok('and the FICA rate cannot disagree with its own inputs',
+         /nonArchived \? Math\.round\(\(n\(d\.fica_approved\) \/ nonArchived\) \* 100\) : 0/.test(ep));
+    }
+
+    console.log('\nupcoming maturities reads the column that exists');
+    {
+      ok('the SQL uses end_date',
+         /FROM investments[\s\S]{0,200}?end_date >= CURRENT_DATE[\s\S]{0,200}?AS upcoming_maturities/
+           .test(fs.readFileSync(path.join(ROOT, 'server', 'routes', 'analytics-extra.js'), 'utf8')));
+      ok('and the browser fallback no longer reads maturity_date alone',
+         /const raw = i\.end_date \|\| i\.maturity_date;/.test(SRC),
+         'maturity_date is a column on investment_pools — on an investment it is undefined, ' +
+         'so the guard rejected every row and the tile read 0 permanently');
+      ok('the old unguarded read is gone',
+         !/if \(i\.status !== 'active' \|\| !i\.maturity_date\) return false;/.test(SRC));
+    }
+
+    console.log('\nthe banner says which figures the shortfall touches');
+    {
+      const withServer = runBanners(['_renderTruncationBanner', '_analyticsTruncation', '_dashboardTruncation']);
+      vm.runInContext('_dashboardKpisFromServer = true', withServer.sandbox);
+      vm.runInContext(`_dashboardTruncation([{label:'Transactions',loaded:5000,total:8412}])`, withServer.sandbox);
+      ok('server-backed tiles are called correct',
+         /counted in SQL over every row and are correct/.test(withServer.els['ds-truncation'].innerHTML),
+         withServer.els['ds-truncation'].innerHTML.slice(-320));
+      ok('while the lists and charts are named as the partial ones',
+         /lists, charts and pending-action widgets/.test(withServer.els['ds-truncation'].innerHTML));
+
+      const noServer = runBanners(['_renderTruncationBanner', '_analyticsTruncation', '_dashboardTruncation']);
+      vm.runInContext('_dashboardKpisFromServer = false', noServer.sandbox);
+      vm.runInContext(`_dashboardTruncation([{label:'Transactions',loaded:5000,total:8412}])`, noServer.sandbox);
+      ok('a fallback run says the tiles are affected too',
+         /fell back to\s+browser sums and are affected too/.test(noServer.els['ds-truncation'].innerHTML.replace(/\s+/g, ' ')) ||
+         /fell back to browser sums and are affected too/.test(noServer.els['ds-truncation'].innerHTML.replace(/\s+/g, ' ')),
+         noServer.els['ds-truncation'].innerHTML.slice(-320));
     }
 
     console.log('\na failed source is distinguished from a zero figure');
