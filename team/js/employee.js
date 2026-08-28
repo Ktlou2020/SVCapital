@@ -387,9 +387,40 @@ async function autoStreakCheck() {
 }
 
 /* ═══ COURSE ENGINE ═════════════════════════════════════════════════ */
+/* course_progress.quiz_scores is JSONB, so node-pg hands it back as an OBJECT,
+   not a string. Every reader here did JSON.parse(prog.quiz_scores || '{}'),
+   which throws "[object Object] is not valid JSON" on everything the server has
+   round-tripped — and each one caught the throw and returned {}.
+
+   So the scores silently reset to empty on every read. Module 1 saved, module 2
+   read {} and saved only itself, module 3 the same: modules_completed never got
+   past 1, `allDone` was never true for a 3-module course, and the course could
+   not be finished. That is the bug behind "Complete Course does nothing".
+
+   Handles all three shapes the column actually holds: the object the driver
+   returns, the '{}' string the portal seeds, and the '[]' array director.js
+   seeds — an array carries no per-module scores, so it normalises to {}. */
+function _courseScores(prog) {
+  const raw = prog && prog.quiz_scores;
+  if (!raw) return {};
+  let v = raw;
+  if (typeof v === 'string') {
+    try { v = JSON.parse(v); } catch (_) { return {}; }
+  }
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
+  return v;
+}
+
 async function openCourse(courseId) {
   const course = _courses.find(c=>c.id===courseId);
   if (!course) return;
+
+  /* A finished course is not re-openable. Its card already routes to the
+     certificate, but learning paths, the onboarding checklist and direct calls
+     all land here, and re-entering would show module 1 of a completed course
+     with no way to record anything new. */
+  const done = _progress.find(p=>p.course_id===courseId && p.status==='completed');
+  if (done) { openCertificate(done.certificate_id, course); return; }
 
   // Load modules if not cached
   if (!_modules[courseId]) {
@@ -433,8 +464,7 @@ async function openCourse(courseId) {
     prog.status = 'in_progress';
   }
 
-  const doneIds = (() => { try { return JSON.parse(prog.quiz_scores||'{}'); } catch { return {}; } });
-  const completedMods = Object.keys(doneIds());
+  const completedMods = Object.keys(_courseScores(prog));
   _readerModIdx = 0;
   for (let i=0; i<_readerModules.length; i++) {
     if (!completedMods.includes(_readerModules[i].id)) { _readerModIdx = i; break; }
@@ -457,9 +487,20 @@ function closeCourseReader() {
 
 function renderReader() {
   if (!_readerCourse || !_readerModules.length) return;
+
+  /* Clamped. _readerModIdx++ in completeModule was unbounded, so once the index
+     ran past the last module this function set the topbar to "Module 7 of 3",
+     rendered the nav, and then threw reading .title of undefined. The header
+     advanced and the content did not — leaving the previous quiz result frozen
+     on screen with a Complete Course button still bound to a module that was
+     already scored. Clicking it repeated the same no-op, which is exactly what
+     "the button does nothing" looked like. */
+  if (_readerModIdx < 0) _readerModIdx = 0;
+  if (_readerModIdx > _readerModules.length - 1) _readerModIdx = _readerModules.length - 1;
+
   const mod = _readerModules[_readerModIdx];
   const prog = _progress.find(p=>p.course_id===_readerCourse.id);
-  const scores = (() => { try { return JSON.parse(prog?.quiz_scores||'{}'); } catch { return {}; } })();
+  const scores = _courseScores(prog);
   const totalMods = _readerModules.length;
 
   // Topbar
@@ -634,22 +675,33 @@ async function completeModule(mod, score, xpReward) {
   if (!prog) return;
 
   // Update quiz scores
-  let scores = {}; try { scores=JSON.parse(prog.quiz_scores||'{}'); } catch{}
+  const scores = _courseScores(prog);
   scores[mod.id] = score;
-  const modsDone = Object.keys(scores).length;
+
+  /* Counted against the modules this course actually has, and only modules it
+     has: a stale key left by a module that was later removed or regenerated
+     would otherwise inflate the count and complete the course early. */
+  const modIds   = _readerModules.map(m=>m.id);
+  const modsDone = modIds.filter(id=>scores[id] !== undefined).length;
   const allDone  = modsDone >= _readerModules.length;
+  const marks    = modIds.map(id=>Number(scores[id])).filter(n=>!isNaN(n));
 
   const updates = {
     quiz_scores: JSON.stringify(scores),
     modules_completed: modsDone,
+    /* Declared INT and seeded to 1 at enrolment, then never advanced — so the
+       director's progress view read module 1 for everyone, forever. */
+    current_module: Math.min(modsDone + 1, _readerModules.length),
+    overall_quiz_score: marks.length ? Math.round(marks.reduce((a,b)=>a+b,0)/marks.length) : 0,
     xp_earned: (Number(prog.xp_earned)||0) + xpReward
   };
 
   if (allDone) {
     updates.status = 'completed';
     updates.completed_at = new Date().toISOString();
-    updates.certificate_id = `CERT-${_emp.id}-${_readerCourse.id}-${Date.now()}`;
+    updates.certificate_id = prog.certificate_id || `CERT-${_emp.id}-${_readerCourse.id}-${Date.now()}`;
     updates.kpi_applied = true;
+    updates.current_module = _readerModules.length;
   }
   let updated;
   try {
@@ -664,40 +716,58 @@ async function completeModule(mod, score, xpReward) {
   }
   Object.assign(prog, updated);
 
-  await awardXP(xpReward, 'Module completion');
-  if (_readerCourse.kpi_dimension) {
-    await autoBoostKpi(_readerCourse.kpi_dimension, Number(_readerCourse.kpi_boost_points)||5);
-  }
+  /* The progress row is saved by this point, so the course IS complete whatever
+     happens below. XP, the KPI boost, the activity feed and the badges are all
+     secondary, and awaiting them unguarded meant any one of them could throw
+     and skip the celebration — leaving a course that finished in the database
+     and looked untouched on screen. Reported, not swallowed, but never fatal. */
+  const _side = async (what, fn) => {
+    try { await fn(); }
+    catch (err) { console.error(`[courses] ${what} failed after completion:`, err.message); }
+  };
 
-  // Log to activity feed
-  await post('tables/activity_feed', {
+  await _side('XP award', () => awardXP(xpReward, 'Module completion'));
+  if (_readerCourse.kpi_dimension) {
+    await _side('KPI boost', () =>
+      autoBoostKpi(_readerCourse.kpi_dimension, Number(_readerCourse.kpi_boost_points)||5));
+  }
+  await _side('activity feed entry', () => post('tables/activity_feed', {
     employee_id:_emp.id, type:'course_complete',
-    title:`Module completed: ${mod.title}`,
+    title: allDone ? `Course completed: ${_readerCourse.title}` : `Module completed: ${mod.title}`,
     body:`+${xpReward} XP earned in ${_readerCourse.title}`,
     icon:'fa-graduation-cap', color:'#eda5ff',
     xp_shown:xpReward, is_public:false,
     created_at:new Date().toISOString()
-  });
+  }));
 
   if (allDone) {
-    await autoAwardCourseBadge(_readerCourse);
-    await autoCheckBadgeUnlocks(_achievements);
+    await _side('course badge', () => autoAwardCourseBadge(_readerCourse));
+    await _side('badge unlocks', () => autoCheckBadgeUnlocks(_achievements));
     showCourseCelebration(_readerCourse, prog.certificate_id);
     return;
   }
 
-  // Move to next module
-  _readerModIdx++;
+  /* Move to the first module still unscored, rather than blindly stepping one
+     forward. A bare ++ walked off the end of the array whenever a module was
+     completed out of order or re-submitted, and nothing clamped it. */
+  const nextIdx = _readerModules.findIndex(m => scores[m.id] === undefined);
+  _readerModIdx = nextIdx === -1 ? _readerModules.length - 1 : nextIdx;
   _readerMode = 'lesson';
   _quizAnswers = {};
   _quizSubmitted = false;
   renderReader();
-  showToast(`Module ${modsDone} complete! +${xpReward} XP`, 'success');
+  showToast(`Module ${modsDone} of ${_readerModules.length} complete! +${xpReward} XP`, 'success');
 }
 
 function showCourseCelebration(course, certId) {
   // Close the reader first so renderCourses() updates the card to "Done"
   closeCourseReader();
+  /* The card, the required-training counter and the dashboard tiles all read
+     _progress, and closeCourseReader only re-renders when the courses view is
+     the one on screen. Finishing a course from the dashboard or a learning path
+     left every one of those showing the pre-completion numbers. */
+  renderCourses();
+  if (typeof renderDashboard === 'function' && _currentView === 'dashboard') renderDashboard();
   launchConfetti();
   showToast(`🎉 Course complete! "${course.title}" finished. Certificate issued!`, 'success');
   openCertificate(certId, course);
@@ -705,7 +775,7 @@ function showCourseCelebration(course, certId) {
 
 function jumpToModule(idx) {
   const prog = _progress.find(p=>p.course_id===_readerCourse?.id);
-  const scores = (() => { try { return JSON.parse(prog?.quiz_scores||'{}'); } catch { return {}; } })();
+  const scores = _courseScores(prog);
   const mod = _readerModules[idx];
   if (!mod) return;
   // Allow jump only if previous done or same
@@ -1291,8 +1361,15 @@ function renderCourses() {
 
 function courseCardHTML(c, mode) {
   const prog = _progress.find(p=>p.course_id===c.id);
-  const pct  = prog ? Math.round((Number(prog.modules_completed)||0)/(Number(c.modules_count)||1)*100) : 0;
   const isDone = prog?.status==='completed';
+  /* Counted from quiz_scores, which is the record of what was actually passed;
+     modules_completed is a denormalised copy and was stuck at 1 for everyone
+     while the JSONB read was throwing. A completed course reads 100% outright
+     rather than being recomputed — the status is the authority, and a course
+     whose module count later changes must not un-fill its own bar. */
+  const total = Number(c.modules_count) || (_modules[c.id]||[]).length || 3;
+  const doneN = Object.keys(_courseScores(prog)).length || Number(prog?.modules_completed) || 0;
+  const pct  = isDone ? 100 : (prog ? Math.min(100, Math.round(doneN/total*100)) : 0);
   const isRequired = c.is_required;
   const diffC = {beginner:'#00d4aa',intermediate:'#fec24f',advanced:'#ff6b6b'}[c.difficulty]||'#6b7280';
   const borderStyle = mode==='required' && !isDone ? 'border:1.5px solid rgba(255,107,107,0.35)' : '';
