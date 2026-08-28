@@ -269,6 +269,88 @@ router.get('/dashboard', requireAuth, _admin, async (req, res) => {
   }
 });
 
+/* ── GET /api/analytics/dashboard-series ─────────────────────────────
+   The dashboard's two charts, over every row.
+
+   Both were built in the browser from a capped page. The cap takes the most
+   recent rows (the list endpoint orders by date DESC), which is harmless for a
+   this-month-vs-last-month trend and wrong for anything cumulative: the oldest
+   investments are exactly the ones missing, so an all-time AUM curve
+   understates every point and understates the earliest months most.
+
+   The AUM series also had a defect that had nothing to do with truncation. It
+   filtered `inv.status === 'active'` — the status NOW — while walking back
+   through months. An investment that matured last month was therefore excluded
+   from every historical point, including the months it was live. That is not
+   AUM over time; it is current holdings plotted by start date. Here an
+   investment counts toward a month if it had started by then and had not yet
+   ended: live as at that date, which is what the chart claims to show.
+   ──────────────────────────────────────────────────────────────────── */
+router.get('/dashboard-series', requireAuth, _admin, async (req, res) => {
+  const months = Math.min(60, Math.max(1, parseInt(req.query.months, 10) || 6));
+  try {
+    /* One row per month, whether or not anything happened in it — a month with
+       no activity is a real zero, not a gap the chart should skip over. */
+    const { rows: series } = await pool.query(`
+      WITH months AS (
+        SELECT (DATE_TRUNC('month', CURRENT_DATE) - (n || ' months')::interval)::date AS m_start
+          FROM generate_series($1::int - 1, 0, -1) AS n
+      ),
+      bounds AS (
+        SELECT m_start,
+               (m_start + INTERVAL '1 month - 1 day')::date AS m_end
+          FROM months
+      )
+      SELECT b.m_start, b.m_end,
+             COALESCE((
+               SELECT SUM(ABS(i.amount)) FROM investments i
+                WHERE COALESCE(i.status,'') NOT IN ('cancelled','rejected','failed')
+                  AND COALESCE(i.start_date, i.created_at::date) <= b.m_end
+                  AND (i.end_date IS NULL OR i.end_date > b.m_end)
+             ), 0) AS aum,
+             COALESCE((
+               SELECT SUM(ABS(t.amount)) FROM transactions t
+                WHERE t.status = 'completed' AND t.type = 'return'
+                  AND COALESCE(t.transaction_date, t.created_at::date) BETWEEN b.m_start AND b.m_end
+             ), 0) AS returns
+        FROM bounds b
+       ORDER BY b.m_start`, [months]);
+
+    /* Every product type that actually holds capital, including ones no chart
+       was written for. The browser version summed into a fixed map and dropped
+       anything absent from it — so the migrated pools carrying 'other' added
+       nothing to the mix at all, and a new product would be invisible until
+       someone remembered to add a key. */
+    const { rows: mix } = await pool.query(`
+      SELECT COALESCE(NULLIF(COALESCE(ip.product_type, i.product_type), ''), 'unclassified') AS product_type,
+             COALESCE(SUM(ABS(i.amount)), 0) AS capital,
+             COUNT(*)::int                    AS count
+        FROM investments i
+        LEFT JOIN investment_pools ip ON ip.id = i.pool_id
+       WHERE i.status = 'active'
+       GROUP BY 1
+       HAVING SUM(ABS(i.amount)) > 0
+       ORDER BY 2 DESC`);
+
+    return res.json({
+      months: series.map(r => ({
+        month:   String(r.m_start).slice(0, 10),
+        aum:     Number(r.aum),
+        returns: Number(r.returns),
+      })),
+      product_mix: mix.map(r => ({
+        product_type: r.product_type,
+        capital:      Number(r.capital),
+        count:        r.count,
+      })),
+      computed_at: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('[analytics/dashboard-series]', err);
+    return res.status(500).json({ error: 'Failed to compute dashboard series: ' + err.message });
+  }
+});
+
 /* ── GET /api/analytics/revenue ─────────────────────────── */
 router.get('/revenue', requireAuth, _admin, async (req, res) => {
   try {
