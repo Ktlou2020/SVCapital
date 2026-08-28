@@ -278,6 +278,45 @@ router.get('/stored-markup-audit', async (req, res) => {
   }
 });
 
+/* ─── GET /api/admin/withdrawal-double-debits ──────────────────────────
+   Who was charged twice for one withdrawal.
+
+   The wallet is debited when a withdrawal REQUEST is created, and the console
+   deducted it again on approval, so every admin-approved withdrawal took the
+   money twice. That second write left no transaction row, so only the audit log
+   can see it. See services/withdrawalReconciliation.js for how it is found and
+   why the signature is unambiguous.
+
+   Read-only — the service is SELECT only, and this runs it inside a READ ONLY
+   transaction so a future edit to it cannot write through this route either.
+
+   Admin/director only, via the router-level guard at the top of this file. It
+   returns client names, emails and balances alongside what each is owed.
+   ──────────────────────────────────────────────────────────────────── */
+router.get('/withdrawal-double-debits', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { runWithdrawalReconciliation } = require('../services/withdrawalReconciliation');
+    await client.query(`SET statement_timeout = '60s'`);
+    await client.query('BEGIN');
+    await client.query('SET TRANSACTION READ ONLY');
+    const report = await runWithdrawalReconciliation(client, {
+      since:    req.query.since    || null,
+      until:    req.query.until    || null,
+      investor: req.query.investor || null,
+      window:   req.query.window,
+    });
+    await client.query('ROLLBACK');
+    return res.json(report);
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[withdrawal-double-debits]', err);
+    return res.status(500).json({ error: 'Reconciliation failed: ' + err.message });
+  } finally {
+    client.release();
+  }
+});
+
 /* ─── POST /api/admin/pools/remap-product-type ─────────────────────────
    Set a pool's product_type AND its investments' product_type together.
 
