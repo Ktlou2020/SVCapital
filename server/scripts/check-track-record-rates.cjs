@@ -164,14 +164,49 @@ const get = (port, url) => new Promise((resolve, reject) => {
          /period/.test(body.note || '') && /annualised/.test(body.note || ''), body.note);
     }
 
-    console.log('\nthe products list exposes both bases too');
+    /* No solar pool has matured, so today this endpoint only ever sees cattle
+       (12 months) and short_term. On both, the new arithmetic and the old
+       agree exactly — that is what makes this deployable without moving a
+       published number. Asserted rather than reasoned about. */
+    console.log('\nnothing currently published moves');
+    {
+      const oldPaidBack = (invested, actual, term, isShortTerm) =>
+        Math.round(isShortTerm ? invested * (1 + actual) : invested * (1 + actual * (term / 12)));
+      const oldRate = (actual, term, isShortTerm) =>
+        isShortTerm && term > 0 ? actual * 12 / term : actual;
+
+      ok('cattle paid-back is unchanged by the fix',
+         d.cattle?.total_paid_back === oldPaidBack(100000, 0.1223, 12, false),
+         `new ${d.cattle?.total_paid_back} vs old ${oldPaidBack(100000, 0.1223, 12, false)}`);
+      ok('cattle rate is unchanged',
+         near(d.cattle?.avg_actual_rate, oldRate(0.1223, 12, false)),
+         `new ${d.cattle?.avg_actual_rate} vs old ${oldRate(0.1223, 12, false)}`);
+      ok('short term paid-back is unchanged',
+         d.short_term?.total_paid_back === oldPaidBack(100000, 0.0213, 5, true));
+      ok('short term rate is unchanged',
+         near(d.short_term?.avg_actual_rate, oldRate(0.0213, 5, true)));
+      ok('only solar moves, and no solar pool has matured',
+         d.solar_7yr?.total_paid_back !== oldPaidBack(100000, 0.98, 84, false),
+         'the fixture forces a matured solar pool precisely because production has none');
+    }
+
+    console.log('\nthe products list adds a basis without changing the old one');
     {
       const src = fs.readFileSync(path.join(ROOT, 'server', 'routes', 'products.js'), 'utf8');
-      ok('as posted, per period', /AS avg_period_rate/.test(src));
-      ok('and annualised for the p.a. label the clients use',
-         /ip\.actual_rate \* 12\.0 \/ ip\.term_months/.test(src));
+      /* avg_actual_rate there is displayed under a "(N MO)" label for
+         short_term, so it must stay the period figure. Annualising it in place
+         would have put an annual number under a period label on a live screen. */
+      ok('avg_actual_rate is still the period figure, as the grid label expects',
+         /\(SELECT ROUND\(AVG\(ip\.actual_rate\)::numeric, 4\)[\s\S]{0,240}?AS avg_actual_rate/.test(src),
+         'short_term shows this under "AVG RETURN (5 MO)" and has matured pools');
+      ok('the annualised figure is added under its own name',
+         /AS avg_annual_rate/.test(src));
+      ok('and is computed by term', /ip\.actual_rate \* 12\.0 \/ ip\.term_months/.test(src));
       ok('a pool with no term is left alone rather than divided by zero',
          /COALESCE\(ip\.term_months, 0\) > 0/.test(src));
+      ok('nothing on the client reads the new field yet, so no display shifts',
+         !/avg_annual_rate/.test(fs.readFileSync(path.join(ROOT, 'js', 'portal-core.js'), 'utf8')) &&
+         !/avg_annual_rate/.test(fs.readFileSync(path.join(ROOT, 'js', 'main.js'), 'utf8')));
     }
 
     console.log('\nthe one-product special case is gone');
