@@ -6557,8 +6557,19 @@ function _backControl(backTo, backKind) {
       <i class="fa-solid fa-arrow-left" style="margin-right:6px"></i>Back to ${_esc(pool?.name || 'pool')}
     </button>`;
   }
+  /* Looked up here, from the id this button already carries.
+
+     This read `_investorName`, which is a const declared inside
+     _renderInvestmentDetail — a different function. Being top level, this one
+     could never see it, so every call threw ReferenceError and the caller's
+     innerHTML was never assigned: the modal simply did not change. Only this
+     branch was affected, which is why the All Investments list (no backTo, so
+     the early return fires) and the pool list (backKind 'pool', handled above)
+     both kept working while the investor's own Investments tab did nothing. */
+  const who  = (STATE.investors || []).find(i => i.id === backTo);
+  const name = who ? (`${who.first_name || ''} ${who.last_name || ''}`.trim() || backTo) : backTo;
   return `<button class="btn btn--secondary btn--sm" onclick="viewInvestor('${backTo}')">
-    <i class="fa-solid fa-arrow-left" style="margin-right:6px"></i>Back to ${_esc(_investorName || 'investor')}
+    <i class="fa-solid fa-arrow-left" style="margin-right:6px"></i>Back to ${_esc(name || 'investor')}
   </button>`;
 }
 
