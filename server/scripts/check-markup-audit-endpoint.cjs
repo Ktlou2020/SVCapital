@@ -169,10 +169,38 @@ const get = (port, url) => new Promise((resolve, reject) => {
       ok('but markup inside a note still is',
          r.body.executable.some(x => x.rowId === 'MKA-JSX' && x.column === 'notes'),
          'skipping the quote check must not stop the audit looking for tags');
-      ok('and the response says which columns had their quotes skipped',
-         Array.isArray(r.body.quotesNotChecked) && r.body.quotesNotChecked.includes('investors.notes'),
-         JSON.stringify(r.body.quotesNotChecked));
+      ok('and the response names where quotes ARE checked',
+         Array.isArray(r.body.quotesCheckedIn) &&
+         r.body.quotesCheckedIn.includes('investors.first_name') &&
+         !r.body.quotesCheckedIn.includes('investors.notes'),
+         JSON.stringify(r.body.quotesCheckedIn));
       await pool.query(`DELETE FROM investors WHERE id IN ('MKA-JSON','MKA-JSX')`);
+    }
+
+    console.log('\na quote only counts where it reaches an attribute');
+    {
+      /* Two production runs got this wrong in different ways: the first
+         reported every JSON note, the second every support ticket, because
+         English prose is full of apostrophes. Both buried the findings that
+         were about a real person's name. */
+      await pool.query(`INSERT INTO investors (id, first_name, last_name, email, status, suburb)
+        VALUES ('MKA-SUB','Thandi','Mokoena','sub@example.test','active','Allen''s Nek')`);
+      await pool.query(`INSERT INTO support_tickets (id, investor_id, subject, message, status)
+        VALUES ('MKA-TKT','MKA-SUB','Bank','Please verify in the investor''s profile.','open'),
+               ('MKA-TKX','MKA-SUB','Bad','<img src=x onerror=1>','open')`);
+      const r = await get(port, '/api/admin/stored-markup-audit');
+
+      ok('an apostrophe in prose is not reported',
+         !r.body.breaking.some(x => x.rowId === 'MKA-TKT'),
+         JSON.stringify(r.body.breaking.map(x => `${x.column}:${x.rowId}`)));
+      ok('nor one in a field rendered as text, like suburb',
+         !r.body.breaking.some(x => x.column === 'suburb'),
+         JSON.stringify(r.body.breaking.map(x => x.column)));
+      ok('but markup in that same prose column still is',
+         r.body.executable.some(x => x.rowId === 'MKA-TKX'),
+         'narrowing the quote check must not narrow the markup check');
+      await pool.query(`DELETE FROM support_tickets WHERE id IN ('MKA-TKT','MKA-TKX')`);
+      await pool.query(`DELETE FROM investors WHERE id = 'MKA-SUB'`);
     }
 
     console.log('\nit says what it looked at');

@@ -57,8 +57,8 @@ const H = s => console.log(`\n${s}\n${'─'.repeat(s.length)}`);
 
     H('Stored text the admin console would render as markup');
     console.log(`\nEXECUTABLE  ${r.totals.executable}   tags, event handlers or javascript: urls`);
-    console.log(`BREAKING    ${r.totals.breaking}   quotes or brackets that truncate an HTML attribute`);
-    console.log(`\n  scanned ${r.scanned.length} column(s)${r.skipped.length ? `, skipped ${r.skipped.length} not present` : ''}`);
+    console.log(`QUOTED      ${r.totals.breaking}   quotes in values that reach an HTML attribute`);
+    console.log(`\n  scanned ${r.scanned.length} column(s) for markup; quotes checked in ${r.quotesCheckedIn.length}`);
 
     if (r.executable.length) {
       H('EXECUTABLE — treat as an incident');
@@ -72,10 +72,11 @@ const H = s => console.log(`\n${s}\n${'─'.repeat(s.length)}`);
     }
 
     if (r.breaking.length) {
-      H('BREAKING — buttons in these rows may already be dead');
-      console.log('  A quote ends the attribute early. Nothing executes, but the controls in');
-      console.log('  that row stop working — and an apostrophe in a surname is ordinary, so');
-      console.log('  some of these are real people rather than anything malicious.\n');
+      H('QUOTED — names carrying a quote that reaches an HTML attribute');
+      console.log('  A quote can end an attribute early. The inline handlers escape these now,');
+      console.log('  so nothing is broken there; they are listed because the wider escaping');
+      console.log('  sweep across the console is unfinished. An apostrophe in a surname is');
+      console.log('  ordinary — these are real people, not attacks.\n');
       const shown = r.breaking.slice(0, 25);
       for (const x of shown) {
         console.log(`  ${x.table}.${x.column}  row ${x.rowId}   ${String(x.value).slice(0, 80)}`);
@@ -100,8 +101,9 @@ const H = s => console.log(`\n${s}\n${'─'.repeat(s.length)}`);
       console.log('  Nothing found. No stored text in the audited columns contains markup,');
       console.log('  an event handler, or a character that would break out of an attribute.');
     } else if (r.verdict === 'attribute-breaking-only') {
-      console.log(`  Nothing executable. ${r.totals.breaking} row(s) carry a quote or bracket that`);
-      console.log('  breaks an attribute — a display and usability problem, not a security one.');
+      console.log(`  Nothing executable. ${r.totals.breaking} row(s) carry a quote in a value that`);
+      console.log('  reaches an HTML attribute. Not a security finding, and not currently a');
+      console.log('  broken one either — the inline handlers escape them.');
     } else {
       console.log(`  ${r.totals.executable} row(s) contain something that would execute. Deal with those first.`);
     }
