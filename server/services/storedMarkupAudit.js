@@ -22,12 +22,30 @@
    a field nobody renders is noise, and noise is how a real finding gets
    skimmed past. */
 const TARGETS = [
-  { table: 'investors',        id: 'id', cols: ['first_name', 'last_name', 'email', 'address', 'street_address', 'suburb', 'occupation', 'notes'] },
+  { table: 'investors',        id: 'id', cols: ['first_name', 'last_name', 'email', 'address', 'street_address', 'suburb', 'occupation'] },
   { table: 'sub_accounts',     id: 'id', cols: ['name'] },
   { table: 'support_tickets',  id: 'id', cols: ['subject', 'message'] },
   { table: 'transactions',     id: 'id', cols: ['description', 'reference'] },
   { table: 'investment_pools', id: 'id', cols: ['name', 'description'] },
 ];
+
+/* Columns whose quotes are structural rather than suspicious.
+
+   investors.notes holds a JSON array — [{"note":…,"admin_email":…}] — so every
+   populated row contains double quotes and every one of them was reported as
+   attribute-breaking. On the first production run that was most of the
+   findings, burying the handful that were real: three investors whose names
+   contain an apostrophe.
+
+   They are still scanned for EXECUTABLE content, because a script tag in an
+   admin note would be a genuine finding. Only the quote check is skipped, and
+   only where quotes are part of the format. */
+const STRUCTURED_JSON = new Set(['investors.notes']);
+
+/* Scanned for markup but not for quotes. Listed here rather than dropped from
+   TARGETS entirely: excluding the column outright would stop the audit looking
+   for the thing that actually matters in it. */
+const JSON_COLS = [{ table: 'investors', id: 'id', cols: ['notes'] }];
 
 /* A tag, an inline handler, or a javascript: url — the things that would
    actually run. Deliberately narrower than "contains < or >": a description
@@ -61,7 +79,7 @@ async function runStoredMarkupAudit(db, { limit = 200 } = {}) {
   const executable = [], breaking = [];
   const scanned = [], skipped = [];
 
-  for (const t of TARGETS) {
+  for (const t of [...TARGETS, ...JSON_COLS]) {
     if (!await hasTable(db, t.table)) { skipped.push(t.table); continue; }
     for (const col of t.cols) {
       if (!await hasColumn(db, t.table, col)) { skipped.push(`${t.table}.${col}`); continue; }
@@ -74,6 +92,10 @@ async function runStoredMarkupAudit(db, { limit = 200 } = {}) {
       for (const h of hits) {
         executable.push({ table: t.table, column: col, rowId: h.row_id, value: String(h.value).slice(0, 400) });
       }
+
+      /* Skipped where quotes are part of the column's format — see
+         STRUCTURED_JSON. The markup scan above still ran. */
+      if (STRUCTURED_JSON.has(`${t.table}.${col}`)) continue;
 
       /* AND NOT the executable predicate, so a row is reported once, at its
          worst severity, rather than appearing in both lists. */
@@ -89,6 +111,7 @@ async function runStoredMarkupAudit(db, { limit = 200 } = {}) {
   return {
     generatedAt: new Date().toISOString(),
     scanned, skipped,
+    quotesNotChecked: [...STRUCTURED_JSON],
     executable, breaking,
     totals: { executable: executable.length, breaking: breaking.length },
     verdict: executable.length ? 'executable-found'
@@ -97,4 +120,4 @@ async function runStoredMarkupAudit(db, { limit = 200 } = {}) {
   };
 }
 
-module.exports = { runStoredMarkupAudit, TARGETS };
+module.exports = { runStoredMarkupAudit, TARGETS, STRUCTURED_JSON };

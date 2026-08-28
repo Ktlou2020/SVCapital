@@ -67,6 +67,15 @@ function renderInvestorTabRow() {
 
 /* A minimal attribute reader. Values are delimited by the quote character the
    attribute opens with, which is exactly the property under test. */
+/* Attribute values are HTML-escaped in the markup — _esc(JSON.stringify(...))
+   — and the browser decodes them before the JS is parsed. Assertions therefore
+   compare against the decoded form, which is what actually executes. Matching
+   the raw markup would fail on correct code and pass on code that forgot to
+   escape, which is exactly backwards. */
+const decodeEntities = s => String(s)
+  .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+  .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+
 function attrs(tag) {
   const out = {};
   const re = /([a-zA-Z-]+)=(["'])([\s\S]*?)\2/g;
@@ -114,7 +123,7 @@ function attrs(tag) {
       ok('it is still there', swapAt > -1);
       const swapBtn = html.slice(html.lastIndexOf('<button', swapAt), swapAt);
       ok('it moves the pool, not opens the detail',
-         /openMoveInvestment\("INV-abc123","POOL-9"\)/.test(swapBtn), swapBtn);
+         /openMoveInvestment\("INV-abc123","POOL-9"\)/.test(decodeEntities(swapBtn)), swapBtn);
       ok('and stops the row click', /event\.stopPropagation\(\)/.test(swapBtn), swapBtn);
       ok('the two buttons do not wrap onto separate lines',
          /white-space:nowrap/.test(html));

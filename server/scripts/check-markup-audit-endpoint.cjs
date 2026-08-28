@@ -150,6 +150,31 @@ const get = (port, url) => new Promise((resolve, reject) => {
          body.verdict === 'executable-found', body.verdict);
     }
 
+    console.log('\nstructural quotes are not reported as findings');
+    {
+      /* investors.notes holds a JSON array, so every populated row contains
+         double quotes. On the first production run those were most of the
+         findings and buried the three that were real. */
+      await pool.query(`INSERT INTO investors (id, first_name, last_name, email, status, notes)
+        VALUES ('MKA-JSON','Thandi','Mokoena','json@example.test','active',
+                '[{"note":"Wallet topped up","admin_email":"Odireleng Ramela"}]'),
+               ('MKA-JSX','Thandi','Mokoena','jsx@example.test','active',
+                '[{"note":"<script>alert(1)</script>"}]')`);
+      const r = await get(port, '/api/admin/stored-markup-audit');
+
+      ok('an ordinary JSON note is not reported',
+         !r.body.breaking.some(x => x.rowId === 'MKA-JSON') &&
+         !r.body.executable.some(x => x.rowId === 'MKA-JSON'),
+         JSON.stringify(r.body.breaking.filter(x => x.column === 'notes')));
+      ok('but markup inside a note still is',
+         r.body.executable.some(x => x.rowId === 'MKA-JSX' && x.column === 'notes'),
+         'skipping the quote check must not stop the audit looking for tags');
+      ok('and the response says which columns had their quotes skipped',
+         Array.isArray(r.body.quotesNotChecked) && r.body.quotesNotChecked.includes('investors.notes'),
+         JSON.stringify(r.body.quotesNotChecked));
+      await pool.query(`DELETE FROM investors WHERE id IN ('MKA-JSON','MKA-JSX')`);
+    }
+
     console.log('\nit says what it looked at');
     {
       ok('the scanned columns are listed', Array.isArray(body.scanned) && body.scanned.length > 0,
