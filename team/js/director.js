@@ -943,8 +943,11 @@ async function createEmployee() {
           course_id:          cid,
           status:             'enrolled',
           current_module:     1,
-          modules_completed:  JSON.stringify([]),
-          quiz_scores:        JSON.stringify([]),
+          /* quiz_scores is a map of module id → score, not a list. Seeding it
+             as [] worked only because every reader treats a non-object as
+             empty; the employee portal seeds {} and the two must agree. */
+          modules_completed:  0,
+          quiz_scores:        JSON.stringify({}),
           overall_quiz_score: 0,
           xp_earned:          0,
           kpi_applied:        false,
