@@ -945,6 +945,16 @@
                 <option value="fee">Fee</option>
                 <option value="referral_bonus">Referral Bonus</option>
               </select>
+              <!-- Status. Without it the pending-deposit queue could only be
+                   found by eye, page by page, through the whole ledger. -->
+              <select class="tbl-filter" id="txnStatusFilter">
+                <option value="">All Statuses</option>
+                <option value="pending">Pending</option>
+                <option value="processing">Processing</option>
+                <option value="completed">Completed</option>
+                <option value="failed">Failed</option>
+                <option value="rejected">Rejected</option>
+              </select>
               <button class="btn btn--primary btn--sm" onclick="openAddTxnModal()">
                 <i class="fa-solid fa-plus"></i> Record Transaction
               </button>
@@ -953,13 +963,25 @@
               </button>
             </div>
           </div>
+          <!-- Bulk bar. Hidden until something actionable is selected, so the
+               ledger does not grow a control that does nothing most of the time. -->
+          <div id="txnBulkBar" style="display:none;padding:10px 16px;border-bottom:1px solid var(--border);background:rgba(0,212,170,0.06);align-items:center;gap:10px">
+            <span id="txnBulkCount" style="font-size:0.8rem;font-weight:600;color:var(--text)"></span>
+            <span id="txnBulkSum" style="font-size:0.78rem;color:var(--text-muted)"></span>
+            <button class="btn btn--success btn--sm" style="margin-left:auto" onclick="bulkApproveDeposits(this)">
+              <i class="fa-solid fa-check-double"></i> Approve Deposits
+            </button>
+            <button class="btn btn--ghost btn--sm" onclick="clearTxnSelection()">
+              <i class="fa-solid fa-xmark"></i> Clear
+            </button>
+          </div>
           <div style="overflow-x:auto">
             <table class="data-table">
               <thead><tr>
-                <th style="width:20%">Investor</th><th style="width:9%">Type</th><th style="width:11%">Amount</th><th style="width:10%">Status</th><th style="width:13%">Reference</th><th style="width:19%">Description</th><th style="width:10%">Date</th><th style="width:8%">Action</th>
+                <th style="width:3%;padding-left:14px"><input type="checkbox" id="txnSelectAll" onchange="toggleAllTxns(this.checked)" title="Select every approvable deposit in the current filter"></th><th style="width:19%">Investor</th><th style="width:9%">Type</th><th style="width:10%">Amount</th><th style="width:10%">Status</th><th style="width:12%">Reference</th><th style="width:18%">Description</th><th style="width:10%">Date</th><th style="width:9%">Action</th>
               </tr></thead>
               <tbody id="txnBody">
-                <tr><td colspan="7" class="text-center text-muted" style="padding:32px">Loading...</td></tr>
+                <tr><td colspan="9" class="text-center text-muted" style="padding:32px">Loading...</td></tr>
               </tbody>
             </table>
           </div>
@@ -4784,7 +4806,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=18"></script>
-<script src="js/admin.js?v=137"></script>
+<script src="js/admin.js?v=138"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>
