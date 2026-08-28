@@ -71,8 +71,16 @@ function validateBody(table, body, isCreate) {
     if (NUMERIC_FIELDS.has(key) && val !== null && val !== undefined) {
       const n = Number(val);
       if (isNaN(n)) errors.push(`${key} must be a number`);
-      // wallet_balance and amount can't be negative when setting directly (allow negative for adjustments)
-      if ((key === 'amount') && n < 0 && isCreate) errors.push(`${key} cannot be negative`);
+      /* The rule said "allow negative for adjustments" and then rejected every
+         negative amount, adjustments included. So a manual DEBIT adjustment —
+         the console's own signed amount — came back 400 and had never once
+         worked; the admin saw "Failed to apply adjustment" with no reason.
+         An adjustment is the one type whose amount genuinely carries a sign.
+         Every other type stores a positive magnitude and takes its direction
+         from the type, which is what the withdrawal refund (wallet + amount),
+         the investment deduct and the ledger display all assume. */
+      if (key === 'amount' && n < 0 && isCreate && body.type !== 'adjustment')
+        errors.push(`${key} cannot be negative for type '${body.type || 'transaction'}' — the type carries the direction`);
     }
     if (STATUS_FIELDS[key] && val !== null && val !== undefined) {
       const allowed = (key === 'status' && TABLE_STATUS_OVERRIDES[table]) ? TABLE_STATUS_OVERRIDES[table] : STATUS_FIELDS[key];
@@ -1192,7 +1200,15 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
        gifts.js, interest.js) do not pass through this route and apply their own
        effects, so there is no overlap between them and this hook.
     ──────────────────────────────────────────────────────────────────── */
-    const _moneyTypes = ['deposit', 'payout', 'referral_bonus', 'return'];
+    /* `adjustment` is here because the admin console's manual adjustment used to
+       move the wallet itself: it POSTed the transaction, then PATCHed
+       investors.wallet_balance to a value it had computed from its own in-memory
+       copy. An absolute write from stale state overwrites anything that landed
+       in between — a probe against this route destroyed a R9,000 deposit that
+       arrived between the page loading and the adjustment being applied. The
+       amount is already signed, so a relative move handles credit and debit
+       alike, and doing it here makes it atomic with the row. */
+    const _moneyTypes = ['deposit', 'payout', 'referral_bonus', 'return', 'adjustment'];
     const _isMoneyInsert = table === 'transactions' && body.status === 'completed' &&
       body.investor_id && _moneyTypes.includes(body.type);
 
@@ -1219,10 +1235,20 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
             [amt, c.sub_account_id]
           );
         } else {
-          await dbClient.query(
+          /* Relative, and not clamped. An adjustment carries a signed amount and
+             may legitimately take a wallet negative — correcting an over-credit
+             that has already been spent — which the console asks the admin to
+             confirm before sending. Clamping at zero here would silently discard
+             the part of that correction that did not fit, which is exactly how
+             GREATEST(0, …) elsewhere in this file let a R500 wallet fund a
+             R10,000 investment. The row is checked instead, so a transaction
+             naming an investor that does not exist fails rather than committing
+             a money row with no balance behind it. */
+          const { rowCount } = await dbClient.query(
             'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
             [amt, c.investor_id]
           );
+          if (!rowCount) throw new Error('Investor not found for this transaction.');
         }
         await dbClient.query('COMMIT');
         rows = ins.rows;
@@ -1751,7 +1777,8 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
               [parseFloat(u.amount), u.investor_id]
             );
           } else if (u.investor_id &&
-              (u.type === 'deposit' || u.type === 'payout' || u.type === 'referral_bonus')) {
+              (u.type === 'deposit' || u.type === 'payout' ||
+               u.type === 'referral_bonus' || u.type === 'adjustment')) {
             if (u.sub_account_id && u.type === 'deposit') {
               await dbClient.query(
                 'UPDATE sub_accounts SET wallet_balance = wallet_balance + $1 WHERE id = $2',
