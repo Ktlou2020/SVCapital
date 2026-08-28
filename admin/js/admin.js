@@ -718,6 +718,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   _initSSE();
 
+  /* Sortable columns. Registered here rather than beside each render function
+     so the list of tables that sort is one thing you can read, and so a table
+     whose header carries data-sort but has no renderer shows up as a header
+     that does nothing rather than a silent no-op. */
+  _registerSortable('investors',    () => { investorPage = 1; renderInvestorsTable(); });
+  _registerSortable('investments',  () => { invPage = 1; renderInvestmentsTable(); });
+  _registerSortable('transactions', () => { txnPage = 1; renderTxnTable(); });
+  _registerSortable('kyc',          () => renderKYCTable());
+  _registerSortable('maturity',     () => renderMaturityTable());
+  _initSortableTables();
+
   // Restore last active view from session (deep-link fix)
   const savedView = sessionStorage.getItem('svc_admin_view');
   if (savedView && savedView !== 'dashboard') {
@@ -1550,6 +1561,127 @@ function clearInvestorSelection() {
    The withdrawals bulk already worked this way; this generalises it and adds
    the names, because "3 failed" without saying which cannot be acted on.
    ───────────────────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════
+   SORTABLE COLUMNS
+   ═══════════════════════════════════════════════
+
+   Not one table in this console sorted. You could not order investors by wallet
+   balance, investments by amount, or transactions by value — the two ways
+   anyone actually finds the row they want are searching for a name they already
+   know, and sorting by the number they are looking for. Only the first existed.
+
+   Declarative rather than per-table: a table carries data-sort-table, a header
+   carries data-sort and data-sort-type, and one delegated listener does the
+   rest. Sixty-odd inline onclicks would have been sixty-odd chances to wire one
+   to the wrong field.
+
+   Three things this gets right that a naive comparator does not:
+
+     · NUMBERS ARE PARSED. node-pg returns NUMERIC as a STRING, so every amount
+       in STATE arrives as text. Sorting those as strings puts R9,000 above
+       R10,000 — and it looks plausible enough to go unnoticed on a screen full
+       of money.
+     · BLANKS SORT LAST IN BOTH DIRECTIONS. A missing maturity date is not
+       "earliest", it is absent. Flipping direction to bring rows with no value
+       to the top buries the ones you asked to see.
+     · THE SORT IS STABLE and applies to the whole FILTER, not the visible page,
+       so it agrees with what the filter bar says is in scope.
+*/
+const _sortState = {};      // tableKey -> { key, dir, type }
+const _sortRenderers = {};  // tableKey -> () => void
+
+function _registerSortable(tableKey, render) { _sortRenderers[tableKey] = render; }
+
+const _sortValue = (row, key, type) => {
+  const raw = key.split('.').reduce((o, k) => (o == null ? o : o[k]), row);
+  if (raw === null || raw === undefined || raw === '') return null;
+  if (type === 'num')  { const n = parseFloat(raw); return isNaN(n) ? null : n; }
+  if (type === 'date') { const t = new Date(raw).getTime(); return isNaN(t) ? null : t; }
+  return String(raw).trim().toLowerCase() || null;
+};
+
+/* Sorts a copy. Several callers hold the array they pass — filteredTxns is
+   re-read by the pager — and sorting in place made the order depend on how many
+   times the table happened to render. */
+function _sortRows(tableKey, rows, accessors) {
+  const st = _sortState[tableKey];
+  if (!st || !st.key) return rows;
+  const get = (accessors && accessors[st.key]) || null;
+  const val = row => get ? get(row) : _sortValue(row, st.key, st.type);
+  const dir = st.dir === 'desc' ? -1 : 1;
+
+  return rows.map((row, i) => ({ row, i, v: val(row) }))
+    .sort((a, b) => {
+      /* Absent always last, whichever way the column is pointing. */
+      if (a.v === null && b.v === null) return a.i - b.i;
+      if (a.v === null) return 1;
+      if (b.v === null) return -1;
+      let c;
+      if (typeof a.v === 'number' && typeof b.v === 'number') c = a.v - b.v;
+      else c = String(a.v).localeCompare(String(b.v), 'en', { numeric: true, sensitivity: 'base' });
+      return c * dir || a.i - b.i;   // index tiebreak keeps it stable
+    })
+    .map(x => x.row);
+}
+
+function _toggleSort(tableKey, key, type) {
+  const st = _sortState[tableKey];
+  if (st && st.key === key) {
+    st.dir = st.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    /* A number or a date almost always wants its largest first — the biggest
+       balance, the newest transaction. Text wants A→Z. Guessing this correctly
+       is the difference between one click and two, every time. */
+    _sortState[tableKey] = { key, type, dir: (type === 'num' || type === 'date') ? 'desc' : 'asc' };
+  }
+  _paintSortHeaders(tableKey);
+  const render = _sortRenderers[tableKey];
+  if (render) render();
+}
+
+function _paintSortHeaders(tableKey) {
+  const table = document.querySelector(`[data-sort-table="${tableKey}"]`);
+  if (!table) return;
+  const st = _sortState[tableKey] || {};
+  table.querySelectorAll('th[data-sort]').forEach(th => {
+    const active = th.dataset.sort === st.key;
+    const caret = active ? (st.dir === 'asc' ? '▲' : '▼') : '⇅';
+    let mark = th.querySelector('.sort-caret');
+    if (!mark) {
+      mark = document.createElement('span');
+      mark.className = 'sort-caret';
+      th.appendChild(document.createTextNode(' '));
+      th.appendChild(mark);
+    }
+    mark.textContent = caret;
+    mark.style.opacity = active ? '1' : '0.3';
+    mark.style.fontSize = '0.7em';
+    th.setAttribute('aria-sort', active ? (st.dir === 'asc' ? 'ascending' : 'descending') : 'none');
+    th.style.cursor = 'pointer';
+    th.style.userSelect = 'none';
+    if (!th.hasAttribute('tabindex')) th.setAttribute('tabindex', '0');
+    if (!th.title) th.title = 'Sort by this column';
+  });
+}
+
+/* One delegated listener for every sortable table, bound once. Keyboard too —
+   a header that only responds to a mouse is a header half the operators here
+   cannot use. */
+function _initSortableTables() {
+  const act = e => {
+    const th = e.target.closest && e.target.closest('th[data-sort]');
+    if (!th) return;
+    const table = th.closest('[data-sort-table]');
+    if (!table) return;
+    if (e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    _toggleSort(table.dataset.sortTable, th.dataset.sort, th.dataset.sortType || 'text');
+  };
+  document.addEventListener('click', act);
+  document.addEventListener('keydown', act);
+  document.querySelectorAll('[data-sort-table]').forEach(t => _paintSortHeaders(t.dataset.sortTable));
+}
+
 async function _bulkRun(items, worker, { sequential = false, label = i => String(i) } = {}) {
   const succeeded = [], failed = [];
   const attempt = async item => {
@@ -1808,9 +1940,26 @@ function _invAvatarColor(name) {
   return p[Math.abs(h) % p.length];
 }
 
+/* Portfolio and Investments are derived, not columns, so they need accessors.
+   Portfolio is the same figure the row shows — wallet plus live investments —
+   because sorting by a number the operator cannot see is worse than no sort. */
+const INVESTOR_SORT = {
+  last_name:    i => (`${i.last_name || ''} ${i.first_name || ''}`).trim().toLowerCase() || null,
+  _portfolio:   i => {
+    const v = Utils.portfolioValue
+      ? Utils.portfolioValue(STATE.investments.filter(x => x.investor_id === i.id), i.wallet_balance)
+      : parseFloat(i.wallet_balance);
+    return isNaN(v) ? null : v;
+  },
+  _investments: i => STATE.investments.filter(x => x.investor_id === i.id).length,
+};
+
 function renderInvestorsTable() {
   const body = document.getElementById('investorsBody');
   const start = (investorPage - 1) * INV_PAGE_SIZE;
+  /* The dropdown still applies its order in the filter step; a column click
+     takes precedence from then on, so the two cannot both claim the table. */
+  if (_sortState.investors?.key) filteredInvestors = _sortRows('investors', filteredInvestors, INVESTOR_SORT);
   const page = filteredInvestors.slice(start, start + INV_PAGE_SIZE);
 
   document.getElementById('investorCount').textContent = `${filteredInvestors.length.toLocaleString()} investors`;
@@ -3978,6 +4127,17 @@ function renderKYCStats() {
   }
 }
 
+/* The queue loads newest-submitted-first (loadKYC sorts it), which stays the
+   default until a column is clicked. */
+const KYC_SORT = {
+  _investor: k => {
+    const i = STATE.investors.find(x => x.id === k.investor_id);
+    return (k.investor_name || (i ? `${i.last_name || ''} ${i.first_name || ''}` : '')).trim().toLowerCase() || null;
+  },
+  document_type: k => (k.doc_type || '').toLowerCase() || null,
+  submitted_at:  k => { const d = new Date(k.submitted_at || k.created_at).getTime(); return isNaN(d) ? null : d; },
+};
+
 function renderKYCTable() {
   const body       = document.getElementById('kycBody');
   const stFilter   = (document.getElementById('kycStatusFilter')?.value  || '').trim();
@@ -3985,7 +4145,7 @@ function renderKYCTable() {
   const search     = (document.getElementById('kycSearch')?.value        || '').trim().toLowerCase();
   const knownTypes = ['id_document', 'proof_of_address', 'proof_of_bank'];
 
-  const items = STATE.kyc.filter(k => {
+  let items = STATE.kyc.filter(k => {
     if (stFilter && k.status !== stFilter) return false;
     if (dtFilter) {
       const kt = knownTypes.includes(k.doc_type) ? k.doc_type : 'other';
@@ -3999,6 +4159,8 @@ function renderKYCTable() {
     }
     return true;
   });
+
+  items = _sortRows('kyc', items, KYC_SORT);
 
   if (!items.length) {
     body.innerHTML = stFilter === 'pending'
@@ -6508,10 +6670,18 @@ function renderInvestmentStats() {
   document.getElementById('inv-avgrate').textContent = avgRate ? Utils.pct(avgRate) : '—';
 }
 
+const INVESTMENT_SORT = {
+  _investor: v => {
+    const i = STATE.investors.find(x => x.id === v.investor_id);
+    return (v.investor_name || (i ? `${i.last_name || ''} ${i.first_name || ''}` : '')).trim().toLowerCase() || null;
+  },
+};
+
 function renderInvestmentsTable() {
   const body = document.getElementById('investmentsBody');
   const start = (invPage - 1) * INV_PG_SIZE;
-  const page = filteredInvests.slice(start, start + INV_PG_SIZE);
+  const ordered = _sortRows('investments', filteredInvests, INVESTMENT_SORT);
+  const page = ordered.slice(start, start + INV_PG_SIZE);
 
   document.getElementById('investmentsFooter').textContent = `${start + 1}–${Math.min(start + INV_PG_SIZE, filteredInvests.length)} of ${filteredInvests.length}`;
 
@@ -7079,10 +7249,19 @@ async function loadMaturity() {
   }
 }
 
+const MATURITY_SORT = {
+  _investor: m => {
+    const i = STATE.investors.find(x => x.id === m.investor_id);
+    return (m.investor_name || (i ? `${i.last_name || ''} ${i.first_name || ''}` : '')).trim().toLowerCase() || null;
+  },
+  _payout: m => { const n = parseFloat(m.payout_amount ?? m.custom_amount); return isNaN(n) ? null : n; },
+  instruction: m => (m.instruction_type || '').toLowerCase() || null,
+};
+
 function renderMaturityTable() {
   const body = document.getElementById('maturityBody');
   const countEl = document.getElementById('maturityCount');
-  const rows = filteredMaturity;
+  const rows = _sortRows('maturity', filteredMaturity, MATURITY_SORT);
   if (countEl) countEl.textContent = `${rows.length.toLocaleString()} of ${(STATE.maturity || []).length.toLocaleString()} instructions`;
   if (!rows.length) {
     body.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding:32px"><i class="fa-solid fa-inbox" style="font-size:1.5rem;color:var(--text-dim);display:block;margin-bottom:8px"></i>No maturity instructions match the current filters</td></tr>';
@@ -7220,6 +7399,16 @@ function _txnInvName(t) {
 const selectedTxns = new Set();
 const _isApprovableTxn = t => t && t.type === 'deposit' && t.status === 'pending';
 
+/* Columns whose value is not a plain field. Amount sorts on its MAGNITUDE —
+   the ledger renders direction from the type and shows every figure positive,
+   so ordering by the raw signed number would put the biggest withdrawal at the
+   bottom of a descending list, under everything else. */
+const TXN_SORT = {
+  _investor:  t => (_txnInvName(t) || '').toLowerCase() || null,
+  _absAmount: t => { const n = Math.abs(parseFloat(t.amount)); return isNaN(n) ? null : n; },
+  _date:      t => { const d = new Date(t.transaction_date || t.created_at).getTime(); return isNaN(d) ? null : d; },
+};
+
 function _txnBulkBar() {
   const bar = document.getElementById('txnBulkBar');
   if (!bar) return;
@@ -7291,7 +7480,14 @@ async function bulkApproveDeposits(btn) {
 function renderTxnTable() {
   const body = document.getElementById('txnBody');
   const start = (txnPage - 1) * TXN_PG_SIZE;
-  const page = filteredTxns.sort((a, b) => new Date(b.transaction_date || b.created_at) - new Date(a.transaction_date || a.created_at)).slice(start, start + TXN_PG_SIZE);
+  /* Newest first until a column is chosen, then the column wins. The old form
+     sorted filteredTxns IN PLACE on every render, so the array the pager reads
+     was reordered underneath it. */
+  const ordered = _sortState.transactions?.key
+    ? _sortRows('transactions', filteredTxns, TXN_SORT)
+    : [...filteredTxns].sort((a, b) =>
+        new Date(b.transaction_date || b.created_at) - new Date(a.transaction_date || a.created_at));
+  const page = ordered.slice(start, start + TXN_PG_SIZE);
 
   document.getElementById('txnFooter').textContent = `${start + 1}–${Math.min(start + TXN_PG_SIZE, filteredTxns.length)} of ${filteredTxns.length}`;
 

@@ -500,10 +500,15 @@
             <div id="invSelectAllBanner" style="display:none;font-size:0.78rem;color:var(--text-muted)"></div>
           </div>
           <div style="overflow-x:auto" id="investorsCard">
-            <table class="data-table" id="investorsTable" style="table-layout:fixed;width:100%">
+            <table class="data-table" id="investorsTable" data-sort-table="investors" style="table-layout:fixed;width:100%">
               <thead><tr>
                 <th style="width:3%;padding:8px 10px"><input type="checkbox" id="invSelectAll" onchange="toggleAllInvestors(this)" title="Select all on this page"></th>
-                <th style="width:23%">Investor</th><th style="width:20%">Contact</th><th style="width:16%">KYC / Status</th><th style="width:15%">Portfolio</th><th style="width:10%">Investments</th><th style="width:13%">Actions</th>
+                <th style="width:23%" data-sort="last_name"      data-sort-type="text">Investor</th>
+                <th style="width:20%" data-sort="email"          data-sort-type="text">Contact</th>
+                <th style="width:16%" data-sort="fica_status"    data-sort-type="text">KYC / Status</th>
+                <th style="width:15%" data-sort="_portfolio"     data-sort-type="num">Portfolio</th>
+                <th style="width:10%" data-sort="_investments"   data-sort-type="num">Investments</th>
+                <th style="width:13%">Actions</th>
               </tr></thead>
               <tbody id="investorsBody">
                 <tr><td colspan="6" class="text-center text-muted" style="padding:32px">Loading...</td></tr>
@@ -684,9 +689,15 @@
             <button class="btn btn--secondary btn--sm" onclick="clearKycSelection()"><i class="fa-solid fa-times"></i> Clear</button>
           </div>
           <div style="overflow-x:auto">
-            <table class="data-table">
+            <table class="data-table" data-sort-table="kyc">
               <thead><tr>
-                <th style="width:4%"><input type="checkbox" id="kycSelectAll" onchange="toggleAllKyc(this.checked)" style="cursor:pointer;width:16px;height:16px;accent-color:#FF9B0C" title="Select all actionable"></th><th style="width:20%">Investor</th><th style="width:14%">Document Type</th><th style="width:11%">File</th><th style="width:9%">Status</th><th style="width:10%">Submitted / Expiry</th><th style="width:9%">Document</th><th style="width:23%">Actions</th>
+                <th style="width:4%"><input type="checkbox" id="kycSelectAll" onchange="toggleAllKyc(this.checked)" style="cursor:pointer;width:16px;height:16px;accent-color:#FF9B0C" title="Select all actionable"></th>
+                <th style="width:20%" data-sort="_investor"     data-sort-type="text">Investor</th>
+                <th style="width:14%" data-sort="document_type" data-sort-type="text">Document Type</th>
+                <th style="width:11%">File</th>
+                <th style="width:9%"  data-sort="status"        data-sort-type="text">Status</th>
+                <th style="width:10%" data-sort="submitted_at"  data-sort-type="date">Submitted / Expiry</th>
+                <th style="width:9%">Document</th><th style="width:23%">Actions</th>
               </tr></thead>
               <tbody id="kycBody">
                 <tr><td colspan="7" class="text-center text-muted" style="padding:32px">Loading...</td></tr>
@@ -846,9 +857,18 @@
             <button class="btn btn--secondary btn--sm" onclick="document.querySelectorAll('.inv-select-cb').forEach(cb=>cb.checked=false);_invUpdateBulkBar()">Clear</button>
           </div>
           <div style="overflow-x:auto">
-            <table class="data-table">
+            <table class="data-table" data-sort-table="investments">
               <thead><tr>
-                <th style="width:4%"></th><th style="width:16%">Investor</th><th style="width:7%">Date</th><th style="width:22%">Pool</th><th style="width:14%">Product</th><th style="width:10%">Amount</th><th style="width:5%">Rate</th><th style="width:9%">Status</th><th style="width:8%">Maturity</th><th style="width:5%">Actions</th>
+                <th style="width:4%"></th>
+                <th style="width:16%" data-sort="_investor"     data-sort-type="text">Investor</th>
+                <th style="width:7%"  data-sort="start_date"    data-sort-type="date">Date</th>
+                <th style="width:22%" data-sort="pool_name"     data-sort-type="text">Pool</th>
+                <th style="width:14%" data-sort="product_type"  data-sort-type="text">Product</th>
+                <th style="width:10%" data-sort="amount"        data-sort-type="num">Amount</th>
+                <th style="width:5%"  data-sort="actual_rate"   data-sort-type="num">Rate</th>
+                <th style="width:9%"  data-sort="status"        data-sort-type="text">Status</th>
+                <th style="width:8%"  data-sort="maturity_date" data-sort-type="date">Maturity</th>
+                <th style="width:5%">Actions</th>
               </tr></thead>
               <tbody id="investmentsBody">
                 <tr><td colspan="10" class="text-center text-muted" style="padding:32px">Loading...</td></tr>
@@ -905,9 +925,15 @@
             <span id="maturityCount" style="margin-left:auto;font-size:0.78rem;color:var(--text-muted)"></span>
           </div>
           <div style="overflow-x:auto">
-            <table class="data-table">
+            <table class="data-table" data-sort-table="maturity">
               <thead><tr>
-                <th style="width:18%">Investor</th><th style="width:28%">Pool</th><th style="width:16%">Instruction</th><th style="width:11%">Payout</th><th style="width:10%">Status</th><th style="width:10%">Submitted</th><th style="width:7%">Actions</th>
+                <th style="width:18%" data-sort="_investor"   data-sort-type="text">Investor</th>
+                <th style="width:28%" data-sort="pool_name"   data-sort-type="text">Pool</th>
+                <th style="width:16%" data-sort="instruction" data-sort-type="text">Instruction</th>
+                <th style="width:11%" data-sort="_payout"     data-sort-type="num">Payout</th>
+                <th style="width:10%" data-sort="status"      data-sort-type="text">Status</th>
+                <th style="width:10%" data-sort="created_at"  data-sort-type="date">Submitted</th>
+                <th style="width:7%">Actions</th>
               </tr></thead>
               <tbody id="maturityBody">
                 <tr><td colspan="7" class="text-center text-muted" style="padding:32px">Loading...</td></tr>
@@ -976,9 +1002,17 @@
             </button>
           </div>
           <div style="overflow-x:auto">
-            <table class="data-table">
+            <table class="data-table" data-sort-table="transactions">
               <thead><tr>
-                <th style="width:3%;padding-left:14px"><input type="checkbox" id="txnSelectAll" onchange="toggleAllTxns(this.checked)" title="Select every approvable deposit in the current filter"></th><th style="width:19%">Investor</th><th style="width:9%">Type</th><th style="width:10%">Amount</th><th style="width:10%">Status</th><th style="width:12%">Reference</th><th style="width:18%">Description</th><th style="width:10%">Date</th><th style="width:9%">Action</th>
+                <th style="width:3%;padding-left:14px"><input type="checkbox" id="txnSelectAll" onchange="toggleAllTxns(this.checked)" title="Select every approvable deposit in the current filter"></th>
+                <th style="width:19%" data-sort="_investor"  data-sort-type="text">Investor</th>
+                <th style="width:9%"  data-sort="type"       data-sort-type="text">Type</th>
+                <th style="width:10%" data-sort="_absAmount" data-sort-type="num">Amount</th>
+                <th style="width:10%" data-sort="status"     data-sort-type="text">Status</th>
+                <th style="width:12%" data-sort="reference"  data-sort-type="text">Reference</th>
+                <th style="width:18%">Description</th>
+                <th style="width:10%" data-sort="_date"      data-sort-type="date">Date</th>
+                <th style="width:9%">Action</th>
               </tr></thead>
               <tbody id="txnBody">
                 <tr><td colspan="9" class="text-center text-muted" style="padding:32px">Loading...</td></tr>
@@ -4843,7 +4877,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=18"></script>
-<script src="js/admin.js?v=139"></script>
+<script src="js/admin.js?v=140"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>
