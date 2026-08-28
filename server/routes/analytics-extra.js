@@ -188,6 +188,87 @@ router.get('/kpis', requireAuth, _admin, async (req, res) => {
   }
 });
 
+/* ── GET /api/analytics/dashboard ────────────────────────────────────
+   The dashboard's tiles, counted in SQL over every row.
+
+   They were summed in the browser from one page of each table — investors
+   capped at 10,000, investments and transactions at 5,000. Past a cap a tile
+   simply stops growing and nothing says so. Transactions crosses first, since
+   every investment writes several rows (deposit, investment, fee,
+   matured_funds, reinvestment, payout), so Returns was the figure most likely
+   to be quietly short.
+
+   Definitions are kept identical to the browser versions they replace, so the
+   numbers do not change meaning on the way to being correct. The one
+   deliberate difference is upcoming maturities: the browser read
+   i.maturity_date, which is a column on investment_pools and does not exist on
+   investments, so the guard `!i.maturity_date` rejected every row and the tile
+   read 0 permanently. Here it is end_date, which is the column that holds it.
+   ──────────────────────────────────────────────────────────────────── */
+router.get('/dashboard', requireAuth, _admin, async (req, res) => {
+  try {
+    const { rows: [d] } = await pool.query(`
+      SELECT
+        (SELECT COUNT(*) FROM investors)                                        AS total_investors,
+
+        COALESCE((SELECT SUM(ABS(amount)) FROM investments
+                   WHERE status = 'active'), 0)                                 AS active_capital,
+
+        /* type = 'return' only, and all time — the tile's own definition.
+           Deliberately NOT the analytics returns_ytd, which also counts
+           payouts and is scoped to the year. Two tiles, two questions. */
+        COALESCE((SELECT SUM(ABS(amount)) FROM transactions
+                   WHERE status = 'completed' AND type = 'return'), 0)          AS returns_total,
+
+        (SELECT COUNT(*) FROM investment_pools
+          WHERE COALESCE(status,'') IN ('open','active','filling'))             AS active_pools,
+
+        (SELECT COUNT(*) FROM investors
+          WHERE COALESCE(status,'') <> 'archived')                              AS non_archived,
+
+        (SELECT COUNT(*) FROM investors
+          WHERE COALESCE(status,'') <> 'archived'
+            AND (fica_status = 'approved' OR kyc_status = 'approved'))          AS fica_approved,
+
+        (SELECT COUNT(*) FROM investors
+          WHERE COALESCE(status,'') <> 'archived'
+            AND (fica_status IN ('pending','in_progress','submitted')
+                 OR kyc_status = 'pending'))                                    AS pending_kyc,
+
+        /* end_date, not maturity_date — see the note above. */
+        (SELECT COUNT(*) FROM investments
+          WHERE status = 'active'
+            AND end_date IS NOT NULL
+            AND end_date >= CURRENT_DATE
+            AND end_date <= CURRENT_DATE + 90)                                  AS upcoming_maturities,
+
+        (SELECT COUNT(*) FROM transactions
+          WHERE type = 'withdrawal' AND status = 'pending')                     AS pending_withdrawals
+    `);
+
+    const n = v => Number(v) || 0;
+    const nonArchived = n(d.non_archived);
+    return res.json({
+      total_investors:     n(d.total_investors),
+      active_capital:      n(d.active_capital),
+      returns_total:       n(d.returns_total),
+      active_pools:        n(d.active_pools),
+      non_archived:        nonArchived,
+      fica_approved:       n(d.fica_approved),
+      /* Computed here so the percentage and its two inputs cannot disagree,
+         and guarded — no investors is 0%, not a division by zero. */
+      fica_rate:           nonArchived ? Math.round((n(d.fica_approved) / nonArchived) * 100) : 0,
+      pending_kyc:         n(d.pending_kyc),
+      upcoming_maturities: n(d.upcoming_maturities),
+      pending_withdrawals: n(d.pending_withdrawals),
+      computed_at:         new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('[analytics/dashboard]', err);
+    return res.status(500).json({ error: 'Failed to compute dashboard figures: ' + err.message });
+  }
+});
+
 /* ── GET /api/analytics/revenue ─────────────────────────── */
 router.get('/revenue', requireAuth, _admin, async (req, res) => {
   try {
