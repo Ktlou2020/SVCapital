@@ -586,6 +586,31 @@ const Utils = {
 
   /* One cell, rendered the same way everywhere: the figure, tinted purple and
      labelled when it is a posted return rather than a target. */
+  /* How a rate should be suffixed.
+
+     investment_pools.actual_rate is the return achieved FOR THE POOL'S PERIOD
+     — for every product, not per annum and not prorated over term_months. The
+     contracted annual_rate is the opposite: an annual figure. Appending
+     "p.a." to both was telling an investor that a 2.13% five-month return was
+     an annual one, which understates it by well over half.
+
+     Returns '' for a posted rate rather than inventing an annualised number:
+     annualising needs an exact day count and a convention nobody has chosen,
+     and a wrong precise figure is worse than an honest unqualified one. */
+  rateSuffix(inv) {
+    const b = Utils.rateBasis(inv);
+    if (!b) return '';
+    return b.posted ? '' : ' p.a.';
+  },
+
+  /* The rate with the right qualifier attached. One definition, so the tile,
+     the modal and the statement cannot label the same number differently. */
+  rateLabel(inv) {
+    const b = Utils.rateBasis(inv);
+    if (!b) return '—';
+    return Utils.pct(b.rate) + Utils.rateSuffix(inv) + (b.posted ? ' for the period' : '');
+  },
+
   rateCell(inv) {
     const b = Utils.rateBasis(inv);
     if (!b) return '<span title="No rate on the investment and none posted on the pool">—</span>';
@@ -627,6 +652,7 @@ const Utils = {
       payout_custom:  'Custom payout',
       switch_product: 'Switch product',
       custom_switch:  'Custom payout & switch',
+      switch_amount:  'Switch an amount, reinvest the rest',
     };
     const label = LABELS[instr] || String(instr).replace(/_/g, ' ');
 
@@ -669,6 +695,17 @@ const Utils = {
             (plan.remainder != null ? `, ${Utils.rand(plan.remainder)}` : ', remainder') +
             (target ? ` switched into ${target}` : ' switched — no product chosen yet')
           : 'Custom payout & switch — no amount set yet';
+        break;
+      case 'switch_amount':
+        /* The one instruction whose named amount goes into a PRODUCT rather
+           than the wallet, so neither half is a payout — both stay invested.
+           Describing it with plan.payout would put it in the "Paid to wallet"
+           row and tell the client money is coming that is not. */
+        plan.remainder = total;
+        plan.detail    = custom
+          ? (target ? `${Utils.rand(custom)} switched into ${target}` : `${Utils.rand(custom)} switched — no product chosen yet`) +
+            (total != null ? `, ${Utils.rand(Math.max(0, total - custom))} reinvested where it is` : ', remainder reinvested where it is')
+          : 'Switch an amount, reinvest the rest — no amount set yet';
         break;
       default:
         plan.detail = 'The client has not chosen what happens at maturity.';

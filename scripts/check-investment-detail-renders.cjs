@@ -70,6 +70,10 @@ function env() {
       statusBadge: () => '<span class="badge">ACTIVE</span>',
       effectiveRate: () => 0.0213,
       rateCell: () => '<span>2.13%</span>',
+      /* A posted rate is a period return, so no "p.a." — the render reads this
+         for the Return Rate row. */
+      rateLabel: () => '2.13% for the period',
+      rateSuffix: () => '',
       maturityPlan: (inv, lbl) => ({ label: 'Switch product',
         detail: `Switched into another product — ${lbl || 'none chosen yet'}`,
         payout: null, remainder: 10213 }),

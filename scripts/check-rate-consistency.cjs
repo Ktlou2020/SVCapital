@@ -99,6 +99,49 @@ ok('a target is green and labelled as a target',
    /#22c55e/.test(Utils.rateCell(CONTRACTED_ONLY)) && /Target return/.test(Utils.rateCell(CONTRACTED_ONLY)),
    Utils.rateCell(CONTRACTED_ONLY));
 ok('nothing at all renders a dash', /—/.test(Utils.rateCell({ amount: '1', annual_rate: '0.0000' })));
+
+/* ── A rate must be labelled as the kind of rate it is ────────────────
+   investment_pools.actual_rate is the return achieved FOR THE POOL'S PERIOD,
+   for every product — not per annum and not prorated over term_months. The
+   contracted annual_rate is an annual figure. The investment detail appended
+   "p.a." to both, so a confirmed 2.13% five-month return was presented as an
+   annual one — understating it by more than half to anyone reading the modal. */
+/* Guarded first. Without this the whole file dies on a TypeError when the
+   helper is absent, printing a stack trace and no failures at all — which
+   reads like a pass to anything counting ✗ lines. */
+ok('Utils.rateLabel exists', typeof Utils.rateLabel === 'function',
+   'the rate label helper is missing — nothing below can be checked');
+ok('Utils.rateSuffix exists', typeof Utils.rateSuffix === 'function');
+if (typeof Utils.rateLabel !== 'function') {
+  console.log(`\n${pass} passed, ${fail} failed`);
+  process.exit(1);
+}
+
+ok('a posted period return is not labelled per annum',
+   !/p\.a\./.test(Utils.rateLabel({ amount: 10000, pool_actual_rate: 0.0213, annual_rate: 0 })),
+   Utils.rateLabel({ amount: 10000, pool_actual_rate: 0.0213, annual_rate: 0 }));
+ok('it says what period it covers instead',
+   /2\.13% for the period/.test(Utils.rateLabel({ amount: 10000, pool_actual_rate: 0.0213, annual_rate: 0 })),
+   Utils.rateLabel({ amount: 10000, pool_actual_rate: 0.0213, annual_rate: 0 }));
+ok('a contracted rate keeps its per annum qualifier',
+   /14\.00% p\.a\./.test(Utils.rateLabel({ amount: 10000, annual_rate: 0.14 })),
+   Utils.rateLabel({ amount: 10000, annual_rate: 0.14 }));
+ok('an investment\'s own realised return is a period figure too',
+   !/p\.a\./.test(Utils.rateLabel({ amount: 10000, actual_return: 213 })),
+   Utils.rateLabel({ amount: 10000, actual_return: 213 }));
+ok('no rate at all is a dash, not a bare qualifier',
+   Utils.rateLabel({ amount: 1000 }) === '—', Utils.rateLabel({ amount: 1000 }));
+ok('a posted rate is not annualised into a number nobody chose',
+   Utils.rateLabel({ amount: 10000, pool_actual_rate: 0.0213 }).startsWith('2.13%'),
+   'annualising needs a day count and a convention — a wrong precise figure is worse than an honest one');
+
+{
+  const adm = require('fs').readFileSync(require('path').join(__dirname, '..', 'admin', 'js', 'admin.js'), 'utf8');
+  ok('the investment detail uses the shared label',
+     /Return Rate<\/span><span class="info-row__value">\$\{Utils\.rateLabel\(inv\)\}/.test(adm));
+  ok('and no longer appends p.a. to whatever it was given',
+     !/Utils\.pct\(_invRate\) \+ ' p\.a\.'/.test(adm));
+}
 ok('the only purple used is the canonical #eda5ff',
    !/#(?!eda5ff)[0-9a-f]*(?:[89ab][0-9a-f]{2}ff|purple)/i.test(Utils.rateCell(POOL_POSTED)));
 
