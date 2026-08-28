@@ -6,6 +6,8 @@
     "start": "cd server && node index.js",
     "build": "cd server && npm install --production",
     "dev": "cd server && node index.js",
+    "check": "node server/scripts/run-checks.cjs",
+    "check:shuffle": "node server/scripts/run-checks.cjs --shuffle",
     "migrate": "cd server && node db/migrate.js",
     "seed": "cd server && node db/seed.js",
     "setup": "cd server && npm install && node db/migrate.js && node db/seed.js",

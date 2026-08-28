@@ -15,6 +15,14 @@ Bump `portal/index.html` query string (`js/portal.js?v=N`) with every web portal
 ## Admin Console Versioning
 Bump `admin/index.html` query string (`js/admin.js?v=N`) with every admin JS change. Check the current version number in `admin/index.html` before bumping.
 
+## Running the Checks
+`npm run check` — the suite, each check in its own database cloned from a
+template. `npm run check:shuffle` runs them in a random order; isolation means
+that should be boring, and a failure there means a check has grown a
+dependency on what ran before it. Needs `DATABASE_URL` pointed at a scratch
+Postgres — the runner creates and drops databases and refuses anything that
+does not look like scratch.
+
 ## Purple / Brand Colour
 The single canonical purple across the entire platform is `#eda5ff`. No other purple values are permitted.
 
