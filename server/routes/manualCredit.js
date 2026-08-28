@@ -255,6 +255,29 @@ router.get('/maturity-preflight', async (req, res) => {
   }
 });
 
+/* ─── GET /api/admin/stored-markup-audit ──────────────────────────────
+   Text already in the database that the admin console would render as markup.
+
+   The write paths are closed — non-privileged writes are stripped, email and
+   id_number refused — but neither reaches rows written before that, or brought
+   in by the migration, which passed through no sanitiser at all. This is the
+   only thing that answers whether any are sitting there now.
+
+   Read-only. Admin/director only, via the router-level guard at the top of
+   this file — the findings quote stored text back verbatim, which is the whole
+   point and also a reason not to expose it more widely.
+   ──────────────────────────────────────────────────────────────────── */
+router.get('/stored-markup-audit', async (req, res) => {
+  try {
+    const { runStoredMarkupAudit } = require('../services/storedMarkupAudit');
+    const report = await runStoredMarkupAudit(pool, { limit: req.query.limit });
+    return res.json(report);
+  } catch (err) {
+    console.error('[stored-markup-audit]', err);
+    return res.status(500).json({ error: 'Audit failed: ' + err.message });
+  }
+});
+
 /* ─── POST /api/admin/pools/remap-product-type ─────────────────────────
    Set a pool's product_type AND its investments' product_type together.
 
