@@ -18,19 +18,24 @@ router.get('/', async (req, res) => {
     const { rows } = await pool.query(`
       SELECT p.*,
         /* As posted: the average return achieved over each pool's own period.
-           Comparable only between pools of the same term. */
+           DELIBERATELY UNCHANGED. The portal's product grid shows this under a
+           "(N MO)" label for short_term — correctly, as a period figure — and
+           short_term has matured pools, so annualising this field would have
+           put 5.11% under a label reading "(5 MO)" on a live screen. The name
+           has an established meaning here; the new basis gets a new name. */
         (SELECT ROUND(AVG(ip.actual_rate)::numeric, 4)
            FROM investment_pools ip
           WHERE ip.product_type = p.product_type
             AND ip.status IN ('matured','paid_out')
-            AND COALESCE(ip.actual_rate, 0) > 0)          AS avg_period_rate,
+            AND COALESCE(ip.actual_rate, 0) > 0)          AS avg_actual_rate,
 
-        /* Annualised, simply — × 12 / term_months. Every surface that shows
-           this figure labels it "p.a." for anything but short_term, while the
-           column holds a PERIOD return for every product. On a 12-month pool
-           the two coincide, which is why cattle looked right and hid it; on
-           solar_7yr the period figure is seven years' return presented as one
-           year's. A pool with no term is left as posted rather than guessed at. */
+        /* Annualised, simply — × 12 / term_months. Additive: nothing reads it
+           yet. It exists so the grid's "AVG RETURN P.A." tile has a figure that
+           is actually per annum to move to, rather than continuing to label a
+           period return that way. On a 12-month pool the two coincide, which is
+           why cattle has always looked right; on solar_7yr the period figure is
+           seven years' return presented as one year's. A pool with no term is
+           left as posted rather than guessed at. */
         (SELECT ROUND(AVG(
                   CASE WHEN COALESCE(ip.term_months, 0) > 0
                        THEN ip.actual_rate * 12.0 / ip.term_months
@@ -38,7 +43,7 @@ router.get('/', async (req, res) => {
            FROM investment_pools ip
           WHERE ip.product_type = p.product_type
             AND ip.status IN ('matured','paid_out')
-            AND COALESCE(ip.actual_rate, 0) > 0)          AS avg_actual_rate,
+            AND COALESCE(ip.actual_rate, 0) > 0)          AS avg_annual_rate,
         (SELECT COUNT(*)
            FROM investment_pools ip2
           WHERE ip2.product_type = p.product_type
