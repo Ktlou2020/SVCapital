@@ -1619,6 +1619,12 @@ async function autoSetup() {
           BEGIN ALTER TABLE kyc_documents ADD COLUMN doc_subtype TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE solar_projects ADD COLUMN documents_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE solar_projects ADD COLUMN foxess_device_sn TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          /* course_progress.certificate_id — written by the employee portal on
+             the FINAL module of a course and never created here, so the PATCH
+             that completes a course failed with "column does not exist". Every
+             module submitted fine until the last one; the client does not check
+             the response status, so it looked like nothing happened at all. */
+          BEGIN ALTER TABLE course_progress ADD COLUMN certificate_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE employee_courses ADD COLUMN role_target TEXT DEFAULT 'all'; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE employee_courses ADD COLUMN department TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE employee_courses ADD COLUMN difficulty TEXT DEFAULT 'intermediate'; EXCEPTION WHEN duplicate_column THEN NULL; END;

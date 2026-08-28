@@ -22,9 +22,32 @@ const get = async p => {
     return r.ok ? r.json() : { data: [], total: 0 };
   } catch { return { data: [], total: 0 }; }
 };
-const post   = async (p,b) => { const r = await fetch(BASE+p,{method:'POST',  headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}); return r.json(); };
-const patch  = async (p,b) => { const r = await fetch(BASE+p,{method:'PATCH', headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}); return r.json(); };
-const put    = async (p,b) => { const r = await fetch(BASE+p,{method:'PUT',   headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}); return r.json(); };
+/* A failed write must not read like a successful one.
+
+   These returned r.json() without looking at r.ok, so a 500 came back as
+   { error: '…' } — a truthy object the caller stored as though it were the
+   saved record. That is how a course that could not be completed produced no
+   error at all: the progress row was an error object, the later lookup for it
+   found nothing, and completeModule returned silently. Nobody saw a failure
+   because there was nothing to see. */
+async function _send(method, p, b) {
+  const r = await fetch(BASE + p, {
+    method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b),
+  });
+  let data = null;
+  try { data = await r.json(); } catch (_) { /* a non-JSON body on an error is still an error */ }
+  if (!r.ok) {
+    const why = (data && (data.error || data.message)) || `HTTP ${r.status}`;
+    const err = new Error(why);
+    err.status = r.status;
+    console.error(`[team] ${method} ${p} failed:`, why);
+    throw err;
+  }
+  return data;
+}
+const post   = (p, b) => _send('POST',  p, b);
+const patch  = (p, b) => _send('PATCH', p, b);
+const put    = (p, b) => _send('PUT',   p, b);
 const del    = async p     => { await fetch(BASE+p,{method:'DELETE'}); };
 
 async function fetchAll(table) {
@@ -385,13 +408,26 @@ async function openCourse(courseId) {
   // Resume from progress
   let prog = _progress.find(p=>p.course_id===courseId);
   if (!prog) {
-    prog = await post('tables/course_progress', {
+    try {
+      prog = await post('tables/course_progress', {
       employee_id:_emp.id, course_id:courseId,
-      status:'in_progress', current_module:_readerModules[0]?.id||'',
+      /* An index, not an id. current_module is INT and director.js writes 1;
+         this wrote the module's UUID, so every self-enrolment failed with
+         "invalid input syntax for type integer" — invisible, because post()
+         did not look at the status. */
+      status:'in_progress', current_module:1,
       modules_completed:0, quiz_scores:'{}', overall_quiz_score:0,
-      xp_earned:0, kpi_applied:false, started_at:new Date().toISOString()
-    });
-    _progress.push(prog);
+        xp_earned:0, kpi_applied:false, started_at:new Date().toISOString()
+      });
+      _progress.push(prog);
+    } catch (err) {
+      /* Enrolment failing used to push an error object into _progress, so the
+         later lookup for this course found nothing and every module silently
+         did nothing. Better to refuse to open the course than to open one that
+         cannot record anything. */
+      showToast(`Could not start this course: ${err.message}`, 'error');
+      return;
+    }
   } else if (prog.status !== 'completed') {
     await patch(`tables/course_progress/${prog.id}`, {status:'in_progress'});
     prog.status = 'in_progress';
@@ -615,7 +651,17 @@ async function completeModule(mod, score, xpReward) {
     updates.certificate_id = `CERT-${_emp.id}-${_readerCourse.id}-${Date.now()}`;
     updates.kpi_applied = true;
   }
-  const updated = await patch(`tables/course_progress/${prog.id}`, updates);
+  let updated;
+  try {
+    updated = await patch(`tables/course_progress/${prog.id}`, updates);
+  } catch (err) {
+    /* This is the submit at the end of a module. Failing it silently is what
+       made a finished course look like a button that does nothing, so say so
+       and stop — the celebration and the XP below would otherwise be awarded
+       for progress that was never stored. */
+    showToast(`Could not save your progress: ${err.message}. Nothing was recorded — please try again.`, 'error');
+    return;
+  }
   Object.assign(prog, updated);
 
   await awardXP(xpReward, 'Module completion');
@@ -778,7 +824,7 @@ async function runAiGeneration(params, _unused) {
     if (!_progress.find(p=>p.course_id===course.id)) {
       const prog = await post('tables/course_progress', {
         employee_id:_emp.id, course_id:course.id,
-        status:'in_progress', current_module:modules[0]?.id||'',
+        status:'in_progress', current_module:1,
         modules_completed:0, quiz_scores:'{}', overall_quiz_score:0,
         xp_earned:0, kpi_applied:false, started_at:new Date().toISOString()
       });
