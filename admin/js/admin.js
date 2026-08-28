@@ -905,7 +905,11 @@ async function loadDashboard() {
     renderPendingActions();
     _markRefreshed('activity');
     renderActivityFeed();
-    renderAumChart();
+    /* Awaited: renderAumChart fetches the series and the mix chart reads the
+       product_mix from the same response. Unawaited, the mix would render from
+       the browser fallback every first load and only look right after a tab
+       switch — a difference nobody would trace back to here. */
+    await renderAumChart();
     renderProductMixChart();
     updateSidebarBadges();
 
@@ -1168,7 +1172,7 @@ function switchAumTab(range, btn) {
   renderAumChart(range);
 }
 
-function renderAumChart(range) {
+async function renderAumChart(range) {
   const ctx = document.getElementById('aumChart');
   if (!ctx) return;
 
@@ -1184,25 +1188,55 @@ function renderAumChart(range) {
     monthLabels.push(d.toLocaleString('en-ZA', { month: 'short', year: monthCount > 12 ? '2-digit' : undefined }));
   }
 
-  // Cumulative AUM: sum of investments active at end of each month
-  const aumData = monthStarts.map(m => {
-    const end = new Date(m.getFullYear(), m.getMonth() + 1, 0, 23, 59, 59);
-    return STATE.investments.filter(inv => {
-      const created = new Date(inv.created_at || inv.start_date || 0);
-      return created <= end && inv.status === 'active';
-    }).reduce((s, inv) => s + (parseFloat(inv.amount) || 0), 0);
-  });
+  /* Counted in SQL over every investment, and as at each month end.
 
-  // Returns paid per month
-  const returnsData = monthStarts.map(m => {
-    const start = new Date(m.getFullYear(), m.getMonth(), 1);
-    const end   = new Date(m.getFullYear(), m.getMonth() + 1, 0, 23, 59, 59);
-    return STATE.transactions.filter(t => {
-      if (t.type !== 'return' || t.status !== 'completed') return false;
-      const d = new Date(t.created_at || t.transaction_date || 0);
-      return d >= start && d <= end;
-    }).reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
-  });
+     The browser version below is kept as a fallback, but it is wrong in two
+     ways that only the server can fix. It reads a capped page — and the cap
+     keeps the most RECENT rows, so the oldest investments, the ones that make
+     up the early months, are precisely the ones missing. And it filters
+     `inv.status === 'active'`, the status now, so anything that has since
+     matured is absent from every historical point including the months it was
+     live. A 36-month curve built that way slopes up because history is
+     disappearing behind it, not because AUM grew. */
+  let aumData = null, returnsData = null, fromServer = false;
+  try {
+    const s = await API._fetch('GET', `analytics/dashboard-series?months=${monthCount}`);
+    if (s && Array.isArray(s.months) && s.months.length === monthCount) {
+      aumData     = s.months.map(m => m.aum);
+      returnsData = s.months.map(m => m.returns);
+      fromServer  = true;
+      STATE.dashboardSeries = s;
+    }
+  } catch (err) {
+    console.error('[dashboard] AUM series unavailable, falling back to browser sums:', err?.message || err);
+  }
+
+  if (!fromServer) {
+    // Cumulative AUM: sum of investments active at end of each month
+    aumData = monthStarts.map(m => {
+      const end = new Date(m.getFullYear(), m.getMonth() + 1, 0, 23, 59, 59);
+      return STATE.investments.filter(inv => {
+        const created = new Date(inv.created_at || inv.start_date || 0);
+        /* As at that month end, not as of now: an investment that has since
+           matured was still live then. Without this the past is redrawn every
+           time something matures. */
+        const ended = inv.end_date ? new Date(inv.end_date) : null;
+        const live  = !['cancelled', 'rejected', 'failed'].includes(inv.status || '') && (!ended || ended > end);
+        return created <= end && live;
+      }).reduce((s, inv) => s + (parseFloat(inv.amount) || 0), 0);
+    });
+
+    // Returns paid per month
+    returnsData = monthStarts.map(m => {
+      const start = new Date(m.getFullYear(), m.getMonth(), 1);
+      const end   = new Date(m.getFullYear(), m.getMonth() + 1, 0, 23, 59, 59);
+      return STATE.transactions.filter(t => {
+        if (t.type !== 'return' || t.status !== 'completed') return false;
+        const d = new Date(t.created_at || t.transaction_date || 0);
+        return d >= start && d <= end;
+      }).reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+    });
+  }
 
   if (STATE.charts.aum) STATE.charts.aum.destroy();
   STATE.charts.aum = new Chart(ctx, {
@@ -1251,23 +1285,51 @@ function renderAumChart(range) {
   });
 }
 
+/* Stable colours per product, so a slice does not change colour when another
+   product appears or disappears. Anything unlisted falls through to the grey,
+   which is a slice the chart draws rather than capital it discards. */
+const PRODUCT_MIX_COLORS = {
+  cattle: '#fec24f', solar_7yr: '#22c55e', solar_6yr: '#4ade80', solar_5yr: '#86efac',
+  solar: '#22c55e', short_term: '#656565', delivery_bikes: '#f97316', delivery_bike: '#f97316',
+  other: '#eda5ff', unclassified: '#9ca3af',
+};
+
 function renderProductMixChart() {
   const ctx = document.getElementById('productMixChart');
   if (!ctx) return;
 
-  const products = { cattle: 0, solar_7yr: 0, solar_6yr: 0, solar_5yr: 0, short_term: 0, delivery_bikes: 0 };
-  STATE.investments.filter(i => i.status === 'active').forEach(i => {
-    // Resolve product_type from investment, falling back to the linked pool
-    const pool = i.pool_id ? STATE.pools.find(p => p.id === i.pool_id) : null;
-    const type = i.product_type || pool?.product_type || '';
-    // Normalise delivery_bike → delivery_bikes
-    const key = type === 'delivery_bike' ? 'delivery_bikes' : type;
-    if (key && products[key] !== undefined) products[key] += (parseFloat(i.amount) || 0);
-  });
+  /* From SQL when it is available, over every active investment.
 
-  const labels = ['Cattle Investment', 'Solar Investment (7yr)', 'Solar Investment (6yr)', 'Solar Investment (5yr)', 'Short Term Investment', 'Delivery Bikes'];
-  const data = Object.values(products);
-  const colors = ['#fec24f', '#22c55e', '#4ade80', '#86efac', '#656565', '#f97316'];
+     The browser version summed into a fixed map and dropped anything absent
+     from it — `if (key && products[key] !== undefined)`. So capital in a
+     product nobody had added a key for simply vanished from the chart rather
+     than showing up as an unfamiliar slice, which is the one thing that would
+     have made it noticeable. The migrated pools carrying 'other' were exactly
+     that case. */
+  let entries = null;
+  const fromServer = STATE.dashboardSeries && Array.isArray(STATE.dashboardSeries.product_mix);
+  if (fromServer) {
+    entries = STATE.dashboardSeries.product_mix
+      .map(r => [r.product_type, Number(r.capital) || 0])
+      .filter(([, v]) => v > 0);
+  } else {
+    const products = {};
+    STATE.investments.filter(i => i.status === 'active').forEach(i => {
+      // Resolve product_type from investment, falling back to the linked pool
+      const pool = i.pool_id ? STATE.pools.find(p => p.id === i.pool_id) : null;
+      const type = i.product_type || pool?.product_type || '';
+      // Normalise delivery_bike → delivery_bikes
+      const key = (type === 'delivery_bike' ? 'delivery_bikes' : type) || 'unclassified';
+      /* Every key, not only the expected ones. An unfamiliar slice is a
+         question someone can ask; silently dropped capital is not. */
+      products[key] = (products[key] || 0) + (parseFloat(i.amount) || 0);
+    });
+    entries = Object.entries(products).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+  }
+
+  const labels = entries.map(([k]) => (Utils.productInfo(k)?.label) || k.replace(/_/g, ' '));
+  const data   = entries.map(([, v]) => v);
+  const colors = entries.map(([k]) => PRODUCT_MIX_COLORS[k] || '#9ca3af');
 
   if (STATE.charts.productMix) STATE.charts.productMix.destroy();
   STATE.charts.productMix = new Chart(ctx, {

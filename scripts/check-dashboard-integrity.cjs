@@ -210,6 +210,58 @@ function runBanners(fnNames) {
          noServer.els['ds-truncation'].innerHTML.slice(-320));
     }
 
+    console.log('\nthe charts are computed over every row, and as at the right date');
+    {
+      const api = fs.readFileSync(path.join(ROOT, 'server', 'routes', 'analytics-extra.js'), 'utf8');
+      const ep  = api.slice(api.indexOf("router.get('/dashboard-series'"), api.indexOf("router.get('/revenue'"));
+      ok('the series endpoint exists and is admin-gated',
+         /router\.get\('\/dashboard-series', requireAuth, _admin/.test(ep));
+
+      /* The defect worth pinning: AUM was filtered on the CURRENT status, so
+         anything since matured vanished from the months it was live. */
+      ok('AUM counts an investment as at the month end, not as of now',
+         /i\.end_date IS NULL OR i\.end_date > b\.m_end/.test(ep),
+         'filtering on status = active redraws the past every time something matures');
+      ok('and excludes only what never counted',
+         /NOT IN \('cancelled','rejected','failed'\)/.test(ep));
+      ok('months with no activity are real zeros, not gaps',
+         /generate_series/.test(ep) && /FROM bounds b/.test(ep));
+      ok('the month range is bounded',
+         /Math\.min\(60, Math\.max\(1, parseInt\(req\.query\.months, 10\) \|\| 6\)\)/.test(ep));
+
+      ok('the product mix groups every type that holds capital',
+         /GROUP BY 1\s*\n\s*HAVING SUM\(ABS\(i\.amount\)\) > 0/.test(ep),
+         'the browser version dropped any product missing from a hardcoded map');
+      ok('falling back to a named bucket rather than an empty key',
+         /'unclassified'/.test(ep));
+
+      ok('the chart asks for it', /analytics\/dashboard-series\?months=\$\{monthCount\}/.test(SRC));
+      ok('and says so when it cannot have it',
+         /AUM series unavailable, falling back to browser sums/.test(SRC));
+      ok('the mix chart reads the same response',
+         /STATE\.dashboardSeries && Array\.isArray\(STATE\.dashboardSeries\.product_mix\)/.test(SRC));
+      ok('and the series is awaited before the mix renders',
+         /await renderAumChart\(\);\s*\n\s*renderProductMixChart\(\)/.test(SRC),
+         'unawaited, the mix renders from the fallback on every first load');
+    }
+
+    console.log('\nthe browser fallbacks are no longer wrong in the same ways');
+    {
+      ok('the AUM fallback also counts as at the month end',
+         /const ended = inv\.end_date \? new Date\(inv\.end_date\) : null;/.test(SRC) &&
+         /!ended \|\| ended > end/.test(SRC),
+         'a fallback that reproduces the bug is not a fallback');
+      ok('and no longer filters on the current status',
+         !/return created <= end && inv\.status === 'active';/.test(SRC));
+      ok('the mix fallback keeps every product it finds',
+         /products\[key\] = \(products\[key\] \|\| 0\) \+ \(parseFloat\(i\.amount\) \|\| 0\);/.test(SRC));
+      ok('the hardcoded product map is gone',
+         !/const products = \{ cattle: 0, solar_7yr: 0/.test(SRC),
+         'capital in an unlisted product was discarded rather than drawn');
+      ok('an unfamiliar product still gets a colour',
+         /PRODUCT_MIX_COLORS\[k\] \|\| '#9ca3af'/.test(SRC));
+    }
+
     console.log('\na failed source is distinguished from a zero figure');
     {
       const { sandbox, els } = runBanners(['_dashboardLoadErrors']);
