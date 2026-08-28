@@ -402,6 +402,8 @@
            VIEW: INVESTORS
       ══════════════════════════════════ -->
       <div class="view" id="view-investors">
+        <div id="investors-load-errors" style="display:none;margin-bottom:12px"></div>
+        <div id="investors-truncation" style="display:none;margin-bottom:12px"></div>
         <div class="vtab-bar">
           <button class="vtab-btn active" data-pane="investors" onclick="switchViewTab('investors','investors',this)"><i class="fa-solid fa-users"></i> Investors</button>
           <button class="vtab-btn" data-pane="intlinterest" onclick="switchViewTab('investors','intlinterest',this)"><i class="fa-solid fa-earth-africa"></i> International Interest <span class="nav-badge" id="intlInterestBadge" style="display:none">0</span></button>
@@ -808,6 +810,8 @@
            VIEW: INVESTMENTS
       ══════════════════════════════════ -->
       <div class="view" id="view-investments">
+        <div id="investments-load-errors" style="display:none;margin-bottom:12px"></div>
+        <div id="investments-truncation" style="display:none;margin-bottom:12px"></div>
         <div class="stats-row" style="grid-template-columns:repeat(5,1fr)">
           <div class="stat-card stat-card--gold" style="cursor:pointer" onclick="document.getElementById('investmentStatusFilter').value='';document.getElementById('investmentStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-chart-line"></i></div></div><div class="stat-card__value" id="inv-total">—</div><div class="stat-card__label">Total Investments</div></div>
           <div class="stat-card stat-card--green" style="cursor:pointer" onclick="document.getElementById('investmentStatusFilter').value='active';document.getElementById('investmentStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-play"></i></div></div><div class="stat-card__value" id="inv-active">—</div><div class="stat-card__label">Active</div></div>
@@ -886,6 +890,8 @@
            VIEW: MATURITY INSTRUCTIONS
       ══════════════════════════════════ -->
       <div class="view" id="view-maturity">
+        <div id="maturity-load-errors" style="display:none;margin-bottom:12px"></div>
+        <div id="maturity-truncation" style="display:none;margin-bottom:12px"></div>
         <div class="table-card">
           <div class="table-card__header">
             <div>
@@ -947,6 +953,8 @@
            VIEW: TRANSACTIONS
       ══════════════════════════════════ -->
       <div class="view" id="view-transactions">
+        <div id="transactions-load-errors" style="display:none;margin-bottom:12px"></div>
+        <div id="transactions-truncation" style="display:none;margin-bottom:12px"></div>
         <div class="stats-row" style="grid-template-columns:repeat(4,1fr)">
           <div class="stat-card stat-card--green" style="cursor:pointer" onclick="document.getElementById('txnTypeFilter').value='deposit';document.getElementById('txnTypeFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-arrow-down"></i></div></div><div class="stat-card__value" id="txn-deposits">—</div><div class="stat-card__label">Total Deposits</div></div>
           <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="document.getElementById('txnTypeFilter').value='investment';document.getElementById('txnTypeFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-arrow-up"></i></div></div><div class="stat-card__value" id="txn-invested">—</div><div class="stat-card__label">Capital Invested</div></div>
@@ -4877,7 +4885,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=18"></script>
-<script src="js/admin.js?v=140"></script>
+<script src="js/admin.js?v=141"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>

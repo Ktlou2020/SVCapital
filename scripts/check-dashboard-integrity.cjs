@@ -264,7 +264,11 @@ function runBanners(fnNames) {
 
     console.log('\na failed source is distinguished from a zero figure');
     {
-      const { sandbox, els } = runBanners(['_dashboardLoadErrors']);
+      /* _renderLoadErrors is loaded alongside it: _dashboardLoadErrors became a
+         two-line delegate when the four tabs got the same guard. Both are
+         hoisted function declarations so the page was never affected — this
+         harness loads named functions, so it has to name the new one. */
+      const { sandbox, els } = runBanners(['_renderLoadErrors', '_dashboardLoadErrors']);
       const none = vm.runInContext(`_dashboardLoadErrors([])`, sandbox);
       ok('nothing failed shows nothing', none === false && els['ds-load-errors'].innerHTML === '');
 
