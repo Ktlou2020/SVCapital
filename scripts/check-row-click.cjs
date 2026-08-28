@@ -47,8 +47,17 @@ function extractRow(marker, endMarker) {
   return src.slice(start, end + endMarker.length);
 }
 
-const LIST_ROW = extractRow('`<tr tabindex="0" style="cursor:pointer"', '</tr>`');
-const TAB_ROW  = extractRow('`<tr style="cursor:pointer" onclick=\'viewInvestmentDetail(', '</tr>`');
+/* Anchored on the const each template builds its handler from, not on the <tr>
+   attributes. Two of these rows now open with the same `<tr tabindex="0"
+   style="cursor:pointer"` prefix, so a marker on that prefix silently captured
+   whichever came first in the file and tested it twice — a check that passes
+   while looking at the wrong row is worse than one that fails. The const names
+   are unique per template.
+
+   The captured text is a statement sequence (`const … ; return \`<tr …\``),
+   so renderRow evaluates it as a function body rather than an expression. */
+const LIST_ROW = extractRow('const _openRow = ', '</tr>`');
+const TAB_ROW  = extractRow('const _open = ', '</tr>`');
 const POOL_ROW = extractRow('`<tr style="cursor:pointer;${isCancelled', '</tr>`');
 
 ok('the All Investments row template was found', !!LIST_ROW);
@@ -78,8 +87,11 @@ function renderRow(tpl, extraVars) {
     ...extraVars,
   };
   const names = Object.keys(scope);
+  /* A template that already contains `return` is a body; a bare `\`<tr …\``
+     is an expression. Both appear here, so wrap only the second. */
+  const body = /(^|\n)\s*return\s/.test(tpl) ? `${tpl};` : `return ${tpl};`;
   // eslint-disable-next-line no-new-func
-  return new Function(...names, `return ${tpl};`)(...names.map(n => scope[n]));
+  return new Function(...names, body)(...names.map(n => scope[n]));
 }
 
 const listHtml = renderRow(LIST_ROW);
@@ -128,7 +140,11 @@ var results = [
   clickAndReport('list:pool',      'td:nth-child(4) div[onclick]', '#list'),
   clickAndReport('list:eyebutton', 'button',               '#list'),
   clickAndReport('tab:row',        'td:nth-child(1)',      '#tab'),
-  clickAndReport('tab:movebutton', 'button',               '#tab'),
+  /* By title, not position. 'button' takes the first in the row, which used to
+     be Move to pool and is now the eye — so the selector silently retargeted
+     and the assertion below started describing a different control. */
+  clickAndReport('tab:movebutton', 'button[title="Move to different pool"]', '#tab'),
+  clickAndReport('tab:eyebutton',  'button[title="Open investment detail"]', '#tab'),
   clickAndReport('pool:row',       'td:nth-child(3)',      '#pool'),
   clickAndReport('pool:investorcell','td:nth-child(1)',     '#pool'),
 ];
@@ -182,6 +198,12 @@ ok('and passes the investor back-reference, so there is a way back',
 ok('clicking Move to pool does NOT also open the detail',
    fired('tab:movebutton').includes('move:INV-1') && !fired('tab:movebutton').some(f => f.startsWith('detail:')),
    JSON.stringify(fired('tab:movebutton')));
+ok('the eye button opens the detail exactly once',
+   fired('tab:eyebutton').filter(f => f.startsWith('detail:')).length === 1,
+   JSON.stringify(fired('tab:eyebutton')));
+ok('and it too carries the way back',
+   fired('tab:eyebutton').some(f => f.includes('|back=S-1105')),
+   JSON.stringify(fired('tab:eyebutton')));
 
 console.log('\nPool investors list');
 ok('clicking the row opens the INVESTMENT, not the investor',
