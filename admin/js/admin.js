@@ -1108,7 +1108,10 @@ function renderPendingActions() {
 
   const pendingTransactions = c ? c.pending_transactions
     : STATE.transactions.filter(t => t.status === 'pending' && t.type !== 'withdrawal').length;
-  if (pendingTransactions) actions.push({ icon: 'fa-arrows-rotate', color: 'var(--green)', text: `${pendingTransactions} transaction(s) pending`, sub: 'Clear deposits, returns and reconciliations to keep reporting current.', view: 'transactions', cta: 'Open transactions', priority: 5 });
+  /* `go` opens the FILTERED queue rather than the raw ledger. Counting work on
+     the dashboard and then landing the operator in an unfiltered table of every
+     transaction ever made left them to find the queue by eye. */
+  if (pendingTransactions) actions.push({ icon: 'fa-arrows-rotate', color: 'var(--green)', text: `${pendingTransactions} transaction(s) pending`, sub: 'Clear deposits, returns and reconciliations to keep reporting current.', view: 'transactions', go: 'openPendingDeposits()', cta: 'Open pending queue', priority: 5 });
 
   actions.sort((a, b) => a.priority - b.priority);
 
@@ -1118,7 +1121,7 @@ function renderPendingActions() {
   }
 
   el.innerHTML = actions.map(a => `
-    <button type="button" style="width:100%;text-align:left;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--dark-3);margin-bottom:10px;cursor:pointer;transition:transform .15s ease, box-shadow .15s ease" onclick="navigate('${a.view}', document.querySelector('[data-view=${a.view}]'))" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,0.3)';this.style.borderColor='rgba(254,194,79,0.3)'" onmouseout="this.style.transform='';this.style.boxShadow='';this.style.borderColor=''">
+    <button type="button" style="width:100%;text-align:left;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--dark-3);margin-bottom:10px;cursor:pointer;transition:transform .15s ease, box-shadow .15s ease" onclick="${a.go || `navigate('${a.view}', document.querySelector('[data-view=${a.view}]'))`}" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,0.3)';this.style.borderColor='rgba(254,194,79,0.3)'" onmouseout="this.style.transform='';this.style.boxShadow='';this.style.borderColor=''">
       <div style="display:flex;align-items:flex-start;gap:12px">
         <div style="width:34px;height:34px;border-radius:10px;background:${a.color}18;display:flex;align-items:center;justify-content:center;flex-shrink:0">
           <i class="fa-solid ${a.icon}" style="color:${a.color};font-size:0.8rem"></i>
@@ -7206,6 +7209,85 @@ function _txnInvName(t) {
   return inv ? `${inv.first_name} ${inv.last_name}` : (t.investor_id || '—');
 }
 
+/* ── Bulk deposit approval ────────────────────────────────────────────
+   The pending-deposit queue is money coming in, and it was the only queue in
+   the console with neither a status filter nor a bulk action: to find it you
+   paged through the whole ledger by eye, and then approved one row at a time.
+   KYC, withdrawals, investors and maturity all had both already.
+
+   Only a pending DEPOSIT is selectable. Approving is what the checkbox means,
+   and nothing else in this table can be approved. */
+const selectedTxns = new Set();
+const _isApprovableTxn = t => t && t.type === 'deposit' && t.status === 'pending';
+
+function _txnBulkBar() {
+  const bar = document.getElementById('txnBulkBar');
+  if (!bar) return;
+  const picked = [...selectedTxns]
+    .map(id => STATE.transactions.find(t => t.id === id))
+    .filter(_isApprovableTxn);
+  if (!picked.length) { bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  const total = picked.reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
+  document.getElementById('txnBulkCount').textContent =
+    `${picked.length} deposit${picked.length === 1 ? '' : 's'} selected`;
+  /* The total matters: this is the figure about to hit client wallets, and
+     seeing it before clicking is the difference between a bulk action and a
+     bulk accident. */
+  document.getElementById('txnBulkSum').textContent = `· ${Utils.rand(total)} to be credited`;
+}
+
+function toggleTxn(id, on) {
+  if (on) selectedTxns.add(id); else selectedTxns.delete(id);
+  _txnBulkBar();
+  const all = document.getElementById('txnSelectAll');
+  if (all) {
+    const approvable = filteredTxns.filter(_isApprovableTxn);
+    all.checked = approvable.length > 0 && approvable.every(t => selectedTxns.has(t.id));
+  }
+}
+
+/* Selects everything the CURRENT FILTER matches, not just the page on screen —
+   the filter is what the operator reasoned about, and a select-all that quietly
+   means "these twenty five" is how a queue gets half-worked. */
+function toggleAllTxns(on) {
+  const approvable = filteredTxns.filter(_isApprovableTxn);
+  approvable.forEach(t => { if (on) selectedTxns.add(t.id); else selectedTxns.delete(t.id); });
+  renderTxnTable();
+}
+
+function clearTxnSelection() {
+  selectedTxns.clear();
+  renderTxnTable();
+}
+
+async function bulkApproveDeposits(btn) {
+  const picked = [...selectedTxns]
+    .map(id => STATE.transactions.find(t => t.id === id))
+    .filter(_isApprovableTxn);
+  if (!picked.length) { Toast.error('No pending deposits selected'); return; }
+
+  const total = picked.reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
+  const ok = await Confirm.ask(`Approve ${picked.length} deposit${picked.length === 1 ? '' : 's'}?`, {
+    body: `${Utils.rand(total)} will be credited to client wallets, and each investor is emailed a confirmation.\n\nThis cannot be undone from here.`,
+    confirmLabel: `Approve ${picked.length}`,
+  });
+  if (!ok) return;
+
+  await _withBtn(btn, async () => {
+    /* Sequential. Each approval credits a wallet inside its own server
+       transaction, and several deposits for the SAME investor running in
+       parallel is exactly the shape that makes concurrent balance writes
+       interesting. Slower, and boring, which is what money should be. */
+    const result = await _bulkRun(picked,
+      t => API.transactions.update(t.id, { status: 'completed' }),
+      { sequential: true, label: t => _investorLabel(t.investor_id) });
+    _bulkReport('deposit', 'approved', result);
+    selectedTxns.clear();
+    await loadTransactions();
+  });
+}
+
 function renderTxnTable() {
   const body = document.getElementById('txnBody');
   const start = (txnPage - 1) * TXN_PG_SIZE;
@@ -7214,9 +7296,10 @@ function renderTxnTable() {
   document.getElementById('txnFooter').textContent = `${start + 1}–${Math.min(start + TXN_PG_SIZE, filteredTxns.length)} of ${filteredTxns.length}`;
 
   if (!page.length) {
+    _txnBulkBar();
     body.innerHTML = filteredTxns.length < STATE.transactions.length
-      ? _emptyRow('fa-filter-circle-xmark', 'No matching transactions', 'Try clearing the search or type filter.', 8)
-      : _emptyRow('fa-arrows-rotate', 'No transactions yet', 'Transactions will appear here once investors make deposits or withdrawals.', 8);
+      ? _emptyRow('fa-filter-circle-xmark', 'No matching transactions', 'Try clearing the search, type or status filter.', 9)
+      : _emptyRow('fa-arrows-rotate', 'No transactions yet', 'Transactions will appear here once investors make deposits or withdrawals.', 9);
     return;
   }
 
@@ -7240,6 +7323,11 @@ function renderTxnTable() {
     const invName = _txnInvName(t);
 
     return `<tr>
+      <td style="padding-left:14px">${isPendingDeposit
+        ? `<input type="checkbox" ${selectedTxns.has(t.id) ? 'checked' : ''}
+                 onchange='toggleTxn(${_esc(JSON.stringify(t.id))}, this.checked)'
+                 title="Select for bulk approval">`
+        : ''}</td>
       <td><div class="td-strong clip">${invName}</div></td>
       <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${t.type?.replace(/_/g, ' ') || '—'}</span></td>
       <td class="${['investment','reinvestment','withdrawal','fee'].includes(t.type)?'td-red':'td-green'} fw-700">${['investment','reinvestment','withdrawal','fee'].includes(t.type)?'-':'+'}${Utils.rand(Math.abs(parseFloat(t.amount)||0))}</td>
@@ -7252,6 +7340,19 @@ function renderTxnTable() {
       </td>
     </tr>`;
   }).join('');
+
+  _txnBulkBar();
+  {
+    const all = document.getElementById('txnSelectAll');
+    const approvable = filteredTxns.filter(_isApprovableTxn);
+    if (all) {
+      all.checked  = approvable.length > 0 && approvable.every(t => selectedTxns.has(t.id));
+      all.disabled = approvable.length === 0;
+      all.title = approvable.length
+        ? `Select all ${approvable.length} approvable deposit${approvable.length === 1 ? '' : 's'} in this filter`
+        : 'No pending deposits in the current filter';
+    }
+  }
 
   const pages = Math.ceil(filteredTxns.length / TXN_PG_SIZE);
   const pagTxn = document.getElementById('txnPagination');
@@ -7268,29 +7369,52 @@ function setupTxnFilters() {
   const type = document.getElementById('txnTypeFilter');
   const dateFrom = document.getElementById('txnDateFrom');
   const dateTo = document.getElementById('txnDateTo');
+  const status = document.getElementById('txnStatusFilter');
 
   const filter = Utils.debounce(() => {
     const q = search.value.toLowerCase();
     const tp = type.value;
+    const st = status?.value || '';
     const from = dateFrom?.value ? new Date(dateFrom.value) : null;
     const to = dateTo?.value ? new Date(dateTo.value + 'T23:59:59') : null;
     filteredTxns = STATE.transactions.filter(t => {
       const invName = _txnInvName(t);
       const mq = !q || `${invName} ${t.reference} ${t.description}`.toLowerCase().includes(q);
       const mt = !tp || t.type === tp;
+      /* A row with no status reads as pending everywhere else in the console,
+         so it has to filter as pending here too — otherwise the queue count on
+         the dashboard and the queue you can actually see disagree. */
+      const ms = !st || (t.status || 'pending') === st;
       const txDate = t.created_at ? new Date(t.created_at) : null;
       const mFrom = !from || (txDate && txDate >= from);
       const mTo = !to || (txDate && txDate <= to);
-      return mq && mt && mFrom && mTo;
+      return mq && mt && ms && mFrom && mTo;
     });
+    /* Dropping a row out of the filter must drop it out of the selection too —
+       a hidden row still ticked is a row that gets approved without being seen. */
+    const visible = new Set(filteredTxns.map(t => t.id));
+    [...selectedTxns].forEach(id => { if (!visible.has(id)) selectedTxns.delete(id); });
     txnPage = 1;
     renderTxnTable();
   }, 200);
 
   search.addEventListener('input', filter);
   type.addEventListener('change', filter);
+  if (status) status.addEventListener('change', filter);
   if (dateFrom) dateFrom.addEventListener('change', filter);
   if (dateTo) dateTo.addEventListener('change', filter);
+}
+
+/* Jump straight to the pending-deposit queue. The dashboard tile counts it, so
+   the tile should be able to open it rather than just report it. */
+function openPendingDeposits() {
+  navigate('transactions', document.querySelector('[data-view=transactions]'));
+  setTimeout(() => {
+    const st = document.getElementById('txnStatusFilter');
+    const tp = document.getElementById('txnTypeFilter');
+    if (tp) tp.value = 'deposit';
+    if (st) { st.value = 'pending'; st.dispatchEvent(new Event('change')); }
+  }, 300);
 }
 
 let _cancelTxnPending = null; // { txnId, investorId, amount }
@@ -14258,17 +14382,44 @@ function renderAdminCmdResults(q) {
   if (!el) return;
   _adminCmdActive = -1;
   const query = (q||'').toLowerCase().trim();
-  const filtered = query ? ADMIN_CMD_ITEMS.filter(c => c.label.toLowerCase().includes(query)) : ADMIN_CMD_ITEMS;
+  /* The box has always said "Search views, investors, actions…" and only ever
+     searched a static list of views. Looking a client up is the single most
+     common thing anyone does in here, and the palette advertised it — so it
+     does it now: name, email, ID number, phone, or investor id, straight to
+     that investor's detail. Views and actions still rank first, because typing
+     "kyc" means the view, not the four clients with kyc in an email address. */
+  const _q = s => String(s || '').toLowerCase();
+  const matches = query ? ADMIN_CMD_ITEMS.filter(c => c.label.toLowerCase().includes(query)) : ADMIN_CMD_ITEMS;
+  const people = query.length >= 2 ? (STATE.investors || []).filter(i =>
+    _q(`${i.first_name} ${i.last_name}`).includes(query) ||
+    _q(i.email).includes(query) || _q(i.id).includes(query) ||
+    _q(i.id_number).includes(query) || _q(i.phone).replace(/\s/g, '').includes(query.replace(/\s/g, ''))
+  ).slice(0, 8).map(i => ({
+    label: `${i.first_name || ''} ${i.last_name || ''}`.trim() || i.id,
+    sub:   [i.email, i.id].filter(Boolean).join(' · '),
+    icon:  'fa-user',
+    /* Straight into the investor, not just the investors view — otherwise the
+       operator searches twice for the same person. */
+    action: () => { navigate('investors', document.querySelector('[data-view=investors]')); viewInvestor(i.id); },
+  })) : [];
+  const filtered = [...matches, ...people];
   if (!filtered.length) {
     el.innerHTML = `<div style="padding:20px;text-align:center;color:#7a92a8;font-size:13px">No results for "${_esc(q)}"</div>`;
     el._filtered = []; return;
   }
+  /* Escaped. These labels used to be a hard-coded list, so raw interpolation was
+     safe; they now include investor names and emails, which are attacker-
+     controlled in the one way that matters — the account holder types them. */
   el.innerHTML = filtered.map((c,i) =>
     `<div class="adm-cmd-item" data-idx="${i}" onmouseenter="adminCmdHover(${i})" onclick="adminCmdSelect(${i})"
       style="display:flex;align-items:center;gap:12px;padding:10px 18px;cursor:pointer;transition:background .1s;color:#e8edf2;font-size:13px">
-      <i class="fa-solid ${c.icon}" style="width:16px;text-align:center;color:#7a92a8;font-size:13px"></i>
-      <span>${c.label}</span>
-      ${c.view?`<kbd style="margin-left:auto;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:4px;font-size:10px;padding:1px 6px;color:#7a92a8">${c.view}</kbd>`:''}
+      <i class="fa-solid ${_esc(c.icon)}" style="width:16px;text-align:center;color:#7a92a8;font-size:13px"></i>
+      <span style="min-width:0">
+        <span style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(c.label)}</span>
+        ${c.sub?`<span style="display:block;font-size:11px;color:#7a92a8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(c.sub)}</span>`:''}
+      </span>
+      ${c.view?`<kbd style="margin-left:auto;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:4px;font-size:10px;padding:1px 6px;color:#7a92a8">${_esc(c.view)}</kbd>`:''}
+      ${c.sub?`<kbd style="margin-left:auto;background:rgba(254,194,79,.1);border:1px solid rgba(254,194,79,.2);border-radius:4px;font-size:10px;padding:1px 6px;color:#fec24f">investor</kbd>`:''}
     </div>`
   ).join('');
   el._filtered = filtered;
