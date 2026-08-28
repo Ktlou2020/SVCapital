@@ -1870,10 +1870,10 @@ function renderInvestorsTable() {
       </td>
       <td style="overflow:hidden" onclick="event.stopPropagation()">
         <div class="flex-center gap-5">
-          <button class="btn btn--secondary btn--sm" onclick='viewInvestor(${JSON.stringify(inv.id)})'><i class="fa-solid fa-eye"></i></button>
+          <button class="btn btn--secondary btn--sm" onclick='viewInvestor(${_esc(JSON.stringify(inv.id))})'><i class="fa-solid fa-eye"></i></button>
           ${inv.status === 'archived'
-            ? `<button class="btn btn--sm" style="background:rgba(253,186,116,.15);color:#fb923c;border:1px solid rgba(253,186,116,.3)" onclick='unarchiveInvestor(${JSON.stringify(inv.id)}, this)' title="Unarchive investor"><i class="fa-solid fa-box-open"></i></button>`
-            : `<button class="btn btn--sm" style="background:rgba(156,163,175,.1);color:var(--text-muted);border:1px solid rgba(156,163,175,.2)" onclick='confirmArchiveInvestor(${JSON.stringify(inv.id)}, this)' title="Archive investor"><i class="fa-solid fa-box-archive"></i></button>`}
+            ? `<button class="btn btn--sm" style="background:rgba(253,186,116,.15);color:#fb923c;border:1px solid rgba(253,186,116,.3)" onclick='unarchiveInvestor(${_esc(JSON.stringify(inv.id))}, this)' title="Unarchive investor"><i class="fa-solid fa-box-open"></i></button>`
+            : `<button class="btn btn--sm" style="background:rgba(156,163,175,.1);color:var(--text-muted);border:1px solid rgba(156,163,175,.2)" onclick='confirmArchiveInvestor(${_esc(JSON.stringify(inv.id))}, this)' title="Archive investor"><i class="fa-solid fa-box-archive"></i></button>`}
         </div>
       </td>
     </tr>`;
@@ -2134,7 +2134,7 @@ function viewSubAccount(saId) {
     <div style="background:var(--dark-3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:16px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
         <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted)">Bank Details</div>
-        <button class="btn btn--secondary btn--sm" style="padding:3px 10px;font-size:0.72rem" onclick='editSaBankDetails(${JSON.stringify(sa.id)})'><i class="fa-solid fa-pen-to-square" style="margin-right:4px"></i>Edit</button>
+        <button class="btn btn--secondary btn--sm" style="padding:3px 10px;font-size:0.72rem" onclick='editSaBankDetails(${_esc(JSON.stringify(sa.id))})'><i class="fa-solid fa-pen-to-square" style="margin-right:4px"></i>Edit</button>
       </div>
       ${sa.sa_bank_holder ? `<div class="info-list">
         <div class="info-row"><span class="info-row__label">Account Holder</span><span class="info-row__value">${_esc(sa.sa_bank_holder||'—')}</span></div>
@@ -2364,7 +2364,7 @@ async function viewInvestor(id) {
       <div style="width:52px;height:52px;border-radius:50%;background:${avatarColor};color:#fff;font-size:1rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">${Utils.initials(inv.first_name + ' ' + inv.last_name)}</div>
       <div>
         <div style="font-size:1.15rem;font-weight:800;color:var(--text)">${_esc(inv.first_name)||''} ${_esc(inv.last_name)||''}</div>
-        <div style="font-family:monospace;font-size:0.78rem;color:var(--text-muted);margin:2px 0">${_esc(inv.id)||''}<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.id||"")},this)' title="Copy account number"><i class="fa-regular fa-copy"></i></button></div>
+        <div style="font-family:monospace;font-size:0.78rem;color:var(--text-muted);margin:2px 0">${_esc(inv.id)||''}<button class="copy-btn" onclick='copyToClipboard(${_esc(JSON.stringify(inv.id||""))},this)' title="Copy account number"><i class="fa-regular fa-copy"></i></button></div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
           ${Utils.statusBadge(inv.status)}
           ${inv.kyc_status==='approved'?`<span class="badge badge--green"><i class="fa-solid fa-shield-check"></i> KYC Verified</span>${inv.fica_reviewed_by?`<span style="font-size:0.65rem;color:var(--text-muted);margin-left:2px">by ${_esc(inv.fica_reviewed_by)}</span>`:''}` : '<span class="badge badge--yellow">KYC Pending</span>'}
@@ -2425,12 +2425,12 @@ async function viewInvestor(id) {
           <div class="info-row"><span class="info-row__label">Status</span><span class="info-row__value"><span class="badge ${bCls[bStatus]}">${bLbl[bStatus]}</span>${inv.bank_account_reviewed_by ? `<span style="font-size:0.7rem;color:var(--text-muted);margin-left:6px">by ${_esc(inv.bank_account_reviewed_by)}</span>` : ''}</span></div>
         </div>
         <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-          <button class="btn btn--secondary btn--sm" onclick='editBankDetails(${JSON.stringify(inv.id)})'><i class="fa-solid fa-pen-to-square"></i> Edit</button>
+          <button class="btn btn--secondary btn--sm" onclick='editBankDetails(${_esc(JSON.stringify(inv.id))})'><i class="fa-solid fa-pen-to-square"></i> Edit</button>
           ${bStatus!=='none'?`
-            <button class="btn btn--secondary btn--sm" onclick='viewBankProof(${JSON.stringify(inv.id)})'><i class="fa-solid fa-arrow-up-right-from-square"></i> View Proof of Bank</button>
+            <button class="btn btn--secondary btn--sm" onclick='viewBankProof(${_esc(JSON.stringify(inv.id))})'><i class="fa-solid fa-arrow-up-right-from-square"></i> View Proof of Bank</button>
             ${bStatus==='pending'?`
-              <button class="btn btn--success btn--sm" onclick='approveBankAccount(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-check"></i> Approve</button>
-              <button class="btn btn--danger btn--sm" onclick='rejectBankAccount(${JSON.stringify(inv.id)})'><i class="fa-solid fa-xmark"></i> Reject</button>
+              <button class="btn btn--success btn--sm" onclick='approveBankAccount(${_esc(JSON.stringify(inv.id))}, this)'><i class="fa-solid fa-check"></i> Approve</button>
+              <button class="btn btn--danger btn--sm" onclick='rejectBankAccount(${_esc(JSON.stringify(inv.id))})'><i class="fa-solid fa-xmark"></i> Reject</button>
             `:''}
           `:''}
         </div>
@@ -2438,14 +2438,14 @@ async function viewInvestor(id) {
     </div>
     <div class="flex-between mt-16" style="flex-wrap:wrap;gap:8px">
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn--success btn--sm" onclick='depositToInvestor(${JSON.stringify(inv.id)}, ${JSON.stringify(inv.first_name + " " + inv.last_name)}, ${inv.wallet_balance || 0})'><i class="fa-solid fa-wallet"></i> Add Funds</button>
-        <button class="btn btn--secondary btn--sm" onclick='approveInvestorFica(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-id-card"></i> Approve FICA</button>
-        ${hasLoginAccount === false ? `<button class="btn btn--secondary btn--sm" id="invInviteBtn" onclick='sendLoginInvite(${JSON.stringify(inv.id)}, ${JSON.stringify(inv.email)}, this)'><i class="fa-solid fa-envelope"></i> Send Login Invite</button>` : hasLoginAccount === true ? `<span class="badge badge--green" style="padding:6px 10px"><i class="fa-solid fa-circle-check"></i> Has login account</span>` : ''}
-        ${userRecord?.totp_enabled ? `<button class="btn btn--sm" style="background:rgba(249,115,22,.15);color:#f97316;border:1px solid rgba(249,115,22,.3)" onclick='adminReset2FA(${JSON.stringify(userRecord.id)}, ${JSON.stringify(inv.first_name + " " + inv.last_name)}, this)'><i class="fa-solid fa-shield-xmark"></i> Reset 2FA</button>` : ''}
+        <button class="btn btn--success btn--sm" onclick='depositToInvestor(${_esc(JSON.stringify(inv.id))}, ${_esc(JSON.stringify(inv.first_name + " " + inv.last_name))}, ${inv.wallet_balance || 0})'><i class="fa-solid fa-wallet"></i> Add Funds</button>
+        <button class="btn btn--secondary btn--sm" onclick='approveInvestorFica(${_esc(JSON.stringify(inv.id))}, this)'><i class="fa-solid fa-id-card"></i> Approve FICA</button>
+        ${hasLoginAccount === false ? `<button class="btn btn--secondary btn--sm" id="invInviteBtn" onclick='sendLoginInvite(${_esc(JSON.stringify(inv.id))}, ${_esc(JSON.stringify(inv.email))}, this)'><i class="fa-solid fa-envelope"></i> Send Login Invite</button>` : hasLoginAccount === true ? `<span class="badge badge--green" style="padding:6px 10px"><i class="fa-solid fa-circle-check"></i> Has login account</span>` : ''}
+        ${userRecord?.totp_enabled ? `<button class="btn btn--sm" style="background:rgba(249,115,22,.15);color:#f97316;border:1px solid rgba(249,115,22,.3)" onclick='adminReset2FA(${_esc(JSON.stringify(userRecord.id))}, ${_esc(JSON.stringify(inv.first_name + " " + inv.last_name))}, this)'><i class="fa-solid fa-shield-xmark"></i> Reset 2FA</button>` : ''}
         ${inv.status === 'archived'
-          ? `<button class="btn btn--sm" style="background:rgba(253,186,116,.15);color:#fb923c;border:1px solid rgba(253,186,116,.3)" onclick='unarchiveInvestor(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-box-open"></i> Unarchive</button>`
-          : `<button class="btn btn--sm" style="background:rgba(156,163,175,.1);color:var(--text-muted);border:1px solid rgba(156,163,175,.2)" onclick='confirmArchiveInvestor(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-box-archive"></i> Archive</button>`}
-        <button class="btn btn--sm" style="background:rgba(237,165,255,.1);color:#eda5ff;border:1px solid rgba(237,165,255,.25)" onclick='viewAsInvestor(${JSON.stringify(inv.id)})'><i class="fa-solid fa-eye"></i> View as Investor</button>
+          ? `<button class="btn btn--sm" style="background:rgba(253,186,116,.15);color:#fb923c;border:1px solid rgba(253,186,116,.3)" onclick='unarchiveInvestor(${_esc(JSON.stringify(inv.id))}, this)'><i class="fa-solid fa-box-open"></i> Unarchive</button>`
+          : `<button class="btn btn--sm" style="background:rgba(156,163,175,.1);color:var(--text-muted);border:1px solid rgba(156,163,175,.2)" onclick='confirmArchiveInvestor(${_esc(JSON.stringify(inv.id))}, this)'><i class="fa-solid fa-box-archive"></i> Archive</button>`}
+        <button class="btn btn--sm" style="background:rgba(237,165,255,.1);color:#eda5ff;border:1px solid rgba(237,165,255,.25)" onclick='viewAsInvestor(${_esc(JSON.stringify(inv.id))})'><i class="fa-solid fa-eye"></i> View as Investor</button>
         <button class="btn btn--sm" style="background:rgba(59,130,246,.1);color:#60a5fa;border:1px solid rgba(59,130,246,.25)" onclick='_invTab("comms")'><i class="fa-solid fa-envelope"></i> Send Email</button>
       </div>
       <button class="btn btn--primary btn--sm" onclick='Modal.close("investorDetailModal")'><i class="fa-solid fa-check"></i> Done</button>
@@ -2457,9 +2457,9 @@ async function viewInvestor(id) {
     <!-- read-only view -->
     <div id="invProfileView">
       <div class="info-list">
-        <div class="info-row"><span class="info-row__label">Email</span><span class="info-row__value">${_esc(inv.email)||'—'}${inv.email?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.email)},this)' title="Copy email"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
-        <div class="info-row"><span class="info-row__label">Phone</span><span class="info-row__value">${_esc(inv.phone)||'—'}${inv.phone?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.phone)},this)' title="Copy phone"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
-        <div class="info-row"><span class="info-row__label">SA ID Number</span><span class="info-row__value">${_esc(inv.id_number)||'—'}${inv.id_number?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.id_number)},this)' title="Copy ID"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
+        <div class="info-row"><span class="info-row__label">Email</span><span class="info-row__value">${_esc(inv.email)||'—'}${inv.email?`<button class="copy-btn" onclick='copyToClipboard(${_esc(JSON.stringify(inv.email))},this)' title="Copy email"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
+        <div class="info-row"><span class="info-row__label">Phone</span><span class="info-row__value">${_esc(inv.phone)||'—'}${inv.phone?`<button class="copy-btn" onclick='copyToClipboard(${_esc(JSON.stringify(inv.phone))},this)' title="Copy phone"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
+        <div class="info-row"><span class="info-row__label">SA ID Number</span><span class="info-row__value">${_esc(inv.id_number)||'—'}${inv.id_number?`<button class="copy-btn" onclick='copyToClipboard(${_esc(JSON.stringify(inv.id_number))},this)' title="Copy ID"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
         ${inv.street_address ? `<div class="info-row"><span class="info-row__label">Street Address</span><span class="info-row__value" style="font-size:0.78rem">${_esc(inv.street_address)}</span></div>` : ''}
         ${inv.suburb ? `<div class="info-row"><span class="info-row__label">Suburb</span><span class="info-row__value">${_esc(inv.suburb)}</span></div>` : ''}
         <div class="info-row"><span class="info-row__label">City</span><span class="info-row__value">${_esc(inv.address)||'—'}</span></div>
@@ -2619,7 +2619,7 @@ async function viewInvestor(id) {
             <td class="td-muted">${Utils.date(i.end_date)}</td>
             <td style="white-space:nowrap">
               <button class="btn btn--secondary btn--sm" onclick='event.stopPropagation();${_open}' title="Open investment detail"><i class="fa-solid fa-eye"></i></button>
-              <button class="btn btn--sm" style="background:rgba(237,165,255,.1);color:#eda5ff;border:1px solid rgba(237,165,255,.25)" onclick='event.stopPropagation();openMoveInvestment(${JSON.stringify(i.id)},${JSON.stringify(i.pool_id)})' title="Move to different pool"><i class="fa-solid fa-right-left"></i></button>
+              <button class="btn btn--sm" style="background:rgba(237,165,255,.1);color:#eda5ff;border:1px solid rgba(237,165,255,.25)" onclick='event.stopPropagation();openMoveInvestment(${_esc(JSON.stringify(i.id))},${_esc(JSON.stringify(i.pool_id))})' title="Move to different pool"><i class="fa-solid fa-right-left"></i></button>
             </td>
           </tr>`;
         }).join(''):'<tr><td colspan="8" class="text-center text-muted" style="padding:16px">No investments on record</td></tr>'}</tbody>
@@ -2653,7 +2653,7 @@ async function viewInvestor(id) {
           <span style="font-size:0.78rem;color:var(--text-muted)">· Wallet: <strong>${Utils.rand(inv.wallet_balance)}</strong></span>
         </div>
         <div id="adminInvestResult-${inv.id}" style="font-size:0.82rem;margin-bottom:10px"></div>
-        <button class="btn btn--success btn--sm" onclick='adminInvestOnBehalf(${JSON.stringify(inv.id)},${JSON.stringify(inv.first_name+" "+inv.last_name)},this)'>
+        <button class="btn btn--success btn--sm" onclick='adminInvestOnBehalf(${_esc(JSON.stringify(inv.id))},${_esc(JSON.stringify(inv.first_name+" "+inv.last_name))},this)'>
           <i class="fa-solid fa-arrow-trend-up"></i> Create Investment
         </button>
       </div>
@@ -2690,7 +2690,7 @@ async function viewInvestor(id) {
           <div style="font-size:0.83rem;font-weight:600;color:var(--text);margin-bottom:4px">Restore Wallet After Re-import</div>
           <div style="font-size:0.77rem;color:var(--text-muted)">Sets wallet balance to the sum of admin-created manual deposits (ADMIN-DEP-* transactions only). Use this if a data migration overwrote the live balance — historical Firebase transactions are intentionally excluded to avoid double-counting.</div>
         </div>
-        <button class="btn btn--secondary btn--sm" style="flex-shrink:0" onclick='_recalcInvestorWallet(${JSON.stringify(inv.id)},${JSON.stringify(inv.first_name + " " + inv.last_name)},this)'>
+        <button class="btn btn--secondary btn--sm" style="flex-shrink:0" onclick='_recalcInvestorWallet(${_esc(JSON.stringify(inv.id))},${_esc(JSON.stringify(inv.first_name + " " + inv.last_name))},this)'>
           <i class="fa-solid fa-magnifying-glass-chart"></i> Wallet Report
         </button>
       </div>
@@ -2705,7 +2705,7 @@ async function viewInvestor(id) {
           <div style="font-size:0.77rem;color:var(--text-muted)">Recomputes wallet balance from all completed deposits, returns and payouts minus withdrawals and fees. Use when a deposit shows as completed but is not reflected in the wallet balance.</div>
           <div id="invReconcileResult-${inv.id}" style="margin-top:8px;font-size:0.77rem"></div>
         </div>
-        <button class="btn btn--sm" style="flex-shrink:0;background:rgba(96,165,250,.12);color:#60a5fa;border:1px solid rgba(96,165,250,.3)" onclick='reconcileInvestorWallet(${JSON.stringify(inv.id)},this)'>
+        <button class="btn btn--sm" style="flex-shrink:0;background:rgba(96,165,250,.12);color:#60a5fa;border:1px solid rgba(96,165,250,.3)" onclick='reconcileInvestorWallet(${_esc(JSON.stringify(inv.id))},this)'>
           <i class="fa-solid fa-scale-balanced"></i> Reconcile Wallet
         </button>
       </div>
@@ -2726,7 +2726,7 @@ async function viewInvestor(id) {
             <label style="font-size:0.77rem;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Reason (optional)</label>
             <input type="text" id="walletOverrideNotes-${inv.id}" class="form-input" placeholder="e.g. correcting reconciliation error" style="width:100%">
           </div>
-          <button class="btn btn--sm" style="flex-shrink:0;background:rgba(239,68,68,.12);color:#f87171;border:1px solid rgba(239,68,68,.3)" onclick='overrideWalletBalance(${JSON.stringify(inv.id)},${JSON.stringify(inv.first_name+' '+inv.last_name)},this)'>
+          <button class="btn btn--sm" style="flex-shrink:0;background:rgba(239,68,68,.12);color:#f87171;border:1px solid rgba(239,68,68,.3)" onclick='overrideWalletBalance(${_esc(JSON.stringify(inv.id))},${_esc(JSON.stringify(inv.first_name+' '+inv.last_name))},this)'>
             <i class="fa-solid fa-pen-to-square"></i> Set Balance
           </button>
         </div>
@@ -2743,7 +2743,7 @@ async function viewInvestor(id) {
       </div>
       <div class="panel__body" style="border-top:1px solid var(--border);padding-top:12px">
         <textarea class="form-input" id="invNewNoteTA" style="width:100%;min-height:70px;font-size:0.82rem;resize:vertical;margin-bottom:8px" placeholder="Add a note visible only to admins…"></textarea>
-        <button class="btn btn--primary btn--sm" onclick='addInvestorNote(${JSON.stringify(inv.id)})'><i class="fa-solid fa-plus"></i> Add Note</button>
+        <button class="btn btn--primary btn--sm" onclick='addInvestorNote(${_esc(JSON.stringify(inv.id))})'><i class="fa-solid fa-plus"></i> Add Note</button>
       </div>
     </div>
     <div class="panel mb-16">
@@ -2844,7 +2844,7 @@ async function viewInvestor(id) {
           <label class="form-label">Message *</label>
           <textarea class="form-input" id="invEmailMessage" style="min-height:140px;resize:vertical" placeholder="Type your message to ${_esc(inv.first_name)}…"></textarea>
         </div>
-        <button class="btn btn--primary" onclick='sendInvestorEmail(${JSON.stringify(inv.id)},${JSON.stringify(inv.email)},this)'><i class="fa-solid fa-paper-plane"></i> Send Email</button>
+        <button class="btn btn--primary" onclick='sendInvestorEmail(${_esc(JSON.stringify(inv.id))},${_esc(JSON.stringify(inv.email))},this)'><i class="fa-solid fa-paper-plane"></i> Send Email</button>
       </div>
     </div>
   </div>
@@ -3433,8 +3433,8 @@ function renderWithdrawalsTable() {
       <td>
         ${showActions ? `
           <div class="flex-center gap-6">
-            <button class="btn btn--success btn--sm" onclick='approveWithdrawal(${JSON.stringify(w.id)}, this)'><i class="fa-solid fa-check"></i> Approve</button>
-            <button class="btn btn--danger btn--sm" onclick='rejectWithdrawalPrompt(${JSON.stringify(w.id)}, this)'><i class="fa-solid fa-xmark"></i> Reject</button>
+            <button class="btn btn--success btn--sm" onclick='approveWithdrawal(${_esc(JSON.stringify(w.id))}, this)'><i class="fa-solid fa-check"></i> Approve</button>
+            <button class="btn btn--danger btn--sm" onclick='rejectWithdrawalPrompt(${_esc(JSON.stringify(w.id))}, this)'><i class="fa-solid fa-xmark"></i> Reject</button>
           </div>
         ` : `<div>${Utils.statusBadge(w.status)}</div>${w.reviewed_by ? `<div style="font-size:0.68rem;color:var(--text-muted);margin-top:3px">by ${_esc(w.reviewed_by)}</div>` : ''}`}
       </td>
@@ -3707,7 +3707,7 @@ async function openMoveInvestment(investmentId, currentPoolId) {
       </select>
       <div style="display:flex;gap:10px;justify-content:flex-end">
         <button class="btn" onclick="Modal.closeAll()">Cancel</button>
-        <button class="btn btn--primary" id="movePoolConfirmBtn" onclick='_confirmMoveInvestment(${JSON.stringify(investmentId)})'>Move</button>
+        <button class="btn btn--primary" id="movePoolConfirmBtn" onclick='_confirmMoveInvestment(${_esc(JSON.stringify(investmentId))})'>Move</button>
       </div>
     </div>`;
 
@@ -4062,7 +4062,7 @@ function renderKYCTable() {
     // Notes indicator
     const hasNotes = !!(k.notes && k.status !== 'rejected');
     const notesIndicator = hasNotes
-      ? `<span title="${_esc(k.notes)}" style="display:inline-flex;align-items:center;gap:3px;font-size:0.65rem;color:#eda5ff;background:rgba(237,165,255,0.1);border-radius:4px;padding:1px 5px;cursor:pointer" onclick='openKycReview(${JSON.stringify(k.id)})'><i class="fa-solid fa-note-sticky"></i></span>`
+      ? `<span title="${_esc(k.notes)}" style="display:inline-flex;align-items:center;gap:3px;font-size:0.65rem;color:#eda5ff;background:rgba(237,165,255,0.1);border-radius:4px;padding:1px 5px;cursor:pointer" onclick='openKycReview(${_esc(JSON.stringify(k.id))})'><i class="fa-solid fa-note-sticky"></i></span>`
       : '';
 
     return `
@@ -4079,8 +4079,8 @@ function renderKYCTable() {
               and every stored document read as "no file". */''}
         ${k.has_file_data || k.file_data || k.file_url || k.attachment_data
           ? `<div style="display:flex;gap:4px;flex-wrap:wrap">
-               <button class="btn btn--secondary btn--sm" title="Side-by-side review" onclick='openKycReview(${JSON.stringify(k.id)})'><i class="fa-solid fa-magnifying-glass"></i></button>
-               <button class="btn btn--secondary btn--sm" title="Open document in new tab" onclick='viewFicaDocument(${JSON.stringify(k.id)})'><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
+               <button class="btn btn--secondary btn--sm" title="Side-by-side review" onclick='openKycReview(${_esc(JSON.stringify(k.id))})'><i class="fa-solid fa-magnifying-glass"></i></button>
+               <button class="btn btn--secondary btn--sm" title="Open document in new tab" onclick='viewFicaDocument(${_esc(JSON.stringify(k.id))})'><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
              </div>`
           : k.file_name
             ? `<span class="td-muted" style="font-size:0.72rem;line-height:1.4">No file data<br><span style="font-size:0.65rem;color:var(--text-dim)">Investor must re-upload</span></span>`
@@ -4089,12 +4089,12 @@ function renderKYCTable() {
       <td>
         <div style="display:flex;gap:4px;flex-wrap:nowrap;align-items:center">
           ${k.status === 'under_review' || k.status === 'pending' ? `
-            <button class="btn btn--success btn--sm" title="Approve document" onclick='approveKyc(${JSON.stringify(k.id)}, this)'><i class="fa-solid fa-check"></i></button>
-            <button class="btn btn--danger btn--sm" title="Reject document" onclick='rejectKyc(${JSON.stringify(k.id)}, this)'><i class="fa-solid fa-xmark"></i></button>
-            <button class="btn btn--secondary btn--sm" title="Upload document for investor" onclick='openKycUploadModal(${JSON.stringify(k.investor_id)},${JSON.stringify(kName)})'><i class="fa-solid fa-upload"></i></button>
+            <button class="btn btn--success btn--sm" title="Approve document" onclick='approveKyc(${_esc(JSON.stringify(k.id))}, this)'><i class="fa-solid fa-check"></i></button>
+            <button class="btn btn--danger btn--sm" title="Reject document" onclick='rejectKyc(${_esc(JSON.stringify(k.id))}, this)'><i class="fa-solid fa-xmark"></i></button>
+            <button class="btn btn--secondary btn--sm" title="Upload document for investor" onclick='openKycUploadModal(${_esc(JSON.stringify(k.investor_id))},${_esc(JSON.stringify(kName))})'><i class="fa-solid fa-upload"></i></button>
           ` : `<span class="td-muted" style="font-size:0.75rem">${Utils.date(k.reviewed_date || k.reviewed_at)}</span>`}
-          <button class="btn btn--secondary btn--sm" title="Add/view reviewer notes" onclick='openKycReview(${JSON.stringify(k.id)})'><i class="fa-solid fa-note-sticky"></i></button>
-          <button class="btn btn--secondary btn--sm" title="View KYC timeline" onclick='openKycTimeline(${JSON.stringify(k.investor_id)})'><i class="fa-solid fa-timeline"></i></button>
+          <button class="btn btn--secondary btn--sm" title="Add/view reviewer notes" onclick='openKycReview(${_esc(JSON.stringify(k.id))})'><i class="fa-solid fa-note-sticky"></i></button>
+          <button class="btn btn--secondary btn--sm" title="View KYC timeline" onclick='openKycTimeline(${_esc(JSON.stringify(k.investor_id))})'><i class="fa-solid fa-timeline"></i></button>
         </div>
       </td>
     </tr>
@@ -4951,10 +4951,10 @@ function renderProductsGrid() {
           ${p.display_on_homepage ? ' · <i class="fa-solid fa-house"></i> on home page' : ''}
         </div>
         <div class="pool-card__actions">
-          <button class="btn btn--secondary btn--sm flex-1" onclick='editProduct(${JSON.stringify(p.id)})'><i class="fa-solid fa-pen"></i> Edit</button>
-          ${p.factsheet_url ? `<button class="btn btn--secondary btn--sm" onclick='_viewProductFactsheet(${JSON.stringify(p.id)})' title="View factsheet"><i class="fa-solid fa-file-pdf" style="color:#ef4444"></i></button>` : ''}
-          ${p.factsheet_url ? `<button class="btn btn--secondary btn--sm" onclick='removeProductFactsheet(${JSON.stringify(p.id)})' title="Remove factsheet"><i class="fa-solid fa-file-circle-xmark" style="color:#ef4444"></i></button>` : ''}
-          <button class="btn btn--secondary btn--sm" onclick='deleteProduct(${JSON.stringify(p.id)})' title="Delete"><i class="fa-solid fa-trash" style="color:#ef4444"></i></button>
+          <button class="btn btn--secondary btn--sm flex-1" onclick='editProduct(${_esc(JSON.stringify(p.id))})'><i class="fa-solid fa-pen"></i> Edit</button>
+          ${p.factsheet_url ? `<button class="btn btn--secondary btn--sm" onclick='_viewProductFactsheet(${_esc(JSON.stringify(p.id))})' title="View factsheet"><i class="fa-solid fa-file-pdf" style="color:#ef4444"></i></button>` : ''}
+          ${p.factsheet_url ? `<button class="btn btn--secondary btn--sm" onclick='removeProductFactsheet(${_esc(JSON.stringify(p.id))})' title="Remove factsheet"><i class="fa-solid fa-file-circle-xmark" style="color:#ef4444"></i></button>` : ''}
+          <button class="btn btn--secondary btn--sm" onclick='deleteProduct(${_esc(JSON.stringify(p.id))})' title="Delete"><i class="fa-solid fa-trash" style="color:#ef4444"></i></button>
         </div>
       </div>`;
   }).join('');
@@ -5252,7 +5252,7 @@ function renderMaturingPoolsAlert() {
     const instrSubmitted = poolInvts.filter(i => i.maturity_instruction && i.maturity_instruction !== 'pending').length;
     const instrPct       = instrTotal ? Math.round((instrSubmitted / instrTotal) * 100) : 0;
     const instrColor     = instrPct >= 80 ? '#22c55e' : instrPct >= 50 ? '#fec24f' : '#ef4444';
-    return `<tr style="cursor:pointer" onclick='viewPoolInvestors(${JSON.stringify(p.id)})'>
+    return `<tr style="cursor:pointer" onclick='viewPoolInvestors(${_esc(JSON.stringify(p.id))})'>
       <td><span class="fw-700">${_esc(p.name)}</span>${p.partner_name ? `<br><span style="font-size:0.7rem;color:var(--text-muted)">${_esc(p.partner_name)}</span>` : ''}</td>
       <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
       <td>${Utils.statusBadge(p.status)}</td>
@@ -5372,7 +5372,7 @@ function renderPoolsGrid() {
             const _b = Utils.rateBasis({ pool_actual_rate: p.actual_rate, annual_rate: p.annual_rate });
             return `<div class="pool-stat"><span class="pool-stat__label">${_b && _b.posted ? 'Achieved' : 'Rate'}</span><span class="pool-stat__value pool-stat__value--gold">${_b ? Utils.pct(_b.rate) : '—'}</span></div>`;
           })()}
-          <div class="pool-stat" style="cursor:pointer" onclick='viewPoolInvestors(${JSON.stringify(p.id)})' title="Click to view investors">
+          <div class="pool-stat" style="cursor:pointer" onclick='viewPoolInvestors(${_esc(JSON.stringify(p.id))})' title="Click to view investors">
             <span class="pool-stat__label">Investors</span>
             <span class="pool-stat__value" style="color:var(--gold);text-decoration:underline dotted">${p.live_investor_count ?? p.investor_count ?? 0}</span>
           </div>
@@ -5437,10 +5437,10 @@ function renderPoolsGrid() {
         })()}
 
         <div class="pool-card__actions">
-          <button class="btn btn--secondary btn--sm flex-1" onclick='editPool(${JSON.stringify(p.id)})'><i class="fa-solid fa-pen"></i> Edit</button>
-          <button class="btn btn--secondary btn--sm" onclick='openFactsheetManager(${JSON.stringify(p.id)},${JSON.stringify(p.name)})' title="Manage factsheets"><i class="fa-solid fa-file-pdf" style="color:#ef4444"></i></button>
-          <button class="btn btn--secondary btn--sm" onclick='openMergePoolModal(${JSON.stringify(p.id)})' title="Merge into another pool"><i class="fa-solid fa-code-merge"></i> Merge</button>
-          <button class="btn btn--danger btn--sm" onclick='deletePool(${JSON.stringify(p.id)})'><i class="fa-solid fa-trash"></i></button>
+          <button class="btn btn--secondary btn--sm flex-1" onclick='editPool(${_esc(JSON.stringify(p.id))})'><i class="fa-solid fa-pen"></i> Edit</button>
+          <button class="btn btn--secondary btn--sm" onclick='openFactsheetManager(${_esc(JSON.stringify(p.id))},${_esc(JSON.stringify(p.name))})' title="Manage factsheets"><i class="fa-solid fa-file-pdf" style="color:#ef4444"></i></button>
+          <button class="btn btn--secondary btn--sm" onclick='openMergePoolModal(${_esc(JSON.stringify(p.id))})' title="Merge into another pool"><i class="fa-solid fa-code-merge"></i> Merge</button>
+          <button class="btn btn--danger btn--sm" onclick='deletePool(${_esc(JSON.stringify(p.id))})'><i class="fa-solid fa-trash"></i></button>
           ${manageDropdown}
         </div>
       </div>
@@ -6500,7 +6500,7 @@ function renderInvestmentsTable() {
       <td>${Utils.statusBadge(i.status)}</td>
       <td class="td-muted">${Utils.date(i.end_date)}</td>
       <td>
-        <button class="btn btn--secondary btn--sm" onclick='event.stopPropagation();viewInvestmentDetail(${JSON.stringify(i.id)})'><i class="fa-solid fa-eye"></i></button>
+        <button class="btn btn--secondary btn--sm" onclick='event.stopPropagation();viewInvestmentDetail(${_esc(JSON.stringify(i.id))})'><i class="fa-solid fa-eye"></i></button>
       </td>
     </tr>`;
   }).join('');
@@ -6790,7 +6790,7 @@ function _renderInvestmentDetail(inv, backTo, backKind) {
           <option value="custom_switch"${inv.maturity_instruction === 'custom_switch' ? ' selected' : ''}>Custom payout &amp; switch the rest</option>
           <option value="switch_amount"${inv.maturity_instruction === 'switch_amount' ? ' selected' : ''}>Switch an amount &amp; reinvest the rest</option>
         </select>
-        <button class="btn btn--primary btn--sm" onclick='adminSetInstruction(${JSON.stringify(inv.id)})'>
+        <button class="btn btn--primary btn--sm" onclick='adminSetInstruction(${_esc(JSON.stringify(inv.id))})'>
           <i class="fa-solid fa-check"></i> Set Instruction
         </button>
       </div>
@@ -6841,13 +6841,13 @@ function _renderInvestmentDetail(inv, backTo, backKind) {
 
     ${inv.status === 'active' ? `
       <div class="flex-between" style="gap:10px;flex-wrap:wrap">
-        <button class="btn btn--success btn--sm" onclick='markInvestmentMatured(${JSON.stringify(inv.id)})'>
+        <button class="btn btn--success btn--sm" onclick='markInvestmentMatured(${_esc(JSON.stringify(inv.id))})'>
           <i class="fa-solid fa-hourglass-end"></i> Mark as Matured
         </button>
-        <button class="btn btn--primary btn--sm" onclick='payoutInvestment(${JSON.stringify(inv.id)})'>
+        <button class="btn btn--primary btn--sm" onclick='payoutInvestment(${_esc(JSON.stringify(inv.id))})'>
           <i class="fa-solid fa-money-bill-transfer"></i> Process Payout
         </button>
-        <button class="btn btn--danger btn--sm" onclick='cancelInvestment(${JSON.stringify(inv.id)})'>
+        <button class="btn btn--danger btn--sm" onclick='cancelInvestment(${_esc(JSON.stringify(inv.id))})'>
           <i class="fa-solid fa-ban"></i> Cancel &amp; Refund
         </button>
       </div>
@@ -7053,7 +7053,7 @@ function renderMaturityTable() {
       <td>${Utils.statusBadge(m.status)}</td>
       <td class="td-muted">${Utils.date(m.submitted_date || m.created_at)}</td>
       <td>
-        ${m.status === 'submitted' && !m._from_investment ? `<button class="btn btn--success btn--sm" onclick='processMaturity(${JSON.stringify(m.id)})'><i class="fa-solid fa-play"></i> Process</button>` : '—'}
+        ${m.status === 'submitted' && !m._from_investment ? `<button class="btn btn--success btn--sm" onclick='processMaturity(${_esc(JSON.stringify(m.id))})'><i class="fa-solid fa-play"></i> Process</button>` : '—'}
       </td>
     </tr>`;
   }).join('');
@@ -7199,7 +7199,7 @@ function renderTxnTable() {
       <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${t.type?.replace(/_/g, ' ') || '—'}</span></td>
       <td class="${['investment','reinvestment','withdrawal','fee'].includes(t.type)?'td-red':'td-green'} fw-700">${['investment','reinvestment','withdrawal','fee'].includes(t.type)?'-':'+'}${Utils.rand(Math.abs(parseFloat(t.amount)||0))}</td>
       <td>${statusCell}</td>
-      <td class="td-muted clip" style="font-size:0.75rem">${t.reference || '—'}${t.reference ? `<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(t.reference)},this)' title="Copy reference"><i class="fa-regular fa-copy"></i></button>` : ''}</td>
+      <td class="td-muted clip" style="font-size:0.75rem">${t.reference || '—'}${t.reference ? `<button class="copy-btn" onclick='copyToClipboard(${_esc(JSON.stringify(t.reference))},this)' title="Copy reference"><i class="fa-regular fa-copy"></i></button>` : ''}</td>
       <td class="td-muted" style="font-size:0.75rem"><div class="clip">${t.description || '—'}</div>${proofLink}</td>
       <td class="td-muted">${Utils.date(t.transaction_date || t.created_at)}</td>
       <td>
@@ -7566,7 +7566,7 @@ function renderTicketsTable() {
       <td class="td-muted">${t.assigned_to || '—'}</td>
       <td class="td-muted">${Utils.date(t.created_at)}</td>
       <td>
-        <button class="btn btn--${needsReply ? 'primary' : 'secondary'} btn--sm" onclick='viewTicket(${JSON.stringify(t.id)})'><i class="fa-solid fa-${needsReply ? 'reply' : 'eye'}"></i> ${needsReply ? 'Reply' : 'View'}</button>
+        <button class="btn btn--${needsReply ? 'primary' : 'secondary'} btn--sm" onclick='viewTicket(${_esc(JSON.stringify(t.id))})'><i class="fa-solid fa-${needsReply ? 'reply' : 'eye'}"></i> ${needsReply ? 'Reply' : 'View'}</button>
       </td>
     </tr>`;
   }).join('');
@@ -7665,12 +7665,12 @@ async function viewTicket(id) {
       <div class="panel__body" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
         ${tkt.proof_filename ? `<span style="font-size:0.85rem;font-weight:600"><i class="fa-solid fa-file" style="color:#fec24f;margin-right:6px"></i>${_esc(tkt.proof_filename)}</span>` : ''}
         ${attachDataUrl
-          ? `<button class="btn btn--secondary btn--sm" onclick='_openTicketDoc(${JSON.stringify(tkt.id)},${JSON.stringify(tkt.proof_filename||"attachment")})'><i class="fa-solid fa-eye"></i> View</button>
-             <button class="btn btn--ghost btn--sm" onclick='_downloadTicketDoc(${JSON.stringify(tkt.id)},${JSON.stringify(tkt.proof_filename||"attachment")})'><i class="fa-solid fa-download"></i> Download</button>`
+          ? `<button class="btn btn--secondary btn--sm" onclick='_openTicketDoc(${_esc(JSON.stringify(tkt.id))},${_esc(JSON.stringify(tkt.proof_filename||"attachment"))})'><i class="fa-solid fa-eye"></i> View</button>
+             <button class="btn btn--ghost btn--sm" onclick='_downloadTicketDoc(${_esc(JSON.stringify(tkt.id))},${_esc(JSON.stringify(tkt.proof_filename||"attachment"))})'><i class="fa-solid fa-download"></i> Download</button>`
           : `<span style="font-size:0.75rem;color:var(--text-muted);font-style:italic">File data unavailable — re-upload below</span>`}
         <label class="btn btn--ghost btn--sm" style="cursor:pointer;margin-left:auto" title="Replace document">
           <i class="fa-solid fa-upload"></i> Re-upload
-          <input type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange='_reuploadTicketFile(event,${JSON.stringify(tkt.id)})'>
+          <input type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange='_reuploadTicketFile(event,${_esc(JSON.stringify(tkt.id))})'>
         </label>
       </div>
     </div>` : ''}
@@ -7678,7 +7678,7 @@ async function viewTicket(id) {
       <div class="panel__header" style="background:rgba(237,165,255,0.07);display:flex;align-items:center;gap:10px">
         <span class="panel__title"><i class="fa-solid fa-building-columns" style="color:#eda5ff;margin-right:6px"></i>Proof of Bank Account</span>
         <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
-          <button class="btn btn--secondary btn--sm" id="bankAutoVerifyBtn" onclick='_runBankAutoVerify(${JSON.stringify(tkt.investor_id)})'><i class="fa-solid fa-robot"></i> Auto-Verify</button>
+          <button class="btn btn--secondary btn--sm" id="bankAutoVerifyBtn" onclick='_runBankAutoVerify(${_esc(JSON.stringify(tkt.investor_id))})'><i class="fa-solid fa-robot"></i> Auto-Verify</button>
         </div>
       </div>
       <div id="bankProofPreview" style="padding:12px 16px;font-size:0.82rem;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i> Loading document…</div>
@@ -11303,7 +11303,7 @@ function _renderSegmentList(q) {
     html += `<div style="padding:7px 14px 3px;font-size:0.67rem;font-weight:700;letter-spacing:0.07em;color:var(--text-dim);text-transform:uppercase">${_esc(g.label)}</div>`;
     for (const item of items) {
       const sel = currentVal === item.value;
-      html += `<div onclick='selectSegment(${JSON.stringify(item.value)},${JSON.stringify(item.label)},${JSON.stringify(item.icon)})'
+      html += `<div onclick='selectSegment(${_esc(JSON.stringify(item.value))},${_esc(JSON.stringify(item.label))},${_esc(JSON.stringify(item.icon))})'
         style="display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;border-radius:6px;margin:1px 4px;background:${sel ? 'rgba(237,165,255,0.12)' : ''}"
         onmouseenter="this.style.background='${sel ? 'rgba(237,165,255,0.15)' : 'rgba(255,255,255,0.04)'}'"
         onmouseleave="this.style.background='${sel ? 'rgba(237,165,255,0.12)' : ''}'">
@@ -11811,8 +11811,8 @@ function renderAMLTable() {
       <td>${statusBadge(f.status)}</td>
       <td>
         <div class="flex-center gap-6">
-          <button class="btn btn--secondary btn--sm" onclick='navigate("investors", document.querySelector("[data-view=investors]"));setTimeout(()=>{document.getElementById("investorSearch").value=${JSON.stringify(invName)};document.getElementById("investorSearch").dispatchEvent(new Event("input"))},350)'><i class="fa-solid fa-eye"></i> Investor</button>
-          ${canResolve ? `<button class="btn btn--success btn--sm" onclick='resolveAMLFlag(${JSON.stringify(f.id)})'><i class="fa-solid fa-check"></i> Resolve</button>` : ''}
+          <button class="btn btn--secondary btn--sm" onclick='navigate("investors", document.querySelector("[data-view=investors]"));setTimeout(()=>{document.getElementById("investorSearch").value=${_esc(JSON.stringify(invName))};document.getElementById("investorSearch").dispatchEvent(new Event("input"))},350)'><i class="fa-solid fa-eye"></i> Investor</button>
+          ${canResolve ? `<button class="btn btn--success btn--sm" onclick='resolveAMLFlag(${_esc(JSON.stringify(f.id))})'><i class="fa-solid fa-check"></i> Resolve</button>` : ''}
         </div>
       </td>
     </tr>`;
@@ -13426,8 +13426,8 @@ async function loadCompliance() {
       const isDone   = d.status === 'completed';
       const color = isDone ? '#22c55e' : isPast ? '#ef4444' : isUrgent ? '#fec24f' : '#656565';
       const label = isDone ? 'Done' : isPast ? 'Overdue' : isUrgent ? `${daysLeft}d left` : `${daysLeft}d`;
-      const deleteBtn = !d._static ? `<button class="btn btn--danger btn--sm" style="margin-left:6px;padding:2px 8px;font-size:0.68rem" onclick='deleteComplianceItem(${JSON.stringify(d.id)})'><i class="fa-solid fa-trash"></i></button>` : '';
-      const doneBtn   = !d._static && d.status !== 'completed' ? `<button class="btn btn--success btn--sm" style="margin-left:4px;padding:2px 8px;font-size:0.68rem" onclick='markComplianceDone(${JSON.stringify(d.id)})'><i class="fa-solid fa-check"></i></button>` : '';
+      const deleteBtn = !d._static ? `<button class="btn btn--danger btn--sm" style="margin-left:6px;padding:2px 8px;font-size:0.68rem" onclick='deleteComplianceItem(${_esc(JSON.stringify(d.id))})'><i class="fa-solid fa-trash"></i></button>` : '';
+      const doneBtn   = !d._static && d.status !== 'completed' ? `<button class="btn btn--success btn--sm" style="margin-left:4px;padding:2px 8px;font-size:0.68rem" onclick='markComplianceDone(${_esc(JSON.stringify(d.id))})'><i class="fa-solid fa-check"></i></button>` : '';
       return `<div style="display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)${isDone ? ';opacity:0.55' : ''}">
         <div style="width:52px;min-width:52px;text-align:center;background:${color}22;border-radius:8px;padding:6px 4px">
           <div style="font-size:0.78rem;font-weight:800;color:${color}">${label}</div>
@@ -13670,7 +13670,7 @@ function renderReconcTable(keepPage) {
       <td style="color:#9ca3af;font-size:0.82rem">${fmt(r.expectedWallet)}</td>
       <td style="font-size:0.82rem;font-weight:700;${varColor}">${r.variance >= 0 ? '+' : '-'}${fmt(r.variance)}</td>
       <td>${statusBadge}</td>
-      <td><button class="btn btn--secondary btn--sm" onclick='openManualCreditModal(${JSON.stringify(r.inv.id)}, ${JSON.stringify(r.inv.first_name + ' ' + r.inv.last_name)})'><i class="fa-solid fa-plus"></i> Credit</button></td>
+      <td><button class="btn btn--secondary btn--sm" onclick='openManualCreditModal(${_esc(JSON.stringify(r.inv.id))}, ${_esc(JSON.stringify(r.inv.first_name + ' ' + r.inv.last_name))})'><i class="fa-solid fa-plus"></i> Credit</button></td>
     </tr>`;
   }).join('');
 
@@ -14319,7 +14319,7 @@ function _renderFicaPipeline() {
       <td style="font-size:0.82rem;color:#7a92a8">${docCount ? `${approvedCount}/${docCount} approved` : '—'}</td>
       <td>
         <div style="display:flex;gap:4px;flex-wrap:wrap">
-          <button class="btn btn--secondary btn--sm" title="View KYC timeline" onclick='openKycTimeline(${JSON.stringify(inv.id)})'><i class="fa-solid fa-timeline"></i> Timeline</button>
+          <button class="btn btn--secondary btn--sm" title="View KYC timeline" onclick='openKycTimeline(${_esc(JSON.stringify(inv.id))})'><i class="fa-solid fa-timeline"></i> Timeline</button>
           <button class="btn btn--secondary btn--sm" onclick='navigate("kyc", document.querySelector("[data-view=kyc]"))'><i class="fa-solid fa-id-card"></i> Queue</button>
         </div>
       </td>
@@ -14399,7 +14399,7 @@ function _renderIntlInterest(data) {
       <td style="color:#7a92a8">${r.created_at ? new Date(r.created_at).toLocaleDateString('en-ZA',{day:'2-digit',month:'short',year:'numeric'}) : '—'}</td>
       <td>
         <div style="display:flex;gap:6px">
-          ${!contacted ? `<button class="btn btn--sm btn--success" onclick='markIntlContacted(${JSON.stringify(r.id)})' title="Mark as contacted"><i class="fa-solid fa-check"></i></button>` : ''}
+          ${!contacted ? `<button class="btn btn--sm btn--success" onclick='markIntlContacted(${_esc(JSON.stringify(r.id))})' title="Mark as contacted"><i class="fa-solid fa-check"></i></button>` : ''}
           <a class="btn btn--sm btn--secondary" href="mailto:${_esc(r.email)}?subject=${encodeURIComponent('SVCapital International Investment Enquiry')}" title="Send email"><i class="fa-solid fa-envelope"></i></a>
         </div>
       </td>
@@ -14968,7 +14968,7 @@ async function _loadInvestorStatements(investorId) {
         <tbody>${stmts.map(s => `<tr>
           <td class="td-strong">${monthNames[s.period_month] || s.period_month} ${s.period_year}</td>
           <td class="td-muted">${Utils.date(s.created_at)}</td>
-          <td><button class="btn btn--secondary btn--sm" onclick='downloadInvestorStatement(${JSON.stringify(s.id)},${JSON.stringify(investorId)},${s.period_year},${s.period_month},this)'><i class="fa-solid fa-download"></i> PDF</button></td>
+          <td><button class="btn btn--secondary btn--sm" onclick='downloadInvestorStatement(${_esc(JSON.stringify(s.id))},${_esc(JSON.stringify(investorId))},${s.period_year},${s.period_month},this)'><i class="fa-solid fa-download"></i> PDF</button></td>
         </tr>`).join('')}</tbody>
       </table>
     </div>`;
