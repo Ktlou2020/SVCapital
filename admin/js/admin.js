@@ -2449,7 +2449,13 @@ async function viewInvestor(id) {
         <thead style="position:sticky;top:0;z-index:1"><tr><th style="min-width:160px">Pool</th><th style="min-width:130px">Product</th><th>Date Invested</th><th>Amount</th><th>Rate</th><th>Status</th><th>Maturity</th><th></th></tr></thead>
         <tbody>${invsts.length ? invsts.map(i => {
           const pi = Utils.productInfo(i.product_type);
-          return `<tr style="cursor:pointer" onclick='viewInvestmentDetail(${JSON.stringify(i.id)},${JSON.stringify(id)})' title="Open investment detail">
+          /* The row has opened the detail all along, but the only visible control
+             in it was the purple move-pool button — which reads as "the action
+             here is moving pools" and makes the row itself look inert. An
+             explicit eye button, the same one the main investments list has,
+             is what makes the capability findable. */
+          const _open = `viewInvestmentDetail(${JSON.stringify(i.id)},${JSON.stringify(id)})`;
+          return `<tr tabindex="0" style="cursor:pointer" onclick='${_open}' onkeydown='if(event.key==="Enter"||event.key===" "){event.preventDefault();${_open};}' title="Open investment detail">
             <td class="td-strong" title="${_esc(i.pool_name||'')}">${_esc(i.pool_name)||'—'}</td>
             <td title="${_esc(pi.label)}"><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
             <td class="td-muted">${Utils.date(i.start_date||i.created_at)}</td>
@@ -2457,7 +2463,10 @@ async function viewInvestor(id) {
             <td>${Utils.rateCell(i)}</td>
             <td>${Utils.statusBadge(i.status)}</td>
             <td class="td-muted">${Utils.date(i.end_date)}</td>
-            <td><button class="btn btn--sm" style="background:rgba(237,165,255,.1);color:#eda5ff;border:1px solid rgba(237,165,255,.25)" onclick='event.stopPropagation();openMoveInvestment(${JSON.stringify(i.id)},${JSON.stringify(i.pool_id)})' title="Move to different pool"><i class="fa-solid fa-right-left"></i></button></td>
+            <td style="white-space:nowrap">
+              <button class="btn btn--secondary btn--sm" onclick='event.stopPropagation();${_open}' title="Open investment detail"><i class="fa-solid fa-eye"></i></button>
+              <button class="btn btn--sm" style="background:rgba(237,165,255,.1);color:#eda5ff;border:1px solid rgba(237,165,255,.25)" onclick='event.stopPropagation();openMoveInvestment(${JSON.stringify(i.id)},${JSON.stringify(i.pool_id)})' title="Move to different pool"><i class="fa-solid fa-right-left"></i></button>
+            </td>
           </tr>`;
         }).join(''):'<tr><td colspan="8" class="text-center text-muted" style="padding:16px">No investments on record</td></tr>'}</tbody>
       </table>
@@ -6316,7 +6325,11 @@ function renderInvestmentsTable() {
     const investor   = STATE.investors.find(inv => inv.id === i.investor_id);
     const invName    = i.investor_name || (investor ? `${investor.first_name} ${investor.last_name}` : '—');
     const investDate = i.start_date || i.created_at;
-    return `<tr tabindex="0" style="cursor:pointer" onclick='viewInvestmentDetail(${JSON.stringify(i.id)})' title="Open investment detail">
+    /* tabindex without a key handler is a row that takes focus and then ignores
+       Enter — worse than not being focusable, because the focus ring promises
+       something. */
+    const _openRow = `viewInvestmentDetail(${JSON.stringify(i.id)})`;
+    return `<tr tabindex="0" style="cursor:pointer" onclick='${_openRow}' onkeydown='if(event.key==="Enter"||event.key===" "){event.preventDefault();${_openRow};}' title="Open investment detail">
       <td style="width:36px;text-align:center" onclick="event.stopPropagation()"><input type="checkbox" class="inv-select-cb" value="${i.id}" onchange="_invUpdateBulkBar()" /></td>
       <td>
         <div class="td-strong clip" style="cursor:pointer" onclick="event.stopPropagation();viewInvestor('${i.investor_id}')">${invName}</div>
@@ -6449,6 +6462,16 @@ let _investorInvestments = [];
    rows are investments, and returning to the investor from there drops you
    somewhere you were not. */
 async function viewInvestmentDetail(id, backTo, backKind) {
+  /* The switch-target list is derived from open pools, so they have to be
+     loaded before the form is built. This modal is reachable from the investor
+     detail without ever opening the Pools tab, which is how the old list —
+     read from STATE.products, filled only by the Products tab — came up empty
+     on a platform with plenty of products. */
+  if (!STATE.pools || !STATE.pools.length) {
+    try { const pr = await API.pools.list({ limit: 1000 }); STATE.pools = pr.data || []; }
+    catch (err) { console.error('[investment detail] pools failed to load:', err?.message || err); }
+  }
+
   let inv = STATE.investments.find(i => i.id === id)
          || _investorInvestments.find(i => i.id === id);
 
@@ -6476,6 +6499,52 @@ async function viewInvestmentDetail(id, backTo, backKind) {
   }
 
   _renderInvestmentDetail(inv, backTo, backKind);
+}
+
+/* Products a switch can actually be routed into, and the pool each would land
+   in — derived from open pools rather than from the products table.
+
+   Two reasons. STATE.products is only filled by the Products tab, so an
+   investment opened without visiting it offered "No products available" on a
+   platform with plenty of them. And a product whose pools are all closed is
+   not a switch target at all: reinvestAmount finds nothing, falls back to the
+   wallet, and the client gets cash they did not ask for. Offering it is
+   offering a wallet payout under another name.
+
+   The filter is reinvestAmount's own predicate — open, not past its close
+   date, not full — and the pool named is the one that query would pick, by
+   end_date ascending. So what the form promises is what the engine does. */
+function _switchableProducts() {
+  const today = new Date().toISOString().slice(0, 10);
+  const byType = new Map();
+  for (const p of (STATE.pools || [])) {
+    if ((p.status || '') !== 'open') continue;
+    if (p.end_date && String(p.end_date).slice(0, 10) < today) continue;
+    const max = p.max_investment != null ? Number(p.max_investment) : null;
+    if (max !== null && (Number(p.current_invested) || 0) >= max) continue;
+    const pt = p.product_type;
+    if (!pt) continue;
+    const prev = byType.get(pt);
+    const key  = String(p.end_date || '9999-12-31').slice(0, 10);
+    if (!prev || key < prev.key) byType.set(pt, { productType: pt, poolName: p.name, endDate: p.end_date, key });
+  }
+  return [...byType.values()].sort((a, b) => a.productType.localeCompare(b.productType));
+}
+
+/* The options, with the current choice preserved even when it has no open pool
+   — dropping it would silently rewrite the client's instruction the next time
+   anyone pressed Set Instruction. It is kept, marked, and the warning says so. */
+function _switchProductOptions(currentType) {
+  const opts   = _switchableProducts();
+  const chosen = currentType || '';
+  const label  = pt => (Utils.productInfo(pt)?.label || pt);
+  const rows   = opts.map(o =>
+    `<option value="${_esc(o.productType)}"${chosen === o.productType ? ' selected' : ''}>` +
+    `${_esc(label(o.productType))} — ${_esc(o.poolName)}</option>`);
+  if (chosen && !opts.some(o => o.productType === chosen)) {
+    rows.unshift(`<option value="${_esc(chosen)}" selected>${_esc(label(chosen))} — no open pool (would pay to wallet)</option>`);
+  }
+  return { html: rows.join(''), count: opts.length, chosenHasPool: opts.some(o => o.productType === chosen) };
 }
 
 /* One definition of the back button, so the failure path and the rendered
@@ -6581,12 +6650,26 @@ function _renderInvestmentDetail(inv, backTo, backKind) {
       </div>
       <div id="admMatProductWrap" style="margin-top:8px;display:${(inv.maturity_instruction === 'switch_product' || inv.maturity_instruction === 'custom_switch' || inv.maturity_instruction === 'switch_amount') ? '' : 'none'}">
         <label class="form-label" style="font-size:0.72rem">Switch into product</label>
-        <select id="admMatProduct" class="form-select">
-          ${(STATE.products || []).map(pr => {
-            const pt = pr.product_type || pr.id;
-            return `<option value="${_esc(pt)}"${inv.switch_product_type === pt ? ' selected' : ''}>${_esc(pr.label || pt)}</option>`;
-          }).join('') || '<option value="">No products available</option>'}
-        </select>
+        ${(() => {
+          const o = _switchProductOptions(inv.switch_product_type);
+          if (!o.count && !o.html) {
+            /* Naming the cause matters: "no products" sends someone to check the
+               product catalogue, when what is missing is an OPEN POOL. */
+            return `<select id="admMatProduct" class="form-select" disabled>
+                      <option value="">No product currently has an open pool</option>
+                    </select>
+                    <div style="font-size:0.68rem;color:#f59e0b;margin-top:4px">
+                      Every product's pools are closed, past their close date, or full. A switch set
+                      now would find nothing at maturity and pay out to the wallet instead.
+                    </div>`;
+          }
+          return `<select id="admMatProduct" class="form-select">${o.html}</select>
+                  <div style="font-size:0.68rem;color:${o.chosenHasPool || !inv.switch_product_type ? 'var(--text-muted)' : '#f59e0b'};margin-top:4px">
+                    ${o.chosenHasPool || !inv.switch_product_type
+                      ? 'Only products with a pool that is open, still before its close date and not full. The pool named is the one the rollover would land in.'
+                      : 'The product currently set has no open pool — at maturity this would pay out to the wallet. Choose one of the others to switch instead.'}
+                  </div>`;
+        })()}
       </div>
       <div style="font-size:0.7rem;color:var(--text-muted);margin-top:6px">Admin submissions bypass the 17:00 client cut-off.</div>
     </div>
