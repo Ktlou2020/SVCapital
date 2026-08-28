@@ -12841,6 +12841,75 @@ function _preflightExportCsv() {
   Toast.success(`${rows.length} row(s) exported`);
 }
 
+/* The stored-markup audit, rendered into the console.
+
+   Everything a finding contains is the very text that was suspect, so every
+   value goes through _esc. A panel that reported unescaped markup by writing
+   it into the page would be the vulnerability it is looking for. */
+async function runStoredMarkupAudit(btn) {
+  const resultEl = document.getElementById('markupAuditResult');
+  const origLabel = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Scanning…';
+  resultEl.innerHTML = '';
+  try {
+    const r = await API._fetch('GET', 'admin/stored-markup-audit');
+
+    if (r.verdict === 'clean') {
+      resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-circle-check"></i>
+        Nothing found across ${_esc(r.scanned.length)} column(s). No stored text contains markup,
+        an event handler, or a character that would break out of an attribute.</span>`;
+      return;
+    }
+
+    const rows = (list, colour) => list.map(x => `
+      <div style="border-left:3px solid ${colour};padding:6px 10px;margin-bottom:6px;background:var(--bg-secondary);border-radius:0 6px 6px 0">
+        <div style="font-size:0.74rem;color:var(--text-muted);font-family:monospace">
+          ${_esc(x.table)}.${_esc(x.column)} &middot; row ${_esc(x.rowId)}
+        </div>
+        <div style="font-family:monospace;font-size:0.78rem;word-break:break-all">${_esc(x.value)}</div>
+      </div>`).join('');
+
+    const parts = [];
+    parts.push(`<div style="display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap">
+      <div><span style="font-size:1.3rem;font-weight:800;color:${r.totals.executable ? '#ef4444' : 'var(--text-muted)'}">${_esc(r.totals.executable)}</span>
+        <span style="font-size:0.74rem;color:var(--text-muted);margin-left:5px">executable</span></div>
+      <div><span style="font-size:1.3rem;font-weight:800;color:${r.totals.breaking ? '#f59e0b' : 'var(--text-muted)'}">${_esc(r.totals.breaking)}</span>
+        <span style="font-size:0.74rem;color:var(--text-muted);margin-left:5px">attribute-breaking</span></div>
+    </div>`);
+
+    if (r.executable.length) {
+      parts.push(`<div style="font-weight:700;color:#ef4444;margin:10px 0 6px">
+        <i class="fa-solid fa-circle-exclamation"></i> Executable — treat as an incident</div>
+        <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:8px">
+          These would run in this session, which can reach manual credit, bulk KYC approval
+          and the pool remap. Clear them before opening the screens that show them.</div>
+        ${rows(r.executable, '#ef4444')}`);
+    }
+    if (r.breaking.length) {
+      const shown = r.breaking.slice(0, 25);
+      parts.push(`<div style="font-weight:700;color:#f59e0b;margin:14px 0 6px">
+        <i class="fa-solid fa-triangle-exclamation"></i> Attribute-breaking — buttons in these rows may already be dead</div>
+        <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:8px">
+          A quote ends the attribute early. Nothing executes, but the controls in that row stop
+          working. An apostrophe in a surname is ordinary, so most of these are real people.</div>
+        ${rows(shown, '#f59e0b')}
+        ${r.breaking.length > shown.length
+          ? `<div style="font-size:0.76rem;color:var(--text-muted)">…and ${_esc(r.breaking.length - shown.length)} more</div>`
+          : ''}`);
+    }
+    parts.push(`<div style="font-size:0.72rem;color:var(--text-muted);margin-top:12px">
+      Scanned ${_esc(r.scanned.length)} column(s). Nothing was changed by running this.</div>`);
+    resultEl.innerHTML = parts.join('');
+  } catch (e) {
+    resultEl.innerHTML = `<span style="color:#ef4444"><i class="fa-solid fa-circle-exclamation"></i>
+      Audit failed: ${_esc(e.message || 'unknown error')}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = origLabel;
+  }
+}
+
 async function runMaturityPreflight(btn) {
   const resultEl = document.getElementById('preflightResult');
   const days = document.getElementById('preflightDays')?.value || 14;
