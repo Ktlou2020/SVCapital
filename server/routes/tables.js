@@ -180,7 +180,29 @@ const ALWAYS_PROTECTED_COLS = new Set([
 /* ─── Columns that non-admin roles (investor, ifa, staff) cannot write ─── */
 const INVESTOR_PROTECTED_COLS = new Set([
   'fica_status', 'kyc_status', 'wallet_balance', 'total_invested',
+
+  /* Identity fields nothing legitimate writes through this endpoint. Both
+     portals' Edit Profile sends first_name, last_name, phone, address,
+     street_address, suburb, postal_code, province and risk_profile — and
+     neither sends these two. An email change is a login change and an ID
+     number is a KYC field; both belong behind review, not a self-service
+     PATCH on a row the investor owns.
+
+     first_name and last_name are deliberately NOT here. They are the fields
+     the XSS came through, but blocking them would silently break Edit Profile:
+     the PATCH would still succeed while dropping the names, which looks to the
+     investor like it saved. They are handled by stripMarkup below instead —
+     the markup goes, the feature stays. */
+  'email', 'id_number',
 ]);
+
+/* Free text a non-admin CAN legitimately write — address lines, occupation,
+   notes — still reaches admin screens, so it is stripped of markup on the way
+   in. Tags are removed rather than entity-encoded: encoding here would double
+   up against escaping at render, and show &amp;lt; to the operator. */
+const stripMarkup = v => (typeof v === 'string'
+  ? v.replace(/<[^>]*>/g, '').replace(/[<>]/g, '')
+  : v);
 /* ─── Combined set used by legacy references ─── */
 const PROTECTED_WRITE_COLS = new Set([...ALWAYS_PROTECTED_COLS, ...INVESTOR_PROTECTED_COLS]);
 
@@ -952,7 +974,12 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
 
     const isPrivileged = ['admin', 'director', 'fund_manager'].includes(req.user.role);
     ALWAYS_PROTECTED_COLS.forEach(c => delete body[c]);
-    if (!isPrivileged) INVESTOR_PROTECTED_COLS.forEach(c => delete body[c]);
+    if (!isPrivileged) {
+      INVESTOR_PROTECTED_COLS.forEach(c => delete body[c]);
+      /* Admin-authored text is left alone — templates and descriptions may
+         legitimately carry markup. Everyone else's is stripped. */
+      for (const k of Object.keys(body)) body[k] = stripMarkup(body[k]);
+    }
 
     // Normalise external FICA status values before validation
     if (body.fica_status && _FICA_NORM_MAP[body.fica_status]) body.fica_status = _FICA_NORM_MAP[body.fica_status];
@@ -1567,7 +1594,12 @@ router.put('/:table/:id', requireAuth, validateTable, async (req, res) => {
 
     const isPrivileged = ['admin', 'director', 'fund_manager'].includes(req.user.role);
     ALWAYS_PROTECTED_COLS.forEach(c => delete body[c]);
-    if (!isPrivileged) INVESTOR_PROTECTED_COLS.forEach(c => delete body[c]);
+    if (!isPrivileged) {
+      INVESTOR_PROTECTED_COLS.forEach(c => delete body[c]);
+      /* Admin-authored text is left alone — templates and descriptions may
+         legitimately carry markup. Everyone else's is stripped. */
+      for (const k of Object.keys(body)) body[k] = stripMarkup(body[k]);
+    }
 
     const _badKey = Object.keys(body).find(k => !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(k));
     if (_badKey) return res.status(400).json({ error: 'Invalid field name: ' + _badKey });
@@ -1633,7 +1665,12 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
 
     const isPrivileged = ['admin', 'director', 'fund_manager'].includes(req.user.role);
     ALWAYS_PROTECTED_COLS.forEach(c => delete body[c]);
-    if (!isPrivileged) INVESTOR_PROTECTED_COLS.forEach(c => delete body[c]);
+    if (!isPrivileged) {
+      INVESTOR_PROTECTED_COLS.forEach(c => delete body[c]);
+      /* Admin-authored text is left alone — templates and descriptions may
+         legitimately carry markup. Everyone else's is stripped. */
+      for (const k of Object.keys(body)) body[k] = stripMarkup(body[k]);
+    }
 
     if (body.fica_status && _FICA_NORM_MAP[body.fica_status]) body.fica_status = _FICA_NORM_MAP[body.fica_status];
     if (body.kyc_status  && _FICA_NORM_MAP[body.kyc_status])  body.kyc_status  = _FICA_NORM_MAP[body.kyc_status];
