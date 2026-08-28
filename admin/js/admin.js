@@ -7346,13 +7346,21 @@ function openAddTxnModal() {
         return name.includes(term) || id.includes(term) || email.includes(term);
       }).slice(0, 25);
       if (!matches.length) { txnDrop.style.display = 'none'; return; }
+      /* Escaped. This built innerHTML from first_name, last_name, email and id
+         with none of it escaped, and data-name="${name}" is an attribute a
+         quote walks straight out of. An investor could write their own name
+         through PATCH /api/tables/investors/:id — ownership was checked, the
+         column was not protected, and that endpoint sanitises nothing — so
+         markup stored there executed here, in a session that can move money.
+         The server side is closed too; this is the half that also covers rows
+         already in the table, which never passed through any sanitiser. */
       txnDrop.innerHTML = matches.map(inv => {
         const name = `${inv.first_name || ''} ${inv.last_name || ''}`.trim() || '—';
         const emailLine = inv.email
-          ? `<span style="color:var(--text-muted);font-size:0.77rem">${inv.email}</span>` : '';
-        return `<li data-id="${inv.id}" data-name="${name}" style="padding:9px 14px;cursor:pointer;display:flex;flex-direction:column;gap:2px">
-          <span style="font-weight:600;font-size:0.87rem">${name}
-            <span style="color:var(--text-muted);font-weight:400;font-size:0.8rem">(${inv.id})</span>
+          ? `<span style="color:var(--text-muted);font-size:0.77rem">${_esc(inv.email)}</span>` : '';
+        return `<li data-id="${_esc(inv.id)}" data-name="${_esc(name)}" style="padding:9px 14px;cursor:pointer;display:flex;flex-direction:column;gap:2px">
+          <span style="font-weight:600;font-size:0.87rem">${_esc(name)}
+            <span style="color:var(--text-muted);font-weight:400;font-size:0.8rem">(${_esc(inv.id)})</span>
           </span>
           ${emailLine}
         </li>`;
