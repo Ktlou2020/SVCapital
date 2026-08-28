@@ -1455,18 +1455,20 @@ let filteredSubAccounts = [];
 
 let selectedInvestors = new Set();
 
+const INVESTOR_SOURCES = [
+  { key: 'investors',   label: 'Investors',     load: () => API.investors.list({ limit: 5000 }) },
+  { key: 'logins',      label: 'Login accounts', load: () => API._fetch('GET', 'tables/users', null, { limit: 10000, role: 'investor' }) },
+  { key: 'subAccounts', label: 'Sub-accounts',  load: () => API._fetch('GET', 'tables/sub_accounts', null, { limit: 5000 }) },
+];
+
 async function loadInvestors() {
   try {
-    const [res, uRes, saRes] = await Promise.all([
-      API.investors.list({ limit: 5000 }),
-      API._fetch('GET', 'tables/users', null, { limit: 10000, role: 'investor' }).catch(() => ({ data: [] })),
-      API._fetch('GET', 'tables/sub_accounts', null, { limit: 5000 }).catch(() => ({ data: [] })),
-    ]);
-    STATE.investors = res.data || [];
-    STATE.subAccounts = saRes.data || [];
+    const { values, counts, failed } = await _loadSources(INVESTOR_SOURCES);
+    STATE.investors = values.investors;
+    STATE.subAccounts = values.subAccounts;
     // Build set of investor_ids that have a login account
     STATE.investorLoginSet = new Set(
-      (uRes.data || []).filter(u => u.investor_id).map(u => u.investor_id)
+      values.logins.filter(u => u.investor_id).map(u => u.investor_id)
     );
     filteredInvestors = [...STATE.investors];
     filteredSubAccounts = [...STATE.subAccounts];
@@ -1475,6 +1477,12 @@ async function loadInvestors() {
     renderInvestorsTable();
     setupInvestorFilters();
     _setRefreshLabel('investorsRefreshed', 'investors');
+    _renderLoadErrors('investors-load-errors', failed, 'loadInvestors()');
+    _renderTruncationBanner('investors-truncation', counts, `
+      The tiles above &mdash; investor count, pending KYC, total wallets, AUM &mdash; are summed in
+      the browser from the rows that were read, and the table footer counts the same rows.
+      Search and the filters only see them too, so an investor past the cap cannot be found here
+      at all. Use the Analytics tab for figures you intend to report.`);
   } catch (e) {
     // Say what actually failed. This read 'Failed to load investors' and
     // discarded the reason, so a 403, a 500 and a render bug all looked
@@ -6636,15 +6644,24 @@ let invPage = 1;
 const INV_PG_SIZE = 10;
 let filteredInvests = [];
 
+const INVESTMENT_SOURCES = [
+  { key: 'investments', label: 'Investments', load: () => API.investments.list({ limit: 5000 }) },
+];
+
 async function loadInvestments() {
   try {
-    const res = await API.investments.list({ limit: 5000 });
-    STATE.investments = res.data || [];
+    const { values, counts, failed } = await _loadSources(INVESTMENT_SOURCES);
+    STATE.investments = values.investments;
     filteredInvests = [...STATE.investments];
     _markRefreshed('investments');
     renderInvestmentStats();
     renderInvestmentsTable();
     setupInvestmentFilters();
+    _renderLoadErrors('investments-load-errors', failed, 'loadInvestments()');
+    _renderTruncationBanner('investments-truncation', counts, `
+      Active capital, the average rate and the counts above are summed in the browser from the rows
+      that were read. The average rate is the one to distrust most &mdash; it is a mean over
+      whichever rows arrived, so it moves with the cap rather than with the book.`);
   } catch (e) {
     // Say what actually failed. This read 'Failed to load investments' and
     // discarded the reason, so a 403, a 500 and a render bug all looked
@@ -7202,16 +7219,35 @@ let filteredMaturity = [];
 
 async function loadMaturity() {
   try {
-    const [matRes, invRes, investRes] = await Promise.all([
-      API.maturityInstructions.list({ limit: 1000 }),
-      STATE.investors.length  ? Promise.resolve({ data: STATE.investors  }) : API.investors.list({ limit: 5000 }),
-      API.investments.list({ limit: 5000 })  // always fresh — maturity_instruction may have changed
+    const hadInvestors = STATE.investors.length > 0;
+    const { values, counts, failed } = await _loadSources([
+      { key: 'maturity',    label: 'Maturity instructions', load: () => API.maturityInstructions.list({ limit: 1000 }) },
+      { key: 'investors',   label: 'Investors',
+        load: () => hadInvestors ? Promise.resolve({ data: STATE.investors }) : API.investors.list({ limit: 5000 }) },
+      // always fresh — maturity_instruction may have changed
+      { key: 'investments', label: 'Investments', load: () => API.investments.list({ limit: 5000 }) },
     ]);
 
-    if (!STATE.investors.length) STATE.investors = invRes.data || [];
-    STATE.investments = investRes.data || [];
+    if (!hadInvestors) STATE.investors = values.investors;
+    STATE.investments = values.investments;
 
-    const matRecords = matRes.data || [];
+    _renderLoadErrors('maturity-load-errors', failed, 'loadMaturity()');
+    /* The strongest of the four warnings, because here truncation removes ROWS
+       rather than skewing a tile. This list is half real maturity_instructions
+       records and half instructions derived from investments, so a capped
+       investments read silently drops people from the list — including from
+       "no instruction set", which is the one an operator works before a run.
+
+       The nightly engine reads the database directly and is unaffected. What is
+       affected is the person checking whether anyone still needs chasing. */
+    _renderTruncationBanner('maturity-truncation', counts, `
+      <strong>Rows are missing from this list, not just from a total.</strong>
+      Instructions are partly derived from the investments table, so anyone past that cap does not
+      appear here at all &mdash; including under &ldquo;no instruction set&rdquo;.
+      The maturity engine reads the database directly and is not affected by this; what is affected
+      is using this screen to decide who still needs chasing before a run.`);
+
+    const matRecords = values.maturity;
 
     /* Build a set of investor_ids already covered by a real maturity_instructions record */
     const covered = new Set(matRecords.map(m => m.investor_id + '|' + (m.pool_id || '')));
@@ -7355,17 +7391,26 @@ let filteredTxns = [];
 
 async function loadTransactions() {
   try {
-    const [txnRes, invRes] = await Promise.all([
-      API.transactions.list({ limit: 5000 }),
-      STATE.investors.length ? Promise.resolve({ data: STATE.investors }) : API.investors.list({ limit: 5000 })
+    const hadInvestors = STATE.investors.length > 0;
+    const { values, counts, failed } = await _loadSources([
+      { key: 'transactions', label: 'Transactions', load: () => API.transactions.list({ limit: 5000 }) },
+      { key: 'investors',    label: 'Investors',
+        load: () => hadInvestors ? Promise.resolve({ data: STATE.investors }) : API.investors.list({ limit: 5000 }) },
     ]);
-    STATE.transactions = txnRes.data || [];
-    if (!STATE.investors.length) STATE.investors = invRes.data || [];
+    STATE.transactions = values.transactions;
+    if (!hadInvestors) STATE.investors = values.investors;
     filteredTxns = [...STATE.transactions];
     _markRefreshed('transactions');
     renderTxnStats();
     renderTxnTable();
     setupTxnFilters();
+    _renderLoadErrors('transactions-load-errors', failed, 'loadTransactions()');
+    _renderTruncationBanner('transactions-truncation', counts, `
+      Deposits, capital invested and returns above are summed in the browser from the rows that were
+      read. <strong>This is the table that crosses its cap first</strong> &mdash; every investment
+      writes several rows (deposit, investment, fee, matured funds, reinvestment, payout), so the
+      ledger outgrows the others by a wide margin. The pending queue is filtered from the same rows,
+      so a pending deposit past the cap will not appear in it.`);
   } catch (e) {
     // Say what actually failed. This read 'Failed to load transactions' and
     // discarded the reason, so a 403, a 500 and a render bug all looked
@@ -8437,27 +8482,74 @@ function _analyticsTruncation(loadedVsTotal) {
    tiles cannot tell you which. Named here so R0.00 is never read as a fact
    when it is really a missing answer. */
 function _dashboardLoadErrors(failedSources) {
-  const el = document.getElementById('ds-load-errors');
+  return _renderLoadErrors('ds-load-errors', failedSources, 'loadDashboard()');
+}
+
+/* Named sources that failed, and a retry. Takes plain labels or {label,message}
+   so the tab loaders can pass the reason straight through. */
+function _renderLoadErrors(elId, failedSources, retryCall) {
+  const el = document.getElementById(elId);
   if (!el) return false;
-  if (!failedSources.length) { el.style.display = 'none'; el.innerHTML = ''; return false; }
+  const list = (failedSources || []).map(f => (typeof f === 'string' ? { label: f } : f));
+  if (!list.length) { el.style.display = 'none'; el.innerHTML = ''; return false; }
 
   el.style.display = '';
   el.innerHTML = `
     <div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.35);border-radius:8px;padding:12px 14px">
       <div style="font-weight:700;color:#ef4444">
         <i class="fa-solid fa-triangle-exclamation" style="margin-right:6px"></i>
-        ${failedSources.map(_esc).join(' and ')} could not be loaded
+        ${list.map(f => _esc(f.label)).join(' and ')} could not be loaded
       </div>
       <div style="margin-top:6px;font-size:0.82rem">
-        Tiles fed by ${failedSources.length === 1 ? 'it' : 'them'} are showing zero because the
+        Figures fed by ${list.length === 1 ? 'it' : 'them'} are showing zero because the
         data is missing, not because the figure is zero. Everything else on this page loaded
         normally.
-        <button class="btn btn--secondary btn--sm" style="margin-left:8px" onclick="loadDashboard()">
+        ${list.some(f => f.message)
+          ? `<div style="margin-top:5px;font-size:0.76rem;color:var(--text-muted)">${
+              list.filter(f => f.message).map(f => `${_esc(f.label)}: ${_esc(f.message)}`).join('<br>')}</div>`
+          : ''}
+        ${retryCall ? `<button class="btn btn--secondary btn--sm" style="margin-left:8px" onclick="${_esc(retryCall)}">
           <i class="fa-solid fa-rotate"></i> Retry
-        </button>
+        </button>` : ''}
       </div>
     </div>`;
   return true;
+}
+
+/* ── One read of a tab's sources ──────────────────────────────────────
+   Investors, Investments, Transactions and Maturity each loaded with a bare
+   Promise.all and no idea how much of the table they had. Two independent
+   faults:
+
+     · Promise.all rejects as a whole, so one failing query blanked the tab
+       even when the others had returned. The catch then showed a toast and
+       left the previous render on screen — stale figures with no indication
+       they were stale.
+     · Every one of them reads a capped page and computes its tiles in the
+       browser. The API has returned the true row count all along and nothing
+       looked, so a tab past its cap simply showed a smaller number. There is
+       no symptom to notice: a total that stops growing looks like a total.
+
+   allSettled and the row counts fix both. Same shape as the dashboard, which
+   got this treatment first. */
+async function _loadSources(sources) {
+  const settled = await Promise.allSettled(sources.map(s => s.load()));
+  const values = {}, counts = [], failed = [];
+  settled.forEach((r, i) => {
+    const s = sources[i];
+    if (r.status === 'fulfilled') {
+      values[s.key] = r.value?.data || [];
+      /* total is absent on the resolved-from-cache paths, and Number(undefined)
+         is NaN — which _renderTruncationBanner already treats as "unknown" and
+         skips rather than reporting a false shortfall. */
+      counts.push({ label: s.label, loaded: values[s.key].length, total: Number(r.value?.total) });
+    } else {
+      values[s.key] = [];
+      failed.push({ label: s.label, message: r.reason?.message || String(r.reason) });
+      console.error(`[load] ${s.label} failed:`, r.reason?.message || r.reason);
+    }
+  });
+  return { values, counts, failed };
 }
 
 /* Whether the headline tiles came from SQL. The banner has to say which,

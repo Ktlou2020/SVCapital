@@ -167,7 +167,12 @@ function makeEnv({ serverKpis = true, seriesOk = true, ticketsOk = true } = {}) 
   vm.runInContext(sliceConst('const _safeParse = ', '\n};'), sandbox);
   vm.runInContext(sliceConst('const _safeStorage = ', ';\n'), sandbox);
   vm.runInContext(slice('_staffSession'), sandbox);
-  for (const f of ['_renderTruncationBanner', '_dashboardLoadErrors', '_dashboardTruncation',
+  /* _renderLoadErrors joined the list when the four tabs got the same guard and
+     _dashboardLoadErrors became a two-line delegate to it. Both are hoisted
+     function declarations, so the browser was never affected — but this harness
+     loads named functions rather than the whole file, so a helper it does not
+     name is genuinely missing here. */
+  for (const f of ['_renderTruncationBanner', '_renderLoadErrors', '_dashboardLoadErrors', '_dashboardTruncation',
                    '_refreshDashboardTotals', 'renderPendingActions', 'updateSidebarBadges',
                    'renderAumChart', 'renderProductMixChart', 'loadDashboard']) {
     vm.runInContext(slice(f), sandbox);
