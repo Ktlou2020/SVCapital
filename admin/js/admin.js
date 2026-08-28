@@ -4,6 +4,40 @@
 'use strict';
 
 /* Escape user-controlled strings before inserting into innerHTML */
+/* A swallowed error should be a decision, not a leftover.
+
+   There were 25 bare `catch (_) {}` blocks in this file and no way to tell,
+   reading any one of them, whether the failure was genuinely unimportant or
+   simply never handled. One of them dropped a KYC rejection reason.
+
+   These two helpers cover the cases that really are unimportant, so that what
+   remains is a short list where the empty catch means something. */
+
+/* JSON stored in a text column — investor_profile, notes — which may hold
+   legacy non-JSON. Falling back is the correct behaviour, not a swallowed
+   failure, and saying so once beats seven identical try/catch blocks. */
+const _safeParse = (raw, fallback) => {
+  if (raw == null || raw === '') return fallback;
+  if (typeof raw === 'object') return raw;
+  try { return JSON.parse(raw); } catch (_) { return fallback; }
+};
+
+/* Browser storage throws outright in some privacy modes, so every read is a
+   maybe. A missing session is a normal state here, not an error to report. */
+const _safeStorage = key => { try { return localStorage.getItem(key); } catch (_) { return null; } };
+
+/* The current staff session, or null when there is not a live one.
+
+   Four places read this the same way — parse, check empId, check expiry, fall
+   back — and each carried its own empty catch. No session and a corrupt one
+   are both normal states for a browser, so they are the same answer here; the
+   point of naming it is that the emptiness becomes a decision once, rather
+   than four unexplained catches a reader has to judge individually. */
+function _staffSession() {
+  const s = _safeParse(_safeStorage('staffSession'), null);
+  return (s && s.empId && s.expiresAt > Date.now()) ? s : null;
+}
+
 const _esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 
 /* Cache for ticket document data — avoids embedding large base64 in onclick attributes */
@@ -106,12 +140,8 @@ function _setRefreshLabel(elId, view) {
 
 /* ─── Get current admin's full name (for audit/review fields) ─── */
 function _getAdminName() {
-  try {
-    const s = JSON.parse(localStorage.getItem('staffSession') || 'null');
-    if (s && s.empId && s.expiresAt > Date.now()) {
-      return `${s.firstName || ''} ${s.lastName || ''}`.trim() || 'Admin';
-    }
-  } catch (_) {}
+  const s = _staffSession();
+  if (s) return `${s.firstName || ''} ${s.lastName || ''}`.trim() || 'Admin';
   if (typeof Auth !== 'undefined') {
     const u = Auth.getUser();
     if (u) return `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email || 'Admin';
@@ -221,10 +251,12 @@ function _syncAdminNotifDot() {
 
 const _ADMIN_NOTIF_READ_KEY = 'svc_admin_dismissed_notifs';
 function _getAdminReadNotifs() {
-  try { return new Set(JSON.parse(localStorage.getItem(_ADMIN_NOTIF_READ_KEY) || '[]')); } catch(_) { return new Set(); }
+  return new Set(_safeParse(_safeStorage(_ADMIN_NOTIF_READ_KEY), []));
 }
 function _saveAdminReadNotifs(s) {
-  try { localStorage.setItem(_ADMIN_NOTIF_READ_KEY, JSON.stringify([...s])); } catch(_) {}
+  /* A storage write throws outright in some privacy modes. Losing which
+     notifications were read is a smaller cost than a broken console. */
+  try { localStorage.setItem(_ADMIN_NOTIF_READ_KEY, JSON.stringify([...s])); } catch (_) {}
 }
 
 function adminMarkAllRead() {
@@ -517,19 +549,18 @@ function _populateAdminIdentity(jwtUser) {
 
   // Try staffSession first
   try {
-    const raw = localStorage.getItem('staffSession');
-    if (raw) {
-      const s = JSON.parse(raw);
-      if (s && s.empId && s.expiresAt > Date.now()) {
-        identity.initials   = s.avatarInitials || null;
-        identity.color      = s.avatarColor    || '#eda5ff';
-        identity.name       = `${s.firstName || ''} ${s.lastName || ''}`.trim() || null;
-        identity.role       = s.role           || null;
-        identity.department = s.department     || null;
-        identity.email      = s.email          || identity.email;
-      }
+    const s = _staffSession();
+    if (s) {
+      identity.initials   = s.avatarInitials || null;
+      identity.color      = s.avatarColor    || '#eda5ff';
+      identity.name       = `${s.firstName || ''} ${s.lastName || ''}`.trim() || null;
+      identity.role       = s.role           || null;
+      identity.department = s.department     || null;
+      identity.email      = s.email          || identity.email;
     }
-  } catch (_) {}
+  } catch (err) {
+    console.error('[admin] could not populate identity from the session:', err?.message || err);
+  }
 
   // Fill any gaps from jwtUser (svc_user bridge or real JWT payload)
   if (jwtUser) {
@@ -586,7 +617,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (typeof Auth !== 'undefined') {
     // Staff PIN login users have a staffSession; email+password users do not.
     const hasStaffSession = (() => {
-      try { const s = JSON.parse(localStorage.getItem('staffSession') || 'null'); return !!(s && s.empId && s.expiresAt > Date.now()); } catch (_) { return false; }
+      return !!_staffSession();
     })();
     const loginPage = hasStaffSession ? '/team/login.html' : '/login.html';
 
@@ -605,13 +636,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     _populateAdminIdentity(user);
 
     // ── Extract admin email from JWT for use in notes etc ──────────────
-    try {
-      const token = localStorage.getItem('svc_token');
-      if (token) {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        STATE.adminEmail = payload.email || (user && user.email) || null;
-      }
-    } catch (_) {}
+    /* A JWT that will not decode is not worth reporting — the email falls
+       back to the user record below, which is where it came from anyway. */
+    const _tok = _safeStorage('svc_token');
+    const _claims = _tok ? _safeParse(atob(_tok.split('.')[1] || ''), {}) : {};
+    STATE.adminEmail = _claims.email || (user && user.email) || null;
     if (!STATE.adminEmail && user) STATE.adminEmail = user.email || null;
   }
 
@@ -904,16 +933,11 @@ async function loadDashboard() {
     // Populate welcome strip
     const jwtUser = (typeof Auth !== 'undefined') ? Auth.getUser() : null;
     const wIdent  = { name: null, role: null };
-    try {
-      const raw = localStorage.getItem('staffSession');
-      if (raw) {
-        const s = JSON.parse(raw);
-        if (s && s.empId && s.expiresAt > Date.now()) {
-          wIdent.name = `${s.firstName || ''} ${s.lastName || ''}`.trim();
-          wIdent.role = s.role;
-        }
-      }
-    } catch (_) {}
+    const _sess = _staffSession();
+    if (_sess) {
+      wIdent.name = `${_sess.firstName || ''} ${_sess.lastName || ''}`.trim();
+      wIdent.role = _sess.role;
+    }
     if (!wIdent.name && jwtUser) {
       wIdent.name = `${jwtUser.firstName || ''} ${jwtUser.lastName || ''}`.trim() || jwtUser.email || null;
       wIdent.role = jwtUser.role;
@@ -2222,13 +2246,7 @@ async function _saveInvProfile(btn) {
 
     // Merge JSONB profile fields, preserving existing keys
     let invProfile = {};
-    try {
-      if (inv.investor_profile) {
-        invProfile = typeof inv.investor_profile === 'string'
-          ? JSON.parse(inv.investor_profile)
-          : { ...inv.investor_profile };
-      }
-    } catch (_) {}
+    invProfile = { ..._safeParse(inv.investor_profile, {}) };
     invProfile.employer     = document.getElementById('ipf-employer').value.trim();
     invProfile.next_of_kin  = document.getElementById('ipf-next_of_kin').value.trim();
     invProfile.kin_contact  = document.getElementById('ipf-kin_contact').value.trim();
@@ -2285,17 +2303,10 @@ async function viewInvestor(id) {
 
   // Parse investor_profile JSONB for fields saved by quests
   let invProfile = {};
-  try {
-    if (inv.investor_profile) {
-      invProfile = typeof inv.investor_profile === 'string'
-        ? JSON.parse(inv.investor_profile)
-        : inv.investor_profile;
-    }
-  } catch (_) {}
+  invProfile = _safeParse(inv.investor_profile, {});
 
   /* Parse bank details stored in notes JSON by migration */
-  let bankNotes = {};
-  try { if (inv.notes && inv.notes.startsWith('{')) bankNotes = JSON.parse(inv.notes); } catch(_) {}
+  const bankNotes = _safeParse(inv.notes, {});
   const bankName   = inv.bank_name    || bankNotes.bank_name    || '—';
   const bankHolder = inv.bank_account_holder || bankNotes.account_holder || '—';
   const bankAcctRaw= inv.bank_account_number || bankNotes.account_number || '';
@@ -3402,8 +3413,7 @@ function renderWithdrawalsTable() {
       ? (() => { const sa = (STATE.subAccounts || []).find(s => s.id === w.sub_account_id); return `<div style="margin-top:2px"><span style="background:rgba(237,165,255,.15);color:#eda5ff;border-radius:4px;padding:1px 6px;font-size:0.65rem;font-weight:700">SA: ${sa ? _esc(sa.name) : 'Sub-Account'}</span></div>`; })()
       : '';
 
-    let bankNotes = {};
-    try { if (inv?.notes?.startsWith('{')) bankNotes = JSON.parse(inv.notes); } catch(_) {}
+    const bankNotes = _safeParse(inv?.notes, {});
     const bankName   = inv?.bank_name           || bankNotes.bank_name    || '—';
     const bankAcct   = inv?.bank_account_number || bankNotes.account_number || '';
     const bankHolder = inv?.bank_account_holder || bankNotes.account_holder || (inv ? `${inv.first_name} ${inv.last_name}` : '—');
@@ -4240,7 +4250,9 @@ async function viewFicaDocument(kycId) {
     try {
       const full = await API.kyc.get(kycId);
       fileData = full?.file_data || full?.attachment_data || full?.file_url || '';
-    } catch (_) {}
+    } catch (err) {
+      console.error('[kyc] document data failed to load — the viewer will be empty:', err?.message || err);
+    }
   }
   if (!fileData) {
     Toast.error('File data not stored — please ask the investor to re-upload their document.');
@@ -4568,7 +4580,9 @@ async function openKycReview(id) {
   try {
     const full = await API.kyc.get(id);
     if (full && full.id) doc = { ...cached, ...full };
-  } catch (_) {}
+  } catch (err) {
+    console.error('[kyc] full document failed to load, using the cached copy:', err?.message || err);
+  }
 
   const inv = STATE.investors.find(i => i.id === doc.investor_id);
   const invName = doc.investor_name || (inv ? `${inv.first_name} ${inv.last_name}`.trim() : doc.investor_id || '—');
@@ -4765,10 +4779,31 @@ async function _kycReviewApprove() {
 async function _kycReviewReject() {
   const id = _reviewingKycId;
   if (!id) return;
-  // Save notes before closing review modal, then open reject modal
+  /* The note is the reason for the rejection — a compliance record, not a
+     convenience. This swallowed the failure and carried on closing the modal
+     and rejecting: the reviewer typed a reason, watched the rejection go
+     through, and the reason was never stored. Nothing said so, and by then the
+     modal holding the text was gone.
+
+     So a failure stops here. The rejection is not blocked outright — the
+     reviewer may still mean to proceed — but they are told, and asked, with
+     the text still on screen behind the dialog to copy out if needed. */
   const notes = document.getElementById('kycReviewNotes')?.value || '';
   if (notes) {
-    try { await API.kyc.update(id, { notes }); const doc = STATE.kyc.find(k => k.id === id); if (doc) doc.notes = notes; } catch (_) {}
+    try {
+      await API.kyc.update(id, { notes });
+      const doc = STATE.kyc.find(k => k.id === id);
+      if (doc) doc.notes = notes;
+    } catch (err) {
+      console.error('[kyc] review notes failed to save:', err?.message || err);
+      const proceed = await Confirm.ask('Your review notes could not be saved.', {
+        body: `${err?.message || 'The server did not accept them.'} The rejection itself has not ` +
+              'happened yet. Continue without the notes, or cancel and copy them somewhere first?',
+        confirmLabel: 'Reject without notes',
+        confirmClass: 'btn--danger',
+      });
+      if (!proceed) return;
+    }
   }
   closeKycReview();
   rejectKyc(id, null);
@@ -4899,7 +4934,8 @@ async function loadProducts() {
   try {
     // Pools power the auto-calculated average return
     if (!STATE.pools || !STATE.pools.length) {
-      try { const pr = await API.pools.list({ limit: 200 }); STATE.pools = pr.data || []; } catch (_) {}
+      try { const pr = await API.pools.list({ limit: 200 }); STATE.pools = pr.data || []; }
+      catch (err) { console.error('[products] pools failed to load — average returns will read as blank:', err?.message || err); }
     }
     const res = await API.products.list({ limit: 200 });
     STATE.products = (res.data || []).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
@@ -5134,7 +5170,10 @@ async function saveProduct(btn) {
           try {
             const existing = (await API.products.list({ limit: 500 })).data || [];
             used = new Set(existing.map(p => String(p.color || '').toLowerCase()));
-          } catch (_) {}
+          } catch (_) {
+            /* Cosmetic only: without the existing colours a new product may
+               repeat one. Not worth interrupting anyone over. */
+          }
           payload.color = palette.find(c => !used.has(c.toLowerCase())) || palette[Math.floor(Math.random() * palette.length)];
         }
         payload.id = `PROD-${productType.toUpperCase()}-${Date.now()}`;
@@ -5873,7 +5912,13 @@ async function notifyWaitlist(poolId) {
 
 async function _ensureProductsForDropdowns() {
   if (!STATE.products || !STATE.products.length) {
-    try { const r = await API.products.list({ limit: 200 }); STATE.products = (r.data || []).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)); } catch (_) {}
+    try { const r = await API.products.list({ limit: 200 }); STATE.products = (r.data || []).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)); }
+    catch (err) {
+      /* An empty products list renders as an empty dropdown with no
+         explanation — the same shape as the switch-target bug that read
+         "No products available" on a platform full of them. */
+      console.error('[products] dropdown list failed to load — selects will be empty:', err?.message || err);
+    }
   }
   _populateProductTypeDropdowns();
 }
@@ -7595,7 +7640,11 @@ async function viewTicket(id) {
       if (idx !== -1) STATE.tickets[idx] = { ...tkt, ...fresh };
       tkt = STATE.tickets[idx] || fresh;
     }
-  } catch (_) {}
+  } catch (err) {
+    /* Falls back to the cached ticket, which is the right behaviour — but
+       silently showing a stale one is worth a line in the console. */
+    console.error('[support] ticket refresh failed, showing the cached copy:', err?.message || err);
+  }
 
   const tktInv     = STATE.investors.find(i => i.id === tkt.investor_id);
   const tktInvName = tkt.investor_name || (tktInv ? `${tktInv.first_name} ${tktInv.last_name}` : tkt.investor_id || '—');
@@ -7606,7 +7655,9 @@ async function viewTicket(id) {
   try {
     const uRes = await API._fetch('GET', 'tables/employees', null, { limit: 200, sort: 'first_name', order: 'asc' });
     adminUsers = (uRes.data || uRes || []).filter(u => u.status === 'active' || !u.status);
-  } catch (_) {}
+  } catch (err) {
+    console.error('[support] staff list failed to load — the assignment dropdown will be empty:', err?.message || err);
+  }
 
   const assignedOpts = [
     `<option value="">— Unassigned —</option>`,
@@ -10527,7 +10578,7 @@ function exportWithdrawalsCSV() {
   const rows = [headers, ...all.map(w => {
     const inv = STATE.investors.find(i => i.id === w.investor_id);
     const name = inv ? `${inv.first_name} ${inv.last_name}` : w.investor_id;
-    let bankNotes = {}; try { if (inv?.notes?.startsWith('{')) bankNotes = JSON.parse(inv.notes); } catch(_) {}
+    const bankNotes = _safeParse(inv?.notes, {});
     const bank    = inv?.bank_name           || bankNotes.bank_name      || '—';
     const acctNo  = inv?.bank_account_number || bankNotes.account_number || '—';
     return [w.id, name, w.investor_id, Math.abs(w.amount||0), bank, acctNo, w.reference||'', w.status, Utils.date(w.created_at||w.transaction_date)];
@@ -13405,6 +13456,7 @@ async function loadCompliance() {
 
   // Load custom calendar items from the database
   let customItems = [];
+  let calendarLoadFailed = null;
   try {
     const calRes = await API._fetch('GET', 'tables/compliance_calendar', null, { limit: 200 });
     customItems = (calRes.data || []).map(c => ({
@@ -13415,13 +13467,29 @@ async function loadCompliance() {
       priority: c.priority || 'medium',
       status:   c.status || 'pending',
     }));
-  } catch (_) {}
+  } catch (err) {
+    /* Swallowing this showed the statutory deadlines alone and silently
+       dropped everything the firm had added — a compliance calendar missing
+       its own entries, looking complete. */
+    console.error('[compliance] custom calendar items failed to load:', err?.message || err);
+    calendarLoadFailed = err?.message || 'unknown error';
+  }
 
   const allDeadlines = [...staticDeadlines, ...customItems].sort((a, b) => new Date(a.date) - new Date(b.date));
 
   const calBody = document.getElementById('complianceCalBody');
   if (calBody) {
-    calBody.innerHTML = allDeadlines.map(d => {
+    /* Said on the page, not only in the console. A compliance calendar that
+       quietly shows the statutory dates and none of the firm's own looks
+       complete, which is the worst way for it to be wrong. */
+    const banner = calendarLoadFailed
+      ? `<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.35);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:0.8rem">
+           <strong style="color:#ef4444"><i class="fa-solid fa-circle-exclamation"></i> This calendar is incomplete.</strong>
+           Your own compliance items could not be loaded (${_esc(calendarLoadFailed)}), so only the
+           statutory deadlines are shown below.
+         </div>`
+      : '';
+    calBody.innerHTML = banner + allDeadlines.map(d => {
       const daysLeft = Math.ceil((new Date(d.date) - now) / 86400000);
       const isPast = daysLeft < 0;
       const isUrgent = daysLeft >= 0 && daysLeft <= 30;
@@ -15472,10 +15540,8 @@ async function loadStaffPermissions() {
 ══════════════════════════════════════════════════════════════ */
 function _initSSE() {
   if (!window.EventSource) return;
-  const raw = localStorage.getItem('staffSession');
-  let token = '';
-  try { const s = JSON.parse(raw || '{}'); if (s.token) token = s.token; } catch (_) {}
-  if (!token) { try { token = localStorage.getItem('svc_staff_token') || ''; } catch (_) {} }
+  const token = _safeParse(_safeStorage('staffSession'), {}).token
+             || _safeStorage('svc_staff_token') || '';
 
   const url = `/api/events/stream${token ? `?token=${encodeURIComponent(token)}` : ''}`;
   let delay = 3000;
@@ -15491,7 +15557,12 @@ function _initSSE() {
         });
         const badge = document.getElementById('kycBadge');
         if (badge) badge.textContent = (parseInt(badge.textContent, 10) || 0) + 1;
-      } catch (_) {}
+      } catch (err) {
+        /* One malformed event must not take the stream down, but it
+           should not vanish either — a notification type that stops
+           arriving is invisible by nature. */
+        console.error('[sse] kyc_submitted payload could not be handled:', err?.message || err);
+      }
     });
 
     src.addEventListener('withdrawal_requested', e => {
@@ -15501,14 +15572,24 @@ function _initSSE() {
         Toast.info(`Withdrawal request: ${d.investor_name || 'Investor'}${amt}`, 9000, {
           action: { label: 'Review', callback: () => { const btn = document.querySelector('[data-view=withdrawals]'); if (btn) navigate('withdrawals', btn); } }
         });
-      } catch (_) {}
+      } catch (err) {
+        /* One malformed event must not take the stream down, but it
+           should not vanish either — a notification type that stops
+           arriving is invisible by nature. */
+        console.error('[sse] withdrawal_requested payload could not be handled:', err?.message || err);
+      }
     });
 
     src.addEventListener('investor_registered', e => {
       try {
         const d = JSON.parse(e.data);
         Toast.info(`New investor: ${d.investor_name || 'Investor'} registered`, 6000);
-      } catch (_) {}
+      } catch (err) {
+        /* One malformed event must not take the stream down, but it
+           should not vanish either — a notification type that stops
+           arriving is invisible by nature. */
+        console.error('[sse] investor_registered payload could not be handled:', err?.message || err);
+      }
     });
 
     src.onerror = () => { src.close(); delay = Math.min(delay * 2, 30000); setTimeout(connect, delay); };

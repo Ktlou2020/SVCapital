@@ -141,6 +141,7 @@ function makeEnv({ serverKpis = true, seriesOk = true, ticketsOk = true } = {}) 
        absence looked exactly like the defect under test. */
     loadAdminNotifications: rec('loadAdminNotifications'),
     Auth: { getUser: () => ({ name: 'Admin', role: 'admin', email: 'a@b.c' }) },
+    /* Real helpers need a real-shaped storage: absent, not throwing. */
     localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
     _analyticsKpisFromServer: false,
     /* Handled logging, kept apart from `caught`. A fallback announcing itself
@@ -154,6 +155,18 @@ function makeEnv({ serverKpis = true, seriesOk = true, ticketsOk = true } = {}) 
 
   vm.runInContext(sliceConst('const DASH_SOURCES = [', '\n];'), sandbox);
   vm.runInContext(sliceConst('const PRODUCT_MIX_COLORS = {', '\n};'), sandbox);
+
+  /* The small shared helpers are loaded from source rather than stubbed.
+
+     loadDashboard reads _staffSession, and stubbing it would have meant this
+     check could not distinguish "undefined because the stub is missing" from
+     "undefined because the function does not exist" — which is the entire
+     class of bug this check was written for. It reported _staffSession as
+     undefined the moment that helper was introduced; the helper was real and
+     the stub was not there. Loading the real thing removes the ambiguity. */
+  vm.runInContext(sliceConst('const _safeParse = ', '\n};'), sandbox);
+  vm.runInContext(sliceConst('const _safeStorage = ', ';\n'), sandbox);
+  vm.runInContext(slice('_staffSession'), sandbox);
   for (const f of ['_renderTruncationBanner', '_dashboardLoadErrors', '_dashboardTruncation',
                    '_refreshDashboardTotals', 'renderPendingActions', 'updateSidebarBadges',
                    'renderAumChart', 'renderProductMixChart', 'loadDashboard']) {
