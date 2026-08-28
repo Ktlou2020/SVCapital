@@ -3530,16 +3530,16 @@ async function approveWithdrawal(txnId, btn) {
   await _withBtn(btn, async () => {
     try {
       await API._fetch('PATCH', `tables/transactions/${txnId}`, { status: 'completed' });
-      // Deduct from investor wallet if still showing balance
-      const txn = STATE.withdrawals.find(w => w.id === txnId);
-      if (txn && txn.investor_id) {
-        const inv = STATE.investors.find(i => i.id === txn.investor_id);
-        if (inv && inv.wallet_balance > 0) {
-          const deduct = Math.abs(parseFloat(txn.amount) || 0);
-          const newBal = Math.max(0, Math.round(((inv.wallet_balance || 0) - deduct) * 100) / 100);
-          await API._fetch('PATCH', `tables/investors/${txn.investor_id}`, { wallet_balance: newBal });
-        }
-      }
+
+      /* No deduction here. The wallet is debited when the withdrawal REQUEST is
+         created (withdrawals.js), which is why tables.js refunds it when one is
+         rejected. Deducting again on approval charged the investor twice for a
+         single withdrawal — probed against the real route: a R1,000 withdrawal
+         from a R5,000 wallet left R3,000 instead of R4,000.
+
+         It was also clamped with Math.max(0, …), so on a wallet too small to
+         absorb the second debit the overcharge silently became "balance zero"
+         rather than an error anyone would notice. */
       Toast.success('Withdrawal approved — funds released to investor bank account');
       await loadWithdrawals();
     } catch (e) {
@@ -7329,16 +7329,23 @@ async function changeTxnStatus(txnId, newStatus, investorId, amount, cancelNote)
     }
     await API.transactions.update(txnId, patch);
 
-    // If approving a pending deposit to completed, credit the investor's wallet
-    if (newStatus === 'completed' && txn.status !== 'completed' && txn.type === 'deposit' && investorId && amount > 0) {
+    /* The wallet is NOT credited here. The server credits it inside the same
+       transaction that flips the status, and it routes a sub-account deposit to
+       the sub-account rather than the parent.
+
+       This used to write investors.wallet_balance to a figure computed from the
+       console's own in-memory copy, on top of the credit the server had just
+       applied. Probed against the real route, that did two things: a R300
+       sub-account deposit credited the sub-account AND the parent, creating R300
+       out of nothing; and because the write was absolute rather than relative, a
+       R5,000 deposit that landed between the page loading and the approval was
+       wiped. Reading the balance back is the only safe move. */
+    if (newStatus === 'completed' && txn.status !== 'completed' && txn.type === 'deposit' && amount > 0) {
       const investor = STATE.investors.find(i => i.id === investorId);
-      if (investor) {
-        const newBalance = Math.round(((investor.wallet_balance || 0) + amount) * 100) / 100;
-        await API.investors.update(investorId, { wallet_balance: newBalance });
-        Toast.success(`Deposit approved — R${amount.toLocaleString('en-ZA', {minimumFractionDigits:2})} credited to ${investor.first_name} ${investor.last_name}'s wallet`);
-      } else {
-        Toast.success('Transaction status updated to completed');
-      }
+      const who = txn.sub_account_id
+        ? 'the sub-account wallet'
+        : investor ? `${investor.first_name} ${investor.last_name}'s wallet` : 'the investor wallet';
+      Toast.success(`Deposit approved — R${amount.toLocaleString('en-ZA', {minimumFractionDigits:2})} credited to ${who}`);
     } else if (newStatus === 'failed') {
       Toast.success('Transaction cancelled — note saved');
     } else {
@@ -7452,16 +7459,27 @@ async function saveNewTxn(btn) {
         id:          Utils.genId('TXN'),
         investor_id: investorId,
         type,
-        amount:      type === 'investment' || type === 'reinvestment' || type === 'withdrawal' ? -Math.abs(amount) : Math.abs(amount),
+        /* A magnitude, with the direction carried by the type. Negating these
+           three made the server reject every one of them — "amount cannot be
+           negative" — so Record Transaction had never worked for an investment,
+           a reinvestment or a withdrawal.
+
+           Storing them negative would also have been wrong on its own: the
+           withdrawal refund adds `amount` back to the wallet, so a negative one
+           would debit the investor a second time on rejection. The ledger
+           already renders these with a minus sign from the type. */
+        amount:      Math.abs(amount),
         status,
         reference:   document.getElementById('txnRef').value.trim(),
         description: document.getElementById('txnDesc').value.trim(),
       });
 
-      // Credit wallet immediately for completed deposits
+      /* The server credits the wallet inside the insert transaction for every
+         money type, so the console must not credit it again. The old absolute
+         write happened to land on the right figure — and destroyed anything that
+         arrived in between: probed, a R9,000 deposit landing between the modal
+         opening and Save was wiped. */
       if (status === 'completed' && type === 'deposit' && investor) {
-        const newBal = Math.round(((investor.wallet_balance || 0) + Math.abs(amount)) * 100) / 100;
-        await API.investors.update(investorId, { wallet_balance: newBal });
         Toast.success(`Transaction recorded — R${amount.toLocaleString('en-ZA', {minimumFractionDigits:2})} added to ${investor.first_name} ${investor.last_name}'s wallet`);
       } else {
         Toast.success('Transaction recorded');
@@ -12586,11 +12604,17 @@ async function saveManualAdj(btn) {
         description:      description,
         transaction_date: new Date().toISOString()
       });
-      await API.investors.update(investorId, { wallet_balance: newBalance });
-      investor.wallet_balance = newBalance;
+      /* The server applies the adjustment to the wallet as a RELATIVE move,
+         inside the same transaction as the row. The console used to PATCH an
+         absolute wallet_balance it had computed from its own copy of the
+         investor, which overwrote anything that landed in between — probed
+         against the real route, a R9,000 deposit arriving while this modal was
+         open was destroyed by the save. */
       Toast.success(`Adjustment applied: ${adjType === 'credit' ? '+' : '−'}${Utils.rand(rawAmount)} for ${investor.first_name} ${investor.last_name}`);
       Modal.close('manualAdjModal');
-      if (STATE.currentView === 'investors') await loadInvestors();
+      /* Always reload. The balance on screen is now the server's, not the one
+         computed here, and this modal opens from more than the investors view. */
+      await loadInvestors();
     } catch (e) {
       Toast.error('Failed to apply adjustment: ' + (e.message || 'unknown error'));
       console.error('[saveManualAdj]', e);
