@@ -29,23 +29,34 @@ const TARGETS = [
   { table: 'investment_pools', id: 'id', cols: ['name', 'description'] },
 ];
 
-/* Columns whose quotes are structural rather than suspicious.
+/* Which columns a quote actually matters in.
 
-   investors.notes holds a JSON array — [{"note":…,"admin_email":…}] — so every
-   populated row contains double quotes and every one of them was reported as
-   attribute-breaking. On the first production run that was most of the
-   findings, burying the handful that were real: three investors whose names
-   contain an apostrophe.
+   A quote only causes trouble where the value is interpolated into an HTML
+   ATTRIBUTE — onclick handlers, data-* — because it can end the attribute
+   early. In element text it is just a character, and every prose column here
+   is rendered as escaped body text: support_tickets.message goes through
+   _esc into a <div>, investors.notes is parsed as JSON, descriptions are
+   text nodes.
 
-   They are still scanned for EXECUTABLE content, because a script tag in an
-   admin note would be a genuine finding. Only the quote check is skipped, and
-   only where quotes are part of the format. */
-const STRUCTURED_JSON = new Set(['investors.notes']);
+   The first two production runs got this wrong in two different ways. Run one
+   reported every JSON note, because JSON is full of double quotes. Run two
+   reported every support ticket, because English prose is full of
+   apostrophes — "the investor's profile". Both buried the five findings that
+   were about a real person's name.
 
-/* Scanned for markup but not for quotes. Listed here rather than dropped from
-   TARGETS entirely: excluding the column outright would stop the audit looking
-   for the thing that actually matters in it. */
-const JSON_COLS = [{ table: 'investors', id: 'id', cols: ['notes'] }];
+   So the quote check now applies only to the columns that reach an attribute.
+   Everything else is still scanned for EXECUTABLE content, which is the part
+   that would actually run. */
+const ATTRIBUTE_COLS = new Set([
+  'investors.first_name',
+  'investors.last_name',
+  'sub_accounts.name',
+]);
+
+/* Scanned for markup only. Kept in the sweep rather than dropped: excluding a
+   column outright would stop the audit looking for the thing that matters in
+   it, which is a tag, not a quote. */
+const PROSE_COLS = [{ table: 'investors', id: 'id', cols: ['notes'] }];
 
 /* A tag, an inline handler, or a javascript: url — the things that would
    actually run. Deliberately narrower than "contains < or >": a description
@@ -79,7 +90,7 @@ async function runStoredMarkupAudit(db, { limit = 200 } = {}) {
   const executable = [], breaking = [];
   const scanned = [], skipped = [];
 
-  for (const t of [...TARGETS, ...JSON_COLS]) {
+  for (const t of [...TARGETS, ...PROSE_COLS]) {
     if (!await hasTable(db, t.table)) { skipped.push(t.table); continue; }
     for (const col of t.cols) {
       if (!await hasColumn(db, t.table, col)) { skipped.push(`${t.table}.${col}`); continue; }
@@ -93,9 +104,9 @@ async function runStoredMarkupAudit(db, { limit = 200 } = {}) {
         executable.push({ table: t.table, column: col, rowId: h.row_id, value: String(h.value).slice(0, 400) });
       }
 
-      /* Skipped where quotes are part of the column's format — see
-         STRUCTURED_JSON. The markup scan above still ran. */
-      if (STRUCTURED_JSON.has(`${t.table}.${col}`)) continue;
+      /* Quotes only checked where the value reaches an HTML attribute — see
+         ATTRIBUTE_COLS. The markup scan above ran for every column. */
+      if (!ATTRIBUTE_COLS.has(`${t.table}.${col}`)) continue;
 
       /* AND NOT the executable predicate, so a row is reported once, at its
          worst severity, rather than appearing in both lists. */
@@ -111,7 +122,7 @@ async function runStoredMarkupAudit(db, { limit = 200 } = {}) {
   return {
     generatedAt: new Date().toISOString(),
     scanned, skipped,
-    quotesNotChecked: [...STRUCTURED_JSON],
+    quotesCheckedIn: [...ATTRIBUTE_COLS],
     executable, breaking,
     totals: { executable: executable.length, breaking: breaking.length },
     verdict: executable.length ? 'executable-found'
@@ -120,4 +131,4 @@ async function runStoredMarkupAudit(db, { limit = 200 } = {}) {
   };
 }
 
-module.exports = { runStoredMarkupAudit, TARGETS, STRUCTURED_JSON };
+module.exports = { runStoredMarkupAudit, TARGETS, ATTRIBUTE_COLS };

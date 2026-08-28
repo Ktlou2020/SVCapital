@@ -12875,7 +12875,7 @@ async function runStoredMarkupAudit(btn) {
       <div><span style="font-size:1.3rem;font-weight:800;color:${r.totals.executable ? '#ef4444' : 'var(--text-muted)'}">${_esc(r.totals.executable)}</span>
         <span style="font-size:0.74rem;color:var(--text-muted);margin-left:5px">executable</span></div>
       <div><span style="font-size:1.3rem;font-weight:800;color:${r.totals.breaking ? '#f59e0b' : 'var(--text-muted)'}">${_esc(r.totals.breaking)}</span>
-        <span style="font-size:0.74rem;color:var(--text-muted);margin-left:5px">attribute-breaking</span></div>
+        <span style="font-size:0.74rem;color:var(--text-muted);margin-left:5px">quoted in an attribute</span></div>
     </div>`);
 
     if (r.executable.length) {
@@ -12889,10 +12889,12 @@ async function runStoredMarkupAudit(btn) {
     if (r.breaking.length) {
       const shown = r.breaking.slice(0, 25);
       parts.push(`<div style="font-weight:700;color:#f59e0b;margin:14px 0 6px">
-        <i class="fa-solid fa-triangle-exclamation"></i> Attribute-breaking — buttons in these rows may already be dead</div>
+        <i class="fa-solid fa-triangle-exclamation"></i> Quotes in values that reach an HTML attribute</div>
         <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:8px">
-          A quote ends the attribute early. Nothing executes, but the controls in that row stop
-          working. An apostrophe in a surname is ordinary, so most of these are real people.</div>
+          A quote can end an attribute early. The inline handlers are escaped, so these are not
+          breaking anything there — they are listed because the wider escaping sweep across the
+          console is not finished. An apostrophe in a surname is ordinary; these are real people,
+          not attacks.</div>
         ${rows(shown, '#f59e0b')}
         ${r.breaking.length > shown.length
           ? `<div style="font-size:0.76rem;color:var(--text-muted)">…and ${_esc(r.breaking.length - shown.length)} more</div>`
