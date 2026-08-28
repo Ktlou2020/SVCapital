@@ -1343,6 +1343,43 @@
           </div>
         </div>
 
+        <!-- Withdrawal double-debit reconciliation -->
+        <div class="panel mb-16">
+          <div class="panel__header">
+            <span class="panel__title"><i class="fa-solid fa-scale-unbalanced" style="color:#f87171;margin-right:6px"></i>Withdrawal Double-Debit Reconciliation</span>
+            <span style="font-size:0.72rem;color:var(--text-muted)">Read-only &mdash; refunds nothing</span>
+          </div>
+          <div class="panel__body">
+            <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px">
+              The wallet is debited when a withdrawal <em>request</em> is created, and this console
+              used to deduct it again on approval &mdash; so approved withdrawals took the money
+              twice. That second deduction wrote no transaction row, so the ledger cannot see it and
+              only the audit log can. Fixed; this is who it happened to.
+              <strong>Owed</strong> is exact. <strong>Needs review</strong> is an upper bound &mdash;
+              the old clamp may have absorbed part of the second debit, so a person has to settle
+              each one. The two are never added together.
+            </p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+              <label style="font-size:0.76rem;color:var(--text-muted)">From
+                <input type="date" id="ddSince" class="form-input" style="height:30px;font-size:0.78rem;width:140px;margin-left:6px">
+              </label>
+              <label style="font-size:0.76rem;color:var(--text-muted)">To
+                <input type="date" id="ddUntil" class="form-input" style="height:30px;font-size:0.78rem;width:140px;margin-left:6px">
+              </label>
+              <label style="font-size:0.76rem;color:var(--text-muted)" title="Seconds allowed between the two writes of one approval">Window
+                <input type="number" id="ddWindow" value="30" min="1" max="86400" class="form-input" style="height:30px;font-size:0.78rem;width:80px;margin-left:6px">
+              </label>
+            </div>
+            <button class="btn btn--secondary" onclick="runWithdrawalReconciliation(this)">
+              <i class="fa-solid fa-scale-unbalanced"></i> Run Reconciliation
+            </button>
+            <button class="btn btn--ghost" id="ddExportBtn" style="display:none" onclick="exportDoubleDebitCSV(this)">
+              <i class="fa-solid fa-file-csv"></i> Export CSV
+            </button>
+            <div id="ddResult" style="margin-top:14px;font-size:0.82rem"></div>
+          </div>
+        </div>
+
         <!-- Stored markup audit -->
         <div class="panel mb-16">
           <div class="panel__header">
@@ -4806,7 +4843,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=18"></script>
-<script src="js/admin.js?v=138"></script>
+<script src="js/admin.js?v=139"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>

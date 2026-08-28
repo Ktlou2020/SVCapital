@@ -13040,6 +13040,149 @@ function _preflightExportCsv() {
   Toast.success(`${rows.length} row(s) exported`);
 }
 
+/* Withdrawal double-debit reconciliation, rendered into the ops console.
+
+   Every value here is client data — names, emails, references — so all of it
+   goes through _esc. The figures are money owed to real people, so the two
+   totals are shown apart and labelled: "owed" is exact, "needs review" is an
+   upper bound the old Math.max(0, …) clamp may have eaten into. Summing them
+   would produce a number nobody can pay out against. */
+let _ddLast = null;
+
+async function runWithdrawalReconciliation(btn) {
+  const resultEl = document.getElementById('ddResult');
+  const origLabel = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Reconciling…';
+  resultEl.innerHTML = '';
+  document.getElementById('ddExportBtn').style.display = 'none';
+  try {
+    const qs = new URLSearchParams();
+    const since  = document.getElementById('ddSince')?.value;
+    const until  = document.getElementById('ddUntil')?.value;
+    const window_ = document.getElementById('ddWindow')?.value;
+    if (since)  qs.set('since', since);
+    if (until)  qs.set('until', until);
+    if (window_) qs.set('window', window_);
+    const r = await API._fetch('GET', 'admin/withdrawal-double-debits' + (qs.toString() ? `?${qs}` : ''));
+    _ddLast = r;
+
+    if (r.verdict === 'no-evidence') {
+      resultEl.innerHTML = `<span style="color:var(--text-muted)"><i class="fa-solid fa-circle-info"></i>
+        The audit log is empty, so there is nothing to reconcile against. That is not the same as
+        finding nothing.</span>`;
+      return;
+    }
+
+    const money = n => Utils.rand(n || 0);
+    const t = r.totals;
+    const parts = [];
+
+    /* Coverage first, deliberately. A clean result over a window that starts
+       after the fix shipped is not evidence that nobody was charged twice. */
+    parts.push(`<div style="font-size:0.74rem;color:var(--text-muted);margin-bottom:12px;
+        border-left:2px solid var(--border);padding-left:10px">
+      Audit log covers ${_esc(String(r.coverage.first).slice(0, 10))} to
+      ${_esc(String(r.coverage.last).slice(0, 10))} · ${_esc(r.coverage.events.toLocaleString())} events ·
+      pairing window ${_esc(r.window)}s
+      ${r.scope.since || r.scope.until
+        ? `<br>Scoped to ${_esc(r.scope.since || 'the beginning')} … ${_esc(r.scope.until || 'now')}`
+        : ''}
+    </div>`);
+
+    if (r.verdict === 'clean') {
+      parts.push(`<div style="color:#22c55e;margin-bottom:10px"><i class="fa-solid fa-circle-check"></i>
+        No double-debited withdrawals in this window.</div>`);
+    } else {
+      parts.push(`<div style="display:flex;gap:22px;margin-bottom:12px;flex-wrap:wrap">
+        <div><span style="font-size:1.3rem;font-weight:800;color:#f87171">${_esc(money(t.owed))}</span>
+          <span style="font-size:0.74rem;color:var(--text-muted);margin-left:5px">owed, exactly (${_esc(t.exactCount)})</span></div>
+        ${t.cappedCount ? `<div><span style="font-size:1.3rem;font-weight:800;color:#f59e0b">≤ ${_esc(money(t.needsReview))}</span>
+          <span style="font-size:0.74rem;color:var(--text-muted);margin-left:5px">needs review (${_esc(t.cappedCount)})</span></div>` : ''}
+      </div>`);
+
+      parts.push(`<div style="overflow-x:auto"><table class="data-table" style="font-size:0.78rem">
+        <thead><tr><th>Investor</th><th>ID</th><th style="text-align:right">Owed</th>
+          <th style="text-align:right">Needs review</th><th style="text-align:right">n</th></tr></thead>
+        <tbody>${r.byInvestor.map(e => `<tr>
+          <td>${_esc(e.name || '(deleted investor)')}</td>
+          <td class="td-muted" style="font-size:0.72rem">${_esc(e.investorId)}</td>
+          <td style="text-align:right" class="${e.owed ? 'td-red fw-700' : 'td-muted'}">${e.owed ? _esc(money(e.owed)) : '—'}</td>
+          <td style="text-align:right;color:${e.needsReview ? '#f59e0b' : 'var(--text-muted)'}">${e.needsReview ? '≤ ' + _esc(money(e.needsReview)) : '—'}</td>
+          <td style="text-align:right">${_esc(e.n)}</td></tr>`).join('')}</tbody>
+      </table></div>`);
+
+      if (t.cappedCount) {
+        parts.push(`<div style="font-size:0.76rem;color:#f59e0b;margin-top:10px">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          ${_esc(t.cappedCount)} write(s) landed on a zero balance. The old <code>Math.max(0, …)</code>
+          clamp may have absorbed part of the second debit, so each is <strong>at most</strong> the
+          amount shown and needs a person to settle. They are not in the refundable total.</div>`);
+      }
+    }
+
+    if (t.subAccountCount) {
+      parts.push(`<div style="margin-top:16px;padding:10px;border-left:3px solid #f59e0b;background:var(--dark-3);border-radius:0 6px 6px 0">
+        <div style="font-weight:700;color:#f59e0b;margin-bottom:4px">
+          <i class="fa-solid fa-arrow-right-arrow-left"></i> ${_esc(t.subAccountCount)} sub-account deposit(s) — the same defect, running the other way</div>
+        <div style="font-size:0.78rem;color:var(--text-muted)">
+          The server credited the sub-account and this console credited the parent as well, so
+          ${_esc(money(t.subAccountTotal))} was created rather than taken. Money owed and money created
+          are different conversations, so this is never netted against the refunds above.</div>
+      </div>`);
+    }
+
+    /* Never let a clean result read as a guarantee. */
+    if (r.approvedWithoutWrite || r.unpaired) {
+      parts.push(`<div style="margin-top:16px;font-size:0.76rem;color:var(--text-muted);
+          border-top:1px solid var(--border);padding-top:10px">
+        <strong style="color:var(--text)">Coverage.</strong>
+        ${r.approvedWithoutWrite ? `${_esc(r.approvedWithoutWrite)} approved withdrawal(s) here have no paired wallet write —
+          approvals made after the fix, made outside this console, or whose audit row never landed.
+          The audit write is fire-and-forget, so where it is the last of those these totals are a
+          <strong>floor, not a total</strong>.` : ''}
+        ${r.unpaired ? `<br>${_esc(r.unpaired)} wallet write(s) paired with no transaction inside ${_esc(r.window)}s.
+          Raise the window and see whether they pair up before treating them as a separate problem.` : ''}
+      </div>`);
+    }
+
+    resultEl.innerHTML = parts.join('');
+    if (r.rowCount) document.getElementById('ddExportBtn').style.display = '';
+  } catch (e) {
+    resultEl.innerHTML = `<span style="color:#ef4444"><i class="fa-solid fa-circle-exclamation"></i>
+      Reconciliation failed: ${_esc(e.message || 'unknown error')}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = origLabel;
+  }
+}
+
+/* Unformatted numbers, and an upper bound marked with <=, so whoever works the
+   refunds cannot read a bound as an amount. */
+function exportDoubleDebitCSV() {
+  if (!_ddLast) { Toast.error('Run the reconciliation first'); return; }
+  const rows = [[
+    'when','investor_id','name','email','kind','txn_id','reference','sub_account_id',
+    'amount','balance_written','clamped_at_zero','extra_debit','wallet_now','actor',
+  ]];
+  const push = (r, kind) => rows.push([
+    String(r.when).slice(0, 19), r.investorId, r.name, r.email, kind, r.txnId, r.reference,
+    r.subAccountId,
+    r.amount == null ? '' : r.amount.toFixed(2),
+    r.written == null ? '' : r.written.toFixed(2),
+    kind === 'withdrawal' ? (r.clamped ? 'yes' : 'no') : '',
+    /* toFixed, not Utils.rand: the on-screen figures are South African format
+       (R1 250,00) and a refund run parsing that would read it as 125000. */
+    kind === 'withdrawal' ? (r.clamped ? `<=${(r.amount || 0).toFixed(2)}` : (r.amount || 0).toFixed(2)) : '',
+    r.walletNow == null ? '' : r.walletNow.toFixed(2),
+    r.actor,
+  ]);
+  _ddLast.doubleDebits.forEach(r => push(r, 'withdrawal'));
+  _ddLast.deposits.forEach(r => push(r, 'deposit'));
+  (_ddLast.other || []).forEach(r => push(r, 'other'));
+  _downloadCSV(rows, `withdrawal-double-debits-${new Date().toISOString().slice(0, 10)}.csv`);
+}
+
 /* The stored-markup audit, rendered into the console.
 
    Everything a finding contains is the very text that was suspect, so every
