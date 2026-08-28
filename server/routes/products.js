@@ -17,7 +17,24 @@ router.get('/', async (req, res) => {
     const includeInactive = req.query.all === '1';
     const { rows } = await pool.query(`
       SELECT p.*,
+        /* As posted: the average return achieved over each pool's own period.
+           Comparable only between pools of the same term. */
         (SELECT ROUND(AVG(ip.actual_rate)::numeric, 4)
+           FROM investment_pools ip
+          WHERE ip.product_type = p.product_type
+            AND ip.status IN ('matured','paid_out')
+            AND COALESCE(ip.actual_rate, 0) > 0)          AS avg_period_rate,
+
+        /* Annualised, simply — × 12 / term_months. Every surface that shows
+           this figure labels it "p.a." for anything but short_term, while the
+           column holds a PERIOD return for every product. On a 12-month pool
+           the two coincide, which is why cattle looked right and hid it; on
+           solar_7yr the period figure is seven years' return presented as one
+           year's. A pool with no term is left as posted rather than guessed at. */
+        (SELECT ROUND(AVG(
+                  CASE WHEN COALESCE(ip.term_months, 0) > 0
+                       THEN ip.actual_rate * 12.0 / ip.term_months
+                       ELSE ip.actual_rate END)::numeric, 4)
            FROM investment_pools ip
           WHERE ip.product_type = p.product_type
             AND ip.status IN ('matured','paid_out')
@@ -232,12 +249,37 @@ router.get('/track-record', async (req, res) => {
       const benchmark = parseFloat(p.annual_rate) || 0;
       const invested  = parseFloat(p.invested_amount) || 0;
       const term      = parseInt(p.term_months) || 12;
-      const isShortTerm = t === 'short_term';
-      // Short-term: actual_rate is total period return, not p.a. → annualise for display
-      const annualActual = isShortTerm && term > 0 ? actual * 12 / term : actual;
-      // Paid back: principal + returns (short_term uses period rate directly; others use annual rate × months)
-      const paidBack = isShortTerm ? invested * (1 + actual) : invested * (1 + actual * (term / 12));
-      byType[t].pools.push({ name: p.name, ended: p.end_date, actual_rate: annualActual, benchmark_rate: benchmark });
+
+      /* actual_rate is the return achieved FOR THE POOL'S PERIOD, for every
+         product — not per annum and not prorated over term_months. This treated
+         short_term as the only period-based product and everything else as per
+         annum, which is the convention the rest of the platform moved off.
+
+         The money figure is not a matter of convention at all. The maturity
+         engine pays `amount * actual_rate` with no proration, for every product
+         (see postedReturnFor in maturityCron). So paid-back has to be
+         invested * (1 + actual) or it is not reporting what was paid. The old
+         expression multiplied the return by term/12 — one for a 12-month cattle
+         pool, so cattle was unaffected and the error stayed invisible, but
+         SEVEN for solar_7yr. A published rand figure was overstating what
+         investors received by a factor of the term in years. */
+      const paidBack = invested * (1 + actual);
+
+      /* Annualised for display, because the tile that shows this says "p.a."
+         and because an average across a five-month pool and a seven-year one
+         is meaningless otherwise. Simple, not compounded — the same 12/term
+         the file already applied to short_term, now applied consistently
+         rather than to one product. The period figure is carried alongside so
+         nothing downstream has to reverse it. */
+      const annualActual = term > 0 ? actual * 12 / term : actual;
+
+      byType[t].pools.push({
+        name: p.name, ended: p.end_date,
+        actual_rate: annualActual,      // annualised, matching the p.a. label
+        period_rate: actual,            // as posted on the pool, unmodified
+        term_months: term,
+        benchmark_rate: benchmark,
+      });
       byType[t].total_paid_back += paidBack;
       byType[t].sum_actual      += annualActual;
       byType[t].sum_benchmark   += benchmark;
@@ -254,7 +296,17 @@ router.get('/track-record', async (req, res) => {
         pools:              v.pools,
       };
     }
-    res.json({ data });
+    /* Stated, not implied. This endpoint is public and its figures are
+       published as achieved performance, so what the rate means travels with
+       it rather than being inferred by each caller. */
+    res.json({
+      data,
+      rate_basis: 'annualised_simple',
+      note: 'actual_rate on a pool is the return achieved for that pool\'s period. ' +
+            'avg_actual_rate and pools[].actual_rate are annualised simply (× 12 / term_months); ' +
+            'pools[].period_rate is the figure as posted. total_paid_back is capital × (1 + period rate), ' +
+            'which is what the maturity engine pays.',
+    });
   } catch (err) {
     console.error('[track-record] error:', err.message);
     res.status(500).json({ error: 'Internal server error.' });
