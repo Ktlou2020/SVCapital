@@ -154,7 +154,7 @@ function _emptyRow(icon, title, sub, colspan = 6) {
   return `<tr><td colspan="${colspan}" style="padding:0;border:none">
     <div class="empty-state">
       <i class="fa-solid ${icon}"></i>
-      <div class="empty-state__title">${title}</div>
+      <div class="empty-state__title">${_esc(title)}</div>
       <div class="empty-state__sub">${sub}</div>
     </div>
   </td></tr>`;
@@ -381,7 +381,7 @@ function loadAdminNotifications(investors, transactions, tickets) {
     <div class="notif-item${n.unread ? ' unread' : ''}" data-nid="${_esc(n.nid || '')}" ${n.action ? `onclick="${n.action}" style="cursor:pointer"` : ''}>
       <div class="notif-icon" style="background:${n.iconBg}"><i class="fa-solid ${n.icon}" style="color:${n.iconColor}"></i></div>
       <div class="notif-body">
-        <div class="notif-title">${n.title}</div>
+        <div class="notif-title">${_esc(n.title)}</div>
         <div class="notif-sub">${n.sub}</div>
       </div>
     </div>
@@ -1061,7 +1061,7 @@ function renderOpenPoolsWidget() {
     const pct = Utils.poolFillPct(p);
     return `<div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)">
       <div class="flex-between mb-4">
-        <span style="font-size:0.82rem;font-weight:700;color:var(--text)">${p.name}</span>
+        <span style="font-size:0.82rem;font-weight:700;color:var(--text)">${_esc(p.name)}</span>
         <span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span>
       </div>
       <div class="pool-card__progress-label">
@@ -2033,13 +2033,13 @@ function renderInvestorsTable() {
           <div style="min-width:0;flex:1">
             <div class="td-strong" style="font-size:0.81rem;${_trunc}">${fullName}</div>
             <div style="font-size:0.67rem;font-family:monospace;color:var(--gold);${_trunc}">${inv.id || ''}</div>
-            ${province ? `<div style="font-size:0.67rem;color:var(--text-muted);${_trunc}">${province}</div>` : ''}
+            ${province ? `<div style="font-size:0.67rem;color:var(--text-muted);${_trunc}">${_esc(province)}</div>` : ''}
           </div>
         </div>
       </td>
       <td style="overflow:hidden">
-        <div style="font-size:0.75rem;${_trunc}">${inv.email || '—'}</div>
-        <div class="td-muted" style="font-size:0.71rem;${_trunc}">${inv.phone || '—'}</div>
+        <div style="font-size:0.75rem;${_trunc}">${_esc(inv.email || '—')}</div>
+        <div class="td-muted" style="font-size:0.71rem;${_trunc}">${_esc(inv.phone || '—')}</div>
       </td>
       <td style="overflow:hidden">
         <div style="display:flex;flex-direction:column;gap:3px">${kycBadge}${stBadge}${loginBadge}</div>
@@ -3112,7 +3112,7 @@ async function _recalcInvestorWallet(investorId, investorName, btn) {
             <span style="color:var(--text-muted)">Difference</span>
             <strong style="color:${diffColour}">${Utils.rand(diff)}</strong>
           </div>
-          <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:14px">${r.note}</div>
+          <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:14px">${_esc(r.note)}</div>
           <div style="font-size:0.8rem;margin-bottom:6px"><strong>Transactions by type</strong></div>
           <div style="max-height:240px;overflow:auto"><table style="width:100%;font-size:0.8rem">${rows}</table></div>
           <div style="font-size:0.78rem;color:var(--text-muted);margin-top:12px">
@@ -3265,7 +3265,7 @@ async function overrideWalletBalance(investorId, name, btn) {
         Toast.error(res.error || 'Override failed');
       }
     } catch (e) {
-      if (resultEl) resultEl.innerHTML = `<span style="color:#f87171">${e.message}</span>`;
+      if (resultEl) resultEl.innerHTML = `<span style="color:#f87171">${_esc(e.message)}</span>`;
       Toast.error('Override failed: ' + (e.message || 'unknown error'));
     }
   });
@@ -3317,7 +3317,7 @@ async function adminInvestOnBehalf(investorId, name, btn) {
         Toast.error(res.error || 'Investment failed');
       }
     } catch (e) {
-      if (resultEl) resultEl.innerHTML = `<span style="color:#f87171">${e.message}</span>`;
+      if (resultEl) resultEl.innerHTML = `<span style="color:#f87171">${_esc(e.message)}</span>`;
       Toast.error('Investment failed: ' + (e.message || 'unknown error'));
     }
   });
@@ -3596,10 +3596,10 @@ function renderWithdrawalsTable() {
         <div>${Utils.date(dateCreated)}</div>
         ${dateUpdated ? `<div style="font-size:0.68rem;color:var(--text-dim);margin-top:2px">Upd: ${Utils.date(dateUpdated)}</div>` : ''}
       </td>
-      <td><div class="td-strong clip">${name}</div><div class="td-muted clip" style="font-size:0.7rem">${w.investor_id||''}</div>${saBadge}</td>
+      <td><div class="td-strong clip">${_esc(name)}</div><div class="td-muted clip" style="font-size:0.7rem">${w.investor_id||''}</div>${saBadge}</td>
       <td class="td-gold fw-700 clip">${Utils.rand(Math.abs(w.amount))}</td>
       <td>${bankDisplay}</td>
-      <td class="td-muted clip" style="font-size:0.75rem">${w.reference || '—'}</td>
+      <td class="td-muted clip" style="font-size:0.75rem">${_esc(w.reference || '—')}</td>
       <td>
         ${showActions ? `
           <div class="flex-center gap-6">
@@ -5568,7 +5568,7 @@ function renderPoolsGrid() {
       <div class="pool-card">
         <div class="pool-card__header">
           <div>
-            <div class="pool-card__name">${p.name}</div>
+            <div class="pool-card__name">${_esc(p.name)}</div>
             <div class="pool-card__partner">${p.partner_name}</div>
           </div>
           <div class="flex-center gap-8">
@@ -5962,7 +5962,7 @@ async function _loadAdminFactsheets(poolId, listEl) {
         <button class="btn btn--ghost btn--sm" style="color:#ef4444" onclick="deleteFactsheet('${s.id}','${poolId}')" title="Delete"><i class="fa-solid fa-trash"></i></button>
       </div>`).join('');
   } catch (e) {
-    listEl.innerHTML = `<div style="color:#ef4444;font-size:0.78rem;text-align:center;padding:12px">${e.message}</div>`;
+    listEl.innerHTML = `<div style="color:#ef4444;font-size:0.78rem;text-align:center;padding:12px">${_esc(e.message)}</div>`;
   }
 }
 
@@ -6726,7 +6726,7 @@ function renderInvestmentsTable() {
       </td>
       <td class="td-muted clip">${Utils.date(investDate)}</td>
       <td>${i.pool_id
-        ? `<div class="td-strong clip" style="cursor:pointer;color:var(--gold)" onclick="event.stopPropagation();viewPoolInvestors('${i.pool_id}')" title="${_esc(i.pool_name||i.pool_id)}">${i.pool_name||i.pool_id}</div>`
+        ? `<div class="td-strong clip" style="cursor:pointer;color:var(--gold)" onclick="event.stopPropagation();viewPoolInvestors('${i.pool_id}')" title="${_esc(i.pool_name||i.pool_id)}">${_esc(i.pool_name||i.pool_id)}</div>`
         : `<div class="td-muted clip">—</div>`
       }</td>
       <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
@@ -7310,7 +7310,7 @@ function renderMaturityTable() {
     return `
     <tr>
       <td><div class="td-strong clip">${mName}</div><div class="td-muted clip" style="font-size:0.7rem">${m.investor_id||''}</div></td>
-      <td class="td-muted clip" title="${_esc(m.pool_name || '')}">${m.pool_name || '—'}</td>
+      <td class="td-muted clip" title="${_esc(m.pool_name || '')}">${_esc(m.pool_name || '—')}</td>
       <td><span class="badge badge--blue">${instrLabel}</span></td>
       <td class="td-gold fw-700">${m.total_payout ? Utils.rand(m.total_payout) : '—'}</td>
       <td>${Utils.statusBadge(m.status)}</td>
@@ -7573,8 +7573,8 @@ function renderTxnTable() {
       <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${t.type?.replace(/_/g, ' ') || '—'}</span></td>
       <td class="${['investment','reinvestment','withdrawal','fee'].includes(t.type)?'td-red':'td-green'} fw-700">${['investment','reinvestment','withdrawal','fee'].includes(t.type)?'-':'+'}${Utils.rand(Math.abs(parseFloat(t.amount)||0))}</td>
       <td>${statusCell}</td>
-      <td class="td-muted clip" style="font-size:0.75rem">${t.reference || '—'}${t.reference ? `<button class="copy-btn" onclick='copyToClipboard(${_esc(JSON.stringify(t.reference))},this)' title="Copy reference"><i class="fa-regular fa-copy"></i></button>` : ''}</td>
-      <td class="td-muted" style="font-size:0.75rem"><div class="clip">${t.description || '—'}</div>${proofLink}</td>
+      <td class="td-muted clip" style="font-size:0.75rem">${_esc(t.reference || '—')}${t.reference ? `<button class="copy-btn" onclick='copyToClipboard(${_esc(JSON.stringify(t.reference))},this)' title="Copy reference"><i class="fa-regular fa-copy"></i></button>` : ''}</td>
+      <td class="td-muted" style="font-size:0.75rem"><div class="clip">${_esc(t.description || '—')}</div>${proofLink}</td>
       <td class="td-muted">${Utils.date(t.transaction_date || t.created_at)}</td>
       <td>
         ${isPendingDeposit ? `<button class="btn btn--success btn--sm" onclick="changeTxnStatus('${t.id}', 'completed', '${t.investor_id}', ${t.amount})" title="Approve deposit — credits wallet"><i class="fa-solid fa-check"></i> Approve</button>` : ''}
@@ -7987,7 +7987,7 @@ function renderTicketsTable() {
     const needsReply = !t.admin_response && t.status === 'open';
     return `<tr ${needsReply ? 'style="background:rgba(254,194,79,0.05)"' : ''}>
       <td><div class="td-strong clip">${invName}</div><div class="td-muted clip">${invEmail}</div></td>
-      <td class="td-strong clip">${t.subject}</td>
+      <td class="td-strong clip">${_esc(t.subject)}</td>
       <td><span class="badge badge--gray">${t.category?.replace(/_/g, ' ') || '—'}</span></td>
       <td>${Utils.priorityBadge(t.priority)}</td>
       <td>${Utils.statusBadge(t.status)}</td>
@@ -8048,7 +8048,7 @@ async function viewTicket(id) {
       const name  = `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email;
       const val   = u.email;
       const sel   = tkt.assigned_to === val ? 'selected' : '';
-      return `<option value="${val}" ${sel}>${name}</option>`;
+      return `<option value="${val}" ${sel}>${_esc(name)}</option>`;
     }),
   ].join('');
 
@@ -8789,7 +8789,7 @@ function _renderPersonas(data) {
               <i class="fa-solid ${m.icon}" style="color:${m.color};font-size:15px"></i>
             </div>
             <div>
-              <div style="font-weight:600;font-size:0.9rem">${name}</div>
+              <div style="font-weight:600;font-size:0.9rem">${_esc(name)}</div>
               <div style="font-size:0.75rem;color:var(--text-muted)">${count} investor${count !== 1 ? 's' : ''} · ${pct}%</div>
             </div>
           </div>
@@ -8807,7 +8807,7 @@ function _renderPersonas(data) {
     const max = entries[0][1];
     return `
       <div style="margin-bottom:16px">
-        <div style="font-weight:600;font-size:0.82rem;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em">${title}</div>
+        <div style="font-weight:600;font-size:0.82rem;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em">${_esc(title)}</div>
         ${entries.map(([label, count]) => `
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
             <div style="flex:0 0 160px;font-size:0.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${label}</div>
@@ -8826,8 +8826,8 @@ function _renderPersonas(data) {
     const m = PERSONA_META[inv.persona] || PERSONA_META['Explorer'];
     return `
       <tr>
-        <td style="font-weight:500">${inv.name || '—'}</td>
-        <td style="color:var(--text-muted);font-size:0.8rem">${inv.email || '—'}</td>
+        <td style="font-weight:500">${_esc(inv.name || '—')}</td>
+        <td style="color:var(--text-muted);font-size:0.8rem">${_esc(inv.email || '—')}</td>
         <td>
           <span style="display:inline-flex;align-items:center;gap:5px;background:${m.color}22;color:${m.color};padding:2px 8px;border-radius:20px;font-size:0.75rem;font-weight:600">
             <i class="fa-solid ${m.icon}" style="font-size:10px"></i>${inv.persona}
@@ -9633,7 +9633,7 @@ function renderInvestFunnel(data, panel) {
               const convCol  = conv >= 60 ? '#22c55e' : conv >= 30 ? '#fec24f' : '#ef4444';
               const dropCol  = dropRate >= 60 ? '#ef4444' : dropRate >= 30 ? '#f97316' : '#fec24f';
               return `<tr style="border-bottom:1px solid var(--border)">
-                <td style="padding:6px 8px;font-size:0.78rem;color:var(--text);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.pool_name}">${r.pool_name}</td>
+                <td style="padding:6px 8px;font-size:0.78rem;color:var(--text);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(r.pool_name)}">${_esc(r.pool_name)}</td>
                 <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">${r.opened.toLocaleString()}</td>
                 <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">${r.fee_shown.toLocaleString()}</td>
                 <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">${r.confirmed.toLocaleString()}</td>
@@ -10252,8 +10252,8 @@ function renderIFATable(filterStatus = '', searchQ = '') {
         <div class="flex-center gap-10">
           <div class="avatar avatar--sm avatar--gold">${initials.toUpperCase()}</div>
           <div>
-            <div class="td-strong clip">${ifa.first_name} ${ifa.last_name}</div>
-            <div class="td-muted clip" style="font-size:0.72rem">${ifa.email}</div>
+            <div class="td-strong clip">${_esc(ifa.first_name)} ${_esc(ifa.last_name)}</div>
+            <div class="td-muted clip" style="font-size:0.72rem">${_esc(ifa.email)}</div>
           </div>
         </div>
       </td>
@@ -10344,7 +10344,7 @@ function viewIFA(ifaId) {
         ${ifa.notes ? `
         <div class="panel mt-12">
           <div class="panel__header"><span class="panel__title">Admin Notes</span></div>
-          <div class="panel__body" style="font-size:0.82rem">${ifa.notes}</div>
+          <div class="panel__body" style="font-size:0.82rem">${_esc(ifa.notes)}</div>
         </div>` : ''}
       </div>
     </div>
@@ -10495,7 +10495,7 @@ function openLinkClientModal(ifaId) {
   const unlinked = STATE.investors.filter(inv => !linked.includes(inv.id));
   const sel = document.getElementById('linkClientInvestorSelect');
   sel.innerHTML = '<option value="">— Choose investor —</option>' +
-    unlinked.map(inv => `<option value="${inv.id}">${inv.first_name} ${inv.last_name} (${inv.email})</option>`).join('');
+    unlinked.map(inv => `<option value="${inv.id}">${_esc(inv.first_name)} ${_esc(inv.last_name)} (${_esc(inv.email)})</option>`).join('');
 
   Modal.open('linkClientModal');
 }
@@ -10617,9 +10617,9 @@ function openKycUploadModal(investorId, investorName) {
       kycDropdown.innerHTML = matches.map(inv => {
         const name = `${inv.first_name || ''} ${inv.last_name || ''}`.trim() || '—';
         const emailLine = inv.email
-          ? `<span style="color:var(--text-muted);font-size:0.77rem">${inv.email}</span>` : '';
-        return `<li data-id="${inv.id}" data-name="${name}" style="padding:9px 14px;cursor:pointer;display:flex;flex-direction:column;gap:2px">
-          <span style="font-weight:600;font-size:0.87rem">${name}
+          ? `<span style="color:var(--text-muted);font-size:0.77rem">${_esc(inv.email)}</span>` : '';
+        return `<li data-id="${inv.id}" data-name="${_esc(name)}" style="padding:9px 14px;cursor:pointer;display:flex;flex-direction:column;gap:2px">
+          <span style="font-weight:600;font-size:0.87rem">${_esc(name)}
             <span style="color:var(--text-muted);font-weight:400;font-size:0.8rem">(${inv.id})</span>
           </span>
           ${emailLine}
@@ -10684,7 +10684,7 @@ function _kycPreviewFile(file) {
     preview.innerHTML = isPdf
       ? `<div style="background:#1a1d23;border-radius:8px;padding:16px;text-align:center;margin-top:12px">
            <i class="fa-solid fa-file-pdf" style="font-size:2.5rem;color:#ef4444;margin-bottom:8px;display:block"></i>
-           <div style="font-size:0.8rem;color:var(--text-muted)">${file.name}</div>
+           <div style="font-size:0.8rem;color:var(--text-muted)">${_esc(file.name)}</div>
          </div>`
       : `<img src="${dataUrl}" alt="Preview" style="max-width:100%;max-height:200px;border-radius:8px;margin-top:12px;display:block" />`;
     /* Store on the form element for retrieval on save */
@@ -10844,7 +10844,7 @@ function setupGlobalSearch() {
                 <i class="fa-solid ${item.icon}" style="color:${item.color};font-size:0.8rem"></i>
               </div>
               <div style="min-width:0">
-                <div style="font-size:0.82rem;font-weight:700;color:var(--text)">${item.title}</div>
+                <div style="font-size:0.82rem;font-weight:700;color:var(--text)">${_esc(item.title)}</div>
                 <div style="font-size:0.72rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.sub}</div>
               </div>
             </div>`;
@@ -11436,10 +11436,10 @@ function _opsRenderHealth(health) {
     const icon   = ok ? 'fa-circle-check' : conf ? 'fa-circle-xmark' : 'fa-circle-minus';
     const status = ok ? 'Online' : conf ? 'Error' : 'Not configured';
     const latency = (svc.ms && svc.ms > 0) ? `${svc.ms}ms` : '';
-    const extra  = key === 'push' ? `<div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px">${(svc.subscribers||0).toLocaleString()} subscribers</div>` : svc.note ? `<div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px">${svc.note}</div>` : latency ? `<div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px">${latency}</div>` : '';
+    const extra  = key === 'push' ? `<div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px">${(svc.subscribers||0).toLocaleString()} subscribers</div>` : svc.note ? `<div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px">${_esc(svc.note)}</div>` : latency ? `<div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px">${latency}</div>` : '';
     return `<div style="padding:14px 12px;border:1.5px solid ${color}22;border-radius:12px;background:${color}08;text-align:center">
       <i class="fa-solid ${icon}" style="font-size:1.4rem;color:${color};margin-bottom:6px"></i>
-      <div style="font-size:0.78rem;font-weight:800;color:#e8edf2;line-height:1.2;margin-bottom:2px">${svc.name}</div>
+      <div style="font-size:0.78rem;font-weight:800;color:#e8edf2;line-height:1.2;margin-bottom:2px">${_esc(svc.name)}</div>
       <div style="font-size:0.72rem;font-weight:700;color:${color}">${status}</div>
       ${extra}
     </div>`;
@@ -11466,7 +11466,7 @@ function _opsRenderMoney(s) {
       </div>
       <div style="flex:1;min-width:0">
         <div style="font-size:0.78rem;color:var(--text-muted);font-weight:600">${label}</div>
-        ${note ? `<div style="font-size:0.68rem;color:var(--text-muted)">${note}</div>` : ''}
+        ${note ? `<div style="font-size:0.68rem;color:var(--text-muted)">${_esc(note)}</div>` : ''}
       </div>
       <div style="font-size:0.92rem;font-weight:900;color:#e8edf2;white-space:nowrap">${val}</div>
     </div>`;
@@ -11571,7 +11571,7 @@ function _opsRenderTopPools(s) {
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
         <div style="display:flex;align-items:center;gap:6px">
           <span style="width:18px;height:18px;border-radius:50%;background:${color};display:inline-flex;align-items:center;justify-content:center;font-size:0.6rem;font-weight:900;color:#fff;flex-shrink:0">${i+1}</span>
-          <span style="font-size:0.8rem;font-weight:700;color:#e8edf2">${p.name}</span>
+          <span style="font-size:0.8rem;font-weight:700;color:#e8edf2">${_esc(p.name)}</span>
         </div>
         <div style="text-align:right">
           <div style="font-size:0.82rem;font-weight:900;color:#e8edf2">${_opsR(p.volume)}</div>
@@ -11652,8 +11652,8 @@ function _opsRenderComms(comms) {
           <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px">
             <i class="fa-solid fa-bell" style="color:#656565;font-size:0.8rem;flex-shrink:0"></i>
             <div style="flex:1;min-width:0">
-              <div style="font-size:0.78rem;font-weight:700;color:#e8edf2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${n.title || '(no title)'}</div>
-              <div style="font-size:0.7rem;color:var(--text-muted)">${n.body ? n.body.slice(0,60)+'…' : ''}</div>
+              <div style="font-size:0.78rem;font-weight:700;color:#e8edf2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(n.title || '(no title)')}</div>
+              <div style="font-size:0.7rem;color:var(--text-muted)">${_esc(n.body ? n.body.slice(0,60)+'…' : '')}</div>
             </div>
             <div style="text-align:right;flex-shrink:0">
               <div style="font-size:0.75rem;font-weight:700;color:#e8edf2">${(n.recipient_count||0).toLocaleString()} recv</div>
@@ -11684,7 +11684,7 @@ function _opsRenderAuditStream(activity) {
       <div style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0;margin-top:5px"></div>
       <div style="flex:1;min-width:0">
         <div style="font-size:0.76rem;font-weight:700;color:#e8edf2">${ev.action || ev.entity_type || 'event'}</div>
-        <div style="font-size:0.7rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ev.description || '—'}</div>
+        <div style="font-size:0.7rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(ev.description || '—')}</div>
         <div style="font-size:0.65rem;color:#7a92a8;margin-top:1px">${ev.actor_email || 'system'} · ${ago}</div>
       </div>
     </div>`;
@@ -12003,10 +12003,10 @@ function _renderBroadcastHistory() {
   body.innerHTML = _broadcastHistory.map(h => `
     <div style="padding:12px 0;border-bottom:1px solid var(--border)">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-        <span style="font-size:0.82rem;font-weight:700;color:var(--text)">${h.subject || '(SMS)'}</span>
+        <span style="font-size:0.82rem;font-weight:700;color:var(--text)">${_esc(h.subject || '(SMS)')}</span>
         <span style="font-size:0.7rem;color:var(--text-dim)">${Utils.date(h.date)}</span>
       </div>
-      <div style="font-size:0.76rem;color:var(--text-muted);margin-bottom:6px">${h.message}</div>
+      <div style="font-size:0.76rem;color:var(--text-muted);margin-bottom:6px">${_esc(h.message)}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <span class="badge badge--blue"><i class="fa-solid ${chIcon[h.channel] || 'fa-paper-plane'}"></i> ${h.channel}</span>
         <span class="badge badge--gray">${h.segment}</span>
@@ -12287,7 +12287,7 @@ function renderAMLTable() {
         <div class="td-muted clip" style="font-size:0.72rem">${f.investor_id || ''}</div>
       </td>
       <td class="td-gold fw-700 clip">${amount ? Utils.rand(amount) : '—'}</td>
-      <td class="clip" style="font-size:0.8rem">${f.subject || f.reason || f.message || '—'}</td>
+      <td class="clip" style="font-size:0.8rem">${_esc(f.subject || f.reason || f.message || '—')}</td>
       <td>${Utils.priorityBadge ? Utils.priorityBadge(f.priority) : `<span class="badge">${f.priority || '—'}</span>`}</td>
       <td>${statusBadge(f.status)}</td>
       <td>
@@ -12356,7 +12356,7 @@ async function loadInvestorNotes(investorId) {
           <span style="font-size:0.75rem;font-weight:700;color:var(--orange)">${authorShort}</span>
           <span style="font-size:0.7rem;color:var(--text-dim)">${Utils.date(n.created_at || n.date)}</span>
         </div>
-        <div style="font-size:0.82rem;color:var(--text);white-space:pre-wrap">${n.note || n.text || '—'}</div>
+        <div style="font-size:0.82rem;color:var(--text);white-space:pre-wrap">${_esc(n.note || n.text || '—')}</div>
       </div>`;
     }).join('');
   };
@@ -12562,7 +12562,7 @@ function loadInvestorTimeline(inv, invsts, txns) {
         <i class="fa-solid ${e.icon}" style="color:${e.color};font-size:0.7rem"></i>
       </div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:0.8rem;font-weight:700;color:var(--text)">${e.title}</div>
+        <div style="font-size:0.8rem;font-weight:700;color:var(--text)">${_esc(e.title)}</div>
         <div style="font-size:0.72rem;color:var(--text-muted)">${e.sub}</div>
         <div style="font-size:0.68rem;color:var(--text-dim);margin-top:2px">${Utils.date(e.date)}</div>
       </div>
@@ -12967,7 +12967,7 @@ function openManualAdjModal() {
     sel.innerHTML = '<option value="">Select investor…</option>' +
       [...STATE.investors]
         .sort((a, b) => `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`))
-        .map(i => `<option value="${i.id}">${i.first_name} ${i.last_name} (${i.id})</option>`)
+        .map(i => `<option value="${i.id}">${_esc(i.first_name)} ${_esc(i.last_name)} (${i.id})</option>`)
         .join('');
   }
   const refEl = document.getElementById('adjReference');
@@ -13167,8 +13167,8 @@ function renderInvestorEmailList() {
     <label style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.15s" onmouseover="this.style.background='var(--bg-secondary)'" onmouseout="this.style.background=''">
       <input type="checkbox" class="email-investor-cb" data-id="${u.id}" checked style="accent-color:#eda5ff;width:14px;height:14px;flex-shrink:0" onchange="updateEmailStats()">
       <div style="flex:1;min-width:0">
-        <div style="font-size:0.82rem;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.first_name || ''} ${u.last_name || ''}</div>
-        <div style="font-size:0.74rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.email}</div>
+        <div style="font-size:0.82rem;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(u.first_name || '')} ${_esc(u.last_name || '')}</div>
+        <div style="font-size:0.74rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(u.email)}</div>
       </div>
       ${u.has_logged_in ? '<span style="font-size:0.68rem;padding:2px 6px;background:rgba(34,197,94,0.12);color:#22c55e;border-radius:4px;flex-shrink:0">logged in</span>' : ''}
     </label>
@@ -13240,7 +13240,7 @@ async function recalculatePoolStats(btn) {
     resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> Updated ${data.poolsUpdated} pool${data.poolsUpdated !== 1 ? 's' : ''} successfully.</span>`;
     Toast.success(`Pool stats recalculated (${data.poolsUpdated} pools updated)`);
   } catch (e) {
-    resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Failed'}</span>`;
+    resultEl.innerHTML = `<span style="color:#ef4444">${_esc(e.message || 'Failed')}</span>`;
     Toast.error(e.message || 'Recalculation failed');
   } finally {
     btn.disabled = false;
@@ -13263,7 +13263,7 @@ async function fixSmmeProductType(btn) {
     Toast.success(`SMME → Short Term: ${data.total} record(s) updated`);
     await loadPools();
   } catch (e) {
-    if (resultEl) resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Failed'}</span>`;
+    if (resultEl) resultEl.innerHTML = `<span style="color:#ef4444">${_esc(e.message || 'Failed')}</span>`;
     Toast.error(e.message || 'Fix failed');
   } finally {
     btn.disabled = false;
@@ -13285,7 +13285,7 @@ async function backfillFicaFromKyc(btn) {
     resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> Updated <strong>${data.updated}</strong> investor${data.updated !== 1 ? 's' : ''} (${data.fromKyc} from KYC→FICA, ${data.fromFica} from FICA→KYC sync).</span>`;
     Toast.success(`FICA backfill complete — ${data.updated} investors updated`);
   } catch (e) {
-    resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Failed'}</span>`;
+    resultEl.innerHTML = `<span style="color:#ef4444">${_esc(e.message || 'Failed')}</span>`;
     Toast.error(e.message || 'Backfill failed');
   } finally {
     btn.disabled = false;
@@ -13779,7 +13779,7 @@ async function backfillMaturedFunds(btn, dryRun) {
       if (!data.would_insert) {
         resultEl.innerHTML = '<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> All reinvestments already have paired Matured Funds entries — nothing to backfill.</span>';
       } else {
-        const preview = data.rows.map(r => `<li><strong>${r.investor_id}</strong> — ${r.pool_name}, R${Number(r.amount).toFixed(2)} (${new Date(r.date).toLocaleDateString('en-ZA')})</li>`).join('');
+        const preview = data.rows.map(r => `<li><strong>${r.investor_id}</strong> — ${_esc(r.pool_name)}, R${Number(r.amount).toFixed(2)} (${new Date(r.date).toLocaleDateString('en-ZA')})</li>`).join('');
         resultEl.innerHTML = `<div style="color:#f59e0b;margin-bottom:6px"><i class="fa-solid fa-eye"></i> <strong>${data.would_insert}</strong> reinvestment${data.would_insert !== 1 ? 's' : ''} missing a Matured Funds entry:</div><ul style="margin:0 0 0 16px;font-size:0.78rem;max-height:180px;overflow-y:auto">${preview}</ul><div style="margin-top:6px;font-size:0.77rem;color:var(--text-muted)">Click <em>Apply Backfill</em> to create these records.</div>`;
       }
     } else {
@@ -13787,7 +13787,7 @@ async function backfillMaturedFunds(btn, dryRun) {
       Toast.success(`Matured Funds backfill complete — ${data.inserted} record${data.inserted !== 1 ? 's' : ''} inserted`);
     }
   } catch (e) {
-    resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Failed'}</span>`;
+    resultEl.innerHTML = `<span style="color:#ef4444">${_esc(e.message || 'Failed')}</span>`;
     Toast.error(e.message || 'Backfill failed');
   } finally {
     btn.disabled = false;
@@ -13807,7 +13807,7 @@ async function importHeardAboutUs(btn) {
   try {
     parsed = JSON.parse(await file.text());
   } catch (e) {
-    resultEl.innerHTML = `<span style="color:#ef4444">Invalid JSON: ${e.message}</span>`;
+    resultEl.innerHTML = `<span style="color:#ef4444">Invalid JSON: ${_esc(e.message)}</span>`;
     return;
   }
   const users = parsed.users || (Array.isArray(parsed) ? parsed : null);
@@ -13820,10 +13820,10 @@ async function importHeardAboutUs(btn) {
   resultEl.textContent = '';
   try {
     const data = await API._fetch('POST', 'admin/import/heard-about-us', { users });
-    resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> ${data.message}</span>`;
+    resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> ${_esc(data.message)}</span>`;
     Toast.success(`Heard About Us imported for ${data.updated} investor(s)`);
   } catch (e) {
-    resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Failed'}</span>`;
+    resultEl.innerHTML = `<span style="color:#ef4444">${_esc(e.message || 'Failed')}</span>`;
     Toast.error(e.message || 'Import failed');
   } finally {
     btn.disabled = false;
@@ -13842,10 +13842,10 @@ async function reverseMigrationDemographics(btn) {
   resultEl.textContent = '';
   try {
     const data = await API._fetch('POST', 'admin/reverse/migration-demographics');
-    resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> ${data.message}</span>`;
+    resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> ${_esc(data.message)}</span>`;
     Toast.success('Demographics cleared');
   } catch (e) {
-    resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Failed'}</span>`;
+    resultEl.innerHTML = `<span style="color:#ef4444">${_esc(e.message || 'Failed')}</span>`;
     Toast.error(e.message || 'Failed');
   } finally {
     btn.disabled = false;
@@ -13865,13 +13865,13 @@ async function backfillInvestorDemographics(btn) {
   try {
     const data = await API._fetch('POST', 'admin/backfill/investor-demographics');
     if (data.gender_updated === 0 && data.heard_updated === 0) {
-      resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> ${data.message || 'Nothing to backfill — all investors already have these fields.'}</span>`;
+      resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> ${_esc(data.message || 'Nothing to backfill — all investors already have these fields.')}</span>`;
     } else {
       resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> Checked <strong>${data.total_checked}</strong> investor(s) — Gender filled for <strong>${data.gender_updated}</strong>, Heard About Us filled for <strong>${data.heard_updated}</strong>.</span>`;
     }
     Toast.success(`Demographics backfill complete`);
   } catch (e) {
-    resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Failed'}</span>`;
+    resultEl.innerHTML = `<span style="color:#ef4444">${_esc(e.message || 'Failed')}</span>`;
     Toast.error(e.message || 'Backfill failed');
   } finally {
     btn.disabled = false;
@@ -13888,7 +13888,7 @@ async function previewRestoreInvestorStatuses(btn) {
     const data = await API._fetch('POST', 'admin/restore/investor-statuses', { dry_run: true });
     resultEl.innerHTML = `<span style="color:#f59e0b"><i class="fa-solid fa-circle-info" style="margin-right:6px"></i>Preview: <strong>${data.kyc_fica_restored}</strong> investor(s) would have KYC/FICA restored from documents, <strong>${data.status_restored}</strong> would be set to active.</span>`;
   } catch (e) {
-    resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Preview failed'}</span>`;
+    resultEl.innerHTML = `<span style="color:#ef4444">${_esc(e.message || 'Preview failed')}</span>`;
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<i class="fa-solid fa-eye" style="margin-right:6px"></i>Preview';
@@ -13909,7 +13909,7 @@ async function restoreInvestorStatuses(btn) {
     resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle" style="margin-right:6px"></i>Done: <strong>${data.kyc_fica_restored}</strong> investor(s) had KYC/FICA restored from documents, <strong>${data.status_restored}</strong> had status set to active.</span>`;
     Toast.success('Investor statuses restored');
   } catch (e) {
-    resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Failed'}</span>`;
+    resultEl.innerHTML = `<span style="color:#ef4444">${_esc(e.message || 'Failed')}</span>`;
     Toast.error(e.message || 'Restore failed');
   } finally {
     btn.disabled = false;
@@ -13929,7 +13929,7 @@ async function backfillCourseQuizzes(btn) {
   try {
     const data = await API._fetch('POST', 'ai/backfill-quizzes');
     if (data.updated === 0 && !data.errors?.length) {
-      resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> ${data.message || 'All modules already have quizzes.'}</span>`;
+      resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> ${_esc(data.message || 'All modules already have quizzes.')}</span>`;
     } else {
       const errHtml = data.errors?.length
         ? `<br><span style="color:#f59e0b">${data.errors.length} error(s): ${data.errors.map(e => e.module).join(', ')}</span>`
@@ -13938,7 +13938,7 @@ async function backfillCourseQuizzes(btn) {
     }
     Toast.success(`Quiz backfill complete — ${data.updated} modules updated`);
   } catch (e) {
-    resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Failed'}</span>`;
+    resultEl.innerHTML = `<span style="color:#ef4444">${_esc(e.message || 'Failed')}</span>`;
     Toast.error(e.message || 'Quiz backfill failed');
   } finally {
     btn.disabled = false;
@@ -13981,7 +13981,7 @@ async function reimportBankAccounts(btn) {
     resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> Done — <strong>${data.updated}</strong> investors updated, ${data.skipped} skipped (no match), ${data.total} active accounts in file.</span>${errHtml}`;
     Toast.success(`Bank accounts re-imported: ${data.updated} updated`);
   } catch (e) {
-    resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Failed'}</span>`;
+    resultEl.innerHTML = `<span style="color:#ef4444">${_esc(e.message || 'Failed')}</span>`;
     Toast.error(e.message || 'Re-import failed');
   } finally {
     btn.disabled = false;
@@ -14005,7 +14005,7 @@ async function promoteBankFromNotes(btn) {
     resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> Done — <strong>${data.updated}</strong> investors updated from notes (${data.checked} checked, ${data.skipped} skipped).</span>`;
     Toast.success(`Bank data promoted: ${data.updated} investors updated`);
   } catch (e) {
-    resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Failed'}</span>`;
+    resultEl.innerHTML = `<span style="color:#ef4444">${_esc(e.message || 'Failed')}</span>`;
     Toast.error(e.message || 'Promotion failed');
   } finally {
     btn.disabled = false;
@@ -14115,7 +14115,7 @@ async function loadCompliance() {
         </div>`;
       }),
       ...stale.map(i => `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
-          <div><div style="font-size:0.82rem;font-weight:700;color:var(--text)">${i.first_name} ${i.last_name}</div><div style="font-size:0.7rem;color:var(--text-muted)">${i.id} · pending &gt;90 days</div></div>
+          <div><div style="font-size:0.82rem;font-weight:700;color:var(--text)">${_esc(i.first_name)} ${_esc(i.last_name)}</div><div style="font-size:0.7rem;color:var(--text-muted)">${i.id} · pending &gt;90 days</div></div>
           <span class="badge badge--red" style="font-size:0.68rem">KYC Stale</span>
         </div>`),
     ];
@@ -14133,7 +14133,7 @@ async function loadCompliance() {
           const inv = STATE.investors.find(x => x.id === i.investor_id);
           const name = inv ? `${inv.first_name} ${inv.last_name}` : i.investor_id;
           return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
-            <div><div style="font-size:0.82rem;font-weight:700;color:var(--text)">${name}</div><div style="font-size:0.7rem;color:var(--text-muted)">${Utils.rand(i.amount)} · ${i.pool_name||'—'}</div></div>
+            <div><div style="font-size:0.82rem;font-weight:700;color:var(--text)">${_esc(name)}</div><div style="font-size:0.7rem;color:var(--text-muted)">${Utils.rand(i.amount)} · ${_esc(i.pool_name||'—')}</div></div>
             <span class="badge badge--yellow" style="font-size:0.68rem">No instruction</span>
           </div>`;
         }).join('')
@@ -14558,7 +14558,7 @@ async function loadInterestHistory() {
       </tr>
     `).join('');
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:20px;color:#ef4444">${e.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:20px;color:#ef4444">${_esc(e.message)}</td></tr>`;
   }
 }
 
@@ -14667,7 +14667,7 @@ function renderAcceptedDocsTable() {
     const ua = d.user_agent ? d.user_agent.replace(/\(.*?\)/g,'').replace(/\s{2,}/g,' ').trim().slice(0,40) : '—';
 
     return `<tr>
-      <td style="white-space:nowrap">${name}${email}</td>
+      <td style="white-space:nowrap">${_esc(name)}${_esc(email)}</td>
       <td><span style="background:${col}22;color:${col};padding:2px 8px;border-radius:20px;font-size:0.75rem;font-weight:700">${label}</span></td>
       <td style="color:#7a92a8;font-size:0.8rem">${_esc(d.document_version || '1.0')}</td>
       <td style="font-size:0.82rem;white-space:nowrap">${acceptedAt}</td>
@@ -15028,7 +15028,7 @@ async function loadIntlInterest() {
   } catch (err) {
     console.error('[intl interest] load error:', err);
     const body = document.getElementById('intlInterestBody');
-    if (body) body.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#ef4444;padding:24px">Failed to load: ${err.message}</td></tr>`;
+    if (body) body.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#ef4444;padding:24px">Failed to load: ${_esc(err.message)}</td></tr>`;
   }
 }
 
@@ -15180,8 +15180,8 @@ async function loadFeedback(filter = 'all') {
           <div style="display:flex;align-items:center;gap:12px">
             <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#fec24f,#FF5229);display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:800;color:#1a1a1a;flex-shrink:0">${r.initials}</div>
             <div>
-              <div style="font-weight:700;font-size:0.9rem">${r.first_name} ${r.last_name}</div>
-              <div style="font-size:0.75rem;color:var(--text-muted)">${r.email}</div>
+              <div style="font-weight:700;font-size:0.9rem">${_esc(r.first_name)} ${_esc(r.last_name)}</div>
+              <div style="font-size:0.75rem;color:var(--text-muted)">${_esc(r.email)}</div>
               <div style="font-size:0.78rem;color:#fec24f;letter-spacing:1px;margin-top:2px">${stars(r.rating)}</div>
             </div>
           </div>
@@ -15190,7 +15190,7 @@ async function loadFeedback(filter = 'all') {
             <span style="font-size:0.72rem;color:var(--text-muted)">${new Date(r.created_at).toLocaleDateString('en-ZA',{day:'numeric',month:'short',year:'numeric'})}</span>
           </div>
         </div>
-        <p style="margin:14px 0 0;font-size:0.88rem;line-height:1.6;font-style:italic;color:var(--text-body)">"${r.body}"</p>
+        <p style="margin:14px 0 0;font-size:0.88rem;line-height:1.6;font-style:italic;color:var(--text-body)">"${_esc(r.body)}"</p>
         ${r.product_label ? `<div style="font-size:0.75rem;color:var(--text-muted);margin-top:6px">Product label: ${r.product_label}</div>` : ''}
         ${r.rejection_reason ? `<div style="font-size:0.75rem;color:#ef4444;margin-top:6px">Rejection reason: ${r.rejection_reason}</div>` : ''}
         ${r.status === 'pending' ? `
@@ -15208,7 +15208,7 @@ async function loadFeedback(filter = 'all') {
       </div>
     `).join('');
   } catch (err) {
-    list.innerHTML = `<p style="color:#ef4444;text-align:center;padding:40px 0">Failed to load feedback: ${err.message}</p>`;
+    list.innerHTML = `<p style="color:#ef4444;text-align:center;padding:40px 0">Failed to load feedback: ${_esc(err.message)}</p>`;
   }
 }
 
@@ -15314,7 +15314,7 @@ async function loadEmailLogs(resetPage = true) {
         : '';
       return `<tr style="border-bottom:1px solid var(--border)">
         <td style="padding:10px 12px">${l.to_email}</td>
-        <td style="padding:10px 12px;max-width:320px;word-break:break-word">${l.subject || ''}</td>
+        <td style="padding:10px 12px;max-width:320px;word-break:break-word">${_esc(l.subject || '')}</td>
         <td style="padding:10px 12px">${typePill}</td>
         <td style="padding:10px 12px">${statusPill}</td>
         <td style="padding:10px 12px;white-space:nowrap">${sent}</td>
@@ -15337,7 +15337,7 @@ async function loadEmailLogs(resetPage = true) {
         </div>`;
     }
   } catch (err) {
-    if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="padding:40px;text-align:center;color:#ef4444">${err.message}</td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="padding:40px;text-align:center;color:#ef4444">${_esc(err.message)}</td></tr>`;
   }
 }
 
@@ -15479,14 +15479,14 @@ function _openAdminTaxCertWindow(data) {
   const returnsRows = returns.map(t => `
     <tr>
       <td>${fmtDate(t.created_at)}</td>
-      <td>${esc(t.description || (t.type === 'return' ? 'Investment return' : 'Payout'))}</td>
+      <td>${_esc(esc(t.description || (t.type === 'return' ? 'Investment return' : 'Payout')))}</td>
       <td class="amt">${fmt(Math.abs(parseFloat(t.amount||0)))}</td>
     </tr>`).join('');
 
   const depositsRows = deposits.map(t => `
     <tr>
       <td>${fmtDate(t.created_at)}</td>
-      <td>${esc(t.description || 'Client deposit')}</td>
+      <td>${_esc(esc(t.description || 'Client deposit'))}</td>
       <td class="amt">${fmt(Math.abs(parseFloat(t.amount||0)))}</td>
     </tr>`).join('');
 
@@ -15545,7 +15545,7 @@ tr.total-row td.amt{color:#111}
 .stamp{display:inline-block;border:2px solid #303030;color:#303030;padding:5px 12px;border-radius:3px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-top:12px}
 </style></head><body>
 <div class="no-print">
-  <span>SV Capital — Investment Income Reference &nbsp;·&nbsp; ${taxYear-1} / ${taxYear} &nbsp;·&nbsp; ${esc(inv.first_name)} ${esc(inv.last_name)}</span>
+  <span>SV Capital — Investment Income Reference &nbsp;·&nbsp; ${taxYear-1} / ${taxYear} &nbsp;·&nbsp; ${_esc(esc(inv.first_name))} ${_esc(esc(inv.last_name))}</span>
   <button onclick="window.print()">Print / Save PDF</button>
 </div>
 <div class="wrap">
@@ -15583,10 +15583,10 @@ tr.total-row td.amt{color:#111}
 
   <div class="section-title">Investor Details</div>
   <dl class="details-grid">
-    <dt>Full Name</dt><dd>${esc(inv.first_name)} ${esc(inv.last_name)}</dd>
+    <dt>Full Name</dt><dd>${_esc(esc(inv.first_name))} ${_esc(esc(inv.last_name))}</dd>
     <dt>Investor Account</dt><dd>${esc(inv.id)}</dd>
-    <dt>Email Address</dt><dd>${esc(inv.email || '—')}</dd>
-    <dt>SA ID / Passport</dt><dd>${esc(inv.id_number || '—')}</dd>
+    <dt>Email Address</dt><dd>${_esc(esc(inv.email || '—'))}</dd>
+    <dt>SA ID / Passport</dt><dd>${_esc(esc(inv.id_number || '—'))}</dd>
     ${fullAddr ? `<dt>Address</dt><dd>${esc(fullAddr)}</dd>` : ''}
   </dl>
 
@@ -16063,7 +16063,7 @@ async function loadUpcomingMaturities() {
       </table>
     </div>
     <div style="margin-top:12px;font-size:0.75rem;color:var(--text-muted);text-align:right">${upcoming.length} pool${upcoming.length!==1?'s':''} maturing within 90 days</div>`;
-  } catch (e) { el.innerHTML = `<div style="color:#ef4444;padding:16px;font-size:0.82rem">Failed to load: ${e.message}</div>`; }
+  } catch (e) { el.innerHTML = `<div style="color:#ef4444;padding:16px;font-size:0.82rem">Failed to load: ${_esc(e.message)}</div>`; }
 }
 
 /* ═══════════════════════════════════════════════
@@ -16100,7 +16100,7 @@ async function loadFailedLogins() {
       </table>
     </div>
     <div style="margin-top:12px;font-size:0.75rem;color:var(--text-muted)">${events.length} event${events.length!==1?'s':''} · Showing most recent 200 audit records filtered for login failures</div>`;
-  } catch (e) { el.innerHTML = `<div style="color:#ef4444;padding:16px;font-size:0.82rem">Failed to load: ${e.message}</div>`; }
+  } catch (e) { el.innerHTML = `<div style="color:#ef4444;padding:16px;font-size:0.82rem">Failed to load: ${_esc(e.message)}</div>`; }
 }
 
 /* ═══════════════════════════════════════════════
@@ -16138,7 +16138,7 @@ async function loadStaffPermissions() {
       </table>
     </div>
     <div style="margin-top:12px;font-size:0.75rem;color:var(--text-muted)">${staff.length} staff account${staff.length!==1?'s':''}</div>`;
-  } catch (e) { el.innerHTML = `<div style="color:#ef4444;padding:16px;font-size:0.82rem">Failed to load staff: ${e.message}</div>`; }
+  } catch (e) { el.innerHTML = `<div style="color:#ef4444;padding:16px;font-size:0.82rem">Failed to load staff: ${_esc(e.message)}</div>`; }
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -16299,7 +16299,7 @@ async function loadRevenueAnalytics() {
       });
     }
   } catch (e) {
-    panel.innerHTML = `<p class="text-muted" style="padding:16px">Failed to load: ${e.message}</p>`;
+    panel.innerHTML = `<p class="text-muted" style="padding:16px">Failed to load: ${_esc(e.message)}</p>`;
     console.error('[loadRevenueAnalytics]', e);
   }
 }
@@ -16361,7 +16361,7 @@ async function loadMaturityReinvestment() {
     }
   } catch (e) {
     if (document.getElementById('maturityReinvestPanel'))
-      document.getElementById('maturityReinvestPanel').innerHTML = `<p class="text-muted" style="padding:16px">Failed to load: ${e.message}</p>`;
+      document.getElementById('maturityReinvestPanel').innerHTML = `<p class="text-muted" style="padding:16px">Failed to load: ${_esc(e.message)}</p>`;
   }
 }
 
@@ -16430,7 +16430,7 @@ async function loadIfaPerformance() {
       </div>`;
   } catch (e) {
     if (document.getElementById('ifaPerformancePanel'))
-      document.getElementById('ifaPerformancePanel').innerHTML = `<p class="text-muted" style="padding:16px">Failed to load: ${e.message}</p>`;
+      document.getElementById('ifaPerformancePanel').innerHTML = `<p class="text-muted" style="padding:16px">Failed to load: ${_esc(e.message)}</p>`;
   }
 }
 
@@ -16503,7 +16503,7 @@ async function loadSubAccountAnalytics() {
     }
   } catch (e) {
     if (document.getElementById('subAccountAnalyticsPanel'))
-      document.getElementById('subAccountAnalyticsPanel').innerHTML = `<p class="text-muted" style="padding:16px">Failed to load: ${e.message}</p>`;
+      document.getElementById('subAccountAnalyticsPanel').innerHTML = `<p class="text-muted" style="padding:16px">Failed to load: ${_esc(e.message)}</p>`;
   }
 }
 
@@ -16565,7 +16565,7 @@ async function loadInterestHistoryAnalytics() {
       </div>`;
   } catch (e) {
     if (document.getElementById('interestHistoryAnalyticsPanel'))
-      document.getElementById('interestHistoryAnalyticsPanel').innerHTML = `<p class="text-muted" style="padding:16px">Failed to load: ${e.message}</p>`;
+      document.getElementById('interestHistoryAnalyticsPanel').innerHTML = `<p class="text-muted" style="padding:16px">Failed to load: ${_esc(e.message)}</p>`;
   }
 }
 
@@ -16651,7 +16651,7 @@ async function loadWithdrawalTrends() {
       recentPanel.innerHTML = '<p class="text-muted" style="padding:8px">No recent withdrawals.</p>';
     }
   } catch (e) {
-    if (summaryPanel) summaryPanel.innerHTML = `<p class="text-muted" style="padding:16px">Failed to load: ${e.message}</p>`;
+    if (summaryPanel) summaryPanel.innerHTML = `<p class="text-muted" style="padding:16px">Failed to load: ${_esc(e.message)}</p>`;
     console.error('[loadWithdrawalTrends]', e);
   }
 }
@@ -16760,7 +16760,7 @@ function _pfRender(data, period) {
     } else {
       topBody.innerHTML = data.top_investors.map(r => `
         <tr>
-          <td class="clip" style="font-size:0.82rem">${r.investor_name}</td>
+          <td class="clip" style="font-size:0.82rem">${_esc(r.investor_name)}</td>
           <td style="text-align:right;color:var(--text-muted);font-size:0.8rem">${r.count}</td>
           <td style="text-align:right;font-weight:700;color:#eda5ff;font-size:0.82rem">${Utils.rand(r.total)}</td>
         </tr>`).join('');
@@ -16803,9 +16803,9 @@ function _pfRenderTable() {
 
   body.innerHTML = page.map(r => `
     <tr>
-      <td class="td-strong clip">${r.investor_name}</td>
-      <td class="td-muted clip" style="font-size:0.8rem">${r.pool_name}</td>
-      <td class="td-muted" style="font-size:0.75rem">${r.reference || '—'}</td>
+      <td class="td-strong clip">${_esc(r.investor_name)}</td>
+      <td class="td-muted clip" style="font-size:0.8rem">${_esc(r.pool_name)}</td>
+      <td class="td-muted" style="font-size:0.75rem">${_esc(r.reference || '—')}</td>
       <td class="td-red fw-700">${Utils.rand(Math.abs(r.amount))}</td>
       <td class="td-muted">${Utils.date(r.created_at)}</td>
     </tr>`).join('');
