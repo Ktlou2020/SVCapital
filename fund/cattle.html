@@ -18,7 +18,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css">
-  <link rel="stylesheet" href="css/cattle.css">
+  <link rel="stylesheet" href="css/cattle.css?v=2">
   <!-- Google Analytics 4 -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-5LEPWC7EFP"></script>
   <script>
@@ -60,6 +60,10 @@
   </button>
   <button class="nav-item" data-view="animals">
     <i class="fa-solid fa-cow"></i> Individual Animals
+  </button>
+
+  <button class="nav-item" data-view="reconcile">
+    <i class="fa-solid fa-scale-unbalanced"></i> Herd Reconciliation
   </button>
 
   <div class="nav-section-label">Management</div>
@@ -119,6 +123,11 @@
     <!-- VIEW: INDIVIDUAL ANIMALS -->
     <section id="view-animals" class="view">
       <div class="loading-state"><div class="spinner"></div> Loading animals…</div>
+    </section>
+
+    <!-- VIEW: HERD RECONCILIATION -->
+    <section id="view-reconcile" class="view">
+      <div class="loading-state"><div class="spinner"></div> Loading reconciliation…</div>
     </section>
 
     <!-- VIEW: IMPORT -->
@@ -477,7 +486,7 @@
      SCRIPTS
 ══════════════════════════════════════════════════ -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="js/cattle.js"></script>
+<script src="js/cattle.js?v=2"></script>
 
 </body>
 </html>

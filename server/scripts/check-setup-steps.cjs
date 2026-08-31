@@ -67,7 +67,21 @@ const ROOT = path.join(__dirname, '..', '..');
     const dbName = 'chk_setup_' + Math.abs(process.pid);
     await pool.query(`DROP DATABASE IF EXISTS ${dbName}`);
     await pool.query(`CREATE DATABASE ${dbName}`);
-    const url = process.env.DATABASE_URL.replace(/\/[^/?]+\?/, `/${dbName}?`);
+    /* Parsed, not pattern-matched. This was
+           DATABASE_URL.replace(/\/[^/?]+\?/, `/${dbName}?`)
+       which only substitutes when the URL carries a query string. The runner
+       hands each check a URL built by URL.pathname and so has none, and the
+       replace quietly did nothing: every assertion below then ran autoSetup
+       against the runner's own already-migrated database instead of the empty
+       one created two lines up. The smme migration had nothing left to migrate
+       there, logged nothing, and the check reported that a step had not run
+       when in truth it had nothing to do.
+
+       A no-op string replace is the worst shape this can take — the check goes
+       on passing or failing for reasons unrelated to what it names. */
+    const _u = new URL(process.env.DATABASE_URL);
+    _u.pathname = '/' + dbName;
+    const url = _u.toString();
 
     try {
       // Fresh boot: the COO step fails without COO_PASSWORD. Everything after
