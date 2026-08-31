@@ -237,6 +237,126 @@ router.post('/eft-approve', async (req, res) => {
   }
 });
 
+/* ─── POST /api/admin/eft-decline ──────────────────────────────────────
+
+   Decline an EFT proof-of-payment ticket, and close the deposit it belongs to.
+
+   The console declined the TICKET and nothing else. The portal pre-creates a
+   pending deposit row when the investor submits proof, so declining left that
+   row at 'pending' forever: the client was told their proof was rejected and
+   then went on seeing the deposit as Pending in their transaction list, with
+   no way to tell the two apart from a payment that was still being checked.
+
+   It is one server call for the same reason approval is. Doing it as a ticket
+   update plus a transaction PATCH from the browser is exactly the split that
+   left the wallet credited and the ticket open on the approve path — the note
+   above that route says so. Both writes commit together or neither does.
+
+   'rejected' rather than 'failed': the transactions API accepts both, but
+   'failed' reads to a client as a payment that broke on the way, and this one
+   did not — a person declined it. 'rejected' is also the word already used for
+   a declined KYC document, bank account and withdrawal.
+
+   No money moves. The deposit was never credited, and the balance hooks in
+   tables.js fire on 'completed' for deposits and on 'rejected' only for
+   withdrawals, so nothing here can touch a wallet.
+   ───────────────────────────────────────────────────────────────── */
+router.post('/eft-decline', async (req, res) => {
+  const { ticket_id, response } = req.body || {};
+  if (!ticket_id) return res.status(400).json({ error: 'ticket_id is required.' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: [ticket] } = await client.query(
+      'SELECT * FROM support_tickets WHERE id = $1 FOR UPDATE', [ticket_id]);
+    if (!ticket) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Ticket not found.' });
+    }
+    if (ticket.category !== 'payment_proof') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'This ticket is not an EFT proof of payment.' });
+    }
+
+    const refMatch = String(ticket.subject || '').match(/EFT-[\w]+/);
+    const reference = refMatch ? refMatch[0] : ticket.id;
+
+    const { rows: [pending] } = await client.query(
+      `SELECT * FROM transactions
+        WHERE investor_id = $1 AND reference = $2 AND type = 'deposit'
+        ORDER BY created_at DESC LIMIT 1
+          FOR UPDATE`,
+      [ticket.investor_id, reference]);
+
+    const adminResponse = String(response || '').trim() ||
+      'Your EFT proof of payment was declined. Please resubmit with a clear, complete proof of payment.';
+
+    /* The WHERE is the guard, twice over: a deposit already completed must not
+       be reversed by declining the ticket after the fact, and one already
+       rejected must not be annotated again. Without the second half a repeated
+       decline appended the same sentence to the description each time — caught
+       by the idempotency case in check-eft-decline. */
+    let closed = false, alreadyCompleted = false;
+    if (pending) {
+      if (pending.status === 'completed') {
+        alreadyCompleted = true;
+      } else {
+        const note = `EFT deposit declined by admin. Ref: ${reference}` +
+          (response ? ` — ${String(response).trim()}` : '');
+        const { rows: [done] } = await client.query(
+          `UPDATE transactions
+              SET status = 'rejected',
+                  description = CASE WHEN COALESCE(description, '') = '' THEN $2
+                                     ELSE description || ' | ' || $2 END,
+                  updated_at = NOW()
+            WHERE id = $1 AND status NOT IN ('completed', 'rejected', 'cancelled')
+          RETURNING *`,
+          [pending.id, note]);
+        closed = !!done;
+      }
+    }
+
+    await client.query(
+      `UPDATE support_tickets
+          SET status = 'resolved', responded_at = NOW(), updated_at = NOW(),
+              admin_response = $2
+        WHERE id = $1`,
+      [ticket_id, adminResponse]);
+
+    await client.query('COMMIT');
+
+    /* After the commit, like the approve path: an audit row records what
+       happened and must not be able to undo it. audit.log never throws. */
+    await audit.log({
+      actorId: req.user?.id || null,
+      actorEmail: req.user?.email || null,
+      actorRole: req.user?.role || null,
+      action: 'eft_deposit_declined',
+      entityType: 'support_ticket',
+      entityId: ticket_id,
+      description: `EFT declined for ${ticket.investor_id}. Ref: ${reference}. ` +
+        (closed ? 'The pending deposit was marked rejected.'
+                : alreadyCompleted ? 'The deposit was ALREADY COMPLETED and was left alone.'
+                : 'No pending deposit was found for this reference.'),
+      before: { ticket_status: ticket.status, deposit_status: pending ? pending.status : null },
+      after:  { ticket_status: 'resolved', deposit_status: closed ? 'rejected' : (pending ? pending.status : null) },
+      ip: req.ip || null,
+      platform: 'admin',
+    });
+
+    return res.json({ ok: true, closed, alreadyCompleted, reference,
+                      deposit_id: pending ? pending.id : null });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[eft-decline]', err);
+    return res.status(500).json({ error: 'Decline failed — nothing was changed. ' + err.message });
+  } finally {
+    client.release();
+  }
+});
+
 /* ─── GET /api/admin/maturity-preflight ───────────────────────────────
    What the maturity engine will do on its next run, while there is still
    time to change it. Read-only: every statement inside is a SELECT, and the

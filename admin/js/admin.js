@@ -8183,19 +8183,37 @@ async function viewTicket(id) {
         const amount = declared;
         if (!approve) {
           if (!await Confirm.ask('Decline EFT Deposit', {
-            body: 'Decline this EFT deposit? The investor will be notified to resubmit proof.',
+            body: `Decline this EFT deposit? The investor is notified to resubmit, and the ` +
+                  `${declared != null ? Utils.rand(declared) + ' ' : ''}deposit stops showing as Pending in their transactions.`,
             confirmLabel: 'Decline', danger: true })) return;
           try {
-            await API.tickets.update(id, {
-              status: 'resolved',
-              admin_response: document.getElementById('ticketResponse').value ||
-                'Your EFT proof of payment was declined. Please resubmit with a clear, complete proof of payment.',
-              responded_at: new Date().toISOString(),
+            /* One server call, for the same reason approval is one. This used
+               to update the TICKET and nothing else, so the pending deposit the
+               portal creates when proof is submitted stayed at 'pending'
+               forever: the client was told their proof was rejected and went on
+               seeing the deposit as Pending, indistinguishable from one still
+               being checked. Splitting it into a ticket update plus a
+               transaction PATCH from here would reintroduce exactly the
+               half-done state the approve path was rewritten to remove. */
+            const out = await API._fetch('POST', 'admin/eft-decline', {
+              ticket_id: id,
+              response: document.getElementById('ticketResponse').value || null,
             });
-            Toast.success('Declined — investor will be notified');
+            /* Toast.success's second argument is a DURATION, not a type —
+               passing a type name there coerces to 0 and the toast vanishes
+               before it can be read. Pick the function, not an argument. */
+            if (out?.alreadyCompleted) {
+              Toast.warning('Ticket declined — but this deposit was already approved and credited, so it was left alone. Reverse it from Transactions if that is wrong.');
+            } else if (out?.closed) {
+              Toast.success('Declined — the deposit now shows as Rejected, and the investor is notified');
+            } else {
+              Toast.warning('Ticket closed — but no pending deposit was found for this reference, so nothing changed in the ledger.');
+            }
             Modal.close('ticketModal');
             await loadSupport();
-          } catch (e) { Toast.error('Action failed: ' + (e.message || 'Unknown error')); }
+            /* The ledger changed underneath whatever is on screen. */
+            if (STATE.transactions.length) await loadTransactions();
+          } catch (e) { Toast.error('Decline failed: ' + (e.message || 'Unknown error')); }
           return;
         }
 
