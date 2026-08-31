@@ -1385,6 +1385,30 @@
           </div>
         </div>
 
+        <!-- Stranded EFT deposits -->
+        <div class="panel mb-16">
+          <div class="panel__header">
+            <span class="panel__title"><i class="fa-solid fa-hourglass-half" style="color:#fec24f;margin-right:6px"></i>Deposits Stuck on Pending</span>
+            <span style="font-size:0.72rem;color:var(--text-muted)">Report is read-only</span>
+          </div>
+          <div class="panel__body">
+            <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px">
+              Declining an EFT proof used to close the support ticket and leave the deposit at
+              Pending, so the client was told the payment was refused and went on seeing it as
+              Pending in their transactions. Fixed &mdash; this finds the ones already stranded.
+              They are grouped by what the client was actually told, and only the
+              <strong>Declined</strong> group can be closed from here.
+            </p>
+            <button class="btn btn--secondary" onclick="runStrandedEftReport(this)">
+              <i class="fa-solid fa-magnifying-glass"></i> Find Stranded Deposits
+            </button>
+            <button class="btn btn--ghost" id="seExportBtn" style="display:none" onclick="exportStrandedEftCSV()">
+              <i class="fa-solid fa-file-csv"></i> Export CSV
+            </button>
+            <div id="seResult" style="margin-top:14px;font-size:0.82rem"></div>
+          </div>
+        </div>
+
         <!-- Withdrawal double-debit reconciliation -->
         <div class="panel mb-16">
           <div class="panel__header">
@@ -4885,7 +4909,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=18"></script>
-<script src="js/admin.js?v=143"></script>
+<script src="js/admin.js?v=144"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>

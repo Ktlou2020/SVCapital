@@ -33,11 +33,19 @@
  *   node server/scripts/close-declined-eft-deposits.cjs            # report only
  *   node server/scripts/close-declined-eft-deposits.cjs --apply    # close the DECLINED group
  *   …--csv out.csv                                                 # the full list
+ *
+ * The query and the grouping live in services/strandedEftDeposits.js because
+ * the ops console runs the same backfill. Two implementations would eventually
+ * disagree about which group a client falls into, and that decision is the
+ * difference between owing them an explanation and owing them money.
  */
 'use strict';
 
-const fs = require('fs');
+const fs   = require('fs');
+const path = require('path');
 const { Pool } = require('pg');
+const { findStrandedEftDeposits, closeDeclinedEftDeposits } =
+  require(path.join(__dirname, '..', 'services', 'strandedEftDeposits'));
 
 const ARGV  = process.argv.slice(2);
 const APPLY = ARGV.includes('--apply');
@@ -57,37 +65,6 @@ const pool = new Pool({
 const R = n => 'R' + Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const pad = (s, n) => String(s == null ? '' : s).padEnd(n);
 
-/* The reference the portal writes onto both the ticket subject and the deposit. */
-const FIND = `
-  SELECT t.id            AS ticket_id,
-         t.investor_id,
-         t.subject,
-         t.admin_response,
-         t.responded_at,
-         x.id            AS deposit_id,
-         x.amount,
-         x.status        AS deposit_status,
-         x.reference,
-         x.created_at    AS deposit_created,
-         i.first_name, i.last_name, i.email
-    FROM support_tickets t
-    JOIN transactions x
-      ON x.investor_id = t.investor_id
-     AND x.type = 'deposit'
-     AND x.reference = COALESCE(substring(t.subject from 'EFT-[[:alnum:]_]+'), t.id)
-    LEFT JOIN investors i ON i.id = t.investor_id
-   WHERE t.category = 'payment_proof'
-     AND t.status IN ('resolved', 'closed')
-     AND x.status = 'pending'
-   ORDER BY t.responded_at NULLS LAST, x.created_at`;
-
-const classify = row => {
-  const r = String(row.admin_response || '').toLowerCase();
-  if (/declin|reject|resubmit/.test(r)) return 'DECLINED';
-  if (/approv|credit/.test(r))          return 'APPROVED';
-  return 'UNCLEAR';
-};
-
 (async () => {
   const client = await pool.connect();
   let exitCode = 0;
@@ -100,28 +77,26 @@ const classify = row => {
       ? '\nCLOSING STRANDED EFT DEPOSITS — writing the DECLINED group only.\n'
       : '\nSTRANDED EFT DEPOSITS — report only, this transaction cannot write.\n');
 
-    const { rows } = await client.query(FIND);
-    if (!rows.length) {
+    const report = await findStrandedEftDeposits(client);
+    if (report.verdict === 'clean') {
       console.log('No resolved payment-proof ticket has a deposit still sitting at pending.');
       await client.query('ROLLBACK'); client.release(); await pool.end(); process.exit(0);
     }
 
-    const groups = { DECLINED: [], APPROVED: [], UNCLEAR: [] };
-    for (const r of rows) groups[classify(r)].push(r);
-
     const show = (key, blurb) => {
-      const g = groups[key];
+      const g = report.groups[key];
+      const t = report.totals[key.toLowerCase()];
       console.log('─'.repeat(76));
-      console.log(`${key}: ${g.length}   ${R(g.reduce((s, r) => s + Number(r.amount || 0), 0))}`);
+      console.log(`${key}: ${t.n}   ${R(t.value)}`);
       console.log('─'.repeat(76));
       console.log(blurb);
       if (!g.length) return;
       console.log(`\n${pad('Investor', 24)}${pad('Reference', 18)}${pad('Amount', 14)}Declined`);
       for (const r of g.slice(0, 25)) {
-        console.log(pad((`${r.first_name || ''} ${r.last_name || ''}`.trim() || r.investor_id).slice(0, 23), 24) +
+        console.log(pad((r.name || r.investorId).slice(0, 23), 24) +
                     pad(String(r.reference).slice(0, 17), 18) +
                     pad(R(r.amount), 14) +
-                    String(r.responded_at || '').slice(0, 10));
+                    String(r.respondedAt || '').slice(0, 10));
       }
       if (g.length > 25) console.log(`…and ${g.length - 25} more (use --csv for the full list)`);
       console.log('');
@@ -139,25 +114,16 @@ const classify = row => {
       'No response recorded, or one that says neither. A person has to read the ticket\n' +
       'before anything is decided. Not written.');
 
-    if (APPLY && groups.DECLINED.length) {
-      const ids = groups.DECLINED.map(r => r.deposit_id);
-      const { rowCount } = await client.query(
-        `UPDATE transactions
-            SET status = 'rejected',
-                description = CASE WHEN COALESCE(description, '') = '' THEN $2
-                                   ELSE description || ' | ' || $2 END,
-                updated_at = NOW()
-          WHERE id = ANY($1::text[])
-            AND status = 'pending'`,
-        [ids, 'EFT deposit declined by admin — closed by backfill, the ticket was declined but the deposit was left pending.']);
+    if (APPLY && report.totals.declined.n) {
+      const { closed } = await closeDeclinedEftDeposits(client);
       await client.query('COMMIT');
-      console.log(`Applied. ${rowCount} deposit(s) moved from Pending to Rejected.`);
+      console.log(`Applied. ${closed} deposit(s) moved from Pending to Rejected.`);
       console.log('No wallet was touched — a rejected deposit moves no money.');
     } else {
       await client.query('ROLLBACK');
       console.log(APPLY
         ? 'Nothing in the DECLINED group to apply.'
-        : `Nothing was written. Re-run with --apply to close the ${groups.DECLINED.length} DECLINED deposit(s).`);
+        : `Nothing was written. Re-run with --apply to close the ${report.totals.declined.n} DECLINED deposit(s).`);
     }
 
     if (CSV) {
@@ -166,14 +132,13 @@ const classify = row => {
       const head = ['group', 'investor_id', 'name', 'email', 'reference', 'amount',
                     'deposit_id', 'deposit_created', 'ticket_id', 'responded_at', 'admin_response'];
       const lines = [head.join(',')];
-      for (const [key, g] of Object.entries(groups)) for (const r of g) {
-        lines.push([key, r.investor_id, `${r.first_name || ''} ${r.last_name || ''}`.trim(), r.email,
-          r.reference, Number(r.amount || 0).toFixed(2), r.deposit_id,
-          String(r.deposit_created).slice(0, 19), r.ticket_id,
-          String(r.responded_at || '').slice(0, 19), r.admin_response].map(esc).join(','));
+      for (const [key, g] of Object.entries(report.groups)) for (const r of g) {
+        lines.push([key, r.investorId, r.name, r.email, r.reference, r.amount.toFixed(2),
+          r.depositId, String(r.depositCreated).slice(0, 19), r.ticketId,
+          String(r.respondedAt || '').slice(0, 19), r.adminResponse].map(esc).join(','));
       }
       fs.writeFileSync(CSV, lines.join('\n') + '\n');
-      console.log(`\nWrote ${rows.length} row(s) to ${CSV}`);
+      console.log(`\nWrote ${report.count} row(s) to ${CSV}`);
     }
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});

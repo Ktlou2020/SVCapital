@@ -357,6 +357,80 @@ router.post('/eft-decline', async (req, res) => {
   }
 });
 
+/* ─── GET  /api/admin/stranded-eft-deposits ────────────────────────────
+   ─── POST /api/admin/stranded-eft-deposits/close ──────────────────────
+
+   The rows the old decline left behind: a payment-proof ticket that was
+   resolved while its deposit stayed at 'pending', so the client is still
+   looking at Pending for money they were told is not coming.
+
+   GET reports and never writes — it runs inside a READ ONLY transaction so a
+   later edit to the service cannot write through this route either.
+
+   POST closes the DECLINED group. It does NOT accept a list of ids: the ids
+   are re-derived server-side from the same query, because the guarantee that
+   an APPROVED row is never written has to hold where the write happens, not
+   where the page renders. A stale console cannot talk this route into closing
+   a deposit whose ticket says it was approved.
+
+   Admin/director only, via the router-level guard at the top of this file.
+   ───────────────────────────────────────────────────────────────── */
+router.get('/stranded-eft-deposits', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { findStrandedEftDeposits } = require('../services/strandedEftDeposits');
+    await client.query(`SET statement_timeout = '60s'`);
+    await client.query('BEGIN');
+    await client.query('SET TRANSACTION READ ONLY');
+    const report = await findStrandedEftDeposits(client);
+    await client.query('ROLLBACK');
+    return res.json(report);
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[stranded-eft-deposits]', err);
+    return res.status(500).json({ error: 'Report failed: ' + err.message });
+  } finally {
+    client.release();
+  }
+});
+
+router.post('/stranded-eft-deposits/close', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { closeDeclinedEftDeposits } = require('../services/strandedEftDeposits');
+    await client.query(`SET statement_timeout = '60s'`);
+    await client.query('BEGIN');
+    const { closed, report } = await closeDeclinedEftDeposits(client);
+    await client.query('COMMIT');
+
+    /* After the commit: an audit row records what happened and must not be able
+       to undo it. audit.log never throws. */
+    await audit.log({
+      actorId: req.user?.id || null,
+      actorEmail: req.user?.email || null,
+      actorRole: req.user?.role || null,
+      action: 'stranded_eft_deposits_closed',
+      entityType: 'transactions',
+      entityId: null,
+      description: `Closed ${closed} deposit(s) left pending by a declined EFT ticket. ` +
+        `${report.totals.approved.n} approved-but-uncredited and ${report.totals.unclear.n} unclear were left alone.`,
+      before: { declined: report.totals.declined, approved: report.totals.approved, unclear: report.totals.unclear },
+      after:  { closed },
+      ip: req.ip || null,
+      platform: 'admin',
+    });
+
+    return res.json({ ok: true, closed,
+                      leftAlone: { approved: report.totals.approved.n, unclear: report.totals.unclear.n } });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[stranded-eft-deposits/close]', err);
+    return res.status(500).json({ error: 'Close failed — nothing was changed. ' + err.message });
+  } finally {
+    client.release();
+  }
+});
+
 /* ─── GET /api/admin/maturity-preflight ───────────────────────────────
    What the maturity engine will do on its next run, while there is still
    time to change it. Read-only: every statement inside is a SELECT, and the

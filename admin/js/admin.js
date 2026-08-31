@@ -13346,6 +13346,146 @@ function _preflightExportCsv() {
   Toast.success(`${rows.length} row(s) exported`);
 }
 
+/* Deposits left Pending by a decline that only closed the ticket.
+
+   Every value rendered is client data — names, emails, references, and the
+   admin_response the reviewer typed — so all of it goes through _esc.
+
+   The three groups are shown apart and only one of them has a button, because
+   the difference between them is the difference between owing a client an
+   explanation and owing them money. */
+let _seLast = null;
+
+async function runStrandedEftReport(btn) {
+  const el = document.getElementById('seResult');
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Looking…';
+  el.innerHTML = '';
+  document.getElementById('seExportBtn').style.display = 'none';
+  try {
+    const r = await API._fetch('GET', 'admin/stranded-eft-deposits');
+    _seLast = r;
+
+    if (r.verdict === 'clean') {
+      el.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-circle-check"></i>
+        Nothing stranded. No resolved payment-proof ticket has a deposit still sitting at Pending.</span>`;
+      return;
+    }
+
+    const money = n => Utils.rand(n || 0);
+    const t = r.totals;
+    const rows = list => list.slice(0, 20).map(x => `
+      <div style="display:flex;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);font-size:0.78rem">
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(x.name || x.investorId)}</span>
+        <span class="td-muted" style="font-size:0.72rem;white-space:nowrap">${_esc(x.reference)}</span>
+        <span class="fw-700" style="white-space:nowrap">${_esc(money(x.amount))}</span>
+        <span class="td-muted" style="font-size:0.72rem;white-space:nowrap">${_esc(String(x.respondedAt || '').slice(0, 10))}</span>
+      </div>`).join('') + (list.length > 20
+        ? `<div style="font-size:0.74rem;color:var(--text-muted);padding-top:6px">…and ${_esc(list.length - 20)} more — use Export CSV for the full list</div>`
+        : '');
+
+    const parts = [];
+
+    parts.push(`<div style="display:flex;gap:22px;margin-bottom:14px;flex-wrap:wrap">
+      <div><span style="font-size:1.3rem;font-weight:800;color:#fec24f">${_esc(t.declined.n)}</span>
+        <span style="font-size:0.74rem;color:var(--text-muted);margin-left:5px">declined · ${_esc(money(t.declined.value))}</span></div>
+      <div><span style="font-size:1.3rem;font-weight:800;color:${t.approved.n ? '#ef4444' : 'var(--text-muted)'}">${_esc(t.approved.n)}</span>
+        <span style="font-size:0.74rem;color:var(--text-muted);margin-left:5px">approved but never credited · ${_esc(money(t.approved.value))}</span></div>
+      <div><span style="font-size:1.3rem;font-weight:800;color:var(--text-muted)">${_esc(t.unclear.n)}</span>
+        <span style="font-size:0.74rem;color:var(--text-muted);margin-left:5px">unclear · ${_esc(money(t.unclear.value))}</span></div>
+    </div>`);
+
+    /* The dangerous group first, and loudest. An approval that never completed
+       means the client may actually have paid — that is money owed, and it is
+       the one thing on this panel nobody should scroll past. */
+    if (t.approved.n) {
+      parts.push(`<div style="border-left:3px solid #ef4444;background:rgba(239,68,68,0.08);border-radius:0 8px 8px 0;padding:11px 13px;margin-bottom:14px">
+        <div style="font-weight:700;color:#ef4444"><i class="fa-solid fa-circle-exclamation"></i>
+          ${_esc(t.approved.n)} approved but never credited — ${_esc(money(t.approved.value))}</div>
+        <div style="font-size:0.78rem;color:var(--text-muted);margin-top:5px">
+          The client was told the deposit was approved and it never completed, so the money may
+          genuinely have arrived. Marking these Rejected would be the opposite of the truth, so
+          nothing here will touch them. Work each one by hand: approve it properly, or find out
+          what happened to the payment.</div>
+        <div style="margin-top:8px">${rows(r.groups.APPROVED)}</div>
+      </div>`);
+    }
+
+    if (t.declined.n) {
+      parts.push(`<div style="font-weight:700;color:#fec24f;margin:10px 0 4px">
+        <i class="fa-solid fa-hourglass-half"></i> ${_esc(t.declined.n)} declined, still showing as Pending</div>
+        <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:6px">
+          These clients were told the payment was refused. Closing them makes the ledger agree
+          with what they were already told. No wallet is touched — a rejected deposit moves no money.</div>
+        ${rows(r.groups.DECLINED)}
+        <button class="btn btn--primary btn--sm" style="margin-top:12px" onclick="closeStrandedEftDeposits(this)">
+          <i class="fa-solid fa-check-double"></i> Close these ${_esc(t.declined.n)} as Rejected
+        </button>`);
+    }
+
+    if (t.unclear.n) {
+      parts.push(`<div style="font-weight:700;color:var(--text-muted);margin:16px 0 4px">
+        <i class="fa-solid fa-circle-question"></i> ${_esc(t.unclear.n)} unclear</div>
+        <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:6px">
+          No response was recorded on the ticket, or it says neither. Someone has to read it
+          before deciding. Not closed from here.</div>
+        ${rows(r.groups.UNCLEAR)}`);
+    }
+
+    el.innerHTML = parts.join('');
+    document.getElementById('seExportBtn').style.display = '';
+  } catch (e) {
+    el.innerHTML = `<span style="color:#ef4444"><i class="fa-solid fa-circle-exclamation"></i>
+      Report failed: ${_esc(e.message || 'unknown error')}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }
+}
+
+async function closeStrandedEftDeposits(btn) {
+  const n = _seLast?.totals?.declined?.n || 0;
+  if (!n) { Toast.error('Run the report first'); return; }
+  const ok = await Confirm.ask(`Close ${n} deposit${n === 1 ? '' : 's'} as Rejected?`, {
+    body: `These clients were already told their proof of payment was declined. Their deposits stop `
+        + `showing as Pending and read Rejected instead.\n\nNo wallet is touched. The `
+        + `${_seLast.totals.approved.n} approved-but-uncredited and ${_seLast.totals.unclear.n} unclear `
+        + `deposits are not affected.`,
+    confirmLabel: `Close ${n}`,
+  });
+  if (!ok) return;
+
+  await _withBtn(btn, async () => {
+    try {
+      /* No ids are sent. The server re-derives the DECLINED group from the same
+         query, so a stale page cannot talk it into closing an approved one. */
+      const out = await API._fetch('POST', 'admin/stranded-eft-deposits/close', {});
+      Toast.success(`${out.closed} deposit${out.closed === 1 ? '' : 's'} closed — they now read Rejected`);
+      await runStrandedEftReport(document.querySelector('[onclick="runStrandedEftReport(this)"]'));
+      if (STATE.transactions.length) await loadTransactions();
+    } catch (e) {
+      Toast.error('Could not close them: ' + (e.message || 'unknown error'));
+    }
+  });
+}
+
+function exportStrandedEftCSV() {
+  if (!_seLast) { Toast.error('Run the report first'); return; }
+  const rows = [['group', 'investor_id', 'name', 'email', 'reference', 'amount',
+                 'deposit_id', 'ticket_id', 'responded_at', 'admin_response']];
+  for (const [group, list] of Object.entries(_seLast.groups)) {
+    for (const r of list) {
+      rows.push([group, r.investorId, r.name, r.email, r.reference,
+        /* toFixed, not Utils.rand: the panel shows R1 250,00 and a spreadsheet
+           reads that as 125000. */
+        r.amount.toFixed(2), r.depositId, r.ticketId,
+        String(r.respondedAt || '').slice(0, 19), r.adminResponse]);
+    }
+  }
+  _downloadCSV(rows, `stranded-eft-deposits-${new Date().toISOString().slice(0, 10)}.csv`);
+}
+
 /* Withdrawal double-debit reconciliation, rendered into the ops console.
 
    Every value here is client data — names, emails, references — so all of it
