@@ -597,36 +597,91 @@
 
 .modal-close:hover { color: var(--white); }
 
-/* ─── Toast ─── */
-.toast {
+/* ─── Toast ────────────────────────────────────────────────────────────
+   This was two implementations fighting, and the client lost both.
+
+   js/api.js builds `<div class="toast toast--error">` inside a
+   `.toast-container`. The rules here styled `.toast.error` — a class the JS
+   never sets — and hid every toast behind `opacity: 0`, revealed by `.toast.show`
+   — a class the JS never adds either. So on the portal a toast was invisible
+   except for the frame or two of admin.css's toast-in animation.
+
+   It was also positioned twice: admin.css puts the CONTAINER at the top right,
+   and this rule made each toast `position: fixed; left: 50%`. Measured at phone
+   width, the result sat 310px off the right edge of the screen.
+
+   Between them, a client submitting a maturity instruction saw no confirmation
+   when it worked and no reason when it failed — so they tapped Submit again.
+   That is the whole of "clients are struggling to submit".
+
+   Now: the CONTAINER positions, the toast is a normal block inside it, and
+   nothing is hidden by default. Errors sit above the bottom nav and clear of
+   the home indicator. */
+.toast-container {
   position: fixed;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%) translateY(20px);
+  top: auto;                       /* admin.css pins it to the top; not here */
+  left: 12px;
+  right: 12px;
+  bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.toast {
+  position: static;                /* the container places it */
+  transform: none;
+  opacity: 1;                      /* visible on arrival, not on a class */
+  width: 100%;
+  max-width: 480px;
+  min-width: 0;                    /* admin.css asks for 280px; phones are narrower */
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
   background: var(--dark-1);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: 12px 20px;
-  font-size: 0.88rem;
+  padding: 13px 16px;
+  font-size: 0.9rem;
+  line-height: 1.45;
   color: var(--white);
   font-weight: 600;
   box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-  z-index: 2000;
-  opacity: 0;
-  transition: opacity 0.3s, transform 0.3s;
   white-space: normal;
-  word-break: break-word;
-  max-width: calc(100vw - 32px);
-  text-align: center;
+  overflow-wrap: anywhere;         /* a long reference must wrap, not overflow */
+  text-align: left;                /* centred text is hard to scan on two lines */
+  pointer-events: auto;
+  /* The slide moves the toast; it never touches opacity. A toast whose
+     visibility depends on an animation running is exactly how the last one
+     disappeared — opacity:0 in the base rule, revealed by a .show class the JS
+     never added. Opaque is the resting state, and no animation state, reduced-
+     motion setting or skipped frame can take that away. */
+  animation: svc-toast-in .22s ease-out;
 }
 
-.toast.show {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
+@keyframes svc-toast-in {
+  from { transform: translateY(12px); }
+  to   { transform: translateY(0); }
 }
 
-.toast.success { border-color: rgba(34,197,94,0.4); color: var(--green); }
-.toast.error { border-color: rgba(239,68,68,0.4); color: #ef4444; }
+@media (prefers-reduced-motion: reduce) {
+  .toast { animation: none; }
+}
+
+.toast__msg { flex: 1; min-width: 0; }
+
+/* Both spellings styled: the JS emits toast--error, and .toast.error is kept so
+   any caller still using it is not silently unstyled. */
+.toast--success, .toast.success { border-color: rgba(34,197,94,0.45); }
+.toast--error,   .toast.error   { border-color: rgba(239,68,68,0.55); }
+.toast--warning, .toast.warning { border-color: rgba(254,194,79,0.5); }
+.toast--success i { color: var(--green); }
+.toast--error i   { color: #ef4444; }
+.toast--warning i { color: var(--gold); }
 
 /* ─── Loading skeleton ─── */
 .skeleton {

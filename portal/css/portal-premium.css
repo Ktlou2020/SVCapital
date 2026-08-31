@@ -3620,8 +3620,18 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
   /* ── Bottom nav: push content up so last card isn't clipped ── */
   .main-content { padding-bottom: 72px !important; }
 
-  /* ── Toast: clear the bottom nav ── */
-  .toast-container { bottom: 80px !important; }
+  /* ── Toast: clear the bottom nav, and stay inside the screen ──
+     top:auto matters. admin.css pins the container to top:80px, and setting
+     only `bottom` here left both edges anchored, so the container spanned the
+     whole screen and the toast inside it landed wherever its own positioning
+     put it — measured at phone width, 310px off the right edge. */
+  .toast-container {
+    top: auto !important;
+    left: 12px !important;
+    right: 12px !important;
+    bottom: calc(84px + env(safe-area-inset-bottom, 0px)) !important;
+    align-items: center !important;
+  }
 
   /* ── iOS input-zoom prevention (iOS zooms when font-size < 16px) ── */
   .form-input, .form-select, .form-textarea,
@@ -3653,14 +3663,41 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
   /* ── Statement view: stack on mobile ── */
   .statement-layout { grid-template-columns: 1fr !important; }
 
-  /* ── Modals: slide up from bottom on small screens ── */
+  /* ── Modals: a proper bottom sheet ──────────────────────────────────
+     admin.css puts overflow-y:auto on the modal itself, so the FOOTER scrolled
+     with the body: on any form longer than the screen — instruction, product,
+     amount — the Submit button was somewhere below the fold and the client had
+     to scroll inside the sheet to find it. On a maturity instruction that is
+     the difference between submitting and giving up.
+
+     Header and footer are now fixed to the sheet, and only the body scrolls.
+     The footer clears the home indicator. */
   .modal-overlay { padding: 0 !important; align-items: flex-end !important; }
   .modal-overlay .modal {
     max-width: 100% !important;
     max-height: 92dvh !important;
     border-radius: 20px 20px 0 0 !important;
     margin: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;      /* the body scrolls, not the sheet */
   }
+  .modal-overlay .modal > .modal__header { flex: 0 0 auto; }
+  .modal-overlay .modal > .modal__body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;     /* scrolling the form must not scroll the page behind it */
+  }
+  .modal-overlay .modal > .modal__footer {
+    flex: 0 0 auto;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)) !important;
+    gap: 10px;
+  }
+  /* Two thumb-sized targets rather than two small ones bunched at the right.
+     The primary action takes the larger share and sits where the thumb is. */
+  .modal-overlay .modal > .modal__footer .btn { flex: 1 1 0; min-height: 48px; justify-content: center; }
+  .modal-overlay .modal > .modal__footer .btn--primary { flex: 1.6 1 0; }
 
   /* ── Tap targets: larger hits for thumbs ── */
   .btn { min-height: 42px; }
@@ -3753,7 +3790,7 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
   }
   @media (max-width: 768px) {
     .main-content { padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important; }
-    .toast-container { bottom: calc(80px + env(safe-area-inset-bottom, 0px)) !important; }
+    .toast-container { bottom: calc(84px + env(safe-area-inset-bottom, 0px)) !important; }
   }
 }
 

@@ -3641,6 +3641,57 @@ async function loadMaturity() {
   container.innerHTML = html;
 }
 
+/* The reason a maturity instruction was refused belongs NEXT TO THE FORM, not
+   only in a toast. Toasts on this portal were invisible and off-screen until
+   today, and even fixed they are the wrong home for a form error: they expire,
+   they sit away from the field, and on a phone the client may be scrolled past
+   them. The toast still fires — it is how every other action reports — but the
+   modal now states it too, and keeps stating it until the client changes
+   something. */
+function _matShowError(msg) {
+  const el = document.getElementById('matError');
+  if (el) {
+    el.innerHTML = `<i class="fa-solid fa-circle-exclamation" style="margin-right:6px"></i>${_esc(msg)}`;
+    el.style.display = 'block';
+    el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+  Toast.error(msg);
+}
+
+/* The chosen product, or null. Reads the selected OPTION so a disabled
+   placeholder resolves to nothing rather than to an empty string that looks
+   like a choice. */
+function _matSelectedProduct(type) {
+  if (type !== 'switch_product' && type !== 'custom_switch') return null;
+  const sel = document.getElementById('matSwitchProductType');
+  const opt = sel && sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex] : null;
+  if (!opt || opt.disabled) return null;
+  return (opt.value || '').trim() || null;
+}
+
+function _matClearError() {
+  const el = document.getElementById('matError');
+  if (el) { el.style.display = 'none'; el.innerHTML = ''; }
+}
+
+/* A function, not a top-level const. This file is shared by the portal and the
+   app and must contain nothing that runs at load — check-portal-split enforces
+   that, and it caught this the moment it was written. */
+function _matErrorSlot() {
+  return `<div id="matError" role="alert" style="display:none;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.4);color:#ef4444;border-radius:10px;padding:11px 13px;font-size:0.85rem;line-height:1.5;font-weight:600;margin-bottom:14px"></div>`;
+}
+
+/* An instruction the client cannot complete must not be offerable. When no
+   other product has a pool, "Switch Product" led to a select with nothing in it
+   but a disabled placeholder — the client picked the instruction, could not pick
+   a product, and got an error they could not act on. */
+function _switchOptionAttrs(canSwitch) {
+  return canSwitch ? '' : ' disabled';
+}
+function _switchUnavailableNote(canSwitch) {
+  return canSwitch ? '' : ` <span style="opacity:.7">(no other product is open right now)</span>`;
+}
+
 async function openMaturityModal(investmentId) {
   const inv = PORTAL.investments.find(i => i.id === investmentId);
   if (!inv) return;
@@ -3659,7 +3710,8 @@ async function openMaturityModal(investmentId) {
   const allProductTypes = [...new Set(
     (PORTAL.pools || []).filter(p => p.product_type && p.product_type !== inv.product_type).map(p => p.product_type)
   )];
-  const switchProductsHtml = allProductTypes.length
+  const canSwitch = allProductTypes.length > 0;
+  const switchProductsHtml = canSwitch
     ? allProductTypes.map(pt => {
         const pi = Utils.productInfo(pt);
         return `<option value="${pt}" ${existing==='switch_product' && inv.switch_product_type===pt?'selected':''}>${pi.label || pt}</option>`;
@@ -3669,6 +3721,7 @@ async function openMaturityModal(investmentId) {
   const poolNote = `<div style="font-size:0.72rem;color:var(--text-dim);margin-top:4px"><i class="fa-solid fa-info-circle"></i> The first available open pool for this product will be assigned when your investment matures.</div>`;
 
   document.getElementById('maturityModalBody').innerHTML = `
+    ${_matErrorSlot()}
     <div class="info-list mb-16">
       <div class="info-row"><span class="info-row__label">Pool</span><span class="info-row__value">${_esc(inv.pool_name)}</span></div>
       <div class="info-row"><span class="info-row__label">Capital</span><span class="info-row__value">${Utils.rand(inv.amount)}</span></div>
@@ -3683,13 +3736,13 @@ async function openMaturityModal(investmentId) {
       <select class="form-select" id="matInstructionType">
         <option value="payout_all"     ${existing==='payout_all'    ?'selected':''}>Payout All — Receive full capital + returns</option>
         ${isDeliveryBike ? `
-        <option value="switch_product" ${existing==='switch_product'?'selected':''}>Switch Product — Move payout into a different product</option>
+        <option value="switch_product" ${existing==='switch_product'?'selected':''}${_switchOptionAttrs(canSwitch)}>Switch Product — into a different product${_switchUnavailableNote(canSwitch)}</option>
         ` : `
-        <option value="payout_return"  ${existing==='payout_return' ?'selected':''}>Payout Returns Only — Keep capital reinvested</option>
-        <option value="reinvest"       ${existing==='reinvest'      ?'selected':''}>Reinvest — Roll over into same product</option>
-        <option value="switch_product" ${existing==='switch_product'?'selected':''}>Switch Product — Move payout into a different product</option>
-        <option value="payout_custom"  ${existing==='payout_custom' ?'selected':''}>Custom Payout — Specify amount; remainder reinvested</option>
-        <option value="custom_switch"  ${existing==='custom_switch' ?'selected':''}>Custom Switch — Pay out a portion &amp; switch the rest to another product</option>
+        <option value="payout_return"  ${existing==='payout_return' ?'selected':''}>Payout Returns Only — keep capital invested</option>
+        <option value="reinvest"       ${existing==='reinvest'      ?'selected':''}>Reinvest — roll over into the same product</option>
+        <option value="switch_product" ${existing==='switch_product'?'selected':''}${_switchOptionAttrs(canSwitch)}>Switch Product — into a different product${_switchUnavailableNote(canSwitch)}</option>
+        <option value="payout_custom"  ${existing==='payout_custom' ?'selected':''}>Custom Payout — take an amount, reinvest the rest</option>
+        <option value="custom_switch"  ${existing==='custom_switch' ?'selected':''}${_switchOptionAttrs(canSwitch)}>Custom Switch — take an amount, switch the rest${_switchUnavailableNote(canSwitch)}</option>
         `}
       </select>
     </div>
@@ -3733,6 +3786,7 @@ async function openMaturityModal(investmentId) {
   `;
 
   document.getElementById('matInstructionType').addEventListener('change', e => {
+    _matClearError();
     const v = e.target.value;
     document.getElementById('switchProductGroup').style.display  = (v === 'switch_product' || v === 'custom_switch') ? 'block' : 'none';
     if (!isDeliveryBike) {
@@ -3753,11 +3807,20 @@ async function submitMaturityInstruction(inv) {
   const total             = (parseFloat(inv.amount) || 0) + Utils.earnedReturns([inv]);
   const needsCustom       = (type === 'payout_custom' || type === 'custom_switch');
   const customAmt         = needsCustom ? parseFloat(document.getElementById('matCustomAmount')?.value || 0) : null;
-  const switchProductType = (type === 'switch_product' || type === 'custom_switch') ? (document.getElementById('matSwitchProductType')?.value || null) : null;
+  /* Read from the SELECTED OPTION, not the select's value. They agree in every
+     ordinary case; they differ when the only option is the disabled "no other
+     product types" placeholder, and reading the option makes that state
+     obvious here rather than sending an empty product the server refuses with
+     a message the client cannot act on. */
+  const switchProductType = _matSelectedProduct(type);
 
-  if (needsCustom && (!customAmt || customAmt <= 0))  { Toast.error('Please enter a valid payout amount'); return; }
-  if (needsCustom && customAmt >= total)              { Toast.error(`Payout amount must be less than the total of ${Utils.rand(total)}`); return; }
-  if ((type === 'switch_product' || type === 'custom_switch') && !switchProductType) { Toast.error('Please select a product to switch into'); return; }
+  _matClearError();
+  if (needsCustom && (!customAmt || customAmt <= 0))  { _matShowError('Enter the amount you want paid out.'); return; }
+  if (needsCustom && customAmt >= total)              { _matShowError(`The payout amount must be less than ${Utils.rand(total)}, the value of this investment.`); return; }
+  if ((type === 'switch_product' || type === 'custom_switch') && !switchProductType) {
+    _matShowError('Choose the product to switch into. If the list is empty, no other product has an open pool right now — choose a different instruction or contact support.');
+    return;
+  }
 
   try {
     // One request, one transaction. The custom amount and switch target used to
@@ -3778,8 +3841,8 @@ async function submitMaturityInstruction(inv) {
     await loadPortalData();
     loadMaturity();
   } catch (e) {
-    console.error('[maturity]', e);
-    Toast.error(e.message || 'Failed to save instruction');
+    console.error('[maturity]', e, { instruction: type, switch_product_type: switchProductType, custom_payout_amount: customAmt });
+    _matShowError(e.message || 'Could not save this instruction. Please try again.');
   }
 }
 
@@ -3799,12 +3862,14 @@ async function openPoolMaturityModal(poolId) {
   const allProductTypes = [...new Set(
     (PORTAL.pools || []).filter(p => p.product_type && p.product_type !== first.product_type).map(p => p.product_type)
   )];
-  const switchProductsHtml = allProductTypes.length
+  const canSwitch = allProductTypes.length > 0;
+  const switchProductsHtml = canSwitch
     ? allProductTypes.map(pt => { const pi = Utils.productInfo(pt); return `<option value="${pt}">${pi.label || pt}</option>`; }).join('')
     : `<option value="" disabled>No other product types available</option>`;
   const poolNote = `<div style="font-size:0.72rem;color:var(--text-dim);margin-top:4px"><i class="fa-solid fa-info-circle"></i> The first available open pool for this product will be assigned when your investment matures.</div>`;
 
   document.getElementById('maturityModalBody').innerHTML = `
+    ${_matErrorSlot()}
     <div class="info-list mb-16">
       <div class="info-row"><span class="info-row__label">Pool</span><span class="info-row__value">${_esc(first.pool_name)}</span></div>
       <div class="info-row"><span class="info-row__label">Investments</span><span class="info-row__value">${poolInvs.length}</span></div>
@@ -3819,13 +3884,13 @@ async function openPoolMaturityModal(poolId) {
       <select class="form-select" id="matInstructionType">
         <option value="payout_all"     ${existing==='payout_all'    ?'selected':''}>Payout All — Receive full capital + returns</option>
         ${isDeliveryBike ? `
-        <option value="switch_product" ${existing==='switch_product'?'selected':''}>Switch Product — Move payout into a different product</option>
+        <option value="switch_product" ${existing==='switch_product'?'selected':''}${_switchOptionAttrs(canSwitch)}>Switch Product — into a different product${_switchUnavailableNote(canSwitch)}</option>
         ` : `
-        <option value="payout_return"  ${existing==='payout_return' ?'selected':''}>Payout Returns Only — Keep capital reinvested</option>
-        <option value="reinvest"       ${existing==='reinvest'      ?'selected':''}>Reinvest — Roll over into same product</option>
-        <option value="switch_product" ${existing==='switch_product'?'selected':''}>Switch Product — Move payout into a different product</option>
-        <option value="payout_custom"  ${existing==='payout_custom' ?'selected':''}>Custom Payout — Specify amount; remainder reinvested</option>
-        <option value="custom_switch"  ${existing==='custom_switch' ?'selected':''}>Custom Switch — Pay out a portion &amp; switch the rest to another product</option>
+        <option value="payout_return"  ${existing==='payout_return' ?'selected':''}>Payout Returns Only — keep capital invested</option>
+        <option value="reinvest"       ${existing==='reinvest'      ?'selected':''}>Reinvest — roll over into the same product</option>
+        <option value="switch_product" ${existing==='switch_product'?'selected':''}${_switchOptionAttrs(canSwitch)}>Switch Product — into a different product${_switchUnavailableNote(canSwitch)}</option>
+        <option value="payout_custom"  ${existing==='payout_custom' ?'selected':''}>Custom Payout — take an amount, reinvest the rest</option>
+        <option value="custom_switch"  ${existing==='custom_switch' ?'selected':''}${_switchOptionAttrs(canSwitch)}>Custom Switch — take an amount, switch the rest${_switchUnavailableNote(canSwitch)}</option>
         `}
       </select>
     </div>
@@ -3859,6 +3924,7 @@ async function openPoolMaturityModal(poolId) {
   `;
 
   document.getElementById('matInstructionType').addEventListener('change', e => {
+    _matClearError();
     const v = e.target.value;
     document.getElementById('switchProductGroup').style.display  = (v === 'switch_product' || v === 'custom_switch') ? 'block' : 'none';
     if (!isDeliveryBike) {
@@ -3879,10 +3945,14 @@ async function submitPoolMaturityInstruction(poolId) {
   const type              = document.getElementById('matInstructionType').value;
   const needsCustom       = (type === 'payout_custom' || type === 'custom_switch');
   const customAmt         = needsCustom ? parseFloat(document.getElementById('matCustomAmount')?.value || 0) : null;
-  const switchProductType = (type === 'switch_product' || type === 'custom_switch') ? (document.getElementById('matSwitchProductType')?.value || null) : null;
+  const switchProductType = _matSelectedProduct(type);
 
-  if (needsCustom && (!customAmt || customAmt <= 0)) { Toast.error('Please enter a valid payout amount'); return; }
-  if ((type === 'switch_product' || type === 'custom_switch') && !switchProductType) { Toast.error('Please select a product to switch into'); return; }
+  _matClearError();
+  if (needsCustom && (!customAmt || customAmt <= 0)) { _matShowError('Enter the amount you want paid out.'); return; }
+  if ((type === 'switch_product' || type === 'custom_switch') && !switchProductType) {
+    _matShowError('Choose the product to switch into. If the list is empty, no other product has an open pool right now — choose a different instruction or contact support.');
+    return;
+  }
 
   try {
     /* One request, applied to the whole pool inside a single transaction.
@@ -3905,8 +3975,8 @@ async function submitPoolMaturityInstruction(poolId) {
     await loadPortalData();
     loadMaturity();
   } catch (e) {
-    console.error('[pool maturity]', e);
-    Toast.error(e.message || 'Failed to save instruction');
+    console.error('[pool maturity]', e, { instruction: type, switch_product_type: switchProductType, custom_payout_amount: customAmt });
+    _matShowError(e.message || 'Could not save this instruction. Please try again.');
   }
 }
 
