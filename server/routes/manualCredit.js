@@ -431,6 +431,55 @@ router.post('/stranded-eft-deposits/close', async (req, res) => {
   }
 });
 
+/* ─── POST /api/admin/stranded-eft-deposits/cancel-superseded ──────────
+
+   Cancel the stranded deposits whose money went in by another route: someone
+   credited the wallet by hand and left the original pending row behind.
+
+   Separate from /close because the two say different things to a client.
+   /close marks a deposit REJECTED — the payment was refused. This marks it
+   CANCELLED — the payment arrived, under another reference, and this row is a
+   duplicate. Saying "rejected" about money sitting in someone's wallet would be
+   worse than leaving it pending.
+
+   It does not accept ids, for the same reason /close does not: the rows are
+   re-derived server-side from the evidence, so a stale page cannot name a
+   deposit with no matching credit and have it cancelled.
+   ───────────────────────────────────────────────────────────────── */
+router.post('/stranded-eft-deposits/cancel-superseded', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { cancelSupersededEftDeposits } = require('../services/strandedEftDeposits');
+    await client.query(`SET statement_timeout = '60s'`);
+    await client.query('BEGIN');
+    const { cancelled, report } = await cancelSupersededEftDeposits(client);
+    await client.query('COMMIT');
+
+    await audit.log({
+      actorId: req.user?.id || null,
+      actorEmail: req.user?.email || null,
+      actorRole: req.user?.role || null,
+      action: 'stranded_eft_deposits_superseded',
+      entityType: 'transactions',
+      entityId: null,
+      description: `Cancelled ${cancelled} duplicate EFT deposit(s) whose wallet credit had already ` +
+        `been applied by hand. No wallet was touched.`,
+      before: { candidates: report.creditedTotals },
+      after:  { cancelled },
+      ip: req.ip || null,
+      platform: 'admin',
+    });
+
+    return res.json({ ok: true, cancelled });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[stranded-eft-deposits/cancel-superseded]', err);
+    return res.status(500).json({ error: 'Cancel failed — nothing was changed. ' + err.message });
+  } finally {
+    client.release();
+  }
+});
+
 /* ─── GET /api/admin/maturity-preflight ───────────────────────────────
    What the maturity engine will do on its next run, while there is still
    time to change it. Read-only: every statement inside is a SELECT, and the

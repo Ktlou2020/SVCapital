@@ -13396,9 +13396,46 @@ async function runStrandedEftReport(btn) {
         <span style="font-size:0.74rem;color:var(--text-muted);margin-left:5px">unclear · ${_esc(money(t.unclear.value))}</span></div>
     </div>`);
 
-    /* The dangerous group first, and loudest. An approval that never completed
-       means the client may actually have paid — that is money owed, and it is
-       the one thing on this panel nobody should scroll past. */
+    /* Already credited by hand: the money went in under another reference and
+       this row is a duplicate nobody closed. Shown first because it is the only
+       group where the right answer is neither approve nor decline, and because
+       the obvious instinct — mark it Completed, the money did arrive — would
+       credit the wallet a SECOND time. */
+    if (r.creditedTotals?.n) {
+      const ct = r.creditedTotals;
+      parts.push(`<div style="border-left:3px solid #22c55e;background:rgba(34,197,94,0.07);border-radius:0 8px 8px 0;padding:11px 13px;margin-bottom:14px">
+        <div style="font-weight:700;color:#22c55e"><i class="fa-solid fa-link"></i>
+          ${_esc(ct.n)} already credited by hand — ${_esc(money(ct.value))}</div>
+        <div style="font-size:0.78rem;color:var(--text-muted);margin-top:5px">
+          A completed credit for the same investor and the same amount exists alongside each of
+          these, so the money is already in the wallet and this EFT row is a duplicate left behind.
+          Cancelling them says exactly that. <strong>Do not approve them</strong> — completing a
+          deposit credits the wallet again.
+          <br><br>The amounts match to the cent, which is strong evidence but not proof: a client
+          can pay the same figure twice. Check the matched reference on each line before cancelling.</div>
+        <div style="margin-top:8px">${r.alreadyCredited.slice(0, 20).map(x => `
+          <div style="padding:7px 0;border-bottom:1px solid var(--border);font-size:0.78rem">
+            <div style="display:flex;gap:10px">
+              <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(x.name || x.investorId)}</span>
+              <span class="td-muted" style="font-size:0.72rem;white-space:nowrap">${_esc(x.reference)}</span>
+              <span class="fw-700" style="white-space:nowrap">${_esc(money(x.amount))}</span>
+            </div>
+            <div class="td-muted" style="font-size:0.72rem;margin-top:2px">
+              credited by ${_esc(x.creditedBy.type)} ${_esc(x.creditedBy.reference || x.creditedBy.id)}
+              on ${_esc(String(x.creditedBy.when).slice(0, 10))}${x.creditedBy.description ? ` · ${_esc(String(x.creditedBy.description).slice(0, 70))}` : ''}
+            </div>
+          </div>`).join('')}
+          ${r.alreadyCredited.length > 20
+            ? `<div style="font-size:0.74rem;color:var(--text-muted);padding-top:6px">…and ${_esc(r.alreadyCredited.length - 20)} more — use Export CSV</div>` : ''}
+        </div>
+        <button class="btn btn--primary btn--sm" style="margin-top:12px" onclick="cancelSupersededEft(this)">
+          <i class="fa-solid fa-link-slash"></i> Cancel these ${_esc(ct.n)} as duplicates
+        </button>
+      </div>`);
+    }
+
+    /* An approval that never completed means the client may actually have paid —
+       that is money owed, and nobody should scroll past it. */
     if (t.approved.n) {
       parts.push(`<div style="border-left:3px solid #ef4444;background:rgba(239,68,68,0.08);border-radius:0 8px 8px 0;padding:11px 13px;margin-bottom:14px">
         <div style="font-weight:700;color:#ef4444"><i class="fa-solid fa-circle-exclamation"></i>
@@ -13470,13 +13507,43 @@ async function closeStrandedEftDeposits(btn) {
   });
 }
 
+async function cancelSupersededEft(btn) {
+  const n = _seLast?.creditedTotals?.n || 0;
+  if (!n) { Toast.error('Run the report first'); return; }
+  const ok = await Confirm.ask(`Cancel ${n} duplicate deposit${n === 1 ? '' : 's'}?`, {
+    body: `Each of these has a matching completed credit for the same investor and amount, so the `
+        + `money is already in the wallet. They will read Cancelled, with a note naming the credit `
+        + `that superseded them.\n\nNo wallet is touched. Nothing is approved — approving would `
+        + `credit these clients a second time.`,
+    confirmLabel: `Cancel ${n}`,
+  });
+  if (!ok) return;
+
+  await _withBtn(btn, async () => {
+    try {
+      const out = await API._fetch('POST', 'admin/stranded-eft-deposits/cancel-superseded', {});
+      Toast.success(`${out.cancelled} duplicate deposit${out.cancelled === 1 ? '' : 's'} cancelled — no wallet was credited`);
+      await runStrandedEftReport(document.querySelector('[onclick="runStrandedEftReport(this)"]'));
+      if (STATE.transactions.length) await loadTransactions();
+    } catch (e) {
+      Toast.error('Could not cancel them: ' + (e.message || 'unknown error'));
+    }
+  });
+}
+
 function exportStrandedEftCSV() {
   if (!_seLast) { Toast.error('Run the report first'); return; }
-  const rows = [['group', 'investor_id', 'name', 'email', 'reference', 'amount',
+  const rows = [['group', 'already_credited', 'credited_by_ref', 'credited_by_type', 'credited_on',
+                 'investor_id', 'name', 'email', 'reference', 'amount',
                  'deposit_id', 'ticket_id', 'responded_at', 'admin_response']];
   for (const [group, list] of Object.entries(_seLast.groups)) {
     for (const r of list) {
-      rows.push([group, r.investorId, r.name, r.email, r.reference,
+      rows.push([group,
+        r.creditedBy ? 'yes' : 'no',
+        r.creditedBy ? (r.creditedBy.reference || r.creditedBy.id) : '',
+        r.creditedBy ? r.creditedBy.type : '',
+        r.creditedBy ? String(r.creditedBy.when).slice(0, 19) : '',
+        r.investorId, r.name, r.email, r.reference,
         /* toFixed, not Utils.rand: the panel shows R1 250,00 and a spreadsheet
            reads that as 125000. */
         r.amount.toFixed(2), r.depositId, r.ticketId,
