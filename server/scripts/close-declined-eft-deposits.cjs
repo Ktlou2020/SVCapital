@@ -30,9 +30,10 @@
  * No money moves either way: the balance hooks in tables.js credit a deposit on
  * 'completed' and refund only withdrawals on 'rejected'.
  *
- *   node server/scripts/close-declined-eft-deposits.cjs            # report only
- *   node server/scripts/close-declined-eft-deposits.cjs --apply    # close the DECLINED group
- *   …--csv out.csv                                                 # the full list
+ *   node server/scripts/close-declined-eft-deposits.cjs                     # report only
+ *   node server/scripts/close-declined-eft-deposits.cjs --apply             # close the DECLINED group
+ *   node server/scripts/close-declined-eft-deposits.cjs --cancel-superseded # clear the duplicates
+ *   …--csv out.csv                                                          # the full list
  *
  * The query and the grouping live in services/strandedEftDeposits.js because
  * the ops console runs the same backfill. Two implementations would eventually
@@ -44,11 +45,12 @@
 const fs   = require('fs');
 const path = require('path');
 const { Pool } = require('pg');
-const { findStrandedEftDeposits, closeDeclinedEftDeposits } =
+const { findStrandedEftDeposits, closeDeclinedEftDeposits, cancelSupersededEftDeposits } =
   require(path.join(__dirname, '..', 'services', 'strandedEftDeposits'));
 
 const ARGV  = process.argv.slice(2);
 const APPLY = ARGV.includes('--apply');
+const CANCEL = ARGV.includes('--cancel-superseded');
 const CSV   = (i => i > -1 ? ARGV[i + 1] : null)(ARGV.indexOf('--csv'));
 
 if (!process.env.DATABASE_URL) {
@@ -71,11 +73,18 @@ const pad = (s, n) => String(s == null ? '' : s).padEnd(n);
   try {
     await client.query(`SET statement_timeout = '120s'`);
     await client.query('BEGIN');
-    if (!APPLY) await client.query('SET TRANSACTION READ ONLY');
+    /* Read-only unless a write flag was passed. --cancel-superseded was added
+       without being named here, so it opened a READ ONLY transaction and then
+       failed on its own UPDATE — every run a no-op with an error at the end.
+       Found by running it, not by reading it. */
+    const WRITING = APPLY || CANCEL;
+    if (!WRITING) await client.query('SET TRANSACTION READ ONLY');
 
-    console.log(APPLY
-      ? '\nCLOSING STRANDED EFT DEPOSITS — writing the DECLINED group only.\n'
-      : '\nSTRANDED EFT DEPOSITS — report only, this transaction cannot write.\n');
+    console.log(CANCEL
+      ? '\nCLEARING SUPERSEDED EFT DEPOSITS — cancelling the duplicates only.\n'
+      : APPLY
+        ? '\nCLOSING STRANDED EFT DEPOSITS — writing the DECLINED group only.\n'
+        : '\nSTRANDED EFT DEPOSITS — report only, this transaction cannot write.\n');
 
     const report = await findStrandedEftDeposits(client);
     if (report.verdict === 'clean') {
@@ -96,11 +105,38 @@ const pad = (s, n) => String(s == null ? '' : s).padEnd(n);
         console.log(pad((r.name || r.investorId).slice(0, 23), 24) +
                     pad(String(r.reference).slice(0, 17), 18) +
                     pad(R(r.amount), 14) +
-                    String(r.respondedAt || '').slice(0, 10));
+                    String(r.respondedAt || '').slice(0, 10) +
+                    (r.creditedBy ? '   ← already credited, see above' : ''));
       }
       if (g.length > 25) console.log(`…and ${g.length - 25} more (use --csv for the full list)`);
       console.log('');
     };
+
+    /* Printed first, like the panel. It is the only group where neither approve
+       nor decline is right, and the one where the obvious move — completing the
+       deposit because the money did arrive — credits the wallet a second time. */
+    if (report.creditedTotals.n) {
+      console.log('─'.repeat(76));
+      console.log(`ALREADY CREDITED BY HAND: ${report.creditedTotals.n}   ${R(report.creditedTotals.value)}`);
+      console.log('─'.repeat(76));
+      console.log('A completed credit for the same investor and the same amount sits alongside each\n' +
+                  'of these, so the money is already in the wallet and the EFT row is a duplicate.\n' +
+                  'DO NOT approve them — completing a deposit credits the wallet again. Cancel them\n' +
+                  'instead with --cancel-superseded.\n' +
+                  'Same amount is strong evidence, not proof: a client can pay the same figure\n' +
+                  'twice. Check the matched reference on each line first.');
+      console.log(`\n${pad('Investor', 22)}${pad('EFT reference', 20)}${pad('Amount', 13)}matched credit`);
+      for (const r of report.alreadyCredited.slice(0, 25)) {
+        console.log(pad((r.name || r.investorId).slice(0, 21), 22) +
+                    pad(String(r.reference).slice(0, 19), 20) +
+                    pad(R(r.amount), 13) +
+                    `${r.creditedBy.type} ${r.creditedBy.reference || r.creditedBy.id} · ` +
+                    String(r.creditedBy.when).slice(0, 10) +
+                    (r.creditedBy.description ? ` · ${String(r.creditedBy.description).slice(0, 34)}` : ''));
+      }
+      if (report.alreadyCredited.length > 25) console.log(`…and ${report.alreadyCredited.length - 25} more (use --csv)`);
+      console.log('');
+    }
 
     show('DECLINED',
       'The client was told the payment was refused, and the deposit still reads Pending\n' +
@@ -114,26 +150,38 @@ const pad = (s, n) => String(s == null ? '' : s).padEnd(n);
       'No response recorded, or one that says neither. A person has to read the ticket\n' +
       'before anything is decided. Not written.');
 
-    if (APPLY && report.totals.declined.n) {
+    if (CANCEL && report.creditedTotals.n) {
+      const { cancelled } = await cancelSupersededEftDeposits(client);
+      await client.query('COMMIT');
+      console.log(`Cancelled ${cancelled} duplicate deposit(s) whose wallet credit was already applied.`);
+      console.log('No wallet was touched, and nothing was approved.');
+    } else if (APPLY && report.totals.declined.n) {
       const { closed } = await closeDeclinedEftDeposits(client);
       await client.query('COMMIT');
       console.log(`Applied. ${closed} deposit(s) moved from Pending to Rejected.`);
       console.log('No wallet was touched — a rejected deposit moves no money.');
     } else {
       await client.query('ROLLBACK');
-      console.log(APPLY
-        ? 'Nothing in the DECLINED group to apply.'
-        : `Nothing was written. Re-run with --apply to close the ${report.totals.declined.n} DECLINED deposit(s).`);
+      console.log(CANCEL ? 'Nothing already credited to cancel.'
+        : APPLY ? 'Nothing in the DECLINED group to apply.'
+        : `Nothing was written. --apply closes the ${report.totals.declined.n} DECLINED deposit(s); ` +
+          `--cancel-superseded clears the ${report.creditedTotals.n} already credited by hand.`);
     }
 
     if (CSV) {
       const esc = v => { const s = v == null ? '' : String(v);
         return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-      const head = ['group', 'investor_id', 'name', 'email', 'reference', 'amount',
+      const head = ['group', 'already_credited', 'credited_by_ref', 'credited_by_type', 'credited_on',
+                    'investor_id', 'name', 'email', 'reference', 'amount',
                     'deposit_id', 'deposit_created', 'ticket_id', 'responded_at', 'admin_response'];
       const lines = [head.join(',')];
       for (const [key, g] of Object.entries(report.groups)) for (const r of g) {
-        lines.push([key, r.investorId, r.name, r.email, r.reference, r.amount.toFixed(2),
+        lines.push([key,
+          r.creditedBy ? 'yes' : 'no',
+          r.creditedBy ? (r.creditedBy.reference || r.creditedBy.id) : '',
+          r.creditedBy ? r.creditedBy.type : '',
+          r.creditedBy ? String(r.creditedBy.when).slice(0, 19) : '',
+          r.investorId, r.name, r.email, r.reference, r.amount.toFixed(2),
           r.depositId, String(r.depositCreated).slice(0, 19), r.ticketId,
           String(r.respondedAt || '').slice(0, 19), r.adminResponse].map(esc).join(','));
       }
