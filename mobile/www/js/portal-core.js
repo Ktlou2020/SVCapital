@@ -544,10 +544,253 @@ function renderMarketConversionPanel(pools) {
     </div>`;
 }
 
+/* The full transaction history, for the statement only.
+ *
+ * The portal loads one 200-row page of transactions for everyday use, which is
+ * fine for a dashboard and is NOT fine for a statement: the balances here are
+ * derived by working backwards from today's wallet, so a missing row does not
+ * merely omit a line, it throws the opening balance out by that amount. A
+ * client with a long history would have been handed a document that looked
+ * precise and was not.
+ *
+ * Paged on demand rather than on every load, so nobody waits for four hundred
+ * rows to see their dashboard. If it cannot finish, it says so and the document
+ * prints the caveat rather than a balance it cannot stand behind.
+ */
+async function loadFullTransactionHistory() {
+  const PAGE = 100;
+  let page = 1, all = [];
+  try {
+    for (;;) {
+      const res = await API.transactions.list({ limit: PAGE, page });
+      const rows = (res && res.data) || [];
+      all = all.concat(rows);
+      if (rows.length < PAGE) break;
+      if (res.total > 0 && all.length >= res.total) break;
+      if (++page > 200) break;
+    }
+  } catch (_) {
+    return { transactions: all, complete: false };
+  }
+  return { transactions: all, complete: true };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   STATEMENT ARITHMETIC
+
+   One source of truth for what a statement says, because there were two and
+   they disagreed: the web and mobile builders carried their own copies of the
+   credit/debit classification and mobile's knew about 'reinvestment' while the
+   web's did not — so the same client's statement showed different totals
+   depending on where they opened it.
+
+   Everything here is a pure function of the rows it is given. The document
+   builders render; they do not compute.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* How each transaction type moves the wallet.
+ *
+ * The old classification was two allow-lists and nothing else, so a type in
+ * NEITHER list — 'adjustment', and 'reinvestment' on the web — rendered a dash
+ * in both the debit and credit columns and counted toward no total at all.
+ * That is real money moving in a client's wallet, absent from the statement of
+ * that wallet.
+ *
+ * So there is a fallback now, and it reads the SIGN of the amount. An
+ * adjustment is stored signed precisely because it can go either way, and a
+ * type nobody has classified yet is far better placed by its sign than
+ * silently dropped. */
+function _stmtDirection(t) {
+  const CREDIT = ['deposit', 'return', 'payout', 'referral_bonus', 'gift_received', 'reward', 'interest', 'refund'];
+  const DEBIT  = ['withdrawal', 'investment', 'reinvestment', 'platform_fee', 'fee', 'gift_sent'];
+  const type = String(t && t.type || '');
+  if (CREDIT.includes(type)) return 'credit';
+  if (DEBIT.includes(type))  return 'debit';
+  const amt = Number(t && t.amount) || 0;
+  if (amt < 0) return 'debit';
+  if (amt > 0) return 'credit';
+  return 'none';
+}
+
+function _stmtLabel(t) {
+  const LABELS = {
+    deposit: 'Deposit', withdrawal: 'Withdrawal', investment: 'Investment',
+    reinvestment: 'Reinvestment', return: 'Return', payout: 'Payout',
+    fee: 'Fee', platform_fee: 'Platform Fee', referral_bonus: 'Referral Bonus',
+    gift_sent: 'Gift Sent', gift_received: 'Gift Received', reward: 'XP Reward',
+    adjustment: 'Adjustment', interest: 'Interest', refund: 'Refund',
+  };
+  const type = String(t && t.type || '');
+  return LABELS[type] || type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || '—';
+}
+
+/* Only a completed transaction moved money.
+ *
+ * Every total on the statement used to include pending AND rejected rows —
+ * every status except 'cancelled' counted. A client whose R50 000 deposit was
+ * rejected saw "Total Deposits R50 000" on a document headed with their name.
+ * Pending and rejected rows are still LISTED, because leaving them out would
+ * be its own kind of lie, but they are excluded from every figure and marked
+ * as excluded. */
+function _stmtCounts(t) {
+  return String(t && t.status || 'completed') === 'completed';
+}
+
+/* The signed effect of one transaction on the wallet, in rands. */
+function _stmtNet(t) {
+  if (!_stmtCounts(t)) return 0;
+  const dir = _stmtDirection(t);
+  const amt = Math.abs(Number(t && t.amount) || 0);
+  return dir === 'credit' ? amt : dir === 'debit' ? -amt : 0;
+}
+
+function _stmtDate(t) {
+  const raw = t && (t.transaction_date || t.created_at);
+  if (!raw) return null;
+  const d = (typeof raw === 'number') ? new Date(raw)
+          : new Date(String(raw).length === 10 ? raw + 'T00:00:00' : raw);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/* Everything the statement document needs, computed once.
+ *
+ * THE BALANCES ARE DERIVED BACKWARDS FROM TODAY. The only balance the platform
+ * stores is the wallet as it stands right now, so the closing balance on a
+ * statement to some past date is today's wallet minus everything that has
+ * happened since, and the opening balance is that closing figure minus the
+ * period's own movements. That makes the statement reconcile — opening plus
+ * credits minus debits equals closing — which is the thing that turns a list of
+ * transactions into a statement.
+ *
+ * It also makes the statement DEPENDENT ON HAVING EVERY TRANSACTION. A missing
+ * row does not just omit a line, it throws the opening balance out by that
+ * amount. `complete` says whether the caller supplied the full history, and the
+ * document says so on its face when it did not, rather than presenting a
+ * balance it cannot stand behind. */
+function computeStatementFigures(opts) {
+  const investor     = (opts && opts.investor) || {};
+  const allTxns      = (opts && opts.transactions) || [];
+  const allInvest    = (opts && opts.investments) || [];
+  const from         = opts && opts.from;
+  const to           = opts && opts.to;
+  const complete     = !(opts && opts.complete === false);
+
+  const inPeriod = t => { const d = _stmtDate(t); return d && d >= from && d <= to; };
+  const afterTo  = t => { const d = _stmtDate(t); return d && d > to; };
+
+  const transactions = allTxns.filter(inPeriod)
+    .sort((a, b) => (_stmtDate(a) || 0) - (_stmtDate(b) || 0));
+
+  const counted   = transactions.filter(_stmtCounts);
+  const excluded  = transactions.filter(t => !_stmtCounts(t));
+
+  const credits = counted.filter(t => _stmtDirection(t) === 'credit')
+                         .reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+  const debits  = counted.filter(t => _stmtDirection(t) === 'debit')
+                         .reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+
+  const walletNow = Number(investor.wallet_balance) || 0;
+  const since     = allTxns.filter(afterTo).reduce((s, t) => s + _stmtNet(t), 0);
+  const closing   = _stmtRound(walletNow - since);
+  const opening   = _stmtRound(closing - (credits - debits));
+
+  /* Compared in cents: 0.1 + 0.2 is not 0.3 in binary floating point, and a
+     statement that cried "does not balance" over that would be worse than one
+     that never checked. */
+  const ties = Math.round(opening * 100) + Math.round(credits * 100)
+             - Math.round(debits * 100) === Math.round(closing * 100);
+
+  const byType = {};
+  for (const t of counted) {
+    const k = String(t.type || 'other');
+    byType[k] = _stmtRound((byType[k] || 0) + Math.abs(Number(t.amount) || 0));
+  }
+
+  /* Investments that were live at any point in the period. */
+  const investments = allInvest.filter(inv => {
+    const start = new Date(inv.start_date || inv.investment_date || inv.created_at || 0);
+    const end   = inv.end_date ? new Date(inv.end_date)
+                : (inv.maturity_date ? new Date(inv.maturity_date) : null);
+    if (isNaN(start.getTime())) return false;
+    if (inv.status === 'active') return start <= to;
+    if (end && !isNaN(end.getTime())) return start <= to && end >= from;
+    return start >= from && start <= to;
+  });
+
+  /* Capital placed DURING the period. The old figure summed every investment
+     the client had ever made and printed it beside "Investments in Period" on a
+     statement covering three months. */
+  const capitalInPeriod = _stmtRound(allInvest.filter(inv => {
+    const start = new Date(inv.start_date || inv.investment_date || inv.created_at || 0);
+    return !isNaN(start.getTime()) && start >= from && start <= to;
+  }).reduce((s, i) => s + (Number(i.amount) || 0), 0));
+
+  const activeInvestments = allInvest.filter(i => i.status === 'active');
+  const activeInvAmt = _stmtRound(activeInvestments.reduce((s, i) => s + (Number(i.amount) || 0), 0));
+
+  return {
+    from, to, complete,
+    transactions, counted, excluded,
+    investments,
+    credits:  _stmtRound(credits),
+    debits:   _stmtRound(debits),
+    opening, closing, ties,
+    net:      _stmtRound(credits - debits),
+    byType,
+    deposits:    byType.deposit || 0,
+    withdrawals: byType.withdrawal || 0,
+    returns:     _stmtRound((byType.return || 0) + (byType.payout || 0)),
+    fees:        _stmtRound((byType.platform_fee || 0) + (byType.fee || 0)),
+    capitalInPeriod,
+    activeInvCount: activeInvestments.length,
+    activeInvAmt,
+    walletNow: _stmtRound(walletNow),
+    /* Portfolio value is a TODAY figure — active investments plus the wallet as
+       it stands. It is returned under a name that says so, because it was
+       printed on historical statements labelled as though it belonged to the
+       period. */
+    portfolioValueToday: _stmtRound(activeInvAmt + walletNow),
+  };
+}
+
+function _stmtRound(n) {
+  return Math.round((Number(n) || 0) * 100) / 100;
+}
+
+/* A statement number that means something.
+ *
+ * It was `SVC-<year>-<five random digits>`: regenerating the same statement
+ * gave a different reference every time, and two different statements could
+ * collide. A reference nobody can look anything up by is decoration. This is
+ * derived from the investor and the period, so the same statement always
+ * carries the same number and two different ones cannot share it. */
+function statementNumber_sa(subAccountId) {
+  let h = 5381;
+  const seed = String(subAccountId || '');
+  for (let i = 0; i < seed.length; i++) h = ((h << 5) + h + seed.charCodeAt(i)) >>> 0;
+  return `SVC-SA-${h.toString(36).toUpperCase().slice(0, 6)}`;
+}
+
+function statementNumber(investorId, from, to) {
+  const iso = d => { try { return new Date(d).toISOString().slice(0, 10).replace(/-/g, ''); } catch (_) { return '00000000'; } };
+  let h = 5381;
+  const seed = `${investorId || ''}|${iso(from)}|${iso(to)}`;
+  for (let i = 0; i < seed.length; i++) h = ((h << 5) + h + seed.charCodeAt(i)) >>> 0;
+  return `SVC-${iso(from).slice(0, 4)}-${iso(from).slice(4)}${iso(to).slice(4)}-${h.toString(36).toUpperCase().slice(0, 4)}`;
+}
+
+/* The South African tax year: 1 March to the end of February.
+ *
+ * The end date was hardcoded to the 28th, which silently drops 29 February in a
+ * leap year — a whole day of transactions missing from a tax statement, in the
+ * years nobody thinks to check. Computed as the day before 1 March instead, so
+ * a leap year needs no special case. UTC throughout, and matched to
+ * taxYearRange in server/routes/statements.js, because a preset and an endpoint
+ * that disagree about the period are worse than either being wrong alone. */
 function _statementTaxYearRange(year) {
   const y = parseInt(year, 10) || new Date().getFullYear();
-  const from = new Date(y - 1, 2, 1);
-  const to = new Date(y, 1, 28);
+  const from = new Date(Date.UTC(y - 1, 2, 1));
+  const to   = new Date(Date.UTC(y, 2, 1) - 86400000);
   return {
     from: from.toISOString().split('T')[0],
     to: to.toISOString().split('T')[0]
@@ -4119,12 +4362,23 @@ function qsr(label, val) {
   </div>`;
 }
 
-function generateStatement() {
+async function generateStatement() {
   // Guard: PORTAL.investor must be populated (set in loadPortalData)
   if (!PORTAL.investor) {
     Toast.error('Portfolio data is still loading — please wait a moment and try again.');
     return;
   }
+
+  /* Fetched once per session. The dashboard's 200-row page is enough for the
+     dashboard; a statement needs all of it. */
+  if (!PORTAL._fullHistory) {
+    const btn = document.getElementById('stmtGenerateBtn');
+    const label = btn ? btn.innerHTML : null;
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading your history…'; }
+    PORTAL._fullHistory = await loadFullTransactionHistory();
+    if (btn) { btn.disabled = false; if (label) btn.innerHTML = label; }
+  }
+  const _hist = PORTAL._fullHistory;
 
   const fromEl = document.getElementById('stmtFrom');
   const toEl   = document.getElementById('stmtTo');
@@ -4149,40 +4403,29 @@ function generateStatement() {
   const effectiveTransactions = anyChecked ? incTransactions : true;
   const effectivePerformance  = anyChecked ? incPerformance  : true;
 
-  const investor    = PORTAL.investor || {};
+  const investor       = PORTAL.investor || {};
   const allInvestments = PORTAL.investments || [];
+  const allTxns        = (_hist && _hist.transactions && _hist.transactions.length)
+                          ? _hist.transactions : (PORTAL.transactions || []);
 
-  // Filter transactions by date range
-  const allTxns = PORTAL.transactions || [];
-  function _inPeriod(raw) {
-    if (!raw) return false;
-    const d = (typeof raw === 'number') ? new Date(raw) : new Date(String(raw).length === 10 ? raw + 'T00:00:00' : raw);
-    if (isNaN(d.getTime())) return false;
-    return d >= from && d <= to;
-  }
-  const transactions = allTxns.filter(t => _inPeriod(t.transaction_date || t.created_at));
-
-  // Show investments that were active at any point during the period
-  const investments = allInvestments.filter(inv => {
-    const start = new Date(inv.start_date || inv.investment_date || inv.created_at || 0);
-    const end   = inv.end_date ? new Date(inv.end_date) : (inv.maturity_date ? new Date(inv.maturity_date) : null);
-    if (inv.status === 'active') return start <= to;
-    if (end) return start <= to && end >= from;
-    return start >= from && start <= to;
+  /* All the arithmetic in one place, shared with the mobile app. The balances
+     only reconcile if every transaction is present, so whether the portal
+     managed to load the full history is passed in and printed on the document
+     when it did not. */
+  const F = computeStatementFigures({
+    investor, transactions: allTxns, investments: allInvestments,
+    from, to, complete: !!(_hist && _hist.complete),
   });
 
-  // Compute stats
-  const walletBal     = Number(investor.wallet_balance) || 0;
-  const activeInvAmt  = allInvestments.filter(i => i.status === 'active').reduce((s, i) => s + (Number(i.amount) || 0), 0);
-  const totalValue    = activeInvAmt + walletBal;                   // Portfolio Value = active inv + wallet
-  const totalDeposits = transactions.filter(t => t.type === 'deposit' && t.status !== 'cancelled').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
-  // Returns: prefer completed return/payout transactions in the period; fall back to
-  // paid-out investments' actual return amounts when no such transactions exist yet.
-  const _txnReturns  = transactions.filter(t => (t.type === 'return' || t.type === 'payout') && t.status !== 'cancelled').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
-  const totalReturns = _txnReturns > 0 ? _txnReturns
-    : Utils.earnedReturns(allInvestments.filter(i => ['paid_out', 'matured'].includes(i.status) && _inPeriod(i.maturity_date || i.investment_date)));
-  const activeInv     = allInvestments.filter(i => i.status === 'active').length;
-  const totalCapital  = allInvestments.reduce((s, i) => s + (Number(i.amount) || 0), 0);
+  const transactions  = F.transactions;
+  const investments   = F.investments;
+  const walletBal     = F.walletNow;
+  const totalValue    = F.portfolioValueToday;
+  const totalDeposits = F.deposits;
+  const totalReturns  = F.returns;
+  const activeInv     = F.activeInvCount;
+  const totalCapital  = F.capitalInPeriod;
+  const activeInvAmt  = F.activeInvAmt;
 
   // Build preview quick stats
   const previewEl = document.getElementById('stmtQuickStats');
@@ -4192,9 +4435,10 @@ function generateStatement() {
         ${quickStatRow('Period', `${fmtDate(from)} — ${fmtDate(to)}`)}
         ${quickStatRow('Investments in Period', investments.length)}
         ${quickStatRow('Transactions in Period', transactions.length)}
-        ${quickStatRow('Capital Invested', Utils.rand(totalCapital))}
+        ${quickStatRow('Capital Placed in Period', Utils.rand(totalCapital))}
         ${quickStatRow('Returns in Period', Utils.rand(totalReturns))}
-        ${quickStatRow('Portfolio Value', Utils.rand(totalValue))}
+        ${quickStatRow('Closing Balance', Utils.rand(F.closing))}
+        ${quickStatRow('Portfolio Value (today)', Utils.rand(totalValue))}
       </div>
     `;
   }
@@ -4203,14 +4447,14 @@ function generateStatement() {
   const doc = document.getElementById('statementDocument');
   if (!doc) return;
 
-  const statementNumber = `SVC-${new Date().getFullYear()}-${String(Math.floor(Math.random()*90000)+10000)}`;
+  const stmtNo = statementNumber(investor.id, from, to);
   const generatedAt = new Date().toLocaleString('en-ZA', {dateStyle:'long', timeStyle:'short'});
 
   let html = buildStatementHTML({
     investor, investments, transactions,
     from, to, totalDeposits, totalReturns, walletBal, totalValue, activeInv,
     totalCapital, activeInvAmt,
-    statementNumber, generatedAt,
+    statementNumber: stmtNo, generatedAt, figures: F,
     incPortfolio:    effectivePortfolio,
     incInvestments:  effectiveInvestments,
     incTransactions: effectiveTransactions,
@@ -8324,19 +8568,30 @@ function downloadSaStatement(saId, saName) {
   const transactions = (PORTAL.transactions || []).filter(t => t.sub_account_id === saId);
   const investor     = PORTAL.investor || {};
 
-  const walletBal     = Number(sa.wallet_balance) || 0;
-  const activeInvAmt  = investments.filter(i => i.status === 'active').reduce((s, i) => s + (Number(i.amount) || 0), 0);
-  const totalValue    = activeInvAmt + walletBal;
-  const totalDeposits = transactions.filter(t => t.type === 'deposit' && t.status !== 'cancelled').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
-  const _saTxnReturns = transactions.filter(t => (t.type === 'return' || t.type === 'payout') && t.status !== 'cancelled').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
-  const totalReturns  = _saTxnReturns > 0 ? _saTxnReturns
-    : Utils.earnedReturns(investments.filter(i => ['paid_out', 'matured'].includes(i.status)));
+  /* Same arithmetic as the main statement, over this sub-account's rows only.
+     It used to count every transaction whose status was not 'cancelled' — so a
+     PENDING or REJECTED deposit was reported to the client as money in the
+     account. Over a whole account life, so the range is deliberately open. */
+  const _saF = computeStatementFigures({
+    investor: { wallet_balance: sa.wallet_balance },
+    transactions, investments,
+    from: new Date(0), to: new Date(8640000000000000),
+    complete: true,
+  });
+
+  const walletBal     = _saF.walletNow;
+  const activeInvAmt  = _saF.activeInvAmt;
+  const totalValue    = _saF.portfolioValueToday;
+  const totalDeposits = _saF.deposits;
+  const totalReturns  = _saF.returns;
   const totalInvested = totalDeposits;
-  const activeInv     = investments.filter(i => i.status === 'active').length;
+  const activeInv     = _saF.activeInvCount;
 
   const now           = new Date();
   const generatedAt   = now.toLocaleString('en-ZA', { dateStyle: 'long', timeStyle: 'short' });
-  const statementNumber = `SVC-${now.getFullYear()}-SA-${String(Math.floor(Math.random() * 90000) + 10000)}`;
+  /* Stable, not random: the same sub-account statement must carry the same
+     reference every time it is produced. */
+  const statementNumber = statementNumber_sa(sa.id);
   const logoUrl       = `${window.location.origin}/assets/sv-capital-logo-horizontal-white-text.png`;
   const logoOutlineUrl = new URL('../assets/logo-outline.png', window.location.href).href;
   const saType        = sa.type ? sa.type.charAt(0).toUpperCase() + sa.type.slice(1) : 'Sub-Account';
@@ -9338,8 +9593,10 @@ function _renderMonthlyReturnsChart() {
   const ctx = document.getElementById('analyticsMonthlyChart');
   if (!ctx) return;
 
+  /* Completed only. A pending or rejected return charted as earned tells the
+     client they made money they have not been paid. */
   const txns = PORTAL.transactions.filter(t =>
-    (t.type === 'return' || t.type === 'interest' || t.type === 'payout') && t.status !== 'cancelled'
+    (t.type === 'return' || t.type === 'interest' || t.type === 'payout') && _stmtCounts(t)
   );
 
   const monthly = {};
