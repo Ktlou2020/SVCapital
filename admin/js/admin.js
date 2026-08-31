@@ -16196,8 +16196,6 @@ function _openAccountStatementWindow(data) {
     '    <tr><td style="padding:8px 10px;font-size:11px;color:#374151">Returns paid to you' +
       ' <span style="color:#9ca3af">maturity payouts and interest</span></td>' +
       '<td class="num" style="padding:8px 10px;font-weight:800;text-align:right;color:#15803d">' + fmtR(_n(paid.returns)) + '</td></tr>',
-    '    <tr><td style="padding:8px 10px;font-size:11px;color:#374151">Withdrawn to your bank</td>' +
-      '<td class="num" style="padding:8px 10px;font-weight:700;text-align:right">' + fmtR(_n(paid.withdrawn)) + '</td></tr>',
     '    <tr><td style="padding:8px 10px;font-size:11px;color:#374151">Deposited by you</td>' +
       '<td class="num" style="padding:8px 10px;text-align:right">' + fmtR(_n(paid.deposited)) + '</td></tr>',
     '    <tr><td style="padding:8px 10px;font-size:11px;color:#374151">Placed into investments</td>' +

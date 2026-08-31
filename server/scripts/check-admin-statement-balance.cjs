@@ -241,7 +241,12 @@ console.log('\nthe portfolio summary adds up');
   ok('and keeps accrued returns visually apart',
      /Returns accrued, not yet paid/.test(src),
      'a client reading a single "returns" figure must not be shown cash plus accrual');
-  ok('and shows what was withdrawn to the bank', /Withdrawn to your bank/.test(src));
+  /* Withdrawals are deliberately NOT summarised here. They are on the ledger
+     below with their dates and references, and the box is about what the fund
+     paid the client — not what the client then chose to move. The endpoint
+     still returns the figure, so restoring the row is a one-line change. */
+  ok('withdrawals are not summarised in the paid box',
+     !/Withdrawn to your bank/.test(src));
   ok('an active investment past its maturity date is flagged',
      /still marked active although/.test(src),
      'the client will ask, so the person sending it should know first');
