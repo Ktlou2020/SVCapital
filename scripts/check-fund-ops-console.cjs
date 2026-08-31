@@ -182,6 +182,39 @@ console.log('\nthe migration adds only what has no equivalent');
      /ALTER TABLE fund_notifications ADD COLUMN is_dismissed/.test(SETUP));
 }
 
+console.log('\nthe payout schedule and fees are generated, not hand-entered');
+{
+  ok('the console asks the server for a plan first',
+     /apiFetch\(`fund\/runs\/\$\{runId\}\/plan`\)/.test(CODE),
+     'the operator must see the split before it is written');
+  ok('and posts nothing but the run id to generate',
+     /apiFetch\(`fund\/runs\/\$\{_genRunId\}\/generate`[\s\S]{0,140}body: '\{\}'/.test(CODE),
+     'a client that posts amounts can pay the wrong person the wrong figure');
+  ok('the confirmation says it does not pay anyone',
+     /does not pay anyone/.test(CODE),
+     'generation records what is owed; paying is a separate act');
+  ok('the split is checked to tie on screen', /_genTies/.test(CODE));
+  ok('and that check compares whole cents',
+     /Math\.round\(plan\.totals\.net \* 100\) === Math\.round/.test(CODE),
+     '0.1 + 0.2 is not 0.3 in binary floating point; a naive compare would cry wolf');
+
+  ok('a schedule can actually be marked paid',
+     /SCHED_PAYABLE\.includes\(status\)/.test(CODE) &&
+     /SCHED_PAYABLE = \['pending'/.test(CODE),
+     "the button was shown only for 'scheduled', which the table does not allow");
+  ok('the schedule row reads amount_invested, not capital_amount',
+     !/s\.capital_amount/.test(CODE) && /parseFloat\(s\.amount_invested\)/.test(CODE));
+  ok('and computes the payout rather than reading a column that is not there',
+     /const _schedPayout/.test(SRC) && !/\b[sp]\.total_payout\b/.test(CODE) &&
+     /fmt\.rand\(capital \+ net\)/.test(CODE),
+     'return_schedules has no total_payout — every obligation figure summed undefined');
+  ok('and fund_runs keeps its own total_payout',
+     /run\.total_payout|r\.total_payout/.test(CODE) || !/total_payout/.test(CODE),
+     'that column is real on fund_runs; the scoping had to spare it');
+  ok('the status counters use the statuses the table allows',
+     !/x\.status==='scheduled'\)\.length/.test(CODE) && /x\.status === 'overdue'/.test(CODE));
+}
+
 console.log('\nno total is computed over part of the book');
 {
   ok('the one-page helper is gone entirely',

@@ -286,7 +286,17 @@ const apiDelete = (t,id)    => apiFetch(`tables/${t}/${id}`, { method:'DELETE' }
    Likewise the date column is expected_date; scheduled_payout_date has never
    existed, so the sort key was always Invalid Date and the "upcoming payouts"
    widget was ordered arbitrarily. */
+/* The statuses return_schedules actually allows are pending, paid, overdue and
+   cancelled. The Mark Paid button was shown only for 'scheduled', which is not
+   one of them — so once a schedule existed, there was no way to mark it paid. */
+const SCHED_PAYABLE = ['pending', 'overdue', 'scheduled'];
 const _schedDate     = s => s.expected_date || s.scheduled_payout_date || null;
+/* What an investor is handed on the day: their capital back plus the net
+   return. return_schedules has no total_payout column — that one belongs to
+   fund_runs — so every obligation figure on the dashboard, the forecast and the
+   intelligence panel was summing undefined and reporting R0. Computed rather
+   than stored, so it cannot drift from the two numbers it comes from. */
+const _schedPayout = s => (parseFloat(s.amount_invested) || 0) + (parseFloat(s.net_return) || 0);
 const _schedInvestor = s => {
   if (s.investor_name) return s.investor_name;
   const i = (S.investors || []).find(x => x.id === s.investor_id);
@@ -431,7 +441,7 @@ function renderUpcomingPayoutsWidget() {
     el.innerHTML = `<div class="empty" style="padding:24px"><i class="fa-solid fa-calendar-check"></i><p>No pending payouts</p></div>`;
     return;
   }
-  const totalVal = pending.reduce((s,p)=>s+(parseFloat(p.total_payout)||0),0);
+  const totalVal = pending.reduce((s,p)=>s+_schedPayout(p),0);
   const now = new Date();
   const rows = pending.map(s=>{
     const payDate = new Date(_schedDate(s));
@@ -445,7 +455,7 @@ function renderUpcomingPayoutsWidget() {
         <div style="font-size:0.72rem;color:var(--text-muted)">${_esc(_schedRun(s))} · ${fmt.date(_schedDate(s))}</div>
       </div>
       <div style="text-align:right;flex-shrink:0">
-        <div class="td-gold fw7" style="font-size:0.88rem">${fmt.rand(s.total_payout)}</div>
+        <div class="td-gold fw7" style="font-size:0.88rem">${fmt.rand(_schedPayout(s))}</div>
         <div style="display:flex;align-items:center;gap:6px;justify-content:flex-end;margin-top:2px">
           <span style="font-size:0.68rem;color:var(--text-muted)">incl. ${fmt.rand(s.net_return)} return</span>
           <span style="font-size:9px;font-weight:700;color:${urgencyColor};background:${urgencyColor}18;padding:1px 5px;border-radius:6px">${urgencyLabel}</span>
@@ -523,7 +533,7 @@ function renderRiskStrip() {
     if (s.status === 'paid' || s.status === 'cancelled') return false;
     const d = new Date(_schedDate(s));
     return d >= now && d <= in90;
-  }).reduce((acc, p) => acc + (parseFloat(p.total_payout)||0), 0);
+  }).reduce((acc, p) => acc + _schedPayout(p), 0);
   const totalRaised = (S.pools||[]).reduce((acc, p) => acc + (parseFloat(p.raised_amount)||0), 0);
   const cattleDep = (S.cattle||[]).filter(c=>['active','in_progress'].includes(c.status)).reduce((s,c)=>s+(parseFloat(c.purchase_value)||parseFloat(c.purchase_price)||0),0);
   const solarDep  = (S.solar||[]).filter(p=>p.status==='active').reduce((s,p)=>s+(parseFloat(p.capital_deployed)||0),0);
@@ -551,7 +561,7 @@ function renderRiskStrip() {
   el.innerHTML = `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px">
     ${card(liqStatus.icon,'Liquidity Coverage',liqRatio>99?'∞':liqRatio.toFixed(1)+'x',liqStatus.label+' · 90-day horizon',liqStatus.color)}
     ${card('fa-triangle-exclamation','Overdue Loans',overdueLoans.length,overdueLoans.length>0?fmt.rand(overdueLoans.reduce((s,l)=>s+(parseFloat(l.disbursement_amount)||0),0))+' at risk':'No overdue accounts',overdueLoans.length>0?'#f87171':'#74c69d')}
-    ${card('fa-calendar-exclamation','Obligations (30d)',obligations30.length+' payouts',fmt.rand(obligations30.reduce((s,p)=>s+(parseFloat(p.total_payout)||0),0))+' due soon','#fb923c')}
+    ${card('fa-calendar-exclamation','Obligations (30d)',obligations30.length+' payouts',fmt.rand(obligations30.reduce((s,p)=>s+_schedPayout(p),0))+' due soon','#fb923c')}
     ${card('fa-chart-pie','Concentration Risk',concPct+'%',maxSeg?_esc(maxSeg.name)+' is largest position':'No active positions',concPct>65?'#f87171':concPct>45?'#fb923c':'#74c69d')}
   </div>`;
 }
@@ -1013,6 +1023,7 @@ function viewRun(runId) {
         <button class="btn btn--primary btn--sm" onclick="openCalculateReturnsModal('${run.id}')"><i class="fa-solid fa-calculator"></i> Calculate Returns</button>
         <button class="btn btn--success btn--sm" onclick="completeRun('${run.id}')"><i class="fa-solid fa-check"></i> Mark Complete</button>
       ` : ''}
+      ${run.status === 'in_progress' || isComplete ? `<button class="btn btn--teal btn--sm" onclick="openGenerateModal('${run.id}')"><i class="fa-solid fa-list-check"></i> Payout Schedule &amp; Fees</button>` : ''}
       ${run.status === 'draft' || run.status === 'in_progress' ? `<button class="btn btn--secondary btn--sm" onclick="editRun('${run.id}')"><i class="fa-solid fa-pen"></i> Edit Run</button>` : ''}
       ${isComplete ? `<button class="btn btn--secondary btn--sm" onclick="exportRunReport('${run.id}')"><i class="fa-solid fa-file-arrow-down"></i> Export Report</button>` : ''}
       <button class="btn btn--danger btn--sm" onclick="deleteRun('${run.id}')"><i class="fa-solid fa-trash"></i> Delete</button>
@@ -1192,6 +1203,190 @@ async function saveEditRun() {
   } catch(e) { T.error('Failed to update run'); }
 }
 
+/* ═══════════════════════════════════════════════
+   PAYOUT SCHEDULE & FEE GENERATION
+
+   return_schedules and fee_ledger both existed with no writer, which is why
+   both screens were empty. A run knows its total return and its fees; this
+   turns that into a row per investor and a line per fee.
+
+   Preview first. The operator sees exactly who gets what before anything is
+   written, and the server recomputes the same plan inside the transaction that
+   writes it — so this screen cannot show one split and commit another, and a
+   stale page cannot pay the wrong person.
+═══════════════════════════════════════════════ */
+let _genRunId = null;
+
+async function openGenerateModal(runId) {
+  _genRunId = runId;
+  const body = document.getElementById('generateModalBody');
+  const btn  = document.getElementById('generateConfirmBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-list-check"></i> Generate'; }
+  if (body) body.innerHTML = `<div class="empty"><i class="fa-solid fa-spinner fa-spin"></i><p>Working out the split…</p></div>`;
+  M.open('generateModal');
+  try {
+    const plan = await apiFetch(`fund/runs/${runId}/plan`);
+    renderGeneratePlan(plan);
+  } catch (e) {
+    if (body) body.innerHTML = `<div class="empty" style="color:var(--red)"><i class="fa-solid fa-triangle-exclamation"></i><p>Could not build the plan</p><p class="hint">${_esc(e.message)}</p></div>`;
+  }
+}
+
+function renderGeneratePlan(plan, written) {
+  const body = document.getElementById('generateModalBody');
+  const btn  = document.getElementById('generateConfirmBtn');
+  if (!body) return;
+  S._genPlan = plan;
+
+  if (btn) {
+    btn.disabled = !plan.ok || !!written;
+    btn.innerHTML = written
+      ? '<i class="fa-solid fa-check"></i> Generated'
+      : (plan.replacing && (plan.replacing.schedules || plan.replacing.fees)
+          ? '<i class="fa-solid fa-rotate"></i> Replace &amp; regenerate'
+          : '<i class="fa-solid fa-list-check"></i> Generate');
+  }
+
+  const money = v => fmt.rand(v, 2);
+  const blockers = (plan.blockers || []).map(b =>
+    `<li style="margin-bottom:6px">${_esc(b)}</li>`).join('');
+  const warnings = (plan.warnings || []).map(w =>
+    `<li style="margin-bottom:6px">${_esc(w)}</li>`).join('');
+
+  body.innerHTML = `
+    ${written ? `
+    <div style="background:rgba(116,198,157,.12);border:1px solid rgba(116,198,157,.4);border-radius:var(--radius);padding:12px 14px;margin-bottom:14px;font-size:0.82rem;color:var(--green)">
+      <i class="fa-solid fa-circle-check"></i>
+      Wrote ${written.schedules} payout schedule${written.schedules===1?'':'s'} and ${written.fees} fee entr${written.fees===1?'y':'ies'}.
+      ${written.replacedSchedules ? `Replaced ${written.replacedSchedules} unpaid schedule${written.replacedSchedules===1?'':'s'}.` : ''}
+      Nothing has been paid — the schedules are pending and the fees accrued.
+    </div>` : ''}
+
+    ${blockers ? `
+    <div style="background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.4);border-radius:var(--radius);padding:12px 14px;margin-bottom:14px">
+      <div style="font-weight:700;color:var(--red);font-size:0.82rem;margin-bottom:6px">
+        <i class="fa-solid fa-circle-exclamation"></i> This run cannot be generated yet</div>
+      <ul style="margin:0;padding-left:18px;font-size:0.78rem;color:var(--text-muted)">${blockers}</ul>
+    </div>` : ''}
+
+    ${warnings ? `
+    <div style="background:rgba(254,194,79,.1);border:1px solid rgba(254,194,79,.4);border-radius:var(--radius);padding:12px 14px;margin-bottom:14px">
+      <div style="font-weight:700;color:var(--gold);font-size:0.82rem;margin-bottom:6px">
+        <i class="fa-solid fa-triangle-exclamation"></i> Worth checking first</div>
+      <ul style="margin:0;padding-left:18px;font-size:0.78rem;color:var(--text-muted)">${warnings}</ul>
+    </div>` : ''}
+
+    ${plan.schedules && plan.schedules.length ? `
+    <div class="flex-b mb-12">
+      <div style="font-size:0.82rem;font-weight:700;color:var(--text-h)">
+        ${plan.totals.investors} investor${plan.totals.investors===1?'':'s'} · due ${fmt.date(plan.run.dueDate)}
+      </div>
+      <div style="font-size:0.75rem;color:var(--text-muted)">
+        Capital ${money(plan.totals.invested)} · Net ${money(plan.totals.net)}
+      </div>
+    </div>
+    <div class="tbl-wrap" style="max-height:280px;overflow:auto">
+      <table class="data-table">
+        <thead><tr><th>Investor</th><th class="text-right">Capital</th><th class="text-right">Share</th>
+          <th class="text-right">Gross</th><th class="text-right">Fees</th><th class="text-right">Net</th></tr></thead>
+        <tbody>
+          ${plan.schedules.map(r => `<tr>
+            <td><div class="td-h">${_esc(r.investorName)}</div></td>
+            <td class="text-right td-m">${money(r.amountInvested)}</td>
+            <td class="text-right td-m">${plan.totals.invested ? (r.amountInvested / plan.totals.invested * 100).toFixed(2) : '0.00'}%</td>
+            <td class="text-right td-m">${money(r.grossReturn)}</td>
+            <td class="text-right" style="color:var(--red)">${money(r.fees)}</td>
+            <td class="text-right td-h" style="color:var(--green)">${money(r.netReturn)}</td>
+          </tr>`).join('')}
+        </tbody>
+        <tfoot><tr style="border-top:2px solid var(--border)">
+          <td style="font-weight:700">Total</td>
+          <td class="text-right" style="font-weight:700">${money(plan.totals.invested)}</td>
+          <td></td>
+          <td class="text-right" style="font-weight:700">${money(plan.totals.gross)}</td>
+          <td class="text-right" style="font-weight:700;color:var(--red)">${money(plan.totals.fees)}</td>
+          <td class="text-right" style="font-weight:700;color:var(--green)">${money(plan.totals.net)}</td>
+        </tr></tfoot>
+      </table>
+    </div>
+
+    <!-- The check an operator would otherwise do by hand, done on screen. The
+         parts are distributed in whole cents by largest remainder, so this is
+         an equality and not an approximation. -->
+    <div style="margin:12px 0;font-size:0.75rem;color:${_genTies(plan) ? 'var(--green)' : 'var(--red)'}">
+      <i class="fa-solid fa-${_genTies(plan) ? 'circle-check' : 'circle-exclamation'}"></i>
+      ${_genTies(plan)
+        ? `The schedule ties to the run: ${money(plan.totals.net)} net across ${plan.totals.investors} investor${plan.totals.investors===1?'':'s'} equals the run's ${money(plan.run.netReturn)}.`
+        : `The schedule does NOT tie to the run (${money(plan.totals.net)} vs ${money(plan.run.netReturn)}). Do not generate — report this.`}
+    </div>` : ''}
+
+    ${plan.feeLines && plan.feeLines.length ? `
+    <div style="font-size:0.82rem;font-weight:700;color:var(--text-h);margin:16px 0 8px">Fee entries</div>
+    <div class="tbl-wrap">
+      <table class="data-table">
+        <thead><tr><th>Type</th><th>Charged on</th><th class="text-right">Rate</th><th class="text-right">Amount</th></tr></thead>
+        <tbody>
+          ${plan.feeLines.map(l => `<tr>
+            <td><div class="td-h" style="text-transform:capitalize">${_esc(l.fee_type)}</div>
+                <div class="td-m" style="font-size:11px">${_esc(l.description)}</div></td>
+            <td class="td-m">${money(l.basis)}</td>
+            <td class="text-right td-m">${l.rate ? fmt.pct(l.rate) : '—'}</td>
+            <td class="text-right td-h" style="color:var(--gold)">${money(l.amount)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>` : ''}
+
+    ${plan.replacing && (plan.replacing.schedules || plan.replacing.fees) && !written ? `
+    <div style="margin-top:14px;font-size:0.75rem;color:var(--text-muted)">
+      <i class="fa-solid fa-rotate"></i>
+      This run already has ${plan.replacing.schedules} unpaid schedule${plan.replacing.schedules===1?'':'s'}
+      and ${plan.replacing.fees} unreceived fee entr${plan.replacing.fees===1?'y':'ies'}; generating replaces them.
+      Anything already paid or received is left alone.
+    </div>` : ''}
+  `;
+}
+
+/* Does the split add up? Compared in cents — 0.1 + 0.2 is not 0.3 in binary
+   floating point, and a tie check that fails on that would cry wolf on a
+   perfectly good schedule. */
+function _genTies(plan) {
+  if (!plan || !plan.totals || !plan.run) return false;
+  return Math.round(plan.totals.net * 100) === Math.round((plan.run.netReturn || 0) * 100);
+}
+
+async function confirmGenerate() {
+  if (!_genRunId) return;
+  const plan = S._genPlan;
+  const n = (plan && plan.totals && plan.totals.investors) || 0;
+  const replacing = plan && plan.replacing && plan.replacing.schedules;
+  if (!confirm(
+    `Create ${n} payout schedule${n===1?'':'s'} and ${(plan.feeLines||[]).length} fee entr${(plan.feeLines||[]).length===1?'y':'ies'} for this run?` +
+    (replacing ? `\n\n${replacing} existing unpaid schedule${replacing===1?'':'s'} will be replaced.` : '') +
+    `\n\nThis records what is owed. It does not pay anyone.`)) return;
+
+  const btn = document.getElementById('generateConfirmBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generating…'; }
+  try {
+    const res = await apiFetch(`fund/runs/${_genRunId}/generate`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    renderGeneratePlan(res, res.written);
+    T.success(`${res.written.schedules} payout schedule(s) and ${res.written.fees} fee entr${res.written.fees===1?'y':'ies'} created`);
+    /* Both screens this fills are now stale. */
+    if (S.schedules) await loadSchedules().catch(() => {});
+  } catch (e) {
+    /* A 409 is the server refusing for a reason the operator can act on, and
+       apiFetch turns every non-2xx into the same terse Error — so the blockers
+       are fetched back and shown rather than swallowed into "generate failed". */
+    try {
+      const again = await apiFetch(`fund/runs/${_genRunId}/plan`);
+      renderGeneratePlan(again);
+    } catch (_) { /* leave what is on screen */ }
+    T.error('Not generated — see the reasons above');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-list-check"></i> Generate'; }
+  }
+}
+
 function exportRunReport(runId) {
   const run = S.runs.find(r => r.id === runId);
   if (!run) return;
@@ -1250,11 +1445,17 @@ async function loadSchedules() {
 function renderScheduleStats() {
   const s = S.schedules;
   const set = (id,v)=>{ const e=document.getElementById(id); if(e) e.textContent=v; };
+  /* The statuses this table actually holds are pending, paid, overdue and
+     cancelled — 'scheduled' and 'processing' are not among them, so these
+     counters read 0 for anything that existed. The outstanding total is capital
+     plus net return, computed: total_payout is not a column here. */
+  const outstanding = s.filter(x => SCHED_PAYABLE.includes(x.status || 'pending'));
   set('sched-total',      s.length);
-  set('sched-scheduled',  s.filter(x=>x.status==='scheduled').length);
-  set('sched-processing', s.filter(x=>x.status==='processing').length);
-  set('sched-paid',       s.filter(x=>x.status==='paid').length);
-  set('sched-total-payout', fmt.rand(s.filter(x=>x.status==='scheduled'||x.status==='processing').reduce((t,x)=>t+(x.total_payout||0),0)));
+  set('sched-scheduled',  s.filter(x => (x.status||'pending') === 'pending').length);
+  set('sched-processing', s.filter(x => x.status === 'overdue').length);
+  set('sched-paid',       s.filter(x => x.status === 'paid').length);
+  set('sched-total-payout', fmt.rand(outstanding.reduce((t, x) =>
+        t + (parseFloat(x.amount_invested)||0) + (parseFloat(x.net_return)||0), 0)));
 }
 
 function renderSchedulesTable(filterStatus='', searchQ='') {
@@ -1269,24 +1470,35 @@ function renderSchedulesTable(filterStatus='', searchQ='') {
     el.innerHTML = `<tr><td colspan="9"><div class="empty"><i class="fa-solid fa-calendar"></i><p>No payout schedules found</p></div></td></tr>`;
     return;
   }
-  el.innerHTML = data.map(s => `
+  /* Every column here used to name something return_schedules does not have —
+     capital_amount, annual_rate, total_payout, product_type — so the table
+     rendered R0 across the board. The product and the rate belong to the RUN
+     and are looked up; the payout is capital plus net return and is computed,
+     because storing a total that can disagree with its own parts is how a
+     schedule stops tying to itself. */
+  el.innerHTML = data.map(s => {
+    const run     = (S.runs || []).find(x => x.id === s.fund_run_id);
+    const capital = parseFloat(s.amount_invested) || 0;
+    const net     = parseFloat(s.net_return) || 0;
+    const status  = s.status || 'pending';
+    return `
     <tr>
       <td><div class="td-h">${_esc(_schedInvestor(s))}</div></td>
       <td class="td-m">${_esc(_schedRun(s))}</td>
-      <td>${productBadge(s.product_type)}</td>
-      <td class="td-gold">${fmt.rand(s.capital_amount)}</td>
-      <td class="td-orange">${fmt.pct(s.annual_rate)}</td>
-      <td class="td-green">${fmt.rand(s.net_return)}</td>
-      <td class="td-h fw7" style="color:var(--teal)">${fmt.rand(s.total_payout)}</td>
+      <td>${productBadge(run && run.product_type)}</td>
+      <td class="td-gold">${fmt.rand(capital)}</td>
+      <td class="td-orange">${fmt.pct(run && run.actual_rate ? run.actual_rate : (run && run.annual_rate))}</td>
+      <td class="td-green">${fmt.rand(net)}</td>
+      <td class="td-h fw7" style="color:var(--teal)">${fmt.rand(capital + net)}</td>
       <td class="td-m">${fmt.date(_schedDate(s))}</td>
       <td>
         <div class="flex-c gap-6">
-          ${schedStatusBadge(s.status)}
-          ${s.status==='scheduled' ? `<button class="btn btn--xs btn--teal" onclick="markSchedPaid('${s.id}')"><i class="fa-solid fa-check"></i></button>` : ''}
+          ${schedStatusBadge(status)}
+          ${SCHED_PAYABLE.includes(status) ? `<button class="btn btn--xs btn--teal" title="Mark paid" onclick="markSchedPaid('${_esc(s.id)}')"><i class="fa-solid fa-check"></i></button>` : ''}
         </div>
       </td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
 }
 
 function setupScheduleFilters() {
@@ -1641,8 +1853,13 @@ function poolStatusBadge(status) {
 }
 
 function schedStatusBadge(status) {
-  const map = { scheduled:'badge--blue', processing:'badge--orange', paid:'badge--green', cancelled:'badge--red' };
-  return `<span class="badge ${map[status]||'badge--gray'}">${status||''}</span>`;
+  /* pending / paid / overdue / cancelled are what the table allows. The old map
+     keyed on 'scheduled' and 'processing', so every real row fell through to a
+     grey badge with no colour to read. */
+  const map = { pending:'badge--blue', scheduled:'badge--blue', overdue:'badge--orange',
+                processing:'badge--orange', paid:'badge--green', cancelled:'badge--red' };
+  const st = status || 'pending';
+  return `<span class="badge ${map[st]||'badge--gray'}">${_esc(st)}</span>`;
 }
 
 /* ─── Search wiring for runs ─── */
@@ -2121,7 +2338,7 @@ function buildForecast({ schedules, solar, loans, cattle, runs, pools, allocs })
   schedules.filter(s => s.status === 'scheduled' || s.status === 'processing').forEach(s => {
     const b = getBucket(_schedDate(s));
     if (!b) return;
-    const amount = parseFloat(s.total_payout) || 0;
+    const amount = _schedPayout(s);
     b.outflows += amount;
     b.items.push({ type:'outflow', label:`Payout: ${_schedInvestor(s)}`, amount, product: s.product_type||'fund_run', date: _schedDate(s), icon:'fa-calendar-check', color:'#f87171' });
     events.push({ bucket: b.key, direction:'outflow', label:`Payout: ${_schedInvestor(s)} (${_schedRun(s)||'—'})`, amount, product:'schedule', date: _schedDate(s) });
@@ -2356,10 +2573,10 @@ const AIAdvisor = {
       const d = new Date(_schedDate(s));
       return d >= now && d <= in90;
     });
-    const totalObligations90 = upcomingPayouts.reduce((s,p) => s + (parseFloat(p.total_payout)||0), 0);
+    const totalObligations90 = upcomingPayouts.reduce((s,p) => s + _schedPayout(p), 0);
 
     const upcomingPayouts30 = upcomingPayouts.filter(s => new Date(_schedDate(s)) <= in30);
-    const totalObligations30 = upcomingPayouts30.reduce((s,p) => s + (parseFloat(p.total_payout)||0), 0);
+    const totalObligations30 = upcomingPayouts30.reduce((s,p) => s + _schedPayout(p), 0);
 
     /* ── Maturing pools (next 90 days) ── */
     const maturingPools = pools.filter(p => {

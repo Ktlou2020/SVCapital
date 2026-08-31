@@ -89,6 +89,27 @@ const FIXTURE = {
       user_email: null, actor_role: null, description: 'Wallet balance changed',
       metadata: null, created_at: '2026-08-29T09:00:00Z' },
   ],
+  /* Exactly the shape POST /api/fund/runs/:id/plan returns. Three thirds of an
+     odd total — the case where naive rounding loses a cent. */
+  plan: {
+    ok: true, blockers: [], warnings: ['The pool holds 900000.00 but the run records 1000000.00 as capital deployed — a difference of 100000.00.'],
+    run: { id: 'FR-001', name: 'Cattle Run Q1 2024', poolId: 'POOL-1',
+           principal: 1000000, grossReturn: 148300, netReturn: 118640, dueDate: '2026-12-31' },
+    schedules: [
+      { investorId: 'INV-1', investorName: "S'busiso Dlamini <b>", amountInvested: 333333.33,
+        expectedReturn: 26362.22, grossReturn: 49433.33, fees: 9886.67, netReturn: 39546.66 },
+      { investorId: 'INV-2', investorName: 'Thandi Nkosi', amountInvested: 333333.33,
+        expectedReturn: 26362.22, grossReturn: 49433.33, fees: 9886.67, netReturn: 39546.66 },
+      { investorId: 'INV-3', investorName: 'Johan van der Merwe', amountInvested: 333333.34,
+        expectedReturn: 26362.23, grossReturn: 49433.34, fees: 9886.66, netReturn: 39546.68 },
+    ],
+    feeLines: [
+      { fee_type: 'management', amount: 20000, rate: 0.02, basis: 1000000, description: 'Management fee on capital deployed' },
+      { fee_type: 'performance', amount: 9660, rate: 0.20, basis: 148300, description: 'Performance fee on gross return' },
+    ],
+    replacing: { schedules: 0, fees: 0 },
+    totals: { investors: 3, invested: 1000000, gross: 148300, fees: 29660, net: 118640, feeLedger: 29660 },
+  },
   notifs: [{ id: 'N-1', type: 'risk', title: 'Concentration above threshold',
              message: 'Cattle is 71% of AUM', entity_type: 'pool', entity_id: 'POOL-1',
              is_read: false, is_dismissed: false, priority: 'critical',
@@ -127,6 +148,7 @@ run('fees',      () => renderFeeLedgerView(F.fees));
 run('allocs',    () => { renderAllocationsKPIs(); renderAllocationsView(); });
 run('notifs',    () => renderNotifications(F.notifs, '', ''));
 run('ticker',    () => renderEventTicker());
+run('genPlan',   () => renderGeneratePlan(F.plan));
 
 const grab = id => (document.getElementById(id) || {}).innerHTML || '';
 out.runsHtml   = grab('runsList');
@@ -152,6 +174,20 @@ out.schedHtml  = grab('schedsBody');
 out.allocHtml  = grab('allocBody');
 out.notifHtml  = grab('notifList') || grab('notificationsList') || grab('notifBody');
 out.deployed   = (document.getElementById('kpi-deployed') || {}).textContent || '';
+out.genHtml = grab('generateModalBody');
+/* Asked of the DOM, not of the captured string: the probe's own JSON has to be
+   entity-decoded to parse, which turns an escaped &lt;b&gt; back into <b> and
+   makes a string test on it meaningless. Whether an ELEMENT was created is the
+   only question that survives the round trip. */
+out.genMadeElement = !!document.querySelector('#generateModalBody b, #generateModalBody script');
+out.genShowsName = (document.getElementById('generateModalBody')||{}).textContent.includes("Dlamini <b>");
+out.genBtnDisabled = !!(document.getElementById('generateConfirmBtn')||{}).disabled;
+/* The same plan with a cent missing, to show the tie check is load-bearing
+   rather than decorative. Rendered last so it does not overwrite the good one
+   before it has been read. */
+run('genBroken', () => renderGeneratePlan(Object.assign({}, F.plan, {
+  totals: Object.assign({}, F.plan.totals, { net: 118639.99 }) })));
+out.genBrokenHtml = grab('generateModalBody');
 
 const all = out.runsHtml + out.auditHtml + out.feesHtml + out.schedHtml + out.allocHtml + out.notifHtml;
 out.undef  = (all.match(/undefined/g) || []).length;
@@ -222,6 +258,24 @@ if (r) {
      r.auditHtml.includes('Wallet balance changed'),
      'these carry no metadata; a reader that assumes it would drop them');
   ok('and derives its action from the event_type', /updated/i.test(r.auditHtml));
+
+  console.log('\nthe payout schedule preview');
+  ok('the plan renders', r.genPlan === 'ok', r.genPlan);
+  ok('every investor is listed with their share',
+     /Dlamini/.test(r.genHtml) && /Nkosi/.test(r.genHtml) && /Merwe/.test(r.genHtml));
+  ok('a name with markup in it renders as text, not as an element',
+     r.genMadeElement === false && r.genShowsName === true,
+     `element=${r.genMadeElement} textShowsTag=${r.genShowsName}`);
+  ok('the totals row shows the run totals', /118[\s,.]?640/.test(r.genHtml), r.genHtml.slice(0, 200));
+  ok('the fee lines are shown with what they were charged on',
+     /management/i.test(r.genHtml) && /148[\s,.]?300/.test(r.genHtml));
+  ok('the warning is surfaced, not hidden', /difference/.test(r.genHtml));
+  ok('and the split is confirmed to tie', /ties to the run/.test(r.genHtml));
+  ok('the Generate button is enabled for a plan that is ok', r.genBtnDisabled === false);
+
+  ok('A SPLIT THAT DOES NOT TIE IS CALLED OUT',
+     /does NOT tie/.test(r.genBrokenHtml) && /Do not generate/.test(r.genBrokenHtml),
+     'one cent out must be visible on the screen, not only in the database');
 
   console.log('\nthe fee ledger and schedules resolve what they show');
   ok('a fee shows its amount', /19[\s,.]?800/.test(r.feesHtml), r.feesHtml.slice(0, 200));

@@ -595,12 +595,12 @@
           <div class="kpi kpi--orange">
             <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-clock"></i></div></div>
             <div class="kpi__value" id="sched-scheduled">—</div>
-            <div class="kpi__label">Scheduled</div>
+            <div class="kpi__label">Pending</div>
           </div>
           <div class="kpi kpi--teal">
             <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-gears"></i></div></div>
             <div class="kpi__value" id="sched-processing">—</div>
-            <div class="kpi__label">Processing</div>
+            <div class="kpi__label">Overdue</div>
           </div>
           <div class="kpi kpi--green">
             <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-circle-check"></i></div></div>
@@ -1429,6 +1429,28 @@
 </div>
 
 <!-- ════════════════════════════════
+     MODAL: PAYOUT SCHEDULE & FEES
+     Preview first, commit second. The plan shown here is recomputed on the
+     server before anything is written, so the screen can never commit a
+     different split from the one it displayed.
+════════════════════════════════ -->
+<div class="overlay" id="generateModal" onclick="if(event.target===this)M.close('generateModal')">
+  <div class="modal modal--lg">
+    <div class="modal__hd">
+      <span class="modal__title">Payout Schedule &amp; Fees</span>
+      <button class="modal__close" onclick="M.close('generateModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__bd" id="generateModalBody">Loading…</div>
+    <div class="modal__ft">
+      <button class="btn btn--secondary" onclick="M.close('generateModal')">Close</button>
+      <button class="btn btn--teal" id="generateConfirmBtn" onclick="confirmGenerate()" disabled>
+        <i class="fa-solid fa-list-check"></i> Generate
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
      MODAL: CALCULATE RETURNS
 ════════════════════════════════ -->
 <div class="overlay" id="calcReturnsModal" onclick="if(event.target===this)M.close('calcReturnsModal')">
@@ -1590,7 +1612,7 @@
 <!-- Toast -->
 <div class="toast-box" id="toastBox"></div>
 
-<script src="js/fund.js?v=3"></script>
+<script src="js/fund.js?v=4"></script>
 <script>
   // Quick preset loader for calculator
   function applyPreset(rate, days, product) {
