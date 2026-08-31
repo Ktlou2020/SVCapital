@@ -12,7 +12,7 @@ const audit   = require('../services/audit');
 router.use(requireAuth, requireRole('admin', 'director'));
 
 /* Cash-movement definition — single source in services/ledger.js */
-const { cashMovementSQL } = require('../services/ledger');
+const { cashMovementSQL, cashMovement: CASH_MOVEMENT, movesCash } = require('../services/ledger');
 
 router.post('/manual-credit', async (req, res) => {
   try {
@@ -1663,21 +1663,74 @@ router.get('/account-statement', async (req, res) => {
          ORDER BY COALESCE(transaction_date, created_at) ASC, created_at ASC`,
         [investor_id, fromDt, toDt]
       ),
-      // Opening balance = net cash effect of all completed transactions before the
-      // period, using the shared CASH_MOVEMENT definition above.
+      // Net cash effect of all completed transactions BEFORE the period, and
+      // AFTER it, using the shared CASH_MOVEMENT definition. The first is the
+      // derived opening balance; the second is what has to be unwound from
+      // today's wallet to get back to the period's closing balance.
       pool.query(
-        `SELECT COALESCE(SUM(${cashMovementSQL()}), 0) AS opening_balance
+        `SELECT
+           COALESCE(SUM(${cashMovementSQL()}) FILTER (
+             WHERE COALESCE(transaction_date, created_at) < $2), 0) AS before_period,
+           COALESCE(SUM(${cashMovementSQL()}) FILTER (
+             WHERE COALESCE(transaction_date, created_at) > $3), 0) AS after_period
          FROM transactions
          WHERE investor_id = $1
-           AND status = 'completed'
-           AND COALESCE(transaction_date, created_at) < $2`,
-        [investor_id, fromDt]
+           AND status = 'completed'`,
+        [investor_id, fromDt, toDt]
       ),
     ]);
 
     if (!invRes.rows[0]) return res.status(404).json({ error: 'Investor not found' });
 
     const inv = invRes.rows[0];
+
+    /* THE BALANCES ARE COMPUTED HERE, NOT IN THE BROWSER.
+     *
+     * The admin console used to run its own credit/debit list over these rows
+     * to build the running balance, while the opening balance came from
+     * services/ledger.js on this side. The two disagreed about platform_fee,
+     * gift_sent, return and every type neither had heard of — so the opening
+     * balance and the ledger printed beneath it were computed by different
+     * rules, and the document could not tie by construction. A statement has
+     * one definition of what moves money or it is not a statement.
+     *
+     * AND IT IS ANCHORED TO THE WALLET. opening_balance used to be the sum of
+     * every prior transaction's cash effect, presented as the client's balance.
+     * ledger.js says in its own header that this definition is "for reporting
+     * and reconciliation, not for repair" and that the wallet column is
+     * authoritative — because almost every write path moves the wallet
+     * directly, and a reinvestment whose matching matured_funds row was never
+     * written (a known historical gap, with its own backfill) leaves the
+     * derived figure short. That is how a client with money on deposit was
+     * handed a statement showing R24 010,73 Dr.
+     *
+     * So the closing balance is the real wallet with everything after the
+     * period unwound, and the opening balance is that figure less the period's
+     * own movement. Both the derived and the anchored opening are returned, and
+     * `reconciles` says whether they agree — a disagreement is a data problem
+     * worth seeing rather than hiding behind a plausible-looking number.
+     */
+    const bal   = openingRes.rows[0] || {};
+    const num   = v => parseFloat(v) || 0;
+    const r2    = n => Math.round(n * 100) / 100;
+    const cash  = CASH_MOVEMENT;
+
+    const wallet       = num(inv.wallet_balance);
+    const afterPeriod  = num(bal.after_period);
+    const derivedOpen  = r2(num(bal.before_period));
+    const closing      = r2(wallet - afterPeriod);
+
+    /* Each row's signed effect and the balance after it, so the client renders
+       what the server computed. */
+    let running = null;
+    const periodMovement = txnRes.rows.reduce((s2, t) => s2 + cash(t), 0);
+    const opening = r2(closing - periodMovement);
+    running = opening;
+    const transactions = txnRes.rows.map(t => {
+      const effect = r2(cash(t));
+      running = r2(running + effect);
+      return { ...t, cash_effect: effect, running_balance: running };
+    });
 
     res.json({
       investor: {
@@ -1690,8 +1743,15 @@ router.get('/account-statement', async (req, res) => {
       },
       period: { from: fromDt.toISOString(), to: toDt.toISOString() },
       investments: invstRes.rows,
-      transactions: txnRes.rows,
-      opening_balance: parseFloat(openingRes.rows[0]?.opening_balance) || 0,
+      transactions,
+      opening_balance: opening,
+      closing_balance: closing,
+      wallet_balance:  r2(wallet),
+      /* What the transaction history alone says the opening was. Kept so the
+         gap is visible and measurable rather than merely absent. */
+      derived_opening_balance: derivedOpen,
+      reconciles: Math.round(derivedOpen * 100) === Math.round(opening * 100),
+      ledger_gap: r2(opening - derivedOpen),
     });
   } catch (err) {
     console.error('[admin/account-statement]', err);
