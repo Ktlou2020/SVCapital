@@ -377,6 +377,40 @@ const wallet  = async () => Number((await q(`SELECT wallet_balance FROM investor
 
       const again = await post('/api/admin/stranded-eft-deposits/cancel-superseded', {});
       ok('a second run finds nothing left', again.body.cancelled === 0, JSON.stringify(again.body));
+
+      /* The CLI runs the same service but has its OWN read-only guard, and
+         --cancel-superseded was added without being named in it: the flag
+         opened a READ ONLY transaction and then failed on its own UPDATE, so
+         every run was a no-op with an error at the end. The endpoint being
+         right said nothing about the CLI, which is why this drives the CLI. */
+      const { execFileSync } = require('child_process');
+      const CLI = path.join(__dirname, 'close-declined-eft-deposits.cjs');
+      const runCli = args => {
+        try {
+          return execFileSync('node', [CLI, ...args],
+            { env: process.env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 60000 });
+        } catch (e) { return (e.stdout || '') + (e.stderr || ''); }
+      };
+      await q(`UPDATE transactions SET status='pending', description=NULL WHERE id='CHK-DEC-TX31'`);
+      const cliReport = runCli([]);
+      ok('the CLI report shows the already-credited group',
+         /ALREADY CREDITED BY HAND: 1/.test(cliReport), cliReport.slice(0, 600));
+      ok('and names the matching credit on the line',
+         /MANUAL-9/.test(cliReport), cliReport.slice(0, 900));
+      ok('it warns against approving them there too',
+         /DO NOT approve them/.test(cliReport));
+      ok('the report itself still writes nothing',
+         (await q(`SELECT status FROM transactions WHERE id='CHK-DEC-TX31'`)).rows[0].status === 'pending');
+
+      const cliCancel = runCli(['--cancel-superseded']);
+      ok('--cancel-superseded actually writes',
+         /Cancelled 1 duplicate deposit/.test(cliCancel),
+         cliCancel.slice(-400) + '  ← a read-only transaction here makes every run a silent no-op');
+      ok('and the row is cancelled',
+         (await q(`SELECT status FROM transactions WHERE id='CHK-DEC-TX31'`)).rows[0].status === 'cancelled');
+      ok('the CLI CSV carries the evidence columns',
+         /'already_credited', 'credited_by_ref'/.test(fs.readFileSync(CLI, 'utf8')),
+         'the console CSV had them and the CLI did not — the service was shared, the presentation was not');
     }
 
     console.log('\nthe panel is wired');
