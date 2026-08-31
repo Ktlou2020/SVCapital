@@ -1619,6 +1619,59 @@ async function autoSetup() {
           BEGIN ALTER TABLE cattle_costs ADD COLUMN per_animal NUMERIC(18,2); EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE cattle_costs ADD COLUMN animals_count INT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE cattle_costs ADD COLUMN status TEXT DEFAULT 'pending'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+
+          -- FUND OPS. Same class again, found by check-schema-contract rather
+          -- than by hand this time. The console wrote sixteen columns fund_runs
+          -- did not have, so no fund run could be created, started, completed or
+          -- have its returns calculated, and the seeded runs rendered as zeros.
+          --
+          -- Seven of those sixteen were RENAMES of columns that already exist
+          -- (capital_deployed/principal_amount, benchmark_rate/annual_rate and
+          -- so on) and the console was moved onto the existing names instead —
+          -- seed.js and the admin console already speak them, and two columns
+          -- meaning one thing is how this drift started. These eight are the
+          -- ones with no equivalent, so they are genuinely new.
+          BEGIN ALTER TABLE fund_runs ADD COLUMN pool_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE fund_runs ADD COLUMN pool_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE fund_runs ADD COLUMN run_type TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          -- annual_rate is the benchmark the run was sold at; actual_rate is what
+          -- it delivered. The console compares them to compute alpha, so they
+          -- cannot share a column.
+          BEGIN ALTER TABLE fund_runs ADD COLUMN actual_rate NUMERIC(8,6); EXCEPTION WHEN duplicate_column THEN NULL; END;
+          -- management_fee/performance_fee are amounts in rands; these are the
+          -- rates they were struck at, and are needed to recompute a run.
+          BEGIN ALTER TABLE fund_runs ADD COLUMN management_fee_pct NUMERIC(8,6); EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE fund_runs ADD COLUMN performance_fee_pct NUMERIC(8,6); EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE fund_runs ADD COLUMN created_by TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE fund_runs ADD COLUMN completed_date TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+
+          -- investor_allocations went the other way. Its schema carries a
+          -- fund-run-shaped model (fund_run_id, amount, nav_share) and the
+          -- console carries a much richer one — who the investor is, which
+          -- product, what was committed versus paid, the rate, the term and the
+          -- expected payout. Nothing on the server writes this table at all, so
+          -- the console's model is the only model there has ever been, and the
+          -- columns are added rather than the console cut down to fit.
+          BEGIN ALTER TABLE investor_allocations ADD COLUMN investor_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investor_allocations ADD COLUMN investor_email TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investor_allocations ADD COLUMN product_type TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investor_allocations ADD COLUMN entity_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investor_allocations ADD COLUMN entity_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investor_allocations ADD COLUMN capital_committed NUMERIC(18,2); EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investor_allocations ADD COLUMN capital_paid NUMERIC(18,2); EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investor_allocations ADD COLUMN allocation_pct NUMERIC(10,6); EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investor_allocations ADD COLUMN annual_rate NUMERIC(8,6); EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investor_allocations ADD COLUMN term_days INT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investor_allocations ADD COLUMN start_date TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investor_allocations ADD COLUMN maturity_date TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investor_allocations ADD COLUMN expected_payout NUMERIC(18,2); EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investor_allocations ADD COLUMN actual_payout NUMERIC(18,2); EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investor_allocations ADD COLUMN notes TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+
+          -- Dismissing a notification is not the same as reading it, and the
+          -- console has always tried to record both. Without this column the
+          -- dismiss button failed silently and the notification came back.
+          BEGIN ALTER TABLE fund_notifications ADD COLUMN is_dismissed BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_holder TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_number TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;

@@ -203,6 +203,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 ═══════════════════════════════════════════════ */
 /* Return the best available auth token — svc_token (JWT) first,
    then fall back to staffSession so PIN-login employees work too. */
+/* Text a person typed must not reach innerHTML as markup.
+ *
+ * This console had no escaper at all. Investor names, emails, entity names,
+ * batch names, notes and audit descriptions all went straight into template
+ * literals — and several of those fields are typed by investors, not by staff,
+ * so an apostrophe in a surname breaks a row and a script tag in one reaches a
+ * director's session. Same helper as the admin console, deliberately: two
+ * escapers that differ is a bug waiting for whichever one is weaker. */
+const _esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
 function _getAuthToken() {
   const jwt = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
   if (jwt) return jwt;
@@ -232,21 +242,89 @@ async function apiFetch(path, opts={}) {
   if (r.status === 204) return null;
   return r.json();
 }
-const apiGet    = (t,qs='') => apiFetch(`tables/${t}?limit=200${qs?'&'+qs:''}`).then(d=>d.data||[]);
+/* apiGet fetched ONE PAGE. It asked for 200 rows and returned whatever came
+ * back, and the dashboard summed those rows into AUM, deployed capital and
+ * upcoming payouts as though they were the whole book. Past two hundred
+ * investments — which an investment platform passes early — every one of those
+ * figures was understated, silently, with nothing on screen to say so.
+ *
+ * It has been removed rather than fixed or kept for "small" tables. Every one
+ * of its call sites totalled its result, and a helper that silently returns a
+ * first page is precisely what the next person would reach for. fetchAllRows
+ * below is the only way to read a table here now. */
+
+/* Every row, and honest about failing.
+ *
+ * intFetchAll paginated but swallowed errors — `catch(e) { break; }` — so a
+ * request that failed on page 4 returned three pages and no indication, and
+ * the caller totalled a third of the book believing it had all of it. A
+ * partial answer presented as a complete one is worse than an error: the error
+ * would at least have been visible. Now a mid-pagination failure throws, and
+ * the callers that can tolerate an absent table say so explicitly with
+ * .catch(() => []) — which is a decision, not an accident. */
+async function fetchAllRows(table, { pageSize = 100 } = {}) {
+  let page = 1, all = [];
+  for (;;) {
+    const r = await apiFetch(`tables/${table}?limit=${pageSize}&page=${page}`);
+    const rows = (r && r.data) || [];
+    all = all.concat(rows);
+    if (rows.length < pageSize) break;
+    if (r.total > 0 && all.length >= r.total) break;
+    if (++page > 500) throw new Error(`${table}: refusing to page past ${all.length} rows`);
+  }
+  return all;
+}
 const apiPost   = (t,b)     => apiFetch(`tables/${t}`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(b) });
 const apiPatch  = (t,id,b)  => apiFetch(`tables/${t}/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(b) });
 const apiDelete = (t,id)    => apiFetch(`tables/${t}/${id}`, { method:'DELETE' });
+
+
+/* return_schedules carries investor_id and fund_run_id, not names — the console
+   read s.investor_name and s.pool_name, which are not columns, so every row in
+   the payouts table and the dashboard widget showed a dash where a person
+   should be. The names are resolved from the tables already in memory.
+   Likewise the date column is expected_date; scheduled_payout_date has never
+   existed, so the sort key was always Invalid Date and the "upcoming payouts"
+   widget was ordered arbitrarily. */
+const _schedDate     = s => s.expected_date || s.scheduled_payout_date || null;
+const _schedInvestor = s => {
+  if (s.investor_name) return s.investor_name;
+  const i = (S.investors || []).find(x => x.id === s.investor_id);
+  return i ? `${i.first_name || ''} ${i.last_name || ''}`.trim() || i.email || s.investor_id : (s.investor_id || '—');
+};
+const _schedRun = s => {
+  if (s.pool_name) return s.pool_name;
+  const r = (S.runs || []).find(x => x.id === s.fund_run_id);
+  return (r && (r.pool_name || r.run_name)) || s.fund_run_id || '';
+};
+
+
+/* fee_ledger stores amount, accrued_at, rate and basis, and links to a run by
+   fund_run_id. The console read fee_amount, fee_date, run_name, product_type
+   and capital_base — none of which are columns — so the Fee Ledger totalled
+   R0, the timeline chart had no dates to bucket by, and every row showed a
+   dash where the run should be. The run's name and product come from the run. */
+const _feeAmount = f => parseFloat(f.amount ?? f.fee_amount) || 0;
+const _feeDate   = f => f.accrued_at || f.fee_date || null;
+const _feeRun    = f => {
+  const r = (S.runs || []).find(x => x.id === f.fund_run_id);
+  return r || null;
+};
+const _feeRunName = f => { const r = _feeRun(f); return (r && (r.run_name || r.pool_name)) || f.fund_run_id || '—'; };
+const _feeProduct = f => { const r = _feeRun(f); return (r && r.product_type) || '—'; };
 
 /* ═══════════════════════════════════════════════
    DASHBOARD
 ═══════════════════════════════════════════════ */
 async function loadDashboard() {
   try {
+    /* All four of these are summed into headline figures, so all four must be
+       the whole table — they were single 200-row pages. */
     const [runs, scheds, pools, investments, cattle, solar, loans, allocations] = await Promise.all([
-      apiGet('fund_runs'),
-      apiGet('return_schedules'),
-      apiGet('investment_pools'),
-      apiGet('investments'),
+      fetchAllRows('fund_runs'),
+      fetchAllRows('return_schedules'),
+      fetchAllRows('investment_pools'),
+      fetchAllRows('investments'),
       intFetchAll('cattle_cycles').catch(()=>[]),
       intFetchAll('solar_projects').catch(()=>[]),
       intFetchAll('shortterm_loans').catch(()=>[]),
@@ -274,17 +352,17 @@ function renderDashboard() {
   const invests   = S.investments;
 
   const totalAUM         = invests.filter(i=>i.status==='active').reduce((s,i)=>s+(parseFloat(i.amount)||0),0);
-  const totalDeployed    = runs.filter(r=>r.status==='completed'||r.status==='in_progress').reduce((s,r)=>s+(parseFloat(r.capital_deployed)||0),0);
-  const totalGrossReturn = runs.filter(r=>r.status==='completed').reduce((s,r)=>s+(parseFloat(r.total_return_gross)||0),0);
-  const totalNetReturn   = runs.filter(r=>r.status==='completed').reduce((s,r)=>s+(parseFloat(r.total_return_net)||0),0);
+  const totalDeployed    = runs.filter(r=>r.status==='completed'||r.status==='in_progress').reduce((s,r)=>s+(parseFloat(r.principal_amount)||0),0);
+  const totalGrossReturn = runs.filter(r=>r.status==='completed').reduce((s,r)=>s+(parseFloat(r.gross_return)||0),0);
+  const totalNetReturn   = runs.filter(r=>r.status==='completed').reduce((s,r)=>s+(parseFloat(r.net_return)||0),0);
   const pendingPayouts   = scheds.filter(s=>s.status==='scheduled'||s.status==='processing').length;
   const completedRuns    = runs.filter(r=>r.status==='completed').length;
   const activeRuns       = runs.filter(r=>r.status==='in_progress').length;
 
   // Alpha vs benchmark (basis points)
-  const alphaRuns = runs.filter(r => r.status==='completed' && parseFloat(r.actual_rate)>0 && parseFloat(r.benchmark_rate)>0);
+  const alphaRuns = runs.filter(r => r.status==='completed' && parseFloat(r.actual_rate)>0 && parseFloat(r.annual_rate)>0);
   const avgAlpha  = alphaRuns.length
-    ? alphaRuns.reduce((s,r) => s + (parseFloat(r.actual_rate) - parseFloat(r.benchmark_rate)) * 10000, 0) / alphaRuns.length
+    ? alphaRuns.reduce((s,r) => s + (parseFloat(r.actual_rate) - parseFloat(r.annual_rate)) * 10000, 0) / alphaRuns.length
     : null;
 
   const set = (id,v) => { const e=document.getElementById(id); if(e) e.textContent=v; };
@@ -327,7 +405,7 @@ function renderDashboardRunsTable() {
   if (!recent.length) { el.innerHTML = `<tr><td colspan="7"><div class="empty"><i class="fa-solid fa-folder-open"></i><p>No fund runs yet</p></div></td></tr>`; return; }
   el.innerHTML = recent.map(r => {
     const actual = parseFloat(r.actual_rate);
-    const bench  = parseFloat(r.benchmark_rate);
+    const bench  = parseFloat(r.annual_rate);
     const alphaBps = (actual > 0 && bench > 0) ? Math.round((actual - bench) * 10000) : null;
     const alphaHtml = alphaBps !== null
       ? `<span style="font-size:11px;font-weight:700;color:${alphaBps>=0?'#74c69d':'#f87171'}">${alphaBps>=0?'+':''}${alphaBps} bps</span>`
@@ -336,10 +414,10 @@ function renderDashboardRunsTable() {
     <tr class="row--clickable" onclick="viewRun('${r.id}')">
       <td><div class="td-h">${r.run_name}</div><div class="td-m">${r.id}</div></td>
       <td>${productBadge(r.product_type)}</td>
-      <td class="td-gold">${fmt.rand(r.capital_deployed)}</td>
-      <td>${actual > 0 ? `<span class="td-green">${fmt.pct(r.actual_rate)}</span>` : `<span class="td-m">${fmt.pct(r.benchmark_rate)} bench</span>`}</td>
+      <td class="td-gold">${fmt.rand(r.principal_amount)}</td>
+      <td>${actual > 0 ? `<span class="td-green">${fmt.pct(r.actual_rate)}</span>` : `<span class="td-m">${fmt.pct(r.annual_rate)} bench</span>`}</td>
       <td>${alphaHtml}</td>
-      <td class="td-green">${fmt.rand(r.total_return_net)}</td>
+      <td class="td-green">${fmt.rand(r.net_return)}</td>
       <td>${runStatusBadge(r.status)}</td>
     </tr>`;
   }).join('');
@@ -356,15 +434,15 @@ function renderUpcomingPayoutsWidget() {
   const totalVal = pending.reduce((s,p)=>s+(parseFloat(p.total_payout)||0),0);
   const now = new Date();
   const rows = pending.map(s=>{
-    const payDate = new Date(s.scheduled_payout_date || s.expected_date);
+    const payDate = new Date(_schedDate(s));
     const daysLeft = Math.ceil((payDate - now) / 86400000);
     const urgencyColor = daysLeft <= 7 ? '#f87171' : daysLeft <= 30 ? '#fb923c' : '#74c69d';
     const urgencyLabel = daysLeft <= 0 ? 'Overdue' : daysLeft === 1 ? '1 day' : `${daysLeft}d`;
     return `
     <div class="flex-b" style="padding:10px 0;border-bottom:1px solid var(--border)">
       <div style="flex:1;min-width:0">
-        <div style="font-size:0.82rem;font-weight:600;color:var(--text-h)">${s.investor_name||'—'}</div>
-        <div style="font-size:0.72rem;color:var(--text-muted)">${s.pool_name||''} · ${fmt.date(s.scheduled_payout_date)}</div>
+        <div style="font-size:0.82rem;font-weight:600;color:var(--text-h)">${_esc(_schedInvestor(s))}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted)">${_esc(_schedRun(s))} · ${fmt.date(_schedDate(s))}</div>
       </div>
       <div style="text-align:right;flex-shrink:0">
         <div class="td-gold fw7" style="font-size:0.88rem">${fmt.rand(s.total_payout)}</div>
@@ -402,8 +480,12 @@ function renderReturnsChart() {
   const completed = S.runs.filter(r=>r.status==='completed' && r.completed_date).sort((a,b)=>new Date(a.completed_date)-new Date(b.completed_date));
   if (completed.length < 2) return;
   const labels  = completed.map(r => r.run_name.split('—')[0].trim().slice(0,20)+'…');
-  const gross   = completed.map(r => +(r.total_return_gross||0).toFixed(0));
-  const net     = completed.map(r => +(r.total_return_net||0).toFixed(0));
+  /* Math.round, not (x||0).toFixed(0). NUMERIC comes back from node-pg as a
+     STRING, and a non-empty string is truthy, so `("147329.70"||0).toFixed(0)`
+     is a TypeError that takes the whole returns chart down the moment a run
+     has a return recorded. It never fired only because no run could be saved. */
+  const gross   = completed.map(r => Math.round(parseFloat(r.gross_return) || 0));
+  const net     = completed.map(r => Math.round(parseFloat(r.net_return)   || 0));
   if (S.charts.returns) S.charts.returns.destroy();
   S.charts.returns = new Chart(ctx, {
     type: 'bar',
@@ -434,19 +516,19 @@ function renderRiskStrip() {
   const overdueLoans = (S.loans||[]).filter(l => l.status === 'overdue');
   const obligations30 = (S.schedules||[]).filter(s => {
     if (s.status === 'paid' || s.status === 'cancelled') return false;
-    const d = new Date(s.scheduled_payout_date || s.expected_date);
+    const d = new Date(_schedDate(s));
     return d >= now && d <= in30;
   });
   const obligations90Val = (S.schedules||[]).filter(s => {
     if (s.status === 'paid' || s.status === 'cancelled') return false;
-    const d = new Date(s.scheduled_payout_date || s.expected_date);
+    const d = new Date(_schedDate(s));
     return d >= now && d <= in90;
   }).reduce((acc, p) => acc + (parseFloat(p.total_payout)||0), 0);
   const totalRaised = (S.pools||[]).reduce((acc, p) => acc + (parseFloat(p.raised_amount)||0), 0);
   const cattleDep = (S.cattle||[]).filter(c=>['active','in_progress'].includes(c.status)).reduce((s,c)=>s+(parseFloat(c.purchase_value)||parseFloat(c.purchase_price)||0),0);
   const solarDep  = (S.solar||[]).filter(p=>p.status==='active').reduce((s,p)=>s+(parseFloat(p.capital_deployed)||0),0);
   const loansDep  = (S.loans||[]).filter(l=>['active','overdue'].includes(l.status)).reduce((s,l)=>s+(parseFloat(l.disbursement_amount)||0),0);
-  const runsDep   = (S.runs||[]).filter(r=>r.status==='in_progress').reduce((s,r)=>s+(parseFloat(r.capital_deployed)||0),0);
+  const runsDep   = (S.runs||[]).filter(r=>r.status==='in_progress').reduce((s,r)=>s+(parseFloat(r.principal_amount)||0),0);
   const totalDep  = cattleDep + solarDep + loansDep + runsDep;
   const liqRatio  = obligations90Val > 0 ? (totalRaised - totalDep) / obligations90Val : 99;
   const liqStatus = liqRatio >= 2 ? {label:'Healthy',color:'#74c69d',icon:'fa-circle-check'}
@@ -470,7 +552,7 @@ function renderRiskStrip() {
     ${card(liqStatus.icon,'Liquidity Coverage',liqRatio>99?'∞':liqRatio.toFixed(1)+'x',liqStatus.label+' · 90-day horizon',liqStatus.color)}
     ${card('fa-triangle-exclamation','Overdue Loans',overdueLoans.length,overdueLoans.length>0?fmt.rand(overdueLoans.reduce((s,l)=>s+(parseFloat(l.disbursement_amount)||0),0))+' at risk':'No overdue accounts',overdueLoans.length>0?'#f87171':'#74c69d')}
     ${card('fa-calendar-exclamation','Obligations (30d)',obligations30.length+' payouts',fmt.rand(obligations30.reduce((s,p)=>s+(parseFloat(p.total_payout)||0),0))+' due soon','#fb923c')}
-    ${card('fa-chart-pie','Concentration Risk',concPct+'%',maxSeg?maxSeg.name+' is largest position':'No active positions',concPct>65?'#f87171':concPct>45?'#fb923c':'#74c69d')}
+    ${card('fa-chart-pie','Concentration Risk',concPct+'%',maxSeg?_esc(maxSeg.name)+' is largest position':'No active positions',concPct>65?'#f87171':concPct>45?'#fb923c':'#74c69d')}
   </div>`;
 }
 
@@ -481,7 +563,7 @@ function renderPortfolioComposition() {
   const cattleDep = (S.cattle||[]).filter(c=>['active','in_progress'].includes(c.status)).reduce((s,c)=>s+(parseFloat(c.purchase_value)||parseFloat(c.purchase_price)||0),0);
   const solarDep  = (S.solar||[]).filter(p=>p.status==='active').reduce((s,p)=>s+(parseFloat(p.capital_deployed)||0),0);
   const loansDep  = (S.loans||[]).filter(l=>['active','overdue'].includes(l.status)).reduce((s,l)=>s+(parseFloat(l.disbursement_amount)||0),0);
-  const runsDep   = (S.runs||[]).filter(r=>r.status==='in_progress').reduce((s,r)=>s+(parseFloat(r.capital_deployed)||0),0);
+  const runsDep   = (S.runs||[]).filter(r=>r.status==='in_progress').reduce((s,r)=>s+(parseFloat(r.principal_amount)||0),0);
   const totalDep  = cattleDep + solarDep + loansDep + runsDep;
   const undeployed = Math.max(0, totalRaised - totalDep);
   const totalAUM  = (S.investments||[]).filter(i=>i.status==='active').reduce((s,i)=>s+(parseFloat(i.amount)||0),0);
@@ -550,10 +632,10 @@ function renderCapitalWaterfall() {
   const ctx = document.getElementById('dashWaterfallChart');
   if (!ctx) return;
   const completed = (S.runs||[]).filter(r=>r.status==='completed');
-  const gross   = completed.reduce((s,r)=>s+(parseFloat(r.total_return_gross)||0),0);
-  const mgmt    = completed.reduce((s,r)=>s+(parseFloat(r.management_fee_amount)||0),0);
-  const perf    = completed.reduce((s,r)=>s+(parseFloat(r.performance_fee_amount)||0),0);
-  const net     = completed.reduce((s,r)=>s+(parseFloat(r.total_return_net)||0),0);
+  const gross   = completed.reduce((s,r)=>s+(parseFloat(r.gross_return)||0),0);
+  const mgmt    = completed.reduce((s,r)=>s+(parseFloat(r.management_fee)||0),0);
+  const perf    = completed.reduce((s,r)=>s+(parseFloat(r.performance_fee)||0),0);
+  const net     = completed.reduce((s,r)=>s+(parseFloat(r.net_return)||0),0);
   if (S.charts.waterfall) { S.charts.waterfall.destroy(); S.charts.waterfall = null; }
   S.charts.waterfall = new Chart(ctx, {
     type: 'bar',
@@ -721,7 +803,7 @@ function calcToggleCompounds(show) {
 ═══════════════════════════════════════════════ */
 async function loadRuns() {
   try {
-    const [runs, pools] = await Promise.all([ apiGet('fund_runs'), apiGet('investment_pools') ]);
+    const [runs, pools] = await Promise.all([ fetchAllRows('fund_runs'), fetchAllRows('investment_pools') ]);
     S.runs  = runs;
     S.pools = pools;
     renderRunsView();
@@ -763,23 +845,23 @@ function renderRunsView() {
       <div class="run-card__metrics">
         <div class="run-metric">
           <div class="run-metric__label">Capital</div>
-          <div class="run-metric__value" style="color:var(--gold)">${fmt.rand(r.capital_deployed)}</div>
+          <div class="run-metric__value" style="color:var(--gold)">${fmt.rand(r.principal_amount)}</div>
         </div>
         <div class="run-metric">
           <div class="run-metric__label">Benchmark</div>
-          <div class="run-metric__value">${fmt.pct(r.benchmark_rate)}</div>
+          <div class="run-metric__value">${fmt.pct(r.annual_rate)}</div>
         </div>
         <div class="run-metric">
           <div class="run-metric__label">Actual Rate</div>
-          <div class="run-metric__value" style="color:${r.actual_rate>=r.benchmark_rate?'var(--green)':'var(--red)'}">${r.actual_rate ? fmt.pct(r.actual_rate) : '—'}</div>
+          <div class="run-metric__value" style="color:${r.actual_rate>=r.annual_rate?'var(--green)':'var(--red)'}">${r.actual_rate ? fmt.pct(r.actual_rate) : '—'}</div>
         </div>
         <div class="run-metric">
           <div class="run-metric__label">Net Return</div>
-          <div class="run-metric__value" style="color:var(--green)">${fmt.rand(r.total_return_net)}</div>
+          <div class="run-metric__value" style="color:var(--green)">${fmt.rand(r.net_return)}</div>
         </div>
         <div class="run-metric">
           <div class="run-metric__label">Investors</div>
-          <div class="run-metric__value">${r.total_investors||0}</div>
+          <div class="run-metric__value">${r.investor_count||0}</div>
         </div>
       </div>
     </div>
@@ -791,7 +873,7 @@ function openNewRunModal() {
   const sel = document.getElementById('newRunPool');
   if (sel) {
     sel.innerHTML = '<option value="">— Select pool —</option>' +
-      S.pools.map(p => `<option value="${p.id}" data-rate="${p.benchmark_rate}" data-name="${p.pool_name}" data-type="${p.product_type}" data-investors="${p.investor_count||0}">${p.pool_name} (${fmt.pct(p.benchmark_rate)})</option>`).join('');
+      S.pools.map(p => `<option value="${p.id}" data-rate="${p.annual_rate}" data-name="${_esc(p.name||'')}" data-type="${p.product_type}" data-investors="${p.investor_count||0}">${_esc(p.name||p.id)} (${fmt.pct(p.annual_rate)})</option>`).join('');
     sel.onchange = () => {
       const opt = sel.options[sel.selectedIndex];
       if (opt.dataset.rate) document.getElementById('newRunBenchmark').value = (parseFloat(opt.dataset.rate)*100).toFixed(4);
@@ -849,17 +931,16 @@ async function saveNewRun() {
     product_type:      productType || 'other',
     run_type:          runType,
     status:            'draft',
-    capital_deployed:  capital,
-    benchmark_rate:    benchmark,
+    principal_amount:  capital,
+    annual_rate:       benchmark,
     actual_rate:       0,
     term_days:         termDays,
     start_date:        new Date(startDate).toISOString(),
     end_date:          new Date(endDate).toISOString(),
-    total_return_gross:0, total_return_net:0,
-    management_fee_pct: mgmtFee, management_fee_amount: 0,
-    performance_fee_pct: perfFee, performance_fee_amount: 0,
-    total_investors:   investors,
-    investor_allocations: [],
+    gross_return: 0, net_return: 0,
+    management_fee_pct: mgmtFee, management_fee: 0,
+    performance_fee_pct: perfFee, performance_fee: 0,
+    investor_count:    investors,
     notes,
     created_by: 'Admin',
     completed_date: null
@@ -871,7 +952,7 @@ async function saveNewRun() {
       eventType: 'fund_run', action: 'create',
       entityId: payload.id, entityName: payload.run_name,
       changeSummary: `New fund run created: ${payload.run_name} — ${fmt.rand(capital)} at ${(benchmark*100).toFixed(2)}% benchmark, ${termDays} days`,
-      afterState: { status:'draft', capital_deployed: capital, benchmark_rate: benchmark },
+      afterState: { status:'draft', principal_amount: capital, annual_rate: benchmark },
       severity: 'info'
     });
     T.success('Fund run created successfully');
@@ -887,7 +968,7 @@ function viewRun(runId) {
 
   const isComplete = run.status === 'completed';
   const res = run.actual_rate > 0 ? Calc.simpleReturn({
-    principal: run.capital_deployed, annualRate: run.actual_rate,
+    principal: run.principal_amount, annualRate: run.actual_rate,
     termDays: run.term_days, mgmtFeePct: run.management_fee_pct || 0.02,
     perfFeePct: run.performance_fee_pct || 0.20
   }) : null;
@@ -898,30 +979,30 @@ function viewRun(runId) {
       <div>
         <div class="info-list">
           <div class="info-row"><span class="info-row__k">Run ID</span><span class="info-row__v mono">${run.id}</span></div>
-          <div class="info-row"><span class="info-row__k">Pool</span><span class="info-row__v">${run.pool_name||'—'}</span></div>
+          <div class="info-row"><span class="info-row__k">Pool</span><span class="info-row__v">${_esc(run.pool_name||'—')}</span></div>
           <div class="info-row"><span class="info-row__k">Product</span><span class="info-row__v">${productBadge(run.product_type)}</span></div>
           <div class="info-row"><span class="info-row__k">Run Type</span><span class="info-row__v">${runTypeBadge(run.run_type)}</span></div>
           <div class="info-row"><span class="info-row__k">Status</span><span class="info-row__v">${runStatusBadge(run.status)}</span></div>
           <div class="info-row"><span class="info-row__k">Period</span><span class="info-row__v">${fmt.date(run.start_date)} → ${fmt.date(run.end_date)}</span></div>
           <div class="info-row"><span class="info-row__k">Term</span><span class="info-row__v">${fmt.days(run.term_days)}</span></div>
-          <div class="info-row"><span class="info-row__k">Investors</span><span class="info-row__v">${run.total_investors||0}</span></div>
+          <div class="info-row"><span class="info-row__k">Investors</span><span class="info-row__v">${run.investor_count||0}</span></div>
         </div>
       </div>
       <div>
         <div class="payout-summary">
           <div class="payout-summary__title">Financial Summary</div>
-          <div class="payout-row"><span class="payout-row__k">Capital Deployed</span><span class="payout-row__v">${fmt.rand(run.capital_deployed)}</span></div>
-          <div class="payout-row"><span class="payout-row__k">Benchmark Rate</span><span class="payout-row__v">${fmt.pct(run.benchmark_rate)}</span></div>
-          <div class="payout-row"><span class="payout-row__k">Actual Rate</span><span class="payout-row__v" style="color:${run.actual_rate>0?(run.actual_rate>=run.benchmark_rate?'var(--green)':'var(--red)'):'rgba(255,255,255,0.4)'}">${run.actual_rate > 0 ? fmt.pct(run.actual_rate) : 'Not set'}</span></div>
-          <div class="payout-row"><span class="payout-row__k">Gross Return</span><span class="payout-row__v">${fmt.rand(run.total_return_gross)}</span></div>
-          <div class="payout-row"><span class="payout-row__k">Mgmt Fee (${fmt.pct(run.management_fee_pct||0.02)})</span><span class="payout-row__v">${fmt.rand(run.management_fee_amount)}</span></div>
-          <div class="payout-row"><span class="payout-row__k">Perf Fee (${fmt.pct(run.performance_fee_pct||0.20)})</span><span class="payout-row__v">${fmt.rand(run.performance_fee_amount)}</span></div>
-          <div class="payout-row payout-row--total"><span class="payout-row__k">Net Return to Investors</span><span class="payout-row__v">${fmt.rand(run.total_return_net)}</span></div>
+          <div class="payout-row"><span class="payout-row__k">Capital Deployed</span><span class="payout-row__v">${fmt.rand(run.principal_amount)}</span></div>
+          <div class="payout-row"><span class="payout-row__k">Benchmark Rate</span><span class="payout-row__v">${fmt.pct(run.annual_rate)}</span></div>
+          <div class="payout-row"><span class="payout-row__k">Actual Rate</span><span class="payout-row__v" style="color:${run.actual_rate>0?(run.actual_rate>=run.annual_rate?'var(--green)':'var(--red)'):'rgba(255,255,255,0.4)'}">${run.actual_rate > 0 ? fmt.pct(run.actual_rate) : 'Not set'}</span></div>
+          <div class="payout-row"><span class="payout-row__k">Gross Return</span><span class="payout-row__v">${fmt.rand(run.gross_return)}</span></div>
+          <div class="payout-row"><span class="payout-row__k">Mgmt Fee (${fmt.pct(run.management_fee_pct||0.02)})</span><span class="payout-row__v">${fmt.rand(run.management_fee)}</span></div>
+          <div class="payout-row"><span class="payout-row__k">Perf Fee (${fmt.pct(run.performance_fee_pct||0.20)})</span><span class="payout-row__v">${fmt.rand(run.performance_fee)}</span></div>
+          <div class="payout-row payout-row--total"><span class="payout-row__k">Net Return to Investors</span><span class="payout-row__v">${fmt.rand(run.net_return)}</span></div>
         </div>
       </div>
     </div>
 
-    ${run.notes ? `<div style="background:#f8fafc;border-radius:var(--radius);padding:14px;margin-bottom:16px;font-size:0.8rem;color:var(--text-muted)"><strong style="color:var(--text-h)">Notes:</strong> ${run.notes}</div>` : ''}
+    ${run.notes ? `<div style="background:#f8fafc;border-radius:var(--radius);padding:14px;margin-bottom:16px;font-size:0.8rem;color:var(--text-muted)"><strong style="color:var(--text-h)">Notes:</strong> ${_esc(run.notes)}</div>` : ''}
 
     <div class="flex-b mb-12">
       <div style="font-size:0.82rem;font-weight:700;color:var(--text-h)">Actions</div>
@@ -981,9 +1062,9 @@ function openCalculateReturnsModal(runId) {
 
   // Pre-fill
   const set = (id, v) => { const e=document.getElementById(id); if(e) e.value=v; };
-  set('crCapital',   run.capital_deployed);
-  set('crBenchmark', (run.benchmark_rate * 100).toFixed(4));
-  set('crActualRate',(run.actual_rate > 0 ? run.actual_rate * 100 : run.benchmark_rate * 100).toFixed(4));
+  set('crCapital',   run.principal_amount);
+  set('crBenchmark', (run.annual_rate * 100).toFixed(4));
+  set('crActualRate',(run.actual_rate > 0 ? run.actual_rate * 100 : run.annual_rate * 100).toFixed(4));
   set('crDays',      run.term_days);
   set('crMgmtFee',   ((run.management_fee_pct||0.02)*100).toFixed(2));
   set('crPerfFee',   ((run.performance_fee_pct||0.20)*100).toFixed(2));
@@ -1033,10 +1114,10 @@ async function saveCalculatedReturns() {
   try {
     await apiPatch('fund_runs', runId, {
       actual_rate:           actualRate,
-      total_return_gross:    +res.grossReturn.toFixed(2),
-      total_return_net:      +res.netReturn.toFixed(2),
-      management_fee_amount: +res.managementFee.toFixed(2),
-      performance_fee_amount:+res.performanceFee.toFixed(2),
+      gross_return:    +res.grossReturn.toFixed(2),
+      net_return:      +res.netReturn.toFixed(2),
+      management_fee:  +res.managementFee.toFixed(2),
+      performance_fee: +res.performanceFee.toFixed(2),
       management_fee_pct:    mgmtFee,
       performance_fee_pct:   perfFee
     });
@@ -1044,8 +1125,8 @@ async function saveCalculatedReturns() {
       eventType: 'fund_run', action: 'calculate_returns',
       entityId: runId, entityName: run?.run_name || runId,
       changeSummary: `Returns calculated: ${run?.run_name||runId} — ${(actualRate*100).toFixed(2)}% actual rate, gross ${fmt.rand(res.grossReturn)}, net ${fmt.rand(res.netReturn)}`,
-      beforeState: { actual_rate: run?.actual_rate||0, total_return_net: run?.total_return_net||0 },
-      afterState:  { actual_rate: actualRate, total_return_gross: res.grossReturn, total_return_net: res.netReturn },
+      beforeState: { actual_rate: run?.actual_rate||0, net_return: run?.net_return||0 },
+      afterState:  { actual_rate: actualRate, gross_return: res.grossReturn, net_return: res.netReturn },
       severity: 'info'
     });
     T.success('Returns calculated and saved to fund run');
@@ -1062,12 +1143,12 @@ function editRun(runId) {
   const set = (id, v) => { const e=document.getElementById(id); if(e) e.value=v||''; };
   set('editRunId',       run.id);
   set('editRunName',     run.run_name);
-  set('editRunCapital',  run.capital_deployed);
-  set('editRunBenchmark',(run.benchmark_rate*100).toFixed(4));
+  set('editRunCapital',  run.principal_amount);
+  set('editRunBenchmark',(run.annual_rate*100).toFixed(4));
   set('editRunDays',     run.term_days);
   set('editRunMgmt',     ((run.management_fee_pct||0.02)*100).toFixed(2));
   set('editRunPerf',     ((run.performance_fee_pct||0.20)*100).toFixed(2));
-  set('editRunInvestors',run.total_investors||0);
+  set('editRunInvestors',run.investor_count||0);
   set('editRunNotes',    run.notes||'');
   const sEl = document.getElementById('editRunStatus');
   if (sEl) sEl.value = run.status;
@@ -1081,12 +1162,12 @@ async function saveEditRun() {
   const before = S.runs.find(r => r.id === id);
   const updates = {
     run_name:            document.getElementById('editRunName')?.value.trim(),
-    capital_deployed:    parseFloat(document.getElementById('editRunCapital')?.value)||0,
-    benchmark_rate:      parseFloat(document.getElementById('editRunBenchmark')?.value)/100||0,
+    principal_amount:    parseFloat(document.getElementById('editRunCapital')?.value)||0,
+    annual_rate:         parseFloat(document.getElementById('editRunBenchmark')?.value)/100||0,
     term_days:           parseInt(document.getElementById('editRunDays')?.value)||0,
     management_fee_pct:  parseFloat(document.getElementById('editRunMgmt')?.value)/100||0.02,
     performance_fee_pct: parseFloat(document.getElementById('editRunPerf')?.value)/100||0.20,
-    total_investors:     parseInt(document.getElementById('editRunInvestors')?.value)||0,
+    investor_count:      parseInt(document.getElementById('editRunInvestors')?.value)||0,
     status:              document.getElementById('editRunStatus')?.value,
     notes:               document.getElementById('editRunNotes')?.value.trim()
   };
@@ -1100,9 +1181,9 @@ async function saveEditRun() {
       entityId: id, entityName: updates.run_name,
       changeSummary: statusChanged
         ? `Fund run status changed: ${before.status} → ${updates.status} — ${updates.run_name}`
-        : `Fund run updated: ${updates.run_name} — capital ${fmt.rand(updates.capital_deployed)}, ${(updates.benchmark_rate*100).toFixed(2)}% benchmark`,
-      beforeState: before ? { status: before.status, capital_deployed: before.capital_deployed } : null,
-      afterState:  { status: updates.status, capital_deployed: updates.capital_deployed },
+        : `Fund run updated: ${updates.run_name} — capital ${fmt.rand(updates.principal_amount)}, ${(updates.annual_rate*100).toFixed(2)}% benchmark`,
+      beforeState: before ? { status: before.status, principal_amount: before.principal_amount } : null,
+      afterState:  { status: updates.status, principal_amount: updates.principal_amount },
       severity: statusChanged ? 'warning' : 'info'
     });
     T.success('Fund run updated');
@@ -1128,14 +1209,14 @@ function exportRunReport(runId) {
     ``,
     `FINANCIAL SUMMARY`,
     `-`.repeat(40),
-    `Capital Deployed:       ${fmt.rand(run.capital_deployed)}`,
-    `Benchmark Rate:         ${fmt.pct(run.benchmark_rate)} p.a.`,
+    `Capital Deployed:       ${fmt.rand(run.principal_amount)}`,
+    `Benchmark Rate:         ${fmt.pct(run.annual_rate)} p.a.`,
     `Actual Rate:            ${run.actual_rate > 0 ? fmt.pct(run.actual_rate) + ' p.a.' : 'N/A'}`,
-    `Gross Return:           ${fmt.rand(run.total_return_gross)}`,
-    `Management Fee (${fmt.pct(run.management_fee_pct||0.02)}): ${fmt.rand(run.management_fee_amount)}`,
-    `Performance Fee (${fmt.pct(run.performance_fee_pct||0.20)}):${fmt.rand(run.performance_fee_amount)}`,
-    `Net Return to Investors:${fmt.rand(run.total_return_net)}`,
-    `Total Investors:        ${run.total_investors}`,
+    `Gross Return:           ${fmt.rand(run.gross_return)}`,
+    `Management Fee (${fmt.pct(run.management_fee_pct||0.02)}): ${fmt.rand(run.management_fee)}`,
+    `Performance Fee (${fmt.pct(run.performance_fee_pct||0.20)}):${fmt.rand(run.performance_fee)}`,
+    `Net Return to Investors:${fmt.rand(run.net_return)}`,
+    `Total Investors:        ${run.investor_count}`,
     ``,
     `NOTES`,
     `-`.repeat(40),
@@ -1158,7 +1239,7 @@ function exportRunReport(runId) {
 ═══════════════════════════════════════════════ */
 async function loadSchedules() {
   try {
-    const scheds = await apiGet('return_schedules');
+    const scheds = await fetchAllRows('return_schedules');
     S.schedules = scheds;
     renderScheduleStats();
     renderSchedulesTable();
@@ -1180,9 +1261,9 @@ function renderSchedulesTable(filterStatus='', searchQ='') {
   const el = document.getElementById('schedsBody');
   if (!el) return;
 
-  let data = S.schedules.slice().sort((a,b) => new Date(a.scheduled_payout_date||0) - new Date(b.scheduled_payout_date||0));
+  let data = S.schedules.slice().sort((a,b) => new Date(_schedDate(a)||0) - new Date(_schedDate(b)||0));
   if (filterStatus) data = data.filter(s => s.status === filterStatus);
-  if (searchQ) { const q=searchQ.toLowerCase(); data=data.filter(s=>(s.investor_name||'').toLowerCase().includes(q)||(s.pool_name||'').toLowerCase().includes(q)); }
+  if (searchQ) { const q=searchQ.toLowerCase(); data=data.filter(s=>_schedInvestor(s).toLowerCase().includes(q)||_schedRun(s).toLowerCase().includes(q)); }
 
   if (!data.length) {
     el.innerHTML = `<tr><td colspan="9"><div class="empty"><i class="fa-solid fa-calendar"></i><p>No payout schedules found</p></div></td></tr>`;
@@ -1190,14 +1271,14 @@ function renderSchedulesTable(filterStatus='', searchQ='') {
   }
   el.innerHTML = data.map(s => `
     <tr>
-      <td><div class="td-h">${s.investor_name}</div></td>
-      <td class="td-m">${s.pool_name}</td>
+      <td><div class="td-h">${_esc(_schedInvestor(s))}</div></td>
+      <td class="td-m">${_esc(_schedRun(s))}</td>
       <td>${productBadge(s.product_type)}</td>
       <td class="td-gold">${fmt.rand(s.capital_amount)}</td>
       <td class="td-orange">${fmt.pct(s.annual_rate)}</td>
       <td class="td-green">${fmt.rand(s.net_return)}</td>
       <td class="td-h fw7" style="color:var(--teal)">${fmt.rand(s.total_payout)}</td>
-      <td class="td-m">${fmt.date(s.scheduled_payout_date)}</td>
+      <td class="td-m">${fmt.date(_schedDate(s))}</td>
       <td>
         <div class="flex-c gap-6">
           ${schedStatusBadge(s.status)}
@@ -1225,12 +1306,14 @@ async function markSchedPaid(schedId) {
   if (!confirm('Mark this payout schedule as paid?')) return;
   const sched = S.schedules.find(s => s.id === schedId);
   try {
-    await apiPatch('return_schedules', schedId, { status:'paid', actual_payout_date: new Date().toISOString() });
+    /* paid_at is the column; actual_payout_date never existed, so every
+       Mark Paid failed and the schedule stayed pending. */
+    await apiPatch('return_schedules', schedId, { status:'paid', paid_at: new Date().toISOString() });
     await auditLog({
       eventType: 'schedule', action: 'mark_paid',
-      entityId: schedId, entityName: sched ? `${sched.investor_name} — ${sched.pool_name}` : schedId,
-      changeSummary: sched ? `Payout marked as paid: ${sched.investor_name} — ${fmt.rand(sched.total_payout)} disbursed from ${sched.pool_name}` : `Payout schedule ${schedId} marked as paid`,
-      beforeState: { status: 'scheduled' }, afterState: { status: 'paid', actual_payout_date: new Date().toISOString() },
+      entityId: schedId, entityName: sched ? `${_schedInvestor(sched)} — ${_schedRun(sched)}` : schedId,
+      changeSummary: sched ? `Payout marked as paid: ${_schedInvestor(sched)} — ${fmt.rand(sched.net_return || sched.expected_return || 0)} disbursed from ${_schedRun(sched)}` : `Payout schedule ${schedId} marked as paid`,
+      beforeState: { status: 'scheduled' }, afterState: { status: 'paid', paid_at: new Date().toISOString() },
       severity: 'info'
     });
     T.success('Payout marked as paid');
@@ -1244,7 +1327,7 @@ async function markSchedPaid(schedId) {
 async function loadPools() {
   try {
     const [pools, cattle, solar, loans] = await Promise.all([
-      apiGet('investment_pools'),
+      fetchAllRows('investment_pools'),
       intFetchAll('cattle_cycles').catch(() => []),
       intFetchAll('solar_projects').catch(() => []),
       intFetchAll('shortterm_loans').catch(() => []),
@@ -1283,7 +1366,7 @@ function renderPoolsOverview() {
     const fillPct = p.target_amount > 0 ? Math.min(100, Math.round((p.raised_amount||0)/p.target_amount*100)) : 0;
     const name = p.name || p.pool_name || p.id;
     return `<tr>
-      <td><div class="td-h">${name}</div><div class="td-m mono">${p.id}</div></td>
+      <td><div class="td-h">${_esc(name)}</div><div class="td-m mono">${p.id}</div></td>
       <td>${productBadge(p.product_type)}</td>
       <td class="td-gold">${fmt.rand(p.raised_amount||0)}</td>
       <td class="td-m">${fmt.rand(p.target_amount||0)}</td>
@@ -1293,7 +1376,7 @@ function renderPoolsOverview() {
           <div style="font-size:0.68rem;color:var(--text-muted);text-align:right">${fillPct}%</div>
         </div>
       </td>
-      <td><span class="td-orange">${fmt.pct(p.benchmark_rate||p.annual_rate)}</span></td>
+      <td><span class="td-orange">${fmt.pct(p.annual_rate)}</span></td>
       <td class="td-m">${p.investor_count||0} investors</td>
       <td style="max-width:200px">
         <div style="display:flex;flex-wrap:wrap;align-items:center;gap:3px">
@@ -1435,11 +1518,11 @@ async function loadReports() {
 
 function renderReportsSummary() {
   const completed = S.runs.filter(r => r.status === 'completed');
-  const totalCap  = completed.reduce((s,r) => s+(r.capital_deployed||0), 0);
-  const totalGross= completed.reduce((s,r) => s+(r.total_return_gross||0), 0);
-  const totalNet  = completed.reduce((s,r) => s+(r.total_return_net||0), 0);
+  const totalCap  = completed.reduce((s,r) => s+(r.principal_amount||0), 0);
+  const totalGross= completed.reduce((s,r) => s+(r.gross_return||0), 0);
+  const totalNet  = completed.reduce((s,r) => s+(r.net_return||0), 0);
   const avgRate   = completed.length ? completed.reduce((s,r)=>s+(r.actual_rate||0),0)/completed.length : 0;
-  const avgAlpha  = completed.filter(r=>r.actual_rate>0).map(r=>r.actual_rate-r.benchmark_rate);
+  const avgAlpha  = completed.filter(r=>r.actual_rate>0).map(r=>r.actual_rate-r.annual_rate);
   const meanAlpha = avgAlpha.length ? avgAlpha.reduce((s,v)=>s+v,0)/avgAlpha.length : 0;
 
   const set=(id,v)=>{ const e=document.getElementById(id); if(e) e.textContent=v; };
@@ -1449,7 +1532,7 @@ function renderReportsSummary() {
   set('rpt-net',         fmt.rand(totalNet));
   set('rpt-avg-rate',    fmt.pct(avgRate));
   set('rpt-avg-alpha',   (meanAlpha>=0?'+':'')+fmt.bps(meanAlpha)+' avg');
-  const totalFeeIncome = completed.reduce((s,r)=>s+(r.management_fee_amount||0)+(r.performance_fee_amount||0),0);
+  const totalFeeIncome = completed.reduce((s,r)=>s+(r.management_fee||0)+(r.performance_fee||0),0);
   set('rpt-fee-income', fmt.rand(totalFeeIncome));
 
   // Performance intelligence — MOIC, IRR proxy, avg term, fee drag
@@ -1470,9 +1553,9 @@ function renderProductPerformanceChart() {
   S.runs.filter(r=>r.status==='completed'&&r.actual_rate>0).forEach(r => {
     const t = r.product_type||'other';
     if (!byProduct[t]) byProduct[t] = { bench:[], actual:[], net:[] };
-    byProduct[t].bench.push(r.benchmark_rate);
+    byProduct[t].bench.push(r.annual_rate);
     byProduct[t].actual.push(r.actual_rate);
-    byProduct[t].net.push(r.total_return_net||0);
+    byProduct[t].net.push(r.net_return||0);
   });
   const labels  = Object.keys(byProduct).map(k=>k.replace(/_/g,' '));
   const avgBench = Object.values(byProduct).map(v => v.bench.reduce((s,x)=>s+x,0)/v.bench.length);
@@ -1505,17 +1588,17 @@ function renderRateComparisonTable() {
   const rows = S.runs.filter(r=>r.status==='completed').map(r => ({
     name: r.run_name,
     product: r.product_type,
-    bench: r.benchmark_rate,
+    bench: r.annual_rate,
     actual: r.actual_rate,
-    alpha: (r.actual_rate||0) - (r.benchmark_rate||0),
-    netRet: r.total_return_net,
-    cap: r.capital_deployed,
+    alpha: (r.actual_rate||0) - (r.annual_rate||0),
+    netRet: r.net_return,
+    cap: r.principal_amount,
     days: r.term_days
   }));
   if (!rows.length) { el.innerHTML=`<tr><td colspan="7" class="text-center td-m" style="padding:24px">No completed runs yet</td></tr>`; return; }
   el.innerHTML = rows.map(r => `
     <tr>
-      <td><div class="td-h" style="font-size:0.79rem">${r.name}</div></td>
+      <td><div class="td-h" style="font-size:0.79rem">${_esc(r.name)}</div></td>
       <td>${productBadge(r.product)}</td>
       <td class="td-m">${fmt.pct(r.bench)}</td>
       <td class="${r.actual>=r.bench?'td-green':'td-red'}">${fmt.pct(r.actual)}</td>
@@ -1576,27 +1659,76 @@ function setupRunFilters() {
 ═══════════════════════════════════════════════════════════════ */
 
 /** Write an audit event — call after every state-changing API call */
+/* The audit trail, in the platform's own vocabulary.
+ *
+ * This wrote nine columns audit_events does not have — action, entity_name,
+ * actor, before_state, after_state, change_summary, severity, event_at — so
+ * EVERY call failed, and it failed into a catch that logs a console warning and
+ * calls itself "non-blocking". The Fund Ops audit trail has therefore never
+ * recorded a single event, and the screen that shows it has always been empty
+ * for a reason no one could see. For a compliance surface that is the worst
+ * possible failure mode: it looks like nothing has happened.
+ *
+ * The real table is the one server/services/audit.js writes and the withdrawal
+ * reconciliation reads, so this now speaks that: event_type as
+ * <entity>.<action>, description for the summary, user_email for the actor.
+ * What has no column — the entity's name, the before and after states, the
+ * severity — goes into the metadata JSONB, which is what it is for.
+ *
+ * ip_address is no longer sent. It was hardcoded to '127.0.0.1'; a browser
+ * cannot know its own address, and a fabricated one in an audit record is
+ * worse than an absent one. The server fills it in on the paths that have it.
+ */
 async function auditLog({ eventType, action, entityId, entityName, changeSummary, beforeState = null, afterState = null, severity = 'info' }) {
   try {
     await apiPost('audit_events', {
-      id:             `AUD-${Date.now()}`,
-      event_type:     eventType,
-      action,
-      entity_id:      entityId || '',
-      entity_name:    entityName || '',
-      actor:          'Fund Manager',
-      actor_role:     'director',
-      before_state:   beforeState ? JSON.stringify(beforeState) : null,
-      after_state:    afterState  ? JSON.stringify(afterState)  : null,
-      change_summary: changeSummary,
-      ip_address:     '127.0.0.1',
-      severity,
-      event_at:       new Date().toISOString()
+      id:          `AUD-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      event_type:  action ? `${eventType}.${action}` : eventType,
+      entity_type: eventType,
+      entity_id:   entityId || '',
+      user_email:  (S.user && S.user.email) || null,
+      actor_role:  (S.user && S.user.role)  || 'director',
+      description: changeSummary,
+      metadata:    { action, entity_name: entityName || '', severity,
+                     before_state: beforeState, after_state: afterState,
+                     source: 'fund_console' },
     });
   } catch(e) {
     console.warn('Audit log write failed (non-blocking):', e.message);
   }
 }
+
+/* Reading one back.
+ *
+ * metadata is JSONB, and node-pg hands JSONB back as a JS OBJECT — JSON.parse
+ * on it throws '"[object Object]" is not valid JSON'. It can also arrive as a
+ * string from other paths, so both are handled here rather than at each of the
+ * five call sites.
+ *
+ * The fallbacks matter as much as the parsing: this table also holds events
+ * written by the server, which carry no metadata at all. Those must render as
+ * themselves rather than as a row of dashes. */
+function _audMeta(e) {
+  const m = e && e.metadata;
+  if (!m) return {};
+  if (typeof m === 'object') return m;
+  try { return JSON.parse(m) || {}; } catch (_) { return {}; }
+}
+const _audAt       = e => e.created_at;
+const _audSeverity = e => _audMeta(e).severity || 'info';
+/* A server-written event_type is 'investors.updated'; its action is the half
+   after the dot. */
+const _audAction   = e => _audMeta(e).action || String(e.event_type || '').split('.').slice(1).join('.') || '';
+const _audEntity   = e => _audMeta(e).entity_name || e.entity_id || '';
+const _audActor    = e => e.user_email || 'system';
+const _audSummary  = e => e.description || '';
+
+/* fund_notifications stores priority, not severity, and the console asked for
+   severity everywhere — so every notification rendered as 'info' in grey
+   whatever its actual priority, and the critical-count badge could never fire.
+   entity_name is likewise not a column on that table; the panel falls back to
+   the entity id rather than showing a blank link. */
+const _notifSeverity = n => n.severity || n.priority || 'info';
 
 async function loadAuditTrail() {
   const el = document.getElementById('auditBody');
@@ -1604,11 +1736,11 @@ async function loadAuditTrail() {
   try {
     const all = await intFetchAll('audit_events');
     // Sort newest first
-    S.auditEvents = all.sort((a, b) => new Date(b.event_at || b.created_at) - new Date(a.event_at || a.created_at));
+    S.auditEvents = all.sort((a, b) => new Date(_audAt(b)) - new Date(_audAt(a)));
     renderAuditStats();
     renderAuditTable();
     // Show critical badge
-    const critCount = S.auditEvents.filter(e => e.severity === 'critical').length;
+    const critCount = S.auditEvents.filter(e => _audSeverity(e) === 'critical').length;
     const badge = document.getElementById('criticalAuditBadge');
     if (badge) { badge.style.display = critCount > 0 ? 'inline-flex' : 'none'; badge.textContent = critCount; }
   } catch(e) {
@@ -1622,9 +1754,9 @@ function renderAuditStats() {
   const today = new Date().toDateString();
   const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
   set('aud-total',    evts.length);
-  set('aud-today',    evts.filter(e => new Date(e.event_at || e.created_at).toDateString() === today).length);
-  set('aud-warnings', evts.filter(e => e.severity === 'warning').length);
-  set('aud-critical', evts.filter(e => e.severity === 'critical').length);
+  set('aud-today',    evts.filter(e => new Date(_audAt(e)).toDateString() === today).length);
+  set('aud-warnings', evts.filter(e => _audSeverity(e) === 'warning').length);
+  set('aud-critical', evts.filter(e => _audSeverity(e) === 'critical').length);
 }
 
 function renderAuditTable() {
@@ -1635,12 +1767,12 @@ function renderAuditTable() {
   const sevF     = document.getElementById('audSeverityFilter')?.value || '';
 
   let data = (S.auditEvents || []).slice();
-  if (typeF)   data = data.filter(e => e.event_type === typeF);
-  if (sevF)    data = data.filter(e => e.severity === sevF);
+  if (typeF)   data = data.filter(e => (e.entity_type || e.event_type) === typeF);
+  if (sevF)    data = data.filter(e => _audSeverity(e) === sevF);
   if (search)  data = data.filter(e =>
-    (e.change_summary||'').toLowerCase().includes(search) ||
-    (e.entity_name||'').toLowerCase().includes(search) ||
-    (e.actor||'').toLowerCase().includes(search) ||
+    _audSummary(e).toLowerCase().includes(search) ||
+    _audEntity(e).toLowerCase().includes(search) ||
+    _audActor(e).toLowerCase().includes(search) ||
     (e.entity_id||'').toLowerCase().includes(search)
   );
 
@@ -1655,21 +1787,21 @@ function renderAuditTable() {
   const actionColors = { create:'#74c69d', update:'#fec24f', delete:'#f87171', status_change:'#656565', approve:'#74c69d', reject:'#f87171', export:'#eda5ff', login:'#656565', logout:'rgba(255,255,255,.4)', mark_paid:'#74c69d', calculate_returns:'#fec24f' };
 
   el.innerHTML = data.map(e => {
-    const ts   = e.event_at || e.created_at;
+    const ts   = _audAt(e);
     const dtStr = ts ? new Date(ts).toLocaleString('en-ZA', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—';
-    const sev  = e.severity || 'info';
+    const sev  = _audSeverity(e);
     const col  = sevColors[sev] || '#656565';
-    const aCol = actionColors[e.action] || 'rgba(255,255,255,.6)';
-    const hasDetail = e.before_state || e.after_state;
+    const aCol = actionColors[_audAction(e)] || 'rgba(255,255,255,.6)';
+    const hasDetail = !!(_audMeta(e).before_state || _audMeta(e).after_state);
     return `
     <tr>
       <td><span class="td-m" style="font-size:11px;white-space:nowrap">${dtStr}</span></td>
       <td><span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:${col}"><i class="fa-solid ${sevIcons[sev]||'fa-circle-info'}"></i>${sev.toUpperCase()}</span></td>
       <td><span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:rgba(255,255,255,.6)"><i class="fa-solid ${typeIcons[e.event_type]||'fa-circle'}" style="width:12px"></i>${(e.event_type||'').replace(/_/g,' ')}</span></td>
-      <td><span style="font-size:11px;font-weight:700;color:${aCol};text-transform:uppercase;letter-spacing:.4px">${(e.action||'').replace(/_/g,' ')}</span></td>
-      <td><div class="td-h" style="font-size:12px">${e.entity_name||'—'}</div><div class="td-m" style="font-size:10px">${e.entity_id||''}</div></td>
-      <td><span style="font-size:12px;color:rgba(255,255,255,.75)">${e.actor||'—'}</span><br><span style="font-size:10px;color:rgba(255,255,255,.3)">${e.actor_role||''}</span></td>
-      <td style="max-width:300px"><span style="font-size:12px;color:rgba(255,255,255,.7);line-height:1.4">${e.change_summary||'—'}</span></td>
+      <td><span style="font-size:11px;font-weight:700;color:${aCol};text-transform:uppercase;letter-spacing:.4px">${_audAction(e).replace(/_/g,' ')}</span></td>
+      <td><div class="td-h" style="font-size:12px">${_audEntity(e)||'—'}</div><div class="td-m" style="font-size:10px">${e.entity_id||''}</div></td>
+      <td><span style="font-size:12px;color:rgba(255,255,255,.75)">${_audActor(e)}</span><br><span style="font-size:10px;color:rgba(255,255,255,.3)">${e.actor_role||''}</span></td>
+      <td style="max-width:300px"><span style="font-size:12px;color:rgba(255,255,255,.7);line-height:1.4">${_audSummary(e)||'—'}</span></td>
       <td>${hasDetail ? `<button class="btn btn--xs btn--secondary" onclick="viewAuditDetail('${e.id}')"><i class="fa-solid fa-eye"></i></button>` : '<span style="color:rgba(255,255,255,.2);font-size:11px">—</span>'}</td>
     </tr>`;
   }).join('');
@@ -1678,8 +1810,8 @@ function renderAuditTable() {
 function viewAuditDetail(eventId) {
   const e = (S.auditEvents || []).find(x => x.id === eventId);
   if (!e) return;
-  const before = e.before_state ? JSON.parse(e.before_state) : null;
-  const after  = e.after_state  ? JSON.parse(e.after_state)  : null;
+  const before = _audMeta(e).before_state || null;
+  const after  = _audMeta(e).after_state  || null;
   const fmt2 = obj => obj ? `<pre style="background:rgba(255,255,255,.05);border-radius:8px;padding:12px;font-size:11px;color:#e2e8f0;white-space:pre-wrap;margin:0;max-height:200px;overflow-y:auto">${JSON.stringify(obj, null, 2)}</pre>` : '<span style="color:rgba(255,255,255,.3);font-size:12px">No state snapshot</span>';
 
   // Inject a lightbox-style modal
@@ -1700,11 +1832,11 @@ function viewAuditDetail(eventId) {
     <div style="padding:22px">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px">
         <div><div style="font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">Event ID</div><div style="font-size:13px;font-weight:700;color:#fff;font-family:monospace">${e.id}</div></div>
-        <div><div style="font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">Timestamp</div><div style="font-size:13px;color:#fff">${new Date(e.event_at||e.created_at).toLocaleString('en-ZA')}</div></div>
-        <div><div style="font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">Actor</div><div style="font-size:13px;color:#fff">${e.actor} <span style="color:rgba(255,255,255,.35);font-size:11px">(${e.actor_role})</span></div></div>
+        <div><div style="font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">Timestamp</div><div style="font-size:13px;color:#fff">${new Date(_audAt(e)).toLocaleString('en-ZA')}</div></div>
+        <div><div style="font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">Actor</div><div style="font-size:13px;color:#fff">${_audActor(e)} <span style="color:rgba(255,255,255,.35);font-size:11px">(${e.actor_role||'—'})</span></div></div>
         <div><div style="font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">IP Address</div><div style="font-size:13px;color:#fff;font-family:monospace">${e.ip_address||'—'}</div></div>
       </div>
-      <div style="margin-bottom:14px"><div style="font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Change Summary</div><div style="font-size:13px;color:rgba(255,255,255,.8);line-height:1.5;background:rgba(255,255,255,.04);padding:10px 12px;border-radius:8px">${e.change_summary}</div></div>
+      <div style="margin-bottom:14px"><div style="font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Change Summary</div><div style="font-size:13px;color:rgba(255,255,255,.8);line-height:1.5;background:rgba(255,255,255,.04);padding:10px 12px;border-radius:8px">${_audSummary(e)||'—'}</div></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
         <div><div style="font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">Before State</div>${fmt2(before)}</div>
         <div><div style="font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">After State</div>${fmt2(after)}</div>
@@ -1717,10 +1849,10 @@ function exportAuditLog() {
   const evts = S.auditEvents || [];
   const header = ['ID','Timestamp','Severity','Type','Action','Entity ID','Entity Name','Actor','Role','Summary','IP'];
   const rows = evts.map(e => [
-    e.id, e.event_at||'', e.severity||'', e.event_type||'', e.action||'',
-    e.entity_id||'', (e.entity_name||'').replace(/,/g,';'),
-    e.actor||'', e.actor_role||'',
-    (e.change_summary||'').replace(/,/g,';'), e.ip_address||''
+    e.id, _audAt(e)||'', _audSeverity(e), e.event_type||'', _audAction(e),
+    e.entity_id||'', _audEntity(e).replace(/,/g,';'),
+    _audActor(e), e.actor_role||'',
+    _audSummary(e).replace(/,/g,';'), e.ip_address||''
   ].join(','));
   const csv  = [header.join(','), ...rows].join('\n');
   const blob = new Blob([csv], { type:'text/csv' });
@@ -1799,9 +1931,9 @@ function renderAllocationsView() {
     <tr>
       <td>
         <div style="display:flex;align-items:center;gap:9px">
-          <div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,var(--orange),var(--teal));display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;flex-shrink:0">${fmt.initials(a.investor_name)}</div>
+          <div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,var(--orange),var(--teal));display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;flex-shrink:0">${_esc(fmt.initials(a.investor_name))}</div>
           <div>
-            <div class="td-h" style="font-size:12px">${a.investor_name||'—'}</div>
+            <div class="td-h" style="font-size:12px">${_esc(a.investor_name||'—')}</div>
             <div class="td-m" style="font-size:10px">${a.investor_email||''}</div>
           </div>
         </div>
@@ -1847,10 +1979,10 @@ function renderAllocByInvestor() {
     const productColors = { cattle:'#74c69d', solar_7yr:'#fec24f', solar_6yr:'#fec24f', solar_5yr:'#fcd34d', short_term:'#656565', fund_run:'#eda5ff' };
     return `
     <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:16px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-      <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--orange),var(--teal));display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#fff;flex-shrink:0">${fmt.initials(inv.name)}</div>
+      <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--orange),var(--teal));display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#fff;flex-shrink:0">${_esc(fmt.initials(inv.name))}</div>
       <div style="flex:1;min-width:120px">
-        <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:2px">${inv.name}</div>
-        <div style="font-size:11px;color:rgba(255,255,255,.4)">${inv.email||''}</div>
+        <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:2px">${_esc(inv.name)}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,.4)">${_esc(inv.email||'')}</div>
         <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
           ${products.map(p => `<span style="font-size:10px;font-weight:700;color:${productColors[p]||'#94a3b8'};background:${productColors[p]||'#94a3b8'}22;border-radius:10px;padding:2px 7px">${p.replace(/_/g,' ')}</span>`).join('')}
         </div>
@@ -1887,7 +2019,7 @@ function viewAllocDetail(allocId) {
         <div style="background:rgba(116,198,157,.08);border:1px solid rgba(116,198,157,.2);border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;color:rgba(255,255,255,.4);margin-bottom:4px">LIVE NAV</div><div style="font-size:18px;font-weight:800;color:#74c69d">${fmt.rand(navNow)}</div><div style="font-size:10px;color:#74c69d">+${fmt.rand(gain)}</div></div>
         <div style="background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.2);border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;color:rgba(255,255,255,.4);margin-bottom:4px">EXPECTED</div><div style="font-size:18px;font-weight:800;color:#656565">${fmt.rand(a.expected_payout||0)}</div></div>
       </div>
-      ${a.notes ? `<div style="background:rgba(255,255,255,.04);border-radius:8px;padding:10px 12px;font-size:12px;color:rgba(255,255,255,.6);line-height:1.5;margin-bottom:14px"><strong style="color:rgba(255,255,255,.7)">Notes:</strong> ${a.notes}</div>` : ''}
+      ${a.notes ? `<div style="background:rgba(255,255,255,.04);border-radius:8px;padding:10px 12px;font-size:12px;color:rgba(255,255,255,.6);line-height:1.5;margin-bottom:14px"><strong style="color:rgba(255,255,255,.7)">Notes:</strong> ${_esc(a.notes)}</div>` : ''}
       <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid rgba(255,255,255,.07)">
         <button onclick="printInvestorStatement('${a.id}')"
                 style="background:rgba(254,194,79,.15);border:1px solid rgba(254,194,79,.3);color:#fec24f;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700">
@@ -1987,12 +2119,12 @@ function buildForecast({ schedules, solar, loans, cattle, runs, pools, allocs })
 
   // ── OUTFLOWS: payout schedules ──
   schedules.filter(s => s.status === 'scheduled' || s.status === 'processing').forEach(s => {
-    const b = getBucket(s.scheduled_payout_date);
+    const b = getBucket(_schedDate(s));
     if (!b) return;
     const amount = parseFloat(s.total_payout) || 0;
     b.outflows += amount;
-    b.items.push({ type:'outflow', label:`Payout: ${s.investor_name}`, amount, product: s.product_type||'fund_run', date: s.scheduled_payout_date, icon:'fa-calendar-check', color:'#f87171' });
-    events.push({ bucket: b.key, direction:'outflow', label:`Payout: ${s.investor_name} (${s.pool_name||'—'})`, amount, product:'schedule', date: s.scheduled_payout_date });
+    b.items.push({ type:'outflow', label:`Payout: ${_schedInvestor(s)}`, amount, product: s.product_type||'fund_run', date: _schedDate(s), icon:'fa-calendar-check', color:'#f87171' });
+    events.push({ bucket: b.key, direction:'outflow', label:`Payout: ${_schedInvestor(s)} (${_schedRun(s)||'—'})`, amount, product:'schedule', date: _schedDate(s) });
   });
 
   // ── OUTFLOWS: investor allocations maturing ──
@@ -2039,7 +2171,7 @@ function buildForecast({ schedules, solar, loans, cattle, runs, pools, allocs })
   runs.filter(r => r.status==='in_progress' && r.end_date).forEach(r => {
     const b = getBucket(r.end_date);
     if (!b) return;
-    const amount = parseFloat(r.capital_deployed)||0;
+    const amount = parseFloat(r.principal_amount)||0;
     b.inflows += amount;
     b.items.push({ type:'inflow', label:`Fund Run Return: ${r.run_name}`, amount, product:'fund_run', date: r.end_date, icon:'fa-play-circle', color:'#eda5ff' });
     events.push({ bucket: b.key, direction:'inflow', label:`Run Return: ${r.run_name}`, amount, product:'fund_run', date: r.end_date });
@@ -2152,20 +2284,9 @@ function renderForecastView({ months, events, totalInflows, totalOutflows, total
 /**
  * Paginated fetch helper for intelligence engine
  */
-async function intFetchAll(table) {
-  const PAGE = 100; let page = 1, all = [];
-  while (true) {
-    try {
-      const r = await apiFetch(`tables/${table}?limit=${PAGE}&page=${page}`);
-      const rows = r.data || [];
-      all = all.concat(rows);
-      if (rows.length < PAGE) break;
-      if (r.total > 0 && all.length >= r.total) break;
-      page++;
-    } catch(e) { break; }
-  }
-  return all;
-}
+/* Kept as the name twenty call sites already use; the behaviour is now
+   fetchAllRows', which throws rather than returning a partial book. */
+const intFetchAll = table => fetchAllRows(table);
 
 async function loadIntelligence() {
   const el = document.getElementById('intelligenceContent');
@@ -2190,7 +2311,7 @@ async function loadIntelligence() {
   } catch(e) {
     el.innerHTML = `<div class="panel"><div class="panel__bd" style="padding:40px;text-align:center;color:#f87171">
       <i class="fa-solid fa-circle-exclamation" style="font-size:28px;margin-bottom:10px"></i>
-      <p style="margin:0">Failed to load intelligence data: ${e.message}</p></div></div>`;
+      <p style="margin:0">Failed to load intelligence data: ${_esc(e.message)}</p></div></div>`;
   }
 }
 
@@ -2212,7 +2333,7 @@ const AIAdvisor = {
 
     /* ── Capital deployed (from fund_runs) ── */
     const activeRuns   = runs.filter(r => r.status === 'in_progress');
-    const totalDeployedRuns = activeRuns.reduce((s,r) => s + (parseFloat(r.capital_deployed)||0), 0);
+    const totalDeployedRuns = activeRuns.reduce((s,r) => s + (parseFloat(r.principal_amount)||0), 0);
 
     /* ── Solar deployed ── */
     const activeSolar  = solar.filter(p => p.status === 'active');
@@ -2232,12 +2353,12 @@ const AIAdvisor = {
     /* ── Upcoming payout obligations (next 90 days) ── */
     const upcomingPayouts = schedules.filter(s => {
       if (s.status === 'paid' || s.status === 'cancelled') return false;
-      const d = new Date(s.scheduled_payout_date);
+      const d = new Date(_schedDate(s));
       return d >= now && d <= in90;
     });
     const totalObligations90 = upcomingPayouts.reduce((s,p) => s + (parseFloat(p.total_payout)||0), 0);
 
-    const upcomingPayouts30 = upcomingPayouts.filter(s => new Date(s.scheduled_payout_date) <= in30);
+    const upcomingPayouts30 = upcomingPayouts.filter(s => new Date(_schedDate(s)) <= in30);
     const totalObligations30 = upcomingPayouts30.reduce((s,p) => s + (parseFloat(p.total_payout)||0), 0);
 
     /* ── Maturing pools (next 90 days) ── */
@@ -2522,7 +2643,7 @@ function renderIntelligenceView(ctx) {
       <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
         <div style="background:linear-gradient(135deg,#1a1000,#2a1800);border:1px solid rgba(251,146,60,.2);border-radius:12px;padding:16px 20px;flex:1;min-width:220px">
           <div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:5px">Pool Name</div>
-          <div style="font-size:16px;font-weight:700;color:#fff">${ctx.nextPool.pool_name || ctx.nextPool.id}</div>
+          <div style="font-size:16px;font-weight:700;color:#fff">${_esc(ctx.nextPool.name || ctx.nextPool.id)}</div>
           <div style="font-size:12px;color:rgba(255,255,255,.4);margin-top:3px">${fmt.date(ctx.nextPool.maturity_date)}</div>
         </div>
         <div style="text-align:center;padding:0 8px">
@@ -2548,7 +2669,7 @@ function renderIntelligenceView(ctx) {
             const d = Math.max(0, Math.round((new Date(p.maturity_date) - new Date()) / 86400000));
             const urgency = d <= 14 ? '#f87171' : d <= 30 ? '#fb923c' : '#fec24f';
             return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:rgba(255,255,255,.04);border-radius:8px;font-size:12px">
-              <span style="color:#fff;font-weight:600">${p.pool_name || p.id}</span>
+              <span style="color:#fff;font-weight:600">${_esc(p.name || p.id)}</span>
               <span style="color:rgba(255,255,255,.4)">${fmt.date(p.maturity_date)}</span>
               <span style="color:${urgency};font-weight:700">${d}d</span>
               <span style="color:#fec24f;font-weight:600">${fmt.rand(parseFloat(p.raised_amount)||0)}</span>
@@ -2589,7 +2710,7 @@ function renderIntelligenceView(ctx) {
                   <i class="fa-solid ${s.icon}" style="color:${s.color};font-size:15px"></i>
                 </div>
                 <div>
-                  <div style="font-size:14px;font-weight:800;color:#fff">${s.title}${rankBadge}</div>
+                  <div style="font-size:14px;font-weight:800;color:#fff">${_esc(s.title)}${rankBadge}</div>
                   ${s.amount > 0 ? `<div style="font-size:12px;color:rgba(255,255,255,.4)">Suggested allocation: <strong style="color:${s.color}">${fmt.rand(s.amount)}</strong></div>` : ''}
                 </div>
               </div>
@@ -2636,13 +2757,13 @@ function renderIntelligenceView(ctx) {
         <thead><tr><th>Investor</th><th>Pool</th><th>Payout Date</th><th class="text-right">Amount</th><th>Status</th><th>Urgency</th></tr></thead>
         <tbody>
           ${ctx.upcomingPayouts.slice(0,8).map(p => {
-            const daysLeft = Math.max(0,Math.round((new Date(p.scheduled_payout_date)-new Date())/86400000));
+            const daysLeft = Math.max(0,Math.round((new Date(_schedDate(p))-new Date())/86400000));
             const urgColor = daysLeft <= 14 ? '#f87171' : daysLeft <= 30 ? '#fb923c' : '#fec24f';
             return `<tr>
-              <td><div class="td-h">${p.investor_name||'—'}</div></td>
-              <td class="td-m">${p.pool_name||'—'}</td>
-              <td class="td-m">${fmt.date(p.scheduled_payout_date)}</td>
-              <td class="td-gold" style="text-align:right;font-weight:700">${fmt.rand(p.total_payout)}</td>
+              <td><div class="td-h">${_esc(_schedInvestor(p))}</div></td>
+              <td class="td-m">${_esc(_schedRun(p)||'—')}</td>
+              <td class="td-m">${fmt.date(_schedDate(p))}</td>
+              <td class="td-gold" style="text-align:right;font-weight:700">${fmt.rand(p.net_return || p.expected_return || 0)}</td>
               <td>${schedStatusBadge(p.status)}</td>
               <td><span style="font-size:12px;font-weight:700;color:${urgColor}">${daysLeft}d</span></td>
             </tr>`;
@@ -2667,17 +2788,17 @@ async function loadFees() {
     S._feeCache = fees;
     renderFeeLedgerView(fees);
   } catch(e) {
-    if (tbody) tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:20px;color:#f87171"><i class="fa-solid fa-triangle-exclamation"></i> Failed to load fee data: ${e.message}</td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:20px;color:#f87171"><i class="fa-solid fa-triangle-exclamation"></i> Failed to load fee data: ${_esc(e.message)}</td></tr>`;
   }
 }
 
 function renderFeeLedgerView(fees) {
   /* ── KPI Calculations ── */
-  const totalEarned  = fees.reduce((s, f) => s + (parseFloat(f.fee_amount)||0), 0);
-  const received     = fees.filter(f => f.status === 'received').reduce((s, f) => s + (parseFloat(f.fee_amount)||0), 0);
-  const accrued      = fees.filter(f => f.status === 'accrued').reduce((s, f) => s + (parseFloat(f.fee_amount)||0), 0);
+  const totalEarned  = fees.reduce((s, f) => s + _feeAmount(f), 0);
+  const received     = fees.filter(f => f.status === 'received').reduce((s, f) => s + _feeAmount(f), 0);
+  const accrued      = fees.filter(f => f.status === 'accrued').reduce((s, f) => s + _feeAmount(f), 0);
   const margin       = totalEarned > 0 ? ((received / totalEarned) * 100).toFixed(1) : '0.0';
-  const totalCapBase = fees.reduce((s, f) => s + (parseFloat(f.capital_base)||0), 0);
+  const totalCapBase = fees.reduce((s, f) => s + (parseFloat(f.basis)||0), 0);
 
   /* ── KPI cards ── */
   const kpiEl = document.getElementById('fee-total-earned');
@@ -2705,7 +2826,7 @@ function _renderFeeTypeChart(fees) {
   if (S.charts.feeType) { S.charts.feeType.destroy(); }
 
   const types = {};
-  fees.forEach(f => { const t = f.fee_type || 'Other'; types[t] = (types[t]||0) + (parseFloat(f.fee_amount)||0); });
+  fees.forEach(f => { const t = f.fee_type || 'Other'; types[t] = (types[t]||0) + _feeAmount(f); });
   const labels = Object.keys(types);
   const data   = labels.map(k => types[k]);
   const COLORS  = ['#fec24f','#74c69d','#656565','#fb923c','#eda5ff','#f472b6'];
@@ -2732,7 +2853,7 @@ function _renderFeeProductChart(fees) {
   if (S.charts.feeProd) { S.charts.feeProd.destroy(); }
 
   const prods = {};
-  fees.forEach(f => { const p = f.product_type || 'Unknown'; prods[p] = (prods[p]||0) + (parseFloat(f.fee_amount)||0); });
+  fees.forEach(f => { const p = _feeProduct(f); prods[p] = (prods[p]||0) + _feeAmount(f); });
   const labels = Object.keys(prods);
   const data   = labels.map(k => prods[k]);
   const COLORS  = ['#656565','#34d399','#fec24f','#f87171','#eda5ff'];
@@ -2767,11 +2888,12 @@ function _renderFeeTimelineChart(fees) {
   }
 
   fees.forEach(f => {
-    if (!f.fee_date) return;
-    const key = f.fee_date.slice(0,7);
+    const fd = _feeDate(f);
+    if (!fd) return;
+    const key = String(fd).slice(0,7);
     const bkt = months.find(m => m.key === key);
     if (!bkt) return;
-    const amt = parseFloat(f.fee_amount)||0;
+    const amt = _feeAmount(f);
     bkt.total += amt;
     if (f.status === 'received') bkt.received += amt;
     else bkt.accrued += amt;
@@ -2809,9 +2931,9 @@ function renderFeeLedgerTable(fees, typeFilter, statusFilter) {
   if (typeFilter   && typeFilter !== 'all')   rows = rows.filter(f => f.fee_type === typeFilter);
   if (statusFilter && statusFilter !== 'all') rows = rows.filter(f => f.status === statusFilter);
 
-  rows.sort((a,b) => (b.fee_date||'').localeCompare(a.fee_date||''));
+  rows.sort((a,b) => String(_feeDate(b)||'').localeCompare(String(_feeDate(a)||'')));
 
-  if (sub) sub.textContent = `${rows.length} entries · Total: ${fmt.rand(rows.reduce((s,f)=>s+(parseFloat(f.fee_amount)||0),0))}`;
+  if (sub) sub.textContent = `${rows.length} entries · Total: ${fmt.rand(rows.reduce((s,f)=>s+_feeAmount(f),0))}`;
 
   const statusBadge = s => {
     const cfg = { received: ['#74c69d','#052e16'], accrued: ['#fec24f','#1c1400'], invoiced: ['#656565','#0c1a2e'], waived: ['rgba(255,255,255,.3)','rgba(0,0,0,.4)'] };
@@ -2826,13 +2948,13 @@ function renderFeeLedgerTable(fees, typeFilter, statusFilter) {
 
   tbody.innerHTML = rows.map(f => `
     <tr>
-      <td class="td-m" style="color:rgba(255,255,255,.5);font-size:11px">${fmt.date(f.fee_date)}</td>
-      <td class="td-m" style="font-weight:600;color:#fff">${f.run_name || f.run_id || '—'}</td>
-      <td class="td-m"><span style="background:rgba(254,194,79,.15);color:#fec24f;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">${f.product_type||'—'}</span></td>
+      <td class="td-m" style="color:rgba(255,255,255,.5);font-size:11px">${fmt.date(_feeDate(f))}</td>
+      <td class="td-m" style="font-weight:600;color:#fff">${_esc(_feeRunName(f))}</td>
+      <td class="td-m"><span style="background:rgba(254,194,79,.15);color:#fec24f;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">${_esc(_feeProduct(f))}</span></td>
       <td class="td-m"><span style="background:rgba(255,255,255,.06);color:rgba(255,255,255,.7);padding:2px 8px;border-radius:10px;font-size:11px">${f.fee_type||'—'}</span></td>
-      <td class="td-m" style="text-align:right;color:rgba(255,255,255,.5)">${fmt.rand(parseFloat(f.capital_base)||0)}</td>
+      <td class="td-m" style="text-align:right;color:rgba(255,255,255,.5)">${fmt.rand(parseFloat(f.basis)||0)}</td>
       <td class="td-m" style="text-align:right;color:rgba(255,255,255,.5);font-size:12px">${f.fee_rate ? (parseFloat(f.fee_rate)*100).toFixed(2)+'%' : '—'}</td>
-      <td class="td-gold" style="text-align:right;font-weight:700">${fmt.rand(parseFloat(f.fee_amount)||0)}</td>
+      <td class="td-gold" style="text-align:right;font-weight:700">${fmt.rand(_feeAmount(f))}</td>
       <td>${statusBadge(f.status)}</td>
       <td class="td-m" style="color:rgba(255,255,255,.35);font-size:11px">${f.invoice_ref||'—'}</td>
     </tr>`).join('');
@@ -2849,9 +2971,9 @@ function exportFeeLedger() {
   if (!fees.length) { T.warn('No fee data to export.'); return; }
   const headers = ['Date','Run','Product','Fee Type','Rate %','Capital Base','Fee Amount','Status','Invoice Ref'];
   const rows = fees.map(f => [
-    f.fee_date||'', f.run_name||'', f.product_type||'', f.fee_type||'',
+    _feeDate(f)||'', _feeRunName(f), _feeProduct(f), f.fee_type||'',
     f.fee_rate ? (parseFloat(f.fee_rate)*100).toFixed(2) : '',
-    parseFloat(f.capital_base)||0, parseFloat(f.fee_amount)||0,
+    parseFloat(f.basis)||0, _feeAmount(f),
     f.status||'', f.invoice_ref||''
   ]);
   const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
@@ -2878,7 +3000,9 @@ async function loadRiskDashboard() {
       intFetchAll('shortterm_loans').catch(()=>[]),
       intFetchAll('cattle_cycles').catch(()=>[]),
       intFetchAll('fund_runs').catch(()=>[]),
-      intFetchAll('fund_pools').catch(()=>[]),
+      /* investment_pools. fund_pools has never existed in any schema, and
+         intFetchAll swallowed the error into an empty list. */
+      intFetchAll('investment_pools').catch(()=>[]),
       intFetchAll('investor_allocations').catch(()=>[])
     ]);
     renderRiskDashboard({ solar, loans, cattle, runs, pools, allocations });
@@ -3135,7 +3259,7 @@ function renderSolarRiskPanel(solar) {
           const daysLeft = p.maturity_date ? Math.round((new Date(p.maturity_date)-now)/86400000) : null;
           const urgColor = daysLeft!=null && daysLeft < 30 ? '#fec24f' : daysLeft!=null && daysLeft < 0 ? '#f87171' : 'rgba(255,255,255,.4)';
           return `<tr>
-            <td class="td-m" style="font-weight:600">${p.project_name||p.name||'—'}</td>
+            <td class="td-m" style="font-weight:600">${_esc(p.project_name||p.name||'—')}</td>
             <td class="td-m" style="text-align:right">${fmt.rand(parseFloat(p.capital_invested||p.capital)||0)}</td>
             <td class="td-m" style="text-align:right">${p.annual_rate ? (parseFloat(p.annual_rate)*100).toFixed(1)+'%' : '—'}</td>
             <td class="td-m" style="color:${urgColor}">${daysLeft!=null ? daysLeft+'d' : (p.maturity_date ? fmt.date(p.maturity_date) : '—')}</td>
@@ -3164,7 +3288,7 @@ async function loadNotifications() {
     renderNotifications(notifs);
     updateNotifBadges();
   } catch(e) {
-    if (list) list.innerHTML = `<div class="panel"><div class="panel__bd" style="color:#f87171;padding:30px;text-align:center"><i class="fa-solid fa-triangle-exclamation"></i> Failed to load notifications: ${e.message}</div></div>`;
+    if (list) list.innerHTML = `<div class="panel"><div class="panel__bd" style="color:#f87171;padding:30px;text-align:center"><i class="fa-solid fa-triangle-exclamation"></i> Failed to load notifications: ${_esc(e.message)}</div></div>`;
   }
 }
 
@@ -3174,7 +3298,7 @@ function renderNotifications(notifs, catFilter, sevFilter) {
 
   let rows = [...(notifs || S._notifCache || [])].filter(n => !n.is_dismissed);
   if (catFilter && catFilter !== 'all') rows = rows.filter(n => n.category === catFilter);
-  if (sevFilter && sevFilter !== 'all') rows = rows.filter(n => n.severity === sevFilter);
+  if (sevFilter && sevFilter !== 'all') rows = rows.filter(n => _notifSeverity(n) === sevFilter);
 
   const sub = document.getElementById('notifSubtitle');
   const unread = rows.filter(n => !n.is_read).length;
@@ -3196,7 +3320,7 @@ function renderNotifications(notifs, catFilter, sevFilter) {
   };
 
   list.innerHTML = rows.map(n => {
-    const cfg = sevConfig[n.severity] || sevConfig.info;
+    const cfg = sevConfig[_notifSeverity(n)] || sevConfig.info;
     const isUnread = !n.is_read;
     const ts = n.notified_at ? new Date(n.notified_at) : new Date(parseInt(n.created_at||0));
     const timeStr = isNaN(ts) ? '' : ts.toLocaleString('en-ZA', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
@@ -3214,15 +3338,15 @@ function renderNotifications(notifs, catFilter, sevFilter) {
             <div>
               <div style="font-size:13px;font-weight:${isUnread?'700':'600'};color:${isUnread?'#fff':'rgba(255,255,255,.75)'}">
                 ${isUnread ? `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${cfg.color};margin-right:7px;vertical-align:middle"></span>` : ''}
-                ${n.title||'Notification'}
+                ${_esc(n.title||'Notification')}
               </div>
-              <div style="font-size:12px;color:rgba(255,255,255,.5);margin-top:3px;line-height:1.5">${n.message||''}</div>
+              <div style="font-size:12px;color:rgba(255,255,255,.5);margin-top:3px;line-height:1.5">${_esc(n.message||'')}</div>
               ${n.entity_name ? `<div style="font-size:11px;color:rgba(255,255,255,.3);margin-top:5px"><i class="fa-solid fa-link" style="margin-right:4px;opacity:.6"></i>${n.entity_type||''}: <strong style="color:rgba(255,255,255,.5)">${n.entity_name}</strong></div>` : ''}
             </div>
             <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex-shrink:0">
               <span style="font-size:10px;color:rgba(255,255,255,.3);white-space:nowrap">${timeStr}</span>
               <div style="display:flex;gap:6px">
-                <span style="background:${cfg.color}22;color:${cfg.color};padding:1px 7px;border-radius:8px;font-size:10px;font-weight:700;text-transform:uppercase">${n.severity||'info'}</span>
+                <span style="background:${cfg.color}22;color:${cfg.color};padding:1px 7px;border-radius:8px;font-size:10px;font-weight:700;text-transform:uppercase">${_notifSeverity(n)}</span>
                 <span style="background:rgba(255,255,255,.06);color:rgba(255,255,255,.4);padding:1px 7px;border-radius:8px;font-size:10px;text-transform:uppercase">${n.category||'general'}</span>
               </div>
               <button onclick="event.stopPropagation();dismissNotif('${n.id}')"
@@ -3301,7 +3425,7 @@ async function updateNotifBadges() {
     if (!S._notifCache) S._notifCache = notifs;
 
     const unread    = notifs.filter(n => !n.is_read && !n.is_dismissed).length;
-    const riskCount = notifs.filter(n => !n.is_read && !n.is_dismissed && n.severity==='critical').length;
+    const riskCount = notifs.filter(n => !n.is_read && !n.is_dismissed && _notifSeverity(n)==='critical').length;
 
     const badge1 = document.getElementById('unreadNotifBadge');
     if (badge1) {
@@ -3368,7 +3492,7 @@ async function printInvestorStatement(allocId) {
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Investor Return Statement — ${a.investor_name || 'Investor'}</title>
+<title>Investor Return Statement — ${_esc(a.investor_name || 'Investor')}</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 11pt; color: #1a1a1a; background: #fff; padding: 0; }
@@ -3461,7 +3585,7 @@ async function printInvestorStatement(allocId) {
   <!-- Investor Details -->
   <div class="section-head">Investor Details</div>
   <div class="data-grid">
-    <div class="data-row"><div class="data-label">Full Name</div><div class="data-value">${a.investor_name || '—'}</div></div>
+    <div class="data-row"><div class="data-label">Full Name</div><div class="data-value">${_esc(a.investor_name || '—')}</div></div>
     <div class="data-row"><div class="data-label">Email Address</div><div class="data-value">${a.investor_email || '—'}</div></div>
     <div class="data-row"><div class="data-label">ID / Entity Ref</div><div class="data-value">${a.investor_id || '—'}</div></div>
     <div class="data-row"><div class="data-label">Account Status</div><div class="data-value">${(a.status || '—').toUpperCase()}</div></div>
@@ -3509,7 +3633,7 @@ async function printInvestorStatement(allocId) {
       </tbody>
     </table>
   </div>
-  ${a.notes ? `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:10px 14px;margin:12px 0;font-size:9pt;color:#78350f"><strong>Notes:</strong> ${a.notes}</div>` : ''}
+  ${a.notes ? `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:10px 14px;margin:12px 0;font-size:9pt;color:#78350f"><strong>Notes:</strong> ${_esc(a.notes)}</div>` : ''}
 
   <!-- Disclaimer -->
   <div class="disclaimer">
@@ -3575,7 +3699,7 @@ async function printTaxCertificate(allocId) {
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>IT3(b) Tax Certificate — ${a.investor_name || 'Investor'}</title>
+<title>IT3(b) Tax Certificate — ${_esc(a.investor_name || 'Investor')}</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 10.5pt; color: #1a1a1a; background: #fff; }
@@ -3686,7 +3810,7 @@ async function printTaxCertificate(allocId) {
     <!-- Investor / Recipient -->
     <div class="s-head">Investor / Recipient Details</div>
     <div class="dgrid">
-      <div class="drow"><div class="dlabel">Full Name / Entity</div><div class="dvalue">${a.investor_name || '—'}</div></div>
+      <div class="drow"><div class="dlabel">Full Name / Entity</div><div class="dvalue">${_esc(a.investor_name || '—')}</div></div>
       <div class="drow"><div class="dlabel">Email Address</div><div class="dvalue">${a.investor_email || '—'}</div></div>
       <div class="drow"><div class="dlabel">Investor Reference</div><div class="dvalue">${a.investor_id || allocId.slice(-10).toUpperCase()}</div></div>
       <div class="drow"><div class="dlabel">Investment Product</div><div class="dvalue">${productLabel}</div></div>
@@ -3785,13 +3909,15 @@ function renderEventTicker() {
   if (!el) return;
   const events = [];
   S.runs.filter(r => r.status === 'in_progress').forEach(r => {
-    events.push({ icon:'fa-play-circle', color:'#fec24f', text:`<b>${r.run_name}</b> is in progress — ${fmt.rand(r.capital_deployed)} deployed` });
+    events.push({ icon:'fa-play-circle', color:'#fec24f', text:`<b>${_esc(r.run_name)}</b> is in progress — ${fmt.rand(r.principal_amount)} deployed` });
   });
   S.schedules.filter(s => s.status === 'processing').forEach(s => {
-    events.push({ icon:'fa-circle-dot', color:'#656565', text:`Payout processing: <b>${s.investor_name||'Investor'}</b> — ${fmt.rand(s.payout_amount||0)}` });
+    /* net_return is what the investor receives; payout_amount is not a column
+       on return_schedules and rendered R0 on every ticker line. */
+    events.push({ icon:'fa-circle-dot', color:'#656565', text:`Payout processing: <b>${_esc(_schedInvestor(s))}</b> — ${fmt.rand(s.net_return || s.expected_return || 0)}` });
   });
   S.runs.filter(r => r.status === 'completed').slice(0,3).forEach(r => {
-    events.push({ icon:'fa-circle-check', color:'#4ade80', text:`Run completed: <b>${r.run_name}</b> — net return ${fmt.rand(r.total_return_net||0)}` });
+    events.push({ icon:'fa-circle-check', color:'#4ade80', text:`Run completed: <b>${r.run_name}</b> — net return ${fmt.rand(r.net_return||0)}` });
   });
   if (!events.length) { el.innerHTML = ''; return; }
   const items = events.map(e =>
@@ -3867,7 +3993,7 @@ function renderInvestorSummaryTable() {
     const statusBadges = statuses.map(s => allocationStatusBadge(s)).join(' ');
     const prodBadges   = products.map(p => productBadge(p)).join(' ');
     return `<tr class="row--clickable" onclick="showInvestorDetail('${encodeURIComponent(name)}')">
-      <td><div class="td-h">${name}</div></td>
+      <td><div class="td-h">${_esc(name)}</div></td>
       <td class="td-m">${allocs.length}</td>
       <td>${prodBadges || '<span class="td-m">—</span>'}</td>
       <td class="td-gold">${fmt.rand(capital)}</td>
@@ -3908,12 +4034,12 @@ function exportReportsCSV() {
   const headers = ['Run Name','Product','Capital','Gross Return','Net Return','Actual Rate','Benchmark Rate','Alpha bps','Term Days','Total Fees'];
   const data = completed.map(r => [
     r.run_name||'', (r.product_type||'').replace(/_/g,' '),
-    r.capital_deployed||0, r.total_return_gross||0, r.total_return_net||0,
+    r.principal_amount||0, r.gross_return||0, r.net_return||0,
     ((r.actual_rate||0)*100).toFixed(4)+'%',
-    ((r.benchmark_rate||0)*100).toFixed(4)+'%',
-    (((r.actual_rate||0)-(r.benchmark_rate||0))*10000).toFixed(1),
+    ((r.annual_rate||0)*100).toFixed(4)+'%',
+    (((r.actual_rate||0)-(r.annual_rate||0))*10000).toFixed(1),
     r.term_days||0,
-    (r.management_fee_amount||0)+(r.performance_fee_amount||0)
+    (r.management_fee||0)+(r.performance_fee||0)
   ]);
   _csvDownload('fund_runs_report.csv', headers, data);
 }
@@ -3945,13 +4071,13 @@ function exportFundRunsPDF() {
     body: completed.map(r => [
       r.run_name||'',
       (r.product_type||'').replace(/_/g,' '),
-      fmt.rand(r.capital_deployed),
-      fmt.rand(r.total_return_gross),
-      fmt.rand(r.total_return_net),
+      fmt.rand(r.principal_amount),
+      fmt.rand(r.gross_return),
+      fmt.rand(r.net_return),
       fmt.pct(r.actual_rate),
-      (((r.actual_rate||0)-(r.benchmark_rate||0))*10000).toFixed(1)+' bps',
+      (((r.actual_rate||0)-(r.annual_rate||0))*10000).toFixed(1)+' bps',
       r.term_days||'—',
-      fmt.rand((r.management_fee_amount||0)+(r.performance_fee_amount||0))
+      fmt.rand((r.management_fee||0)+(r.performance_fee||0))
     ]),
     styles:{ fontSize:8, cellPadding:3 },
     headStyles:{ fillColor:[26,31,46], textColor:[212,175,55], fontStyle:'bold' },

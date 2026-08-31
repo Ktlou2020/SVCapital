@@ -34,17 +34,35 @@ const fs   = require('fs');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
-const FILE = path.join(ROOT, 'admin', 'js', 'admin.js');
-const SRC  = fs.readFileSync(FILE, 'utf8');
+
+/* Two consoles now, checked by the same machinery.
+ *
+ * The Fund Ops console was added after the admin sweep and had no escaper at
+ * all — a second detector written for it would have drifted from this one, and
+ * the two disagreeing about what counts is how a residue survives a sweep.
+ *
+ * SAFE differs per file only because the number and badge helpers are named
+ * differently in each; the taint list is shared, because it describes the
+ * database, not the console. */
+const TARGETS = [
+  { rel: 'admin/js/admin.js',
+    safe: /^(Utils\.(rand|pct|date|dateTime|num|money|statusBadge|productInfo|initials|poolFillPct|effectiveRate)|Number|parseFloat|parseInt|encodeURIComponent|String\(.*\)\.length)\s*\(/ },
+  { rel: 'fund/js/fund.js',
+    safe: /^(fmt\.(rand|randK|pct|date|dateTime|num|days|money)|(product|runStatus|runType|poolStatus|schedStatus)Badge|Number|parseFloat|parseInt|Math\.\w+|encodeURIComponent|String\(.*\)\.length)\s*\(/ },
+];
+const ONLY = (process.argv.find(a => a.startsWith('--file=')) || '').slice(7);
+const FILES = ONLY ? TARGETS.filter(t => t.rel === ONLY) : TARGETS;
+
+let FILE, SRC, SAFE_CALL;
 
 /* Fields a client, a sub-account holder or a ticket author can type. The
    denormalised copies are included deliberately: investor_name is written onto
    transactions, investments and maturity rows, and is the same text. */
 const TAINTED = /\b(first_name|last_name|investor_name|full_name|nickname|email|phone|id_number|address|city|province|bank_name|account_holder|description|notes?|message|subject|body|reason|comment|reference|pool_name|title|file\.name|\bname\b)\b/;
 
-/* Helpers that produce their own safe output: numbers, dates, fixed badge
-   markup. Escaping their result would show entities to the operator. */
-const SAFE_CALL = /^(Utils\.(rand|pct|date|dateTime|num|money|statusBadge|productInfo|initials|poolFillPct|effectiveRate)|Number|parseFloat|parseInt|encodeURIComponent|String\(.*\)\.length)\s*\(/;
+/* Helpers that produce their own safe output — numbers, dates, fixed badge
+   markup — are listed per target above. Escaping their result would show
+   entities to the operator. */
 
 /* Template literals, with nesting tracked so an inner literal inside ${…} is
    collected in its own right rather than swallowed by the outer one. */
@@ -112,6 +130,26 @@ function ternaryBranches(expr) {
     else if (c === ':' && depth === 0) return [expr.slice(q + 1, i), expr.slice(i + 1)];
   }
   return null;
+}
+
+/* Does this expression CALL a local helper that returns markup?
+ *
+ * `${card('…', maxSeg.name + ' is largest', …)}` is tainted, but wrapping the
+ * whole call in _esc escapes the card's own HTML and renders a wall of angle
+ * brackets to the operator. The value has to be escaped where it goes IN, not
+ * where the finished markup comes out. --fix wrapped exactly one of these
+ * before this rail existed, and it looked right in the diff.
+ *
+ * Detected by finding the helper's own definition and asking whether it
+ * produces a template literal containing a tag. */
+function callsMarkupHelper(expr, src) {
+  const m = /^([A-Za-z_$][\w$]*)\s*\(/.exec(expr.trim());
+  if (!m) return null;
+  const name = m[1];
+  const def = new RegExp(`(?:const|let|var)\\s+${name}\\s*=[^;]{0,200}?\`|function\\s+${name}\\s*\\(`).exec(src);
+  if (!def) return null;
+  const after = src.slice(def.index, def.index + 900);
+  return /`[^`]*<[a-zA-Z][a-zA-Z0-9-]*[\s>/]/.test(after) ? name : null;
 }
 
 /* What actually reaches the page: a ternary contributes only its branches. */
@@ -196,13 +234,21 @@ function findings() {
       if (seen.has(start)) continue;
       seen.add(start);
       out.push({ line, start, end: sub.end, raw: expr,
+                 markupHelper: callsMarkupHelper(expr, SRC),
                  expr: expr.replace(/\s+/g, ' ').slice(0, 120) });
     }
   }
   return out.sort((a, b) => a.line - b.line);
 }
 
-const found = findings();
+/* Analysis is per file: FILE/SRC/SAFE_CALL are rebound for each target and the
+   pure functions above read them. */
+function analyse(target) {
+  FILE = path.join(ROOT, target.rel);
+  SRC = fs.readFileSync(FILE, 'utf8');
+  SAFE_CALL = target.safe;
+  return findings();
+}
 
 /* --fix wraps each finding in _esc at the point of interpolation, using the
    SAME detection as the report. A separate fixer would drift from the check
@@ -213,17 +259,30 @@ const found = findings();
    escaped at construction is "already HTML" and quietly wrong the next time it
    is used for a title attribute, a CSV cell or a comparison. */
 if (process.argv.includes('--fix')) {
-  const edits = findings().sort((a, b) => b.start - a.start);   // back to front, so offsets hold
-  let out = SRC;
-  for (const f of edits) out = out.slice(0, f.start) + '${_esc(' + f.raw.trim() + ')}' + out.slice(f.end);
-  fs.writeFileSync(FILE, out);
-  console.log(`wrapped ${edits.length} interpolation(s) in _esc`);
+  for (const target of FILES) {
+    const all = analyse(target).sort((a, b) => b.start - a.start);  // back to front, so offsets hold
+    if (!all.length) { console.log(`${target.rel}: already clean`); continue; }
+    /* A call that returns markup is left for a person: escaping its result
+       would show the operator the HTML instead of rendering it. */
+    const manual = all.filter(f => f.markupHelper);
+    const edits  = all.filter(f => !f.markupHelper);
+    let out = SRC;
+    for (const f of edits) out = out.slice(0, f.start) + '${_esc(' + f.raw.trim() + ')}' + out.slice(f.end);
+    if (edits.length) fs.writeFileSync(FILE, out);
+    console.log(`${target.rel}: wrapped ${edits.length} interpolation(s) in _esc`);
+    for (const f of manual)
+      console.log(`  ! ${target.rel}:${f.line} calls ${f.markupHelper}(), which returns markup — ` +
+                  `escape the argument inside the call, not the call itself:\n      ${f.expr}`);
+  }
   process.exit(0);
 }
 
 if (process.argv.includes('--list')) {
-  console.log(`${found.length} unescaped tainted interpolation(s) in markup\n`);
-  for (const f of found) console.log(`  admin/js/admin.js:${f.line}  ${f.expr}`);
+  for (const target of FILES) {
+    const list = analyse(target);
+    console.log(`\n${target.rel}: ${list.length} unescaped tainted interpolation(s) in markup`);
+    for (const f of list) console.log(`  ${target.rel}:${f.line}  ${f.expr}`);
+  }
   process.exit(0);
 }
 
@@ -234,11 +293,14 @@ const ok = (name, cond, detail) => {
 };
 
 console.log('\nno client-typed text reaches innerHTML unescaped');
-ok('the console is clean', found.length === 0,
-   found.length
-     ? found.slice(0, 25).map(f => `admin/js/admin.js:${f.line}  ${f.expr}`).join('\n      ') +
-       (found.length > 25 ? `\n      …and ${found.length - 25} more (run with --list)` : '')
-     : '');
+for (const target of FILES) {
+  const list = analyse(target);
+  ok(`${target.rel} is clean`, list.length === 0,
+     list.length
+       ? list.slice(0, 20).map(f => `${target.rel}:${f.line}  ${f.expr}`).join('\n      ') +
+         (list.length > 20 ? `\n      …and ${list.length - 20} more (run with --list)` : '')
+       : '');
+}
 
 /* The detector has to be able to see a defect, or a clean run means nothing.
    Both directions are exercised on synthetic input rather than trusted. */
