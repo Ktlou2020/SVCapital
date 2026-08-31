@@ -320,6 +320,65 @@ const wallet  = async () => Number((await q(`SELECT wallet_balance FROM investor
          'a stale page must not be able to name an APPROVED deposit and have it closed');
     }
 
+    console.log('\na deposit already credited by hand is cancelled, never approved');
+    {
+      /* The case the ops console found in production: someone credited the
+         wallet by hand and left the EFT row pending. Neither approve nor
+         decline is right — approving credits the client a SECOND time, and
+         declining tells them a payment sitting in their wallet was refused. */
+      await cleanup();
+      await q(`INSERT INTO investors (id, first_name, last_name, email, wallet_balance)
+               VALUES ('CHK-DEC-INV','Manual','Credit','mc@chk.test', 5000)`);
+      await q(`INSERT INTO support_tickets (id, investor_id, category, subject, message, status, admin_response, responded_at)
+               VALUES ('CHK-DEC-T31','CHK-DEC-INV','payment_proof','EFT proof of payment EFT-CHKD31','proof','resolved', NULL, NOW())`);
+      await q(`INSERT INTO transactions (id, investor_id, type, amount, status, reference)
+               VALUES ('CHK-DEC-TX31','CHK-DEC-INV','deposit', 3000, 'pending', 'EFT-CHKD31')`);
+      /* The credit that actually happened — same investor, same amount. */
+      await q(`INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, created_at)
+               VALUES ('CHK-DEC-TX32','CHK-DEC-INV','deposit', 3000, 'completed', 'MANUAL-9', 'Manual wallet credit', NOW())`);
+      /* An UNCLEAR row with no matching credit — must NOT be swept up. */
+      await q(`INSERT INTO support_tickets (id, investor_id, category, subject, message, status, admin_response, responded_at)
+               VALUES ('CHK-DEC-T33','CHK-DEC-INV','payment_proof','EFT proof of payment EFT-CHKD33','proof','resolved', NULL, NOW())`);
+      await q(`INSERT INTO transactions (id, investor_id, type, amount, status, reference)
+               VALUES ('CHK-DEC-TX33','CHK-DEC-INV','deposit', 777, 'pending', 'EFT-CHKD33')`);
+
+      const rep2 = await new Promise(res => {
+        http.get({ port: server.address().port, path: '/api/admin/stranded-eft-deposits' }, x => {
+          let str = ''; x.on('data', c => str += c);
+          x.on('end', () => { let j = {}; try { j = JSON.parse(str); } catch (_) {} res(j); });
+        });
+      });
+      ok('the already-credited one is detected', rep2.creditedTotals?.n === 1,
+         JSON.stringify(rep2.creditedTotals));
+      ok('and names the credit that superseded it',
+         rep2.alreadyCredited?.[0]?.creditedBy?.reference === 'MANUAL-9',
+         JSON.stringify(rep2.alreadyCredited?.[0]?.creditedBy));
+      ok('the one with no matching credit is not swept up',
+         !rep2.alreadyCredited.some(x => x.reference === 'EFT-CHKD33'),
+         'same-amount matching is evidence; a row with no match has none');
+      ok('it is still counted as unclear', rep2.totals?.unclear?.n === 2, JSON.stringify(rep2.totals));
+
+      const walletBefore = Number((await q(`SELECT wallet_balance FROM investors WHERE id='CHK-DEC-INV'`)).rows[0].wallet_balance);
+      const out2 = await post('/api/admin/stranded-eft-deposits/cancel-superseded', {});
+      ok('the endpoint cancels exactly one', out2.status === 200 && out2.body.cancelled === 1,
+         JSON.stringify(out2.body));
+
+      const tx31 = (await q(`SELECT * FROM transactions WHERE id='CHK-DEC-TX31'`)).rows[0];
+      ok('it reads cancelled, not rejected', tx31.status === 'cancelled',
+         `${tx31.status} — "rejected" would tell a client the money in their wallet was refused`);
+      ok('and NOT completed', tx31.status !== 'completed',
+         'completing a deposit credits the wallet again — that is why this is its own action');
+      ok('the note names the credit that superseded it', /MANUAL-9/.test(tx31.description), tx31.description);
+      ok('the unmatched one is left pending',
+         (await q(`SELECT status FROM transactions WHERE id='CHK-DEC-TX33'`)).rows[0].status === 'pending');
+
+      const walletAfter = Number((await q(`SELECT wallet_balance FROM investors WHERE id='CHK-DEC-INV'`)).rows[0].wallet_balance);
+      ok('no wallet was credited', walletAfter === walletBefore, `${walletBefore} → ${walletAfter}`);
+
+      const again = await post('/api/admin/stranded-eft-deposits/cancel-superseded', {});
+      ok('a second run finds nothing left', again.body.cancelled === 0, JSON.stringify(again.body));
+    }
+
     console.log('\nthe panel is wired');
     {
       const HTML = fs.readFileSync(path.join(ROOT, 'admin', 'index.html'), 'utf8');
@@ -337,6 +396,24 @@ const wallet  = async () => Number((await q(`SELECT wallet_balance FROM investor
       ok('the console sends no ids', /'admin\/stranded-eft-deposits\/close', \{\}/.test(ADMIN));
       ok('the CSV writes unformatted numbers', /r\.amount\.toFixed\(2\)/.test(ADMIN),
          'Utils.rand emits R1 250,00, which a spreadsheet reads as 125000');
+      ok('the superseded group has its own action and its own words',
+         /cancelSupersededEft\(this\)/.test(ADMIN) && /already credited by hand/.test(ADMIN));
+      ok('and the panel warns against approving them',
+         /<strong>Do not approve them<\/strong>/.test(ADMIN),
+         'completing a deposit credits the wallet a second time');
+      /* Compared on the SECTION headings, not the summary chips at the top of
+         the panel — the chip for the approved group carries the same words and
+         appears first, so the original comparison was measuring the chip
+         against the section and would have passed whatever the real order. The
+         headings use an em dash, the chips a middle dot. */
+      ok('the superseded section comes before the approved one',
+         ADMIN.indexOf('already credited by hand —') < ADMIN.indexOf('approved but never credited —'),
+         'it is the only group where neither approve nor decline is right');
+      ok('and its action comes before the declined one',
+         ADMIN.indexOf('cancelSupersededEft(this)') < ADMIN.indexOf('closeStrandedEftDeposits(this)'));
+      ok('the CSV carries the evidence',
+         /'already_credited', 'credited_by_ref'/.test(ADMIN),
+         'a spreadsheet of cancellations with no reference is a dead end');
       ok('the ledger is reloaded after closing',
          /if \(STATE\.transactions\.length\) await loadTransactions\(\);/.test(ADMIN));
     }
