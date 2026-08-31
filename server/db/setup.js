@@ -218,6 +218,7 @@ CREATE TABLE IF NOT EXISTS cattle_costs (
   id TEXT PRIMARY KEY, cycle_id TEXT, category TEXT NOT NULL,
   amount NUMERIC(18,2) NOT NULL, description TEXT, date DATE,
   vendor TEXT, invoice_ref TEXT,
+  per_animal NUMERIC(18,2), animals_count INT, status TEXT DEFAULT 'pending',
   created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -242,7 +243,7 @@ CREATE TABLE IF NOT EXISTS cattle_animals (
   id TEXT PRIMARY KEY,
   tag_number TEXT, batch_no TEXT, batch_name TEXT,
   cycle_id TEXT REFERENCES cattle_cycles(id) ON DELETE SET NULL,
-  entry_mass NUMERIC(10,2), gender TEXT, breed TEXT,
+  entry_mass NUMERIC(10,2), exit_mass NUMERIC(10,2), gender TEXT, breed TEXT,
   status TEXT DEFAULT 'active',
   mortality BOOLEAN DEFAULT false, mortality_date DATE, mortality_report TEXT,
   sold BOOLEAN DEFAULT false, sale_batch TEXT, sale_date DATE,
@@ -1599,6 +1600,25 @@ async function autoSetup() {
           BEGIN ALTER TABLE investments ADD COLUMN custom_payout_amount NUMERIC(18,2); EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE cattle_animals ADD COLUMN dim_tag TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE cattle_animals ADD COLUMN extra_colour_tag TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          -- The Add/Edit Animal form has always collected Exit Mass and the animals
+          -- table has always had a column for it, but cattle_animals never did. The
+          -- generic tables API builds its INSERT from the body keys, so every save
+          -- from that form died on: column "exit_mass" does not exist. The
+          -- console reported "Error saving animal: API 500" — no animal could be
+          -- added or edited by hand at all. Exit mass is also the only way to know
+          -- what an animal actually gained, so nothing downstream could measure it.
+          BEGIN ALTER TABLE cattle_animals ADD COLUMN exit_mass NUMERIC(10,2); EXCEPTION WHEN duplicate_column THEN NULL; END;
+          -- Same story on the cost ledger, and worse: the Cycle Costs tab wrote
+          -- cost_type, cost_date, supplier, cycle_name, per_animal, animals_count
+          -- and status, and cattle_costs had none of them. Every "Add Cost" died
+          -- on the first missing column, so not one cost entry could ever be
+          -- recorded — which is also why NAV had nothing real to deduct and fell
+          -- back on a modelled feed rate. The three that already existed under
+          -- other names (category, date, vendor) stay as they are and the console
+          -- now uses those names; these are the three that were genuinely absent.
+          BEGIN ALTER TABLE cattle_costs ADD COLUMN per_animal NUMERIC(18,2); EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE cattle_costs ADD COLUMN animals_count INT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE cattle_costs ADD COLUMN status TEXT DEFAULT 'pending'; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_holder TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_number TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;

@@ -3,7 +3,7 @@
    Version: 1.0.0
 ═══════════════════════════════════════════════════════════════ */
 
-const CACHE_NAME  = 'svcapital-fund-v3';
+const CACHE_NAME  = 'svcapital-fund-v4';
 const STATIC_URLS = [
   '/fund/index.html',
   '/fund/cattle.html',

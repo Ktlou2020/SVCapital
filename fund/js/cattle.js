@@ -50,8 +50,12 @@ const CToast = {
 
 /* ── HTML ESCAPE (XSS prevention) ─────────────────────────── */
 function escapeHtml(str) {
-  if (!str) return '';
-  return str.replace(/[&<>]/g, function(m) {
+  if (str === null || str === undefined || str === '') return '';
+  /* Coerced, because a number reaches this from ids and counts and
+     (123).replace is a TypeError that takes the whole render with it. */
+  return String(str).replace(/[&<>"']/g, function(m) {
+    if (m === '"') return '&quot;';
+    if (m === "'") return '&#39;';
     if (m === '&') return '&amp;';
     if (m === '<') return '&lt;';
     if (m === '>') return '&gt;';
@@ -78,7 +82,18 @@ const fmt = {
 
 /* ── STATE ─────────────────────────────────────────────────── */
 const S = {
+  /* Two animal collections, deliberately.
+     `animals` is ONE PAGE of the animals table — 75 rows, whatever the current
+     filter selects. `allAnimals` is the whole herd, and is the only one NAV may
+     read. They used to be the same array, so the Cycles tab valued the herd off
+     whatever happened to be in it: the full set after visiting the dashboard,
+     75 filtered rows after visiting Animals, and nothing at all on a direct
+     load — where the average entry mass silently fell back to a hardcoded
+     220kg. Three different herd values for the same cycle, decided by where the
+     user had clicked first. */
   animals:      [],
+  allAnimals:   [],
+  costs:        [],
   animalTotal:  0,
   animalPages:  0,
   animalStats:  { total: 0, sold: 0, mortalities: 0, avg_mass: null },
@@ -146,18 +161,20 @@ async function navigate(view, btn) {
     animals:   'Individual Animals (Purchased)',
     import:    'Import Data',
     settings:  'NAV Settings',
-    costs:     'Cycle Cost Ledger'
+    costs:     'Cycle Cost Ledger',
+    reconcile: 'Herd Reconciliation'
   };
   const titleEl = document.getElementById('topbarTitle');
   if (titleEl) titleEl.textContent = titles[view] || view;
 
   const loaders = {
-    nav:      loadNAVDashboard,
-    cycles:   loadCycles,
-    animals:  loadAnimals,
-    import:   setupImportView,
-    settings: loadSettingsView,
-    costs:    loadCostLedger
+    nav:       loadNAVDashboard,
+    cycles:    loadCycles,
+    animals:   loadAnimals,
+    import:    setupImportView,
+    settings:  loadSettingsView,
+    costs:     loadCostLedger,
+    reconcile: loadReconciliation
   };
   if (loaders[view]) await loaders[view]();
 }
@@ -200,115 +217,214 @@ async function loadNavSettings() {
 ══════════════════════════════════════════════════════════════ */
 const NAV = {
 
+  /* Days a cycle has been running, from its start date to today. */
+  daysIn(cycle) {
+    if (!cycle || !cycle.cycle_start_date) return 0;
+    const start = new Date(cycle.cycle_start_date);
+    if (isNaN(start.getTime())) return 0;
+    return Math.max(0, Math.round((Date.now() - start.getTime()) / 86400000));
+  },
+
   /**
-   * Calculate current NAV for a single active animal
-   * @param {object} animal  - from cattle_animals table
-   * @param {number} daysInCycle - days since cycle start
+   * Current value of a single animal.
+   *
+   * Exit mass is used the moment it exists: it is what the animal actually
+   * weighed, and no growth model beats a scale. The daily-gain estimate is the
+   * fallback for animals still in the feedlot, and `estimated` says which of
+   * the two produced the number.
    */
   animalNAV(animal, daysInCycle = 0) {
     const pricePerKg  = S.navSettings.live_cattle_price_per_kg  || 42.50;
     const dailyGain   = S.navSettings.avg_daily_weight_gain_kg   || 1.2;
     const entryMass   = parseFloat(animal.entry_mass) || 0;
-    const estMass     = entryMass + (dailyGain * daysInCycle);
+    const exitMass    = parseFloat(animal.exit_mass);
+    const weighed     = !isNaN(exitMass) && exitMass > 0;
+    const estMass     = weighed ? exitMass : entryMass + (dailyGain * daysInCycle);
     const grossValue  = estMass * pricePerKg;
     const feedCost    = (S.navSettings.feedlot_cost_per_day_per_head || 28) * daysInCycle;
     const netValue    = Math.max(0, grossValue - feedCost);
-    return { entryMass, estMass, grossValue, feedCost, netValue, pricePerKg };
+    return { entryMass, exitMass: weighed ? exitMass : null, estMass, estimated: !weighed,
+             grossValue, feedCost, netValue, pricePerKg };
   },
 
   /**
-   * Calculate NAV for an entire active cycle — INCLUDES ALL COSTS
+   * NAV for one cycle: what the live herd is worth, less everything spent
+   * getting it there.
+   *
+   * CARRY COSTS COME FROM THE LEDGER FIRST. A cycle with invoices captured in
+   * cattle_costs is valued against those invoices; the per-day feedlot and
+   * standing-fee assumptions are used only for cycles with no invoices at all,
+   * and `costSource` records which happened. Before this, NAV always used the
+   * assumption — so the Cycle Costs tab could hold a season of real feed bills
+   * and the valuation would not move by a rand. (It could not, in fact, hold
+   * anything: every cost entry failed to save. Both halves of that are fixed.)
+   *
+   * The modelled fallback is per LIVE head per day, which understates the
+   * carry on a cycle that lost animals late — they ate until they died. It is
+   * an assumption standing in for a missing invoice, and it is labelled as one.
    */
-  cycleNAV(cycle, animals = []) {
-    const now = new Date();
-    const startDate = cycle.cycle_start_date ? new Date(cycle.cycle_start_date) : now;
-    const daysIn = Math.max(0, Math.round((now - startDate) / 86400000));
-
-    const liveCount = parseInt(cycle.no_live) || 0;
-    const purchased = parseInt(cycle.no_purchased) || 0;
+  cycleNAV(cycle, animals = [], costs = null) {
+    const daysIn      = NAV.daysIn(cycle);
+    const liveCount   = parseInt(cycle.no_live) || 0;
+    const purchased   = parseInt(cycle.no_purchased) || 0;
     const mortalities = parseInt(cycle.mortalities) || 0;
 
-    // Value of live herd
-    const pricePerKg  = S.navSettings.live_cattle_price_per_kg || 42.50;
-    const dailyGain   = S.navSettings.avg_daily_weight_gain_kg || 1.2;
-    const avgEntryMass = animals.length > 0
-      ? animals.reduce((s, a) => s + (parseFloat(a.entry_mass) || 0), 0) / animals.length
-      : 220;
-    const estAvgMass = avgEntryMass + (dailyGain * daysIn);
-    const herdValue  = liveCount * estAvgMass * pricePerKg;
+    const pricePerKg = S.navSettings.live_cattle_price_per_kg || 42.50;
+    const dailyGain  = S.navSettings.avg_daily_weight_gain_kg || 1.2;
 
-    // Cost base
+    /* Averaging entry mass over the animals on file. `massKnown` is how many
+       that was: a cycle with no animal records falls back to the settings
+       default, and a valuation resting on a default should say so rather than
+       look identical to one resting on 400 weigh-in slips. */
+    const withMass   = animals.filter(a => parseFloat(a.entry_mass) > 0);
+    const massKnown  = withMass.length;
+    const avgEntryMass = massKnown
+      ? withMass.reduce((s, a) => s + parseFloat(a.entry_mass), 0) / massKnown
+      : (S.navSettings.default_entry_mass_kg || 220);
+
+    /* Where animals have been weighed out, that is the herd's real average. */
+    const weighed    = animals.filter(a => parseFloat(a.exit_mass) > 0);
+    const estAvgMass = weighed.length
+      ? weighed.reduce((s, a) => s + parseFloat(a.exit_mass), 0) / weighed.length
+      : avgEntryMass + (dailyGain * daysIn);
+
+    const herdValue = liveCount * estAvgMass * pricePerKg;
+
     const purchaseValue = parseFloat(cycle.purchase_value) || 0;
-    const standingFees  = (S.navSettings.svc_standing_fee_per_day_per_head || 3.50) * liveCount * daysIn;
-    const feedCosts     = (S.navSettings.feedlot_cost_per_day_per_head || 28) * liveCount * daysIn;
-    const totalCosts    = purchaseValue + standingFees + feedCosts;
 
-    // Expected sale value
+    const recorded = (costs || []).filter(c => c.cycle_id === cycle.id);
+    const recordedTotal = recorded.reduce((s, c) => s + (parseFloat(c.amount) || 0), 0);
+
+    let feedCosts, standingFees, carryCosts, costSource;
+    if (recorded.length) {
+      /* Purchase cost, if someone booked it to the ledger as well, is already
+         in purchase_value — counting it twice would halve the cycle's NAV. */
+      carryCosts   = recorded.filter(c => c.category !== 'purchase')
+                             .reduce((s, c) => s + (parseFloat(c.amount) || 0), 0);
+      feedCosts    = recorded.filter(c => c.category === 'feed')
+                             .reduce((s, c) => s + (parseFloat(c.amount) || 0), 0);
+      standingFees = carryCosts - feedCosts;
+      costSource   = 'actual';
+    } else {
+      feedCosts    = (S.navSettings.feedlot_cost_per_day_per_head || 28) * liveCount * daysIn;
+      standingFees = (S.navSettings.svc_standing_fee_per_day_per_head || 3.50) * liveCount * daysIn;
+      carryCosts   = feedCosts + standingFees;
+      costSource   = 'modelled';
+    }
+
+    const totalCosts   = purchaseValue + carryCosts;
     const expectedSale = parseFloat(cycle.expected_sale_value) || herdValue;
 
-    // NAV = current herd value - all costs incurred so far
-    const nav = herdValue - purchaseValue - feedCosts - standingFees;
+    const nav    = herdValue - totalCosts;
     const navPct = purchaseValue > 0 ? (nav / purchaseValue) * 100 : 0;
-
-    // Mortality cost (mark to zero)
-    const mortalityCost = mortalities * (avgEntryMass * pricePerKg);
 
     return {
       daysIn, liveCount, purchased, mortalities,
-      pricePerKg, estAvgMass, herdValue,
-      purchaseValue, standingFees, feedCosts, totalCosts,
-      expectedSale, nav, navPct, mortalityCost,
+      pricePerKg, estAvgMass, avgEntryMass, massKnown, weighedCount: weighed.length,
+      herdValue, purchaseValue,
+      standingFees, feedCosts, carryCosts, totalCosts, costSource, recordedTotal,
+      expectedSale, nav, navPct,
+      /* What the herd would lose if the mortalities were valued at entry. Kept
+         for the cycle detail panel; it is NOT deducted from nav, because a dead
+         animal is already absent from liveCount and subtracting it again would
+         charge the loss twice. */
+      mortalityCost: mortalities * avgEntryMass * pricePerKg,
       cycleStatus: cycle.status
     };
   },
 
   /**
-   * Aggregate NAV across ALL active cycles
+   * The whole book.
+   *
+   * portNAV is the SUM OF THE CYCLE NAVs — the same number the per-cycle rows
+   * show, added up. It used to be herdValue − purchaseValue, which quietly
+   * dropped every carry cost the rows deducted, so the headline unrealised gain
+   * and the cycles listed directly beneath it disagreed by the entire feed
+   * bill. On a hundred head over four months at R28/day that is over R330 000
+   * of difference between two numbers on the same screen.
    */
-  portfolioNAV(cycles, animals = []) {
+  portfolioNAV(cycles, animals = [], costs = null) {
     const activeCycles = cycles.filter(c => c.status === 'active');
     const soldCycles   = cycles.filter(c => c.status === 'sold');
 
-    let totalHerdValue    = 0;
-    let totalPurchaseValue= 0;
-    let totalLiveAnimals  = 0;
-    let totalMortalities  = 0;
-    let totalSold         = 0;
-    let totalSaleValue    = 0;
-    let totalPurchased    = 0;
+    let totalHerdValue = 0, totalPurchaseValue = 0, totalCarryCosts = 0, portNAV = 0;
+    let totalLiveAnimals = 0, totalMortalities = 0, totalPurchased = 0;
+    let modelledCycles = 0;
 
     activeCycles.forEach(c => {
-      const cycleAnimals = animals.filter(a => a.cycle_id === c.id);
-      const nav = NAV.cycleNAV(c, cycleAnimals);
+      const nav = NAV.cycleNAV(c, animals.filter(a => a.cycle_id === c.id), costs);
       totalHerdValue     += nav.herdValue;
       totalPurchaseValue += nav.purchaseValue;
+      totalCarryCosts    += nav.carryCosts;
+      portNAV            += nav.nav;
       totalLiveAnimals   += nav.liveCount;
       totalMortalities   += nav.mortalities;
       totalPurchased     += nav.purchased;
+      if (nav.costSource === 'modelled') modelledCycles++;
     });
 
+    let totalSold = 0, totalSaleValue = 0, soldCost = 0;
     soldCycles.forEach(c => {
-      totalSold      += parseInt(c.no_sold)         || 0;
+      totalSold      += parseInt(c.no_sold) || 0;
       totalSaleValue += parseFloat(c.total_selling_price) || 0;
-      totalPurchased += parseInt(c.no_purchased)    || 0;
+      totalPurchased += parseInt(c.no_purchased) || 0;
+      soldCost       += parseFloat(c.purchase_value) || 0;
     });
 
-    const totalReturn     = totalSaleValue > 0 ? totalSaleValue - soldCycles.reduce((s,c) => s + (parseFloat(c.purchase_value)||0), 0) : 0;
-    const totalReturnPct  = soldCycles.reduce((s,c) => s + (parseFloat(c.net_return_pct)||0), 0) / (soldCycles.length || 1);
-    const portNAV         = totalHerdValue - totalPurchaseValue;
+    const totalReturn = totalSaleValue - soldCost;
+
+    /* CAPITAL-WEIGHTED, not the mean of the percentages. A R10 000 cycle
+       returning 20% and a R500 000 cycle returning 2% averaged to 11% — a
+       number no rand in the fund earned. Weighting by the capital each cycle
+       actually employed gives 2.35%, which is what the book made. Cycles with
+       no purchase value recorded are excluded rather than counted as zero,
+       since a missing cost basis is not a nil return. */
+    const weighted = soldCycles.filter(c => (parseFloat(c.purchase_value) || 0) > 0);
+    const weightedCost = weighted.reduce((s, c) => s + parseFloat(c.purchase_value), 0);
+    const totalReturnPct = weightedCost > 0
+      ? (weighted.reduce((s, c) =>
+           s + parseFloat(c.purchase_value) * (parseFloat(c.net_return_pct) || 0), 0) / weightedCost)
+      : 0;
 
     return {
-      activeCycles:  activeCycles.length,
-      soldCycles:    soldCycles.length,
-      totalCycles:   cycles.length,
-      totalHerdValue, totalPurchaseValue,
+      activeCycles: activeCycles.length,
+      soldCycles:   soldCycles.length,
+      totalCycles:  cycles.length,
+      totalHerdValue, totalPurchaseValue, totalCarryCosts, modelledCycles,
       totalLiveAnimals, totalMortalities, totalPurchased,
       totalSold, totalSaleValue, totalReturn, totalReturnPct,
       portNAV,
+      returnBasis: weighted.length < soldCycles.length ? 'partial' : 'full',
       mortalityRate: totalPurchased > 0 ? (totalMortalities / totalPurchased) * 100 : 0
     };
   }
 };
+
+/* ══════════════════════════════════════════════════════════════
+   THE HERD — cycles, every animal, and the cost ledger.
+
+   One loader, because NAV needs all three and every view that shows a NAV
+   number needs the same three. The Cycles tab used to load cycles only and
+   value the herd against whatever animals happened to be in memory; landing on
+   it directly meant valuing it against none.
+
+   `force` is for the dashboard's Refresh. Everything else reuses what is
+   already loaded rather than re-walking a herd of thousands one 100-row page
+   at a time.
+══════════════════════════════════════════════════════════════ */
+let _herdLoaded = false;
+async function _loadHerd(onStatus = () => {}, force = false) {
+  if (_herdLoaded && !force) return;
+  onStatus('Loading cycles…');
+  S.cycles = await fetchAll('cattle_cycles');
+  onStatus('Loading animals… 0 found');
+  S.allAnimals = await fetchAll('cattle_animals', (loaded, total) => {
+    onStatus(total > 0 ? `Loading animals… ${loaded} of ${total}` : `Loading animals… ${loaded} found`);
+  });
+  onStatus('Loading cost ledger…');
+  S.costs = await fetchAll('cattle_costs');
+  _herdLoaded = true;
+}
 
 /* ══════════════════════════════════════════════════════════════
    VIEW: NAV DASHBOARD (with error handling)
@@ -319,20 +435,19 @@ async function loadNAVDashboard() {
   el.innerHTML = `<div class="loading-state"><div class="spinner"></div> Calculating NAV…</div>`;
 
   try {
-    S.cycles  = await fetchAll('cattle_cycles');
-    el.innerHTML = `<div class="loading-state"><div class="spinner"></div> <span id="navLoadStatus">Loading animals… 0 found</span></div>`;
-    S.animals = await fetchAll('cattle_animals', (loaded, total) => {
+    await _loadHerd(msg => {
       const lbl = document.getElementById('navLoadStatus');
-      if (lbl) lbl.textContent = total > 0 ? `Loading animals… ${loaded} of ${total}` : `Loading animals… ${loaded} found`;
-    });
+      if (lbl) lbl.textContent = msg;
+      else el.innerHTML = `<div class="loading-state"><div class="spinner"></div> <span id="navLoadStatus">${escapeHtml(msg)}</span></div>`;
+    }, true);
 
-    const pNav = NAV.portfolioNAV(S.cycles, S.animals);
+    const pNav = NAV.portfolioNAV(S.cycles, S.allAnimals, S.costs);
     const activeCycles = S.cycles.filter(c => c.status === 'active');
     const soldCycles   = S.cycles.filter(c => c.status === 'sold');
     const now = new Date().toLocaleDateString('en-ZA', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
     // Breed breakdown for active animals
-    const activeAnimals = S.animals.filter(a => a.status === 'active' || (!isTrue(a.sold) && !isTrue(a.mortality)));
+    const activeAnimals = S.allAnimals.filter(a => a.status === 'active' || (!isTrue(a.sold) && !isTrue(a.mortality)));
     const breedMap = {};
     activeAnimals.forEach(a => { const b = a.breed || 'Unknown'; breedMap[b] = (breedMap[b]||0)+1; });
     const breedLabels = Object.keys(breedMap).slice(0, 6);
@@ -344,11 +459,27 @@ async function loadNAVDashboard() {
     const chartPurchase = chartCycles.map(c => parseFloat(c.purchase_value)||0);
     const chartSale     = chartCycles.map(c => parseFloat(c.total_selling_price)||0);
 
-    const zarM  = v => { if (!v || isNaN(v)) return '—'; const n = Number(v); return n >= 1e6 ? 'R' + (n/1e6).toFixed(2) + 'M' : n >= 1e3 ? 'R' + (n/1e3).toFixed(1) + 'k' : 'R' + n.toFixed(0); };
-    const portNAVTotal    = pNav.portNAV + pNav.totalPurchaseValue;
+    /* Negatives need the sign, and -R0 is not a number anyone should read. */
+    const zarM  = v => {
+      if (v === null || v === undefined || isNaN(v)) return '—';
+      const n = Number(v), a = Math.abs(n), sign = n < 0 ? '-' : '';
+      return a >= 1e6 ? `${sign}R${(a/1e6).toFixed(2)}M`
+           : a >= 1e3 ? `${sign}R${(a/1e3).toFixed(1)}k`
+                      : `${sign}R${a.toFixed(0)}`;
+    };
+    /* The hero is the herd's gross value; the gain beneath it is the NAV, which
+       is that value less the purchase AND the carry. Both come off the same
+       cycleNAV the rows below use, so the headline and the table now describe
+       one book. */
+    const portNAVTotal    = pNav.totalHerdValue;
     const unrealisedPct   = pNav.totalPurchaseValue > 0 ? ((pNav.portNAV / pNav.totalPurchaseValue) * 100) : 0;
     const unrealisedColor = pNav.portNAV >= 0 ? '#74c69d' : '#ff8080';
     const totalCapital    = pNav.totalPurchaseValue + soldCycles.reduce((s,c) => s + (parseFloat(c.purchase_value)||0), 0);
+    const costBasisNote   = pNav.modelledCycles === 0
+      ? 'Carry costs from the recorded ledger'
+      : pNav.modelledCycles === pNav.activeCycles
+        ? `Carry costs estimated — no invoices captured${pNav.activeCycles ? ' for any active cycle' : ''}`
+        : `Carry costs recorded for ${pNav.activeCycles - pNav.modelledCycles} of ${pNav.activeCycles} cycles, estimated for the rest`;
 
     el.innerHTML = `
       <div class="nav-panel">
@@ -364,7 +495,7 @@ async function loadNAVDashboard() {
               <div style="font-size:28px;font-weight:900;color:${unrealisedColor};letter-spacing:-.5px;line-height:1">
                 ${pNav.portNAV >= 0 ? '+' : ''}${unrealisedPct.toFixed(2)}%
               </div>
-              <div class="nav-hero-sub">${pNav.portNAV >= 0 ? '+' : ''}${zarM(pNav.portNAV)} vs. cost</div>
+              <div class="nav-hero-sub">${pNav.portNAV >= 0 ? '+' : ''}${zarM(pNav.portNAV)} after ${zarM(pNav.totalCarryCosts)} carry</div>
             </div>
             <div style="text-align:right">
               <div class="nav-panel-title">Market Price / kg</div>
@@ -390,7 +521,12 @@ async function loadNAVDashboard() {
           <div class="nav-metric">
             <div class="nav-metric-label">Realised Returns</div>
             <div class="nav-metric-value" style="color:#74c69d">${zarM(pNav.totalReturn)}</div>
-            <div class="nav-metric-sub">Avg ${fmt.pct(pNav.totalReturnPct)} / cycle</div>
+            <div class="nav-metric-sub">${fmt.pct(pNav.totalReturnPct)} capital-weighted${pNav.returnBasis === 'partial' ? ' *' : ''}</div>
+          </div>
+          <div class="nav-metric">
+            <div class="nav-metric-label">Carry Costs (Active)</div>
+            <div class="nav-metric-value" style="color:#fec24f">${zarM(pNav.totalCarryCosts)}</div>
+            <div class="nav-metric-sub">${escapeHtml(costBasisNote)}</div>
           </div>
           <div class="nav-metric">
             <div class="nav-metric-label">Total Cycles</div>
@@ -399,8 +535,8 @@ async function loadNAVDashboard() {
           </div>
           <div class="nav-metric">
             <div class="nav-metric-label">Animals Tracked</div>
-            <div class="nav-metric-value">${fmt.num(S.animals.length)}</div>
-            <div class="nav-metric-sub">${fmt.num(S.animals.filter(a=>isTrue(a.sold)||a.status==='sold').length)} sold &nbsp;·&nbsp; ${fmt.num(S.animals.filter(a=>isTrue(a.mortality)||a.status==='mortality').length)} mort.</div>
+            <div class="nav-metric-value">${fmt.num(S.allAnimals.length)}</div>
+            <div class="nav-metric-sub">${fmt.num(S.allAnimals.filter(a=>isTrue(a.sold)||a.status==='sold').length)} sold &nbsp;·&nbsp; ${fmt.num(S.allAnimals.filter(a=>isTrue(a.mortality)||a.status==='mortality').length)} mort.</div>
           </div>
           <div class="nav-metric">
             <div class="nav-metric-label">Total Capital (All)</div>
@@ -412,6 +548,11 @@ async function loadNAVDashboard() {
         <div class="nav-date">
           <i class="fa-regular fa-clock"></i>
           Calculated: ${escapeHtml(now)}
+          &nbsp;·&nbsp;
+          ${pNav.returnBasis === 'partial' ? `<span style="color:#fec24f">* weighted over the sold cycles with a purchase value recorded</span> &nbsp;·&nbsp;` : ''}
+          <a href="#" onclick="navigate('reconcile',document.querySelector('[data-view=reconcile]'));return false;" style="color:var(--green-light);text-decoration:none">
+            <i class="fa-solid fa-scale-unbalanced"></i> Reconcile herd
+          </a>
           &nbsp;·&nbsp;
           <a href="#" onclick="loadNAVDashboard();return false;" style="color:var(--green-light);text-decoration:none">
             <i class="fa-solid fa-rotate"></i> Refresh
@@ -433,16 +574,21 @@ async function loadNAVDashboard() {
             </thead>
             <tbody>
               ${activeCycles.map(c => {
-                const cycleAnimals = S.animals.filter(a => a.cycle_id === c.id);
-                const nav = NAV.cycleNAV(c, cycleAnimals);
+                const cycleAnimals = S.allAnimals.filter(a => a.cycle_id === c.id);
+                const nav = NAV.cycleNAV(c, cycleAnimals, S.costs);
                 const isUp = nav.navPct >= 0;
                 const pctColor = isUp ? 'var(--green-mid)' : 'var(--red)';
+                /* An estimated carry and an invoiced one are different claims,
+                   and the row says which without needing a second table. */
+                const carryTitle = nav.costSource === 'actual'
+                  ? `${fmt.zar(nav.carryCosts)} carry, from recorded invoices`
+                  : `${fmt.zar(nav.carryCosts)} carry, estimated — no costs captured for this cycle`;
                 return `<tr style="cursor:pointer" onclick="openCycleDetail('${escapeHtml(c.id)}')">
                   <td><strong>${escapeHtml(c.batch_name || c.id)}</strong></td>
                   <td style="color:var(--text-muted);font-size:12px">${escapeHtml(c.company || '—')}</td>
                   <td style="text-align:center"><span class="badge badge-blue">${nav.daysIn}d</span></td>
                   <td style="text-align:center"><span class="badge badge-green" style="margin-right:4px">${nav.liveCount}</span>${nav.mortalities > 0 ? `<span class="badge badge-red">${nav.mortalities}</span>` : ''}</td>
-                  <td class="num" style="color:var(--text-muted)">${zarM(nav.purchaseValue)}</td>
+                  <td class="num" style="color:var(--text-muted)" title="${escapeHtml(carryTitle)}">${zarM(nav.totalCosts)}${nav.costSource === 'modelled' ? ' <span style="color:#fec24f;font-weight:700" title="Carry costs estimated">~</span>' : ''}</td>
                   <td class="num"><strong>${zarM(nav.herdValue)}</strong></td>
                   <td class="num" style="color:${pctColor};font-weight:700">${isUp?'+':''}${zarM(nav.nav)}</td>
                   <td class="num"><span style="display:inline-flex;align-items:center;gap:4px;font-weight:700;color:${pctColor}"><i class="fa-solid fa-arrow-${isUp?'up':'down'}" style="font-size:10px"></i>${Math.abs(nav.navPct).toFixed(2)}%</span></td>
@@ -552,7 +698,10 @@ async function loadCycles() {
   if (!el) return;
   el.innerHTML = `<div class="loading-state"><div class="spinner"></div> Loading cycles…</div>`;
   try {
-    S.cycles = await fetchAll('cattle_cycles');
+    /* The whole herd, not just the cycles: every card on this page shows a NAV,
+       and a NAV computed against an empty animal list is a NAV against a
+       hardcoded 220kg. */
+    await _loadHerd(msg => { el.innerHTML = `<div class="loading-state"><div class="spinner"></div> ${escapeHtml(msg)}</div>`; });
     renderCyclesView();
   } catch (err) {
     el.innerHTML = `<div class="empty-state"><i class="fa-solid fa-triangle-exclamation"></i><h3>Error loading cycles</h3><p>${escapeHtml(err.message)}</p></div>`;
@@ -609,8 +758,8 @@ function renderCyclesView() {
 }
 
 function renderCycleCard(cycle) {
-  const cycleAnimals = S.animals.filter(a => a.cycle_id === cycle.id);
-  const nav = NAV.cycleNAV(cycle, cycleAnimals);
+  const cycleAnimals = S.allAnimals.filter(a => a.cycle_id === cycle.id);
+  const nav = NAV.cycleNAV(cycle, cycleAnimals, S.costs);
   const statusMap = { active: 'badge-blue', sold: 'badge-green', draft: 'badge-grey', cancelled: 'badge-red' };
   const mortalityPct = cycle.no_purchased > 0 ? ((parseInt(cycle.mortalities)||0) / parseInt(cycle.no_purchased) * 100).toFixed(1) : 0;
 
@@ -668,6 +817,10 @@ async function loadAnimals() {
   if (!el) return;
   el.innerHTML = `<div class="loading-state"><div class="spinner"></div><span>Loading animals…</span></div>`;
   try {
+    /* Cycles too: the per-animal valuation needs each animal's cycle start
+       date, and the Edit Animal cycle picker was showing a permanent
+       "Loading cycles…" for anyone who opened this tab first. */
+    if (!S.cycles.length) S.cycles = await fetchAll('cattle_cycles');
     await Promise.all([_fetchAnimalStats(), _fetchAnimalPage()]);
     renderAnimalsView();
   } catch (err) {
@@ -733,6 +886,11 @@ function renderAnimalsView() {
     <div class="stat-row">
       <div class="stat-item"><div class="stat-item-label">Total Animals</div><div class="stat-item-value">${fmt.num(tot)}</div></div>
       <div class="stat-item"><div class="stat-item-label">Avg Entry Mass</div><div class="stat-item-value">${st.avg_mass ? parseFloat(st.avg_mass).toFixed(0) + ' kg' : '—'}</div></div>
+      <div class="stat-item" title="Averaged over the animals with both an entry and an exit weight — not the whole herd">
+        <div class="stat-item-label">Avg Weight Gain</div>
+        <div class="stat-item-value green">${st.avg_gain != null ? '+' + parseFloat(st.avg_gain).toFixed(0) + ' kg' : '—'}</div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:2px">${st.weighed ? `${fmt.num(st.weighed)} of ${fmt.num(tot)} weighed out` : 'none weighed out yet'}</div>
+      </div>
       <div class="stat-item"><div class="stat-item-label">Sold</div><div class="stat-item-value green">${fmt.num(st.sold || 0)}</div></div>
       <div class="stat-item"><div class="stat-item-label">Mortalities</div><div class="stat-item-value red">${fmt.num(mort)}</div></div>
       <div class="stat-item"><div class="stat-item-label">Mortality Rate</div><div class="stat-item-value">${tot > 0 ? (mort/tot*100).toFixed(2) : 0}%</div></div>
@@ -753,7 +911,12 @@ function renderAnimalsView() {
           <tbody>${S.animals.map(a => {
             const status = isTrue(a.mortality) ? 'mortality' : isTrue(a.sold) ? 'sold' : (a.status || 'active');
             const statusBadge = { sold:'badge-green', mortality:'badge-red', active:'badge-blue' };
-            const nav = status === 'active' ? NAV.animalNAV(a, 30) : null;
+            /* Days from the animal's OWN cycle. This was hardcoded to 30, so
+               every animal in the fund was valued as if it were one month into
+               the feedlot — an animal on day 4 and an animal on day 180 carried
+               the same estimated mass and the same rand value. */
+            const aCycle = a.cycle_id ? S.cycles.find(c => c.id === a.cycle_id) : null;
+            const nav = status === 'active' ? NAV.animalNAV(a, NAV.daysIn(aCycle)) : null;
             return `<tr>
               <td class="mono">${escapeHtml(a.tag_number||'—')}</td>
               <td>${escapeHtml(a.batch_no||'—')}</td>
@@ -834,14 +997,42 @@ function setupImportView() {
   setupDropZone('dropZoneAnimals', 'fileAnimals', handleAnimalsFile);
 }
 
+/* The most destructive button in Fund Ops, on the same screen as CSV import.
+ *
+ * It used to be a browser confirm() reading "Type OK to confirm" — over a
+ * dialog with nothing to type into, where OK is the default button. A stray
+ * Enter emptied the cattle books, and nothing in the app could put them back.
+ * It now asks for the phrase and sends it, and the server refuses without it.
+ *
+ * It also called loadCattleView(), which does not exist in this file and never
+ * has: the purge succeeded and the page then threw a ReferenceError instead of
+ * refreshing, leaving the console showing a herd that was no longer there. */
+const PURGE_PHRASE = 'DELETE ALL CATTLE DATA';
+
 async function purgeAllCattleData() {
-  const confirmed = confirm('This will permanently delete ALL cattle cycles and animals from the database.\n\nType OK to confirm.');
-  if (!confirmed) return;
+  const n = S.allAnimals.length, c = S.cycles.length;
+  const typed = prompt(
+    `This permanently deletes ALL cattle cycles and animals.\n` +
+    (n || c ? `Currently on file: ${c} cycle${c === 1 ? '' : 's'}, ${n} animal${n === 1 ? '' : 's'}.\n` : '') +
+    `It cannot be undone from inside the console.\n\n` +
+    `Type ${PURGE_PHRASE} to confirm.`);
+  if (typed === null) return;
+  if (typed.trim() !== PURGE_PHRASE) {
+    CToast.show('Not deleted — the confirmation phrase did not match.', 'info');
+    return;
+  }
   try {
-    const r = await apiFetch('cattle/purge', { method: 'DELETE' });
+    const r = await apiFetch('cattle/purge', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirm: PURGE_PHRASE }),
+    });
     const data = await r.json();
     CToast.show(`Deleted ${data.deleted.animals} animal(s) and ${data.deleted.cycles} cycle(s).`, 'success');
-    loadCattleView();
+    S.cycles = []; S.allAnimals = []; S.animals = []; S.costs = [];
+    _herdLoaded = false;
+    await loadNAVDashboard();
+    navigate('nav', document.querySelector('[data-view=nav]'));
   } catch (err) {
     CToast.show('Purge failed: ' + err.message, 'error');
   }
@@ -916,18 +1107,44 @@ function parseGender(raw) {
 
 /* ── Batch sender: send records to endpoint in chunks ────── */
 async function sendInChunks(endpoint, records, bar, lbl, chunkSize = 200) {
-  let totalInserted = 0, totalSkipped = 0;
+  let totalInserted = 0, totalSkipped = 0, totalFailed = 0;
+  const failures = [];
   for (let i = 0; i < records.length; i += chunkSize) {
     const chunk = records.slice(i, i + chunkSize);
     const result = await apiPost(endpoint, { records: chunk });
     totalInserted += result.inserted || 0;
     totalSkipped  += result.skipped  || 0;
+    totalFailed   += result.failed   || 0;
+    if (result.failures) failures.push(...result.failures);
     const pct = Math.min(100, Math.round((i + chunk.length) / records.length * 100));
     bar.style.width = pct + '%';
-    lbl.textContent = `Importing… ${Math.min(i + chunkSize, records.length)} / ${records.length} — ${totalInserted} saved, ${totalSkipped} skipped`;
+    lbl.textContent = `Importing… ${Math.min(i + chunkSize, records.length)} / ${records.length} — ${totalInserted} saved, ${totalSkipped} skipped${totalFailed ? `, ${totalFailed} failed` : ''}`;
     await new Promise(r => setTimeout(r, 0));
   }
-  return { inserted: totalInserted, skipped: totalSkipped };
+  return { inserted: totalInserted, skipped: totalSkipped, failed: totalFailed, failures };
+}
+
+/* What the import actually did, in the operator's words rather than a count.
+ *
+ * The old label said "N imported, M already existed" from a server that
+ * counted attempts — a row the database refused was reported as imported, and
+ * the operator's next act was to close a spreadsheet they believed had landed.
+ * Rows that failed are now named, because a rejected row is data that needs
+ * fixing and re-importing, not a number to note. */
+function _importSummary(what, r) {
+  const parts = [`${r.inserted} ${what} imported`];
+  if (r.skipped) parts.push(`${r.skipped} already existed`);
+  if (r.failed)  parts.push(`${r.failed} could not be saved`);
+  let html = `${r.failed ? '⚠️' : '✅'} Done — ${parts.join(', ')}`;
+  if (r.failed && r.failures.length) {
+    const shown = r.failures.slice(0, 5);
+    html += `<div style="margin-top:8px;padding:10px;border-radius:8px;background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.3);font-size:11px;line-height:1.6">
+      <strong style="color:#f87171">Not saved — fix these rows and re-import:</strong><br>
+      ${shown.map(f => `<span style="color:rgba(255,255,255,.75)">${escapeHtml(f.row || '(unnamed row)')}</span> <span style="color:rgba(255,255,255,.4)">— ${escapeHtml(f.error)}</span>`).join('<br>')}
+      ${r.failures.length > shown.length ? `<br><span style="color:rgba(255,255,255,.4)">…and ${r.failures.length - shown.length} more</span>` : ''}
+    </div>`;
+  }
+  return html;
 }
 
 let _cyclesData = [];
@@ -1006,16 +1223,18 @@ async function importCycles() {
   }));
 
   try {
-    const { inserted, skipped } = await sendInChunks('cattle/import/cycles', records, bar, lbl);
+    const r = await sendInChunks('cattle/import/cycles', records, bar, lbl);
     bar.style.width = '100%';
-    lbl.textContent = `✅ Done — ${inserted} cycles imported, ${skipped} already existed`;
-    CToast.show(`${inserted} cattle cycles imported`, 'success');
+    lbl.innerHTML = _importSummary('cycles', r);
+    CToast.show(r.failed ? `${r.inserted} imported, ${r.failed} could not be saved` : `${r.inserted} cattle cycles imported`,
+                r.failed ? 'error' : 'success');
   } catch(err) {
     lbl.textContent = `❌ Import failed: ${err.message}`;
     CToast.show('Import failed — check console', 'error');
   }
 
   _cyclesData = [];
+  _herdLoaded = false;
   await loadCycles();
 }
 
@@ -1096,6 +1315,10 @@ async function importAnimals() {
       batch_no:         r['Batch No']        || '',
       batch_name:       r['Name']            || '',
       entry_mass:       parseFloat(r['Entry Mass']) || null,
+      /* Exit mass had nowhere to land until now, so the export column was
+         dropped on the floor along with the only measure of what the animals
+         actually gained. */
+      exit_mass:        parseFloat(r['Exit Mass'] || r['Exit mass'] || r['Sale Mass']) || null,
       gender:           parseGender(r['Gender']),
       breed:            r['Breed']           || '',
       dim_tag:          r['Dim Tag']         || '',
@@ -1111,16 +1334,18 @@ async function importAnimals() {
   });
 
   try {
-    const { inserted, skipped } = await sendInChunks('cattle/import/animals', records, bar, lbl);
+    const r = await sendInChunks('cattle/import/animals', records, bar, lbl);
     bar.style.width = '100%';
-    lbl.textContent = `✅ Done — ${inserted.toLocaleString()} animals imported, ${skipped.toLocaleString()} already existed`;
-    CToast.show(`${inserted.toLocaleString()} animals imported`, 'success');
+    lbl.innerHTML = _importSummary('animals', r);
+    CToast.show(r.failed ? `${r.inserted} imported, ${r.failed} could not be saved` : `${r.inserted.toLocaleString()} animals imported`,
+                r.failed ? 'error' : 'success');
   } catch(err) {
     lbl.textContent = `❌ Import failed: ${err.message}`;
     CToast.show('Import failed — check console', 'error');
   }
 
   _animalsData = [];
+  _herdLoaded = false;
   await loadAnimals();
 }
 
@@ -1319,6 +1544,7 @@ async function saveCycleForm() {
       CToast.show('Cycle added', 'success');
     }
     closeCycleForm();
+    _herdLoaded = false;
     await loadCycles();
   } catch(e) {
     CToast.show('Error saving cycle', 'error');
@@ -1328,12 +1554,30 @@ async function saveCycleForm() {
 async function deleteCycle(id) {
   if (!confirm('Delete this cycle? This cannot be undone.')) return;
   try {
-    await apiDelete(`cattle/cycles/${id}`);
+    /* apiFetch throws on any non-2xx, so the 409 is read here rather than in
+       the catch: deleting a cycle that still has animals is not an error, it is
+       a question. The server refuses the first time and names the number of
+       animals about to lose their batch — they are unlinked, not deleted, and
+       nothing in the console can put the link back except a re-import. */
+    const r = await fetch(BASE + `cattle/cycles/${id}`, {
+      method: 'DELETE', credentials: 'include',
+      headers: _getAuthToken() ? { Authorization: `Bearer ${_getAuthToken()}` } : {},
+    });
+    if (r.status === 409) {
+      const info = await r.json().catch(() => ({}));
+      if (!confirm(`${info.message || 'This cycle still has animals linked to it.'}\n\nDelete it anyway?`)) return;
+      await apiDelete(`cattle/cycles/${id}?orphan=1`);
+      CToast.show(`Cycle deleted — ${info.linkedAnimals} animal record(s) unlinked`, 'info');
+    } else if (!r.ok) {
+      throw new Error(`API ${r.status}`);
+    } else {
+      CToast.show('Cycle deleted', 'success');
+    }
     S.cycles = S.cycles.filter(c => c.id !== id);
+    S.allAnimals.forEach(a => { if (a.cycle_id === id) a.cycle_id = null; });
     renderCyclesView();
-    CToast.show('Cycle deleted', 'success');
   } catch(e) {
-    CToast.show('Error deleting cycle', 'error');
+    CToast.show('Error deleting cycle: ' + e.message, 'error');
   }
 }
 
@@ -1435,6 +1679,9 @@ async function saveAnimalForm() {
       CToast.show('Animal added', 'success');
     }
     closeAnimalForm();
+    /* The full herd NAV reads is now stale — this animal's mass, status or
+       cycle just changed. */
+    _herdLoaded = false;
     S.animalPage = 1;
     await _reloadAnimalPage();
   } catch(e) {
@@ -1450,6 +1697,7 @@ async function deleteAnimal(id) {
   try {
     await apiDelete(`tables/cattle_animals/${id}`);
     CToast.show('Animal deleted', 'success');
+    _herdLoaded = false;
     await _reloadAnimalPage();
   } catch(e) {
     CToast.show('Error deleting animal', 'error');
@@ -1462,6 +1710,207 @@ function _buildAnimalCycleOptions(selectedId) {
     .sort((a, b) => (a.batch_name||'').localeCompare(b.batch_name||''))
     .map(c => `<option value="${escapeHtml(c.id)}" ${c.id === selectedId ? 'selected' : ''}>${escapeHtml(c.batch_name||c.id)} (${c.status||''})</option>`)
     .join('');
+}
+
+/* ══════════════════════════════════════════════════════════════
+   HERD RECONCILIATION
+
+   The cycle header and the animal records describe the same herd, and until
+   now nothing compared them. That is not a bookkeeping nicety here: NAV
+   multiplies the HEADER's live count by an estimated mass and a market price,
+   so a live count three too high values three animals that do not exist.
+
+   Read-only, except for one action — relinking animals whose batch name still
+   names exactly one cycle. Everything else is a question about the actual herd
+   and belongs to a person, not to a button.
+══════════════════════════════════════════════════════════════ */
+async function loadReconciliation() {
+  const el = document.getElementById('view-reconcile');
+  if (!el) return;
+  el.innerHTML = `<div class="loading-state"><div class="spinner"></div> Comparing headers against animal records…</div>`;
+  try {
+    if (!S.cycles.length) S.cycles = await fetchAll('cattle_cycles');
+    S._recon = await apiGet('cattle/reconcile');
+    renderReconciliation();
+  } catch (err) {
+    el.innerHTML = `<div class="empty-state"><i class="fa-solid fa-triangle-exclamation"></i><h3>Could not reconcile</h3><p>${escapeHtml(err.message)}</p><button class="btn btn-primary" onclick="loadReconciliation()">Retry</button></div>`;
+  }
+}
+
+function renderReconciliation() {
+  const el = document.getElementById('view-reconcile');
+  const r  = S._recon;
+  if (!el || !r) return;
+  const t = r.totals;
+
+  const deltaCell = c => {
+    const up = c.delta > 0;
+    return `<span style="color:${up ? '#fec24f' : '#f87171'};font-weight:700">${up ? '+' : ''}${c.delta}</span>`;
+  };
+
+  el.innerHTML = `
+    <div class="stat-row">
+      <div class="stat-item"><div class="stat-item-label">Cycles Checked</div><div class="stat-item-value">${t.cycles}</div></div>
+      <div class="stat-item"><div class="stat-item-label">Disagreeing</div><div class="stat-item-value ${t.mismatched ? 'red' : 'green'}">${t.mismatched}</div></div>
+      <div class="stat-item" title="Head the NAV counts as live that have no animal record behind them">
+        <div class="stat-item-label">Live Overstated</div><div class="stat-item-value ${t.liveOverstated ? 'red' : 'green'}">${t.liveOverstated}</div>
+      </div>
+      <div class="stat-item" title="Animals on file that the header does not count as live">
+        <div class="stat-item-label">Live Understated</div><div class="stat-item-value">${t.liveUnderstated}</div>
+      </div>
+      <div class="stat-item"><div class="stat-item-label">Orphaned Animals</div><div class="stat-item-value ${t.orphans ? 'red' : 'green'}">${t.orphans}</div></div>
+      <div class="stat-item"><div class="stat-item-label">Header Doesn't Balance</div><div class="stat-item-value ${t.imbalanced ? 'red' : 'green'}">${t.imbalanced}</div></div>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap">
+      <button class="btn btn-secondary btn-sm" onclick="loadReconciliation()"><i class="fa-solid fa-rotate"></i> Re-run</button>
+      <button class="btn btn-secondary btn-sm" onclick="exportReconciliationCSV()"><i class="fa-solid fa-download"></i> Export CSV</button>
+      ${t.relinkable ? `<button class="btn btn-primary btn-sm" onclick="relinkOrphans(this)"><i class="fa-solid fa-link"></i> Relink ${t.relinkable} matched orphan${t.relinkable===1?'':'s'}</button>` : ''}
+    </div>
+
+    ${r.verdict === 'clean' ? `
+      <div class="empty-state"><i class="fa-solid fa-circle-check" style="color:var(--green-mid)"></i>
+        <h3>The headers and the animals agree</h3>
+        <p>Every cycle's purchased, live, sold and mortality counts match the animal records behind them, and no animal is missing its cycle.</p>
+      </div>` : ''}
+
+    ${r.mismatched.length ? `
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-header"><i class="fa-solid fa-scale-unbalanced" style="color:var(--red)"></i>
+        Header vs animals on file
+        <span style="font-size:11px;color:var(--text-muted);margin-left:auto;font-weight:400">NAV uses the header — a wrong live count is a wrong valuation</span>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Batch</th><th>Status</th><th>Disagreement</th><th class="num">Header</th><th class="num">On file</th><th class="num">Diff</th><th class="num">Capital</th></tr></thead>
+          <tbody>
+            ${r.mismatched.map(c => c.checks.map((chk, i) => `
+              <tr${chk.key === 'live' && c.severity === 'high' ? ' style="background:rgba(248,113,113,.05)"' : ''}>
+                ${i === 0 ? `<td rowspan="${c.checks.length}"><strong>${escapeHtml(c.batchName)}</strong><div style="font-size:11px;color:var(--text-muted)">${escapeHtml(c.company || '')}</div></td>
+                             <td rowspan="${c.checks.length}"><span class="badge ${c.status === 'active' ? 'badge-blue' : 'badge-grey'}">${escapeHtml((c.status || '—').toUpperCase())}</span></td>` : ''}
+                <td>${escapeHtml(chk.label)}${chk.key === 'live' ? ' <span title="This is the count NAV multiplies" style="color:#fec24f">◆</span>' : ''}</td>
+                <td class="num">${chk.header}</td>
+                <td class="num">${chk.counted}</td>
+                <td class="num">${deltaCell(chk)}</td>
+                ${i === 0 ? `<td class="num" rowspan="${c.checks.length}" style="color:var(--text-muted)">${fmt.zar(c.purchaseValue)}</td>` : ''}
+              </tr>`).join('')).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>` : ''}
+
+    ${r.imbalanced.length ? `
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-header"><i class="fa-solid fa-calculator" style="color:#fec24f"></i>
+        Headers that don't add up
+        <span style="font-size:11px;color:var(--text-muted);margin-left:auto;font-weight:400">live + sold + mortalities should equal purchased</span>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Batch</th><th class="num">Purchased</th><th class="num">Live</th><th class="num">Sold</th><th class="num">Mortalities</th><th class="num">Accounted</th><th class="num">Unaccounted</th></tr></thead>
+          <tbody>
+            ${r.imbalanced.map(c => `<tr>
+              <td><strong>${escapeHtml(c.batchName)}</strong></td>
+              <td class="num">${c.header.purchased}</td>
+              <td class="num">${c.header.live}</td>
+              <td class="num">${c.header.sold}</td>
+              <td class="num">${c.header.mortalities}</td>
+              <td class="num">${c.imbalance.accounted}</td>
+              <td class="num" style="color:${c.imbalance.delta > 0 ? '#fec24f' : '#f87171'};font-weight:700">${c.imbalance.delta > 0 ? '+' : ''}${c.imbalance.delta}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>` : ''}
+
+    ${r.orphans.length ? `
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-header"><i class="fa-solid fa-link-slash" style="color:#fec24f"></i>
+        Animals with no cycle
+        <span style="font-size:11px;color:var(--text-muted);margin-left:auto;font-weight:400">${r.relinkable.length} of ${r.orphans.length} still name a cycle that exists</span>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Tag</th><th>Batch No</th><th>Batch Name</th><th>Status</th><th>Matches</th></tr></thead>
+          <tbody>
+            ${r.orphans.slice(0, 200).map(o => `<tr>
+              <td class="mono">${escapeHtml(o.tagNumber || '—')}</td>
+              <td>${escapeHtml(o.batchNo || '—')}</td>
+              <td>${escapeHtml(o.batchName || '—')}</td>
+              <td><span class="badge badge-grey">${escapeHtml(o.status || '—')}</span></td>
+              <td>${o.matchedCycle
+                    ? `<span class="badge badge-green">${escapeHtml(o.matchedBatch)}</span>`
+                    : `<span style="color:var(--text-muted);font-size:12px">no matching cycle — needs a person</span>`}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+      ${r.orphans.length > 200 ? `<div style="padding:10px 14px;font-size:12px;color:var(--text-muted)">Showing the first 200 of ${r.orphans.length} — export the CSV for the rest.</div>` : ''}
+    </div>` : ''}
+
+    ${r.headerOnly.length ? `
+    <div class="card">
+      <div class="card-header"><i class="fa-solid fa-file-lines" style="color:var(--text-muted)"></i>
+        Cycles with no animal records
+        <span style="font-size:11px;color:var(--text-muted);margin-left:auto;font-weight:400">imported header-only — nothing to reconcile against</span>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Batch</th><th>Company</th><th>Status</th><th class="num">Header says purchased</th><th class="num">Capital</th></tr></thead>
+          <tbody>
+            ${r.headerOnly.map(c => `<tr>
+              <td><strong>${escapeHtml(c.batchName)}</strong></td>
+              <td style="color:var(--text-muted);font-size:12px">${escapeHtml(c.company || '—')}</td>
+              <td><span class="badge ${c.status === 'active' ? 'badge-blue' : 'badge-grey'}">${escapeHtml((c.status || '—').toUpperCase())}</span></td>
+              <td class="num">${c.header.purchased}</td>
+              <td class="num" style="color:var(--text-muted)">${fmt.zar(c.purchaseValue)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>` : ''}
+  `;
+}
+
+async function relinkOrphans(btn) {
+  const n = (S._recon && S._recon.totals.relinkable) || 0;
+  if (!confirm(`Reattach ${n} animal record${n === 1 ? '' : 's'} to the cycle their batch name already names?\n\nThis changes no counts and no values — it restores a link. Animals whose batch name matches more than one cycle are left alone.`)) return;
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Relinking…'; }
+  try {
+    const res = await apiPost('cattle/reconcile/relink', {});
+    S._recon = res.report;
+    /* The herd in memory is now stale — NAV groups animals by cycle_id. */
+    _herdLoaded = false;
+    CToast.show(`${res.relinked} animal record(s) reattached`, 'success');
+    renderReconciliation();
+  } catch (err) {
+    CToast.show('Relink failed: ' + err.message, 'error');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-link"></i> Relink matched orphans'; }
+  }
+}
+
+function exportReconciliationCSV() {
+  const r = S._recon;
+  if (!r) { CToast.show('Run the reconciliation first', 'info'); return; }
+  const rows = [['Section','Batch','Company','Status','Field','Header','On file','Difference','Tag','Matches cycle']];
+  r.mismatched.forEach(c => c.checks.forEach(chk =>
+    rows.push(['header vs animals', c.batchName, c.company || '', c.status || '', chk.label, chk.header, chk.counted, chk.delta, '', ''])));
+  r.imbalanced.forEach(c =>
+    rows.push(['header does not balance', c.batchName, c.company || '', c.status || '', 'purchased vs accounted',
+               c.imbalance.purchased, c.imbalance.accounted, c.imbalance.delta, '', '']));
+  r.orphans.forEach(o =>
+    rows.push(['orphaned animal', o.batchName || '', '', o.status || '', '', '', '', '', o.tagNumber || '', o.matchedBatch || '']));
+  r.headerOnly.forEach(c =>
+    rows.push(['no animal records', c.batchName, c.company || '', c.status || '', 'purchased', c.header.purchased, 0, -c.header.purchased, '', '']));
+
+  const csv = rows.map(row => row.map(v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(blob),
+    download: `cattle_reconciliation_${new Date().toISOString().slice(0, 10)}.csv`,
+  });
+  a.click();
+  CToast.show('Reconciliation exported', 'success');
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -1479,7 +1928,10 @@ async function loadCostLedger() {
       S.cycles = res.data || [];
     }
     const costs = await fetchAll('cattle_costs');
-    S._costCache = costs;
+    /* One array. NAV reads S.costs, this view reads S._costCache, and two
+       copies of the cost ledger that can drift is exactly how a valuation ends
+       up disagreeing with the ledger it is supposedly built on. */
+    S._costCache = S.costs = costs;
     // restore filters if they exist
     _currentCostCycleFilter = document.getElementById('costCycleFilter')?.value || '';
     _currentCostTypeFilter = document.getElementById('costTypeFilter')?.value || '';
@@ -1489,11 +1941,19 @@ async function loadCostLedger() {
   }
 }
 
+/* A cycle's name, looked up rather than stored on every cost row. */
+function _cycleName(cycleId) {
+  if (!cycleId) return null;
+  const c = S.cycles.find(x => x.id === cycleId);
+  return (c && c.batch_name) || cycleId;
+}
+
 function renderCostsView(costs) {
+  S.costs = costs;
   const total    = costs.reduce((s,c) => s + (parseFloat(c.amount)||0), 0);
-  const feed     = costs.filter(c => c.cost_type==='feed').reduce((s,c)=>s+(parseFloat(c.amount)||0),0);
-  const vet      = costs.filter(c => c.cost_type==='vet').reduce((s,c)=>s+(parseFloat(c.amount)||0),0);
-  const mort     = costs.filter(c => c.cost_type==='mortality').reduce((s,c)=>s+(parseFloat(c.amount)||0),0);
+  const feed     = costs.filter(c => c.category==='feed').reduce((s,c)=>s+(parseFloat(c.amount)||0),0);
+  const vet      = costs.filter(c => c.category==='vet').reduce((s,c)=>s+(parseFloat(c.amount)||0),0);
+  const mort     = costs.filter(c => c.category==='mortality').reduce((s,c)=>s+(parseFloat(c.amount)||0),0);
 
   const setTxt = (id, val) => { const e=document.getElementById(id); if(e) e.textContent=val; };
   setTxt('cost-total',    fmt.zar(total));
@@ -1503,7 +1963,7 @@ function renderCostsView(costs) {
 
   const cycleFilter = document.getElementById('costCycleFilter');
   if (cycleFilter) {
-    const cycleNames = [...new Set(costs.map(c => c.cycle_name||c.cycle_id).filter(Boolean))].sort();
+    const cycleNames = [...new Set(costs.map(c => _cycleName(c.cycle_id)).filter(Boolean))].sort();
     cycleFilter.innerHTML = '<option value="">All Cycles</option>' + cycleNames.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
     cycleFilter.value = _currentCostCycleFilter;
   }
@@ -1522,7 +1982,7 @@ function _renderCostTypeChart(costs) {
   if (S.charts.costType) S.charts.costType.destroy();
   const TYPE_COLORS = { feed: '#fec24f', vet: '#656565', transport: '#eda5ff', labour: '#34d399', mortality: '#f87171', other: 'rgba(255,255,255,.35)' };
   const types = {};
-  costs.forEach(c => { const t = c.cost_type||'other'; types[t] = (types[t]||0) + (parseFloat(c.amount)||0); });
+  costs.forEach(c => { const t = c.category||'other'; types[t] = (types[t]||0) + (parseFloat(c.amount)||0); });
   const labels = Object.keys(types);
   const data   = labels.map(k => types[k]);
   const colors = labels.map(k => TYPE_COLORS[k] || 'rgba(255,255,255,.35)');
@@ -1538,7 +1998,7 @@ function _renderCostCycleChart(costs) {
   if (!canvas) return;
   if (S.charts.costCycle) S.charts.costCycle.destroy();
   const byCycle = {};
-  costs.forEach(c => { const name = c.cycle_name || c.cycle_id || 'Unknown'; byCycle[name] = (byCycle[name]||0) + (parseFloat(c.amount)||0); });
+  costs.forEach(c => { const name = _cycleName(c.cycle_id) || "Unknown"; byCycle[name] = (byCycle[name]||0) + (parseFloat(c.amount)||0); });
   const labels = Object.keys(byCycle).slice(0, 10);
   const data   = labels.map(k => byCycle[k]);
   S.charts.costCycle = new Chart(canvas, {
@@ -1553,9 +2013,9 @@ function renderCostTable(costs, cycleFilter, typeFilter) {
   const sub   = document.getElementById('costLedgerSub');
   if (!tbody) return;
   let rows = [...costs];
-  if (cycleFilter) rows = rows.filter(c => (c.cycle_name||c.cycle_id) === cycleFilter);
-  if (typeFilter)  rows = rows.filter(c => c.cost_type === typeFilter);
-  rows.sort((a,b) => (b.cost_date||'').localeCompare(a.cost_date||''));
+  if (cycleFilter) rows = rows.filter(c => (_cycleName(c.cycle_id)) === cycleFilter);
+  if (typeFilter)  rows = rows.filter(c => c.category === typeFilter);
+  rows.sort((a,b) => (String(b.date||"")).localeCompare(String(a.date||"")));
   if (sub) sub.textContent = `${rows.length} entries · Total: ${fmt.zar(rows.reduce((s,c)=>s+(parseFloat(c.amount)||0),0))}`;
   const TYPE_COLORS = { feed:'#fec24f', vet:'#656565', transport:'#eda5ff', labour:'#34d399', mortality:'#f87171', other:'rgba(255,255,255,.35)' };
   const statusBadge = s => {
@@ -1565,16 +2025,16 @@ function renderCostTable(costs, cycleFilter, typeFilter) {
   };
   if (!rows.length) { tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:30px;color:rgba(255,255,255,.3)">No cost entries match filters</td></tr>`; return; }
   tbody.innerHTML = rows.map(c => {
-    const typeColor = TYPE_COLORS[c.cost_type] || 'rgba(255,255,255,.4)';
+    const typeColor = TYPE_COLORS[c.category] || 'rgba(255,255,255,.4)';
     return `<tr>
-      <td style="font-size:11px;color:rgba(255,255,255,.45)">${fmt.date(c.cost_date)}</td>
-      <td style="font-weight:600;font-size:12px">${escapeHtml(c.cycle_name||c.cycle_id||'—')}</td>
-      <td><span style="background:${typeColor}22;color:${typeColor};padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700;text-transform:capitalize">${escapeHtml(c.cost_type||'—')}</span></td>
+      <td style="font-size:11px;color:rgba(255,255,255,.45)">${fmt.date(c.date)}</td>
+      <td style="font-weight:600;font-size:12px">${escapeHtml(_cycleName(c.cycle_id)||'—')}</td>
+      <td><span style="background:${typeColor}22;color:${typeColor};padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700;text-transform:capitalize">${escapeHtml(c.category||'—')}</span></td>
       <td style="font-size:12px;color:rgba(255,255,255,.7)">${escapeHtml(c.description||'—')}</td>
       <td style="text-align:right;font-size:12px;color:rgba(255,255,255,.5)">${c.per_animal ? fmt.zar(c.per_animal) : '—'}</td>
       <td style="text-align:right;font-size:12px;color:rgba(255,255,255,.5)">${c.animals_count || '—'}</td>
       <td style="text-align:right;font-weight:700;color:#fec24f">${fmt.zar(parseFloat(c.amount)||0)}</td>
-      <td style="font-size:11px;color:rgba(255,255,255,.4)">${escapeHtml(c.supplier||'—')}</td>
+      <td style="font-size:11px;color:rgba(255,255,255,.4)">${escapeHtml(c.vendor||'—')}</td>
       <td style="font-size:11px;color:rgba(255,255,255,.35)">${escapeHtml(c.invoice_ref||'—')}</td>
       <td>${statusBadge(c.status)}</td>
       <td style="white-space:nowrap"><button onclick="openEditCostModal('${escapeHtml(c.id)}')" style="background:none;border:none;color:rgba(255,255,255,.35);cursor:pointer;padding:4px" title="Edit"><i class="fa-solid fa-pen"></i></button><button onclick="deleteCostEntry('${escapeHtml(c.id)}')" style="background:none;border:none;color:rgba(248,113,113,.4);cursor:pointer;padding:4px" title="Delete"><i class="fa-solid fa-trash"></i></button></td>
@@ -1592,7 +2052,7 @@ function renderCostNetReturnPanel(costs) {
   const el = document.getElementById('costNetReturnBody');
   if (!el) return;
   const byCycle = {};
-  costs.forEach(c => { const key = c.cycle_id || 'unknown'; if (!byCycle[key]) byCycle[key] = { name: c.cycle_name||key, total:0 }; byCycle[key].total += parseFloat(c.amount)||0; });
+  costs.forEach(c => { const key = c.cycle_id || 'unknown'; if (!byCycle[key]) byCycle[key] = { name: _cycleName(c.cycle_id) || key, total:0 }; byCycle[key].total += parseFloat(c.amount)||0; });
   const rows = Object.entries(byCycle).map(([id, info]) => {
     const cycle = S.cycles.find(c => c.id === id);
     const saleValue = cycle ? (parseFloat(cycle.total_selling_price)||0) : 0;
@@ -1606,13 +2066,23 @@ function renderCostNetReturnPanel(costs) {
 }
 
 let _editingCostId = null;
+
+/* The cost modal's fields are prefixed co_, not cf_.
+ *
+ * They used to share the cycle form's prefix, and shared one id outright:
+ * cattle.html has <select id="cf_status"> for a cycle's status and this modal
+ * built another for a cost's. getElementById returns the first in the document,
+ * which is always the cycle form's — so every cost was saved with the status of
+ * whatever the cycle form happened to be showing ('active', 'sold', 'draft'),
+ * never 'pending' or 'paid', and editing a cost silently reached into the other
+ * form. Separate prefixes make the collision impossible rather than fixed. */
 function openAddCostModal() {
   _editingCostId = null;
   _ensureCostModal();
   document.getElementById('costFormTitle').textContent = 'Add Cost Entry';
   document.getElementById('costForm').reset();
-  document.getElementById('cf_cost_date').value = new Date().toISOString().slice(0,10);
-  const sel = document.getElementById('cf_cycle_id');
+  document.getElementById('co_date').value = new Date().toISOString().slice(0,10);
+  const sel = document.getElementById('co_cycle_id');
   if (sel) sel.innerHTML = '<option value="">— Select Cycle —</option>' + S.cycles.map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.batch_name||c.id)}</option>`).join('');
   document.getElementById('costFormOverlay').classList.add('open');
 }
@@ -1623,19 +2093,19 @@ function openEditCostModal(id) {
   _editingCostId = id;
   _ensureCostModal();
   document.getElementById('costFormTitle').textContent = 'Edit Cost Entry';
-  const setV = (fid, val) => { const e=document.getElementById(fid); if(e) e.value=val||''; };
-  const sel  = document.getElementById('cf_cycle_id');
+  const setV = (fid, val) => { const e=document.getElementById(fid); if(e) e.value = (val === null || val === undefined) ? '' : val; };
+  const sel  = document.getElementById('co_cycle_id');
   if (sel) sel.innerHTML = '<option value="">— Select Cycle —</option>' + S.cycles.map(c => `<option value="${escapeHtml(c.id)}" ${c.id===cost.cycle_id?'selected':''}>${escapeHtml(c.batch_name||c.id)}</option>`).join('');
-  setV('cf_cycle_id',     cost.cycle_id);
-  setV('cf_cost_type',    cost.cost_type);
-  setV('cf_description',  cost.description);
-  setV('cf_amount',       cost.amount);
-  setV('cf_per_animal',   cost.per_animal);
-  setV('cf_animals_count',cost.animals_count);
-  setV('cf_cost_date',    cost.cost_date ? cost.cost_date.slice(0,10) : '');
-  setV('cf_supplier',     cost.supplier);
-  setV('cf_invoice_ref',  cost.invoice_ref);
-  setV('cf_status',       cost.status || 'pending');
+  setV('co_cycle_id',     cost.cycle_id);
+  setV('co_category',     cost.category);
+  setV('co_description',  cost.description);
+  setV('co_amount',       cost.amount);
+  setV('co_per_animal',   cost.per_animal);
+  setV('co_animals_count',cost.animals_count);
+  setV('co_date',         cost.date ? String(cost.date).slice(0,10) : '');
+  setV('co_vendor',       cost.vendor);
+  setV('co_invoice_ref',  cost.invoice_ref);
+  setV('co_status',       cost.status || 'pending');
   document.getElementById('costFormOverlay').classList.add('open');
 }
 
@@ -1650,21 +2120,31 @@ async function saveCostForm() {
   if (saveBtn) { saveBtn.disabled=true; saveBtn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Saving…'; }
   try {
     const getV = id => { const e=document.getElementById(id); return e ? e.value.trim() : ''; };
-    const cycleId   = getV('cf_cycle_id');
-    const cycleName = cycleId ? (S.cycles.find(c=>c.id===cycleId)?.batch_name || cycleId) : '';
+    const cycleId = getV('co_cycle_id');
+    /* The column names are the table's, not the form's. This payload named
+       seven columns cattle_costs does not have — cost_type, cost_date,
+       supplier, cycle_name, and three more — and the generic table API builds
+       its INSERT straight from the body, so every single "Add Cost" died on the
+       first one and reported "Error saving cost". Not one cost entry had ever
+       been recorded, which is why NAV had no invoices to value against.
+
+       cycle_name is gone rather than renamed: the cycle's name belongs to the
+       cycle, and a copy stored here goes stale the moment a batch is renamed.
+       It is looked up for display instead. */
     const payload = {
-      cycle_id:     cycleId,
-      cycle_name:   cycleName,
-      cost_type:    getV('cf_cost_type'),
-      description:  getV('cf_description'),
-      amount:       parseFloat(getV('cf_amount'))||0,
-      per_animal:   parseFloat(getV('cf_per_animal'))||0,
-      animals_count:parseInt(getV('cf_animals_count'))||0,
-      cost_date:    getV('cf_cost_date'),
-      supplier:     getV('cf_supplier'),
-      invoice_ref:  getV('cf_invoice_ref'),
-      status:       getV('cf_status') || 'pending'
+      cycle_id:     cycleId || null,
+      category:     getV('co_category'),
+      description:  getV('co_description'),
+      amount:       parseFloat(getV('co_amount'))||0,
+      per_animal:   parseFloat(getV('co_per_animal'))||null,
+      animals_count:parseInt(getV('co_animals_count'))||null,
+      date:         getV('co_date') || null,
+      vendor:       getV('co_vendor'),
+      invoice_ref:  getV('co_invoice_ref'),
+      status:       getV('co_status') || 'pending'
     };
+    if (!payload.amount) { CToast.show('Enter the amount for this cost', 'error'); return; }
+    if (!payload.category) { CToast.show('Choose a cost type', 'error'); return; }
     if (_editingCostId) {
       await apiPatch(`tables/cattle_costs/${_editingCostId}`, payload);
       const idx = (S._costCache||[]).findIndex(c => c.id === _editingCostId);
@@ -1677,6 +2157,9 @@ async function saveCostForm() {
       CToast.show('Cost entry added', 'success');
     }
     closeCostForm();
+    /* NAV values active cycles against these invoices, so a cost that has just
+       changed makes the herd in memory stale. */
+    _herdLoaded = false;
     renderCostsView(S._costCache);
   } catch(e) {
     CToast.show('Error saving cost: ' + e.message, 'error');
@@ -1690,6 +2173,7 @@ async function deleteCostEntry(id) {
   try {
     await apiDelete(`tables/cattle_costs/${id}`);
     S._costCache = (S._costCache||[]).filter(c => c.id !== id);
+    _herdLoaded = false;
     renderCostsView(S._costCache);
     CToast.show('Cost entry deleted', 'success');
   } catch(e) {
@@ -1701,7 +2185,7 @@ function exportCostLedger() {
   const costs = S._costCache || [];
   if (!costs.length) { CToast.show('No cost data to export', 'info'); return; }
   const headers = ['Date','Cycle','Type','Description','Per Animal','Animals','Total Amount','Supplier','Invoice','Status'];
-  const rows = costs.map(c => [c.cost_date||'', c.cycle_name||'', c.cost_type||'', c.description||'', c.per_animal||'', c.animals_count||'', c.amount||'', c.supplier||'', c.invoice_ref||'', c.status||'']);
+  const rows = costs.map(c => [c.date||'', _cycleName(c.cycle_id)||'', c.category||'', c.description||'', c.per_animal||'', c.animals_count||'', c.amount||'', c.vendor||'', c.invoice_ref||'', c.status||'']);
   const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], { type:'text/csv' });
   const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `cattle_costs_${new Date().toISOString().slice(0,10)}.csv` });
@@ -1719,16 +2203,16 @@ function _ensureCostModal() {
     <div class="modal">
       <div class="modal-header"><i class="fa-solid fa-receipt" style="color:var(--gold)"></i><span class="modal-title" id="costFormTitle">Add Cost Entry</span><button class="modal-close" onclick="closeCostForm()"><i class="fa-solid fa-xmark"></i></button></div>
       <div class="modal-body"><form id="costForm" onsubmit="event.preventDefault();saveCostForm()"><div class="settings-grid" style="margin-bottom:14px">
-        <div class="form-group"><label>Cycle</label><select id="cf_cycle_id" style="width:100%;background:#16213e;border:1px solid rgba(255,255,255,.12);color:#fff;padding:8px 10px;border-radius:8px;font-size:13px"><option value="">— Select Cycle —</option></select></div>
-        <div class="form-group"><label>Cost Type</label><select id="cf_cost_type" style="width:100%;background:#16213e;border:1px solid rgba(255,255,255,.12);color:#fff;padding:8px 10px;border-radius:8px;font-size:13px"><option value="feed">Feed</option><option value="vet">Vet / Medical</option><option value="transport">Transport</option><option value="labour">Labour</option><option value="mortality">Mortality</option><option value="other">Other</option></select></div>
-        <div class="form-group"><label>Description</label><input type="text" id="cf_description" placeholder="e.g. Bulk feed delivery" style="width:100%;background:#16213e;border:1px solid rgba(255,255,255,.12);color:#fff;padding:8px 10px;border-radius:8px;font-size:13px"></div>
-        <div class="form-group"><label>Total Amount (R)</label><input type="number" id="cf_amount" step="0.01" min="0" required placeholder="0.00" style="width:100%;background:#16213e;border:1px solid rgba(255,255,255,.12);color:#fff;padding:8px 10px;border-radius:8px;font-size:13px"></div>
-        <div class="form-group"><label>Per Animal (R)</label><input type="number" id="cf_per_animal" step="0.01" min="0" placeholder="0.00" style="width:100%;background:#16213e;border:1px solid rgba(255,255,255,.12);color:#fff;padding:8px 10px;border-radius:8px;font-size:13px"></div>
-        <div class="form-group"><label>Animals Count</label><input type="number" id="cf_animals_count" step="1" min="0" placeholder="0" style="width:100%;background:#16213e;border:1px solid rgba(255,255,255,.12);color:#fff;padding:8px 10px;border-radius:8px;font-size:13px"></div>
-        <div class="form-group"><label>Date</label><input type="date" id="cf_cost_date" required style="width:100%;background:#16213e;border:1px solid rgba(255,255,255,.12);color:#fff;padding:8px 10px;border-radius:8px;font-size:13px"></div>
-        <div class="form-group"><label>Status</label><select id="cf_status" style="width:100%;background:#16213e;border:1px solid rgba(255,255,255,.12);color:#fff;padding:8px 10px;border-radius:8px;font-size:13px"><option value="pending">Pending</option><option value="paid">Paid</option><option value="approved">Approved</option></select></div>
-        <div class="form-group"><label>Supplier</label><input type="text" id="cf_supplier" placeholder="Supplier name" style="width:100%;background:#16213e;border:1px solid rgba(255,255,255,.12);color:#fff;padding:8px 10px;border-radius:8px;font-size:13px"></div>
-        <div class="form-group"><label>Invoice Ref</label><input type="text" id="cf_invoice_ref" placeholder="INV-0001" style="width:100%;background:#16213e;border:1px solid rgba(255,255,255,.12);color:#fff;padding:8px 10px;border-radius:8px;font-size:13px"></div>
+        <div class="form-group"><label>Cycle</label><select id="co_cycle_id" style="width:100%;background:#16213e;border:1px solid rgba(255,255,255,.12);color:#fff;padding:8px 10px;border-radius:8px;font-size:13px"><option value="">— Select Cycle —</option></select></div>
+        <div class="form-group"><label>Cost Type</label><select id="co_category" style="width:100%;background:#16213e;border:1px solid rgba(255,255,255,.12);color:#fff;padding:8px 10px;border-radius:8px;font-size:13px"><option value="feed">Feed</option><option value="vet">Vet / Medical</option><option value="transport">Transport</option><option value="labour">Labour</option><option value="mortality">Mortality</option><option value="other">Other</option></select></div>
+        <div class="form-group"><label>Description</label><input type="text" id="co_description" placeholder="e.g. Bulk feed delivery" style="width:100%;background:#16213e;border:1px solid rgba(255,255,255,.12);color:#fff;padding:8px 10px;border-radius:8px;font-size:13px"></div>
+        <div class="form-group"><label>Total Amount (R)</label><input type="number" id="co_amount" step="0.01" min="0" required placeholder="0.00" style="width:100%;background:#16213e;border:1px solid rgba(255,255,255,.12);color:#fff;padding:8px 10px;border-radius:8px;font-size:13px"></div>
+        <div class="form-group"><label>Per Animal (R)</label><input type="number" id="co_per_animal" step="0.01" min="0" placeholder="0.00" style="width:100%;background:#16213e;border:1px solid rgba(255,255,255,.12);color:#fff;padding:8px 10px;border-radius:8px;font-size:13px"></div>
+        <div class="form-group"><label>Animals Count</label><input type="number" id="co_animals_count" step="1" min="0" placeholder="0" style="width:100%;background:#16213e;border:1px solid rgba(255,255,255,.12);color:#fff;padding:8px 10px;border-radius:8px;font-size:13px"></div>
+        <div class="form-group"><label>Date</label><input type="date" id="co_date" required style="width:100%;background:#16213e;border:1px solid rgba(255,255,255,.12);color:#fff;padding:8px 10px;border-radius:8px;font-size:13px"></div>
+        <div class="form-group"><label>Status</label><select id="co_status" style="width:100%;background:#16213e;border:1px solid rgba(255,255,255,.12);color:#fff;padding:8px 10px;border-radius:8px;font-size:13px"><option value="pending">Pending</option><option value="paid">Paid</option><option value="approved">Approved</option></select></div>
+        <div class="form-group"><label>Supplier</label><input type="text" id="co_vendor" placeholder="Supplier name" style="width:100%;background:#16213e;border:1px solid rgba(255,255,255,.12);color:#fff;padding:8px 10px;border-radius:8px;font-size:13px"></div>
+        <div class="form-group"><label>Invoice Ref</label><input type="text" id="co_invoice_ref" placeholder="INV-0001" style="width:100%;background:#16213e;border:1px solid rgba(255,255,255,.12);color:#fff;padding:8px 10px;border-radius:8px;font-size:13px"></div>
       </div></form></div>
       <div class="modal-footer"><button class="btn btn-secondary" onclick="closeCostForm()">Cancel</button><button class="btn" id="costSaveBtn" onclick="saveCostForm()"><i class="fa-solid fa-save"></i> Save Cost</button></div>
     </div>`;
