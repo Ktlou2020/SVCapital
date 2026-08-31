@@ -4519,10 +4519,25 @@ function _eftConfirmAmount({ declared, name, ref, fileName }) {
     const fmt = n => 'R' + Number(n).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     const el = document.createElement('div');
-    el.className = 'modal-overlay';
-    el.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:20px';
+    /* `open` matters. admin.css styles `.modal-overlay` with `opacity: 0` and
+       `pointer-events: none`, and only `.modal-overlay.open` makes it visible
+       and clickable — every other modal in this console is opened by adding
+       that class. This one was built by hand and never got it, so the inline
+       cssText below set display:flex on an element that was still fully
+       transparent and click-through.
+
+       The effect: pressing "Approve & Credit Wallet" appended an invisible
+       dialog and nothing happened. The button worked; the thing it opened could
+       not be seen or clicked, and the promise it waits on never resolved. Same
+       shape as the portal toast hidden behind a `.show` class the JS never
+       added — a base rule that hides, and a class nobody adds.
+
+       opacity and pointer-events are also set inline, so this cannot break
+       again if the stylesheet's class name changes. */
+    el.className = 'modal-overlay open';
+    el.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:20px;opacity:1;pointer-events:auto';
     el.innerHTML = `
-      <div class="modal" style="max-width:520px;width:100%;background:var(--bg-card,#1c1c1e);border-radius:16px;padding:22px">
+      <div class="modal" style="max-width:520px;width:100%;background:var(--bg-card,#1c1c1e);border-radius:16px;padding:22px;transform:none;opacity:1">
         <div style="font-weight:800;font-size:1.05rem;margin-bottom:4px">Confirm EFT amount</div>
         <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:16px">
           Check the figure against the proof of payment${fileName ? ` — <strong>${_esc(fileName)}</strong>` : ''}.
