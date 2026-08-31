@@ -186,7 +186,96 @@ async function seed(wallet, txns) {
          Math.abs(r.body.ledger_gap) > 0, String(r.body.ledger_gap));
     }
 
-    console.log('\nthe ledger ties to its own opening and closing');
+    console.log('\nan investment that matured in the period is on the statement');
+{
+  /* The case the old filter dropped: started well before the period, matured
+     inside it. This is the ordinary shape of anything whose term is longer than
+     the statement, which is most of them. */
+  await seed(1000, [{ type: 'deposit', amount: 1000, at: D(2026, 1, 5) }]);
+  const pool1 = 'POOL-STMT-CHK';
+  await pool.query(
+    `INSERT INTO investment_pools (id, name, product_type, status, annual_rate)
+     VALUES ($1,'Short Term Investment','short_term','matured',0.0323)
+     ON CONFLICT (id) DO NOTHING`, [pool1]);
+
+  const mk = (id, start, end, status) => pool.query(
+    `INSERT INTO investments (id, investor_id, pool_id, amount, status, start_date, end_date, expected_return, actual_return)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+    [id, INV, pool1, 100000, status, start, end, 3000, status === 'matured' ? 3230 : null]);
+
+  await mk('INVST-BEFORE', D(2024, 3, 1), D(2026, 4, 30), 'matured');   // matured IN the period
+  await mk('INVST-INSIDE', D(2026, 2, 1), D(2026, 2, 28), 'matured');   // started and matured inside
+  await mk('INVST-OLD',    D(2023, 1, 1), D(2025, 6, 30), 'matured');   // matured BEFORE the period
+  await mk('INVST-LIVE',   D(2025, 9, 1), D(2027, 9, 1),  'active');    // running through it
+
+  const r = await get(`/api/admin/account-statement?investor_id=${INV}&from=2026-01-01&to=2026-09-01`);
+  const ids = (r.body.investments || []).map(i => i.id);
+
+  ok('AN INVESTMENT THAT MATURED IN THE PERIOD IS INCLUDED',
+     ids.includes('INVST-BEFORE'),
+     'it started in 2024, so filtering on start date dropped it — the defect the client reported');
+  ok('one that started and matured inside it still is', ids.includes('INVST-INSIDE'));
+  ok('one running through the whole period is', ids.includes('INVST-LIVE'));
+  ok('and one that matured BEFORE the period is not',
+     !ids.includes('INVST-OLD'),
+     'a statement is for its period; everything ever held is a different document');
+
+  await pool.query(`DELETE FROM investments WHERE investor_id = $1`, [INV]);
+  await pool.query(`DELETE FROM investment_pools WHERE id = $1`, [pool1]);
+}
+
+console.log('\nthe portfolio summary adds up');
+{
+  const src = ADMIN;
+  ok('the summary shows active investment capital', /Active investment capital/.test(src));
+  ok('and the wallet balance beside it', /Wallet balance<\/td>/.test(CODE) || /Wallet balance/.test(src));
+  ok('and totals the two', /Total portfolio value/.test(src));
+  ok('the wallet figure is the CLOSING balance, not today\'s',
+     /const walletAtClose  = Math\.round\(\(parseFloat\(data\.closing_balance\)/.test(CODE),
+     "today's wallet would be a figure the ledger below never reaches");
+  ok('the summary is dated to the period end', /Portfolio Summary &mdash; as at ' \+ toLabel/.test(CODE));
+  ok('pending capital counts as active, since it has left the wallet',
+     /\['active','pending'\]\.includes\(i\.status\)/.test(CODE),
+     'leaving it out would make the two figures fail to account for it');
+  ok('the paid box shows returns paid to the client', /Returns paid to you/.test(src));
+  ok('and keeps accrued returns visually apart',
+     /Returns accrued, not yet paid/.test(src),
+     'a client reading a single "returns" figure must not be shown cash plus accrual');
+  ok('and shows what was withdrawn to the bank', /Withdrawn to your bank/.test(src));
+  ok('an active investment past its maturity date is flagged',
+     /still marked active although/.test(src),
+     'the client will ask, so the person sending it should know first');
+}
+
+console.log('\nwhat was paid, in rands');
+{
+  await seed(2000, [
+    { type: 'payout',       amount: 4893.02, at: D(2026, 3, 31) },
+    { type: 'interest',     amount: 227.78,  at: D(2026, 8, 18) },
+    { type: 'return',       amount: 900,     at: D(2026, 4, 1) },     // accrual, not cash
+    { type: 'withdrawal',   amount: 4000,    at: D(2026, 4, 2) },
+    { type: 'deposit',      amount: 40000,   at: D(2026, 6, 29) },
+    { type: 'investment',   amount: 40000,   at: D(2026, 6, 29) },
+    { type: 'platform_fee', amount: 400,     at: D(2026, 6, 29) },
+    { type: 'payout',       amount: 99999,   at: D(2025, 1, 1) },     // before the period
+  ]);
+  const r = await get(`/api/admin/account-statement?investor_id=${INV}&from=2026-01-01&to=2026-09-01`);
+  const paid = r.body.paid || {};
+
+  ok('returns paid are the payouts and interest actually received',
+     near(paid.returns, 4893.02 + 227.78), String(paid.returns));
+  ok('an ACCRUED return is reported apart, never added in',
+     near(paid.accrued, 900) && !near(paid.returns, 4893.02 + 227.78 + 900),
+     'an accrual is money earned and not yet handed over; summing the two reports it twice');
+  ok('withdrawals to the bank are their own figure', near(paid.withdrawn, 4000), String(paid.withdrawn));
+  ok('deposits and placements are separated', near(paid.deposited, 40000) && near(paid.invested, 40000));
+  ok('fees are shown', near(paid.fees, 400), String(paid.fees));
+  ok('and nothing outside the period is counted',
+     !near(paid.returns, 4893.02 + 227.78 + 99999),
+     'the R99 999 payout was a year before the period');
+}
+
+console.log('\nthe ledger ties to its own opening and closing');
     {
       await seed(12000, [
         { type: 'deposit',      amount: 20000, at: D(2026, 1, 10) },

@@ -15931,7 +15931,7 @@ async function _generateAccountStatement(investorId) {
 
 function _openAccountStatementWindow(data) {
   const { investor: inv, period, investments, transactions = [],
-          opening_balance = 0, closing_balance = 0,
+          opening_balance = 0, closing_balance = 0, paid = {},
           derived_opening_balance = 0, reconciles = true, ledger_gap = 0 } = data;
 
   const fmt = n => 'R ' + Math.abs(parseFloat(n) || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -15956,6 +15956,39 @@ function _openAccountStatementWindow(data) {
 
   const activeInvests  = investments.filter(i => ['active','pending'].includes(i.status));
   const maturedInvests = investments.filter(i => ['matured','paid_out'].includes(i.status));
+
+  /* ── Portfolio summary ────────────────────────────────────────────────
+     What the client holds, in the two places it can be: still invested, and
+     sitting in the wallet.
+
+     The wallet figure is the CLOSING BALANCE — the wallet as at the period end,
+     which is what the ledger below closes on. Using today's wallet instead
+     would put a figure in the summary that the ledger never reaches, on any
+     statement for a period that has already ended.
+
+     Active capital is the sum of the investments still running. `pending`
+     is included because that money has left the wallet and is committed —
+     leaving it out would make the two figures fail to account for it. */
+  const fmtR = n => 'R ' + Math.abs(n).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtRSigned = n => fmtR(n) + (n < 0 ? ' Dr' : '');
+  const _n = v => parseFloat(v) || 0;
+  const activeCapital  = Math.round(activeInvests.reduce((a, i) => a + _n(i.amount), 0) * 100) / 100;
+  const walletAtClose  = Math.round((parseFloat(data.closing_balance) || 0) * 100) / 100;
+  const portfolioTotal = Math.round((activeCapital + walletAtClose) * 100) / 100;
+  const maturedCapital = Math.round(maturedInvests.reduce((a, i) => a + _n(i.amount), 0) * 100) / 100;
+  const maturedReturn  = Math.round(maturedInvests.reduce((a, i) =>
+    a + _n(i.actual_return != null ? i.actual_return : i.expected_return), 0) * 100) / 100;
+
+  /* An investment still marked active whose maturity date has passed has not
+     been processed. The statement reports the status it finds — but the person
+     about to send it should know, because the client will ask. */
+  const _periodEnd = new Date(period && period.to ? period.to : Date.now());
+  const overdueActive = activeInvests.filter(i => {
+    const end = i.maturity_date || i.pool_end_date;
+    if (!end) return false;
+    const d = new Date(end);
+    return !isNaN(d.getTime()) && d < _periodEnd;
+  });
   const _sortDesc = (a, b) => new Date(b.maturity_date || b.pool_end_date || 0) - new Date(a.maturity_date || a.pool_end_date || 0);
   activeInvests.sort(_sortDesc);
   maturedInvests.sort(_sortDesc);
@@ -16135,6 +16168,59 @@ function _openAccountStatementWindow(data) {
     '      <dt>Matured Pools</dt><dd>' + mCnt + '</dd>',
     '    </dl></div>',
     '  </div>',
+
+    // ── Portfolio summary ──────────────────────────────────────────────
+    '  <div class="sec-hdr" style="background:#f8fafc;border-left:3px solid #eda5ff">Portfolio Summary &mdash; as at ' + toLabel + '</div>',
+    '  <table><tbody>',
+    '    <tr><td style="padding:8px 10px;font-size:11px;color:#374151">Active investment capital' +
+      (aCnt ? ' <span style="color:#9ca3af">(' + aCnt + ' investment' + (aCnt !== 1 ? 's' : '') + ')</span>' : '') +
+      '</td><td class="num" style="padding:8px 10px;font-weight:700;text-align:right">' + fmtR(activeCapital) + '</td></tr>',
+    '    <tr><td style="padding:8px 10px;font-size:11px;color:#374151">Wallet balance</td>' +
+      '<td class="num" style="padding:8px 10px;font-weight:700;text-align:right' + (walletAtClose < 0 ? ';color:#b91c1c' : '') + '">' + fmtRSigned(walletAtClose) + '</td></tr>',
+    '    <tr style="border-top:2px solid #e5e7eb;background:#fafafa"><td style="padding:9px 10px;font-size:11px;font-weight:800;color:#111827">Total portfolio value</td>' +
+      '<td class="num" style="padding:9px 10px;font-weight:800;text-align:right;color:#15803d">' + fmtRSigned(portfolioTotal) + '</td></tr>',
+    (mCnt
+      ? '    <tr><td style="padding:8px 10px;font-size:11px;color:#6b7280">Matured in this period' +
+        ' <span style="color:#9ca3af">(' + mCnt + ' investment' + (mCnt !== 1 ? 's' : '') + ')</span></td>' +
+        '<td class="num" style="padding:8px 10px;text-align:right;color:#6b7280">' + fmtR(maturedCapital) +
+        (maturedReturn ? ' <span style="color:#15803d">+ ' + fmtR(maturedReturn) + ' return</span>' : '') + '</td></tr>'
+      : ''),
+    '  </tbody></table>',
+    // ── Paid in this period ────────────────────────────────────────────
+    // The cash side of the period, in rands, for a client who wants the one
+    // number rather than the ledger. Returns PAID and returns ACCRUED are shown
+    // apart and never added: an accrual is money earned that has not been
+    // handed over, and summing the two reports it twice.
+    '  <div class="sec-hdr" style="background:#f8fafc;border-left:3px solid #15803d">Paid in this Period &mdash; ' + fromLabel + ' to ' + toLabel + '</div>',
+    '  <table><tbody>',
+    '    <tr><td style="padding:8px 10px;font-size:11px;color:#374151">Returns paid to you' +
+      ' <span style="color:#9ca3af">maturity payouts and interest</span></td>' +
+      '<td class="num" style="padding:8px 10px;font-weight:800;text-align:right;color:#15803d">' + fmtR(_n(paid.returns)) + '</td></tr>',
+    '    <tr><td style="padding:8px 10px;font-size:11px;color:#374151">Withdrawn to your bank</td>' +
+      '<td class="num" style="padding:8px 10px;font-weight:700;text-align:right">' + fmtR(_n(paid.withdrawn)) + '</td></tr>',
+    '    <tr><td style="padding:8px 10px;font-size:11px;color:#374151">Deposited by you</td>' +
+      '<td class="num" style="padding:8px 10px;text-align:right">' + fmtR(_n(paid.deposited)) + '</td></tr>',
+    '    <tr><td style="padding:8px 10px;font-size:11px;color:#374151">Placed into investments</td>' +
+      '<td class="num" style="padding:8px 10px;text-align:right">' + fmtR(_n(paid.invested)) + '</td></tr>',
+    (_n(paid.fees)
+      ? '    <tr><td style="padding:8px 10px;font-size:11px;color:#374151">Fees charged</td>' +
+        '<td class="num" style="padding:8px 10px;text-align:right;color:#b91c1c">' + fmtR(_n(paid.fees)) + '</td></tr>'
+      : ''),
+    (_n(paid.accrued)
+      ? '    <tr style="background:#fafafa"><td style="padding:8px 10px;font-size:11px;color:#6b7280">Returns accrued, not yet paid' +
+        ' <span style="color:#9ca3af">paid at maturity</span></td>' +
+        '<td class="num" style="padding:8px 10px;text-align:right;color:#6b7280">' + fmtR(_n(paid.accrued)) + '</td></tr>'
+      : ''),
+    '  </tbody></table>',
+
+    (overdueActive.length
+      ? '  <p class="note" style="background:#fffbeb;border:1px solid #fde68a;color:#92400e;padding:7px 10px;border-radius:4px">' +
+        overdueActive.length + ' investment' + (overdueActive.length !== 1 ? 's are' : ' is') +
+        ' still marked active although ' + (overdueActive.length !== 1 ? 'their maturity dates have' : 'its maturity date has') +
+        ' passed. Check whether ' + (overdueActive.length !== 1 ? 'they have' : 'it has') +
+        ' been processed before sending this statement.</p>'
+      : ''),
+
     '  <div class="sec-hdr active-hdr">Active Pools &mdash; ' + aCnt + ' investment' + (aCnt !== 1 ? 's' : '') + '</div>',
     '  <table>' + activeHead + '<tbody>' + activeRows + '</tbody></table>',
     '  <div class="sec-hdr matured-hdr">Matured Pools &mdash; ' + mCnt + ' investment' + (mCnt !== 1 ? 's' : '') + '</div>',

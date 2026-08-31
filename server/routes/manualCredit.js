@@ -1588,7 +1588,30 @@ router.get('/tax-cert', async (req, res) => {
     const totalDeposits = deposits.reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
 
     const inv = invRes.rows[0];
+    /* What the client was actually PAID in the period, and what they took out.
+     *
+     * Computed here beside the balances so a summary figure and the ledger it
+     * summarises come from one pass over one set of rows. Returns paid are the
+     * cash the fund handed over — maturity payouts and interest credits — and
+     * are deliberately NOT the same thing as `return` rows, which are accruals
+     * that move no cash and are counted at maturity instead. Counting both
+     * would report the same money to the client twice. */
+    const sumTypes = (...types) => r2(transactions
+      .filter(t => types.includes(t.type))
+      .reduce((a, t) => a + Math.abs(num(t.amount)), 0));
+
+    const paid = {
+      returns:     sumTypes('payout', 'interest'),
+      withdrawn:   sumTypes('withdrawal'),
+      deposited:   sumTypes('deposit'),
+      invested:    sumTypes('investment', 'reinvestment'),
+      fees:        sumTypes('platform_fee', 'fee'),
+      /* Accrued but not yet cash — shown separately so the two are never added. */
+      accrued:     sumTypes('return'),
+    };
+
     res.json({
+      paid,
       investor: {
         id: inv.id, first_name: inv.first_name, last_name: inv.last_name,
         email: inv.email, id_number: inv.id_number,
@@ -1645,9 +1668,22 @@ router.get('/account-statement', async (req, res) => {
            SELECT instruction FROM maturity_instructions
            WHERE investment_id = i.id ORDER BY created_at DESC LIMIT 1
          ) mi ON true
+         /* OVERLAP, not "started in the window".
+          *
+          * This used to require the START DATE to fall inside the period, which
+          * silently dropped every investment that MATURED during it but began
+          * before it — the ordinary case for anything with a term longer than
+          * the statement. A client with a dozen maturities in the period saw
+          * only the ones that also happened to start in it, and nothing said
+          * any were missing.
+          *
+          * An investment belongs on a statement if it was live at any point in
+          * the period: it began on or before the period ended, and it had not
+          * already ended before the period began. An investment with no end
+          * date has not ended, so it qualifies on the first test alone. */
          WHERE i.investor_id = $1
-           AND COALESCE(i.start_date, i.created_at::date) >= $2
            AND COALESCE(i.start_date, i.created_at::date) <= $3
+           AND (i.end_date IS NULL OR i.end_date >= $2)
          ORDER BY i.created_at ASC`,
         [investor_id, fromDt.toISOString().slice(0,10), toDt.toISOString().slice(0,10)]
       ),
@@ -1732,7 +1768,30 @@ router.get('/account-statement', async (req, res) => {
       return { ...t, cash_effect: effect, running_balance: running };
     });
 
+    /* What the client was actually PAID in the period, and what they took out.
+     *
+     * Computed here beside the balances so a summary figure and the ledger it
+     * summarises come from one pass over one set of rows. Returns paid are the
+     * cash the fund handed over — maturity payouts and interest credits — and
+     * are deliberately NOT the same thing as `return` rows, which are accruals
+     * that move no cash and are counted at maturity instead. Counting both
+     * would report the same money to the client twice. */
+    const sumTypes = (...types) => r2(transactions
+      .filter(t => types.includes(t.type))
+      .reduce((a, t) => a + Math.abs(num(t.amount)), 0));
+
+    const paid = {
+      returns:     sumTypes('payout', 'interest'),
+      withdrawn:   sumTypes('withdrawal'),
+      deposited:   sumTypes('deposit'),
+      invested:    sumTypes('investment', 'reinvestment'),
+      fees:        sumTypes('platform_fee', 'fee'),
+      /* Accrued but not yet cash — shown separately so the two are never added. */
+      accrued:     sumTypes('return'),
+    };
+
     res.json({
+      paid,
       investor: {
         id: inv.id, first_name: inv.first_name, last_name: inv.last_name,
         email: inv.email, id_number: inv.id_number,
