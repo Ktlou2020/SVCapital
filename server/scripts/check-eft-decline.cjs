@@ -236,6 +236,111 @@ const wallet  = async () => Number((await q(`SELECT wallet_balance FROM investor
          /DECLINED: 0/.test(run([])) , run([]).slice(0, 400));
     }
 
+    console.log('\nthe ops console runs the same backfill');
+    {
+      /* The point of the shared service. The CLI and the panel must not be able
+         to disagree about which group a client is in — that decision is the
+         difference between owing them an explanation and owing them money. */
+      await cleanup();
+      await q(`INSERT INTO investors (id, first_name, last_name, email)
+               VALUES ('CHK-DEC-INV','Decline','Probe','dec@chk.test')`);
+      const mk = async (n, resp, ref) => {
+        await q(`INSERT INTO support_tickets (id, investor_id, category, subject, message, status, admin_response, responded_at)
+                 VALUES ($1,'CHK-DEC-INV','payment_proof',$2,'proof','resolved',$3, NOW())`,
+                [`CHK-DEC-T${n}`, `EFT proof of payment ${ref}`, resp]);
+        await q(`INSERT INTO transactions (id, investor_id, type, amount, status, reference)
+                 VALUES ($1,'CHK-DEC-INV','deposit', 100, 'pending', $2)`, [`CHK-DEC-TX${n}`, ref]);
+      };
+      await mk(21, 'Your EFT proof of payment was declined. Please resubmit.', 'EFT-CHKD21');
+      await mk(22, 'Your EFT deposit of R100.00 has been approved and credited to your wallet.', 'EFT-CHKD22');
+      await mk(23, null, 'EFT-CHKD23');
+
+      const get = p2 => new Promise(res => {
+        http.get({ port: server.address().port, path: p2 }, x => {
+          let str = ''; x.on('data', c => str += c);
+          x.on('end', () => { let j = {}; try { j = JSON.parse(str); } catch (_) {} res({ status: x.statusCode, body: j }); });
+        }).on('error', e => res({ status: 0, body: { error: e.message } }));
+      });
+
+      const rep = await get('/api/admin/stranded-eft-deposits');
+      ok('the report endpoint answers', rep.status === 200, `HTTP ${rep.status}`);
+      ok('and groups them the same way the CLI does',
+         rep.body.totals?.declined?.n === 1 && rep.body.totals?.approved?.n === 1 && rep.body.totals?.unclear?.n === 1,
+         JSON.stringify(rep.body.totals));
+      ok('it returns the admin response verbatim for the console to escape',
+         /approved and credited/.test(rep.body.groups.APPROVED[0].adminResponse || ''),
+         'escaping belongs in the renderer; escaping here would corrupt the CSV');
+
+      const before = (await q(`SELECT COUNT(*)::int n FROM transactions WHERE id LIKE 'CHK-DEC-TX2%' AND status='pending'`)).rows[0].n;
+      await get('/api/admin/stranded-eft-deposits');
+      ok('reporting writes nothing',
+         (await q(`SELECT COUNT(*)::int n FROM transactions WHERE id LIKE 'CHK-DEC-TX2%' AND status='pending'`)).rows[0].n === before);
+
+      const done = await post('/api/admin/stranded-eft-deposits/close', {});
+      ok('the close endpoint closes exactly one', done.status === 200 && done.body.closed === 1,
+         JSON.stringify(done.body));
+      ok('and reports what it left alone',
+         done.body.leftAlone?.approved === 1 && done.body.leftAlone?.unclear === 1,
+         JSON.stringify(done.body));
+      const st2 = async n => (await q(`SELECT status FROM transactions WHERE id=$1`, [`CHK-DEC-TX${n}`])).rows[0].status;
+      ok('the declined one is rejected', await st2(21) === 'rejected', await st2(21));
+      ok('the approved one is untouched', await st2(22) === 'pending', await st2(22));
+      ok('the unclear one is untouched', await st2(23) === 'pending', await st2(23));
+
+      /* A deposit credited between the report being read and the close being
+         pressed must not be flipped to rejected — money credited, ledger saying
+         refused.
+
+         Two independent guards hold this: the close re-runs the query in its
+         own transaction and that query only returns rows still at 'pending',
+         and the UPDATE repeats the condition. Mutation-tested — removing either
+         one alone still passes, removing both fails here. So this case does not
+         pin one line, it pins the OUTCOME, which is what should survive someone
+         refactoring either half. */
+      await q(`UPDATE transactions SET status='pending' WHERE id='CHK-DEC-TX21'`);
+      await q(`UPDATE support_tickets SET admin_response='Your EFT proof of payment was declined.' WHERE id='CHK-DEC-T21'`);
+      await q(`INSERT INTO support_tickets (id, investor_id, category, subject, message, status, admin_response, responded_at)
+               VALUES ('CHK-DEC-T24','CHK-DEC-INV','payment_proof','EFT proof of payment EFT-CHKD24','proof','resolved','Your EFT proof of payment was declined.', NOW())`);
+      await q(`INSERT INTO transactions (id, investor_id, type, amount, status, reference)
+               VALUES ('CHK-DEC-TX24','CHK-DEC-INV','deposit', 100, 'pending', 'EFT-CHKD24')`);
+      /* Both now read as DECLINED. One of them gets credited before the close. */
+      await q(`UPDATE transactions SET status='completed' WHERE id='CHK-DEC-TX24'`);
+      const raced = await post('/api/admin/stranded-eft-deposits/close', {});
+      ok('a deposit credited before the close is not flipped to rejected',
+         await st2(24) === 'completed',
+         `${await st2(24)} — the money is credited; marking it rejected would make the ledger lie`);
+      ok('and the genuinely pending one is still closed',
+         await st2(21) === 'rejected' && raced.body.closed === 1,
+         `TX21 ${await st2(21)}, closed ${raced.body.closed}`);
+
+      ok('the route takes no list of ids to close',
+         !/req\.body[^\n]*(ids|deposit_id)/.test(
+           fs.readFileSync(path.join(__dirname, '..', 'routes', 'manualCredit.js'), 'utf8')
+             .match(/router\.post\('\/stranded-eft-deposits\/close'[\s\S]*?\n\}\);/)[0]),
+         'a stale page must not be able to name an APPROVED deposit and have it closed');
+    }
+
+    console.log('\nthe panel is wired');
+    {
+      const HTML = fs.readFileSync(path.join(ROOT, 'admin', 'index.html'), 'utf8');
+      ok('there is a panel', /Deposits Stuck on Pending/.test(HTML));
+      ok('with a report button', /runStrandedEftReport\(this\)/.test(HTML));
+      ok('and an export that appears only once there is something to export',
+         /id="seExportBtn" style="display:none"/.test(HTML));
+      ok('the handler exists', /async function runStrandedEftReport\(btn\)/.test(ADMIN));
+      ok('closing asks first', /await Confirm\.ask\(`Close \$\{n\} deposit/.test(ADMIN));
+      ok('the approved group is shown before anything else',
+         ADMIN.indexOf('approved but never credited') < ADMIN.indexOf('declined, still showing as Pending'),
+         'money that may be owed must not be below the fold under a button');
+      ok('only the declined group gets a button',
+         (ADMIN.match(/closeStrandedEftDeposits\(this\)/g) || []).length === 1);
+      ok('the console sends no ids', /'admin\/stranded-eft-deposits\/close', \{\}/.test(ADMIN));
+      ok('the CSV writes unformatted numbers', /r\.amount\.toFixed\(2\)/.test(ADMIN),
+         'Utils.rand emits R1 250,00, which a spreadsheet reads as 125000');
+      ok('the ledger is reloaded after closing',
+         /if \(STATE\.transactions\.length\) await loadTransactions\(\);/.test(ADMIN));
+    }
+
     await cleanup();
     console.log(`\n${pass} passed, ${fail} failed`);
   } catch (err) {
