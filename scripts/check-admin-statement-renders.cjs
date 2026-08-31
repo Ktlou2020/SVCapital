@@ -145,7 +145,7 @@ out.totalSum     = /462 437,57|462,437.57/.test(txt);
 
 out.hasPaid      = /Paid in this Period/.test(txt);
 out.paidReturns  = /354 734,68|354,734.68/.test(txt);
-out.paidWithdrawn= /354 506,90|354,506.90/.test(txt);
+out.noWithdrawnRow = !/Withdrawn to your bank/.test(txt);
 out.accrualApart = /Returns accrued, not yet paid/.test(txt);
 
 out.maturedCount = /Matured Pools . 2 investments/.test(txt) || /Matured Pools/.test(txt);
@@ -194,7 +194,8 @@ if (r) {
   console.log('\nwhat was paid, in rands');
   ok('the box is on the statement', r.hasPaid === true);
   ok('returns paid are shown', r.paidReturns === true);
-  ok('and what was withdrawn to the bank', r.paidWithdrawn === true);
+  ok('and withdrawals are left to the ledger below', r.noWithdrawnRow === true,
+     'the box is what the fund paid the client, not what they then moved');
   ok('with accrued returns kept apart from paid ones', r.accrualApart === true,
      'a client must not read cash and accrual as one figure');
 
