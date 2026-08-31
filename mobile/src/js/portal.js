@@ -1809,9 +1809,16 @@ function buildStatementHTML(opts) {
     investor, investments, transactions,
     from, to, totalDeposits, totalReturns, walletBal, totalValue, activeInv,
     totalCapital, activeInvAmt,
-    statementNumber, generatedAt,
+    statementNumber, generatedAt, figures,
     incPortfolio, incInvestments, incTransactions, incPerformance
   } = opts;
+
+  /* Every figure below comes from computeStatementFigures in portal-core.
+     This builder and the mobile one used to carry their own copies of the
+     credit/debit classification, and they had drifted: mobile knew about
+     'reinvestment' and this one did not, so the same client's statement showed
+     different totals depending on where they opened it. */
+  const F = figures || {};
 
   const fullName   = `${investor.first_name || ''} ${investor.last_name || ''}`.trim() || 'Investor';
   const investorId = investor.id || '—';
@@ -2083,50 +2090,88 @@ function buildStatementHTML(opts) {
 
   // ─── TRANSACTION LEDGER ────────────────────────────────────────────────
   if (incTransactions) {
-    const TYPE_LABEL = { deposit:'Deposit', withdrawal:'Withdrawal', investment:'Investment', reinvestment:'Reinvestment', return:'Return', payout:'Payout', fee:'Fee', platform_fee:'Platform Fee', referral_bonus:'Referral Bonus', gift_sent:'Gift Sent', gift_received:'Gift Received', reward:'XP Reward' };
-    const isCreditType = t => ['deposit','return','payout','referral_bonus','gift_received','reward'].includes(t.type);
-    const isDebitType  = t => ['withdrawal','investment','reinvestment','platform_fee','fee','gift_sent'].includes(t.type);
+    /* Shared with the mobile app and with the totals, so a row's column and the
+       figure it is counted in cannot disagree. A type in neither list falls
+       back to the SIGN of the amount rather than vanishing from both columns,
+       which is what used to happen to every 'adjustment'. */
+    const isCreditType = t => _stmtDirection(t) === 'credit';
+    const isDebitType  = t => _stmtDirection(t) === 'debit';
 
     const sortedTxns = [...transactions].sort((a, b) =>
       new Date(a.transaction_date || a.created_at) - new Date(b.transaction_date || b.created_at)
     );
 
+    /* A running balance, so a client can follow their own money down the page.
+       It starts at the opening balance and only moves on rows that actually
+       moved money. */
+    let running = Number(F.opening) || 0;
+
     const txnRows = sortedTxns.length > 0 ? sortedTxns.map(t => {
       const absAmt    = Math.abs(Number(t.amount) || 0);
+      const counts    = _stmtCounts(t);
       const isCredit  = isCreditType(t);
       const isDebit   = isDebitType(t);
+      if (counts) running += isCredit ? absAmt : isDebit ? -absAmt : 0;
+      const dim       = counts ? '' : 'opacity:0.55;';
       const debitStr  = isDebit  ? `<span style="color:#ef4444;font-weight:700">${fmtNum(absAmt)}</span>` : `<span style="color:#d1d5db">—</span>`;
       const creditStr = isCredit ? `<span style="color:#22C55E;font-weight:700">${fmtNum(absAmt)}</span>` : `<span style="color:#d1d5db">—</span>`;
+      const balStr    = counts ? fmtNum(running) : `<span style="color:#9ca3af;font-size:9px">not counted</span>`;
       const desc = t.pool_name || t.description || '—';
-      const statusPillHtml = `<span style="background:${t.status==='completed'?'#dcfce7':'#fef9c3'};color:${t.status==='completed'?'#16a34a':'#92400e'};font-size:9px;font-weight:700;padding:2px 6px;border-radius:20px;text-transform:uppercase">${t.status}</span>`;
-      return `<tr style="border-bottom:1px solid #f0f0f0">
+      /* A rejected deposit used to wear the same amber pill as a pending one
+         and count toward the totals just the same. */
+      const SPILL = { completed:['#dcfce7','#16a34a'], pending:['#fef9c3','#92400e'],
+                      rejected:['#fee2e2','#b91c1c'], cancelled:['#f1f5f9','#64748b'] };
+      const [sBg, sFg] = SPILL[t.status] || ['#f1f5f9','#64748b'];
+      const statusPillHtml = `<span style="background:${sBg};color:${sFg};font-size:9px;font-weight:700;padding:2px 6px;border-radius:20px;text-transform:uppercase">${t.status || 'unknown'}</span>`;
+      return `<tr style="border-bottom:1px solid #f0f0f0;${dim}">
         ${tdCell(`<span style="font-size:9px;color:#9ca3af;font-family:monospace">${t.reference || '—'}</span>`)}
-        ${tdCell(TYPE_LABEL[t.type] || t.type)}
+        ${tdCell(_stmtLabel(t))}
         ${tdCell(desc)}
         ${tdCell(debitStr, 'right')}
         ${tdCell(creditStr, 'right')}
+        ${tdCell(balStr, 'right')}
         ${tdCell(fmtDate(t.transaction_date || t.created_at), 'right')}
         ${tdCell(statusPillHtml)}
       </tr>`;
-    }).join('') : `<tr><td colspan="7" style="padding:20px;text-align:center;color:#9ca3af;font-size:11px">No transactions in selected period</td></tr>`;
+    }).join('') : `<tr><td colspan="8" style="padding:20px;text-align:center;color:#9ca3af;font-size:11px">No transactions in selected period</td></tr>`;
 
-    const txDeposits = sortedTxns.filter(t => t.type === 'deposit').reduce((s, t) => s + Math.abs(Number(t.amount)||0), 0);
-    const txReturns  = sortedTxns.filter(t => ['return','payout'].includes(t.type)).reduce((s, t) => s + Math.abs(Number(t.amount)||0), 0);
-    const txDebits   = sortedTxns.filter(isDebitType).reduce((s, t) => s + Math.abs(Number(t.amount)||0), 0);
-    const txCredits  = sortedTxns.filter(isCreditType).reduce((s, t) => s + Math.abs(Number(t.amount)||0), 0);
+    /* Straight off the shared figures — completed rows only. */
+    const txDeposits = F.deposits || 0;
+    const txReturns  = F.returns  || 0;
+    const txDebits   = F.debits   || 0;
+    const txCredits  = F.credits  || 0;
+    const excludedCount = (F.excluded || []).length;
 
     sections += `
       <section style="margin-bottom:36px">
         ${sectionHead('Transaction Ledger', '#eda5ff', `${transactions.length} transactions · ${fmtDate(from)} — ${fmtDate(to)}`)}
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px">
-          ${stmtMiniBox('Total Deposits',   fmtNum(txDeposits),  '#22C55E')}
-          ${stmtMiniBox('Returns Received', fmtNum(txReturns),   '#fec24f')}
-          ${stmtMiniBox('Total Debits',     fmtNum(txDebits),    '#ef4444')}
-          ${stmtMiniBox('Total Credits',    fmtNum(txCredits),   '#22C55E')}
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:16px">
+          ${stmtMiniBox('Opening Balance', fmtNum(F.opening), '#6b7280')}
+          ${stmtMiniBox('Total Credits',   fmtNum(txCredits), '#22C55E')}
+          ${stmtMiniBox('Total Debits',    fmtNum(txDebits),  '#ef4444')}
+          ${stmtMiniBox('Closing Balance', fmtNum(F.closing), '#0096ff')}
         </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:16px">
+          ${stmtMiniBox('Deposits',        fmtNum(txDeposits), '#22C55E')}
+          ${stmtMiniBox('Returns',         fmtNum(txReturns),  '#fec24f')}
+          ${stmtMiniBox('Withdrawals',     fmtNum(F.withdrawals || 0), '#ef4444')}
+          ${stmtMiniBox('Fees',            fmtNum(F.fees || 0), '#ef4444')}
+        </div>
+
+        <!-- The arithmetic a reader would otherwise do by hand. A statement
+             that does not reconcile has to say so on its face; a wrong number
+             presented confidently is worse than one that admits doubt. -->
+        <div style="background:${F.ties ? '#f0fdf4' : '#fef2f2'};border:1px solid ${F.ties ? '#bbf7d0' : '#fecaca'};border-radius:8px;padding:10px 12px;margin-bottom:16px;font-size:10px;color:${F.ties ? '#166534' : '#b91c1c'}">
+          ${F.ties
+            ? `Opening ${fmtNum(F.opening)} + credits ${fmtNum(txCredits)} − debits ${fmtNum(txDebits)} = closing ${fmtNum(F.closing)}.`
+            : `This period does not reconcile: opening ${fmtNum(F.opening)} + credits ${fmtNum(txCredits)} − debits ${fmtNum(txDebits)} does not equal closing ${fmtNum(F.closing)}. Please contact support before relying on these figures.`}
+          ${F.complete === false ? ` Not all of your transaction history could be loaded, so the opening balance may be incomplete.` : ''}
+          ${excludedCount ? ` ${excludedCount} transaction${excludedCount === 1 ? ' is' : 's are'} listed but not counted, because ${excludedCount === 1 ? 'it has' : 'they have'} not completed.` : ''}
+        </div>
+
         <div style="overflow-x:auto">
-          <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #eaeaea;min-width:640px">
-            <thead><tr style="background:#F7F8FA">${th('Reference')}${th('Type')}${th('Description')}${th('Debit','right')}${th('Credit','right')}${th('Date','right')}${th('Status')}</tr></thead>
+          <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #eaeaea;min-width:700px">
+            <thead><tr style="background:#F7F8FA">${th('Reference')}${th('Type')}${th('Description')}${th('Debit','right')}${th('Credit','right')}${th('Balance','right')}${th('Date','right')}${th('Status')}</tr></thead>
             <tbody>${txnRows}</tbody>
           </table>
         </div>
