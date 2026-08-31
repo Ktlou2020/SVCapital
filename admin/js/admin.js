@@ -15930,7 +15930,9 @@ async function _generateAccountStatement(investorId) {
 }
 
 function _openAccountStatementWindow(data) {
-  const { investor: inv, period, investments, transactions = [], opening_balance = 0 } = data;
+  const { investor: inv, period, investments, transactions = [],
+          opening_balance = 0, closing_balance = 0,
+          derived_opening_balance = 0, reconciles = true, ledger_gap = 0 } = data;
 
   const fmt = n => 'R ' + Math.abs(parseFloat(n) || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtDate = s => s ? new Date(s).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
@@ -16141,35 +16143,77 @@ function _openAccountStatementWindow(data) {
 
     // ── Transaction ledger ─────────────────────────────────────────────
     (function() {
-      const DEBIT_TYPES = new Set(['investment', 'reinvestment', 'withdrawal', 'fee']);
+      /* THE BALANCES COME FROM THE SERVER.
+       *
+       * This block used to carry its own DEBIT_TYPES — {investment,
+       * reinvestment, withdrawal, fee} — with everything else treated as a
+       * credit, while the opening balance above it came from
+       * services/ledger.js. The two disagreed about platform_fee, gift_sent,
+       * return and every type neither listed, so the opening balance and the
+       * ledger printed under it were computed by different rules and the
+       * document could not tie. A platform fee INCREASED the client's balance
+       * as the page went down.
+       *
+       * One definition now, on the server, which also anchors the closing
+       * balance to the actual wallet instead of re-deriving it from history. */
       const TYPE_LABELS = {
         deposit: 'Deposit', withdrawal: 'Withdrawal', investment: 'Investment',
         reinvestment: 'Reinvestment', matured_funds: 'Matured Funds',
         return: 'Return', payout: 'Maturity Payout', fee: 'Platform Fee',
-        referral_bonus: 'Referral Bonus',
+        platform_fee: 'Platform Fee', referral_bonus: 'Referral Bonus',
+        interest: 'Interest', gift_sent: 'Gift Sent', gift_received: 'Gift Received',
+        adjustment: 'Adjustment',
       };
       const r2 = n => Math.round((n || 0) * 100) / 100;
-      let runBal = r2(opening_balance);
+      const money = n => 'R ' + Math.abs(n).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const signed = n => money(n) + (n < 0 ? ' Dr' : '');
+
       const rows = transactions.map(t => {
+        const effect = parseFloat(t.cash_effect);
+        const bal    = parseFloat(t.running_balance);
         const amt    = Math.abs(parseFloat(t.amount) || 0);
-        const isDebit = DEBIT_TYPES.has(t.type);
-        runBal = r2(runBal + (isDebit ? -amt : amt));
-        const balColor = runBal < 0 ? 'color:#b91c1c' : '';
+        const isDebit = effect < 0;
+        /* A row with no cash effect is an ACCRUAL — a `return` posted to
+           total_returns, say. It belongs on the statement and must not move the
+           balance, and saying so beats printing a blank the reader has to
+           guess at. */
+        const isAccrual = effect === 0;
+        const balColor = bal < 0 ? 'color:#b91c1c' : '';
         const label  = TYPE_LABELS[t.type] || (t.type || '').replace(/_/g, ' ');
         const desc   = (t.description || '').length > 55 ? t.description.slice(0, 55) + '…' : (t.description || '—');
-        const credit = isDebit ? '' : `<td class="txn-credit">R ${amt.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td></td>`;
-        const debit  = isDebit ? `<td></td><td class="txn-debit">R ${amt.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>` : '';
+        const cells = isAccrual
+          ? `<td colspan="2" style="text-align:center;font-size:9px;color:#9ca3af">${money(amt)} &mdash; no cash movement</td>`
+          : isDebit
+            ? `<td></td><td class="txn-debit">${money(amt)}</td>`
+            : `<td class="txn-credit">${money(amt)}</td><td></td>`;
         return `<tr>
           <td>${fmtDate(t.txn_date)}</td>
           <td><span class="txn-type tt-${esc(t.type || '')}">${esc(label)}</span></td>
           <td style="font-size:10px;color:#6b7280;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(desc)}</td>
-          ${isDebit ? debit : credit}
-          <td class="txn-bal" style="${balColor}">R ${Math.abs(runBal).toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}${runBal < 0 ? ' Dr' : ''}</td>
+          ${cells}
+          <td class="txn-bal" style="${balColor}">${signed(bal)}</td>
         </tr>`;
       }).join('');
-      const closingBal = runBal;
-      const openFmt  = `R ${Math.abs(opening_balance).toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}${opening_balance < 0 ? ' Dr' : ''}`;
-      const closeFmt = `R ${Math.abs(closingBal).toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}${closingBal < 0 ? ' Dr' : ''}`;
+      const closingBal = r2(closing_balance);
+      const openFmt  = signed(r2(opening_balance));
+      const closeFmt = signed(closingBal);
+
+      /* When the transaction history does not reproduce the wallet, say so.
+       *
+       * The closing balance is the client's real wallet; the opening balance is
+       * that figure less the period's movement. If summing the history from the
+       * beginning gives something else, rows are missing or mis-typed — most
+       * often a reinvestment whose matching matured_funds credit was never
+       * written. That is a data problem, and printing a confident balance over
+       * it is how a client with money on deposit received a statement reading
+       * R24 010,73 Dr. It is stated here instead, with the size of the gap. */
+      const gapNote = (reconciles === false)
+        ? `  <tr><td colspan="6" style="background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;font-size:9px;padding:8px 10px;line-height:1.5">` +
+          `<strong>Balances are anchored to the account's wallet.</strong> Summing this account's transaction history from the beginning gives ` +
+          `${signed(r2(derived_opening_balance))} as the opening figure — a difference of ${money(r2(ledger_gap))}. ` +
+          `That usually means a transaction is missing or recorded under a type that carries no cash effect. ` +
+          `Resolve it before sending this statement to the client.</td></tr>`
+        : '';
       if (!transactions.length) return '  <div class="sec-hdr txn-hdr">Transaction Ledger — No transactions in this period</div>';
       return [
         `  <div class="sec-hdr txn-hdr">Transaction Ledger — ${transactions.length} transaction${transactions.length !== 1 ? 's' : ''}</div>`,
@@ -16179,6 +16223,7 @@ function _openAccountStatementWindow(data) {
         `  <tr style="background:#f8fafc"><td colspan="3" style="font-size:10px;font-weight:700;color:#374151">Opening Balance — ${fromLabel}</td><td></td><td></td><td class="txn-bal">${openFmt}</td></tr>`,
         rows,
         `  <tr style="background:#f1f5f9;border-top:2px solid #e5e7eb"><td colspan="3" style="font-size:10px;font-weight:700;color:#374151">Closing Balance — ${toLabel}</td><td></td><td></td><td class="txn-bal" style="${closingBal < 0 ? 'color:#b91c1c' : 'color:#15803d'}">${closeFmt}</td></tr>`,
+        gapNote,
         '  </tbody></table>',
       ].join('\n');
     })(),

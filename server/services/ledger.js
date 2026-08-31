@@ -39,4 +39,32 @@ const cashMovementSQL = (p = '') => `
     ELSE 0
   END`;
 
-module.exports = { CASH_CREDIT_TYPES, CASH_DEBIT_TYPES, cashMovementSQL };
+/* The same rule in JavaScript, for the rows already in hand.
+ *
+ * The SQL version and a hand-written list in the admin console had drifted:
+ * the console's DEBIT_TYPES was {investment, reinvestment, withdrawal, fee} and
+ * everything else — platform_fee, gift_sent, return, and any type it had never
+ * heard of — counted as a credit. So a statement's opening balance came from
+ * the SQL and its running balance from the other list, and the two could not
+ * agree. A platform fee INCREASED the client's balance down the page.
+ *
+ * Exported so the one definition serves both, and returns the signed effect of
+ * a single row. A type in neither list moves nothing, exactly as the SQL's
+ * ELSE 0 does: `return` is an accrual and must not be counted as cash, and a
+ * type nobody has classified is not something to guess about in a balance. */
+function cashMovement(txn) {
+  const type = String((txn && txn.type) || '');
+  const amt  = Math.abs(Number(txn && txn.amount) || 0);
+  if (CASH_CREDIT_TYPES.includes(type)) return amt;
+  if (CASH_DEBIT_TYPES.includes(type))  return -amt;
+  return 0;
+}
+
+/* Whether a row moves cash at all — the ledger prints these differently from
+   the accruals, which belong on the statement but not in the balance. */
+const movesCash = txn =>
+  CASH_CREDIT_TYPES.includes(String((txn && txn.type) || '')) ||
+  CASH_DEBIT_TYPES.includes(String((txn && txn.type) || ''));
+
+module.exports = { CASH_CREDIT_TYPES, CASH_DEBIT_TYPES, cashMovementSQL,
+                   cashMovement, movesCash, CASH_MOVEMENT: cashMovement };
