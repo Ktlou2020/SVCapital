@@ -125,16 +125,42 @@ async function seed() {
        type, amount, status, `fixture ${type}`, `${when}T09:00:00Z`, MIGRATED_ON]);
   }
 
-  /* An investment that matured inside the tax year. Its return is on the
-     investment, not in the ledger — creditWallet writes only the payout. */
+  /* Investments that matured inside the tax year. The return realised at
+     maturity is not in the ledger — creditWallet writes only the payout — and
+     it is posted on the POOL as actual_rate, not on the investment.
+
+     The three shapes below are the ones that matter, and the middle one is
+     what a real account looks like: actual_return sits at 0 (its default, not
+     NULL) while the pool carries the posted rate. A rule of
+     COALESCE(actual_return, expected_return, 0) short-circuits on that zero
+     and prints R 0,00 against every matured holding a client owns. */
+  await pool.query(`
+    INSERT INTO investment_pools (id,name,product_type,status,annual_rate,actual_rate,
+        term_months,start_date,end_date,maturity_date,min_investment)
+    VALUES ('TC-P-POSTED','Short Term Investment - October 2024','short_term','matured',
+            0.16,0.0213,12,'2024-10-01','2024-10-31','2025-11-01',500),
+           ('TC-P-OPEN','Cattle Investment - November 2024','cattle','matured',
+            0.16,0,12,'2024-11-01','2024-11-30','2025-11-30',500)`);
+
   await pool.query(`
     INSERT INTO investments (id,investor_id,pool_id,pool_name,amount,status,
         start_date,end_date,annual_rate,term_months,expected_return,actual_return,
         product_type,maturity_instruction)
-    VALUES ('TC-I-MAT','TC-INV',NULL,'Cattle Investment - November 2025',
-            8000,'matured','2024-11-01','2025-11-01',0.0625,12,500,500,'cattle','payout'),
-           ('TC-I-OUT','TC-INV',NULL,'Cattle Investment - June 2026',
-            9000,'matured','2025-06-01','2026-06-01',0.05,12,450,450,'cattle','payout')`);
+    VALUES
+      /* 1. A return written onto the investment itself. Used as-is. */
+      ('TC-I-MAT','TC-INV',NULL,'Cattle Investment - November 2025',
+       8000,'matured','2024-11-01','2025-11-01',0.0625,12,500,500,'cattle','payout'),
+      /* 2. actual_return 0, pool rate posted: 100000 x 0.0213 = 2130. */
+      ('TC-I-RATE','TC-INV','TC-P-POSTED','Short Term Investment - October 2024',
+       100000,'matured','2024-10-01','2025-03-31',0.16,12,9999,0,'short_term','payout'),
+      /* 3. Nothing posted anywhere. Not zero — unknown. expected_return is
+         deliberately large, because using it would put a projection on a tax
+         document. */
+      ('TC-I-NONE','TC-INV','TC-P-OPEN','Cattle Investment - November 2024',
+       50000,'matured','2024-11-01','2025-04-30',0.16,12,7777,0,'cattle','payout'),
+      /* 4. Matured outside the tax year. */
+      ('TC-I-OUT','TC-INV',NULL,'Cattle Investment - June 2026',
+       9000,'matured','2025-06-01','2026-06-01',0.05,12,450,450,'cattle','payout')`);
 }
 
 /* The real router, with only its auth replaced. requireAuth/requireRole are
@@ -270,8 +296,38 @@ const sum   = rows => Math.round((rows || []).reduce((a, r) => a + Math.abs(Numb
       ok('one that matured outside it is not',
          !(body.maturedInvestments || []).some(m => m.id === 'TC-I-OUT'),
          JSON.stringify((body.maturedInvestments || []).map(m => m.id)));
-      ok('its realised return is totalled', Math.abs(Number(body.maturedReturns) - 500) < 0.005,
-         String(body.maturedReturns));
+      const mByIdRaw = Object.fromEntries((body.maturedInvestments || []).map(m => [m.id, m]));
+
+      console.log('\n  the return comes from the pool, the way the payout engine reads it');
+      /* The defect this replaced: 39 matured investments on a real certificate,
+         every one of them printing R 0,00. actual_return defaults to 0 rather
+         than NULL, so COALESCE(actual_return, expected_return, 0) never even
+         looked at the pool. */
+      ok('a posted pool rate is applied to the capital',
+         mByIdRaw['TC-I-RATE'] && Math.abs(Number(mByIdRaw['TC-I-RATE'].realised_return) - 2130) < 0.005,
+         `R100 000 x 2.13% = R2 130, got ${mByIdRaw['TC-I-RATE'] && mByIdRaw['TC-I-RATE'].realised_return}`);
+      ok('even though actual_return on the investment is zero',
+         mByIdRaw['TC-I-RATE'] && mByIdRaw['TC-I-RATE'].return_posted === true,
+         'zero is the column default, not a statement that nothing was earned');
+      ok('a return written on the investment is still used',
+         mByIdRaw['TC-I-MAT'] && Math.abs(Number(mByIdRaw['TC-I-MAT'].realised_return) - 500) < 0.005,
+         String(mByIdRaw['TC-I-MAT'] && mByIdRaw['TC-I-MAT'].realised_return));
+
+      console.log('\n  and nothing posted is reported as unknown, not as zero');
+      ok('an investment with no posted return anywhere is flagged',
+         mByIdRaw['TC-I-NONE'] && mByIdRaw['TC-I-NONE'].return_posted === false,
+         JSON.stringify(mByIdRaw['TC-I-NONE']));
+      ok('its return is null rather than 0',
+         mByIdRaw['TC-I-NONE'] && mByIdRaw['TC-I-NONE'].realised_return === null,
+         'R 0,00 on a tax document says the client earned nothing, which is a different claim');
+      ok("and expected_return is not substituted for it",
+         mByIdRaw['TC-I-NONE'] && Number(mByIdRaw['TC-I-NONE'].realised_return) !== 7777,
+         'expected_return is the projection made when the investment was written');
+      ok('the count of unposted ones is reported', Number(body.maturedUnposted) === 1,
+         `${body.maturedUnposted} — a total that silently omits them looks authoritative`);
+
+      ok('the total is the posted returns only', Math.abs(Number(body.maturedReturns) - (500 + 2130)) < 0.005,
+         `${body.maturedReturns} — expected 2630`);
       ok('and kept out of the credited-income figure',
          Math.abs(Number(body.totalReturns) - 1950) < 0.005,
          'a holding accrued monthly and then matured appears in both — adding them declares it twice');
@@ -309,6 +365,150 @@ const sum   = rows => Math.round((rows || []).reduce((a, r) => a + Math.abs(Numb
     ok('the router requires an admin or director for everything it serves',
        /router\.use\(requireAuth, requireRole\('admin', 'director'\)\)/.test(src),
        'this check replaces that middleware, so it has to be asserted separately');
+
+    /* ── The document, drawn ─────────────────────────────────────────
+       The route can be right and the page still wrong: a figure computed
+       correctly and then printed in the wrong column, or an unknown return
+       rendered as R 0,00, is a defect the endpoint cannot see. */
+    console.log('\nthe document, drawn');
+    {
+      const CHROME = ['/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+                      '/opt/pw-browsers/chromium/chrome-linux/chrome'].find(p => require('fs').existsSync(p));
+      if (!CHROME) {
+        console.log('  SKIP  no headless Chromium — the certificate was not rendered');
+      } else {
+        const os = require('os'), { execFileSync } = require('child_process');
+        const admin = require('fs').readFileSync(path.join(ROOT, 'admin', 'js', 'admin.js'), 'utf8');
+        const at = admin.indexOf('function _openAdminTaxCertWindow(');
+        let i = admin.indexOf('{', admin.indexOf(')', at)), d = 0, end = i;
+        for (; i < admin.length; i++) {
+          if (admin[i] === '{') d++;
+          else if (admin[i] === '}') { d--; if (d === 0) { end = i; break; } }
+        }
+        const fnSrc = admin.slice(at, end + 1);
+        const escSrc = (admin.match(/^const _esc = .*$/m) || [])[0];
+
+        const DATA = {
+          investor: { id: 'S-111628', first_name: 'Devin', last_name: 'Padayachy',
+                      email: 'devin@example.test', id_number: '7202275224082' },
+          taxYear: 2026, from: '2025-03-01', to: '2026-02-28',
+          returns: [], totalReturns: 0,
+          deposits: [{ id: 'd1', txn_date: '2025-06-26', type: 'deposit', description: 'CREDIT', amount: '20000.00' }],
+          totalDeposits: 20000,
+          maturedInvestments: [
+            { id: 'A', pool_name: 'Short Term Investment - October 2024', amount: '80000.00',
+              end_date: '2025-03-31', realised_return: 1704, return_posted: true },
+            { id: 'B', pool_name: 'Cattle Investment - April 2024', amount: '179440.00',
+              end_date: '2025-04-29', realised_return: null, return_posted: false },
+          ],
+          maturedReturns: 1704, maturedUnposted: 1,
+        };
+
+        const tmp = require('fs').mkdtempSync(path.join(os.tmpdir(), 'taxcert-'));
+        require('fs').writeFileSync(path.join(tmp, 'p.html'), `<!doctype html>
+<html><head><meta charset="utf-8"></head><body><div id="doc"></div><div id="probe"></div>
+<script>const ERRORS=[];window.onerror=m=>ERRORS.push(String(m));window.__html='';
+window.location.origin||0;
+window.open=function(){return {document:{write(h){window.__html+=h;},close(){}},focus(){},print(){}};};<\/script>
+<script>${escSrc}
+${fnSrc}
+const out={errors:ERRORS};
+try{_openAdminTaxCertWindow(${JSON.stringify(DATA).replace(/</g, '\\u003c')});out.built='ok';}
+catch(e){out.built='THREW: '+e.message;}
+document.getElementById('doc').innerHTML=window.__html||'';
+const txt=(document.getElementById('doc').textContent||'').replace(/\\s+/g,' ');
+out.len=txt.length;
+/* Read the RETURN CELLS, not the page text.
+   Two traps, both hit on the first attempt: "Not yet posted" also appears in
+   the warning paragraph above the table, so searching the whole document
+   found it even when the cell showed a zero; and headless Chromium renders
+   en-ZA as "1,704.00" while a browser in South Africa renders "1 704,00", so
+   a regex written for one locale silently matched nothing in the other. */
+const mTable=[...document.querySelectorAll('table')].find(t=>/TOTAL RETURNS REALISED/.test(t.textContent));
+const retCells=mTable?[...mTable.querySelectorAll('tbody tr:not(.total-row)')]
+  .map(r=>(r.lastElementChild.textContent||'').trim()):[];
+out.retCells=retCells;
+out.notPosted=retCells.some(c=>/Not yet posted/.test(c));
+out.postedAmount=retCells.some(c=>/1[  ,]704[.,]00/.test(c));
+out.warns=/has no posted return/.test(txt);
+out.headerRange=/1 March 2025 . 28 February 2026/.test(txt);
+out.marchFirst=/1 March 2026/.test(txt);
+/* A zero in the return column is the defect: it states the client earned
+   nothing where the truth is that nobody has posted the figure. Matched in
+   either locale's decimal separator. */
+out.zeroReturn=retCells.some(c=>/^R.?0[.,]00$/.test(c));
+out.stamp=/www\\.svcapital\\.co\\.za/.test(txt);
+out.undef=(txt.match(/undefined/g)||[]).length;
+out.nan=(txt.match(/NaN/g)||[]).length;
+document.getElementById('probe').textContent=JSON.stringify(out);
+<\/script></body></html>`);
+
+        let dom = '';
+        try {
+          dom = execFileSync(CHROME, ['--headless=new', '--disable-gpu', '--no-sandbox',
+            '--virtual-time-budget=5000', '--dump-dom', 'file://' + path.join(tmp, 'p.html')],
+            { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 40000, maxBuffer: 32 * 1024 * 1024 });
+        } catch (e) { dom = (e.stdout || '').toString(); }
+        const mm = dom.match(/id="probe">([\s\S]*?)<\/div>/);
+        let d2 = null;
+        try {
+          d2 = JSON.parse((mm ? mm[1] : '').replace(/&quot;/g, '"').replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'"));
+        } catch (_) {}
+
+        ok('the certificate renders', !!d2 && d2.built === 'ok',
+           d2 ? d2.built : (mm ? mm[1] : dom).slice(0, 300));
+        if (d2 && d2.built === 'ok') {
+          ok('nothing threw', (d2.errors || []).length === 0, JSON.stringify(d2.errors));
+          ok('a posted return prints its amount', d2.postedAmount === true);
+          ok('an unposted one prints "Not yet posted" IN ITS CELL', d2.notPosted === true,
+             `printing R 0,00 tells a client they earned nothing, which is a different claim — cells: ${JSON.stringify(d2.retCells)}`);
+          ok('and no return cell shows a zero', d2.zeroReturn === false,
+             `the defect was 39 matured investments each showing R 0,00 — cells: ${JSON.stringify(d2.retCells)}`);
+          ok('the reader is warned how many are unposted', d2.warns === true);
+          ok('the tax year reads 1 March to 28 February', d2.headerRange === true);
+          ok('and 1 March of the following year appears nowhere', d2.marchFirst === false,
+             'the end of the year rendered as an instant used to roll into the next morning');
+          ok('the shared footer stamp is on it', d2.stamp === true);
+          ok('nothing renders as undefined', d2.undef === 0, String(d2.undef));
+          ok('and none as NaN', d2.nan === 0, String(d2.nan));
+        }
+        if (!process.env.DUMP) require('fs').rmSync(tmp, { recursive: true, force: true });
+      }
+    }
+
+    console.log('\nthe two documents a client receives share one masthead');
+    /* The statement and the certificate go to the same person, often in the
+       same email. Two different letterheads read as two different companies. */
+    {
+      const admin = require('fs').readFileSync(path.join(ROOT, 'admin', 'js', 'admin.js'), 'utf8');
+      const fn = name => {
+        const at = admin.indexOf(`function ${name}(`);
+        const end = admin.indexOf('\nfunction ', at + 10);
+        return admin.slice(at, end > 0 ? end : admin.length);
+      };
+      const cert = fn('_openAdminTaxCertWindow');
+      const stmt = fn('_openAccountStatementWindow');
+      const LOGO = "/assets/sv-capital-logo-horizontal-white-text.png";
+      ok('both use the same logo asset',
+         cert.includes(LOGO) && stmt.includes(LOGO),
+         'the certificate used a text heading while the statement used the logo');
+      ok('both carry the purple rule above the page',
+         /border-top:5px solid #eda5ff/.test(cert) && /border-top:5px solid #eda5ff/.test(stmt));
+      ok('both use the same chrome colour, not two greys',
+         /background:#1f2937/.test(cert) && /background:#1f2937/.test(stmt),
+         'the certificate was #303030 and the statement #1f2937');
+      ok('both close with the same stamp',
+         /SV Capital \(Pty\) Ltd &mdash; www\.svcapital\.co\.za/.test(cert) &&
+         /SV Capital \(Pty\) Ltd &mdash; www\.svcapital\.co\.za/.test(stmt));
+      ok('and both name the client, the account and the period in the footer',
+         /prepared for/.test(cert) && /prepared for/.test(stmt) &&
+         /All amounts are in South African Rand \(ZAR\)/.test(cert));
+      ok('the canonical purple is the only purple on the certificate',
+         !/#[0-9a-fA-F]{6}/.test(cert.replace(/#eda5ff/gi, '')) ||
+         !/(#8b5cf6|#a855f7|#9333ea|#7c3aed|#6d28d9)/i.test(cert),
+         'the platform has one purple and it is #eda5ff');
+    }
 
     console.log('\nand the stray block has not come back');
     const certRoute = src.slice(src.indexOf("router.get('/tax-cert'"),
