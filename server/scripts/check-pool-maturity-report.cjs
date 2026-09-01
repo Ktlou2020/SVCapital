@@ -364,7 +364,7 @@ const get = (port, url) => new Promise((resolve, reject) => {
     {
       const vm = require('vm');
       const admin = fs.readFileSync(path.join(ROOT, 'admin', 'js', 'admin.js'), 'utf8');
-      const at = admin.indexOf('function downloadPoolMaturityPDF(');
+      const at = admin.indexOf('function _buildPoolMaturityPDF(');
       let k = admin.indexOf('{', admin.indexOf(')', at)), depth = 0, end = k;
       for (; k < admin.length; k++) {
         if (admin[k] === '{') depth++;
@@ -391,13 +391,13 @@ const get = (port, url) => new Promise((resolve, reject) => {
       vm.createContext(ctx);
       let threw = null;
       try {
-        vm.runInContext(`${fnSrc}\nthis.__run = () => downloadPoolMaturityPDF();`, ctx);
-        ctx.__run();
+        vm.runInContext(`${fnSrc}\nthis.__run = () => _buildPoolMaturityPDF(_POOL_MATURITY_REPORT);`, ctx);
+        calls.returned = ctx.__run();
       } catch (e) { threw = e.message; }
 
       ok('it runs without throwing', threw === null, String(threw));
-      ok('and saves a file named for the pool',
-         /^SV_Capital_Maturity_Instructions_.+\.pdf$/.test(calls.saved || ''), String(calls.saved));
+      ok('and returns a document for the caller to embed or save',
+         calls.returned === docStub, 'null means the libraries are missing, which is a different outcome');
       ok('with a table for each section',
          calls.tables.length === 3,
          `${calls.tables.length} tables — instructions, destinations, by client`);
@@ -428,8 +428,8 @@ const get = (port, url) => new Promise((resolve, reject) => {
       ok('every page carries the footer',
          calls.text.filter(t => /www\.svcapital\.co\.za/.test(t)).length === 2,
          'two pages in the stub, so two footers');
-      ok('and it reports success rather than failing silently',
-         calls.toasts.some(t => t.startsWith('ok:')), JSON.stringify(calls.toasts));
+      ok('and it reports nothing — the caller decides what to do with it',
+         calls.toasts.length === 0, JSON.stringify(calls.toasts));
     }
 
     console.log('\nthe console can draw and export it');
@@ -447,14 +447,31 @@ const get = (port, url) => new Promise((resolve, reject) => {
       ok('and a PDF download that produces a file, not a print dialog',
          /function downloadPoolMaturityPDF/.test(admin) && /doc\.save\(/.test(admin),
          'this report is filed and forwarded, not just read on screen');
-      ok('the PDF is offered alongside the CSV on the report',
-         /_back\('downloadPoolMaturityPDF'\)/.test(admin) && /_back\('downloadPoolMaturityCSV'\)/.test(admin));
-      ok('a closed console window is reported rather than silently doing nothing',
-         /has been closed\. Reopen the report/.test(admin),
-         'both files are built by the console, which owns jsPDF and the data');
-      ok('the PDF degrades to Print if jsPDF or autoTable is missing',
-         /PDF library unavailable/.test(admin) && /PDF table plugin unavailable/.test(admin),
-         'both come from a CDN and either can fail to load');
+      /* The report window is a document.write into about:blank, and what a
+         download needs there is specific. Driving the real popup over CDP
+         showed: a data: anchor in that window downloads, a blob: anchor in it
+         does NOT, and the first version's cross-window callback left every
+         failure reporting through Toast in the console behind the report — so
+         a broken button and a working one looked identical.
+
+         Hence: both files embedded as data: URLs on real anchors. No opener,
+         no blob, one gesture in the window the person is looking at. */
+      ok('the download controls are anchors carrying the file, not callbacks',
+         /<a class="btn-csv" href="\$\{csvHref\}" download=/.test(admin) &&
+         /<a class="btn-pdf" href="\$\{pdfHref\}" download=/.test(admin),
+         'a cross-window call depends on window.opener surviving; an anchor does not');
+      ok('and nothing calls back into the opener any more',
+         !/_back\('download/.test(admin) && !/window\.opener\.downloadPoolMaturity/.test(admin));
+      ok('the CSV is a data: URL, which is what downloads from that window',
+         /'data:text\/csv;charset=utf-8;base64,' \+ b64\(/.test(admin),
+         'a blob: URL in a document.write popup silently fails to download');
+      ok('and the PDF is embedded the same way, not saved from the console',
+         /pdfDoc\.output\('datauristring'\)/.test(admin));
+      ok('a PDF that cannot be built shows a note instead of a dead button',
+         /PDF unavailable &mdash; use Print/.test(admin),
+         'jsPDF and autoTable come from a CDN and either can fail to load');
+      ok('and the builder returns null rather than toasting into the wrong window',
+         /function _buildPoolMaturityPDF\(d\) \{[\s\S]{0,400}return null;/.test(admin));
       ok('and the console loads both libraries',
          /jspdf\.umd\.min\.js/.test(fs.readFileSync(path.join(ROOT, 'admin', 'index.html'), 'utf8')) &&
          /jspdf\.plugin\.autotable/.test(fs.readFileSync(path.join(ROOT, 'admin', 'index.html'), 'utf8')));
