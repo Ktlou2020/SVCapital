@@ -5666,7 +5666,20 @@ function renderPoolsGrid() {
         <div class="pool-card__actions">
           <button class="btn btn--secondary btn--sm flex-1" onclick='editPool(${_esc(JSON.stringify(p.id))})'><i class="fa-solid fa-pen"></i> Edit</button>
           <button class="btn btn--secondary btn--sm" onclick='openFactsheetManager(${_esc(JSON.stringify(p.id))},${_esc(JSON.stringify(p.name))})' title="Manage factsheets"><i class="fa-solid fa-file-pdf" style="color:#ef4444"></i></button>
-          <button class="btn btn--secondary btn--sm" onclick='openPoolMaturityReport(${_esc(JSON.stringify(p.id))})' title="Maturity instruction report"><i class="fa-solid fa-list-check" style="color:#22c55e"></i> Maturity</button>
+          ${/* The maturity report is about money leaving a pool, so it only
+                means anything once the pool has matured. On an open pool it
+                would report an allocation nobody has been asked for yet.
+
+                The raise report is the mirror: it is about money that came IN,
+                and it is complete the moment the pool stops raising — which is
+                when the cycler moves it from 'open' to 'active'. Both are
+                offered from the point they become truthful, and not before. */
+            p.status === 'matured'
+            ? `<button class="btn btn--secondary btn--sm" onclick='openPoolMaturityReport(${_esc(JSON.stringify(p.id))})' title="Maturity instruction report"><i class="fa-solid fa-list-check" style="color:#22c55e"></i> Maturity</button>`
+            : ''}
+          ${!['open', 'waitlist', 'filling'].includes(p.status)
+            ? `<button class="btn btn--secondary btn--sm" onclick='openPoolRaiseReport(${_esc(JSON.stringify(p.id))})' title="Raise report — where the money came from"><i class="fa-solid fa-arrow-down-short-wide" style="color:#eda5ff"></i> Raise</button>`
+            : ''}
           <button class="btn btn--secondary btn--sm" onclick='openMergePoolModal(${_esc(JSON.stringify(p.id))})' title="Merge into another pool"><i class="fa-solid fa-code-merge"></i> Merge</button>
           <button class="btn btn--danger btn--sm" onclick='deletePool(${_esc(JSON.stringify(p.id))})'><i class="fa-solid fa-trash"></i></button>
           ${manageDropdown}
@@ -10969,6 +10982,388 @@ function setupGlobalSearch() {
   document.addEventListener('click', e => {
     if (!input.parentElement.contains(e.target)) close();
   });
+}
+
+/* ═══════════════════════════════════════════════
+   POOL RAISE REPORT
+   Where a closed pool's money came from, and what the raise cost.
+   ═══════════════════════════════════════════════ */
+let _POOL_RAISE_REPORT = null;
+
+async function openPoolRaiseReport(poolId) {
+  Toast.info('Building raise report…');
+  try {
+    const data = await API._fetch('GET', 'admin/pool-raise-report', null, { pool_id: poolId });
+    if (data.error) throw new Error(data.error);
+    if (!data.rows.length) { Toast.error('This pool has no investments to report on'); return; }
+    _POOL_RAISE_REPORT = data;
+    _openPoolRaiseReportWindow(data);
+  } catch (e) {
+    Toast.error('Raise report failed: ' + (e.message || 'error'));
+  }
+}
+
+const _poolRaiseFileBase = d =>
+  `SV_Capital_Raise_${String(d.pool.name || d.pool.id).replace(/[^A-Za-z0-9]+/g, '_')}`;
+
+function _poolRaiseCSVRows(d) {
+  const rows = [[
+    'Investment ID', 'Holder', 'Holder ID', 'Sub-account', 'Amount', 'Source',
+    'Source pool', 'Source product', 'Platform fee paid', 'Platform fee expected',
+    'Upfront fee', 'EVA', 'Net of upfront fee', 'Status', 'Started',
+  ]];
+  for (const r of d.rows) {
+    rows.push([
+      r.investmentId, r.holderName || '', r.holderId || '', r.isSubAccount ? 'yes' : 'no',
+      r.amount, r.kindLabel, r.sourcePoolName || '', r.sourceProductType || '',
+      r.platformFeePaid, r.platformFeeExpected, r.upfrontFee, r.eva, r.netAmount,
+      r.status || '', r.startDate ? String(r.startDate).slice(0, 10) : '',
+    ]);
+  }
+  rows.push([]);
+  rows.push(['TOTAL RAISED', '', '', '', d.totals.raised]);
+  rows.push(['New money', '', '', '', d.totals.newMoney]);
+  rows.push(['Reinvested', '', '', '', d.totals.reinvested]);
+  rows.push(['Switched in', '', '', '', d.totals.switchedIn]);
+  if (d.totals.sourceUnknown > 0) rows.push(['Reinvested, source not recorded', '', '', '', d.totals.sourceUnknown]);
+  rows.push(['Platform fees paid', '', '', '', d.totals.platformFeesPaid]);
+  rows.push(['Upfront fees', '', '', '', d.totals.upfrontFees]);
+  rows.push(['Investors', '', '', '', d.totals.investors]);
+  rows.push(['Investments', '', '', '', d.totals.investments]);
+  return rows;
+}
+
+function _poolRaiseCSVText(d) {
+  return '﻿' + _poolRaiseCSVRows(d).map(r => r.map(cell => {
+    const c = String(cell == null ? '' : cell).replace(/"/g, '""');
+    return /[,"\n\r]/.test(c) ? `"${c}"` : c;
+  }).join(',')).join('\r\n');
+}
+
+function downloadPoolRaiseCSV() {
+  const d = _POOL_RAISE_REPORT;
+  if (!d) { Toast.error('Open the report first'); return; }
+  _downloadCSV(_poolRaiseCSVRows(d), `${_poolRaiseFileBase(d)}.csv`);
+}
+
+function _buildPoolRaisePDF(d) {
+  if (!d || !window.jspdf || !window.jspdf.jsPDF) return null;
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+  if (typeof doc.autoTable !== 'function') return null;
+
+  const money = n => 'R ' + parseFloat(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const day = v => { const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? `${+m[3]} ${MONTHS[+m[2] - 1]} ${m[1]}` : '—'; };
+  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+  const PURPLE = [237,165,255], INK = [31,41,55], MUTED = [107,114,128], AMBER = [180,83,9];
+
+  doc.setFillColor(PURPLE[0], PURPLE[1], PURPLE[2]); doc.rect(0, 0, W, 5, 'F');
+  doc.setTextColor(INK[0], INK[1], INK[2]); doc.setFont('helvetica','bold'); doc.setFontSize(16);
+  doc.text('Pool Raise Report', 40, 44);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9);
+  doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+  doc.text(String(d.pool.name || ''), 40, 60);
+  doc.text(`Raised ${day(d.pool.openedOn)} to ${day(d.pool.closedOn)}  ·  ${d.pool.productType || ''}`, 40, 73);
+  doc.text('SV Capital (Pty) Ltd — FSCA Regulated Financial Services Provider', W - 40, 44, { align: 'right' });
+  doc.text(`Issued ${new Date().toLocaleString('en-ZA', { dateStyle: 'long', timeStyle: 'short' })}`, W - 40, 60, { align: 'right' });
+
+  doc.setTextColor(INK[0], INK[1], INK[2]); doc.setFont('helvetica','bold'); doc.setFontSize(10);
+  doc.text(`Total raised ${money(d.totals.raised)}     ${d.totals.investments} investments · ${d.totals.investors} investors`, 40, 94);
+
+  const table = (head, body, startY) => {
+    doc.autoTable({ head: [head], body, startY,
+      styles: { fontSize: 7.5, cellPadding: 3, overflow: 'linebreak', textColor: [17,17,17] },
+      headStyles: { fillColor: [243,244,246], textColor: [55,65,81], fontStyle: 'bold' },
+      margin: { left: 40, right: 40 }, theme: 'grid' });
+    return doc.lastAutoTable.finalY + 20;
+  };
+  const heading = (t, atY) => {
+    doc.setTextColor(INK[0], INK[1], INK[2]); doc.setFont('helvetica','bold'); doc.setFontSize(9);
+    doc.text(t, 40, atY); return atY + 8;
+  };
+
+  let y = heading('Where the money came from', 116);
+  const composition = [
+    ['New money', String(d.totals.newMoneyCount), money(d.totals.newMoney)],
+    ['Reinvested from the same product', String(d.totals.reinvestedCount), money(d.totals.reinvested)],
+    ['Switched in from another product', String(d.totals.switchedInCount), money(d.totals.switchedIn)],
+  ];
+  if (d.totals.sourceUnknown > 0) {
+    composition.push(['Reinvested — source pool not recorded', String(d.totals.sourceUnknownCount), money(d.totals.sourceUnknown)]);
+  }
+  composition.push(['TOTAL RAISED', String(d.totals.investments), money(d.totals.raised)]);
+  y = table(['Source', 'Investments', 'Amount'], composition, y);
+
+  if (d.sources.length) {
+    y = heading('Rolled in, by the pool it came from', y);
+    y = table(['Source pool', 'Product', 'Switched', 'Investments', 'Investors', 'Amount'],
+      d.sources.map(sc => [
+        sc.poolName || 'Not recorded', sc.productType || '—', sc.isSwitch ? 'yes' : 'no',
+        String(sc.count), String(sc.investors), money(sc.amount),
+      ]), y);
+  }
+
+  y = heading('Fees', y);
+  const feeRows = [
+    ['Platform fees paid (1% on new money)', money(d.totals.platformFeesPaid)],
+    ['Upfront fees (' + ((d.pool.managementFeePct || 0) * 100).toFixed(2) + '% management, taken once)', money(d.totals.upfrontFees)],
+    ['of which EVA', money(d.totals.eva)],
+    ['Net of upfront fee', money(d.totals.netRaised)],
+  ];
+  if (d.totals.platformFeeShortfall > 0.005) {
+    feeRows.splice(1, 0, ['Platform fees expected but not recorded', money(d.totals.platformFeeShortfall)]);
+  }
+  y = table(['', 'Amount'], feeRows, y);
+
+  y = heading('By investment', y);
+  table(['Holder', 'Amount', 'Source', 'Source pool', 'Platform fee', 'Upfront fee', 'Net'],
+    d.rows.map(r => [
+      (r.holderName || '—') + (r.isSubAccount ? ' (sub)' : ''),
+      money(r.amount), r.kindLabel, r.sourcePoolName || '—',
+      money(r.platformFeePaid), money(r.upfrontFee), money(r.netAmount),
+    ]), y);
+
+  const pages = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= pages; i++) {
+    doc.setPage(i);
+    doc.setFont('helvetica','normal'); doc.setFontSize(7);
+    doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+    doc.text('Reinvested and switched money is fee-free: it moves from a matured holding straight into this pool without passing through a wallet. ' +
+             'Platform fees shown are the fee transactions actually recorded. The upfront fee is a deduction, not a transaction, and is computed from the pool’s management fee.',
+             40, H - 26);
+    doc.text('SV Capital (Pty) Ltd — www.svcapital.co.za', 40, H - 15);
+    doc.text(`Page ${i} of ${pages}`, W - 40, H - 15, { align: 'right' });
+  }
+  return doc;
+}
+
+function downloadPoolRaisePDF() {
+  const d = _POOL_RAISE_REPORT;
+  if (!d) { Toast.error('Open the report first'); return; }
+  const doc = _buildPoolRaisePDF(d);
+  if (!doc) { Toast.error('PDF library unavailable — use Print instead'); return; }
+  doc.save(`${_poolRaiseFileBase(d)}.pdf`);
+  Toast.success('PDF downloaded');
+}
+
+function _openPoolRaiseReportWindow(d) {
+  /* Same embedding as the maturity report, for the same reason: a data: anchor
+     in a document.write window downloads, a callback into this one is fragile
+     and reports its failures where nobody is looking. */
+  const fileBase = _poolRaiseFileBase(d);
+  const b64 = str => btoa(unescape(encodeURIComponent(str)));
+  const csvHref = 'data:text/csv;charset=utf-8;base64,' + b64(_poolRaiseCSVText(d));
+  let pdfHref = null;
+  try { const doc = _buildPoolRaisePDF(d); if (doc) pdfHref = doc.output('datauristring'); }
+  catch (e) { console.error('[raise report] PDF build failed:', e); }
+
+  const fmt = n => 'R ' + parseFloat(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const fmtDate = v => { const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? `${+m[3]} ${MONTHS_SHORT[+m[2] - 1]} ${m[1]}` : '—'; };
+  const pct = r => r == null ? '—' : (r * 100).toFixed(2) + '%';
+  const issuedAt = new Date().toLocaleString('en-ZA', { dateStyle: 'long', timeStyle: 'short' });
+  const _logoUrl = window.location.origin + '/assets/sv-capital-logo-horizontal-white-text.png';
+  const ref = `SVCRR-${String(d.pool.id).replace(/[^A-Za-z0-9]/g, '').slice(-10)}`;
+  const t = d.totals;
+
+  const sourceRows = d.sources.map(sc => `
+    <tr>
+      <td>${sc.poolName ? _esc(sc.poolName) : '<span style="color:#b45309">Not recorded</span>'}</td>
+      <td>${_esc(sc.productType || '—')}</td>
+      <td>${sc.isSwitch ? '<span class="tag-switch">switched</span>' : '<span style="color:#6b7280">same product</span>'}</td>
+      <td class="num">${sc.count}</td>
+      <td class="num">${sc.investors}</td>
+      <td class="amt">${fmt(sc.amount)}</td>
+    </tr>`).join('');
+
+  const invRows = d.rows.map(r => `
+    <tr>
+      <td>${_esc(r.holderName || '—')}${r.isSubAccount ? ' <span class="tag-sub">sub</span>' : ''}</td>
+      <td class="amt">${fmt(r.amount)}</td>
+      <td>${_esc(r.kindLabel)}${r.kind === 'switch' ? ' <span class="tag-switch">switched</span>' : ''}</td>
+      <td>${r.sourcePoolName ? _esc(r.sourcePoolName) : '<span style="color:#d1d5db">—</span>'}</td>
+      <td class="amt">${r.platformFeePaid > 0 ? fmt(r.platformFeePaid)
+        : (r.kind === 'new' && r.platformFeeExpected > 0
+            ? `<span style="color:#b45309">none recorded</span>`
+            : '<span style="color:#d1d5db">fee-free</span>')}</td>
+      <td class="amt">${fmt(r.upfrontFee)}</td>
+      <td class="amt">${fmt(r.netAmount)}</td>
+    </tr>`).join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<title>SV Capital — Raise Report — ${_esc(d.pool.name)}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,Helvetica,sans-serif;background:#fff;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:12px}
+@page{size:A4 landscape;margin:12mm 14mm}
+@media print{.no-print{display:none!important}.wrap{margin-top:0!important}}
+.no-print{position:fixed;top:0;left:0;right:0;background:#1f2937;padding:9px 20px;display:flex;justify-content:space-between;align-items:center;z-index:99;gap:10px;flex-wrap:wrap}
+.no-print span{color:#fff;font-size:12px;font-weight:600;flex:1}
+.no-print .btn-row{display:flex;gap:8px}
+.no-print button,.no-print a{border:none;padding:7px 16px;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-block;line-height:1.2}
+.btn-print{background:#e5e7eb;color:#111}.btn-csv{background:#22c55e;color:#fff}.btn-pdf{background:#eda5ff;color:#111}
+.btn-note{background:#4b5563;color:#fff;padding:7px 16px;border-radius:5px;font-size:12px;font-weight:700}
+.wrap{max-width:1100px;margin:52px auto 32px;padding:24px 30px;border-top:5px solid #eda5ff}
+.hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:14px;border-bottom:3px solid #1f2937;margin-bottom:18px}
+.hdr-brand p{font-size:10px;color:#6b7280;margin-top:7px}
+.hdr-right{text-align:right}
+.stmt-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#9ca3af;margin-bottom:3px}
+.stmt-title{font-size:20px;font-weight:800;color:#1f2937;margin-bottom:4px}
+.stmt-meta{font-size:10px;color:#6b7280;line-height:1.6}
+.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+.sum-box{border:1.5px solid #e5e7eb;border-radius:7px;padding:11px 13px}
+.sum-box.green{border-color:#bbf7d0;background:#f0fdf4}
+.sum-box.blue{border-color:#bfdbfe;background:#eff6ff}
+.sum-box.purple{border-color:#e9d5ff;background:#faf5ff}
+.sum-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;margin-bottom:4px}
+.sum-amt{font-size:17px;font-weight:800;color:#1f2937}
+.sum-sub{font-size:9px;color:#6b7280;margin-top:3px}
+.sec-hdr{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;padding:6px 10px;border-radius:5px;margin:18px 0 8px;background:#f3f4f6;color:#374151}
+table{width:100%;border-collapse:collapse;font-size:10.5px}
+th{background:#f9fafb;text-align:left;padding:6px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;border-bottom:1.5px solid #e5e7eb}
+td{padding:6px 8px;border-bottom:1px solid #f3f4f6;vertical-align:top}
+.amt,.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tr.total-row td{font-weight:800;background:#f9fafb;border-top:1.5px solid #d1d5db}
+.tag-switch{display:inline-block;background:#ede9fe;color:#5b21b6;font-size:8px;font-weight:800;padding:1px 5px;border-radius:99px;text-transform:uppercase;letter-spacing:.05em}
+.tag-sub{display:inline-block;background:#e5e7eb;color:#374151;font-size:8px;font-weight:700;padding:1px 5px;border-radius:99px}
+.warning{background:#fffbeb;border:1.5px solid #f59e0b;border-radius:6px;padding:10px 13px;margin-bottom:16px;font-size:10.5px;color:#78350f;line-height:1.6}
+.footer{border-top:1px solid #e5e7eb;padding-top:11px;font-size:9px;color:#6b7280;line-height:1.7;margin-top:14px}
+.footer strong{color:#374151}
+.stamp{display:inline-block;border:2px solid #eda5ff;color:#eda5ff;padding:4px 11px;border-radius:3px;font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-top:10px}
+</style></head><body>
+<div class="no-print">
+  <span>SV Capital &mdash; Raise Report &nbsp;&middot;&nbsp; ${_esc(d.pool.name)}</span>
+  <div class="btn-row">
+    ${pdfHref
+      ? `<a class="btn-pdf" href="${pdfHref}" download="${fileBase}.pdf">Download PDF</a>`
+      : `<span class="btn-note" title="jsPDF did not load in the admin console">PDF unavailable &mdash; use Print</span>`}
+    <a class="btn-csv" href="${csvHref}" download="${fileBase}.csv">Download CSV</a>
+    <button class="btn-print" onclick="window.print()">Print</button>
+  </div>
+</div>
+<div class="wrap">
+  <div class="hdr">
+    <div class="hdr-brand">
+      <div style="background:#1f2937;padding:10px 18px;border-radius:8px;display:inline-block"><img src="${_logoUrl}" style="height:46px;width:auto;display:block" alt="SV Capital"></div>
+      <p>FSCA Regulated Financial Services Provider &middot; <span style="color:#eda5ff;font-weight:600">www.svcapital.co.za</span></p>
+    </div>
+    <div class="hdr-right">
+      <div class="stmt-lbl">Document Type</div>
+      <div class="stmt-title">Pool Raise Report</div>
+      <div class="stmt-meta">Ref: <strong>${ref}</strong><br>Pool: ${_esc(d.pool.name)}<br>
+        Raised ${fmtDate(d.pool.openedOn)} &ndash; ${fmtDate(d.pool.closedOn)} &middot; Rate ${pct(d.pool.annualRate)}<br>
+        Issued: ${issuedAt}</div>
+    </div>
+  </div>
+
+  ${t.sourceUnknown > 0 ? `<div class="warning">
+    <strong>${fmt(t.sourceUnknown)} across ${t.sourceUnknownCount} investment(s) is recorded as reinvested but carries no source pool.</strong>
+    It is counted in the total raised and shown separately below. The source is recovered from the rollover's
+    transaction reference, so a holding written before that record existed cannot be traced back.
+  </div>` : ''}
+
+  ${t.platformFeeShortfall > 0.005 ? `<div class="warning">
+    <strong>${fmt(t.platformFeeShortfall)} of platform fee is expected on the new money but has no fee transaction recorded.</strong>
+    "Fees paid" below counts the transactions that exist, not the rule applied to the balances.
+  </div>` : ''}
+
+  <div class="summary">
+    <div class="sum-box">
+      <div class="sum-lbl">Total raised</div>
+      <div class="sum-amt">${fmt(t.raised)}</div>
+      <div class="sum-sub">${t.investments} investment${t.investments === 1 ? '' : 's'} &middot; ${t.investors} investor${t.investors === 1 ? '' : 's'}</div>
+    </div>
+    <div class="sum-box blue">
+      <div class="sum-lbl">New money</div>
+      <div class="sum-amt">${fmt(t.newMoney)}</div>
+      <div class="sum-sub">${t.newMoneyCount} investment${t.newMoneyCount === 1 ? '' : 's'} &middot; carries the platform fee</div>
+    </div>
+    <div class="sum-box green">
+      <div class="sum-lbl">Reinvested</div>
+      <div class="sum-amt">${fmt(t.reinvested)}</div>
+      <div class="sum-sub">${t.reinvestedCount} rolled over from the same product</div>
+    </div>
+    <div class="sum-box purple">
+      <div class="sum-lbl">Switched in</div>
+      <div class="sum-amt">${fmt(t.switchedIn)}</div>
+      <div class="sum-sub">${t.switchedInCount} moved from another product</div>
+    </div>
+  </div>
+
+  <div class="summary">
+    <div class="sum-box">
+      <div class="sum-lbl">Platform fees paid</div>
+      <div class="sum-amt">${fmt(t.platformFeesPaid)}</div>
+      <div class="sum-sub">1% on new money; rollovers are fee-free</div>
+    </div>
+    <div class="sum-box">
+      <div class="sum-lbl">Upfront fees</div>
+      <div class="sum-amt">${fmt(t.upfrontFees)}</div>
+      <div class="sum-sub">${pct(d.pool.managementFeePct)} management, taken once</div>
+    </div>
+    <div class="sum-box">
+      <div class="sum-lbl">Net of upfront fee</div>
+      <div class="sum-amt">${fmt(t.netRaised)}</div>
+      <div class="sum-sub">what the pool works with</div>
+    </div>
+    <div class="sum-box">
+      <div class="sum-lbl">Investors &middot; Investments</div>
+      <div class="sum-amt">${t.investors} &middot; ${t.investments}</div>
+      <div class="sum-sub">a holder counted once, sub-accounts separately</div>
+    </div>
+  </div>
+
+  <div class="sec-hdr">Where the money came from</div>
+  <table>
+    <thead><tr><th>Source</th><th class="num">Investments</th><th class="amt">Amount</th><th class="amt">Share</th></tr></thead>
+    <tbody>
+      <tr><td>New money</td><td class="num">${t.newMoneyCount}</td><td class="amt">${fmt(t.newMoney)}</td><td class="amt">${t.raised ? ((t.newMoney / t.raised) * 100).toFixed(1) + '%' : '—'}</td></tr>
+      <tr><td>Reinvested from the same product</td><td class="num">${t.reinvestedCount}</td><td class="amt">${fmt(t.reinvested)}</td><td class="amt">${t.raised ? ((t.reinvested / t.raised) * 100).toFixed(1) + '%' : '—'}</td></tr>
+      <tr><td>Switched in from another product</td><td class="num">${t.switchedInCount}</td><td class="amt">${fmt(t.switchedIn)}</td><td class="amt">${t.raised ? ((t.switchedIn / t.raised) * 100).toFixed(1) + '%' : '—'}</td></tr>
+      ${t.sourceUnknown > 0 ? `<tr><td>Reinvested &mdash; source pool not recorded</td><td class="num">${t.sourceUnknownCount}</td><td class="amt">${fmt(t.sourceUnknown)}</td><td class="amt">${((t.sourceUnknown / t.raised) * 100).toFixed(1)}%</td></tr>` : ''}
+      <tr class="total-row"><td>TOTAL RAISED</td><td class="num">${t.investments}</td><td class="amt">${fmt(t.raised)}</td><td class="amt">100%</td></tr>
+    </tbody>
+  </table>
+
+  ${d.sources.length ? `
+  <div class="sec-hdr">Rolled in, by the pool it came from</div>
+  <table>
+    <thead><tr><th>Source pool</th><th>Product</th><th>Kind</th><th class="num">Investments</th><th class="num">Investors</th><th class="amt">Amount</th></tr></thead>
+    <tbody>${sourceRows}</tbody>
+  </table>` : ''}
+
+  <div class="sec-hdr">By investment</div>
+  <table>
+    <thead><tr><th>Holder</th><th class="amt">Amount</th><th>Source</th><th>Source pool</th><th class="amt">Platform fee</th><th class="amt">Upfront fee</th><th class="amt">Net</th></tr></thead>
+    <tbody>
+      ${invRows}
+      <tr class="total-row"><td>TOTAL</td><td class="amt">${fmt(t.raised)}</td><td></td><td></td><td class="amt">${fmt(t.platformFeesPaid)}</td><td class="amt">${fmt(t.upfrontFees)}</td><td class="amt">${fmt(t.netRaised)}</td></tr>
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <strong>SV Capital (Pty) Ltd</strong> &mdash; FSCA Regulated Financial Services Provider.<br>
+    This report covers <strong>${_esc(d.pool.name)}</strong> and the money raised into it between
+    ${fmtDate(d.pool.openedOn)} and ${fmtDate(d.pool.closedOn)}.
+    Reinvested and switched money is fee-free: it moves from a matured holding straight into this pool
+    without passing through a wallet. Platform fees shown are the fee transactions actually recorded.
+    The upfront fee is a deduction rather than a transaction and is computed from the pool's management
+    fee of ${pct(d.pool.managementFeePct)}. All amounts are in South African Rand (ZAR).<br>
+    <strong>Ref:</strong> ${ref} &middot; <strong>Issued:</strong> ${issuedAt} &middot; <strong>Generated by:</strong> SV Capital Admin Console<br>
+    <div class="stamp">SV Capital (Pty) Ltd &mdash; www.svcapital.co.za</div>
+  </div>
+</div>
+</body></html>`;
+
+  const win = window.open('', '_blank', 'width=1200,height=900');
+  if (!win) { Toast.error('Allow pop-ups to open the report'); return; }
+  win.document.write(html);
+  win.document.close();
+  win.focus();
 }
 
 /* ═══════════════════════════════════════════════

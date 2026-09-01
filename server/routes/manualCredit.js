@@ -509,6 +509,26 @@ router.get('/maturity-preflight', async (req, res) => {
 
    Read-only. Admin/director only, via the router-level guard at the top.
    ──────────────────────────────────────────────────────────────────── */
+/* ─── GET /api/admin/pool-raise-report?pool_id=X ──────────────────────
+   The mirror of the maturity report: where a pool's money CAME FROM, and
+   what the raise cost. Read once a pool has closed to new money.
+
+   Read-only. Admin/director only, via the router-level guard at the top.
+   ──────────────────────────────────────────────────────────────────── */
+router.get('/pool-raise-report', async (req, res) => {
+  try {
+    const poolId = req.query.pool_id;
+    if (!poolId) return res.status(400).json({ error: 'pool_id is required' });
+    const { buildRaiseReport } = require('../services/poolRaiseReport');
+    const report = await buildRaiseReport(pool, poolId);
+    if (report.error === 'not_found') return res.status(404).json({ error: 'Pool not found' });
+    return res.json(report);
+  } catch (err) {
+    console.error('[pool-raise-report]', err);
+    return res.status(500).json({ error: 'Report failed: ' + err.message });
+  }
+});
+
 router.get('/pool-maturity-report', async (req, res) => {
   try {
     const poolId = req.query.pool_id;

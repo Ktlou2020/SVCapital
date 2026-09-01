@@ -847,21 +847,17 @@ router.get('/investment_pools/:id/investors', requireAuth, async (req, res) => {
       ORDER BY inv.start_date DESC NULLS LAST
     `, [req.params.id]);
 
-    // Augment each row with fee breakdown
-    const PLATFORM_FEE_PCT = 0.01;
+    /* Fee breakdown from services/poolFees, not restated here. The raise
+       report shows the same figures to the same people, and two copies of this
+       arithmetic would eventually disagree in front of them. */
+    const { feesFor } = require('../services/poolFees');
     rows.forEach(r => {
-      const amt         = parseFloat(r.amount) || 0;
-      const platformFee = r.is_reinvestment ? 0 : Math.round(amt * PLATFORM_FEE_PCT * 100) / 100;
-      const upfrontFee  = Math.round(amt * mgmtFeePct * 100) / 100;
-      // EVA is evaRate% of the upfront fee net of 15% VAT — taken from the upfront fee, not additional
-      const evaCalc     = Math.round((upfrontFee / 1.15) * evaRate * 100) / 100;
-      const totalFees   = Math.round((platformFee + upfrontFee) * 100) / 100;
-      const netAmount   = Math.round((amt - upfrontFee) * 100) / 100;
-      r.platform_fee    = platformFee;
-      r.upfront_fee     = upfrontFee;
-      r.eva_contribution = evaCalc;
-      r.total_fees      = totalFees;
-      r.net_amount      = netAmount;
+      const f = feesFor({ amount: r.amount, isReinvestment: r.is_reinvestment, mgmtFeePct, evaRate });
+      r.platform_fee     = f.platformFee;
+      r.upfront_fee      = f.upfrontFee;
+      r.eva_contribution = f.eva;
+      r.total_fees       = f.totalFees;
+      r.net_amount       = f.netAmount;
     });
 
     const activeRows = rows.filter(r => r.investment_status !== 'cancelled');
