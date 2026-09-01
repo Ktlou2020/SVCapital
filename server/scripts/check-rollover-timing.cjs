@@ -22,8 +22,10 @@
  *      that product type — the current month-end one included — before a cent
  *      moved, so R3.9m of rollovers would have landed in a successor minted
  *      moments earlier, on a different close date and term. The sweep now
- *      only deploys pools that have passed their own close date, so a pool
- *      still inside its fundraising window survives it.
+ *      only deploys pools that have reached their own investment start date,
+ *      so a pool still inside its fundraising window survives it — and a pool
+ *      closing tonight has an investment start date of tomorrow, so it is
+ *      still raising when the rollovers arrive.
  *
  *      Both halves are held here: the current pool keeps its rollovers, and
  *      the sweep still deploys pools that really have closed — narrowing it
@@ -248,9 +250,29 @@ const statusOf = async id => (await pool.query(
          'the ordering is what makes the sweep able to move the target');
       const cyc = require('fs').readFileSync(
         path.join(ROOT, 'server', 'jobs', 'poolCyclerCron.js'), 'utf8');
-      ok('the cycler never touches a pool closing today',
-         /end_date < CURRENT_DATE/.test(cyc),
-         'strict less-than is what keeps today\'s pool open through the 23:00 run');
+      ok('the cycler runs at 00:01 SAST',
+         /cron\.schedule\('1 0 \* \* \*'/.test(cyc) && /timezone: 'Africa\/Johannesburg'/.test(cyc));
+
+      /* Behavioural, not a regex on the source: run the job against a pool
+         closing today and see whether it survives. Its investment start date
+         is tomorrow, so it must — that one day is the whole reason a rollover
+         at 23:00 tonight has anywhere to go. */
+      await pool.query(`DELETE FROM investment_pools WHERE id LIKE 'RT-TODAY%'`);
+      await pool.query(`
+        INSERT INTO investment_pools (id,name,product_type,status,annual_rate,term_months,
+            start_date,end_date,maturity_date,min_investment,cycled_at)
+        VALUES ('RT-TODAY','Cattle - closing today','cattle','open',0.16,12,
+                CURRENT_DATE-25, CURRENT_DATE, CURRENT_DATE+365, 500, NULL)`);
+      const log3 = console.log; console.log = quiet;
+      await cycleExpiredPools();
+      console.log = log3;
+      const successorOfToday = (await pool.query(
+        `SELECT id FROM investment_pools WHERE id LIKE 'RT-TODAY-CYC-%'`)).rows.length;
+      ok('a pool closing today is left open — its investment start date is tomorrow',
+         await statusOf('RT-TODAY') === 'open',
+         `RT-TODAY is "${await statusOf('RT-TODAY')}"`);
+      ok('and no successor was minted for it a day early', successorOfToday === 0,
+         `${successorOfToday} successor(s) exist`);
     }
 
     console.log(`\n${pass} passed, ${fail} failed`);
@@ -261,7 +283,7 @@ const statusOf = async id => (await pool.query(
     await pool.query(`DELETE FROM investments WHERE investor_id LIKE 'RT-%' OR pool_id LIKE 'RT-%'`).catch(() => {});
     await pool.query(`DELETE FROM transactions WHERE investor_id LIKE 'RT-%'`).catch(() => {});
     await pool.query(`DELETE FROM investors WHERE id LIKE 'RT-%'`).catch(() => {});
-    await pool.query(`DELETE FROM investment_pools WHERE id LIKE 'RT-%' OR id LIKE 'RT-SWEEP%'`).catch(() => {});
+    await pool.query(`DELETE FROM investment_pools WHERE id LIKE 'RT-%' OR id LIKE 'RT-SWEEP%' OR id LIKE 'RT-TODAY%'`).catch(() => {});
     await pool.end();
     process.exit(fail ? 1 : 0);
   }
