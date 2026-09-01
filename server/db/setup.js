@@ -1107,6 +1107,11 @@ CREATE TABLE IF NOT EXISTS product_factsheets (
   version     TEXT,
   uploaded_by TEXT,
   is_current  BOOLEAN DEFAULT true,
+  /* The month the sheet REPORTS ON, which is not created_at (when it was
+     uploaded) and must not be read out of file_name. The portal sorted this
+     archive by parsing "April 2025" out of free text an admin typed, so a
+     sheet named any other way had no place in the order at all. */
+  period_date DATE,
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS factsheets_pool_idx     ON product_factsheets(pool_id);
@@ -1585,6 +1590,22 @@ async function autoSetup() {
           BEGIN ALTER TABLE audit_events ADD COLUMN platform TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE investment_pools ADD COLUMN cycled_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE investment_pools ADD COLUMN source_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE product_factsheets ADD COLUMN period_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN CREATE INDEX IF NOT EXISTS factsheets_period_idx ON product_factsheets(period_date DESC); EXCEPTION WHEN others THEN NULL; END;
+          /* Backfill the period from the pool the sheet belongs to. A sheet is
+             attached to one pool and reports on that pool's month, so the pool
+             is a better source for it than the words in a filename — and it is
+             a source that cannot be typed wrong. Where the pool has no close
+             date, the month is left NULL and the portal falls back to reading
+             the name, as it did for everything before this column existed. */
+          BEGIN
+            UPDATE product_factsheets f
+               SET period_date = date_trunc('month', p.end_date)::date
+              FROM investment_pools p
+             WHERE p.id = f.pool_id
+               AND f.period_date IS NULL
+               AND p.end_date IS NOT NULL;
+          EXCEPTION WHEN others THEN NULL; END;
           -- Merge legacy 'paid_out' status into 'matured' (pools + investments)
           BEGIN UPDATE investment_pools SET status = 'matured' WHERE status = 'paid_out'; EXCEPTION WHEN others THEN NULL; END;
           BEGIN UPDATE investments      SET status = 'matured' WHERE status = 'paid_out'; EXCEPTION WHEN others THEN NULL; END;

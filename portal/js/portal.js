@@ -1137,6 +1137,7 @@ const _RISK_COLORS = { 'Low': '#22c55e', 'Medium': '#fec24f', 'Medium-High': '#f
 function _openPoolsForProduct(type) {
   return PORTAL.pools.filter(p => {
     if (p.product_type !== type) return false;
+    if (_poolPastClose(p)) return false;
     return p.status === 'open' || p.status === 'waitlist';
   });
 }

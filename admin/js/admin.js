@@ -5934,6 +5934,30 @@ async function setPoolWaitlist(id) {
 }
 
 /* ── Factsheet Manager ─────────────────────────────── */
+
+const _FS_MONTH_NAMES = ['January','February','March','April','May','June',
+                         'July','August','September','October','November','December'];
+
+/* The house convention, written once. The portal orders the archive on the
+   period, not on this text, but a list of consistently named sheets is the
+   point of having a convention at all — and an admin who sees the name filled
+   in is far less likely to invent a different one. */
+function _autoFsName() {
+  const per = document.getElementById('adminFsPeriod');
+  const nam = document.getElementById('adminFsFileName');
+  if (!per || !nam || !per.value) return;
+  const [y, m] = per.value.split('-').map(Number);
+  if (!y || !m) return;
+  const suggested = `${_FS_MONTH_NAMES[m - 1]} ${y} - Factsheet`;
+  /* Only fills a blank field or one this function last wrote. A name an admin
+     typed themselves is theirs — a deliberate "Herd health notes" must not be
+     wiped by touching the period afterwards. */
+  if (!nam.value.trim() || nam.dataset.auto === '1') {
+    nam.value = suggested;
+    nam.dataset.auto = '1';
+  }
+}
+
 async function openFactsheetManager(poolId, poolName) {
   const modal = document.getElementById('adminFactsheetModal');
   const title = document.getElementById('adminFsTitle');
@@ -5946,9 +5970,23 @@ async function openFactsheetManager(poolId, poolName) {
   const inp = document.getElementById('adminFsFileInput');
   if (inp) inp.value = '';
   const namEl = document.getElementById('adminFsFileName');
-  if (namEl) namEl.value = '';
+  if (namEl) { namEl.value = ''; delete namEl.dataset.auto; namEl.oninput = () => { delete namEl.dataset.auto; }; }
   const verEl = document.getElementById('adminFsVersion');
   if (verEl) verEl.value = '';
+
+  /* Default the period to the pool's close month — the month the sheet
+     reports on. The admin can change it; most of the time they will not have
+     to, and that is what keeps the archive consistent. */
+  const perEl = document.getElementById('adminFsPeriod');
+  if (perEl) {
+    const p = (STATE.pools || []).find(x => x.id === poolId);
+    const end = p && p.end_date ? new Date(p.end_date) : null;
+    perEl.value = end && !isNaN(end)
+      ? `${end.getUTCFullYear()}-${String(end.getUTCMonth() + 1).padStart(2, '0')}`
+      : '';
+    _autoFsName();
+  }
+
   Modal.open('adminFactsheetModal');
   await _loadAdminFactsheets(poolId, list);
 }
@@ -5971,7 +6009,11 @@ async function _loadAdminFactsheets(poolId, listEl) {
             ${_esc(s.file_name)}
             ${s.is_current ? '<span style="font-size:0.6rem;background:rgba(34,197,94,0.15);color:#22c55e;padding:1px 6px;border-radius:99px;font-weight:800">CURRENT</span>' : ''}
           </div>
-          <div style="font-size:0.68rem;color:var(--text-dim);margin-top:2px">${s.version ? `v${_esc(s.version)} · ` : ''}${Utils.date(s.created_at)}${s.uploaded_by ? ` · ${_esc(s.uploaded_by)}` : ''}</div>
+          <div style="font-size:0.68rem;color:var(--text-dim);margin-top:2px">${
+            /* The period leads: it is what orders the investor's archive, so a
+               sheet filed under the wrong month has to be visible here. */
+            s.period_label ? `<span style="color:var(--text-primary);font-weight:700">${_esc(s.period_label)}</span> · ` : '<span style="color:#f59e0b">No period · </span>'
+          }${s.version ? `v${_esc(s.version)} · ` : ''}uploaded ${Utils.date(s.created_at)}${s.uploaded_by ? ` · ${_esc(s.uploaded_by)}` : ''}</div>
         </div>
         <a href="${s.file_url}" target="_blank" rel="noopener" class="btn btn--ghost btn--sm" title="Open"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
         <button class="btn btn--ghost btn--sm" style="color:#ef4444" onclick="deleteFactsheet('${s.id}','${poolId}')" title="Delete"><i class="fa-solid fa-trash"></i></button>
@@ -5994,6 +6036,11 @@ async function uploadFactsheet() {
   const fileName = nameEl?.value?.trim();
   const version  = verEl?.value?.trim();
   const file     = fileInput?.files?.[0];
+  /* A month input gives "2026-08"; the column is a DATE, so it is the first
+     of that month. The server derives the same thing from the pool when this
+     is blank, so an older console that does not send it still stores a period. */
+  const periodEl = document.getElementById('adminFsPeriod');
+  const period   = periodEl?.value ? `${periodEl.value}-01` : null;
 
   if (!fileName) { Toast.error('Enter a factsheet name'); return; }
   if (!file) { Toast.error('Select a PDF file to upload'); return; }
@@ -6011,11 +6058,12 @@ async function uploadFactsheet() {
         file_url:  e.target.result,  // base64 data URL stored in DB
         file_size: file.size,
         mime_type: file.type || 'application/pdf',
+        period_date: period,
         version,
       });
       if (res.error) throw new Error(res.error);
       Toast.success('Factsheet uploaded');
-      if (nameEl) nameEl.value = '';
+      if (nameEl) { nameEl.value = ''; delete nameEl.dataset.auto; }
       if (verEl)  verEl.value  = '';
       if (fileInput) fileInput.value = '';
       await _loadAdminFactsheets(poolId, document.getElementById('adminFsList'));

@@ -421,10 +421,27 @@ function _poolEndMs(dateStr) {
   return new Date(dateStr).getTime();
 }
 
+/* Has this pool stopped taking money?
+ *
+ * Status alone does not answer that. The cycler deploys a pool on its
+ * INVESTMENT START DATE, which an admin can set days or weeks after the close
+ * date, and for all of those days the pool still reads 'open' — so the
+ * marketplace kept offering a pool whose raising window had shut. The close
+ * date is the honest answer, and _poolEndMs already carries the convention
+ * that a date-only end_date means the end of that day.
+ *
+ * A pool with no close date is left alone: it has not demonstrably closed,
+ * and guessing that it has would take a live pool off the marketplace. */
+function _poolPastClose(p) {
+  const endMs = _poolEndMs(p && p.end_date);
+  return endMs !== null && !isNaN(endMs) && Date.now() > endMs;
+}
+
 function _getOpenMarketplacePools() {
   return (PORTAL.pools || []).filter(p => {
     if (!p) return false;
-    // Trust status from the database — the cron manages transitions.
+    if (_poolPastClose(p)) return false;
+    // Status otherwise comes from the database — the cron manages transitions.
     return p.status === 'open' || p.status === 'waitlist';
   });
 }
@@ -483,7 +500,7 @@ function renderMarketConversionPanel(pools) {
   const inv = PORTAL.investor || {};
   const wallet = parseFloat(inv.wallet_balance) || 0;
   const ranked = _rankMarketPools((pools || []).filter(Boolean), wallet);
-  const openPools = ranked.filter(p => p.status === 'open');
+  const openPools = ranked.filter(p => p.status === 'open' && !_poolPastClose(p));
   const affordable = openPools.filter(p => wallet >= (parseFloat(p.min_investment) || 0));
   const cheapest = openPools.slice().sort((a, b) => (parseFloat(a.min_investment) || 0) - (parseFloat(b.min_investment) || 0))[0] || null;
   const ficaApproved = _isInvestorFicaApproved(inv);
@@ -3406,18 +3423,25 @@ function _fsMonths() {
 function _fsCollapsedCount() { return 4; }
 function _fsSearchAt()       { return 8; }
 
-/* The period a factsheet covers, read from its name. "April 2025 - Factsheet"
-   is about April 2025 no matter when it was uploaded, and sorting on the
-   upload date is what made the list look shuffled — most of these were
-   imported on one day.
+/* The period a factsheet covers.
 
-   null when the name carries no period. NOT the upload date as a fallback:
-   the two are on the same numeric scale but mean different things, so a
-   document uploaded last week outranked every dated sheet and sat at the top
-   of the archive. Unreadable names sort to the end instead, ordered among
-   themselves by upload. */
+   period_date is the real answer — a column, set from the pool the sheet
+   belongs to. Reading the month out of file_name is the fallback for rows
+   written before that column existed, and it is why this used to be guesswork:
+   a sheet named in any other way had no place in the order.
+
+   Sorting on the upload date is what made the list look shuffled — most of
+   these were imported on one day. And the upload date is NOT the fallback of
+   last resort either: it is on the same numeric scale as a period but means
+   something different, so a document uploaded last week outranked every dated
+   sheet and sat at the top of the archive. Unreadable ones sort to the end
+   instead, ordered among themselves by upload. */
 function _fsPeriod(sheet) {
   const months = _fsMonths();
+  if (sheet && sheet.period_date) {
+    const t = new Date(sheet.period_date);
+    if (!isNaN(t)) return Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), 1);
+  }
   const name = String((sheet && sheet.file_name) || '');
   const m = name.match(/([A-Za-z]{3,9})[\s\-_]+(20\d{2})/);
   if (m && months[m[1].toLowerCase()] != null) {
@@ -6597,7 +6621,7 @@ function openSaInvest(saId) {
   const sa = PORTAL.subAccounts.find(a => a.id === saId);
   if (!sa) return;
   const bal      = parseFloat(sa.wallet_balance) || 0;
-  const openPools = (PORTAL.pools || []).filter(p => p.status === 'open');
+  const openPools = (PORTAL.pools || []).filter(p => p.status === 'open' && !_poolPastClose(p));
   const poolMins  = openPools.map(p => parseFloat(p.min_investment)).filter(v => v > 0);
   const minNeeded = poolMins.length ? Math.min(...poolMins) : 0;
   if (bal <= 0 || (minNeeded > 0 && bal < minNeeded)) { _showSaNoFundsPrompt(sa, minNeeded); return; }
@@ -7559,7 +7583,7 @@ function openInvestNowPicker() {
 
   const openCounts = {};
   (PORTAL.pools || []).forEach(p => {
-    if (p.status === 'open') openCounts[p.product_type] = (openCounts[p.product_type] || 0) + 1;
+    if (p.status === 'open' && !_poolPastClose(p)) openCounts[p.product_type] = (openCounts[p.product_type] || 0) + 1;
   });
 
   body.innerHTML = products.map(prod => {
@@ -7596,7 +7620,7 @@ function openCalcModal() {
   const sel = document.getElementById('calcPoolSelect');
   if (sel) {
     sel.innerHTML = '<option value="">— Custom rate —</option>' +
-      (PORTAL.pools || []).filter(p => p.status === 'open' && p.product_type !== 'delivery_bikes' && p.product_type !== 'delivery_bike').map(p =>
+      (PORTAL.pools || []).filter(p => p.status === 'open' && !_poolPastClose(p) && p.product_type !== 'delivery_bikes' && p.product_type !== 'delivery_bike').map(p =>
         `<option value="${p.id}" data-rate="${p.annual_rate}" data-term="${p.term_months}">${p.name} — ${Utils.pct(p.annual_rate)} p.a.</option>`
       ).join('');
   }
@@ -9418,7 +9442,7 @@ function openRecurringModal() {
   if (prodSel) {
     const openProductTypes = [...new Set(
       (PORTAL.pools || [])
-        .filter(p => p.status === 'open')
+        .filter(p => p.status === 'open' && !_poolPastClose(p))
         .map(p => p.product_type)
         .filter(Boolean)
     )];
@@ -9447,7 +9471,7 @@ async function saveRecurringInvestment() {
     if (!day || day < 1 || day > 31) { Toast.error('Please select a valid day (1–31)'); return; }
 
     // Validate against the open pool's minimum investment
-    const openPool = (PORTAL.pools || []).find(p => p.status === 'open' && p.product_type === productType);
+    const openPool = (PORTAL.pools || []).find(p => p.status === 'open' && !_poolPastClose(p) && p.product_type === productType);
     if (openPool) {
       const minInvest = parseFloat(openPool.min_investment) || 0;
       if (amount < minInvest) {

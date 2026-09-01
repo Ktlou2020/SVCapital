@@ -4272,13 +4272,19 @@
       <p style="font-size:0.78rem;color:var(--text-dim);margin-bottom:14px">Upload a PDF factsheet. The uploaded file becomes the current factsheet; previous versions are kept as history.</p>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
         <div>
-          <label class="form-label">Factsheet Name</label>
-          <input class="form-input" id="adminFsFileName" placeholder="e.g. Cattle Fund June 2025" />
+          <label class="form-label">Reporting Period</label>
+          <input class="form-input" type="month" id="adminFsPeriod" onchange="_autoFsName()" />
+          <div style="font-size:0.66rem;color:var(--text-dim);margin-top:3px">The month this sheet reports on — investors see the archive in this order.</div>
         </div>
         <div>
           <label class="form-label">Version (optional)</label>
           <input class="form-input" id="adminFsVersion" placeholder="e.g. 1.2" />
         </div>
+      </div>
+      <div style="margin-bottom:10px">
+        <label class="form-label">Factsheet Name</label>
+        <input class="form-input" id="adminFsFileName" placeholder="e.g. June 2025 - Factsheet" />
+        <div style="font-size:0.66rem;color:var(--text-dim);margin-top:3px">Filled in from the period. Change it only for a document that is not a monthly factsheet.</div>
       </div>
       <div style="margin-bottom:14px">
         <label class="form-label">PDF File</label>
@@ -4909,7 +4915,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=18"></script>
-<script src="js/admin.js?v=149"></script>
+<script src="js/admin.js?v=150"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>
