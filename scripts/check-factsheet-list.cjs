@@ -79,7 +79,7 @@ function sliceFn(src, name) {
 const ESC = (WEB.match(/^const _esc = .*$/m) || [])[0];
 if (!ESC) { console.log('  ✗ _esc not found in portal/js/portal.js'); process.exit(1); }
 
-/* Fourteen sheets: deliberately out of order, with a duplicate, upload dates
+/* Fifteen sheets: deliberately out of order, with a duplicate, upload dates
    that are all the same day (the bulk-import shape), and one named in a way
    the month parser cannot read. */
 const SHEETS = [
@@ -99,6 +99,10 @@ const SHEETS = [
   { pool_id: 'PC', file_url: 'u/dec2024.pdf', file_name: 'December 2024 - Factsheet', created_at: '2026-08-21T00:00:00Z' },
   { pool_id: 'PD', file_url: 'u/sep2024.pdf', file_name: 'Sept 2024 - Factsheet',     created_at: '2026-08-21T00:00:00Z' },
   { pool_id: 'PE', file_url: 'u/notes.pdf',   file_name: 'Herd health notes',         created_at: '2026-08-21T00:00:00Z' },
+  /* A sheet whose stored period disagrees with the words in its name. The
+     column is the answer — the name is a label, and this one is wrong. */
+  { pool_id: 'PF', file_url: 'u/mislabelled.pdf', file_name: 'Fund update (Jan 2019)',
+    period_date: '2025-11-01', created_at: '2026-08-21T00:00:00Z' },
 ];
 
 const PRODUCT = {
@@ -150,7 +154,9 @@ const nameOf = r => (r.querySelector('.fs-row__name').textContent || '').trim();
   out.order       = rows().map(nameOf);
   out.years       = [...document.querySelectorAll('[data-fs-kind="year"]')].map(y => y.textContent.trim());
   out.visibleFirst= visible().map(nameOf);
-  out.countShown  = /Factsheets & documents 14/.test(txt) || / 14 /.test(txt);
+  const misRow = rows().find(x => /Fund update/.test(nameOf(x)));
+  out.yearOfMislabelled = misRow ? misRow.getAttribute('data-fs-year') : null;
+  out.countShown  = /Factsheets & documents 15/.test(txt) || / 15 /.test(txt);
   out.uploadLabel = /Uploaded/.test(txt);
   out.hasSearch   = !!document.getElementById('fsFilter');
   out.toggleText  = (document.getElementById('fsToggle') || {}).textContent || '';
@@ -212,11 +218,22 @@ if (r) {
      JSON.stringify(r.errors) + (r.probeError ? ` / ${r.probeError}` : ''));
 
   console.log('\nthe same file is listed once');
-  ok('fourteen sheets and one duplicate become fourteen rows',
-     r.total === 14, `${r.total} rows — 13 unique sheets plus the product one`);
+  ok('fifteen sheets and one duplicate become fifteen rows',
+     r.total === 15, `${r.total} rows — 14 unique sheets plus the product one`);
   ok('and "April 2024" appears exactly once',
      r.order.filter(n => /April 2024/.test(n)).length === 1,
      JSON.stringify(r.order.filter(n => /April 2024/.test(n))));
+
+  console.log('\nthe period comes from the column, not the words in the name');
+  /* This is the whole point of period_date: "Fund update (Jan 2019)" carries a
+     year in its text and a different, correct period in its column. Before the
+     column existed the only answer available was the text, and it was wrong. */
+  ok('a sheet filed under a period its name contradicts sorts by the period',
+     r.order.indexOf(r.order.find(n => /Fund update/.test(n))) <
+     r.order.indexOf(r.order.find(n => /October 2025/.test(n))),
+     JSON.stringify(r.order));
+  ok('and it is grouped under that period\'s year, not the one in its name',
+     r.yearOfMislabelled === '2025', r.yearOfMislabelled);
 
   console.log('\nnewest first, by the period the sheet is about');
   /* Not by upload date: nine of these were uploaded on the same day, and the
@@ -254,8 +271,8 @@ if (r) {
   ok('and those are the newest ones', /Current/.test(r.visibleFirst[0] || '') &&
      /August 2026/.test(r.visibleFirst[1] || ''), JSON.stringify(r.visibleFirst));
   ok('the control says how many there are',
-     /Show all 14 factsheets/.test(r.toggleText), r.toggleText);
-  ok('expanding shows all of them', r.expandedCount === 14, String(r.expandedCount));
+     /Show all 15 factsheets/.test(r.toggleText), r.toggleText);
+  ok('expanding shows all of them', r.expandedCount === 15, String(r.expandedCount));
   ok('and the control then offers to collapse',
      /Show fewer/.test(r.expandedToggle), r.expandedToggle);
   ok('collapsing again returns to four', r.recollapsed === 4, String(r.recollapsed));

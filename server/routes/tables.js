@@ -1033,10 +1033,39 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
       }
 
       if (body.pool_id) {
-        const { rows: pr } = await pool.query('SELECT min_investment FROM investment_pools WHERE id = $1', [body.pool_id]);
+        const { rows: pr } = await pool.query(
+          `SELECT min_investment, status, end_date,
+                  (end_date IS NOT NULL AND end_date < CURRENT_DATE) AS past_close
+             FROM investment_pools WHERE id = $1`, [body.pool_id]);
         const minInv = parseFloat(pr[0]?.min_investment) || 0;
         if (minInv && required < minInv - 0.005) {
           return res.status(400).json({ error: `Minimum investment for this pool is R${minInv.toLocaleString('en-ZA')}.` });
+        }
+
+        /* The pool must still be raising. The marketplace already hides a
+           closed pool, but that is a filter in the browser and this is where
+           the money moves: a stale tab, a bookmarked modal, or a client whose
+           pool list was loaded before midnight would otherwise buy into a
+           round that had shut.
+
+           Not a reinvestment: maturityCron picks its own target and writes it
+           directly, and its rule (earliest open pool not yet past its close)
+           is stricter than this one.
+
+           Investors only. Staff place late investments against a closed pool
+           as a correction — an EFT that cleared after the cut-off, a
+           misallocation being moved — and blocking that would leave them
+           editing rows by hand instead. */
+        if (req.user.role === 'investor' && !isReinvestment) {
+          if (!pr.length) return res.status(400).json({ error: 'Unknown pool.' });
+          if (pr[0].past_close) {
+            return res.status(400).json({
+              error: 'This pool has closed to new investments. Please choose a currently open pool.' });
+          }
+          if (!['open', 'waitlist', 'filling'].includes(String(pr[0].status || ''))) {
+            return res.status(400).json({
+              error: 'This pool is no longer open to new investments. Please choose a currently open pool.' });
+          }
         }
       }
 
