@@ -43,7 +43,13 @@ function withDatabase(url, name) {
   const u = new URL(url); u.pathname = '/' + name; return u.toString();
 }
 
-const adminPool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: SSL });
+/* max: 2 — these checks are single-threaded and never need more. The pg
+   default is 10 per pool, and this file opens two (plus the route module's
+   own), which under check-run-checks' NESTED suite run put enough idle
+   connections against max_connections to fail a run about one time in ten.
+   The error surfaced inside the nested runner, where it read as an
+   unrelated pg-protocol stack trace. */
+const adminPool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: SSL, max: 2 });
 let pool;
 
 async function makeDatabase() {
@@ -55,7 +61,7 @@ async function makeDatabase() {
   delete require.cache[require.resolve(path.join(ROOT, 'server', 'db', 'setup.js'))];
   const q = console.log; console.log = () => {};
   try { await require(path.join(ROOT, 'server', 'db', 'setup.js'))(); } finally { console.log = q; }
-  pool = new Pool({ connectionString: url, ssl: SSL });
+  pool = new Pool({ connectionString: url, ssl: SSL, max: 2 });
 }
 
 /* RR-POOL is the pool that has just closed: short_term, 2% management fee.
