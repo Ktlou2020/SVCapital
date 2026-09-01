@@ -437,6 +437,18 @@ out.marchFirst=/1 March 2026/.test(txt);
    nothing where the truth is that nobody has posted the figure. Matched in
    either locale's decimal separator. */
 out.zeroReturn=retCells.some(c=>/^R.?0[.,]00$/.test(c));
+/* Order, read off the rendered page. With interestCron disabled the credited
+   figure is structurally zero for a client whose returns come from maturities,
+   so leading with it buries the number that matters. */
+const titles=[...document.querySelectorAll('.section-title')].map(t=>t.textContent.trim());
+out.titles=titles;
+out.maturedBeforeCredited=titles.indexOf('Investments Matured in this Tax Year')>-1 &&
+  titles.indexOf('Investments Matured in this Tax Year')<titles.indexOf('Returns Credited');
+const cards=[...document.querySelectorAll('.sum-lbl')].map(t=>t.textContent.trim());
+out.cards=cards;
+out.maturityCardLeads=cards[0]==='Returns Realised at Maturity';
+/* The empty state must not read as "you earned nothing". */
+out.emptyPointsAtMaturity=/investment income for this year is the return realised at maturity/.test(txt);
 out.stamp=/www\\.svcapital\\.co\\.za/.test(txt);
 out.undef=(txt.match(/undefined/g)||[]).length;
 out.nan=(txt.match(/NaN/g)||[]).length;
@@ -469,6 +481,15 @@ document.getElementById('probe').textContent=JSON.stringify(out);
           ok('the tax year reads 1 March to 28 February', d2.headerRange === true);
           ok('and 1 March of the following year appears nowhere', d2.marchFirst === false,
              'the end of the year rendered as an instant used to roll into the next morning');
+          console.log('\n  and the figure that matters leads');
+          ok('the maturity return is the first summary card', d2.maturityCardLeads === true,
+             JSON.stringify(d2.cards));
+          ok('and its section comes before Returns Credited',
+             d2.maturedBeforeCredited === true, JSON.stringify(d2.titles));
+          ok('an empty Returns Credited section says where the income actually is',
+             d2.emptyPointsAtMaturity === true,
+             '"No returns were credited" alone reads as "you earned nothing"');
+
           ok('the shared footer stamp is on it', d2.stamp === true);
           ok('nothing renders as undefined', d2.undef === 0, String(d2.undef));
           ok('and none as NaN', d2.nan === 0, String(d2.nan));
