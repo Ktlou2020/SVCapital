@@ -77,6 +77,14 @@ async function seed() {
      ('PF-TARGET','Open Target','pf_type','open',0.12,0,6,
       CURRENT_DATE,CURRENT_DATE+30,CURRENT_DATE+210,1000,0,0)`);
 
+  /* Closed, still open, and legitimately so: its investment start date is a
+     week out. The cycler deploys it then, not now. */
+  await pool.query(`
+    INSERT INTO investment_pools (id,name,product_type,status,annual_rate,term_months,
+        start_date,end_date,investment_start_date,maturity_date,min_investment)
+    VALUES ('PF-WAITING','Cattle - awaiting deployment','cattle','open',0.16,12,
+            CURRENT_DATE-40,CURRENT_DATE-2,CURRENT_DATE+7,CURRENT_DATE+370,1000)`);
+
   await pool.query(`
     INSERT INTO investors (id,first_name,last_name,email,phone,status,wallet_balance)
     VALUES ('PF-A','Ann','Posted','ann@example.test','0800000001','active',0),
@@ -314,8 +322,21 @@ const snapshot = async () => (await pool.query(`
     ok('and the client is named with the issue',
        (r.affected || []).some(a => a.issue === 'custom_payout_no_amount' && a.severity === 'STOP'),
        JSON.stringify((r.affected || []).map(a => a.issue)));
-    ok('stale open pools are reported',
-       r.stalePools.length > 0 && r.findings.some(f => /past their close date/.test(f.message)));
+    /* Two shapes, and the report must tell them apart. A pool past its
+       investment start date and still open is a job that did not run. A pool
+       closed but not yet at its investment start date is waiting on purpose —
+       calling that stale would train people to ignore the section. */
+    ok('a pool open past its investment start date is reported as overdue',
+       r.stalePools.some(s => s.awaitingInvestmentStart === false) &&
+       r.findings.some(f => /past their investment start date/.test(f.message)),
+       JSON.stringify(r.stalePools.map(s => [s.poolId, s.awaitingInvestmentStart])));
+    ok('and one still waiting for that date is reported as waiting, not overdue',
+       r.stalePools.some(s => s.poolId === 'PF-WAITING' && s.awaitingInvestmentStart === true) &&
+       r.findings.some(f => /investment start date has not arrived/.test(f.message)),
+       JSON.stringify(r.stalePools.find(s => s.poolId === 'PF-WAITING')));
+    ok('the waiting pool is not queued for tonight either',
+       !(r.pendingCycle || []).some(p => p.poolId === 'PF-WAITING'),
+       'the cycler will not touch it until its investment start date');
     ok('the verdict is blocked while a STOP stands', r.summary.verdict === 'blocked', r.summary.verdict);
 
     console.log('\nthe horizon is bounded');

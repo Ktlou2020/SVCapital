@@ -17,6 +17,12 @@
 
 const STOP = 'STOP', ATTENTION = 'ATTENTION', OK = 'OK';
 
+/* The cycler's own trigger expression. Importing it costs a module load that
+   only defines a cron schedule (nothing is scheduled until startPoolCyclerCron
+   is called), and buys a guarantee that this report and that job are looking
+   at the same pools. */
+const { INVESTMENT_START } = require('../jobs/poolCyclerCron');
+
 /* The posted return. investment_pools.actual_rate is the achieved return for
    the pool's PERIOD, for every product — not per annum, not prorated over
    term_months. Same rule as Utils.postedReturn in the portal and as
@@ -194,26 +200,33 @@ async function runMaturityPreflight(db, { horizonDays = 14 } = {}) {
      This used to carry a STOP: cycling closed every other open pool of the
      product type, including the one the rollovers were aimed at, and it ran
      before any payout. That is fixed at source — poolCyclerCron now only
-     deploys pools that have passed their own close date, and the rollover
-     target query only ever returns pools that have not. The two sets are
-     disjoint, so a valid target can no longer be swept, and a warning that
+     deploys pools that have reached their own investment start date, and the
+     rollover target query only ever returns pools that have not. The two sets
+     are disjoint, so a valid target can no longer be swept, and a warning that
      cannot come true would only teach people to ignore warnings.
 
      Still reported, because a pool sitting uncycled says the cycler has not
-     run, and because cycling one tonight will create a successor. */
+     run, and because cycling one tonight will create a successor.
+
+     The predicate is imported, not restated. A pre-flight that predicts a
+     different set from the job it is previewing is worse than no pre-flight:
+     someone reads "these two will cycle", three cycle, and the report is never
+     trusted again. */
   const { rows: pendingCycle } = await db.query(`
-    SELECT id, name, product_type, status, end_date
+    SELECT id, name, product_type, status, end_date,
+           ${INVESTMENT_START} AS investment_start
       FROM investment_pools
      WHERE end_date IS NOT NULL
-       AND end_date < CURRENT_DATE
-       AND end_date >= CURRENT_DATE - INTERVAL '60 days'
+       AND ${INVESTMENT_START} <= CURRENT_DATE
+       AND ${INVESTMENT_START} >= CURRENT_DATE - INTERVAL '60 days'
        AND cycled_at IS NULL
        AND product_type IN ('cattle','short_term')
        AND COALESCE(status, '') <> 'closed'
-     ORDER BY end_date`);
+     ORDER BY ${INVESTMENT_START}`);
   result.pendingCycle = pendingCycle.map(p => ({
     poolId: p.id, name: p.name, productType: p.product_type,
-    status: p.status, endDate: p.end_date }));
+    status: p.status, endDate: p.end_date,
+    investmentStartDate: p.investment_start }));
 
   /* Per maturing pool, name the pool its rollovers actually land in. The
      aggregate below answers "how much"; this answers "from here, to where",
@@ -280,23 +293,50 @@ async function runMaturityPreflight(db, { horizonDays = 14 } = {}) {
   }
 
   /* ── Pools left open past their close date ───────────────────────── */
+  /* Two different situations look alike here and must not be reported alike.
+
+     A pool that has closed but not yet reached its investment start date is
+     WAITING, by design — the cycler deploys it on that date, not on the close
+     date. With the auto value that is one night. With a date an admin set by
+     hand it can be weeks, and for those weeks the pool reads "open" in the
+     console and in the marketplace although it has stopped raising. That is
+     worth saying out loud, but it is not a fault.
+
+     A pool past BOTH dates is a fault: the cycler should have deployed it and
+     did not. Past 60 days it never will, because that is where its window
+     ends. */
   const { rows: stale } = await db.query(`
     SELECT id, name, product_type, status, end_date,
-           (CURRENT_DATE - end_date) AS days_closed
+           ${INVESTMENT_START} AS investment_start,
+           (CURRENT_DATE - end_date) AS days_closed,
+           (${INVESTMENT_START} > CURRENT_DATE) AS awaiting_start
       FROM investment_pools
      WHERE status = 'open' AND end_date IS NOT NULL AND end_date < CURRENT_DATE
      ORDER BY end_date`);
   result.stalePools = stale.map(s => ({
     poolId: s.id, name: s.name, productType: s.product_type, endDate: s.end_date,
+    investmentStartDate: s.investment_start,
+    awaitingInvestmentStart: s.awaiting_start === true,
     daysClosed: Number(s.days_closed), beyondCyclerWindow: Number(s.days_closed) > 60 }));
 
-  if (!stale.length) {
-    add(OK, 'stale-pools', 'No pool is sitting open past its close date.');
-  } else {
-    const stuck = result.stalePools.filter(s => s.beyondCyclerWindow).length;
+  const waiting     = result.stalePools.filter(s => s.awaitingInvestmentStart);
+  const notDeployed = result.stalePools.filter(s => !s.awaitingInvestmentStart);
+
+  if (waiting.length) {
     add(ATTENTION, 'stale-pools',
-      `${stale.length} pool(s) are still "open" past their close date. They no longer capture ` +
-      'rollovers, but they show as open in the console' +
+      `${waiting.length} pool(s) have closed but are still "open" because their investment ` +
+      'start date has not arrived. The cycler deploys each at 00:01 on that date. Until then ' +
+      'they still read as open to investors.');
+  }
+
+  if (!notDeployed.length) {
+    if (!waiting.length) add(OK, 'stale-pools', 'No pool is sitting open past its close date.');
+  } else {
+    const stuck = notDeployed.filter(s => s.beyondCyclerWindow).length;
+    add(ATTENTION, 'stale-pools',
+      `${notDeployed.length} pool(s) are still "open" past their investment start date — the cycler ` +
+      'should already have deployed them. They no longer capture rollovers, but they show as ' +
+      'open in the console' +
       (stuck ? ` and ${stuck} of them are beyond the cycler's 60-day window, so they will never ` +
                'clear themselves. Set them to "active".' : '.'));
   }
