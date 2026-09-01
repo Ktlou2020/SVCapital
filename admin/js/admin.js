@@ -9414,9 +9414,25 @@ function renderConversionFunnel() {
   );
   const deposited = investors.filter(i => i.id != null && depositedIds.has(i.id)).length;
 
-  // Investors grouped by investment count
+  /* ── Two definitions this whole panel turns on ──────────────────────
+     A ROLLOVER IS NOT A DECISION. maturityCron writes a fresh investments row
+     every time a holding matures and reinvests, so counting rows counts the
+     engine's actions as if they were the client's. An investor who invested
+     once and auto-reinvested four times appeared here as a repeat investor,
+     and the retention figure was mostly the maturity engine looking at itself.
+
+     THE DATE AN INVESTMENT STARTED IS NOT THE DATE ITS ROW WAS WRITTEN. For
+     anything migrated they are months apart, and for a ledger imported in one
+     batch every created_at is the import timestamp — which is why "avg days to
+     invest" read 0d: it was measuring the gap between two copies of the same
+     import date. start_date is when the money went in. */
+  const _newMoney = inv => !inv.is_reinvestment;
+  const _invDate  = inv => new Date(inv.start_date || inv.created_at);
+  const _signupDate = i => new Date(i.date_joined || i.created_at);
+
+  // Investors grouped by how many investments they CHOSE to make
   const invCountById = {};
-  investments.filter(inv => inv.investor_id != null).forEach(inv => {
+  investments.filter(inv => inv.investor_id != null && _newMoney(inv)).forEach(inv => {
     invCountById[inv.investor_id] = (invCountById[inv.investor_id] || 0) + 1;
   });
   const investedIds  = new Set(Object.keys(invCountById));
@@ -9442,6 +9458,8 @@ function renderConversionFunnel() {
     { label: 'FICA Approved',       count: ficaApproved,   color: '#fec24f', icon: '✅' },
     { label: 'First Deposit',       count: deposited,      color: '#22c55e', icon: '💳' },
     { label: 'First Investment',    count: invested,       color: '#fec24f', icon: '📈' },
+    /* Repeat means a second DECISION. Rollovers are excluded upstream, so this
+       no longer counts the maturity engine's own writes as client behaviour. */
     { label: 'Repeat Investor',     count: multiInvested,  color: '#f97316', icon: '🔄' },
     { label: 'Recurring Set',       count: recurring,      color: '#eda5ff', icon: '⚡' },
     { label: 'Referred Someone',    count: referred,       color: '#ec4899', icon: '🎁' },
@@ -9451,44 +9469,42 @@ function renderConversionFunnel() {
   const totalAUM  = investments.filter(i => i.status === 'active').reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
   const activeAUM = investments.filter(i => i.status === 'active' && i.investor_id != null && investedIds.has(i.investor_id)).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
 
-  // Average first investment amount
-  const firstInvByInvestor = {};
+  /* Each investor's FIRST investment: new money only, earliest by the date the
+     money went in. Ordering by created_at put a rollover first whenever the
+     rows were written together, which is every migrated account. */
+  const firstInvestment = {};
   investments
-    .filter(inv => inv.investor_id != null && inv.created_at)
-    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    .filter(inv => inv.investor_id != null && _newMoney(inv) && (inv.start_date || inv.created_at))
+    .sort((a, b) => _invDate(a) - _invDate(b))
     .forEach(inv => {
-      if (!firstInvByInvestor[inv.investor_id]) {
-        firstInvByInvestor[inv.investor_id] = parseFloat(inv.amount) || 0;
-      }
+      if (!firstInvestment[inv.investor_id]) firstInvestment[inv.investor_id] = inv;
     });
-  const firstInvAmts = Object.values(firstInvByInvestor);
+  const firstInvAmts = Object.values(firstInvestment).map(inv => parseFloat(inv.amount) || 0);
   const avgFirstInv  = firstInvAmts.length
     ? firstInvAmts.reduce((s, v) => s + v, 0) / firstInvAmts.length
     : 0;
 
-  // Avg days signup → first investment
+  /* Avg days signup → first investment, measured on the dates the two things
+     happened rather than on when their rows were written. */
   const daysToInvest = [];
   investors.forEach(inv => {
-    if (!inv.id || !inv.created_at || !invCountById[inv.id]) return;
-    const firstInvDate = investments
-      .filter(i => i.investor_id === inv.id && i.created_at)
-      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))[0]?.created_at;
-    if (firstInvDate) {
-      const days = (new Date(firstInvDate) - new Date(inv.created_at)) / 86400000;
-      if (days >= 0 && days < 3650) daysToInvest.push(days);
-    }
+    if (!inv.id) return;
+    const first = firstInvestment[inv.id];
+    if (!first) return;
+    const signup = _signupDate(inv);
+    if (isNaN(signup)) return;
+    const days = (_invDate(first) - signup) / 86400000;
+    if (days >= 0 && days < 3650) daysToInvest.push(days);
   });
   const avgDays = daysToInvest.length
     ? Math.round(daysToInvest.reduce((s, v) => s + v, 0) / daysToInvest.length)
     : null;
+  const daysSample = daysToInvest.length;
 
-  // Most popular product type for first investment
+  // Most popular product type for a first investment
   const firstInvProducts = {};
-  Object.keys(firstInvByInvestor).forEach(invId => {
-    const inv = investments
-      .filter(i => i.investor_id === invId && i.created_at)
-      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))[0];
-    if (inv?.product_type) {
+  Object.values(firstInvestment).forEach(inv => {
+    if (inv && inv.product_type) {
       firstInvProducts[inv.product_type] = (firstInvProducts[inv.product_type] || 0) + 1;
     }
   });
@@ -9533,17 +9549,20 @@ function renderConversionFunnel() {
       <div style="background:rgba(34,197,94,0.08);border-radius:8px;padding:10px 12px">
         <div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px">Total AUM</div>
         <div style="font-size:1.05rem;font-weight:700;color:#22c55e">${fmt(totalAUM)}</div>
-        <div style="font-size:0.68rem;color:var(--text-muted)">all investors</div>
+        <div style="font-size:0.68rem;color:var(--text-muted)">active investments</div>
       </div>
       <div style="background:rgba(237,165,255,0.08);border-radius:8px;padding:10px 12px">
         <div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px">Avg 1st Invest</div>
         <div style="font-size:1.05rem;font-weight:700;color:#656565">${avgFirstInv > 0 ? fmt(avgFirstInv) : '—'}</div>
-        <div style="font-size:0.68rem;color:var(--text-muted)">per investor</div>
+        <div style="font-size:0.68rem;color:var(--text-muted)">new money, per investor</div>
       </div>
       <div style="background:rgba(59,130,246,0.08);border-radius:8px;padding:10px 12px">
         <div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px">Avg days to invest</div>
         <div style="font-size:1.05rem;font-weight:700;color:#656565">${avgDays !== null ? avgDays + 'd' : '—'}</div>
-        <div style="font-size:0.68rem;color:var(--text-muted)">signup → 1st investment</div>
+        <div style="font-size:0.68rem;color:var(--text-muted)">signup → 1st investment${
+          /* The sample size, because a mean over three people reads exactly
+             like a mean over three hundred and is worth a great deal less. */
+          daysSample ? ` · ${daysSample} investor${daysSample === 1 ? '' : 's'}` : ''}</div>
       </div>
       <div style="background:rgba(249,115,22,0.08);border-radius:8px;padding:10px 12px">
         <div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px">Top pool</div>
@@ -9553,7 +9572,7 @@ function renderConversionFunnel() {
       <div style="background:rgba(237,165,255,0.08);border-radius:8px;padding:10px 12px">
         <div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px">Retention</div>
         <div style="font-size:1.05rem;font-weight:700;color:#eda5ff">${invested > 0 ? Math.round(multiInvested/invested*100) : 0}%</div>
-        <div style="font-size:0.68rem;color:var(--text-muted)">made 2+ investments</div>
+        <div style="font-size:0.68rem;color:var(--text-muted)">chose to invest 2+ times</div>
       </div>
     </div>
   `;
@@ -9575,9 +9594,28 @@ async function loadInvestFunnel() {
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
+    /* Empty and broken are different things, and this panel used to report them
+       identically: any failure — a 500, a 403, a network drop — landed in the
+       catch and drew "No funnel data yet". Someone reading that concluded the
+       marketplace was quiet when the endpoint was down. */
+    const opened = Number(data?.funnel?.opened) || 0;
+    const total  = opened + (Number(data?.funnel?.confirmed) || 0) + (Number(data?.funnel?.abandoned) || 0);
+    if (!total) {
+      const days = document.getElementById('investFunnelDaysFilter')?.value || 30;
+      panel.innerHTML = `<div class="text-center text-muted" style="padding:20px">
+        No marketplace activity in the last ${_esc(String(days))} days.<br>
+        <span style="font-size:0.78rem">Events are recorded when an investor opens the invest modal in the portal.
+        A longer window may show more.</span></div>`;
+      return;
+    }
     renderInvestFunnel(data, panel);
   } catch (err) {
-    panel.innerHTML = '<div class="text-center text-muted" style="padding:20px">No funnel data yet — it will appear once investors use the marketplace.</div>';
+    /* Say what actually went wrong, and offer the way back. */
+    panel.innerHTML = `<div class="text-center" style="padding:20px;color:#ef4444">
+      Could not load the investment funnel: ${_esc(err.message || 'error')}<br>
+      <button class="btn btn--secondary btn--sm" style="margin-top:10px" onclick="loadInvestFunnel()">Retry</button>
+    </div>`;
+    console.error('[invest-funnel]', err);
   }
 }
 
