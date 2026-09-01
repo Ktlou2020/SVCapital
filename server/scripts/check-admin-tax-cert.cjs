@@ -546,8 +546,14 @@ document.getElementById('probe').textContent=JSON.stringify(out);
   } finally {
     if (srv) srv.close();
     if (pool) await pool.end().catch(() => {});
+    /* The route module under test resolves db/pool at require time and opens
+       its OWN pool against this database. Leaving it open makes the DROP below
+       fail with "is being accessed by other users", which the .catch() then
+       swallows — so the scratch database survives the run and check-run-checks
+       reports it. Closing it here is what actually lets the drop succeed. */
+    try { await require(path.join(ROOT, 'server', 'db', 'pool.js')).end(); } catch (_) {}
     if (original) process.env.DATABASE_URL = original;
-    await adminPool.query(`DROP DATABASE IF EXISTS ${DB_NAME}`).catch(() => {});
+    await adminPool.query(`DROP DATABASE IF EXISTS ${DB_NAME} WITH (FORCE)`).catch(() => {});
     await adminPool.end().catch(() => {});
     console.log(`\n${pass} passed, ${fail} failed`);
     process.exit(fail ? 1 : 0);

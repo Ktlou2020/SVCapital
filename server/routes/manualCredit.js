@@ -498,6 +498,31 @@ router.get('/maturity-preflight', async (req, res) => {
   }
 });
 
+/* ─── GET /api/admin/pool-maturity-report?pool_id=X ───────────────────
+   One maturing pool: every investment in it, the maturity instruction each
+   client gave, and where that instruction sends the money — including the
+   named destination pool for a switch.
+
+   The pre-flight above answers "is tonight safe to run" across the whole
+   platform. This answers "where does THIS pool's money go", per client, in a
+   form that can be printed or exported and handed to someone.
+
+   Read-only. Admin/director only, via the router-level guard at the top.
+   ──────────────────────────────────────────────────────────────────── */
+router.get('/pool-maturity-report', async (req, res) => {
+  try {
+    const poolId = req.query.pool_id;
+    if (!poolId) return res.status(400).json({ error: 'pool_id is required' });
+    const { buildMaturityReport } = require('../services/maturityInstructionReport');
+    const report = await buildMaturityReport(pool, poolId);
+    if (report.error === 'not_found') return res.status(404).json({ error: 'Pool not found' });
+    return res.json(report);
+  } catch (err) {
+    console.error('[pool-maturity-report]', err);
+    return res.status(500).json({ error: 'Report failed: ' + err.message });
+  }
+});
+
 /* ─── GET /api/admin/stored-markup-audit ──────────────────────────────
    Text already in the database that the admin console would render as markup.
 

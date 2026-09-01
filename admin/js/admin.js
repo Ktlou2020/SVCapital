@@ -5666,6 +5666,7 @@ function renderPoolsGrid() {
         <div class="pool-card__actions">
           <button class="btn btn--secondary btn--sm flex-1" onclick='editPool(${_esc(JSON.stringify(p.id))})'><i class="fa-solid fa-pen"></i> Edit</button>
           <button class="btn btn--secondary btn--sm" onclick='openFactsheetManager(${_esc(JSON.stringify(p.id))},${_esc(JSON.stringify(p.name))})' title="Manage factsheets"><i class="fa-solid fa-file-pdf" style="color:#ef4444"></i></button>
+          <button class="btn btn--secondary btn--sm" onclick='openPoolMaturityReport(${_esc(JSON.stringify(p.id))})' title="Maturity instruction report"><i class="fa-solid fa-list-check" style="color:#22c55e"></i> Maturity</button>
           <button class="btn btn--secondary btn--sm" onclick='openMergePoolModal(${_esc(JSON.stringify(p.id))})' title="Merge into another pool"><i class="fa-solid fa-code-merge"></i> Merge</button>
           <button class="btn btn--danger btn--sm" onclick='deletePool(${_esc(JSON.stringify(p.id))})'><i class="fa-solid fa-trash"></i></button>
           ${manageDropdown}
@@ -10968,6 +10969,424 @@ function setupGlobalSearch() {
   document.addEventListener('click', e => {
     if (!input.parentElement.contains(e.target)) close();
   });
+}
+
+/* ═══════════════════════════════════════════════
+   POOL MATURITY INSTRUCTION REPORT
+   ═══════════════════════════════════════════════ */
+async function openPoolMaturityReport(poolId) {
+  Toast.info('Building maturity report…');
+  try {
+    const data = await API._fetch('GET', 'admin/pool-maturity-report', null, { pool_id: poolId });
+    if (data.error) throw new Error(data.error);
+    if (!data.rows.length && !data.heldBack.length) {
+      Toast.error('No investments in this pool to report on');
+      return;
+    }
+    _POOL_MATURITY_REPORT = data;
+    _openPoolMaturityReportWindow(data);
+  } catch (e) {
+    Toast.error('Maturity report failed: ' + (e.message || 'error'));
+  }
+}
+
+let _POOL_MATURITY_REPORT = null;
+
+/* The CSV is the row-level report, one line per investment, because that is
+   the form someone reconciles against a bank file. The printed page carries
+   the summary; a spreadsheet of summaries reconciles nothing. */
+function downloadPoolMaturityCSV() {
+  const d = _POOL_MATURITY_REPORT;
+  if (!d) { Toast.error('Open the report first'); return; }
+  const rows = [[
+    'Investment ID', 'Holder', 'Holder ID', 'Sub-account', 'Capital', 'Return', 'Gross',
+    'Instruction', 'Instruction (as executed)', 'Named amount', 'To wallet', 'Reinvested',
+    'Destination pool', 'Destination closes', 'Switched', 'Processed',
+  ]];
+  for (const r of d.rows) {
+    /* One line per destination, so a switch_amount — the instruction with two
+       destinations — is not flattened into a single row that hides one of them. */
+    const legs = r.legs.length ? r.legs : [null];
+    legs.forEach((leg, idx) => rows.push([
+      r.investmentId, r.holderName || '', r.holderId || '', r.isSubAccount ? 'yes' : 'no',
+      idx === 0 ? r.principal : '', idx === 0 ? r.actualReturn : '', idx === 0 ? r.gross : '',
+      r.instructionLabel, r.effectiveInstruction || '',
+      r.customAmount == null ? '' : r.customAmount,
+      idx === 0 ? r.toWallet : '',
+      leg ? leg.amount : '',
+      leg ? (leg.fallsBackToWallet ? `No open ${leg.productType} pool — paid to wallet` : (leg.destinationPoolName || '')) : '',
+      leg && leg.destinationEndDate ? String(leg.destinationEndDate).slice(0, 10) : '',
+      leg && leg.isSwitch ? 'yes' : 'no',
+      r.processed ? 'yes' : 'no',
+    ]));
+  }
+  for (const h of d.heldBack) {
+    rows.push([h.investmentId, h.holderName || '', h.holderId || '', h.isSubAccount ? 'yes' : 'no',
+               h.principal, '', '', h.instructionLabel, 'HELD BACK — no posted return', '', '', '',
+               '', '', 'no', 'no']);
+  }
+  const safe = String(d.pool.name || d.pool.id).replace(/[^A-Za-z0-9]+/g, '_');
+  _downloadCSV(rows, `SV_Capital_Maturity_Instructions_${safe}.csv`);
+}
+
+/* A real PDF file, not a print dialog.
+ *
+ * The statement and the certificate are print-to-PDF because each is a single
+ * page a person reads. This one is a working document: it goes into a payout
+ * meeting, gets filed against a bank run, and is sent on. jsPDF and autoTable
+ * are already loaded in this console, so it can produce an actual file instead
+ * of depending on whichever print stack the reader happens to have.
+ *
+ * Landscape: the by-client table carries seven columns and two of them hold
+ * pool names. */
+function downloadPoolMaturityPDF() {
+  const d = _POOL_MATURITY_REPORT;
+  if (!d) { Toast.error('Open the report first'); return; }
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    Toast.error('PDF library unavailable — use Print instead');
+    return;
+  }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+  if (typeof doc.autoTable !== 'function') {
+    Toast.error('PDF table plugin unavailable — use Print instead');
+    return;
+  }
+  const money = n => 'R ' + parseFloat(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const day = v => {
+    const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? `${+m[3]} ${MONTHS[+m[2] - 1]} ${m[1]}` : '—';
+  };
+  const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
+  const PURPLE = [237, 165, 255], INK = [31, 41, 55], MUTED = [107, 114, 128], AMBER = [180, 83, 9];
+
+  doc.setFillColor(PURPLE[0], PURPLE[1], PURPLE[2]); doc.rect(0, 0, W, 5, 'F');
+  doc.setTextColor(INK[0], INK[1], INK[2]);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
+  doc.text('Maturity Instructions', 40, 44);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+  doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+  doc.text(String(d.pool.name || ''), 40, 60);
+  doc.text(`Matures ${day(d.pool.maturityDate || d.pool.endDate)}  ·  Rate ${
+    d.pool.actualRate == null ? '—' : (d.pool.actualRate * 100).toFixed(2) + '%'}`, 40, 73);
+  doc.text('SV Capital (Pty) Ltd — FSCA Regulated Financial Services Provider', W - 40, 44, { align: 'right' });
+  doc.text(`Issued ${new Date().toLocaleString('en-ZA', { dateStyle: 'long', timeStyle: 'short' })}`, W - 40, 60, { align: 'right' });
+
+  doc.setTextColor(INK[0], INK[1], INK[2]); doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+  doc.text(`Maturing ${money(d.totals.gross)}     Paid to wallets ${money(d.totals.toWallet)}     ` +
+           `Reinvested ${money(d.totals.reinvested)}     ${d.totals.investments} investments · ${d.totals.investors} holders`,
+           40, 94);
+
+  let y = 110;
+  if (d.heldBack.length) {
+    doc.setTextColor(AMBER[0], AMBER[1], AMBER[2]); doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+    doc.text(`${d.heldBack.length} investment(s) totalling ${money(d.heldBackPrincipal)} have no posted return, ` +
+             'are held back by the maturity engine, and are in no total above.', 40, y);
+    y += 16;
+  }
+
+  const table = (head, body, startY) => {
+    doc.autoTable({
+      head: [head], body, startY,
+      styles: { fontSize: 7.5, cellPadding: 3, overflow: 'linebreak', textColor: [17, 17, 17] },
+      headStyles: { fillColor: [243, 244, 246], textColor: [55, 65, 81], fontStyle: 'bold' },
+      margin: { left: 40, right: 40 }, theme: 'grid',
+    });
+    return doc.lastAutoTable.finalY + 20;
+  };
+  const heading = (t, atY) => {
+    doc.setTextColor(INK[0], INK[1], INK[2]); doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
+    doc.text(t, 40, atY);
+    return atY + 8;
+  };
+
+  y = heading('Allocation by instruction', y);
+  y = table(['Instruction', 'Count', 'Maturing', 'To wallet', 'Reinvested', 'Destination'],
+    d.byInstruction.map(g => [
+      g.label, String(g.count), money(g.gross), money(g.toWallet), money(g.reinvested),
+      g.destinations.map(x => x.fallsBackToWallet
+        ? `No open ${x.productType} pool — ${money(x.amount)} paid to wallet`
+        : `${x.poolName || '—'} — ${money(x.amount)}${x.isSwitch ? ' (switched)' : ''}`).join('\n') || '—',
+    ]).concat([['TOTAL', String(d.totals.investments), money(d.totals.gross),
+                money(d.totals.toWallet), money(d.totals.reinvested), '']]), y);
+
+  if (d.destinations.length) {
+    y = heading('Where the money goes', y);
+    y = table(['Destination pool', 'Product', 'Closes', 'Investments', 'Of which switched', 'Total'],
+      d.destinations.map(x => [
+        x.fallsBackToWallet ? `Wallet (no open ${x.productType} pool)` : (x.poolName || '—'),
+        x.productType || '—', day(x.endDate), String(x.count), money(x.switchedIn), money(x.amount),
+      ]), y);
+  }
+
+  y = heading('By client', y);
+  y = table(['Holder', 'Capital', 'Return', 'Maturing', 'Instruction', 'To wallet', 'Reinvested into'],
+    d.rows.map(r => [
+      (r.holderName || '—') + (r.isSubAccount ? ' (sub)' : ''),
+      money(r.principal), money(r.actualReturn), money(r.gross),
+      r.instructionLabel + (r.effectiveInstruction ? `\nexecuted as ${r.effectiveInstruction}` : ''),
+      r.toWallet > 0 ? money(r.toWallet) : '—',
+      r.legs.length
+        ? r.legs.map(l => `${money(l.amount)} -> ${l.fallsBackToWallet
+            ? `no open ${l.productType} pool, paid to wallet`
+            : (l.destinationPoolName || '—') + (l.isSwitch ? ' (switched)' : '')}`).join('\n')
+        : '—',
+    ]), y);
+
+  if (d.heldBack.length) {
+    y = heading('Held back — no posted return', y);
+    table(['Holder', 'Capital', 'Instruction'],
+      d.heldBack.map(h => [(h.holderName || '—') + (h.isSubAccount ? ' (sub)' : ''),
+                           money(h.principal), h.instructionLabel]), y);
+  }
+
+  /* On every page, because this document leaves the building a page at a time. */
+  const pages = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= pages; i++) {
+    doc.setPage(i);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
+    doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+    doc.text('An investment with no instruction is tagged auto-reinvest, which is what the maturity engine applies to it. ' +
+             'Destination pools are resolved as the engine resolves them at 23:00 and can change if a pool opens or fills before then.',
+             40, H - 26);
+    doc.text('SV Capital (Pty) Ltd — www.svcapital.co.za', 40, H - 15);
+    doc.text(`Page ${i} of ${pages}`, W - 40, H - 15, { align: 'right' });
+  }
+
+  const safe = String(d.pool.name || d.pool.id).replace(/[^A-Za-z0-9]+/g, '_');
+  doc.save(`SV_Capital_Maturity_Instructions_${safe}.pdf`);
+  Toast.success('PDF downloaded');
+}
+
+function _openPoolMaturityReportWindow(d) {
+  const fmt = n => 'R ' + parseFloat(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  /* _esc, not a local copy: it is the platform's escaper, it also handles
+     quotes, and check-markup-interpolation looks for it by name. */
+  const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  /* Rendered from the date's own text, never through a Date — the same reason
+     as on the certificate: a day has no timezone, and passing one through a
+     Date moves it for readers east of UTC. */
+  const fmtDate = v => {
+    const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? `${+m[3]} ${MONTHS_SHORT[+m[2] - 1]} ${m[1]}` : '—';
+  };
+  const pct = r => r == null ? '—' : (r * 100).toFixed(2) + '%';
+  const issuedAt = new Date().toLocaleString('en-ZA', { dateStyle: 'long', timeStyle: 'short' });
+  const _logoUrl = window.location.origin + '/assets/sv-capital-logo-horizontal-white-text.png';
+  const ref = `SVCMR-${String(d.pool.id).replace(/[^A-Za-z0-9]/g, '').slice(-10)}`;
+
+  const destCell = leg => leg.fallsBackToWallet
+    ? `<span style="color:#b45309;font-weight:600">No open ${_esc(leg.productType)} pool &mdash; paid to wallet</span>`
+    : `${_esc(leg.destinationPoolName || '—')}${leg.isSwitch ? ' <span class="tag-switch">switched</span>' : ''}`;
+
+  const instrRows = d.byInstruction.map(g => `
+    <tr>
+      <td>${_esc(g.label)}</td>
+      <td class="num">${g.count}</td>
+      <td class="amt">${fmt(g.gross)}</td>
+      <td class="amt">${fmt(g.toWallet)}${g.fallbackToWallet > 0
+        ? `<div style="color:#b45309;font-size:9px;font-weight:600">incl. ${fmt(g.fallbackToWallet)} with nowhere to go</div>` : ''}</td>
+      <td class="amt">${fmt(g.reinvested)}</td>
+      <td>${g.destinations.length
+        ? g.destinations.map(x => x.fallsBackToWallet
+            ? `<div style="color:#b45309">No open ${_esc(x.productType)} pool &mdash; ${fmt(x.amount)} paid to wallet</div>`
+            : `<div>${_esc(x.poolName || '—')} &mdash; ${fmt(x.amount)}${x.isSwitch ? ' <span class="tag-switch">switched</span>' : ''}</div>`).join('')
+        : '<span style="color:#9ca3af">—</span>'}</td>
+    </tr>`).join('');
+
+  const destRows = d.destinations.map(x => `
+    <tr>
+      <td>${x.fallsBackToWallet
+            ? `<span style="color:#b45309;font-weight:600">Wallet (no open ${_esc(x.productType)} pool)</span>`
+            : _esc(x.poolName || '—')}</td>
+      <td>${_esc(x.productType || '—')}</td>
+      <td>${fmtDate(x.endDate)}</td>
+      <td class="num">${x.count}</td>
+      <td class="amt">${fmt(x.switchedIn)}</td>
+      <td class="amt">${fmt(x.amount)}</td>
+    </tr>`).join('');
+
+  const clientRows = d.rows.map(r => `
+    <tr>
+      <td>${_esc(r.holderName || '—')}${r.isSubAccount ? ' <span class="tag-sub">sub</span>' : ''}</td>
+      <td class="amt">${fmt(r.principal)}</td>
+      <td class="amt">${fmt(r.actualReturn)}</td>
+      <td class="amt">${fmt(r.gross)}</td>
+      <td>${_esc(r.instructionLabel)}${r.effectiveInstruction
+            ? `<div style="color:#b45309;font-size:9px">executed as ${_esc(r.effectiveInstruction)}</div>` : ''}</td>
+      <td class="amt">${r.toWallet > 0 ? fmt(r.toWallet) : '<span style="color:#d1d5db">—</span>'}${
+        r.fallbackToWallet > 0 ? '<div style="color:#b45309;font-size:9px">no open pool</div>' : ''}</td>
+      <td>${r.legs.length
+            ? r.legs.map(leg => `<div>${fmt(leg.amount)} &rarr; ${destCell(leg)}</div>`).join('')
+            : '<span style="color:#d1d5db">—</span>'}</td>
+    </tr>`).join('');
+
+  const heldRows = d.heldBack.map(h => `
+    <tr>
+      <td>${_esc(h.holderName || '—')}${h.isSubAccount ? ' <span class="tag-sub">sub</span>' : ''}</td>
+      <td class="amt">${fmt(h.principal)}</td>
+      <td>${_esc(h.instructionLabel)}</td>
+    </tr>`).join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<title>SV Capital — Maturity Instructions — ${_esc(d.pool.name)}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,Helvetica,sans-serif;background:#fff;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:12px}
+@page{size:A4 landscape;margin:12mm 14mm}
+@media print{.no-print{display:none!important}.wrap{margin-top:0!important}}
+.no-print{position:fixed;top:0;left:0;right:0;background:#1f2937;padding:9px 20px;display:flex;justify-content:space-between;align-items:center;z-index:99;gap:10px;flex-wrap:wrap}
+.no-print span{color:#fff;font-size:12px;font-weight:600;flex:1}
+.no-print .btn-row{display:flex;gap:8px}
+.no-print button{border:none;padding:7px 16px;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer}
+.btn-print{background:#e5e7eb;color:#111}.btn-csv{background:#22c55e;color:#fff}.btn-pdf{background:#eda5ff;color:#111}
+.wrap{max-width:1100px;margin:52px auto 32px;padding:24px 30px;border-top:5px solid #eda5ff}
+.hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:14px;border-bottom:3px solid #1f2937;margin-bottom:18px}
+.hdr-brand p{font-size:10px;color:#6b7280;margin-top:7px}
+.hdr-right{text-align:right}
+.stmt-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#9ca3af;margin-bottom:3px}
+.stmt-title{font-size:20px;font-weight:800;color:#1f2937;margin-bottom:4px}
+.stmt-meta{font-size:10px;color:#6b7280;line-height:1.6}
+.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px}
+.sum-box{border:1.5px solid #e5e7eb;border-radius:7px;padding:11px 13px}
+.sum-box.green{border-color:#bbf7d0;background:#f0fdf4}
+.sum-box.blue{border-color:#bfdbfe;background:#eff6ff}
+.sum-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;margin-bottom:4px}
+.sum-amt{font-size:17px;font-weight:800;color:#1f2937}
+.sum-sub{font-size:9px;color:#6b7280;margin-top:3px}
+.sec-hdr{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;padding:6px 10px;border-radius:5px;margin:18px 0 8px;background:#f3f4f6;color:#374151}
+table{width:100%;border-collapse:collapse;font-size:10.5px}
+th{background:#f9fafb;text-align:left;padding:6px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;border-bottom:1.5px solid #e5e7eb}
+td{padding:6px 8px;border-bottom:1px solid #f3f4f6;vertical-align:top}
+.amt,.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tr.total-row td{font-weight:800;background:#f9fafb;border-top:1.5px solid #d1d5db}
+.tag-switch{display:inline-block;background:#ede9fe;color:#5b21b6;font-size:8px;font-weight:800;padding:1px 5px;border-radius:99px;text-transform:uppercase;letter-spacing:.05em}
+.tag-sub{display:inline-block;background:#e5e7eb;color:#374151;font-size:8px;font-weight:700;padding:1px 5px;border-radius:99px}
+.warning{background:#fffbeb;border:1.5px solid #f59e0b;border-radius:6px;padding:10px 13px;margin-bottom:16px;font-size:10.5px;color:#78350f;line-height:1.6}
+.footer{border-top:1px solid #e5e7eb;padding-top:11px;font-size:9px;color:#6b7280;line-height:1.7;margin-top:14px}
+.footer strong{color:#374151}
+.stamp{display:inline-block;border:2px solid #eda5ff;color:#eda5ff;padding:4px 11px;border-radius:3px;font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-top:10px}
+</style></head><body>
+<script>
+/* Both files are built by the console, not here: it holds jsPDF and the
+   report data. A closed opener is the one way this fails, and saying so
+   beats a button that silently does nothing. */
+function _back(fn) {
+  if (window.opener && !window.opener.closed && typeof window.opener[fn] === 'function') {
+    window.opener[fn]();
+  } else {
+    alert('The admin console window that opened this report has been closed. Reopen the report from the pool to download.');
+  }
+}
+<\/script>
+<div class="no-print">
+  <span>SV Capital &mdash; Maturity Instructions &nbsp;&middot;&nbsp; ${_esc(d.pool.name)}</span>
+  <div class="btn-row">
+    <button class="btn-pdf" onclick="_back('downloadPoolMaturityPDF')">Download PDF</button>
+    <button class="btn-csv" onclick="_back('downloadPoolMaturityCSV')">Download CSV</button>
+    <button class="btn-print" onclick="window.print()">Print</button>
+  </div>
+</div>
+<div class="wrap">
+  <div class="hdr">
+    <div class="hdr-brand">
+      <div style="background:#1f2937;padding:10px 18px;border-radius:8px;display:inline-block"><img src="${_logoUrl}" style="height:46px;width:auto;display:block" alt="SV Capital"></div>
+      <p>FSCA Regulated Financial Services Provider &middot; <span style="color:#eda5ff;font-weight:600">www.svcapital.co.za</span></p>
+    </div>
+    <div class="hdr-right">
+      <div class="stmt-lbl">Document Type</div>
+      <div class="stmt-title">Maturity Instructions</div>
+      <div class="stmt-meta">Ref: <strong>${ref}</strong><br>Pool: ${_esc(d.pool.name)}<br>Matures: ${fmtDate(d.pool.maturityDate || d.pool.endDate)} &middot; Rate: ${pct(d.pool.actualRate)}<br>Issued: ${issuedAt}</div>
+    </div>
+  </div>
+
+  ${!d.pool.ratePosted ? `<div class="warning">
+    <strong>This pool has no posted return rate.</strong>
+    Every figure below rests on the return each investment has earned, and without a rate on the pool
+    there is nothing to compute it from. The maturity engine holds these investments back and retries
+    each night, so posting the rate is all that is needed to release them.
+  </div>` : ''}
+
+  ${d.heldBack.length ? `<div class="warning">
+    <strong>${d.heldBack.length} investment${d.heldBack.length === 1 ? '' : 's'} totalling ${fmt(d.heldBackPrincipal)} in capital ${d.heldBack.length === 1 ? 'is' : 'are'} held back and not included in any total below.</strong>
+    Their return has not been posted, so the engine skips them and retries the next night.
+  </div>` : ''}
+
+  <div class="summary">
+    <div class="sum-box">
+      <div class="sum-lbl">Maturing</div>
+      <div class="sum-amt">${fmt(d.totals.gross)}</div>
+      <div class="sum-sub">${d.totals.investments} investment${d.totals.investments === 1 ? '' : 's'} &middot; ${d.totals.investors} holder${d.totals.investors === 1 ? '' : 's'}</div>
+    </div>
+    <div class="sum-box blue">
+      <div class="sum-lbl">Paid to wallets</div>
+      <div class="sum-amt">${fmt(d.totals.toWallet)}</div>
+      <div class="sum-sub">${d.totals.fallbackToWallet > 0
+        ? `includes ${fmt(d.totals.fallbackToWallet)} with no open pool to go to`
+        : 'cash leaving the fund'}</div>
+    </div>
+    <div class="sum-box green">
+      <div class="sum-lbl">Reinvested</div>
+      <div class="sum-amt">${fmt(d.totals.reinvested)}</div>
+      <div class="sum-sub">into ${d.destinations.filter(x => !x.fallsBackToWallet).length} pool(s)</div>
+    </div>
+    <div class="sum-box">
+      <div class="sum-lbl">Capital &middot; Return</div>
+      <div class="sum-amt" style="font-size:14px">${fmt(d.totals.principal)}<br>${fmt(d.totals.actualReturn)}</div>
+    </div>
+  </div>
+
+  <div class="sec-hdr">Allocation by instruction</div>
+  <table>
+    <thead><tr><th>Instruction</th><th class="num">Count</th><th class="amt">Maturing</th><th class="amt">To wallet</th><th class="amt">Reinvested</th><th>Destination</th></tr></thead>
+    <tbody>
+      ${instrRows}
+      <tr class="total-row"><td>TOTAL</td><td class="num">${d.totals.investments}</td><td class="amt">${fmt(d.totals.gross)}</td><td class="amt">${fmt(d.totals.toWallet)}</td><td class="amt">${fmt(d.totals.reinvested)}</td><td></td></tr>
+    </tbody>
+  </table>
+
+  ${d.destinations.length ? `
+  <div class="sec-hdr">Where the money goes</div>
+  <table>
+    <thead><tr><th>Destination pool</th><th>Product</th><th>Closes</th><th class="num">Investments</th><th class="amt">Of which switched</th><th class="amt">Total</th></tr></thead>
+    <tbody>${destRows}</tbody>
+  </table>` : ''}
+
+  <div class="sec-hdr">By client</div>
+  <table>
+    <thead><tr><th>Holder</th><th class="amt">Capital</th><th class="amt">Return</th><th class="amt">Maturing</th><th>Instruction</th><th class="amt">To wallet</th><th>Reinvested into</th></tr></thead>
+    <tbody>${clientRows}</tbody>
+  </table>
+
+  ${d.heldBack.length ? `
+  <div class="sec-hdr">Held back &mdash; no posted return</div>
+  <table>
+    <thead><tr><th>Holder</th><th class="amt">Capital</th><th>Instruction</th></tr></thead>
+    <tbody>${heldRows}</tbody>
+  </table>` : ''}
+
+  <div class="footer">
+    <strong>SV Capital (Pty) Ltd</strong> &mdash; FSCA Regulated Financial Services Provider.<br>
+    This report shows the maturity instruction held for each investment in <strong>${_esc(d.pool.name)}</strong>
+    and the allocation that instruction produces. An investment with no instruction is tagged
+    <strong>auto-reinvest</strong>, which is what the maturity engine applies to it.
+    Destination pools are resolved the way the engine resolves them at 23:00 &mdash; the open pool of that
+    product closing soonest with room left &mdash; so a pool that opens or fills before then can change them.
+    All amounts are in South African Rand (ZAR).<br>
+    <strong>Ref:</strong> ${ref} &middot; <strong>Issued:</strong> ${issuedAt} &middot; <strong>Generated by:</strong> SV Capital Admin Console<br>
+    <div class="stamp">SV Capital (Pty) Ltd &mdash; www.svcapital.co.za</div>
+  </div>
+</div>
+</body></html>`;
+
+  const win = window.open('', '_blank', 'width=1200,height=900');
+  if (!win) { Toast.error('Allow pop-ups to open the report'); return; }
+  win.document.write(html);
+  win.document.close();
+  win.focus();
 }
 
 /* ═══════════════════════════════════════════════
