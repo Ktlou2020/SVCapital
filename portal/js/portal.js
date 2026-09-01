@@ -1207,12 +1207,16 @@ async function renderProductDetailView(type) {
 
           ${isSolar ? '<div id="prodSolarHistory" style="margin-top:16px"></div>' : ''}
           <div id="prodTrackRecord" style="margin-top:16px"></div>
-          <div id="prodFactsheets" style="margin-top:14px"></div>
         </div>
       </div>
 
       <div style="font-size:0.95rem;font-weight:800;color:var(--text);margin:22px 0 12px"><i class="fa-solid fa-layer-group" style="color:${color};margin-right:6px"></i>Open pools — ${open.length}</div>
       <div class="grid-3" id="productPoolsGrid"></div>
+
+      <!-- The archive sits below what can be acted on. It was inside the
+           product card, above the pools, and a product with three years of
+           monthly factsheets pushed its one open pool off the screen. -->
+      <div id="prodFactsheets" style="margin-top:26px"></div>
     </div>`;
 
   // Pools

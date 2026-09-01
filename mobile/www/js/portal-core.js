@@ -3370,6 +3370,142 @@ async function _renderSolarHistory(containerId, color) {
   });
 }
 
+/* ── Factsheets & documents ────────────────────────────────────────────
+   This is an archive, and it grows by one sheet a month for as long as a
+   product exists. Rendered flat it was a wall of near-identical rows —
+   "April 2025 - Factsheet", "October 2023 - Factsheet" — in the order the
+   API happened to return them, each stamped with its UPLOAD date, which for
+   a bulk import is the same day for all of them. Nothing to scan by, and it
+   pushed the open pools off the bottom of the screen.
+
+   So: newest first, by the period in the sheet's own name rather than by
+   when someone uploaded it; grouped by year; the recent handful shown and
+   the rest behind one tap; and a search box once the list is long enough to
+   need one. */
+
+/* This file carries no top-level state and runs nothing at load — see
+   check-portal-split. So the collapsed/searching state lives on the rendered
+   list element itself, which suits it better anyway: it belongs to that list,
+   and re-rendering the product page resets it without anyone remembering to.
+
+   The month table is memoised on the function object rather than built at
+   load, for the same reason. */
+function _fsMonths() {
+  if (!_fsMonths._map) {
+    const names = ['january','february','march','april','may','june',
+                   'july','august','september','october','november','december'];
+    const map = {};
+    names.forEach((n, i) => { map[n] = i; map[n.slice(0, 3)] = i; });
+    map.sept = 8;
+    _fsMonths._map = map;
+  }
+  return _fsMonths._map;
+}
+
+/* Sheets shown before "show all", and the list length that earns a search box. */
+function _fsCollapsedCount() { return 4; }
+function _fsSearchAt()       { return 8; }
+
+/* The period a factsheet covers, read from its name. "April 2025 - Factsheet"
+   is about April 2025 no matter when it was uploaded, and sorting on the
+   upload date is what made the list look shuffled — most of these were
+   imported on one day.
+
+   null when the name carries no period. NOT the upload date as a fallback:
+   the two are on the same numeric scale but mean different things, so a
+   document uploaded last week outranked every dated sheet and sat at the top
+   of the archive. Unreadable names sort to the end instead, ordered among
+   themselves by upload. */
+function _fsPeriod(sheet) {
+  const months = _fsMonths();
+  const name = String((sheet && sheet.file_name) || '');
+  const m = name.match(/([A-Za-z]{3,9})[\s\-_]+(20\d{2})/);
+  if (m && months[m[1].toLowerCase()] != null) {
+    return Date.UTC(Number(m[2]), months[m[1].toLowerCase()], 1);
+  }
+  const y = name.match(/\b(20\d{2})\b/);
+  if (y) return Date.UTC(Number(y[1]), 0, 1);
+  return null;
+}
+
+function _fsUploaded(sheet) {
+  const t = sheet && sheet.created_at ? Date.parse(sheet.created_at) : NaN;
+  return isNaN(t) ? 0 : t;
+}
+
+/* Newest period first; anything undated after all of it. */
+function _fsCompare(a, b) {
+  const pa = _fsPeriod(a), pb = _fsPeriod(b);
+  if (pa === null && pb === null) return _fsUploaded(b) - _fsUploaded(a);
+  if (pa === null) return 1;
+  if (pb === null) return -1;
+  return pb - pa;
+}
+
+/* The heading a sheet files under. */
+function _fsYear(sheet) {
+  const p = _fsPeriod(sheet);
+  return p === null ? 'Other' : String(new Date(p).getUTCFullYear());
+}
+
+/* Rows and year headings are shown or hidden in place rather than re-rendered,
+   so typing in the search box does not cost the input its focus on every
+   keystroke. */
+function _fsApplyVisibility() {
+  const list = document.getElementById('fsList');
+  if (!list) return;
+  const limit    = _fsCollapsedCount();
+  const expanded = list.getAttribute('data-fs-expanded') === '1';
+  const input    = document.getElementById('fsFilter');
+  const q        = String((input && input.value) || '').trim().toLowerCase();
+  const searching = q.length > 0;
+
+  let shown = 0;
+  const visibleYears = new Set();
+  list.querySelectorAll('[data-fs-kind="row"]').forEach(row => {
+    const matches = !searching || (row.getAttribute('data-fs-text') || '').includes(q);
+    /* A search looks through the whole archive — collapsing it would hide the
+       one sheet the person is searching for and report nothing found. */
+    const visible = matches && (searching || expanded || shown < limit);
+    if (visible) { shown++; visibleYears.add(row.getAttribute('data-fs-year')); }
+    row.style.display = visible ? '' : 'none';
+  });
+
+  list.querySelectorAll('[data-fs-kind="year"]').forEach(h => {
+    h.style.display = visibleYears.has(h.getAttribute('data-fs-year')) ? '' : 'none';
+  });
+
+  const total  = list.querySelectorAll('[data-fs-kind="row"]').length;
+  const toggle = document.getElementById('fsToggle');
+  if (toggle) {
+    /* Hidden while searching: the collapse is not what is limiting the list
+       then, so offering to expand it would be a lie about why a sheet is not
+       on screen. Hidden too when everything fits — a control that does
+       nothing still has to be read before it can be dismissed. */
+    if (searching || total <= limit) {
+      toggle.style.display = 'none';
+    } else {
+      toggle.style.display = '';
+      toggle.innerHTML = expanded
+        ? `Show fewer <i class="fa-solid fa-chevron-up"></i>`
+        : `Show all ${total} factsheets <i class="fa-solid fa-chevron-down"></i>`;
+    }
+  }
+
+  const empty = document.getElementById('fsEmpty');
+  if (empty) empty.style.display = shown === 0 ? '' : 'none';
+}
+
+function _toggleFsList() {
+  const list = document.getElementById('fsList');
+  if (!list) return;
+  list.setAttribute('data-fs-expanded', list.getAttribute('data-fs-expanded') === '1' ? '0' : '1');
+  _fsApplyVisibility();
+}
+
+/* Reads the input directly, so nothing has to be kept in step with it. */
+function _filterFsRows() { _fsApplyVisibility(); }
+
 async function _renderProductFactsheets(type, product) {
   const el = document.getElementById('prodFactsheets');
   if (!el) return;
@@ -3389,7 +3525,21 @@ async function _renderProductFactsheets(type, product) {
     file_url: product.factsheet_url, file_name: product.factsheet_name || `${product.label} factsheet`,
     created_at: product.updated_at, _product: true,
   } : null;
-  const all = [productSheet, ...sheets].filter(Boolean);
+
+  /* The same sheet reaches this list once per pool it is attached to, so
+     "April 2024 - Factsheet" appeared twice in a row with nothing to tell the
+     two entries apart. Keyed on the file, since that is what opens. */
+  const seen = new Set();
+  const archive = sheets.filter(s => {
+    const key = `${s.file_url || ''}|${s.file_name || ''}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).sort(_fsCompare);
+
+  // The product-level sheet is the current one and is pinned above the archive.
+  const all = [productSheet, ...archive].filter(Boolean);
+
   // If there's a product-level factsheet, reveal buttons for ALL pools of this product
   if (productSheet) {
     poolIds.forEach(pid => {
@@ -3397,16 +3547,67 @@ async function _renderProductFactsheets(type, product) {
       if (btn) btn.style.display = '';
     });
   }
+
+  if (!all.length) {
+    el.innerHTML = `
+      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:8px"><i class="fa-solid fa-file-pdf" style="color:#ef4444"></i> Factsheets &amp; documents</div>
+      <div style="font-size:0.82rem;color:var(--text-muted)">No factsheets uploaded yet for this product.</div>`;
+    return;
+  }
+
+  _fsDocCache = all;
+
+  const row = (s, i, year) => `
+    <a href="#" onclick="event.preventDefault();_openFsDoc(${i})"
+       class="fs-row ${s._product ? 'fs-row--current' : ''}"
+       data-fs-kind="row" data-fs-year="${year}"
+       data-fs-text="${_esc(String(s.file_name || '').toLowerCase())} ${year}">
+      <div class="fs-row__icon"><i class="fa-solid fa-file-pdf"></i></div>
+      <div class="fs-row__info">
+        <div class="fs-row__name">${_esc(s.file_name)}${s._product ? ' <span class="fs-current-tag">Current</span>' : ''}</div>
+        <div class="fs-row__meta">Uploaded ${Utils.date(s.created_at)}</div>
+      </div>
+      <i class="fa-solid fa-arrow-up-right-from-square fs-row__arrow"></i>
+    </a>`;
+
+  /* Built in one pass so the index passed to _openFsDoc stays the index into
+     _fsDocCache. A year heading is emitted when the year changes, which means
+     the headings follow the sort rather than being computed separately from
+     it — the two cannot disagree. */
+  const parts = [];
+  let lastYear = null;
+  all.forEach((s, i) => {
+    const year = s._product ? 'current' : _fsYear(s);
+    if (year !== lastYear && !s._product) {
+      parts.push(`<div data-fs-kind="year" data-fs-year="${year}"
+        style="font-size:0.68rem;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);margin:10px 0 2px">${year}</div>`);
+      lastYear = year;
+    }
+    parts.push(row(s, i, year));
+  });
+
+  const searchable = archive.length >= _fsSearchAt();
+
   el.innerHTML = `
-    <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:8px"><i class="fa-solid fa-file-pdf" style="color:#ef4444"></i> Factsheets & documents</div>
-    ${all.length ? (() => { _fsDocCache = all; return `<div style="display:flex;flex-direction:column;gap:8px">
-      ${all.map((s, i) => `<a href="#" onclick="event.preventDefault();_openFsDoc(${i})" class="fs-row ${s._product ? 'fs-row--current' : ''}">
-        <div class="fs-row__icon"><i class="fa-solid fa-file-pdf"></i></div>
-        <div class="fs-row__info"><div class="fs-row__name">${_esc(s.file_name)}${s._product ? ' <span class="fs-current-tag">Product</span>' : ''}</div>
-          <div class="fs-row__meta">${Utils.date(s.created_at)}</div></div>
-        <i class="fa-solid fa-arrow-up-right-from-square fs-row__arrow"></i>
-      </a>`).join('')}
-    </div>`; })() : `<div style="font-size:0.82rem;color:var(--text-muted)">No factsheets uploaded yet for this product.</div>`}`;
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted)">
+        <i class="fa-solid fa-file-pdf" style="color:#ef4444"></i> Factsheets &amp; documents
+        <span style="font-weight:800;color:var(--text)">${all.length}</span>
+      </div>
+      ${searchable ? `<input type="search" id="fsFilter" placeholder="Search month or year…"
+        oninput="_filterFsRows()" autocomplete="off"
+        style="flex:1;min-width:150px;font-size:0.8rem;padding:6px 10px;border-radius:8px;
+               border:1px solid rgba(128,128,128,0.28);background:transparent;color:var(--text)">` : ''}
+    </div>
+    <div id="fsList" data-fs-expanded="0" style="display:flex;flex-direction:column;gap:8px">${parts.join('')}</div>
+    <div id="fsEmpty" style="display:none;font-size:0.82rem;color:var(--text-muted);padding:10px 2px">
+      No factsheet matches that.</div>
+    <button type="button" id="fsToggle" onclick="_toggleFsList()"
+      style="margin-top:10px;width:100%;font-size:0.78rem;font-weight:700;color:var(--text-muted);
+             background:transparent;border:1px dashed rgba(128,128,128,0.3);border-radius:9px;
+             padding:8px;cursor:pointer"></button>`;
+
+  _fsApplyVisibility();
 }
 
 async function _getPortalProducts() {
