@@ -1516,30 +1516,60 @@ router.get('/tax-cert', async (req, res) => {
     if (isNaN(taxYear) || taxYear < 2019 || taxYear > 2040)
       return res.status(400).json({ error: 'Invalid year' });
 
-    // SA tax year: 1 March (taxYear-1) → last day of February (taxYear)
-    const from = new Date(taxYear - 1, 2, 1, 0, 0, 0).toISOString();
-    const to   = new Date(taxYear,     2, 0, 23, 59, 59).toISOString(); // day 0 of March = last Feb day
+    /* SA tax year: 1 March (taxYear-1) → last day of February (taxYear), as
+       plain dates. They used to be built as local Date objects at 00:00:00 and
+       23:59:59 and sent as ISO instants, so the console — rendering an instant
+       in the reader's timezone — printed the end of a UTC day as the following
+       morning in SAST. The document's own header said "28 February 2026" while
+       the summary card beside it said "1 March 2026". A date has no timezone;
+       treating it as one is what created the disagreement. */
+    const pad     = n => String(n).padStart(2, '0');
+    const lastFeb = new Date(Date.UTC(taxYear, 2, 0));   // day 0 of March = last Feb day
+    const from    = `${taxYear - 1}-03-01`;
+    const to      = `${lastFeb.getUTCFullYear()}-${pad(lastFeb.getUTCMonth() + 1)}-${pad(lastFeb.getUTCDate())}`;
+
+    /* COALESCE(transaction_date, created_at), not created_at.
+     *
+     * created_at is when the ROW was written; transaction_date is when the
+     * money moved. For anything migrated or captured after the fact the two
+     * are months apart, and this route was the only money view still filtering
+     * on the wrong one — /account-statement has used the COALESCE for as long
+     * as it has had a balance. That is why a client with a full ledger could
+     * be handed an income reference reading R 0,00 and "No returns recorded".
+     *
+     * The end of the window is expressed as < (to + 1 day) so a transaction at
+     * any time on the last day of February is inside it, whatever time of day
+     * it carries. */
+    const WINDOW = `COALESCE(transaction_date, created_at) >= $2::date
+                AND COALESCE(transaction_date, created_at) <  ($3::date + INTERVAL '1 day')`;
+
+    /* Income is `return` and `interest` — see services/ledger. `payout` is not
+       income: its amount is the client's capital coming back plus the return
+       on it, so summing payouts here declared capital as taxable earnings. */
+    const { incomeTypesSQL } = require('../services/ledger');
 
     const [invRes, returnsRes, depositsRes, subAccRes] = await Promise.all([
       pool.query('SELECT * FROM investors WHERE id = $1 LIMIT 1', [investor_id]),
       pool.query(
-        `SELECT id, created_at, type, description, amount, reference
+        `SELECT id, COALESCE(transaction_date, created_at) AS txn_date,
+                created_at, type, description, amount, reference
          FROM transactions
          WHERE investor_id = $1
-           AND type IN ('return','payout')
+           AND type IN (${incomeTypesSQL()})
            AND status = 'completed'
-           AND created_at >= $2 AND created_at <= $3
-         ORDER BY created_at`,
+           AND ${WINDOW}
+         ORDER BY COALESCE(transaction_date, created_at)`,
         [investor_id, from, to]
       ),
       pool.query(
-        `SELECT id, created_at, type, description, amount, reference
+        `SELECT id, COALESCE(transaction_date, created_at) AS txn_date,
+                created_at, type, description, amount, reference
          FROM transactions
          WHERE investor_id = $1
            AND type = 'deposit'
            AND status = 'completed'
-           AND created_at >= $2 AND created_at <= $3
-         ORDER BY created_at`,
+           AND ${WINDOW}
+         ORDER BY COALESCE(transaction_date, created_at)`,
         [investor_id, from, to]
       ),
       pool.query('SELECT id FROM sub_accounts WHERE parent_investor_id = $1', [investor_id]),
@@ -1553,23 +1583,25 @@ router.get('/tax-cert', async (req, res) => {
     if (subIds.length) {
       const [saR, saD] = await Promise.all([
         pool.query(
-          `SELECT id, created_at, type, description, amount, reference
+          `SELECT id, COALESCE(transaction_date, created_at) AS txn_date,
+                  created_at, type, description, amount, reference
            FROM transactions
            WHERE sub_account_id = ANY($1::text[])
-             AND type IN ('return','payout')
+             AND type IN (${incomeTypesSQL()})
              AND status = 'completed'
-             AND created_at >= $2 AND created_at <= $3
-           ORDER BY created_at`,
+             AND ${WINDOW}
+           ORDER BY COALESCE(transaction_date, created_at)`,
           [subIds, from, to]
         ),
         pool.query(
-          `SELECT id, created_at, type, description, amount, reference
+          `SELECT id, COALESCE(transaction_date, created_at) AS txn_date,
+                  created_at, type, description, amount, reference
            FROM transactions
            WHERE sub_account_id = ANY($1::text[])
              AND type = 'deposit'
              AND status = 'completed'
-             AND created_at >= $2 AND created_at <= $3
-           ORDER BY created_at`,
+             AND ${WINDOW}
+           ORDER BY COALESCE(transaction_date, created_at)`,
           [subIds, from, to]
         ),
       ]);
@@ -1577,15 +1609,40 @@ router.get('/tax-cert', async (req, res) => {
       saDeposits = saD.rows;
     }
 
+    /* Investments that MATURED inside the year. The return realised at maturity
+       is written to investments.actual_return and NOT as a transaction of its
+       own — creditWallet writes only the payout, whose amount is capital plus
+       return together. So without this the realised return has no
+       representation on the certificate at all.
+
+       Reported beside the credited income rather than added to it. A holding
+       whose return was also accrued month by month appears in both, and adding
+       them would declare the same earnings twice — the identical trap the
+       portal's certificate documents and avoids. */
+    const maturedRes = await pool.query(
+      `SELECT i.id, i.pool_name, i.amount, i.end_date,
+              COALESCE(i.actual_return, i.expected_return, 0) AS realised_return,
+              i.actual_return IS NULL AS return_is_projected
+         FROM investments i
+        WHERE (i.investor_id = $1 OR i.sub_account_id = ANY($4::text[]))
+          AND i.status IN ('matured', 'paid_out')
+          AND i.end_date >= $2::date AND i.end_date <= $3::date
+        ORDER BY i.end_date`,
+      [investor_id, from, to, subIds]
+    );
+
     const returns  = [...returnsRes.rows,  ...saReturns];
     const deposits = [...depositsRes.rows, ...saDeposits];
 
-    // Sort merged arrays chronologically
-    returns.sort((a, b)  => new Date(a.created_at) - new Date(b.created_at));
-    deposits.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    // Sort merged arrays chronologically, on the date the money moved
+    const when = t => new Date(t.txn_date || t.created_at);
+    returns.sort((a, b)  => when(a) - when(b));
+    deposits.sort((a, b) => when(a) - when(b));
 
     const totalReturns  = returns.reduce((s, t)  => s + Math.abs(parseFloat(t.amount) || 0), 0);
     const totalDeposits = deposits.reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
+    const maturedReturns = maturedRes.rows.reduce(
+      (s, r) => s + (parseFloat(r.realised_return) || 0), 0);
 
     const inv = invRes.rows[0];
 
@@ -1604,9 +1661,17 @@ router.get('/tax-cert', async (req, res) => {
         street_address: inv.street_address, suburb: inv.suburb,
         address: inv.address, postal_code: inv.postal_code, province: inv.province,
       },
-      taxYear, from, to,
+      taxYear,
+      /* Plain YYYY-MM-DD. The console renders these verbatim rather than
+         through a Date, so no reader's timezone can move the end of the tax
+         year onto the following morning. */
+      from, to,
       returns, totalReturns,
       deposits, totalDeposits,
+      /* Realised at maturity, held on the investment rather than in the
+         ledger. Separate from totalReturns on purpose — see above. */
+      maturedInvestments: maturedRes.rows,
+      maturedReturns: Math.round(maturedReturns * 100) / 100,
     });
   } catch (err) {
     console.error('[admin/tax-cert]', err);

@@ -76,6 +76,9 @@ const TAX_YEAR = 2026;
 const T = [
   // id,               type,        amount,  when,          status,      where
   ['TC-T-IN-RET',     'return',     1200,   '2025-06-15', 'completed', 'investor'],
+  ['TC-T-IN-INT',     'interest',    450,   '2025-08-18', 'completed', 'investor'],
+  /* A maturity payout: capital plus the return on it, in one amount. Counting
+     this as income declares R8 500 of the client's own money as earnings. */
   ['TC-T-IN-PAY',     'payout',     8500,   '2025-11-01', 'completed', 'investor'],
   ['TC-T-IN-DEP',     'deposit',   40000,   '2025-04-02', 'completed', 'investor'],
   // Boundaries: the first and last day of the year must be inside it.
@@ -106,14 +109,32 @@ async function seed() {
     INSERT INTO sub_accounts (id,parent_investor_id,name,account_type,wallet_balance)
     VALUES ('TC-SA','TC-INV','Minor account','minor',0)`);
 
+  /* created_at is deliberately NOT the date the money moved. Every row is
+     stamped as though the ledger were migrated in one batch on 21 August 2026,
+     which is the shape real imported data has — and the shape that made this
+     endpoint report R 0,00 to a client with a full ledger. A fixture where the
+     two columns agree cannot tell the two apart, and the first version of this
+     check made exactly that mistake and passed against the bug. */
+  const MIGRATED_ON = '2026-08-21T00:00:00Z';
   for (const [id, type, amount, when, status, where] of T) {
     await pool.query(
       `INSERT INTO transactions (id,investor_id,sub_account_id,type,amount,status,reference,
                                  description,transaction_date,created_at,updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$1,$7,$8::timestamptz,$8::timestamptz,NOW())`,
+       VALUES ($1,$2,$3,$4,$5,$6,$1,$7,$8::timestamptz,$9::timestamptz,NOW())`,
       [id, where === 'sub' ? null : 'TC-INV', where === 'sub' ? 'TC-SA' : null,
-       type, amount, status, `fixture ${type}`, `${when}T09:00:00Z`]);
+       type, amount, status, `fixture ${type}`, `${when}T09:00:00Z`, MIGRATED_ON]);
   }
+
+  /* An investment that matured inside the tax year. Its return is on the
+     investment, not in the ledger — creditWallet writes only the payout. */
+  await pool.query(`
+    INSERT INTO investments (id,investor_id,pool_id,pool_name,amount,status,
+        start_date,end_date,annual_rate,term_months,expected_return,actual_return,
+        product_type,maturity_instruction)
+    VALUES ('TC-I-MAT','TC-INV',NULL,'Cattle Investment - November 2025',
+            8000,'matured','2024-11-01','2025-11-01',0.0625,12,500,500,'cattle','payout'),
+           ('TC-I-OUT','TC-INV',NULL,'Cattle Investment - June 2026',
+            9000,'matured','2025-06-01','2026-06-01',0.05,12,450,450,'cattle','payout')`);
 }
 
 /* The real router, with only its auth replaced. requireAuth/requireRole are
@@ -178,11 +199,32 @@ const sum   = rows => Math.round((rows || []).reduce((a, r) => a + Math.abs(Numb
         ok(`${k} is present`, body[k] !== undefined, JSON.stringify(Object.keys(body)));
       }
 
+      console.log('\nthe date the money moved, not the date the row was written');
+      /* The bug that produced an income reference reading R 0,00 for a client
+         with a full ledger: every row here was written on 21 August 2026, and
+         filtering on created_at put all of it outside every tax year the
+         client could ask for. */
+      ok('a transaction migrated long afterwards is still in its own tax year',
+         idsOf(body.returns).includes('TC-T-IN-RET'),
+         `returns: ${JSON.stringify(idsOf(body.returns))} — all rows have created_at in Aug 2026`);
+      ok('and the certificate is not empty',
+         Number(body.totalReturns) > 0 && Number(body.totalDeposits) > 0,
+         `returns ${body.totalReturns}, deposits ${body.totalDeposits}`);
+      ok('each row carries the date the money moved',
+         (body.returns || []).every(r => r.txn_date),
+         'without it the document prints the migration date against every line');
+
       console.log('\nthe SA tax year, 1 March to the last day of February');
       ok('it starts on 1 March of the previous year',
          String(body.from).slice(0, 10) === '2025-03-01', String(body.from));
       ok('and ends on the last day of February',
          String(body.to).slice(0, 10) === '2026-02-28', String(body.to));
+      /* Plain dates, not instants. Sent as 23:59:59Z the end of the year was
+         printed as "1 March 2026" by a browser in SAST, disagreeing with the
+         document's own header. */
+      ok('and both are plain dates, so no reader\'s timezone can move them',
+         /^\d{4}-\d{2}-\d{2}$/.test(String(body.from)) && /^\d{4}-\d{2}-\d{2}$/.test(String(body.to)),
+         `${body.from} … ${body.to}`);
       ok('a transaction on the first day is inside it',
          idsOf(body.deposits).includes('TC-T-FIRST-DAY'), JSON.stringify(idsOf(body.deposits)));
       ok('and one on the last day too',
@@ -206,6 +248,33 @@ const sum   = rows => Math.round((rows || []).reduce((a, r) => a + Math.abs(Numb
          idsOf(body.returns).includes('TC-T-SA-RET'), JSON.stringify(idsOf(body.returns)));
       ok('and its deposits', idsOf(body.deposits).includes('TC-T-SA-DEP'),
          JSON.stringify(idsOf(body.deposits)));
+
+      console.log('\nincome is what was earned, not what moved');
+      /* A payout's amount is the client's capital coming back PLUS the return
+         on it. Summing payouts as income declares returned capital as taxable
+         earnings — R8 500 of it, on this fixture. */
+      ok('a maturity payout is not counted as income',
+         !idsOf(body.returns).includes('TC-T-IN-PAY'),
+         `returns: ${JSON.stringify(idsOf(body.returns))}`);
+      ok('an accrued return is', idsOf(body.returns).includes('TC-T-IN-RET'));
+      ok('and so is credited interest', idsOf(body.returns).includes('TC-T-IN-INT'),
+         'interest credited from the periodic distribution is income and was omitted entirely');
+      ok('so the credited-income total is the returns and interest alone',
+         Math.abs(Number(body.totalReturns) - (1200 + 450 + 300)) < 0.005,
+         `${body.totalReturns} — expected 1950 (1200 return + 450 interest + 300 sub-account return)`);
+
+      console.log('\nthe return realised at maturity is reported, and reported apart');
+      ok('an investment that matured in the year is listed',
+         (body.maturedInvestments || []).some(m => m.id === 'TC-I-MAT'),
+         JSON.stringify((body.maturedInvestments || []).map(m => m.id)));
+      ok('one that matured outside it is not',
+         !(body.maturedInvestments || []).some(m => m.id === 'TC-I-OUT'),
+         JSON.stringify((body.maturedInvestments || []).map(m => m.id)));
+      ok('its realised return is totalled', Math.abs(Number(body.maturedReturns) - 500) < 0.005,
+         String(body.maturedReturns));
+      ok('and kept out of the credited-income figure',
+         Math.abs(Number(body.totalReturns) - 1950) < 0.005,
+         'a holding accrued monthly and then matured appears in both — adding them declares it twice');
 
       console.log('\nthe totals are the rows');
       /* Asserted against the rows the response itself returned, not against a

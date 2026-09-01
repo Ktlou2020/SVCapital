@@ -28,7 +28,31 @@
 const CASH_CREDIT_TYPES = ['deposit', 'payout', 'interest', 'gift_received', 'referral_bonus', 'matured_funds'];
 const CASH_DEBIT_TYPES  = ['withdrawal', 'investment', 'reinvestment', 'fee', 'platform_fee', 'gift_sent'];
 
+/* The transaction types that are INVESTMENT INCOME — what a client earned, as
+   opposed to what moved.
+ *
+ * `payout` is deliberately absent, and it is the reason this list exists.
+ * maturityCron's creditWallet takes (amount, returnPortion) and writes a
+ * payout transaction whose amount is the WHOLE credit — the client's capital
+ * coming back plus the return on it — while the return portion alone goes to
+ * investors.total_returns. Summing payout amounts as income therefore declares
+ * the client's own capital as taxable earnings. On a document headed
+ * "Investment Income" that is not a rounding problem.
+ *
+ * `deposit` is absent for the same reason from the other side: it is the
+ * client's own money arriving, reported separately as a contribution.
+ *
+ * This covers income recorded AS A TRANSACTION. The return realised when an
+ * investment matures is recorded on the investment (investments.actual_return),
+ * not as a transaction of its own, and has to be read from there. The two must
+ * be reported side by side rather than added: a maturity whose return was also
+ * accrued monthly appears in both, and adding them declares income twice. */
+const INCOME_TYPES = ['return', 'interest'];
+
 const _list = arr => arr.map(t => `'${t}'`).join(',');
+
+/* For SQL IN clauses, so no caller retypes the list. */
+const incomeTypesSQL = () => _list(INCOME_TYPES);
 
 /* SQL CASE expression for the signed cash effect of a transaction row.
    `p` prefixes the column names for queries that alias the table. */
@@ -66,5 +90,6 @@ const movesCash = txn =>
   CASH_CREDIT_TYPES.includes(String((txn && txn.type) || '')) ||
   CASH_DEBIT_TYPES.includes(String((txn && txn.type) || ''));
 
-module.exports = { CASH_CREDIT_TYPES, CASH_DEBIT_TYPES, cashMovementSQL,
+module.exports = { CASH_CREDIT_TYPES, CASH_DEBIT_TYPES, INCOME_TYPES,
+                   cashMovementSQL, incomeTypesSQL,
                    cashMovement, movesCash, CASH_MOVEMENT: cashMovement };

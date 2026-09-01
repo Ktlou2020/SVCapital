@@ -2,6 +2,10 @@
 const router = require('express').Router();
 const pool = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
+/* One definition of what counts as investment income, shared with the admin
+   console's certificate — two documents reporting the same client's earnings
+   must not be able to disagree. */
+const { INCOME_TYPES } = require('../services/ledger');
 
 /* GET /api/statements — list available statements for the logged-in investor */
 router.get('/', requireAuth, async (req, res) => {
@@ -49,12 +53,19 @@ router.get('/tax-cert/:year', requireAuth, async (req, res) => {
 
     const [invRes, txnRes, retRes] = await Promise.all([
       pool.query('SELECT * FROM investors WHERE id=$1', [investorId]),
+      /* COALESCE(transaction_date, created_at): created_at is when the row was
+         written, and for anything migrated or captured after the fact that is
+         months from when the money moved. Filtering on it put a client's
+         income in the wrong tax year — or, when the whole ledger was imported
+         at once, in no year the client could ask for. */
       pool.query(
-        `SELECT type, amount, status, created_at, reference, description
+        `SELECT type, amount, status, reference, description,
+                COALESCE(transaction_date, created_at) AS txn_date, created_at
            FROM transactions
           WHERE investor_id = $1 AND status = 'completed'
-            AND created_at >= $2 AND created_at < ($3::date + INTERVAL '1 day')
-          ORDER BY created_at`, [investorId, from, to]),
+            AND COALESCE(transaction_date, created_at) >= $2
+            AND COALESCE(transaction_date, created_at) < ($3::date + INTERVAL '1 day')
+          ORDER BY COALESCE(transaction_date, created_at)`, [investorId, from, to]),
       /* 'matured', not 'paid_out'. Setup migrates paid_out to matured on every
          boot, so this filter matched nothing and the certificate reported R0 of
          investment returns to every investor, every year. Both are accepted
@@ -77,13 +88,19 @@ router.get('/tax-cert/:year', requireAuth, async (req, res) => {
     const deposits    = sumType('deposit');
     const withdrawals = sumType('withdrawal');
 
-    /* Interest and returns credited as transactions are what an investor was
-       actually paid in the period. The matured investments are reported
+    /* Income credited as transactions. The matured investments are reported
        alongside, and the two are NOT added together: a matured investment whose
-       return was credited as a transaction would otherwise be counted twice —
+       return was also accrued as transactions would otherwise be counted twice —
        which on a tax certificate means declaring income the client never
-       received. */
-    const returnsPaid = sumType('return') + sumType('payout') + sumType('interest');
+       received.
+
+       `payout` used to be in this sum and has been removed. maturityCron's
+       creditWallet writes a payout whose amount is the client's capital coming
+       back PLUS the return on it; only the return portion goes to
+       total_returns. Adding payout amounts here therefore declared returned
+       capital as investment income. The realised return is already carried by
+       maturedReturns below, from investments.actual_return. */
+    const returnsPaid = INCOME_TYPES.reduce((s, t) => s + sumType(t), 0);
     const maturedReturns = retRes.rows.reduce(
       (s, r) => s + num(r.actual_return != null ? r.actual_return : r.expected_return), 0);
 

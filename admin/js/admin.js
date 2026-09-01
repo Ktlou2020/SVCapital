@@ -15753,29 +15753,59 @@ async function _generateAdminTaxCert(investorId) {
 }
 
 function _openAdminTaxCertWindow(data) {
-  const { investor: inv, taxYear, returns, deposits, totalReturns, totalDeposits, from, to } = data;
+  const { investor: inv, taxYear, returns, deposits, totalReturns, totalDeposits, from, to,
+          maturedInvestments = [], maturedReturns = 0 } = data;
 
   const fmt = n => 'R ' + parseFloat(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const fmtDate = s => s ? new Date(s).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+  const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const MONTHS_LONG  = ['January','February','March','April','May','June',
+                        'July','August','September','October','November','December'];
+
+  /* Dates are rendered from their own YYYY-MM-DD text, never through a Date.
+     A tax year ends on a DAY, and a day has no timezone: the server used to
+     send the end as an instant at 23:59:59Z, which a browser in SAST printed
+     as the next morning — so this document's header read "28 February 2026"
+     while the summary card beside it read "1 March 2026". */
+  const ymd = s => {
+    const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? { y: +m[1], m: +m[2], d: +m[3] } : null;
+  };
+  const fmtDate = s => { const p = ymd(s); return p ? `${p.d} ${MONTHS_SHORT[p.m - 1]} ${p.y}` : '—'; };
+  const fmtLong = s => { const p = ymd(s); return p ? `${p.d} ${MONTHS_LONG[p.m - 1]} ${p.y}` : '—'; };
+  /* The row date is when the money moved, not when the row was written. */
+  const rowDate = t => fmtDate(t.txn_date || t.created_at);
+
   const esc = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const certNo = `SVCRC-${taxYear}-${String(inv.id).replace(/\D/g,'').slice(-6)}`;
   const issuedAt = new Date().toLocaleString('en-ZA', { dateStyle: 'long', timeStyle: 'short' });
-  const fromLabel = new Date(from).toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' });
-  const toLabel   = new Date(to).toLocaleDateString('en-ZA',   { day: 'numeric', month: 'long', year: 'numeric' });
+  const fromLabel = fmtLong(from);
+  const toLabel   = fmtLong(to);
   const fullAddr  = [inv.street_address, inv.suburb, inv.address, inv.postal_code, inv.province].filter(Boolean).join(', ');
 
   const returnsRows = returns.map(t => `
     <tr>
-      <td>${fmtDate(t.created_at)}</td>
-      <td>${_esc(esc(t.description || (t.type === 'return' ? 'Investment return' : 'Payout')))}</td>
+      <td>${rowDate(t)}</td>
+      <td>${_esc(esc(t.description || (t.type === 'interest' ? 'Interest credited' : 'Investment return')))}</td>
       <td class="amt">${fmt(Math.abs(parseFloat(t.amount||0)))}</td>
     </tr>`).join('');
 
   const depositsRows = deposits.map(t => `
     <tr>
-      <td>${fmtDate(t.created_at)}</td>
+      <td>${rowDate(t)}</td>
       <td>${_esc(esc(t.description || 'Client deposit'))}</td>
       <td class="amt">${fmt(Math.abs(parseFloat(t.amount||0)))}</td>
+    </tr>`).join('');
+
+  /* Returns realised at maturity live on the investment, not in the ledger, so
+     they need their own section. Shown beside the credited income and never
+     added to it — a holding accrued monthly and then matured appears in both,
+     and one total covering the two would declare the same earnings twice. */
+  const maturedRows = maturedInvestments.map(m => `
+    <tr>
+      <td>${fmtDate(m.end_date)}</td>
+      <td>${_esc(esc(m.pool_name || 'Investment'))}${m.return_is_projected ? ' (projected)' : ''}</td>
+      <td class="amt">${fmt(Math.abs(parseFloat(m.amount||0)))}</td>
+      <td class="amt">${fmt(Math.abs(parseFloat(m.realised_return||0)))}</td>
     </tr>`).join('');
 
   const html = `<!DOCTYPE html>
@@ -15858,7 +15888,7 @@ tr.total-row td.amt{color:#111}
 
   <div class="summary">
     <div class="sum-box green">
-      <div class="sum-lbl">Total Returns Earned</div>
+      <div class="sum-lbl">Returns Credited</div>
       <div class="sum-amt">${fmt(totalReturns)}</div>
       <div class="sum-period">${fromLabel} – ${toLabel}</div>
     </div>
@@ -15868,6 +15898,21 @@ tr.total-row td.amt{color:#111}
       <div class="sum-period">${fromLabel} – ${toLabel}</div>
     </div>
   </div>
+  ${maturedInvestments.length ? `<div class="summary" style="margin-top:-10px">
+    <div class="sum-box green">
+      <div class="sum-lbl">Returns Realised at Maturity</div>
+      <div class="sum-amt">${fmt(maturedReturns)}</div>
+      <div class="sum-period">${maturedInvestments.length} investment${maturedInvestments.length === 1 ? '' : 's'} matured in this year</div>
+    </div>
+    <div class="sum-box" style="border-color:#d4d4d4">
+      <div class="sum-lbl">Reported Separately</div>
+      <div style="font-size:10.5px;color:#555;line-height:1.5;margin-top:4px">
+        Returns credited and returns realised at maturity are shown apart and are
+        <strong>not added together</strong>. An investment whose return was credited
+        during the year and which then matured appears in both figures.
+      </div>
+    </div>
+  </div>` : ''}
 
   <div class="section-title">Investor Details</div>
   <dl class="details-grid">
@@ -15878,14 +15923,14 @@ tr.total-row td.amt{color:#111}
     ${fullAddr ? `<dt>Address</dt><dd>${esc(fullAddr)}</dd>` : ''}
   </dl>
 
-  <div class="section-title" style="color:#166534">Returns Earned</div>
+  <div class="section-title" style="color:#166534">Returns Credited</div>
   ${returns.length ? `<table>
     <thead><tr><th>Date</th><th>Description</th><th style="text-align:right">Amount</th></tr></thead>
     <tbody>
       ${returnsRows}
-      <tr class="total-row"><td colspan="2">TOTAL RETURNS EARNED</td><td class="amt">${fmt(totalReturns)}</td></tr>
+      <tr class="total-row"><td colspan="2">TOTAL RETURNS CREDITED</td><td class="amt">${fmt(totalReturns)}</td></tr>
     </tbody>
-  </table>` : `<div class="empty">No returns recorded for this tax year.</div>`}
+  </table>` : `<div class="empty">No returns or interest were credited in this tax year.</div>`}
 
   <div class="section-title" style="color:#1e40af">Deposits Made</div>
   ${deposits.length ? `<table>
@@ -15896,11 +15941,23 @@ tr.total-row td.amt{color:#111}
     </tbody>
   </table>` : `<div class="empty">No deposits recorded for this tax year.</div>`}
 
+  ${maturedInvestments.length ? `
+  <div class="section-title" style="color:#166534">Investments Matured in this Tax Year</div>
+  <table>
+    <thead><tr><th>Matured</th><th>Investment</th><th style="text-align:right">Capital</th><th style="text-align:right">Return</th></tr></thead>
+    <tbody>
+      ${maturedRows}
+      <tr class="total-row"><td colspan="3">TOTAL RETURNS REALISED AT MATURITY</td><td class="amt">${fmt(maturedReturns)}</td></tr>
+    </tbody>
+  </table>` : ''}
+
   <div class="footer">
     <strong>SV Capital (Pty) Ltd</strong> — FSCA Regulated Financial Services Provider.<br>
     This document is generated for client reference only and does not constitute an official SARS IT3(b) interest income certificate.
-    Returns shown are investment returns and payouts credited to the investor account in the tax year ${taxYear-1}/${taxYear}
-    (1 March ${taxYear-1} to 28 February ${taxYear}).<br>
+    Returns credited are investment return and interest amounts credited to the investor account in the tax year
+    ${taxYear-1}/${taxYear} (${fromLabel} to ${toLabel}). Maturity payouts are excluded from that figure because a
+    payout returns the client's own capital along with the return on it; the return realised at maturity is reported
+    in its own section.<br>
     Deposits shown are funds deposited into the investor's SV Capital account during the same period.<br>
     <strong>Ref:</strong> ${certNo} &nbsp;·&nbsp; <strong>Issued:</strong> ${issuedAt}<br>
     <div class="stamp">SV Capital</div>

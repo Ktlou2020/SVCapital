@@ -238,6 +238,22 @@ console.log('\nthe South African tax year');
   ok('the two return figures are reported separately, not summed',
      /maturedReturns:/.test(STMTS) && /totalReturns: Math\.round\(returnsPaid/.test(STMTS),
      'adding them would declare income twice on a tax certificate');
+
+  /* The portal certificate and the admin one report the same client's earnings.
+     They must not be able to disagree about what earnings ARE, so both take the
+     list from services/ledger rather than writing their own. */
+  ok('income types come from the ledger, not a list retyped here',
+     /INCOME_TYPES/.test(STMTS) && /require\('\.\.\/services\/ledger'\)/.test(STMTS),
+     'two documents with two definitions is how they drift');
+  ok("and a maturity payout is not among them",
+     !/sumType\('payout'\)/.test(strip(STMTS)),
+     "a payout's amount is the client's capital plus the return on it — summing it as " +
+     'income declares returned capital as taxable earnings');
+  ok('the period filter is the date the money moved, not the date the row was written',
+     /COALESCE\(transaction_date, created_at\) >=/.test(STMTS) &&
+     !/AND created_at >= \$2/.test(strip(STMTS)),
+     'a migrated ledger has created_at on the import date, which puts every ' +
+     'transaction outside every tax year the client can ask for');
 }
 
 console.log('\none source of truth, shared by both surfaces');
