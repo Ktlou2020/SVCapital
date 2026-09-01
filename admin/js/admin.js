@@ -15894,7 +15894,41 @@ tr.total-row td.amt{color:#111}
     This document is provided to assist the client in preparing their tax return. It has not been submitted to SARS and does not replace an official IT3(b) certificate.</div>
   </div>
 
-  <div class="summary">
+  ${/* The maturity return leads whenever there is one.
+
+        With interestCron disabled, a client whose returns come from maturities
+        can never have anything in "Returns Credited" — their whole investment
+        income arrives as the return portion of maturity payouts, carried on the
+        pool's actual_rate. Leading with a figure that is structurally R 0,00 for
+        most clients puts the number that matters below the fold. */
+    maturedInvestments.length ? `<div class="summary">
+    <div class="sum-box green">
+      <div class="sum-lbl">Returns Realised at Maturity</div>
+      <div class="sum-amt">${maturedUnposted === maturedInvestments.length ? '—' : fmt(maturedReturns)}</div>
+      <div class="sum-period">${maturedInvestments.length} investment${maturedInvestments.length === 1 ? '' : 's'} matured in this year${
+        maturedUnposted ? ` · ${maturedUnposted} with no posted return yet` : ''}</div>
+    </div>
+    <div class="sum-box green">
+      <div class="sum-lbl">Returns Credited</div>
+      <div class="sum-amt">${fmt(totalReturns)}</div>
+      <div class="sum-period">${fromLabel} – ${toLabel}</div>
+    </div>
+  </div>
+  <div class="summary" style="margin-top:-10px">
+    <div class="sum-box blue">
+      <div class="sum-lbl">Total Deposits Made</div>
+      <div class="sum-amt">${fmt(totalDeposits)}</div>
+      <div class="sum-period">${fromLabel} – ${toLabel}</div>
+    </div>
+    <div class="sum-box" style="border-color:#d4d4d4">
+      <div class="sum-lbl">Reported Separately</div>
+      <div style="font-size:10.5px;color:#555;line-height:1.5;margin-top:4px">
+        Returns realised at maturity and returns credited are shown apart and are
+        <strong>not added together</strong>. An investment whose return was credited
+        during the year and which then matured appears in both figures.
+      </div>
+    </div>
+  </div>` : `<div class="summary">
     <div class="sum-box green">
       <div class="sum-lbl">Returns Credited</div>
       <div class="sum-amt">${fmt(totalReturns)}</div>
@@ -15905,23 +15939,7 @@ tr.total-row td.amt{color:#111}
       <div class="sum-amt">${fmt(totalDeposits)}</div>
       <div class="sum-period">${fromLabel} – ${toLabel}</div>
     </div>
-  </div>
-  ${maturedInvestments.length ? `<div class="summary" style="margin-top:-10px">
-    <div class="sum-box green">
-      <div class="sum-lbl">Returns Realised at Maturity</div>
-      <div class="sum-amt">${maturedUnposted === maturedInvestments.length ? '—' : fmt(maturedReturns)}</div>
-      <div class="sum-period">${maturedInvestments.length} investment${maturedInvestments.length === 1 ? '' : 's'} matured in this year${
-        maturedUnposted ? ` · ${maturedUnposted} with no posted return yet` : ''}</div>
-    </div>
-    <div class="sum-box" style="border-color:#d4d4d4">
-      <div class="sum-lbl">Reported Separately</div>
-      <div style="font-size:10.5px;color:#555;line-height:1.5;margin-top:4px">
-        Returns credited and returns realised at maturity are shown apart and are
-        <strong>not added together</strong>. An investment whose return was credited
-        during the year and which then matured appears in both figures.
-      </div>
-    </div>
-  </div>` : ''}
+  </div>`}
 
   <div class="section-title">Investor Details</div>
   <dl class="details-grid">
@@ -15931,24 +15949,6 @@ tr.total-row td.amt{color:#111}
     <dt>SA ID / Passport</dt><dd>${_esc(esc(inv.id_number || '—'))}</dd>
     ${fullAddr ? `<dt>Address</dt><dd>${esc(fullAddr)}</dd>` : ''}
   </dl>
-
-  <div class="section-title" style="color:#166534">Returns Credited</div>
-  ${returns.length ? `<table>
-    <thead><tr><th>Date</th><th>Description</th><th style="text-align:right">Amount</th></tr></thead>
-    <tbody>
-      ${returnsRows}
-      <tr class="total-row"><td colspan="2">TOTAL RETURNS CREDITED</td><td class="amt">${fmt(totalReturns)}</td></tr>
-    </tbody>
-  </table>` : `<div class="empty">No returns or interest were credited in this tax year.</div>`}
-
-  <div class="section-title" style="color:#1e40af">Deposits Made</div>
-  ${deposits.length ? `<table>
-    <thead><tr><th>Date</th><th>Description</th><th style="text-align:right">Amount</th></tr></thead>
-    <tbody>
-      ${depositsRows}
-      <tr class="total-row"><td colspan="2">TOTAL DEPOSITS MADE</td><td class="amt">${fmt(totalDeposits)}</td></tr>
-    </tbody>
-  </table>` : `<div class="empty">No deposits recorded for this tax year.</div>`}
 
   ${maturedInvestments.length ? `
   <div class="section-title" style="color:#166534">Investments Matured in this Tax Year</div>
@@ -15966,6 +15966,32 @@ tr.total-row td.amt{color:#111}
       <tr class="total-row"><td colspan="3">TOTAL RETURNS REALISED AT MATURITY</td><td class="amt">${fmt(maturedReturns)}</td></tr>
     </tbody>
   </table>` : ''}
+
+  <div class="section-title" style="color:#166534">Returns Credited</div>
+  ${returns.length ? `<table>
+    <thead><tr><th>Date</th><th>Description</th><th style="text-align:right">Amount</th></tr></thead>
+    <tbody>
+      ${returnsRows}
+      <tr class="total-row"><td colspan="2">TOTAL RETURNS CREDITED</td><td class="amt">${fmt(totalReturns)}</td></tr>
+    </tbody>
+  </table>` : `<div class="empty">${
+    /* "No returns were credited" on its own reads as "you earned nothing",
+       which is wrong for a client whose whole income came from maturities —
+       and that is most of them. Say where the income actually is. */
+    maturedInvestments.length
+      ? 'No returns or interest were credited directly to the account in this tax year. ' +
+        'The investment income for this year is the return realised at maturity, shown above.'
+      : 'No returns or interest were credited in this tax year.'}</div>`}
+
+  <div class="section-title" style="color:#1e40af">Deposits Made</div>
+  ${deposits.length ? `<table>
+    <thead><tr><th>Date</th><th>Description</th><th style="text-align:right">Amount</th></tr></thead>
+    <tbody>
+      ${depositsRows}
+      <tr class="total-row"><td colspan="2">TOTAL DEPOSITS MADE</td><td class="amt">${fmt(totalDeposits)}</td></tr>
+    </tbody>
+  </table>` : `<div class="empty">No deposits recorded for this tax year.</div>`}
+
 
   <div class="footer">
     <strong>SV Capital (Pty) Ltd</strong> &mdash; FSCA Regulated Financial Services Provider.<br>
