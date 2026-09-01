@@ -10995,9 +10995,9 @@ let _POOL_MATURITY_REPORT = null;
 /* The CSV is the row-level report, one line per investment, because that is
    the form someone reconciles against a bank file. The printed page carries
    the summary; a spreadsheet of summaries reconciles nothing. */
-function downloadPoolMaturityCSV() {
-  const d = _POOL_MATURITY_REPORT;
-  if (!d) { Toast.error('Open the report first'); return; }
+/* The rows, separated from the download, because the report window embeds
+   them rather than calling back here. */
+function _poolMaturityCSVRows(d) {
   const rows = [[
     'Investment ID', 'Holder', 'Holder ID', 'Sub-account', 'Capital', 'Return', 'Gross',
     'Instruction', 'Instruction (as executed)', 'Named amount', 'To wallet', 'Reinvested',
@@ -11025,8 +11025,26 @@ function downloadPoolMaturityCSV() {
                h.principal, '', '', h.instructionLabel, 'HELD BACK — no posted return', '', '', '',
                '', '', 'no', 'no']);
   }
-  const safe = String(d.pool.name || d.pool.id).replace(/[^A-Za-z0-9]+/g, '_');
-  _downloadCSV(rows, `SV_Capital_Maturity_Instructions_${safe}.csv`);
+  return rows;
+}
+
+const _poolMaturityFileBase = d =>
+  `SV_Capital_Maturity_Instructions_${String(d.pool.name || d.pool.id).replace(/[^A-Za-z0-9]+/g, '_')}`;
+
+/* CSV text, with the BOM the rest of the console writes so Excel reads UTF-8. */
+function _poolMaturityCSVText(d) {
+  return '\ufeff' + _poolMaturityCSVRows(d).map(r => r.map(cell => {
+    const c = String(cell == null ? '' : cell).replace(/"/g, '""');
+    return /[,"\n\r]/.test(c) ? `"${c}"` : c;
+  }).join(',')).join('\r\n');
+}
+
+/* Still here for use from the console itself. The report window does NOT call
+   it — see _openPoolMaturityReportWindow. */
+function downloadPoolMaturityCSV() {
+  const d = _POOL_MATURITY_REPORT;
+  if (!d) { Toast.error('Open the report first'); return; }
+  _downloadCSV(_poolMaturityCSVRows(d), `${_poolMaturityFileBase(d)}.csv`);
 }
 
 /* A real PDF file, not a print dialog.
@@ -11039,19 +11057,12 @@ function downloadPoolMaturityCSV() {
  *
  * Landscape: the by-client table carries seven columns and two of them hold
  * pool names. */
-function downloadPoolMaturityPDF() {
-  const d = _POOL_MATURITY_REPORT;
-  if (!d) { Toast.error('Open the report first'); return; }
-  if (!window.jspdf || !window.jspdf.jsPDF) {
-    Toast.error('PDF library unavailable — use Print instead');
-    return;
-  }
+function _buildPoolMaturityPDF(d) {
+  if (!d) return null;
+  if (!window.jspdf || !window.jspdf.jsPDF) return null;
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
-  if (typeof doc.autoTable !== 'function') {
-    Toast.error('PDF table plugin unavailable — use Print instead');
-    return;
-  }
+  if (typeof doc.autoTable !== 'function') return null;
   const money = n => 'R ' + parseFloat(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const day = v => {
@@ -11155,12 +11166,52 @@ function downloadPoolMaturityPDF() {
     doc.text(`Page ${i} of ${pages}`, W - 40, H - 15, { align: 'right' });
   }
 
-  const safe = String(d.pool.name || d.pool.id).replace(/[^A-Za-z0-9]+/g, '_');
-  doc.save(`SV_Capital_Maturity_Instructions_${safe}.pdf`);
+  return doc;
+}
+
+/* Still here for use from the console itself. The report window embeds the
+   file instead of calling this — see _openPoolMaturityReportWindow. */
+function downloadPoolMaturityPDF() {
+  const d = _POOL_MATURITY_REPORT;
+  if (!d) { Toast.error('Open the report first'); return; }
+  const doc = _buildPoolMaturityPDF(d);
+  if (!doc) { Toast.error('PDF library unavailable — use Print instead'); return; }
+  doc.save(`${_poolMaturityFileBase(d)}.pdf`);
   Toast.success('PDF downloaded');
 }
 
 function _openPoolMaturityReportWindow(d) {
+  /* Both files are built HERE and embedded in the page as data: URLs, rather
+     than the report's buttons calling back into this window.
+
+     The callback version did not work. The report window is a document.write
+     into about:blank, and what a download needs there is specific: a data:
+     anchor in that window downloads, a blob: anchor in it does not, and a
+     cross-window call depends on window.opener still being there and on the
+     console never having been navigated away from. Worse, anything that went
+     wrong reported through Toast — in the console, behind the report — so a
+     failure looked exactly like a button that did nothing.
+
+     Embedding removes all of it: one anchor, one user gesture, in the window
+     the person is looking at, with no dependency on this one surviving. It is
+     the pattern the account statement already uses for its CSV.
+
+     The cost is that both files sit base64 in the markup, so a very large pool
+     makes a large document.write. Acceptable at the size these reports run to,
+     and worth knowing before someone reports a slow open on a huge pool. */
+  const fileBase = _poolMaturityFileBase(d);
+  const b64 = str => btoa(unescape(encodeURIComponent(str)));
+  const csvHref = 'data:text/csv;charset=utf-8;base64,' + b64(_poolMaturityCSVText(d));
+  let pdfHref = null;
+  try {
+    const pdfDoc = _buildPoolMaturityPDF(d);
+    /* datauristring, not save(): the file has to become a link in the other
+       window, not a download started in this one. */
+    if (pdfDoc) pdfHref = pdfDoc.output('datauristring');
+  } catch (e) {
+    console.error('[maturity report] PDF build failed:', e);
+  }
+
   const fmt = n => 'R ' + parseFloat(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   /* _esc, not a local copy: it is the platform's escaper, it also handles
      quotes, and check-markup-interpolation looks for it by name. */
@@ -11241,7 +11292,8 @@ body{font-family:Arial,Helvetica,sans-serif;background:#fff;color:#111;-webkit-p
 .no-print{position:fixed;top:0;left:0;right:0;background:#1f2937;padding:9px 20px;display:flex;justify-content:space-between;align-items:center;z-index:99;gap:10px;flex-wrap:wrap}
 .no-print span{color:#fff;font-size:12px;font-weight:600;flex:1}
 .no-print .btn-row{display:flex;gap:8px}
-.no-print button{border:none;padding:7px 16px;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer}
+.no-print button,.no-print a{border:none;padding:7px 16px;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-block;line-height:1.2}
+.btn-note{background:#4b5563;color:#fff;padding:7px 16px;border-radius:5px;font-size:12px;font-weight:700}
 .btn-print{background:#e5e7eb;color:#111}.btn-csv{background:#22c55e;color:#fff}.btn-pdf{background:#eda5ff;color:#111}
 .wrap{max-width:1100px;margin:52px auto 32px;padding:24px 30px;border-top:5px solid #eda5ff}
 .hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:14px;border-bottom:3px solid #1f2937;margin-bottom:18px}
@@ -11270,23 +11322,13 @@ tr.total-row td{font-weight:800;background:#f9fafb;border-top:1.5px solid #d1d5d
 .footer strong{color:#374151}
 .stamp{display:inline-block;border:2px solid #eda5ff;color:#eda5ff;padding:4px 11px;border-radius:3px;font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-top:10px}
 </style></head><body>
-<script>
-/* Both files are built by the console, not here: it holds jsPDF and the
-   report data. A closed opener is the one way this fails, and saying so
-   beats a button that silently does nothing. */
-function _back(fn) {
-  if (window.opener && !window.opener.closed && typeof window.opener[fn] === 'function') {
-    window.opener[fn]();
-  } else {
-    alert('The admin console window that opened this report has been closed. Reopen the report from the pool to download.');
-  }
-}
-<\/script>
 <div class="no-print">
   <span>SV Capital &mdash; Maturity Instructions &nbsp;&middot;&nbsp; ${_esc(d.pool.name)}</span>
   <div class="btn-row">
-    <button class="btn-pdf" onclick="_back('downloadPoolMaturityPDF')">Download PDF</button>
-    <button class="btn-csv" onclick="_back('downloadPoolMaturityCSV')">Download CSV</button>
+    ${pdfHref
+      ? `<a class="btn-pdf" href="${pdfHref}" download="${fileBase}.pdf">Download PDF</a>`
+      : `<span class="btn-note" title="jsPDF did not load in the admin console">PDF unavailable &mdash; use Print</span>`}
+    <a class="btn-csv" href="${csvHref}" download="${fileBase}.csv">Download CSV</a>
     <button class="btn-print" onclick="window.print()">Print</button>
   </div>
 </div>
