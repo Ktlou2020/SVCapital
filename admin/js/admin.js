@@ -15754,7 +15754,7 @@ async function _generateAdminTaxCert(investorId) {
 
 function _openAdminTaxCertWindow(data) {
   const { investor: inv, taxYear, returns, deposits, totalReturns, totalDeposits, from, to,
-          maturedInvestments = [], maturedReturns = 0 } = data;
+          maturedInvestments = [], maturedReturns = 0, maturedUnposted = 0 } = data;
 
   const fmt = n => 'R ' + parseFloat(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -15781,6 +15781,9 @@ function _openAdminTaxCertWindow(data) {
   const fromLabel = fmtLong(from);
   const toLabel   = fmtLong(to);
   const fullAddr  = [inv.street_address, inv.suburb, inv.address, inv.postal_code, inv.province].filter(Boolean).join(', ');
+  /* Same asset and same resolution as the statement, so the two documents a
+     client receives carry one masthead rather than two. */
+  const _logoUrl  = window.location.origin + '/assets/sv-capital-logo-horizontal-white-text.png';
 
   const returnsRows = returns.map(t => `
     <tr>
@@ -15803,9 +15806,11 @@ function _openAdminTaxCertWindow(data) {
   const maturedRows = maturedInvestments.map(m => `
     <tr>
       <td>${fmtDate(m.end_date)}</td>
-      <td>${_esc(esc(m.pool_name || 'Investment'))}${m.return_is_projected ? ' (projected)' : ''}</td>
+      <td>${_esc(esc(m.pool_name || 'Investment'))}</td>
       <td class="amt">${fmt(Math.abs(parseFloat(m.amount||0)))}</td>
-      <td class="amt">${fmt(Math.abs(parseFloat(m.realised_return||0)))}</td>
+      <td class="amt">${m.return_posted
+        ? fmt(Math.abs(parseFloat(m.realised_return||0)))
+        : '<span style="color:#b45309;font-weight:600">Not yet posted</span>'}</td>
     </tr>`).join('');
 
   const html = `<!DOCTYPE html>
@@ -15816,14 +15821,17 @@ function _openAdminTaxCertWindow(data) {
 body{font-family:Arial,Helvetica,sans-serif;background:#fff;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:13px}
 @page{size:A4 portrait;margin:16mm 20mm}
 @media print{.no-print{display:none!important}.wrap{margin-top:0!important}}
-.no-print{position:fixed;top:0;left:0;right:0;background:#303030;padding:9px 20px;display:flex;justify-content:space-between;align-items:center;z-index:99;gap:10px}
-.no-print span{color:#fff;font-size:12px;font-weight:600}
-.no-print button{background:#eda5ff;color:#111;border:none;padding:7px 18px;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer}
-.wrap{max-width:740px;margin:56px auto 32px;padding:32px}
+.no-print{position:fixed;top:0;left:0;right:0;background:#1f2937;padding:9px 20px;display:flex;justify-content:space-between;align-items:center;z-index:99;gap:10px;flex-wrap:wrap}
+.no-print span{color:#fff;font-size:12px;font-weight:600;flex:1}
+.no-print button{background:#eda5ff;color:#111;border:none;padding:7px 16px;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer}
+.wrap{max-width:740px;margin:52px auto 32px;padding:24px 30px;border-top:5px solid #eda5ff}
 /* Header */
-.hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:18px;border-bottom:3px solid #303030;margin-bottom:22px}
-.hdr-left h1{font-size:16px;font-weight:700;color:#303030;margin-bottom:2px}
-.hdr-left p{font-size:11px;color:#666;margin-top:3px}
+.hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:14px;border-bottom:3px solid #1f2937;margin-bottom:22px}
+.hdr-brand p{font-size:10px;color:#6b7280;margin-top:7px}
+.hdr-right{text-align:right}
+.stmt-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#9ca3af;margin-bottom:3px}
+.stmt-title{font-size:20px;font-weight:800;color:#1f2937;margin-bottom:4px}
+.stmt-meta{font-size:10px;color:#6b7280;line-height:1.6}
 .cert-badge{text-align:right;font-size:10px;color:#555;line-height:1.6}
 .cert-badge strong{display:block;font-size:12px;color:#303030;font-weight:700}
 /* Warning */
@@ -15858,25 +15866,25 @@ tr.total-row td{border-top:2px solid #e5e7eb;border-bottom:none;font-weight:700;
 tr.total-row td.amt{color:#111}
 .empty{text-align:center;padding:16px;background:#f8fafc;border-radius:6px;color:#9ca3af;font-size:12px;margin-bottom:22px}
 /* Footer */
-.footer{border-top:1px solid #e5e7eb;padding-top:14px;font-size:10px;color:#6b7280;line-height:1.7;margin-top:8px}
+.footer{border-top:1px solid #e5e7eb;padding-top:11px;font-size:9px;color:#6b7280;line-height:1.7;margin-top:8px}
 .footer strong{color:#374151}
+.stamp{display:inline-block;border:2px solid #eda5ff;color:#eda5ff;padding:4px 11px;border-radius:3px;font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-top:10px}
 .stamp{display:inline-block;border:2px solid #303030;color:#303030;padding:5px 12px;border-radius:3px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-top:12px}
 </style></head><body>
 <div class="no-print">
-  <span>SV Capital — Investment Income Reference &nbsp;·&nbsp; ${taxYear-1} / ${taxYear} &nbsp;·&nbsp; ${_esc(esc(inv.first_name))} ${_esc(esc(inv.last_name))}</span>
+  <span>SV Capital &mdash; Investment Income Reference &nbsp;&middot;&nbsp; ${taxYear-1} / ${taxYear} &nbsp;&middot;&nbsp; ${_esc(esc(inv.first_name))} ${_esc(esc(inv.last_name))}</span>
   <button onclick="window.print()">Print / Save PDF</button>
 </div>
 <div class="wrap">
   <div class="hdr">
-    <div class="hdr-left">
-      <h1>SV Capital (Pty) Ltd</h1>
-      <p>FSCA Regulated Financial Services Provider</p>
-      <p style="font-size:10px;color:#9ca3af;margin-top:4px">Ref No: ${certNo}</p>
+    <div class="hdr-brand">
+      <div style="background:#1f2937;padding:10px 18px;border-radius:8px;display:inline-block"><img src="${_logoUrl}" style="height:46px;width:auto;display:block" alt="SV Capital"></div>
+      <p>FSCA Regulated Financial Services Provider &middot; <span style="color:#eda5ff;font-weight:600">www.svcapital.co.za</span></p>
     </div>
-    <div class="cert-badge">
-      <strong>Investment Income Reference</strong>
-      Tax Year: 1 March ${taxYear-1} – 28 February ${taxYear}<br>
-      Issued: ${issuedAt}
+    <div class="hdr-right">
+      <div class="stmt-lbl">Document Type</div>
+      <div class="stmt-title">Investment Income Reference</div>
+      <div class="stmt-meta">Ref: <strong>${certNo}</strong><br>Tax Year: ${fromLabel} &ndash; ${toLabel}<br>Issued: ${issuedAt}</div>
     </div>
   </div>
 
@@ -15901,8 +15909,9 @@ tr.total-row td.amt{color:#111}
   ${maturedInvestments.length ? `<div class="summary" style="margin-top:-10px">
     <div class="sum-box green">
       <div class="sum-lbl">Returns Realised at Maturity</div>
-      <div class="sum-amt">${fmt(maturedReturns)}</div>
-      <div class="sum-period">${maturedInvestments.length} investment${maturedInvestments.length === 1 ? '' : 's'} matured in this year</div>
+      <div class="sum-amt">${maturedUnposted === maturedInvestments.length ? '—' : fmt(maturedReturns)}</div>
+      <div class="sum-period">${maturedInvestments.length} investment${maturedInvestments.length === 1 ? '' : 's'} matured in this year${
+        maturedUnposted ? ` · ${maturedUnposted} with no posted return yet` : ''}</div>
     </div>
     <div class="sum-box" style="border-color:#d4d4d4">
       <div class="sum-lbl">Reported Separately</div>
@@ -15943,6 +15952,13 @@ tr.total-row td.amt{color:#111}
 
   ${maturedInvestments.length ? `
   <div class="section-title" style="color:#166534">Investments Matured in this Tax Year</div>
+  ${maturedUnposted ? `<div class="warning" style="background:#fffbeb">
+    <div><strong>${maturedUnposted} of these ${maturedInvestments.length} investments has no posted return.</strong>
+    A return is posted when the pool is closed out. Until then the amount earned is not known,
+    and it is shown as "Not yet posted" rather than as zero. The total below covers only the
+    investments whose return has been posted${maturedUnposted === maturedInvestments.length
+      ? ', which is none of them' : ''}.</div>
+  </div>` : ''}
   <table>
     <thead><tr><th>Matured</th><th>Investment</th><th style="text-align:right">Capital</th><th style="text-align:right">Return</th></tr></thead>
     <tbody>
@@ -15952,15 +15968,17 @@ tr.total-row td.amt{color:#111}
   </table>` : ''}
 
   <div class="footer">
-    <strong>SV Capital (Pty) Ltd</strong> — FSCA Regulated Financial Services Provider.<br>
-    This document is generated for client reference only and does not constitute an official SARS IT3(b) interest income certificate.
-    Returns credited are investment return and interest amounts credited to the investor account in the tax year
-    ${taxYear-1}/${taxYear} (${fromLabel} to ${toLabel}). Maturity payouts are excluded from that figure because a
-    payout returns the client's own capital along with the return on it; the return realised at maturity is reported
-    in its own section.<br>
-    Deposits shown are funds deposited into the investor's SV Capital account during the same period.<br>
-    <strong>Ref:</strong> ${certNo} &nbsp;·&nbsp; <strong>Issued:</strong> ${issuedAt}<br>
-    <div class="stamp">SV Capital</div>
+    <strong>SV Capital (Pty) Ltd</strong> &mdash; FSCA Regulated Financial Services Provider.<br>
+    This investment income reference is prepared for <strong>${_esc(esc(inv.first_name))} ${_esc(esc(inv.last_name))}</strong>
+    (Account: ${esc(inv.id)}) and covers the ${taxYear-1}/${taxYear} tax year, ${fromLabel} to ${toLabel}.
+    All amounts are in South African Rand (ZAR).<br>
+    Returns credited are investment return and interest amounts credited to the investor account in the period.
+    Maturity payouts are excluded from that figure because a payout returns the client's own capital along with the
+    return on it; the return realised at maturity is reported in its own section. Deposits shown are funds deposited
+    into the account during the same period. This document is generated for client reference only and does not
+    constitute an official SARS IT3(b) interest income certificate.<br>
+    <strong>Ref:</strong> ${certNo} &middot; <strong>Issued:</strong> ${issuedAt} &middot; <strong>Generated by:</strong> SV Capital Admin Console<br>
+    <div class="stamp">SV Capital (Pty) Ltd &mdash; www.svcapital.co.za</div>
   </div>
 </div>
 </body></html>`;

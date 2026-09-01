@@ -1610,20 +1610,27 @@ router.get('/tax-cert', async (req, res) => {
     }
 
     /* Investments that MATURED inside the year. The return realised at maturity
-       is written to investments.actual_return and NOT as a transaction of its
-       own — creditWallet writes only the payout, whose amount is capital plus
-       return together. So without this the realised return has no
-       representation on the certificate at all.
+       is not a transaction of its own — creditWallet writes only the payout,
+       whose amount is capital and return together — so without this the
+       realised return has no representation on the certificate at all.
 
        Reported beside the credited income rather than added to it. A holding
        whose return was also accrued month by month appears in both, and adding
        them would declare the same earnings twice — the identical trap the
-       portal's certificate documents and avoids. */
+       portal's certificate documents and avoids.
+
+       The return itself comes from postedReturnFor's rule, applied below. It is
+       NOT COALESCE(actual_return, expected_return): returns are posted on the
+       POOL as investment_pools.actual_rate, expected_return is the projection
+       made when the investment was written, and actual_return defaults to 0
+       rather than NULL — so that COALESCE short-circuits on the zero and prints
+       R 0,00 against every matured holding a client has. maturityCron carries a
+       comment warning about precisely that expression. */
     const maturedRes = await pool.query(
       `SELECT i.id, i.pool_name, i.amount, i.end_date,
-              COALESCE(i.actual_return, i.expected_return, 0) AS realised_return,
-              i.actual_return IS NULL AS return_is_projected
+              i.actual_return, p.actual_rate AS pool_actual_rate
          FROM investments i
+         LEFT JOIN investment_pools p ON p.id = i.pool_id
         WHERE (i.investor_id = $1 OR i.sub_account_id = ANY($4::text[]))
           AND i.status IN ('matured', 'paid_out')
           AND i.end_date >= $2::date AND i.end_date <= $3::date
@@ -1641,8 +1648,28 @@ router.get('/tax-cert', async (req, res) => {
 
     const totalReturns  = returns.reduce((s, t)  => s + Math.abs(parseFloat(t.amount) || 0), 0);
     const totalDeposits = deposits.reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
-    const maturedReturns = maturedRes.rows.reduce(
-      (s, r) => s + (parseFloat(r.realised_return) || 0), 0);
+
+    /* The platform's one rule for what a matured investment earned, imported
+       rather than rewritten — a fourth copy would be a fourth thing to drift.
+       It returns null when nothing has been posted, and null is carried all the
+       way to the page: "R 0,00" on a tax document states that a client earned
+       nothing, which is a different claim from "the pool has not been closed
+       out yet" and must not be printed in its place. */
+    const { postedReturn } = require('../services/maturityPreflight');
+
+    const maturedInvestments = maturedRes.rows.map(r => {
+      const realised = postedReturn({
+        amount: r.amount, actualReturn: r.actual_return, poolActualRate: r.pool_actual_rate });
+      return {
+        id: r.id, pool_name: r.pool_name, amount: r.amount, end_date: r.end_date,
+        realised_return: realised,          // null when nothing is posted
+        return_posted: realised !== null,
+      };
+    });
+
+    const maturedReturns = maturedInvestments.reduce(
+      (s, r) => s + (Number(r.realised_return) || 0), 0);
+    const maturedUnposted = maturedInvestments.filter(r => !r.return_posted).length;
 
     const inv = invRes.rows[0];
 
@@ -1668,10 +1695,14 @@ router.get('/tax-cert', async (req, res) => {
       from, to,
       returns, totalReturns,
       deposits, totalDeposits,
-      /* Realised at maturity, held on the investment rather than in the
-         ledger. Separate from totalReturns on purpose — see above. */
-      maturedInvestments: maturedRes.rows,
+      /* Realised at maturity, held on the pool rather than in the ledger.
+         Separate from totalReturns on purpose — see above. */
+      maturedInvestments,
       maturedReturns: Math.round(maturedReturns * 100) / 100,
+      /* How many of those have no posted return. The total above is the sum of
+         the posted ones only, so a reader has to be told the rest exist —
+         otherwise the figure silently understates and looks authoritative. */
+      maturedUnposted,
     });
   } catch (err) {
     console.error('[admin/tax-cert]', err);
