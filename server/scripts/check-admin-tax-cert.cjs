@@ -49,7 +49,13 @@ function withDatabase(url, name) {
   return u.toString();
 }
 
-const adminPool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: SSL });
+/* max: 2 — these checks are single-threaded and never need more. The pg
+   default is 10 per pool, and this file opens two (plus the route module's
+   own), which under check-run-checks' NESTED suite run put enough idle
+   connections against max_connections to fail a run about one time in ten.
+   The error surfaced inside the nested runner, where it read as an
+   unrelated pg-protocol stack trace. */
+const adminPool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: SSL, max: 2 });
 let pool;
 
 /* Its own database. The suite's checks replace each other's schemas, and this
@@ -66,7 +72,7 @@ async function makeDatabase() {
   try { await require(path.join(ROOT, 'server', 'db', 'setup.js'))(); } finally { console.log = q; }
   /* Left pointing at the new database: the route module under test resolves
      db/pool at require time too, and it must reach the same place. */
-  pool = new Pool({ connectionString: url, ssl: SSL });
+  pool = new Pool({ connectionString: url, ssl: SSL, max: 2 });
   return original;
 }
 
