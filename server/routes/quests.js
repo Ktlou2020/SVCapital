@@ -30,6 +30,24 @@ function getLevelForXP(xp) {
   return level;
 }
 
+
+/* LIFETIME INVESTED — one definition, two callers.
+ *
+ * investors.total_invested is a running total that is only ever incremented
+ * when an investment is made. It is never reduced at maturity, so it IS a
+ * lifetime figure — but it is also blank on accounts migrated in without one,
+ * and those clients are not new: they have years of investments behind them.
+ *
+ * Taking the greater of the stored total and the sum over investments cannot
+ * invent money — both are evidence of capital actually placed — and it is what
+ * the milestone badges have always used. The leaderboard read the stored column
+ * on its own and showed R0,00 against clients who had earned the R10k, R50k and
+ * R100k badges, which the same page was displaying two columns to the left. */
+const LIFETIME_INVESTED_SQL = `GREATEST(
+    COALESCE(i.total_invested, 0),
+    COALESCE((SELECT SUM(amount) FROM investments
+               WHERE investor_id = i.id AND COALESCE(status,'') <> 'cancelled'), 0))`;
+
 /* ─── Quest catalogue ─────────────────────────────────── */
 const QUESTS = [
   // Profile & Compliance — data collection surveys
@@ -251,11 +269,8 @@ router.post('/complete', requireAuth, async (req, res) => {
 
     if (MILESTONE_AMOUNTS[questId]) {
       const { rows } = await pool.query(
-        `SELECT GREATEST(
-                  COALESCE((SELECT total_invested FROM investors WHERE id = $1), 0),
-                  COALESCE((SELECT SUM(amount) FROM investments
-                             WHERE investor_id = $1 AND COALESCE(status,'') <> 'cancelled'), 0)
-                ) AS lifetime`,
+        /* The same rule the leaderboard reads — see LIFETIME_INVESTED_SQL. */
+        `SELECT ${LIFETIME_INVESTED_SQL} AS lifetime FROM investors i WHERE i.id = $1`,
         [investorId]
       );
       const lifetime = parseFloat(rows[0].lifetime) || 0;
@@ -400,7 +415,8 @@ router.get('/leaderboard', requireAuth, requireRole('admin', 'director', 'staff'
        clients or fifty thousand. */
     const { rows } = await pool.query(
       `SELECT i.id, i.first_name, i.last_name, i.email, i.kyc_status, i.status,
-              i.date_joined, i.total_invested,
+              i.date_joined,
+              ${LIFETIME_INVESTED_SQL} AS total_invested,
               COALESCE(i.xp_points, 0) AS xp_points,
               i.xp_level AS stored_level,
               COALESCE(c.done, 0)         AS quests_completed,
