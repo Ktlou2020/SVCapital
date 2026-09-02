@@ -132,6 +132,39 @@ for (const [file, fn, call, what] of DELEGATES) {
      'a second copy of the design is a second thing to keep in step');
 }
 
+console.log('\nthe documents survive a phone');
+{
+  const docs = read('js/investor-documents.js');
+
+  /* The download is the point of the document. A phone must not change it. */
+  ok('the statement is still A4 landscape',
+     /@page\{size:A4 landscape/.test(docs),
+     'the preview is scaled with a transform, which changes nothing about the page');
+  ok('the certificate is still A4 portrait',
+     /@page\{size:A4 portrait/.test(docs));
+
+  /* window.open with window features is refused as a pop-up on mobile Safari
+     and inside the Capacitor WebView. */
+  ok('a blocked pop-up falls back to a full-screen overlay',
+     /if \(win\) \{[\s\S]{0,120}\}\s*\n\s*_overlay\(html, width\);/.test(docs),
+     'it used to tell the client to change a browser setting and give up');
+  ok('and the overlay prints the FRAME, so the page rules still apply',
+     /frame\.contentWindow\.print\(\)/.test(docs),
+     'printing the overlay itself would print the chrome and lose @page');
+  ok('nothing tells a client to allow pop-ups any more',
+     !/allow pop-ups/i.test(docs));
+
+  ok('the preview scales rather than squeezing',
+     /transform-origin:top left/.test(docs) && /Math\.min\(1, avail \/ docWidth\)/.test(docs),
+     'these are fixed-width documents — they do not reflow, they just overflow');
+  ok('and never scales a document UP on a desktop',
+     /Math\.min\(1,/.test(docs));
+
+  const core = read('js/portal-core.js');
+  ok('the portal preview uses the shared scaled mount',
+     /SVCDocs\.mountScaled\(doc, SVCDocs\.accountStatementHTML/.test(core));
+}
+
 console.log('\nthe mobile build carries the same documents');
 {
   /* mobile/www is a build artifact — mobile/src and js/ are the sources — so
