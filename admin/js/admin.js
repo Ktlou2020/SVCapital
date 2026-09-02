@@ -16684,6 +16684,9 @@ async function _generateAdminTaxCert(investorId) {
   }
 }
 
+/* The letterhead logo. This one is dark artwork on transparency, so it goes
+   straight onto the white letterhead — the old white-text logo needed a dark
+   chip behind it to be visible at all, and that chip would swallow this one. */
 function _openAdminTaxCertWindow(data) {
   const { investor: inv, taxYear, returns, deposits, totalReturns, totalDeposits, from, to,
           maturedInvestments = [], maturedReturns = 0, maturedUnposted = 0 } = data;
@@ -16715,7 +16718,7 @@ function _openAdminTaxCertWindow(data) {
   const fullAddr  = [inv.street_address, inv.suburb, inv.address, inv.postal_code, inv.province].filter(Boolean).join(', ');
   /* Same asset and same resolution as the statement, so the two documents a
      client receives carry one masthead rather than two. */
-  const _logoUrl  = window.location.origin + '/assets/sv-capital-logo-horizontal-white-text.png';
+  const _logoUrl  = window.location.origin + '/assets/sv-capital-logo-horizontal-outline-1.png';
 
   const returnsRows = returns.map(t => `
     <tr>
@@ -16810,7 +16813,7 @@ tr.total-row td.amt{color:#111}
 <div class="wrap">
   <div class="hdr">
     <div class="hdr-brand">
-      <div style="background:#1f2937;padding:10px 18px;border-radius:8px;display:inline-block"><img src="${_logoUrl}" style="height:46px;width:auto;display:block" alt="SV Capital"></div>
+      <img src="${_logoUrl}" style="height:52px;width:auto;max-width:270px;object-fit:contain;display:block" alt="SV Capital">
       <p>FSCA Regulated Financial Services Provider &middot; <span style="color:#eda5ff;font-weight:600">www.svcapital.co.za</span></p>
     </div>
     <div class="hdr-right">
@@ -17155,7 +17158,7 @@ function _openAccountStatementWindow(data) {
   const aCnt = activeInvests.length;
   const mCnt = maturedInvests.length;
 
-  const _logoUrl = window.location.origin + '/assets/sv-capital-logo-horizontal-white-text.png';
+  const _logoUrl = window.location.origin + '/assets/sv-capital-logo-horizontal-outline-1.png';
 
   const html = [
     '<!DOCTYPE html>',
@@ -17225,7 +17228,7 @@ function _openAccountStatementWindow(data) {
     '<div class="wrap">',
     '  <div class="hdr">',
     '    <div class="hdr-brand">',
-    '      <div style="background:#1f2937;padding:10px 18px;border-radius:8px;display:inline-block"><img src="' + _logoUrl + '" style="height:46px;width:auto;display:block" alt="SV Capital"></div>',
+    '      <img src="' + _logoUrl + '" style="height:52px;width:auto;max-width:270px;object-fit:contain;display:block" alt="SV Capital">',
     '      <p style="font-size:10px;color:#6b7280;margin-top:7px">FSCA Regulated Financial Services Provider &middot; <span style="color:#eda5ff;font-weight:600">www.svcapital.co.za</span></p>',
     '    </div>',
     '    <div class="hdr-right"><div class="stmt-lbl">Document Type</div><div class="stmt-title">Investment Statement</div>',

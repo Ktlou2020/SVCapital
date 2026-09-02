@@ -1828,7 +1828,7 @@ function buildStatementHTML(opts) {
   const fullName   = `${investor.first_name || ''} ${investor.last_name || ''}`.trim() || 'Investor';
   const investorId = investor.id || '—';
   const memberSince = investor.date_joined ? fmtDate(investor.date_joined) : '—';
-  const logoUrl     = `${window.location.origin}/assets/sv-capital-logo-horizontal-white-text.png`;
+  const logoUrl     = `${window.location.origin}/assets/sv-capital-logo-horizontal-outline-1.png`;
   const logoOutlineUrl = new URL('../assets/logo-outline.png', window.location.href).href;
   const now = new Date();
 
@@ -2187,7 +2187,7 @@ function buildStatementHTML(opts) {
     <div id="stmtPrintArea" style="font-family:'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a1a;background:#fff;min-height:100%;position:relative">
       <div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:0;opacity:0.04;width:480px;height:480px;background:url('${logoOutlineUrl}') center/contain no-repeat;print-color-adjust:exact;-webkit-print-color-adjust:exact"></div>
       <div style="background:#303030;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;position:relative;z-index:1">
-        <img src="${logoUrl}" alt="SV Capital" style="height:44px;width:auto;max-width:220px;object-fit:contain;display:block">
+        <div style="background:#fff;padding:8px 14px;border-radius:8px;display:inline-block"><img src="${logoUrl}" alt="SV Capital" style="height:40px;width:auto;max-width:220px;object-fit:contain;display:block"></div>
         <div style="text-align:right">
           <div style="font-size:16px;font-weight:800;color:#fec24f;letter-spacing:0.04em">ACCOUNT STATEMENT</div>
           <div style="font-size:10px;color:rgba(255,255,255,0.55);margin-top:4px"># ${statementNumber}</div>
