@@ -3302,3 +3302,96 @@ body.dark-mode .fs-row__name { color:#f3f4f6 !important; }
 
 /* Sub-account stat tiles: space between label and value */
 #view-subaccounts .sa-stat__label { margin-right: 6px; }
+
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE WEB — measured fixes
+   Every rule here comes from rendering the real portal markup at narrow
+   width and measuring it, not from eye. Appended last, and !important
+   where the value it corrects is itself !important — the earlier
+   attempts in this file lost to exactly that and changed nothing.
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+
+  /* ── 1. Sideways scroll ───────────────────────────────────────
+     The page scrolled 27px sideways on every view. A grid item's implicit
+     `min-width: auto` stops a `1fr` track shrinking below its content's
+     min-content width: measured, the container was 472px while its single 1fr
+     track computed to 514.7px, because a data table would not fit. */
+  .grid-layout, .grid-2, .grid-3, .stats-row, .form-row--2, .form-row--3 { min-width: 0; }
+  .grid-layout > *, .grid-2 > *, .grid-3 > *, .stats-row > *,
+  .form-row--2 > *, .form-row--3 > * { min-width: 0; }
+  .grid-layout--sidebar { grid-template-columns: minmax(0, 1fr) !important; }
+
+  /* The tables already sit in `<div style="overflow-x:auto">`. That div is not
+     a direct child of the card, so a `>` selector missed it — descendant. */
+  .table-card [style*="overflow-x"] { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
+  .table-card .data-table { min-width: 480px; }
+
+  /* Nothing may take the document sideways. A horizontal scrollbar on the body
+     hides content with nothing on screen saying it is there. */
+  html, body { overflow-x: hidden; }
+
+  /* ── 2. Tap targets ───────────────────────────────────────────
+     44px is the floor in both Apple's and Google's guidance. Measured before
+     this: primary buttons 36px, tabs 40px, filter selects 33px, checkboxes
+     13px. */
+  .btn, .btn--primary, .btn--secondary, .btn--ghost, .btn--danger { min-height: 44px !important; }
+  .btn--sm { min-height: 44px !important; }
+  .tab-btn { min-height: 44px !important; }
+  .tbl-filter, .form-select, .form-input, select, input[type="text"],
+  input[type="email"], input[type="tel"], input[type="number"], input[type="date"] { min-height: 44px !important; }
+  .faq-quick-q, .gift-preset, .gift-tab { min-height: 44px !important; }
+
+  /* The bottom bar is the portal's primary navigation on a phone and measured
+     32px tall — the smallest target on the screen was the one every journey
+     starts from. */
+  .mbn-item { min-height: 52px !important; }
+
+  /* A star rating 20px wide is a miss waiting to happen; the glyph keeps its
+     size, the target grows around it. */
+  .fb-star { min-width: 44px !important; min-height: 44px !important;
+             display: inline-flex !important; align-items: center; justify-content: center; }
+
+  /* A checkbox's hit area is its label. These sit as `<label><input> text`,
+     so the label carries the height and the box stays 20px. */
+  label:has(> input[type="checkbox"]), label:has(> input[type="radio"]),
+  .form-check, .checkbox-row { min-height: 44px; display: flex; align-items: center; gap: 10px; }
+
+  /* A 13px checkbox is not a target. The box grows to 20px and the label
+     around it carries the 44px. */
+  input[type="checkbox"], input[type="radio"] { width: 20px !important; height: 20px !important; min-height: 0 !important; }
+  .form-check, .checkbox-row { min-height: 44px; display: flex; align-items: center; gap: 10px; }
+
+  /* ── 3. Legibility ────────────────────────────────────────────
+     43 elements rendered under 11.5px, the smallest at 9.5px — the greeting,
+     the account chip, table headers, stat captions. Below about 11px on a
+     phone that is decoration, not information.
+
+     In PIXELS, deliberately. admin.css sets `html { font-size: 14px }`, so
+     every rem in this portal is 12.5% smaller than it reads: the first version
+     of these floors used 0.8rem expecting 12.8px and got 11.2px, which is why
+     they changed almost nothing. A minimum legible size is a physical
+     threshold, not a scale-relative one, so it belongs in px. */
+  .topbar__breadcrumb, .welcome-greeting { font-size: 13px !important; }
+  .portfolio-hero__label, .ph-stat__label, .stat-card__label,
+  .info-row__label, .wchip-text, .badge, .xp-chip,
+  #wchipIdText, #wchipSinceText,
+  .table-card__sub, .wallet-card__label, .section-banner__sub,
+  .xp-hero__track-label, .xp-hero__earned-label, .learn-header__sub { font-size: 12px !important; }
+  .form-label, .gift-label { font-size: 12.5px !important; }
+  /* The long tail: secondary flows (gifts, sub-accounts, policies, quests)
+     carry their own caption classes and were all sitting at 9.8–11.5px. */
+  .sa-view-sub, .sa-type-tile__desc, .policies-header__sub,
+  .gift-form-sub, .gift-card-label, .gift-card__label-row, .gift-card__from,
+  .gift-preset, .table-card__sub, .risk-warning strong,
+  #riskProfileDesc, .learn-header__sub { font-size: 12px !important; }
+  th { font-size: 12px !important; }
+  .data-table td { font-size: 13px !important; }
+  .btn, .btn--secondary, .btn--ghost, .tab-btn { font-size: 13px !important; }
+  .text-muted, .td-muted { font-size: 12.5px; }
+  /* Nothing on a phone below 11px, whatever set it. */
+  .view [style*="font-size:0.6"], .view [style*="font-size: 0.6"],
+  .view [style*="font-size:0.7"], .view [style*="font-size: 0.7"],
+  .view [style*="font-size:0.72"], .view [style*="font-size: 0.72"],
+  .view [style*="font-size:0.75"], .view [style*="font-size: 0.75"] { font-size: 12px !important; }
+}

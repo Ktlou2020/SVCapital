@@ -20,7 +20,23 @@ const JS_DIR    = path.join(ROOT, 'js');
 const CSS_DIR   = path.join(ROOT, 'css');
 const ASSETS    = path.join(ROOT, 'assets');
 const SRC_DIR   = path.join(__dirname, '../src');
-const WWW       = path.join(__dirname, '../www');
+/* SVC_BUILD_OUT builds somewhere other than mobile/www, so the build can be
+   compared against the committed artifact without overwriting it — see
+   scripts/check-mobile-build-reproducible.cjs.
+
+   This script starts by deleting its output directory, so the override refuses
+   anything that already holds files. A typo in an env var must not be a
+   recursive delete. */
+const WWW = (() => {
+  const out = process.env.SVC_BUILD_OUT;
+  if (!out) return path.join(__dirname, '../www');
+  const abs = path.resolve(out);
+  if (fs.existsSync(abs) && fs.readdirSync(abs).length) {
+    console.error(`[build] SVC_BUILD_OUT must be empty or absent; ${abs} is not.`);
+    process.exit(2);
+  }
+  return abs;
+})();
 
 // Production API URL — update if your Railway domain changes
 const API_BASE = process.env.SVC_API_URL || 'https://svcapital-production.up.railway.app/api/';
