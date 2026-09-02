@@ -356,7 +356,34 @@ router.get('/invest-funnel/summary', requireAuth, requireRole('admin', 'director
         GROUP BY day ORDER BY day
       `),
 
-      // Per-investor drop-off — join to investors for name/email
+      /* NOTE: the order of these queries is the order of the destructuring
+         above. These last two used to be the other way round, so poolRows held
+         investor rows and vice versa — every by_pool field the investor query
+         does not select came back undefined, parseInt(undefined) serialised as
+         JSON null, and the admin table crashed on r.fee_shown.toLocaleString().
+         Keep query order and destructuring order in step. */
+
+      // Per-pool drop-off — join to investment_pools for name  → poolRows
+      pool.query(`
+        SELECT
+          e.pool_id,
+          COALESCE(p.name, e.pool_id) AS pool_name,
+          p.product_type AS pool_product_type,
+          COUNT(*) FILTER (WHERE e.event_type = 'modal_opened') AS opened,
+          COUNT(*) FILTER (WHERE e.event_type = 'fee_shown')    AS fee_shown,
+          COUNT(*) FILTER (WHERE e.event_type = 'confirmed')    AS confirmed,
+          COUNT(*) FILTER (WHERE e.event_type = 'abandoned')    AS abandoned
+        FROM invest_funnel_events e
+        LEFT JOIN investment_pools p ON p.id = e.pool_id
+        WHERE e.pool_id IS NOT NULL
+          AND e.event_type IN ('modal_opened','fee_shown','confirmed','abandoned')
+          AND e.created_at >= NOW() - ($1 || ' days')::INTERVAL
+        GROUP BY e.pool_id, p.name, p.product_type
+        ORDER BY opened DESC
+        LIMIT 20
+      `, [days]),
+
+      // Per-investor drop-off — join to investors for name/email  → investorRows
       pool.query(`
         SELECT
           e.investor_id,
@@ -377,26 +404,6 @@ router.get('/invest-funnel/summary', requireAuth, requireRole('admin', 'director
         HAVING COUNT(*) FILTER (WHERE e.event_type = 'abandoned') > 0
         ORDER BY abandoned DESC, opened DESC
         LIMIT 25
-      `, [days]),
-
-      // Per-pool drop-off — join to investment_pools for name
-      pool.query(`
-        SELECT
-          e.pool_id,
-          COALESCE(p.name, e.pool_id) AS pool_name,
-          p.product_type AS pool_product_type,
-          COUNT(*) FILTER (WHERE e.event_type = 'modal_opened') AS opened,
-          COUNT(*) FILTER (WHERE e.event_type = 'fee_shown')    AS fee_shown,
-          COUNT(*) FILTER (WHERE e.event_type = 'confirmed')    AS confirmed,
-          COUNT(*) FILTER (WHERE e.event_type = 'abandoned')    AS abandoned
-        FROM invest_funnel_events e
-        LEFT JOIN investment_pools p ON p.id = e.pool_id
-        WHERE e.pool_id IS NOT NULL
-          AND e.event_type IN ('modal_opened','fee_shown','confirmed','abandoned')
-          AND e.created_at >= NOW() - ($1 || ' days')::INTERVAL
-        GROUP BY e.pool_id, p.name, p.product_type
-        ORDER BY opened DESC
-        LIMIT 20
       `, [days]),
     ]);
 
