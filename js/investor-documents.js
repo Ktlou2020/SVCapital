@@ -26,12 +26,106 @@
      preview pane and opens the same window from the Print button. Splitting
      build from present is what lets one implementation serve both without
      either surface reimplementing the design. */
+  /* Mount a document in an iframe SCALED TO FIT its container.
+   *
+   * The statement is A4 landscape and lays out at 1100px; the certificate is
+   * A4 portrait at 740. On a 390px phone the browser does not reflow them —
+   * they are fixed-width documents — so the preview showed a sliver of a page
+   * with the right-hand column off the edge.
+   *
+   * The frame is therefore rendered at the document's OWN width and scaled
+   * down with a transform, which shrinks the whole page evenly instead of
+   * squeezing its columns. Nothing about the document changes, so what
+   * downloads is still A4 at full size. */
+  function _mountScaled(container, html, docWidth) {
+    container.innerHTML = '';
+    const shell = document.createElement('div');
+    shell.style.cssText = 'width:100%;overflow:hidden';
+    const frame = document.createElement('iframe');
+    frame.title = 'Document preview';
+    frame.setAttribute('scrolling', 'no');
+    frame.style.cssText = 'border:0;display:block;background:#fff;width:' + docWidth +
+                          'px;transform-origin:top left';
+    shell.appendChild(frame);
+    container.appendChild(shell);
+
+    const fit = () => {
+      const avail = container.clientWidth || docWidth;
+      /* Never scale UP: on a desktop the document is shown at its own size. */
+      const scale = Math.min(1, avail / docWidth);
+      frame.style.transform = scale < 1 ? 'scale(' + scale + ')' : '';
+      let h = 0;
+      try { h = frame.contentDocument.body.scrollHeight; } catch (_) {}
+      if (h) {
+        frame.style.height = (h + 24) + 'px';
+        shell.style.height = Math.ceil((h + 24) * scale) + 'px';
+      }
+    };
+    frame.addEventListener('load', fit);
+    /* A phone rotating is the common case, and the scale is width-derived. */
+    window.addEventListener('resize', fit);
+    frame.srcdoc = html;
+    return frame;
+  }
+
+  /* Show a finished document.
+   *
+   * window.open with window features is treated as a pop-up on mobile Safari
+   * and inside the Capacitor WebView, and is refused — so "Print / Save PDF"
+   * failed on a phone with nothing but a toast telling the client to change a
+   * browser setting they should not have to think about. A real window is
+   * still nicer on a desktop, so it is tried first and the page falls back to
+   * a full-screen overlay that needs no pop-up at all. Printing from the
+   * overlay prints the IFRAME, so the @page rules still apply and the output
+   * is the same A4 document. */
   function _present(html, width, height) {
     const win = window.open('', '_blank', 'width=' + width + ',height=' + height);
-    if (!win) { Toast.error('Pop-up blocked — allow pop-ups for this site and try again'); return false; }
-    win.document.write(html);
-    win.document.close();
+    if (win) { win.document.write(html); win.document.close(); return true; }
+    _overlay(html, width);
     return true;
+  }
+
+  function _overlay(html, docWidth) {
+    const prev = document.getElementById('svc-doc-overlay');
+    if (prev) prev.remove();
+    const ov = document.createElement('div');
+    ov.id = 'svc-doc-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#f1f5f9;' +
+                       'display:flex;flex-direction:column';
+    ov.innerHTML =
+      '<div style="background:#1f2937;color:#fff;padding:10px 14px;display:flex;' +
+           'align-items:center;gap:10px;flex-wrap:wrap">' +
+        '<span style="font-size:13px;font-weight:700;flex:1;min-width:120px">Document</span>' +
+        '<button id="svc-doc-print" style="border:none;padding:8px 16px;border-radius:6px;' +
+          'font-size:13px;font-weight:700;background:#eda5ff;color:#111;cursor:pointer">Print / Save PDF</button>' +
+        '<button id="svc-doc-close" style="border:none;padding:8px 16px;border-radius:6px;' +
+          'font-size:13px;font-weight:700;background:rgba(255,255,255,0.14);color:#fff;cursor:pointer">Close</button>' +
+      '</div>' +
+      '<div id="svc-doc-body" style="flex:1;overflow:auto;padding:10px"></div>';
+    document.body.appendChild(ov);
+    /* Full size here, not scaled. The inline preview is scaled so a client can
+       see the shape of the document on a phone; this is the one they read and
+       print, and a 35% A4 landscape page is not readable. It scrolls both ways
+       instead. */
+    const body  = ov.querySelector('#svc-doc-body');
+    const frame = document.createElement('iframe');
+    frame.title = 'Document';
+    frame.style.cssText = 'border:0;display:block;background:#fff;width:' + docWidth + 'px;height:100%';
+    body.appendChild(frame);
+    frame.addEventListener('load', () => {
+      try {
+        const h = frame.contentDocument.body.scrollHeight;
+        if (h) frame.style.height = (h + 24) + 'px';
+      } catch (_) {}
+    });
+    frame.srcdoc = html;
+    ov.querySelector('#svc-doc-close').onclick = () => ov.remove();
+    ov.querySelector('#svc-doc-print').onclick = () => {
+      /* Print the frame, not the overlay: the document carries its own @page
+         size and margins, and the overlay chrome is not part of it. */
+      try { frame.contentWindow.focus(); frame.contentWindow.print(); }
+      catch (_) { Toast.error('This browser could not open the print dialog'); }
+    };
   }
 
 function _openAdminTaxCertWindow(data) {
@@ -739,5 +833,10 @@ function _openAccountStatementWindow(data) {
     /* The same page as a string, for a surface that shows it inline. */
     accountStatementHTML: d => _openAccountStatementWindow(d, 'html'),
     incomeReferenceHTML:  d => _openAdminTaxCertWindow(d, 'html'),
+    /* Preview a document inside a container, scaled to fit a phone. */
+    mountScaled: _mountScaled,
+    /* The width each document lays out at — the statement is A4 landscape. */
+    STATEMENT_WIDTH: 1100,
+    CERTIFICATE_WIDTH: 860,
   };
 })(window);

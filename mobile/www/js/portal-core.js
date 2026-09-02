@@ -756,7 +756,19 @@ function computeStatementFigures(opts) {
     byType,
     deposits:    byType.deposit || 0,
     withdrawals: byType.withdrawal || 0,
-    returns:     _stmtRound((byType.return || 0) + (byType.payout || 0)),
+    /* INCOME, not cash returned.
+     *
+     * This summed `payout` as well, and a payout's amount is the client's
+     * CAPITAL COMING BACK plus the return on it — maturityCron credits the
+     * whole sum and books only the return portion to total_returns. So a
+     * client whose R19 000 holding matured inside the window was shown that
+     * R19 000 as money they had earned.
+     *
+     * Income is `return` and `interest`, which is what services/ledger.js
+     * says and what both tax documents now count. The cash that actually
+     * moved at maturity is visible in the ledger and in the closing balance;
+     * it does not belong in a figure labelled "Returns". */
+    returns:     _stmtRound((byType.return || 0) + (byType.interest || 0)),
     fees:        _stmtRound((byType.platform_fee || 0) + (byType.fee || 0)),
     capitalInPeriod,
     activeInvCount: activeInvestments.length,
@@ -4706,18 +4718,11 @@ async function generateStatement() {
   }
   PORTAL._lastStatement = stmtData;
 
-  doc.innerHTML = '<iframe id="statementFrame" title="Account statement" ' +
-    'style="width:100%;height:600px;border:0;display:block;background:#fff"></iframe>';
-  const frame = document.getElementById('statementFrame');
-  frame.addEventListener('load', () => {
-    /* Grow the frame to its content so the preview scrolls with the page
-       rather than inside a box. */
-    try {
-      const h = frame.contentDocument.body.scrollHeight;
-      if (h) frame.style.height = (h + 24) + 'px';
-    } catch (_) { /* cross-origin cannot happen for srcdoc; height stays default */ }
-  });
-  frame.srcdoc = SVCDocs.accountStatementHTML(stmtData);
+  /* Scaled to fit rather than squeezed. The statement is an A4 LANDSCAPE
+     document that lays out at 1100px and does not reflow — on a phone the
+     unscaled frame showed a sliver of the page with the right-hand column off
+     the edge. What downloads is unaffected: still A4, still full size. */
+  SVCDocs.mountScaled(doc, SVCDocs.accountStatementHTML(stmtData), SVCDocs.STATEMENT_WIDTH);
   const generatedSummary = `${transactions.length} transaction${transactions.length === 1 ? '' : 's'} in range · ${effectivePerformance ? 'performance included' : 'summary only'}`;
   renderStatementAssistCard({
     generatedAt: new Date().toLocaleString('en-ZA', { dateStyle: 'medium', timeStyle: 'short' }),
