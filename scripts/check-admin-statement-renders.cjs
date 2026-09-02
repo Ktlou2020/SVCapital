@@ -17,7 +17,11 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 
 const ROOT  = path.join(__dirname, '..');
-const ADMIN = fs.readFileSync(path.join(ROOT, 'admin', 'js', 'admin.js'), 'utf8');
+/* The two document builders moved out of admin.js into
+   js/investor-documents.js, which the investor portal loads too — one
+   implementation, so the console and the portal cannot drift. This reads
+   them from where they now live. */
+const ADMIN = fs.readFileSync(path.join(ROOT, 'js', 'investor-documents.js'), 'utf8');
 const CHROME = ['/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
                 '/opt/pw-browsers/chromium/chrome-linux/chrome'].find(p => fs.existsSync(p));
 
@@ -100,12 +104,14 @@ const DATA = {
           invested: 346708.26, fees: 400, accrued: 900 },
 };
 
-const fn = sliceFn(ADMIN, '_openAccountStatementWindow');
+/* The whole shipped file, not one sliced function: the builders share a
+   module-scoped helper, and a slice of one of them is not what runs. */
+const fn = ADMIN;
 const esc = (ADMIN.match(/^const _esc = .*$/m) || [])[0];
 /* The builder leans on Utils.effectiveRate for the return column. Taken from
    the shipped file so the rendered document is the real one. */
 let effRate = '';
-try { effRate = sliceFn(ADMIN, 'effectiveRate'); } catch (_) {}
+try { effRate = sliceFn(fs.readFileSync(path.join(ROOT, 'admin', 'js', 'admin.js'), 'utf8'), 'effectiveRate'); } catch (_) {}
 const utilsStub = effRate
   ? `const Utils = { effectiveRate: (function(){ ${effRate}; return effectiveRate; })() };`
   : `const Utils = { effectiveRate: i => parseFloat(i && i.annual_rate) || 0 };`;
@@ -129,7 +135,7 @@ const page = `<!doctype html><html><head><meta charset="utf-8"></head><body>
 <script>
 const DATA = ${JSON.stringify(DATA).replace(/</g, '\\u003c')};
 const out = { errors: ERRORS };
-try { _openAccountStatementWindow(DATA); out.built = 'ok'; }
+try { SVCDocs.openAccountStatement(DATA); out.built = 'ok'; }
 catch (e) { out.built = 'THREW: ' + e.message; }
 document.getElementById('doc').innerHTML = window.__html || '';
 const txt = (document.getElementById('doc').textContent || '').replace(/\\s+/g, ' ');

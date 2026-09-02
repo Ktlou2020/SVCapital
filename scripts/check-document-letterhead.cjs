@@ -71,11 +71,17 @@ console.log('\nthe asset is in the repository');
 /* [file, function, description, ground] — 'light' means the logo sits on the
    white letterhead, 'dark' means it sits inside the #303030 brand band. */
 const DOCUMENTS = [
-  ['admin/js/admin.js',   '_openAdminTaxCertWindow',     'the admin tax certificate',   'light'],
-  ['admin/js/admin.js',   '_openAccountStatementWindow', 'the admin account statement', 'light'],
-  ['js/portal-core.js',   'generateTaxCertificate',      'the investor tax certificate', 'light'],
+  ['js/investor-documents.js', '_openAdminTaxCertWindow',     'the tax certificate',   'light'],
+  ['js/investor-documents.js', '_openAccountStatementWindow', 'the account statement', 'light'],
   ['js/portal-core.js',   'downloadSaStatement',         'the sub-account statement',   'dark'],
-  ['portal/js/portal.js', 'buildStatementHTML',          'the account statement',       'dark'],
+];
+
+/* The investor's certificate and statement no longer carry a letterhead of
+   their own — they render the shared document above. What is asserted of them
+   is that they still delegate rather than growing a second copy. */
+const DELEGATES = [
+  ['js/portal-core.js', 'generateTaxCertificate', 'SVCDocs.openIncomeReference',  'the investor income reference'],
+  ['js/portal-core.js', 'generateStatement',      'SVCDocs.accountStatementHTML', 'the investor statement'],
 ];
 
 console.log('\nevery statement and tax certificate carries the new logo');
@@ -115,6 +121,17 @@ for (const [file, fn, what, ground] of DOCUMENTS) {
   }
 }
 
+console.log('\nthe investor copies delegate rather than duplicating');
+for (const [file, fn, call, what] of DELEGATES) {
+  const body = fnBody(read(file), fn);
+  ok(`${what} renders the shared document`,
+     !!body && body.includes(call),
+     `${fn} should call ${call}`);
+  ok(`and builds no letterhead of its own`,
+     !!body && !body.includes(OLD_LOGO) && !/<!DOCTYPE html>/i.test(body),
+     'a second copy of the design is a second thing to keep in step');
+}
+
 console.log('\nthe mobile build carries the same documents');
 {
   /* mobile/www is a build artifact — mobile/src and js/ are the sources — so
@@ -133,7 +150,7 @@ console.log('\nthe mobile build carries the same documents');
 
 console.log('\nand the documents nobody asked to change were left alone');
 {
-  const admin = read('admin/js/admin.js');
+  const admin = read('admin/js/admin.js');   // the pool reports still live here
   for (const fn of ['_openPoolRaiseReportWindow', '_openPoolMaturityReportWindow']) {
     const body = fnBody(admin, fn);
     ok(`${fn} keeps its existing letterhead`,

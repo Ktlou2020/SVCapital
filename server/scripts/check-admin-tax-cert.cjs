@@ -384,15 +384,13 @@ const sum   = rows => Math.round((rows || []).reduce((a, r) => a + Math.abs(Numb
         console.log('  SKIP  no headless Chromium — the certificate was not rendered');
       } else {
         const os = require('os'), { execFileSync } = require('child_process');
-        const admin = require('fs').readFileSync(path.join(ROOT, 'admin', 'js', 'admin.js'), 'utf8');
-        const at = admin.indexOf('function _openAdminTaxCertWindow(');
-        let i = admin.indexOf('{', admin.indexOf(')', at)), d = 0, end = i;
-        for (; i < admin.length; i++) {
-          if (admin[i] === '{') d++;
-          else if (admin[i] === '}') { d--; if (d === 0) { end = i; break; } }
-        }
-        const fnSrc = admin.slice(at, end + 1);
-        const escSrc = (admin.match(/^const _esc = .*$/m) || [])[0];
+        const admin = require('fs').readFileSync(path.join(ROOT, 'js', 'investor-documents.js'), 'utf8');
+        /* The whole shipped file: the builders share a module-scoped helper,
+           so a slice of one of them is not what actually runs. */
+        const fnSrc = admin;
+        /* _esc lives in each surface's bundle, not in the shared document file. */
+        const escSrc = `const _esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => (
+  { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));`;
 
         const DATA = {
           investor: { id: 'S-111628', first_name: 'Devin', last_name: 'Padayachy',
@@ -419,7 +417,7 @@ window.open=function(){return {document:{write(h){window.__html+=h;},close(){}},
 <script>${escSrc}
 ${fnSrc}
 const out={errors:ERRORS};
-try{_openAdminTaxCertWindow(${JSON.stringify(DATA).replace(/</g, '\\u003c')});out.built='ok';}
+try{SVCDocs.openIncomeReference(${JSON.stringify(DATA).replace(/</g, '\\u003c')});out.built='ok';}
 catch(e){out.built='THREW: '+e.message;}
 document.getElementById('doc').innerHTML=window.__html||'';
 const txt=(document.getElementById('doc').textContent||'').replace(/\\s+/g,' ');
@@ -508,7 +506,7 @@ document.getElementById('probe').textContent=JSON.stringify(out);
     /* The statement and the certificate go to the same person, often in the
        same email. Two different letterheads read as two different companies. */
     {
-      const admin = require('fs').readFileSync(path.join(ROOT, 'admin', 'js', 'admin.js'), 'utf8');
+      const admin = require('fs').readFileSync(path.join(ROOT, 'js', 'investor-documents.js'), 'utf8');
       const fn = name => {
         const at = admin.indexOf(`function ${name}(`);
         const end = admin.indexOf('\nfunction ', at + 10);

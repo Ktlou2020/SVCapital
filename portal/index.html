@@ -1349,7 +1349,7 @@
                   <button class="btn btn--success" style="flex:1;min-width:160px" onclick="generateTaxCertificate()">
                     <i class="fa-solid fa-file-arrow-down"></i> Preview / Print Certificate
                   </button>
-                  <button class="btn btn--secondary" style="flex:1;min-width:130px" onclick="generateTaxCertificate();setTimeout(()=>downloadTaxCertPDF(_lastTaxCertHTML),200)">
+                  <button class="btn btn--secondary" style="flex:1;min-width:130px" onclick="generateTaxCertificate();setTimeout(()=>downloadTaxCertPDF(PORTAL._lastTaxCertHTML),200)">
                     <i class="fa-solid fa-file-pdf"></i> Download PDF
                   </button>
                 </div>
@@ -3001,8 +3001,9 @@ if (window.Capacitor) {
 }
 </script>
 <script src="/js/native.js"></script>
-<script src="../js/portal-core.js?v=14"></script>
-<script src="js/portal.js?v=114"></script>
+<script src="../js/portal-core.js?v=15"></script>
+<script src="../js/investor-documents.js?v=1"></script>
+<script src="js/portal.js?v=115"></script>
 <!-- sv-intelligence.js hidden -->
 <script>
 // Service worker: web browsers only (not Capacitor). Handles web push notifications.

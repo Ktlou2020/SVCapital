@@ -6,6 +6,65 @@ const { requireAuth } = require('../middleware/auth');
    console's certificate — two documents reporting the same client's earnings
    must not be able to disagree. */
 const { INCOME_TYPES } = require('../services/ledger');
+/* The Investment Income Reference and the account statement are built by the
+   same services the admin console uses, so a client and a staff member looking
+   at the same period cannot be shown different figures. These routes decide
+   only that the investor is themselves. */
+const { buildIncomeReference } = require('../services/incomeReference');
+const { buildAccountStatement } = require('../services/accountStatement');
+
+/* The one place that answers "who is asking". The claim is investorId; reading
+   it as investor_id finds nothing and falls through to the users row id, which
+   is a different key entirely — that is exactly how the invest funnel came to
+   file every event under an id the investors table has never heard of. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function callerInvestorId(req) {
+  if (req.user && req.user.investorId) return req.user.investorId;
+  if (req.user && req.user.investor_id) return req.user.investor_id;
+  /* users.id is a uuid column. A token whose id is not one — a staff or
+     service caller, say — made this query throw, and the route answered 500
+     where it meant "you have no investor account". "Not yours" and "we broke"
+     must not look the same to a client. */
+  const id = req.user && req.user.id;
+  if (!id || !UUID_RE.test(String(id))) return null;
+  const { rows } = await pool.query('SELECT investor_id FROM users WHERE id=$1', [id]);
+  return rows[0] && rows[0].investor_id;
+}
+
+/* GET /api/statements/income-reference/:year
+   The same document the console produces, for the caller's own account. */
+router.get('/income-reference/:year', requireAuth, async (req, res) => {
+  try {
+    const investorId = await callerInvestorId(req);
+    if (!investorId) return res.status(403).json({ error: 'Forbidden.' });
+    const data = await buildIncomeReference(pool, { investorId, year: req.params.year });
+    res.json(data);
+  } catch (err) {
+    if (err.code === 'BAD_REQUEST') return res.status(400).json({ error: err.message });
+    if (err.code === 'NOT_FOUND')   return res.status(404).json({ error: err.message });
+    console.error('[statements/income-reference]', err.message);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+/* GET /api/statements/account-statement?from=&to=
+   The same document the console produces, for the caller's own account. */
+router.get('/account-statement', requireAuth, async (req, res) => {
+  try {
+    const investorId = await callerInvestorId(req);
+    if (!investorId) return res.status(403).json({ error: 'Forbidden.' });
+    const { from, to } = req.query;
+    if (!from || !to) return res.status(400).json({ error: 'from and to are required' });
+    const data = await buildAccountStatement(pool, { investorId, from, to });
+    res.json(data);
+  } catch (err) {
+    if (err.code === 'BAD_REQUEST') return res.status(400).json({ error: err.message });
+    if (err.code === 'NOT_FOUND')   return res.status(404).json({ error: err.message });
+    console.error('[statements/account-statement]', err.message);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
 
 /* GET /api/statements — list available statements for the logged-in investor */
 router.get('/', requireAuth, async (req, res) => {

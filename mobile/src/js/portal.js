@@ -2250,12 +2250,12 @@ function buildStatementHTML(opts) {
 
 
 function printStatement() {
-  const stmtDoc = document.getElementById('statementDocument');
-  if (!stmtDoc || !stmtDoc.innerHTML.trim()) {
-    Toast.error('Please generate a statement first, then print.');
-    return;
-  }
-  _openStatementOverlay(stmtDoc.innerHTML);
+  /* The same document the preview shows, opened for printing — one builder,
+     so what a client prints is what they were shown. It used to re-wrap the
+     preview's innerHTML in a second, differently-styled page. */
+  const data = (typeof PORTAL !== 'undefined') && PORTAL._lastStatement;
+  if (!data) { Toast.error('Please generate a statement first, then print.'); return; }
+  SVCDocs.openAccountStatement(data);
 }
 
 /* Cached statement body HTML for _handleSavePdf() */
@@ -3511,14 +3511,22 @@ function downloadStatement() {
   const statementNumber = `SVC-${now.getFullYear()}-${String(Date.now()).slice(-5)}`;
   const generatedAt     = now.toLocaleString('en-ZA', { dateStyle: 'long', timeStyle: 'short' });
 
-  const bodyHtml = buildStatementHTML({
-    investor, investments, transactions,
-    from: from90, to: now,
-    totalDeposits, totalReturns, walletBal, totalValue, activeInv,
-    totalCapital, activeInvAmt,
-    statementNumber, generatedAt,
-    incPortfolio: true, incInvestments: true, incTransactions: true, incPerformance: true,
-  });
+  /* The document the client was shown. downloadStatement used to rebuild it
+     with the portal's own builder, so the PDF the app saved was a different
+     design — and different figures — from the statement on screen. It now uses
+     whatever generateStatement last fetched from the server, and only falls
+     back to the local builder if the client somehow reaches Save before
+     generating anything. */
+  const bodyHtml = (typeof SVCDocs !== 'undefined' && PORTAL._lastStatement)
+    ? SVCDocs.accountStatementHTML(PORTAL._lastStatement)
+    : buildStatementHTML({
+        investor, investments, transactions,
+        from: from90, to: now,
+        totalDeposits, totalReturns, walletBal, totalValue, activeInv,
+        totalCapital, activeInvAmt,
+        statementNumber, generatedAt,
+        incPortfolio: true, incInvestments: true, incTransactions: true, incPerformance: true,
+      });
 
   const htmlContent = `<!DOCTYPE html>
 <html lang="en">
@@ -3777,9 +3785,9 @@ const PORTAL_CMD_ITEMS = [
   { label: 'Support',                  icon: 'fa-headset',         group: 'Navigate', action: () => navigate('support',       document.querySelector('[data-view=support]')) },
   // Refer & Earn hidden — referral programme not yet live
   { label: 'Documents',                icon: 'fa-folder-open',     group: 'Navigate', action: () => navigate('documents',     document.querySelector('[data-view=documents]')) },
-  { label: 'Account Statement',        icon: 'fa-file-invoice',    group: 'Navigate', action: () => navigate('statement',     document.querySelector('[data-view=statement]')) }, on mobile
+  { label: 'Account Statement',        icon: 'fa-file-invoice',    group: 'Navigate', action: () => navigate('statement',     document.querySelector('[data-view=statement]')) },
   { label: 'Top Up Wallet',            icon: 'fa-plus',            group: 'Actions',  action: () => openTopUpModal() },
-  { label: 'Download Tax Certificate', icon: 'fa-file-shield',     group: 'Actions',  action: () => { navigate('documents', document.querySelector('[data-view=documents]')); } }, on mobile
+  { label: 'Download Tax Certificate', icon: 'fa-file-shield',     group: 'Actions',  action: () => { navigate('documents', document.querySelector('[data-view=documents]')); } },
   { label: 'Download Statement PDF',   icon: 'fa-file-pdf',        group: 'Actions',  action: () => downloadStatement() },
   { label: 'Export Analytics CSV',     icon: 'fa-table',           group: 'Actions',  action: () => exportAnalyticsCSV() },
   { label: 'Submit Maturity Instruction', icon: 'fa-check-circle', group: 'Actions',  action: () => navigate('maturity', document.querySelector('[data-view=maturity]')) },
