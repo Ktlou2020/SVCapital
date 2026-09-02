@@ -8847,12 +8847,24 @@ async function loadPersonas() {
   panel.innerHTML = '<div class="text-center text-muted" style="padding:20px">Loading…</div>';
   try {
     const res = await fetch('/api/analytics/personas', { headers: { Authorization: `Bearer ${_getToken()}` } });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+    /* Empty and broken are different things. This panel used to draw "No
+       persona data yet" from a catch that also caught 500s, 403s, network
+       drops and exceptions thrown by the renderer itself — so a dead endpoint
+       read as a quiet one. Decide emptiness from the payload; let failures
+       fall through to the catch and say what happened. */
+    if (!Number(data.total)) {
+      panel.innerHTML = `<div class="text-center text-muted" style="padding:20px">No persona data yet — investors complete profile quests to appear here.</div>`;
+      return;
+    }
     _renderPersonas(data);
   } catch (e) {
-    panel.innerHTML = `<div class="text-center text-muted" style="padding:20px">No persona data yet — investors complete profile quests to appear here.</div>`;
-    console.warn('[personas]', e.message);
+    panel.innerHTML = `<div class="text-center" style="padding:20px;color:#ef4444">
+      Could not load investor personas: ${_esc(e.message || 'error')}<br>
+      <button class="btn btn--secondary btn--sm" style="margin-top:10px" onclick="loadPersonas()">Retry</button>
+    </div>`;
+    console.error('[personas]', e);
   }
 }
 
@@ -9626,6 +9638,19 @@ function renderInvestFunnel(data, panel) {
 
   const { opened = 0, fee_shown = 0, confirmed = 0, abandoned = 0 } = funnel;
 
+  /* One bad field should cost one cell, not the whole panel. A count that
+     arrives null or non-numeric renders as a dash — still visible as wrong,
+     but the surrounding rows keep working. */
+  /* Number(null) and Number('') are both 0, so a missing count would coerce to
+     a confident zero — which is the one answer worse than a dash. */
+  function _n(v) {
+    if (v === null || v === undefined || v === '') return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+  function _num(v) { const n = _n(v); return n === null ? '—' : n.toLocaleString(); }
+  function _rate(a, b) { const x = _n(a), y = _n(b); return y > 0 ? Math.round(x / y * 100) : 0; }
+
   function pct(n, d) { return d > 0 ? Math.round(n / d * 100) : 0; }
   function dropBadge(drop) {
     if (!drop) return '';
@@ -9761,16 +9786,17 @@ function renderInvestFunnel(data, panel) {
           </thead>
           <tbody>
             ${by_pool.map(r => {
-              const conv     = r.opened > 0 ? Math.round(r.confirmed / r.opened * 100) : 0;
-              const dropRate = r.opened > 0 ? Math.round(r.abandoned / r.opened * 100) : 0;
+              const conv     = _rate(r.confirmed, r.opened);
+              const dropRate = _rate(r.abandoned, r.opened);
               const convCol  = conv >= 60 ? '#22c55e' : conv >= 30 ? '#fec24f' : '#ef4444';
               const dropCol  = dropRate >= 60 ? '#ef4444' : dropRate >= 30 ? '#f97316' : '#fec24f';
+              const poolName = r.pool_name || r.pool_id || '—';
               return `<tr style="border-bottom:1px solid var(--border)">
-                <td style="padding:6px 8px;font-size:0.78rem;color:var(--text);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(r.pool_name)}">${_esc(r.pool_name)}</td>
-                <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">${r.opened.toLocaleString()}</td>
-                <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">${r.fee_shown.toLocaleString()}</td>
-                <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">${r.confirmed.toLocaleString()}</td>
-                <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">${r.abandoned.toLocaleString()}</td>
+                <td style="padding:6px 8px;font-size:0.78rem;color:var(--text);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(poolName)}">${_esc(poolName)}</td>
+                <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">${_num(r.opened)}</td>
+                <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">${_num(r.fee_shown)}</td>
+                <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">${_num(r.confirmed)}</td>
+                <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">${_num(r.abandoned)}</td>
                 <td style="padding:6px 8px;font-size:0.78rem;font-weight:700;color:${convCol};text-align:right">${conv}%</td>
                 <td style="padding:6px 8px;font-size:0.78rem;font-weight:700;color:${dropCol};text-align:right">${dropRate}%</td>
               </tr>`;
@@ -9799,19 +9825,22 @@ function renderInvestFunnel(data, panel) {
           </thead>
           <tbody>
             ${by_investor.map(r => {
-              const dropRate  = r.opened > 0 ? Math.round(r.abandoned / r.opened * 100) : 0;
+              const dropRate  = _rate(r.abandoned, r.opened);
               const dropCol   = dropRate >= 70 ? '#ef4444' : dropRate >= 40 ? '#f97316' : '#fec24f';
               const kycColor  = r.kyc_status === 'verified' ? '#22c55e' : r.kyc_status === 'pending' ? '#fec24f' : 'var(--text-muted)';
               const invested  = r.total_invested ? 'R ' + Number(r.total_invested).toLocaleString('en-ZA', {minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
               const name      = r.investor_name || r.email || r.investor_id || '—';
+              /* abandoned_after_fee is a BOOL_OR — a flag, not a count. It used
+                 to be interpolated as a number, so it read "true ⚠". */
+              const afterFee  = r.abandoned_after_fee === true || r.abandoned_after_fee === 'true';
               return `<tr style="border-bottom:1px solid var(--border)">
-                <td style="padding:6px 8px;font-size:0.78rem;color:var(--text);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.email || ''}">${name}</td>
-                <td style="padding:6px 8px;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;color:${kycColor}">${r.kyc_status || '—'}</td>
+                <td style="padding:6px 8px;font-size:0.78rem;color:var(--text);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(r.email || '')}">${_esc(name)}</td>
+                <td style="padding:6px 8px;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;color:${kycColor}">${_esc(r.kyc_status || '—')}</td>
                 <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">${invested}</td>
-                <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">${r.opened}</td>
-                <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:#ef4444;font-weight:700">${r.abandoned}</td>
-                <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:#22c55e">${r.confirmed}</td>
-                <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:${r.abandoned_after_fee > 0 ? '#f97316' : 'var(--text-muted)'}">${r.abandoned_after_fee > 0 ? r.abandoned_after_fee + ' ⚠' : '0'}</td>
+                <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">${_num(r.opened)}</td>
+                <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:#ef4444;font-weight:700">${_num(r.abandoned)}</td>
+                <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:#22c55e">${_num(r.confirmed)}</td>
+                <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:${afterFee ? '#f97316' : 'var(--text-muted)'}">${afterFee ? 'Yes ⚠' : 'No'}</td>
                 <td style="padding:6px 8px;font-size:0.78rem;font-weight:700;color:${dropCol};text-align:right">${dropRate}%</td>
               </tr>`;
             }).join('')}
@@ -9836,9 +9865,18 @@ async function loadSignupFriction() {
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
+    /* Empty and broken are different things — see loadInvestFunnel. */
+    if (!Number(data.total_sessions)) {
+      panel.innerHTML = `<div class="text-center text-muted" style="padding:20px">No friction data yet — it will appear once users visit the signup page.</div>`;
+      return;
+    }
     renderSignupFriction(data, panel);
   } catch (err) {
-    panel.innerHTML = `<div class="text-center text-muted" style="padding:20px">No friction data yet — it will appear once users visit the signup page.</div>`;
+    panel.innerHTML = `<div class="text-center" style="padding:20px;color:#ef4444">
+      Could not load the signup friction analysis: ${_esc(err.message || 'error')}<br>
+      <button class="btn btn--secondary btn--sm" style="margin-top:10px" onclick="loadSignupFriction()">Retry</button>
+    </div>`;
+    console.error('[signup-friction]', err);
   }
 }
 
