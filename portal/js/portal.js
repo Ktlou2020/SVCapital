@@ -1807,12 +1807,33 @@ function buildStatementHTML(opts) {
   }
 
   // ── Pre-sort investments ────────────────────────────────────────────────
-  const activeInvestments    = investments.filter(i => i.status === 'active')
-    .sort((a, b) => new Date(a.maturity_date || '9999') - new Date(b.maturity_date || '9999'));
-  const completedInvestments = investments.filter(i => ['matured', 'paid_out'].includes(i.status))
-    .sort((a, b) => new Date(b.maturity_date || b.updated_at || 0) - new Date(a.maturity_date || a.updated_at || 0));
+  /* Newest first, on the date each table is about: an active holding by when
+     it STARTED, a matured one by when it MATURED. An undated row sorts last
+     rather than to the top of the document. */
+  const _stmtMs = v => { const d = new Date(v); return isNaN(d.getTime()) ? null : d.getTime(); };
+  const _stmtNewest = pick => (a, b) => {
+    const x = pick(a), y = pick(b);
+    if (x === null && y === null) return 0;
+    if (x === null) return 1;
+    if (y === null) return -1;
+    return y - x;
+  };
+  const _startedMs  = i => _stmtMs(i.start_date) ?? _stmtMs(i.created_at);
+  const _maturedMs  = i => _stmtMs(i.maturity_date) ?? _stmtMs(i.updated_at);
 
-  const nextMaturityDate = activeInvestments.find(i => i.maturity_date)?.maturity_date;
+  const activeInvestments    = investments.filter(i => i.status === 'active')
+    .sort(_stmtNewest(_startedMs));
+  const completedInvestments = investments.filter(i => ['matured', 'paid_out'].includes(i.status))
+    .sort(_stmtNewest(_maturedMs));
+
+  /* The NEXT maturity is the soonest one still ahead, which the display order
+     no longer surfaces — it used to fall out of sorting the active table by
+     earliest maturity, so reversing that table would silently have turned this
+     into the LAST maturity. Computed on its own now. */
+  const nextMaturityDate = activeInvestments
+    .filter(i => i.maturity_date)
+    .map(i => i.maturity_date)
+    .sort((a, b) => new Date(a) - new Date(b))[0];
   const capitalInvested  = (totalCapital != null ? totalCapital : 0) ||
     investments.reduce((s, i) => s + (Number(i.amount) || 0), 0);
 
@@ -1987,7 +2008,7 @@ function buildStatementHTML(opts) {
 
         ${activeInvestments.length > 0 ? `
           <div style="font-size:10px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">
-            Active Investments — ${activeInvestments.length} (sorted by earliest maturity)
+            Active Investments — ${activeInvestments.length} (newest first)
           </div>
           <div style="overflow-x:auto;margin-bottom:20px">
             <table style="${tableStyle}">
@@ -2041,6 +2062,10 @@ function buildStatementHTML(opts) {
        moved money. */
     let running = Number(F.opening) || 0;
 
+    /* The balance is accumulated walking FORWARD, so the rows are built in
+       date order and reversed for display. Each row still shows the balance
+       after its own transaction; the closing balance simply sits at the top
+       and the opening at the bottom, the way a bank statement reads. */
     const txnRows = sortedTxns.length > 0 ? sortedTxns.map(t => {
       const absAmt    = Math.abs(Number(t.amount) || 0);
       const counts    = _stmtCounts(t);
@@ -2068,7 +2093,7 @@ function buildStatementHTML(opts) {
         ${tdCell(fmtDate(t.transaction_date || t.created_at), 'right')}
         ${tdCell(statusPillHtml)}
       </tr>`;
-    }).join('') : `<tr><td colspan="8" style="padding:20px;text-align:center;color:#9ca3af;font-size:11px">No transactions in selected period</td></tr>`;
+    }).reverse().join('') : `<tr><td colspan="8" style="padding:20px;text-align:center;color:#9ca3af;font-size:11px">No transactions in selected period</td></tr>`;
 
     /* Straight off the shared figures — completed rows only. */
     const txDeposits = F.deposits || 0;

@@ -7226,13 +7226,26 @@ function generateTaxCertificate() {
   const from = new Date(taxYear - 1, 2, 1);   // 1 March (year-1)
   const to   = new Date(taxYear,     1, 28, 23, 59, 59); // 28 Feb (year)
 
-  // Total returns = returns + payouts in the tax year
+  /* INCOME, AND THE DATE IT WAS EARNED — both were wrong here, and the admin
+     copy of this certificate was corrected for exactly these two.
+
+     A `payout` amount is CAPITAL PLUS RETURN: maturityCron credits the whole
+     sum and books only the return portion to total_returns. Counting payouts
+     as interest declared the client's own returned capital as taxable income.
+     Income is `return` and `interest`, which is what services/ledger.js says.
+
+     And created_at is when the ROW WAS WRITTEN. For a ledger imported in one
+     batch that is the import timestamp on every row, so the tax-year window
+     selected by it is not the client's tax year. transaction_date carries the
+     date the money moved. */
+  const INCOME_TYPES = ['return', 'interest'];
+  const _txnDate = t => new Date(t.transaction_date || t.created_at || 0);
   const interestTxns = (PORTAL.transactions || []).filter(t => {
-    if (!['return', 'payout'].includes(t.type)) return false;
-    const d = new Date(t.created_at || t.transaction_date || 0);
-    return d >= from && d <= to;
-  });
-  const totalInterest = interestTxns.reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+    if (!INCOME_TYPES.includes(t.type)) return false;
+    const d = _txnDate(t);
+    return !isNaN(d.getTime()) && d >= from && d <= to;
+  }).sort((a, b) => _txnDate(b) - _txnDate(a));   // newest first
+  const totalInterest = interestTxns.reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
 
   const certNumber = `SVCIT-${taxYear}-${String(inv.id).replace(/\D/g,'').slice(-6) || Math.floor(Math.random()*900000+100000)}`;
   const generatedAt = new Date().toLocaleString('en-ZA', { dateStyle: 'long', timeStyle: 'short' });
@@ -7311,9 +7324,9 @@ td:last-child{text-align:right;font-weight:600}
     <tbody>
       ${interestTxns.map(t => `
       <tr>
-        <td>${new Date(t.created_at || t.transaction_date).toLocaleDateString('en-ZA')}</td>
-        <td>${t.description || (t.type === 'return' ? 'Investment return' : 'Payout')}</td>
-        <td>${Utils.rand(t.amount)}</td>
+        <td>${_txnDate(t).toLocaleDateString('en-ZA')}</td>
+        <td>${t.description || (t.type === 'interest' ? 'Interest credited' : 'Investment return')}</td>
+        <td>${Utils.rand(Math.abs(parseFloat(t.amount) || 0))}</td>
       </tr>`).join('')}
       <tr style="background:#f8fafc"><td colspan="2" style="font-weight:700;text-align:right">TOTAL INTEREST</td><td style="color:#15803d;font-weight:800">${Utils.rand(totalInterest)}</td></tr>
     </tbody>
@@ -8907,7 +8920,18 @@ function downloadSaStatement(saId, saName) {
   // ─── INVESTMENT DETAILS ───
   let investmentSection = '';
   if (investments.length > 0) {
-    const invRows = investments.map(inv => {
+    /* Newest first. This table mixes active and matured holdings, so it is
+       ordered by the date each one began — the one date every row has. */
+    const _saMs = v => { const d = new Date(v); return isNaN(d.getTime()) ? null : d.getTime(); };
+    const _saStart = i => _saMs(i.start_date) ?? _saMs(i.created_at);
+    const invSorted = investments.slice().sort((a, b) => {
+      const x = _saStart(a), y = _saStart(b);
+      if (x === null && y === null) return 0;
+      if (x === null) return 1;
+      if (y === null) return -1;
+      return y - x;
+    });
+    const invRows = invSorted.map(inv => {
       const info       = getProductInfo(inv.product_type);
       const poolRate2  = (Number(inv.pool_actual_rate) || 0) * 100;
       const rateCell   = poolRate2 > 0 ? `${poolRate2.toFixed(2)}%` : '—';

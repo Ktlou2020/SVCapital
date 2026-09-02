@@ -16727,14 +16727,31 @@ function _openAdminTaxCertWindow(data) {
      client receives carry one masthead rather than two. */
   const _logoUrl  = window.location.origin + '/assets/sv-capital-logo-horizontal-outline-1.png';
 
-  const returnsRows = returns.map(t => `
+  /* Newest first, on the date each list is about — the same ordering the
+     statement uses, so the two documents a client receives read the same way.
+     Sorted on copies: these arrays feed the totals above. An undated row sorts
+     last rather than to the top of the document. */
+  const _ms = v => { const d = new Date(v); return isNaN(d.getTime()) ? null : d.getTime(); };
+  const _byNewest = pick => (a, b) => {
+    const x = pick(a), y = pick(b);
+    if (x === null && y === null) return 0;
+    if (x === null) return 1;
+    if (y === null) return -1;
+    return y - x;
+  };
+  const _txnMs = t => _ms(t.txn_date) ?? _ms(t.created_at);
+  const returnsSorted  = returns.slice().sort(_byNewest(_txnMs));
+  const depositsSorted = deposits.slice().sort(_byNewest(_txnMs));
+  const maturedSorted  = maturedInvestments.slice().sort(_byNewest(m => _ms(m.end_date)));
+
+  const returnsRows = returnsSorted.map(t => `
     <tr>
       <td>${rowDate(t)}</td>
       <td>${_esc(esc(t.description || (t.type === 'interest' ? 'Interest credited' : 'Investment return')))}</td>
       <td class="amt">${fmt(Math.abs(parseFloat(t.amount||0)))}</td>
     </tr>`).join('');
 
-  const depositsRows = deposits.map(t => `
+  const depositsRows = depositsSorted.map(t => `
     <tr>
       <td>${rowDate(t)}</td>
       <td>${_esc(esc(t.description || 'Client deposit'))}</td>
@@ -16745,7 +16762,7 @@ function _openAdminTaxCertWindow(data) {
      they need their own section. Shown beside the credited income and never
      added to it — a holding accrued monthly and then matured appears in both,
      and one total covering the two would declare the same earnings twice. */
-  const maturedRows = maturedInvestments.map(m => `
+  const maturedRows = maturedSorted.map(m => `
     <tr>
       <td>${fmtDate(m.end_date)}</td>
       <td>${_esc(esc(m.pool_name || 'Investment'))}</td>
@@ -17080,9 +17097,22 @@ function _openAccountStatementWindow(data) {
     const d = new Date(end);
     return !isNaN(d.getTime()) && d < _periodEnd;
   });
-  const _sortDesc = (a, b) => new Date(b.maturity_date || b.pool_end_date || 0) - new Date(a.maturity_date || a.pool_end_date || 0);
-  activeInvests.sort(_sortDesc);
-  maturedInvests.sort(_sortDesc);
+  /* Newest first, but on the date each table is actually about: an active
+     holding is placed by when it STARTED (which is what its Date column
+     shows), a matured one by when it MATURED. Sorting both by maturity date
+     put the active table in an order its own first column did not explain. */
+  const _ms = v => { const d = new Date(v); return isNaN(d.getTime()) ? null : d.getTime(); };
+  const _byNewest = pick => (a, b) => {
+    const x = pick(a), y = pick(b);
+    if (x === null && y === null) return 0;
+    if (x === null) return 1;              // undated rows sort last, not first
+    if (y === null) return -1;
+    return y - x;
+  };
+  const _startMs    = i => _ms(i.start_date) ?? _ms(i.created_at);
+  const _maturityMs = i => _ms(i.maturity_date) ?? _ms(i.pool_end_date);
+  activeInvests.sort(_byNewest(_startMs));
+  maturedInvests.sort(_byNewest(_maturityMs));
 
   const activeHead  = '<thead><tr><th>Date</th><th>Pool Name</th><th>Product</th><th class="num">Capital</th><th>Pool Start</th><th>Pool End</th><th>Status</th></tr></thead>';
   const maturedHead = '<thead><tr><th>Date</th><th>Pool Name</th><th>Product</th><th class="num">Capital</th><th class="num">Return</th><th class="num">Rand Return</th><th>Pool Start</th><th>Pool End</th><th>Maturity Instruction</th><th>Status</th></tr></thead>';
@@ -17343,7 +17373,13 @@ function _openAccountStatementWindow(data) {
       const money = n => 'R ' + Math.abs(n).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       const signed = n => money(n) + (n < 0 ? ' Dr' : '');
 
-      const rows = transactions.map(t => {
+      /* Newest first. running_balance is computed on the server in date order
+         and is the balance AFTER its own transaction, so reversing the display
+         leaves every row's balance correct — the closing balance simply sits
+         at the top and the opening at the bottom, the way a bank statement
+         reads. slice() first: this must not reorder the array the summary
+         figures above were derived from. */
+      const rows = transactions.slice().reverse().map(t => {
         const effect = parseFloat(t.cash_effect);
         const bal    = parseFloat(t.running_balance);
         const amt    = Math.abs(parseFloat(t.amount) || 0);
@@ -17395,9 +17431,13 @@ function _openAccountStatementWindow(data) {
         '  <table>',
         '  <thead><tr><th>Date</th><th>Type</th><th>Description</th><th class="num">Credit</th><th class="num">Debit</th><th class="num">Balance</th></tr></thead>',
         '  <tbody>',
-        `  <tr style="background:#f8fafc"><td colspan="3" style="font-size:10px;font-weight:700;color:#374151">Opening Balance — ${fromLabel}</td><td></td><td></td><td class="txn-bal">${openFmt}</td></tr>`,
-        rows,
+        /* Closing at the top and opening at the bottom, because the rows
+           between them now run newest first. Left as they were, the opening
+           balance sat above the most recent transaction and the column read
+           backwards through the middle of the table. */
         `  <tr style="background:#f1f5f9;border-top:2px solid #e5e7eb"><td colspan="3" style="font-size:10px;font-weight:700;color:#374151">Closing Balance — ${toLabel}</td><td></td><td></td><td class="txn-bal" style="${closingBal < 0 ? 'color:#b91c1c' : 'color:#15803d'}">${closeFmt}</td></tr>`,
+        rows,
+        `  <tr style="background:#f8fafc"><td colspan="3" style="font-size:10px;font-weight:700;color:#374151">Opening Balance — ${fromLabel}</td><td></td><td></td><td class="txn-bal">${openFmt}</td></tr>`,
         gapNote,
         '  </tbody></table>',
       ].join('\n');

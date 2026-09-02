@@ -31,6 +31,7 @@
 'use strict';
 
 const fs   = require('fs');
+const os   = require('os');
 const path = require('path');
 const { execFileSync } = require('child_process');
 const { Pool } = require('pg');
@@ -114,6 +115,10 @@ function shuffled(list, seed) {
 }
 
 const TEMPLATE = 'svc_chk_tpl_' + process.pid;
+
+/* Where a failed check's full output goes, so a rare failure can be read
+   rather than guessed at. */
+const FAIL_LOG_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'svc-checks-'));
 const admin = new Pool({ connectionString: process.env.DATABASE_URL, ssl: SSL });
 
 async function dropDb(name) {
@@ -218,9 +223,20 @@ async function buildTemplate() {
     if (ok) { pass++; console.log(`  ✓ ${name.padEnd(42)} ${secs}s${wantsDb ? '' : '  (no db)'}`); }
     else {
       fail++;
+      /* Keep the whole output. Summarising it to three matching lines is how
+         an intermittent failure got diagnosed twice from its stack frames
+         alone: /Error/ matches "_handleErrorEvent", so pg's stack crowded out
+         the one line that says what the server actually refused. A rare
+         failure you cannot read is a failure you will guess at. */
+      const logPath = path.join(FAIL_LOG_DIR, `${name}.log`);
+      try { fs.writeFileSync(logPath, output); } catch (_) { /* diagnosis only */ }
+
       const lines = output.trim().split('\n');
-      const why = lines.filter(l => /✗|threw|Error/.test(l)).slice(0, 3).join(' | ') || lines.slice(-2).join(' | ');
-      failures.push({ name, why: why.slice(0, 300) });
+      const stackish = l => /^\s*at\s/.test(l);
+      const why = lines.filter(l => /✗|threw|Error/.test(l) && !stackish(l)).slice(0, 3).join(' | ')
+               || lines.filter(l => !stackish(l)).slice(-2).join(' | ')
+               || lines.slice(-2).join(' | ');
+      failures.push({ name, why: why.slice(0, 300), logPath });
       console.log(`  ✗ ${name.padEnd(42)} ${secs}s`);
     }
 
@@ -233,7 +249,7 @@ async function buildTemplate() {
   console.log(`\n${pass} passed, ${fail} failed${SHUFFLE ? `  (seed ${SEED})` : ''}`);
   if (failures.length) {
     console.log('\nfailures:');
-    for (const f of failures) console.log(`  ${f.name}\n     ${f.why}`);
+    for (const f of failures) console.log(`  ${f.name}\n     ${f.why}${f.logPath ? `\n     full output: ${f.logPath}` : ''}`);
     if (SHUFFLE) console.log(`\nreproduce this order with:  --shuffle --seed ${SEED}`);
   }
   process.exit(fail ? 1 : 0);
