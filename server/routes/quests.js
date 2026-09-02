@@ -7,7 +7,7 @@
 
 const router = require('express').Router();
 const pool   = require('../db/pool');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireRole } = require('../middleware/auth');
 
 /* ─── XP Level thresholds ─── */
 const XP_LEVELS = [
@@ -147,6 +147,13 @@ const QUESTS = [
   { id: 'learn_risk',             title: 'Risk vs Return',             category: 'learning', xp: 50, icon: 'fa-scale-balanced',   color: '#eda5ff' },
   { id: 'learn_compounding',      title: 'The Compounding Effect',     category: 'learning', xp: 50, icon: 'fa-chart-line',       color: '#65ed00' },
   { id: 'learn_tax',              title: 'Investment Tax in SA',       category: 'learning', xp: 50, icon: 'fa-receipt',          color: '#fec24f' },
+  /* The Learning Hub's two strategist modules. They were missing here, and
+     /complete answers 404 for a quest id it does not know — so a client who
+     finished them was told "Quest not found" and paid no XP, and the Hub could
+     not be completed at all. The ids and the 50 XP are the modules' own, from
+     LEARN_MODULES; check-rewards-catalogue keeps the two lists in step. */
+  { id: 'learn_yield_opt',        title: 'Yield Optimisation',         category: 'learning', xp: 50, icon: 'fa-chart-line',       color: '#fec24f' },
+  { id: 'learn_estate',           title: 'Protecting Your Investment Wealth', category: 'learning', xp: 50, icon: 'fa-people-roof', color: '#22c55e' },
 ];
 
 /* ────────────────────────────────────────────────────────
@@ -377,7 +384,182 @@ router.post('/complete', requireAuth, async (req, res) => {
    maps in the portal and left two badges permanently locked. */
 const REFERRAL_XP = 100;
 
+/* ═══════════════════════════════════════════════════════════
+   GET /api/quests/leaderboard   — admin, director, staff
+   Every investor's standing, ranked. Computed here because this is where the
+   ladder and the catalogue live; a second copy of either would be a second
+   answer to "what level is this client".
+   ═══════════════════════════════════════════════════════════ */
+router.get('/leaderboard', requireAuth, requireRole('admin', 'director', 'staff'), async (req, res) => {
+  try {
+    const LEARNING_IDS  = QUESTS.filter(q => q.category === 'learning').map(q => q.id);
+    const XP_AVAILABLE  = QUESTS.reduce((s, q) => s + (q.xp || 0), 0);
+
+    /* One pass. Counting quests per investor in SQL rather than pulling every
+       completion row keeps this the same shape whether the book is fifty
+       clients or fifty thousand. */
+    const { rows } = await pool.query(
+      `SELECT i.id, i.first_name, i.last_name, i.email, i.kyc_status, i.status,
+              i.date_joined, i.total_invested,
+              COALESCE(i.xp_points, 0) AS xp_points,
+              i.xp_level AS stored_level,
+              COALESCE(c.done, 0)         AS quests_completed,
+              COALESCE(c.learning, 0)     AS learning_completed,
+              COALESCE(c.xp_awarded, 0)   AS xp_from_quests,
+              c.last_completed_at
+         FROM investors i
+         LEFT JOIN (
+           SELECT investor_id,
+                  COUNT(*)                                        AS done,
+                  COUNT(*) FILTER (WHERE quest_id = ANY($1::text[])) AS learning,
+                  SUM(COALESCE(xp_awarded, 0))                    AS xp_awarded,
+                  MAX(completed_at)                               AS last_completed_at
+             FROM quest_completions
+            GROUP BY investor_id
+         ) c ON c.investor_id = i.id
+        WHERE COALESCE(i.status, 'active') <> 'archived'`,
+      [LEARNING_IDS]);
+
+    const num = v => Number(v) || 0;
+    const investors = rows.map(r => {
+      const xp    = num(r.xp_points);
+      const level = getLevelForXP(xp);
+      const next  = XP_LEVELS.find(l => l.min > xp) || null;
+      const span  = next ? next.min - level.min : 0;
+      return {
+        id: r.id,
+        name: [r.first_name, r.last_name].filter(Boolean).join(' ') || r.email || r.id,
+        email: r.email,
+        kyc_status: r.kyc_status,
+        date_joined: r.date_joined,
+        total_invested: num(r.total_invested),
+        xp,
+        level_id: level.id,
+        level_label: level.label,
+        level_index: XP_LEVELS.findIndex(l => l.id === level.id),
+        next_level: next ? next.label : null,
+        xp_to_next: next ? next.min - xp : 0,
+        /* How far through the current level, for a progress bar that means
+           something at every level rather than only the first. */
+        level_progress: span > 0 ? Math.round(((xp - level.min) / span) * 100) : 100,
+        quests_completed:   num(r.quests_completed),
+        learning_completed: num(r.learning_completed),
+        last_activity: r.last_completed_at,
+        /* Reported, not reconciled. investors.xp_level is a stored copy and
+           xp_points is a running total; either can drift from the completions
+           that produced them, and a leaderboard that quietly papers over that
+           is a leaderboard nobody can audit. */
+        stored_level: r.stored_level || null,
+        level_drifted: !!r.stored_level && r.stored_level !== level.id,
+        xp_from_quests: num(r.xp_from_quests),
+        xp_drifted: num(r.xp_from_quests) !== xp,
+      };
+    });
+
+    /* Rank on XP, ties broken by who got there first — two clients on the same
+       score should not swap places between one page load and the next. */
+    investors.sort((a, b) => b.xp - a.xp ||
+      new Date(a.last_activity || a.date_joined || 0) - new Date(b.last_activity || b.date_joined || 0));
+    let rank = 0, seen = 0, lastXp = null;
+    for (const inv of investors) {
+      seen++;
+      if (inv.xp !== lastXp) { rank = seen; lastXp = inv.xp; }
+      inv.rank = rank;                    // equal scores share a rank
+    }
+
+    /* How many clients have finished each quest. A quest nobody completes is
+       the most useful row on the page — it is either too hard, unreachable, or
+       missing from the catalogue the client is served — and it only shows up
+       if it is counted rather than inferred from an absence. */
+    const { rows: perQuest } = await pool.query(
+      `SELECT quest_id, COUNT(*)::int AS done, SUM(COALESCE(xp_awarded,0))::int AS xp
+         FROM quest_completions GROUP BY quest_id`);
+    const doneBy = Object.fromEntries(perQuest.map(r => [r.quest_id, r]));
+    const catalogue = QUESTS.map(q => ({
+      id: q.id, title: q.title, category: q.category, xp: q.xp,
+      completed_by: (doneBy[q.id] || {}).done || 0,
+    }));
+    /* Completions whose quest is no longer in the catalogue. They happened and
+       they were paid; hiding them would make the XP totals unexplainable. */
+    const orphaned = perQuest
+      .filter(r => !QUESTS.some(q => q.id === r.quest_id))
+      .map(r => ({ id: r.quest_id, title: r.quest_id, category: 'unknown', xp: 0,
+                   completed_by: r.done, orphaned: true }));
+
+    res.json({
+      levels: XP_LEVELS,
+      learning_total: LEARNING_IDS.length,
+      xp_available: XP_AVAILABLE,
+      quest_total: QUESTS.length,
+      catalogue,
+      orphaned_quests: orphaned,
+      investors,
+    });
+  } catch (e) {
+    console.error('[quests/leaderboard]', e.message);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+/* GET /api/quests/investor/:id — one client's standing, for the console's
+   investor overview. Same ladder, same catalogue, same computation as the
+   leaderboard; only the shape differs. */
+router.get('/investor/:id', requireAuth, requireRole('admin', 'director', 'staff'), async (req, res) => {
+  try {
+    const investorId = req.params.id;
+    const LEARNING_IDS = QUESTS.filter(q => q.category === 'learning').map(q => q.id);
+
+    const [invRes, compRes] = await Promise.all([
+      pool.query('SELECT id, first_name, last_name, xp_points, xp_level, total_invested FROM investors WHERE id = $1', [investorId]),
+      pool.query('SELECT quest_id, xp_awarded, completed_at FROM quest_completions WHERE investor_id = $1 ORDER BY completed_at DESC', [investorId]),
+    ]);
+    if (!invRes.rows[0]) return res.status(404).json({ error: 'Investor not found.' });
+
+    const inv   = invRes.rows[0];
+    const xp    = Number(inv.xp_points) || 0;
+    const level = getLevelForXP(xp);
+    const next  = XP_LEVELS.find(l => l.min > xp) || null;
+    const span  = next ? next.min - level.min : 0;
+
+    const byId = Object.fromEntries(QUESTS.map(q => [q.id, q]));
+    const completions = compRes.rows.map(r => ({
+      quest_id: r.quest_id,
+      /* A completion whose quest is no longer in the catalogue still happened
+         and still counts; it is named as unknown rather than dropped. */
+      title:    (byId[r.quest_id] || {}).title    || r.quest_id,
+      category: (byId[r.quest_id] || {}).category || 'unknown',
+      xp_awarded: Number(r.xp_awarded) || 0,
+      completed_at: r.completed_at,
+    }));
+
+    const learningDone = completions.filter(c => LEARNING_IDS.includes(c.quest_id)).length;
+
+    res.json({
+      investor_id: inv.id,
+      xp,
+      level_id: level.id, level_label: level.label,
+      level_index: XP_LEVELS.findIndex(l => l.id === level.id),
+      level_count: XP_LEVELS.length,
+      next_level: next ? next.label : null,
+      xp_to_next: next ? next.min - xp : 0,
+      level_progress: span > 0 ? Math.round(((xp - level.min) / span) * 100) : 100,
+      stored_level: inv.xp_level || null,
+      level_drifted: !!inv.xp_level && inv.xp_level !== level.id,
+      learning_completed: learningDone,
+      learning_total: LEARNING_IDS.length,
+      quests_completed: completions.length,
+      quest_total: QUESTS.length,
+      completions,
+      levels: XP_LEVELS,
+    });
+  } catch (e) {
+    console.error('[quests/investor]', e.message);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
 module.exports = router;
 module.exports.XP_LEVELS     = XP_LEVELS;
 module.exports.getLevelForXP = getLevelForXP;
 module.exports.REFERRAL_XP   = REFERRAL_XP;
+module.exports.QUESTS        = QUESTS;

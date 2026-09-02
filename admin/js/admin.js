@@ -460,7 +460,7 @@ function navigate(view, btnEl) {
     terms: 'Legal Documents', privacy: 'Privacy Policy &amp; POPIA Notice', intlinterest: 'International Interest',
     opsconsole: 'Operations Console', feedback: 'Client Feedback', emaillogs: 'Email Logs',
     'fica-pipeline': 'FICA Pipeline',
-    handbook: 'Platform Handbook',
+    handbook: 'Platform Handbook', rewards: 'Rewards',
   };
   document.getElementById('topbarTitle').textContent = titles[view] || view;
   STATE.currentView = view;
@@ -487,6 +487,7 @@ function navigate(view, btnEl) {
     terms: loadTermsEditor,
     opsconsole: loadOpsConsole,
     feedback: () => loadFeedback('pending'),
+    rewards: loadRewards,
   };
   if (loaders[view]) loaders[view]();
   // Close mobile sidebar after navigation
@@ -2607,6 +2608,11 @@ async function viewInvestor(id) {
         </div>
       </div>
     </div>
+
+    <!-- Rewards level and Learning Hub stage. Filled by _loadInvestorRewards()
+         so the modal opens on the figures that matter without waiting on it. -->
+    <div id="invRewardsCard" class="mt-16"></div>
+
     <div class="flex-between mt-16" style="flex-wrap:wrap;gap:8px">
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn--success btn--sm" onclick='depositToInvestor(${_esc(JSON.stringify(inv.id))}, ${_esc(JSON.stringify(inv.first_name + " " + inv.last_name))}, ${inv.wallet_balance || 0})'><i class="fa-solid fa-wallet"></i> Add Funds</button>
@@ -3059,6 +3065,393 @@ async function viewInvestor(id) {
   if (ta) ta.value = inv.notes || '';
   loadInvestorNotes(inv.id);
   loadInvestorTimeline(inv, invsts, txns);
+  _loadInvestorRewards(inv.id);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   REWARDS — a client's level, and the whole book ranked
+   ═══════════════════════════════════════════════════════════ */
+
+/* The ladder's colours. The levels themselves come from the server, which is
+   where the thresholds live; only the paint is here. */
+const LEVEL_TINT = {
+  seed:'#94a3b8', sprout:'#22c55e', grower:'#65ed00', cultivator:'#0096ff',
+  harvester:'#fec24f', pioneer:'#f97316', architect:'#eda5ff', luminary:'#facc15',
+};
+const _tint = id => LEVEL_TINT[id] || '#94a3b8';
+
+/* Rank 1-3 read as medals; the rest as a plain number. A leaderboard that
+   gives everyone a trophy is just a list. */
+function _rankBadge(rank) {
+  const M = { 1:['#facc15','#1f2937','fa-trophy'], 2:['#cbd5e1','#1f2937','fa-medal'], 3:['#d8a06a','#1f2937','fa-medal'] };
+  const m = M[rank];
+  if (!m) return `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;border-radius:8px;background:rgba(148,163,184,0.12);color:var(--text-muted);font-size:0.75rem;font-weight:800">${rank}</span>`;
+  return `<span title="Rank ${rank}" style="display:inline-flex;align-items:center;justify-content:center;gap:4px;min-width:26px;height:26px;padding:0 7px;border-radius:8px;background:${m[0]};color:${m[1]};font-size:0.72rem;font-weight:800"><i class="fa-solid ${m[2]}"></i>${rank}</span>`;
+}
+
+function _levelChip(levelId, label) {
+  const c = _tint(levelId);
+  return `<span style="display:inline-block;padding:2px 9px;border-radius:20px;background:${c}1f;color:${c};border:1px solid ${c}44;font-size:0.7rem;font-weight:800;letter-spacing:0.03em">${_esc(label || levelId || '—')}</span>`;
+}
+
+function _xpBar(pct, colour) {
+  const p = Math.max(0, Math.min(100, Number(pct) || 0));
+  return `<div style="height:6px;border-radius:3px;background:rgba(148,163,184,0.18);overflow:hidden">
+    <div style="height:100%;width:${p}%;background:${colour};border-radius:3px"></div></div>`;
+}
+
+/* ── The card on the investor overview ── */
+async function _loadInvestorRewards(investorId) {
+  const el = document.getElementById('invRewardsCard');
+  if (!el) return;
+  el.innerHTML = `<div style="font-size:0.78rem;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i> Loading rewards…</div>`;
+  let d;
+  try {
+    d = await API._fetch('GET', `quests/investor/${encodeURIComponent(investorId)}`);
+  } catch (err) {
+    /* Empty and broken are different things. */
+    el.innerHTML = `<div style="font-size:0.78rem;color:#ef4444">Could not load rewards: ${_esc(err.message || 'error')}
+      <button class="btn btn--ghost btn--sm" style="margin-left:8px" onclick="_loadInvestorRewards('${_esc(investorId)}')">Retry</button></div>`;
+    return;
+  }
+
+  const c = _tint(d.level_id);
+  const learnPct = d.learning_total ? Math.round(d.learning_completed / d.learning_total * 100) : 0;
+  /* The Learning Hub stage is how far through the modules they are, not how
+     much they have invested — an admin asking "where are they up to" means the
+     reading, and the money is already on the tile beside it. */
+  const stage = d.learning_completed === 0 ? 'Not started'
+              : d.learning_completed >= d.learning_total ? 'Complete'
+              : `Module ${d.learning_completed} of ${d.learning_total}`;
+
+  el.innerHTML = `
+  <div class="panel" style="padding:14px 16px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <i class="fa-solid fa-trophy" style="color:${c}"></i>
+      <span style="font-size:0.8rem;font-weight:800;color:var(--text)">Rewards &amp; Learning</span>
+      ${d.level_drifted ? `<span class="badge badge--yellow" style="margin-left:auto" title="investors.xp_level says '${_esc(d.stored_level)}' but ${d.xp} XP is ${_esc(d.level_label)}">stored level disagrees</span>` : ''}
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px">
+      <div style="min-width:0">
+        <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:4px">Rewards level</div>
+        <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px">
+          ${_levelChip(d.level_id, d.level_label)}
+          <span style="font-size:1.05rem;font-weight:800;color:var(--text)">${Number(d.xp).toLocaleString()}<span style="font-size:0.72rem;font-weight:600;color:var(--text-muted)"> XP</span></span>
+        </div>
+        ${_xpBar(d.level_progress, c)}
+        <div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px">
+          ${d.next_level ? `${Number(d.xp_to_next).toLocaleString()} XP to ${_esc(d.next_level)}` : 'Top level reached'}
+          · level ${d.level_index + 1} of ${d.level_count}
+        </div>
+      </div>
+      <div style="min-width:0">
+        <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:4px">Learning Hub stage</div>
+        <div style="font-size:1.05rem;font-weight:800;color:var(--text);margin-bottom:6px">${_esc(stage)}</div>
+        ${_xpBar(learnPct, '#0096ff')}
+        <div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px">${d.learning_completed} of ${d.learning_total} modules read</div>
+      </div>
+      <div style="min-width:0">
+        <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:4px">Quests</div>
+        <div style="font-size:1.05rem;font-weight:800;color:var(--text);margin-bottom:6px">${d.quests_completed} of ${d.quest_total}</div>
+        ${_xpBar(d.quest_total ? d.quests_completed / d.quest_total * 100 : 0, '#22c55e')}
+        <div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px">${d.completions.length ? 'Last: ' + _esc((d.completions[0] || {}).title) : 'None completed yet'}</div>
+      </div>
+    </div>
+    ${d.completions.length ? `
+    <details style="margin-top:12px">
+      <summary style="cursor:pointer;font-size:0.75rem;color:var(--text-muted)">Completed quests (${d.completions.length})</summary>
+      <div style="display:flex;flex-direction:column;gap:4px;margin-top:8px;max-height:220px;overflow-y:auto">
+        ${d.completions.map(q => `<div style="display:flex;align-items:center;gap:8px;font-size:0.76rem">
+          <span style="color:var(--text)">${_esc(q.title)}</span>
+          <span style="font-size:0.66rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${_esc(q.category)}</span>
+          <span style="margin-left:auto;color:#22c55e;font-weight:700">+${q.xp_awarded} XP</span>
+          <span style="color:var(--text-muted);font-size:0.7rem;min-width:78px;text-align:right">${Utils.date(q.completed_at)}</span>
+        </div>`).join('')}
+      </div>
+    </details>` : ''}
+  </div>`;
+}
+
+
+/* ── The Rewards view ── */
+function _rewardsTab(tab) {
+  ['leaderboard', 'levels', 'quests', 'learning'].forEach(t => {
+    const p = document.getElementById('rwPanel-' + t);
+    const b = document.getElementById('rwTab-' + t);
+    if (p) p.style.display = t === tab ? '' : 'none';
+    if (b) b.classList.toggle('active', t === tab);
+  });
+}
+
+async function loadRewards() {
+  const table = document.getElementById('rewardsTable');
+  if (!table) return;
+  table.innerHTML = '<div class="text-center text-muted" style="padding:20px"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div>';
+  try {
+    STATE.rewards = await API._fetch('GET', 'quests/leaderboard');
+  } catch (err) {
+    /* Empty and broken are different things — a 500 must not read as "nobody
+       has earned anything yet". */
+    table.innerHTML = `<div class="text-center" style="padding:20px;color:#ef4444">
+      Could not load rewards: ${_esc(err.message || 'error')}<br>
+      <button class="btn btn--secondary btn--sm" style="margin-top:10px" onclick="loadRewards()">Retry</button></div>`;
+    return;
+  }
+
+  /* The level filter is built from the ladder the server sent, so a new level
+     appears here without anyone remembering to add it. */
+  const sel = document.getElementById('rwLevel');
+  if (sel && sel.options.length <= 1) {
+    STATE.rewards.levels.forEach(l => {
+      const o = document.createElement('option');
+      o.value = l.id; o.textContent = `${l.label} (${l.min}+ XP)`;
+      sel.appendChild(o);
+    });
+  }
+
+  _renderRewardsSummary();
+  _renderRewardsTable();
+  _renderRewardsLevels();
+  _renderRewardsQuests();
+  _renderRewardsLearning();
+}
+
+function _renderRewardsSummary() {
+  const el = STATE.rewards && document.getElementById('rewardsSummary');
+  if (!el) return;
+  const d = STATE.rewards;
+  const earners = d.investors.filter(i => i.xp > 0);
+  const totalXp = d.investors.reduce((s, i) => s + i.xp, 0);
+  const doneLearning = d.investors.filter(i => i.learning_completed >= d.learning_total).length;
+  const drifted = d.investors.filter(i => i.level_drifted || i.xp_drifted).length;
+
+  const tile = (label, value, sub, colour) => `
+    <div class="panel" style="padding:12px 14px">
+      <div style="font-size:0.66rem;text-transform:uppercase;letter-spacing:0.07em;color:var(--text-muted)">${label}</div>
+      <div style="font-size:1.3rem;font-weight:800;color:${colour};margin-top:2px">${value}</div>
+      <div style="font-size:0.7rem;color:var(--text-muted)">${sub}</div>
+    </div>`;
+
+  el.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:14px">
+    ${tile('Playing', earners.length.toLocaleString(),
+           `of ${d.investors.length.toLocaleString()} clients have earned XP`, 'var(--text)')}
+    ${tile('XP awarded', totalXp.toLocaleString(),
+           `${d.xp_available.toLocaleString()} available per client`, '#facc15')}
+    ${tile('Finished the Hub', doneLearning.toLocaleString(),
+           `read all ${d.learning_total} modules`, '#0096ff')}
+    ${tile('Top level reached',
+           (d.investors[0] && d.investors[0].xp > 0) ? _esc(d.investors[0].level_label) : '—',
+           (d.investors[0] && d.investors[0].xp > 0) ? _esc(d.investors[0].name) : 'nobody has scored yet', '#eda5ff')}
+    ${drifted ? tile('Needs attention', drifted.toLocaleString(),
+           'stored level or XP disagrees with the completions', '#f97316') : ''}
+  </div>`;
+}
+
+/* The filtered, sorted rows — recomputed from STATE.rewards on every input so
+   there is one source and no cached half-state. */
+function _rewardsRows() {
+  const d = STATE.rewards;
+  if (!d) return [];
+  const q      = (document.getElementById('rwSearch')?.value || '').trim().toLowerCase();
+  const level  = document.getElementById('rwLevel')?.value || '';
+  const stage  = document.getElementById('rwStage')?.value || '';
+  const sort   = document.getElementById('rwSort')?.value || 'rank';
+  const active = !!document.getElementById('rwActiveOnly')?.checked;
+
+  let rows = d.investors.filter(i => {
+    if (active && i.xp <= 0) return false;
+    if (level && i.level_id !== level) return false;
+    if (stage === 'none' && i.learning_completed !== 0) return false;
+    if (stage === 'done' && i.learning_completed < d.learning_total) return false;
+    if (stage === 'part' && !(i.learning_completed > 0 && i.learning_completed < d.learning_total)) return false;
+    if (q) {
+      const hay = `${i.name} ${i.email || ''} ${i.id}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  const by = {
+    rank:      (a, b) => a.rank - b.rank,
+    xp:        (a, b) => b.xp - a.xp,
+    quests:    (a, b) => b.quests_completed - a.quests_completed,
+    learning:  (a, b) => b.learning_completed - a.learning_completed,
+    invested:  (a, b) => b.total_invested - a.total_invested,
+    recent:    (a, b) => new Date(b.last_activity || 0) - new Date(a.last_activity || 0),
+  };
+  return rows.sort(by[sort] || by.rank);
+}
+
+function _renderRewardsTable() {
+  const el = document.getElementById('rewardsTable');
+  if (!el || !STATE.rewards) return;
+  const d = STATE.rewards;
+  const rows = _rewardsRows();
+
+  if (!rows.length) {
+    el.innerHTML = `<div class="text-center text-muted" style="padding:20px;font-size:0.85rem">
+      ${d.investors.length ? 'No client matches these filters.' : 'No clients yet.'}</div>`;
+    return;
+  }
+
+  el.innerHTML = `
+  <table class="data-table" style="width:100%;border-collapse:collapse">
+    <thead><tr>
+      <th style="width:64px">Rank</th>
+      <th>Client</th>
+      <th>Account no.</th>
+      <th>Level</th>
+      <th style="text-align:right">XP</th>
+      <th style="min-width:130px">Progress</th>
+      <th style="text-align:right">Quests</th>
+      <th style="min-width:120px">Learning Hub</th>
+      <th style="text-align:right">Invested</th>
+      <th>Last activity</th>
+    </tr></thead>
+    <tbody>
+      ${rows.map(i => {
+        const c = _tint(i.level_id);
+        const learnPct = d.learning_total ? Math.round(i.learning_completed / d.learning_total * 100) : 0;
+        return `<tr style="cursor:pointer" onclick="viewInvestor('${_esc(i.id)}')">
+          <td>${_rankBadge(i.rank)}</td>
+          <td style="font-weight:600;color:var(--text)">${_esc(i.name)}
+            ${i.level_drifted || i.xp_drifted ? `<i class="fa-solid fa-triangle-exclamation" style="color:#f97316;margin-left:5px;font-size:0.72rem" title="Stored level or XP total disagrees with the recorded completions"></i>` : ''}
+            <div style="font-size:0.7rem;color:var(--text-muted)">${_esc(i.email || '')}</div></td>
+          <td style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:0.72rem;color:var(--text-muted)">${_esc(i.id)}</td>
+          <td>${_levelChip(i.level_id, i.level_label)}</td>
+          <td style="text-align:right;font-weight:800;font-variant-numeric:tabular-nums;color:var(--text)">${i.xp.toLocaleString()}</td>
+          <td>${_xpBar(i.level_progress, c)}
+            <div style="font-size:0.66rem;color:var(--text-muted);margin-top:3px">${i.next_level ? `${i.xp_to_next.toLocaleString()} to ${_esc(i.next_level)}` : 'max level'}</div></td>
+          <td style="text-align:right;color:var(--text-muted)">${i.quests_completed}<span style="font-size:0.7rem">/${d.quest_total}</span></td>
+          <td>${_xpBar(learnPct, '#0096ff')}
+            <div style="font-size:0.66rem;color:var(--text-muted);margin-top:3px">${i.learning_completed} / ${d.learning_total} modules</div></td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;color:var(--text-muted)">${Utils.rand(i.total_invested)}</td>
+          <td style="color:var(--text-muted);font-size:0.76rem">${i.last_activity ? Utils.date(i.last_activity) : '—'}</td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>
+  <div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px">Showing ${rows.length} of ${d.investors.length} clients</div>`;
+}
+
+/* ── Levels: how the book is distributed across the ladder ── */
+function _renderRewardsLevels() {
+  const el = document.getElementById('rwPanel-levels');
+  if (!el || !STATE.rewards) return;
+  const d = STATE.rewards;
+  const counts = {};
+  d.investors.forEach(i => { counts[i.level_id] = (counts[i.level_id] || 0) + 1; });
+  const max = Math.max(1, ...Object.values(counts));
+
+  el.innerHTML = `<div class="panel"><div class="panel__header">
+      <span class="panel__title"><i class="fa-solid fa-layer-group" style="color:#eda5ff;margin-right:6px"></i>The ladder</span>
+    </div><div class="panel__body">
+    <div style="display:flex;flex-direction:column;gap:10px">
+      ${d.levels.map((l, idx) => {
+        const n = counts[l.id] || 0;
+        const c = _tint(l.id);
+        const next = d.levels[idx + 1];
+        return `<div style="display:flex;align-items:center;gap:12px">
+          <div style="width:120px;flex-shrink:0">${_levelChip(l.id, l.label)}</div>
+          <div style="width:118px;flex-shrink:0;font-size:0.72rem;color:var(--text-muted)">
+            ${l.min.toLocaleString()}${next ? `–${(next.min - 1).toLocaleString()}` : '+'} XP</div>
+          <div style="flex:1;min-width:0">
+            <div style="height:20px;border-radius:5px;background:rgba(148,163,184,0.12);overflow:hidden">
+              <div style="height:100%;width:${Math.round(n / max * 100)}%;background:${c};border-radius:5px"></div>
+            </div>
+          </div>
+          <div style="width:110px;text-align:right;font-size:0.8rem;font-weight:700;color:var(--text)">
+            ${n.toLocaleString()}<span style="font-weight:400;color:var(--text-muted);font-size:0.72rem"> client${n === 1 ? '' : 's'}</span></div>
+        </div>`;
+      }).join('')}
+    </div></div></div>`;
+}
+
+/* ── Quests: which ones actually get done ── */
+function _renderRewardsQuests() {
+  const el = document.getElementById('rwPanel-quests');
+  if (!el || !STATE.rewards) return;
+  const d = STATE.rewards;
+  const total = d.investors.length || 1;
+  const rows  = [...d.catalogue, ...(d.orphaned_quests || [])]
+    .sort((a, b) => b.completed_by - a.completed_by);
+
+  el.innerHTML = `<div class="panel"><div class="panel__header">
+      <span class="panel__title"><i class="fa-solid fa-list-check" style="color:#22c55e;margin-right:6px"></i>The catalogue</span>
+      <span style="margin-left:auto;font-size:0.75rem;color:var(--text-muted)">${d.quest_total} quests · ${d.xp_available.toLocaleString()} XP available per client</span>
+    </div><div class="panel__body" style="overflow-x:auto">
+    <table class="data-table" style="width:100%;border-collapse:collapse">
+      <thead><tr><th>Quest</th><th>Category</th><th style="text-align:right">XP</th>
+        <th style="text-align:right">Completed by</th><th style="min-width:110px">Take-up</th></tr></thead>
+      <tbody>${rows.map(q => {
+        const pct = Math.round(q.completed_by / total * 100);
+        return `<tr>
+        <td style="color:var(--text);font-weight:600">${_esc(q.title)}
+          ${q.orphaned ? `<i class="fa-solid fa-triangle-exclamation" style="color:#f97316;margin-left:5px;font-size:0.72rem" title="Completions exist for this id but it is not in the catalogue the client is served"></i>` : ''}</td>
+        <td><span style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted)">${_esc(q.category)}</span></td>
+        <td style="text-align:right;color:#22c55e;font-weight:700">${q.xp}</td>
+        <td style="text-align:right;font-weight:700;color:${q.completed_by ? 'var(--text)' : '#f97316'}">${q.completed_by.toLocaleString()}</td>
+        <td>${_xpBar(pct, q.completed_by ? '#22c55e' : '#f97316')}
+          <div style="font-size:0.66rem;color:var(--text-muted);margin-top:3px">${pct}% of clients</div></td>
+      </tr>`;
+      }).join('')}</tbody>
+    </table>
+    ${(d.orphaned_quests || []).length ? `<div style="font-size:0.72rem;color:#f97316;margin-top:10px">
+      ${d.orphaned_quests.length} completed quest id${d.orphaned_quests.length === 1 ? ' is' : 's are'} not in the catalogue —
+      the XP was awarded but the client is no longer offered it.</div>` : ''}
+    </div></div>`;
+}
+
+/* ── Learning Hub: how far the book has read ── */
+function _renderRewardsLearning() {
+  const el = document.getElementById('rwPanel-learning');
+  if (!el || !STATE.rewards) return;
+  const d = STATE.rewards;
+  const buckets = { none: 0, part: 0, done: 0 };
+  d.investors.forEach(i => {
+    if (i.learning_completed === 0) buckets.none++;
+    else if (i.learning_completed >= d.learning_total) buckets.done++;
+    else buckets.part++;
+  });
+  const total = d.investors.length || 1;
+  const row = (label, n, colour, note) => `
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="width:130px;flex-shrink:0;font-size:0.8rem;font-weight:700;color:var(--text)">${label}</div>
+      <div style="flex:1;min-width:0"><div style="height:20px;border-radius:5px;background:rgba(148,163,184,0.12);overflow:hidden">
+        <div style="height:100%;width:${Math.round(n / total * 100)}%;background:${colour};border-radius:5px"></div></div></div>
+      <div style="width:150px;text-align:right;font-size:0.8rem;font-weight:700;color:var(--text)">
+        ${n.toLocaleString()} <span style="font-weight:400;color:var(--text-muted);font-size:0.72rem">${_esc(note)}</span></div>
+    </div>`;
+
+  el.innerHTML = `<div class="panel"><div class="panel__header">
+      <span class="panel__title"><i class="fa-solid fa-graduation-cap" style="color:#0096ff;margin-right:6px"></i>Learning Hub</span>
+      <span style="margin-left:auto;font-size:0.75rem;color:var(--text-muted)">${d.learning_total} modules</span>
+    </div><div class="panel__body">
+      <div style="display:flex;flex-direction:column;gap:10px">
+        ${row('Not started', buckets.none, '#94a3b8', `${Math.round(buckets.none / total * 100)}%`)}
+        ${row('In progress', buckets.part, '#fec24f', `${Math.round(buckets.part / total * 100)}%`)}
+        ${row('Completed',   buckets.done, '#22c55e', `${Math.round(buckets.done / total * 100)}%`)}
+      </div>
+    </div></div>`;
+}
+
+function _exportRewardsCSV() {
+  const d = STATE.rewards;
+  if (!d) { Toast.warning('Nothing to export yet'); return; }
+  const rows = _rewardsRows();
+  if (!rows.length) { Toast.warning('No rows match these filters'); return; }
+  const head = ['Rank','Client','Account No.','Email','Level','XP','XP to next','Quests completed',
+                'Quests available','Modules read','Modules total','Total invested','Last activity'];
+  const data = rows.map(i => [i.rank, i.name, i.id, i.email || '', i.level_label, i.xp, i.xp_to_next,
+    i.quests_completed, d.quest_total, i.learning_completed, d.learning_total,
+    Number(i.total_invested).toFixed(2), i.last_activity ? new Date(i.last_activity).toISOString().slice(0, 10) : '']);
+  const esc = v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const csv = [head, ...data].map(r => r.map(esc).join(',')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = `SVC-Rewards-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  Toast.success(`Exported ${rows.length} row${rows.length === 1 ? '' : 's'}`);
 }
 
 async function depositToInvestor(investorId, investorName, currentBalance) {
