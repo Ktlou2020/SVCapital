@@ -28,7 +28,7 @@
   <link rel="stylesheet" href="/css/portal.css?v=4" />
   <link rel="stylesheet" href="/css/ci-theme.css?v=1" />
   <!-- sv-intelligence hidden -->
-  <link rel="stylesheet" href="/css/portal-premium.css?v=5" />
+  <link rel="stylesheet" href="/css/portal-premium.css?v=6" />
   <!-- Payment modal must retain dark theme — isolate from ci-theme overrides -->
   <style>
     #topUpModal.modal-overlay { background: rgba(0,0,0,0.82) !important; }
@@ -573,8 +573,10 @@
           </button>
         </div>
         <div id="txnAllTab">
-          <!-- Summary strip -->
-          <div class="txn-summary" id="txnSummary"></div>
+          <!-- No summary strip. #txnSummary was markup with no renderer — nothing
+               in the app has ever written to it — while mobile-app.css gives
+               .txn-summary a white card with a shadow, so it painted an empty
+               box above the filter pills that read as a search field. -->
           <!-- Filter pills -->
           <div class="txn-filter-scroll">
             <div class="txn-filter-pills" id="txnFilterPills">

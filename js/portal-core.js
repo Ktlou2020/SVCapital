@@ -3690,21 +3690,27 @@ function _cattleHerdStatusHtml(s) {
         </span>
       </div>
 
-      <!-- Compact stat strip: Total · Weight · Survival -->
-      <div style="display:flex;align-items:stretch;border:1px solid rgba(0,0,0,0.07);border-radius:8px;overflow:hidden;margin-bottom:12px">
-        <div style="padding:9px 14px;flex:0 0 auto">
+      <!-- Stat strip: Total · Weight · Survival.
+           A grid, not a flex row. Every item was flex:0 0 auto with a flex:1
+           spacer pushing survival to the right, all inside overflow:hidden —
+           so nothing could shrink and on a phone the survival stat was CLIPPED
+           by the container instead of wrapping. auto-fit wraps it onto a
+           second line when three do not fit.
+
+           The dividers went with it: a 1px separator is a single-row idea, and
+           once the row can wrap it lands at the start of a line. -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:10px 16px;border:1px solid rgba(0,0,0,0.07);border-radius:8px;padding:10px 14px;margin-bottom:12px">
+        <div style="min-width:0">
           <div style="font-size:1.15rem;font-weight:800;color:var(--text);line-height:1.1">${s.total_purchased.toLocaleString('en-ZA')}</div>
-          <div style="font-size:0.67rem;color:var(--text-muted);margin-top:2px">purchased to date</div>
+          <div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px">purchased to date</div>
         </div>
-        ${weight ? `<div style="width:1px;background:rgba(0,0,0,0.07);flex-shrink:0"></div>
-        <div style="padding:9px 14px;flex:0 0 auto">
+        ${weight ? `<div style="min-width:0">
           <div style="font-size:1.15rem;font-weight:800;color:var(--text);line-height:1.1">${weight}<span style="font-size:0.78rem;font-weight:600"> kg</span></div>
-          <div style="font-size:0.67rem;color:var(--text-muted);margin-top:2px">average weight</div>
+          <div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px">average weight</div>
         </div>` : ''}
-        <div style="flex:1"></div>
-        <div style="padding:9px 14px;border-left:1px solid rgba(0,0,0,0.07);flex-shrink:0;display:flex;flex-direction:column;justify-content:center;align-items:flex-end">
-          <div style="font-size:1rem;font-weight:800;color:#16a34a;line-height:1.1"><i class="fa-solid fa-heart-pulse" style="font-size:0.8rem;margin-right:3px"></i>${survival}%</div>
-          <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px">survival rate</div>
+        <div style="min-width:0">
+          <div style="font-size:1.15rem;font-weight:800;color:#16a34a;line-height:1.1"><i class="fa-solid fa-heart-pulse" style="font-size:0.8rem;margin-right:3px"></i>${survival}%</div>
+          <div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px">survival rate</div>
         </div>
       </div>
 
@@ -8660,20 +8666,29 @@ function downloadCertificate(investmentId) {
   let ly = y + 16;
   let ry = y + 16;
 
-  const infoL = (lbl, val) => {
+  /* Values are wrapped to the width left inside their own panel. doc.text()
+     takes a point, not a box, and draws straight past the edge of the page if
+     the string is long enough — which a migrated investment id
+     ("INV-MIGR-" plus a 20-character key) comfortably is. It ran over the
+     panel, over the certificate border and off the sheet.
+
+     The panel's right edge is derived from the same expressions that drew it,
+     so the two cannot drift apart. */
+  const PANEL_W    = (W - 28) / 2 - 6;
+  const leftValMax  = (leftX + 4 + PANEL_W) - valLeft  - 5;
+  const rightValMax = (rightX + PANEL_W)    - valRight - 5;
+  const LINE = 4.2;
+
+  const infoAt = (lbl, val, lblX, valX, maxW, atY) => {
     doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(107, 114, 128);
-    doc.text(lbl, leftX + 8, ly);
+    doc.text(lbl, lblX, atY);
     doc.setFont('helvetica', 'normal'); doc.setTextColor(26, 26, 26);
-    doc.text(String(val || '—'), valLeft, ly);
-    ly += 7;
+    const lines = doc.splitTextToSize(String(val || '—'), maxW);
+    doc.text(lines, valX, atY);
+    return Math.max(7, lines.length * LINE + 2.8);
   };
-  const infoR = (lbl, val) => {
-    doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(107, 114, 128);
-    doc.text(lbl, rightX + 4, ry);
-    doc.setFont('helvetica', 'normal'); doc.setTextColor(26, 26, 26);
-    doc.text(String(val || '—'), valRight, ry);
-    ry += 7;
-  };
+  const infoL = (lbl, val) => { ly += infoAt(lbl, val, leftX + 8,  valLeft,  leftValMax,  ly); };
+  const infoR = (lbl, val) => { ry += infoAt(lbl, val, rightX + 4, valRight, rightValMax, ry); };
 
   infoL('Investor Name', `${investor.first_name} ${investor.last_name}`);
   infoL('Investor ID', investor.id);
@@ -8712,10 +8727,10 @@ function downloadCertificate(investmentId) {
   doc.setFontSize(7.5);
   doc.setFont('helvetica', 'italic');
   doc.setTextColor(156, 163, 175);
-  doc.text('This certificate is a record of investment and does not constitute a guarantee of returns. All investments are subject to the terms and conditions of SV Capital.', 14, y, { maxWidth: W - 28 });
+  doc.text('This certificate is a record of investment and does not constitute a guarantee of returns. All investments are subject to the terms and conditions of SV Capital.', leftX + 4, y, { maxWidth: W - 36 });
   y += 8;
   doc.setFontSize(6.5);
-  doc.text('IMPORTANT NOTICE: This investment is not a regulated financial product under the Financial Sector Conduct Authority (FSCA) and is not covered by the Financial Advisory and Intermediary Services Act (FAIS) or the Collective Investment Schemes Control Act (CISCA). This investment is managed solely by SV Capital (Pty) Ltd. Investors should be aware that their capital is at risk and there is no guarantee of returns. Past performance is not indicative of future results.', 14, y, { maxWidth: W - 28 });
+  doc.text('IMPORTANT NOTICE: This investment is not a regulated financial product under the Financial Sector Conduct Authority (FSCA) and is not covered by the Financial Advisory and Intermediary Services Act (FAIS) or the Collective Investment Schemes Control Act (CISCA). This investment is managed solely by SV Capital (Pty) Ltd. Investors should be aware that their capital is at risk and there is no guarantee of returns. Past performance is not indicative of future results.', leftX + 4, y, { maxWidth: W - 36 });
 
   _pdfFooter(doc);
   doc.save(`SVC-Certificate-${inv.id}.pdf`);

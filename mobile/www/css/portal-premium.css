@@ -3222,13 +3222,30 @@ body.dark-mode input::placeholder { color: #4b5563 !important; }
   display:flex;align-items:stretch;margin:16px 20px 0;
   background:#f8f9fb;border-radius:14px;overflow:hidden;
 }
-.mpc2-metric    { flex:1;text-align:center;padding:14px 8px; }
+.mpc2-metric    { flex:1;min-width:0;text-align:center;padding:14px 8px; }
 .mpc2-metric-sep{ width:1px;background:rgba(0,0,0,0.06);flex-shrink:0;margin:12px 0; }
+
 .mpc2-metric__val {
   font-family:'Poppins','Poppins',Georgia,serif;
   font-size:1.55rem;font-weight:800;line-height:1;letter-spacing:-0.03em;color:#111827;
 }
 .mpc2-metric__lbl { font-size:0.62rem;color:#9ca3af;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;margin-top:4px; }
+
+/* Four metrics do not fit one row on a phone. flex:1 lets them shrink but not
+   below their min-content width, so the values crowd and the labels wrap —
+   "AVG RETURN P.A." over two lines beside a value that has run out of room.
+   Two columns instead, with the separators dropped: a 1px vertical rule is a
+   single-row device and lands mid-grid once the row wraps.
+
+   Placed AFTER every base .mpc2-* rule on purpose. A media query adds no
+   specificity, so sitting it in the middle of the block left the later
+   .mpc2-metric__val declaration overriding the size inside it. */
+@media (max-width: 430px) {
+  .mpc2-metrics    { display:grid;grid-template-columns:1fr 1fr;row-gap:2px; }
+  .mpc2-metric-sep { display:none; }
+  .mpc2-metric     { padding:12px 6px; }
+  .mpc2-metric__val{ font-size:1.35rem; }
+}
 
 .mpc2-pills { display:flex;flex-wrap:wrap;gap:6px;padding:12px 20px 0; }
 .mpc2-pill {
