@@ -2180,54 +2180,12 @@ function buildStatementHTML(opts) {
 
 
 function printStatement() {
-  const stmtDoc = document.getElementById('statementDocument');
-  if (!stmtDoc || !stmtDoc.innerHTML.trim()) {
-    Toast.error('Please generate a statement first, then print.');
-    return;
-  }
-  const htmlContent = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>SV Capital — Account Statement</title>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <style>
-    *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
-    body{font-family:'Poppins',-apple-system,BlinkMacSystemFont,sans-serif;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;color:#1a1a1a}
-    @page{size:A4;margin:0}
-    @media print{.no-print{display:none!important}.print-body{padding-top:0!important}}
-    .no-print{position:fixed;top:0;left:0;right:0;background:#1a1a1a;padding:12px 24px;display:flex;justify-content:space-between;align-items:center;z-index:999;box-shadow:0 2px 12px rgba(0,0,0,0.3)}
-    .no-print span{color:#fff;font-size:13px;font-weight:600}
-    .no-print button{background:linear-gradient(135deg,#fec24f,#FF5229);color:#fff;border:none;padding:8px 22px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer}
-    .no-print button:hover{opacity:0.9}
-    .print-body{padding-top:52px}
-  </style>
-</head>
-<body>
-  <div class="no-print">
-    <span>SV Capital — Account Statement</span>
-    <button onclick="window.print()">⬇&nbsp; Save as PDF / Print</button>
-  </div>
-  <div class="print-body">${stmtDoc.innerHTML}</div>
-  <script>window.addEventListener('load',function(){setTimeout(function(){window.print();},600);});</script>
-</body>
-</html>`;
-  const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
-  const url  = URL.createObjectURL(blob);
-  // Open as new tab (no width/height = new tab, not popup → avoids popup blocker)
-  const win = window.open(url, '_blank');
-  if (!win) {
-    // Blocked or native app — download the file directly
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `SVC-Statement-${new Date().toISOString().slice(0,10)}.html`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    Toast.success('Statement downloaded — open in your browser, then use File → Print → Save as PDF.');
-  }
-  setTimeout(() => URL.revokeObjectURL(url), 120000);
+  /* The same document the preview shows, opened for printing — one builder,
+     so what a client prints is what they were shown. It used to re-wrap the
+     preview's innerHTML in a second, differently-styled page. */
+  const data = (typeof PORTAL !== 'undefined') && PORTAL._lastStatement;
+  if (!data) { Toast.error('Please generate a statement first, then print.'); return; }
+  SVCDocs.openAccountStatement(data);
 }
 
 

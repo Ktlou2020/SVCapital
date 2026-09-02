@@ -54,7 +54,9 @@ const { cashMovement, CASH_CREDIT_TYPES, CASH_DEBIT_TYPES } =
   require(path.join(__dirname, '..', 'services', 'ledger'));
 
 const ROOT  = path.join(__dirname, '..', '..');
-const ADMIN = fs.readFileSync(path.join(ROOT, 'admin', 'js', 'admin.js'), 'utf8');
+/* The statement builder moved out of admin.js into js/investor-documents.js,
+   which the investor portal loads too — one implementation for both. */
+const ADMIN = fs.readFileSync(path.join(ROOT, 'js', 'investor-documents.js'), 'utf8');
 const CODE  = ADMIN
   .replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, ' '))
   .replace(/(^|[^:'"`\\])\/\/[^\n]*/g, (m, p) => p + ' '.repeat(m.length - p.length));

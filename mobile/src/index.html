@@ -1367,7 +1367,7 @@
                   <button class="btn btn--success" style="flex:1;min-width:160px" onclick="generateTaxCertificate()">
                     <i class="fa-solid fa-file-arrow-down"></i> Preview / Print Certificate
                   </button>
-                  <button class="btn btn--secondary" style="flex:1;min-width:130px" onclick="generateTaxCertificate();setTimeout(()=>downloadTaxCertPDF(_lastTaxCertHTML),200)">
+                  <button class="btn btn--secondary" style="flex:1;min-width:130px" onclick="generateTaxCertificate();setTimeout(()=>downloadTaxCertPDF(PORTAL._lastTaxCertHTML),200)">
                     <i class="fa-solid fa-file-pdf"></i> Download PDF
                   </button>
                 </div>
@@ -3052,6 +3052,7 @@
 
 <script src="../js/api.js?v=24"></script>
 <script src="../js/portal-core.js?v=13"></script>
+<script src="../js/investor-documents.js?v=1"></script>
 <script src="js/portal.js?v=44"></script>
 <!-- sv-intelligence.js hidden -->
 <script>

@@ -233,7 +233,10 @@ for (const [label, marker] of invQueries) {
      'the query returns investments without the pool\'s posted rate');
 }
 
-const manual = fs.readFileSync(path.join(ROOT, 'server', 'routes', 'manualCredit.js'), 'utf8');
+/* The account-statement query moved into services/accountStatement.js, which
+   the investor route calls too — one computation, so the client and the
+   console cannot be quoted different rates. */
+const manual = fs.readFileSync(path.join(ROOT, 'server', 'services', 'accountStatement.js'), 'utf8');
 ok('account-statement lets a stored 0 fall through to the pool rate',
    /COALESCE\(NULLIF\(i\.annual_rate,\s*0\)/.test(manual),
    'plain COALESCE only falls through on NULL — a stored 0.0000 beats the pool and the statement quotes 0.00%');

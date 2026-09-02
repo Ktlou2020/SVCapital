@@ -7,6 +7,8 @@
 const router  = require('express').Router();
 const pool    = require('../db/pool');
 const { requireAuth, requireRole } = require('../middleware/auth');
+const { buildIncomeReference } = require('../services/incomeReference');
+const { buildAccountStatement } = require('../services/accountStatement');
 const audit   = require('../services/audit');
 
 router.use(requireAuth, requireRole('admin', 'director'));
@@ -1553,203 +1555,16 @@ router.post('/bulk-reassign-investments', async (req, res) => {
    Tax year: 1 March (year-1) → last day of February (year)
    ════════════════════════════════════════════════════ */
 router.get('/tax-cert', async (req, res) => {
+  /* The document itself is built by services/incomeReference, which the
+     investor portal renders from too. This route only decides WHOSE. */
   try {
     const { investor_id, year } = req.query;
     if (!investor_id || !year) return res.status(400).json({ error: 'investor_id and year required' });
-
-    const taxYear = parseInt(year, 10);
-    if (isNaN(taxYear) || taxYear < 2019 || taxYear > 2040)
-      return res.status(400).json({ error: 'Invalid year' });
-
-    /* SA tax year: 1 March (taxYear-1) → last day of February (taxYear), as
-       plain dates. They used to be built as local Date objects at 00:00:00 and
-       23:59:59 and sent as ISO instants, so the console — rendering an instant
-       in the reader's timezone — printed the end of a UTC day as the following
-       morning in SAST. The document's own header said "28 February 2026" while
-       the summary card beside it said "1 March 2026". A date has no timezone;
-       treating it as one is what created the disagreement. */
-    const pad     = n => String(n).padStart(2, '0');
-    const lastFeb = new Date(Date.UTC(taxYear, 2, 0));   // day 0 of March = last Feb day
-    const from    = `${taxYear - 1}-03-01`;
-    const to      = `${lastFeb.getUTCFullYear()}-${pad(lastFeb.getUTCMonth() + 1)}-${pad(lastFeb.getUTCDate())}`;
-
-    /* COALESCE(transaction_date, created_at), not created_at.
-     *
-     * created_at is when the ROW was written; transaction_date is when the
-     * money moved. For anything migrated or captured after the fact the two
-     * are months apart, and this route was the only money view still filtering
-     * on the wrong one — /account-statement has used the COALESCE for as long
-     * as it has had a balance. That is why a client with a full ledger could
-     * be handed an income reference reading R 0,00 and "No returns recorded".
-     *
-     * The end of the window is expressed as < (to + 1 day) so a transaction at
-     * any time on the last day of February is inside it, whatever time of day
-     * it carries. */
-    const WINDOW = `COALESCE(transaction_date, created_at) >= $2::date
-                AND COALESCE(transaction_date, created_at) <  ($3::date + INTERVAL '1 day')`;
-
-    /* Income is `return` and `interest` — see services/ledger. `payout` is not
-       income: its amount is the client's capital coming back plus the return
-       on it, so summing payouts here declared capital as taxable earnings. */
-    const { incomeTypesSQL } = require('../services/ledger');
-
-    const [invRes, returnsRes, depositsRes, subAccRes] = await Promise.all([
-      pool.query('SELECT * FROM investors WHERE id = $1 LIMIT 1', [investor_id]),
-      pool.query(
-        `SELECT id, COALESCE(transaction_date, created_at) AS txn_date,
-                created_at, type, description, amount, reference
-         FROM transactions
-         WHERE investor_id = $1
-           AND type IN (${incomeTypesSQL()})
-           AND status = 'completed'
-           AND ${WINDOW}
-         ORDER BY COALESCE(transaction_date, created_at)`,
-        [investor_id, from, to]
-      ),
-      pool.query(
-        `SELECT id, COALESCE(transaction_date, created_at) AS txn_date,
-                created_at, type, description, amount, reference
-         FROM transactions
-         WHERE investor_id = $1
-           AND type = 'deposit'
-           AND status = 'completed'
-           AND ${WINDOW}
-         ORDER BY COALESCE(transaction_date, created_at)`,
-        [investor_id, from, to]
-      ),
-      pool.query('SELECT id FROM sub_accounts WHERE parent_investor_id = $1', [investor_id]),
-    ]);
-
-    if (!invRes.rows[0]) return res.status(404).json({ error: 'Investor not found' });
-
-    // Include sub-account transactions if any
-    const subIds = subAccRes.rows.map(r => r.id);
-    let saReturns = [], saDeposits = [];
-    if (subIds.length) {
-      const [saR, saD] = await Promise.all([
-        pool.query(
-          `SELECT id, COALESCE(transaction_date, created_at) AS txn_date,
-                  created_at, type, description, amount, reference
-           FROM transactions
-           WHERE sub_account_id = ANY($1::text[])
-             AND type IN (${incomeTypesSQL()})
-             AND status = 'completed'
-             AND ${WINDOW}
-           ORDER BY COALESCE(transaction_date, created_at)`,
-          [subIds, from, to]
-        ),
-        pool.query(
-          `SELECT id, COALESCE(transaction_date, created_at) AS txn_date,
-                  created_at, type, description, amount, reference
-           FROM transactions
-           WHERE sub_account_id = ANY($1::text[])
-             AND type = 'deposit'
-             AND status = 'completed'
-             AND ${WINDOW}
-           ORDER BY COALESCE(transaction_date, created_at)`,
-          [subIds, from, to]
-        ),
-      ]);
-      saReturns  = saR.rows;
-      saDeposits = saD.rows;
-    }
-
-    /* Investments that MATURED inside the year. The return realised at maturity
-       is not a transaction of its own — creditWallet writes only the payout,
-       whose amount is capital and return together — so without this the
-       realised return has no representation on the certificate at all.
-
-       Reported beside the credited income rather than added to it. A holding
-       whose return was also accrued month by month appears in both, and adding
-       them would declare the same earnings twice — the identical trap the
-       portal's certificate documents and avoids.
-
-       The return itself comes from postedReturnFor's rule, applied below. It is
-       NOT COALESCE(actual_return, expected_return): returns are posted on the
-       POOL as investment_pools.actual_rate, expected_return is the projection
-       made when the investment was written, and actual_return defaults to 0
-       rather than NULL — so that COALESCE short-circuits on the zero and prints
-       R 0,00 against every matured holding a client has. maturityCron carries a
-       comment warning about precisely that expression. */
-    const maturedRes = await pool.query(
-      `SELECT i.id, i.pool_name, i.amount, i.end_date,
-              i.actual_return, p.actual_rate AS pool_actual_rate
-         FROM investments i
-         LEFT JOIN investment_pools p ON p.id = i.pool_id
-        WHERE (i.investor_id = $1 OR i.sub_account_id = ANY($4::text[]))
-          AND i.status IN ('matured', 'paid_out')
-          AND i.end_date >= $2::date AND i.end_date <= $3::date
-        ORDER BY i.end_date`,
-      [investor_id, from, to, subIds]
-    );
-
-    const returns  = [...returnsRes.rows,  ...saReturns];
-    const deposits = [...depositsRes.rows, ...saDeposits];
-
-    // Sort merged arrays chronologically, on the date the money moved
-    const when = t => new Date(t.txn_date || t.created_at);
-    returns.sort((a, b)  => when(a) - when(b));
-    deposits.sort((a, b) => when(a) - when(b));
-
-    const totalReturns  = returns.reduce((s, t)  => s + Math.abs(parseFloat(t.amount) || 0), 0);
-    const totalDeposits = deposits.reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
-
-    /* The platform's one rule for what a matured investment earned, imported
-       rather than rewritten — a fourth copy would be a fourth thing to drift.
-       It returns null when nothing has been posted, and null is carried all the
-       way to the page: "R 0,00" on a tax document states that a client earned
-       nothing, which is a different claim from "the pool has not been closed
-       out yet" and must not be printed in its place. */
-    const { postedReturn } = require('../services/maturityPreflight');
-
-    const maturedInvestments = maturedRes.rows.map(r => {
-      const realised = postedReturn({
-        amount: r.amount, actualReturn: r.actual_return, poolActualRate: r.pool_actual_rate });
-      return {
-        id: r.id, pool_name: r.pool_name, amount: r.amount, end_date: r.end_date,
-        realised_return: realised,          // null when nothing is posted
-        return_posted: realised !== null,
-      };
-    });
-
-    const maturedReturns = maturedInvestments.reduce(
-      (s, r) => s + (Number(r.realised_return) || 0), 0);
-    const maturedUnposted = maturedInvestments.filter(r => !r.return_posted).length;
-
-    const inv = invRes.rows[0];
-
-    /* No `paid` summary here. One belonged to /account-statement and was
-       duplicated into this route by mistake: it referenced `transactions`,
-       `num` and `r2`, all of which are declared inside the account-statement
-       handler and none of which exist in this scope. Every call to this
-       endpoint threw a ReferenceError and returned a 500, and nothing
-       consumed the block's output — _openAdminTaxCertWindow reads returns,
-       deposits and their totals, which are computed above. */
-
-    res.json({
-      investor: {
-        id: inv.id, first_name: inv.first_name, last_name: inv.last_name,
-        email: inv.email, id_number: inv.id_number,
-        street_address: inv.street_address, suburb: inv.suburb,
-        address: inv.address, postal_code: inv.postal_code, province: inv.province,
-      },
-      taxYear,
-      /* Plain YYYY-MM-DD. The console renders these verbatim rather than
-         through a Date, so no reader's timezone can move the end of the tax
-         year onto the following morning. */
-      from, to,
-      returns, totalReturns,
-      deposits, totalDeposits,
-      /* Realised at maturity, held on the pool rather than in the ledger.
-         Separate from totalReturns on purpose — see above. */
-      maturedInvestments,
-      maturedReturns: Math.round(maturedReturns * 100) / 100,
-      /* How many of those have no posted return. The total above is the sum of
-         the posted ones only, so a reader has to be told the rest exist —
-         otherwise the figure silently understates and looks authoritative. */
-      maturedUnposted,
-    });
+    const data = await buildIncomeReference(pool, { investorId: investor_id, year });
+    res.json(data);
   } catch (err) {
+    if (err.code === 'BAD_REQUEST') return res.status(400).json({ error: err.message });
+    if (err.code === 'NOT_FOUND')   return res.status(404).json({ error: err.message });
     console.error('[admin/tax-cert]', err);
     res.status(500).json({ error: err.message });
   }
@@ -1762,184 +1577,15 @@ router.get('/tax-cert', async (req, res) => {
    and the current investment portfolio.
    ════════════════════════════════════════════════════ */
 router.get('/account-statement', async (req, res) => {
+  /* The document itself is built by services/accountStatement, which the
+     investor portal renders from too. This route only decides WHOSE. */
   try {
     const { investor_id, from, to } = req.query;
-    if (!investor_id || !from || !to)
-      return res.status(400).json({ error: 'investor_id, from and to are required' });
-
-    const fromDt = new Date(from + 'T00:00:00.000Z');
-    const toDt   = new Date(to   + 'T23:59:59.999Z');
-    if (isNaN(fromDt.getTime()) || isNaN(toDt.getTime()))
-      return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
-
-    const [invRes, invstRes, txnRes, openingRes] = await Promise.all([
-      pool.query('SELECT * FROM investors WHERE id = $1 LIMIT 1', [investor_id]),
-      pool.query(
-        `SELECT i.id, i.amount, i.status, i.created_at,
-                COALESCE(i.start_date, i.created_at::date) AS start_date,
-                i.end_date AS maturity_date,
-                i.expected_return, i.actual_return,
-                -- COALESCE alone fell through only on NULL, so an investment
-                -- carrying a stored 0.0000 beat the pool's rate and the
-                -- statement quoted 0.00%. NULLIF makes a zero fall through
-                -- too, and the pool's *posted* return outranks its target.
-                COALESCE(NULLIF(i.annual_rate, 0), NULLIF(p.actual_rate, 0), p.annual_rate) AS annual_rate,
-                p.actual_rate AS pool_actual_rate,
-                i.payout_option,
-                p.name AS pool_name, p.product_type,
-                p.start_date AS pool_start_date, p.end_date AS pool_end_date,
-                mi.instruction AS maturity_instruction
-         FROM investments i
-         LEFT JOIN investment_pools p ON p.id = i.pool_id
-         LEFT JOIN LATERAL (
-           SELECT instruction FROM maturity_instructions
-           WHERE investment_id = i.id ORDER BY created_at DESC LIMIT 1
-         ) mi ON true
-         /* OVERLAP, not "started in the window".
-          *
-          * This used to require the START DATE to fall inside the period, which
-          * silently dropped every investment that MATURED during it but began
-          * before it — the ordinary case for anything with a term longer than
-          * the statement. A client with a dozen maturities in the period saw
-          * only the ones that also happened to start in it, and nothing said
-          * any were missing.
-          *
-          * An investment belongs on a statement if it was live at any point in
-          * the period: it began on or before the period ended, and it had not
-          * already ended before the period began. An investment with no end
-          * date has not ended, so it qualifies on the first test alone. */
-         WHERE i.investor_id = $1
-           AND COALESCE(i.start_date, i.created_at::date) <= $3
-           AND (i.end_date IS NULL OR i.end_date >= $2)
-         ORDER BY i.created_at ASC`,
-        [investor_id, fromDt.toISOString().slice(0,10), toDt.toISOString().slice(0,10)]
-      ),
-      // All completed transactions in the period, ordered chronologically
-      pool.query(
-        `SELECT type, amount, description, reference,
-                COALESCE(transaction_date, created_at) AS txn_date
-         FROM transactions
-         WHERE investor_id = $1
-           AND status = 'completed'
-           AND COALESCE(transaction_date, created_at) >= $2
-           AND COALESCE(transaction_date, created_at) <= $3
-         ORDER BY COALESCE(transaction_date, created_at) ASC, created_at ASC`,
-        [investor_id, fromDt, toDt]
-      ),
-      // Net cash effect of all completed transactions BEFORE the period, and
-      // AFTER it, using the shared CASH_MOVEMENT definition. The first is the
-      // derived opening balance; the second is what has to be unwound from
-      // today's wallet to get back to the period's closing balance.
-      pool.query(
-        `SELECT
-           COALESCE(SUM(${cashMovementSQL()}) FILTER (
-             WHERE COALESCE(transaction_date, created_at) < $2), 0) AS before_period,
-           COALESCE(SUM(${cashMovementSQL()}) FILTER (
-             WHERE COALESCE(transaction_date, created_at) > $3), 0) AS after_period
-         FROM transactions
-         WHERE investor_id = $1
-           AND status = 'completed'`,
-        [investor_id, fromDt, toDt]
-      ),
-    ]);
-
-    if (!invRes.rows[0]) return res.status(404).json({ error: 'Investor not found' });
-
-    const inv = invRes.rows[0];
-
-    /* THE BALANCES ARE COMPUTED HERE, NOT IN THE BROWSER.
-     *
-     * The admin console used to run its own credit/debit list over these rows
-     * to build the running balance, while the opening balance came from
-     * services/ledger.js on this side. The two disagreed about platform_fee,
-     * gift_sent, return and every type neither had heard of — so the opening
-     * balance and the ledger printed beneath it were computed by different
-     * rules, and the document could not tie by construction. A statement has
-     * one definition of what moves money or it is not a statement.
-     *
-     * AND IT IS ANCHORED TO THE WALLET. opening_balance used to be the sum of
-     * every prior transaction's cash effect, presented as the client's balance.
-     * ledger.js says in its own header that this definition is "for reporting
-     * and reconciliation, not for repair" and that the wallet column is
-     * authoritative — because almost every write path moves the wallet
-     * directly, and a reinvestment whose matching matured_funds row was never
-     * written (a known historical gap, with its own backfill) leaves the
-     * derived figure short. That is how a client with money on deposit was
-     * handed a statement showing R24 010,73 Dr.
-     *
-     * So the closing balance is the real wallet with everything after the
-     * period unwound, and the opening balance is that figure less the period's
-     * own movement. Both the derived and the anchored opening are returned, and
-     * `reconciles` says whether they agree — a disagreement is a data problem
-     * worth seeing rather than hiding behind a plausible-looking number.
-     */
-    const bal   = openingRes.rows[0] || {};
-    const num   = v => parseFloat(v) || 0;
-    const r2    = n => Math.round(n * 100) / 100;
-    const cash  = CASH_MOVEMENT;
-
-    const wallet       = num(inv.wallet_balance);
-    const afterPeriod  = num(bal.after_period);
-    const derivedOpen  = r2(num(bal.before_period));
-    const closing      = r2(wallet - afterPeriod);
-
-    /* Each row's signed effect and the balance after it, so the client renders
-       what the server computed. */
-    let running = null;
-    const periodMovement = txnRes.rows.reduce((s2, t) => s2 + cash(t), 0);
-    const opening = r2(closing - periodMovement);
-    running = opening;
-    const transactions = txnRes.rows.map(t => {
-      const effect = r2(cash(t));
-      running = r2(running + effect);
-      return { ...t, cash_effect: effect, running_balance: running };
-    });
-
-    /* What the client was actually PAID in the period, and what they took out.
-     *
-     * Computed here beside the balances so a summary figure and the ledger it
-     * summarises come from one pass over one set of rows. Returns paid are the
-     * cash the fund handed over — maturity payouts and interest credits — and
-     * are deliberately NOT the same thing as `return` rows, which are accruals
-     * that move no cash and are counted at maturity instead. Counting both
-     * would report the same money to the client twice. */
-    const sumTypes = (...types) => r2(transactions
-      .filter(t => types.includes(t.type))
-      .reduce((a, t) => a + Math.abs(num(t.amount)), 0));
-
-    const paid = {
-      returns:     sumTypes('payout', 'interest'),
-      withdrawn:   sumTypes('withdrawal'),
-      deposited:   sumTypes('deposit'),
-      invested:    sumTypes('investment', 'reinvestment'),
-      fees:        sumTypes('platform_fee', 'fee'),
-      /* Accrued but not yet cash — shown separately so the two are never added. */
-      accrued:     sumTypes('return'),
-    };
-
-    res.json({
-      paid,
-      investor: {
-        id: inv.id, first_name: inv.first_name, last_name: inv.last_name,
-        email: inv.email, id_number: inv.id_number,
-        mobile: inv.mobile || inv.phone,
-        wallet_balance: inv.wallet_balance,
-        street_address: inv.street_address, suburb: inv.suburb,
-        address: inv.address, postal_code: inv.postal_code, province: inv.province,
-      },
-      period: { from: fromDt.toISOString(), to: toDt.toISOString() },
-      investments: invstRes.rows,
-      transactions,
-      opening_balance: opening,
-      closing_balance: closing,
-      wallet_balance:  r2(wallet),
-      /* What the transaction history alone says the opening was. Kept so the
-         gap is visible and measurable rather than merely absent. */
-      derived_opening_balance: derivedOpen,
-      reconciles: Math.round(derivedOpen * 100) === Math.round(opening * 100),
-      ledger_gap: r2(opening - derivedOpen),
-    });
+    const data = await buildAccountStatement(pool, { investorId: investor_id, from, to });
+    res.json(data);
   } catch (err) {
+    if (err.code === 'BAD_REQUEST') return res.status(400).json({ error: err.message });
+    if (err.code === 'NOT_FOUND')   return res.status(404).json({ error: err.message });
     console.error('[admin/account-statement]', err);
     res.status(500).json({ error: err.message });
   }

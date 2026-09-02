@@ -4681,18 +4681,43 @@ async function generateStatement() {
   const stmtNo = statementNumber(investor.id, from, to);
   const generatedAt = new Date().toLocaleString('en-ZA', {dateStyle:'long', timeStyle:'short'});
 
-  let html = buildStatementHTML({
-    investor, investments, transactions,
-    from, to, totalDeposits, totalReturns, walletBal, totalValue, activeInv,
-    totalCapital, activeInvAmt,
-    statementNumber: stmtNo, generatedAt, figures: F,
-    incPortfolio:    effectivePortfolio,
-    incInvestments:  effectiveInvestments,
-    incTransactions: effectiveTransactions,
-    incPerformance:  effectivePerformance
-  });
+  /* THE SAME DOCUMENT THE CONSOLE PRODUCES.
+   *
+   * The portal used to assemble its own statement from whatever the browser
+   * had cached, with its own idea of which transaction types move cash. Two
+   * implementations of one document is two answers to "what is my balance",
+   * and a client can hold both. It now asks the server for the same payload
+   * the console reads and renders it with the same builder — see
+   * js/investor-documents.js and server/services/accountStatement.js.
+   *
+   * It goes in an IFRAME. The document is a complete HTML page whose stylesheet
+   * targets bare `table`, `th`, `td` and `body`; dropped into a div those rules
+   * would escape and restyle the portal around it. */
+  let stmtData;
+  try {
+    stmtData = await API._fetch('GET',
+      `statements/account-statement?from=${encodeURIComponent(fromVal)}&to=${encodeURIComponent(toVal)}`);
+  } catch (err) {
+    doc.innerHTML = `<div style="padding:24px;text-align:center;color:#b91c1c;font-size:0.85rem">
+      Could not generate your statement: ${_esc(err.message || 'error')}<br>
+      <button class="btn btn--secondary btn--sm" style="margin-top:10px" onclick="generateStatement()">Try again</button>
+    </div>`;
+    return;
+  }
+  PORTAL._lastStatement = stmtData;
 
-  doc.innerHTML = html;
+  doc.innerHTML = '<iframe id="statementFrame" title="Account statement" ' +
+    'style="width:100%;height:600px;border:0;display:block;background:#fff"></iframe>';
+  const frame = document.getElementById('statementFrame');
+  frame.addEventListener('load', () => {
+    /* Grow the frame to its content so the preview scrolls with the page
+       rather than inside a box. */
+    try {
+      const h = frame.contentDocument.body.scrollHeight;
+      if (h) frame.style.height = (h + 24) + 'px';
+    } catch (_) { /* cross-origin cannot happen for srcdoc; height stays default */ }
+  });
+  frame.srcdoc = SVCDocs.accountStatementHTML(stmtData);
   const generatedSummary = `${transactions.length} transaction${transactions.length === 1 ? '' : 's'} in range · ${effectivePerformance ? 'performance included' : 'summary only'}`;
   renderStatementAssistCard({
     generatedAt: new Date().toLocaleString('en-ZA', { dateStyle: 'medium', timeStyle: 'short' }),
@@ -7221,146 +7246,46 @@ async function confirmWithdrawal() {
   }
 }
 
-function generateTaxCertificate() {
+async function generateTaxCertificate() {
+  /* THE SAME DOCUMENT THE CONSOLE PRODUCES.
+   *
+   * This used to build its own certificate from whatever the browser had
+   * cached, and it was wrong in the two ways the console's copy had already
+   * been corrected for: it counted `payout` as income — a payout is the
+   * client's capital coming back PLUS the return on it, so returned capital
+   * was declared as taxable earnings — and it windowed the tax year on
+   * created_at, which on a migrated ledger is one import timestamp across
+   * every row.
+   *
+   * It now asks the server for the same payload the console reads and renders
+   * it with the same builder. A client and a staff member looking at the same
+   * tax year cannot be shown different figures, or a different document.
+   *
+   * The realised return still comes from the POOL's posted rate, which is the
+   * part a client-side rebuild cannot get right: investments.actual_return
+   * defaults to 0 rather than NULL, so anything reading it directly reports
+   * R 0,00 against every matured holding. */
   if (!PORTAL.investor) { Toast.error('Portfolio data still loading — please wait'); return; }
 
-  const inv = PORTAL.investor;
   const taxYearEl = document.getElementById('taxYearSelect');
   const taxYear = taxYearEl ? parseInt(taxYearEl.value) : new Date().getFullYear();
 
-  // SA tax year: 1 March to 28/29 Feb
-  const from = new Date(taxYear - 1, 2, 1);   // 1 March (year-1)
-  const to   = new Date(taxYear,     1, 28, 23, 59, 59); // 28 Feb (year)
+  let data;
+  try {
+    data = await API._fetch('GET', `statements/income-reference/${taxYear}`);
+  } catch (err) {
+    Toast.error('Could not generate your income reference: ' + (err.message || 'please try again'));
+    return;
+  }
 
-  /* INCOME, AND THE DATE IT WAS EARNED — both were wrong here, and the admin
-     copy of this certificate was corrected for exactly these two.
-
-     A `payout` amount is CAPITAL PLUS RETURN: maturityCron credits the whole
-     sum and books only the return portion to total_returns. Counting payouts
-     as interest declared the client's own returned capital as taxable income.
-     Income is `return` and `interest`, which is what services/ledger.js says.
-
-     And created_at is when the ROW WAS WRITTEN. For a ledger imported in one
-     batch that is the import timestamp on every row, so the tax-year window
-     selected by it is not the client's tax year. transaction_date carries the
-     date the money moved. */
-  const INCOME_TYPES = ['return', 'interest'];
-  const _txnDate = t => new Date(t.transaction_date || t.created_at || 0);
-  const interestTxns = (PORTAL.transactions || []).filter(t => {
-    if (!INCOME_TYPES.includes(t.type)) return false;
-    const d = _txnDate(t);
-    return !isNaN(d.getTime()) && d >= from && d <= to;
-  }).sort((a, b) => _txnDate(b) - _txnDate(a));   // newest first
-  const totalInterest = interestTxns.reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
-
-  const certNumber = `SVCIT-${taxYear}-${String(inv.id).replace(/\D/g,'').slice(-6) || Math.floor(Math.random()*900000+100000)}`;
-  const generatedAt = new Date().toLocaleString('en-ZA', { dateStyle: 'long', timeStyle: 'short' });
-  const fromLabel = from.toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' });
-  const toLabel   = to.toLocaleDateString('en-ZA',   { day: 'numeric', month: 'long', year: 'numeric' });
-
-  const html = `
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Poppins',sans-serif;background:#fff;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-@page{size:A4;margin:20mm}
-@media print{.no-print{display:none!important}}
-.no-print{position:fixed;top:0;left:0;right:0;background:#303030;padding:10px 24px;display:flex;justify-content:space-between;align-items:center;z-index:99}
-.no-print span{color:#fff;font-size:13px;font-weight:600}
-.no-print button{background:#fec24f;color:#fff;border:none;padding:8px 20px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer}
-.wrap{max-width:700px;margin:60px auto 32px;padding:40px}
-.hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;padding-bottom:20px;border-bottom:3px solid #303030}
-.logo img{height:48px;max-width:220px;object-fit:contain;display:block}
-.cert-badge{background:#303030;color:#fff;padding:8px 16px;border-radius:6px;font-size:0.75rem;font-weight:700;text-align:right}
-.cert-badge small{display:block;color:#9ca3af;font-size:0.65rem;font-weight:400}
-h1{font-size:1.25rem;font-weight:800;color:#303030;margin:0 0 4px}
-.subtitle{font-size:0.82rem;color:#6b7280;margin-bottom:28px}
-.interest-box{background:#f0fdf4;border:2px solid #22c55e;border-radius:12px;padding:24px 28px;margin-bottom:28px;text-align:center}
-.interest-lbl{font-size:0.8rem;color:#166534;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px}
-.interest-amt{font-size:2.4rem;font-weight:800;color:#15803d}
-.interest-sub{font-size:0.78rem;color:#166534;margin-top:4px}
-table{width:100%;border-collapse:collapse;margin-bottom:24px;font-size:0.85rem}
-th{text-align:left;padding:8px 12px;background:#f1f5f9;color:#374151;font-weight:600;font-size:0.78rem;text-transform:uppercase;letter-spacing:0.05em}
-td{padding:10px 12px;border-bottom:1px solid #e5e7eb;color:#374151}
-td:last-child{text-align:right;font-weight:600}
-.footer{border-top:1px solid #e5e7eb;padding-top:18px;font-size:0.73rem;color:#6b7280;line-height:1.6}
-.footer strong{color:#374151}
-.stamp{display:inline-block;border:2px solid #303030;color:#303030;padding:6px 14px;border-radius:4px;font-size:0.72rem;font-weight:700;letter-spacing:0.12em;margin-top:16px;text-transform:uppercase}
-</style></head><body>
-<div class="no-print">
-  <span>SV Capital — IT3(b) Tax Certificate ${taxYear}</span>
-  <button onclick="window.print()">⬇ Save as PDF / Print</button>
-</div>
-<div class="wrap">
-  <div class="hdr">
-    <div>
-      <div class="logo"><img src="${window.location.origin}/assets/sv-capital-logo-horizontal-outline-1.png" alt="SV Capital"></div>
-      <div style="font-size:0.75rem;color:#6b7280;margin-top:6px">SV Capital (Pty) Ltd &nbsp;·&nbsp; FSCA Regulated</div>
-    </div>
-    <div class="cert-badge">
-      IT3(b) INTEREST INCOME CERTIFICATE
-      <small>Cert No: ${certNumber}</small>
-      <small>Generated: ${generatedAt}</small>
-    </div>
-  </div>
-
-  <h1>IT3(b) Interest Income Certificate</h1>
-  <div class="subtitle">Tax Year: 1 March ${taxYear - 1} – 28 February ${taxYear} &nbsp;|&nbsp; For submission to SARS</div>
-
-  <div class="interest-box">
-    <div class="interest-lbl">Total Interest Received</div>
-    <div class="interest-amt">${Utils.rand(totalInterest)}</div>
-    <div class="interest-sub">For the period ${fromLabel} – ${toLabel}</div>
-  </div>
-
-  <table>
-    <thead><tr><th>Account Holder Details</th><th></th></tr></thead>
-    <tbody>
-      <tr><td>Full Name</td><td>${_esc(inv.first_name)} ${_esc(inv.last_name)}</td></tr>
-      <tr><td>Email Address</td><td>${_esc(inv.email || '—')}</td></tr>
-      <tr><td>SA ID / Passport</td><td>${inv.id_number || '—'}</td></tr>
-      <tr><td>Investor Account</td><td>${inv.id || '—'}</td></tr>
-    </tbody>
-  </table>
-
-  ${interestTxns.length > 0 ? `
-  <table>
-    <thead><tr><th>Date</th><th>Description</th><th>Amount</th></tr></thead>
-    <tbody>
-      ${interestTxns.map(t => `
-      <tr>
-        <td>${_txnDate(t).toLocaleDateString('en-ZA')}</td>
-        <td>${t.description || (t.type === 'interest' ? 'Interest credited' : 'Investment return')}</td>
-        <td>${Utils.rand(Math.abs(parseFloat(t.amount) || 0))}</td>
-      </tr>`).join('')}
-      <tr style="background:#f8fafc"><td colspan="2" style="font-weight:700;text-align:right">TOTAL INTEREST</td><td style="color:#15803d;font-weight:800">${Utils.rand(totalInterest)}</td></tr>
-    </tbody>
-  </table>
-  ` : `<div style="text-align:center;padding:24px;background:#f8fafc;border-radius:10px;color:#6b7280;font-size:0.85rem;margin-bottom:24px">No returns recorded for this tax year.</div>`}
-
-  <div class="footer">
-    <strong>SV Capital (Pty) Ltd</strong> is a registered financial services provider regulated by the Financial Sector Conduct Authority (FSCA).<br>
-    This certificate is generated in accordance with Section 11(j) of the Income Tax Act No. 58 of 1962.<br>
-    Interest declared above must be included in your annual tax return (ITR12) under "Local interest income".<br>
-    The IT3(b) exemption threshold for individuals under 65 is <strong>R23,800</strong> per annum (2024 tax year).
-    <br><br>
-    <strong>Certificate No:</strong> ${certNumber} &nbsp;·&nbsp; <strong>Date Issued:</strong> ${generatedAt}<br>
-    This certificate is computer generated and does not require a signature.
-    <br>
-    <div class="stamp">SV Capital — IT3(b)</div>
-  </div>
-</div>
-</body></html>`;
-
-  _lastTaxCertHTML = html;
+  /* Parked on PORTAL rather than in a module-level variable: portal-core.js
+     carries no top-level state, because the file is shared by two bundles and
+     a second declaration of the same name is a redeclaration error. */
+  PORTAL._lastTaxCertHTML = SVCDocs.incomeReferenceHTML(data);
+  PORTAL._lastTaxCert     = data;
 
   SVC.track('svc_tax_cert_generated', { tax_year: taxYear });
-
-  const win = window.open('', '_blank', 'width=820,height=900');
-  if (!win) { Toast.error('Pop-up blocked — please allow pop-ups for this site'); return; }
-  win.document.write(html);
-  win.document.close();
+  SVCDocs.openIncomeReference(data);
 }
 
 /* ── IT3(b) jsPDF download ── */

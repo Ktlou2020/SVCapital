@@ -35,7 +35,11 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 
 const ROOT  = path.join(__dirname, '..');
-const ADMIN = fs.readFileSync(path.join(ROOT, 'admin', 'js', 'admin.js'), 'utf8');
+/* The two document builders moved out of admin.js into
+   js/investor-documents.js, which the investor portal loads too — one
+   implementation, so the console and the portal cannot drift. This reads
+   them from where they now live. */
+const ADMIN = fs.readFileSync(path.join(ROOT, 'js', 'investor-documents.js'), 'utf8');
 const CHROME = ['/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
                 '/opt/pw-browsers/chromium/chrome-linux/chrome'].find(p => fs.existsSync(p));
 
@@ -155,7 +159,10 @@ console.log('\nthe account statement');
   let effRate = '';
   try { effRate = sliceFn(ADMIN, 'effectiveRate'); } catch (_) {}
   const stub = `
-${(ADMIN.match(/^const _esc = .*$/m) || [])[0]}
+/* _esc lives in each surface's own bundle, not in the shared document file.
+   Stubbed to the same behaviour so the builders can run here. */
+const _esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => (
+  { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 const Utils = ${effRate
     ? `{ effectiveRate: (function(){ ${effRate}; return effectiveRate; })() }`
     : `{ effectiveRate: i => parseFloat(i && i.annual_rate) || 0 }`};
@@ -163,11 +170,11 @@ window.__html = '';
 window.open = function () {
   return { document: { write(h) { window.__html += h; }, close() {} }, focus() {}, print() {} };
 };
-${sliceFn(ADMIN, '_openAccountStatementWindow')}
+${ADMIN}
 ${TABLE_READER}
 `;
   const r = render(stub, `
-try { _openAccountStatementWindow(${JSON.stringify(DATA).replace(/</g, '\\u003c')}); out.built = 'ok'; }
+try { SVCDocs.openAccountStatement(${JSON.stringify(DATA).replace(/</g, '\\u003c')}); out.built = 'ok'; }
 catch (e) { out.built = 'THREW: ' + e.message; }
 const doc = document.getElementById('doc');
 doc.innerHTML = window.__html || '';
@@ -236,16 +243,19 @@ console.log('\nthe Investment Income Reference');
   };
 
   const stub = `
-${(ADMIN.match(/^const _esc = .*$/m) || [])[0]}
+/* _esc lives in each surface's own bundle, not in the shared document file.
+   Stubbed to the same behaviour so the builders can run here. */
+const _esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => (
+  { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 window.__html = '';
 window.open = function () {
   return { document: { write(h) { window.__html += h; }, close() {} }, focus() {}, print() {} };
 };
-${sliceFn(ADMIN, '_openAdminTaxCertWindow')}
+${ADMIN}
 ${TABLE_READER}
 `;
   const r = render(stub, `
-try { _openAdminTaxCertWindow(${JSON.stringify(DATA).replace(/</g, '\\u003c')}); out.built = 'ok'; }
+try { SVCDocs.openIncomeReference(${JSON.stringify(DATA).replace(/</g, '\\u003c')}); out.built = 'ok'; }
 catch (e) { out.built = 'THREW: ' + e.message; }
 const doc = document.getElementById('doc');
 doc.innerHTML = window.__html || '';
@@ -287,15 +297,32 @@ console.log('\nthe client’s own copies order the same way');
      /soonest one still ahead|\.sort\(\(a, b\) => new Date\(a\) - new Date\(b\)\)\[0\]/.test(stmt),
      'it used to fall out of the active table being sorted by earliest maturity');
 
+  /* The investor certificate is no longer rebuilt in the browser: it asks the
+     server for the same payload the console reads and renders it with the same
+     builder. So the properties that used to be asserted against the portal's
+     own copy now belong to the service both routes call. */
   const cert = sliceFn(CORE, 'generateTaxCertificate');
-  ok('the investor certificate lists income newest first',
-     /\.sort\(\(a, b\) => _txnDate\(b\) - _txnDate\(a\)\)/.test(cert));
-  ok('and counts income, not returned capital',
-     /INCOME_TYPES = \['return', 'interest'\]/.test(cert) && !/'payout'/.test(cert),
-     'a payout is capital PLUS return; counting it as interest declares the client’s own capital as income');
+  ok('the investor certificate asks the server for the same document',
+     /statements\/income-reference/.test(cert) && /SVCDocs\.openIncomeReference/.test(cert),
+     'it used to rebuild the certificate from whatever the browser had cached');
+  ok('and rebuilds nothing of its own',
+     !/INCOME_TYPES/.test(cert) && !/interestTxns/.test(cert),
+     'a second implementation is a second answer to "what did I earn"');
+
+  const svc = fs.readFileSync(path.join(ROOT, 'server', 'services', 'incomeReference.js'), 'utf8');
+  ok('the service counts income, not returned capital',
+     /incomeTypesSQL\(\)/.test(svc) && !/'payout'/.test(svc),
+     'a payout is capital PLUS return; counting it declares the client’s own capital as income');
   ok('and windows the tax year on the date the money moved',
-     /t\.transaction_date \|\| t\.created_at/.test(cert) && !/t\.created_at \|\| t\.transaction_date/.test(cert),
+     /COALESCE\(transaction_date, created_at\) >= \$2::date/.test(svc),
      'created_at is when the row was written — one import timestamp across a migrated ledger');
+  /* Tested against CODE, not prose. The service's own comment explains why it
+     is NOT COALESCE(actual_return, expected_return), and a naive search finds
+     that sentence and reports the bug the comment warns against. */
+  const svcCode = svc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  ok('and reads the realised return off the pool',
+     /postedReturn\(\{/.test(svcCode) && !/COALESCE\(actual_return, expected_return/.test(svcCode),
+     'actual_return defaults to 0, not NULL, so reading it directly prints R 0,00');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
