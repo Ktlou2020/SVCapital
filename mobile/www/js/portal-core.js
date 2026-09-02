@@ -7276,7 +7276,7 @@ td:last-child{text-align:right;font-weight:600}
 <div class="wrap">
   <div class="hdr">
     <div>
-      <div class="logo"><img src="${window.location.origin}/assets/sv-capital-logo-horizontal-white-text.png" alt="SV Capital"></div>
+      <div class="logo"><img src="${window.location.origin}/assets/sv-capital-logo-horizontal-outline-1.png" alt="SV Capital"></div>
       <div style="font-size:0.75rem;color:#6b7280;margin-top:6px">SV Capital (Pty) Ltd &nbsp;·&nbsp; FSCA Regulated</div>
     </div>
     <div class="cert-badge">
@@ -8817,7 +8817,7 @@ function downloadSaStatement(saId, saName) {
   /* Stable, not random: the same sub-account statement must carry the same
      reference every time it is produced. */
   const statementNumber = statementNumber_sa(sa.id);
-  const logoUrl       = `${window.location.origin}/assets/sv-capital-logo-horizontal-white-text.png`;
+  const logoUrl       = `${window.location.origin}/assets/sv-capital-logo-horizontal-outline-1.png`;
   const logoOutlineUrl = new URL('../assets/logo-outline.png', window.location.href).href;
   const saType        = sa.type ? sa.type.charAt(0).toUpperCase() + sa.type.slice(1) : 'Sub-Account';
   const parentName    = `${investor.first_name || ''} ${investor.last_name || ''}`.trim() || 'Parent Investor';
@@ -9025,7 +9025,7 @@ function downloadSaStatement(saId, saName) {
     <div style="font-family:'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a1a;background:#fff;min-height:100%;position:relative">
       <div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:0;opacity:0.04;width:480px;height:480px;background:url('${logoOutlineUrl}') center/contain no-repeat;print-color-adjust:exact;-webkit-print-color-adjust:exact"></div>
       <div style="background:#303030;padding:24px 40px;display:flex;align-items:center;justify-content:space-between;position:relative;z-index:1">
-        <img src="${logoUrl}" alt="SV Capital" style="height:44px;width:auto;max-width:220px;object-fit:contain;display:block">
+        <div style="background:#fff;padding:8px 14px;border-radius:8px;display:inline-block"><img src="${logoUrl}" alt="SV Capital" style="height:40px;width:auto;max-width:220px;object-fit:contain;display:block"></div>
         <div style="text-align:right">
           <div style="font-size:16px;font-weight:800;color:#fec24f;letter-spacing:0.04em">SUB-ACCOUNT STATEMENT</div>
           <div style="font-size:10px;color:rgba(255,255,255,0.55);margin-top:4px"># ${statementNumber}</div>

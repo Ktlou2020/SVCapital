@@ -516,7 +516,11 @@ document.getElementById('probe').textContent=JSON.stringify(out);
       };
       const cert = fn('_openAdminTaxCertWindow');
       const stmt = fn('_openAccountStatementWindow');
-      const LOGO = "/assets/sv-capital-logo-horizontal-white-text.png";
+      /* The asset changed to the dark horizontal logo; what this asserts is
+         unchanged — the two documents must not drift onto different marks.
+         Which mark, and whether it needs a chip behind it, is
+         scripts/check-document-letterhead.cjs. */
+      const LOGO = "/assets/sv-capital-logo-horizontal-outline-1.png";
       ok('both use the same logo asset',
          cert.includes(LOGO) && stmt.includes(LOGO),
          'the certificate used a text heading while the statement used the logo');
