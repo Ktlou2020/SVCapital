@@ -13,11 +13,18 @@
     "setup": "cd server && npm install && node db/migrate.js && node db/seed.js",
     "pages:build": "rm -rf dist && mkdir -p dist && cp -r assets css js admin ifa fund portal team _data index.html login.html signup.html manifest.json dist/ && echo '[/api/*]\\nurl = https://svcapital-production.up.railway.app/api/:splat\\nstatus = 200' > dist/_redirects",
     "check:utils": "node scripts/check-utils-calls.cjs",
-  "check:portal": "node scripts/check-portal-split.cjs",
-  "cap:sync": "npx cap sync",
-    "cap:android": "npx cap open android",
-    "cap:build:android": "npx cap sync android && cd android && ./gradlew bundleRelease",
-    "migrate:firebase": "node server/scripts/migrate-from-firebase.js"
+    "check:portal": "node scripts/check-portal-split.cjs",
+    "cap:sync": "cd mobile && npx cap sync",
+    "cap:android": "cd mobile && npx cap open android",
+    "cap:build:android": "npm run build:mobile && npm run apply:android && npm run check:android && cd mobile && npx cap sync android && cd android && ./gradlew bundleRelease",
+    "migrate:firebase": "node server/scripts/migrate-from-firebase.js",
+    "add:android": "cd mobile && npx cap add android",
+    "apply:android": "node mobile/scripts/apply-android-config.js",
+    "check:android": "node mobile/scripts/check-android-config.js",
+    "add:ios": "cd mobile && npx cap add ios",
+    "apply:ios": "node mobile/scripts/apply-ios-config.js",
+    "check:ios": "node mobile/scripts/check-ios-config.js",
+    "build:mobile": "node mobile/scripts/build.js"
   },
   "engines": {
     "node": ">=18.0.0"

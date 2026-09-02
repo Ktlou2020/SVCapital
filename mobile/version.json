@@ -12,11 +12,11 @@
     "",
     "androidVersionCode: Play requires it to be strictly higher than anything",
     "already uploaded to the track. Only Play knows what has been used, so no",
-    "local check can verify it — bump it for every upload and never reuse one.",
+    "local check can verify it \u2014 bump it for every upload and never reuse one.",
     "",
     "iosBuildNumber: CFBundleVersion. Two App Store Connect rules apply. A",
     "marketing version whose build was approved for sale is a CLOSED train and",
-    "rejects any further upload at any build number (error 90186) — 4.0.9 is",
+    "rejects any further upload at any build number (error 90186) \u2014 4.0.9 is",
     "closed for that reason. Within an open train, CFBundleVersion must strictly",
     "increase (error 90062). Build numbers ran 79, 83, 84, 85, were then reset",
     "to 4-7 for 4.0.9, and are now kept monotonic ACROSS trains so that 'what is",
@@ -31,6 +31,6 @@
     "Run `npm run apply:android` / `npm run apply:ios` after changing this."
   ],
   "versionName": "5.2",
-  "androidVersionCode": 87,
-  "iosBuildNumber": 87
+  "androidVersionCode": 88,
+  "iosBuildNumber": 88
 }

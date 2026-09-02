@@ -37,7 +37,7 @@
          trains so the question stays unambiguous - which is why opening the 5.2
          train goes to 87 rather than back to 1. -->
     <key>CFBundleVersion</key>
-    <string>87</string>
+    <string>88</string>
     <key>CFBundleShortVersionString</key>
     <string>5.2</string>
     <key>CFBundlePackageType</key>
