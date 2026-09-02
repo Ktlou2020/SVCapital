@@ -132,6 +132,8 @@ async function makeDatabase() {
    RW-5 is archived and must not appear at all. */
 async function seed() {
   await pool.query(`DELETE FROM quest_completions WHERE investor_id LIKE 'RW-%'`);
+  await pool.query(`DELETE FROM investments       WHERE id LIKE 'RW-%'`);
+  await pool.query(`DELETE FROM investment_pools  WHERE id LIKE 'RW-%'`);
   await pool.query(`DELETE FROM investors         WHERE id LIKE 'RW-%'`);
 
   await pool.query(`
@@ -151,6 +153,22 @@ async function seed() {
        paid, and it must still be reported. */
     ['RW-4', 'learn_retired_topic', 25, '15 days'],
   ];
+  /* The migrated shape: real investments, a blank investors.total_invested.
+     These clients are not new — they have years behind them — and the stored
+     column is the one thing that does not know it. */
+  await pool.query(`
+    INSERT INTO investment_pools (id,name,product_type,status,annual_rate,term_months,
+        start_date,end_date,maturity_date,min_investment)
+    VALUES ('RW-P1','Short Term Investment - Legacy','short_term','matured',0.13,12,
+            CURRENT_DATE-400, CURRENT_DATE-40, CURRENT_DATE-40, 500)`);
+  await pool.query(`
+    INSERT INTO investments (id,investor_id,pool_id,pool_name,amount,status,start_date,end_date,
+        annual_rate,term_months,expected_return,actual_return,product_type,maturity_instruction)
+    VALUES ('RW-I1','RW-3','RW-P1','Short Term Investment - Legacy',75000,'matured',
+            CURRENT_DATE-400, CURRENT_DATE-40, 0.13,12,0,0,'short_term','reinvest'),
+           ('RW-I2','RW-3','RW-P1','Short Term Investment - Legacy',9999,'cancelled',
+            CURRENT_DATE-400, CURRENT_DATE-40, 0.13,12,0,0,'short_term','reinvest')`);
+
   for (const [who, quest, xp, ago] of C) {
     await pool.query(
       `INSERT INTO quest_completions (id,investor_id,quest_id,xp_awarded,completed_at)
@@ -210,6 +228,20 @@ const get = (port, url) => new Promise((resolve, reject) => {
     ok('a client who has earned nothing is still listed',
        !!by['RW-3'] && by['RW-3'].xp === 0,
        'they are the ones worth chasing');
+
+    console.log('\ninvested is the lifetime figure, not the stored column');
+    ok('a client with investments but a blank stored total is not shown as R0',
+       by['RW-3'].total_invested === 75000,
+       `${by['RW-3'].total_invested} — investors.total_invested is 0 on migrated ` +
+       `accounts, and reading it alone put R 0,00 beside clients who had earned ` +
+       `the R10k, R50k and R100k badges on the same page`);
+    ok('and a cancelled investment is not counted as money placed',
+       by['RW-3'].total_invested === 75000,
+       'the 9 999 cancelled row must not be in the total');
+    ok('a stored total higher than the ledger still wins',
+       by['RW-1'].total_invested === 50000,
+       `${by['RW-1'].total_invested} — the stored column is a lifetime total that ` +
+       `maturity never reduces, so it can legitimately exceed the open ledger`);
 
     console.log('\nlevels come from the XP, not from the stored column');
     ok('1200 XP is Harvester', by['RW-1'].level_id === 'harvester', by['RW-1'].level_id);
