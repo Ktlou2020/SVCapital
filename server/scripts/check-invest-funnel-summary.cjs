@@ -84,13 +84,20 @@ async function makeDatabase() {
    result sets are transposed, no assertion below can pass by luck.
 
      by pool      opened  fee_shown  confirmed  abandoned   (order: opened desc)
-       IF-P1        3         2          1          2
+       IF-P1        5         2          1          3
        IF-P2        2         1          1          1
 
      by investor  opened  abandoned  confirmed  after_fee   (order: abandoned desc)
        IF-I2        2         2          0        true
-       IF-I1        2         1          1        true
-       IF-I3      excluded — the query keeps only investors who abandoned
+       IF-I3        3         1          1        false   ← two of these arrive
+       IF-I1        2         1          1        true      under a users uuid
+
+   IF-I3's events are split across both id shapes on purpose. Until the
+   investorId fix, POST /invest-funnel filed every event under req.user.id —
+   the USERS row's uuid — because it read the claim as `investor_id` while
+   signToken writes `investorId`. The summary therefore has to resolve through
+   users, and fold an investor's events together across both shapes, or the
+   console shows a column of uuids where the clients' names belong.
 
    [investor, pool, event_type, fee_seen] */
 const EVENTS = [
@@ -109,8 +116,17 @@ const EVENTS = [
   ['IF-I3', 'IF-P2', 'confirmed',    true],
 ];
 
+/* IF-I3's user account. Events written before the fix carry THIS id. */
+const LEGACY_UUID = '11111111-2222-3333-4444-555555555555';
+const LEGACY_EVENTS = [
+  [LEGACY_UUID, 'IF-P1', 'modal_opened', null],
+  [LEGACY_UUID, 'IF-P1', 'modal_opened', null],
+  [LEGACY_UUID, 'IF-P1', 'abandoned',    false],
+];
+
 async function seed() {
-  await pool.query(`DELETE FROM invest_funnel_events WHERE investor_id LIKE 'IF-%'`);
+  await pool.query(`DELETE FROM invest_funnel_events`);
+  await pool.query(`DELETE FROM users            WHERE investor_id LIKE 'IF-%'`);
   await pool.query(`DELETE FROM investors        WHERE id LIKE 'IF-%'`);
   await pool.query(`DELETE FROM investment_pools WHERE id LIKE 'IF-%'`);
 
@@ -129,7 +145,14 @@ async function seed() {
            ('IF-I2','Bea','Bailer','bea@example.test','active','pending',0),
            ('IF-I3','Cal','Committer','cal@example.test','active','verified',5000)`);
 
-  for (const [investor, poolId, type, feeSeen] of EVENTS) {
+  /* Cal's login. users.investor_id is the bridge from the uuid the old events
+     were filed under back to the account number. */
+  await pool.query(
+    `INSERT INTO users (id,email,password_hash,role,first_name,last_name,investor_id)
+     VALUES ($1,'cal@example.test','x','investor','Cal','Committer','IF-I3')`,
+    [LEGACY_UUID]);
+
+  for (const [investor, poolId, type, feeSeen] of [...EVENTS, ...LEGACY_EVENTS]) {
     await pool.query(
       `INSERT INTO invest_funnel_events (investor_id,event_type,pool_id,product_type,fee_seen,created_at)
        VALUES ($1,$2,$3,$4,$5,NOW())`,
@@ -137,13 +160,17 @@ async function seed() {
   }
 }
 
+/* Whoever the next request is from. signToken's payload shape matters here:
+   it writes `investorId`, and the bug was reading `investor_id`. */
+let CURRENT_USER = { id: 'IF-ADM', email: 'a@example.test', role: 'admin' };
+
 function serve() {
   const express = require(path.join(ROOT, 'server', 'node_modules', 'express'));
   const authPath = require.resolve(path.join(ROOT, 'server', 'middleware', 'auth'));
   require.cache[authPath] = {
     id: authPath, filename: authPath, loaded: true, children: [], paths: [],
     exports: {
-      requireAuth: (req, _res, next) => { req.user = { id: 'IF-ADM', email: 'a@example.test', role: 'admin' }; next(); },
+      requireAuth: (req, _res, next) => { req.user = CURRENT_USER; next(); },
       requireRole: () => (_req, _res, next) => next(),
     },
   };
@@ -161,6 +188,19 @@ const get = (port, url) => new Promise((resolve, reject) => {
       resolve({ status: res.statusCode, body });
     });
   }).on('error', reject);
+});
+
+const post = (port, url, payload) => new Promise((resolve, reject) => {
+  const data = JSON.stringify(payload);
+  const req = http.request({ host: '127.0.0.1', port, path: url, method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } }, res => {
+    let b = ''; res.on('data', d => (b += d));
+    res.on('end', () => {
+      let body; try { body = JSON.parse(b); } catch (_) { body = { _raw: b.slice(0, 300) }; }
+      resolve({ status: res.statusCode, body });
+    });
+  });
+  req.on('error', reject); req.write(data); req.end();
 });
 
 /* Pull one named function out of admin.js so it can be run for real. */
@@ -260,10 +300,10 @@ document.getElementById('probe').textContent = JSON.stringify(out);
     if (status !== 200) throw new Error('cannot continue');
 
     console.log('\nthe totals count every event once');
-    ok('opened is 5',    d.funnel && d.funnel.opened    === 5, JSON.stringify(d.funnel));
+    ok('opened is 7',    d.funnel && d.funnel.opened    === 7, JSON.stringify(d.funnel));
     ok('fee_shown is 3', d.funnel && d.funnel.fee_shown === 3, JSON.stringify(d.funnel));
     ok('confirmed is 2', d.funnel && d.funnel.confirmed === 2, JSON.stringify(d.funnel));
-    ok('abandoned is 3', d.funnel && d.funnel.abandoned === 3, JSON.stringify(d.funnel));
+    ok('abandoned is 4', d.funnel && d.funnel.abandoned === 4, JSON.stringify(d.funnel));
 
     console.log('\nby_pool holds POOLS — this is what the transposition broke');
     {
@@ -281,7 +321,7 @@ document.getElementById('probe').textContent = JSON.stringify(out);
       ok('and it is the POOL’s fee_shown count',
          p1.fee_shown === 2, String(p1.fee_shown));
       ok('the pool’s own opened/confirmed/abandoned counts',
-         p1.opened === 3 && p1.confirmed === 1 && p1.abandoned === 2,
+         p1.opened === 5 && p1.confirmed === 1 && p1.abandoned === 3,
          JSON.stringify({ o: p1.opened, c: p1.confirmed, a: p1.abandoned }));
       ok('the second pool is separate and carries its product type',
          rows[1] && rows[1].pool_id === 'IF-P2' && rows[1].opened === 2 &&
@@ -297,8 +337,8 @@ document.getElementById('probe').textContent = JSON.stringify(out);
       const rows = d.by_investor || [];
       const i2 = rows[0] || {};
       ok('only investors who abandoned, most abandons first',
-         rows.length === 2 && i2.investor_id === 'IF-I2',
-         `${JSON.stringify(rows.map(r => r.investor_id))} — IF-I3 never abandoned`);
+         rows.length === 3 && i2.investor_id === 'IF-I2',
+         JSON.stringify(rows.map(r => r.investor_id)));
       ok('an investor row is named from investors, not from a pool',
          i2.investor_name === 'Bea Bailer' && i2.email === 'bea@example.test',
          `investor_name was ${JSON.stringify(i2.investor_name)}`);
@@ -310,14 +350,48 @@ document.getElementById('probe').textContent = JSON.stringify(out);
       ok('abandoned_after_fee is a flag, not a count',
          i2.abandoned_after_fee === true, JSON.stringify(i2.abandoned_after_fee));
       ok('an investor who left before the fee is told apart',
-         (rows[1] || {}).investor_id === 'IF-I1' && rows[1].confirmed === 1,
-         JSON.stringify(rows[1]));
+         (rows[2] || {}).investor_id === 'IF-I1' && rows[2].confirmed === 1,
+         JSON.stringify(rows[2]));
+
+      /* The column the console was showing uuids in. */
+      const cal = rows[1] || {};
+      ok('an event filed under the users uuid still finds the investor',
+         cal.investor_name === 'Cal Committer',
+         `${JSON.stringify(cal.investor_id)} / ${JSON.stringify(cal.investor_name)} — resolved through users.investor_id`);
+      ok('and reports the ACCOUNT NUMBER, not the login id',
+         cal.investor_id === 'IF-I3',
+         `investors.id is what the statement prints as "Account Number"; got ${JSON.stringify(cal.investor_id)}`);
+      ok('events under both id shapes fold into one investor',
+         cal.opened === 3 && cal.abandoned === 1 && cal.confirmed === 1,
+         `${JSON.stringify({ o: cal.opened, a: cal.abandoned, c: cal.confirmed })} — 2 legacy opens + 1 direct`);
+      ok('no row reports a raw uuid as an account number',
+         rows.every(r => !/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(String(r.investor_id))),
+         JSON.stringify(rows.map(r => r.investor_id)));
+    }
+
+    console.log('\nand new events are filed under the account number');
+    {
+      /* The cause. signToken writes the claim as `investorId`; this route read
+         `investor_id`, found nothing, and fell through to req.user.id. */
+      CURRENT_USER = { id: LEGACY_UUID, email: 'cal@example.test', role: 'investor',
+                       investorId: 'IF-I3' };
+      const r = await post(port, '/api/analytics/invest-funnel',
+                           { event_type: 'modal_opened', pool_id: 'IF-P2', product_type: 'cattle' });
+      ok('the event is recorded', r.status === 200 && r.body.ok === true, JSON.stringify(r.body));
+      const { rows: back } = await pool.query(
+        `SELECT investor_id FROM invest_funnel_events
+         WHERE pool_id = 'IF-P2' AND event_type = 'modal_opened'
+         ORDER BY created_at DESC LIMIT 1`);
+      ok('under the investor id from the token, not the users uuid',
+         back[0] && back[0].investor_id === 'IF-I3',
+         `stored ${JSON.stringify(back[0] && back[0].investor_id)} — reading req.user.investor_id finds nothing and falls through to req.user.id`);
+      CURRENT_USER = { id: 'IF-ADM', email: 'a@example.test', role: 'admin' };
     }
 
     console.log('\nand the fee-aversion split matches the flags');
-    ok('two of the three abandons happened after the fee was shown',
+    ok('two of the four abandons happened after the fee was shown',
        d.abandoned_breakdown && d.abandoned_breakdown.fee_seen === 2 &&
-       d.abandoned_breakdown.no_fee_seen === 1,
+       d.abandoned_breakdown.no_fee_seen === 2,
        JSON.stringify(d.abandoned_breakdown));
 
     if (!CHROME) {
@@ -342,9 +416,15 @@ document.getElementById('probe').textContent = JSON.stringify(out);
         const ir = (r.investorRows || [])[0] || [];
         ok('the investor table names the investor',
            ir[0] === 'Bea Bailer', JSON.stringify(ir));
+        ok('and shows the account number beside the name',
+           ir[1] === 'IF-I2',
+           `${JSON.stringify(ir[1])} — the column read a uuid before the id was resolved`);
         ok('after-fee reads as a yes/no, not the word "true"',
-           /Yes/.test(ir[6] || '') && r.trueLiteral === 0,
-           `${JSON.stringify(ir[6])} — abandoned_after_fee is a BOOL_OR`);
+           /Yes/.test(ir[7] || '') && r.trueLiteral === 0,
+           `${JSON.stringify(ir[7])} — abandoned_after_fee is a BOOL_OR`);
+        ok('the legacy-uuid investor renders as a name, not an id',
+           ((r.investorRows || [])[1] || [])[0] === 'Cal Committer',
+           JSON.stringify((r.investorRows || [])[1]));
 
         console.log('\nand one bad field costs one cell, not the panel');
         ok('a null count still renders',

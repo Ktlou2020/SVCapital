@@ -260,7 +260,13 @@ router.post('/invest-funnel', requireAuth, async (req, res) => {
     if (!INVEST_FUNNEL_TYPES.has(e.event_type)) {
       return res.status(400).json({ error: 'Invalid event_type' });
     }
-    const investorId = req.user?.investor_id || req.user?.id || null;
+    /* signToken puts the claim on as `investorId`. Reading `investor_id` finds
+       nothing and falls through to req.user.id — the USERS row's uuid — so
+       every event ever recorded was filed under an id the investors table has
+       never heard of, and the console showed a column of uuids where the
+       clients' names belong. The other routes all read investorId first;
+       this one was the exception. */
+    const investorId = req.user?.investorId || req.user?.investor_id || req.user?.id || null;
     await pool.query(
       `INSERT INTO invest_funnel_events
          (investor_id, event_type, pool_id, product_type, stage,
@@ -383,11 +389,18 @@ router.get('/invest-funnel/summary', requireAuth, requireRole('admin', 'director
         LIMIT 20
       `, [days]),
 
-      // Per-investor drop-off — join to investors for name/email  → investorRows
+      /* Per-investor drop-off  → investorRows
+         Events recorded before the investorId fix carry the USERS row's uuid
+         rather than the investor's account number, so the id is resolved
+         through users before joining. That makes the existing history readable
+         without a backfill, and folds an investor's events together where both
+         shapes exist. investors.id IS the account number — it is what the
+         statement prints as "Account Number" and what the console shows as
+         "Account No." */
       pool.query(`
         SELECT
-          e.investor_id,
-          COALESCE(i.first_name || ' ' || i.last_name, i.email, e.investor_id) AS investor_name,
+          COALESCE(u.investor_id, e.investor_id) AS investor_id,
+          COALESCE(i.first_name || ' ' || i.last_name, i.email) AS investor_name,
           i.email,
           i.kyc_status,
           i.total_invested,
@@ -396,11 +409,13 @@ router.get('/invest-funnel/summary', requireAuth, requireRole('admin', 'director
           COUNT(*) FILTER (WHERE e.event_type = 'confirmed')    AS confirmed,
           BOOL_OR(e.fee_seen = true AND e.event_type = 'abandoned') AS abandoned_after_fee
         FROM invest_funnel_events e
-        LEFT JOIN investors i ON i.id = e.investor_id
+        LEFT JOIN users     u ON u.id::text = e.investor_id
+        LEFT JOIN investors i ON i.id = COALESCE(u.investor_id, e.investor_id)
         WHERE e.investor_id IS NOT NULL
           AND e.event_type IN ('modal_opened','abandoned','confirmed')
           AND e.created_at >= NOW() - ($1 || ' days')::INTERVAL
-        GROUP BY e.investor_id, i.first_name, i.last_name, i.email, i.kyc_status, i.total_invested
+        GROUP BY COALESCE(u.investor_id, e.investor_id),
+                 i.first_name, i.last_name, i.email, i.kyc_status, i.total_invested
         HAVING COUNT(*) FILTER (WHERE e.event_type = 'abandoned') > 0
         ORDER BY abandoned DESC, opened DESC
         LIMIT 25

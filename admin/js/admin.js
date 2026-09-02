@@ -9814,6 +9814,7 @@ function renderInvestFunnel(data, panel) {
           <thead>
             <tr style="border-bottom:2px solid var(--border)">
               <th style="padding:6px 8px;font-size:0.72rem;text-align:left;color:var(--text-muted)">Investor</th>
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:left;color:var(--text-muted)">Account No.</th>
               <th style="padding:6px 8px;font-size:0.72rem;text-align:left;color:var(--text-muted)">KYC</th>
               <th style="padding:6px 8px;font-size:0.72rem;text-align:right;color:var(--text-muted)">Total invested</th>
               <th style="padding:6px 8px;font-size:0.72rem;text-align:right;color:var(--text-muted)">Opened</th>
@@ -9829,12 +9830,18 @@ function renderInvestFunnel(data, panel) {
               const dropCol   = dropRate >= 70 ? '#ef4444' : dropRate >= 40 ? '#f97316' : '#fec24f';
               const kycColor  = r.kyc_status === 'verified' ? '#22c55e' : r.kyc_status === 'pending' ? '#fec24f' : 'var(--text-muted)';
               const invested  = r.total_invested ? 'R ' + Number(r.total_invested).toLocaleString('en-ZA', {minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
-              const name      = r.investor_name || r.email || r.investor_id || '—';
+              /* investors.id is the account number — "INV-…", the same string
+                 the statement prints. An id that did not resolve to an
+                 investor is shown as-is rather than dressed up as one. */
+              const acctNo    = r.investor_id || '—';
+              const resolved  = !!(r.investor_name || r.email);
+              const name      = r.investor_name || r.email || 'Unknown investor';
               /* abandoned_after_fee is a BOOL_OR — a flag, not a count. It used
                  to be interpolated as a number, so it read "true ⚠". */
               const afterFee  = r.abandoned_after_fee === true || r.abandoned_after_fee === 'true';
               return `<tr style="border-bottom:1px solid var(--border)">
-                <td style="padding:6px 8px;font-size:0.78rem;color:var(--text);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(r.email || '')}">${_esc(name)}</td>
+                <td style="padding:6px 8px;font-size:0.78rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${resolved ? 'var(--text)' : 'var(--text-muted)'};font-style:${resolved ? 'normal' : 'italic'}" title="${_esc(r.email || '')}">${_esc(name)}</td>
+                <td style="padding:6px 8px;font-size:0.72rem;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--text-muted);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(acctNo)}">${_esc(acctNo)}</td>
                 <td style="padding:6px 8px;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;color:${kycColor}">${_esc(r.kyc_status || '—')}</td>
                 <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">${invested}</td>
                 <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">${_num(r.opened)}</td>
