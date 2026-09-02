@@ -116,6 +116,9 @@
       <button class="nav-item" data-view="analytics" onclick="navigate('analytics', this)">
         <i class="fa-solid fa-chart-pie"></i> Analytics
       </button>
+      <button class="nav-item" data-view="rewards" onclick="navigate('rewards', this)">
+        <i class="fa-solid fa-trophy"></i> Rewards
+      </button>
       <button class="nav-item" data-view="compliance" onclick="navigate('compliance', this)">
         <i class="fa-solid fa-calendar-check"></i> Compliance &amp; Audit
         <span class="nav-badge" id="acceptedDocsBadge" style="display:none">0</span>
@@ -1563,6 +1566,65 @@
       <!-- ══════════════════════════════════
            VIEW: ANALYTICS
       ══════════════════════════════════ -->
+      <!-- ══════════════════════════════════
+           VIEW: REWARDS
+      ══════════════════════════════════ -->
+      <div class="view" id="view-rewards">
+        <div class="page-head">
+          <div>
+            <h1 class="page-title"><i class="fa-solid fa-trophy" style="color:#facc15;margin-right:8px"></i>Rewards</h1>
+            <p class="page-sub">Every client ranked on the XP they have earned, and how far they are through the Learning Hub.</p>
+          </div>
+          <button class="btn btn--secondary btn--sm" onclick="loadRewards()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+        </div>
+
+        <div class="tab-bar" style="display:flex;gap:4px;padding:4px;border-radius:10px;margin-bottom:14px;flex-wrap:wrap">
+          <button class="tab-btn active" id="rwTab-leaderboard" onclick="_rewardsTab('leaderboard')"><i class="fa-solid fa-ranking-star" style="margin-right:5px"></i>Leaderboard</button>
+          <button class="tab-btn"        id="rwTab-levels"      onclick="_rewardsTab('levels')"><i class="fa-solid fa-layer-group" style="margin-right:5px"></i>Levels</button>
+          <button class="tab-btn"        id="rwTab-quests"      onclick="_rewardsTab('quests')"><i class="fa-solid fa-list-check" style="margin-right:5px"></i>Quests</button>
+          <button class="tab-btn"        id="rwTab-learning"    onclick="_rewardsTab('learning')"><i class="fa-solid fa-graduation-cap" style="margin-right:5px"></i>Learning Hub</button>
+        </div>
+
+        <div id="rewardsSummary"></div>
+
+        <div id="rwPanel-leaderboard">
+          <div class="panel">
+            <div class="panel__header" style="gap:10px;flex-wrap:wrap">
+              <span class="panel__title"><i class="fa-solid fa-ranking-star" style="color:#facc15;margin-right:6px"></i>Leaderboard</span>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-left:auto;align-items:center">
+                <input id="rwSearch" class="form-input" placeholder="Search name, email or account no.…" style="min-width:220px;font-size:0.8rem" oninput="_renderRewardsTable()">
+                <select id="rwLevel"  class="form-select" style="font-size:0.8rem" onchange="_renderRewardsTable()"><option value="">All levels</option></select>
+                <select id="rwStage"  class="form-select" style="font-size:0.8rem" onchange="_renderRewardsTable()">
+                  <option value="">Any learning stage</option>
+                  <option value="none">Not started</option>
+                  <option value="part">In progress</option>
+                  <option value="done">Completed</option>
+                </select>
+                <select id="rwSort" class="form-select" style="font-size:0.8rem" onchange="_renderRewardsTable()">
+                  <option value="rank">Rank</option>
+                  <option value="xp">XP</option>
+                  <option value="quests">Quests completed</option>
+                  <option value="learning">Modules read</option>
+                  <option value="invested">Total invested</option>
+                  <option value="recent">Most recent activity</option>
+                </select>
+                <label style="display:flex;align-items:center;gap:5px;font-size:0.75rem;color:var(--text-muted);white-space:nowrap">
+                  <input type="checkbox" id="rwActiveOnly" onchange="_renderRewardsTable()"> Earned XP only
+                </label>
+                <button class="btn btn--ghost btn--sm" onclick="_exportRewardsCSV()"><i class="fa-solid fa-file-csv"></i> CSV</button>
+              </div>
+            </div>
+            <div class="panel__body" style="overflow-x:auto">
+              <div id="rewardsTable"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="rwPanel-levels"   style="display:none"></div>
+        <div id="rwPanel-quests"   style="display:none"></div>
+        <div id="rwPanel-learning" style="display:none"></div>
+      </div>
+
       <div class="view" id="view-analytics">
 
         <!-- Analytics page header -->
@@ -4916,7 +4978,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=18"></script>
 <script src="../js/investor-documents.js?v=1"></script>
-<script src="js/admin.js?v=162"></script>
+<script src="js/admin.js?v=163"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>
