@@ -2213,6 +2213,76 @@ async function autoSetup() {
       }
     });
 
+    await step("12. Correct the cattle minimum taught to staff", async () => {
+      /* 12. Staff training taught the wrong minimum investment for cattle.
+             It said R5 000 in the module text, in the key points, and — worst —
+             as the CORRECT ANSWER to its own quiz question. The cattle product
+             is min_investment 500 and the sales course already says R500, so
+             staff were certified on a figure contradicting both the product and
+             another course, and then quoted it to clients.
+
+             It lives in CRS-OB-001, the onboarding course, not in the cattle
+             product course — so this is scoped by THE WRONG TEXT rather than by
+             a course id. That is the only key that is actually reliable here,
+             and it catches the same sentence wherever else it was copied to.
+
+             The seed is corrected, but courses insert ON CONFLICT DO NOTHING,
+             so an environment that already has them keeps the wrong text for
+             ever. This repairs the rows in place. Idempotent: once the text is
+             right the WHERE clause matches nothing. */
+      try {
+        const { rowCount: mods } = await pool.query(`
+          UPDATE course_modules
+             SET content    = REPLACE(content, 'Minimum investment: <strong>R5 000</strong>',
+                                               'Minimum investment: <strong>R500</strong>'),
+                 key_points = REPLACE(key_points::text, 'Minimum investment is R5 000',
+                                                        'Minimum investment is R500')::jsonb,
+                 updated_at = NOW()
+           WHERE content ILIKE '%cattle%'
+             AND (content LIKE '%Minimum investment: <strong>R5 000</strong>%'
+               OR key_points::text LIKE '%Minimum investment is R5 000%')`);
+        if (mods > 0) console.log(`✅ Cattle minimum corrected (R5 000 → R500) in ${mods} training module(s).`);
+
+        /* The quiz is on the MODULE, not the course — employee_courses.
+           quiz_questions is a count, not the questions.
+
+           Rebuilt structurally rather than by string replacement. quiz is
+           JSONB: Postgres sorts object keys and normalises whitespace, so the
+           text of a stored question bears no resemblance to the JS literal it
+           was written from and a REPLACE on quiz::text matches nothing at all
+           while reporting success.
+
+           Options and the answer index move together — patching one without
+           the other leaves the quiz marking a wrong answer correct. Other
+           questions and their order are preserved. */
+        const CATTLE_MIN_Q = 'What is the minimum investment amount for SV Capital cattle farming products?';
+        const { rowCount: quiz } = await pool.query(`
+          UPDATE course_modules m
+             SET quiz = (
+                   SELECT jsonb_agg(
+                            CASE WHEN q->>'question' = $1
+                                 THEN q || jsonb_build_object(
+                                        'options', $2::jsonb,
+                                        'correct', 0,
+                                        'explanation', $3::text)
+                                 ELSE q END
+                            ORDER BY ord)
+                     FROM jsonb_array_elements(m.quiz) WITH ORDINALITY AS t(q, ord)),
+                 updated_at = NOW()
+           WHERE m.quiz @> jsonb_build_array(jsonb_build_object('question', $1::text))
+             AND m.quiz::text LIKE '%R5 000%'`,
+          [CATTLE_MIN_Q,
+           JSON.stringify(['R500', 'R1 000', 'R2 500', 'R5 000']),
+           'The minimum investment for cattle farming is R500, keeping it accessible while maintaining viable pool sizes.']);
+        if (quiz > 0) {
+          console.log(`✅ Cattle quiz answer corrected in ${quiz} module(s).`);
+          console.log('ℹ️  Anyone who passed that quiz before now answered R5 000. Their score stands; the figure they were taught does not.');
+        }
+      } catch (courseErr) {
+        console.warn('⚠️  Cattle course correction skipped:', courseErr.message);
+      }
+    });
+
   } catch (err) {
     // Anything outside a step — the runner itself, or a connection that dies
     // mid-setup. Still not fatal, but reported alongside the rest.
@@ -2299,11 +2369,11 @@ const STANDARD_COURSES = [
     modules: [
       {
         module_index: 1, title: 'Cattle Farming & Agricultural Finance', estimated_minutes: 18, xp_reward: 60,
-        content: `<h3>How the Cattle Cycle Works</h3><p>SV Capital finances cattle acquisition and fattening cycles with vetted farming partners. Investors' capital is pooled into a farming tranche; when the herd is sold at market, returns are distributed proportionally. The typical cycle runs <strong>5–8 months</strong>.</p><h3>The Numbers</h3><ul><li>Target return: <strong>14–17% per annum</strong> (prorated for the cycle length)</li><li>Minimum investment: <strong>R5 000</strong></li><li>Risk level: <strong>Medium</strong></li><li>Collateral: Livestock insurance + farming partner guarantees</li></ul><h3>Risk Management</h3><p>All herds are insured against death, disease, and theft. We partner only with experienced, accredited farmers with proven track records. SV Capital monitors herd health and market conditions throughout the cycle.</p><h3>Client Conversation Guide</h3><p>When discussing cattle farming with clients, emphasise: (1) the tangible nature of the asset — real animals with insurance, (2) the short-term liquidity cycle — 5–8 months is accessible, (3) the return premium over traditional savings — 14–17% vs 8–10% from banks.</p>`,
-        key_points: ['Cattle cycles run 5–8 months with 14–17% per annum target returns', 'Minimum investment is R5 000', 'All herds are insured against death, disease, and theft', 'We only partner with accredited, experienced farmers', 'Emphasise: tangible asset, short cycle, return premium over banks'],
+        content: `<h3>How the Cattle Cycle Works</h3><p>SV Capital finances cattle acquisition and fattening cycles with vetted farming partners. Investors' capital is pooled into a farming tranche; when the herd is sold at market, returns are distributed proportionally. The typical cycle runs <strong>5–8 months</strong>.</p><h3>The Numbers</h3><ul><li>Target return: <strong>14–17% per annum</strong> (prorated for the cycle length)</li><li>Minimum investment: <strong>R500</strong></li><li>Risk level: <strong>Medium</strong></li><li>Collateral: Livestock insurance + farming partner guarantees</li></ul><h3>Risk Management</h3><p>All herds are insured against death, disease, and theft. We partner only with experienced, accredited farmers with proven track records. SV Capital monitors herd health and market conditions throughout the cycle.</p><h3>Client Conversation Guide</h3><p>When discussing cattle farming with clients, emphasise: (1) the tangible nature of the asset — real animals with insurance, (2) the short-term liquidity cycle — 5–8 months is accessible, (3) the return premium over traditional savings — 14–17% vs 8–10% from banks.</p>`,
+        key_points: ['Cattle cycles run 5–8 months with 14–17% per annum target returns', 'Minimum investment is R500', 'All herds are insured against death, disease, and theft', 'We only partner with accredited, experienced farmers', 'Emphasise: tangible asset, short cycle, return premium over banks'],
         quiz: [
           { question: 'What is the typical duration of a SV Capital cattle farming cycle?', options: ['1–2 months', '3–4 months', '5–8 months', '12–18 months'], correct: 2, explanation: 'Cattle farming cycles typically run 5–8 months from acquisition to sale, making them attractive medium-term investments.' },
-          { question: 'What is the minimum investment amount for SV Capital cattle farming products?', options: ['R1 000', 'R2 500', 'R5 000', 'R10 000'], correct: 2, explanation: 'The minimum investment for cattle farming is R5 000, keeping it accessible while maintaining viable pool sizes.' },
+          { question: 'What is the minimum investment amount for SV Capital cattle farming products?', options: ['R500', 'R1 000', 'R2 500', 'R5 000'], correct: 0, explanation: 'The minimum investment for cattle farming is R500, keeping it accessible while maintaining viable pool sizes.' },
           { question: 'Which risk mitigation is applied to all cattle farming investments?', options: ['Government guarantees', 'Livestock insurance covering death, disease, and theft', 'Capital protection from SV Capital reserves', 'JSE-listed bond backing'], correct: 1, explanation: 'All cattle herds are insured against the primary risks — death, disease, and theft — as the core risk mitigation tool.' },
         ],
       },
