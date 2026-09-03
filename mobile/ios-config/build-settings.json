@@ -1,0 +1,30 @@
+{
+  "_comment": [
+    "iOS build settings that must survive `cap add ios`.",
+    "",
+    "mobile/ios/ is gitignored and regenerated from Capacitor's stock template,",
+    "which pins IPHONEOS_DEPLOYMENT_TARGET to the framework's own floor — 13.0",
+    "on Capacitor 6. Nothing in the repo said otherwise, so every regenerated",
+    "project went back to 13.0 and every upload drew the same App Store Connect",
+    "warning:",
+    "",
+    "  MinimumOSVersion too low. This app has a MinimumOSVersion of 13.0.",
+    "  Starting in Spring 2027, all iOS apps must have a MinimumOSVersion of",
+    "  15.0 or later in order to be uploaded to App Store Connect or submitted",
+    "  for distribution.",
+    "",
+    "It is a warning today and a rejection from Spring 2027.",
+    "",
+    "iOS 15 runs on the iPhone 6s and later, so raising the floor from 13 gives",
+    "up devices Apple stopped supporting in 2021. Set deliberately rather than",
+    "inherited: this is the version the app is tested against and the one the",
+    "store will require.",
+    "",
+    "The Podfile needs the same number, and a post_install hook, because pods",
+    "carry their own deployment targets and a pod built for 13.0 pulls the",
+    "archive's effective minimum back down. apply:ios writes all three places.",
+    "",
+    "Run `npm run apply:ios` after changing this, then `npm run check:ios`."
+  ],
+  "iosDeploymentTarget": "15.0"
+}

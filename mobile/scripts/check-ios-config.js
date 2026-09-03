@@ -140,6 +140,62 @@ function main() {
      which would let a project pass with a correct plist and a build still signed
      against the wrong app. */
   const pbid    = resolveSetting(pbx, 'PRODUCT_BUNDLE_IDENTIFIER');
+
+  /* ── Deployment target ────────────────────────────────────────────────
+     App Store Connect warns below 15.0 today and refuses from Spring 2027.
+     mobile/ios/ is regenerated from a template that pins Capacitor's own
+     floor (13.0 on Capacitor 6), so this drifts back every time the project
+     is recreated unless apply:ios has been run.
+
+     Checked PER CONFIGURATION: an archive is built from Release, and a
+     project whose Debug is 15.0 while Release is 13.0 uploads at 13.0. */
+  {
+    const SETTINGS = path.join(MOBILE, 'ios-config', 'build-settings.json');
+    let want = null;
+    if (fs.existsSync(SETTINGS)) {
+      try { want = JSON.parse(fs.readFileSync(SETTINGS, 'utf8')).iosDeploymentTarget; }
+      catch (_) { problems.push('ios-config/build-settings.json is not valid JSON'); }
+    } else {
+      notes.push('ios-config/build-settings.json missing — deployment target unpinned');
+    }
+
+    if (want && pbx) {
+      const found = [...pbx.matchAll(/IPHONEOS_DEPLOYMENT_TARGET = ([0-9.]+);/g)].map(m => m[1]);
+      if (!found.length) {
+        problems.push('project.pbxproj sets no IPHONEOS_DEPLOYMENT_TARGET');
+      } else {
+        const wrong = [...new Set(found.filter(v => v !== String(want)))];
+        if (wrong.length) {
+          problems.push(`IPHONEOS_DEPLOYMENT_TARGET is ${wrong.join(', ')} in project.pbxproj; ` +
+                        `ios-config says ${want} — run \`npm run apply:ios\``);
+        }
+        const low = found.filter(v => parseFloat(v) < 15);
+        if (low.length) {
+          problems.push(`deployment target ${[...new Set(low)].join(', ')} is below 15.0 — ` +
+                        `App Store Connect warns today and refuses from Spring 2027`);
+        }
+      }
+
+      const PODFILE = path.join(MOBILE, 'ios', 'App', 'Podfile');
+      if (fs.existsSync(PODFILE)) {
+        const pod = fs.readFileSync(PODFILE, 'utf8');
+        const m = pod.match(/^platform :ios, ?'([0-9.]+)'/m);
+        if (!m) problems.push("Podfile declares no `platform :ios` line");
+        else if (m[1] !== String(want)) {
+          problems.push(`Podfile platform is ${m[1]}, ios-config says ${want}`);
+        }
+        /* Without the hook a pod built for 13.0 pulls the archive's effective
+           minimum down, whatever the app target says. */
+        if (!/IPHONEOS_DEPLOYMENT_TARGET'\] = '/.test(pod)) {
+          problems.push('Podfile has no post_install hook pinning pod deployment targets — ' +
+                        'a pod built lower sets the minimum for the whole archive');
+        }
+      } else {
+        notes.push('mobile/ios/App/Podfile not found — pod deployment targets unchecked');
+      }
+    }
+  }
+
   const perCfg  = settingByConfig(pbx, 'PRODUCT_BUNDLE_IDENTIFIER');
   if (pbx) {
     if (pbid.ambiguous) {

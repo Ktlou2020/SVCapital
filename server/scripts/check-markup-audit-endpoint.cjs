@@ -41,7 +41,20 @@ const ROOT = path.join(__dirname, '..', '..');
    every single time and quietly test nothing. Isolation is the only answer
    that both works and stays honest. */
 const SSL = process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false };
-const DB_NAME = 'chk_markup_' + process.pid;
+/* A name no other process can pick.
+ *
+ * A check failed intermittently with FATAL 57P01, "terminating connection due
+ * to administrator command" — which in this suite only comes from
+ * DROP DATABASE ... WITH (FORCE), confirmed by the forced checkpoint the
+ * server logs immediately after it. Something dropped a database out from
+ * under a running check.
+ *
+ * process.pid alone is not unique enough to rule that out: one suite run
+ * spawns two hundred short-lived processes and a container recycles pids, so
+ * two checks can pick the same database name minutes apart. The random suffix
+ * costs nothing and removes the only way two processes can name the same
+ * database. */
+const DB_NAME = 'chk_markup_' + process.pid + '_' + Math.random().toString(36).slice(2, 8);
 
 /* Swapped structurally rather than by regex. An earlier helper elsewhere in
    this repo rewrote the database name with a pattern that only matched when
