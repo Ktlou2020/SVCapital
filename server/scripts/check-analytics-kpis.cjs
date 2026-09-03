@@ -68,7 +68,23 @@ function routeSql() {
   const src = fs.readFileSync(path.join(ROOT, 'server', 'routes', 'analytics-extra.js'), 'utf8');
   const i = src.indexOf("router.get('/kpis'");
   const start = src.indexOf('`', src.indexOf('pool.query(', i)) + 1;
-  return src.slice(start, src.indexOf('`', start));
+  let sql = src.slice(start, src.indexOf('`', start));
+
+  /* The SQL is lifted out of the file as TEXT, so any ${…} in it arrives at
+     Postgres verbatim — "syntax error at or near $". It used to contain none.
+     It now interpolates the platform's one definition of income, so that call
+     is resolved here with the real helper rather than a copy: the point of the
+     check is to run what ships, and a second list of income types in the check
+     would be the very drift it exists to catch. */
+  const { incomeTypesSQL } = require(path.join(ROOT, 'server', 'services', 'ledger'));
+  sql = sql.replace(/\$\{incomeTypesSQL\(\)\}/g, incomeTypesSQL());
+
+  const leftover = sql.match(/\$\{[^}]*\}/);
+  if (leftover) {
+    throw new Error(`routeSql cannot run: unresolved ${leftover[0]} — teach this ` +
+                    `function about it rather than letting Postgres see a $`);
+  }
+  return sql;
 }
 
 /* The browser formulas, transcribed from _renderAnalyticsKPIsFromState. */
@@ -82,8 +98,13 @@ function browserKpis({ investors, investments, transactions }) {
     total_aum: Math.max(0, totalAUM),
     active_capital: investments.filter(i => i.status === 'active').reduce((s, i) => s + num(i.amount), 0),
     total_investors: investors.length,
+    /* Income — `return` and `interest`. A payout is capital coming back plus
+       the return on it; counting it here reported a client's own money as
+       something they earned. Moves in step with the browser formula it
+       transcribes: if only one of the two changed, this check would compare a
+       fixed figure against a broken one and pass. */
     returns_ytd: transactions
-      .filter(t => t.status === 'completed' && ['return', 'payout'].includes(t.type) &&
+      .filter(t => t.status === 'completed' && ['return', 'interest'].includes(t.type) &&
         new Date(t.transaction_date || t.created_at || 0).getTime() >= ytdStart)
       .reduce((s, t) => s + num(t.amount), 0),
     platform_revenue: transactions
@@ -124,9 +145,16 @@ async function seed(nInvestors) {
   await pool.query(`
     INSERT INTO transactions (id, investor_id, type, amount, status, reference, transaction_date, created_at)
     SELECT 'KT-P-'||g, 'K-'||g, 'payout',       25,  'completed', 'KTP'||g, NOW(), NOW() FROM generate_series(1,$1) g`, [nInvestors]);
+  /* Real income in the window. The payouts above are capital coming back plus
+     its return in one row, so they are NOT income — they are here to prove the
+     figure excludes them. Without an income row the assertion would be
+     satisfied by zero and would stop testing the date boundary at all. */
   await pool.query(`
     INSERT INTO transactions (id, investor_id, type, amount, status, reference, transaction_date, created_at)
-    VALUES ('KT-OLD','K-1','payout', 9999, 'completed','KTOLD',
+    SELECT 'KT-R-'||g, 'K-'||g, 'return',       25,  'completed', 'KTR'||g, NOW(), NOW() FROM generate_series(1,$1) g`, [nInvestors]);
+  await pool.query(`
+    INSERT INTO transactions (id, investor_id, type, amount, status, reference, transaction_date, created_at)
+    VALUES ('KT-OLD','K-1','return', 9999, 'completed','KTOLD',
             DATE_TRUNC('year', NOW() AT TIME ZONE 'Africa/Johannesburg') - INTERVAL '1 day',
             NOW() - INTERVAL '400 days')`);
   await pool.query(`
@@ -163,8 +191,9 @@ const readAll = async () => ({
     eqN('a pending deposit is excluded',     sqlK.total_aum, 20000,
         'the R7,777 pending deposit must not count');
     eqN('fees count as revenue despite being stored negative', sqlK.platform_revenue, 50 * 10);
-    eqN('last year\'s payout is outside YTD', sqlK.returns_ytd, 50 * 25,
-        'the R9,999 payout dated before 1 Jan must not count');
+    eqN('last year\'s income is outside YTD', sqlK.returns_ytd, 50 * 25,
+        'the R9 999 return dated before 1 Jan must not count, and the 50 payouts ' +
+        'inside the window are capital coming back rather than income');
     ok('matured investments are not active capital',
        Number(sqlK.active_investments) === 50 - Math.floor(50 / 4),
        `active_investments=${sqlK.active_investments}`);

@@ -2,6 +2,11 @@
 const router = require('express').Router();
 const pool   = require('../db/pool');
 const { requireAuth, requireRole } = require('../middleware/auth');
+/* Income is `return` and `interest`. These sums included `payout`, whose amount
+   is the client's capital coming back PLUS the return on it — so "Returns Paid"
+   and "Returns YTD" reported the capital the firm handed back as money it had
+   earned for people. One definition, shared with the tax documents. */
+const { incomeTypesSQL } = require('../services/ledger');
 
 const _admin = requireRole('admin', 'director', 'staff');
 
@@ -60,7 +65,7 @@ router.get('/kpis/period', requireAuth, _admin, async (req, res) => {
                  WHERE status = 'completed' AND type IN ('deposit','withdrawal')
                    AND ${when} >= ${a} AND ${when} < ${b}), 0)        AS ${prefix}_net_deposits,
       COALESCE((SELECT SUM(ABS(amount)) FROM transactions
-                 WHERE status = 'completed' AND type IN ('return','payout')
+                 WHERE status = 'completed' AND type IN (${incomeTypesSQL()})
                    AND ${when} >= ${a} AND ${when} < ${b}), 0)        AS ${prefix}_returns_paid,
       COALESCE((SELECT SUM(ABS(amount)) FROM transactions
                  WHERE status = 'completed' AND type IN ('fee','platform_fee')
@@ -161,7 +166,7 @@ router.get('/kpis', requireAuth, _admin, async (req, res) => {
 
         COALESCE((
           SELECT SUM(ABS(amount)) FROM transactions
-           WHERE status = 'completed' AND type IN ('return','payout')
+           WHERE status = 'completed' AND type IN (${incomeTypesSQL()})
              AND COALESCE(transaction_date, created_at)
                  >= DATE_TRUNC('year', NOW() AT TIME ZONE 'Africa/Johannesburg')
         ), 0)                                                                    AS returns_ytd,

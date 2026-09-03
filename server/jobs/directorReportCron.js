@@ -34,9 +34,26 @@ async function runDirectorReport() {
       [monthStart, monthEnd]
     );
 
-    // Returns distributed this month (type='return' or 'payout')
+    /* Returns distributed this month.
+     *
+     * This summed `payout` as well, and a payout's amount is the client's
+     * CAPITAL COMING BACK plus the return on it — maturityCron credits the
+     * whole sum and books only the return portion to total_returns. So in any
+     * month with maturities the directors were told the firm had distributed
+     * far more in returns than it had, by exactly the capital it handed back.
+     *
+     * Income is `return` and `interest`, from services/ledger — the same
+     * definition both tax documents and the statements now use.
+     *
+     * The window is on the date the money MOVED, not on when the row was
+     * written: a migrated or back-dated transaction lands in the wrong month
+     * otherwise. */
+    const { incomeTypesSQL } = require('../services/ledger');
     const { rows: [returnsRow] } = await pool.query(
-      "SELECT COALESCE(SUM(amount),0) AS total FROM transactions WHERE type IN ('return','payout') AND status='completed' AND created_at >= $1 AND created_at < $2",
+      `SELECT COALESCE(SUM(amount),0) AS total FROM transactions
+        WHERE type IN (${incomeTypesSQL()}) AND status = 'completed'
+          AND COALESCE(transaction_date, created_at) >= $1
+          AND COALESCE(transaction_date, created_at) <  $2`,
       [monthStart, monthEnd]
     );
 

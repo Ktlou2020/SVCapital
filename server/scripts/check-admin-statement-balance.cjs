@@ -239,7 +239,15 @@ console.log('\nthe portfolio summary adds up');
   ok('pending capital counts as active, since it has left the wallet',
      /\['active','pending'\]\.includes\(i\.status\)/.test(CODE),
      'leaving it out would make the two figures fail to account for it');
-  ok('the paid box shows returns paid to the client', /Returns paid to you/.test(src));
+  /* "Paid out to you", not "Returns paid to you". A maturity payout's amount
+     is the client's capital coming back plus the return on it, and this row
+     sums payouts and interest — so the figure is cash and correct, while the
+     old label told a client their own capital was money they had earned. */
+  ok('the paid box shows what was paid out to the client',
+     /Paid out to you/.test(src) && !/Returns paid to you/.test(src));
+  ok('and says what is in that figure',
+     /maturity payouts \(capital \+ return\) and interest/.test(src),
+     'a client cannot tell capital from return unless the row says so');
   ok('and keeps accrued returns visually apart',
      /Returns accrued, not yet paid/.test(src),
      'a client reading a single "returns" figure must not be shown cash plus accrual');

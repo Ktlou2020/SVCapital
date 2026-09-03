@@ -683,8 +683,14 @@ function _openAccountStatementWindow(data) {
     // handed over, and summing the two reports it twice.
     '  <div class="sec-hdr" style="background:#f8fafc;border-left:3px solid #15803d">Paid in this Period &mdash; ' + fromLabel + ' to ' + toLabel + '</div>',
     '  <table><tbody>',
-    '    <tr><td style="padding:8px 10px;font-size:11px;color:#374151">Returns paid to you' +
-      ' <span style="color:#9ca3af">maturity payouts and interest</span></td>' +
+    /* "Paid out to you", NOT "returns paid to you".
+       A maturity payout's amount is the client's CAPITAL coming back plus the
+       return on it. This row belongs to a CASH section — deposited by you,
+       placed into investments, fees charged — so the figure is right; calling
+       it a return told a client that R346 708 of their own capital was money
+       they had earned. */
+    '    <tr><td style="padding:8px 10px;font-size:11px;color:#374151">Paid out to you' +
+      ' <span style="color:#9ca3af">maturity payouts (capital + return) and interest</span></td>' +
       '<td class="num" style="padding:8px 10px;font-weight:800;text-align:right;color:#15803d">' + fmtR(_n(paid.returns)) + '</td></tr>',
     '    <tr><td style="padding:8px 10px;font-size:11px;color:#374151">Deposited by you</td>' +
       '<td class="num" style="padding:8px 10px;text-align:right">' + fmtR(_n(paid.deposited)) + '</td></tr>',
