@@ -3501,7 +3501,11 @@ function downloadStatement() {
   const totalCapital = allInvestments.filter(i => !i.is_reinvestment).reduce((s, i) => s + (Number(i.amount) || 0), 0);
   const activeInvAmt = allInvestments.filter(i => i.status === 'active').reduce((s, i) => s + (Number(i.amount) || 0), 0);
   const totalDeposits = transactions.filter(t => t.type === 'deposit' && t.status !== 'cancelled').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
-  const _txnReturns  = transactions.filter(t => (t.type === 'return' || t.type === 'payout') && t.status !== 'cancelled').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+  /* Income only — `return` and `interest`. This counted `payout`, whose amount
+     is capital plus return, so a client whose holding matured in the window saw
+     their own capital reported back to them as returns earned. See
+     _isIncomeTxn in portal-core. */
+  const _txnReturns  = transactions.filter(t => _isIncomeTxn(t) && t.status !== 'cancelled').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
   const totalReturns = _txnReturns > 0 ? _txnReturns
     : allInvestments.filter(i => ['paid_out', 'matured'].includes(i.status) && _inPeriod(i.maturity_date || i.investment_date))
                     .reduce((s, i) => s + (i.actual_return_amount || i.expected_return_amount || 0), 0);

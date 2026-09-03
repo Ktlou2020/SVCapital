@@ -1184,7 +1184,7 @@ function renderActivityFeed(page) {
   });
 
   // Completed transactions (returns/payouts)
-  STATE.transactions.filter(t => ['return','payout'].includes(t.type) && t.status === 'completed').forEach(t => {
+  STATE.transactions.filter(t => ['return','payout'].includes(t.type) && t.status === 'completed').forEach(t => { /* payout-is-cash: the feed says "received" and names the type */
     const ts = t.transaction_date || t.created_at;
     if (!ts) return;
     events.push({
@@ -9856,6 +9856,7 @@ function renderTxnFlowChart() {
       .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0)
   );
   const payouts = monthStarts.map(m =>
+    /* payout-is-cash: the chart series is labelled "Payouts" — money out, not income */
     STATE.transactions.filter(t => (t.type === 'return' || t.type === 'payout') && t.status === 'completed' && _inMonth(t.created_at || t.transaction_date, m))
       .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0)
   );
@@ -14425,10 +14426,17 @@ function _renderAnalyticsKPIsFromState() {
     .filter(i => i.status === 'active')
     .reduce((s, i) => s + Math.abs(parseFloat(i.amount) || 0), 0);
 
-  // Returns YTD = return + payout transactions since Jan 1 this year
+  /* Returns YTD = INCOME since 1 January — `return` and `interest`.
+   *
+   * This counted `payout`, whose amount is the client's capital coming back
+   * plus the return on it, so the figure jumped by the size of every holding
+   * that matured. It is also the browser-side fallback for the KPI the server
+   * computes in analytics-extra, which now sums income — so leaving this alone
+   * would have shown two different numbers for one tile depending on which
+   * path rendered it. */
   const ytdStart = new Date(new Date().getFullYear(), 0, 1).getTime();
   const returnsYTD = STATE.transactions
-    .filter(t => t.status === 'completed' && (t.type === 'return' || t.type === 'payout') &&
+    .filter(t => t.status === 'completed' && ['return', 'interest'].includes(t.type) &&
       new Date(t.transaction_date || t.created_at || 0).getTime() >= ytdStart)
     .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
 

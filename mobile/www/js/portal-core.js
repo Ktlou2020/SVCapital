@@ -617,6 +617,27 @@ async function loadFullTransactionHistory() {
  * adjustment is stored signed precisely because it can go either way, and a
  * type nobody has classified yet is far better placed by its sign than
  * silently dropped. */
+/* WHAT COUNTS AS INCOME.
+ *
+ * `return` and `interest`. NOT `payout`: a payout's amount is the client's
+ * CAPITAL COMING BACK plus the return on it — maturityCron credits the whole
+ * sum in one row and books only the return portion to total_returns. Anything
+ * that sums payouts and calls the result "returns" reports a client's own
+ * money back to them as earnings, and the figure spikes in exactly the months
+ * a holding matured.
+ *
+ * This is the same definition as server/services/ledger.js INCOME_TYPES and
+ * the one both tax documents use. It is deliberately NOT the same as the
+ * credit/debit direction below — a payout very much is a cash credit; it just
+ * is not income.
+ *
+ * A function rather than a const because portal-core carries no top-level
+ * state: the file is shared by two bundles and a second declaration of the
+ * same name is a redeclaration error. */
+function _isIncomeTxn(t) {
+  return ['return', 'interest'].includes(String(t && t.type || ''));
+}
+
 function _stmtDirection(t) {
   const CREDIT = ['deposit', 'return', 'payout', 'referral_bonus', 'gift_received', 'reward', 'interest', 'refund'];
   const DEBIT  = ['withdrawal', 'investment', 'reinvestment', 'platform_fee', 'fee', 'gift_sent'];
@@ -9789,9 +9810,10 @@ function _renderMonthlyReturnsChart() {
 
   /* Completed only. A pending or rejected return charted as earned tells the
      client they made money they have not been paid. */
-  const txns = PORTAL.transactions.filter(t =>
-    (t.type === 'return' || t.type === 'interest' || t.type === 'payout') && _stmtCounts(t)
-  );
+  /* Income only. Including `payout` charted the client's returned CAPITAL as
+     a return, so the month a holding matured showed a spike the size of the
+     holding itself. See _isIncomeTxn. */
+  const txns = PORTAL.transactions.filter(t => _isIncomeTxn(t) && _stmtCounts(t));
 
   const monthly = {};
   txns.forEach(t => {
