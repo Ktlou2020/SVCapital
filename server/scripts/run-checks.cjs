@@ -114,7 +114,21 @@ function shuffled(list, seed) {
   return a;
 }
 
-const TEMPLATE = 'svc_chk_tpl_' + process.pid;
+/* A run tag no other runner can pick.
+ *
+ * The template and every per-check database were named from process.pid alone.
+ * check-run-checks spawns this runner up to five times in one suite, each a
+ * fresh short-lived process, and a container recycles pids — so two runners
+ * could name the same template. buildTemplate() opens with
+ * DROP DATABASE ... WITH (FORCE), which terminates whatever is connected to
+ * that name, and the other runner's checks die with
+ * FATAL 57P01 "terminating connection due to administrator command" — an error
+ * that names neither the database nor the process that dropped it.
+ *
+ * The suffix costs nothing and makes the collision impossible rather than
+ * unlikely. */
+const RUN_TAG  = process.pid + '_' + Math.random().toString(36).slice(2, 8);
+const TEMPLATE = 'svc_chk_tpl_' + RUN_TAG;
 
 /* Where a failed check's full output goes, so a rare failure can be read
    rather than guessed at. */
@@ -195,7 +209,7 @@ async function buildTemplate() {
     const rel = checks[i];
     const name = path.basename(rel);
     const wantsDb = needsDatabase(rel);
-    const dbName = `chk_${String(i).padStart(3, '0')}_${process.pid}`;
+    const dbName = `chk_${String(i).padStart(3, '0')}_${RUN_TAG}`;
     const env = { ...process.env };
 
     if (wantsDb) {
