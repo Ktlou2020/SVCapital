@@ -2812,9 +2812,9 @@ async function viewInvestor(id) {
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
           <div>
             <label style="font-size:0.78rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Investment Pool</label>
-            <select id="adminInvestPool-${inv.id}" style="width:100%;padding:8px 10px;border:1.5px solid rgba(0,0,0,0.12);border-radius:8px;font-size:0.85rem;background:var(--bg-secondary);color:var(--text)">
+            <select id="adminInvestPool-${inv.id}" onchange="_adminInvestPoolPicked('${_esc(inv.id)}')" style="width:100%;padding:8px 10px;border:1.5px solid rgba(0,0,0,0.12);border-radius:8px;font-size:0.85rem;background:var(--bg-secondary);color:var(--text)">
               <option value="">— Select pool —</option>
-              ${(STATE.pools||[]).filter(p=>['open','active','filling'].includes(p.status)).sort((a,b)=>(a.name||'').localeCompare(b.name||'')).map(p=>`<option value="${_esc(p.id)}">${_esc(p.name)} (min: ${Utils.rand(p.min_investment||0)}, ${Utils.pct(p.annual_rate||0)} p.a.)</option>`).join('')}
+              ${_adminInvestPoolOptions()}
             </select>
           </div>
           <div>
@@ -2829,6 +2829,7 @@ async function viewInvestor(id) {
           </label>
           <span style="font-size:0.78rem;color:var(--text-muted)">· Wallet: <strong>${Utils.rand(inv.wallet_balance)}</strong></span>
         </div>
+        <div id="adminInvestPoolNote-${inv.id}" style="font-size:0.8rem;margin-bottom:10px"></div>
         <div id="adminInvestResult-${inv.id}" style="font-size:0.82rem;margin-bottom:10px"></div>
         <button class="btn btn--success btn--sm" onclick='adminInvestOnBehalf(${_esc(JSON.stringify(inv.id))},${_esc(JSON.stringify(inv.first_name+" "+inv.last_name))},this)'>
           <i class="fa-solid fa-arrow-trend-up"></i> Create Investment
@@ -3664,6 +3665,84 @@ async function overrideWalletBalance(investorId, name, btn) {
   });
 }
 
+
+/* ── Which pools staff may place money into ──────────────────────────────
+ *
+ * The dropdown used to list open, filling and active pools only, so a pool
+ * that had CLOSED to raising simply was not there — and a late placement had
+ * to be done by editing rows by hand, which is how money goes missing.
+ *
+ * The server has always allowed this. tables.js refuses a closed pool for
+ * `req.user.role === 'investor'` and says why in as many words: staff place
+ * late investments against a closed pool as a correction — an EFT that
+ * cleared after the cut-off, a misallocation being moved. The console was
+ * enforcing a rule the platform does not have.
+ *
+ * So every pool that can still take money is offered, grouped and labelled by
+ * state, and the ones that cannot are left out rather than silently accepted:
+ * a matured, paid-out or cancelled pool has already been closed out and money
+ * placed into it would have nothing to mature into.
+ * ──────────────────────────────────────────────────────────────────────── */
+const _INVEST_OPEN_STATES   = ['open', 'filling', 'waitlist'];
+const _INVEST_CLOSED_STATES = ['active', 'closed'];
+
+function _poolIsPastClose(p) {
+  if (!p || !p.end_date) return false;
+  const d = new Date(p.end_date);
+  if (isNaN(d.getTime())) return false;
+  /* A date column is a DAY: a pool closing today is still open today. */
+  d.setHours(23, 59, 59, 999);
+  return d.getTime() < Date.now();
+}
+
+function _adminInvestPoolOptions() {
+  const all = (STATE.pools || []).slice()
+    .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  const label = p => `${_esc(p.name)} — min ${Utils.rand(p.min_investment || 0)}, ` +
+                     `${Utils.pct(p.annual_rate || 0)} p.a.`;
+
+  const open   = all.filter(p => _INVEST_OPEN_STATES.includes(p.status) && !_poolIsPastClose(p));
+  /* Past its close date but still flagged open is a closed pool that the
+     cycler has not reached yet — it belongs with the late placements. */
+  const closed = all.filter(p => _INVEST_CLOSED_STATES.includes(p.status) ||
+                                 (_INVEST_OPEN_STATES.includes(p.status) && _poolIsPastClose(p)));
+
+  const group = (name, rows) => rows.length
+    ? `<optgroup label="${_esc(name)}">${rows.map(p =>
+        `<option value="${_esc(p.id)}">${label(p)}${
+          _INVEST_OPEN_STATES.includes(p.status) && !_poolIsPastClose(p) ? '' :
+          ` · ${_esc(String(p.status || '').toUpperCase())}`}</option>`).join('')}</optgroup>`
+    : '';
+
+  return '<option value="">— Select pool —</option>' +
+         group('Open for raising', open) +
+         group('Closed to new money — late placement', closed);
+}
+
+/* Say plainly when the chosen pool has stopped raising. This is a correction,
+   and a correction made without noticing is just a mistake. */
+function _adminInvestPoolPicked(investorId) {
+  const note = document.getElementById('adminInvestPoolNote-' + investorId);
+  const sel  = document.getElementById('adminInvestPool-' + investorId);
+  if (!note || !sel) return;
+  const p = (STATE.pools || []).find(x => x.id === sel.value);
+  if (!p) { note.innerHTML = ''; return; }
+
+  const closed = !_INVEST_OPEN_STATES.includes(p.status) || _poolIsPastClose(p);
+  if (!closed) { note.innerHTML = ''; return; }
+
+  const why = _poolIsPastClose(p)
+    ? `Its close date was ${Utils.date(p.end_date)}.`
+    : `Its status is ${_esc(String(p.status || '').toUpperCase())}.`;
+  note.innerHTML = `<div style="background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);
+      color:#f97316;border-radius:8px;padding:9px 11px;line-height:1.5">
+      <i class="fa-solid fa-triangle-exclamation"></i>
+      <strong>This pool has closed to new money.</strong> ${why}
+      Placing an investment here is a late correction — an EFT that cleared after the
+      cut-off, or a misallocation being moved. The client keeps the pool's posted
+      return and its maturity date; nothing about the round changes.</div>`;
+}
+
 async function adminInvestOnBehalf(investorId, name, btn) {
   const poolEl   = document.getElementById('adminInvestPool-' + investorId);
   const amtEl    = document.getElementById('adminInvestAmt-' + investorId);
@@ -3690,9 +3769,19 @@ async function adminInvestOnBehalf(investorId, name, btn) {
   const inv       = STATE.investors.find(i => i.id === investorId);
   const balance   = parseFloat(inv?.wallet_balance) || 0;
 
+  /* If the pool has stopped raising, the confirmation says so. The dropdown
+     warns as well, but a dialog is the last thing read before money moves and
+     it should not be the one place that leaves it out. */
+  const _closedPool = pool && (!_INVEST_OPEN_STATES.includes(pool.status) || _poolIsPastClose(pool));
+  const _lateNote = _closedPool
+    ? `\n\n⚠ LATE PLACEMENT — this pool has closed to new money${
+        pool.end_date ? ` (closed ${Utils.date(pool.end_date)})` : ''}, status ${
+        String(pool.status || '').toUpperCase()}. The client keeps the pool's posted return and maturity date.`
+    : '';
+
   const confirmed = await Confirm.ask('Create investment on behalf?', {
-    body: `Investor: ${name}\nPool: ${pool?.name || poolId}\nAmount: R${amt.toFixed(2)}${feeNote}\nTotal deducted from wallet: R${total.toFixed(2)}\nCurrent wallet: R${balance.toFixed(2)}\n\nThis will create an active investment record and deduct from the investor's wallet.`,
-    confirmLabel: 'Create Investment',
+    body: `Investor: ${name}\nPool: ${pool?.name || poolId}\nAmount: R${amt.toFixed(2)}${feeNote}\nTotal deducted from wallet: R${total.toFixed(2)}\nCurrent wallet: R${balance.toFixed(2)}${_lateNote}\n\nThis will create an active investment record and deduct from the investor's wallet.`,
+    confirmLabel: _closedPool ? 'Place late investment' : 'Create Investment',
   });
   if (!confirmed) return;
 
