@@ -1,0 +1,549 @@
+/* Everything the app styles differently from the web portal — and nothing else.
+ *
+ * mobile/src/css/ used to hold whole copies of admin.css, ci-theme.css,
+ * portal.css and portal-premium.css, plus five more nothing loaded. The build
+ * copies mobile/src/ over the shared layers last, so those copies shadowed the
+ * real stylesheets completely: a fix to portal/css/portal.css reached the web
+ * and stopped at the app. Nothing said so — the app kept rendering, one release
+ * behind, and the divergence only surfaced when someone compared the two by eye.
+ *
+ * It had drifted a long way. portal-premium.css was 869 lines behind, and the
+ * two fixes written during one afternoon's work — the toast stack and the
+ * measured mobile-web layout block — each had to be written twice, once in each
+ * copy, because the second copy was invisible from the first.
+ *
+ * So the copies are gone and the app loads the shared sheets. What is left here
+ * is the difference: every declaration where the app really does want a
+ * different value, and every component the app has that the web portal does not.
+ * It is 94 rules where it was four files and nine thousand lines, and each rule
+ * is now a decision somebody can read and argue with.
+ *
+ * What was dropped rather than carried across:
+ *
+ *   · 84 blocks under `body.dark-mode`. initDarkMode() removes that class and
+ *     clears its localStorage key, and toggleDarkMode() is empty — dark mode was
+ *     taken out of the product and nothing has carried the class since.
+ *   · 78 blocks for components the app does not render: the .im-* invest modal,
+ *     .ov-txn, .ov-inv, .igs-* and .invest-guide-strip. Confirmed against the
+ *     built www/, not assumed — a class counts as used if it or a BEM ancestor
+ *     of it appears there, because the app builds modifiers by interpolation
+ *     (`txn-card__status--${status}` never appears literally anywhere).
+ *
+ * Load order matters: this file comes after the four shared sheets and before
+ * mobile-app.css, which is where its rules sat before. Adding a rule here is
+ * fine. Adding a copy of a shared stylesheet to mobile/src/css/ is what this
+ * change undid — scripts/check-mobile-css-fork.cjs fails the build if one
+ * comes back.
+ */
+
+/* ── Tokens ────────────────────────────────────────────────────────────
+   Tighter radii than the web. A 28px corner on a 390px-wide card reads as a
+   pill; the app steps every radius down one notch.
+   ───────────────────────────────────────────────────────────────────── */
+:root {
+  --purple-bg: rgba(237,165,255,0.12);
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+}
+body {
+  overflow-x: hidden;
+}
+
+/* ── Density ───────────────────────────────────────────────────────────
+   Type and controls are a notch smaller than the web everywhere the app shows
+   the same component on a phone-width screen. Each of these was measured
+   against an overflowing element, not chosen for taste.
+   ───────────────────────────────────────────────────────────────────── */
+.nav-item .nav-badge {
+  font-size: 0.65rem;
+}
+.sidebar-user__info .user-role {
+  font-size: 0.68rem;
+}
+.topbar-btn {
+  width: 36px !important;
+  height: 36px !important;
+}
+.badge--purple {
+  border: 1px solid rgba(237,165,255,0.25);
+}
+.modal__close {
+  width: 30px !important;
+  height: 30px !important;
+}
+
+/* ── Hero and wallet surfaces ──────────────────────────────────────────
+   The app runs a darker, warmer hero than the web portal. Kept deliberately:
+   the web card is lighter because it sits on a page with a sidebar and more
+   surrounding chrome.
+   ───────────────────────────────────────────────────────────────────── */
+.portfolio-hero {
+  background: linear-gradient(140deg, #1a0c04 0%, #0e0702 55%, #060301 100%) !important;
+  border: 1px solid rgba(255,140,20,0.14) !important;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.32), inset 0 1px 0 rgba(254,194,79,0.08) !important;
+}
+.portfolio-hero::before {
+  top: -60px;
+  right: -30px !important;
+  width: 340px;
+  height: 340px !important;
+  background: radial-gradient(circle, rgba(254,194,79,0.22) 0%, rgba(255,100,0,0.06) 45%, transparent 68%) !important;
+}
+.ph-stat__label {
+  font-size: 0.68rem;
+}
+
+/* ── Transaction cards — mobile only ───────────────────────────────────
+   The web portal renders transactions as a table; the app renders a card list.
+   mobile/src/js/portal.js is the only thing that emits .txn-card, so these
+   rules have no counterpart in portal/css/.
+   ───────────────────────────────────────────────────────────────────── */
+.txn-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.txn-card:last-child {
+  border-bottom: none;
+}
+.txn-card__icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+.txn-card__main {
+  flex: 1;
+  min-width: 0;
+}
+.txn-card__title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--white);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.txn-card__meta {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.txn-card__right {
+  flex-shrink: 0;
+  text-align: right;
+  padding-right: 4px;
+}
+.txn-card__amount {
+  font-size: 0.88rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.txn-card__status {
+  font-size: 0.68rem;
+  margin-top: 2px;
+  text-transform: capitalize;
+}
+.txn-card__status--completed {
+  color: #16a34a;
+}
+.txn-card__status--pending {
+  color: #d97706;
+}
+.txn-card__status--rejected, .txn-card__status--failed {
+  color: #dc2626;
+}
+.txn-summary__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.txn-summary__icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+.txn-summary__label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+.txn-summary__value {
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+.txn-summary__divider {
+  width: 1px;
+  background: var(--border);
+  align-self: stretch;
+  margin: 0 4px;
+}
+
+/* ── Dark-surface pass ─────────────────────────────────────────────────
+   Higher-specificity re-statements that beat the shared dark treatment. The
+   app is a notch denser and its shadows a notch tighter than the web.
+   ───────────────────────────────────────────────────────────────────── */
+html body .portfolio-hero {
+  background: linear-gradient(165deg, #20232e 0%, #15171f 48%, #0d0e14 100%) !important;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.40) !important;
+}
+html body .wallet-card {
+  background: linear-gradient(165deg, #20232e 0%, #15171f 48%, #0d0e14 100%) !important;
+}
+html body .my-inv-card {
+  box-shadow: 0 2px 16px rgba(0,0,0,0.40) !important;
+  padding: 16px 18px !important;
+}
+html body .my-inv-card:hover {
+  box-shadow: 0 6px 32px rgba(0,0,0,0.55) !important;
+}
+html body .my-inv-card__name {
+  font-size: 0.92rem !important;
+}
+html body .my-inv-card__partner {
+  font-size: 0.70rem !important;
+}
+html body .my-inv-progress__label span {
+  font-size: 0.66rem !important;
+}
+html body .my-inv-card__stats {
+  gap: 7px !important;
+}
+html body .my-inv-card .mic-stat {
+  padding: 10px 10px !important;
+}
+html body .my-inv-card .mic-stat__label {
+  font-size: 0.56rem !important;
+}
+html body .my-inv-card .mic-stat__value {
+  font-size: 0.86rem !important;
+}
+
+/* ── Statement screen — mobile only ────────────────────────────────────
+   The statement view is laid out for a desktop two-column grid. These rules
+   fold it into one column and shrink the date pickers so the row fits a phone.
+   They match on inline styles because the markup carries them inline.
+   ───────────────────────────────────────────────────────────────────── */
+html body #view-statement {
+  padding-left: 4px !important;
+  padding-right: 4px !important;
+  overflow: hidden !important;
+}
+html body #view-statement > div[style*="340px"] {
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  gap: 16px !important;
+}
+html body #view-statement > div[style*="340px"] > div {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  min-width: 0 !important;
+}
+html body #view-statement > div[style*="340px"] > div:first-child > div[style*="padding:24px"] {
+  padding: 16px !important;
+}
+html body #view-statement div[style*="gap:14px"] {
+  display: flex !important;
+  flex-direction: row !important;
+  gap: 12px !important;
+  justify-content: center !important;
+  width: auto !important;
+}
+html body #view-statement div[style*="gap:8px"] {
+  width: 100% !important;
+  box-sizing: border-box !important;
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+}
+html body #view-statement div[style*="gap:10px"][style*="display:flex"] {
+  flex-wrap: wrap !important;
+}
+html body #view-statement div[style*="gap:14px"] > div {
+  flex: 0 0 auto !important;
+  width: 130px !important;
+}
+html body #view-statement div[style*="gap:8px"] > label {
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+html body #view-statement div[style*="gap:8px"] > label span {
+  font-size: 0.75rem !important;
+  white-space: normal !important;
+  word-break: break-word !important;
+}
+html body #view-statement #stmtFrom, html body #view-statement #stmtTo {
+  width: 130px !important;
+  box-sizing: border-box !important;
+  display: block !important;
+  padding: 4px 8px !important;
+  font-size: 0.72rem !important;
+  height: 30px !important;
+  margin: 0 !important;
+}
+html body #view-statement > div[style*="340px"] > div:first-child {
+  overflow: visible !important;
+}
+html body #view-statement #stmtCurrency {
+  width: 100% !important;
+  box-sizing: border-box !important;
+  padding: 4px 8px !important;
+  font-size: 0.72rem !important;
+  height: 30px !important;
+}
+
+/* ── Sub-account modal — mobile only ───────────────────────────────────
+   Centres and caps the create-sub-account modal so it does not run off the
+   bottom of a short screen.
+   ───────────────────────────────────────────────────────────────────── */
+#createSaModal.modal-overlay {
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 20px 16px !important;
+}
+#createSaModal .modal {
+  width: 100% !important;
+  max-width: 480px !important;
+  max-height: 88vh !important;
+  border-radius: 20px !important;
+  margin: auto !important;
+}
+#createSaModal .modal__header::before {
+  display: none !important;
+}
+#createSaModal .modal__body {
+  padding-bottom: 16px !important;
+}
+#createSaModal .modal__footer {
+  padding-bottom: 16px !important;
+}
+
+/* ── Transaction filter pills — mobile only ────────────────────────────
+   A horizontally scrolling pill row, with the scrollbar hidden. No web
+   counterpart: the portal filters from a select.
+   ───────────────────────────────────────────────────────────────────── */
+.txn-filter-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: 12px;
+  scrollbar-width: none;
+}
+.txn-filter-scroll::-webkit-scrollbar {
+  display: none;
+}
+.txn-filter-pills {
+  display: flex;
+  gap: 8px;
+  padding-bottom: 2px;
+  width: max-content;
+}
+.txn-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  font-family: inherit;
+  line-height: 1;
+}
+.txn-pill:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+.txn-pill.active {
+  background: var(--gold);
+  color: #1a1a1a;
+  border-color: var(--gold);
+}
+
+/* ── Overview investment cards — mobile only ───────────────────────────
+   Same story as .txn-card — the overview lists holdings as cards in the app
+   and as a table on the web.
+   ───────────────────────────────────────────────────────────────────── */
+.ov-inv-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.ov-inv-card:last-child {
+  border-bottom: none;
+}
+.ov-inv-card__icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 1.05rem;
+}
+.ov-inv-card__main {
+  flex: 1;
+  min-width: 0;
+}
+.ov-inv-card__name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--white);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ov-inv-card__meta {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+.ov-inv-card__right {
+  flex-shrink: 0;
+  text-align: right;
+}
+.ov-inv-card__amount {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--gold);
+}
+.ov-inv-card__days {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+
+/* ── Product detail — mobile only ──────────────────────────────────────
+   ───────────────────────────────────────────────────────────────────── */
+.prod-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  align-items: start;
+}
+
+/* ── Product detail — mobile only ──────────────────────────────────────
+   ───────────────────────────────────────────────────────────────────── */
+@media (min-width: 520px) {
+  .prod-detail-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.txn-list {
+  padding: 0;
+}
+
+/* ── Odds and ends ─────────────────────────────────────────────────────
+   Single-declaration deviations, each one a measured fix for a phone-width
+   screen.
+   ───────────────────────────────────────────────────────────────────── */
+.mps__label {
+  font-size: 0.6rem !important;
+}
+.maturity-card {
+  border-radius: 14px !important;
+  transition: transform 0.22s ease, box-shadow 0.22s ease !important;
+}
+.stat-card--purple::after {
+  background: linear-gradient(90deg, #eda5ff, #eda5ff);
+}
+.maturity-card:hover {
+  transform: translateX(4px) !important;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.09) !important;
+}
+.faq-quick-q.open i {
+  transform: rotate(180deg);
+  color: var(--ci-orange, #fec24f);
+}
+.faq-quick-a.open {
+  display: block;
+  animation: viewFadeIn 0.2s ease;
+}
+.level-step__reward {
+  font-size: 0.6rem;
+}
+.learn-tab-recommended {
+  font-size: 0.6rem;
+}
+.tour-prev-btn {
+  width: 34px;
+  height: 34px;
+}
+.portfolio-hero::after {
+  bottom: -80px;
+  left: -30px !important;
+  width: 260px;
+  height: 260px !important;
+  background: radial-gradient(circle, rgba(180,80,0,0.08) 0%, transparent 68%) !important;
+}
+.minor-btn--transfer {
+  background: linear-gradient(135deg,#1d4ed8,#3b82f6);
+  color: #fff;
+}
+.minor-actions--4 {
+  grid-template-columns: repeat(2,1fr);
+}
+.mbn-item {
+  font-size: 0.6rem;
+}
+@media (max-width: 768px) {
+  .main-content {
+    padding-bottom: 70px !important;
+  }
+}
+.mpc2-badge {
+  font-size: 0.62rem;
+}
+.mpc2-metric__lbl {
+  font-size: 0.62rem;
+}
+.mpc2-progress__labels {
+  font-size: 0.68rem;
+}
+.mpc2-fs-btn {
+  width: 40px;
+  height: 40px;
+}
+.fs-current-tag {
+  font-size: 0.6rem;
+}
+
+/* ── Sign out ───────────────────────────────────────────────────────────
+   The shared sheet hides the topbar's secondary buttons below 768px, on the
+   grounds that the sidebar carries a sign-out button. The web portal's sidebar
+   does. The app's does not — its sidebar-user block is name and account number
+   only — so the topbar button is the one place a client can sign out, and the
+   command palette entry behind it needs a keyboard to reach.
+   ───────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .topbar__actions .btn--secondary.btn--sm {
+    display: inline-flex !important;
+  }
+}
