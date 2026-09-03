@@ -74,6 +74,12 @@ async function makeDatabase() {
   const q = console.log; console.log = () => {};
   try { await require(path.join(ROOT, 'server', 'db', 'setup.js'))(); } finally { console.log = q; }
   pool = new Pool({ connectionString: url, ssl: SSL, max: 2 });
+  /* The teardown drops this database WITH (FORCE), which terminates whatever
+     is still connected to it. pg reports that as an 'error' event on the pool,
+     and a pool with no listener for one takes the process down — so a check
+     that passed every assertion exits non-zero, at random, with a stack that
+     names pg and not the drop. The termination is expected. The crash is not. */
+  pool.on('error', () => {});
 }
 
 /* One pool still raising, one that closed a month ago, one already matured.

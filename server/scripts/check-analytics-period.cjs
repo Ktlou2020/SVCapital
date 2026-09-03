@@ -38,6 +38,13 @@ const { execFileSync } = require('child_process');
 const { Pool } = require('pg');
 
 const ROOT = path.join(__dirname, '..', '..');
+/* The one definition of income, from the same helper the route calls. This
+   check used to hand-write `type IN ('return','payout')` — the definition the
+   route carried before a payout was found to be capital coming back plus the
+   return on it. The route was fixed and this was not, so the check went on
+   asserting the old answer: it would have passed just as happily if the route
+   had regressed. Reaching for the helper is what stops that happening twice. */
+const { incomeTypesSQL } = require(path.join(ROOT, 'server', 'services', 'ledger.js'));
 const CHROME = ['/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
                 '/opt/pw-browsers/chromium/chrome-linux/chrome'].find(p => fs.existsSync(p));
 const pool = new Pool({
@@ -108,7 +115,12 @@ async function seed() {
      ('P-D','P-IN','deposit',    1000,'completed','PD',  NOW() - INTERVAL '5 days',  NOW()),
      ('P-W','P-IN','withdrawal', -250,'completed','PW',  NOW() - INTERVAL '3 days',  NOW()),
      ('P-F','P-IN','fee',      -12.50,'completed','PF',  NOW() - INTERVAL '2 days',  NOW()),
+     /* A payout is the client's capital coming back PLUS the return on it, so
+        it is cash, not income. It sits inside the window on purpose: the
+        figure below is right only if this row is left out of it. */
      ('P-R','P-IN','payout',      300,'completed','PR',  NOW() - INTERVAL '4 days',  NOW()),
+     ('P-RET','P-IN','return',    180,'completed','PRT', NOW() - INTERVAL '4 days',  NOW()),
+     ('P-INT','P-IN','interest',   20,'completed','PIN', NOW() - INTERVAL '4 days',  NOW()),
      ('P-PD','P-PRI','deposit',   400,'completed','PPD', NOW() - INTERVAL '40 days', NOW()),
      ('P-OD','P-OLD','deposit',  9999,'completed','POD', NOW() - INTERVAL '400 days',NOW()),
      ('P-PEND','P-IN','deposit', 5555,'pending',  'PPE', NOW() - INTERVAL '1 days',  NOW())`);
@@ -139,7 +151,7 @@ async function seed() {
                    WHERE status='completed' AND type IN ('fee','platform_fee')
                      AND ${when} >= ${a} AND ${when} < ${b}),0) AS revenue,
         COALESCE((SELECT SUM(ABS(amount)) FROM transactions
-                   WHERE status='completed' AND type IN ('return','payout')
+                   WHERE status='completed' AND type IN (${incomeTypesSQL()})
                      AND ${when} >= ${a} AND ${when} < ${b}),0) AS returns_paid,
         (SELECT COUNT(*) FROM investors
           WHERE COALESCE(date_joined,created_at) >= ${a}
@@ -150,7 +162,8 @@ async function seed() {
     console.log('\nthe window includes what moved inside it');
     eqN('net deposits net the withdrawal off', cur.net_deposits, 1000 - 250);
     eqN('a fee stored negative counts as revenue', cur.revenue, 12.5);
-    eqN('a payout counts as a return paid', cur.returns_paid, 300);
+    eqN('"Returns Paid" is the return and the interest, and not the payout',
+        cur.returns_paid, 180 + 20);
     eqN('one investor joined inside the window', cur.new_investors, 1);
 
     console.log('\nand excludes what did not');
@@ -205,11 +218,23 @@ ${fns}
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'svc-period-'));
       const file = path.join(dir, 'p.html');
       fs.writeFileSync(file, page);
-      const dom = execFileSync(CHROME, ['--headless', '--disable-gpu', '--no-sandbox',
-        '--virtual-time-budget=4000', '--dump-dom', 'file://' + file],
-        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+      /* 4000ms of virtual time was enough on an idle machine and not enough on
+         a busy one: this failed once in a shuffled run and passed on the same
+         seed immediately after, which is a browser that ran out of budget, not
+         a panel that stopped working. A larger budget costs nothing when the
+         page settles early — virtual time skips ahead — and the real timeout
+         below is what stops a wedged browser. */
+      let dom = '';
+      try {
+        dom = execFileSync(CHROME, ['--headless', '--disable-gpu', '--no-sandbox',
+          '--virtual-time-budget=15000', '--dump-dom', 'file://' + file],
+          { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 60000 });
+      } catch (err) { dom = (err.stdout || '').toString(); }
       const m = dom.match(/<title>RESULTS(.*?)<\/title>/s);
-      if (!m) { ok('the panel reported results', false); }
+      /* Say what came back. A bare false here sent the last reader looking at
+         the panel code, which was fine. */
+      if (!m) { ok('the panel reported results', false,
+                   'no RESULTS title; DOM ended: ' + dom.trim().slice(-300)); }
       else {
         const decode = s => s.replace(/&quot;/g, '"').replace(/&amp;/g, '&')
                              .replace(/&lt;/g, '<').replace(/&gt;/g, '>');

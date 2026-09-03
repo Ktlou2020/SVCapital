@@ -142,9 +142,14 @@ if (!CHROME) {
 
 /* ── 2. The product metric row ─────────────────────────────────────────── */
 console.log('\nthe product metric row');
-for (const rel of ['portal/css/portal-premium.css', 'mobile/src/css/portal-premium.css']) {
+/* One sheet, asserted once. This used to run twice — against the web stylesheet
+   and against mobile/src/css/portal-premium.css, the app's forked copy of it —
+   because a fix had to be written into both or the app would not get it. The
+   copy is gone and the app loads this file, so a second pass would now assert
+   the same bytes twice and say nothing. */
+for (const rel of ['portal/css/portal-premium.css']) {
   const css = fs.readFileSync(path.join(ROOT, rel), 'utf8');
-  const label = rel.startsWith('portal/') ? 'web' : 'app';
+  const label = 'web and app';
 
   ok(`${label}: metrics can shrink below their content width`,
      /\.mpc2-metric\s*\{[^}]*min-width:0/.test(css),

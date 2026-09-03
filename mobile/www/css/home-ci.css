@@ -34,7 +34,7 @@
 
 /* ── Scrollbar ─────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 7px; }
-::-webkit-scrollbar-track { background: #0d1117; }
+::-webkit-scrollbar-track { background: #1a1a1a; }
 ::-webkit-scrollbar-thumb { background: rgba(255,130,21,0.30); border-radius: 6px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--ci-orange); }
 
@@ -394,8 +394,11 @@ input[type="range"] { accent-color: var(--ci-orange) !important; }
 .testimonial-stars   { color: var(--ci-orange) !important; }
 .testimonial-text    { color: var(--ci-text-muted) !important; }
 .testimonial-author-name { color: var(--ci-text) !important; }
+.testimonial-author strong { color: var(--ci-text) !important; }
+.testimonial-author span, .testimonial-verified { color: var(--ci-text-muted) !important; }
 .testimonial-product { color: var(--ci-orange) !important; }
 .testimonial-return  { color: var(--ci-green) !important; }
+.testimonial-card p  { color: var(--ci-text-body) !important; }
 
 /* ═══════════════════════════════════════════════════════════════
    FAQ — white background
@@ -415,37 +418,52 @@ input[type="range"] { accent-color: var(--ci-orange) !important; }
 .faq-item {
   background: #fff !important;
   border: 1px solid var(--ci-border) !important;
+  overflow: hidden !important;
 }
 .faq-item.open { border-color: var(--ci-orange-border) !important; }
-.faq-question { color: var(--ci-text) !important; }
+.faq-question { color: var(--ci-text) !important; cursor: pointer !important; }
 .faq-question:hover { color: var(--ci-orange) !important; }
-.faq-question i { color: var(--ci-orange) !important; }
+.faq-question i { color: var(--ci-orange) !important; pointer-events: none; }
 .faq-answer {
   color: var(--ci-text-muted) !important;
   background: var(--ci-section-bg) !important;
+  overflow: hidden !important;
 }
+.faq-item.open .faq-answer { max-height: 600px !important; padding: 0 24px 20px !important; }
 .faq-answer a { color: var(--ci-orange) !important; }
 
 /* ═══════════════════════════════════════════════════════════════
-   FINAL CTA — dark (hero-style brand moment)
+   FINAL CTA — light, matches the rest of the home page
    ═══════════════════════════════════════════════════════════════ */
 .final-cta {
-  background: linear-gradient(135deg, #1a3a4a 0%, #0d2535 100%) !important;
+  background: var(--ci-section-bg) !important;
+  border-top: 1px solid var(--ci-border) !important;
 }
-.final-cta-orb { background: radial-gradient(circle, rgba(255,130,21,0.10) 0%, transparent 70%) !important; }
+.final-cta-orb { background: radial-gradient(circle, rgba(255,130,21,0.08) 0%, transparent 70%) !important; }
 .final-cta__badge {
-  background: rgba(255,130,21,0.12) !important;
-  border-color: rgba(255,130,21,0.28) !important;
-  color: var(--ci-orange-light) !important;
+  background: var(--ci-orange-pale) !important;
+  border-color: var(--ci-orange-border) !important;
+  color: var(--ci-orange-dark) !important;
 }
-.final-cta h2 em { color: var(--ci-orange-light) !important; }
-.final-cta-trust i { color: var(--ci-orange-light) !important; }
-.final-cta-trust span { color: rgba(255,255,255,0.65) !important; }
+.final-cta h2 { color: var(--ci-text) !important; }
+.final-cta h2 em { color: var(--ci-orange-dark) !important; }
+.final-cta p { color: var(--ci-text-muted) !important; }
+.final-cta .btn--outline-light {
+  color: var(--ci-text) !important;
+  border-color: var(--ci-border) !important;
+  background: transparent !important;
+}
+.final-cta .btn--outline-light:hover {
+  border-color: var(--ci-orange) !important;
+  color: var(--ci-orange) !important;
+}
+.final-cta-trust i { color: var(--ci-orange) !important; }
+.final-cta-trust span { color: var(--ci-text-muted) !important; }
 
 /* ═══════════════════════════════════════════════════════════════
    FOOTER — dark with CI orange accents
    ═══════════════════════════════════════════════════════════════ */
-.footer { background: #0a0e15 !important; }
+.footer { background: #1a1a1a !important; }
 .footer-logo .logo-sv { color: var(--ci-orange) !important; }
 .footer-logo .logo-capital { color: #fff !important; }
 .footer-desc { color: rgba(255,255,255,0.50) !important; }
@@ -494,7 +512,7 @@ input[type="range"] { accent-color: var(--ci-orange) !important; }
    ═══════════════════════════════════════════════════════════════ */
 .author-avatar {
   background: linear-gradient(135deg, #fec24f, #FF5229) !important;
-  color: #fff !important;
+  color: #1a1a1a !important;
 }
 
 /* ═══════════════════════════════════════════════════════════════

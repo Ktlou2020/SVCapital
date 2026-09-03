@@ -3738,8 +3738,12 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
   /* ── Topbar: hide topbar search (keyboard takes space) ── */
   .topbar__search { display: none !important; }
 
-  /* ── Topbar actions: keep only essential buttons ── */
-  .topbar-btn:not(#sidebarToggleBtn):not(.notif-btn):not(.dark-mode-btn) {
+  /* ── Topbar actions: keep only essential buttons ──
+     #notifBtn, not .notif-btn: the notification button has never carried that
+     class in either markup, so the exclusion matched nothing and this rule hid
+     the bell it was written to keep. It went unnoticed because the app was
+     loading its own copy of this file, from before the rule existed. */
+  .topbar-btn:not(#sidebarToggleBtn):not(#notifBtn):not(.dark-mode-btn) {
     display: none !important;
   }
 

@@ -89,6 +89,12 @@ async function makeDatabase() {
   /* Left pointing at the new database: the route module under test resolves
      db/pool at require time too, and it must reach the same place. */
   pool = new Pool({ connectionString: url, ssl: SSL, max: 2 });
+  /* The teardown drops this database WITH (FORCE), which terminates whatever
+     is still connected to it. pg reports that as an 'error' event on the pool,
+     and a pool with no listener for one takes the process down — so a check
+     that passed every assertion exits non-zero, at random, with a stack that
+     names pg and not the drop. The termination is expected. The crash is not. */
+  pool.on('error', () => {});
   return original;
 }
 

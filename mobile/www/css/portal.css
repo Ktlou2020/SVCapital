@@ -4,8 +4,8 @@
 
 /* ─── Portfolio Hero ─── */
 .portfolio-hero {
-  background: linear-gradient(135deg, #707070 0%, #565656 100%);
-  border: 1px solid rgba(255,255,255,0.12);
+  background: linear-gradient(135deg, var(--dark-3) 0%, var(--dark-4) 100%);
+  border: 1px solid var(--border-gold);
   border-radius: var(--radius-xl);
   padding: 28px;
   display: grid;
@@ -21,7 +21,7 @@
   position: absolute;
   top: -60px; right: -60px;
   width: 200px; height: 200px;
-  background: radial-gradient(circle, rgba(254,194,79,0.10), transparent 70%);
+  background: radial-gradient(circle, rgba(254,194,79,0.12), transparent 70%);
   border-radius: 50%;
   pointer-events: none;
 }
@@ -76,13 +76,13 @@
 }
 
 .ph-stat { display: flex; flex-direction: column; gap: 2px; }
-.ph-stat__label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); font-weight: 700; }
+.ph-stat__label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); font-weight: 700; }
 .ph-stat__value { font-size: 1rem; font-weight: 800; color: var(--white); }
 
 /* ─── Wallet Card ─── */
 .wallet-card {
-  background: linear-gradient(135deg, #1a2640 0%, #0d1829 100%);
-  border: 1px solid var(--border-gold);
+  background: linear-gradient(135deg, #eda5ff 0%, #c870e8 100%);
+  border: 1px solid rgba(237,165,255,0.4);
   border-radius: var(--radius-xl);
   padding: 28px;
   position: relative;
@@ -94,7 +94,7 @@
   position: absolute;
   bottom: -40px; right: -40px;
   width: 180px; height: 180px;
-  background: radial-gradient(circle, rgba(254,194,79,0.1), transparent 70%);
+  background: radial-gradient(circle, rgba(255,255,255,0.18), transparent 70%);
   border-radius: 50%;
   pointer-events: none;
 }
@@ -194,7 +194,7 @@
 }
 
 .inv-stat__label {
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--text-dim);
@@ -284,10 +284,10 @@
 .tx-item:last-child { border-bottom: none; }
 
 .tx-icon {
-  width: 44px; height: 44px;
+  width: 38px; height: 38px;
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  font-size: 1.1rem;
+  font-size: 1rem;
   flex-shrink: 0;
 }
 
@@ -322,190 +322,6 @@
 .tx-amount.positive { color: var(--green); }
 .tx-amount.negative { color: #ef4444; }
 .tx-amount.neutral { color: var(--white); }
-
-/* ─── Overview Transaction List (ov-txn) ─── */
-.ov-txn {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
-}
-.ov-txn:last-child { border-bottom: none; }
-
-.ov-txn__icon {
-  width: 44px; height: 44px;
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 1.1rem;
-  flex-shrink: 0;
-}
-
-.ov-txn__main { flex: 1; min-width: 0; }
-
-.ov-txn__label {
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--white);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.ov-txn__date {
-  font-size: 0.74rem;
-  color: var(--text-muted);
-  margin-top: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.ov-txn__amount {
-  font-size: 0.88rem;
-  font-weight: 700;
-  white-space: nowrap;
-  flex-shrink: 0;
-  padding-right: 4px;
-}
-
-/* ─── Overview Investment List (ov-inv) ─── */
-.ov-inv {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
-}
-.ov-inv:last-child { border-bottom: none; }
-
-.ov-inv__icon {
-  width: 44px; height: 44px;
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 1.1rem;
-  flex-shrink: 0;
-}
-
-.ov-inv__main { flex: 1; min-width: 0; }
-
-.ov-inv__name {
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--white);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.ov-inv__sub {
-  font-size: 0.74rem;
-  color: var(--text-muted);
-  margin-top: 2px;
-}
-
-.ov-inv__bar {
-  height: 3px;
-  background: var(--border);
-  border-radius: 2px;
-  margin-top: 5px;
-}
-.ov-inv__bar-fill {
-  height: 100%;
-  background: var(--gold);
-  border-radius: 2px;
-}
-
-.ov-inv__right { flex-shrink: 0; text-align: right; padding-right: 4px; }
-
-.ov-inv__amount {
-  font-size: 0.88rem;
-  font-weight: 700;
-  color: var(--white);
-  white-space: nowrap;
-}
-
-/* ─── Transaction Cards (Transactions view) ─── */
-.txn-month {
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 14px 0 6px;
-}
-
-.txn-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
-}
-.txn-card:last-child { border-bottom: none; }
-
-.txn-card__icon {
-  width: 44px; height: 44px;
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 1.1rem;
-  flex-shrink: 0;
-}
-
-.txn-card__main { flex: 1; min-width: 0; }
-
-.txn-card__title {
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--white);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.txn-card__meta {
-  font-size: 0.74rem;
-  color: var(--text-muted);
-  margin-top: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.txn-card__right {
-  flex-shrink: 0;
-  text-align: right;
-  padding-right: 4px;
-}
-
-.txn-card__amount {
-  font-size: 0.88rem;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.txn-card__status {
-  font-size: 0.68rem;
-  margin-top: 2px;
-  text-transform: capitalize;
-}
-.txn-card__status--completed { color: #16a34a; }
-.txn-card__status--pending   { color: #d97706; }
-.txn-card__status--rejected,
-.txn-card__status--failed    { color: #dc2626; }
-
-/* Transaction summary strip */
-.txn-summary__item { display: flex; align-items: center; gap: 10px; }
-.txn-summary__icon {
-  width: 32px; height: 32px;
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 0.8rem;
-  flex-shrink: 0;
-}
-.txn-summary__label { font-size: 0.72rem; color: var(--text-muted); }
-.txn-summary__value { font-size: 0.9rem; font-weight: 700; }
-.txn-summary__divider { width: 1px; background: var(--border); align-self: stretch; margin: 0 4px; }
 
 /* ─── KYC Banner ─── */
 .kyc-banner {
@@ -900,6 +716,13 @@
 }
 
 /* ─── CI override: dark backgrounds for key cards ─── */
+/* These rules ensure portal-premium.css can apply its !important overrides cleanly */
+
+/* Allow portal-premium.css to override .portfolio-hero with its dark gradient */
+/* (its rules already carry !important so no extra specificity needed here) */
+
+/* Wallet-card base colour: allow portal-premium.css §override to win */
+/* portal-premium.css line ~2320 sets the dark navy gradient with !important */
 
 /* ─── Stat cards / metric tiles ─── */
 .stat-card {
@@ -1061,6 +884,71 @@
   background: rgba(254,194,79,0.1);
   color: var(--gold);
 }
+
+/* ─── Learning Quiz ─── */
+.learn-quiz-section { margin-top: 20px; }
+.learn-quiz-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--gold);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.learn-quiz-q { margin-bottom: 18px; }
+.learn-quiz-q__text {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+.learn-quiz-opts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.learn-quiz-opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--dark-3);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.88rem;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+  font-family: inherit;
+  width: 100%;
+}
+.learn-quiz-opt:hover { border-color: rgba(254,194,79,0.5); background: rgba(254,194,79,0.06); }
+.learn-quiz-opt__letter {
+  font-weight: 800;
+  font-size: 0.78rem;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--dark-4);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.learn-quiz-opt--selected {
+  border-color: var(--gold) !important;
+  background: rgba(254,194,79,0.1) !important;
+}
+.learn-quiz-opt--selected .learn-quiz-opt__letter {
+  background: var(--gold);
+  color: #1a1a1a;
+}
+.learn-quiz-opt--correct { border-color: #22c55e !important; background: rgba(34,197,94,0.1) !important; }
+.learn-quiz-opt--wrong   { border-color: #ef4444 !important; background: rgba(239,68,68,0.1) !important; }
+.learn-quiz-submit-btn { margin-top: 16px; width: 100%; }
 
 /* ─── Investment Opportunity Cards ─── */
 .opp-card {
@@ -1480,6 +1368,7 @@
 }
 
 /* ─── Mobile-specific tweaks ─── */
+/* Applied when portal is embedded in the Cordova/Capacitor WebView */
 @media (max-width: 640px) {
   .portfolio-hero {
     grid-template-columns: 1fr;
@@ -1660,12 +1549,19 @@
 /* ─── Responsive select fix (prevents overflow on small screens) ─── */
 select option { background: #1a1a2e; color: #fff; }
 
+/* ─── CI override section ─── */
+/* Wallet card CI: override the purple base above to match portal-premium.css dark treatment */
+/* (portal-premium.css §2320 already sets the dark navy with !important; this comment is a marker) */
+
 /* Withdraw amount presets */
 .withdraw-amount-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 10px;
   margin-bottom: 16px;
+}
+@media (max-width: 640px) {
+  .withdraw-amount-grid { grid-template-columns: 1fr 1fr; }
 }
 
 /* ─── Notification badge ─── */
@@ -1678,7 +1574,7 @@ select option { background: #1a1a2e; color: #fff; }
   padding: 0 5px;
   background: #ef4444;
   color: #fff;
-  font-size: 0.65rem;
+  font-size: 0.72rem;
   font-weight: 700;
   border-radius: 100px;
   line-height: 1;
@@ -1827,8 +1723,10 @@ select option { background: #1a1a2e; color: #fff; }
 }
 
 /* ─── SV Mobile App special overrides for portal embed ─── */
+/* These fix rendering issues specific to the Cordova WebView on iOS/Android */
 
 .cordova-fix-select select {
+  /* prevents iOS from rounding selects differently */
   -webkit-border-radius: 8px;
   border-radius: 8px;
 }
@@ -1959,6 +1857,10 @@ select option { background: #1a1a2e; color: #fff; }
   color: var(--green);
   font-weight: 600;
 }
+
+/* ─── Wallet Card CI override (fund sources counter) ─── */
+/* Ensures the purple default base is suppressed in environments
+   where portal-premium.css !important dark override wins */
 
 /* ─── Dropdown menu (context menus) ─── */
 .dropdown-menu {
@@ -2160,14 +2062,14 @@ select option { background: #1a1a2e; color: #fff; }
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   Portfolio hero + wallet card — match mobile sidebar colour
+   Portfolio hero + wallet card — match sidebar colour (#1a1a1a→#141414)
    html+body prefix raises specificity to (0,1,2) — beats every
-   (0,1,0) !important rule in mobile-app.css
+   (0,1,0) !important rule in portal-premium.css
    ═══════════════════════════════════════════════════════════════ */
 html body .portfolio-hero {
-  background: linear-gradient(165deg, #20232e 0%, #15171f 48%, #0d0e14 100%) !important;
+  background: linear-gradient(180deg, #1a1a1a 0%, #141414 100%) !important;
   border: 1px solid rgba(255,255,255,0.08) !important;
-  box-shadow: 0 12px 40px rgba(0,0,0,0.40) !important;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.40), inset 0 1px 0 rgba(255,255,255,0.06) !important;
 }
 html body .portfolio-hero::before {
   background: radial-gradient(circle, rgba(255,255,255,0.06) 0%, transparent 68%) !important;
@@ -2176,10 +2078,10 @@ html body .portfolio-hero::after {
   background: radial-gradient(circle, rgba(255,255,255,0.04) 0%, transparent 68%) !important;
 }
 html body .portfolio-hero__value {
-  -webkit-text-fill-color: #ffffff !important;
   background: none !important;
-  background-clip: unset !important;
   -webkit-background-clip: unset !important;
+  background-clip: unset !important;
+  -webkit-text-fill-color: #ffffff !important;
   color: #ffffff !important;
 }
 html body .portfolio-hero__label { color: rgba(255,255,255,0.55) !important; }
@@ -2187,16 +2089,20 @@ html body .ph-stat {
   background: rgba(255,255,255,0.07) !important;
   border: 1px solid rgba(255,255,255,0.10) !important;
 }
+html body .ph-stat:hover { background: rgba(255,255,255,0.12) !important; }
 html body .ph-stat__label { color: rgba(255,255,255,0.50) !important; }
-html body .ph-stat__value { color: #ffffff !important; -webkit-text-fill-color: #ffffff !important; }
+html body .ph-stat__value {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
 html body .ph-stat__value.text-green { color: #4ade80 !important; -webkit-text-fill-color: #4ade80 !important; }
 html body .wallet-card {
-  background: linear-gradient(165deg, #20232e 0%, #15171f 48%, #0d0e14 100%) !important;
+  background: linear-gradient(180deg, #1a1a1a 0%, #141414 100%) !important;
   border-color: rgba(255,255,255,0.08) !important;
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   My-investments cards — world-class dark treatment (mobile)
+   My-investments cards — world-class dark treatment
    Overrides portal-premium.css §2231 white default (#ffffff)
    html body prefix → specificity (0,1,2) beats (0,1,0)
    ═══════════════════════════════════════════════════════════════ */
@@ -2204,14 +2110,14 @@ html body .my-inv-card {
   background: linear-gradient(145deg, #1e2027 0%, #16181e 100%) !important;
   border: 1px solid rgba(255,255,255,0.07) !important;
   border-radius: 18px !important;
-  box-shadow: 0 2px 16px rgba(0,0,0,0.40) !important;
-  padding: 16px 18px !important;
+  box-shadow: 0 2px 20px rgba(0,0,0,0.35) !important;
+  padding: 18px 20px !important;
   overflow: visible !important;
   transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease !important;
 }
 html body .my-inv-card:hover {
   border-color: rgba(254,194,79,0.50) !important;
-  box-shadow: 0 6px 32px rgba(0,0,0,0.55) !important;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.55), 0 0 0 1px rgba(254,194,79,0.12) !important;
   transform: translateY(-2px) !important;
 }
 html body .my-inv-card--paidout { opacity: 0.55 !important; }
@@ -2223,13 +2129,13 @@ html body .my-inv-card__header {
 }
 html body .my-inv-card__name {
   color: #ffffff !important;
-  font-size: 0.92rem !important;
+  font-size: 0.93rem !important;
   font-weight: 700 !important;
   line-height: 1.3 !important;
 }
 html body .my-inv-card__partner {
   color: rgba(255,255,255,0.32) !important;
-  font-size: 0.70rem !important;
+  font-size: 0.72rem !important;
   letter-spacing: 0.03em !important;
   margin-top: 3px !important;
 }
@@ -2241,7 +2147,7 @@ html body .my-inv-progress__label {
   margin-bottom: 8px !important;
 }
 html body .my-inv-progress__label span {
-  font-size: 0.66rem !important;
+  font-size: 0.68rem !important;
   color: rgba(255,255,255,0.42) !important;
   font-weight: 600 !important;
   text-transform: uppercase !important;
@@ -2261,14 +2167,14 @@ html body .my-inv-card .progress-fill {
 html body .my-inv-card__stats {
   display: grid !important;
   grid-template-columns: repeat(3, 1fr) !important;
-  gap: 7px !important;
+  gap: 8px !important;
   margin: 16px 0 !important;
 }
 html body .my-inv-card .mic-stat {
   background: rgba(255,255,255,0.04) !important;
   border: 1px solid rgba(255,255,255,0.06) !important;
   border-radius: 10px !important;
-  padding: 10px 10px !important;
+  padding: 11px 12px !important;
   display: flex !important;
   flex-direction: column !important;
   gap: 5px !important;
@@ -2276,7 +2182,7 @@ html body .my-inv-card .mic-stat {
 }
 html body .my-inv-card .mic-stat__label {
   display: block !important;
-  font-size: 0.56rem !important;
+  font-size: 0.58rem !important;
   text-transform: uppercase !important;
   letter-spacing: 0.08em !important;
   color: rgba(255,255,255,0.38) !important;
@@ -2287,7 +2193,7 @@ html body .my-inv-card .mic-stat__label {
 }
 html body .my-inv-card .mic-stat__value {
   display: block !important;
-  font-size: 0.86rem !important;
+  font-size: 0.90rem !important;
   font-weight: 700 !important;
   color: #ffffff !important;
   -webkit-text-fill-color: #ffffff !important;
@@ -2313,334 +2219,95 @@ html body .my-inv-card .btn--secondary:hover {
   color: #fec24f !important;
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   §C — Account Statement page — prevent overflow on mobile
-   ═══════════════════════════════════════════════════════════════ */
-html body #view-statement {
-  padding-left: 4px !important;
-  padding-right: 4px !important;
-  overflow: hidden !important;
-}
-/* Collapse the desktop 1fr/340px two-column grid to a single column */
-html body #view-statement > div[style*="340px"] {
-  display: flex !important;
-  flex-direction: column !important;
-  width: 100% !important;
-  max-width: 100% !important;
-  box-sizing: border-box !important;
-  gap: 16px !important;
-}
-/* Each panel (options card + sidebar) fills full width */
-html body #view-statement > div[style*="340px"] > div {
-  width: 100% !important;
-  max-width: 100% !important;
-  box-sizing: border-box !important;
-  min-width: 0 !important;
-}
-/* Options card inner padding — tighten on narrow screens */
-html body #view-statement > div[style*="340px"] > div:first-child > div[style*="padding:24px"] {
-  padding: 16px !important;
-}
-/* Stack the date inputs (From / To) into a single column */
-html body #view-statement div[style*="gap:14px"] {
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 10px !important;
-}
-/* Keep Include Sections as 2-column grid but constrain width */
-html body #view-statement div[style*="gap:8px"] {
-  width: 100% !important;
-  box-sizing: border-box !important;
-}
-/* Action buttons row — stack on very narrow screens */
-html body #view-statement div[style*="gap:10px"][style*="display:flex"] {
-  flex-wrap: wrap !important;
-}
-/* Date grid (gap:14px) — centred, not full-width */
-html body #view-statement div[style*="gap:14px"] {
-  display: flex !important;
-  flex-direction: row !important;
-  justify-content: center !important;
-  gap: 12px !important;
-  width: auto !important;
-}
-html body #view-statement div[style*="gap:14px"] > div {
-  flex: 0 0 auto !important;
-  width: 130px !important;
-}
-/* Include Sections grid (gap:8px) — keep as proper 2×2 grid, contained */
-html body #view-statement div[style*="gap:8px"] {
-  display: grid !important;
-  grid-template-columns: 1fr 1fr !important;
-  width: 100% !important;
-  box-sizing: border-box !important;
-}
-html body #view-statement div[style*="gap:8px"] > label {
-  min-width: 0 !important;
-  box-sizing: border-box !important;
-  overflow: hidden !important;
-}
-html body #view-statement div[style*="gap:8px"] > label span {
-  font-size: 0.75rem !important;
-  white-space: normal !important;
-  word-break: break-word !important;
-}
-/* Date inputs — constrain size and fix border clipping */
-html body #view-statement #stmtFrom,
-html body #view-statement #stmtTo {
-  width: 130px !important;
-  box-sizing: border-box !important;
-  display: block !important;
-  padding: 4px 8px !important;
-  font-size: 0.72rem !important;
-  height: 30px !important;
-  margin: 0 !important;
-}
-/* Remove overflow:hidden on the options card so input borders aren't clipped */
-html body #view-statement > div[style*="340px"] > div:first-child {
-  overflow: visible !important;
-}
-/* Currency select */
-html body #view-statement #stmtCurrency {
-  width: 100% !important;
-  box-sizing: border-box !important;
-  padding: 4px 8px !important;
-  font-size: 0.72rem !important;
-  height: 30px !important;
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   §D — Create Sub-Account modal — centred, not bottom sheet
-   ═══════════════════════════════════════════════════════════════ */
-#createSaModal.modal-overlay {
-  align-items: center !important;
-  justify-content: center !important;
-  padding: 20px 16px !important;
-}
-#createSaModal .modal {
-  width: 100% !important;
-  max-width: 480px !important;
-  max-height: 88vh !important;
-  border-radius: 20px !important;
-  margin: auto !important;
-}
-#createSaModal .modal__header::before {
-  display: none !important;
-}
-#createSaModal .modal__body {
-  padding-bottom: 16px !important;
-}
-#createSaModal .modal__footer {
-  padding-bottom: 16px !important;
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   §E — Invest guide strip (How to Invest steps)
-   Replaces conflicting 2x2-grid vs flex rules in mobile-app.css
-   ═══════════════════════════════════════════════════════════════ */
-html body .invest-guide-strip {
-  display: grid !important;
-  grid-template-columns: 1fr 1fr !important;
-  gap: 10px !important;
-  background: rgba(255,255,255,0.03) !important;
-  border: 1px solid rgba(255,255,255,0.07) !important;
-  border-radius: 16px !important;
-  padding: 12px !important;
-  box-shadow: none !important;
-  overflow: visible !important;
-  margin-bottom: 14px !important;
-}
-html body .igs-arrow {
-  display: none !important;
-}
-/* Light mode (default) */
-html body .igs-step {
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: center !important;
-  text-align: center !important;
-  gap: 6px !important;
-  background: #f4f5f7 !important;
-  border: 1px solid rgba(0,0,0,0.07) !important;
-  border-radius: 12px !important;
-  padding: 14px 10px !important;
-  min-width: 0 !important;
-  flex: unset !important;
-}
-html body .igs-num {
-  width: 26px !important;
-  height: 26px !important;
-  border-radius: 50% !important;
-  background: rgba(0,0,0,0.08) !important;
-  color: #6b7280 !important;
-  font-size: 0.72rem !important;
-  font-weight: 800 !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  flex-shrink: 0 !important;
-}
-html body .igs-icon {
-  font-size: 1.1rem !important;
-  color: #9ca3af !important;
-}
-html body .igs-text {
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: center !important;
-  gap: 2px !important;
-}
-html body .igs-text b {
-  font-size: 0.74rem !important;
-  font-weight: 700 !important;
-  color: #1a1a1a !important;
-  line-height: 1.2 !important;
-  display: block !important;
-}
-html body .igs-text span {
-  font-size: 0.62rem !important;
-  color: #9ca3af !important;
-  line-height: 1.3 !important;
-}
-/* Active step — orange highlight */
-html body .igs-step--active {
-  background: rgba(254,194,79,0.10) !important;
-  border-color: rgba(254,194,79,0.30) !important;
-}
-html body .igs-step--active .igs-num {
-  background: linear-gradient(135deg,#fec24f,#ff5229) !important;
-  color: #fff !important;
-}
-html body .igs-step--active .igs-icon {
-  color: #fec24f !important;
-}
-html body .igs-step--active .igs-text b {
-  color: #fec24f !important;
-}
-/* Dark mode overrides */
-html body.dark-mode .igs-step {
-  background: rgba(255,255,255,0.06) !important;
-  border-color: rgba(255,255,255,0.08) !important;
-}
-html body.dark-mode .igs-num {
-  background: rgba(255,255,255,0.10) !important;
-  color: rgba(255,255,255,0.50) !important;
-}
-html body.dark-mode .igs-icon {
-  color: rgba(255,255,255,0.40) !important;
-}
-html body.dark-mode .igs-text b {
-  color: rgba(255,255,255,0.85) !important;
-}
-html body.dark-mode .igs-text span {
-  color: rgba(255,255,255,0.40) !important;
-}
-html body.dark-mode .invest-guide-strip {
-  background: rgba(255,255,255,0.03) !important;
-  border-color: rgba(255,255,255,0.07) !important;
-}
-
-/* ─────────────────────────────────────────────────────────────
-   Transaction filter pills
-   ───────────────────────────────────────────────────────────── */
-.txn-filter-scroll {
+/* ── Product type filter tiles (My Investments) ──────────────────────── */
+.prod-type-filter {
+  display: flex;
+  gap: 6px;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  margin-bottom: 12px;
-  /* hide scrollbar */
   scrollbar-width: none;
+  flex: 1;
+  min-width: 0;
+  padding: 2px 0;
 }
-.txn-filter-scroll::-webkit-scrollbar { display: none; }
+.prod-type-filter::-webkit-scrollbar { display: none; }
 
-.txn-filter-pills {
+.prod-type-tile {
   display: flex;
-  gap: 8px;
-  padding-bottom: 2px;
-  width: max-content;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1.5px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.09);
+  cursor: pointer;
+  flex-shrink: 0;
+  min-width: 52px;
+  transition: background 0.15s, border-color 0.15s;
+}
+.prod-type-tile i {
+  font-size: 1rem;
+  color: rgba(255,255,255,0.65);
+  display: block;
+}
+.prod-type-tile span {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: rgba(255,255,255,0.75);
+  text-align: center;
+  line-height: 1.2;
+  display: block;
+  white-space: nowrap;
+}
+/* light mode */
+body:not(.dark-mode) .prod-type-tile {
+  background: #e9eaec;
+  border-color: rgba(0,0,0,0.18);
+}
+body:not(.dark-mode) .prod-type-tile i    { color: #4b5563; }
+body:not(.dark-mode) .prod-type-tile span { color: #1f2937; }
+.prod-type-tile.active {
+  background: rgba(254,194,79,0.15);
+  border-color: #fec24f;
+}
+.prod-type-tile.active i    { color: #fec24f; }
+.prod-type-tile.active span { color: #fec24f; }
+.prod-type-tile:hover:not(.active) {
+  background: rgba(255,255,255,0.13);
+  border-color: rgba(255,255,255,0.28);
+}
+body:not(.dark-mode) .prod-type-tile:hover:not(.active) {
+  background: #d1d5db;
+  border-color: rgba(0,0,0,0.25);
 }
 
-.txn-pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 6px 14px;
-  border-radius: 20px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
-  font-family: inherit;
-  line-height: 1;
-}
-.txn-pill:hover { border-color: var(--gold); color: var(--gold); }
-.txn-pill.active {
-  background: var(--gold);
-  color: #1a1a1a;
-  border-color: var(--gold);
+/* ── Investment card stats: 2-col on narrow mobile (beats the 3-col !important above) ── */
+@media (max-width: 640px) {
+  html body .my-inv-card__stats {
+    grid-template-columns: 1fr 1fr !important;
+  }
 }
 
 /* ─────────────────────────────────────────────────────────────
-   Investment overview cards (ov-list)
+   Reduced motion
+   Honours the viewer's OS-level setting. Animation is decorative
+   here — count-ups, view transitions, toast slide-ins, chart
+   tweens — so it is removed rather than shortened. Kept to a
+   near-zero duration rather than `none` so animationend and
+   transitionend listeners still fire and nothing waits forever.
    ───────────────────────────────────────────────────────────── */
-.ov-inv-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
-  cursor: pointer;
-  transition: background 0.1s;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
-.ov-inv-card:last-child { border-bottom: none; }
-.ov-inv-card__icon {
-  width: 42px; height: 42px;
-  border-radius: 12px;
-  display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
-  font-size: 1.05rem;
-}
-.ov-inv-card__main { flex: 1; min-width: 0; }
-.ov-inv-card__name {
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--white);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.ov-inv-card__meta {
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  margin-top: 3px;
-}
-.ov-inv-card__right { flex-shrink: 0; text-align: right; }
-.ov-inv-card__amount {
-  font-size: 0.88rem;
-  font-weight: 700;
-  color: var(--gold);
-}
-.ov-inv-card__days {
-  font-size: 0.68rem;
-  color: var(--text-muted);
-  margin-top: 3px;
-}
-
-/* Product detail: live status + key details — stack on mobile, side-by-side on wider screens */
-.prod-detail-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 14px;
-  align-items: start;
-}
-@media (min-width: 520px) {
-  .prod-detail-grid { grid-template-columns: 1fr 1fr; }
-}
-
-/* Transaction list container */
-.txn-list { padding: 0; }
 
 /* ─────────────────────────────────────────────────────────────
    Stale data notice
