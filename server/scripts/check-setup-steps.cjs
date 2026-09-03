@@ -64,7 +64,20 @@ const ROOT = path.join(__dirname, '..', '..');
        'a boot-log line scrolls away; a health check does not');
 
     /* ── Behaviour, against a real database ─────────────────────────── */
-    const dbName = 'chk_setup_' + Math.abs(process.pid);
+    /* A name no other process can pick.
+     *
+     * A check failed intermittently with FATAL 57P01, "terminating connection due
+     * to administrator command" — which in this suite only comes from
+     * DROP DATABASE ... WITH (FORCE), confirmed by the forced checkpoint the
+     * server logs immediately after it. Something dropped a database out from
+     * under a running check.
+     *
+     * process.pid alone is not unique enough to rule that out: one suite run
+     * spawns two hundred short-lived processes and a container recycles pids, so
+     * two checks can pick the same database name minutes apart. The random suffix
+     * costs nothing and removes the only way two processes can name the same
+     * database. */
+    const dbName = 'chk_setup_' + Math.abs(process.pid) + '_' + Math.random().toString(36).slice(2, 8);
     await pool.query(`DROP DATABASE IF EXISTS ${dbName}`);
     await pool.query(`CREATE DATABASE ${dbName}`);
     /* Parsed, not pattern-matched. This was

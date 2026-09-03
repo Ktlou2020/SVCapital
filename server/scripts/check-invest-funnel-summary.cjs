@@ -46,7 +46,20 @@ const { Pool } = require('pg');
 
 const ROOT = path.join(__dirname, '..', '..');
 const SSL  = process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false };
-const DB_NAME = 'chk_ifunnel_' + process.pid;
+/* A name no other process can pick.
+ *
+ * A check failed intermittently with FATAL 57P01, "terminating connection due
+ * to administrator command" — which in this suite only comes from
+ * DROP DATABASE ... WITH (FORCE), confirmed by the forced checkpoint the
+ * server logs immediately after it. Something dropped a database out from
+ * under a running check.
+ *
+ * process.pid alone is not unique enough to rule that out: one suite run
+ * spawns two hundred short-lived processes and a container recycles pids, so
+ * two checks can pick the same database name minutes apart. The random suffix
+ * costs nothing and removes the only way two processes can name the same
+ * database. */
+const DB_NAME = 'chk_ifunnel_' + process.pid + '_' + Math.random().toString(36).slice(2, 8);
 const ADMIN = fs.readFileSync(path.join(ROOT, 'admin', 'js', 'admin.js'), 'utf8');
 const CHROME = ['/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
                 '/opt/pw-browsers/chromium/chrome-linux/chrome'].find(p => fs.existsSync(p));
@@ -61,9 +74,15 @@ function withDatabase(url, name) {
   const u = new URL(url); u.pathname = '/' + name; return u.toString();
 }
 
-/* max: 2 — single-threaded, and the pg default of 10 per pool put enough idle
-   connections against max_connections to fail roughly one nested suite run in
-   ten. See the same note in check-pool-raise-report.cjs. */
+/* max: 2 — these checks are single-threaded and never need more; the pg
+   default is 10 per pool and this file opens two.
+
+   This was originally introduced as a fix for an intermittent failure, on the
+   theory that idle connections were exhausting max_connections. That theory
+   was WRONG: the server log carries not one "sorry, too many clients already"
+   in the whole session. The real error was FATAL 57P01, a forced DROP
+   DATABASE terminating a live connection. The cap is kept because it is
+   correct on its own terms, not because it fixed anything. */
 const adminPool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: SSL, max: 2 });
 let pool;
 

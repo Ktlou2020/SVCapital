@@ -69,6 +69,91 @@ if (!hasProject) {
   notes.push('mobile/ios/ not generated — run `npm run add:ios` on macOS, then copy ios-config/ in');
 }
 
+
+/* ── Deployment target ──────────────────────────────────────────────────
+ *
+ * Capacitor's stock project pins IPHONEOS_DEPLOYMENT_TARGET to the framework
+ * floor (13.0 on Capacitor 6), and App Store Connect warns on anything below
+ * 15.0 — a warning now, a rejection from Spring 2027. mobile/ios/ is
+ * regenerated and gitignored, so the number has to be re-applied every time
+ * rather than set once in Xcode and forgotten.
+ *
+ * Three places, and all three matter:
+ *   project.pbxproj  every build configuration, debug and release
+ *   Podfile          the platform line
+ *   Podfile          a post_install hook, because each pod carries its own
+ *                    target and one built for 13.0 drags the archive's
+ *                    effective minimum back down with it
+ * ─────────────────────────────────────────────────────────────────────── */
+const SETTINGS_FILE = path.join(MOBILE, 'ios-config', 'build-settings.json');
+const PBXPROJ = path.join(MOBILE, 'ios', 'App', 'App.xcodeproj', 'project.pbxproj');
+const PODFILE = path.join(MOBILE, 'ios', 'App', 'Podfile');
+
+function readDeploymentTarget() {
+  if (!fs.existsSync(SETTINGS_FILE)) return null;
+  let raw;
+  try { raw = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')); }
+  catch (_) { die('ios-config/build-settings.json is not valid JSON.'); }
+  const t = raw && raw.iosDeploymentTarget;
+  if (!t || !/^\d+(\.\d+)?$/.test(String(t))) {
+    die('ios-config/build-settings.json: iosDeploymentTarget must be a version like "15.0".');
+  }
+  if (parseFloat(t) < 15) {
+    notes.push(`iosDeploymentTarget is ${t}; App Store Connect requires 15.0 from Spring 2027`);
+  }
+  return String(t);
+}
+
+function applyDeploymentTarget(target) {
+  if (!target) { notes.push('no ios-config/build-settings.json — deployment target left as generated'); return; }
+
+  if (fs.existsSync(PBXPROJ)) {
+    const before = fs.readFileSync(PBXPROJ, 'utf8');
+    /* Every configuration, not just the first: a project carries Debug and
+       Release, and an archive is built from Release. */
+    const after = before.replace(/IPHONEOS_DEPLOYMENT_TARGET = [0-9.]+;/g,
+                                 `IPHONEOS_DEPLOYMENT_TARGET = ${target};`);
+    if (after !== before) { fs.writeFileSync(PBXPROJ, after); changes.push(`project.pbxproj → iOS ${target}`); }
+    if (!/IPHONEOS_DEPLOYMENT_TARGET/.test(after)) {
+      notes.push('project.pbxproj declares no IPHONEOS_DEPLOYMENT_TARGET — set it in Xcode once');
+    }
+  } else {
+    notes.push('mobile/ios/App/App.xcodeproj not generated — deployment target not applied');
+  }
+
+  if (fs.existsSync(PODFILE)) {
+    let pod = fs.readFileSync(PODFILE, 'utf8');
+    const orig = pod;
+    if (/^platform :ios/m.test(pod)) {
+      pod = pod.replace(/^platform :ios, ?'[0-9.]+'/m, `platform :ios, '${target}'`);
+    } else {
+      pod = `platform :ios, '${target}'\n` + pod;
+    }
+    /* Pods override the app's target unless they are told not to. Without this
+       the archive reports the LOWEST target among its pods, which is the
+       number App Store Connect reads. */
+    const HOOK_MARK = '# svc: pin pod deployment targets';
+    if (!pod.includes(HOOK_MARK)) {
+      pod += `\n${HOOK_MARK}\npost_install do |installer|\n` +
+             `  installer.pods_project.targets.each do |t|\n` +
+             `    t.build_configurations.each do |c|\n` +
+             `      c.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '${target}'\n` +
+             `    end\n  end\nend\n`;
+    } else {
+      pod = pod.replace(/(IPHONEOS_DEPLOYMENT_TARGET'\] = ')[0-9.]+(')/, `$1${target}$2`);
+    }
+    if (pod !== orig) {
+      fs.writeFileSync(PODFILE, pod);
+      changes.push(`Podfile → iOS ${target} (run \`pod install\` in mobile/ios/App)`);
+    }
+  } else {
+    notes.push('mobile/ios/App/Podfile not generated — platform line not applied');
+  }
+}
+
+const deploymentTarget = readDeploymentTarget();
+applyDeploymentTarget(deploymentTarget);
+
 console.log('[apply:ios] mobile/version.json → Info.plist');
 console.log(`            version ${v.versionName} · build ${v.iosBuildNumber}`);
 if (!changes.length) console.log('            already up to date');
