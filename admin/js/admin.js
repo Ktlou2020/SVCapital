@@ -5697,10 +5697,14 @@ async function removeProductFactsheet(productId) {
 
 function openProductModal() {
   document.getElementById('productModalTitle').textContent = 'New Product';
-  ['productId','prodType','prodLabel','prodHeadline','prodDescription','prodKeyDetails','prodMin','prodTerm','prodSort','prodBenchmark','prodPerfFee','prodPartner','prodSector','prodRisk','prodIcon','prodColor','prodRiskColor'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  ['productId','prodType','prodLabel','prodHeadline','prodDescription','prodKeyDetails','prodMin','prodTerm','prodSort','prodBenchmark','prodPerfFee','prodPartner','prodSector','prodRisk','prodIcon','prodColor','prodRiskColor','prodCategory'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   document.getElementById('prodActive').value = 'true';
   document.getElementById('prodHomepage').value = 'true';
   document.getElementById('prodRisk').value = 'Medium';   // default risk profile for new products
+  /* A new product is a standard one unless somebody says otherwise. Clearing
+     the select above leaves it on '' — an empty category would drop the product
+     out of both the standard grid and the EIF tab and it would look deleted. */
+  document.getElementById('prodCategory').value = 'standard';
   document.getElementById('prodType').removeAttribute('readonly');
   const ff = document.getElementById('prodFactsheetFile'); if (ff) ff.value = '';
   document.getElementById('prodFactsheetCurrent').textContent = '';
@@ -5728,6 +5732,7 @@ function editProduct(id) {
   document.getElementById('prodPerfFee').value     = p.performance_fee_pct || '';
   document.getElementById('prodPartner').value     = p.partner_name || '';
   document.getElementById('prodSector').value      = p.sector || '';
+  document.getElementById('prodCategory').value    = p.category || 'standard';
   document.getElementById('prodRisk').value        = p.risk_profile || '';
   document.getElementById('prodIcon').value        = p.icon || '';
   document.getElementById('prodColor').value       = p.color || '';
@@ -5804,6 +5809,10 @@ async function saveProduct(btn) {
     performance_fee_pct: num('prodPerfFee'),
     partner_name:        document.getElementById('prodPartner').value.trim() || null,
     sector:              document.getElementById('prodSector').value || null,
+    /* Never null: a product with no category shows in neither the standard
+       grid nor the EIF tab, which on the portal looks exactly like a product
+       that has been deleted. */
+    category:            document.getElementById('prodCategory').value || 'standard',
     risk_profile:        document.getElementById('prodRisk').value.trim() || null,
     icon:                document.getElementById('prodIcon').value.trim() || null,
     color:               document.getElementById('prodColor').value.trim() || null,
@@ -16170,6 +16179,11 @@ function renderInterestPreview(data) {
       <div style="font-size:1.3rem;font-weight:800;color:var(--text-muted)">${summary.skipped}</div>
       <div style="font-size:0.72rem;color:var(--text-muted)">Zero / negative (skipped)</div>
     </div>
+    ${summary.declined ? `
+    <div style="background:rgba(101,237,0,.08);border:1px solid rgba(101,237,0,.28);border-radius:8px;padding:10px 16px;flex:1;min-width:130px">
+      <div style="font-size:1.3rem;font-weight:800;color:#65ed00">${summary.declined}</div>
+      <div style="font-size:0.72rem;color:var(--text-muted)">Interest-free (${fmt(summary.declined_total)} withheld)</div>
+    </div>` : ''}
   `;
 
   // Table rows
@@ -16179,6 +16193,11 @@ function renderInterestPreview(data) {
       unmatched:['#ef4444', 'Unmatched'],
       negative: ['#f97316', 'Negative Δ'],
       zero:     ['#7a92a8', 'No change'],
+      /* The client asked not to be paid interest. Deliberately its own chip
+         rather than folded into "No change": the amount is real and is being
+         withheld on instruction, which is a different fact from there being
+         nothing to pay. */
+      interest_free: ['#65ed00', 'Interest-free'],
     };
     const [col, label] = cfg[s] || ['#7a92a8', s];
     return `<span style="background:${col}22;color:${col};border-radius:12px;padding:2px 8px;font-size:0.7rem;font-weight:700">${label}</span>`;

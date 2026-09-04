@@ -4090,10 +4090,20 @@
             <option value="Energy">Energy</option>
             <option value="Logistics">Logistics</option>
             <option value="Credit">Credit</option>
+            <option value="Trade Finance">Trade Finance</option>
+            <option value="Asset Leasing">Asset Leasing</option>
+            <option value="Enterprise Finance">Enterprise Finance</option>
           </select>
         </div>
       </div>
       <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">Offering</label>
+          <select class="form-select" id="prodCategory">
+            <option value="standard" selected>Standard</option>
+            <option value="eif">Ethical &amp; Interest-Free</option>
+          </select>
+          <div style="font-size:0.75rem;color:var(--text-muted);margin-top:6px;line-height:1.55">Ethical &amp; Interest-Free products appear under their own tab in the portal, and the return is labelled a profit share rather than an interest rate. The tab appears only while at least one of them is active — deactivate them all and the section disappears from the portal.</div>
+        </div>
         <div class="form-group"><label class="form-label">Risk Profile</label>
           <select class="form-select" id="prodRisk">
             <option value="Low">Low</option>
@@ -4978,7 +4988,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=18"></script>
 <script src="../js/investor-documents.js?v=3"></script>
-<script src="js/admin.js?v=165"></script>
+<script src="js/admin.js?v=166"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>

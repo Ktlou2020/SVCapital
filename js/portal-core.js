@@ -3130,13 +3130,225 @@ function _productRisk(productType) {
   return { risk, color };
 }
 
+/* ═══════════════════════════════════════════════════════════════════════
+   Ethical and Interest-Free (EIF)
+   ═══════════════════════════════════════════════════════════════════════
+
+   A sub-category of the same marketplace, not a second one. EIF products are
+   ordinary rows in `products` carrying category = 'eif'; they are pooled,
+   filled, invested in and matured by the machinery every other product uses.
+   What changes here is presentation and vocabulary.
+
+   The vocabulary is the point. A client who will not take riba is not served
+   by a screen that offers them a "target return p.a." on a Murabaha — the
+   number may be right and the word still wrong. So the same fields are read
+   and different labels are drawn over them.
+
+   The offering appears only while an active EIF product exists. Deactivating
+   all three in the admin console takes the tab, the banner and the FAQ off the
+   portal — the is_active switch the platform already has, rather than a second
+   flag somebody has to remember. */
+
+function EIF_ACCENT()   { return '#65ed00'; }        /* CI lime — see css/ci-theme.css */
+function EIF_CATEGORY() { return 'eif'; }
+function EIF_LABEL()    { return 'Ethical &amp; Interest-Free'; }
+/* A leaf, not a mosque. The offering is built for clients who will not take
+   riba, but the name they gave it is not a denominational one and neither is
+   the eligibility — a client of any faith or none can hold these. A religious
+   mark on the tab, and on the badge these products carry out in the
+   all-products grid, would narrow an offering that is deliberately open. */
+function EIF_ICON()     { return 'fa-leaf'; }
+
+function _isEifProduct(p) { return ((p && p.category) || 'standard') === EIF_CATEGORY(); }
+
+function _eifProducts() {
+  return (_mktProducts || []).filter(p => p && p.is_active && _isEifProduct(p));
+}
+
+/* Whether the offering exists at all on this environment. */
+function _eifIsLive() { return _eifProducts().length > 0; }
+
+function _mktCategory() { return PORTAL.marketCategory || 'all'; }
+
+/* The category tabs, drawn above the risk filter. Only rendered when there is
+   a second category to choose — on an environment with no EIF products this
+   returns the marketplace exactly as it was. */
+function renderMarketCategoryTabs() {
+  const host = document.getElementById('mktCategoryTabs');
+  if (!host) return;
+  if (!_eifIsLive() || _selectedProductType) { host.innerHTML = ''; host.style.display = 'none'; return; }
+  const cur = _mktCategory();
+  const accent = EIF_ACCENT();
+  host.style.display = '';
+  host.innerHTML = `
+    <button class="mkt-cat-tab${cur === 'all' ? ' active' : ''}" onclick="filterMarketCategory('all', this)">
+      <i class="fa-solid fa-layer-group"></i><span>All products</span>
+    </button>
+    <button class="mkt-cat-tab mkt-cat-tab--eif${cur === 'eif' ? ' active' : ''}"
+            style="--cat-accent:${accent}" onclick="filterMarketCategory('eif', this)">
+      <i class="fa-solid ${EIF_ICON()}"></i><span>${EIF_LABEL()}</span>
+    </button>`;
+}
+
+function filterMarketCategory(cat, btn) {
+  PORTAL.marketCategory = cat;
+  const host = document.getElementById('mktCategoryTabs');
+  if (host) host.querySelectorAll('.mkt-cat-tab').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  /* Leaving a product detail open while the category changes under it would
+     show a conventional product inside the EIF section. */
+  _selectedProductType = null;
+  renderMarketplace();
+  SVC.track('svc_filter_changed', { filter_type: 'marketplace_category', filter_value: cat });
+}
+
+/* The headline figure's label. Same number as every other product — this is
+   `benchmark_rate` or the achieved average — under a word that does not
+   describe it as a rate of interest on money lent. */
+function _rateSubLabel(p, isAvg, termMonths) {
+  if (_isEifProduct(p)) {
+    /* No period suffix. EIF benchmark_rate is annualised on every one of these
+       products, and an early draft appended the term to all of them — which
+       put "TARGET PROFIT SHARE (36 MO)" beside 12.5% on the Ijara, saying the
+       lease pays 12.5% over three years rather than each year. The suffix
+       exists for short_term, whose stored rate really is a period rate. */
+    return isAvg ? 'PROFIT SHARE ACHIEVED P.A.' : 'TARGET PROFIT SHARE P.A.';
+  }
+  const isSt = p.product_type === 'short_term';
+  if (isAvg) return isSt && termMonths ? `AVG RETURN (${termMonths} MO)` : 'AVG RETURN P.A.';
+  return isSt && termMonths ? `TARGET RETURN (${termMonths} MO)` : 'TARGET RETURN P.A.';
+}
+
+/* The section header. States the principles and says plainly where the
+   governance stands — the copy claims no certificate, because there is not one
+   yet. The wording lives in a row (product_faqs, "Is this offering Sharia
+   certified?") so it can be corrected without a deploy; this strip is the
+   short version and is deliberately the same claim. */
+function _eifBannerHtml() {
+  const a = EIF_ACCENT();
+  const principles = [
+    ['fa-ban',            'No riba',          'Return comes from trade, rent or enterprise — never from lending money.'],
+    ['fa-cubes',          'Backed by assets', 'Every structure sits on goods, an asset or a business that actually exists.'],
+    ['fa-scale-balanced', 'Shared risk',      'If the underlying venture does not perform, neither does the return.'],
+    ['fa-filter-circle-xmark', 'Screened sectors', 'No conventional lending, alcohol, tobacco, pork, gambling or weapons.'],
+  ];
+  return `
+    <div class="eif-banner" style="--eif:${a}">
+      <div class="eif-banner__head">
+        <div class="eif-banner__mark"><i class="fa-solid ${EIF_ICON()}"></i></div>
+        <div>
+          <div class="eif-banner__title">Ethical &amp; Interest-Free</div>
+          <div class="eif-banner__sub">Investments structured so the return is earned by trade, by ownership or by enterprise — not by charging for the use of money.</div>
+        </div>
+      </div>
+      <div class="eif-principles">
+        ${principles.map(([icon, t, d]) => `
+          <div class="eif-principle">
+            <i class="fa-solid ${icon}"></i>
+            <div><strong>${t}</strong><span>${d}</span></div>
+          </div>`).join('')}
+      </div>
+      <div class="eif-governance">
+        <i class="fa-solid fa-circle-info"></i>
+        <span><strong>Sharia advisory review is under way.</strong> These products are structured on established Islamic finance principles. We do not yet hold a Sharia certificate and do not claim one — the advisor, certificate and date will be published here as soon as it is issued. Please take your own advice in the meantime.</span>
+      </div>
+    </div>`;
+}
+
+/* ── The offering's FAQ ────────────────────────────────────────────────────
+   Rows from product_faqs, not markup. Cached on PORTAL for the session; a
+   failure leaves the section without its FAQ rather than without its
+   products. */
+async function loadEifFaqs() {
+  if (PORTAL.eifFaqs) return PORTAL.eifFaqs;
+  try {
+    const res = await API._fetch('GET', 'products/faqs', null, { category: 'eif' });
+    PORTAL.eifFaqs = (res && res.data) || [];
+  } catch (err) {
+    console.warn('[eif] could not load FAQs:', err);
+    PORTAL.eifFaqs = [];
+  }
+  return PORTAL.eifFaqs;
+}
+
+function _eifFaqHtml(faqs) {
+  if (!faqs || !faqs.length) return '';
+  return `
+    <div class="panel eif-faq" style="--eif:${EIF_ACCENT()};margin-top:20px">
+      <div class="panel__header"><span class="panel__title">Questions about this offering</span></div>
+      <div class="panel__body">
+        ${faqs.map(f => `
+          <div class="faq-quick-item">
+            <button class="faq-quick-q" onclick="toggleQuickFaq(this)">${_esc(f.question)}<i class="fa-solid fa-chevron-down"></i></button>
+            <div class="faq-quick-a">${_esc(f.answer)}</div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+}
+
+/* ── The interest-free election ────────────────────────────────────────────
+   The platform credits interest imported from 3PIM into investor wallets. A
+   client who chose this offering keeps their money in that same wallet, so
+   this is where they say they do not want it. Not implied by holding an EIF
+   product — some clients hold both kinds and want the interest. */
+async function loadEifElection() {
+  try {
+    const res = await API._fetch('GET', 'products/eif/election');
+    PORTAL.eifElection = !!(res && res.interest_free_election);
+  } catch (err) {
+    console.warn('[eif] could not read the interest election:', err);
+    PORTAL.eifElection = null;          // unknown — the toggle says so
+  }
+  return PORTAL.eifElection;
+}
+
+function _eifElectionHtml() {
+  const on = PORTAL.eifElection === true;
+  const unknown = PORTAL.eifElection === null || PORTAL.eifElection === undefined;
+  return `
+    <div class="eif-election" style="--eif:${EIF_ACCENT()}">
+      <div class="eif-election__text">
+        <strong>Decline interest on my wallet balance</strong>
+        <span>Money waiting in your wallet sits in the platform's client account, and interest earned on it is normally credited to you each period. Turn this on and none of it will be paid into your wallet or your sub-accounts.</span>
+      </div>
+      ${unknown
+        ? '<span class="eif-election__err">Could not load this setting — reload the page to try again.</span>'
+        : `<button class="eif-switch${on ? ' on' : ''}" role="switch" aria-checked="${on}"
+                   aria-label="Decline interest on my wallet balance"
+                   onclick="toggleEifElection(${on ? 'false' : 'true'})"><span></span></button>`}
+    </div>`;
+}
+
+async function toggleEifElection(next) {
+  const want = next === true;
+  try {
+    await API._fetch('PUT', 'products/eif/election', { interest_free_election: want });
+    PORTAL.eifElection = want;
+    Toast.success(want
+      ? 'Interest will no longer be credited to your wallet.'
+      : 'Interest will be credited to your wallet again.');
+  } catch (err) {
+    console.error('[eif] could not save the interest election:', err);
+    Toast.error('Could not save that — please try again.');
+  }
+  renderMarketplace();
+}
+
 function renderMarketplace() {
   // Risk filter bar: visible on the product grid, hidden inside a product detail
   const tabBar = document.getElementById('marketRiskTabBar');
   if (tabBar) tabBar.style.display = _selectedProductType ? 'none' : '';
-  const banner = document.querySelector('#view-marketplace .section-banner__title');
+  /* The two shells title this view differently — .section-banner__title on the
+     web, .mkt-hero__title in the app. Ask for both; whichever is absent is
+     null and the assignment below is skipped. */
+  const banner = document.querySelector('#view-marketplace .section-banner__title')
+              || document.querySelector('#view-marketplace .mkt-hero__title');
+  renderMarketCategoryTabs();
   if (_selectedProductType) { if (banner) banner.textContent = 'Product Details'; renderProductDetailView(_selectedProductType); }
-  else { if (banner) banner.textContent = 'Investment Products'; renderProductsGrid(); }
+  else {
+    if (banner) banner.textContent = _mktCategory() === 'eif' ? 'Ethical & Interest-Free' : 'Investment Products';
+    renderProductsGrid();
+  }
 
   // Sub-account context banner
   let saBanner = document.getElementById('mktSaContextBanner');
@@ -3175,10 +3387,45 @@ function renderProductsGrid() {
     if (balEl) { balEl.textContent = (_saGrid ? _saGrid.name + ': ' : '') + Utils.rand(walletBal); balEl.style.color = walletBal >= 500 ? 'var(--green)' : 'var(--gold)'; }
   }
 
+  /* The EIF section header, above the grid. Drawn as its own node so the grid
+     itself stays a plain product grid — the section is a frame around the same
+     component, not a second implementation of it. */
+  const inEif = _mktCategory() === 'eif';
+  let eifHead = document.getElementById('eifSectionHead');
+  if (inEif) {
+    if (!eifHead) {
+      eifHead = document.createElement('div');
+      eifHead.id = 'eifSectionHead';
+      grid.before(eifHead);
+    }
+    eifHead.innerHTML = _eifBannerHtml() + _eifElectionHtml();
+    eifHead.style.display = '';
+    /* Both are fetched once and re-render when they land. */
+    if (PORTAL.eifElection === undefined) loadEifElection().then(renderMarketplace);
+    if (!PORTAL.eifFaqs) loadEifFaqs().then(renderMarketplace);
+  } else if (eifHead) {
+    eifHead.style.display = 'none';
+  }
+
+  let eifFaq = document.getElementById('eifSectionFaq');
+  if (inEif && PORTAL.eifFaqs && PORTAL.eifFaqs.length) {
+    if (!eifFaq) {
+      eifFaq = document.createElement('div');
+      eifFaq.id = 'eifSectionFaq';
+      grid.after(eifFaq);
+    }
+    eifFaq.innerHTML = _eifFaqHtml(PORTAL.eifFaqs);
+    eifFaq.style.display = '';
+  } else if (eifFaq) {
+    eifFaq.style.display = 'none';
+  }
+
   // First-time explainer strip — for users who have never invested
   const _mktHasInvested = (PORTAL.investments || []).length > 0;
   let _mktLearnStrip = document.getElementById('mktFirstTimeStrip');
-  if (!_mktHasInvested) {
+  /* Not inside the EIF section: its banner already explains what these are and
+     two stacked explainer strips read as clutter rather than as help. */
+  if (!_mktHasInvested && !inEif) {
     if (!_mktLearnStrip) {
       _mktLearnStrip = document.createElement('div');
       _mktLearnStrip.id = 'mktFirstTimeStrip';
@@ -3202,8 +3449,13 @@ function renderProductsGrid() {
   // sorted by sort order. Products with open pools rank first.
   // Filtered by risk level (Conservative / Moderate / Aggressive).
   const mf = PORTAL.marketFilter || 'all';
+  /* The category narrows first, then risk within it. "All products" really is
+     all of them — an EIF product is a product, and a client browsing
+     everything should see it, badged. The EIF tab is the one that excludes. */
+  const cat = _mktCategory();
   const products = (_mktProducts || []).filter(p => {
     if (!p.is_active) return false;
+    if (cat === 'eif' && !_isEifProduct(p)) return false;
     if (mf === 'all') return true;
     return (p.risk_profile || 'Medium') === mf;   // risk from the product (admin console)
   }).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
@@ -3212,11 +3464,20 @@ function renderProductsGrid() {
     .sort((a, b) => (b.open.length > 0) - (a.open.length > 0));
 
   if (!shown.length) {
+    /* Inside a section, an empty grid usually means the risk filter excluded
+       everything rather than that the section is empty. Saying "no products
+       available" there sends the reader looking for a fault that is one tab
+       away. */
+    const filteredOut = inEif && mf !== 'all' && _eifProducts().length > 0;
     grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
       <i class="fa-solid fa-box-open"></i>
-      <div class="empty-state__title">No products available yet</div>
-      <div class="empty-state__sub">New investment products are added regularly — check back soon or ask a question.</div>
-      <div style="margin-top:12px"><button class="btn btn--primary btn--sm" onclick="navigate('support', document.querySelector('[data-view=support]'))"><i class="fa-solid fa-headset"></i> Ask a question</button></div>
+      <div class="empty-state__title">${filteredOut ? `No ${_esc(mf)} products in this section` : 'No products available yet'}</div>
+      <div class="empty-state__sub">${filteredOut
+        ? 'Set the risk filter back to All to see the rest of the Ethical &amp; Interest-Free range.'
+        : 'New investment products are added regularly — check back soon or ask a question.'}</div>
+      <div style="margin-top:12px">${filteredOut
+        ? `<button class="btn btn--primary btn--sm" onclick="filterMarket('all', document.querySelector('#marketRiskTabBar .tab-btn'))">Show all risk levels</button>`
+        : `<button class="btn btn--primary btn--sm" onclick="navigate('support', document.querySelector('[data-view=support]'))"><i class="fa-solid fa-headset"></i> Ask a question</button>`}</div>
     </div>`;
     return;
   }
@@ -3229,21 +3490,20 @@ function renderProductsGrid() {
     const poolRate = open[0] ? parseFloat(open[0].annual_rate) : null;
     const rateLabel = avg != null ? `${(avg * 100).toFixed(2)}%` : (p.benchmark_rate ? `${(parseFloat(p.benchmark_rate) * 100).toFixed(1)}%` : (poolRate != null ? `${(poolRate * 100).toFixed(1)}%` : '—'));
     const termMonths = p.term_months || (open[0] && open[0].term_months) || null;
-    const isStProduct = p.product_type === 'short_term';
-    const rateSub = avg != null
-      ? (isStProduct && termMonths ? `AVG RETURN (${termMonths} MO)` : 'AVG RETURN P.A.')
-      : (isStProduct && termMonths ? `TARGET RETURN (${termMonths} MO)` : 'TARGET RETURN P.A.');
+    const rateSub = _rateSubLabel(p, avg != null, termMonths);
+    const eif = _isEifProduct(p);
     // soonest closing among the open pools
     const days = open.map(o => Utils.daysRemaining(o.end_date)).filter(d => d !== null);
     const soonest = days.length ? Math.min(...days) : null;
     return `
-      <div class="market-pool-card mpc-v2" style="cursor:pointer" onclick="openProductDetail('${p.product_type}')">
+      <div class="market-pool-card mpc-v2${eif ? ' mpc-v2--eif' : ''}" style="cursor:pointer" onclick="openProductDetail('${p.product_type}')">
         <div class="mpc2-accent" style="background:linear-gradient(90deg,${color},${color}88)"></div>
         <div class="mpc2-top">
           <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
             <div class="mpc2-icon" style="background:${color}18;color:${color}"><i class="fa-solid ${icon}"></i></div>
             <span class="mpc2-badge" style="background:${color}14;color:${color};border-color:${color}30">${open.length ? `${open.length} open pool${open.length === 1 ? '' : 's'}` : 'Details & factsheets'}</span>
           </div>
+          ${eif && cat !== 'eif' ? `<div class="eif-tag"><i class="fa-solid ${EIF_ICON()}"></i> Interest-free</div>` : ''}
           <div style="margin-top:14px">
             <div class="mpc2-title">${_esc((p.label || '').replace(/\s*\(\d+yr\)/gi, '').trim())}</div>
             <div class="mpc2-blurb">${_esc(p.headline || p.description || '')}</div>
@@ -3375,7 +3635,7 @@ async function _renderProductTrackRecord(type, color) {
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">
         <div style="background:${color}12;border:1px solid ${color}30;border-radius:12px;padding:12px 8px;text-align:center;min-width:0">
           <div style="font-size:clamp(0.85rem,4vw,1.5rem);font-weight:900;color:${color};letter-spacing:-0.02em;overflow-wrap:break-word">${avgRate}%</div>
-          <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-top:3px">Avg return p.a.</div>
+          <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-top:3px">${_isEifProduct((_mktProducts || []).find(x => x.product_type === type)) ? 'Avg profit share p.a.' : 'Avg return p.a.'}</div>
         </div>
         <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:12px 8px;text-align:center;min-width:0">
           <div style="font-size:clamp(0.85rem,4vw,1.5rem);font-weight:900;color:var(--text);letter-spacing:-0.02em;overflow-wrap:break-word">${nTotal}</div>
