@@ -3152,12 +3152,10 @@ function _productRisk(productType) {
 function EIF_ACCENT()   { return '#65ed00'; }        /* CI lime — see css/ci-theme.css */
 function EIF_CATEGORY() { return 'eif'; }
 function EIF_LABEL()    { return 'Ethical &amp; Interest-Free'; }
-/* A leaf, not a mosque. The offering is built for clients who will not take
-   riba, but the name they gave it is not a denominational one and neither is
-   the eligibility — a client of any faith or none can hold these. A religious
-   mark on the tab, and on the badge these products carry out in the
-   all-products grid, would narrow an offering that is deliberately open. */
-function EIF_ICON()     { return 'fa-leaf'; }
+/* The mark for the offering, used in three places that must agree: the
+   category tab, the section banner, and the badge an EIF product carries when
+   it appears in the all-products grid. Change it here and all three follow. */
+function EIF_ICON()     { return 'fa-mosque'; }
 
 function _isEifProduct(p) { return ((p && p.category) || 'standard') === EIF_CATEGORY(); }
 
