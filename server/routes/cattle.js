@@ -103,7 +103,13 @@ router.get('/herd-summary', requireFund, async (req, res) => {
                COALESCE(SUM(entry_mass) FILTER (WHERE entry_mass > 0), 0)::float8 AS entry_sum,
                COUNT(*) FILTER (WHERE entry_mass > 0)::int              AS entry_count,
                COALESCE(SUM(exit_mass)  FILTER (WHERE exit_mass  > 0), 0)::float8 AS exit_sum,
-               COUNT(*) FILTER (WHERE exit_mass  > 0)::int              AS exit_count
+               COUNT(*) FILTER (WHERE exit_mass  > 0)::int              AS exit_count,
+               /* What the animals in this batch have actually fetched, where
+                  they were sold one at a time with a price recorded. It is what
+                  the bulk mark-sold dialog offers as the batch's sale value —
+                  a figure taken from the sales rather than typed over them. */
+               COALESCE(SUM(sale_value), 0)::float8                     AS sale_sum,
+               COUNT(*) FILTER (WHERE sale_value IS NOT NULL)::int      AS sale_count
           FROM cattle_animals
          WHERE cycle_id IS NOT NULL
          GROUP BY cycle_id`),
@@ -415,6 +421,279 @@ router.patch('/cycles/:id', requireFund, async (req, res) => {
   } catch (err) {
     console.error('[cattle/cycles PATCH]', err.message);
     res.status(500).json({ error: err.message });
+  }
+});
+
+/* ── GET /api/cattle/cycles/:id/animals ─────────────────────
+   The animals in one batch, for the cycle detail panel. READ ONLY.
+
+   Scoped to the cycle and paged. The detail panel used to read whatever was in
+   S.animals — the animals TABLE's current page, 75 rows of whatever filter was
+   last applied — so it listed animals from other batches, or none, and valued
+   the cycle off them. */
+router.get('/cycles/:id/animals', requireFund, async (req, res) => {
+  try {
+    const limit  = Math.min(500, Math.max(1, parseInt(req.query.limit) || 200));
+    const offset = Math.max(0, parseInt(req.query.offset) || 0);
+    const [rows, count] = await Promise.all([
+      pool.query(
+        `SELECT id, tag_number, breed, gender, entry_mass, exit_mass,
+                status, sold, mortality, mortality_date, sale_date, sale_batch, sale_value
+           FROM cattle_animals
+          WHERE cycle_id = $1
+          ORDER BY tag_number NULLS LAST, id
+          LIMIT $2 OFFSET $3`, [req.params.id, limit, offset]),
+      pool.query('SELECT COUNT(*)::int AS n FROM cattle_animals WHERE cycle_id = $1', [req.params.id]),
+    ]);
+    res.set('Cache-Control', 'no-store');
+    res.json({ data: rows.rows, total: count.rows[0].n, limit, offset });
+  } catch (err) {
+    console.error('[cattle/cycle-animals]', err.message);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+/* ── PATCH /api/cattle/animals/:id ──────────────────────────
+   Mark one animal sold, deceased, or back to active.
+
+   `sold` and `mortality` are separate booleans as well as a `status` string,
+   and they have disagreed: an animal could carry sold = true and
+   status = 'mortality' at once, and which one the console believed depended on
+   which screen was reading it. Every write here sets all three together, so
+   they cannot drift.
+
+   A sale value belongs to a sold animal. Marking one deceased clears it —
+   money it did not fetch has no business staying on the record, and it would
+   otherwise be summed into the cycle's sale total. */
+router.patch('/animals/:id', requireFund, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body || {};
+    if (!['sold', 'mortality', 'active'].includes(status))
+      return res.status(400).json({ error: "status must be 'sold', 'mortality' or 'active'." });
+
+    let sale = null;
+    if (status === 'sold' && req.body.sale_value !== undefined && req.body.sale_value !== null && req.body.sale_value !== '') {
+      sale = Number(req.body.sale_value);
+      if (!isFinite(sale) || sale < 0) return res.status(400).json({ error: 'sale_value must be a positive number.' });
+    }
+
+    /* An exit mass, when one is supplied, is what the animal actually weighed —
+       and cycleNAV prefers it over the growth model for the whole cycle. */
+    let exitMass = null;
+    if (req.body.exit_mass !== undefined && req.body.exit_mass !== null && req.body.exit_mass !== '') {
+      exitMass = Number(req.body.exit_mass);
+      if (!isFinite(exitMass) || exitMass <= 0) return res.status(400).json({ error: 'exit_mass must be a positive number.' });
+    }
+
+    /* Built as (fragment, params) together rather than as a template with a
+       conditional tail. The first version counted $-placeholders by hand and
+       got them out of step the moment exit_mass was optional — which is the
+       kind of bug that writes a date into a numeric column. */
+    const sets = [];
+    const params = [id];
+    const P = v => { params.push(v); return `$${params.length}`; };
+
+    if (status === 'sold') {
+      sets.push(`status = 'sold'`, `sold = true`, `mortality = false`, `mortality_date = NULL`);
+      sets.push(`sale_date = COALESCE(${P(req.body.date || null)}::date, CURRENT_DATE)`);
+      sets.push(`sale_value = ${P(sale)}`);
+      sets.push(`sale_batch = COALESCE(sale_batch, 'MANUAL')`);
+    } else if (status === 'mortality') {
+      sets.push(`status = 'mortality'`, `sold = false`, `mortality = true`);
+      sets.push(`mortality_date = COALESCE(${P(req.body.date || null)}::date, CURRENT_DATE)`);
+      sets.push(`sale_date = NULL`, `sale_value = NULL`, `sale_batch = NULL`);
+    } else {
+      sets.push(`status = 'active'`, `sold = false`, `mortality = false`);
+      sets.push(`sale_date = NULL`, `mortality_date = NULL`, `sale_value = NULL`, `sale_batch = NULL`);
+    }
+    if (exitMass !== null) sets.push(`exit_mass = ${P(exitMass)}`);
+    sets.push('updated_at = NOW()');
+
+    const { rows: [row] } = await pool.query(
+      `UPDATE cattle_animals SET ${sets.join(', ')}
+        WHERE id = $1
+       RETURNING id, cycle_id, tag_number, status, sold, mortality, sale_date,
+                 mortality_date, sale_value, exit_mass`,
+      params
+    );
+    if (!row) return res.status(404).json({ error: 'Animal not found.' });
+
+    /* The cycle's headline counts are derived from its animals, so they are
+       recomputed here rather than left for someone to notice. Only for a cycle
+       still open: a sold or discontinued cycle is a closed record and must not
+       start moving because one animal was corrected. */
+    let cycle = null;
+    if (row.cycle_id) {
+      const { rows: [c] } = await pool.query(
+        `UPDATE cattle_cycles c
+            SET no_live     = s.live,
+                mortalities = s.dead,
+                no_sold     = s.sold,
+                updated_at  = NOW()
+           FROM (SELECT
+                   COUNT(*) FILTER (WHERE COALESCE(sold,false) = false
+                                      AND COALESCE(mortality,false) = false)::int AS live,
+                   COUNT(*) FILTER (WHERE COALESCE(mortality,false) = true)::int  AS dead,
+                   COUNT(*) FILTER (WHERE COALESCE(sold,false) = true)::int       AS sold
+                   FROM cattle_animals WHERE cycle_id = $1) s
+          WHERE c.id = $1 AND c.status NOT IN ('sold','discontinued')
+        RETURNING c.id, c.no_live, c.mortalities, c.no_sold`, [row.cycle_id]);
+      cycle = c || null;
+    }
+
+    res.json({ success: true, animal: row, cycle });
+  } catch (err) {
+    console.error('[cattle/animals PATCH]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ── POST /api/cattle/cycles/bulk-status ────────────────────
+   Mark many cycles sold, discontinue them, or reopen a discontinued one.
+
+   SOLD carries a sale value per cycle, and the route will not accept the
+   action without one. A sold cycle shows total_selling_price as its realised
+   value and (sale − purchase) ÷ purchase as its realised return, so a cycle
+   marked sold at nothing books its entire purchase value as a loss — on a book
+   of 138 cycles and R110m that is a nine-figure hole in the fund's reported
+   return, produced by two clicks and no typing. The figure is required here
+   rather than defaulted so that cannot happen quietly.
+
+   DISCONTINUED takes no value. It freezes a cycle where it stands and marks
+   its animals sold, for batches that will never be closed out properly — the
+   stale imports sitting at a thousand-plus days in cycle, still accruing
+   1.2kg a day of modelled weight gain against nothing. It leaves the book
+   entirely: cycleNAV is not asked for a valuation, and portfolioNAV counts it
+   in neither the active herd nor realised returns. It keeps its recorded
+   numbers for the record and contributes nothing.
+
+   REOPEN undoes a discontinue. The animals it flagged carry sale_batch
+   'DISC-<cycle id>', so reopening releases exactly those and leaves an animal
+   that was genuinely sold — by an import, or by a real sale — flagged. Without
+   that tag, reopening would resurrect every sold animal in the batch.
+
+   One transaction: a bulk action that half-applied would leave cycles and
+   animals disagreeing about what was sold, and nothing on the screen would
+   say which half landed. */
+router.post('/cycles/bulk-status', requireFund, async (req, res) => {
+  const { action } = req.body || {};
+  const cycles = Array.isArray(req.body && req.body.cycles) ? req.body.cycles : [];
+
+  if (!['sold', 'discontinued', 'reopen'].includes(action))
+    return res.status(400).json({ error: "action must be 'sold', 'discontinued' or 'reopen'." });
+  if (!cycles.length) return res.status(400).json({ error: 'No cycles selected.' });
+  if (cycles.length > 500) return res.status(400).json({ error: 'Too many cycles in one request (max 500).' });
+
+  const ids = cycles.map(c => (c && typeof c === 'object' ? c.id : c)).filter(Boolean);
+  if (ids.length !== cycles.length) return res.status(400).json({ error: 'Every entry needs an id.' });
+
+  /* Validated before the transaction opens, so a missing figure is a 400 that
+     changed nothing rather than a rollback. */
+  const saleById = {};
+  if (action === 'sold') {
+    const missing = [];
+    for (const c of cycles) {
+      const v = Number(c.total_selling_price);
+      if (!isFinite(v) || v < 0) { missing.push(c.id); continue; }
+      saleById[c.id] = v;
+    }
+    if (missing.length)
+      return res.status(400).json({
+        error: 'sale_value_required',
+        cycles: missing,
+        message: `${missing.length} selected cycle${missing.length === 1 ? '' : 's'} ha${missing.length === 1 ? 's' : 've'} no sale value. A cycle marked sold at nothing reports its whole purchase value as a realised loss.`,
+      });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows: found } = await client.query(
+      'SELECT * FROM cattle_cycles WHERE id = ANY($1::text[]) FOR UPDATE', [ids]);
+    const byId = {};
+    for (const r of found) byId[r.id] = r;
+    const notFound = ids.filter(i => !byId[i]);
+    if (notFound.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Some cycles no longer exist.', cycles: notFound });
+    }
+
+    let cyclesChanged = 0, animalsChanged = 0;
+    const skipped = [];
+
+    for (const id of ids) {
+      const cycle = byId[id];
+
+      if (action === 'reopen') {
+        if (cycle.status !== 'discontinued') { skipped.push({ id, why: 'not discontinued' }); continue; }
+        const { rowCount: a } = await client.query(
+          `UPDATE cattle_animals
+              SET sold = false, status = 'active', sale_date = NULL, sale_batch = NULL, updated_at = NOW()
+            WHERE cycle_id = $1 AND sale_batch = $2`, [id, `DISC-${id}`]);
+        const { rowCount: c } = await client.query(
+          `UPDATE cattle_cycles SET status = 'active', updated_at = NOW() WHERE id = $1`, [id]);
+        cyclesChanged += c; animalsChanged += a;
+        continue;
+      }
+
+      if (action === 'discontinued') {
+        if (cycle.status === 'discontinued') { skipped.push({ id, why: 'already discontinued' }); continue; }
+        /* Only animals still live. One already flagged sold keeps whatever
+           sale_batch it had, so a later reopen does not claim it. */
+        const { rowCount: a } = await client.query(
+          `UPDATE cattle_animals
+              SET sold = true, status = 'sold', sale_date = NOW(), sale_batch = $2, updated_at = NOW()
+            WHERE cycle_id = $1
+              AND COALESCE(sold, false) = false
+              AND COALESCE(status, 'active') <> 'mortality'
+              AND COALESCE(mortality, false) = false`, [id, `DISC-${id}`]);
+        /* The cycle's own figures are left exactly as they are — that is what
+           freezing means. Only the status moves. */
+        const { rowCount: c } = await client.query(
+          `UPDATE cattle_cycles SET status = 'discontinued', updated_at = NOW() WHERE id = $1`, [id]);
+        cyclesChanged += c; animalsChanged += a;
+        continue;
+      }
+
+      /* sold */
+      if (cycle.status === 'sold') { skipped.push({ id, why: 'already sold' }); continue; }
+      const sale     = saleById[id];
+      const purchase = parseFloat(cycle.purchase_value) || 0;
+      /* Gross of the standing fee, and the console says so beside the field as
+         it is typed. net_return_pct is otherwise an imported column the fund
+         supplies; this route only ever writes it for a sale it is recording. */
+      const netPct = purchase > 0 ? ((sale - purchase) / purchase) * 100 : null;
+      const live   = parseInt(cycle.no_live) || 0;
+
+      const { rowCount: a } = await client.query(
+        `UPDATE cattle_animals
+            SET sold = true, status = 'sold', sale_date = NOW(), sale_batch = $2, updated_at = NOW()
+          WHERE cycle_id = $1
+            AND COALESCE(sold, false) = false
+            AND COALESCE(status, 'active') <> 'mortality'
+            AND COALESCE(mortality, false) = false`, [id, `SOLD-${id}`]);
+      const { rowCount: c } = await client.query(
+        `UPDATE cattle_cycles
+            SET status = 'sold',
+                total_selling_price = $2,
+                net_return_pct = $3,
+                sale_date = COALESCE(sale_date, NOW()),
+                no_sold = COALESCE(NULLIF(no_sold, 0), $4),
+                no_live = 0,
+                updated_at = NOW()
+          WHERE id = $1`, [id, sale, netPct, live]);
+      cyclesChanged += c; animalsChanged += a;
+    }
+
+    await client.query('COMMIT');
+    res.json({ success: true, action, cyclesChanged, animalsChanged, skipped });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[cattle/bulk-status]', err.message);
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
   }
 });
 
