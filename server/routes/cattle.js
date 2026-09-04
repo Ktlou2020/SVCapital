@@ -347,6 +347,38 @@ router.post('/import/animals', requireFund, async (req, res) => {
         };
       });
       ({ inserted, failures } = await bulkInsert(client, 'cattle_animals', rows, r => r.tag_number));
+
+      /* The cycles these animals landed in now hold more head than their
+         header says. Recomputed here, or the batch reads "0 purchased" beside
+         129 animals — which is what several batches on this book already look
+         like, and why nothing valued them.
+
+         no_purchased is raised to the animals on file rather than overwritten:
+         it is the fund's own figure from the invoice, and an import that only
+         carries part of a batch must not shrink it. live/dead/sold are derived
+         and are simply recomputed. Open cycles only — a sold or discontinued
+         batch is a closed record. */
+      const touched = [...new Set(rows.map(r => r.cycle_id).filter(Boolean))];
+      if (touched.length) {
+        await client.query(`
+          UPDATE cattle_cycles c
+             SET no_purchased = GREATEST(COALESCE(c.no_purchased, 0), s.total),
+                 no_live      = s.live,
+                 mortalities  = s.dead,
+                 no_sold      = s.sold,
+                 updated_at   = NOW()
+            FROM (SELECT cycle_id,
+                         COUNT(*)::int                                                  AS total,
+                         COUNT(*) FILTER (WHERE COALESCE(sold,false) = false
+                                            AND COALESCE(mortality,false) = false)::int AS live,
+                         COUNT(*) FILTER (WHERE COALESCE(mortality,false))::int         AS dead,
+                         COUNT(*) FILTER (WHERE COALESCE(sold,false))::int              AS sold
+                    FROM cattle_animals
+                   WHERE cycle_id = ANY($1::text[])
+                   GROUP BY cycle_id) s
+           WHERE c.id = s.cycle_id
+             AND c.status NOT IN ('sold','discontinued')`, [touched]);
+      }
       await client.query('COMMIT');
     } catch (err) {
       await client.query('ROLLBACK');

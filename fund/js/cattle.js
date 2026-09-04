@@ -1301,7 +1301,7 @@ function setupImportView() {
       <div class="card">
         <div class="card-header"><i class="fa-solid fa-cow" style="color:var(--amber-dark)"></i> Purchased Cattle — Individual Animals <span style="font-size:11px;color:var(--text-muted);margin-left:auto">cattle_animals table</span></div>
         <div class="card-body">
-          <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Expected columns: <strong>Batch No, Main tag number, Entry Mass, Gender, Breed, Name, Mortality, Date, Mortality Report, Sold, Sale Batch, Sale date, Notes</strong></p>
+          <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Expected columns: <strong>Date, Event, Batch no, Owner, Main tag ID, Breed, Gender, Qty Total, Mass</strong> &mdash; the intake export.<br>The older <strong>Batch No, Main tag number, Entry Mass, Name, Mortality, Sold, Sale Batch, Sale date</strong> layout is still read. Whichever it is, you pick the batch to allocate to once the file has been read.</p>
           <div class="import-zone" id="dropZoneAnimals" onclick="document.getElementById('fileAnimals').click()"><i class="fa-solid fa-file-csv"></i><h3>Drop CSV here or click to browse</h3><p>Purchased Cattle-Grid view.csv</p><input type="file" id="fileAnimals" accept=".csv,text/csv,text/plain" onchange="handleAnimalsFile(this.files[0])"></div>
           <div id="animalsImportPreview"></div>
           <div id="animalsImportProgress" style="display:none"><div class="progress-bar-wrap"><div class="progress-bar-fill" id="animalsProgressBar" style="width:0%"></div></div><div style="font-size:12px;color:var(--text-muted)" id="animalsProgressLabel">Importing…</div></div>
@@ -1422,6 +1422,68 @@ function cleanDate(val) {
   if (!val) return null;
   const d = new Date(val);
   return isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+/* ── Animal CSV layouts ────────────────────────────────────────────────────
+ *
+ * Two exports reach this importer and they do not share a single column name
+ * for the two fields that matter most:
+ *
+ *   legacy intake   Main tag number · Entry Mass · Name       (batch)
+ *   intake 2026     Main tag ID     · Mass       · Batch no
+ *
+ * A header is looked up through this map rather than read directly, so the
+ * same import handles both and a third layout is a line here rather than a
+ * second importer.
+ *
+ * `Date` is why this exists. In the legacy export it is the MORTALITY date —
+ * the old code wrote it straight to mortality_date — and in the 2026 intake it
+ * is the date the cattle arrived. Importing an intake file through the legacy
+ * mapping stamps a mortality date on every live animal in it: 129 head, all
+ * alive, all carrying a date that says otherwise. Which column `Date` is
+ * depends on the layout, so the layout has to be identified first. */
+function _animalCsvLayout(headers) {
+  const has = h => headers.includes(h);
+  /* Identified by the columns unique to each, not by counting: a file with
+     extra columns bolted on the end is still the layout it was. */
+  if (has('Main tag ID') && has('Mass'))          return 'intake2026';
+  if (has('Main tag number') || has('Entry Mass')) return 'legacy';
+  return null;
+}
+
+const ANIMAL_CSV_FIELDS = {
+  legacy: {
+    tag:       ['Main tag number'],
+    mass:      ['Entry Mass'],
+    exitMass:  ['Exit Mass', 'Exit mass', 'Sale Mass'],
+    batchNo:   ['Batch No'],
+    batchName: ['Name'],
+    breed:     ['Breed'],
+    gender:    ['Gender'],
+    /* The legacy Date is the mortality date. */
+    mortDate:  ['Date'],
+  },
+  intake2026: {
+    tag:       ['Main tag ID'],
+    mass:      ['Mass'],
+    exitMass:  [],
+    batchNo:   ['Batch no'],
+    batchName: ['Batch no'],
+    breed:     ['Breed'],
+    gender:    ['Gender'],
+    /* The 2026 Date is the intake date. It is NOT a mortality date and must
+       not be written as one. */
+    intakeDate: ['Date'],
+    event:      ['Event'],
+    owner:      ['Owner'],
+    qtyTotal:   ['Qty Total'],
+  },
+};
+
+function _csvField(row, layout, key) {
+  const names = (ANIMAL_CSV_FIELDS[layout] || {})[key] || [];
+  for (const n of names) if (row[n] !== undefined && row[n] !== '') return row[n];
+  return '';
 }
 
 /* ── Gender helper ───────────────────────────────────────── */
@@ -1574,48 +1636,119 @@ function clearCyclesPreview() {
 }
 
 let _animalsData = [];
+let _animalsLayout = null;
+
 function handleAnimalsFile(file) {
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = e => {
+  reader.onload = async e => {
     const rows = parseCSV(e.target.result);
     _animalsData = rows;
+    const headers = rows.length ? Object.keys(rows[0]) : [];
+    _animalsLayout = _animalCsvLayout(headers);
+
+    if (!_animalsLayout) {
+      document.getElementById('animalsImportPreview').innerHTML = `
+        <div class="import-preview">
+          <h4><i class="fa-solid fa-triangle-exclamation" style="color:var(--red)"></i> Unrecognised columns</h4>
+          <p style="font-size:12px;color:var(--text-muted);margin-top:8px">
+            This importer needs a tag column and a mass column. It knows
+            <strong>Main tag ID</strong> + <strong>Mass</strong>, and
+            <strong>Main tag number</strong> + <strong>Entry Mass</strong>.
+            This file has: ${headers.map(h => escapeHtml(h)).join(', ') || '(nothing)'}
+          </p>
+        </div>`;
+      document.getElementById('animalsImportActions').style.display = 'none';
+      return;
+    }
+
+    const f = k => rows.map(r => _csvField(r, _animalsLayout, k));
     const breedCounts = {};
-    rows.forEach(r => { const b = (r['Breed']||'Unknown'); breedCounts[b]=(breedCounts[b]||0)+1; });
-    const topBreeds   = Object.entries(breedCounts).sort((a,b)=>b[1]-a[1]).slice(0,5);
-    const mortalities = rows.filter(r => r['Mortality'] && r['Mortality'].trim()).length;
-    const sold        = rows.filter(r => (r['Sold']||'').toLowerCase()==='checked').length;
-    const males       = rows.filter(r => String(r['Gender']).trim() === '1').length;
-    const females     = rows.filter(r => String(r['Gender']).trim() === '3').length;
-    const batches     = new Set(rows.map(r => r['Name']).filter(Boolean)).size;
+    f('breed').forEach(b => { const k = b || 'Unknown'; breedCounts[k] = (breedCounts[k] || 0) + 1; });
+    const topBreeds = Object.entries(breedCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const genders   = f('gender').map(parseGender);
+    const males     = genders.filter(g => g === 'Male').length;
+    const females   = genders.filter(g => g === 'Female').length;
+    const tags      = f('tag');
+    const noTag     = tags.filter(t => !t).length;
+    const dupTags   = tags.length - new Set(tags.filter(Boolean)).size;
+    const batchNos  = [...new Set(f('batchNo').filter(Boolean))];
+
+    /* Anything the layout does not account for, said out loud rather than
+       imported quietly as something else. */
+    const warnings = [];
+    if (noTag)   warnings.push(`${noTag} row${noTag === 1 ? ' has' : 's have'} no tag number and will be skipped`);
+    if (dupTags) warnings.push(`${dupTags} duplicate tag number${dupTags === 1 ? '' : 's'} within the file`);
+    if (_animalsLayout === 'intake2026') {
+      const events = [...new Set(f('event').filter(Boolean))];
+      const other  = events.filter(ev => ev.toLowerCase() !== 'new intake');
+      if (other.length) warnings.push(`Events other than "New Intake" present (${other.map(escapeHtml).join(', ')}) — every row is imported as a live animal`);
+      /* One row, one animal. A quantity above one is several head behind a
+         single tag, which cannot be split into records. */
+      const multi = f('qtyTotal').filter(q => parseFloat(q) > 1).length;
+      if (multi) warnings.push(`${multi} row${multi === 1 ? ' has' : 's have'} a quantity above 1 — each row is imported as ONE animal`);
+      if (batchNos.length > 1) warnings.push(`More than one batch number in the file (${batchNos.map(escapeHtml).join(', ')})`);
+    }
+
+    /* The cycle picker. The batch number in the file is matched against the
+       cycles on file, but it is only ever a default — the operator chooses.
+       Without this the importer relied on the batch NAME matching a cycle's
+       name exactly, and when it did not the animals landed with cycle_id NULL:
+       present in the herd, attached to nothing, and invisible to every
+       valuation. That is what Herd Reconciliation exists to clean up. */
+    if (!S.cycles.length) { try { S.cycles = await fetchAll('cattle_cycles'); } catch (_) {} }
+    const fileBatch = batchNos[0] || '';
+    const guess = S.cycles.find(c =>
+      (c.batch_name && fileBatch && c.batch_name.toLowerCase() === fileBatch.toLowerCase()) ||
+      (c.inv_no && fileBatch && fileBatch.toLowerCase().startsWith(String(c.inv_no).toLowerCase())) ||
+      (c.batch_name && fileBatch && c.batch_name.toLowerCase().includes(fileBatch.split(' ')[0].toLowerCase()))
+    );
+    const owner = _animalsLayout === 'intake2026' ? (f('owner').find(Boolean) || '') : '';
+
     document.getElementById('animalsImportPreview').innerHTML = `
       <div class="import-preview">
         <h4><i class="fa-solid fa-check-circle" style="color:var(--green-mid)"></i> File ready: ${escapeHtml(file.name)}</h4>
         <div class="import-stats">
           <div class="import-stat">Animals: <strong>${rows.length.toLocaleString()}</strong></div>
-          <div class="import-stat">Batches: <strong>${batches}</strong></div>
           <div class="import-stat">Male: <strong>${males.toLocaleString()}</strong></div>
           <div class="import-stat">Female: <strong>${females.toLocaleString()}</strong></div>
-          <div class="import-stat">Sold: <strong>${sold.toLocaleString()}</strong></div>
-          <div class="import-stat">Mortalities: <strong>${mortalities}</strong></div>
-          ${topBreeds.map(([b,c])=>`<div class="import-stat">${escapeHtml(b)}: <strong>${c}</strong></div>`).join('')}
+          ${batchNos.length ? `<div class="import-stat">Batch no: <strong>${escapeHtml(batchNos.join(', '))}</strong></div>` : ''}
+          ${owner ? `<div class="import-stat">Owner: <strong>${escapeHtml(owner)}</strong></div>` : ''}
+          ${topBreeds.map(([b, c]) => `<div class="import-stat">${escapeHtml(b)}: <strong>${c}</strong></div>`).join('')}
         </div>
-        <p style="font-size:12px;color:var(--text-muted);margin-top:10px">Preview (first 3 rows):</p>
+
+        ${warnings.length ? `<div class="import-warn">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          <div>${warnings.map(w => `<div>${w}</div>`).join('')}</div>
+        </div>` : ''}
+
+        <div class="import-allocate">
+          <label for="animalCycleSelect">Allocate these ${rows.length.toLocaleString()} animals to</label>
+          <select id="animalCycleSelect">
+            <option value="">— Leave unallocated —</option>
+            ${S.cycles.map(c => `<option value="${escapeHtml(c.id)}" ${guess && guess.id === c.id ? 'selected' : ''}>${escapeHtml(c.batch_name || c.id)}${c.status && c.status !== 'active' ? ' · ' + escapeHtml(c.status) : ''} · ${fmt.num(c.no_live || 0)} live</option>`).join('')}
+          </select>
+          <div class="import-allocate__note">
+            ${guess
+              ? `Matched <strong>${escapeHtml(guess.batch_name || guess.id)}</strong> from the file's batch number. Change it if that is wrong.`
+              : fileBatch
+                ? `No cycle matches batch <strong>${escapeHtml(fileBatch)}</strong> — pick one, or leave unallocated and link them later from Herd Reconciliation.`
+                : `The file carries no batch number. Pick the cycle these belong to.`}
+          </div>
+        </div>
+
+        <p style="font-size:12px;color:var(--text-muted);margin-top:12px">Preview (first 3 rows) &mdash; read as the <strong>${_animalsLayout === 'intake2026' ? '2026 intake' : 'legacy'}</strong> layout:</p>
         <table class="data-table" style="font-size:11px;margin-top:6px">
-          <thead><tr><th>Tag #</th><th>Batch Name</th><th>Breed</th><th>Gender</th><th>Mass (kg)</th><th>Dim Tag</th><th>Sold</th><th>Status</th></tr></thead>
-          <tbody>${rows.slice(0,3).map(r => {
-            const isMort = r['Mortality'] && r['Mortality'].trim();
-            const isSold = (r['Sold']||'').toLowerCase() === 'checked';
-            const status = isMort ? 'mortality' : isSold ? 'sold' : 'active';
+          <thead><tr><th>Tag #</th><th>Breed</th><th>Gender</th><th>Mass (kg)</th><th>Batch no</th><th>Status</th></tr></thead>
+          <tbody>${rows.slice(0, 3).map(r => {
+            const st = _animalStatusFromRow(r, _animalsLayout);
             return `<tr>
-              <td>${escapeHtml(r['Main tag number']||'—')}</td>
-              <td>${escapeHtml(r['Name']||'—')}</td>
-              <td>${escapeHtml(r['Breed']||'—')}</td>
-              <td>${escapeHtml(parseGender(r['Gender']))}</td>
-              <td>${escapeHtml(r['Entry Mass']||'—')}</td>
-              <td style="font-size:10px">${escapeHtml(r['Dim Tag']||'—')}</td>
-              <td>${isSold ? '✅' : '—'}</td>
-              <td>${status}</td>
+              <td>${escapeHtml(_csvField(r, _animalsLayout, 'tag') || '—')}</td>
+              <td>${escapeHtml(_csvField(r, _animalsLayout, 'breed') || '—')}</td>
+              <td>${escapeHtml(parseGender(_csvField(r, _animalsLayout, 'gender')) || '—')}</td>
+              <td>${escapeHtml(_csvField(r, _animalsLayout, 'mass') || '—')}</td>
+              <td>${escapeHtml(_csvField(r, _animalsLayout, 'batchNo') || '—')}</td>
+              <td>${st}</td>
             </tr>`;
           }).join('')}</tbody>
         </table>
@@ -1626,6 +1759,16 @@ function handleAnimalsFile(file) {
   reader.readAsText(file);
 }
 
+/* Only the legacy export carries mortality and sale columns. An intake file is
+   an intake: every row is a live animal, and reading a status out of columns
+   it does not have would invent one. */
+function _animalStatusFromRow(r, layout) {
+  if (layout !== 'legacy') return 'active';
+  const isMort = !!(r['Mortality'] && r['Mortality'].trim());
+  const isSold = (r['Sold'] || '').toLowerCase() === 'checked';
+  return isMort ? 'mortality' : isSold ? 'sold' : 'active';
+}
+
 async function importAnimals() {
   if (!_animalsData.length) return;
   const prog = document.getElementById('animalsImportProgress');
@@ -1634,28 +1777,47 @@ async function importAnimals() {
   prog.style.display = 'block';
   document.getElementById('animalsImportActions').style.display = 'none';
 
+  /* The batch the operator chose, sent with every record. The server accepts
+     cycle_id and only falls back to matching on batch NAME when none is given —
+     that fallback is what left an import attached to nothing when the names
+     did not line up, so an explicit choice beats it. */
+  const sel     = document.getElementById('animalCycleSelect');
+  const cycleId = sel ? sel.value || null : null;
+  const cycle   = cycleId ? S.cycles.find(c => c.id === cycleId) : null;
+  const layout  = _animalsLayout || 'legacy';
+
   const records = _animalsData.map(r => {
-    const isMortality = !!(r['Mortality'] && r['Mortality'].trim());
-    const isSold      = (r['Sold']||'').toLowerCase() === 'checked';
+    const status = _animalStatusFromRow(r, layout);
+    const isMortality = status === 'mortality';
+    const isSold      = status === 'sold';
     return {
-      tag_number:       r['Main tag number'] || '',
-      batch_no:         r['Batch No']        || '',
-      batch_name:       r['Name']            || '',
-      entry_mass:       parseFloat(r['Entry Mass']) || null,
+      tag_number:       _csvField(r, layout, 'tag'),
+      batch_no:         _csvField(r, layout, 'batchNo'),
+      /* The chosen cycle's name, so the animal reads as belonging to it
+         everywhere batch_name is shown, rather than carrying the raw text out
+         of the file. */
+      batch_name:       (cycle && cycle.batch_name) || _csvField(r, layout, 'batchName'),
+      cycle_id:         cycleId,
+      entry_mass:       parseFloat(_csvField(r, layout, 'mass')) || null,
       /* Exit mass had nowhere to land until now, so the export column was
          dropped on the floor along with the only measure of what the animals
-         actually gained. */
-      exit_mass:        parseFloat(r['Exit Mass'] || r['Exit mass'] || r['Sale Mass']) || null,
-      gender:           parseGender(r['Gender']),
-      breed:            r['Breed']           || '',
-      dim_tag:          r['Dim Tag']         || '',
-      extra_colour_tag: r['Extra Colour Tag']|| '',
+         actually gained. The intake layout has none — an animal being weighed
+         in has not been weighed out. */
+      exit_mass:        parseFloat(_csvField(r, layout, 'exitMass')) || null,
+      gender:           parseGender(_csvField(r, layout, 'gender')),
+      breed:            _csvField(r, layout, 'breed'),
+      dim_tag:          r['Dim Tag']          || '',
+      extra_colour_tag: r['Extra Colour Tag'] || '',
       mortality:        isMortality,
-      mortality_date:   cleanDate(r['Date']),
-      mortality_report: r['Mortality Report']|| '',
+      /* Only when the animal is actually dead. `Date` means the mortality date
+         in the legacy export and the INTAKE date in the 2026 one; writing it
+         unconditionally stamped a mortality date on every live animal in an
+         intake file. */
+      mortality_date:   isMortality ? cleanDate(_csvField(r, layout, 'mortDate')) : null,
+      mortality_report: r['Mortality Report'] || '',
       sold:             isSold,
-      sale_batch:       r['Sale Batch']      || '',
-      sale_date:        cleanDate(r['Sale date']),
+      sale_batch:       r['Sale Batch']       || '',
+      sale_date:        isSold ? cleanDate(r['Sale date']) : null,
       notes:            '',
     };
   });
