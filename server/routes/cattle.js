@@ -69,6 +69,75 @@ async function bulkInsert(client, table, rows, labelOf) {
   return { inserted, failures };
 }
 
+/* ── GET /api/cattle/herd-summary ───────────────────────────
+   Everything the NAV dashboard needs to know about the herd, as aggregates.
+   READ ONLY.
+
+   The console used to build these figures in the browser, from the herd. It
+   walked cattle_animals through the generic table API a hundred rows at a
+   time, sequentially, and then reduced twenty thousand rows to about fifty
+   numbers. Measured against a 20 000-head herd on localhost: 210 requests,
+   8.7 MB and 4.8 seconds, of which 4.6 was the animals. On a real connection
+   the two hundred sequential round trips cost far more than the transfer —
+   that is the wait the operator was sitting through, and it grows with every
+   animal ever imported because the walk is of the whole table, not of the
+   part being valued.
+
+   Not one of those figures needs a row. cycleNAV averages entry_mass and
+   exit_mass per cycle and counts how many animals each average rests on; the
+   dashboard wants a breed histogram and three totals. All of it is GROUP BY.
+
+   The Animals VIEW is untouched and still pages — it lists individual animals,
+   which is the one screen that genuinely needs them, and it already had its
+   own server-side stats. */
+router.get('/herd-summary', requireFund, async (req, res) => {
+  try {
+    const [byCycle, totals, breeds] = await Promise.all([
+      /* The four numbers cycleNAV reduces the herd to. Sums and counts rather
+         than averages so the client can hold the same arithmetic it always
+         had — and `*_count` is what tells the dashboard whether a valuation
+         rests on real weigh-in slips or on the settings default. */
+      pool.query(`
+        SELECT cycle_id,
+               COUNT(*)::int                                            AS animals,
+               COALESCE(SUM(entry_mass) FILTER (WHERE entry_mass > 0), 0)::float8 AS entry_sum,
+               COUNT(*) FILTER (WHERE entry_mass > 0)::int              AS entry_count,
+               COALESCE(SUM(exit_mass)  FILTER (WHERE exit_mass  > 0), 0)::float8 AS exit_sum,
+               COUNT(*) FILTER (WHERE exit_mass  > 0)::int              AS exit_count
+          FROM cattle_animals
+         WHERE cycle_id IS NOT NULL
+         GROUP BY cycle_id`),
+      pool.query(`
+        SELECT COUNT(*)::int                                                     AS total,
+               COUNT(*) FILTER (WHERE status = 'sold'      OR sold = true)::int  AS sold,
+               COUNT(*) FILTER (WHERE status = 'mortality' OR mortality = true)::int AS mortalities
+          FROM cattle_animals`),
+      /* Active only, and only the breeds the dashboard can draw. The chart
+         takes the first six; ordering by count here means those six are the
+         six largest rather than whichever six sorted first. */
+      pool.query(`
+        SELECT COALESCE(NULLIF(breed, ''), 'Unknown') AS breed, COUNT(*)::int AS count
+          FROM cattle_animals
+         WHERE status = 'active'
+            OR (COALESCE(sold, false) = false AND COALESCE(mortality, false) = false)
+         GROUP BY 1
+         ORDER BY count DESC, breed`),
+    ]);
+
+    /* Keyed by cycle_id so the client looks a cycle up rather than filtering
+       the whole herd once per cycle — that filter was O(cycles × animals) and
+       ran again on every re-render. */
+    const cycles = {};
+    for (const r of byCycle.rows) cycles[r.cycle_id] = r;
+
+    res.set('Cache-Control', 'no-store');
+    res.json({ cycles, totals: totals.rows[0], breeds: breeds.rows });
+  } catch (err) {
+    console.error('[cattle/herd-summary]', err.message);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
 /* ── GET /api/cattle/animals/stats ──────────────────────────
    Returns aggregate stats + distinct batches/breeds for the
    animals filter bar. Accepts the same filter params as the

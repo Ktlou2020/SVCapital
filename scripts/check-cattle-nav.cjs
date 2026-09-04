@@ -217,15 +217,20 @@ if (NAV) {
    different ways depending on which tab had been visited first. */
 console.log('\nNAV never reads the animals table\'s current page');
 {
-  ok('the state carries a full herd separate from the table page',
-     /allAnimals:\s*\[\]/.test(SRC) && /animals:\s*\[\]/.test(SRC));
+  /* The herd used to be a second array holding every animal on file, beside
+     `animals`, the 75-row table page. It is now S.herd — the same figures NAV
+     was reducing that array to, computed by the database. The invariant is
+     unchanged and the separation is stronger: there is no longer an array for
+     NAV to read the wrong one of. */
+  ok('the state carries a herd summary separate from the table page',
+     /herd:\s*\{ cycles: \{\}/.test(SRC) && /animals:\s*\[\]/.test(SRC));
   ok('the animals table page is written to S.animals',
      /S\.animals\s*=\s*res\.data/.test(SRC));
-  ok('and every cycleNAV call reads the full herd',
+  ok('and no cycleNAV call reads the table page',
      !/cycleNAV\([^)]*S\.animals\b/.test(CODE),
      'a NAV computed over 75 filtered rows is not a NAV');
-  ok('the dashboard aggregates over the full herd too',
-     /portfolioNAV\(S\.cycles,\s*S\.allAnimals/.test(SRC));
+  ok('the dashboard aggregates over the whole herd too',
+     /portfolioNAV\(S\.cycles,\s*S\.herd\.cycles/.test(SRC));
   ok('the cycles tab loads the herd before valuing it',
      /async function loadCycles[\s\S]{0,400}_loadHerd\(/.test(SRC),
      'it used to load cycles only, and fall back to a hardcoded 220kg average');
