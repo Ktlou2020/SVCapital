@@ -278,6 +278,71 @@ console.log('\nthe look and feel stays inside the CI');
   }
 }
 
+console.log('\nthe homepage carries it, on the same switches');
+{
+  const HOME  = read('index.html');
+  const MAIN  = read('js/main.js');
+  const HOMECSS = read('css/home-ci.css');
+
+  ok('there is a section, and it starts hidden',
+     /<section class="eif-section" id="eif" style="display:none">/.test(HOME),
+     'shown by main.js once the products are known — a section that paints ' +
+     'before the fetch flashes an offering that may be switched off');
+
+  ok('and so does its nav link',
+     /id="navEifLink" style="display:none"/.test(HOME));
+
+  ok('the cards are keyed by product_type',
+     ['eif_murabaha', 'eif_ijara', 'eif_mudarabah']
+       .every(t => HOME.includes(`data-product="${t}"`)),
+     'data-product is what _applyLiveProductAverages resolves against, so ' +
+     'these get the achieved average, the admin colour and the admin copy ' +
+     'without any homepage code specific to them');
+
+  ok('and they are in homeMap, so that machinery reaches them',
+     /eif_murabaha:\s*\{ types: \['eif_murabaha'\],\s*primary: 'eif_murabaha' \}/.test(MAIN) &&
+     /eif_mudarabah:\s*\{ types: \['eif_mudarabah'\]/.test(MAIN));
+
+  ok('the section follows its cards',
+     /const eifVisible = EIF_TYPES\.some\(resolveVisible\)/.test(MAIN) &&
+     /eifSection\.style\.display = eifVisible \? '' : 'none'/.test(MAIN) &&
+     /eifNav\.style\.display = eifVisible \? '' : 'none'/.test(MAIN),
+     'hiding the cards but leaving the section is a header, four principles ' +
+     'and a governance note about an offering that is not there');
+
+  /* The risk pills belong to #products. Unscoped, choosing "Low" emptied a
+     section they have nothing to do with. */
+  ok('the risk filter is scoped to the products section',
+     /querySelectorAll\('#products \.products-grid \.product-card'\)/.test(MAIN),
+     'the EIF cards sit in their own .products-grid');
+
+  ok('the FAQs are fetched, not a second copy in the markup',
+     /fetch\('\/api\/products\/faqs\?category=eif'\)/.test(MAIN) &&
+     !/What makes these investments interest-free/.test(HOME),
+     'a static copy is a second thing to correct when the Sharia review ' +
+     'concludes, and the one nobody remembers');
+
+  ok('the homepage makes the same claim as the portal',
+     /Sharia advisory review is under way/.test(HOME) &&
+     /do not yet hold a Sharia certificate/i.test(HOME) &&
+     !/Sharia[- ]certified\b|fully Sharia compliant/i.test(HOME));
+
+  /* _applyLiveProductAverages paints each card's stat value and icon with the
+     product's colour, inline. #65ed00 on a white card is about 1.7:1 — the
+     headline figure would be the least legible thing on the card. */
+  ok('the accent never becomes body text on the light homepage',
+     /\.product-card--eif \.stat__value--gold \{ color: var\(--eif-ink\) !important; \}/.test(HOMECSS) &&
+     /--eif-ink:\s*#2f6b00/.test(HOMECSS),
+     'only !important beats the inline style the live sync writes');
+
+  const eifCss = (HOMECSS.match(/ETHICAL AND INTEREST-FREE \(EIF\)[\s\S]*$/) || [''])[0];
+  const hexes = [...new Set((strip(eifCss).match(/#[0-9a-fA-F]{6}/g) || []).map(h => h.toLowerCase()))];
+  const allowed = ['#65ed00', '#2f6b00', '#fbfef8', '#ffffff', '#f0f2f5', '#fff'];
+  ok('and the homepage block introduces no colour of its own either',
+     hexes.every(h => allowed.includes(h)),
+     `found ${hexes.filter(h => !allowed.includes(h)).join(', ')}`);
+}
+
 console.log('\nand the console can create them like any other product');
 {
   ok('the product form has an offering field',

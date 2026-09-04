@@ -560,3 +560,203 @@ input[type="range"] { accent-color: var(--ci-orange) !important; }
 .compare-table td:first-child { color: var(--ci-text) !important; }
 .compare-table th, .compare-table td { border-bottom-color: rgba(0,0,0,0.07) !important; }
 .compare-highlight strong { color: var(--ci-orange) !important; }
+
+/* ═══════════════════════════════════════════════════════════════
+   ETHICAL AND INTEREST-FREE (EIF)
+   ═══════════════════════════════════════════════════════════════
+
+   The homepage's own treatment of the offering the portal carries. Same
+   accent as the portal — #65ed00, the CI lime, already in
+   Utils.ciProductPalette — and the same one deliberate departure: a flat
+   top-left corner, so the section reads as its own room without a second
+   design language.
+
+   The homepage runs light, so the lime is used as a rule, a tint and a mark
+   rather than as a fill. Lime type on white does not pass contrast, and the
+   two places a reader must actually read — the card titles and the FAQ — keep
+   the page's normal ink. */
+
+.eif-section {
+  --eif: #65ed00;
+  --eif-ink: #2f6b00;          /* the lime taken dark enough to read on white */
+  background: linear-gradient(180deg, #fbfef8 0%, #ffffff 60%) !important;
+  color: var(--ci-text-body) !important;
+  padding: 88px 0;
+}
+
+.eif-eyebrow {
+  background: rgba(101,237,0,0.10) !important;
+  border-color: rgba(101,237,0,0.30) !important;
+  color: var(--eif-ink) !important;
+}
+.eif-eyebrow i { margin-right: 6px; }
+
+/* ── The four principles ────────────────────────────────────────────────── */
+.eif-principles-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin: 36px 0 44px;
+}
+.eif-principle-card {
+  background: #fff;
+  border: 1.5px solid rgba(101,237,0,0.24);
+  border-radius: 4px 16px 16px 16px;
+  padding: 22px 20px;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.05);
+}
+.eif-principle-card > i {
+  display: block;
+  font-size: 1.25rem;
+  color: var(--eif-ink);
+  margin-bottom: 12px;
+}
+.eif-principle-card h4 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--ci-text);
+}
+.eif-principle-card p {
+  margin: 0;
+  font-size: 0.87rem;
+  line-height: 1.6;
+  color: var(--ci-text-muted);
+}
+
+/* ── Cards ──────────────────────────────────────────────────────────────── */
+.eif-grid { margin-top: 0; }
+
+.product-card--eif {
+  border-top-left-radius: 4px !important;
+  border-color: rgba(101,237,0,0.28) !important;
+}
+.product-card--eif:hover {
+  border-color: rgba(101,237,0,0.55) !important;
+  box-shadow: 0 8px 32px rgba(101,237,0,0.16) !important;
+}
+.product-card--eif .product-card__icon { color: var(--eif-ink) !important; }
+
+.eif-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 4px 12px 12px 12px;
+  background: rgba(101,237,0,0.12);
+  border: 1px solid rgba(101,237,0,0.30);
+  color: var(--eif-ink);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+/* ── Governance ─────────────────────────────────────────────────────────── */
+/* Neutral on purpose: it states what the platform does not yet hold, and the
+   section's colour on that sentence would read as approval. */
+.eif-governance-note {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-top: 36px;
+  padding: 18px 20px;
+  border-radius: 12px;
+  border: 1px solid var(--ci-border);
+  background: var(--ci-bg-light, #f0f2f5);
+}
+.eif-governance-note > i {
+  color: var(--ci-orange);
+  font-size: 1rem;
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+.eif-governance-note p {
+  margin: 0;
+  font-size: 0.87rem;
+  line-height: 1.65;
+  color: var(--ci-text-muted);
+}
+.eif-governance-note strong { color: var(--ci-text); }
+
+/* ── The offering's FAQ ─────────────────────────────────────────────────── */
+.eif-faq { margin-top: 44px; }
+.eif-faq__title {
+  margin: 0 0 18px;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--ci-text);
+}
+.eif-faq__title::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 20px;
+  margin-right: 12px;
+  border-radius: 2px;
+  background: var(--eif);
+  vertical-align: -3px;
+}
+.eif-faq-item {
+  border-bottom: 1px solid var(--ci-border);
+}
+.eif-faq-q {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 4px;
+  background: none;
+  border: 0;
+  font-family: inherit;
+  font-size: 0.97rem;
+  font-weight: 700;
+  color: var(--ci-text);
+  text-align: left;
+  cursor: pointer;
+  transition: color .15s;
+}
+.eif-faq-q:hover { color: var(--eif-ink); }
+.eif-faq-q i {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  color: var(--ci-text-muted);
+  transition: transform .2s, color .15s;
+}
+.eif-faq-item.open .eif-faq-q i { transform: rotate(180deg); color: var(--eif-ink); }
+/* Collapsed by max-height rather than display so the chevron has something to
+   animate against and the row does not jump. */
+.eif-faq-a {
+  max-height: 0;
+  overflow: hidden;
+  padding: 0 4px;
+  font-size: 0.9rem;
+  line-height: 1.7;
+  color: var(--ci-text-muted);
+  transition: max-height .25s ease, padding .25s ease;
+}
+.eif-faq-item.open .eif-faq-a {
+  max-height: 480px;
+  padding: 0 4px 20px;
+}
+
+@media (max-width: 640px) {
+  .eif-section { padding: 60px 0; }
+  .eif-principles-row { grid-template-columns: 1fr; gap: 12px; margin: 28px 0 32px; }
+  .eif-faq__title { font-size: 1.15rem; }
+}
+
+/* The percentage and the icon keep readable ink, whatever the admin sets.
+ *
+ * _applyLiveProductAverages() paints each card's stat value and icon with the
+ * product's colour from the API, inline. That is right for the gold and amber
+ * products and wrong here: #65ed00 is the section's accent and it is roughly
+ * 1.7:1 against a white card — the headline number, the one figure a reader
+ * came to the card for, would be the least legible thing on it.
+ *
+ * !important beats an inline style, which is the only way to win against JS
+ * that writes to style.color. The tint the same function applies to
+ * .product-card__bg is left alone: a 6% wash has nothing to read. */
+.product-card--eif .stat__value--gold { color: var(--eif-ink) !important; }
+.product-card--eif .product-card__icon { color: var(--eif-ink) !important; }
