@@ -149,6 +149,89 @@ console.log('\nand it says profit share, not interest');
      !/TARGET RETURN[\s\S]{0,80}_isEifProduct/.test(CORE));
 }
 
+console.log('\nthe offering shows how each structure earns, rather than asserting it');
+{
+  ok('each structure has its flow',
+     /function EIF_STRUCTURES\(\)/.test(CORE) &&
+     ['eif_murabaha', 'eif_ijara', 'eif_mudarabah'].every(t => new RegExp(t + ':\\s*\\{').test(CORE)));
+
+  const structs = (CORE.match(/function EIF_STRUCTURES\(\)[\s\S]*?\n\}/) || [''])[0];
+  ok('each names the contract and glosses it in English',
+     ['Murabaha', 'Ijara', 'Mudarabah'].every(t => structs.includes(`term: '${t}'`)) &&
+     /gloss: 'cost-plus sale'/.test(structs) && /gloss: 'lease'/.test(structs) &&
+     /gloss: 'profit-sharing partnership'/.test(structs));
+
+  /* The order is the argument: owned before sold, owned before leased. */
+  ok('the flow puts ownership before the sale',
+     structs.indexOf('SV Capital buys the goods') < structs.indexOf('Sold on at a known mark-up'),
+     'a mark-up on goods you never owned is a financing charge, not a trade');
+  ok('and ownership before the lease',
+     structs.indexOf('The pool buys the asset') < structs.indexOf('Leased to an operator'));
+
+  ok('each says in one sentence why it is not interest',
+     (structs.match(/why:/g) || []).length === 3 &&
+     /separates it from interest/.test(structs) &&
+     /rent rather than interest/.test(structs));
+
+  ok('a product with no flow shows none rather than the wrong one',
+     /if \(!st\) return '';/.test(CORE),
+     'better nothing than a diagram describing a different contract');
+
+  ok('the flow is drawn on the product\'s own page',
+     /_isEifProduct\(product\) \? _eifStructureHtml\(type\) : ''/.test(read('portal/js/portal.js')) &&
+     /_isEifProduct\(product\) \? _eifStructureHtml\(type\) : ''/.test(read('mobile/src/js/portal.js')),
+     'both surfaces, or the app quietly has a lesser version of the offering');
+
+  /* The detail page had its own copy of the rate-label rule, so a card said
+     "target profit share" and the page one click later said "target return
+     p.a." on the same number. */
+  for (const f of ['portal/js/portal.js', 'mobile/src/js/portal.js']) {
+    ok(`${f} takes its rate label from the shared rule`,
+       /const returnLbl = _rateSubLabel\(product, avg != null, termMoDetail\);/.test(read(f)) &&
+       !/TARGET RETURN P\.A\./.test(strip(read(f))),
+       'a second copy of the rule is a second answer');
+  }
+
+  ok('the three are compared on what separates them',
+     /function _eifCompareHtml\(\)/.test(CORE) &&
+     /What earns the return/.test(CORE) && /Who carries a loss/.test(CORE) &&
+     /Is the return known in advance/.test(CORE),
+     'the cards carry three numbers; the choice is about certainty and who ' +
+     'bears the loss');
+  ok('and it is not drawn when there is nothing to compare',
+     /if \(prods\.length < 2\) return '';/.test(CORE));
+  ok('the comparison scrolls inside itself',
+     /\.eif-compare__scroll \{ overflow-x: auto; \}/.test(CSS),
+     'a four-column table has a floor below which it cannot shrink, and the ' +
+     'page body must never scroll sideways');
+}
+
+console.log('\nand the accent is never used as text on the light ground');
+{
+  /* #65ed00 measures about 1.7:1 on white. It is the section's accent and it
+     belongs to rules, borders, tints and fills — never to a word. */
+  ok('there is a separate ink for text',
+     /--eif-ink: #2f6b00;/.test(CSS));
+
+  const eifCss = (CSS.match(/ETHICAL AND INTEREST-FREE|Ethical and Interest-Free \(EIF\)[\s\S]*$/) || [''])[0];
+  const textProps = [...strip(eifCss).matchAll(/^\s*color:\s*([^;]+);/gm)].map(m => m[1].trim());
+  const rawAccent = textProps.filter(v => /var\(--eif\)|#65ed00/.test(v));
+  ok('no colour declaration uses the raw accent',
+     rawAccent.length === 0,
+     'found: ' + rawAccent.join(', '));
+
+  ok('and the step marker is tinted rather than filled with a hardcoded dark',
+     !/background: color-mix\(in srgb, var\(--eif\) \d+%, #0d0d0d\)/.test(CSS),
+     'that renders as a black square on the light CI ground this section sits on');
+
+  /* The figure is the thing a reader came to the card for. */
+  ok('a long label cannot squeeze the figure beside it',
+     /\.mpc2-metric__val \{ white-space: nowrap; \}/.test(CSS),
+     '"TARGET PROFIT SHARE P.A." wrapped to four lines and rendered 11.5% as "11."');
+  ok('and the EIF label is short enough for the row it sits in',
+     /'AVG SHARE P\.A\.' : 'TARGET SHARE P\.A\.'/.test(CORE));
+}
+
 console.log('\nthe interest election is real, and is checked where the money moves');
 {
   ok('investors carry the election',
@@ -247,7 +330,10 @@ console.log('\nthe look and feel stays inside the CI');
   /* One canonical purple, and no second brand colour smuggled in beside it. */
   const eifCss = (CSS.match(/Ethical and Interest-Free \(EIF\)[\s\S]*$/) || [''])[0];
   const hexes = [...new Set((strip(eifCss).match(/#[0-9a-fA-F]{6}/g) || []).map(h => h.toLowerCase()))];
-  const allowed = ['#65ed00', '#0d1a00', '#1a1a1a'];
+  /* #2f6b00 is the same lime taken dark enough to read as text on the light
+     CI ground — a role of the accent, not a second colour. #0d1a00 is the ink
+     that sits ON the accent. */
+  const allowed = ['#65ed00', '#2f6b00', '#0d1a00', '#1a1a1a'];
   ok('the EIF stylesheet introduces no colour of its own',
      hexes.every(h => allowed.includes(h)),
      `found ${hexes.filter(h => !allowed.includes(h)).join(', ')} — everything ` +

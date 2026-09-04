@@ -3159,6 +3159,146 @@ function EIF_ICON()     { return 'fa-mosque'; }
 
 function _isEifProduct(p) { return ((p && p.category) || 'standard') === EIF_CATEGORY(); }
 
+/* ── How each structure actually earns ─────────────────────────────────────
+ *
+ * The substance of this offering, and the part a paragraph of copy cannot
+ * carry. A client who will not take riba is not reassured by being told there
+ * is none; they want to see where the money comes from — who buys what, who
+ * holds title, when it passes, and what happens if the thing behind it fails.
+ * That mechanism IS the compliance argument, so it is drawn rather than
+ * asserted.
+ *
+ * Keyed by product_type. A new EIF product with no entry here simply shows no
+ * diagram — better nothing than a flow that describes a different contract. */
+function EIF_STRUCTURES() {
+  return {
+    eif_murabaha: {
+      term: 'Murabaha',
+      gloss: 'cost-plus sale',
+      steps: [
+        ['fa-wallet',    'You invest',                   'Your capital joins the pool.'],
+        ['fa-box',       'SV Capital buys the goods',    'Bought and owned outright before anything is sold on.'],
+        ['fa-file-signature', 'Sold on at a known mark-up', 'Price and mark-up agreed in writing before the sale.'],
+        ['fa-calendar',  'The business pays in instalments', 'The amount owed never changes, however long it takes.'],
+      ],
+      earns: 'Your share of the mark-up',
+      /* The sentence that does the work: what makes it not interest. */
+      why: 'The return is a trading profit on goods that were actually bought and actually sold. It is fixed at the moment of sale and cannot grow with time — which is precisely what separates it from interest.',
+    },
+    eif_ijara: {
+      term: 'Ijara',
+      gloss: 'lease',
+      steps: [
+        ['fa-wallet',        'You invest',              'Your capital joins the pool.'],
+        ['fa-key',           'The pool buys the asset', 'Title is held by the pool for the life of the lease.'],
+        ['fa-handshake',     'Leased to an operator',   'An agreed rental over an agreed term.'],
+        ['fa-arrow-rotate-right', 'Rent is paid over the term', 'Maintenance and insurance stay with the owner.'],
+      ],
+      earns: 'Rent on an asset the pool owns',
+      why: 'Because the pool owns the asset it carries the ownership risk: if the asset cannot be used, the rent stops. That risk is what makes this income rent rather than interest.',
+    },
+    eif_mudarabah: {
+      term: 'Mudarabah',
+      gloss: 'profit-sharing partnership',
+      steps: [
+        ['fa-wallet',         'You provide the capital', 'The investors are rabb al-mal.'],
+        ['fa-user-tie',       'A vetted partner provides the work', 'The operator is the mudarib.'],
+        ['fa-store',          'The venture trades',      'Quarterly reporting on what it actually does.'],
+        ['fa-scale-balanced', 'Profit is divided 80 / 20', 'On a ratio fixed before a rand is deployed.'],
+      ],
+      earns: 'Your share of profit actually made',
+      why: 'A loss falls on the capital, and the partner forfeits their share of the profit rather than sharing the loss. Nothing is promised in advance, because a promised return on a partnership would be the thing this structure exists to avoid.',
+    },
+  };
+}
+
+/* The flow, drawn. Numbered because the order is the argument: the goods are
+   owned before they are sold, the asset is owned before it is leased. */
+function _eifStructureHtml(productType) {
+  const st = EIF_STRUCTURES()[productType];
+  if (!st) return '';
+  return `
+    <div class="eif-structure" style="--eif:${EIF_ACCENT()}">
+      <div class="eif-structure__head">
+        <div>
+          <div class="eif-structure__term">${_esc(st.term)}</div>
+          <div class="eif-structure__gloss">${_esc(st.gloss)}</div>
+        </div>
+        <div class="eif-structure__earns">
+          <span>You earn</span>
+          <strong>${_esc(st.earns)}</strong>
+        </div>
+      </div>
+      <ol class="eif-flow">
+        ${st.steps.map(([icon, title, sub], i) => `
+          <li class="eif-flow__step">
+            <div class="eif-flow__mark"><i class="fa-solid ${icon}"></i><span>${i + 1}</span></div>
+            <div class="eif-flow__body">
+              <strong>${_esc(title)}</strong>
+              <span>${_esc(sub)}</span>
+            </div>
+          </li>`).join('')}
+      </ol>
+      <p class="eif-structure__why"><i class="fa-solid fa-circle-check"></i><span>${_esc(st.why)}</span></p>
+    </div>`;
+}
+
+/* The three side by side, on the axes that actually separate them. A client
+   choosing between these is choosing how much certainty they want and who
+   carries the loss — not between three numbers. */
+function _eifCompareHtml() {
+  const rows = [
+    ['What earns the return',
+     'A disclosed mark-up on goods', 'Rent on an owned asset', 'A share of profit made'],
+    ['What stands behind it',
+     'The goods, and the buyer\'s receivables', 'The asset itself', 'The venture\'s own trade'],
+    ['Who carries a loss',
+     'The pool, if the buyer defaults', 'The pool, as the owner', 'The capital; the partner forfeits profit'],
+    ['Is the return known in advance',
+     'Yes — fixed at the sale', 'Yes — contracted rent', 'No — a target only'],
+  ];
+  const cols = ['eif_murabaha', 'eif_ijara', 'eif_mudarabah'];
+  const prods = cols.map(t => (_mktProducts || []).find(p => p.product_type === t)).filter(Boolean);
+  if (prods.length < 2) return '';          /* nothing to compare */
+  const S2 = EIF_STRUCTURES();
+  const on = t => cols.indexOf(t);
+
+  return `
+    <div class="eif-compare" style="--eif:${EIF_ACCENT()}">
+      <div class="eif-compare__title">Which one, and why</div>
+      <div class="eif-compare__scroll">
+        <table class="eif-compare__table">
+          <thead>
+            <tr>
+              <th></th>
+              ${prods.map(p => `<th>
+                <span class="eif-compare__term">${_esc((S2[p.product_type] || {}).term || p.label)}</span>
+                <span class="eif-compare__gloss">${_esc((S2[p.product_type] || {}).gloss || '')}</span>
+              </th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(([label, ...vals]) => `
+              <tr>
+                <th scope="row">${_esc(label)}</th>
+                ${prods.map(p => `<td>${_esc(vals[on(p.product_type)] || '—')}</td>`).join('')}
+              </tr>`).join('')}
+            <tr class="eif-compare__nums">
+              <th scope="row">Target profit share</th>
+              ${prods.map(p => `<td><strong>${p.benchmark_rate ? (parseFloat(p.benchmark_rate) * 100).toFixed(1) + '%' : '—'}</strong> p.a.</td>`).join('')}
+            </tr>
+            <tr class="eif-compare__nums">
+              <th scope="row">Term &middot; minimum</th>
+              ${prods.map(p => `<td>${p.term_months || '—'} mo &middot; ${Utils.rand(p.min_investment || 0)}</td>`).join('')}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="eif-compare__foot">Targets are drawn from the underlying trade, lease or venture. Murabaha and Ijara returns come from contracted amounts and are the more predictable of the three; a Mudarabah target is a projection and nothing more.</p>
+    </div>`;
+}
+
+
 function _eifProducts() {
   return (_mktProducts || []).filter(p => p && p.is_active && _isEifProduct(p));
 }
@@ -3210,7 +3350,11 @@ function _rateSubLabel(p, isAvg, termMonths) {
        put "TARGET PROFIT SHARE (36 MO)" beside 12.5% on the Ijara, saying the
        lease pays 12.5% over three years rather than each year. The suffix
        exists for short_term, whose stored rate really is a period rate. */
-    return isAvg ? 'PROFIT SHARE ACHIEVED P.A.' : 'TARGET PROFIT SHARE P.A.';
+    /* Short, because this label sits in a three-across metric row and the
+       longer form — "TARGET PROFIT SHARE P.A." — wrapped to four lines and
+       squeezed the figure beside it down to "11.". The full wording is in the
+       comparison table directly below, and on the product's own page. */
+    return isAvg ? 'AVG SHARE P.A.' : 'TARGET SHARE P.A.';
   }
   const isSt = p.product_type === 'short_term';
   if (isAvg) return isSt && termMonths ? `AVG RETURN (${termMonths} MO)` : 'AVG RETURN P.A.';
@@ -3405,12 +3549,29 @@ function renderProductsGrid() {
     eifHead.style.display = 'none';
   }
 
+  /* Below the cards, above the FAQ: the three compared on the axes that
+     separate them. The cards carry three numbers; this carries the choice. */
+  let eifCmp = document.getElementById('eifSectionCompare');
+  if (inEif) {
+    if (!eifCmp) {
+      eifCmp = document.createElement('div');
+      eifCmp.id = 'eifSectionCompare';
+      grid.after(eifCmp);
+    }
+    eifCmp.innerHTML = _eifCompareHtml();
+    eifCmp.style.display = '';
+  } else if (eifCmp) {
+    eifCmp.style.display = 'none';
+  }
+
   let eifFaq = document.getElementById('eifSectionFaq');
   if (inEif && PORTAL.eifFaqs && PORTAL.eifFaqs.length) {
     if (!eifFaq) {
       eifFaq = document.createElement('div');
       eifFaq.id = 'eifSectionFaq';
-      grid.after(eifFaq);
+      /* After the comparison, so the order reads: what they are, how they
+         differ, then the questions. */
+      (eifCmp || grid).after(eifFaq);
     }
     eifFaq.innerHTML = _eifFaqHtml(PORTAL.eifFaqs);
     eifFaq.style.display = '';

@@ -3123,6 +3123,12 @@ body.dark-mode input::placeholder { color: #4b5563 !important; }
   font-family:'Poppins','Poppins',Georgia,serif;
   font-size:1.55rem;font-weight:800;line-height:1;letter-spacing:-0.03em;color:#111827;
 }
+
+/* The figure comes first. A long label in this three-across row was allowed to
+   take width off the number beside it, so "11.5%" rendered as "11." — the one
+   thing on the card a reader is looking for, clipped by its own caption. */
+.mpc2-metric__val { white-space: nowrap; }
+.mpc2-metric__lbl { overflow-wrap: anywhere; }
 .mpc2-metric__lbl { font-size:0.72rem;color:#9ca3af;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;margin-top:4px; }
 
 /* Four metrics do not fit one row on a phone. flex:1 lets them shrink but not
@@ -3985,6 +3991,15 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
    Loaded on both surfaces: the app reads this same file since the CSS fork
    was removed, so there is one place to change any of it. */
 
+/* One accent, two roles. --eif is the CI lime, used for rules, borders, tints
+   and fills. --eif-ink is the same hue taken dark enough to read as text: this
+   section renders on the light CI ground, where #65ed00 measures about 1.7:1
+   and is unreadable at any size. Anything a person reads uses the ink. */
+.eif-banner, .eif-election, .eif-structure, .eif-compare, .eif-faq, .eif-tag,
+.mkt-cat-tab--eif, .mpc-v2--eif {
+  --eif-ink: #2f6b00;
+}
+
 .mkt-cat-tabs {
   display: flex;
   gap: 8px;
@@ -4043,7 +4058,7 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
   display: flex; align-items: center; justify-content: center;
   border-radius: 4px 14px 14px 14px;
   background: color-mix(in srgb, var(--eif) 16%, transparent);
-  color: var(--eif);
+  color: var(--eif-ink);
   font-size: 1.15rem;
 }
 .eif-banner__title {
@@ -4076,7 +4091,7 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
   background: color-mix(in srgb, var(--eif) 6%, transparent);
   min-width: 0;
 }
-.eif-principle > i { color: var(--eif); font-size: 0.95rem; margin-top: 2px; flex-shrink: 0; }
+.eif-principle > i { color: var(--eif-ink); font-size: 0.95rem; margin-top: 2px; flex-shrink: 0; }
 .eif-principle strong {
   display: block;
   font-size: 0.82rem;
@@ -4174,15 +4189,15 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
   border-radius: 4px 10px 10px 10px;
   border: 1px solid color-mix(in srgb, #65ed00 30%, transparent);
   background: color-mix(in srgb, #65ed00 10%, transparent);
-  color: #65ed00;
+  color: var(--eif-ink, #2f6b00);
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.02em;
 }
 
 /* ── The section's FAQ ──────────────────────────────────────────────────── */
-.eif-faq .faq-quick-q:hover { color: var(--eif); }
-.eif-faq .faq-quick-q.open i { color: var(--eif); }
+.eif-faq .faq-quick-q:hover { color: var(--eif-ink); }
+.eif-faq .faq-quick-q.open i { color: var(--eif-ink); }
 .eif-faq .panel__title::before {
   content: '';
   display: inline-block;
@@ -4198,4 +4213,230 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
   .eif-principles { grid-template-columns: 1fr; }
   /* The switch drops below the copy rather than squeezing it to two words. */
   .eif-election { flex-direction: column; align-items: flex-start; gap: 12px; }
+}
+
+/* ── EIF: the structure, drawn ─────────────────────────────────────────────
+   The offering's substance. A client who will not take riba wants to see
+   where the money comes from — who buys what, who holds title, when it passes
+   — so the flow is a numbered sequence rather than a paragraph, because the
+   ORDER is the argument: the goods are owned before they are sold, the asset
+   is owned before it is leased.
+
+   Numbered here for that reason and no other. A step list that is not
+   genuinely sequential should not be numbered. */
+.eif-structure {
+  margin: 4px 0 18px;
+  padding: 18px;
+  border: 1px solid color-mix(in srgb, var(--eif) 26%, transparent);
+  border-radius: 4px 16px 16px 16px;
+  background:
+    radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--eif) 8%, transparent) 0%, transparent 60%),
+    rgba(255,255,255,0.02);
+}
+.eif-structure__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-bottom: 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--eif) 16%, transparent);
+}
+.eif-structure__term {
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--text, #fff);
+}
+.eif-structure__gloss {
+  margin-top: 2px;
+  font-size: 0.78rem;
+  font-style: italic;
+  color: var(--text-muted);
+}
+.eif-structure__earns { text-align: right; }
+.eif-structure__earns > span {
+  display: block;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.eif-structure__earns > strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--eif-ink);
+}
+
+/* The flow. A rule runs down the left through the markers, so the steps read
+   as one sequence rather than four cards that happen to be stacked. */
+.eif-flow {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  position: relative;
+}
+.eif-flow::before {
+  content: '';
+  position: absolute;
+  left: 15px;
+  top: 14px;
+  bottom: 14px;
+  width: 2px;
+  border-radius: 2px;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--eif) 55%, transparent),
+    color-mix(in srgb, var(--eif) 12%, transparent));
+}
+.eif-flow__step {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 9px 0;
+  position: relative;
+}
+.eif-flow__mark {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 4px 11px 11px 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Tinted, not filled with a hardcoded dark. The first version mixed the
+     accent into #0d0d0d, which is right on a dark ground and a black square
+     on this one — and this section renders on the light CI ground. */
+  background: color-mix(in srgb, var(--eif) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--eif) 40%, transparent);
+  color: var(--eif-ink);
+  font-size: 0.8rem;
+}
+/* The number rides on the marker rather than taking a column of its own. */
+.eif-flow__mark > span {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: 8px;
+  background: var(--eif);
+  color: #0d1a00;
+  font-size: 0.58rem;
+  font-weight: 900;
+  line-height: 15px;
+  text-align: center;
+}
+.eif-flow__body { min-width: 0; padding-top: 2px; }
+.eif-flow__body > strong {
+  display: block;
+  font-size: 0.87rem;
+  font-weight: 700;
+  color: var(--text, #fff);
+}
+.eif-flow__body > span {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.79rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+/* The sentence that says why this is not interest. Given its own weight,
+   because it is the one a client came to read. */
+.eif-structure__why {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--eif) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--eif) 20%, transparent);
+  font-size: 0.82rem;
+  line-height: 1.65;
+  color: var(--text, #fff);
+}
+.eif-structure__why > i { color: var(--eif-ink); margin-top: 3px; flex-shrink: 0; }
+
+/* ── EIF: the three compared ───────────────────────────────────────────── */
+.eif-compare {
+  margin-top: 22px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 4px 16px 16px 16px;
+  background: var(--card-bg, rgba(255,255,255,0.02));
+}
+.eif-compare__title {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--text, #fff);
+  margin-bottom: 14px;
+}
+.eif-compare__title::before {
+  content: '';
+  display: inline-block;
+  width: 3px; height: 14px;
+  margin-right: 9px;
+  border-radius: 2px;
+  background: var(--eif);
+  vertical-align: -2px;
+}
+/* Its own scroller: a four-column table has a floor below which it cannot
+   shrink, and the page body must never scroll sideways. */
+.eif-compare__scroll { overflow-x: auto; }
+.eif-compare__table {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+.eif-compare__table th,
+.eif-compare__table td {
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border);
+}
+.eif-compare__table thead th { border-bottom: 1px solid color-mix(in srgb, var(--eif) 30%, transparent); }
+.eif-compare__table tbody th {
+  width: 30%;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.eif-compare__table td { color: var(--text, #fff); }
+.eif-compare__term {
+  display: block;
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: var(--eif-ink);
+}
+.eif-compare__gloss {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.7rem;
+  font-style: italic;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+.eif-compare__nums td { font-variant-numeric: tabular-nums; }
+.eif-compare__table tbody tr:last-child th,
+.eif-compare__table tbody tr:last-child td { border-bottom: none; }
+.eif-compare__foot {
+  margin: 12px 0 0;
+  font-size: 0.76rem;
+  line-height: 1.65;
+  color: var(--text-muted);
+}
+
+@media (max-width: 560px) {
+  .eif-structure { padding: 14px; }
+  .eif-structure__head { flex-direction: column; gap: 10px; }
+  .eif-structure__earns { text-align: left; }
+  .eif-compare { padding: 14px; }
 }
