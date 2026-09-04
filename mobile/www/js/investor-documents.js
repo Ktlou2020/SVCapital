@@ -773,7 +773,7 @@ function _openAccountStatementWindow(data) {
             ? `<td></td><td class="txn-debit">${money(amt)}</td>`
             : `<td class="txn-credit">${money(amt)}</td><td></td>`;
         return `<tr>
-          <td>${fmtDate(t.txn_date)}</td>
+          <td>${fmtDate(t.txn_date || t.transaction_date || t.created_at)}</td>
           <td><span class="txn-type tt-${esc(t.type || '')}">${esc(label)}</span></td>
           <td style="font-size:10px;color:#6b7280;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(desc)}</td>
           ${cells}

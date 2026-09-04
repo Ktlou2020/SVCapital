@@ -358,7 +358,7 @@ function loadAdminNotifications(investors, transactions, tickets) {
   // 6. Recent deposits (last 24 h) — informational
   const recentDeps = transactions.filter(t => {
     if (t.type !== 'deposit' || t.status !== 'completed') return false;
-    return (now - new Date(t.created_at || t.transaction_date || 0)) < 86400000;
+    return (now - new Date(Utils.txnDate(t) || 0)) < 86400000;
   });
   if (recentDeps.length) {
     const total = recentDeps.reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
@@ -907,10 +907,10 @@ async function loadDashboard() {
       _setTrend('ds-trend-invested', _trendPct(aumThis, aumLast));
 
       // Returns: returns paid this month vs last month
-      const retThis = STATE.transactions.filter(t => t.type === 'return' && t.status === 'completed' && new Date(t.created_at || t.transaction_date || 0) >= thisMonthStart).reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+      const retThis = STATE.transactions.filter(t => t.type === 'return' && t.status === 'completed' && new Date(Utils.txnDate(t) || 0) >= thisMonthStart).reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
       const retLast = STATE.transactions.filter(t => {
         if (t.type !== 'return' || t.status !== 'completed') return false;
-        const d = new Date(t.created_at || t.transaction_date || 0);
+        const d = new Date(Utils.txnDate(t) || 0);
         return d >= lastMonthStart && d <= lastMonthEnd;
       }).reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
       _setTrend('ds-trend-returns', _trendPct(retThis, retLast));
@@ -1314,7 +1314,7 @@ async function renderAumChart(range) {
     aumData = monthStarts.map(m => {
       const end = new Date(m.getFullYear(), m.getMonth() + 1, 0, 23, 59, 59);
       return STATE.investments.filter(inv => {
-        const created = new Date(inv.created_at || inv.start_date || 0);
+        const created = new Date(Utils.invDate(inv) || 0);
         /* As at that month end, not as of now: an investment that has since
            matured was still live then. Without this the past is redrawn every
            time something matures. */
@@ -1330,7 +1330,7 @@ async function renderAumChart(range) {
       const end   = new Date(m.getFullYear(), m.getMonth() + 1, 0, 23, 59, 59);
       return STATE.transactions.filter(t => {
         if (t.type !== 'return' || t.status !== 'completed') return false;
-        const d = new Date(t.created_at || t.transaction_date || 0);
+        const d = new Date(Utils.txnDate(t) || 0);
         return d >= start && d <= end;
       }).reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
     });
@@ -4031,7 +4031,7 @@ function renderWithdrawalsTable() {
     const amt = Math.abs(parseFloat(w.amount) || 0);
     if (fMin  && amt < fMin) return false;
     if (fMax !== Infinity && amt > fMax) return false;
-    const d = (w.created_at || w.transaction_date || '').slice(0, 10);
+    const d = String(Utils.txnDate(w) || '').slice(0, 10);
     if (fFrom && d < fFrom) return false;
     if (fTo   && d > fTo)   return false;
     return true;
@@ -7562,7 +7562,7 @@ function _renderInvestmentDetail(inv, backTo, backKind) {
       <div class="info-row"><span class="info-row__label">${_invRate != null && _invRate > 0 && !(parseFloat(inv.annual_rate) > 0) ? 'Return (posted)' : 'Target Return'}</span><span class="info-row__value td-green">${_invReturn != null ? Utils.rand(_invReturn) : '—'}</span></div>
       <div class="info-row"><span class="info-row__label">Return Rate</span><span class="info-row__value">${Utils.rateLabel(inv)}</span></div>
       <div class="info-row"><span class="info-row__label">Status</span><span class="info-row__value">${Utils.statusBadge(inv.status)}</span></div>
-      <div class="info-row"><span class="info-row__label">Investment Date</span><span class="info-row__value td-muted">${Utils.date(inv.start_date)}</span></div>
+      <div class="info-row"><span class="info-row__label">Investment Date</span><span class="info-row__value td-muted">${Utils.date(Utils.invDate(inv))}</span></div>
       <div class="info-row"><span class="info-row__label">Maturity Date</span><span class="info-row__value td-muted">${Utils.date(inv.end_date)}</span></div>
       <div class="info-row"><span class="info-row__label">Payout Date</span><span class="info-row__value td-muted">${Utils.date(inv.payout_date) || 'Pending'}</span></div>
       <div class="info-row"><span class="info-row__label">Maturity Instruction</span><span class="info-row__value">${_esc(_matPlan.label)}</span></div>
@@ -9861,12 +9861,12 @@ function renderTxnFlowChart() {
     return d >= start && d <= end;
   };
   const deposits = monthStarts.map(m =>
-    STATE.transactions.filter(t => t.type === 'deposit' && t.status === 'completed' && _inMonth(t.created_at || t.transaction_date, m))
+    STATE.transactions.filter(t => t.type === 'deposit' && t.status === 'completed' && _inMonth(Utils.txnDate(t), m))
       .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0)
   );
   const payouts = monthStarts.map(m =>
     /* payout-is-cash: the chart series is labelled "Payouts" — money out, not income */
-    STATE.transactions.filter(t => (t.type === 'return' || t.type === 'payout') && t.status === 'completed' && _inMonth(t.created_at || t.transaction_date, m))
+    STATE.transactions.filter(t => (t.type === 'return' || t.type === 'payout') && t.status === 'completed' && _inMonth(Utils.txnDate(t), m))
       .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0)
   );
 
@@ -12433,11 +12433,14 @@ function exportInvestorsCSV() {
 
 function exportTransactionsCSV() {
   if (!STATE.transactions.length) { Toast.error('Load transactions first'); return; }
-  const headers = ['ID','Investor','Type','Amount','Status','Reference','Description','Date'];
+  const headers = ['ID','Investor','Type','Amount','Status','Reference','Description','Date','Time'];
   const rows = [headers, ...STATE.transactions.map(t => [
     t.id, _txnInvName(t), t.type, t.amount, t.status,
     t.reference || '', t.description || '',
-    t.created_at ? new Date(t.created_at).toLocaleDateString('en-ZA') : '',
+    /* When the money moved, not when the row was written — and with the time,
+       because a day's worth of movements in an unordered block cannot be
+       reconciled against a bank statement. */
+    Utils.csvDate(Utils.txnDate(t)), Utils.csvTime(Utils.txnDate(t)),
   ])];
   _downloadCSV(rows, `transactions-${new Date().toISOString().slice(0,10)}.csv`);
   Toast.success(`Exported ${STATE.transactions.length} transactions`);
@@ -12483,7 +12486,7 @@ function exportInvestmentsCSV() {
   const headers = ['ID','Investor ID','Pool','Product','Amount','Rate','Status','Start Date','End Date','Maturity Instruction'];
   const rows = [headers, ...STATE.investments.map(i => [
     i.id, i.investor_id, i.pool_name||'', i.product_type, i.amount,
-    Utils.effectiveRate(i) ?? '', i.status, Utils.date(i.start_date), Utils.date(i.end_date), i.maturity_instruction||''
+    Utils.effectiveRate(i) ?? '', i.status, Utils.csvDate(Utils.invDate(i)), Utils.csvDate(i.end_date), i.maturity_instruction||''
   ])];
   _downloadCSV(rows, `investments-${new Date().toISOString().slice(0,10)}.csv`);
   Toast.success(`Exported ${STATE.investments.length} investments`);
@@ -12516,14 +12519,14 @@ function exportMaturityCSV() {
 function exportWithdrawalsCSV() {
   const all = STATE.withdrawals || [];
   if (!all.length) { Toast.error('Load withdrawals first'); return; }
-  const headers = ['ID','Investor Name','Investor ID','Amount','Bank','Account Number','Reference','Status','Date'];
+  const headers = ['ID','Investor Name','Investor ID','Amount','Bank','Account Number','Reference','Status','Date','Time'];
   const rows = [headers, ...all.map(w => {
     const inv = STATE.investors.find(i => i.id === w.investor_id);
     const name = inv ? `${inv.first_name} ${inv.last_name}` : w.investor_id;
     const bankNotes = _safeParse(inv?.notes, {});
     const bank    = inv?.bank_name           || bankNotes.bank_name      || '—';
     const acctNo  = inv?.bank_account_number || bankNotes.account_number || '—';
-    return [w.id, name, w.investor_id, Math.abs(w.amount||0), bank, acctNo, w.reference||'', w.status, Utils.date(w.created_at||w.transaction_date)];
+    return [w.id, name, w.investor_id, Math.abs(w.amount||0), bank, acctNo, w.reference||'', w.status, Utils.csvDate(Utils.txnDate(w)), Utils.csvTime(Utils.txnDate(w))];
   })];
   _downloadCSV(rows, `withdrawals-${new Date().toISOString().slice(0,10)}.csv`);
   Toast.success(`Exported ${all.length} withdrawals`);
@@ -13973,7 +13976,7 @@ function _buildTimelineEvents(inv, invsts, txns) {
   // 2. Transactions
   txns.forEach(t => {
     const amt = Utils.rand(Math.abs(t.amount || 0));
-    const d = t.created_at || t.transaction_date;
+    const d = Utils.txnDate(t);
     if (!d) return;
     const typeMap = {
       deposit:    { icon: 'fa-arrow-down',           color: '#22c55e', text: `Deposited ${amt}` },
@@ -14235,16 +14238,16 @@ function renderAnAumChart() {
   const monthDeposits = buckets.map(b =>
     STATE.transactions
       .filter(t => t.type === 'deposit' && t.status === 'completed' &&
-        new Date(t.created_at || t.transaction_date || 0).getFullYear() === b.year &&
-        new Date(t.created_at || t.transaction_date || 0).getMonth() === b.month)
+        new Date(Utils.txnDate(t) || 0).getFullYear() === b.year &&
+        new Date(Utils.txnDate(t) || 0).getMonth() === b.month)
       .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0)
   );
 
   const monthWithdrawals = buckets.map(b =>
     STATE.transactions
       .filter(t => t.type === 'withdrawal' && t.status === 'completed' &&
-        new Date(t.created_at || t.transaction_date || 0).getFullYear() === b.year &&
-        new Date(t.created_at || t.transaction_date || 0).getMonth() === b.month)
+        new Date(Utils.txnDate(t) || 0).getFullYear() === b.year &&
+        new Date(Utils.txnDate(t) || 0).getMonth() === b.month)
       .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0)
   );
 
@@ -14339,7 +14342,7 @@ function renderAnReturnsChart() {
     STATE.transactions
       .filter(t => {
         if (t.type !== 'return') return false;
-        const d = new Date(t.created_at || t.transaction_date || 0);
+        const d = new Date(Utils.txnDate(t) || 0);
         return d.getFullYear() === b.year && d.getMonth() === b.month;
       })
       .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0)
@@ -17974,7 +17977,8 @@ function exportWithdrawalCSV() {
     Investor: r.investor_name || '',
     'Amount (R)': Math.abs(r.amount),
     Status: r.status,
-    Date: r.created_at ? new Date(r.created_at).toLocaleDateString('en-ZA') : '',
+    Date: Utils.csvDate(Utils.txnDate(r)),
+    Time: Utils.csvTime(Utils.txnDate(r)),
   })), `withdrawals-${new Date().toISOString().slice(0,10)}.csv`);
 }
 
@@ -18195,7 +18199,8 @@ function _pfDrawChart(breakdown, period) {
 function exportPlatformFeesCSV() {
   if (!_pfFiltered.length) { Toast.warning('Load platform fees data first'); return; }
   _exportCSV(_pfFiltered.map(r => ({
-    Date:            r.created_at ? new Date(r.created_at).toLocaleDateString('en-ZA') : '',
+    Date:            Utils.csvDate(Utils.txnDate(r)),
+    Time:            Utils.csvTime(Utils.txnDate(r)),
     Investor:        r.investor_name || '',
     Pool:            r.pool_name || '',
     Reference:       r.reference || '',

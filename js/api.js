@@ -950,6 +950,61 @@ const Utils = {
     });
   },
 
+  /* ── When a transaction happened, and when an investment started ──────────
+   *
+   * `created_at` is when the ROW was written. `transaction_date` is when the
+   * money moved. They are usually within a second of each other and are wildly
+   * different on a migrated ledger: a batch import stamps every row it writes
+   * with the same created_at, so a deposit made in 2023 reads as having
+   * happened on the day of the migration.
+   *
+   * Both orderings were in use across the platform — `transaction_date ||
+   * created_at` in some places, `created_at || transaction_date` in others —
+   * so one ledger row showed two different dates depending on the screen, and
+   * the CSV export showed a third. This is the answer, in one place, and the
+   * server's statement queries already agree with it:
+   *   COALESCE(transaction_date, created_at) AS txn_date
+   */
+  txnDate(t) {
+    if (!t) return null;
+    return t.txn_date || t.transaction_date || t.created_at || null;
+  },
+
+  /* The same question for an investment. start_date is the day the money went
+     to work; investment_date is what some imports carry instead. */
+  invDate(i) {
+    if (!i) return null;
+    return i.start_date || i.investment_date || i.created_at || null;
+  },
+
+  /* ── Dates for a CSV ──────────────────────────────────────────────────────
+   *
+   * ISO, and empty when there is nothing — not the em-dash Utils.date() draws
+   * for a screen, which a spreadsheet reads as text and a filter as a value.
+   *
+   * ISO also because a CSV date is parsed by whatever opens it. 04/09/2026 is
+   * the 4th of September here and the 9th of April in a US locale, and Excel
+   * decides which without asking: a ledger exported for a reconciliation can
+   * come back with a third of its rows silently moved. 2026-09-04 cannot be
+   * read two ways, and it sorts correctly as text.
+   *
+   * en-CA is the shortest route to YYYY-MM-DD that still formats in the
+   * viewer's own timezone — toISOString() would render a 01:30 SAST
+   * transaction as the previous day. */
+  csvDate(v) {
+    if (!v) return '';
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-CA');
+  },
+
+  /* The time beside it. A day's movements exported as an unordered block
+     cannot be reconciled against a bank statement line by line. */
+  csvTime(v) {
+    if (!v) return '';
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? '' : d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  },
+
   /* Format datetime */
   datetime(str) {
     if (!str) return '—';
