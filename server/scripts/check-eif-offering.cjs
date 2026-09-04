@@ -259,12 +259,23 @@ console.log('\nthe look and feel stays inside the CI');
      'the app loads portal/css/portal-premium.css directly since the CSS fork ' +
      'was removed — a second copy here is how that fork started');
 
-  /* The offering is open to anyone; its name is not a denominational one. */
-  ok('the mark is neutral',
-     /function EIF_ICON\(\)\s*\{ return 'fa-leaf'; \}/.test(CORE) &&
-     !/fa-mosque/.test(strip(CORE)),
-     'a religious icon on the tab, and on the badge these products carry in ' +
-     'the all-products grid, narrows an offering that is deliberately open');
+  /* One mark, defined once. It is drawn in three places — the category tab,
+     the section banner, and the badge an EIF product carries out in the
+     all-products grid — and the three disagreeing is how a section stops
+     looking like one thing. */
+  ok('the mark is defined in one place',
+     /function EIF_ICON\(\)\s*\{ return 'fa-[\w-]+'; \}/.test(CORE));
+  {
+    const eifMarkup = [
+      (CORE.match(/function renderMarketCategoryTabs\(\)[\s\S]*?\n\}/) || [''])[0],
+      (CORE.match(/function _eifBannerHtml\(\)[\s\S]*?\n\}/) || [''])[0],
+      (CORE.match(/class="eif-tag"[^`]*/) || [''])[0],
+    ].join('\n');
+    ok('and every place that draws it reads that one function',
+       (eifMarkup.match(/fa-solid \$\{EIF_ICON\(\)\}/g) || []).length === 3 &&
+       !/fa-solid fa-(mosque|leaf)/.test(eifMarkup),
+       'a hard-coded icon in one of the three drifts the moment the other two change');
+  }
 }
 
 console.log('\nand the console can create them like any other product');
