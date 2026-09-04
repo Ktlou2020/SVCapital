@@ -246,6 +246,7 @@ CREATE TABLE IF NOT EXISTS cattle_animals (
   entry_mass NUMERIC(10,2), exit_mass NUMERIC(10,2), gender TEXT, breed TEXT,
   status TEXT DEFAULT 'active',
   mortality BOOLEAN DEFAULT false, mortality_date DATE, mortality_report TEXT,
+  sale_value NUMERIC(18,2),
   sold BOOLEAN DEFAULT false, sale_batch TEXT, sale_date DATE,
   notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -1620,6 +1621,12 @@ async function autoSetup() {
           BEGIN ALTER TABLE investments ADD COLUMN switch_product_type TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE investments ADD COLUMN custom_payout_amount NUMERIC(18,2); EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE cattle_animals ADD COLUMN dim_tag TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          /* What this animal actually sold for. The cycle has had a total and a
+             price-per-head since the import; neither says what any individual
+             beast fetched, so a batch sold in two lots at two prices could only
+             ever be recorded as an average. With this, a cycle's sale value can
+             be the sum of its animals rather than a figure typed over them. */
+          BEGIN ALTER TABLE cattle_animals ADD COLUMN sale_value NUMERIC(18,2); EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE cattle_animals ADD COLUMN extra_colour_tag TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           -- The Add/Edit Animal form has always collected Exit Mass and the animals
           -- table has always had a column for it, but cattle_animals never did. The

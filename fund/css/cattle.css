@@ -571,3 +571,83 @@ table.data-table {
   .content { padding: 16px; }
   .kpi-grid { grid-template-columns: 1fr 1fr; }
 }
+
+/* ── Batch selection and bulk actions ─────────────────────────────
+   The cycles list carries a checkbox per card and a bar above it. The bar is
+   always present rather than appearing on first selection: a control that
+   materialises when you act is one nobody finds, and its resting state is
+   where the select-all lives. */
+.cycle-bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 12px);
+  background: var(--surface);
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.cycle-bulk-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+.cycle-pick {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  padding: 2px;
+}
+.cycle-pick input { width: 16px; height: 16px; cursor: pointer; accent-color: var(--green-mid); }
+
+/* A selected card is outlined rather than tinted: these cards already carry
+   green and red figures, and a green wash across one made its own numbers
+   harder to read. */
+.cycle-card--selected {
+  box-shadow: 0 0 0 2px var(--green-mid) inset;
+}
+
+/* ── The bulk sale-value dialog ───────────────────────────────── */
+.bulk-sold-list { display: flex; flex-direction: column; gap: 8px; max-height: 46vh; overflow-y: auto; }
+.bulk-sold-row {
+  display: grid;
+  grid-template-columns: 1fr 190px 90px;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.bsr-name { font-size: 13px; font-weight: 700; }
+.bsr-sub  { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.bsr-input { display: flex; align-items: center; gap: 6px; }
+.bsr-input > span { font-size: 13px; color: var(--text-muted); }
+.bsr-input input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  background: var(--surface);
+  outline: none;
+}
+.bsr-input input:focus { border-color: var(--green-mid); }
+/* The realised return, as it will be written. Tabular so a column of them
+   lines up while they change under the cursor. */
+.bsr-ret {
+  font-size: 13px;
+  font-weight: 800;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 640px) {
+  .bulk-sold-row { grid-template-columns: 1fr; gap: 8px; }
+  .bsr-ret { text-align: left; }
+  .cycle-bulk-actions { margin-left: 0; width: 100%; }
+}

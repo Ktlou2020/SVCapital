@@ -113,6 +113,14 @@ const S = {
   animalFilter: { search: '', batch: '', status: '', breed: '' },
   cyclePage: 1,
   cycleFilter: { search: '', company: '', status: '' },
+  /* Batch ids ticked on the cycles list. A Set, and it survives a re-render —
+     typing in the search box re-renders, and a selection that emptied itself
+     every keystroke would be unusable on a list of 138. */
+  cycleSel: new Set(),
+  /* The animals of the batch whose detail modal is open: { cycleId, offset,
+     total, rows }. Scoped to one batch and fetched for it — never the animals
+     table's page. */
+  cycleAnimals: null,
   selectedCycle: null,
   charts: {}
 };
@@ -395,6 +403,13 @@ const NAV = {
 
   portfolioNAV(cycles, herd = [], costs = null) {
     const summaries    = NAV.byCycle(herd);
+    /* A DISCONTINUED cycle is in neither list, deliberately. It is frozen: it
+       keeps its recorded numbers for the record and contributes nothing to
+       herd value, to capital, or to realised return. It falls out here by
+       naming the two statuses that count rather than by excluding the one that
+       does not — but that is easy to "fix" by widening `active` to mean
+       "not sold", so: widening it would put a batch nobody is feeding back
+       into the herd value, still accruing 1.2kg a day. */
     const activeCycles = cycles.filter(c => c.status === 'active');
     const soldCycles   = cycles.filter(c => c.status === 'sold');
 
@@ -770,21 +785,33 @@ async function loadCycles() {
   }
 }
 
+/* One definition of what the cycles list is showing. The selection bar and the
+   card list both need it, and two copies would let the bar count one set while
+   the list drew another. */
+function _filteredCycles() {
+  const q = (S.cycleFilter.search || '').toLowerCase();
+  return S.cycles.filter(c => {
+    const matchSearch  = !q || (c.batch_name||'').toLowerCase().includes(q) || (c.company||'').toLowerCase().includes(q) || (c.inv_no||'').toLowerCase().includes(q);
+    const matchCompany = !S.cycleFilter.company || c.company === S.cycleFilter.company;
+    const matchStatus  = !S.cycleFilter.status  || c.status  === S.cycleFilter.status;
+    return matchSearch && matchCompany && matchStatus;
+  });
+}
+
 function renderCyclesView() {
   const el = document.getElementById('view-cycles');
   if (!el) return;
   const companies = [...new Set(S.cycles.map(c => c.company).filter(Boolean))].sort();
 
-  let filtered = S.cycles.filter(c => {
-    const q = S.cycleFilter.search.toLowerCase();
-    const matchSearch = !q || (c.batch_name||'').toLowerCase().includes(q) || (c.company||'').toLowerCase().includes(q) || (c.inv_no||'').toLowerCase().includes(q);
-    const matchCompany = !S.cycleFilter.company || c.company === S.cycleFilter.company;
-    const matchStatus  = !S.cycleFilter.status  || c.status  === S.cycleFilter.status;
-    return matchSearch && matchCompany && matchStatus;
-  });
+  const filtered = _filteredCycles();
+
 
   const activeCycles = filtered.filter(c => c.status === 'active');
   const soldCycles   = filtered.filter(c => c.status === 'sold');
+  /* Its own tile. Without one, discontinuing a batch makes it vanish from both
+     Active and Sold while Total Cycles stays put, and the three stop adding
+     up with nothing on screen saying where it went. */
+  const discCycles   = filtered.filter(c => c.status === 'discontinued');
   const totalCapital = filtered.reduce((s,c) => s + (parseFloat(c.purchase_value)||0), 0);
   const totalSale    = soldCycles.reduce((s,c) => s + (parseFloat(c.total_selling_price)||0), 0);
 
@@ -793,6 +820,7 @@ function renderCyclesView() {
       <div class="stat-item"><div class="stat-item-label">Total Cycles</div><div class="stat-item-value">${filtered.length}</div></div>
       <div class="stat-item"><div class="stat-item-label">Active</div><div class="stat-item-value green">${activeCycles.length}</div></div>
       <div class="stat-item"><div class="stat-item-label">Sold</div><div class="stat-item-value">${soldCycles.length}</div></div>
+      ${discCycles.length ? `<div class="stat-item"><div class="stat-item-label">Discontinued</div><div class="stat-item-value">${discCycles.length}</div></div>` : ''}
       <div class="stat-item"><div class="stat-item-label">Total Capital</div><div class="stat-item-value">${fmt.zar(totalCapital)}</div></div>
       <div class="stat-item"><div class="stat-item-label">Total Sale Revenue</div><div class="stat-item-value green">${fmt.zar(totalSale)}</div></div>
     </div>
@@ -810,23 +838,260 @@ function renderCyclesView() {
         <option value="">All Statuses</option>
         <option value="active" ${S.cycleFilter.status==='active'?'selected':''}>Active</option>
         <option value="sold" ${S.cycleFilter.status==='sold'?'selected':''}>Sold</option>
+        <option value="discontinued" ${S.cycleFilter.status==='discontinued'?'selected':''}>Discontinued</option>
         <option value="draft" ${S.cycleFilter.status==='draft'?'selected':''}>Draft</option>
       </select>
       <button class="btn btn-primary btn-sm" onclick="openAddCycleModal()"><i class="fa-solid fa-plus"></i> Add Cycle</button>
     </div>
 
+    <div class="cycle-bulk-bar" id="cycleBulkBar">${_cycleBulkBarHtml()}</div>
+
     ${filtered.length === 0 ? `<div class="empty-state"><i class="fa-solid fa-cow"></i><h3>No cycles found</h3><p>Import data or adjust filters</p></div>` : filtered.map(c => renderCycleCard(c)).join('')}
   `;
 }
 
+/* ── Selection ─────────────────────────────────────────────────────────────
+   The selection is by id and is pruned to what is currently shown, so a batch
+   filtered out of view cannot be acted on by a button that says "3 selected"
+   while meaning something else. */
+function _selectedCycles() {
+  return S.cycles.filter(c => S.cycleSel.has(c.id));
+}
+
+/* The bar counts what is BOTH selected and on screen. A selection made before a
+   filter was applied still exists; acting on the hidden part of it from a
+   button labelled with a number the user can see would be acting on batches
+   they are not looking at. */
+function _cycleBulkBarHtml() {
+  const filtered = _filteredCycles();
+  const shownSel = filtered.filter(c => S.cycleSel.has(c.id));
+  const n        = shownSel.length;
+  const all      = filtered.length > 0 && n === filtered.length;
+  const open     = shownSel.filter(c => c.status !== 'sold' && c.status !== 'discontinued').length;
+  const disc     = shownSel.filter(c => c.status === 'discontinued').length;
+  return `
+    <label class="cycle-pick">
+      <input type="checkbox" id="cycleSelectAll" onchange="toggleSelectAllCycles(this.checked)" ${all ? 'checked' : ''}>
+    </label>
+    <span id="cycleSelCount">${n ? `${n} selected` : `Select batches to act on ${filtered.length === S.cycles.length ? 'them' : 'the ' + filtered.length + ' shown'}`}</span>
+    ${n ? `
+      <div class="cycle-bulk-actions">
+        <button class="btn btn-secondary btn-sm" onclick="clearCycleSelection()">Clear</button>
+        ${disc ? `<button class="btn btn-secondary btn-sm" onclick="bulkReopenCycles()"><i class="fa-solid fa-rotate-left"></i> Reopen (${disc})</button>` : ''}
+        ${open ? `<button class="btn btn-secondary btn-sm" onclick="bulkDiscontinueCycles()"><i class="fa-solid fa-snowflake"></i> Discontinue (${open})</button>` : ''}
+        ${open ? `<button class="btn btn-primary btn-sm" onclick="openBulkSoldModal()"><i class="fa-solid fa-tag"></i> Mark sold (${open})</button>` : ''}
+      </div>` : ''}`;
+}
+
+function _refreshCycleBulkBar() {
+  const bar = document.getElementById('cycleBulkBar');
+  if (bar) bar.innerHTML = _cycleBulkBarHtml();
+}
+
+/* Ticking a box redraws the bar and that card's outline — NOT the list.
+   Rebuilding the list detached every other checkbox mid-click, so the second
+   box a user ticked did nothing and the count stuck at one: the whole point of
+   the feature, broken by a re-render nobody needed. It is also 138 cards
+   rebuilt per tick, losing the scroll position each time. */
+function toggleCycleSelected(id, on) {
+  if (on) S.cycleSel.add(id); else S.cycleSel.delete(id);
+  const box = document.querySelector(`#view-cycles .cycle-pick input[data-cycle="${CSS.escape(id)}"]`);
+  const card = box && box.closest('.cycle-card');
+  if (card) card.classList.toggle('cycle-card--selected', on);
+  _refreshCycleBulkBar();
+}
+
+function toggleSelectAllCycles(on) {
+  const shown = _filteredCycles();
+  if (on) shown.forEach(c => S.cycleSel.add(c.id));
+  else    shown.forEach(c => S.cycleSel.delete(c.id));
+  /* Every card changes, so this one really does redraw the list. */
+  renderCyclesView();
+}
+
+function clearCycleSelection() {
+  S.cycleSel.clear();
+  renderCyclesView();
+}
+
+/* ── A modal built from JS ─────────────────────────────────────────────────
+   The console's other modals are markup in cattle.html with fields known ahead
+   of time. These two are not: the sale dialog has a row per selected batch and
+   the animal dialog depends on which animal. */
+function _openModal(title, bodyHtml, footerHtml) {
+  const o = document.getElementById('genericOverlay');
+  if (!o) return;
+  document.getElementById('genericTitle').textContent = title;
+  document.getElementById('genericBody').innerHTML = bodyHtml;
+  document.getElementById('genericFooter').innerHTML = footerHtml || '';
+  o.classList.add('open');
+}
+
+function _closeModal() {
+  const o = document.getElementById('genericOverlay');
+  if (o) o.classList.remove('open');
+}
+
+/* ── Bulk actions ──────────────────────────────────────────────────────────
+   All three go through one route in one transaction, so a run that fails
+   leaves nothing half-applied — cycles and animals disagreeing about what was
+   sold is the state nobody could unpick afterwards. */
+async function _bulkStatus(action, cycles, describe) {
+  try {
+    const r = await apiPost('cattle/cycles/bulk-status', { action, cycles });
+    const parts = [`${r.cyclesChanged} batch${r.cyclesChanged === 1 ? '' : 'es'} ${describe}`];
+    if (r.animalsChanged) parts.push(`${fmt.num(r.animalsChanged)} animals updated`);
+    if (r.skipped && r.skipped.length) parts.push(`${r.skipped.length} skipped`);
+    CToast.show(parts.join(' · '));
+    S.cycleSel.clear();
+    /* force: these are the figures that just changed. */
+    await _loadHerd(() => {}, true);
+    renderCyclesView();
+  } catch (e) {
+    CToast.show(e.message || 'Could not apply that', 'error');
+  }
+}
+
+function bulkDiscontinueCycles() {
+  const list = _filteredCycles().filter(c => S.cycleSel.has(c.id) && c.status !== 'sold' && c.status !== 'discontinued');
+  if (!list.length) return;
+  const head = list.reduce((n, c) => n + (parseInt(c.no_live) || 0), 0);
+  if (!confirm(
+    `Discontinue ${list.length} batch${list.length === 1 ? '' : 'es'}?\n\n` +
+    `Each is frozen where it stands — it keeps its recorded numbers and stops being valued, ` +
+    `so it no longer counts toward herd value or returns.\n` +
+    (head ? `${fmt.num(head)} live animal${head === 1 ? '' : 's'} will be marked sold.\n` : '') +
+    `\nThis can be reversed with Reopen.`
+  )) return;
+  _bulkStatus('discontinued', list.map(c => ({ id: c.id })), 'discontinued');
+}
+
+function bulkReopenCycles() {
+  const list = _filteredCycles().filter(c => S.cycleSel.has(c.id) && c.status === 'discontinued');
+  if (!list.length) return;
+  if (!confirm(
+    `Reopen ${list.length} batch${list.length === 1 ? '' : 'es'}?\n\n` +
+    `They go back to active and start being valued again. Animals that this ` +
+    `console marked sold when the batch was discontinued go back to live; ` +
+    `animals sold any other way stay sold.`
+  )) return;
+  _bulkStatus('reopen', list.map(c => ({ id: c.id })), 'reopened');
+}
+
+/* ── Mark sold ─────────────────────────────────────────────────────────────
+   A sale value per batch, and the dialog will not submit without one for each.
+
+   Not a convenience: a sold cycle reports total_selling_price as its realised
+   value and (sale − purchase) ÷ purchase as its realised return, so a batch
+   marked sold at nothing books its whole purchase value as a loss. Across the
+   138 cycles and R110m on this book, defaulting the field would have put a
+   nine-figure hole in the fund's reported return, produced by two clicks and
+   no typing.
+
+   Pre-filled, in order of what is actually known: the sum of the animals'
+   own sale values if they have been captured one by one, then the cycle's
+   expected sale value. The source is named on the row so the operator knows
+   whether they are confirming a fact or an estimate. */
+function openBulkSoldModal() {
+  const list = _filteredCycles().filter(c => S.cycleSel.has(c.id) && c.status !== 'sold' && c.status !== 'discontinued');
+  if (!list.length) return;
+
+  const rows = list.map(c => {
+    const fromAnimals = parseFloat((S.herd.cycles[c.id] || {}).sale_sum) || 0;
+    const expected    = parseFloat(c.expected_sale_value) || 0;
+    const value  = fromAnimals > 0 ? fromAnimals : (expected > 0 ? expected : '');
+    const source = fromAnimals > 0 ? 'from animals sold' : (expected > 0 ? 'expected sale value' : 'no figure on file');
+    return { c, value, source };
+  });
+
+  const body = `
+    <p style="font-size:13px;color:var(--text-muted);margin:0 0 14px">
+      A batch marked sold reports this as its realised value, and its return as
+      <strong>(sale &minus; purchase) &divide; purchase</strong> &mdash; gross of the standing fee.
+      Every batch needs a figure.
+    </p>
+    <div class="bulk-sold-list">
+      ${rows.map(({ c, value, source }) => `
+        <div class="bulk-sold-row" data-cycle="${escapeHtml(c.id)}">
+          <div>
+            <div class="bsr-name">${escapeHtml(c.batch_name || c.id)}</div>
+            <div class="bsr-sub">Cost ${fmt.zar(c.purchase_value)} · ${escapeHtml(source)}</div>
+          </div>
+          <div class="bsr-input">
+            <span>R</span>
+            <input type="number" step="0.01" min="0" value="${value}"
+                   data-purchase="${parseFloat(c.purchase_value) || 0}"
+                   oninput="_bulkSoldPreview(this)" placeholder="Sale value">
+          </div>
+          <div class="bsr-ret" data-ret>&mdash;</div>
+        </div>`).join('')}
+    </div>`;
+
+  _openModal('Mark ' + list.length + ' batch' + (list.length === 1 ? '' : 'es') + ' sold', body,
+    `<button class="btn btn-secondary" onclick="_closeModal()">Cancel</button>
+     <button class="btn btn-primary" onclick="confirmBulkSold(this)">Mark sold</button>`);
+
+  document.querySelectorAll('.bulk-sold-row input').forEach(_bulkSoldPreview);
+}
+
+/* The realised return, as it will be recorded, updated as the figure is typed.
+   The number that goes into the book should not be a surprise. */
+function _bulkSoldPreview(input) {
+  const row = input.closest('.bulk-sold-row');
+  const out = row && row.querySelector('[data-ret]');
+  if (!out) return;
+  const purchase = parseFloat(input.dataset.purchase) || 0;
+  const sale     = parseFloat(input.value);
+  if (!isFinite(sale) || input.value === '' || purchase <= 0) {
+    out.textContent = purchase > 0 ? '—' : 'no cost on file';
+    out.style.color = 'var(--text-muted)';
+    return;
+  }
+  const pct = ((sale - purchase) / purchase) * 100;
+  out.textContent = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
+  out.style.color = pct >= 0 ? 'var(--green-mid)' : 'var(--red)';
+}
+
+async function confirmBulkSold(btn) {
+  const rows = [...document.querySelectorAll('.bulk-sold-row')];
+  const cycles = [], missing = [];
+  for (const r of rows) {
+    const input = r.querySelector('input');
+    const v = parseFloat(input.value);
+    if (input.value === '' || !isFinite(v) || v < 0) {
+      missing.push(r);
+      input.style.borderColor = 'var(--red)';
+    } else {
+      input.style.borderColor = '';
+      cycles.push({ id: r.dataset.cycle, total_selling_price: v });
+    }
+  }
+  if (missing.length) {
+    CToast.show(`${missing.length} batch${missing.length === 1 ? ' needs' : 'es need'} a sale value`, 'error');
+    missing[0].querySelector('input').focus();
+    return;
+  }
+  btn.disabled = true;
+  _closeModal();
+  await _bulkStatus('sold', cycles, 'marked sold');
+}
+
 function renderCycleCard(cycle) {
   const nav = NAV.cycleNAV(cycle, S.herd.cycles[cycle.id], S.costs);
-  const statusMap = { active: 'badge-blue', sold: 'badge-green', draft: 'badge-grey', cancelled: 'badge-red' };
+  /* Frozen: no live valuation, and no day counter running against a batch
+     nobody is feeding. The runaway day count is what this status exists for —
+     a stale import at 1 355 days was accruing 1 626kg of modelled gain a head. */
+  const frozen = cycle.status === 'discontinued';
+  const statusMap = { active: 'badge-blue', sold: 'badge-green', draft: 'badge-grey', cancelled: 'badge-red', discontinued: 'badge-grey' };
   const mortalityPct = cycle.no_purchased > 0 ? ((parseInt(cycle.mortalities)||0) / parseInt(cycle.no_purchased) * 100).toFixed(1) : 0;
 
   return `
-    <div class="cycle-card" onclick="openCycleDetail('${escapeHtml(cycle.id)}')">
+    <div class="cycle-card${S.cycleSel.has(cycle.id) ? ' cycle-card--selected' : ''}" onclick="openCycleDetail('${escapeHtml(cycle.id)}')">
       <div class="cycle-card-header">
+        <label class="cycle-pick" onclick="event.stopPropagation()" title="Select this batch">
+          <input type="checkbox" data-cycle="${escapeHtml(cycle.id)}" ${S.cycleSel.has(cycle.id) ? 'checked' : ''}
+                 onchange="toggleCycleSelected('${escapeHtml(cycle.id)}', this.checked)">
+        </label>
         <div>
           <div class="cycle-card-title">${escapeHtml(cycle.batch_name || cycle.id)}</div>
           <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${escapeHtml(cycle.company||'')} &nbsp;·&nbsp; ${escapeHtml(cycle.cycle_no||'')} &nbsp;·&nbsp; INV ${escapeHtml(cycle.inv_no||'—')}</div>
@@ -840,10 +1105,10 @@ function renderCycleCard(cycle) {
         <div><div class="cycle-metric-label">Purchased</div><div class="cycle-metric-value">${fmt.num(cycle.no_purchased)}</div></div>
         <div><div class="cycle-metric-label">Live / Mortalities</div><div class="cycle-metric-value">${fmt.num(cycle.no_live)} <span style="color:var(--red);font-size:12px">/ ${cycle.mortalities||0} (${mortalityPct}%)</span></div></div>
         <div><div class="cycle-metric-label">Purchase Value</div><div class="cycle-metric-value">${fmt.zar(cycle.purchase_value)}</div></div>
-        <div><div class="cycle-metric-label">${cycle.status === 'sold' ? 'Sale Value' : 'Est. Herd Value'}</div><div class="cycle-metric-value" style="color:var(--green-mid)">${cycle.status==='sold' ? fmt.zar(cycle.total_selling_price) : fmt.zar(nav.herdValue)}</div></div>
-        <div><div class="cycle-metric-label">${cycle.status === 'sold' ? 'Realised Return' : 'Unrealised NAV'}</div><div class="cycle-metric-value" style="color:${nav.navPct>=0?'var(--green-mid)':'var(--red)'};font-weight:800">${cycle.status==='sold' ? fmt.pct(cycle.net_return_pct) : (nav.navPct>=0?'+':'')+nav.navPct.toFixed(2)+'%'}</div></div>
+        <div><div class="cycle-metric-label">${cycle.status === 'sold' ? 'Sale Value' : frozen ? 'Herd Value' : 'Est. Herd Value'}</div><div class="cycle-metric-value" style="color:${frozen?'var(--text-muted)':'var(--green-mid)'}">${cycle.status==='sold' ? fmt.zar(cycle.total_selling_price) : frozen ? '&mdash;' : fmt.zar(nav.herdValue)}</div></div>
+        <div><div class="cycle-metric-label">${cycle.status === 'sold' ? 'Realised Return' : frozen ? 'Status' : 'Unrealised NAV'}</div><div class="cycle-metric-value" style="color:${frozen?'var(--text-muted)':(nav.navPct>=0?'var(--green-mid)':'var(--red)')};font-weight:800">${cycle.status==='sold' ? fmt.pct(cycle.net_return_pct) : frozen ? 'Frozen' : (nav.navPct>=0?'+':'')+nav.navPct.toFixed(2)+'%'}</div></div>
       </div>
-      <div style="margin-top:10px;font-size:11px;color:var(--text-muted)">${cycle.cycle_start_date ? `Start: ${fmt.date(cycle.cycle_start_date)}` : ''}${cycle.sale_date ? ` &nbsp;·&nbsp; Sold: ${fmt.date(cycle.sale_date)}` : cycle.end_date ? ` &nbsp;·&nbsp; Expected end: ${fmt.date(cycle.end_date)}` : ''}${cycle.status === 'active' ? ` &nbsp;·&nbsp; <strong>${nav.daysIn} days in cycle</strong>` : ''}</div>
+      <div style="margin-top:10px;font-size:11px;color:var(--text-muted)">${cycle.cycle_start_date ? `Start: ${fmt.date(cycle.cycle_start_date)}` : ''}${cycle.sale_date ? ` &nbsp;·&nbsp; Sold: ${fmt.date(cycle.sale_date)}` : cycle.end_date ? ` &nbsp;·&nbsp; Expected end: ${fmt.date(cycle.end_date)}` : ''}${cycle.status === 'active' ? ` &nbsp;·&nbsp; <strong>${nav.daysIn} days in cycle</strong>` : frozen ? ` &nbsp;·&nbsp; <strong>Frozen &mdash; not valued</strong>` : ''}</div>
     </div>`;
 }
 
@@ -1480,11 +1745,18 @@ async function saveSettings() {
 /* ══════════════════════════════════════════════════════════════
    CYCLE DETAIL MODAL (unchanged, uses escapeHtml)
 ══════════════════════════════════════════════════════════════ */
-function openCycleDetail(id) {
+function openCycleDetail(id, keepAnimals = false) {
   const cycle = S.cycles.find(c => c.id === id);
   if (!cycle) return;
-  const cycleAnimals = S.animals.filter(a => a.cycle_id === id);
-  const nav = NAV.cycleNAV(cycle, cycleAnimals);
+  /* The herd summary for THIS cycle, not S.animals — which is the animals
+     table's current page, 75 rows of whatever filter was last applied. Reading
+     it here meant the modal valued a batch off animals belonging to other
+     batches, or off none at all, in which case the average entry mass fell back
+     to the settings default. The card and the modal showed different herd
+     values for the same cycle: R776 356 against R829 056 on a 24-head batch,
+     the difference being a real 168kg average against an assumed 220kg. */
+  const nav = NAV.cycleNAV(cycle, S.herd.cycles[id], S.costs);
+  const frozen = cycle.status === 'discontinued';
   const statusMap = { active: 'badge-blue', sold: 'badge-green', draft: 'badge-grey', cancelled: 'badge-red' };
   const ret = (parseFloat(cycle.total_selling_price)||0) - (parseFloat(cycle.purchase_value)||0);
 
@@ -1531,9 +1803,177 @@ function openCycleDetail(id) {
     </div>
     ${renderAnimalBar(cycle)}
     ${cycle.notes ? `<div style="background:var(--surface-2);border-radius:8px;padding:12px 16px;font-size:12px;color:var(--text-muted);margin-top:8px"><strong>Notes:</strong> ${escapeHtml(cycle.notes)}</div>` : ''}
+    <div id="cycleAnimalsPanel" style="margin-top:20px"></div>
   `;
   overlay.classList.add('open');
+  /* keepAnimals: the caller already has the list and only needs the panels
+     above it redrawn. Refetching would drop the operator back to page one of
+     several hundred animals after every row they touched. */
+  if (keepAnimals && S.cycleAnimals && S.cycleAnimals.cycleId === id) renderCycleAnimals();
+  else loadCycleAnimals(id);
 }
+
+/* ══════════════════════════════════════════════════════════════
+   THE ANIMALS IN ONE BATCH
+
+   Fetched for this cycle rather than filtered out of whatever the animals
+   table happens to be showing, and paged: a batch can hold several hundred
+   head and this panel sits inside a modal.
+══════════════════════════════════════════════════════════════ */
+async function loadCycleAnimals(cycleId, offset = 0) {
+  const el = document.getElementById('cycleAnimalsPanel');
+  if (!el) return;
+  el.innerHTML = `<div class="loading-state" style="padding:20px"><div class="spinner"></div> Loading animals…</div>`;
+  try {
+    const res = await apiGet(`cattle/cycles/${encodeURIComponent(cycleId)}/animals?limit=200&offset=${offset}`);
+    S.cycleAnimals = { cycleId, offset, total: res.total, rows: res.data || [] };
+    renderCycleAnimals();
+  } catch (e) {
+    el.innerHTML = `<div class="empty-state" style="padding:20px"><p>Could not load animals: ${escapeHtml(e.message)}</p></div>`;
+  }
+}
+
+function renderCycleAnimals() {
+  const el = document.getElementById('cycleAnimalsPanel');
+  const st = S.cycleAnimals;
+  if (!el || !st) return;
+  const cycle = S.cycles.find(c => c.id === st.cycleId) || {};
+  const closed = cycle.status === 'sold' || cycle.status === 'discontinued';
+
+  if (!st.total) {
+    el.innerHTML = `<div class="empty-state" style="padding:20px"><i class="fa-solid fa-cow"></i><h3>No animal records</h3>
+      <p>This batch's numbers come from the cycle header. Import animals to manage them individually.</p></div>`;
+    return;
+  }
+
+  const shownFrom = st.offset + 1, shownTo = st.offset + st.rows.length;
+  const soldValue = st.rows.reduce((n, a) => n + (parseFloat(a.sale_value) || 0), 0);
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+      <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px">Animals in this batch</div>
+      <span style="font-size:12px;color:var(--text-muted)">${fmt.num(st.total)} on file${st.total > st.rows.length ? ` · showing ${shownFrom}–${shownTo}` : ''}</span>
+      ${soldValue > 0 ? `<span style="margin-left:auto;font-size:12px">Sale value on this page: <strong style="color:var(--green-mid)">${fmt.zar(soldValue)}</strong></span>` : ''}
+    </div>
+    ${closed ? `<div style="background:var(--surface-2);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--text-muted);margin-bottom:10px">
+      This batch is ${escapeHtml(cycle.status)} &mdash; a closed record. Reopen it to change individual animals.</div>` : ''}
+    <div style="overflow-x:auto">
+      <table class="data-table" style="min-width:640px">
+        <thead><tr>
+          <th>Tag</th><th>Breed</th><th class="num">Entry kg</th><th class="num">Exit kg</th>
+          <th>Status</th><th class="num">Sale value</th><th style="width:150px"></th>
+        </tr></thead>
+        <tbody>
+          ${st.rows.map(a => {
+            const status = isTrue(a.mortality) ? 'mortality' : isTrue(a.sold) ? 'sold' : (a.status || 'active');
+            const chip = status === 'sold'      ? '<span style="color:var(--green-mid);font-weight:700">Sold</span>'
+                       : status === 'mortality' ? '<span style="color:var(--red);font-weight:700">Deceased</span>'
+                       : '<span style="color:var(--text-muted)">Live</span>';
+            return `
+            <tr>
+              <td style="font-weight:600">${escapeHtml(a.tag_number || a.id)}</td>
+              <td style="color:var(--text-muted)">${escapeHtml(a.breed || '—')}</td>
+              <td class="num">${a.entry_mass ? fmt.num(a.entry_mass) : '—'}</td>
+              <td class="num">${a.exit_mass ? fmt.num(a.exit_mass) : '—'}</td>
+              <td>${chip}</td>
+              <td class="num">${a.sale_value != null ? fmt.zar(a.sale_value) : '—'}</td>
+              <td style="text-align:right;white-space:nowrap">
+                ${closed ? '' : status === 'active' ? `
+                  <button class="btn btn-xs btn-primary" onclick="openAnimalSale('${escapeHtml(a.id)}')">Sold</button>
+                  <button class="btn btn-xs" style="background:#fdecea;color:#a3241a" onclick="markAnimal('${escapeHtml(a.id)}','mortality')">Deceased</button>
+                ` : `
+                  <button class="btn btn-xs btn-secondary" onclick="markAnimal('${escapeHtml(a.id)}','active')">Undo</button>
+                `}
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+    ${st.total > 200 ? `
+      <div style="display:flex;gap:8px;align-items:center;justify-content:center;margin-top:12px">
+        <button class="btn btn-secondary btn-sm" ${st.offset === 0 ? 'disabled' : ''}
+                onclick="loadCycleAnimals('${escapeHtml(st.cycleId)}', ${Math.max(0, st.offset - 200)})">Previous</button>
+        <span style="font-size:12px;color:var(--text-muted)">${shownFrom}–${shownTo} of ${fmt.num(st.total)}</span>
+        <button class="btn btn-secondary btn-sm" ${shownTo >= st.total ? 'disabled' : ''}
+                onclick="loadCycleAnimals('${escapeHtml(st.cycleId)}', ${st.offset + 200})">Next</button>
+      </div>` : ''}
+  `;
+}
+
+/* Marking one animal sold asks for what it fetched. Deceased and Undo do not:
+   there is no figure to record, and Undo clears the one that was there. */
+function openAnimalSale(animalId) {
+  const st = S.cycleAnimals;
+  const a  = st && st.rows.find(x => x.id === animalId);
+  if (!a) return;
+  const body = `
+    <div style="font-size:13px;color:var(--text-muted);margin-bottom:14px">
+      Tag <strong style="color:var(--text)">${escapeHtml(a.tag_number || a.id)}</strong>${a.breed ? ' · ' + escapeHtml(a.breed) : ''}${a.entry_mass ? ' · entered at ' + fmt.num(a.entry_mass) + 'kg' : ''}
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px">
+      <div class="form-group">
+        <label>Sale value (R)</label>
+        <input type="number" step="0.01" min="0" id="animalSaleValue" placeholder="e.g. 9850.00" value="${a.sale_value != null ? a.sale_value : ''}">
+      </div>
+      <div class="form-group">
+        <label>Exit mass (kg) &mdash; optional</label>
+        <input type="number" step="0.1" min="0" id="animalExitMass" placeholder="e.g. 478" value="${a.exit_mass != null ? a.exit_mass : ''}">
+      </div>
+      <div class="form-group">
+        <label>Sale date &mdash; defaults to today</label>
+        <input type="date" id="animalSaleDate" value="${a.sale_date ? String(a.sale_date).slice(0,10) : ''}">
+      </div>
+    </div>
+    <p style="font-size:12px;color:var(--text-muted);margin:12px 0 0">
+      An exit mass is what the animal actually weighed, and the whole batch is
+      valued from the weigh-outs on file in preference to the growth model &mdash;
+      so entering it improves the batch's valuation, not just this row.
+    </p>`;
+  _openModal('Mark animal sold', body,
+    `<button class="btn btn-secondary" onclick="_closeModal()">Cancel</button>
+     <button class="btn btn-primary" onclick="confirmAnimalSale('${escapeHtml(animalId)}', this)">Mark sold</button>`);
+  setTimeout(() => { const f = document.getElementById('animalSaleValue'); if (f) f.focus(); }, 30);
+}
+
+async function confirmAnimalSale(animalId, btn) {
+  const val  = document.getElementById('animalSaleValue').value;
+  const mass = document.getElementById('animalExitMass').value;
+  const date = document.getElementById('animalSaleDate').value;
+  btn.disabled = true;
+  _closeModal();
+  await markAnimal(animalId, 'sold', { sale_value: val === '' ? null : val, exit_mass: mass || null, date: date || null });
+}
+
+async function markAnimal(animalId, status, extra = {}) {
+  try {
+    const r = await apiPatch(`cattle/animals/${encodeURIComponent(animalId)}`, { status, ...extra });
+    /* The row is patched in place rather than the page refetched: the operator
+       is working down a list and losing their position after every animal is
+       what makes a screen like this unusable. */
+    const st = S.cycleAnimals;
+    if (st) {
+      const i = st.rows.findIndex(x => x.id === animalId);
+      if (i > -1) st.rows[i] = { ...st.rows[i], ...r.animal };
+    }
+    /* The cycle's live/dead/sold counts move with it, and so does the herd
+       summary the batch is valued from. */
+    if (r.cycle) {
+      const c = S.cycles.find(x => x.id === r.cycle.id);
+      if (c) Object.assign(c, r.cycle);
+    }
+    try { S.herd = await apiGet('cattle/herd-summary'); } catch (_) { /* figures stay as they were */ }
+    /* Redraw the panels above the list — the batch's counts and its valuation
+       have just moved — without refetching the list itself. */
+    if (st) openCycleDetail(st.cycleId, true);
+    else renderCycleAnimals();
+    CToast.show(status === 'sold' ? 'Animal marked sold' : status === 'mortality' ? 'Animal marked deceased' : 'Animal set back to live');
+  } catch (e) {
+    CToast.show(e.message || 'Could not update that animal', 'error');
+  }
+}
+
+
 
 function closeCycleDetail() {
   const ov = document.getElementById('cycleDetailOverlay');

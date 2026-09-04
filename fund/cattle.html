@@ -267,6 +267,22 @@
 <!-- ══════════════════════════════════════════════════
      CYCLE FORM MODAL (Add / Edit)
 ══════════════════════════════════════════════════ -->
+<!-- Generic modal, built by _openModal(). Used by the bulk sale-value dialog
+     and the per-animal sale capture — both are transient forms whose contents
+     depend on what is selected, so they are composed in JS rather than kept as
+     dead markup here. -->
+<div class="modal-overlay" id="genericOverlay" onclick="if(event.target===this)_closeModal()">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <i class="fa-solid fa-layer-group"></i>
+      <span class="modal-title" id="genericTitle">&nbsp;</span>
+      <button class="modal-close" onclick="_closeModal()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body" id="genericBody"></div>
+    <div class="modal-footer" id="genericFooter"></div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="cycleFormOverlay" onclick="if(event.target===this)closeCycleForm()">
   <div class="modal">
     <div class="modal-header">
@@ -486,7 +502,7 @@
      SCRIPTS
 ══════════════════════════════════════════════════ -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="js/cattle.js?v=3"></script>
+<script src="js/cattle.js?v=4"></script>
 
 </body>
 </html>
