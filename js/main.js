@@ -285,7 +285,69 @@ const MODAL_DATA = {
       'Auto-reinvest option available at maturity'
     ]
   },
+
+  /* Ethical and Interest-Free. Keyed by product_type rather than by a home key,
+     because each is a single product rather than a family the way solar is —
+     which also means _applyLiveProductAverages() finds them by direct lookup
+     and overwrites this copy with whatever the admin console holds. What is
+     written here is the fallback for a first paint or a failed fetch. */
+  eif_murabaha: {
+    eyebrow: 'Murabaha Trade Finance',
+    title: 'A known mark-up on real goods.',
+    desc: 'SV Capital buys goods a business needs — stock, equipment, raw materials — and sells them on at a mark-up agreed and disclosed in full before the sale. The business pays in instalments. Your return is your share of that mark-up: a trading profit on an asset that was actually bought and actually sold, not a charge for the use of money.',
+    stats: [
+      { label: 'Target Profit Share', val: '11.50% p.a.' },
+      { label: 'Minimum', val: 'R500' },
+      { label: 'Term', val: '6 Months' }
+    ],
+    points: [
+      'SV Capital takes ownership of the goods before selling them on',
+      'The mark-up is fixed and disclosed in the contract — it never increases',
+      'No penalty interest: a late payer owes the same amount they always owed',
+      'Backed by the goods and by the buyer\'s trade receivables',
+      'Shorter term than most products on the platform'
+    ]
+  },
+  eif_ijara: {
+    eyebrow: 'Ijara Asset Leasing',
+    title: 'Rent from something you own.',
+    desc: 'The pool buys an income-producing asset — solar plant, delivery vehicles, plant and machinery — and leases it to an operator. Your return is rent. Because the pool owns the asset, it carries the ownership risks: if the asset cannot be used, the rent stops. That is what makes the income rent rather than interest.',
+    stats: [
+      { label: 'Target Profit Share', val: '12.50% p.a.' },
+      { label: 'Minimum', val: 'R1,000' },
+      { label: 'Term', val: '36 Months' }
+    ],
+    points: [
+      'The pool holds title to the asset for the life of the lease',
+      'Return is contracted rental income, paid over the lease term',
+      'Ownership risk sits with the pool — rent stops if the asset cannot be used',
+      'Major maintenance and insurance are the owner\'s cost, not the lessee\'s',
+      'Option to transfer the asset to the lessee at the end of the term'
+    ]
+  },
+  eif_mudarabah: {
+    eyebrow: 'Mudarabah Enterprise',
+    title: 'A share of the profit, and of the risk.',
+    desc: 'You provide the capital; a vetted operating partner provides the work. Profit is divided on a ratio agreed before a rand is deployed. If the venture loses money, the loss falls on the capital rather than on the partner — they lose their effort instead. Nothing is promised in advance, because a promised return on a partnership would be the thing this structure exists to avoid.',
+    stats: [
+      { label: 'Target Profit Share', val: '14.50% p.a.' },
+      { label: 'Minimum', val: 'R2,500' },
+      { label: 'Term', val: '12 Months' }
+    ],
+    points: [
+      'Profit split on a ratio fixed in advance — 80% investors, 20% manager',
+      'The figure shown is a target drawn from the venture\'s own projections, not a promise',
+      'Losses are borne by the capital; the operating partner forfeits their share of profit',
+      'Quarterly reporting on the underlying venture',
+      'Highest risk of the three EIF structures, and the highest potential share'
+    ]
+  },
 };
+
+/* The product_types that make up the Ethical and Interest-Free offering.
+   Named once: the section's visibility, its nav link and its cards all key
+   off this list. */
+const EIF_TYPES = ['eif_murabaha', 'eif_ijara', 'eif_mudarabah'];
 
 /* ═══════════════════════════════════════════════
    INITIALISATION
@@ -963,6 +1025,14 @@ async function _applyLiveProductAverages() {
     cattle:   { types: ['cattle'], primary: 'cattle' },
     solar:    { types: ['solar_7yr', 'solar_6yr', 'solar_5yr'], primary: 'solar_7yr' },
     short:    { types: ['short_term', 'smme'], primary: 'short_term' },
+    /* Each EIF product is one product rather than a family the way solar is,
+       so its home key and its product_type are the same string. Being in here
+       is what gives these cards the same treatment as every other one: the
+       achieved average once pools mature, the admin's colour, and the admin's
+       copy in the View Details modal. */
+    eif_murabaha:  { types: ['eif_murabaha'],  primary: 'eif_murabaha' },
+    eif_ijara:     { types: ['eif_ijara'],     primary: 'eif_ijara' },
+    eif_mudarabah: { types: ['eif_mudarabah'], primary: 'eif_mudarabah' },
   };
 
   const fmtR = n => 'R' + Number(n || 0).toLocaleString('en-ZA');
@@ -1063,6 +1133,17 @@ async function _applyLiveProductAverages() {
     card.style.display    = '';
     card.classList.toggle('product-card--hp-hidden', !visible);
   });
+
+  /* The EIF section as a whole. Its cards are governed above like any other,
+     but a section left standing with three hidden cards inside it is a header,
+     four principles and a governance note about an offering that is not there.
+     So the section, and its nav link, follow the cards. */
+  const eifVisible = EIF_TYPES.some(resolveVisible);
+  const eifSection = document.getElementById('eif');
+  if (eifSection) eifSection.style.display = eifVisible ? '' : 'none';
+  const eifNav = document.getElementById('navEifLink');
+  if (eifNav) eifNav.style.display = eifVisible ? '' : 'none';
+  if (eifVisible) _loadEifFaqs();
 
   // Hide/show footer product links
   document.querySelectorAll('[data-footer-product]').forEach(li => {
@@ -1330,11 +1411,57 @@ async function _applySolarTelemetry() {
 document.addEventListener('DOMContentLoaded', _applySolarTelemetry);
 
 /* ─── Public product page: filter by risk band ───────────────────────── */
+/* The offering's FAQs, from the same product_faqs rows the portal reads.
+ *
+ * Not written into index.html. These answers describe how a structure avoids
+ * riba, and a second copy in static markup is a second thing to correct when
+ * the wording changes — which it will, at least once, when the Sharia review
+ * concludes. One source, corrected in the admin console.
+ *
+ * A failure leaves the section without its FAQ rather than without its
+ * products: the wrap starts hidden and is only revealed once rows arrive. */
+async function _loadEifFaqs() {
+  const wrap = document.getElementById('eifFaqWrap');
+  const list = document.getElementById('eifFaqList');
+  if (!wrap || !list || wrap.dataset.loaded) return;
+  wrap.dataset.loaded = '1';
+  let faqs = [];
+  try {
+    const r = await fetch('/api/products/faqs?category=eif');
+    if (r.ok) { const d = await r.json(); faqs = d.data || []; }
+  } catch (_) { /* section renders without it */ }
+  if (!faqs.length) return;
+  const esc = t => String(t == null ? '' : t)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  list.innerHTML = faqs.map(f => `
+    <div class="eif-faq-item">
+      <button class="eif-faq-q" type="button" onclick="toggleEifFaqItem(this)">
+        <span>${esc(f.question)}</span><i class="fa-solid fa-chevron-down"></i>
+      </button>
+      <div class="eif-faq-a">${esc(f.answer)}</div>
+    </div>`).join('');
+  wrap.style.display = '';
+}
+
+function toggleEifFaqItem(btn) {
+  const item = btn.closest('.eif-faq-item');
+  if (!item) return;
+  const wasOpen = item.classList.contains('open');
+  item.parentElement.querySelectorAll('.eif-faq-item.open').forEach(i => i.classList.remove('open'));
+  if (!wasOpen) item.classList.add('open');
+}
+window.toggleEifFaqItem = toggleEifFaqItem;
+
 function filterProductsByRisk(risk, btn) {
   document.querySelectorAll('.product-risk-filter .prf-pill').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
   let shown = 0;
-  document.querySelectorAll('.products-grid .product-card').forEach(card => {
+  /* Scoped to #products. The EIF cards sit in their own .products-grid inside
+     their own section, and an unscoped selector let the main section's risk
+     pills empty a section they do not belong to — choosing "Low" hid two of
+     the three EIF products with nothing on screen explaining why. */
+  document.querySelectorAll('#products .products-grid .product-card').forEach(card => {
     if (card.classList.contains('product-card--hp-hidden')) return; // never reveal homepage-hidden products
     const match = risk === 'all' || card.getAttribute('data-risk') === risk;
     card.style.display = match ? '' : 'none';
