@@ -82,21 +82,27 @@ const fmt = {
 
 /* ── STATE ─────────────────────────────────────────────────── */
 const S = {
-  /* Two animal collections, deliberately.
-     `animals` is ONE PAGE of the animals table — 75 rows, whatever the current
-     filter selects. `allAnimals` is the whole herd, and is the only one NAV may
-     read. They used to be the same array, so the Cycles tab valued the herd off
-     whatever happened to be in it: the full set after visiting the dashboard,
-     75 filtered rows after visiting Animals, and nothing at all on a direct
-     load — where the average entry mass silently fell back to a hardcoded
-     220kg. Three different herd values for the same cycle, decided by where the
-     user had clicked first. */
+  /* `animals` is ONE PAGE of the animals table — 75 rows, whatever the current
+     filter selects. It belongs to the Animals view and to nothing else.
+
+     NAV reads `herd`, never `animals`. The two used to be one array, so the
+     Cycles tab valued the herd off whatever happened to be in it: the full set
+     after visiting the dashboard, 75 filtered rows after visiting Animals, and
+     nothing at all on a direct load — where the average entry mass silently
+     fell back to a hardcoded 220kg. Three different herd values for the same
+     cycle, decided by where the user had clicked first.
+
+     `herd` replaced a second array holding every animal on file. It is the
+     same information NAV was reducing that array to, computed by the database
+     instead: per-cycle mass sums and counts, three totals, and a breed
+     histogram. Nothing in this console needs an individual animal row outside
+     the Animals view, which pages. */
   animals:      [],
-  allAnimals:   [],
   costs:        [],
   animalTotal:  0,
   animalPages:  0,
   animalStats:  { total: 0, sold: 0, mortalities: 0, avg_mass: null },
+  herd: { cycles: {}, totals: { total: 0, sold: 0, mortalities: 0 }, breeds: [] },
   animalBatches: [],
   animalBreeds:  [],
   cycles:   [],
@@ -263,7 +269,31 @@ const NAV = {
    * carry on a cycle that lost animals late — they ate until they died. It is
    * an assumption standing in for a missing invoice, and it is labelled as one.
    */
-  cycleNAV(cycle, animals = [], costs = null) {
+  /* The four numbers a cycle's valuation actually needs from its animals:
+     the entry and exit masses on file, as sums and counts.
+
+     Reducing a herd to this is what lets the console stop downloading it. The
+     server returns exactly this shape per cycle from /cattle/herd-summary; this
+     function produces it from an array for anything that still holds one, so
+     the arithmetic below has one definition rather than two that must agree. */
+  massSummary(animals = []) {
+    let entry_sum = 0, entry_count = 0, exit_sum = 0, exit_count = 0;
+    for (const a of animals) {
+      const e = parseFloat(a.entry_mass);
+      if (e > 0) { entry_sum += e; entry_count++; }
+      const x = parseFloat(a.exit_mass);
+      if (x > 0) { exit_sum += x; exit_count++; }
+    }
+    return { entry_sum, entry_count, exit_sum, exit_count, animals: animals.length };
+  },
+
+  /* `herd` is either that summary or a plain array of animals. The array form
+     is what the NAV check exercises and what any caller holding real rows can
+     still pass; the summary form is what the console uses now. Same maths
+     either way — the array is summarised and then forgotten. */
+  cycleNAV(cycle, herd = [], costs = null) {
+    const m = Array.isArray(herd) ? NAV.massSummary(herd) : (herd || NAV.massSummary([]));
+
     const daysIn      = NAV.daysIn(cycle);
     const liveCount   = parseInt(cycle.no_live) || 0;
     const purchased   = parseInt(cycle.no_purchased) || 0;
@@ -276,16 +306,15 @@ const NAV = {
        that was: a cycle with no animal records falls back to the settings
        default, and a valuation resting on a default should say so rather than
        look identical to one resting on 400 weigh-in slips. */
-    const withMass   = animals.filter(a => parseFloat(a.entry_mass) > 0);
-    const massKnown  = withMass.length;
+    const massKnown    = Number(m.entry_count) || 0;
     const avgEntryMass = massKnown
-      ? withMass.reduce((s, a) => s + parseFloat(a.entry_mass), 0) / massKnown
+      ? Number(m.entry_sum) / massKnown
       : (S.navSettings.default_entry_mass_kg || 220);
 
     /* Where animals have been weighed out, that is the herd's real average. */
-    const weighed    = animals.filter(a => parseFloat(a.exit_mass) > 0);
-    const estAvgMass = weighed.length
-      ? weighed.reduce((s, a) => s + parseFloat(a.exit_mass), 0) / weighed.length
+    const weighedCount = Number(m.exit_count) || 0;
+    const estAvgMass = weighedCount
+      ? Number(m.exit_sum) / weighedCount
       : avgEntryMass + (dailyGain * daysIn);
 
     const herdValue = liveCount * estAvgMass * pricePerKg;
@@ -320,7 +349,7 @@ const NAV = {
 
     return {
       daysIn, liveCount, purchased, mortalities,
-      pricePerKg, estAvgMass, avgEntryMass, massKnown, weighedCount: weighed.length,
+      pricePerKg, estAvgMass, avgEntryMass, massKnown, weighedCount,
       herdValue, purchaseValue,
       standingFees, feedCosts, carryCosts, totalCosts, costSource, recordedTotal,
       expectedSale, nav, navPct,
@@ -343,7 +372,29 @@ const NAV = {
    * bill. On a hundred head over four months at R28/day that is over R330 000
    * of difference between two numbers on the same screen.
    */
-  portfolioNAV(cycles, animals = [], costs = null) {
+  /* `herd` is the per-cycle summary map from /cattle/herd-summary, or an array
+     of animals. The array form is grouped once here rather than filtered once
+     per cycle: that filter was O(cycles × animals) and ran again on every
+     re-render — 45 cycles against 20 000 animals is 900 000 comparisons to
+     produce 180 numbers. */
+  byCycle(herd) {
+    if (!Array.isArray(herd)) return herd || {};
+    const map = {};
+    for (const a of herd) {
+      const k = a.cycle_id;
+      if (!k) continue;
+      const m = map[k] || (map[k] = { entry_sum: 0, entry_count: 0, exit_sum: 0, exit_count: 0, animals: 0 });
+      m.animals++;
+      const e = parseFloat(a.entry_mass);
+      if (e > 0) { m.entry_sum += e; m.entry_count++; }
+      const x = parseFloat(a.exit_mass);
+      if (x > 0) { m.exit_sum += x; m.exit_count++; }
+    }
+    return map;
+  },
+
+  portfolioNAV(cycles, herd = [], costs = null) {
+    const summaries    = NAV.byCycle(herd);
     const activeCycles = cycles.filter(c => c.status === 'active');
     const soldCycles   = cycles.filter(c => c.status === 'sold');
 
@@ -352,7 +403,7 @@ const NAV = {
     let modelledCycles = 0;
 
     activeCycles.forEach(c => {
-      const nav = NAV.cycleNAV(c, animals.filter(a => a.cycle_id === c.id), costs);
+      const nav = NAV.cycleNAV(c, summaries[c.id], costs);
       totalHerdValue     += nav.herdValue;
       totalPurchaseValue += nav.purchaseValue;
       totalCarryCosts    += nav.carryCosts;
@@ -415,14 +466,26 @@ const NAV = {
 let _herdLoaded = false;
 async function _loadHerd(onStatus = () => {}, force = false) {
   if (_herdLoaded && !force) return;
-  onStatus('Loading cycles…');
-  S.cycles = await fetchAll('cattle_cycles');
-  onStatus('Loading animals… 0 found');
-  S.allAnimals = await fetchAll('cattle_animals', (loaded, total) => {
-    onStatus(total > 0 ? `Loading animals… ${loaded} of ${total}` : `Loading animals… ${loaded} found`);
-  });
-  onStatus('Loading cost ledger…');
-  S.costs = await fetchAll('cattle_costs');
+  onStatus('Loading herd…');
+
+  /* Three independent reads, so three at once. Sequentially they were the
+     console's whole start-up cost; the slowest now sets the pace instead of
+     the sum.
+
+     The herd arrives as aggregates rather than as animals. It used to be
+     walked out of the generic table API a hundred rows at a time — 210
+     requests and 8.7 MB for a 20 000-head herd, measured, of which 4.6 of the
+     4.8 seconds was the walk — and then reduced in the browser to about fifty
+     numbers. /cattle/herd-summary is those numbers. */
+  const [cycles, costs, herd] = await Promise.all([
+    fetchAll('cattle_cycles'),
+    fetchAll('cattle_costs'),
+    safeGet('cattle/herd-summary'),
+  ]);
+
+  S.cycles = cycles;
+  S.costs  = costs;
+  S.herd   = (herd && herd.cycles) ? herd : { cycles: {}, totals: { total: 0, sold: 0, mortalities: 0 }, breeds: [] };
   _herdLoaded = true;
 }
 
@@ -441,17 +504,17 @@ async function loadNAVDashboard() {
       else el.innerHTML = `<div class="loading-state"><div class="spinner"></div> <span id="navLoadStatus">${escapeHtml(msg)}</span></div>`;
     }, true);
 
-    const pNav = NAV.portfolioNAV(S.cycles, S.allAnimals, S.costs);
+    const pNav = NAV.portfolioNAV(S.cycles, S.herd.cycles, S.costs);
     const activeCycles = S.cycles.filter(c => c.status === 'active');
     const soldCycles   = S.cycles.filter(c => c.status === 'sold');
     const now = new Date().toLocaleDateString('en-ZA', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
     // Breed breakdown for active animals
-    const activeAnimals = S.allAnimals.filter(a => a.status === 'active' || (!isTrue(a.sold) && !isTrue(a.mortality)));
-    const breedMap = {};
-    activeAnimals.forEach(a => { const b = a.breed || 'Unknown'; breedMap[b] = (breedMap[b]||0)+1; });
-    const breedLabels = Object.keys(breedMap).slice(0, 6);
-    const breedData   = breedLabels.map(b => breedMap[b]);
+    /* Already grouped, and already ordered by size — so the six drawn are the
+       six largest rather than whichever six happened to sort first. */
+    const breedTop    = (S.herd.breeds || []).slice(0, 6);
+    const breedLabels = breedTop.map(b => b.breed);
+    const breedData   = breedTop.map(b => b.count);
 
     // Cycle return history for chart
     const chartCycles = soldCycles.slice(-12);
@@ -535,8 +598,8 @@ async function loadNAVDashboard() {
           </div>
           <div class="nav-metric">
             <div class="nav-metric-label">Animals Tracked</div>
-            <div class="nav-metric-value">${fmt.num(S.allAnimals.length)}</div>
-            <div class="nav-metric-sub">${fmt.num(S.allAnimals.filter(a=>isTrue(a.sold)||a.status==='sold').length)} sold &nbsp;·&nbsp; ${fmt.num(S.allAnimals.filter(a=>isTrue(a.mortality)||a.status==='mortality').length)} mort.</div>
+            <div class="nav-metric-value">${fmt.num(S.herd.totals.total)}</div>
+            <div class="nav-metric-sub">${fmt.num(S.herd.totals.sold)} sold &nbsp;·&nbsp; ${fmt.num(S.herd.totals.mortalities)} mort.</div>
           </div>
           <div class="nav-metric">
             <div class="nav-metric-label">Total Capital (All)</div>
@@ -574,8 +637,7 @@ async function loadNAVDashboard() {
             </thead>
             <tbody>
               ${activeCycles.map(c => {
-                const cycleAnimals = S.allAnimals.filter(a => a.cycle_id === c.id);
-                const nav = NAV.cycleNAV(c, cycleAnimals, S.costs);
+                const nav = NAV.cycleNAV(c, S.herd.cycles[c.id], S.costs);
                 const isUp = nav.navPct >= 0;
                 const pctColor = isUp ? 'var(--green-mid)' : 'var(--red)';
                 /* An estimated carry and an invoiced one are different claims,
@@ -758,8 +820,7 @@ function renderCyclesView() {
 }
 
 function renderCycleCard(cycle) {
-  const cycleAnimals = S.allAnimals.filter(a => a.cycle_id === cycle.id);
-  const nav = NAV.cycleNAV(cycle, cycleAnimals, S.costs);
+  const nav = NAV.cycleNAV(cycle, S.herd.cycles[cycle.id], S.costs);
   const statusMap = { active: 'badge-blue', sold: 'badge-green', draft: 'badge-grey', cancelled: 'badge-red' };
   const mortalityPct = cycle.no_purchased > 0 ? ((parseInt(cycle.mortalities)||0) / parseInt(cycle.no_purchased) * 100).toFixed(1) : 0;
 
@@ -1010,7 +1071,7 @@ function setupImportView() {
 const PURGE_PHRASE = 'DELETE ALL CATTLE DATA';
 
 async function purgeAllCattleData() {
-  const n = S.allAnimals.length, c = S.cycles.length;
+  const n = S.herd.totals.total, c = S.cycles.length;
   const typed = prompt(
     `This permanently deletes ALL cattle cycles and animals.\n` +
     (n || c ? `Currently on file: ${c} cycle${c === 1 ? '' : 's'}, ${n} animal${n === 1 ? '' : 's'}.\n` : '') +
@@ -1029,7 +1090,8 @@ async function purgeAllCattleData() {
     });
     const data = await r.json();
     CToast.show(`Deleted ${data.deleted.animals} animal(s) and ${data.deleted.cycles} cycle(s).`, 'success');
-    S.cycles = []; S.allAnimals = []; S.animals = []; S.costs = [];
+    S.cycles = []; S.animals = []; S.costs = [];
+    S.herd = { cycles: {}, totals: { total: 0, sold: 0, mortalities: 0 }, breeds: [] };
     _herdLoaded = false;
     await loadNAVDashboard();
     navigate('nav', document.querySelector('[data-view=nav]'));
@@ -1574,7 +1636,9 @@ async function deleteCycle(id) {
       CToast.show('Cycle deleted', 'success');
     }
     S.cycles = S.cycles.filter(c => c.id !== id);
-    S.allAnimals.forEach(a => { if (a.cycle_id === id) a.cycle_id = null; });
+    /* The deleted cycle's animals are unlinked server-side; drop its summary
+       so the next render does not value a cycle that is gone. */
+    delete S.herd.cycles[id];
     renderCyclesView();
   } catch(e) {
     CToast.show('Error deleting cycle: ' + e.message, 'error');
