@@ -1271,7 +1271,7 @@ function loadNotifications() {
       icon: 'fa-money-bill-transfer', iconBg: 'rgba(99,102,241,0.1)', iconColor: '#656565',
       title: 'Withdrawal in progress',
       sub: `${Utils.rand(Math.abs(pendingWithdrawal.amount))} withdrawal is being processed — 1–2 business days.`,
-      time: Utils.timeAgo(pendingWithdrawal.created_at || pendingWithdrawal.transaction_date),
+      time: Utils.timeAgo(Utils.txnDate(pendingWithdrawal)),
       action: "navigate('wallet',document.querySelector('[data-view=wallet]'))",
       unread: false,
     });
@@ -1793,7 +1793,7 @@ function renderPortfolioTrendChart() {
   };
 
   for (const t of (PORTAL.transactions || [])) {
-    const d = new Date(t.created_at || t.transaction_date || 0);
+    const d = new Date(Utils.txnDate(t) || 0);
     if (isNaN(d.getTime())) continue;
     for (const b of buckets) {
       if (d >= b.from && d < b.to) { b.net += valueImpact(t); break; }
@@ -2293,7 +2293,7 @@ async function loadWallet() {
     <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(0,0,0,0.06)">
       <div>
         <div style="font-size:0.82rem;font-weight:600;color:#1a1a1a">${t.description || t.type?.replace(/_/g, ' ')}${statusTag}</div>
-        <div style="font-size:0.7rem;color:#9ca3af">${Utils.date(t.created_at || t.transaction_date)}</div>
+        <div style="font-size:0.7rem;color:#9ca3af">${Utils.date(Utils.txnDate(t))}</div>
       </div>
       <span style="font-weight:700;color:${colour}">${sign}${Utils.rand(Math.abs(t.amount))}</span>
     </div>
@@ -6586,7 +6586,7 @@ function _saMinorHub(sa) {
           <div class="minor-inv-row__icon" style="background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.7)"><i class="fa-solid fa-receipt" style="font-size:0.8rem"></i></div>
           <div class="minor-inv-row__info">
             <div class="minor-inv-row__name">${t.description || t.type}</div>
-            <div class="minor-inv-row__sub">${Utils.date(t.created_at || t.transaction_date)}</div>
+            <div class="minor-inv-row__sub">${Utils.date(Utils.txnDate(t))}</div>
           </div>
           <div class="minor-inv-row__amount" style="color:${!['withdrawal','fee','investment','gift_sent'].includes(t.type)?'#4ade80':'#ef4444'}">${['withdrawal','fee','investment','gift_sent'].includes(t.type)?'-':''}${Utils.rand(Math.abs(t.amount))}</div>
         </div>`).join('')}
@@ -7004,7 +7004,7 @@ function openSaWithdrawal(saId) {
     content.innerHTML = `
       <div style="padding:14px 16px;border-radius:14px;background:rgba(47,140,155,0.08);border:1px solid rgba(47,140,155,0.18)">
         <div style="font-size:0.92rem;font-weight:800;color:#1a1a1a">A withdrawal for ${sa.name} is already in progress.</div>
-        <div style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;line-height:1.55">${Utils.rand(Math.abs(parseFloat(pendingWithdrawal.amount)||0))} was requested on ${Utils.date(pendingWithdrawal.created_at||pendingWithdrawal.transaction_date)}. Most payouts land within 1–2 business days.</div>
+        <div style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;line-height:1.55">${Utils.rand(Math.abs(parseFloat(pendingWithdrawal.amount)||0))} was requested on ${Utils.date(Utils.txnDate(pendingWithdrawal))}. Most payouts land within 1–2 business days.</div>
       </div>`;
     footer.style.display = 'none';
     Modal.open('withdrawalModal');
@@ -7131,7 +7131,7 @@ function openWithdrawalModal() {
       <div style="display:flex;flex-direction:column;gap:14px;padding:8px 0">
         <div style="padding:14px 16px;border-radius:14px;background:rgba(47,140,155,0.08);border:1px solid rgba(47,140,155,0.18)">
           <div style="font-size:0.92rem;font-weight:800;color:#1a1a1a">A withdrawal is already in progress.</div>
-          <div style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;line-height:1.55">${Utils.rand(Math.abs(parseFloat(pendingWithdrawal.amount) || 0))} was requested on ${Utils.date(pendingWithdrawal.created_at || pendingWithdrawal.transaction_date)}. Most payouts land within 1–2 business days.</div>
+          <div style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;line-height:1.55">${Utils.rand(Math.abs(parseFloat(pendingWithdrawal.amount) || 0))} was requested on ${Utils.date(Utils.txnDate(pendingWithdrawal))}. Most payouts land within 1–2 business days.</div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn--secondary" onclick="Modal.close('withdrawalModal');navigate('support', document.querySelector('[data-view=support]'))"><i class="fa-solid fa-headset"></i> Contact support</button>

@@ -28,6 +28,31 @@ const vm   = require('vm');
 const ROOT = path.join(__dirname, '..');
 const SRC  = fs.readFileSync(path.join(ROOT, 'admin', 'js', 'admin.js'), 'utf8');
 
+/* The real Utils, lifted out of js/api.js, with this check's deterministic
+   overrides on top.
+ *
+ * Each of these checks used to hand-write a Utils object with the four or five
+ * methods the render happened to call. Adding a method to the real Utils and
+ * using it in admin.js then failed here with "Utils.txnDate is not a function"
+ * — a true failure reported as if the shipped code were broken, when what was
+ * missing was the stub. Lifting the real one means a new helper is simply
+ * there, and one that is DELETED breaks these honestly. */
+function realUtils(overrides) {
+  const src = require('fs').readFileSync(
+    require('path').join(__dirname, '..', 'js', 'api.js'), 'utf8');
+  const at = src.indexOf('const Utils = {');
+  if (at < 0) throw new Error('Utils not found in js/api.js');
+  let i = src.indexOf('{', at), depth = 0, j = i;
+  for (; j < src.length; j++) {
+    if (src[j] === '{') depth++;
+    else if (src[j] === '}') { depth--; if (!depth) break; }
+  }
+  const box = { console };
+  require('vm').createContext(box);
+  require('vm').runInContext(src.slice(at, j + 1) + ';\nthis.U = Utils;', box);
+  return Object.assign({}, box.U, overrides || {});
+}
+
 let pass = 0, fail = 0;
 const ok = (name, cond, detail) => {
   if (cond) { pass++; console.log(`  ✓ ${name}`); }
@@ -61,7 +86,7 @@ function env() {
   const sandbox = {
     document: { getElementById: id => els[id] || null, querySelector: () => null },
     STATE: { investors: [INVESTOR], pools: [POOL_OPEN, SOURCE_POOL], products: [], investments: [] },
-    Utils: {
+    Utils: realUtils({
       productInfo: pt => ({ label: { cattle: 'Cattle Investment', short_term: 'Short Term Investment' }[pt] || pt || '—',
                             badgeClass: 'badge--gold', icon: 'fa-bolt' }),
       rand: v => 'R' + Number(v || 0).toFixed(2),
@@ -77,7 +102,7 @@ function env() {
       maturityPlan: (inv, lbl) => ({ label: 'Switch product',
         detail: `Switched into another product — ${lbl || 'none chosen yet'}`,
         payout: null, remainder: 10213 }),
-    },
+    }),
     _esc: s => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])),
     Modal: { open() {}, close() {} },
