@@ -23,7 +23,7 @@
   <link rel="stylesheet" href="css/portal.css?v=5" />
   <link rel="stylesheet" href="../css/ci-theme.css?v=1" />
   <!-- sv-intelligence hidden -->
-  <link rel="stylesheet" href="css/portal-premium.css?v=7" />
+  <link rel="stylesheet" href="css/portal-premium.css?v=8" />
   <!-- Payment modal must retain dark theme — isolate from ci-theme overrides -->
   <style>
     #topUpModal.modal-overlay { background: rgba(0,0,0,0.82) !important; }
@@ -720,7 +720,10 @@
             <h2 class="section-banner__title">Investment Products</h2>
             <p class="section-banner__sub">Choose a product to see its details, factsheets and open pools — then invest. All investments are FSCA-regulated via SmartVest Financial Services (FSP 52449).</p>
           </div>
-          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                  <!-- Offering tabs — drawn by renderMarketCategoryTabs() only when the
+             platform has an active Ethical & Interest-Free product. -->
+        <div class="mkt-cat-tabs" id="mktCategoryTabs" style="display:none"></div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
             <div class="tab-bar" id="marketRiskTabBar" style="align-self:center">
               <span style="font-size:0.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-right:4px;align-self:center">Risk</span>
               <button class="tab-btn active" onclick="filterMarket('all', this)">All</button>
@@ -3001,9 +3004,9 @@ if (window.Capacitor) {
 }
 </script>
 <script src="/js/native.js"></script>
-<script src="../js/portal-core.js?v=17"></script>
+<script src="../js/portal-core.js?v=18"></script>
 <script src="../js/investor-documents.js?v=3"></script>
-<script src="js/portal.js?v=115"></script>
+<script src="js/portal.js?v=116"></script>
 <!-- sv-intelligence.js hidden -->
 <script>
 // Service worker: web browsers only (not Capacitor). Handles web push notifications.

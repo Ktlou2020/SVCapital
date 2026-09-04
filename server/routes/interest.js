@@ -40,14 +40,21 @@ router.post('/interest/preview', requireAuth, requireRole('admin', 'director'), 
     // for sub-accounts, also against sa_reference — both are the same value in practice.
     // UPPER(TRIM(...)) on the DB side ensures casing or whitespace differences never block a match.
     const [saResult, invResult] = await Promise.all([
+      /* interest_free_election travels with the row on both sides. A
+         sub-account inherits its parent's election — the money in it is the
+         same client's, and crediting a child account would defeat the choice
+         exactly as crediting the main wallet would. */
       pool.query(
-        `SELECT id, wallet_balance, name, parent_investor_id, sa_reference
-         FROM sub_accounts
-         WHERE UPPER(TRIM(id)) = ANY($1::text[]) OR UPPER(TRIM(sa_reference)) = ANY($1::text[])`,
+        `SELECT s.id, s.wallet_balance, s.name, s.parent_investor_id, s.sa_reference,
+                COALESCE(p.interest_free_election, false) AS interest_free_election
+           FROM sub_accounts s
+           LEFT JOIN investors p ON p.id = s.parent_investor_id
+          WHERE UPPER(TRIM(s.id)) = ANY($1::text[]) OR UPPER(TRIM(s.sa_reference)) = ANY($1::text[])`,
         [refList]
       ),
       pool.query(
-        `SELECT id, first_name, last_name, wallet_balance
+        `SELECT id, first_name, last_name, wallet_balance,
+                COALESCE(interest_free_election, false) AS interest_free_election
          FROM investors WHERE UPPER(TRIM(id)) = ANY($1::text[])`,
         [refList]
       ),
@@ -74,6 +81,11 @@ router.post('/interest/preview', requireAuth, requireRole('admin', 'director'), 
     });
 
     let totalInterest = 0, toCredit = 0, unmatched = 0, skipped = 0;
+    /* Withheld from clients who elected to take no interest. Counted and
+       totalled separately rather than folded into `skipped`, so the admin
+       running the distribution can see that the money was deliberately not
+       paid rather than lost to a matching failure. */
+    let declined = 0, declinedTotal = 0;
 
     const items = rows.map(row => {
       const ref        = normalizeRef(row['Account Reference']);
@@ -120,6 +132,24 @@ router.post('/interest/preview', requireAuth, requireRole('admin', 'director'), 
       // platform_account_id lets the UI show the exact DB record ID for visual verification
       const platformAccountId = sa ? sa.id : inv.id;
 
+      /* The election is read from the database, never from the uploaded CSV,
+         and it is checked before the amount is: a client who declined interest
+         should read as "declined", not as "zero", whatever the figure is. */
+      const declinedInterest = !!(sa ? sa.interest_free_election : inv.interest_free_election);
+      if (declinedInterest) {
+        declined++;
+        if (interest > 0) declinedTotal += interest;
+        return {
+          account_reference: row['Account Reference'] || ref,
+          client_name_pim: clientName, pim_balance: pimBalance,
+          platform_balance: platformBalance, interest_amount: interest,
+          status: 'interest_free',
+          match_type: matchType, sub_account_id: subAccountId,
+          investor_id: investorId, platform_name: platformName,
+          platform_account_id: platformAccountId,
+        };
+      }
+
       if (interest <= 0) {
         skipped++;
         return {
@@ -153,6 +183,8 @@ router.post('/interest/preview', requireAuth, requireRole('admin', 'director'), 
         to_credit:        toCredit,
         unmatched,
         skipped,
+        declined,
+        declined_total:   Math.round(declinedTotal * 100) / 100,
         total_interest:   Math.round(totalInterest * 100) / 100,
         duplicate_refs:   [...saDupes, ...invDupes],
       },
@@ -178,8 +210,35 @@ router.post('/interest/apply', requireAuth, requireRole('admin', 'director'), as
     if (existing.rows.length)
       return res.status(409).json({ error: `Interest for period "${period}" has already been applied.` });
 
-    const toCredit      = items.filter(i => i.status === 'matched' && i.interest_amount > 0);
-    if (!toCredit.length) return res.status(400).json({ error: 'No accounts to credit' });
+    const posted = items.filter(i => i.status === 'matched' && i.interest_amount > 0);
+
+    /* Re-read the election here rather than trusting the posted rows.
+       `items` is whatever the browser sends back, and the preview it came from
+       may be minutes or hours old — a client who declined interest in between
+       would otherwise be credited by a stale payload. This is the only place
+       the money actually moves, so this is where the question has to be asked. */
+    const investorIds = [...new Set(posted.map(i => i.investor_id).filter(Boolean))];
+    const declinedSet = new Set();
+    if (investorIds.length) {
+      const { rows: elections } = await pool.query(
+        `SELECT id FROM investors
+          WHERE id = ANY($1::text[]) AND COALESCE(interest_free_election, false) = true`,
+        [investorIds]
+      );
+      elections.forEach(r => declinedSet.add(r.id));
+    }
+    const toCredit = posted.filter(i => !declinedSet.has(i.investor_id));
+    const withheld = posted.length - toCredit.length;
+    if (withheld) {
+      console.log(`[interest] ${withheld} account(s) withheld — investor elected to receive no interest.`);
+    }
+    if (!toCredit.length) {
+      return res.status(400).json({
+        error: withheld
+          ? 'No accounts to credit — every matched account belongs to an investor who has declined interest.'
+          : 'No accounts to credit',
+      });
+    }
 
     // Guard: reject if any item lacks both sub_account_id and investor_id —
     // credits must always go to a specific DB record, never inferred from name alone.
@@ -290,6 +349,7 @@ router.post('/interest/apply', requireAuth, requireRole('admin', 'director'), as
       res.json({ success: true, distribution_id: distId,
                  accounts_credited: creditedCount,
                  accounts_already_credited: alreadyCredited,
+                 accounts_interest_free: withheld,
                  total_interest: Math.round(creditedTotal * 100) / 100 });
     } catch (err) {
       await client.query('ROLLBACK');

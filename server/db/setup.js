@@ -1135,6 +1135,7 @@ CREATE TABLE IF NOT EXISTS products (
   badge_class         TEXT DEFAULT 'badge--gray',
   partner_name        TEXT,
   sector              TEXT,                   -- e.g. "Agriculture", "Energy"
+  category            TEXT DEFAULT 'standard',-- 'standard' | 'eif' (Ethical and Interest-Free)
   factsheet_url       TEXT,                   -- base64 data URL or external link
   factsheet_name      TEXT,
   is_active           BOOLEAN DEFAULT true,
@@ -1144,6 +1145,30 @@ CREATE TABLE IF NOT EXISTS products (
   updated_at          TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS products_type_idx ON products(product_type);
+CREATE INDEX IF NOT EXISTS products_category_idx ON products(category);
+
+/* Questions a client asks before they invest, kept per offering.
+ *
+ * The portal's general FAQ is written into portal/index.html by hand, which is
+ * fine for five questions that have not changed in a year. The EIF offering is
+ * different: its questions are about how a structure avoids riba, and the
+ * answers have to be correctable by whoever is accountable for them without a
+ * deploy. So they are rows, editable in the admin console like everything else.
+ *
+ * Scoped by category, and optionally narrowed to one product_type — an Ijara
+ * question does not belong on a Mudarabah card. */
+CREATE TABLE IF NOT EXISTS product_faqs (
+  id           TEXT PRIMARY KEY,
+  category     TEXT NOT NULL DEFAULT 'standard',
+  product_type TEXT,                      -- NULL = applies to the whole category
+  question     TEXT NOT NULL,
+  answer       TEXT NOT NULL,
+  sort_order   INT DEFAULT 0,
+  is_active    BOOLEAN DEFAULT true,
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS product_faqs_cat_idx ON product_faqs(category, sort_order);
 
 -- ── Private Equity Monitor ──────────────────────────────────────────────────
 
@@ -1349,6 +1374,108 @@ CREATE TABLE IF NOT EXISTS cr_notification_clears (
 );
 `;
 
+/* ── Ethical and Interest-Free (EIF) ──────────────────────────────────────
+ *
+ * A sub-category for clients who will not take riba. Three classical
+ * structures, each of which earns its return from something other than the
+ * lending of money:
+ *
+ *   Murabaha    a disclosed mark-up on goods actually bought and sold
+ *   Ijara       rent on an asset actually owned and leased
+ *   Mudarabah   a share of profit actually made, with loss borne by capital
+ *
+ * These are ordinary rows in `products`. They are created, priced, pooled,
+ * filled and matured by exactly the machinery every other product uses — the
+ * only thing `category` changes is how the portal presents them and which
+ * words it uses for the return. That is deliberate: an offering that needed
+ * its own investment pipeline would be a second platform to maintain.
+ *
+ * `benchmark_rate` is the field the product grid reads for its headline
+ * figure. On these products the portal labels it "target profit share" rather
+ * than "target return p.a." — same number, and the number is a target in both
+ * cases, but calling a Mudarabah distribution an annual rate is the language
+ * the client came here to avoid.
+ *
+ * Seeded active so the offering is visible on staging. Deactivating all three
+ * in the admin console removes the section from the portal entirely — the tab
+ * is drawn only when an active EIF product exists, so `is_active` is the
+ * on/off switch and there is no second flag to remember. */
+const EIF_PRODUCTS = [
+  {
+    product_type: 'eif_murabaha', label: 'Murabaha Trade Finance',
+    headline: 'A known mark-up on real goods.', category: 'eif',
+    description: 'SV Capital buys goods a business needs — stock, equipment, raw materials — and sells them on at a mark-up agreed and disclosed in full before the sale. The business pays in instalments. Your return is your share of that mark-up. It is a trading profit on an asset that was actually bought and actually sold, not a charge for the use of money, and it cannot grow if the buyer pays late.',
+    key_details: [
+      'SV Capital takes ownership of the goods before selling them on',
+      'The mark-up is fixed and disclosed in the contract — it never increases',
+      'No penalty interest: a late payer owes the same amount they always owed',
+      'Backed by the goods and by the buyer\'s trade receivables',
+      'Shorter term than most products on the platform',
+    ].join('\n'),
+    min_investment: 500, term_months: 6, benchmark_rate: 0.115, performance_fee_pct: 0,
+    risk_profile: 'Low-Medium', risk_color: '#22c55e', icon: 'fa-handshake',
+    color: '#65ed00', badge_class: 'badge--green', sector: 'Trade Finance', sort_order: 40,
+  },
+  {
+    product_type: 'eif_ijara', label: 'Ijara Asset Leasing',
+    headline: 'Rent from something you own.', category: 'eif',
+    description: 'The pool buys an income-producing asset — solar plant, delivery vehicles, plant and machinery — and leases it to an operator. Your return is rent. Because the pool owns the asset, it carries the ownership risks: if the asset cannot be used, the rent stops. That is what makes the income rent rather than interest.',
+    key_details: [
+      'The pool holds title to the asset for the life of the lease',
+      'Return is contracted rental income, paid over the lease term',
+      'Ownership risk sits with the pool — rent stops if the asset cannot be used',
+      'Major maintenance and insurance are the owner\'s cost, not the lessee\'s',
+      'Option to transfer the asset to the lessee at the end of the term',
+    ].join('\n'),
+    min_investment: 1000, term_months: 36, benchmark_rate: 0.125, performance_fee_pct: 0,
+    risk_profile: 'Medium', risk_color: '#fec24f', icon: 'fa-file-contract',
+    color: '#65ed00', badge_class: 'badge--green', sector: 'Asset Leasing', sort_order: 41,
+  },
+  {
+    product_type: 'eif_mudarabah', label: 'Mudarabah Enterprise',
+    headline: 'A share of the profit, and of the risk.', category: 'eif',
+    description: 'You provide the capital; a vetted operating partner provides the work. Profit is divided on a ratio agreed before a rand is deployed. If the venture loses money, the loss falls on the capital rather than on the partner — they lose their effort instead. Nothing is promised in advance, because a promised return on a partnership would be the thing this structure exists to avoid.',
+    key_details: [
+      'Profit split on a ratio fixed in advance — 80% investors, 20% manager',
+      'The figure shown is a target drawn from the venture\'s own projections, not a promise',
+      'Losses are borne by the capital; the operating partner forfeits their share of profit',
+      'Quarterly reporting on the underlying venture',
+      'Highest risk of the three EIF structures, and the highest potential share',
+    ].join('\n'),
+    min_investment: 2500, term_months: 12, benchmark_rate: 0.145, performance_fee_pct: 0.20,
+    risk_profile: 'Medium-High', risk_color: '#ffb782', icon: 'fa-scale-balanced',
+    color: '#65ed00', badge_class: 'badge--green', sector: 'Enterprise Finance', sort_order: 42,
+  },
+];
+
+/* The questions a client actually asks before putting money into this, in the
+   order they ask them. Written to be corrected: they are rows, and whoever is
+   accountable for the wording can change it in the admin console without a
+   deploy. The governance answer says review is under way and claims no
+   certificate, because the platform does not have one yet. */
+const EIF_FAQS = [
+  { q: 'What makes these investments interest-free?',
+    a: 'None of them earns money from lending money. Murabaha earns a disclosed mark-up on goods SV Capital actually buys and sells. Ijara earns rent on an asset the pool actually owns. Mudarabah earns a share of profit a business actually makes. In each case the return comes from trade, from property or from enterprise — and in each case, if the underlying thing does not perform, the return does not appear.' },
+  { q: 'Is this offering Sharia certified?',
+    a: 'Not yet, and we will not say otherwise. These products are structured on established Islamic finance principles — no riba, no gharar, no prohibited sectors, and a real asset or enterprise behind every return. Independent Sharia advisory review is under way, and we will publish the advisor, the certificate and its date here as soon as it is issued. Until then, please treat the structures as described and take your own advice.' },
+  { q: 'What sectors are excluded?',
+    a: 'Conventional interest-based lending, alcohol, tobacco, pork, gambling, adult entertainment, and weapons. Any business a pool finances is screened against this list before the pool opens, and a business that moves into an excluded activity during the term is exited.' },
+  { q: 'Is the 1% platform fee permissible?',
+    a: 'The platform fee is a fee for the work of running the platform — administration, reporting, custody of the paperwork, and the operations behind each pool. It is a fixed percentage of the amount you invest, charged once, and it is the same whether the investment does well or badly. It is a fee for a service rendered, not a charge for the use of money.' },
+  { q: 'What happens if a pool makes a loss?',
+    a: 'You would receive less than you invested. That is the honest answer, and it applies across the platform. In a Mudarabah the loss falls specifically on the capital, and the operating partner loses their share of the profit rather than sharing the loss — which is the structure working as intended, not a term against you. No product on this platform guarantees a return.' },
+  { q: 'Are the returns shown a promise?',
+    a: 'No. The figure on each product is a target, drawn from the underlying trade, lease or venture. Murabaha and Ijara returns come from contracted amounts and are the more predictable of the three; a Mudarabah target is a projection and nothing more. Actual returns are published on each pool once it matures.' },
+  { q: 'Can I hold these alongside your other products?',
+    a: 'Yes. Nothing stops you, and your portfolio, statements and wallet work exactly as they do for any other product. If you would rather your money never touched the conventional products, invest only from this section — and if it helps to keep them apart, a sub-account gives you a separate wallet and a separate statement.' },
+  /* Deliberately describes only what the platform does today. Purification of
+     the interest earned on idle wallet balances is an operational process
+     nobody has been asked to run yet, so this answer does not promise it. If
+     and when it is set up, this row is the place to say so. */
+  { q: 'What about money sitting in my wallet?',
+    a: 'Money in your wallet is not invested — it is held in the platform\'s client account until you place it. No interest is credited to your wallet balance: what you put in is what you see. The shortest way to keep uninvested cash to a minimum is to place it in a pool as soon as one you want is open, and to choose payout rather than roll-over only when you intend to withdraw.' },
+];
+
 /* Default product catalogue — seeded once, then fully editable in the admin
    console. Parameterised inserts avoid any apostrophe-escaping issues. */
 const DEFAULT_PRODUCTS = [
@@ -1459,6 +1586,7 @@ const DEFAULT_PRODUCTS = [
     risk_profile: 'High', risk_color: '#ff5229', icon: 'fa-seedling', color: '#65ed00',
     badge_class: 'badge--green', partner_name: 'GridFarmer', sort_order: 8,
   },
+  ...EIF_PRODUCTS,
 ];
 
 async function seedProducts() {
@@ -1473,14 +1601,16 @@ async function seedProducts() {
         `INSERT INTO products
            (id, product_type, label, headline, description, key_details,
             min_investment, term_months, benchmark_rate, performance_fee_pct,
-            risk_profile, risk_color, icon, color, badge_class, partner_name, sort_order)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+            risk_profile, risk_color, icon, color, badge_class, partner_name,
+            sector, category, sort_order)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
          ON CONFLICT (product_type) DO NOTHING`,
         [
           `PROD-${p.product_type.toUpperCase()}`, p.product_type, p.label, p.headline,
           p.description, p.key_details, p.min_investment, p.term_months, p.benchmark_rate,
           p.performance_fee_pct, p.risk_profile, p.risk_color, p.icon, p.color,
-          p.badge_class, p.partner_name || null, p.sort_order,
+          p.badge_class, p.partner_name || null, p.sector || null,
+          p.category || 'standard', p.sort_order,
         ]
       );
     }
@@ -1573,6 +1703,14 @@ async function autoSetup() {
           BEGIN ALTER TABLE investors ADD COLUMN xp_points INT DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE investors ADD COLUMN xp_level TEXT DEFAULT 'seed'; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE investors ADD COLUMN investor_profile JSONB DEFAULT '{}'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          /* Set by the investor in the Ethical and Interest-Free section: do not
+             credit interest to my wallet.
+             The platform imports interest from 3PIM and credits it to investor
+             wallets and sub-accounts. An EIF client's money passes through the
+             same wallet, so without this the offering would be paying riba into
+             the account of the person who chose it. The interest run reads this
+             and reports what it withheld. */
+          BEGIN ALTER TABLE investors ADD COLUMN interest_free_election BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE support_tickets ADD COLUMN investor_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE support_tickets ADD COLUMN investor_email TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE support_tickets ADD COLUMN admin_response TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
@@ -1702,6 +1840,12 @@ async function autoSetup() {
           BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_reference TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE sub_accounts ADD COLUMN pim_account_ref TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE products ADD COLUMN sector TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          /* Which offering a product belongs to. 'standard' is everything the
+             platform has ever sold; 'eif' is Ethical and Interest-Free. It is
+             the product that carries this, not the pool — a pool inherits the
+             category from its product_type, so nothing about how pools are
+             created, filled or matured changes. */
+          BEGIN ALTER TABLE products ADD COLUMN category TEXT DEFAULT 'standard'; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE transactions ADD COLUMN date_updated TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE push_tokens ADD COLUMN app_version TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE push_tokens ADD COLUMN device_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
@@ -2281,6 +2425,66 @@ async function autoSetup() {
       } catch (courseErr) {
         console.warn('⚠️  Cattle course correction skipped:', courseErr.message);
       }
+    });
+
+    await step("13. Install the Ethical and Interest-Free offering", async () => {
+      /* 13. seedProducts() returns early the moment `products` has any row at
+             all, so a product added to DEFAULT_PRODUCTS reaches a brand-new
+             database and no existing one — which is every environment that
+             matters. The cattle-course fix in step 12 was the same shape of
+             mistake and cost a release to notice.
+
+             So the EIF catalogue is installed here, per product, with
+             ON CONFLICT (product_type) DO NOTHING. Idempotent, and it does not
+             touch a product an admin has since edited: once the row exists
+             this step is a no-op for it for ever, and the console is the only
+             thing that changes it after that. */
+      let added = 0;
+      for (const p of EIF_PRODUCTS) {
+        const { rowCount } = await pool.query(
+          `INSERT INTO products
+             (id, product_type, label, headline, description, key_details,
+              min_investment, term_months, benchmark_rate, performance_fee_pct,
+              risk_profile, risk_color, icon, color, badge_class, sector, category, sort_order)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+           ON CONFLICT (product_type) DO NOTHING`,
+          [`PROD-${p.product_type.toUpperCase()}`, p.product_type, p.label, p.headline,
+           p.description, p.key_details, p.min_investment, p.term_months, p.benchmark_rate,
+           p.performance_fee_pct, p.risk_profile, p.risk_color, p.icon, p.color,
+           p.badge_class, p.sector || null, 'eif', p.sort_order]
+        );
+        added += rowCount;
+      }
+      if (added) console.log(`✅ EIF products installed (${added}).`);
+
+      /* An environment that already carried these product_types from before
+         `category` existed would have them sitting in the standard catalogue.
+         Scoped to the three keys this offering owns, so it cannot reclassify
+         anything an admin has deliberately set. */
+      const { rowCount: fixed } = await pool.query(
+        `UPDATE products SET category = 'eif', updated_at = NOW()
+          WHERE product_type = ANY($1::text[])
+            AND COALESCE(category, 'standard') <> 'eif'`,
+        [EIF_PRODUCTS.map(p => p.product_type)]
+      );
+      if (fixed) console.log(`✅ ${fixed} product(s) moved into the EIF category.`);
+
+      /* Everything without a category is standard. Written once so the column
+         is never NULL for a reader that forgets to COALESCE. */
+      await pool.query(`UPDATE products SET category = 'standard' WHERE category IS NULL`);
+
+      let faqs = 0;
+      for (let i = 0; i < EIF_FAQS.length; i++) {
+        const f = EIF_FAQS[i];
+        const { rowCount } = await pool.query(
+          `INSERT INTO product_faqs (id, category, question, answer, sort_order)
+           VALUES ($1, 'eif', $2, $3, $4)
+           ON CONFLICT (id) DO NOTHING`,
+          [`FAQ-EIF-${String(i + 1).padStart(2, '0')}`, f.q, f.a, (i + 1) * 10]
+        );
+        faqs += rowCount;
+      }
+      if (faqs) console.log(`✅ EIF FAQs installed (${faqs}).`);
     });
 
   } catch (err) {

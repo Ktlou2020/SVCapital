@@ -28,7 +28,7 @@
   <link rel="stylesheet" href="/css/portal.css?v=5" />
   <link rel="stylesheet" href="/css/ci-theme.css?v=2" />
   <!-- sv-intelligence hidden -->
-  <link rel="stylesheet" href="/css/portal-premium.css?v=7" />
+  <link rel="stylesheet" href="/css/portal-premium.css?v=8" />
   <!-- Everything the app styles differently from the web portal. Must stay here:
        after the four shared sheets, before mobile-app.css. -->
   <link rel="stylesheet" href="/css/mobile-overrides.css?v=1" />
@@ -720,6 +720,10 @@
           <h2 class="mkt-hero__title">Investment Products</h2>
           <p class="mkt-hero__sub">Choose a product to see its details, factsheets and open pools — then invest.</p>
         </div>
+
+        <!-- Offering tabs — drawn by renderMarketCategoryTabs() only when the
+             platform has an active Ethical & Interest-Free product. -->
+        <div class="mkt-cat-tabs mb-16" id="mktCategoryTabs" style="display:none"></div>
 
         <!-- Risk filter bar -->
         <div class="mkt-filter-bar mb-16" id="marketRiskTabBar">
@@ -3054,9 +3058,9 @@
 </nav>
 
 <script src="../js/api.js?v=24"></script>
-<script src="../js/portal-core.js?v=13"></script>
+<script src="../js/portal-core.js?v=14"></script>
 <script src="../js/investor-documents.js?v=3"></script>
-<script src="js/portal.js?v=44"></script>
+<script src="js/portal.js?v=45"></script>
 <!-- sv-intelligence.js hidden -->
 <script>
 if ('serviceWorker' in navigator && !window.__SVC_NATIVE__) {

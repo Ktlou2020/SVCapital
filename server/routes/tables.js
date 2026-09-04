@@ -146,6 +146,7 @@ const ALLOWED_TABLES = {
   compliance_calendar:      'id',
   accepted_client_documents: 'id',
   products:                 'id',
+  product_faqs:             'id',
   pe_companies:             'id',
   pe_deals:                 'id',
   pe_financials:            'id',
@@ -176,7 +177,7 @@ const ADMIN_WRITE_TABLES = new Set([
   'employees', 'employee_courses',
   'payslips',
   'eva_periods', 'pulse_surveys', 'learning_paths',
-  'products',
+  'products', 'product_faqs',
   'investment_pools', 'platform_settings', 'fund_runs', 'ifas',
   'fica_checks', 'compliance_calendar', 'accepted_client_documents',
 ]);

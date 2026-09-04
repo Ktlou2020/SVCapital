@@ -3965,3 +3965,237 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
   .view [style*="font-size:0.72"], .view [style*="font-size: 0.72"],
   .view [style*="font-size:0.75"], .view [style*="font-size: 0.75"] { font-size: 12px !important; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Ethical and Interest-Free (EIF)
+   ═══════════════════════════════════════════════════════════════════════
+
+   A distinct section inside the same marketplace. The brief was "a slightly
+   different look and feel, staying true to our CI", so this borrows nothing
+   from outside the CI palette: the accent is #65ed00, already the CI lime and
+   already in Utils.ciProductPalette. Everything else — radii, spacing, type
+   scale, card shape — is the platform's, so the section reads as a room in the
+   same building rather than a different one.
+
+   The one deliberate departure is the corner treatment. EIF panels carry a
+   flat top-left rule and a slightly squarer radius than the gold cards, which
+   is enough for a client to know at a glance which part of the platform they
+   are in without a second design language to maintain.
+
+   Loaded on both surfaces: the app reads this same file since the CSS fork
+   was removed, so there is one place to change any of it. */
+
+.mkt-cat-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.mkt-cat-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 0.83rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color .15s, border-color .15s, background .15s;
+}
+.mkt-cat-tab i { font-size: 0.9rem; }
+.mkt-cat-tab:hover { color: var(--gold); border-color: var(--gold); }
+.mkt-cat-tab.active {
+  color: #1a1a1a;
+  background: var(--gold);
+  border-color: var(--gold);
+}
+/* The EIF tab takes the section's accent in both states, so the colour is
+   attached to the offering rather than to selection. */
+.mkt-cat-tab--eif:hover { color: var(--cat-accent); border-color: var(--cat-accent); }
+.mkt-cat-tab--eif.active {
+  color: #0d1a00;
+  background: var(--cat-accent);
+  border-color: var(--cat-accent);
+}
+
+/* ── Section banner ─────────────────────────────────────────────────────── */
+.eif-banner {
+  border: 1px solid color-mix(in srgb, var(--eif) 32%, transparent);
+  border-top-left-radius: 4px;
+  border-radius: 4px 16px 16px 16px;
+  background:
+    radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--eif) 10%, transparent) 0%, transparent 58%),
+    var(--card-bg, rgba(255,255,255,0.02));
+  padding: 20px;
+  margin-bottom: 18px;
+}
+.eif-banner__head { display: flex; gap: 14px; align-items: flex-start; }
+.eif-banner__mark {
+  flex-shrink: 0;
+  width: 46px; height: 46px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 4px 14px 14px 14px;
+  background: color-mix(in srgb, var(--eif) 16%, transparent);
+  color: var(--eif);
+  font-size: 1.15rem;
+}
+.eif-banner__title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--text, #fff);
+}
+.eif-banner__sub {
+  margin-top: 4px;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+  max-width: 62ch;
+}
+
+.eif-principles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+.eif-principle {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border-radius: 4px 12px 12px 12px;
+  border: 1px solid color-mix(in srgb, var(--eif) 18%, transparent);
+  background: color-mix(in srgb, var(--eif) 6%, transparent);
+  min-width: 0;
+}
+.eif-principle > i { color: var(--eif); font-size: 0.95rem; margin-top: 2px; flex-shrink: 0; }
+.eif-principle strong {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text, #fff);
+}
+.eif-principle span {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.76rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+/* The governance line. Neutral rather than accented on purpose — it says what
+   the platform does NOT yet have, and dressing that in the section's colour
+   would read as a badge of approval. */
+.eif-governance {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.03);
+  font-size: 0.78rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+.eif-governance > i { color: var(--gold); margin-top: 2px; flex-shrink: 0; }
+.eif-governance strong { color: var(--text, #fff); }
+
+/* ── The interest election ──────────────────────────────────────────────── */
+.eif-election {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 18px;
+  margin-bottom: 18px;
+  border-radius: 4px 14px 14px 14px;
+  border: 1px solid color-mix(in srgb, var(--eif) 24%, transparent);
+  background: color-mix(in srgb, var(--eif) 5%, transparent);
+}
+.eif-election__text { flex: 1; min-width: 0; }
+.eif-election__text strong {
+  display: block;
+  font-size: 0.87rem;
+  font-weight: 700;
+  color: var(--text, #fff);
+}
+.eif-election__text span {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.78rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+  max-width: 68ch;
+}
+.eif-election__err { font-size: 0.78rem; color: var(--gold); }
+
+.eif-switch {
+  flex-shrink: 0;
+  width: 52px;
+  height: 30px;
+  padding: 3px;
+  border-radius: 30px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.06);
+  cursor: pointer;
+  transition: background .18s, border-color .18s;
+}
+.eif-switch > span {
+  display: block;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition: transform .18s, background .18s;
+}
+.eif-switch.on { background: color-mix(in srgb, var(--eif) 26%, transparent); border-color: var(--eif); }
+.eif-switch.on > span { transform: translateX(22px); background: var(--eif); }
+.eif-switch:focus-visible { outline: 2px solid var(--eif); outline-offset: 2px; }
+
+/* ── Product cards inside the section ───────────────────────────────────── */
+.mpc-v2--eif { border-top-left-radius: 4px; }
+
+/* The badge an EIF product carries when it appears in the All-products grid,
+   where it needs to say what it is without the section around it. */
+.eif-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 3px 9px;
+  border-radius: 4px 10px 10px 10px;
+  border: 1px solid color-mix(in srgb, #65ed00 30%, transparent);
+  background: color-mix(in srgb, #65ed00 10%, transparent);
+  color: #65ed00;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* ── The section's FAQ ──────────────────────────────────────────────────── */
+.eif-faq .faq-quick-q:hover { color: var(--eif); }
+.eif-faq .faq-quick-q.open i { color: var(--eif); }
+.eif-faq .panel__title::before {
+  content: '';
+  display: inline-block;
+  width: 3px; height: 14px;
+  margin-right: 9px;
+  border-radius: 2px;
+  background: var(--eif);
+  vertical-align: -2px;
+}
+
+@media (max-width: 560px) {
+  .eif-banner { padding: 16px; }
+  .eif-principles { grid-template-columns: 1fr; }
+  /* The switch drops below the copy rather than squeezing it to two words. */
+  .eif-election { flex-direction: column; align-items: flex-start; gap: 12px; }
+}

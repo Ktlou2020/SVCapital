@@ -70,6 +70,85 @@ router.get('/', async (req, res) => {
   }
 });
 
+/* GET /api/products/faqs — PUBLIC. The questions shown under an offering.
+ *
+ * Rows, not markup, because the EIF answers describe how a structure avoids
+ * riba and whoever is accountable for that wording has to be able to correct
+ * it without a deploy. ?category= narrows to one offering; the default returns
+ * everything active so a caller can group them itself. */
+router.get('/faqs', async (req, res) => {
+  try {
+    const category = (req.query.category || '').trim();
+    const params = [];
+    let where = 'WHERE is_active = true';
+    if (category) { params.push(category); where += ` AND category = $${params.length}`; }
+    const { rows } = await pool.query(
+      `SELECT id, category, product_type, question, answer, sort_order
+         FROM product_faqs ${where}
+        ORDER BY sort_order, question`, params);
+    res.set('Cache-Control', 'no-store');
+    res.json({ data: rows });
+  } catch (err) {
+    console.error('[products/faqs] error:', err.message);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+/* ── The interest-free election ───────────────────────────────────────────
+ *
+ * The platform imports interest from 3PIM each period and credits it to
+ * investor wallets and sub-accounts. A client who came here for the Ethical
+ * and Interest-Free offering keeps their money in that same wallet, so
+ * without this they would be paid riba by the platform that sold them the
+ * alternative to it — quietly, as a line on a statement they did not ask for.
+ *
+ * This is the client's own choice, recorded on their record. The interest run
+ * reads it in two places: the preview marks the row `interest_free` and leaves
+ * it out of the total, and the apply re-reads it at the moment of payment so a
+ * stale preview cannot credit someone who has since opted out.
+ *
+ * It is not implied by holding an EIF product, and it is not set for them.
+ * Some clients hold both kinds and want the interest; that is theirs to say.
+ */
+const { requireAuth } = require('../middleware/auth');
+
+/* The token claim is `investorId`. Reading `investor_id` here finds nothing
+   and falls through to the users-table uuid, which matches no investor row —
+   the election would appear to save and then not be there. */
+const callerInvestorId = req => (req.user && (req.user.investorId || req.user.investor_id)) || null;
+
+router.get('/eif/election', requireAuth, async (req, res) => {
+  try {
+    const id = callerInvestorId(req);
+    if (!id) return res.json({ interest_free_election: false });
+    const { rows } = await pool.query(
+      'SELECT COALESCE(interest_free_election, false) AS elected FROM investors WHERE id = $1', [id]);
+    res.set('Cache-Control', 'no-store');
+    res.json({ interest_free_election: !!(rows[0] && rows[0].elected) });
+  } catch (err) {
+    console.error('[products/eif-election] read error:', err.message);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+router.put('/eif/election', requireAuth, async (req, res) => {
+  try {
+    const id = callerInvestorId(req);
+    if (!id) return res.status(403).json({ error: 'Forbidden.' });
+    /* Only ever the caller's own row. There is no id in the path for a reason:
+       one client must not be able to set another's election. */
+    const elected = req.body && req.body.interest_free_election === true;
+    const { rowCount } = await pool.query(
+      `UPDATE investors SET interest_free_election = $1, updated_at = NOW() WHERE id = $2`,
+      [elected, id]);
+    if (!rowCount) return res.status(404).json({ error: 'Investor not found.' });
+    res.json({ success: true, interest_free_election: elected });
+  } catch (err) {
+    console.error('[products/eif-election] write error:', err.message);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
 /* GET /api/products/cattle-stats — PUBLIC. Aggregated, non-sensitive herd
    stats (no individual animal data) for the Cattle Investment product:
    number purchased to date, gender & breed breakdown, and average weight. */
