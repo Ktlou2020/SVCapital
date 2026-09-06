@@ -112,7 +112,9 @@ const S = {
   animalPageSize: 75,
   animalFilter: { search: '', batch: '', status: '', breed: '' },
   cyclePage: 1,
-  cycleFilter: { search: '', company: '', status: '' },
+  /* Newest first by default — the batch you bought this week is the one you
+     came to look at. */
+  cycleFilter: { search: '', company: '', status: '', sort: 'newest' },
   /* Batch ids ticked on the cycles list. A Set, and it survives a re-render —
      typing in the search box re-renders, and a selection that emptied itself
      every keystroke would be unusable on a list of 138. */
@@ -785,17 +787,84 @@ async function loadCycles() {
   }
 }
 
+/* ── Ordering the cycles list ──────────────────────────────────────────────
+ *
+ * The list had no sort at all: it rendered in whatever order the table API
+ * returned, which is ORDER BY created_at — and on a ledger that came through a
+ * batch migration every row carries the same created_at, so the order was
+ * effectively the order they happened to be inserted in. On 872 cycles that
+ * puts the batch you bought this week somewhere in the middle.
+ *
+ * "Latest" is the start date, because that is when the batch actually began.
+ * A cycle with no start date on file sorts after every dated one, in EITHER
+ * direction, and those are then ordered among themselves by the batch number
+ * in their name — 1001 is later than 1000, since they are issued in order.
+ *
+ * Undated last in both directions is deliberate. A missing start date does not
+ * make a batch the newest or the oldest, it makes it unknown, and putting the
+ * unknowns at the top of "oldest first" would read as a claim about them. On
+ * this book the undated ones are the incomplete imports, so the end of the
+ * list is where they belong either way.
+ */
+function _batchNo(c) {
+  /* "Batch 1000 - SVC Cows" → 1000. The invoice number is a separate field and
+     is NOT a batch number: they run in different sequences. */
+  const m = String(c.batch_name || '').match(/(\d+)/);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+function _cycleStart(c) {
+  const v = c.cycle_start_date || c.invoice_date || null;
+  if (!v) return null;
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? null : d.getTime();
+}
+
+/* Sorted with a stable tail, so two cycles that tie do not swap places between
+   renders — a list that reshuffles under the cursor while you are ticking
+   checkboxes is worse than one in the wrong order. */
+function _sortCycles(list, mode) {
+  const dir = (mode === 'oldest' || mode === 'batch_asc') ? 1 : -1;
+  const byBatch = mode === 'batch_desc' || mode === 'batch_asc';
+  const byMoney = mode === 'capital';
+
+  return list.slice().sort((a, b) => {
+    if (byMoney) {
+      const d = (parseFloat(b.purchase_value) || 0) - (parseFloat(a.purchase_value) || 0);
+      if (d) return d;
+    } else if (byBatch) {
+      const an = _batchNo(a), bn = _batchNo(b);
+      /* A batch with no number sorts last in either direction, rather than
+         being treated as batch zero. */
+      if (an == null && bn != null) return 1;
+      if (bn == null && an != null) return -1;
+      if (an != null && bn != null && an !== bn) return (an - bn) * dir;
+    } else {
+      const at = _cycleStart(a), bt = _cycleStart(b);
+      if (at == null && bt != null) return 1;
+      if (bt == null && at != null) return -1;
+      if (at != null && bt != null && at !== bt) return (at - bt) * dir;
+      /* No start date on either, or the same date: fall through to the batch
+         number, which is issued in order. */
+      const an = _batchNo(a), bn = _batchNo(b);
+      if (an != null && bn != null && an !== bn) return (an - bn) * dir;
+    }
+    return String(a.id || '').localeCompare(String(b.id || ''));
+  });
+}
+
 /* One definition of what the cycles list is showing. The selection bar and the
    card list both need it, and two copies would let the bar count one set while
    the list drew another. */
 function _filteredCycles() {
   const q = (S.cycleFilter.search || '').toLowerCase();
-  return S.cycles.filter(c => {
+  const hits = S.cycles.filter(c => {
     const matchSearch  = !q || (c.batch_name||'').toLowerCase().includes(q) || (c.company||'').toLowerCase().includes(q) || (c.inv_no||'').toLowerCase().includes(q);
     const matchCompany = !S.cycleFilter.company || c.company === S.cycleFilter.company;
     const matchStatus  = !S.cycleFilter.status  || c.status  === S.cycleFilter.status;
     return matchSearch && matchCompany && matchStatus;
   });
+  return _sortCycles(hits, S.cycleFilter.sort || 'newest');
 }
 
 function renderCyclesView() {
@@ -840,6 +909,12 @@ function renderCyclesView() {
         <option value="sold" ${S.cycleFilter.status==='sold'?'selected':''}>Sold</option>
         <option value="discontinued" ${S.cycleFilter.status==='discontinued'?'selected':''}>Discontinued</option>
         <option value="draft" ${S.cycleFilter.status==='draft'?'selected':''}>Draft</option>
+      </select>
+      <select class="filter-select" onchange="S.cycleFilter.sort=this.value;renderCyclesView()" title="Order the list">
+        ${[['newest','Newest first'],['oldest','Oldest first'],
+           ['batch_desc','Batch no. 9→1'],['batch_asc','Batch no. 1→9'],
+           ['capital','Largest capital']].map(([v,l]) =>
+          `<option value="${v}" ${(S.cycleFilter.sort||'newest')===v?'selected':''}>${l}</option>`).join('')}
       </select>
       <button class="btn btn-primary btn-sm" onclick="openAddCycleModal()"><i class="fa-solid fa-plus"></i> Add Cycle</button>
     </div>

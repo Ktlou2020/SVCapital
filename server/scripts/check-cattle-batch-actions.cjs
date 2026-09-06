@@ -78,6 +78,77 @@ console.log('\nthe console can select batches, and selecting does not fight itse
      'batches the user is not looking at');
 }
 
+console.log('\nand the list is in an order somebody chose');
+{
+  ok('the list is sorted at all',
+     /function _sortCycles\(list, mode\)/.test(CODE) &&
+     /return _sortCycles\(hits, S\.cycleFilter\.sort \|\| 'newest'\)/.test(CODE),
+     'it rendered in whatever order the table API returned — ORDER BY ' +
+     'created_at, which is identical across every row of a batch migration');
+
+  ok('newest first is the default',
+     /sort: 'newest'/.test(CODE));
+
+  ok('the sort lives inside _filteredCycles, so the bar and the list agree',
+     /function _filteredCycles\(\)[\s\S]{0,700}_sortCycles\(hits/.test(CODE),
+     'sorting only at render time would leave the selection bar counting a ' +
+     'different order from the one on screen');
+
+  ok('the batch number is read from the name, not the invoice number',
+     /const m = String\(c\.batch_name \|\| ''\)\.match/.test(CODE),
+     'they run in different sequences — "Batch 1000 - SVC Cows" is INV 70912');
+
+  /* Run it, over the shapes this book contains. */
+  const vm2 = require('vm');
+  const grab = n => { const at = SRC.indexOf('function ' + n + '('); return SRC.slice(at, SRC.indexOf('\n}\n', at) + 2); };
+  const box = { console };
+  vm2.createContext(box);
+  try {
+    vm2.runInContext([grab('_batchNo'), grab('_cycleStart'), grab('_sortCycles'),
+                      'this.F = { _batchNo, _cycleStart, _sortCycles };'].join('\n'), box);
+  } catch (e) { ok('the comparators run', false, e.message); }
+  const F = box.F;
+  ok('the comparators are runnable', !!F && typeof F._sortCycles === 'function');
+
+  if (F) {
+    const CY = [
+      { id: 'C1', batch_name: 'Batch 1000 - SVC Cows',      cycle_start_date: '2025-04-29', purchase_value: 137960 },
+      { id: 'C2', batch_name: 'Batch 1001 - AgriFund Dios', cycle_start_date: '2025-06-02', purchase_value: 1087783 },
+      { id: 'C3', batch_name: 'Batch 331 - Beefcor',        cycle_start_date: '2023-11-16', purchase_value: 500000 },
+      { id: 'C4', batch_name: 'Batch 1002 - SVC Farming',   cycle_start_date: null,         purchase_value: 900000 },
+      { id: 'C5', batch_name: 'Opening stock',              cycle_start_date: null,         purchase_value: 10 },
+    ];
+    const ids = m => F._sortCycles(CY, m).map(c => c.id).join(',');
+
+    ok('newest first really is by start date',
+       ids('newest').startsWith('C2,C1,C3'), ids('newest'));
+    ok('and oldest first reverses it',
+       ids('oldest').startsWith('C3,C1,C2'), ids('oldest'));
+
+    /* Not newest and not oldest — unknown. Putting the unknowns at the top of
+       "oldest first" would read as a claim about them. */
+    ok('a cycle with no start date sorts last in BOTH directions',
+       ids('newest').endsWith('C4,C5') && ids('oldest').endsWith('C4,C5'),
+       `newest: ${ids('newest')}  oldest: ${ids('oldest')}`);
+
+    ok('batch number order is numeric, not alphabetical',
+       ids('batch_desc').startsWith('C4,C2,C1,C3'), ids('batch_desc') +
+       ' — "Batch 331" sorts after "Batch 1000" as text');
+    ok('and a batch with no number sorts last there too',
+       ids('batch_desc').endsWith('C5') && ids('batch_asc').endsWith('C5'),
+       'rather than being treated as batch zero');
+
+    ok('the comparator does not mutate what it is given',
+       (() => { const before = CY.map(c => c.id).join(','); F._sortCycles(CY, 'newest');
+                return CY.map(c => c.id).join(',') === before; })(),
+       'S.cycles is the herd loader\'s array, and every other view reads it');
+    ok('and sorting an already-sorted list does not reshuffle it',
+       ids('newest') === F._sortCycles(F._sortCycles(CY, 'newest'), 'newest').map(c => c.id).join(','),
+       'a list that reorders under the cursor while checkboxes are being ' +
+       'ticked is worse than one in the wrong order');
+  }
+}
+
 console.log('\na batch cannot be marked sold at nothing');
 {
   ok('the dialog asks for a value per batch',
