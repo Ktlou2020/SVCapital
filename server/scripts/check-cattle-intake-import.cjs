@@ -160,6 +160,78 @@ console.log('\nthe operator chooses the batch');
      /if \(!S\.cycles\.length\) \{ try \{ S\.cycles = await fetchAll\('cattle_cycles'\)/.test(CODE));
 }
 
+console.log('\nthe batch is searchable, not a list of 138 to scroll');
+{
+  ok('the picker is a search over the cycles',
+     /id="animalCycleSearch"/.test(CODE) && /function _filterCyclePicker/.test(CODE) &&
+     !/<select id="animalCycleSelect">/.test(CODE),
+     "a native select's type-ahead matches from the first character, and every " +
+     'batch here is called "Batch <number> - <company>"');
+
+  ok('it searches the invoice number and the company, not just the name',
+     /\[c\.batch_name, c\.inv_no, c\.company, c\.cycle_no, c\.id\]/.test(CODE),
+     'the file names its batch "55396 - BEEFCOR" and 55396 is the INVOICE ' +
+     'number on the cycle, not part of its name');
+
+  ok('an exact hit ranks above a partial one',
+     /if \(inv === term \|\| name === term\) return 0;/.test(CODE));
+
+  ok('the chosen batch is still carried by an id the import reads',
+     /<input type="hidden" id="animalCycleSelect"/.test(CODE) &&
+     /function _pickCycle/.test(CODE) &&
+     /const cycleId = sel \? sel\.value \|\| null : null/.test(CODE),
+     'the import already read #animalCycleSelect — the picker had to keep that ' +
+     'contract, not change it');
+
+  ok('and it says what it is allocating to after a pick',
+     /Allocating to <strong>/.test(CODE));
+
+  ok('a long list is capped with a note rather than rendered whole',
+     /hits\.slice\(0, 40\)/.test(CODE) && /narrow the search/.test(CODE));
+  ok('and a search that matches nothing says so',
+     /No batch matches/.test(CODE));
+}
+
+console.log('\nand the herd is asked about these tags before anything is written');
+{
+  ok('there is a read-only check',
+     /router\.post\('\/animals\/check-tags', requireFund/.test(ROUTE) &&
+     !/INSERT|UPDATE|DELETE/.test((ROUTE.match(/router\.post\('\/animals\/check-tags'[\s\S]*?\n\}\);/) || [''])[0]));
+
+  ok('it runs from the preview, before the import',
+     /_checkTagsAndRender\(tags\.filter\(Boolean\)\)/.test(CODE));
+
+  ok('it separates the three kinds',
+     /exact\.push\(hit\)/.test(ROUTE) && /near\.push\(/.test(ROUTE) &&
+     /const withinFile = /.test(ROUTE));
+
+  /* The distinction is only real because the import's dedup is an exact
+     string match. If that ever became case-insensitive, `near` would stop
+     being the dangerous one and this panel would be saying something false. */
+  ok('the import\'s own dedup really is exact',
+     /const existingSet = new Set\(existingTags\.map\(r => String\(r\.tag_number\)\)\)/.test(ROUTE) &&
+     /!existingSet\.has\(String\(r\.tag_number\)\)/.test(ROUTE),
+     'which is why a tag differing only by case or spacing is NOT skipped, and ' +
+     'why the panel frames that kind as the severe one');
+
+  ok('the panel says which batch already holds them',
+     /import-dupes__batch/.test(CODE) && /byBatch/.test(CODE),
+     'twelve tags in the batch being imported means the file was sent twice; ' +
+     'twelve in a different batch means an animal is recorded in two places');
+
+  ok('the headline counts distinct tags, not the sum of the lists',
+     /const flagged = new Set\(\[/.test(CODE),
+     'a tag can be both already on file and repeated within the file — adding ' +
+     'the counts reported "131 of 129", which is arithmetically impossible');
+
+  ok('a failed check does not read as a clean bill of health',
+     /Could not check these tags against the herd/.test(CODE),
+     'silence after a failure is indistinguishable from silence after a pass');
+
+  ok('and a clean file says so explicitly',
+     /All \$\{d\.checked\.toLocaleString\(\)\} tags are new/.test(CODE));
+}
+
 console.log('\nwhat the file does not say is said out loud');
 {
   ok('rows with no tag are counted as skipped up front',
@@ -272,6 +344,68 @@ console.log('\nwhat the file does not say is said out loud');
     ok('an explicit cycle_id wins over the batch name in the file',
        xref.rows[0].cycle_id === 'CI-CYC1',
        'the name match is the fallback, not the rule');
+
+    /* ── The three kinds of tag collision, over real rows ─────────────── */
+    console.log('\nand the check tells them apart');
+    await pool.query(`DELETE FROM cattle_animals WHERE tag_number LIKE 'CT-%'`);
+    await pool.query(`DELETE FROM cattle_cycles  WHERE id LIKE 'CT-CYC%'`);
+    await pool.query(`
+      INSERT INTO cattle_cycles (id, batch_name, status, no_purchased, no_live, purchase_value)
+      VALUES ('CT-CYC1','Home Batch','active', 0, 0, 1),
+             ('CT-CYC2','Somewhere Else','active', 0, 0, 1)`);
+    await pool.query(`
+      INSERT INTO cattle_animals (id, cycle_id, tag_number, status, sold, mortality)
+      VALUES ('CT-A1','CT-CYC1','CT-SAME','active',false,false),
+             ('CT-A2','CT-CYC2','CT-ELSEWHERE','active',false,false),
+             ('CT-A3','CT-CYC1','ct-case ','active',false,false)`);
+
+    const chk = await post(port, '/api/cattle/animals/check-tags', {
+      tags: ['CT-SAME', 'CT-ELSEWHERE', 'CT-CASE', 'CT-BRAND-NEW', 'CT-TWICE', 'CT-TWICE'],
+    });
+    ok('the check answers', chk.status === 200, JSON.stringify(chk.body).slice(0, 160));
+    const b = chk.body || {};
+    const exactTags = (b.exact || []).map(h => h.tag_number).sort();
+    ok('a tag already on file comes back exact',
+       exactTags.join(',') === 'CT-ELSEWHERE,CT-SAME', exactTags.join(','));
+    ok('and it names the batch that holds it',
+       (b.exact || []).find(h => h.tag_number === 'CT-ELSEWHERE')?.batch_name === 'Somewhere Else',
+       'an animal recorded in a different batch is counted twice by the herd valuation');
+
+    /* The one the import will NOT skip: 'ct-case ' on file, 'CT-CASE' in the
+       file. Different strings, same animal. */
+    ok('a tag differing only by case and spacing comes back as near, not exact',
+       (b.near || []).length === 1 &&
+       b.near[0].tag_number === 'ct-case ' && b.near[0].in_file_as === 'CT-CASE',
+       JSON.stringify(b.near));
+    ok('and it is NOT in the exact list, because the import will not skip it',
+       !exactTags.includes('CT-CASE'));
+
+    ok('a tag repeated inside the file is reported on its own',
+       (b.withinFile || []).length === 1 &&
+       b.withinFile[0].tag_number === 'CT-TWICE' && b.withinFile[0].count === 2,
+       JSON.stringify(b.withinFile));
+    ok('a genuinely new tag is in none of the three',
+       !exactTags.includes('CT-BRAND-NEW') &&
+       !(b.near || []).some(h => h.in_file_as === 'CT-BRAND-NEW') &&
+       !(b.withinFile || []).some(t => t.tag_number === 'CT-BRAND-NEW'));
+
+    /* And the claim the panel makes about `near` is true of the importer. */
+    const before = await pool.query(`SELECT COUNT(*)::int AS n FROM cattle_animals WHERE cycle_id = 'CT-CYC1'`);
+    await post(port, '/api/cattle/import/animals', {
+      records: [{ tag_number: 'CT-CASE', batch_name: 'Home Batch', cycle_id: 'CT-CYC1',
+                  entry_mass: 200, gender: 'Male', breed: 'Nguni', mortality: false, sold: false }] });
+    const after = await pool.query(`SELECT COUNT(*)::int AS n FROM cattle_animals WHERE cycle_id = 'CT-CYC1'`);
+    ok('the import really does let a near-miss through as a second record',
+       after.rows[0].n === before.rows[0].n + 1,
+       'if this ever stops being true the panel is telling the operator ' +
+       'something false, and the severe framing has to go');
+
+    const empty = await post(port, '/api/cattle/animals/check-tags', { tags: [] });
+    ok('an empty request is answered rather than refused',
+       empty.status === 200 && empty.body.checked === 0);
+
+    await pool.query(`DELETE FROM cattle_animals WHERE tag_number LIKE 'CT-%' OR tag_number LIKE 'ct-%'`);
+    await pool.query(`DELETE FROM cattle_cycles  WHERE id LIKE 'CT-CYC%'`);
 
     await pool.query(`DELETE FROM cattle_animals WHERE tag_number LIKE 'CI-TAG-%'`);
     await pool.query(`DELETE FROM cattle_cycles  WHERE id LIKE 'CI-CYC%'`);

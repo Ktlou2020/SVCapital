@@ -1723,12 +1723,17 @@ function handleAnimalsFile(file) {
         </div>` : ''}
 
         <div class="import-allocate">
-          <label for="animalCycleSelect">Allocate these ${rows.length.toLocaleString()} animals to</label>
-          <select id="animalCycleSelect">
-            <option value="">— Leave unallocated —</option>
-            ${S.cycles.map(c => `<option value="${escapeHtml(c.id)}" ${guess && guess.id === c.id ? 'selected' : ''}>${escapeHtml(c.batch_name || c.id)}${c.status && c.status !== 'active' ? ' · ' + escapeHtml(c.status) : ''} · ${fmt.num(c.no_live || 0)} live</option>`).join('')}
-          </select>
-          <div class="import-allocate__note">
+          <label for="animalCycleSearch">Allocate these ${rows.length.toLocaleString()} animals to</label>
+          <!-- Searchable, because this list is as long as the book. A native
+               select of 138 batches can only be typed at by its first letters,
+               and every one of these is called "Batch <number> - <company>". -->
+          <input type="text" id="animalCycleSearch" autocomplete="off"
+                 placeholder="Search by batch name, invoice or company…"
+                 oninput="_filterCyclePicker(this.value)"
+                 onfocus="_filterCyclePicker(this.value)">
+          <input type="hidden" id="animalCycleSelect" value="${guess ? escapeHtml(guess.id) : ''}">
+          <div class="cycle-picker" id="animalCyclePicker"></div>
+          <div class="import-allocate__note" id="animalCycleNote">
             ${guess
               ? `Matched <strong>${escapeHtml(guess.batch_name || guess.id)}</strong> from the file's batch number. Change it if that is wrong.`
               : fileBatch
@@ -1736,6 +1741,8 @@ function handleAnimalsFile(file) {
                 : `The file carries no batch number. Pick the cycle these belong to.`}
           </div>
         </div>
+
+        <div id="animalDupePanel"></div>
 
         <p style="font-size:12px;color:var(--text-muted);margin-top:12px">Preview (first 3 rows) &mdash; read as the <strong>${_animalsLayout === 'intake2026' ? '2026 intake' : 'legacy'}</strong> layout:</p>
         <table class="data-table" style="font-size:11px;margin-top:6px">
@@ -1755,8 +1762,168 @@ function handleAnimalsFile(file) {
       </div>`;
     document.getElementById('animalsImportActions').style.display = 'flex';
     document.getElementById('animalsImportActions').style.gap = '10px';
+
+    /* The picker is drawn from S.cycles rather than baked into the markup, so
+       it can be filtered without re-rendering the whole preview. */
+    _filterCyclePicker('');
+    /* And the herd is asked about these tags before anything is written. */
+    _checkTagsAndRender(tags.filter(Boolean));
   };
   reader.readAsText(file);
+}
+
+/* ── The batch picker ──────────────────────────────────────────────────────
+   A search box over the cycles, not a <select>. There are 138 batches on this
+   book and they are all called "Batch <number> - <company>", so a native
+   select's type-ahead — which matches from the first character — can only ever
+   reach the first one starting with "B". Searching the invoice number and the
+   company as well as the name is the point: the file names its batch as
+   "55396 - BEEFCOR", and 55396 is the INVOICE number on the cycle. */
+function _filterCyclePicker(q) {
+  const host = document.getElementById('animalCyclePicker');
+  if (!host) return;
+  const term = String(q || '').trim().toLowerCase();
+  const chosen = (document.getElementById('animalCycleSelect') || {}).value || '';
+
+  const match = c => {
+    if (!term) return true;
+    return [c.batch_name, c.inv_no, c.company, c.cycle_no, c.id]
+      .some(v => String(v || '').toLowerCase().includes(term));
+  };
+  /* Ranked, so an exact hit on the invoice number is not fourteenth. */
+  const score = c => {
+    if (!term) return 0;
+    const name = String(c.batch_name || '').toLowerCase();
+    const inv  = String(c.inv_no || '').toLowerCase();
+    if (inv === term || name === term) return 0;
+    if (inv.startsWith(term) || name.startsWith(term)) return 1;
+    return 2;
+  };
+
+  const hits = S.cycles.filter(match).sort((a, b) => score(a) - score(b) ||
+    String(a.batch_name || '').localeCompare(String(b.batch_name || '')));
+  const shown = hits.slice(0, 40);
+
+  host.innerHTML = `
+    <button type="button" class="cycle-opt${chosen === '' ? ' selected' : ''}"
+            onclick="_pickCycle('', 'Leave unallocated')">
+      <span class="cycle-opt__name">— Leave unallocated —</span>
+      <span class="cycle-opt__meta">link them later from Herd Reconciliation</span>
+    </button>
+    ${shown.map(c => `
+      <button type="button" class="cycle-opt${chosen === c.id ? ' selected' : ''}"
+              onclick="_pickCycle('${escapeHtml(c.id)}', '${escapeHtml(c.batch_name || c.id)}')">
+        <span class="cycle-opt__name">${escapeHtml(c.batch_name || c.id)}</span>
+        <span class="cycle-opt__meta">${[
+          c.inv_no ? 'INV ' + escapeHtml(c.inv_no) : '',
+          c.company ? escapeHtml(c.company) : '',
+          fmt.num(c.no_live || 0) + ' live',
+          c.status && c.status !== 'active' ? escapeHtml(c.status) : '',
+        ].filter(Boolean).join(' · ')}</span>
+      </button>`).join('')}
+    ${hits.length > shown.length
+      ? `<div class="cycle-opt__more">${hits.length - shown.length} more — narrow the search</div>` : ''}
+    ${term && !hits.length
+      ? `<div class="cycle-opt__more">No batch matches “${escapeHtml(q)}”</div>` : ''}`;
+}
+
+function _pickCycle(id, label) {
+  const hidden = document.getElementById('animalCycleSelect');
+  const note   = document.getElementById('animalCycleNote');
+  if (hidden) hidden.value = id;
+  if (note) {
+    note.innerHTML = id
+      ? `Allocating to <strong>${escapeHtml(label)}</strong>.`
+      : 'These animals will be imported with no batch. Link them later from Herd Reconciliation.';
+  }
+  _filterCyclePicker((document.getElementById('animalCycleSearch') || {}).value || '');
+}
+
+/* ── Tags that already exist ───────────────────────────────────────────────
+   Asked before the import, not reported after it. The import drops a row whose
+   tag is already on file and returns a count; "129 imported, 12 skipped" does
+   not say which twelve, and the answer changes what the operator should do.
+   Twelve tags already in the batch being imported means the file was sent
+   twice. Twelve in a DIFFERENT batch means an animal is recorded in two
+   places, and the herd valuation counts it twice. */
+async function _checkTagsAndRender(tags) {
+  const host = document.getElementById('animalDupePanel');
+  if (!host) return;
+  host.innerHTML = `<div class="import-checking"><i class="fa-solid fa-spinner fa-spin"></i> Checking ${tags.length.toLocaleString()} tags against the herd…</div>`;
+  let d;
+  try {
+    d = await apiPost('cattle/animals/check-tags', { tags });
+  } catch (e) {
+    /* A failed check must not read as a clean bill of health. */
+    host.innerHTML = `<div class="import-warn"><i class="fa-solid fa-triangle-exclamation"></i>
+      <div>Could not check these tags against the herd (${escapeHtml(e.message)}).
+      The import will still skip any tag that already exists, but you will not see which.</div></div>`;
+    return;
+  }
+
+  const nExact = d.exact.length, nNear = d.near.length, nDupe = d.withinFile.length;
+  /* DISTINCT tags, not the sum of the three lists. A tag can be both already
+     on file and repeated within the file, and adding the counts then reported
+     "131 of 129 tags" — a headline that is arithmetically impossible is the
+     fastest way to lose a reader's trust in the rest of the panel. */
+  const flagged = new Set([
+    ...d.exact.map(h => h.tag_number),
+    ...d.near.map(h => h.in_file_as || h.tag_number),
+    ...d.withinFile.map(t => t.tag_number),
+  ]).size;
+  if (!nExact && !nNear && !nDupe) {
+    host.innerHTML = `<div class="import-clean"><i class="fa-solid fa-circle-check"></i>
+      All ${d.checked.toLocaleString()} tags are new — none is already on file.</div>`;
+    return;
+  }
+
+  /* Grouped by the batch that already holds them: one line saying "8 already
+     in Batch 700" is the fact, where eight rows of tag numbers is a list. */
+  const byBatch = new Map();
+  for (const h of d.exact) {
+    const k = h.batch_name || (h.cycle_id ? h.cycle_id : '(no batch)');
+    if (!byBatch.has(k)) byBatch.set(k, []);
+    byBatch.get(k).push(h);
+  }
+
+  host.innerHTML = `
+    <div class="import-dupes">
+      <div class="import-dupes__head">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <strong>${flagged.toLocaleString()} of ${d.checked.toLocaleString()} tag${flagged === 1 ? '' : 's'} need${flagged === 1 ? 's' : ''} a look before you import</strong>
+      </div>
+
+      ${nExact ? `
+        <div class="import-dupes__group">
+          <div class="import-dupes__title">${nExact.toLocaleString()} already on file — the import will skip ${nExact === 1 ? 'it' : 'them'}</div>
+          ${[...byBatch].map(([batch, hits]) => `
+            <div class="import-dupes__row">
+              <span class="import-dupes__batch">${escapeHtml(batch)}</span>
+              <span class="import-dupes__count">${hits.length.toLocaleString()}</span>
+              <span class="import-dupes__tags">${hits.slice(0, 6).map(h => escapeHtml(h.tag_number)).join(', ')}${hits.length > 6 ? ` … and ${hits.length - 6} more` : ''}</span>
+            </div>`).join('')}
+        </div>` : ''}
+
+      ${nNear ? `
+        <div class="import-dupes__group import-dupes__group--severe">
+          <div class="import-dupes__title">${nNear.toLocaleString()} differ${nNear === 1 ? 's' : ''} only by spacing or capitals — ${nNear === 1 ? 'this one' : 'these'} will NOT be skipped</div>
+          <p class="import-dupes__why">The import matches tags exactly, so ${nNear === 1 ? 'this lands' : 'each of these lands'} as a second record for an animal already in the herd, and the valuation counts it twice. Correct the tag in the file, or leave it and merge the records afterwards.</p>
+          ${d.near.slice(0, 8).map(h => `
+            <div class="import-dupes__row">
+              <span class="import-dupes__batch">${escapeHtml(h.batch_name || h.cycle_id || '(no batch)')}</span>
+              <span class="import-dupes__tags">on file as <code>${escapeHtml(h.tag_number)}</code> · in this file as <code>${escapeHtml(h.in_file_as || '')}</code></span>
+            </div>`).join('')}
+          ${d.near.length > 8 ? `<div class="import-dupes__row"><span class="import-dupes__tags">… and ${d.near.length - 8} more</span></div>` : ''}
+        </div>` : ''}
+
+      ${nDupe ? `
+        <div class="import-dupes__group">
+          <div class="import-dupes__title">${nDupe.toLocaleString()} tag${nDupe === 1 ? '' : 's'} appear${nDupe === 1 ? 's' : ''} more than once in this file</div>
+          <div class="import-dupes__row">
+            <span class="import-dupes__tags">${d.withinFile.slice(0, 10).map(t => escapeHtml(t.tag_number) + ' ×' + t.count).join(', ')}${d.withinFile.length > 10 ? ' …' : ''}</span>
+          </div>
+        </div>` : ''}
+    </div>`;
 }
 
 /* Only the legacy export carries mortality and sale columns. An intake file is
