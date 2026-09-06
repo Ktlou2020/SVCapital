@@ -456,6 +456,79 @@ router.patch('/cycles/:id', requireFund, async (req, res) => {
   }
 });
 
+/* ── POST /api/cattle/animals/check-tags ────────────────────
+   Which of these tag numbers are already on file, and where. READ ONLY.
+
+   The import silently drops a row whose tag already exists and reports the
+   count as `skipped`. That is the right behaviour — re-importing a file must
+   not double the herd — but the operator was told "129 imported, 12 skipped"
+   with no way to learn WHICH twelve or which batch already holds them. The
+   answer matters: twelve tags already in the batch being imported means the
+   file was sent twice, and twelve tags sitting in a DIFFERENT batch means an
+   animal has been recorded in two places, which the herd valuation will count
+   twice.
+
+   Three kinds of collision, reported separately because they need different
+   answers:
+
+     exact       the tag is already on file. The import will skip it.
+     near        the tag differs only by case or surrounding whitespace. The
+                 import's dedup is an exact string match, so this one is NOT
+                 skipped — it lands as a second record for the same animal, and
+                 nothing downstream will ever notice.
+     withinFile  the same tag appears twice in the file being imported. The
+                 first lands, the rest are skipped as duplicates of it.
+
+   `near` is the one worth having. It is invisible from every other screen. */
+router.post('/animals/check-tags', requireFund, async (req, res) => {
+  try {
+    const raw = Array.isArray(req.body && req.body.tags) ? req.body.tags : [];
+    if (!raw.length) return res.json({ checked: 0, exact: [], near: [], withinFile: [] });
+    if (raw.length > 20000) return res.status(400).json({ error: 'Too many tags in one request (max 20 000).' });
+
+    const tags = raw.map(t => String(t == null ? '' : t)).filter(Boolean);
+
+    /* Duplicates inside the file itself, before the database is asked. */
+    const seen = new Map();
+    for (const t of tags) seen.set(t, (seen.get(t) || 0) + 1);
+    const withinFile = [...seen].filter(([, n]) => n > 1).map(([tag_number, count]) => ({ tag_number, count }));
+
+    const unique = [...seen.keys()];
+    /* Matched on the normalised form so both kinds come back from one query;
+       which kind each row is, is decided below by comparing the exact strings. */
+    const { rows } = await pool.query(
+      `SELECT a.tag_number, a.cycle_id, a.status, a.sold, a.mortality,
+              c.batch_name
+         FROM cattle_animals a
+         LEFT JOIN cattle_cycles c ON c.id = a.cycle_id
+        WHERE UPPER(TRIM(a.tag_number)) = ANY($1::text[])`,
+      [unique.map(t => t.trim().toUpperCase())]
+    );
+
+    const exactSet = new Set(unique);
+    const exact = [], near = [];
+    for (const r of rows) {
+      const hit = {
+        tag_number:  r.tag_number,
+        cycle_id:    r.cycle_id,
+        batch_name:  r.batch_name || null,
+        status:      r.mortality ? 'mortality' : (r.sold ? 'sold' : (r.status || 'active')),
+      };
+      if (exactSet.has(r.tag_number)) { exact.push(hit); continue; }
+      /* Same animal, different spacing or case — the import will not catch it. */
+      const norm = String(r.tag_number).trim().toUpperCase();
+      const inFile = unique.find(t => t.trim().toUpperCase() === norm);
+      near.push({ ...hit, in_file_as: inFile || null });
+    }
+
+    res.set('Cache-Control', 'no-store');
+    res.json({ checked: tags.length, exact, near, withinFile });
+  } catch (err) {
+    console.error('[cattle/check-tags]', err.message);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
 /* ── GET /api/cattle/cycles/:id/animals ─────────────────────
    The animals in one batch, for the cycle detail panel. READ ONLY.
 
