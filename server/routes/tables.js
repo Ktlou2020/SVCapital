@@ -457,6 +457,16 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
         conditions.push(`(tag_number ILIKE $${params.length} OR batch_name ILIKE $${params.length} OR batch_no::text ILIKE $${params.length} OR breed ILIKE $${params.length})`);
       } else if (table === 'cattle_cycles') {
         conditions.push(`(batch_name ILIKE $${params.length} OR company ILIKE $${params.length} OR inv_no::text ILIKE $${params.length})`);
+      } else if (table === 'transactions') {
+        /* A transaction is looked up by its reference — that is the number on
+           the statement, the EFT and the client's email. Searching id alone
+           found a fee raised at investment time (its id and reference are both
+           FEE-<investment id>) but nothing raised anywhere else: a manual
+           credit's fee reference is FEE-<random> against an unrelated id, so
+           the reference on the paperwork matched no row. */
+        conditions.push(`(reference ILIKE $${params.length} OR description ILIKE $${params.length} OR id::text ILIKE $${params.length} OR investor_id ILIKE $${params.length})`);
+      } else if (table === 'investments') {
+        conditions.push(`(id::text ILIKE $${params.length} OR pool_name ILIKE $${params.length} OR investor_id ILIKE $${params.length} OR product_type ILIKE $${params.length})`);
       } else {
         conditions.push(`id::text ILIKE $${params.length}`);
       }

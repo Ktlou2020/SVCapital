@@ -7957,6 +7957,20 @@ let txnPage = 1;
 const TXN_PG_SIZE = 10;
 let filteredTxns = [];
 
+/* The console holds the newest 5 000 transactions and the search box filtered
+   that array. Anything older simply was not in the browser, so looking up a
+   reference off a statement — FEE-INVST-…, a fee raised months ago — returned
+   "No matching transactions" whether or not the row existed. The ledger is on
+   the server; when the loaded page has no answer, ask it.
+
+   Remote hits are kept SEPARATE from STATE.transactions on purpose: the
+   dashboard tiles, the queue counts and the analytics are all derived from
+   that array, and quietly folding a handful of old rows into it would move
+   numbers nobody asked to move. These rows exist to be found, not counted. */
+let txnRemoteHits  = [];   // rows fetched by reference lookup
+let _txnRemoteQ    = '';   // query the fetch above answered
+let _txnRemoteState = '';  // '' | 'searching' | 'done'
+
 async function loadTransactions() {
   try {
     const hadInvestors = STATE.investors.length > 0;
@@ -8102,13 +8116,27 @@ function renderTxnTable() {
         new Date(b.transaction_date || b.created_at) - new Date(a.transaction_date || a.created_at));
   const page = ordered.slice(start, start + TXN_PG_SIZE);
 
-  document.getElementById('txnFooter').textContent = `${start + 1}–${Math.min(start + TXN_PG_SIZE, filteredTxns.length)} of ${filteredTxns.length}`;
+  /* Say when a row came from the ledger rather than the loaded page, so an
+     operator knows they are looking at history the console had not fetched. */
+  let footer = `${start + 1}–${Math.min(start + TXN_PG_SIZE, filteredTxns.length)} of ${filteredTxns.length}`;
+  if (txnRemoteHits.length) {
+    const loaded = new Set(STATE.transactions.map(t => t.id));
+    const fromLedger = filteredTxns.filter(t => !loaded.has(t.id)).length;
+    if (fromLedger) footer += ` · ${fromLedger} found in the full ledger, beyond the loaded page`;
+  }
+  document.getElementById('txnFooter').textContent = footer;
 
   if (!page.length) {
     _txnBulkBar();
-    body.innerHTML = filteredTxns.length < STATE.transactions.length
-      ? _emptyRow('fa-filter-circle-xmark', 'No matching transactions', 'Try clearing the search, type or status filter.', 9)
-      : _emptyRow('fa-arrows-rotate', 'No transactions yet', 'Transactions will appear here once investors make deposits or withdrawals.', 9);
+    if (_txnRemoteState === 'searching') {
+      body.innerHTML = _emptyRow('fa-magnifying-glass', 'Searching the full ledger…', 'Nothing on the loaded page matched, so the whole transaction history is being searched by reference.', 9);
+    } else if (_txnRemoteState === 'done') {
+      body.innerHTML = _emptyRow('fa-magnifying-glass-minus', 'No such transaction', 'Searched every transaction on record — by reference, description, id and investor — and nothing matched.', 9);
+    } else {
+      body.innerHTML = filteredTxns.length < STATE.transactions.length
+        ? _emptyRow('fa-filter-circle-xmark', 'No matching transactions', 'Try clearing the search, type or status filter.', 9)
+        : _emptyRow('fa-arrows-rotate', 'No transactions yet', 'Transactions will appear here once investors make deposits or withdrawals.', 9);
+    }
     return;
   }
 
@@ -8173,6 +8201,94 @@ function renderTxnTable() {
   _setRefreshLabel('txnRefreshed', 'transactions');
 }
 
+/* Everything the search can see: the loaded page, plus whatever the reference
+   lookup pulled back that is not already in it. */
+function _txnSearchPool() {
+  if (!txnRemoteHits.length) return STATE.transactions;
+  const have = new Set(STATE.transactions.map(t => t.id));
+  return STATE.transactions.concat(txnRemoteHits.filter(t => !have.has(t.id)));
+}
+
+/* Reads the filter inputs and rebuilds filteredTxns. Split out of the debounced
+   handler so the reference lookup can re-run it once its rows land. */
+function applyTxnFilters(opts) {
+  const search   = document.getElementById('txnSearch');
+  const type     = document.getElementById('txnTypeFilter');
+  const status   = document.getElementById('txnStatusFilter');
+  const dateFrom = document.getElementById('txnDateFrom');
+  const dateTo   = document.getElementById('txnDateTo');
+  if (!search) return;
+
+  const q  = search.value.trim().toLowerCase();
+  const tp = type?.value || '';
+  const st = status?.value || '';
+  const from = dateFrom?.value ? new Date(dateFrom.value) : null;
+  const to   = dateTo?.value   ? new Date(dateTo.value + 'T23:59:59') : null;
+
+  filteredTxns = _txnSearchPool().filter(t => {
+    const invName = _txnInvName(t);
+    /* The id is searchable too. A fee raised at investment time carries
+       reference AND id of FEE-<investment id>, but other fee paths put an
+       unrelated id on the row — an operator holding one of the two strings
+       should not have to know which one they are holding. */
+    const mq = !q || `${invName} ${t.reference || ''} ${t.description || ''} ${t.id || ''}`.toLowerCase().includes(q);
+    const mt = !tp || t.type === tp;
+    /* A row with no status reads as pending everywhere else in the console,
+       so it has to filter as pending here too — otherwise the queue count on
+       the dashboard and the queue you can actually see disagree. */
+    const ms = !st || (t.status || 'pending') === st;
+    const txDate = t.created_at ? new Date(t.created_at) : null;
+    const mFrom = !from || (txDate && txDate >= from);
+    const mTo = !to || (txDate && txDate <= to);
+    return mq && mt && ms && mFrom && mTo;
+  });
+
+  /* Dropping a row out of the filter must drop it out of the selection too —
+     a hidden row still ticked is a row that gets approved without being seen. */
+  const visible = new Set(filteredTxns.map(t => t.id));
+  [...selectedTxns].forEach(id => { if (!visible.has(id)) selectedTxns.delete(id); });
+
+  if (!q) { txnRemoteHits = []; _txnRemoteQ = ''; _txnRemoteState = ''; }
+
+  if (!opts || !opts.noRemote) {
+    /* Only when the loaded page has nothing. A search that already matched is
+       answered; going to the server anyway would be a round trip per keystroke
+       for a row that is on screen. */
+    if (q.length >= 3 && !filteredTxns.length && _txnRemoteQ !== q) {
+      searchTxnLedger(q);
+    } else if (q.length < 3 || filteredTxns.length) {
+      if (_txnRemoteQ !== q) _txnRemoteState = '';
+    }
+  }
+
+  txnPage = 1;
+  renderTxnTable();
+}
+
+/* Ask the server for a reference anywhere in the ledger, not just the newest
+   5 000 rows. */
+async function searchTxnLedger(q) {
+  _txnRemoteQ = q;
+  _txnRemoteState = 'searching';
+  renderTxnTable();
+  try {
+    const res = await API._fetch('GET', 'tables/transactions', null, { search: q, limit: 200 });
+    /* A slower query for an earlier keystroke must not overwrite the answer to
+       what is in the box now. */
+    if (_txnRemoteQ !== q) return;
+    txnRemoteHits = (res && res.data) || [];
+    _txnRemoteState = 'done';
+    applyTxnFilters({ noRemote: true });
+  } catch (e) {
+    if (_txnRemoteQ !== q) return;
+    console.error('[txn ledger search]', e);
+    txnRemoteHits = [];
+    _txnRemoteState = 'done';
+    Toast.error('Could not search the full ledger' + (e && e.message ? ` — ${e.message}` : ''));
+    renderTxnTable();
+  }
+}
+
 function setupTxnFilters() {
   const search = document.getElementById('txnSearch');
   const type = document.getElementById('txnTypeFilter');
@@ -8180,32 +8296,7 @@ function setupTxnFilters() {
   const dateTo = document.getElementById('txnDateTo');
   const status = document.getElementById('txnStatusFilter');
 
-  const filter = Utils.debounce(() => {
-    const q = search.value.toLowerCase();
-    const tp = type.value;
-    const st = status?.value || '';
-    const from = dateFrom?.value ? new Date(dateFrom.value) : null;
-    const to = dateTo?.value ? new Date(dateTo.value + 'T23:59:59') : null;
-    filteredTxns = STATE.transactions.filter(t => {
-      const invName = _txnInvName(t);
-      const mq = !q || `${invName} ${t.reference} ${t.description}`.toLowerCase().includes(q);
-      const mt = !tp || t.type === tp;
-      /* A row with no status reads as pending everywhere else in the console,
-         so it has to filter as pending here too — otherwise the queue count on
-         the dashboard and the queue you can actually see disagree. */
-      const ms = !st || (t.status || 'pending') === st;
-      const txDate = t.created_at ? new Date(t.created_at) : null;
-      const mFrom = !from || (txDate && txDate >= from);
-      const mTo = !to || (txDate && txDate <= to);
-      return mq && mt && ms && mFrom && mTo;
-    });
-    /* Dropping a row out of the filter must drop it out of the selection too —
-       a hidden row still ticked is a row that gets approved without being seen. */
-    const visible = new Set(filteredTxns.map(t => t.id));
-    [...selectedTxns].forEach(id => { if (!visible.has(id)) selectedTxns.delete(id); });
-    txnPage = 1;
-    renderTxnTable();
-  }, 200);
+  const filter = Utils.debounce(() => applyTxnFilters(), 200);
 
   search.addEventListener('input', filter);
   type.addEventListener('change', filter);
@@ -11485,13 +11576,34 @@ function setupGlobalSearch() {
     }));
     if (pools.length) groups.push({ label: 'Pools', items: pools });
 
-    const transactions = STATE.transactions.filter(t => (t.reference||'').toLowerCase().includes(q) || (t.investor_id||'').toLowerCase().includes(q)).slice(0, 4).map(t => ({
+    const transactions = STATE.transactions.filter(t => (t.reference||'').toLowerCase().includes(q) || (t.id||'').toLowerCase().includes(q) || (t.investor_id||'').toLowerCase().includes(q)).slice(0, 4).map(t => ({
       icon: 'fa-arrows-rotate', color: '#22c55e',
       title: `${t.type} — ${Utils.rand(t.amount)}`,
       sub: `Ref: ${t.reference||'—'} · ${Utils.date(t.transaction_date||t.created_at)}`,
       action: () => { input.value = ''; close(); navigate('transactions', document.querySelector('[data-view=transactions]')); setTimeout(() => { const el = document.getElementById('txnSearch'); if (el) { el.value = t.reference||''; el.dispatchEvent(new Event('input')); } }, 200); }
     }));
     if (transactions.length) groups.push({ label: 'Transactions', items: transactions });
+
+    /* The palette only sees the transactions the console has loaded. A
+       reference off a statement is often older than that, so always offer the
+       ledger lookup — it opens the transactions view with the reference in the
+       search box, and that search now goes to the server. */
+    if (q.length >= 3) {
+      groups.push({ label: 'Ledger', items: [{
+        icon: 'fa-magnifying-glass-dollar', color: '#eda5ff',
+        title: `Search the full ledger for “${q}”`,
+        sub: 'Every transaction on record — by reference, description or id',
+        action: () => {
+          const term = input.value.trim();
+          input.value = ''; close();
+          navigate('transactions', document.querySelector('[data-view=transactions]'));
+          setTimeout(() => {
+            const el = document.getElementById('txnSearch');
+            if (el) { el.value = term; el.dispatchEvent(new Event('input')); }
+          }, 200);
+        }
+      }] });
+    }
 
     flatResults = groups.flatMap(group => group.items);
     if (!flatResults.length) {
