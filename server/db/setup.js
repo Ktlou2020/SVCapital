@@ -1997,9 +1997,13 @@ async function autoSetup() {
           BEGIN ALTER TABLE pe_companies ADD COLUMN contract_end_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE pe_companies ADD COLUMN fee_amount NUMERIC(18,2); EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE pe_companies ADD COLUMN fee_basis TEXT DEFAULT 'percentage'; EXCEPTION WHEN duplicate_column THEN NULL; END;
-          BEGIN ALTER TABLE pe_companies ADD COLUMN fee_escalation_pct NUMERIC(8,4) DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          -- No defaults on these two. A default makes "not agreed" and "agreed
+          -- at that value" the same stored value, and the console then prints
+          -- "escalating 0%" and "payable within 30 days" as though somebody
+          -- had read them off a contract. NULL means nobody has told us.
+          BEGIN ALTER TABLE pe_companies ADD COLUMN fee_escalation_pct NUMERIC(8,4); EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE pe_companies ADD COLUMN fee_escalation_note TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-          BEGIN ALTER TABLE pe_companies ADD COLUMN invoice_terms_days INT DEFAULT 30; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_companies ADD COLUMN invoice_terms_days INT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE pe_companies ADD COLUMN invoice_payable_note TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE pe_companies ADD COLUMN svc_share_pct NUMERIC(8,4) DEFAULT 0.51; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE pe_companies ADD COLUMN holding_pct NUMERIC(8,4); EXCEPTION WHEN duplicate_column THEN NULL; END;
@@ -2063,6 +2067,24 @@ async function autoSetup() {
           BEGIN ALTER TABLE pe_documents ADD COLUMN uploaded_by TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
         END $$;
       `);
+
+      /* Databases that already took these columns with their original defaults
+         carry a 0 and a 30 that nobody agreed to. Convert those back to NULL
+         and drop the defaults — self-limiting, because the conversion only
+         runs while the default is still there, so a deliberate 0% flat fee
+         entered later is never touched. */
+      const defaulted = await pool.query(`
+        SELECT column_name FROM information_schema.columns
+         WHERE table_name = 'pe_companies'
+           AND column_name IN ('fee_escalation_pct','invoice_terms_days')
+           AND column_default IS NOT NULL`);
+      for (const { column_name } of defaulted.rows) {
+        const wasDefault = column_name === 'fee_escalation_pct' ? '0' : '30';
+        await pool.query(
+          `UPDATE pe_companies SET ${column_name} = NULL
+            WHERE ${column_name} = ${wasDefault} AND fee_escalation_note IS NULL AND invoice_payable_note IS NULL`);
+        await pool.query(`ALTER TABLE pe_companies ALTER COLUMN ${column_name} DROP DEFAULT`);
+      }
 
       /* The pipeline funnel gains three stages that describe what actually
          happens: an introductory meeting while terms are negotiated, the
@@ -2151,6 +2173,94 @@ async function autoSetup() {
       // 2b-pre. Seed standard SV Capital courses (idempotent — ON CONFLICT DO NOTHING)
       await seedStandardCourses(pool);
     });
+
+    await step("2a-terms. Load the signed agreement terms onto the PE portfolio", async () => {
+      /* The five portfolio companies were seeded with a name, a sector and an
+         AUM figure. Their actual terms — the partnership, the 51% stake, the
+         monthly management fee and its split — were written into a free-text
+         notes field by server/db/seed-pe-portfolio.js, where nothing could
+         compute against them. Now that there are columns, the terms move into
+         them.
+
+         The fee columns hold the ANNUAL gross. Every one of these agreements
+         bills monthly, so the annual figure is the monthly fee × 12 and the
+         console divides it back down by fee_billing_period for the invoice —
+         which is the arithmetic that was wrong before, writing the annual
+         figure onto a monthly invoice.
+
+           HB SVC            R10 400/m → R124 800 p.a.  (SVC R5 304/m)
+           SAS SVC           R40 000/m → R480 000 p.a.  (SVC R20 400/m)
+           GMA SVC           R40 000/m → R480 000 p.a.  (SVC R20 400/m)
+           EdelSenz SVC       R6 500/m →  R78 000 p.a.  (SVC R3 315/m)
+           Steel Studio SVC  R10 500/m → R126 000 p.a.  (SVC R5 355/m)
+
+         Every SVC share in the seed's notes is exactly 51% of the fee, which
+         is what makes 0.51 a reading of the agreements rather than an
+         assumption carried over from one of them.
+
+         RUNS AFTER 2a, NOT BEFORE IT. 2a is what creates these five rows on a
+         fresh database; loading terms ahead of it would find nothing to update
+         and leave a new deployment one boot behind with no sign of it.
+
+         WHAT IS DELIBERATELY NOT SET: the escalation percentage, the payment
+         terms and the financial year end are not recorded in the agreements as
+         they reach this repository. Filling them with a plausible default —
+         7%, 30 days, February — would put numbers nobody agreed to onto a
+         fee schedule and an AFS reminder, and they would be indistinguishable
+         from terms somebody had actually read off a contract. They stay empty,
+         and the console lists which clients are still missing them.
+
+         GUARDED ON fee_amount IS NULL. Once these terms are loaded — or once
+         somebody corrects them in the console — this step never touches the
+         row again, so a boot cannot undo an edit. */
+      const AGREEMENTS = [
+        // id, partnership, monthly fee, registration no, sub-sector
+        ['peco-hb-svc-2025',          'HB SVC Partnership',           10400, '2001/016603/07', null],
+        ['peco-sas-svc-2025',         'SAS SVC Partnership',          40000, '2022/495100/07', 'Aquatic Services'],
+        ['peco-gma-svc-2025',         'GMA SVC Partnership',          40000, '2013/194929/07', null],
+        ['peco-edelsenz-svc-2025',    'EdelSenz SVC Partnership',      6500, '2025/137242/07', null],
+        ['peco-steelstudio-svc-2026', 'Steel Studio SVC Partnership', 10500, '2017/155319/07', null],
+      ];
+
+      let loaded = 0;
+      for (const [id, partnership, monthly, regNo, subSector] of AGREEMENTS) {
+        const { rowCount } = await pool.query(`
+          UPDATE pe_companies SET
+            fee_basis           = 'amount',
+            fee_amount          = $2,
+            fee_billing_period  = 'monthly',
+            svc_share_pct       = 0.51,
+            holding_pct         = COALESCE(holding_pct, 0.51),
+            partnership_name    = COALESCE(partnership_name, $3),
+            registration_number = COALESCE(registration_number, $4),
+            sub_sector          = COALESCE(sub_sector, $5),
+            /* The commencement date on the agreement is what was seeded as
+               entry_date, and it is the anniversary the escalation clause will
+               run off once there is one. */
+            contract_start_date = COALESCE(contract_start_date, entry_date),
+            updated_at          = NOW()
+          WHERE id = $1
+            AND fee_amount IS NULL
+        `, [id, monthly * 12, partnership, regNo, subSector]);
+        loaded += rowCount;
+      }
+      if (loaded) console.log(`✅ Loaded signed agreement terms for ${loaded} PE portfolio compan${loaded === 1 ? 'y' : 'ies'}.`);
+
+      /* The fee rows already on file are the gross monthly invoices. Their
+         SVC share was recorded in a notes string; put it in the column the
+         lifetime-revenue total actually reads. */
+      await pool.query(`
+        UPDATE pe_fees f
+           SET gross_amount     = COALESCE(f.gross_amount, f.amount),
+               svc_share_pct    = COALESCE(f.svc_share_pct, c.svc_share_pct, 0.51),
+               svc_share_amount = COALESCE(f.svc_share_amount,
+                 ROUND(COALESCE(f.gross_amount, f.amount) * COALESCE(f.svc_share_pct, c.svc_share_pct, 0.51), 2))
+          FROM pe_companies c
+         WHERE c.id = f.company_id
+           AND (f.gross_amount IS NULL OR f.svc_share_amount IS NULL)
+      `);
+    });
+
 
     await step("2b. Ensure change requests app key", async () => {
       // 2b. Ensure change_requests app key is in every employee's app_access array

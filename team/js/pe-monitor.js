@@ -278,6 +278,51 @@ function renderDashboard() {
   renderPipelineMini();
   renderUpcomingFees();
   loadAfsReminders();
+  renderTermsGaps();
+}
+
+/* The terms the signed agreements do not carry.
+   The fee, the partnership and the 51% split were loaded from the agreements;
+   the escalation clause, the payment terms and the financial year end were
+   not, because they are not in them as filed. Each absence is silent and
+   consequential — no year end means no AFS reminder ever fires for that
+   client, and no escalation means the fee schedule shows the same figure for
+   year five as for year one. Naming them is the difference between a gap and
+   a wrong answer nobody questions. */
+const TERM_GAPS = [
+  ['financial_year_end_month', 'financial year end', 'no AFS reminders'],
+  ['fee_escalation_pct',       'escalation clause',  'fee never escalates'],
+  ['invoice_terms_days',       'payment terms',      'no invoice due date'],
+  ['contract_start_date',      'contract start',     'no escalation anniversary'],
+];
+
+function companyTermGaps(c) {
+  return TERM_GAPS.filter(([col]) => {
+    const v = c[col];
+    /* 0% escalation is a real term — a flat-fee agreement — and must not read
+       as missing. Only null does. */
+    return v === null || v === undefined || v === '';
+  });
+}
+
+function renderTermsGaps() {
+  const card = document.getElementById('terms-gap-card');
+  const el = document.getElementById('terms-gaps');
+  if (!card || !el) return;
+  const rows = activeCompanies()
+    .filter(c => ['portfolio', 'approved'].includes(c.status))
+    .map(c => ({ c, gaps: companyTermGaps(c) }))
+    .filter(r => r.gaps.length);
+  if (!rows.length) { card.hidden = true; el.innerHTML = ''; return; }
+  card.hidden = false;
+  el.innerHTML = rows.map(({ c, gaps }) => `
+    <div class="afs-row" onclick="openEditCompany('${esc(c.id)}')">
+      <div>
+        <div class="afs-company">${esc(c.name)}</div>
+        <div class="afs-meta">Missing ${gaps.map(g => esc(g[1])).join(', ')} — ${gaps.map(g => esc(g[2])).join('; ')}</div>
+      </div>
+      <span class="badge badge-gold">Add terms</span>
+    </div>`).join('');
 }
 
 function renderSectorDonut(portfolio, totalAum) {
@@ -1540,11 +1585,12 @@ function openAddCompany() {
   _companyDocQueue.length = 0;
   renderDocQueue(_companyDocQueue, 'company-doc-queue', 'company');
   document.getElementById('company-doc-existing').innerHTML = '';
-  /* The partnership split and the payment terms are the same on every
-     agreement signed so far. Defaulted, not hard-coded — each is a term of
-     that company's agreement and editable per company. */
+  /* 51% is the split on every partnership agreement signed so far, so it is
+     offered — it is still a term of that company's agreement and editable.
+     The payment terms are NOT defaulted: no agreement on file states them, and
+     a pre-filled 30 would be indistinguishable from one somebody had read off
+     a contract. */
   if (f.elements['svc_share_pct_display']) f.elements['svc_share_pct_display'].value = '51';
-  if (f.elements['invoice_terms_days'])    f.elements['invoice_terms_days'].value = '30';
   if (f.elements['fee_basis'])             f.elements['fee_basis'].value = 'amount';
   toggleFeeBasis('amount');
   const idle = document.getElementById('ai-upload-idle');
@@ -2514,10 +2560,14 @@ function renderFeesTab(id) {
         </tr>`).join('')}</tbody>
       </table>
       <p class="muted-note">
-        ${(numOrNull(co.fee_escalation_pct) || 0) > 0
-          ? `Escalating ${fmtPct(co.fee_escalation_pct)} on each anniversary of ${fmtDate(contractStart(co))}.`
-          : 'No escalation recorded on this agreement.'}
-        ${co.invoice_payable_note ? ` ${esc(co.invoice_payable_note)}` : co.invoice_terms_days ? ` Payable within ${esc(String(co.invoice_terms_days))} days of invoice.` : ''}
+        ${numOrNull(co.fee_escalation_pct) === null
+          ? 'No escalation clause recorded — the schedule above repeats the same fee, which may not be what the agreement says.'
+          : numOrNull(co.fee_escalation_pct) > 0
+            ? `Escalating ${fmtPct(co.fee_escalation_pct)} on each anniversary of ${fmtDate(contractStart(co))}.`
+            : 'Flat fee — no escalation, per the agreement.'}
+        ${co.invoice_payable_note ? ` ${esc(co.invoice_payable_note)}`
+          : co.invoice_terms_days ? ` Payable within ${esc(String(co.invoice_terms_days))} days of invoice.`
+          : ' No payment terms recorded on this agreement.'}
       </p>` : '<p class="muted-note">No fee recorded on this agreement yet.</p>'}
 
     <h4 class="panel-subhead">Invoices</h4>
@@ -2931,7 +2981,13 @@ async function loadAfsReminders() {
     const json = await res.json();
     const due = json.due || [];
     if (!due.length) {
-      el.innerHTML = '<p class="muted-note">No AFS outstanding — every year end more than three months past has statements on file.</p>';
+      /* Two different empty lists. "Everyone is up to date" and "nobody has a
+         financial year end recorded, so this can never fire" look identical
+         from here, and only one of them is good news. */
+      el.innerHTML = json.companies_with_year_end === 0 && json.companies_total > 0
+        ? `<p class="muted-note">No financial year end is recorded for any client, so no AFS reminder
+             can fire. Set each client's year end and statements will be chased three months after it.</p>`
+        : '<p class="muted-note">No AFS outstanding — every year end more than three months past has statements on file.</p>';
       return;
     }
     el.innerHTML = due.map(d => `

@@ -861,11 +861,133 @@ async function seed() {
       ok('existing updates were backfilled with a date', Number(back[0].n) === 0);
     }
 
+    /* ═══ 10. The signed agreements, loaded ═══ */
+    console.log('\nthe signed agreement terms are on the portfolio companies');
+    {
+      /* Straight from the partnership agreements as recorded in
+         server/db/seed-pe-portfolio.js: the monthly management fee and SVC's
+         share of it. Every share is exactly 51% of the fee, which is what
+         makes 0.51 a reading of the agreements rather than one company's
+         number carried across all five. */
+      const AGREED = [
+        ['peco-hb-svc-2025',          'HB SVC Partnership',           10400,  5304, '2025-07-01'],
+        ['peco-sas-svc-2025',         'SAS SVC Partnership',          40000, 20400, '2025-07-01'],
+        ['peco-gma-svc-2025',         'GMA SVC Partnership',          40000, 20400, '2025-07-01'],
+        ['peco-edelsenz-svc-2025',    'EdelSenz SVC Partnership',      6500,  3315, '2025-08-01'],
+        ['peco-steelstudio-svc-2026', 'Steel Studio SVC Partnership', 10500,  5355, '2026-08-01'],
+      ];
+      const { rows } = await pool.query(
+        `SELECT * FROM pe_companies WHERE id = ANY($1)`, [AGREED.map(a => a[0])]);
+      const by = new Map(rows.map(r => [r.id, r]));
+
+      ok('all five portfolio companies took their terms on a fresh build',
+         rows.length === 5, `${rows.length} of 5`);
+
+      const wrong = [];
+      for (const [id, partnership, monthly, svcMonthly, start] of AGREED) {
+        const r = by.get(id); if (!r) { wrong.push(`${id}: missing`); continue; }
+        const sched = F.feeSchedule(r, { years: 1 });
+        if (!near(Number(sched.rows[0].per_invoice), monthly))
+          wrong.push(`${id}: invoice ${sched.rows[0].per_invoice} ≠ ${monthly}`);
+        if (!near(Number(sched.rows[0].svc_per_invoice), svcMonthly))
+          wrong.push(`${id}: SVC ${sched.rows[0].svc_per_invoice} ≠ ${svcMonthly}`);
+        if (r.partnership_name !== partnership) wrong.push(`${id}: partnership ${r.partnership_name}`);
+        if (F.iso(r.contract_start_date) !== start) wrong.push(`${id}: start ${r.contract_start_date}`);
+      }
+      ok('each bills the monthly fee its agreement states, and SVC keeps 51% of it',
+         wrong.length === 0, wrong.join(' | '));
+      ok('the annual column is twelve times the monthly invoice',
+         AGREED.every(([id, , monthly]) => near(Number(by.get(id).fee_amount), monthly * 12)),
+         'the fee columns hold the annual gross; the console divides it back down');
+      ok('every one is on the rand basis, billed monthly',
+         rows.every(r => r.fee_basis === 'amount' && r.fee_billing_period === 'monthly'));
+      ok('and holds 51% of the equity', rows.every(r => near(Number(r.holding_pct), 0.51)));
+      ok('registration numbers came across from the agreements too',
+         rows.every(r => /^\d{4}\/\d{6}\/\d{2}$/.test(r.registration_number || '')),
+         JSON.stringify(rows.map(r => r.registration_number)));
+
+      /* Terms that are NOT on the agreements must stay empty. Filling them
+         with a plausible default puts numbers nobody agreed to onto a fee
+         schedule, where they are indistinguishable from real ones. */
+      ok('the escalation clause is left empty, not defaulted to a number',
+         rows.every(r => r.fee_escalation_pct === null),
+         JSON.stringify(rows.map(r => r.fee_escalation_pct)));
+      ok('so are the payment terms',
+         rows.every(r => r.invoice_terms_days === null),
+         JSON.stringify(rows.map(r => r.invoice_terms_days)));
+      ok('and the financial year end',
+         rows.every(r => r.financial_year_end_month === null));
+      ok('neither column carries a default any more',
+         (await pool.query(`SELECT 1 FROM information_schema.columns
+             WHERE table_name='pe_companies'
+               AND column_name IN ('fee_escalation_pct','invoice_terms_days')
+               AND column_default IS NOT NULL`)).rowCount === 0,
+         'a default makes "not agreed" and "agreed at that value" the same stored value');
+
+      /* Idempotence, and the edit guard. */
+      await pool.query(`UPDATE pe_companies SET fee_amount = 999, fee_escalation_pct = 0.07 WHERE id='peco-sas-svc-2025'`);
+      const q = console.log; console.log = () => {};
+      try {
+        delete require.cache[require.resolve(path.join(ROOT, 'server', 'db', 'setup.js'))];
+        await require(path.join(ROOT, 'server', 'db', 'setup.js'))();
+      } finally { console.log = q; }
+      const after = (await pool.query(`SELECT fee_amount, fee_escalation_pct FROM pe_companies WHERE id='peco-sas-svc-2025'`)).rows[0];
+      ok('a second boot does not undo an edit made in the console',
+         near(Number(after.fee_amount), 999) && near(Number(after.fee_escalation_pct), 0.07),
+         JSON.stringify(after),
+         'the load is guarded on fee_amount IS NULL, so it fires once per company');
+
+      /* And a deliberately recorded flat fee survives the 0 → NULL sweep. */
+      await pool.query(`ALTER TABLE pe_companies ALTER COLUMN fee_escalation_pct SET DEFAULT 0`);
+      await pool.query(`UPDATE pe_companies SET fee_escalation_pct = 0 WHERE id IN ('peco-gma-svc-2025','peco-hb-svc-2025')`);
+      await pool.query(`UPDATE pe_companies SET fee_escalation_note = 'Flat fee per clause 7.2' WHERE id='peco-gma-svc-2025'`);
+      const q2 = console.log; console.log = () => {};
+      try {
+        delete require.cache[require.resolve(path.join(ROOT, 'server', 'db', 'setup.js'))];
+        await require(path.join(ROOT, 'server', 'db', 'setup.js'))();
+      } finally { console.log = q2; }
+      const swept = (await pool.query(
+        `SELECT id, fee_escalation_pct FROM pe_companies WHERE id IN ('peco-gma-svc-2025','peco-hb-svc-2025')`)).rows;
+      const gma = swept.find(r => r.id === 'peco-gma-svc-2025');
+      const hb  = swept.find(r => r.id === 'peco-hb-svc-2025');
+      ok('an un-noted zero is swept back to "not recorded"',
+         hb.fee_escalation_pct === null, String(hb.fee_escalation_pct));
+      ok('but a flat fee somebody wrote a clause note against is left alone',
+         near(Number(gma.fee_escalation_pct), 0), String(gma.fee_escalation_pct),
+         '0% is a real term and must not read as a gap forever');
+    }
+
+    console.log('\nand the console says which terms are still missing');
+    {
+      ok('an empty AFS list distinguishes "up to date" from "cannot fire"',
+         /companies_with_year_end/.test(fs.readFileSync(path.join(ROOT,'server','routes','pe-insights.js'),'utf8')) &&
+         /No financial year end is recorded for any client/.test(UI),
+         'both look identical from the endpoint, and only one is good news');
+      ok('there is an outstanding-terms list at all',
+         /function renderTermsGaps\(/.test(UI_CODE) && /id="terms-gap-card"/.test(HTML),
+         'no year end means no AFS reminder ever fires, silently');
+      ok('it names the consequence, not just the field',
+         /no AFS reminders/.test(UI) && /fee never escalates/.test(UI));
+      ok('a recorded 0% is not treated as a gap',
+         /v === null \|\| v === undefined \|\| v === ''/.test(UI_CODE) &&
+         !/!c\[col\]/.test(UI_CODE),
+         'a flat-fee agreement would nag forever');
+      ok('the card hides itself when there is nothing outstanding',
+         /card\.hidden = true/.test(UI_CODE) && /hidden>/.test(HTML));
+      ok('the fees tab distinguishes a flat fee from an unrecorded clause',
+         /No escalation clause recorded/.test(UI) && /Flat fee — no escalation, per the agreement/.test(UI));
+      ok('and does not assert payment terms nobody agreed',
+         /No payment terms recorded on this agreement/.test(UI));
+      ok('the new-company form does not pre-fill payment terms either',
+         !/invoice_terms_days'\]\.value = '30'/.test(UI_CODE),
+         "a pre-filled 30 is indistinguishable from one read off a contract");
+    }
+
     console.log('\nand the front end is cache-busted past what is deployed');
     {
       const js  = HTML.match(/js\/pe-monitor\.js\?v=(\d+)/);
       const css = HTML.match(/css\/pe-monitor\.css\?v=(\d+)/);
-      ok('pe-monitor.js is past v=11', js && Number(js[1]) > 11, js ? js[0] : 'no version');
+      ok('pe-monitor.js is past v=12', js && Number(js[1]) > 12, js ? js[0] : 'no version');
       ok('pe-monitor.css is versioned at all', !!css,
          'it was unversioned, so a stylesheet change could serve stale');
       ok('the new styles are actually in the stylesheet',

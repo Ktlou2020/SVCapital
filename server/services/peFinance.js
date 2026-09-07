@@ -474,7 +474,7 @@ function invoiceDueDate(invoiceDate, company) {
 }
 
 module.exports = {
-  num, round2, fmtR,
+  num, round2, fmtR, iso, parseDate,
   computeEbitda, ebitdaOf,
   assessFinancials,
   annualGrossFee, feeSchedule, svcShareOf, lifetimeRevenue,

@@ -104,6 +104,18 @@
           </div>
           <div class="card-body" id="afs-reminders"></div>
         </div>
+
+        <!-- What the signed agreements do not record. A client with no
+             financial year end gets no AFS reminder and a client with no
+             escalation clause bills the same fee forever — both silently, so
+             the gap has to be visible rather than inferred from an empty list. -->
+        <div class="card" id="terms-gap-card" hidden>
+          <div class="card-header">
+            <h2>Agreement Terms Outstanding</h2>
+            <span class="card-sub">Not recorded on the signed agreements as filed</span>
+          </div>
+          <div class="card-body" id="terms-gaps"></div>
+        </div>
       </section>
 
       <!-- ══ PIPELINE ══ -->
@@ -907,6 +919,6 @@
 </div>
 
 <script src="/js/staff-auth.js"></script>
-<script src="js/pe-monitor.js?v=12"></script>
+<script src="js/pe-monitor.js?v=13"></script>
 </body>
 </html>

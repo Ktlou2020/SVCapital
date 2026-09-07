@@ -126,13 +126,18 @@ router.get('/company/:id/fee-schedule', requireAuth, async (req, res) => {
    file, or marked received or waived, never appears here. */
 router.get('/afs-due', requireAuth, async (req, res) => {
   try {
-    const [coRes, finRes, afsRes] = await Promise.all([
+    const [coRes, finRes, afsRes, countRes] = await Promise.all([
       pool.query(`SELECT id, name, financial_year_end_month, status
                     FROM pe_companies
                    WHERE COALESCE(archived, false) = false
                      AND financial_year_end_month IS NOT NULL`),
       pool.query('SELECT company_id, financial_year FROM pe_financials'),
       pool.query('SELECT company_id, financial_year, status FROM pe_afs_requests'),
+      /* How many live clients this could even have looked at. An empty list
+         because every client is up to date and an empty list because nobody
+         has recorded a financial year end are opposite situations, and the
+         second one silently means no reminder will ever fire. */
+      pool.query(`SELECT COUNT(*) AS n FROM pe_companies WHERE COALESCE(archived, false) = false`),
     ]);
     const onFile  = new Set(finRes.rows.map(r => `${r.company_id}:${r.financial_year}`));
     const tracked = new Map(afsRes.rows.map(r => [`${r.company_id}:${r.financial_year}`, r.status]));
@@ -155,7 +160,12 @@ router.get('/afs-due', requireAuth, async (req, res) => {
     /* Oldest year end first — the one that has been outstanding longest is the
        one to chase. */
     due.sort((a, b) => (a.year_end < b.year_end ? -1 : a.year_end > b.year_end ? 1 : 0));
-    res.json({ ok: true, due, overdue_count: due.filter(d => d.status === 'overdue').length });
+    res.json({
+      ok: true, due,
+      overdue_count: due.filter(d => d.status === 'overdue').length,
+      companies_with_year_end: coRes.rows.length,
+      companies_total: Number(countRes.rows[0].n),
+    });
   } catch (err) {
     console.error('[pe-insights afs-due]', err.message);
     res.status(500).json({ error: err.message });
