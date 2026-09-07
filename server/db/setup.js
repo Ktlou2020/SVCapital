@@ -1287,6 +1287,93 @@ CREATE TABLE IF NOT EXISTS pe_reviews (
 CREATE INDEX IF NOT EXISTS pe_reviews_company_idx ON pe_reviews(company_id, review_date DESC);
 CREATE INDEX IF NOT EXISTS pe_reviews_next_idx    ON pe_reviews(next_review_date);
 
+/* Documents. This table was created at runtime by server/routes/pe-documents.js
+   and nowhere else, which made it the one PE table whose existence depended on
+   a route file having been required — and the migration below adds columns to
+   it. An ALTER against a table that is not there yet aborts the whole DO block
+   it sits in, silently rolling back every other column with it. Declared here
+   so the schema build owns it; the route's own CREATE IF NOT EXISTS is then a
+   no-op. */
+CREATE TABLE IF NOT EXISTS pe_documents (
+  id          TEXT PRIMARY KEY,
+  company_id  TEXT,
+  deal_id     TEXT,
+  doc_type    TEXT NOT NULL DEFAULT 'AFS',
+  label       TEXT,
+  filename    TEXT NOT NULL,
+  mimetype    TEXT NOT NULL,
+  file_size   INTEGER,
+  file_data   TEXT NOT NULL,
+  uploaded_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS pe_documents_company_idx ON pe_documents(company_id);
+CREATE INDEX IF NOT EXISTS pe_documents_deal_idx    ON pe_documents(deal_id);
+CREATE INDEX IF NOT EXISTS pe_documents_type_idx    ON pe_documents(doc_type);
+
+/* Meeting notes. pe_reviews already holds a date, attendees and notes, but a
+   review is a scheduled governance event with a next-review date attached —
+   a note from a call is not that, and filing one as a review moved the whole
+   company's review clock. */
+CREATE TABLE IF NOT EXISTS pe_meeting_notes (
+  id            TEXT PRIMARY KEY,
+  company_id    TEXT REFERENCES pe_companies(id) ON DELETE CASCADE,
+  deal_id       TEXT REFERENCES pe_deals(id) ON DELETE CASCADE,
+  meeting_date  DATE NOT NULL,
+  title         TEXT NOT NULL,
+  attendees     TEXT,
+  location      TEXT,
+  body          TEXT,
+  action_items  TEXT,
+  author        TEXT,
+  created_at    TIMESTAMPTZ DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS pe_meeting_notes_company_idx ON pe_meeting_notes(company_id, meeting_date DESC);
+CREATE INDEX IF NOT EXISTS pe_meeting_notes_deal_idx    ON pe_meeting_notes(deal_id, meeting_date DESC);
+
+/* B-BBEE verification, one row per year. A certificate is valid for twelve
+   months from issue, so the year it covers and the date it lapses are
+   different facts and both have to be on the row. */
+CREATE TABLE IF NOT EXISTS pe_bee_verifications (
+  id                  TEXT PRIMARY KEY,
+  company_id          TEXT NOT NULL REFERENCES pe_companies(id) ON DELETE CASCADE,
+  verification_year   INT NOT NULL,
+  bee_level           TEXT,
+  black_ownership_pct NUMERIC(8,4),
+  black_women_pct     NUMERIC(8,4),
+  procurement_pct     NUMERIC(8,4),
+  issue_date          DATE,
+  expiry_date         DATE,
+  verified_by         TEXT,
+  certificate_type    TEXT DEFAULT 'certificate'
+                        CHECK (certificate_type IN ('certificate','affidavit','other')),
+  notes               TEXT,
+  created_at          TIMESTAMPTZ DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (company_id, verification_year)
+);
+CREATE INDEX IF NOT EXISTS pe_bee_company_idx ON pe_bee_verifications(company_id, verification_year DESC);
+CREATE INDEX IF NOT EXISTS pe_bee_expiry_idx  ON pe_bee_verifications(expiry_date);
+
+/* AFS request tracking. The due dates themselves are derived from the
+   company's financial year end and are never stored — a stored due date goes
+   stale the moment a year end is corrected. What IS stored is what a person
+   did: when we asked, when it arrived, and whether it was waived. */
+CREATE TABLE IF NOT EXISTS pe_afs_requests (
+  id             TEXT PRIMARY KEY,
+  company_id     TEXT NOT NULL REFERENCES pe_companies(id) ON DELETE CASCADE,
+  financial_year INT NOT NULL,
+  status         TEXT DEFAULT 'outstanding'
+                   CHECK (status IN ('outstanding','requested','received','waived')),
+  requested_date DATE,
+  received_date  DATE,
+  notes          TEXT,
+  created_at     TIMESTAMPTZ DEFAULT NOW(),
+  updated_at     TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (company_id, financial_year)
+);
+CREATE INDEX IF NOT EXISTS pe_afs_company_idx ON pe_afs_requests(company_id, financial_year DESC);
+
 -- ── Change Requests & Suggestions ────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS change_requests (
@@ -1889,6 +1976,133 @@ async function autoSetup() {
       } catch (backfillErr) {
         console.warn('⚠️  investor_id repair warning:', backfillErr.message);
       }
+    });
+
+    await step("1f. PE Monitor contract, fee and compliance columns", async () => {
+      /* The PE console was built around a percentage-of-AUM fee and an entry
+         date. The signed fund management agreements are not that: they fix a
+         rand fee, escalating annually on the contract anniversary, of which
+         SVC keeps 51% under the partnership agreement. None of those three
+         facts had anywhere to live, so they lived in a free-text notes field
+         where nothing could compute against them.
+
+         fee_rate and aum_amount stay. A company whose agreement really is a
+         percentage of assets still works — fee_basis says which shape the
+         agreement is, and every existing row is left on 'percentage'. */
+      await pool.query(`
+        DO $$
+        BEGIN
+          -- Contract terms
+          BEGIN ALTER TABLE pe_companies ADD COLUMN contract_start_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_companies ADD COLUMN contract_end_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_companies ADD COLUMN fee_amount NUMERIC(18,2); EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_companies ADD COLUMN fee_basis TEXT DEFAULT 'percentage'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_companies ADD COLUMN fee_escalation_pct NUMERIC(8,4) DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_companies ADD COLUMN fee_escalation_note TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_companies ADD COLUMN invoice_terms_days INT DEFAULT 30; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_companies ADD COLUMN invoice_payable_note TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_companies ADD COLUMN svc_share_pct NUMERIC(8,4) DEFAULT 0.51; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_companies ADD COLUMN holding_pct NUMERIC(8,4); EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_companies ADD COLUMN partnership_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          -- Business address
+          BEGIN ALTER TABLE pe_companies ADD COLUMN address_line1 TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_companies ADD COLUMN address_line2 TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_companies ADD COLUMN address_province TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_companies ADD COLUMN address_postal_code TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          -- Compliance
+          BEGIN ALTER TABLE pe_companies ADD COLUMN financial_year_end_month INT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          -- Archiving: a duplicate client has to leave the list without taking
+          -- its documents, fees and financials with it.
+          BEGIN ALTER TABLE pe_companies ADD COLUMN archived BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_companies ADD COLUMN archived_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_companies ADD COLUMN archived_by TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_companies ADD COLUMN archived_reason TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+
+          -- Income-statement lines EBITDA is rebuilt from when the AFS does
+          -- not state it, plus the two current figures the liquidity test needs.
+          BEGIN ALTER TABLE pe_financials ADD COLUMN tax_expense NUMERIC(18,2); EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_financials ADD COLUMN finance_cost NUMERIC(18,2); EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_financials ADD COLUMN depreciation NUMERIC(18,2); EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_financials ADD COLUMN amortisation NUMERIC(18,2); EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_financials ADD COLUMN current_assets NUMERIC(18,2); EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_financials ADD COLUMN current_liabilities NUMERIC(18,2); EXCEPTION WHEN duplicate_column THEN NULL; END;
+
+          -- Fee rows carry the gross and SVC's share of it. amount stays as
+          -- the billed figure so nothing that reads it changes meaning.
+          BEGIN ALTER TABLE pe_fees ADD COLUMN gross_amount NUMERIC(18,2); EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_fees ADD COLUMN svc_share_pct NUMERIC(8,4); EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_fees ADD COLUMN svc_share_amount NUMERIC(18,2); EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_fees ADD COLUMN escalation_pct NUMERIC(8,4); EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_fees ADD COLUMN contract_year INT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_fees ADD COLUMN source TEXT DEFAULT 'manual'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_fees ADD COLUMN xero_invoice_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_fees ADD COLUMN currency TEXT DEFAULT 'ZAR'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+
+          -- An update needs the date the thing happened, not only the date it
+          -- was typed, and needs to be able to carry the document it is about.
+          BEGIN ALTER TABLE pe_updates ADD COLUMN update_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
+
+          -- Deal-side facts that were being kept in the description.
+          BEGIN ALTER TABLE pe_deals ADD COLUMN contact_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_deals ADD COLUMN contact_email TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_deals ADD COLUMN contact_phone TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_deals ADD COLUMN contact_role TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_deals ADD COLUMN website TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_deals ADD COLUMN registration_number TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_deals ADD COLUMN prospect_fee NUMERIC(18,2); EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_deals ADD COLUMN prospect_fee_basis TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_deals ADD COLUMN holding_pct NUMERIC(8,4); EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_deals ADD COLUMN city TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_deals ADD COLUMN employee_count INT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+
+          -- Documents hang off an update or a BEE year as well as a company
+          -- or a deal.
+          BEGIN ALTER TABLE pe_documents ADD COLUMN update_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_documents ADD COLUMN bee_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_documents ADD COLUMN financial_year INT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE pe_documents ADD COLUMN uploaded_by TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        END $$;
+      `);
+
+      /* The pipeline funnel gains three stages that describe what actually
+         happens: an introductory meeting while terms are negotiated, the
+         drafting and review of agreements, and active — signed, and billing.
+         A CHECK constraint cannot be extended in place, so it is dropped and
+         rebuilt. Every existing stage is kept: dropping one would orphan the
+         deals sitting on it. */
+      await pool.query(`
+        ALTER TABLE pe_deals DROP CONSTRAINT IF EXISTS pe_deals_stage_check;
+        ALTER TABLE pe_deals ADD CONSTRAINT pe_deals_stage_check CHECK (stage IN (
+          'sourcing','intro_meeting','screening','due_diligence','drafting',
+          'ic_review','approved','active','closed','declined','exited'));
+      `);
+
+      /* Sector list gains FMCG. It is a CHECK nowhere — the column is free
+         text and the list lives in the form — so there is nothing to migrate,
+         but the index is worth having on a column now filtered on. */
+      await pool.query(`CREATE INDEX IF NOT EXISTS pe_companies_archived_idx ON pe_companies(archived)`).catch(() => {});
+
+      /* Existing rows: an update with no date reads as having happened when it
+         was written, which is what the console displayed before this column
+         existed. Backfilling it means the new date field is never blank on
+         historical rows. */
+      await pool.query(`UPDATE pe_updates SET update_date = created_at::date WHERE update_date IS NULL`);
+
+      /* Fees already on file are all gross figures billed to the client; SVC's
+         share was never recorded. Backfilling from the company's share makes
+         the lifetime-revenue total right from day one rather than starting
+         from zero. */
+      await pool.query(`
+        UPDATE pe_fees f
+           SET gross_amount = COALESCE(f.gross_amount, f.amount),
+               svc_share_pct = COALESCE(f.svc_share_pct, c.svc_share_pct, 0.51),
+               svc_share_amount = COALESCE(
+                 f.svc_share_amount,
+                 ROUND(COALESCE(f.gross_amount, f.amount) * COALESCE(f.svc_share_pct, c.svc_share_pct, 0.51), 2))
+          FROM pe_companies c
+         WHERE c.id = f.company_id
+           AND (f.gross_amount IS NULL OR f.svc_share_amount IS NULL)
+      `);
     });
 
     await step("2a. Always seed PE portfolio companies", async () => {

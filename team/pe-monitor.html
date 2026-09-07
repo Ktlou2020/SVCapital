@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PE Monitor — SV Capital</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
-  <link rel="stylesheet" href="css/pe-monitor.css" />
+  <link rel="stylesheet" href="css/pe-monitor.css?v=2" />
 </head>
 <body>
 
@@ -92,6 +92,17 @@
             <button class="btn btn-ghost btn-sm" onclick="navigate('fees')">View all <i class="fa-solid fa-arrow-right"></i></button>
           </div>
           <div class="card-body" id="upcoming-fees"></div>
+        </div>
+
+        <!-- AFS chase list. Statements are requested three months after each
+             client's financial year end; a year with statements already on
+             file never appears here, so the list empties as work is done. -->
+        <div class="card">
+          <div class="card-header">
+            <h2>AFS to Request</h2>
+            <span class="card-sub">Requested three months after financial year end</span>
+          </div>
+          <div class="card-body" id="afs-reminders"></div>
         </div>
       </section>
 
@@ -252,16 +263,22 @@
   </div>
   <div class="panel-tabs">
     <div class="panel-tab active" data-tab="overview">Overview</div>
+    <div class="panel-tab" data-tab="position">Position</div>
     <div class="panel-tab" data-tab="financials">Financials</div>
-    <div class="panel-tab" data-tab="updates">Updates</div>
     <div class="panel-tab" data-tab="fees">Fees</div>
+    <div class="panel-tab" data-tab="compliance">AFS &amp; BEE</div>
+    <div class="panel-tab" data-tab="meetings">Meetings</div>
+    <div class="panel-tab" data-tab="updates">Updates</div>
     <div class="panel-tab" data-tab="reviews">Reviews</div>
     <div class="panel-tab" data-tab="documents">Documents</div>
   </div>
   <div id="cp-overview"   class="panel-tab-body active"></div>
+  <div id="cp-position"   class="panel-tab-body"></div>
   <div id="cp-financials" class="panel-tab-body"></div>
-  <div id="cp-updates"    class="panel-tab-body"></div>
   <div id="cp-fees"       class="panel-tab-body"></div>
+  <div id="cp-compliance" class="panel-tab-body"></div>
+  <div id="cp-meetings"   class="panel-tab-body"></div>
+  <div id="cp-updates"    class="panel-tab-body"></div>
   <div id="cp-reviews"    class="panel-tab-body"></div>
   <div id="cp-documents"  class="panel-tab-body"></div>
 </div>
@@ -308,7 +325,7 @@
               <option value="">Select sector</option>
               <option>Technology</option><option>Healthcare</option><option>Financial Services</option>
               <option>Agriculture</option><option>Energy</option><option>Property</option>
-              <option>Retail</option><option>Manufacturing</option><option>Logistics</option>
+              <option>Retail</option><option>FMCG</option><option>Manufacturing</option><option>Logistics</option>
               <option>Media</option><option>Education</option><option>Mining</option><option>Other</option>
             </select>
           </div>
@@ -325,13 +342,6 @@
             </select>
           </div>
           <div class="form-group"><label>AUM / Investment (R)</label><input name="aum_amount" type="number" step="0.01" placeholder="0.00" /></div>
-          <div class="form-group"><label>Annual Fee Rate (e.g. 0.02 = 2%)</label><input name="fee_rate" type="number" step="0.0001" placeholder="0.0200" /></div>
-          <div class="form-group"><label>Fee Billing Period</label>
-            <select name="fee_billing_period">
-              <option value="annual">Annual</option><option value="quarterly">Quarterly</option><option value="monthly">Monthly</option>
-            </select>
-          </div>
-          <div class="form-group"><label>Entry Date</label><input name="entry_date" type="date" /></div>
           <div class="form-group"><label>Country</label><input name="country" placeholder="South Africa" /></div>
           <div class="form-group"><label>City</label><input name="city" placeholder="Johannesburg" /></div>
           <div class="form-group"><label>Founded Year</label><input name="founded_year" type="number" placeholder="2010" /></div>
@@ -342,17 +352,92 @@
           <div class="form-group"><label>Contact Name</label><input name="contact_name" /></div>
           <div class="form-group"><label>Contact Email</label><input name="contact_email" type="email" /></div>
           <div class="form-group"><label>Contact Phone</label><input name="contact_phone" /></div>
+
+          <!-- ── Business address ── city and country are above; this is the
+               street address the invoice and the agreement carry. -->
+          <div class="form-group full"><h4 class="form-section-head"><i class="fa-solid fa-location-dot"></i> Business Address</h4></div>
+          <div class="form-group full"><label>Address Line 1</label><input name="address_line1" placeholder="12 Fredman Drive" /></div>
+          <div class="form-group full"><label>Address Line 2</label><input name="address_line2" placeholder="Sandown" /></div>
+          <div class="form-group"><label>Province</label>
+            <select name="address_province">
+              <option value="">—</option>
+              <option>Gauteng</option><option>Western Cape</option><option>KwaZulu-Natal</option>
+              <option>Eastern Cape</option><option>Free State</option><option>Limpopo</option>
+              <option>Mpumalanga</option><option>North West</option><option>Northern Cape</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Postal Code</label><input name="address_postal_code" placeholder="2196" /></div>
+
+          <!-- ── The agreement ── the fund management agreement fixes a rand
+               fee escalating on the contract anniversary; the partnership
+               agreement fixes the split of it. Both are terms, not settings. -->
+          <div class="form-group full"><h4 class="form-section-head"><i class="fa-solid fa-file-signature"></i> Fund Management Agreement</h4></div>
+          <div class="form-group"><label>Partnership Name</label>
+            <input name="partnership_name" list="partnership-names" placeholder="SAS SVC Partnership" />
+            <datalist id="partnership-names">
+              <option value="SAS SVC Partnership"></option>
+            </datalist>
+          </div>
+          <div class="form-group"><label>Contract Start Date</label><input name="contract_start_date" type="date" /></div>
+          <div class="form-group"><label>Contract End Date</label><input name="contract_end_date" type="date" /></div>
+          <div class="form-group"><label>Fee Basis</label>
+            <select name="fee_basis" onchange="toggleFeeBasis(this.value)">
+              <option value="amount">Rand amount (per agreement)</option>
+              <option value="percentage">% of AUM</option>
+            </select>
+          </div>
+          <div class="form-group" data-fee-basis="amount"><label>Annual Fee (R, gross)</label><input name="fee_amount" type="number" step="0.01" placeholder="0.00" /></div>
+          <div class="form-group" data-fee-basis="percentage"><label>Annual Fee Rate (e.g. 0.02 = 2%)</label><input name="fee_rate" type="number" step="0.0001" placeholder="0.0200" /></div>
+          <div class="form-group"><label>Fee Billing Period</label>
+            <select name="fee_billing_period">
+              <option value="annual">Annual</option><option value="quarterly">Quarterly</option><option value="monthly">Monthly</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Annual Escalation (%)</label><input name="fee_escalation_pct_display" type="number" step="0.01" placeholder="7.00" /></div>
+          <div class="form-group"><label>SVC Share (%)</label><input name="svc_share_pct_display" type="number" step="0.01" placeholder="51.00" /></div>
+          <div class="form-group"><label>Equity Holding (%)</label><input name="holding_pct_display" type="number" step="0.01" placeholder="51.00" /></div>
+          <div class="form-group"><label>Invoice Payable (days)</label><input name="invoice_terms_days" type="number" placeholder="30" /></div>
+          <div class="form-group full"><label>When Invoice Is Payable — as per agreement</label><input name="invoice_payable_note" placeholder="e.g. Monthly in advance, payable within 30 days of invoice date" /></div>
+          <div class="form-group full"><label>Escalation Clause — as per agreement</label><input name="fee_escalation_note" placeholder="e.g. 7% on each anniversary of the commencement date" /></div>
+          <div class="form-group full" id="fee-preview-wrap"><div id="fee-preview" class="fee-preview"></div></div>
+
+          <div class="form-group full"><h4 class="form-section-head"><i class="fa-solid fa-calendar-check"></i> Reporting</h4></div>
+          <div class="form-group"><label>Financial Year End</label>
+            <select name="financial_year_end_month">
+              <option value="">—</option>
+              <option value="1">31 January</option><option value="2">End February</option>
+              <option value="3">31 March</option><option value="4">30 April</option>
+              <option value="5">31 May</option><option value="6">30 June</option>
+              <option value="7">31 July</option><option value="8">31 August</option>
+              <option value="9">30 September</option><option value="10">31 October</option>
+              <option value="11">30 November</option><option value="12">31 December</option>
+            </select>
+            <span class="field-hint" id="afs-hint">AFS is requested three months after year end.</span>
+          </div>
+          <div class="form-group"><label>Entry Date (legacy)</label><input name="entry_date" type="date" /></div>
+
           <div class="form-group full"><label>Description</label><textarea name="description" rows="3"></textarea></div>
           <div class="form-group full"><label>Notes</label><textarea name="notes" rows="2"></textarea></div>
         </div>
       </form>
-      <!-- AFS / Documents section -->
+      <!-- Documents. The kind is chosen before the file is picked so an
+           agreement does not land in the same undifferentiated pile as a
+           working spreadsheet — the panel files them under separate headings. -->
       <div class="doc-attach-section">
         <div class="doc-attach-header">
-          <span><i class="fa-solid fa-paperclip"></i> AFS / Supporting Documents</span>
+          <span><i class="fa-solid fa-paperclip"></i> Documents</span>
+          <select id="company-doc-type" class="doc-type-select" title="What kind of document is this?">
+            <option value="AFS">Annual Financial Statements</option>
+            <option value="fund_management">Fund Management Agreement</option>
+            <option value="partnership">Partnership Agreement</option>
+            <option value="bee">BEE Verification</option>
+            <option value="xero_invoice">Xero Invoice</option>
+            <option value="working_spreadsheet">Monthly Working Spreadsheet</option>
+            <option value="general">Other</option>
+          </select>
           <label class="btn btn-ghost btn-sm doc-attach-btn">
             <i class="fa-solid fa-plus"></i> Attach
-            <input type="file" id="company-doc-input" multiple accept=".pdf,.doc,.docx,image/jpeg,image/png,image/webp" style="display:none" onchange="queueCompanyDoc(this.files)">
+            <input type="file" id="company-doc-input" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.xlsm,.csv,image/jpeg,image/png,image/webp" style="display:none" onchange="queueCompanyDoc(this.files)">
           </label>
         </div>
         <div id="company-doc-existing"></div>
@@ -396,10 +481,13 @@
           <div class="form-group"><label>Stage</label>
             <select name="stage">
               <option value="sourcing">Sourcing</option>
+              <option value="intro_meeting">Introductory Meeting &amp; Deal Negotiating</option>
               <option value="screening">Screening</option>
               <option value="due_diligence">Due Diligence</option>
+              <option value="drafting">Drafting of Agreements</option>
               <option value="ic_review">IC Review</option>
               <option value="approved">Approved</option>
+              <option value="active">Active — Signed &amp; Billing</option>
               <option value="closed">Closed</option>
               <option value="declined">Declined</option>
               <option value="exited">Exited</option>
@@ -417,7 +505,7 @@
               <option value="">Select sector</option>
               <option>Technology</option><option>Healthcare</option><option>Financial Services</option>
               <option>Agriculture</option><option>Energy</option><option>Property</option>
-              <option>Retail</option><option>Manufacturing</option><option>Logistics</option>
+              <option>Retail</option><option>FMCG</option><option>Manufacturing</option><option>Logistics</option>
               <option>Media</option><option>Education</option><option>Mining</option><option>Other</option>
             </select>
           </div>
@@ -437,19 +525,46 @@
           <div class="form-group"><label>Originator</label><input name="originator" /></div>
           <div class="form-group"><label>Assigned Analyst</label><input name="assigned_analyst" /></div>
           <div class="form-group"><label>Source</label><input name="source" placeholder="How was this deal sourced?" /></div>
+
+          <!-- ── Who we actually deal with, and on what terms. These were
+               being written into the description, where nothing could sort,
+               dial or total them. -->
+          <div class="form-group full"><h4 class="form-section-head"><i class="fa-solid fa-address-card"></i> Contact Person</h4></div>
+          <div class="form-group"><label>Contact Name</label><input name="contact_name" placeholder="Full name" /></div>
+          <div class="form-group"><label>Role</label><input name="contact_role" placeholder="e.g. Managing Director" /></div>
+          <div class="form-group"><label>Contact Email</label><input name="contact_email" type="email" /></div>
+          <div class="form-group"><label>Contact Phone</label><input name="contact_phone" /></div>
+
+          <div class="form-group full"><h4 class="form-section-head"><i class="fa-solid fa-building-circle-check"></i> Company Details</h4></div>
+          <div class="form-group"><label>Website</label><input name="website" placeholder="https://" /></div>
+          <div class="form-group"><label>Reg. Number</label><input name="registration_number" placeholder="2012/123456/07" /></div>
+          <div class="form-group"><label>City</label><input name="city" /></div>
+          <div class="form-group"><label>Employees</label><input name="employee_count" type="number" /></div>
+          <div class="form-group"><label>Equity Holding (%)</label><input name="holding_pct_display" type="number" step="0.01" placeholder="51.00" /></div>
+          <div class="form-group"><label>Prospect Fee (R)</label><input name="prospect_fee" type="number" step="0.01" placeholder="0.00" /></div>
+          <div class="form-group full"><label>Prospect Fee Basis</label><input name="prospect_fee_basis" placeholder="e.g. R45 000 per month once signed, escalating 7% annually" /></div>
+
           <div class="form-group full"><label>Deal Description</label><textarea name="deal_description" rows="3" placeholder="Overview of the business and transaction…"></textarea></div>
           <div class="form-group full"><label>Investment Thesis</label><textarea name="investment_thesis" rows="3" placeholder="Why this is a compelling investment…"></textarea></div>
           <div class="form-group full"><label>Key Risks</label><textarea name="key_risks" rows="2" placeholder="Main risks and mitigants…"></textarea></div>
           <div class="form-group full"><label>Decision Notes</label><textarea name="decision_notes" rows="2"></textarea></div>
         </div>
       </form>
-      <!-- AFS / Documents section -->
+      <!-- Documents. Same filing as the company modal: without a kind, a
+           financial model uploaded here landed under Annual Financial
+           Statements, which is where you then could not find it. -->
       <div class="doc-attach-section">
         <div class="doc-attach-header">
-          <span><i class="fa-solid fa-paperclip"></i> AFS / Supporting Documents</span>
+          <span><i class="fa-solid fa-paperclip"></i> Documents</span>
+          <select id="deal-doc-type" class="doc-type-select" title="What kind of document is this?">
+            <option value="general">Pitch deck / IM / Other</option>
+            <option value="working_spreadsheet">Financial Model / Spreadsheet</option>
+            <option value="AFS">Annual Financial Statements</option>
+            <option value="fund_management">Draft Agreement</option>
+          </select>
           <label class="btn btn-ghost btn-sm doc-attach-btn">
             <i class="fa-solid fa-plus"></i> Attach
-            <input type="file" id="deal-doc-input" multiple accept=".pdf,.doc,.docx,image/jpeg,image/png,image/webp" style="display:none" onchange="queueDealDoc(this.files)">
+            <input type="file" id="deal-doc-input" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.xlsm,.csv,image/jpeg,image/png,image/webp" style="display:none" onchange="queueDealDoc(this.files)">
           </label>
         </div>
         <div id="deal-doc-existing"></div>
@@ -489,7 +604,13 @@
           <div class="form-group full"><label>Company *</label>
             <select name="company_id" id="fin-company-select-modal" required><option value="">— Select —</option></select>
           </div>
-          <div class="form-group"><label>Financial Year *</label><input name="financial_year" type="number" required placeholder="2024" /></div>
+          <!-- A dropdown, not a free integer. Typing the year produced 202,
+               20255 and 2O24 in a column that a UNIQUE constraint and every
+               year-on-year comparison depend on. The list is built from the
+               company's financial year end. -->
+          <div class="form-group"><label>Financial Year *</label>
+            <select name="financial_year" id="fin-year-select" required><option value="">— Select —</option></select>
+          </div>
           <div class="form-group" style="align-items:center;justify-content:flex-end;padding-top:22px">
             <label style="display:flex;gap:8px;align-items:center;cursor:pointer">
               <input name="audited" type="checkbox" /> <span>Audited</span>
@@ -503,6 +624,19 @@
           <div class="form-group"><label>EBITDA (R)</label><input name="ebitda" type="number" step="0.01" /></div>
           <div class="form-group"><label>EBIT (R)</label><input name="ebit" type="number" step="0.01" /></div>
           <div class="form-group"><label>Net Profit (R)</label><input name="net_profit" type="number" step="0.01" /></div>
+
+          <!-- The four add-backs. Many AFS never state EBITDA — it is not an
+               IFRS line item — so when the EBITDA box above is empty the
+               platform rebuilds it: net profit PLUS tax, finance cost,
+               depreciation and amortisation. Enter each as the positive charge
+               for the year, as the income statement reports it. -->
+          <div class="form-group full"><span class="fin-subhead">EBITDA add-backs — only needed when EBITDA is not stated on the AFS</span></div>
+          <div class="form-group"><label>Tax Expense (R)</label><input name="tax_expense" type="number" step="0.01" oninput="previewEbitda()" /></div>
+          <div class="form-group"><label>Finance Cost (R)</label><input name="finance_cost" type="number" step="0.01" oninput="previewEbitda()" /></div>
+          <div class="form-group"><label>Depreciation (R)</label><input name="depreciation" type="number" step="0.01" oninput="previewEbitda()" /></div>
+          <div class="form-group"><label>Amortisation (R)</label><input name="amortisation" type="number" step="0.01" oninput="previewEbitda()" /></div>
+          <div class="form-group full"><div id="ebitda-preview" class="ebitda-preview"></div></div>
+
           <div class="form-group"><label>EBITDA Margin (e.g. 0.25)</label><input name="ebitda_margin" type="number" step="0.0001" /></div>
           <div class="form-group"><label>Net Margin (e.g. 0.10)</label><input name="net_margin" type="number" step="0.0001" /></div>
           <div class="form-group"><label>Revenue Growth (e.g. 0.15)</label><input name="revenue_growth" type="number" step="0.0001" /></div>
@@ -514,6 +648,11 @@
           <div class="form-group"><label>Equity (R)</label><input name="equity" type="number" step="0.01" /></div>
           <div class="form-group"><label>Cash (R)</label><input name="cash" type="number" step="0.01" /></div>
           <div class="form-group"><label>Total Debt (R)</label><input name="total_debt" type="number" step="0.01" /></div>
+          <!-- The liquidity test needs the twelve-month subtotals, not just
+               the balance sheet totals: a company can be solvent on assets and
+               still unable to pay what falls due this year. -->
+          <div class="form-group"><label>Current Assets (R)</label><input name="current_assets" type="number" step="0.01" /></div>
+          <div class="form-group"><label>Current Liabilities (R)</label><input name="current_liabilities" type="number" step="0.01" /></div>
           <div class="form-group full" style="border-bottom:1px solid var(--border);padding-bottom:10px;margin-bottom:4px">
             <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted)">Cashflows</span>
           </div>
@@ -619,10 +758,25 @@
             </select>
           </div>
           <div class="form-group"><label>Author</label><input name="author" placeholder="Your name" /></div>
+          <!-- The date the thing happened. created_at is the date it was
+               typed, and on anything entered after the fact those are not the
+               same day — which made the update list order by the wrong thing. -->
+          <div class="form-group"><label>Date *</label><input name="update_date" type="date" required /></div>
           <div class="form-group full"><label>Title *</label><input name="title" required placeholder="Brief summary…" /></div>
           <div class="form-group full"><label>Body *</label><textarea name="body" required rows="5" placeholder="Detailed update…"></textarea></div>
         </div>
       </form>
+      <div class="doc-attach-section">
+        <div class="doc-attach-header">
+          <span><i class="fa-solid fa-paperclip"></i> Attachments</span>
+          <label class="btn btn-ghost btn-sm doc-attach-btn">
+            <i class="fa-solid fa-plus"></i> Attach
+            <input type="file" id="update-doc-input" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.xlsm,.csv,image/jpeg,image/png,image/webp" style="display:none" onchange="queueUpdateDoc(this.files)">
+          </label>
+        </div>
+        <div id="update-doc-existing"></div>
+        <div id="update-doc-queue"></div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('update-modal')">Cancel</button>
@@ -631,7 +785,128 @@
   </div>
 </div>
 
+<!-- ══ MEETING NOTE MODAL ══ -->
+<div id="meeting-modal" class="modal-overlay">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <span id="meeting-modal-title">Add Meeting Note</span>
+      <button class="modal-close" onclick="closeModal('meeting-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="meeting-form" onsubmit="event.preventDefault(); saveMeetingNote()">
+        <input type="hidden" name="company_id" />
+        <input type="hidden" name="deal_id" />
+        <div class="form-grid">
+          <div class="form-group"><label>Meeting Date *</label><input name="meeting_date" type="date" required /></div>
+          <div class="form-group"><label>Location</label><input name="location" placeholder="e.g. Teams, Sandton office" /></div>
+          <div class="form-group full"><label>Title *</label><input name="title" required placeholder="e.g. Q3 performance review" /></div>
+          <div class="form-group full"><label>Attendees</label><input name="attendees" placeholder="e.g. Jane Smith (SVC), John Doe (client)" /></div>
+          <div class="form-group full"><label>Notes</label><textarea name="body" rows="6" placeholder="What was discussed…"></textarea></div>
+          <div class="form-group full"><label>Action Items</label><textarea name="action_items" rows="3" placeholder="Who is doing what, by when…"></textarea></div>
+          <div class="form-group full"><label>Author</label><input name="author" placeholder="Your name" /></div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('meeting-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveMeetingNote()"><i class="fa-solid fa-save"></i> Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ BEE VERIFICATION MODAL ══ -->
+<div id="bee-modal" class="modal-overlay">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <span id="bee-modal-title">Add BEE Verification</span>
+      <button class="modal-close" onclick="closeModal('bee-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="bee-form" onsubmit="event.preventDefault(); saveBee()">
+        <input type="hidden" name="company_id" />
+        <div class="form-grid">
+          <div class="form-group"><label>Year *</label>
+            <select name="verification_year" id="bee-year-select" required><option value="">— Select —</option></select>
+          </div>
+          <div class="form-group"><label>BEE Level</label>
+            <select name="bee_level">
+              <option value="">—</option>
+              <option>Level 1</option><option>Level 2</option><option>Level 3</option>
+              <option>Level 4</option><option>Level 5</option><option>Level 6</option>
+              <option>Level 7</option><option>Level 8</option><option>Non-compliant</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Certificate Type</label>
+            <select name="certificate_type">
+              <option value="certificate">Verification Certificate</option>
+              <option value="affidavit">Sworn Affidavit (EME/QSE)</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Verification Agency</label><input name="verified_by" placeholder="e.g. Empowerdex" /></div>
+          <div class="form-group"><label>Issue Date</label><input name="issue_date" type="date" onchange="beeSuggestExpiry(this.value)" /></div>
+          <div class="form-group"><label>Expiry Date</label><input name="expiry_date" type="date" /></div>
+          <div class="form-group"><label>Black Ownership (%)</label><input name="black_ownership_pct_display" type="number" step="0.01" /></div>
+          <div class="form-group"><label>Black Women Ownership (%)</label><input name="black_women_pct_display" type="number" step="0.01" /></div>
+          <div class="form-group full"><label>Notes</label><textarea name="notes" rows="2"></textarea></div>
+        </div>
+      </form>
+      <div class="doc-attach-section">
+        <div class="doc-attach-header">
+          <span><i class="fa-solid fa-certificate"></i> Certificate / Affidavit</span>
+          <label class="btn btn-ghost btn-sm doc-attach-btn">
+            <i class="fa-solid fa-plus"></i> Attach
+            <input type="file" id="bee-doc-input" multiple accept=".pdf,.doc,.docx,image/jpeg,image/png,image/webp" style="display:none" onchange="queueBeeDoc(this.files)">
+          </label>
+        </div>
+        <div id="bee-doc-existing"></div>
+        <div id="bee-doc-queue"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('bee-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveBee()"><i class="fa-solid fa-save"></i> Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ XERO INVOICE IMPORT MODAL ══ -->
+<div id="xero-modal" class="modal-overlay">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-header">
+      <span id="xero-modal-title">Import Xero Invoices</span>
+      <button class="modal-close" onclick="closeModal('xero-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="xero-company-id" />
+      <p class="modal-lede">
+        In Xero: <strong>Business → Invoices → Export</strong>, then upload the CSV here.
+        Invoices are matched on their Xero invoice number, so re-uploading the same
+        export refreshes the rows rather than doubling the revenue.
+      </p>
+      <div class="ai-upload-zone" onclick="document.getElementById('xero-file-input').click()">
+        <input type="file" id="xero-file-input" accept=".csv,text/csv" style="display:none" onchange="previewXeroImport(this.files[0])">
+        <div id="xero-idle">
+          <i class="fa-solid fa-file-csv" style="color:#eda5ff;font-size:1.25rem"></i>
+          <span>Choose the Xero invoice export (.csv)</span>
+          <span class="ai-upload-hint">Max 10 MB</span>
+        </div>
+        <div id="xero-loading" style="display:none">
+          <span class="ai-spinner"></span><span id="xero-status">Reading export…</span>
+        </div>
+      </div>
+      <div id="xero-preview"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('xero-modal')">Cancel</button>
+      <button class="btn btn-primary" id="xero-import-btn" disabled onclick="commitXeroImport()">
+        <i class="fa-solid fa-file-import"></i> Import
+      </button>
+    </div>
+  </div>
+</div>
+
 <script src="/js/staff-auth.js"></script>
-<script src="js/pe-monitor.js?v=11"></script>
+<script src="js/pe-monitor.js?v=12"></script>
 </body>
 </html>

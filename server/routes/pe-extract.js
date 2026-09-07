@@ -48,7 +48,7 @@ const EXTRACTION_PROMPT = `You are an expert financial analyst assistant. Carefu
 Return ONLY a JSON object with these exact keys (omit any key you cannot find — do not guess):
 {
   "name":                 "Company legal name",
-  "sector":               "One of: Technology, Healthcare, Financial Services, Agriculture, Energy, Property, Retail, Manufacturing, Logistics, Media, Education, Mining, Other",
+  "sector":               "One of: Technology, Healthcare, Financial Services, Agriculture, Energy, Property, Retail, FMCG, Manufacturing, Logistics, Media, Education, Mining, Other",
   "sub_sector":           "More specific industry niche (e.g. SaaS, Renewables, InsurTech)",
   "country":              "Country of incorporation or primary operations",
   "city":                 "City of headquarters",
@@ -134,7 +134,7 @@ const DEAL_EXTRACTION_PROMPT = `You are a private equity analyst. Carefully read
 Return ONLY a JSON object with these exact keys (omit any key you cannot find — do not guess):
 {
   "company_name":        "Company or issuer name",
-  "sector":              "One of: Technology, Healthcare, Financial Services, Agriculture, Energy, Property, Retail, Manufacturing, Logistics, Media, Education, Mining, Other",
+  "sector":              "One of: Technology, Healthcare, Financial Services, Agriculture, Energy, Property, Retail, FMCG, Manufacturing, Logistics, Media, Education, Mining, Other",
   "deal_type":           "One of: equity, debt, hybrid, mezzanine, convertible",
   "target_amount":       123456.78,
   "committed_amount":    123456.78,
@@ -207,6 +207,12 @@ Return ONLY a JSON object with these exact keys (omit any key where the value ca
   "ebitda":               123456.78,
   "ebit":                 123456.78,
   "net_profit":           123456.78,
+  "tax_expense":          123456.78,
+  "finance_cost":         123456.78,
+  "depreciation":         123456.78,
+  "amortisation":         123456.78,
+  "current_assets":       123456.78,
+  "current_liabilities":  123456.78,
   "ebitda_margin":        0.2500,
   "net_margin":           0.1000,
   "revenue_growth":       0.1500,
@@ -225,7 +231,11 @@ Rules:
 - audited is true if the statements are audited, false if reviewed or unaudited.
 - All monetary values must be plain numbers (no currency symbols, commas, or spaces). Use negative numbers for losses.
 - Margins and growth rates must be expressed as decimals (e.g. 25% → 0.25).
-- If EBITDA is not stated but EBIT is, do NOT estimate EBITDA — omit it.
+- If EBITDA is not stated but EBIT is, do NOT estimate EBITDA — omit it. The platform rebuilds EBITDA itself by adding tax, finance cost, depreciation and amortisation back to net profit, which is why those four lines matter: extract each of them as a POSITIVE number representing the charge for the year, exactly as the income statement reports it, even when the statement shows it in brackets as a deduction.
+- tax_expense is the income tax charge for the year (current plus deferred), not tax paid per the cash flow statement.
+- finance_cost is interest and similar charges expensed for the year, not the debt balance.
+- depreciation and amortisation are the charges for the year — usually found in the cash flow statement's operating reconciliation or the property, plant and equipment note — not accumulated depreciation from the balance sheet.
+- current_assets and current_liabilities are the balance sheet subtotals for amounts falling due within twelve months.
 - If a margin or growth rate is not stated, derive it only if BOTH inputs are present (e.g. ebitda_margin = ebitda / revenue when both are available).
 - Return ONLY the JSON — no markdown fences, no explanation.`;
 

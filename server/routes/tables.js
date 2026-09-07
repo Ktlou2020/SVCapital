@@ -59,6 +59,7 @@ const STATUS_FIELDS  = { status: ['active','inactive','suspended','pending','pen
 const TABLE_STATUS_OVERRIDES = {
   pe_companies:    ['prospect','deal_flow','due_diligence','approved','portfolio','exited','declined'],
   pe_fees:         ['projected','invoiced','paid','overdue','waived'],
+  pe_afs_requests: ['outstanding','requested','received','waived'],
   change_requests: ['pending','reviewing','approved','rejected','implemented'],
 };
 
@@ -152,6 +153,9 @@ const ALLOWED_TABLES = {
   pe_fees:                  'id',
   pe_updates:               'id',
   pe_reviews:               'id',
+  pe_meeting_notes:         'id',
+  pe_bee_verifications:     'id',
+  pe_afs_requests:          'id',
   change_requests:          'id',
 };
 
@@ -470,6 +474,9 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
       investments:               'COALESCE(start_date, created_at)',
       cattle_animals:            'tag_number',
       cattle_cycles:             'batch_name',
+      pe_meeting_notes:          'meeting_date',
+      pe_bee_verifications:      'verification_year',
+      pe_afs_requests:           'financial_year',
       accepted_client_documents: 'accepted_at',
     };
     const defaultDir = (table === 'cattle_animals' || table === 'cattle_cycles') ? 'ASC' : 'DESC';
