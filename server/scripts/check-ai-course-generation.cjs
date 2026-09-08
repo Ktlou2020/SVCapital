@@ -155,6 +155,14 @@ const course = (mods) => JSON.stringify({
 const FULL = course([mod(1), mod(2), mod(3)]);
 const reply = (text, stop) => ({ content: [{ type: 'text', text }], stop_reason: stop || 'end_turn' });
 
+const getJson = (port, url) => new Promise((resolve, reject) => {
+  http.get({ host: '127.0.0.1', port, path: url }, res => {
+    let b = ''; res.on('data', c => (b += c));
+    res.on('end', () => { let j; try { j = JSON.parse(b); } catch (_) { j = { _raw: b.slice(0, 200) }; }
+      resolve({ status: res.statusCode, body: j }); });
+  }).on('error', reject);
+});
+
 (async () => {
   let srv;
   try {
@@ -162,7 +170,26 @@ const reply = (text, stop) => ({ content: [{ type: 'text', text }], stop_reason:
     await makeDatabase();
     srv = await serve();
     const port = srv.address().port;
-    const gen = (title, body) => post(port, '/api/ai/generate-course', Object.assign({ title }, body));
+
+    /* Generation is a job now, so "what does the user get" means: queue it,
+       then wait for the job to settle and report what the poll returns. Every
+       assertion below still goes through the real routes. */
+    const queue = (title, body) => post(port, '/api/ai/generate-course', Object.assign({ title }, body));
+    async function gen(title, body) {
+      const q = await queue(title, body);
+      if (q.status !== 202 || !q.body.job) return { status: q.status, body: q.body, job: null };
+      /* Long enough to outlast the 529 backoff below (3+6+9 = 18s), because a
+         check that gives up before the code does reports a working retry as a
+         job that never settled. */
+      for (let i = 0; i < 2400; i++) {
+        const r = await getJson(port, '/api/ai/course-jobs/' + q.body.job.id);
+        const j = r.body.job;
+        if (j && j.status === 'done')   return { status: 200, body: r.body, job: j };
+        if (j && j.status === 'failed') return { status: 500, body: { error: j.error }, job: j };
+        await new Promise(r2 => setTimeout(r2, 25));
+      }
+      return { status: 0, body: { error: 'job never settled' }, job: null };
+    }
     const countCourses = async t =>
       Number((await pool.query('SELECT COUNT(*) n FROM employee_courses WHERE title = $1', [t])).rows[0].n);
 
@@ -170,7 +197,7 @@ const reply = (text, stop) => ({ content: [{ type: 'text', text }], stop_reason:
     {
       RESPONSE = reply(FULL); THROW = null;
       const r = await gen('Clean Course');
-      ok('the route returns the course', r.status === 200 && r.body.course,
+      ok('the job finishes and the poll carries the course', r.status === 200 && r.body.course,
          JSON.stringify(r.body).slice(0, 200));
       ok('with its three modules', (r.body.modules || []).length === 3);
       ok('and they are on the database', await countCourses('Clean Course') === 1);
@@ -258,11 +285,17 @@ const reply = (text, stop) => ({ content: [{ type: 'text', text }], stop_reason:
     {
       CALLS = 0;
       THROW = Object.assign(new Error('Overloaded'), { status: 529 });
+      /* Timed from queueing to the job settling, not from the POST — the POST
+         returns in milliseconds now, which is the whole point. */
       const t0 = Date.now();
-      const r = await gen('Overloaded Course');
+      const queued = await queue('Overloaded Course');
+      const postMs = Date.now() - t0;
+      const r = await gen('Overloaded Course 2');
       const secs = (Date.now() - t0) / 1000;
-      ok('it is retried rather than failed on the first 529', CALLS === 4, `${CALLS} attempts`);
-      ok('with a backoff between attempts', secs >= 17 && secs < 40, `${secs.toFixed(1)}s`);
+      ok('queueing returns at once even though the work will take half a minute',
+         queued.status === 202 && postMs < 2000, `${postMs}ms`);
+      ok('it is retried rather than failed on the first 529', CALLS >= 4, `${CALLS} attempts`);
+      ok('with a backoff between attempts', secs >= 17 && secs < 90, `${secs.toFixed(1)}s`);
       ok('and only then reported, in words a person can act on',
          r.status === 500 && /busy/i.test(r.body.error || '') && /again/i.test(r.body.error || ''),
          r.body.error);
@@ -284,6 +317,92 @@ const reply = (text, stop) => ({ content: [{ type: 'text', text }], stop_reason:
         `SELECT COUNT(*) n FROM course_modules m
           WHERE NOT EXISTS (SELECT 1 FROM employee_courses c WHERE c.id = m.course_id)`);
       ok('and no orphan modules either', Number(orphans.rows[0].n) === 0);
+    }
+
+    console.log('\ngeneration is a job, and the request does not wait for it');
+    {
+      /* The reason for all of this: the browser used to hold a connection open
+         for the minute or two Claude takes, and anything between the two that
+         gives up on an idle response took the work with it — with no record
+         that the attempt had happened. */
+      RESPONSE = reply(FULL); THROW = null;
+      const t0 = Date.now();
+      const q = await queue('Queued Course');
+      const ms = Date.now() - t0;
+      ok('the POST returns 202 with a job, not the course', q.status === 202 && q.body.job && !q.body.course,
+         `${q.status}: ${JSON.stringify(q.body).slice(0, 140)}`);
+      ok('and it returns immediately', ms < 2000, `${ms}ms`);
+      ok('the job is recorded before any generating starts',
+         Number((await pool.query('SELECT COUNT(*) n FROM ai_course_jobs WHERE id = $1',
+           [q.body.job.id])).rows[0].n) === 1,
+         'the record has to outlive the connection');
+
+      /* Wait it out, then check the row carries the outcome. */
+      let job = null;
+      for (let i = 0; i < 400; i++) {
+        const r = await getJson(port, '/api/ai/course-jobs/' + q.body.job.id);
+        job = r.body.job;
+        if (job.status === 'done' || job.status === 'failed') { var final = r.body; break; }
+        await new Promise(r2 => setTimeout(r2, 25));
+      }
+      ok('the job finishes as done', job && job.status === 'done', JSON.stringify(job));
+      ok('and the finished course travels with the last poll',
+         final && final.course && (final.modules || []).length === 3,
+         'so the page does not need a second round trip');
+      ok('the course id is derived from the job id',
+         job.course_id === 'CRS-AI-' + job.id, `${job.course_id} vs CRS-AI-${job.id}`);
+
+      const again = await queue('Queued Course');
+      ok('a second press while one is running returns the job already going',
+         again.status === 202 && again.body.job, JSON.stringify(again.body).slice(0, 120));
+
+      ok('an unknown job id is a 404, so the page stops rather than spinning',
+         (await getJson(port, '/api/ai/course-jobs/no-such-job')).status === 404);
+
+      const latest = await getJson(port, '/api/ai/course-jobs');
+      ok('the caller can find their most recent job after a refresh',
+         latest.status === 200 && latest.body.job && latest.body.job.id,
+         JSON.stringify(latest.body).slice(0, 140));
+
+      ok('a title is still required, and refused before a job is made',
+         (await post(port, '/api/ai/generate-course', { title: '  ' })).status === 400);
+    }
+
+    console.log('\nand a restart cannot strand one');
+    {
+      /* The course insert commits before the job row is updated. A process
+         that dies in that gap leaves a real course and a job that never heard
+         about it — so the reconciliation has to look, not assume. */
+      await pool.query(
+        `INSERT INTO ai_course_jobs (id, employee_id, title, status, stage, started_at)
+         VALUES ('rc-lost','AIC-E1','Lost To Restart','running','Generating lesson content',NOW()),
+                ('rc-saved','AIC-E1','Saved Before Restart','running','Saving modules and quizzes',NOW()),
+                ('rc-queued','AIC-E1','Never Started','queued','Queued',NULL)`);
+      await pool.query(
+        `INSERT INTO employee_courses (id,title,description,category,xp_reward,is_active)
+         VALUES ('CRS-AI-rc-saved','Saved Before Restart','d','professional_development',200,true)`);
+
+      const q2 = console.log; console.log = () => {};
+      try {
+        delete require.cache[require.resolve(path.join(ROOT, 'server', 'db', 'setup.js'))];
+        await require(path.join(ROOT, 'server', 'db', 'setup.js'))();
+      } finally { console.log = q2; }
+
+      const row = async id =>
+        (await pool.query('SELECT * FROM ai_course_jobs WHERE id = $1', [id])).rows[0];
+      const saved = await row('rc-saved');
+      ok('a job whose course was already written is recovered, not failed',
+         saved.status === 'done' && saved.course_id === 'CRS-AI-rc-saved',
+         `${saved.status} / ${saved.course_id} — failing it would tell somebody their course was lost while it sat in their list`);
+      const lost = await row('rc-lost');
+      ok('one whose course was not written is failed, and says why',
+         lost.status === 'failed' && /server restarted/i.test(lost.error || ''), lost.error);
+      const never = await row('rc-queued');
+      ok('and one that never started is failed too, not left queued forever',
+         never.status === 'failed', never.status);
+      ok('nothing is left running for a page to poll at forever',
+         Number((await pool.query(
+           `SELECT COUNT(*) n FROM ai_course_jobs WHERE status IN ('queued','running')`)).rows[0].n) === 0);
     }
 
     console.log('\nthe budget the whole thing turned on');
@@ -330,6 +449,40 @@ const reply = (text, stop) => ({ content: [{ type: 'text', text }], stop_reason:
       const q2 = await post(port, `/api/ai/generate-quiz/${modId}`, {});
       ok('so is one whose answer is not among its options',
          q2.status === 500 && /not one of its options/.test(q2.body.error || ''), q2.body.error);
+    }
+
+    console.log('\nthe page polls, and its labels match the stages the server sends');
+    {
+      const EMP = fs.readFileSync(path.join(ROOT, 'team', 'js', 'employee.js'), 'utf8');
+      const EMP_CODE = strip(EMP);
+      ok('the page polls rather than holding the request open',
+         /function pollCourseJob\(/.test(EMP_CODE) && /ai\/course-jobs\//.test(EMP_CODE));
+      ok('it stops on a 404 instead of spinning',
+         /if \(r\.status === 404\)/.test(EMP_CODE));
+      ok('but a dropped poll or a 500 is retried, because the work is on the server',
+         /await sleep\(AI_POLL_MS\);\s*continue;/.test(EMP_CODE));
+      ok('it does not go through get\(\), which returns an empty object for every failure',
+         /await fetch\(BASE \+ `ai\/course-jobs\//.test(EMP_CODE),
+         'through that helper a dropped poll and a missing job look identical');
+      ok('and it gives up eventually rather than polling for ever',
+         /AI_POLL_TIMEOUT/.test(EMP_CODE));
+      ok('a failed job surfaces the job\'s own message',
+         /throw new Error\(job\.error/.test(EMP_CODE));
+
+      /* Every stage the server sets must light a step up. A stage with no
+         mapping leaves the overlay frozen on the previous one, which is the
+         behaviour this whole change was meant to replace. */
+      const serverStages = [...SRC.matchAll(/setStage\(jobId, '([^']+)'\)/g)].map(m => m[1])
+        .concat([...SRC.matchAll(/stage='([^']+)'/g)].map(m => m[1]));
+      const mapped = new Set([...EMP.matchAll(/^\s*'([^']+)':\s*\d,?$/gm)].map(m => m[1]));
+      const unmapped = [...new Set(serverStages)].filter(x => !mapped.has(x));
+      ok('every stage the server sets has a step on the page',
+         unmapped.length === 0,
+         `unmapped: ${unmapped.join(', ')} — the overlay would freeze on the previous one`);
+      ok('the page is cache-busted so the old synchronous client is not served',
+         (() => { const m = fs.readFileSync(path.join(ROOT, 'team', 'employee.html'), 'utf8')
+                    .match(/employee\.js\?v=(\d+)/); return m && Number(m[1]) > 3; })(),
+         'a cached client would POST and wait for a body that never comes');
     }
 
   } catch (err) {

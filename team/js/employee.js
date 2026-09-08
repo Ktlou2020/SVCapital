@@ -856,10 +856,69 @@ async function startAiGeneration() {
   await runAiGeneration({ title, focus, category: cat, kpi_dimension: dim, difficulty: 'intermediate' });
 }
 
+/* The five labels in the overlay, and which of them each server-side stage
+   lights up. The steps used to advance on a timer while a single request sat
+   open — so they told you how long you had been waiting, not where the work
+   had got to, and they finished long before it did. */
+const AI_STAGE_STEP = {
+  'Queued': 0,
+  'Writing the course': 1,
+  'Generating lesson content': 2,
+  'Saving modules and quizzes': 3,
+  'Ready': 4,
+};
+
+/* Generation runs as a job on the server and this polls it.
+
+   It used to be one POST that the browser held open for the minute or two
+   Claude takes. Anything in between that gives up on an idle response would
+   drop it, and the work went with it — no course, and no record that it had
+   ever been attempted. Now the request returns a job id straight away and the
+   work outlives the connection: close the tab and the course still lands. */
+const AI_POLL_MS      = 2500;
+const AI_POLL_TIMEOUT = 10 * 60 * 1000;   // a course takes 1–2 minutes; this is the giving-up point
+
+async function pollCourseJob(jobId, onStage) {
+  const started = Date.now();
+  let lastStage = null;
+  for (;;) {
+    if (Date.now() - started > AI_POLL_TIMEOUT) {
+      throw new Error('This is taking much longer than usual. It may still finish — check your ' +
+                      'course list in a few minutes before generating another.');
+    }
+    /* fetch directly rather than through get(), which returns
+       { data: [], total: 0 } for every failure. Through that helper a dropped
+       poll and a job that does not exist look identical, and one of them is a
+       reason to stop waiting while the other is not. */
+    let r, body = null;
+    try {
+      r = await fetch(BASE + `ai/course-jobs/${encodeURIComponent(jobId)}`);
+      try { body = await r.json(); } catch (_) { /* handled below */ }
+    } catch (_) {
+      /* The network dropped. The work is on the server; keep asking. */
+      await sleep(AI_POLL_MS);
+      continue;
+    }
+    if (r.status === 404) {
+      throw new Error('The course generation job could not be found. Please try again.');
+    }
+    if (!r.ok || !body || !body.job) {
+      /* A 500 or a garbled body is the server having a bad moment, not the job
+         having failed — the job says when it has failed. */
+      await sleep(AI_POLL_MS);
+      continue;
+    }
+    const job = body.job;
+    if (job.stage && job.stage !== lastStage) { lastStage = job.stage; onStage(job.stage); }
+    if (job.status === 'done')   return body;
+    if (job.status === 'failed') throw new Error(job.error || 'Course generation failed.');
+    await sleep(AI_POLL_MS);
+  }
+}
+
 async function runAiGeneration(params, _unused) {
   const ov = document.getElementById('ai-gen-overlay');
   ov.classList.add('open');
-  const steps = ['Analysing role & objectives','Structuring 3 modules','Generating lesson content','Building quiz questions','Enrolling you in the course'];
 
   function setStep(idx) {
     document.querySelectorAll('.ai-gen-step').forEach((el,i)=>{
@@ -868,22 +927,27 @@ async function runAiGeneration(params, _unused) {
   }
 
   try {
-    setStep(0); await sleep(400);
-    setStep(1);
+    setStep(0);
 
-    const result = await post('ai/generate-course', {
+    const queued = await post('ai/generate-course', {
       title:         params.title,
       focus:         params.focus || params.title,
       category:      params.category || 'professional_development',
       difficulty:    params.difficulty || 'intermediate',
       kpi_dimension: params.kpi_dimension || 'task_completion_rate',
     });
+    if (!queued || !queued.job) throw new Error('Could not start course generation.');
 
-    setStep(2); await sleep(400);
-    setStep(3); await sleep(400);
+    const result = await pollCourseJob(queued.job.id, stage => {
+      const idx = AI_STAGE_STEP[stage];
+      if (idx !== undefined) setStep(idx);
+    });
+
+    setStep(4);
 
     const course  = result.course;
     const modules = result.modules;
+    if (!course) throw new Error('The course finished generating but could not be loaded. Refresh and check your list.');
 
     _courses.push(course);
     _modules[course.id] = modules;

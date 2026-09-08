@@ -180,12 +180,119 @@ function validateCourse(data) {
   }
 }
 
+/* ── POST /generate-course ────────────────────────────────────────────────
+   Records the request and returns immediately. The generation itself runs
+   after the response, and the page polls /course-jobs/:id for it.
+
+   This used to do the whole thing inside the request: Claude took a minute or
+   two, the browser held the connection open for all of it, and anything
+   between the two that gives up on an idle response — a proxy, a load
+   balancer — took the work with it. There was no record that the attempt had
+   happened, so it looked exactly like a course that silently never generated.
+   Now the record is written first and survives whatever happens to the
+   connection. */
 router.post('/generate-course', requireAuth, async (req, res) => {
   const { title, focus, category, difficulty, kpi_dimension } = req.body;
-  if (!title) return res.status(400).json({ error: 'title is required' });
+  if (!title || !String(title).trim()) return res.status(400).json({ error: 'title is required' });
 
-  const role = req.user.role || 'staff';
-  const empId = req.user.empId;
+  const role  = req.user.role || 'staff';
+  const empId = req.user.empId || null;
+
+  try {
+    /* One at a time per person. Pressing the button twice used to start two
+       generations; now the second press returns the job already running, which
+       is what the page is waiting for anyway. */
+    if (empId) {
+      const { rows: [open] } = await pool.query(
+        `SELECT * FROM ai_course_jobs
+          WHERE employee_id = $1 AND status IN ('queued','running')
+          ORDER BY created_at DESC LIMIT 1`, [empId]);
+      if (open) return res.status(202).json({ job: publicJob(open), already_running: true });
+    }
+
+    const jobId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const { rows: [job] } = await pool.query(
+      `INSERT INTO ai_course_jobs
+         (id, employee_id, requested_by, title, focus, category, difficulty, kpi_dimension,
+          role_target, status, stage)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'queued','Queued')
+       RETURNING *`,
+      [jobId, empId, req.user.email || req.user.id || null, String(title).trim(),
+       focus || null, category || 'professional_development',
+       difficulty || 'intermediate', kpi_dimension || 'task_completion_rate', role]);
+
+    /* Deliberately not awaited: the response goes out now and the work carries
+       on. Any throw inside is caught by runCourseJob and written to the row. */
+    runCourseJob(job).catch(err => console.error('[ai-courses] job runner escaped:', err));
+
+    res.status(202).json({ job: publicJob(job) });
+  } catch (err) {
+    console.error('[ai-courses] could not queue job:', err.message);
+    res.status(500).json({ error: 'Could not start course generation: ' + err.message });
+  }
+});
+
+/* ── GET /course-jobs/:id ── what the page polls ── */
+router.get('/course-jobs/:id', requireAuth, async (req, res) => {
+  try {
+    const { rows: [job] } = await pool.query('SELECT * FROM ai_course_jobs WHERE id = $1', [req.params.id]);
+    if (!job) return res.status(404).json({ error: 'No such course generation job.' });
+    const out = { job: publicJob(job) };
+    /* The finished course travels with the final poll, so the page does not
+       need a second round trip to show what it has been waiting for. */
+    if (job.status === 'done' && job.course_id) {
+      const [{ rows: [course] }, { rows: modules }] = await Promise.all([
+        pool.query('SELECT * FROM employee_courses WHERE id = $1', [job.course_id]),
+        pool.query('SELECT * FROM course_modules WHERE course_id = $1 ORDER BY module_index', [job.course_id]),
+      ]);
+      out.course = course || null;
+      out.modules = modules;
+    }
+    res.json(out);
+  } catch (err) {
+    console.error('[ai-courses] job lookup:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ── GET /course-jobs ── the caller's most recent job ──
+   So a page that was closed or refreshed mid-generation can pick the thread
+   back up instead of leaving the course to appear silently in the list. */
+router.get('/course-jobs', requireAuth, async (req, res) => {
+  try {
+    if (!req.user.empId) return res.json({ job: null });
+    const { rows: [job] } = await pool.query(
+      `SELECT * FROM ai_course_jobs WHERE employee_id = $1
+        ORDER BY created_at DESC LIMIT 1`, [req.user.empId]);
+    res.json({ job: job ? publicJob(job) : null });
+  } catch (err) {
+    console.error('[ai-courses] job list:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* Only what the page needs. The prompt inputs stay on the row for support. */
+function publicJob(j) {
+  return {
+    id: j.id, status: j.status, stage: j.stage, title: j.title,
+    course_id: j.course_id, error: j.error,
+    created_at: j.created_at, finished_at: j.finished_at,
+  };
+}
+
+const setStage = (jobId, stage) =>
+  pool.query(`UPDATE ai_course_jobs SET stage=$2, updated_at=NOW() WHERE id=$1`, [jobId, stage])
+      .catch(() => { /* a progress label is not worth failing a job over */ });
+
+/* ── The worker ──────────────────────────────────────────────────────────
+   Everything that used to be the body of the POST. It writes its outcome to
+   the job row rather than to a response, so nothing depends on the browser
+   still being connected. */
+async function runCourseJob(job) {
+  const { id: jobId, title, focus, category, difficulty, kpi_dimension, role_target: role } = job;
+  await pool.query(
+    `UPDATE ai_course_jobs SET status='running', stage='Writing the course', started_at=NOW(), updated_at=NOW()
+      WHERE id=$1`, [jobId]);
 
   const prompt = `You are a professional Learning & Development specialist for SV Capital, a South African alternative investment firm regulated under FAIS/FSCA. Generate a structured 3-module professional development course.
 
@@ -255,6 +362,7 @@ RULES:
 - Return ONLY the JSON object, starting with { and ending with }`;
 
   try {
+    await setStage(jobId, 'Generating lesson content');
     const message = await generateWithRetry(prompt);
     const text = message.content.find(b => b.type === 'text')?.text || '';
 
@@ -283,8 +391,12 @@ RULES:
 
     const data = parseCourseJson(text);
     validateCourse(data);
+    await setStage(jobId, 'Saving modules and quizzes');
 
-    const courseId = `CRS-AI-${Date.now()}`;
+    /* Derived from the job id, not from the clock. That is what lets a restart
+       tell a job whose course was already written from one whose was not —
+       see the reconciliation step in db/setup.js. */
+    const courseId = `CRS-AI-${jobId}`;
     const color    = CAT_COLORS[category] || '#eda5ff';
     const xpTotal  = 200;
     const xpSplit  = [0.30, 0.35, 0.35];
@@ -341,17 +453,25 @@ RULES:
       db.release();
     }
 
-    console.log(`[ai-courses] Generated "${title}" for emp ${empId || role} — ${modules.length} modules`);
-    res.json({ course, modules });
+    await pool.query(
+      `UPDATE ai_course_jobs
+          SET status='done', course_id=$2, stage='Ready', error=NULL, finished_at=NOW(), updated_at=NOW()
+        WHERE id=$1`, [jobId, courseId]);
+    console.log(`[ai-courses] Generated "${title}" (job ${jobId}) — ${modules.length} modules`);
 
   } catch (err) {
-    console.error('[ai-courses] generation error:', err.message);
-    /* The message reaches the person who pressed the button, so it has to say
-       what to do about it. err.message is already written that way for the
-       cases this route raises itself. */
-    res.status(500).json({ error: 'Course generation failed: ' + err.message });
+    console.error(`[ai-courses] job ${jobId} failed:`, err.message);
+    /* The message reaches the person who pressed the button, by way of the
+       poll, so it has to say what to do about it. err.message is already
+       written that way for the cases this route raises itself. */
+    await pool.query(
+      `UPDATE ai_course_jobs
+          SET status='failed', stage=NULL, error=$2, finished_at=NOW(), updated_at=NOW()
+        WHERE id=$1`,
+      [jobId, String(err.message || 'Course generation failed.')]
+    ).catch(e => console.error('[ai-courses] could not record failure:', e.message));
   }
-});
+}
 
 /* ── POST /api/ai/generate-quiz/:moduleId  — generate quiz for one module ── */
 router.post('/generate-quiz/:moduleId', requireAuth, async (req, res) => {

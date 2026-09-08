@@ -728,6 +728,43 @@ CREATE TABLE IF NOT EXISTS personal_notes (
 );
 CREATE INDEX IF NOT EXISTS personal_notes_emp_idx ON personal_notes(employee_id);
 
+/* Course generation is a job, not a request.
+
+   Generating a three-module course takes Claude a minute or two. It used to be
+   done inside the POST that asked for it, so the browser held a connection
+   open for the whole thing and any proxy between the two could drop it — and
+   when that happened the work was lost with no trace, which reads to the
+   person who pressed the button exactly like a course that never generated.
+
+   The row survives the connection AND the process: everything about the
+   request is on it, so a job can be picked back up, reported on after a
+   refresh, and reconciled after a restart. */
+CREATE TABLE IF NOT EXISTS ai_course_jobs (
+  id            TEXT PRIMARY KEY,
+  employee_id   TEXT,
+  requested_by  TEXT,
+  title         TEXT NOT NULL,
+  focus         TEXT,
+  category      TEXT,
+  difficulty    TEXT,
+  kpi_dimension TEXT,
+  role_target   TEXT,
+  status        TEXT NOT NULL DEFAULT 'queued'
+                  CHECK (status IN ('queued','running','done','failed')),
+  /* What to show while it works — set by the worker as it goes, so the page
+     reports where the job actually is rather than animating on a timer. */
+  stage         TEXT,
+  course_id     TEXT,
+  error         TEXT,
+  created_at    TIMESTAMPTZ DEFAULT NOW(),
+  started_at    TIMESTAMPTZ,
+  finished_at   TIMESTAMPTZ,
+  updated_at    TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS ai_course_jobs_emp_idx ON ai_course_jobs(employee_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS ai_course_jobs_open_idx ON ai_course_jobs(status)
+  WHERE status IN ('queued','running');
+
 CREATE TABLE IF NOT EXISTS course_modules (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
   course_id TEXT REFERENCES employee_courses(id) ON DELETE CASCADE,
@@ -2582,6 +2619,45 @@ async function autoSetup() {
         console.warn('⚠️  investment_pools window constraint not validated — some existing row still ' +
                      'closes before it opens: ' + e.message);
       }
+    });
+
+    await step("8c. Reconcile course jobs left running by a restart", async () => {
+      /* A job that was mid-generation when the process stopped is left
+         'running' forever, and the page polling it would wait forever with it.
+
+         It cannot simply be failed: the course insert commits before the job
+         row is updated, so a process that died in that gap left a real,
+         complete course behind and a job that never heard about it. Failing it
+         would tell somebody their course was lost while it sat in their list.
+
+         The course id is derived from the job id, so the reconciliation is
+         exact rather than a guess — the course either exists or it does not. */
+      const { rows: stuck } = await pool.query(
+        `SELECT j.id, j.title, c.id AS found_course
+           FROM ai_course_jobs j
+           LEFT JOIN employee_courses c ON c.id = 'CRS-AI-' || j.id
+          WHERE j.status IN ('queued','running')`);
+      if (!stuck.length) return;
+
+      let recovered = 0, lost = 0;
+      for (const j of stuck) {
+        if (j.found_course) {
+          await pool.query(
+            `UPDATE ai_course_jobs
+                SET status='done', course_id=$2, stage='Ready', finished_at=NOW(), updated_at=NOW()
+              WHERE id=$1`, [j.id, j.found_course]);
+          recovered++;
+        } else {
+          await pool.query(
+            `UPDATE ai_course_jobs
+                SET status='failed', finished_at=NOW(), updated_at=NOW(),
+                    error='The server restarted while this course was being generated. Nothing was saved — generate it again.'
+              WHERE id=$1`, [j.id]);
+          lost++;
+        }
+      }
+      if (recovered) console.log(`✅ Recovered ${recovered} course job(s) whose course had already been written.`);
+      if (lost) console.log(`ℹ️  ${lost} course job(s) were interrupted by a restart and are marked failed.`);
     });
 
     await step("9. Backfill cattle cycles cycle start", async () => {
