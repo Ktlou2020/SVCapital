@@ -108,13 +108,26 @@ const DATA = {
    module-scoped helper, and a slice of one of them is not what runs. */
 const fn = ADMIN;
 const esc = (ADMIN.match(/^const _esc = .*$/m) || [])[0];
-/* The builder leans on Utils.effectiveRate for the return column. Taken from
-   the shipped file so the rendered document is the real one. */
-let effRate = '';
-try { effRate = sliceFn(fs.readFileSync(path.join(ROOT, 'admin', 'js', 'admin.js'), 'utf8'), 'effectiveRate'); } catch (_) {}
-const utilsStub = effRate
-  ? `const Utils = { effectiveRate: (function(){ ${effRate}; return effectiveRate; })() };`
-  : `const Utils = { effectiveRate: i => parseFloat(i && i.annual_rate) || 0 };`;
+/* The REAL Utils from js/api.js, not a hand-written stand-in.
+
+   This used to be `{ effectiveRate }` and nothing else, so the moment the
+   document started calling another Utils method the render threw
+   "Utils.rateBasis is not a function" — reported here as though the shipped
+   builder were broken, when what was broken was this file's idea of Utils.
+   The whole object literal is lifted instead, so adding a method to Utils can
+   never fail a render check. */
+function realUtils() {
+  const src = fs.readFileSync(path.join(ROOT, 'js', 'api.js'), 'utf8');
+  const at = src.indexOf('const Utils = {');
+  if (at < 0) return null;
+  const end = src.indexOf('\n};\n', at);
+  return end < 0 ? null : src.slice(at, end + 3);
+}
+const utilsStub = realUtils();
+if (!utilsStub) {
+  console.log('  \u2717 the real Utils could not be lifted from js/api.js');
+  process.exit(1);
+}
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'astmt-'));
 fs.writeFileSync(path.join(tmp, 'stub.js'), `

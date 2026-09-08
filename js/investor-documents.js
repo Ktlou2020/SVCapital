@@ -453,8 +453,13 @@ function _openAccountStatementWindow(data) {
   const walletAtClose  = Math.round((parseFloat(data.closing_balance) || 0) * 100) / 100;
   const portfolioTotal = Math.round((activeCapital + walletAtClose) * 100) / 100;
   const maturedCapital = Math.round(maturedInvests.reduce((a, i) => a + _n(i.amount), 0) * 100) / 100;
+  /* Deliberately the SAME function the rows use. This total read
+     actual_return ?? expected_return while the Rand Return column beside it
+     recomputed from a rate and a day count, so the header and the rows under
+     it reported different numbers for the same thing on the same page.
+     randReturn is defined below and hoisted; both callers now go through it. */
   const maturedReturn  = Math.round(maturedInvests.reduce((a, i) =>
-    a + _n(i.actual_return != null ? i.actual_return : i.expected_return), 0) * 100) / 100;
+    a + randReturn(i).value, 0) * 100) / 100;
 
   /* An investment still marked active whose maturity date has passed has not
      been processed. The statement reports the status it finds — but the person
@@ -490,19 +495,97 @@ function _openAccountStatementWindow(data) {
     const raw = i.maturity_instruction || i.payout_option || '';
     return { reinvest:'Reinvest', withdraw:'Withdraw', partial_withdraw:'Partial Withdraw', rollover:'Roll Over' }[raw] || (raw ? raw.replace(/_/g,' ') : '—');
   };
+  /* The rate, and what kind of rate it is.
+
+     Utils.rateBasis returns { rate, posted }. A POSTED rate is what was
+     achieved over the pool's own period — not per annum and not prorated over
+     term_months. A TARGET rate is the contracted annual figure. The column
+     printed the number bare, so 12.23% achieved over fourteen months and
+     12.23% a year looked identical, and there was no way to tell which one you
+     were reading. */
   const getRate = i => {
-    const r = Utils.effectiveRate(i);
-    return r != null ? (r * 100).toFixed(2) + '%' : '—';
+    const b = Utils.rateBasis(i);
+    if (!b) return '—';
+    return Utils.pct(b.rate) + '<span class="rate-basis">' +
+      (b.posted ? 'achieved' : 'p.a. target') + '</span>';
   };
-  const calcRandReturn = i => {
+
+  /* ── The rand return, and where the figure comes from ────────────────────
+     This is the column that did not match the maturity value.
+
+     It used to be, unconditionally:
+
+         principal x Utils.effectiveRate(i) x (days / 365)
+
+     Two things are wrong with that, and they compound.
+
+     FIRST, it prorated a rate that is already a period rate. effectiveRate
+     returns actual_return/amount when the investment has paid out, and
+     pool_actual_rate when the pool has posted one — both of which already
+     cover the whole term. Multiplying either by days/365 rescales a settled
+     figure by the length of the term: on the 426-day cattle holding it
+     reported 117% of what was credited, and on a 180-day short-term holding
+     49% of it. The codebase already knows this — Utils.rateSuffix carries the
+     comment explaining that a posted rate must not be annualised — but this
+     calculation predates it and never got the message.
+
+     SECOND, and more simply: a matured investment does not need its return
+     derived at all. actual_return is the amount that was actually credited.
+     The statement's own summary line has always used it (the maturedReturn
+     total above reads actual_return ?? expected_return), so the header and the
+     rows underneath it were computing the same quantity two different ways and
+     printing both on the same page.
+
+     So: settled figures first, and a projection only when there is nothing
+     settled to show. The basis comes back with the value because a projected
+     number and a paid one should not look alike on a statement. */
+  /* A function DECLARATION, not a const arrow: the matured total above is
+     computed before this point in the file and a const would sit in the
+     temporal dead zone there — the statement would throw rather than render. */
+  function randReturn(i) {
     const principal = parseFloat(i.amount) || 0;
-    const rate      = Utils.effectiveRate(i) || 0;
-    const startMs   = new Date(i.start_date || i.created_at).getTime();
-    const endMs     = new Date(i.maturity_date || i.pool_end_date).getTime();
-    if (!principal || !rate || isNaN(startMs) || isNaN(endMs) || endMs <= startMs)
-      return parseFloat(i.actual_return || i.expected_return || 0);
-    const days = (endMs - startMs) / 86400000;
-    return principal * rate * (days / 365);
+
+    // 1. What was actually credited. Nothing to derive.
+    const actual = parseFloat(i.actual_return);
+    if (Number.isFinite(actual) && actual !== 0) return { value: actual, basis: 'actual' };
+
+    // 2. A rate the pool posted. Already the return for the period — it is
+    //    multiplied by the principal and by nothing else.
+    const b = Utils.rateBasis(i);
+    if (b && b.posted && principal) return { value: principal * b.rate, basis: 'posted' };
+
+    // 3. The figure recorded when the investment was taken out. This is what
+    //    the client was shown and what the contract says, so it beats anything
+    //    this file can recompute from a rate and two dates.
+    const expected = parseFloat(i.expected_return);
+    if (Number.isFinite(expected) && expected !== 0) return { value: expected, basis: 'expected' };
+
+    // 4. Last resort: prorate the contracted annual rate over the term. Only
+    //    reached when nothing settled and nothing recorded exists, and only a
+    //    target rate is ever prorated here.
+    const rate    = b && !b.posted ? b.rate : 0;
+    const startMs = new Date(i.start_date || i.created_at).getTime();
+    const endMs   = new Date(i.maturity_date || i.pool_end_date).getTime();
+    if (!principal || !rate || isNaN(startMs) || isNaN(endMs) || endMs <= startMs) {
+      return { value: 0, basis: 'none' };
+    }
+    return { value: principal * rate * ((endMs - startMs) / 86400000 / 365), basis: 'projected' };
+  }
+
+  /* Anything that is not a settled figure is marked, so an investor reading
+     the column can tell a payment from a projection. */
+  const RETURN_MARK = { expected: '*', projected: '\u2020', none: '' };
+  const RETURN_BASIS_LABEL = {
+    actual:    'Actual return credited',
+    posted:    'Pool posted rate applied to capital',
+    expected:  'Expected return recorded at investment',
+    projected: 'Projected from the annual target rate over the term',
+    none:      'Not available',
+  };
+  const randReturnCell = i => {
+    const r = randReturn(i);
+    if (r.basis === 'none') return '&mdash;';
+    return fmt(r.value) + (RETURN_MARK[r.basis] ? '<span class="ret-mark">' + RETURN_MARK[r.basis] + '</span>' : '');
   };
 
   const buildActiveRows = rows => rows.map(i => {
@@ -528,7 +611,7 @@ function _openAccountStatementWindow(data) {
       '<td>' + esc(prod) + '</td>' +
       '<td class="num">' + fmt(i.amount) + '</td>' +
       '<td class="num earn">' + getRate(i) + '</td>' +
-      '<td class="num earn">' + fmt(calcRandReturn(i)) + '</td>' +
+      '<td class="num earn">' + randReturnCell(i) + '</td>' +
       '<td>' + fmtDate(i.pool_start_date) + '</td>' +
       '<td>' + fmtDate(i.pool_end_date) + '</td>' +
       '<td>' + esc(getInstr(i)) + '</td>' +
@@ -541,14 +624,19 @@ function _openAccountStatementWindow(data) {
 
   // Build CSV for download button
   const csvRows = [
-    ['Date','Pool Name','Product','Capital','Return','Rand Return','Pool Start Date','Pool End Date','Maturity Instruction','Status']
+    ['Date','Pool Name','Product','Capital','Return','Return Basis','Rand Return','Rand Return Basis','Pool Start Date','Pool End Date','Maturity Instruction','Status']
   ].concat(investments.map(i => [
     fmtDate(i.start_date || i.created_at),
     i.pool_name || '',
     PROD_LABELS[i.product_type] || i.pool_name || '',
     parseFloat(i.amount || 0).toFixed(2),
-    getRate(i),
-    calcRandReturn(i).toFixed(2),
+    /* The CSV takes the number and the basis as separate columns rather than
+       the marked-up cell — a spreadsheet has room to say it in words, and a
+       '%' with an HTML span in it is not a number anything can sum. */
+    (Utils.rateBasis(i) ? Utils.pct(Utils.rateBasis(i).rate) : ''),
+    (Utils.rateBasis(i) ? (Utils.rateBasis(i).posted ? 'Achieved over the period' : 'Annual target') : ''),
+    randReturn(i).value.toFixed(2),
+    RETURN_BASIS_LABEL[randReturn(i).basis] || '',
     fmtDate(i.pool_start_date),
     fmtDate(i.pool_end_date),
     getInstr(i),
@@ -610,7 +698,13 @@ function _openAccountStatementWindow(data) {
     '.sb-active{background:#dcfce7;color:#166534}.sb-matured{background:#dbeafe;color:#1e40af}',
     '.sb-pending{background:#fef3c7;color:#92400e}.sb-paidout{background:#f3e8ff;color:#7e22ce}',
     '.sb-cancelled{background:#f1f5f9;color:#6b7280}',
-    '.note{font-size:9.5px;color:#9ca3af;margin-bottom:14px}',
+    '.note{font-size:9.5px;color:#9ca3af;margin-bottom:14px;line-height:1.5}',
+    /* The basis sits under the number rather than beside it: these are
+       narrow right-aligned money columns and a suffix on the same line
+       either wraps mid-figure or pushes the column wide enough to lose a
+       date column off the page. */
+    '.rate-basis{display:block;font-size:8px;font-weight:400;color:#9ca3af;letter-spacing:.02em}',
+    '.ret-mark{color:#9ca3af;font-size:9px;vertical-align:super;margin-left:1px}',
     '.sec-hdr.txn-hdr{background:#f5f3ff;color:#4c1d95;border-left:3px solid #eda5ff}',
     '.txn-credit{color:#15803d;font-weight:700;text-align:right;white-space:nowrap}',
     '.txn-debit{color:#b91c1c;font-weight:700;text-align:right;white-space:nowrap}',
@@ -719,7 +813,18 @@ function _openAccountStatementWindow(data) {
     '  <table>' + activeHead + '<tbody>' + activeRows + '</tbody></table>',
     '  <div class="sec-hdr matured-hdr">Matured Pools &mdash; ' + mCnt + ' investment' + (mCnt !== 1 ? 's' : '') + '</div>',
     '  <table>' + maturedHead + '<tbody>' + maturedRows + '</tbody></table>',
-    '  <p class="note">* Expected return shown where actual return has not yet been recorded.</p>',
+    /* The old footnote promised "expected return shown where actual return has
+       not yet been recorded" — which the column did not do: it recomputed every
+       figure from a rate and a day count, settled or not. Now that each row
+       says which basis it is on, the note explains what the marks mean instead
+       of making a promise the column has to be trusted to keep. */
+    '  <p class="note">Rand Return is the amount credited at maturity. ' +
+    '<span class="ret-mark">*</span> the expected return recorded when the investment was taken out, ' +
+    'where no actual return has been posted yet. ' +
+    '<span class="ret-mark">&dagger;</span> projected from the annual target rate over the term, ' +
+    'where neither has been recorded. ' +
+    'Rates marked <em>achieved</em> are the return over the pool\'s own period; ' +
+    'rates marked <em>p.a. target</em> are the contracted annual rate.</p>',
 
     // ── Transaction ledger ─────────────────────────────────────────────
     (function() {
@@ -821,7 +926,12 @@ function _openAccountStatementWindow(data) {
     '  <div class="footer">',
     '    <strong>SV Capital (Pty) Ltd</strong> &mdash; FSCA Regulated Financial Services Provider.<br>',
     '    This investment statement is prepared for <strong>' + esc(inv.first_name) + ' ' + esc(inv.last_name) + '</strong> (Account: ' + esc(inv.id) + ') and covers the period ' + fromLabel + ' to ' + toLabel + '. All amounts are in South African Rand (ZAR).<br>',
-    '    Returns marked * represent projected figures based on the pool rate; actual returns are confirmed at maturity. This document does not constitute a tax certificate.<br>',
+    /* This said '*' meant a projection from the pool rate, while the note
+       above the table now uses '*' for a recorded expected return and
+       '\u2020' for a projection. Two definitions of the same mark on one
+       page. The table's note is the one that explains the marks; this
+       line keeps only what it alone says. */
+    '    Returns are confirmed at maturity. This document does not constitute a tax certificate.<br>',
     '    <strong>Ref:</strong> ' + stmtRef + ' &middot; <strong>Issued:</strong> ' + issuedAt + ' &middot; <strong>Generated by:</strong> SV Capital Admin Console<br>',
     '    <div class="stamp">SV Capital (Pty) Ltd &mdash; www.svcapital.co.za</div>',
     '  </div>',

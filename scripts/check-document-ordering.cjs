@@ -43,6 +43,22 @@ const ADMIN = fs.readFileSync(path.join(ROOT, 'js', 'investor-documents.js'), 'u
 const CHROME = ['/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
                 '/opt/pw-browsers/chromium/chrome-linux/chrome'].find(p => fs.existsSync(p));
 
+/* The REAL Utils from js/api.js, not a hand-written stand-in.
+
+   This used to be `{ effectiveRate }` and nothing else, so the moment the
+   document started calling another Utils method the render threw
+   "Utils.rateBasis is not a function" — reported here as though the shipped
+   builder were broken, when what was broken was this file's idea of Utils.
+   The whole object literal is lifted instead, so adding a method to Utils can
+   never fail a render check. */
+function realUtils() {
+  const src = fs.readFileSync(path.join(ROOT, 'js', 'api.js'), 'utf8');
+  const at = src.indexOf('const Utils = {');
+  if (at < 0) return null;
+  const end = src.indexOf('\n};\n', at);
+  return end < 0 ? null : src.slice(at, end + 3);
+}
+
 let pass = 0, fail = 0;
 const ok = (name, cond, detail) => {
   if (cond) { pass++; console.log(`  ✓ ${name}`); }
@@ -156,16 +172,12 @@ console.log('\nthe account statement');
     paid: { returns: 25, withdrawn: 400, deposited: 1000, invested: 0, fees: 0, accrued: 0 },
   };
 
-  let effRate = '';
-  try { effRate = sliceFn(ADMIN, 'effectiveRate'); } catch (_) {}
   const stub = `
 /* _esc lives in each surface's own bundle, not in the shared document file.
    Stubbed to the same behaviour so the builders can run here. */
 const _esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => (
   { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
-const Utils = ${effRate
-    ? `{ effectiveRate: (function(){ ${effRate}; return effectiveRate; })() }`
-    : `{ effectiveRate: i => parseFloat(i && i.annual_rate) || 0 }`};
+${realUtils()}
 window.__html = '';
 window.open = function () {
   return { document: { write(h) { window.__html += h; }, close() {} }, focus() {}, print() {} };
