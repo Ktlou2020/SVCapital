@@ -87,8 +87,14 @@ async function makePool(id, { product = 'cattle', status = 'open', close, invest
         management_fee_pct,management_fee_frequency,
         operational_fee_pct,operational_fee_frequency,
         raised_amount,current_invested,investor_count,cycled_at)
+    /* The open date is anchored to the close, not to today. It was
+       CURRENT_DATE - 60 regardless, so a fixture closing 200 days ago (below)
+       described a pool that opened 60 days ago and shut 140 days before it
+       opened — the exact shape investment_pools_window_ck now refuses, and the
+       one that reached a client statement. Sixty days before its own close is
+       a window that could really have existed. */
     VALUES ($1,$2,$3,$4,0.16,0.09,$5,
-            CURRENT_DATE - 60, CURRENT_DATE + $6::int, NULL,
+            CURRENT_DATE + $6::int - 60, CURRENT_DATE + $6::int, NULL,
             CURRENT_DATE + 400, 500,
             9000000, 12000000, 'medium', 'Beefcor',
             0.02,'once',

@@ -6720,11 +6720,30 @@ function _autoCalcInvStartDate(closeDateId, targetId) {
   targetEl.value = d.toISOString().split('T')[0];
 }
 
+/* A pool's start and end dates are its FUNDRAISING WINDOW — when it opens to
+   money and when it shuts. A close on or before the open is not a short pool,
+   it is a pool that shut before it opened: poolCyclerCron warns that such a
+   pool is "invisible to every query that looks for one still raising", and one
+   reached a client statement reading "Pool Start 01 Feb 2025 · Pool End 31 Jan
+   2025". The database now refuses it; catching it here means the operator is
+   told which field is wrong instead of being handed a constraint violation. */
+function _poolWindowError(startVal, endVal) {
+  if (!startVal || !endVal) return null;
+  if (endVal > startVal) return null;
+  return `The close date (${endVal}) must be after the open date (${startVal}). ` +
+    `These are the fundraising window — if you meant the date money is deployed, ` +
+    `that is the investment start date, and if you meant maturity, that is the maturity date.`;
+}
+
 async function saveNewPool(btn) {
   const name = document.getElementById('newPoolName').value.trim();
   const type = document.getElementById('newPoolType').value;
   const target = parseFloat(document.getElementById('newPoolTarget').value);
   if (!name) { Toast.error('Pool name is required'); return; }
+  const newWindowErr = _poolWindowError(
+    document.getElementById('newPoolOpenDate').value,
+    document.getElementById('newPoolCloseDate').value);
+  if (newWindowErr) { Toast.error(newWindowErr); return; }
   const maxCapVal = document.getElementById('newPoolMaxCapacity').value;
   const max_capacity = maxCapVal ? (parseFloat(maxCapVal) || null) : null;
   await _withBtn(btn, async () => {
@@ -7182,6 +7201,8 @@ async function saveEditPool(btn) {
   };
 
   if (!updates.name) { Toast.error('Pool name is required'); return; }
+  const editWindowErr = _poolWindowError(updates.start_date, updates.end_date);
+  if (editWindowErr) { Toast.error(editWindowErr); return; }
 
   await _withBtn(btn, async () => {
     try {

@@ -2461,6 +2461,129 @@ async function autoSetup() {
       }
     });
 
+    await step("8b. Repair pools that close before they open", async () => {
+      /* A pool on a client statement read:
+
+             Short Term Investment - January 2025
+             Pool Start 01 Feb 2025    Pool End 31 Jan 2025
+
+         investment_pools.start_date and end_date are the FUNDRAISING WINDOW —
+         when the pool opens to money and when it shuts — not the term. The
+         cycler sets them that way: open = the previous pool's close + 1 day,
+         close = the last day of the month the pool opens in for short_term,
+         and the pool is NAMED for the month it closes in. maturity_date is
+         close + term_months, and investment_start_date is close + 1 day.
+
+         So on that row the end date is right — it agrees with the pool's own
+         name — and the start date is holding what belongs in
+         investment_start_date: the day AFTER the close.
+
+         This is not only a display fault. poolCyclerCron carries the same
+         warning where it guards against creating one: "a pool that shut before
+         it opened, invisible to every query that looks for one still raising."
+
+         THE REPAIR USES EVIDENCE, NOT A GUESS. An investment cannot be placed
+         in a pool before the pool opened, so the earliest investment in the
+         pool is an upper bound on its open date that came from a real
+         transaction. Where a pool has investments, the earliest of those start
+         dates is used. Where it has none, the cycler's own rule applies: for a
+         window whose close is a month end, the pool opened in that same month,
+         so the open date is the first of it. A pool that fits neither is left
+         alone and named in the log rather than being moved to a date nobody
+         can justify. */
+      const { rows: broken } = await pool.query(`
+        SELECT p.id, p.name, p.product_type, p.start_date, p.end_date,
+               (SELECT MIN(i.start_date) FROM investments i WHERE i.pool_id = p.id) AS first_investment
+          FROM investment_pools p
+         WHERE p.start_date IS NOT NULL AND p.end_date IS NOT NULL
+           AND p.end_date <= p.start_date`);
+
+      if (!broken.length) {
+        /* Nothing to say on a healthy database — this step is silent unless it
+           has actually moved a date. */
+      } else {
+        const iso = d => (d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10));
+        const fixed = [], unresolved = [];
+        for (const p of broken) {
+          /* Two independent bounds, and the EARLIER of the two is taken.
+
+             Each is a date the pool was demonstrably open on, not a guess at
+             when it opened, so neither on its own is the answer — but the
+             earlier one is the more conservative window and is never later
+             than the truth. Taking either alone is worse: on a cattle pool
+             that raises across two months the month rule lands a month late,
+             and on any pool whose first investment arrived mid-window the
+             investment date does. */
+          const candidates = [];
+          if (p.first_investment && iso(p.first_investment) < iso(p.end_date)) {
+            candidates.push([iso(p.first_investment), 'earliest investment placed in it']);
+          }
+          /* Is the close date the last day of its month? Then the window was
+             open during that month — the cycler closes short_term on the last
+             day of the month the pool opens in. */
+          const end = new Date(iso(p.end_date) + 'T00:00:00Z');
+          const monthEnd = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() + 1, 0));
+          if (iso(end) === iso(monthEnd)) {
+            candidates.push([iso(new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), 1))),
+                             'close is a month end, so the window was open that month']);
+          }
+          candidates.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+          let openDate = null, why = '';
+          if (candidates.length) {
+            openDate = candidates[0][0];
+            why = candidates.length > 1
+              ? `${candidates[0][1]}; the other bound gave ${candidates[1][0]}`
+              : candidates[0][1];
+          }
+          if (!openDate || openDate >= iso(p.end_date)) {
+            unresolved.push(`${p.id} (${p.name}): ${iso(p.start_date)} → ${iso(p.end_date)}`);
+            continue;
+          }
+          await pool.query(
+            `UPDATE investment_pools
+                SET start_date = $2,
+                    /* The value that was in start_date is the day after the
+                       close — which is what investment_start_date is for.
+                       Kept rather than discarded, unless one is already set. */
+                    investment_start_date = COALESCE(investment_start_date, $3),
+                    updated_at = NOW()
+              WHERE id = $1`,
+            [p.id, openDate, iso(p.start_date)]);
+          fixed.push(`${p.id} (${p.name}): start ${iso(p.start_date)} → ${openDate} [${why}]`);
+        }
+        if (fixed.length) {
+          console.log(`✅ Repaired ${fixed.length} pool window(s) that closed before they opened:`);
+          fixed.forEach(l => console.log(`   · ${l}`));
+        }
+        if (unresolved.length) {
+          console.warn(`⚠️  ${unresolved.length} pool window(s) could not be derived from the data and still`);
+          console.warn('   close before they open. Correct these by hand in the admin console:');
+          unresolved.forEach(l => console.warn(`   · ${l}`));
+        }
+      }
+
+      /* Stop it recurring. NOT VALID so a legacy row the repair above could not
+         resolve does not fail the boot — the constraint still applies to every
+         INSERT and every UPDATE from here on, which is where the bad row came
+         from. It is then validated separately, and a failure to validate is
+         reported rather than thrown. */
+      await pool.query(`
+        DO $$
+        BEGIN
+          ALTER TABLE investment_pools
+            ADD CONSTRAINT investment_pools_window_ck
+            CHECK (start_date IS NULL OR end_date IS NULL OR end_date > start_date) NOT VALID;
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END $$;
+      `);
+      try {
+        await pool.query(`ALTER TABLE investment_pools VALIDATE CONSTRAINT investment_pools_window_ck`);
+      } catch (e) {
+        console.warn('⚠️  investment_pools window constraint not validated — some existing row still ' +
+                     'closes before it opens: ' + e.message);
+      }
+    });
+
     await step("9. Backfill cattle cycles cycle start", async () => {
       // 9. Backfill cattle_cycles.cycle_start_date from invoice_date.
       //    "Invoice Date_" in the import CSV is the cycle start date — previously
