@@ -176,6 +176,65 @@
     .comment-submit:hover { opacity:.85; }
     .comment-submit:disabled { opacity:.5; cursor:not-allowed; }
 
+    /* ── Media on a comment ── a screenshot is the point of the comment, so it
+       shows at a size you can read rather than as a filename to click. */
+    .comment-media { display:flex; flex-wrap:wrap; gap:8px; margin-top:9px; }
+    .comment-media img, .comment-media video {
+      max-width:min(340px,100%); max-height:260px; border-radius:9px;
+      border:1px solid var(--border); background:#000; display:block;
+    }
+    /* A minimum tile, so a small image is something you can see and click
+       rather than a four-pixel speck against a dark bubble. object-fit keeps
+       it from being stretched to fill the tile. */
+    .comment-media img {
+      cursor:zoom-in; object-fit:contain;
+      min-width:64px; min-height:48px; background:var(--surface3);
+    }
+    .comment-media video { width:340px; }
+    .comment-file {
+      display:inline-flex; align-items:center; gap:7px; background:var(--surface3);
+      border:1px solid var(--border); border-radius:8px; padding:6px 11px;
+      font-size:.74rem; color:var(--muted2); text-decoration:none;
+    }
+    .comment-file:hover { border-color:var(--purple); color:var(--purple); }
+
+    /* Files chosen but not yet sent. Shown before posting so a wrong file can
+       be taken off rather than discovered in the thread afterwards. */
+    .pending-strip { display:flex; flex-wrap:wrap; gap:7px; margin-bottom:8px; }
+    .pending-strip:empty { display:none; }
+    .pending-chip {
+      display:inline-flex; align-items:center; gap:7px; background:var(--surface2);
+      border:1px solid var(--border); border-radius:8px; padding:5px 9px;
+      font-size:.72rem; color:var(--muted2); max-width:230px;
+    }
+    .pending-chip img { width:26px; height:26px; object-fit:cover; border-radius:5px; }
+    .pending-chip span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .pending-chip button {
+      background:none; border:none; color:var(--muted); cursor:pointer; padding:0 2px;
+      font-size:.8rem; line-height:1;
+    }
+    .pending-chip button:hover { color:var(--danger,#f87171); }
+    .comment-compose { flex:1; display:flex; flex-direction:column; }
+    .comment-tools { display:flex; align-items:center; gap:10px; margin-top:6px; }
+    .comment-attach-btn {
+      display:inline-flex; align-items:center; gap:6px; background:none; border:none;
+      color:var(--muted); cursor:pointer; font-size:.75rem; font-family:'Inter',sans-serif; padding:0;
+    }
+    .comment-attach-btn:hover { color:var(--purple); }
+    .comment-hint { font-size:.68rem; color:var(--muted); }
+
+    /* Full-size view for a screenshot. */
+    .lightbox {
+      position:fixed; inset:0; background:rgba(0,0,0,.88); z-index:9999;
+      display:none; align-items:center; justify-content:center; padding:28px; cursor:zoom-out;
+    }
+    .lightbox.open { display:flex; }
+    .lightbox img { max-width:100%; max-height:100%; border-radius:10px; }
+    .lightbox-close {
+      position:absolute; top:18px; right:22px; background:none; border:none;
+      color:#fff; font-size:1.6rem; cursor:pointer; line-height:1;
+    }
+
     /* New request modal */
     .form-group { margin-bottom:16px; }
     .form-label { display:block; font-size:.78rem; font-weight:600; color:var(--muted2); margin-bottom:6px; }
@@ -532,15 +591,26 @@ function renderDetail(r, comments, attachments) {
       <div style="margin-top:8px"><button class="save-btn" id="notesSaveBtn" onclick="saveNotes()">Save Notes</button></div>
     </div>` : (r.admin_notes ? `<div class="detail-section"><div class="detail-label">Admin Response</div><div class="detail-text">${esc(r.admin_notes)}</div></div>` : '');
 
+  /* Attachments filed against a COMMENT belong under that comment, not in the
+     request's own list — otherwise a screenshot posted as feedback shows up
+     detached from the sentence explaining it. */
+  COMMENT_MEDIA = {};
+  const requestAttach = [];
+  attachments.forEach(a => {
+    if (a.comment_id) (COMMENT_MEDIA[a.comment_id] = COMMENT_MEDIA[a.comment_id] || []).push(a);
+    else requestAttach.push(a);
+  });
+
   // Attachments
-  const existingAttach = attachments.length ? `
+  const existingAttach = requestAttach.length ? `
     <div class="attachments-grid">
-      ${attachments.map(a => `
+      ${requestAttach.map(a => `
         <a class="attachment-chip" href="/api/change-requests/attachments/${a.id}" target="_blank">
           <i class="${attachIcon(a.filename)}"></i>${esc(a.filename)}
           <span style="font-size:.65rem;color:var(--muted)">· ${esc(a.author_name)}</span>
         </a>`).join('')}
     </div>` : '<p style="font-size:.78rem;color:var(--muted);margin-top:4px">No attachments</p>';
+  PENDING_FILES = [];
 
   document.getElementById('detailBody').innerHTML = `
     ${adminHtml}
@@ -554,20 +624,61 @@ function renderDetail(r, comments, attachments) {
       ${existingAttach}
       <div class="attach-upload-row">
         <label class="file-input-label" for="attachFileInput"><i class="fa-solid fa-paperclip"></i> Attach file</label>
-        <input type="file" id="attachFileInput" multiple accept="image/*,.pdf,.doc,.docx,.txt,.xlsx,.csv" onchange="uploadAttachments()" />
+        <input type="file" id="attachFileInput" multiple accept="image/png,image/jpeg,image/gif,image/webp,image/avif,video/mp4,video/webm,video/quicktime,.pdf,.doc,.docx,.txt,.xlsx,.csv" onchange="uploadAttachments()" />
         <span id="attachFileName"></span>
       </div>
     </div>
     <div class="comments-section">
-      <div class="comments-title"><i class="fa-solid fa-comments" style="margin-right:5px"></i>Discussion (${comments.length})</div>
+      <div class="comments-title" id="commentsTitle"><i class="fa-solid fa-comments" style="margin-right:5px"></i>Discussion (${comments.length})</div>
       <div class="comment-list" id="commentList">
         ${comments.length ? comments.map(c => buildComment(c)).join('') : '<p style="font-size:.78rem;color:var(--muted);margin-bottom:12px">No comments yet — be the first.</p>'}
       </div>
+      <div class="pending-strip" id="pendingStrip"></div>
       <div class="comment-form">
-        <textarea class="comment-input" id="commentInput" placeholder="Write a comment… (Shift+Enter for new line)" onkeydown="commentKeydown(event)"></textarea>
+        <div class="comment-compose">
+          <textarea class="comment-input" id="commentInput" placeholder="Write a comment… (Shift+Enter for new line)" onkeydown="commentKeydown(event)"></textarea>
+          <div class="comment-tools">
+            <button type="button" class="comment-attach-btn" onclick="document.getElementById('commentFileInput').click()">
+              <i class="fa-solid fa-paperclip"></i> Attach image or video
+            </button>
+            <input type="file" id="commentFileInput" multiple style="display:none"
+                   accept="image/png,image/jpeg,image/gif,image/webp,image/avif,video/mp4,video/webm,video/quicktime,.pdf,.doc,.docx,.xlsx,.csv,.txt"
+                   onchange="queueCommentFiles(this.files)" />
+            <span class="comment-hint">Up to 8 files, 25 MB each</span>
+          </div>
+        </div>
         <button class="comment-submit" id="commentSubmitBtn" onclick="submitComment()"><i class="fa-solid fa-paper-plane"></i></button>
       </div>
     </div>`;
+}
+
+/* Attachments on the open request, grouped by the comment they belong to, and
+   the files chosen for the comment being written. */
+let COMMENT_MEDIA = {};
+let PENDING_FILES = [];
+
+/* Only the types the server will serve inline. Anything else is a link — and
+   the two lists have to agree, because a video rendered in a <video> that the
+   server hands back as a download plays nothing at all. */
+const INLINE_IMAGE = ['image/png','image/jpeg','image/gif','image/webp','image/avif'];
+const INLINE_VIDEO = ['video/mp4','video/webm','video/quicktime'];
+
+function commentMediaHtml(commentId) {
+  const list = COMMENT_MEDIA[commentId] || [];
+  if (!list.length) return '';
+  return `<div class="comment-media">${list.map(a => {
+    const url = `/api/change-requests/attachments/${a.id}`;
+    if (INLINE_IMAGE.includes(a.mime_type)) {
+      return `<img src="${url}" alt="${esc(a.filename)}" loading="lazy" onclick="openLightbox('${url}')">`;
+    }
+    if (INLINE_VIDEO.includes(a.mime_type)) {
+      /* preload="metadata" so the thread does not pull every video the moment
+         it opens; the range support on the server is what makes that work. */
+      return `<video src="${url}" controls preload="metadata"></video>`;
+    }
+    return `<a class="comment-file" href="${url}" target="_blank" rel="noopener">
+              <i class="${attachIcon(a.filename)}"></i>${esc(a.filename)}</a>`;
+  }).join('')}</div>`;
 }
 
 function buildComment(c) {
@@ -579,10 +690,55 @@ function buildComment(c) {
       <div class="comment-avatar">${initials}</div>
       <div class="comment-bubble${isMine?' mine':''}">
         <div class="comment-author${isKagiso?' kagiso':''}">${esc(c.author_name)}${isKagiso?' <i class="fa-solid fa-shield-halved" style="font-size:.65rem"></i>':''}</div>
-        <div class="comment-body">${esc(c.body)}</div>
+        ${c.body ? `<div class="comment-body">${esc(c.body)}</div>` : ''}
+        ${commentMediaHtml(c.id)}
         <div class="comment-time">${timeAgo(c.created_at)}</div>
       </div>
     </div>`;
+}
+
+/* ── Files on the comment being written ───────────────────────────────────
+   Held on the client until the comment is posted, so text and media go to
+   the server together and either both land or neither does. */
+const CR_MAX_FILES = 8;
+const CR_MAX_BYTES = 25 * 1024 * 1024;
+
+function queueCommentFiles(fileList) {
+  const input = document.getElementById('commentFileInput');
+  for (const f of Array.from(fileList)) {
+    if (PENDING_FILES.length >= CR_MAX_FILES) { toast(`Up to ${CR_MAX_FILES} files per comment`, true); break; }
+    /* Rejected here as well as on the server, because finding out a 60 MB
+       screen recording is too big AFTER waiting for it to upload is the
+       annoying way to find out. */
+    if (f.size > CR_MAX_BYTES) { toast(`${f.name} is over 25 MB`, true); continue; }
+    PENDING_FILES.push(f);
+  }
+  if (input) input.value = '';
+  renderPending();
+}
+
+function removePendingFile(i) { PENDING_FILES.splice(i, 1); renderPending(); }
+
+function renderPending() {
+  const strip = document.getElementById('pendingStrip');
+  if (!strip) return;
+  strip.innerHTML = PENDING_FILES.map((f, i) => {
+    const thumb = f.type.startsWith('image/')
+      ? `<img src="${URL.createObjectURL(f)}" alt="">`
+      : `<i class="${f.type.startsWith('video/') ? 'fa-solid fa-film' : attachIcon(f.name)}"></i>`;
+    return `<span class="pending-chip">${thumb}<span title="${esc(f.name)}">${esc(f.name)}</span>
+              <button type="button" onclick="removePendingFile(${i})" title="Remove">&times;</button></span>`;
+  }).join('');
+}
+
+function openLightbox(url) {
+  const lb = document.getElementById('lightbox');
+  document.getElementById('lightboxImg').src = url;
+  lb.classList.add('open');
+}
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('open');
+  document.getElementById('lightboxImg').src = '';
 }
 
 function commentKeydown(e) {
@@ -592,26 +748,53 @@ function commentKeydown(e) {
 async function submitComment() {
   const input = document.getElementById('commentInput');
   const body  = input.value.trim();
-  if (!body) return;
+  /* A comment that is only a screenshot is a real comment — the server takes
+     it, so the button has to as well. */
+  if (!body && !PENDING_FILES.length) return;
   const btn = document.getElementById('commentSubmitBtn');
   btn.disabled = true;
+  const hadFiles = PENDING_FILES.length;
+  if (hadFiles) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
   try {
-    const { data: c } = await apiFetch(`/api/change-requests/${CURRENT_REQUEST_ID}/comments`, {
-      method:'POST', body: JSON.stringify({ body })
-    });
+    /* Multipart when there are files, JSON when there are not — the endpoint
+       takes both, and the whole comment commits in one transaction so text
+       and media cannot come apart. */
+    let opts;
+    if (hadFiles) {
+      const fd = new FormData();
+      fd.append('body', body);
+      PENDING_FILES.forEach(f => fd.append('files', f));
+      opts = { method:'POST', body: fd };
+    } else {
+      opts = { method:'POST', body: JSON.stringify({ body }) };
+    }
+    const { data: c, attachments: added } = await apiFetch(
+      `/api/change-requests/${CURRENT_REQUEST_ID}/comments`, opts);
+
+    /* Register the new comment's media before it is drawn, or it renders with
+       no images and only appears on the next load. */
+    if (added && added.length) COMMENT_MEDIA[c.id] = added;
+
     const list = document.getElementById('commentList');
     // Remove "no comments" placeholder if present
     if (list.querySelector('p')) list.innerHTML = '';
     list.insertAdjacentHTML('beforeend', buildComment(c));
+    /* The heading was rendered once with the count it had on open, so posting
+       left "Discussion (3)" above four comments. */
+    const title = document.getElementById('commentsTitle');
+    if (title) title.innerHTML =
+      `<i class="fa-solid fa-comments" style="margin-right:5px"></i>Discussion (${list.querySelectorAll('.comment-item').length})`;
     input.value = '';
+    PENDING_FILES = [];
+    renderPending();
     list.scrollTop = list.scrollHeight;
-    toast('Comment posted');
+    toast(hadFiles ? `Comment posted with ${hadFiles} attachment${hadFiles === 1 ? '' : 's'}` : 'Comment posted');
     // update count in list
     const card = ALL_REQUESTS.find(r => r.id === CURRENT_REQUEST_ID);
     if (card) { card.comment_count = (card.comment_count || 0) + 1; renderRequests(); }
     loadNotifications();
   } catch(err) { toast(err.message, true); }
-  finally { btn.disabled = false; }
+  finally { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i>'; }
 }
 
 async function uploadAttachments() {
@@ -619,14 +802,24 @@ async function uploadAttachments() {
   const files = Array.from(input.files);
   if (!files.length) return;
   document.getElementById('attachFileName').textContent = 'Uploading…';
+  /* A refused upload used to report success: this only caught network errors,
+     so a 400 — wrong type, over the size limit — resolved, fell through, and
+     the toast said the file had been attached. Now that the server actually
+     turns files away, that would be a lie on every rejection. */
+  let ok = 0; const failed = [];
   for (const file of files) {
     const fd = new FormData();
     fd.append('file', file);
     try {
-      await fetch(`/api/change-requests/${CURRENT_REQUEST_ID}/attachments`, { method:'POST', body:fd, credentials:'include' });
-    } catch(e) { toast('Upload failed: ' + e.message, true); }
+      const res = await fetch(`/api/change-requests/${CURRENT_REQUEST_ID}/attachments`,
+        { method:'POST', body:fd, credentials:'include' });
+      if (res.ok) { ok++; continue; }
+      const j = await res.json().catch(() => ({}));
+      failed.push(`${file.name}: ${j.error || 'HTTP ' + res.status}`);
+    } catch(e) { failed.push(`${file.name}: ${e.message}`); }
   }
-  toast('Attachment(s) uploaded');
+  if (ok) toast(`${ok} attachment${ok === 1 ? '' : 's'} uploaded`);
+  failed.forEach(m => toast(m, true));
   document.getElementById('attachFileName').textContent = '';
   input.value = '';
   // Reload detail
@@ -725,7 +918,8 @@ async function submitNewRequest() {
 /* ── Helpers ── */
 function attachIcon(filename) {
   const ext = (filename||'').split('.').pop().toLowerCase();
-  if (['jpg','jpeg','png','gif','webp','svg'].includes(ext)) return 'fa-solid fa-image';
+  if (['jpg','jpeg','png','gif','webp','avif','svg'].includes(ext)) return 'fa-solid fa-image';
+  if (['mp4','webm','mov','m4v'].includes(ext)) return 'fa-solid fa-film';
   if (ext === 'pdf') return 'fa-solid fa-file-pdf';
   if (['doc','docx'].includes(ext)) return 'fa-solid fa-file-word';
   if (['xls','xlsx','csv'].includes(ext)) return 'fa-solid fa-file-excel';
@@ -748,6 +942,18 @@ function toast(msg, isErr = false) {
   clearTimeout(_toastTimer);
   _toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
 }
+</script>
+<!-- Full-size view for a screenshot posted in a comment. -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <button class="lightbox-close" onclick="closeLightbox()" aria-label="Close">&times;</button>
+  <img id="lightboxImg" alt="" onclick="event.stopPropagation()">
+</div>
+<script>
+  /* Escape closes it, because a full-screen overlay with only a small × is a
+     trap on a keyboard. */
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && document.getElementById('lightbox').classList.contains('open')) closeLightbox();
+  });
 </script>
 </body>
 </html>

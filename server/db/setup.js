@@ -1449,14 +1449,19 @@ CREATE INDEX IF NOT EXISTS cr_comments_req_idx ON change_request_comments(reques
 CREATE TABLE IF NOT EXISTS change_request_attachments (
   id          TEXT PRIMARY KEY,
   request_id  TEXT NOT NULL REFERENCES change_requests(id) ON DELETE CASCADE,
+  /* NULL means the file is on the request itself, which is what every row
+     written before comments could carry one is. */
+  comment_id  TEXT REFERENCES change_request_comments(id) ON DELETE CASCADE,
   employee_id TEXT NOT NULL,
   author_name TEXT NOT NULL,
   filename    TEXT NOT NULL,
   mime_type   TEXT,
+  file_size   INT,
   file_data   TEXT NOT NULL,
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS cr_attachments_req_idx ON change_request_attachments(request_id);
+CREATE INDEX IF NOT EXISTS cr_attachments_comment_idx ON change_request_attachments(comment_id);
 
 CREATE TABLE IF NOT EXISTS cr_events (
   id          TEXT PRIMARY KEY,
@@ -1843,6 +1848,12 @@ async function autoSetup() {
           BEGIN ALTER TABLE kyc_documents ADD COLUMN expiry_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE kyc_documents ADD COLUMN doc_subtype TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE solar_projects ADD COLUMN documents_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          -- An attachment could only belong to the REQUEST, so feedback on a
+          -- change request could not carry the screenshot or the screen
+          -- recording it was about. comment_id being NULL still means "on the
+          -- request itself", which is every row that already exists.
+          BEGIN ALTER TABLE change_request_attachments ADD COLUMN comment_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE change_request_attachments ADD COLUMN file_size INT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE solar_projects ADD COLUMN foxess_device_sn TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           /* course_progress.certificate_id — written by the employee portal on
              the FINAL module of a course and never created here, so the PATCH
