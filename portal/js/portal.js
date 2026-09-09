@@ -1154,11 +1154,12 @@ async function renderProductDetailView(type) {
   const avg = product.avg_actual_rate > 0 ? parseFloat(product.avg_actual_rate) : null;
   const projRate = avg != null ? avg : (product.benchmark_rate ? parseFloat(product.benchmark_rate) : (open[0] ? parseFloat(open[0].annual_rate) : 0.13));
   const keyDetails = (product.key_details || '').split('\n').map(s => s.trim()).filter(Boolean);
-  const isStDetail = type === 'short_term';
   const termMoDetail = product.term_months || (open[0] && open[0].term_months) || null;
-  const returnLbl = avg != null
-    ? (isStDetail && termMoDetail ? `AVG RETURN (${termMoDetail} MO)` : 'AVG RETURN P.A.')
-    : (isStDetail && termMoDetail ? `TARGET RETURN (${termMoDetail} MO)` : 'TARGET RETURN P.A.');
+  /* The same rule the product grid uses. This page carried its own copy of it,
+     so an EIF product's card said "target profit share" and its detail page —
+     one click later, the page a client actually reads before investing — said
+     "target return p.a." on the same number. */
+  const returnLbl = _rateSubLabel(product, avg != null, termMoDetail);
 
   // Live data panels: cattle herd status / solar telematics
   const isSolar = (type || '').startsWith('solar');
@@ -1193,6 +1194,8 @@ async function renderProductDetailView(type) {
             <div class="mpc2-metric"><div class="mpc2-metric__val">${product.term_months || (open[0] && open[0].term_months) || '—'}<span style="font-size:1rem;opacity:0.7">mo</span></div><div class="mpc2-metric__lbl">term</div></div>
             ${product.performance_fee_pct ? `<div class="mpc2-metric-sep"></div><div class="mpc2-metric"><div class="mpc2-metric__val" style="font-size:1.2rem">${(parseFloat(product.performance_fee_pct) * 100).toFixed(0)}%</div><div class="mpc2-metric__lbl">perf. fee</div></div>` : ''}
           </div>
+
+          ${_isEifProduct(product) ? _eifStructureHtml(type) : ''}
 
           ${type === 'cattle' && keyDetails.length
             ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start;margin-bottom:16px">

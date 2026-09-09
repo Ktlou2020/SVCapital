@@ -575,10 +575,28 @@ const APP_META = {
   },
   staging: {
     label:       'Staging Portal',
-    description: 'Pre-production staging environment — test new features before they go live.',
+    description: 'The INVESTOR portal on the staging environment — see what a client sees before it goes live.',
     icon:        'fa-solid fa-flask',
     color:       '#f59e0b',
     path:        'https://svcapital-staging.up.railway.app/',
+    tags:        ['Staging', 'Testing'],
+    badge:       'Staging',
+    newTab:      true,
+  },
+  /* The console side of the same environment. There was a staging tile, but it
+     opened the investor portal — so testing anything that is configured rather
+     than merely displayed meant knowing the admin URL by heart, and a change
+     that only exists on staging is a change nobody has looked at.
+
+     newTab is not cosmetic here: staging and production are different origins
+     with separate login cookies, and navigating this tab away would leave the
+     production console you were working in signed out behind you. */
+  staging_admin: {
+    label:       'Staging Console',
+    description: 'The ADMIN console on the staging environment, against its own database — configure and test changes before they reach production. Nothing done here touches live data.',
+    icon:        'fa-solid fa-screwdriver-wrench',
+    color:       '#f59e0b',
+    path:        'https://svcapital-staging.up.railway.app/admin/',
     tags:        ['Staging', 'Testing'],
     badge:       'Staging',
     newTab:      true,

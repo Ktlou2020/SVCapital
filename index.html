@@ -151,7 +151,7 @@
   <script defer src="https://cdn.jsdelivr.net/npm/countup.js@2.8.0/dist/countUp.umd.js"></script>
 
   <link rel="stylesheet" href="css/style.css?v=12" />
-  <link rel="stylesheet" href="css/home-ci.css?v=2" />
+  <link rel="stylesheet" href="css/home-ci.css?v=3" />
   <link rel="stylesheet" href="css/premium.css?v=6" />
   <!-- Google Analytics 4 -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-5LEPWC7EFP"></script>
@@ -253,6 +253,7 @@
 
       <ul class="nav-links" id="navLinks">
         <li><a href="#products" class="nav-link">Products</a></li>
+        <li><a href="#eif" class="nav-link" id="navEifLink" style="display:none">Interest-Free</a></li>
         <li><a href="#calculator" class="nav-link">Calculator</a></li>
         <li><a href="#how-it-works" class="nav-link">How It Works</a></li>
         <li><a href="#impact" class="nav-link">Impact</a></li>
@@ -761,6 +762,208 @@
             </table>
           </div>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="section-rule" />
+
+  <!-- ═══════════════════════════════════════════════
+       ETHICAL & INTEREST-FREE (EIF)
+
+       The whole section is hidden by main.js unless at least one EIF product
+       is active and set to show on the homepage, so it is governed by the same
+       admin switches as every other product rather than by editing this file.
+  ═══════════════════════════════════════════════ -->
+  <section class="eif-section" id="eif" style="display:none">
+    <div class="container">
+      <div class="section-header" data-reveal="up">
+        <div class="section-eyebrow eif-eyebrow"><i class="fa-solid fa-mosque"></i> Ethical &amp; Interest-Free</div>
+        <h2 class="section-title">Earned by trade. Not by interest.</h2>
+        <p class="section-sub">Investments structured so the return comes from goods actually bought and sold, an asset actually owned and leased, or a business that actually made a profit — never from charging for the use of money.</p>
+      </div>
+
+      <div class="eif-principles-row" data-reveal="up">
+        <div class="eif-principle-card">
+          <i class="fa-solid fa-ban"></i>
+          <h4>No riba</h4>
+          <p>Return comes from trade, rent or enterprise — never from lending money.</p>
+        </div>
+        <div class="eif-principle-card">
+          <i class="fa-solid fa-cubes"></i>
+          <h4>Backed by assets</h4>
+          <p>Every structure sits on goods, an asset or a business that actually exists.</p>
+        </div>
+        <div class="eif-principle-card">
+          <i class="fa-solid fa-scale-balanced"></i>
+          <h4>Shared risk</h4>
+          <p>If the underlying venture does not perform, neither does the return.</p>
+        </div>
+        <div class="eif-principle-card">
+          <i class="fa-solid fa-filter-circle-xmark"></i>
+          <h4>Screened sectors</h4>
+          <p>No conventional lending, alcohol, tobacco, pork, gambling or weapons.</p>
+        </div>
+      </div>
+
+      <!-- The three cards carry data-product = product_type, so the same code
+           that colours, prices and hides every other card on this page governs
+           these. Nothing here is EIF-specific machinery. -->
+      <div class="products-grid eif-grid">
+
+        <article class="product-card product-card--eif" data-product="eif_murabaha" data-risk="conservative" data-reveal="up" data-reveal-delay="100">
+          <div class="product-card__bg"></div>
+          <div class="product-card__badge-row">
+            <span class="risk-badge risk-badge--conservative">Low-Medium Risk</span>
+            <span class="eif-badge"><i class="fa-solid fa-mosque"></i> Interest-free</span>
+          </div>
+          <div class="product-card__icon">
+            <i class="fa-solid fa-handshake"></i>
+          </div>
+          <h3 class="product-card__title">Murabaha Trade Finance</h3>
+          <p class="product-card__desc">SV Capital buys the goods a business needs and sells them on at a mark-up agreed and disclosed in full before the sale. Your return is your share of that mark-up — a trading profit, not a charge for money.</p>
+          <div class="product-card__stats">
+            <div class="stat">
+              <span class="stat__label">Target Share</span>
+              <span class="stat__value stat__value--gold">11.50%</span>
+              <span class="stat__unit">p.a.</span>
+            </div>
+            <div class="stat">
+              <span class="stat__label">Min. Invest</span>
+              <span class="stat__value">R500</span>
+            </div>
+            <div class="stat">
+              <span class="stat__label">Term</span>
+              <span class="stat__value">6 mo</span>
+            </div>
+          </div>
+          <div class="product-card__detail">
+            <div class="detail-row">
+              <i class="fa-solid fa-box"></i>
+              <span>SV Capital owns the goods before selling them on</span>
+            </div>
+            <div class="detail-row">
+              <i class="fa-solid fa-lock"></i>
+              <span>The mark-up is fixed in the contract and never increases</span>
+            </div>
+            <div class="detail-row">
+              <i class="fa-solid fa-clock"></i>
+              <span>No penalty interest — a late payer owes the same amount</span>
+            </div>
+          </div>
+          <div class="product-card__actions">
+            <a href="signup.html" class="btn btn--gold btn--full">Start Investing</a>
+            <button class="btn btn--ghost btn--full" onclick="openModal('eif_murabaha')">View Details</button>
+          </div>
+        </article>
+
+        <article class="product-card product-card--eif" data-product="eif_ijara" data-risk="moderate" data-reveal="up" data-reveal-delay="200">
+          <div class="product-card__bg"></div>
+          <div class="product-card__badge-row">
+            <span class="risk-badge risk-badge--moderate">Moderate Risk</span>
+            <span class="eif-badge"><i class="fa-solid fa-mosque"></i> Interest-free</span>
+          </div>
+          <div class="product-card__icon">
+            <i class="fa-solid fa-file-contract"></i>
+          </div>
+          <h3 class="product-card__title">Ijara Asset Leasing</h3>
+          <p class="product-card__desc">The pool buys an income-producing asset — solar plant, vehicles, machinery — and leases it to an operator. Your return is rent. Because the pool owns the asset, it carries the ownership risk, and that is what makes the income rent rather than interest.</p>
+          <div class="product-card__stats">
+            <div class="stat">
+              <span class="stat__label">Target Share</span>
+              <span class="stat__value stat__value--gold">12.50%</span>
+              <span class="stat__unit">p.a.</span>
+            </div>
+            <div class="stat">
+              <span class="stat__label">Min. Invest</span>
+              <span class="stat__value">R1,000</span>
+            </div>
+            <div class="stat">
+              <span class="stat__label">Term</span>
+              <span class="stat__value">36 mo</span>
+            </div>
+          </div>
+          <div class="product-card__detail">
+            <div class="detail-row">
+              <i class="fa-solid fa-key"></i>
+              <span>The pool holds title for the life of the lease</span>
+            </div>
+            <div class="detail-row">
+              <i class="fa-solid fa-shield-halved"></i>
+              <span>Maintenance and insurance are the owner's cost</span>
+            </div>
+            <div class="detail-row">
+              <i class="fa-solid fa-arrow-right-arrow-left"></i>
+              <span>Option to transfer the asset at end of term</span>
+            </div>
+          </div>
+          <div class="product-card__actions">
+            <a href="signup.html" class="btn btn--gold btn--full">Start Investing</a>
+            <button class="btn btn--ghost btn--full" onclick="openModal('eif_ijara')">View Details</button>
+          </div>
+        </article>
+
+        <article class="product-card product-card--eif" data-product="eif_mudarabah" data-risk="aggressive" data-reveal="up" data-reveal-delay="300">
+          <div class="product-card__bg"></div>
+          <div class="product-card__badge-row">
+            <span class="risk-badge risk-badge--aggressive">Medium-High Risk</span>
+            <span class="eif-badge"><i class="fa-solid fa-mosque"></i> Interest-free</span>
+          </div>
+          <div class="product-card__icon">
+            <i class="fa-solid fa-scale-balanced"></i>
+          </div>
+          <h3 class="product-card__title">Mudarabah Enterprise</h3>
+          <p class="product-card__desc">You provide the capital; a vetted operating partner provides the work. Profit is divided on a ratio agreed before a rand is deployed. Nothing is promised in advance, because a promised return on a partnership is the thing this structure exists to avoid.</p>
+          <div class="product-card__stats">
+            <div class="stat">
+              <span class="stat__label">Target Share</span>
+              <span class="stat__value stat__value--gold">14.50%</span>
+              <span class="stat__unit">p.a.</span>
+            </div>
+            <div class="stat">
+              <span class="stat__label">Min. Invest</span>
+              <span class="stat__value">R2,500</span>
+            </div>
+            <div class="stat">
+              <span class="stat__label">Term</span>
+              <span class="stat__value">12 mo</span>
+            </div>
+          </div>
+          <div class="product-card__detail">
+            <div class="detail-row">
+              <i class="fa-solid fa-percent"></i>
+              <span>Profit split fixed in advance — 80% investors, 20% manager</span>
+            </div>
+            <div class="detail-row">
+              <i class="fa-solid fa-triangle-exclamation"></i>
+              <span>Losses fall on capital; the partner forfeits their profit share</span>
+            </div>
+            <div class="detail-row">
+              <i class="fa-solid fa-chart-line"></i>
+              <span>Quarterly reporting on the underlying venture</span>
+            </div>
+          </div>
+          <div class="product-card__actions">
+            <a href="signup.html" class="btn btn--gold btn--full">Start Investing</a>
+            <button class="btn btn--ghost btn--full" onclick="openModal('eif_mudarabah')">View Details</button>
+          </div>
+        </article>
+
+      </div>
+
+      <!-- Governance. Deliberately plain rather than accented: it says what the
+           platform does NOT yet hold, and dressing that in the section colour
+           would read as a badge of approval. -->
+      <div class="eif-governance-note" data-reveal="up">
+        <i class="fa-solid fa-circle-info"></i>
+        <p><strong>Sharia advisory review is under way.</strong> These products are structured on established Islamic finance principles. We do not yet hold a Sharia certificate and do not claim one — the advisor, certificate and date will be published here as soon as it is issued. Please take your own advice in the meantime.</p>
+      </div>
+
+      <!-- Rendered by main.js from /api/products/faqs?category=eif — the same
+           rows the portal shows, so the answers are corrected in one place. -->
+      <div class="eif-faq" id="eifFaqWrap" style="display:none" data-reveal="up">
+        <h3 class="eif-faq__title">Questions about this offering</h3>
+        <div class="eif-faq__list" id="eifFaqList"></div>
       </div>
     </div>
   </section>
@@ -1348,7 +1551,7 @@
     <span class="whatsapp-label">Need help?</span>
   </a>
 
-  <script src="js/main.js?v=6"></script>
+  <script src="js/main.js?v=7"></script>
   <script>document.querySelectorAll('.yr').forEach(function(el){el.textContent=new Date().getFullYear();});</script>
 </body>
 </html>

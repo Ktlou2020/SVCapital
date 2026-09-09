@@ -67,7 +67,12 @@
   };
 
   /* Level-based elevation (overrides role if level is executive) */
-  const EXECUTIVE_APPS = ['employee', 'team', 'fund', 'admin', 'ifa', 'portal', 'director', 'accounting', 'pe_monitor', 'change_requests', 'moolalend', 'beefcor_recon'];
+  /* 'staging' and 'staging_admin' were in the hub's tile registry and in no
+     access list anywhere, so getAllowedApps never returned them and both
+     tiles were filtered out for everyone. This is the fallback for a
+     session with no per-person allocation; setup grants the keys to the
+     people who have one. */
+  const EXECUTIVE_APPS = ['employee', 'team', 'fund', 'admin', 'ifa', 'portal', 'director', 'accounting', 'pe_monitor', 'change_requests', 'moolalend', 'beefcor_recon', 'staging', 'staging_admin'];
 
   /* Director-level check — executive level, CEO/COO/CTO/CFO titles,
      or a JWT role of 'director' or 'admin' all grant Director panel access */
