@@ -156,7 +156,45 @@ function makeGridFilter(P) {
       const seeded = await pool.query(
         `SELECT COUNT(*) n FROM products WHERE category_exclusive IS NOT false`);
       ok('nothing is exclusive out of the box', Number(seeded.rows[0].n) === 0,
-         'the three seeded EIF products keep appearing in both places');
+         'exclusivity is opt-in per product');
+    }
+
+    console.log('\nthe offering installs dormant');
+    {
+      /* is_active was left to the column default, which is true, so installing
+         EIF on an environment put the tab in front of every investor the
+         moment the server booted. */
+      const { rows } = await pool.query(
+        `SELECT product_type, is_active FROM products WHERE category='eif' ORDER BY product_type`);
+      ok('the three seeded EIF products exist', rows.length === 3, JSON.stringify(rows));
+      ok('and every one of them is INACTIVE',
+         rows.every(r => r.is_active === false),
+         JSON.stringify(rows) + ' — active means the portal tab appears to every investor');
+      const std = await pool.query(
+        `SELECT COUNT(*) n FROM products WHERE COALESCE(category,'standard')='standard' AND is_active = false`);
+      ok('while the standard products are untouched', Number(std.rows[0].n) === 0);
+
+      /* Both seed paths: the fresh-database one spreads EIF_PRODUCTS into
+         DEFAULT_PRODUCTS, and the top-up step installs them on an existing
+         database. Changing only one left the other installing them live. */
+      const SETUP = fs.readFileSync(path.join(ROOT, 'server', 'db', 'setup.js'), 'utf8');
+      ok('the fresh-database seed marks an EIF product inactive',
+         /\(p\.category \|\| 'standard'\) !== 'eif',/.test(SETUP),
+         'DEFAULT_PRODUCTS spreads EIF_PRODUCTS in — this is the path a new environment takes');
+      ok('and so does the top-up for an existing one',
+         /\$18,false\)\s*\n\s*ON CONFLICT \(product_type\) DO NOTHING/.test(SETUP));
+      ok('and it says how to turn one on',
+         /Activate one in the admin console/.test(SETUP),
+         'otherwise the offering is installed and invisible with no way to tell why');
+
+      /* Reactivating one must bring the tab back. */
+      await pool.query(`UPDATE products SET is_active = true WHERE product_type = 'eif_murabaha'`);
+      const { rows: live } = await pool.query('SELECT * FROM products');
+      ok('activating one makes it appear in both tabs again',
+         gridFilter(live, 'eif').includes('eif_murabaha') &&
+         gridFilter(live, 'all').includes('eif_murabaha'),
+         'dormant is a starting position, not a restriction');
+      await pool.query(`UPDATE products SET is_active = false WHERE product_type = 'eif_murabaha'`);
     }
 
     console.log('\na standard product cannot be made exclusive');
@@ -187,6 +225,9 @@ function makeGridFilter(P) {
         `INSERT INTO products (id, product_type, label, category, category_exclusive, is_active, min_investment)
          VALUES ('p-only','eif_sukuk','Sukuk Income','eif',true,true,1000),
                 ('p-both','eif_open','Open EIF','eif',false,true,1000)`);
+      /* The seeded three install dormant now, so activate them here — this
+         section is about WHERE an active product appears, not whether it is. */
+      await pool.query(`UPDATE products SET is_active = true WHERE category = 'eif'`);
       const { rows: products } = await pool.query('SELECT * FROM products ORDER BY sort_order');
 
       const all = gridFilter(products, 'all');

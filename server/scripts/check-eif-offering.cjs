@@ -73,7 +73,7 @@ console.log('\nthe offering is a category, not a second platform');
      one. Step 12 was the same mistake in a different table. */
   ok('and installed by a setup step, not only by the seed',
      /await step\("13\. Install the Ethical and Interest-Free offering"/.test(SETUP) &&
-     /for \(const p of EIF_PRODUCTS\)[\s\S]{0,600}ON CONFLICT \(product_type\) DO NOTHING/.test(SETUP),
+     /for \(const p of EIF_PRODUCTS\)[\s\S]{0,1600}ON CONFLICT \(product_type\) DO NOTHING/.test(SETUP),
      'seedProducts skips a table that already has rows — a seed-only addition ' +
      'would never reach production');
 
@@ -465,8 +465,16 @@ console.log('\nand the console can create them like any other product');
          FROM products WHERE category = 'eif' ORDER BY sort_order`);
     ok('the three structures are installed', prods.length === 3,
        `found ${prods.length}: ${prods.map(p => p.product_type).join(', ')}`);
-    ok('and are active, so the section is visible',
-       prods.every(p => p.is_active));
+    /* DORMANT ON PURPOSE. is_active was left to the column default, which is
+       true, so installing the offering put the Ethical & Interest-Free tab in
+       front of every investor the moment the server booted — on any
+       environment, including production. The portal shows the tab only while
+       an ACTIVE EIF product exists, so seeding them inactive means the console
+       has the offering and nothing reaches a client until somebody activates
+       one deliberately. This assertion used to require the opposite. */
+    ok('and are INACTIVE, so the section is not visible until somebody turns it on',
+       prods.every(p => p.is_active === false),
+       JSON.stringify(prods.map(p => [p.product_type, p.is_active])));
     ok('each has a minimum and a term a pool can be built from',
        prods.every(p => Number(p.min_investment) > 0 && Number(p.term_months) > 0),
        JSON.stringify(prods));

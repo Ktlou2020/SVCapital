@@ -8,19 +8,19 @@ const { requireAuth, requireRole } = require('../middleware/auth');
 const RBAC_KEY = 'rbac_matrix';
 
 const DEFAULT_RBAC = {
-  'CEO':                 ['employee','team','fund','admin','ifa','portal','director','accounting','pe_monitor'],
-  'COO':                 ['employee','team','fund','admin','ifa','portal','director','accounting','pe_monitor'],
-  'Operations Manager':  ['employee','team','fund','admin','accounting'],
-  'Finance Manager':     ['employee','team','fund','admin','accounting','pe_monitor'],
-  'Tech Lead':           ['employee','team','fund','admin','accounting'],
+  'CEO':                 ['employee','team','fund','admin','ifa','portal','director','accounting','pe_monitor','staging','staging_admin'],
+  'COO':                 ['employee','team','fund','admin','ifa','portal','director','accounting','pe_monitor','staging','staging_admin'],
+  'Operations Manager':  ['employee','team','fund','admin','accounting','staging','staging_admin'],
+  'Finance Manager':     ['employee','team','fund','admin','accounting','pe_monitor','staging','staging_admin'],
+  'Tech Lead':           ['employee','team','fund','admin','accounting','staging','staging_admin'],
   'Investment Analyst':  ['employee','team','fund','pe_monitor'],
-  'Compliance Officer':  ['employee','admin'],
-  'Internal Audit':      ['employee','admin'],
+  'Compliance Officer':  ['employee','admin','staging','staging_admin'],
+  'Internal Audit':      ['employee','admin','staging','staging_admin'],
   'Client Relations':    ['employee','portal'],
   'Marketing':           ['employee'],
   'Marketing Associate': ['employee'],
   'Junior Analyst':      ['employee'],
-  'Admin':               ['employee','admin','accounting'],
+  'Admin':               ['employee','admin','accounting','staging','staging_admin'],
 };
 
 /* GET /api/settings/rbac — requires auth */

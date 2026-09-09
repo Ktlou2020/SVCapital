@@ -1607,8 +1607,15 @@ async function seedProducts() {
            (id, product_type, label, headline, description, key_details,
             min_investment, term_months, benchmark_rate, performance_fee_pct,
             risk_profile, risk_color, icon, color, badge_class, partner_name,
-            sector, category, sort_order)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+            sector, category, sort_order,
+            /* An EIF product is seeded DORMANT. This is the path a fresh
+               database takes — DEFAULT_PRODUCTS spreads EIF_PRODUCTS in, so
+               changing only the top-up step further down left a new
+               environment installing them active, and the Ethical &
+               Interest-Free tab appeared to every investor the moment the
+               server booted. The standard products keep the column default. */
+            is_active)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
          ON CONFLICT (product_type) DO NOTHING`,
         [
           `PROD-${p.product_type.toUpperCase()}`, p.product_type, p.label, p.headline,
@@ -1616,6 +1623,7 @@ async function seedProducts() {
           p.performance_fee_pct, p.risk_profile, p.risk_color, p.icon, p.color,
           p.badge_class, p.partner_name || null, p.sector || null,
           p.category || 'standard', p.sort_order,
+          (p.category || 'standard') !== 'eif',
         ]
       );
     }
@@ -2122,6 +2130,35 @@ async function autoSetup() {
       }
     });
 
+    await step("2e. Grant the staging environment keys", async () => {
+      /* The hub has carried a "Staging Portal" tile for some time and NOBODY
+         COULD SEE IT: the key was in the tile registry and in no access list
+         at all — not EXECUTIVE_APPS, not the role matrix, not any employee's
+         app_access — so getAllowedApps never returned it and the tile was
+         filtered out for every person on the platform. Testing staging meant
+         knowing the URL by heart.
+
+         Granted to whoever can already administer PRODUCTION. Staging is a
+         copy of the platform against a throwaway database, so it is strictly
+         less sensitive than the console these people already hold; anyone who
+         should not be there should not have 'admin' either. */
+      try {
+        const { rowCount } = await pool.query(`
+          UPDATE employees
+          SET app_access = app_access || ARRAY[
+                CASE WHEN NOT (app_access @> ARRAY['staging']::TEXT[])       THEN 'staging'       END,
+                CASE WHEN NOT (app_access @> ARRAY['staging_admin']::TEXT[]) THEN 'staging_admin' END
+              ]::TEXT[]
+          WHERE app_access IS NOT NULL
+            AND (app_access @> ARRAY['admin']::TEXT[] OR level = 'executive')
+            AND NOT (app_access @> ARRAY['staging','staging_admin']::TEXT[])
+        `);
+        if (rowCount) console.log(`✅ Staging environment access granted to ${rowCount} employee(s).`);
+      } catch (stErr) {
+        console.warn('⚠️  staging access patch warning:', stErr.message);
+      }
+    });
+
     await step("2d. Migrate change requests id from", async () => {
       // 2d. Migrate change_requests.id from UUID to TEXT if created before fix
       try {
@@ -2461,8 +2498,21 @@ async function autoSetup() {
           `INSERT INTO products
              (id, product_type, label, headline, description, key_details,
               min_investment, term_months, benchmark_rate, performance_fee_pct,
-              risk_profile, risk_color, icon, color, badge_class, sector, category, sort_order)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+              risk_profile, risk_color, icon, color, badge_class, sector, category, sort_order,
+              /* SEEDED DORMANT.
+                 is_active was left to the column default, which is true — so
+                 installing the offering on a new environment put the Ethical &
+                 Interest-Free tab in front of every investor the moment the
+                 server booted. The portal shows that tab only while an ACTIVE
+                 EIF product exists, so seeding them inactive means the console
+                 has the offering, the products are there to be reviewed and
+                 edited, and nothing reaches a client until somebody activates
+                 one deliberately.
+
+                 ON CONFLICT DO NOTHING, so an environment where these are
+                 already live and active is not touched. */
+              is_active)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,false)
            ON CONFLICT (product_type) DO NOTHING`,
           [`PROD-${p.product_type.toUpperCase()}`, p.product_type, p.label, p.headline,
            p.description, p.key_details, p.min_investment, p.term_months, p.benchmark_rate,
@@ -2471,7 +2521,11 @@ async function autoSetup() {
         );
         added += rowCount;
       }
-      if (added) console.log(`✅ EIF products installed (${added}).`);
+      if (added) {
+        console.log(`✅ EIF products installed (${added}) — INACTIVE.`);
+        console.log('ℹ️  They are not visible to investors. Activate one in the admin console ' +
+                    '(Products → set Active) to make the Ethical & Interest-Free tab appear.');
+      }
 
       /* An environment that already carried these product_types from before
          `category` existed would have them sitting in the standard catalogue.
