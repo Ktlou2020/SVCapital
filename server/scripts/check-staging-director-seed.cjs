@@ -51,7 +51,7 @@ const runSetup = async (env) => {
 };
 
 const seedRow = async () => (await pool.query(
-  `SELECT id, email, role, level, status, app_access, pin_hash, pin_set,
+  `SELECT id, email, role, level, status, app_access, id_number, pin_hash, pin_set,
           login_attempts, login_locked_until
      FROM employees WHERE email = $1`, [SEED_EMAIL]
 )).rows[0] || null;
@@ -128,21 +128,40 @@ const dropSeed = () => pool.query('DELETE FROM employees WHERE email = $1', [SEE
         ok(`app_access carries ${a}`, apps.includes(a), JSON.stringify(apps));
       }
 
-      /* The returning-user branch of /staff-token is bcrypt.compare against
-         pin_hash, gated on pin_set. Both halves have to be right or the
-         account exists and still cannot be used. */
-      ok('a PIN is set, so login takes the PIN branch not the ID-number branch',
-         row && row.pin_set === true, row && String(row.pin_set));
-      const pin = (captured.match(/One-time PIN: (\d{4,6})/) || [])[1];
-      ok('the one-time PIN is reported, since nothing else knows it', !!pin,
+      /* THE credential has to be rotatable, and only one state allows that.
+         /set-pin is the sole writer of a staff PIN and it demands a
+         'pin-setup' token; /staff-token mints that token on exactly one
+         branch — the one it takes when pin_set is false. Seed pin_set true
+         and the account is stuck for good on whatever the build log printed. */
+      ok('pin_set is false, which is what makes the PIN replaceable',
+         row && row.pin_set === false, row && String(row.pin_set));
+      ok('and no hash is stored, so nothing but the temp PIN can open it',
+         row && row.pin_hash === null, row && String(row.pin_hash));
+
+      const temp = (captured.match(/Temporary PIN: (\d{4})/) || [])[1];
+      ok('the temporary PIN is reported, since nothing else knows it', !!temp,
          captured.slice(-300));
-      ok('and it is the PIN the account actually accepts',
-         !!(pin && row && row.pin_hash && await bcrypt.compare(pin, row.pin_hash)),
-         'the printed PIN and the stored hash disagree — the log would be a dead end');
-      const wrong = String((Number(pin) + 1) % 1000000).padStart(String(pin).length, '0');
-      ok('a different PIN is refused', !!row &&
-         !(await bcrypt.compare(wrong, row.pin_hash)),
-         'the hash accepts something other than the PIN that was issued');
+      /* /staff-token compares the submission against the LAST FOUR digits of
+         id_number. A printed PIN that is not those four digits is a dead end. */
+      ok('and it is the last four digits of id_number, which is what login compares',
+         !!(temp && row && (row.id_number || '').replace(/\D/g, '').slice(-4) === temp),
+         `printed ${temp}, stored ${row && row.id_number}`);
+      ok('the stored id_number is long enough to have a last four',
+         !!(row && (row.id_number || '').replace(/\D/g, '').length >= 4),
+         row && row.id_number);
+    }
+
+    console.log('\nthe rotation path it depends on is really there');
+    {
+      /* Asserted against the shipped routes, because the seed's whole PIN
+         design rests on these two facts about them. */
+      const auth = fs.readFileSync(path.join(ROOT, 'server', 'routes', 'auth.js'), 'utf8');
+      ok('a setup token is issued only when pin_set is false',
+         /if \(!emp\.pin_set\) \{[\s\S]{0,400}?type: 'pin-setup'/.test(auth),
+         'if this changes, seeding pin_set false is no longer what enables rotation');
+      ok('and /set-pin is what writes the PIN, gated on that token',
+         /router\.post\('\/set-pin'[\s\S]{0,1800}?payload\.type !== 'pin-setup'[\s\S]{0,900}?SET pin_hash/.test(auth),
+         'no other endpoint writes pin_hash, so no other route can rotate it');
     }
 
     console.log('\nit does not reset a PIN the person has already chosen');
@@ -154,6 +173,7 @@ const dropSeed = () => pool.query('DELETE FROM employees WHERE email = $1', [SEE
         'UPDATE employees SET pin_hash = $1, pin_set = true WHERE email = $2',
         [chosen, SEED_EMAIL]
       );
+      const idBefore = (await seedRow()).id_number;
       captured = '';
       await quiet(() => runSetup({
         RAILWAY_PUBLIC_DOMAIN: 'svcapital-staging.up.railway.app',
@@ -161,25 +181,67 @@ const dropSeed = () => pool.query('DELETE FROM employees WHERE email = $1', [SEE
       }));
       const row = await seedRow();
       ok('the chosen PIN still works after a redeploy',
-         !!(row && await bcrypt.compare('4821', row.pin_hash)),
+         !!(row && row.pin_hash && await bcrypt.compare('4821', row.pin_hash)),
          'setup overwrote a PIN its owner had set');
-      ok('and no new PIN is printed', !/One-time PIN:/.test(captured),
-         captured.slice(-200));
+      ok('pin_set stays true, so they are not sent back to the temp branch',
+         !!(row && row.pin_set === true), row && String(row.pin_set));
+      ok('no fresh temp PIN is minted behind their back',
+         !!(row && row.id_number === idBefore),
+         `id_number went ${idBefore} -> ${row && row.id_number}`);
+      ok('and none is printed to the log',
+         !/Temporary PIN:/.test(captured), captured.slice(-200));
     }
 
-    console.log('\na PIN supplied by the operator is used instead of a printed one');
+    console.log('\nit repairs an account an earlier version left unrotatable');
+    {
+      /* The shipped-then-fixed state: a hash written straight in, pin_set
+         true, id_number never set. It reads as "PIN already chosen" but the
+         owner cannot have chosen it — with pin_set true no setup token is
+         ever issued, and /set-pin is the only writer. Left alone it stays on
+         a PIN that is in a build log forever. */
+      await pool.query(
+        `UPDATE employees SET pin_hash = $1, pin_set = true, id_number = NULL
+          WHERE email = $2`,
+        [await bcrypt.hash('668992', 12), SEED_EMAIL]
+      );
+      captured = '';
+      await quiet(() => runSetup({
+        RAILWAY_PUBLIC_DOMAIN: 'svcapital-staging.up.railway.app',
+        STAGING_SEED_DIRECTOR: null, STAGING_DIRECTOR_PIN: null,
+      }));
+      const row = await seedRow();
+      ok('it is put back into the state that can rotate',
+         !!(row && row.pin_set === false && row.pin_hash === null),
+         row && `pin_set ${row.pin_set}, hash ${row.pin_hash ? 'present' : 'null'}`);
+      ok('the stranded PIN stops working',
+         !!(row && row.pin_hash === null),
+         'the old hash still opens the account');
+      const temp = (captured.match(/Temporary PIN: (\d{4})/) || [])[1];
+      ok('a fresh temporary PIN is issued and reported', !!temp, captured.slice(-300));
+      ok('and login will compare against it',
+         !!(temp && row && (row.id_number || '').replace(/\D/g, '').slice(-4) === temp),
+         `printed ${temp}, stored ${row && row.id_number}`);
+      ok('the repair says why it happened',
+         /could never change/.test(captured), captured.slice(-300));
+    }
+
+    console.log('\na temp PIN supplied by the operator stays out of the log');
     {
       await dropSeed();
       captured = '';
       await quiet(() => runSetup({
         RAILWAY_PUBLIC_DOMAIN: 'svcapital-staging.up.railway.app',
-        STAGING_SEED_DIRECTOR: null, STAGING_DIRECTOR_PIN: '135791',
+        STAGING_SEED_DIRECTOR: null, STAGING_DIRECTOR_PIN: '1357',
       }));
       const row = await seedRow();
-      ok('the supplied PIN is what the account accepts',
-         !!(row && await bcrypt.compare('135791', row.pin_hash)));
-      ok('and it is never written to the log',
-         !/135791/.test(captured), captured.slice(-200));
+      ok('the supplied digits are what login will compare against',
+         !!(row && (row.id_number || '').replace(/\D/g, '').slice(-4) === '1357'),
+         row && row.id_number);
+      ok('and they are never written to the log',
+         !/1357/.test(captured), captured.slice(-200));
+      ok('it is still a temporary PIN, not a permanent one',
+         !!(row && row.pin_set === false && row.pin_hash === null),
+         'an operator-supplied PIN must rotate on first login too');
     }
 
     console.log('\nit clears a lockout earned before the account existed');

@@ -2582,21 +2582,47 @@ async function autoSetup() {
 
       try {
         const { rows: [existing] } = await pool.query(
-          'SELECT id, pin_set FROM employees WHERE email = $1 LIMIT 1', [email]
+          'SELECT id, pin_set, id_number FROM employees WHERE email = $1 LIMIT 1', [email]
         );
 
         /* A PIN this person already chose is theirs. Re-seeding it on every
            deploy would silently reset their login and hand the new one to
-           whoever reads the build log. */
-        const keepPin = !!(existing && existing.pin_set);
-        let pin = null, pinHash = null;
+           whoever reads the build log.
+
+           The id_number half of that test repairs the accounts an earlier
+           version of this step created. It wrote pin_hash directly and set
+           pin_set true, which reads as "already chosen" but was not: it left
+           id_number NULL, and with pin_set true /staff-token never issues the
+           setup token that /set-pin demands, so the owner could not replace a
+           PIN that had been printed to a build log. A chosen PIN always
+           arrives on a row that was seeded with an id_number, so the two
+           cases are distinguishable and only the broken one is reset. */
+        const keepPin = !!(existing && existing.pin_set && existing.id_number);
+        if (existing && existing.pin_set && !existing.id_number) {
+          console.log(`♻️  Staging director ${email} was provisioned with a PIN it could never change — reissuing a temporary one.`);
+        }
+
+        /* The credential goes in as a TEMPORARY one, down the same path the
+           platform onboards every other employee: pin_set false, and
+           /staff-token validates the submission against the last four digits
+           of id_number, then issues a 15-minute token that only /set-pin
+           accepts and forces a six-digit PIN of the person's own choosing.
+
+           Writing pin_hash directly instead looks simpler and is a trap. It
+           makes pin_set true, /staff-token then takes the returning-user
+           branch, no setup token is ever issued, and /set-pin — the only
+           endpoint that writes a PIN — has no other caller. The account is
+           then stuck for good on a credential printed to the build log. */
+        let temp = null;
         if (!keepPin) {
           const supplied = String(process.env.STAGING_DIRECTOR_PIN || '').trim();
-          pin = /^\d{4,6}$/.test(supplied)
+          temp = /^\d{4}$/.test(supplied)
             ? supplied
-            : String(require('crypto').randomInt(0, 1000000)).padStart(6, '0');
-          pinHash = await bcrypt.hash(pin, 12);
+            : String(require('crypto').randomInt(0, 10000)).padStart(4, '0');
         }
+        /* Last four digits are the temp PIN; the leading zeros are filler so
+           the column holds something id-number-shaped. */
+        const idNumber = temp === null ? null : '000000000' + temp;
 
         const first = email.split('@')[0].split(/[._-]/)[0];
         const name  = first.charAt(0).toUpperCase() + first.slice(1);
@@ -2604,35 +2630,36 @@ async function autoSetup() {
         await pool.query(`
           INSERT INTO employees
             (id, first_name, last_name, email, role, level, department, status,
-             avatar_initials, avatar_color, app_access, pin_hash, pin_set,
+             avatar_initials, avatar_color, app_access, id_number, pin_hash, pin_set,
              login_attempts, login_locked_until, hire_date)
           VALUES ($1, $2, 'SV Capital', $3, 'Director', 'executive', 'Executive',
-                  'active', $4, '#eda5ff', $5::TEXT[], $6, true, 0, NULL, NOW())
+                  'active', $4, '#eda5ff', $5::TEXT[], $6, NULL, false, 0, NULL, NOW())
           ON CONFLICT (email) DO UPDATE SET
             role       = 'Director',
             level      = 'executive',
             department = 'Executive',
             status     = 'active',
             app_access = EXCLUDED.app_access,
-            pin_hash   = COALESCE(EXCLUDED.pin_hash, employees.pin_hash),
-            /* pin_set drives which branch /staff-token takes. It is true once
-               a hash exists — the one just generated, or the one already on
-               the row that this deploy deliberately left alone. */
-            pin_set    = employees.pin_set OR (EXCLUDED.pin_hash IS NOT NULL),
+            /* Everything below is frozen once a PIN has been chosen, and
+               $7 — not employees.pin_set — decides that, so the repair above
+               is the single place the question is answered. */
+            id_number  = CASE WHEN $7 THEN employees.id_number ELSE EXCLUDED.id_number END,
+            pin_hash   = CASE WHEN $7 THEN employees.pin_hash   ELSE NULL END,
+            pin_set    = $7,
             /* A lockout from failed attempts against an account that did not
                exist yet must not outlive the account being created. */
             login_attempts     = 0,
             login_locked_until = NULL
         `, ['EMP-STG-DIR-1', name, email, name.slice(0, 2).toUpperCase(),
-            APPS, pinHash]);
+            APPS, idNumber, keepPin]);
 
         if (keepPin) {
           console.log(`✅ Staging director ${email} confirmed — existing PIN left alone.`);
         } else if (process.env.STAGING_DIRECTOR_PIN) {
-          console.log(`✅ Staging director ${email} provisioned with the PIN from STAGING_DIRECTOR_PIN.`);
+          console.log(`✅ Staging director ${email} provisioned with the temporary PIN from STAGING_DIRECTOR_PIN. First login will ask for a new one.`);
         } else {
-          console.log(`✅ Staging director ${email} provisioned. One-time PIN: ${pin}`);
-          console.log('   Set STAGING_DIRECTOR_PIN on this service to choose it yourself and keep it out of this log.');
+          console.log(`✅ Staging director ${email} provisioned. Temporary PIN: ${temp}`);
+          console.log('   It works once — first login asks you to choose a six-digit PIN, and this one stops working.');
         }
       } catch (sdErr) {
         console.warn('⚠️  Staging director seed warning:', sdErr.message);
