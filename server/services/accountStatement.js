@@ -52,7 +52,16 @@ async function buildAccountStatement(pool, { investorId, from, to }) {
                 COALESCE(NULLIF(i.annual_rate, 0), NULLIF(p.actual_rate, 0), p.annual_rate) AS annual_rate,
                 p.actual_rate AS pool_actual_rate,
                 i.payout_option,
+                i.term_months,
                 p.name AS pool_name, p.product_type,
+                /* The pool's OWN maturity, which is a real fallback for an
+                   investment missing its end date — everyone in a pool matures
+                   when the pool does. investment_pools.end_date is not: that is
+                   the day the pool stopped taking money, months or years
+                   earlier, and using it as a maturity is the confusion this
+                   statement was reporting. Both are sent so the document can
+                   tell them apart. */
+                p.maturity_date AS pool_maturity_date,
                 p.start_date AS pool_start_date, p.end_date AS pool_end_date,
                 mi.instruction AS maturity_instruction
          FROM investments i

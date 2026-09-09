@@ -97,7 +97,15 @@ let Utils, randReturn;
 try {
   Utils = liftUtils();
   const ctx = vm.createContext({ Utils, console, Date, Math, Number, parseFloat, isNaN });
-  vm.runInContext(sliceFn(DOCS, 'randReturn') + '\nthis._f = randReturn;', ctx);
+  /* randReturn now closes over the document's start/maturity definitions, so
+     they come with it. Lifting the function alone gave a ReferenceError on the
+     first call, which reads as though the shipped code were broken. */
+  const deps = [
+    (DOCS.match(/const _dateOf = [^\n]*/) || [''])[0],
+    sliceFn(DOCS, 'investmentStart'),
+    sliceFn(DOCS, 'investmentMaturity'),
+  ].join('\n');
+  vm.runInContext(deps + '\n' + sliceFn(DOCS, 'randReturn') + '\nthis._f = randReturn;', ctx);
   randReturn = ctx._f;
 } catch (e) {
   ok('the statement arithmetic could be extracted and run', false, e.message);
@@ -298,11 +306,17 @@ try {
   out.rendered = 'ok';
 } catch (e) { out.rendered = 'THREW: ' + e.message; }
 const txt = document.getElementById('doc').textContent || '';
-const cells = [...document.querySelectorAll('#doc table tr')]
-  .filter(tr => tr.children.length === 10)
-  .map(tr => [...tr.children].map(td => td.textContent.trim()));
-out.randCol = cells.slice(1).map(c => c[5]);
-out.rateCol = cells.slice(1).map(c => c[4]);
+/* Located by HEADER NAME, not by column count or position. This filtered on
+   "ten cells" and read fixed indexes, so changing a column on the matured
+   table emptied it and reported a working Rand Return as missing. */
+const mt = [...document.querySelectorAll('#doc table')].find(t => t.innerHTML.includes('Rand Return'));
+const head = mt ? [...mt.querySelectorAll('th')].map(th => th.textContent.trim()) : [];
+const iRand = head.indexOf('Rand Return');
+const iRate = head.indexOf('Return');
+const body = mt ? [...mt.querySelectorAll('tbody tr')].map(tr => [...tr.children].map(td => td.textContent.trim())) : [];
+out.headings = head;
+out.randCol = iRand < 0 ? [] : body.map(c => c[iRand]);
+out.rateCol = iRate < 0 ? [] : body.map(c => c[iRate]);
 out.summary = (txt.match(/\\+ R [\\d\\s,.]+ return/) || [''])[0];
 out.starMeaning = (txt.match(/represent projected figures/) || []).length;
 out.hasNote = /Rand Return is the amount credited at maturity/.test(txt);

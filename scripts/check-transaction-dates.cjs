@@ -140,12 +140,18 @@ console.log('\nthe documents a client keeps carry it too');
      /<td>\$\{fmtDate\(t\.txn_date \|\| t\.transaction_date \|\| t\.created_at\)\}<\/td>/.test(DOCS));
   ok('the income certificate dates each line',
      /const rowDate = t => fmtDate\(t\.txn_date \|\| t\.created_at\)/.test(DOCS));
+  /* The two tables carry the INVESTMENT's own dates now, not the pool's
+     fundraising window — see check-statement-investment-dates.cjs. This asked
+     for a column literally headed "Date" followed by "Pool Name", which was
+     the old layout; what it is actually for is that the investment tables are
+     dated at all, and they now carry two dates rather than one. */
   ok('the statement\'s investment tables are dated',
-     /<th>Date<\/th><th>Pool Name<\/th>/.test(DOCS) &&
-     (DOCS.match(/fmtDate\(i\.start_date \|\| i\.created_at\)/g) || []).length >= 3,
+     /<th>Investment Start<\/th><th>Investment Maturity<\/th>/.test(DOCS) &&
+     (DOCS.match(/fmtDate\(investmentStart\(i\)\)/g) || []).length >= 3 &&
+     (DOCS.match(/fmtDate\(investmentMaturity\(i\)\)/g) || []).length >= 3,
      'the two on-screen tables and the CSV the page offers');
-  ok('and the statement CSV carries a date column',
-     /\['Date','Pool Name','Product'/.test(DOCS));
+  ok('and the statement CSV carries them too',
+     /\['Investment Start Date','Investment Maturity Date'/.test(DOCS));
 }
 
 console.log('\nthe admin screens show a date wherever they list either');

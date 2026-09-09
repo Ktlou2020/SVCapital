@@ -461,21 +461,61 @@ function _openAccountStatementWindow(data) {
   const maturedReturn  = Math.round(maturedInvests.reduce((a, i) =>
     a + randReturn(i).value, 0) * 100) / 100;
 
+  /* ── WHEN DID THIS INVESTMENT START, AND WHEN DOES IT MATURE ────────────
+     One definition, because four places were answering it differently and one
+     of the answers was the pool's fundraising window.
+
+     investment_pools.start_date and end_date are when the pool OPENED and
+     CLOSED TO NEW MONEY. They are not the life of an investment placed in it:
+     a pool that shut to new money in August 2025 holds investments maturing in
+     August 2026. Showing them as the investment's dates — which the two date
+     columns did — told a client their twelve-month holding ran for two months.
+
+     So the pool's raise window is never a fallback for anything here. The
+     pool's own maturity_date is: everyone in a pool matures when the pool
+     does. Failing that the term is derivable from the start date and
+     term_months. Failing that it is unknown, and says so. */
+  const _dateOf = v => { if (!v) return null; const d = new Date(v); return isNaN(d.getTime()) ? null : d; };
+
+  function investmentStart(i) {
+    return _dateOf(i.start_date) || _dateOf(i.created_at);
+  }
+
+  function investmentMaturity(i) {
+    /* 1. Its own maturity date. */
+    const own = _dateOf(i.maturity_date) || _dateOf(i.end_date);
+    if (own) return own;
+    /* 2. The pool's maturity — NOT the pool's close. */
+    const poolMat = _dateOf(i.pool_maturity_date);
+    if (poolMat) return poolMat;
+    /* 3. Derived from the term on the investment. */
+    const start = investmentStart(i);
+    const months = parseInt(i.term_months, 10);
+    if (start && Number.isFinite(months) && months > 0) {
+      const d = new Date(start.getTime());
+      d.setMonth(d.getMonth() + months);
+      return d;
+    }
+    return null;
+  }
+
   /* An investment still marked active whose maturity date has passed has not
      been processed. The statement reports the status it finds — but the person
-     about to send it should know, because the client will ask. */
+     about to send it should know, because the client will ask.
+
+     This fell back to the pool's CLOSE date, so an active investment with no
+     maturity date on it was flagged "past maturity" from the day its pool
+     stopped raising — which is every one of them, months early, on a document
+     going to a client's accountant. */
   const _periodEnd = new Date(period && period.to ? period.to : Date.now());
   const overdueActive = activeInvests.filter(i => {
-    const end = i.maturity_date || i.pool_end_date;
-    if (!end) return false;
-    const d = new Date(end);
-    return !isNaN(d.getTime()) && d < _periodEnd;
+    const end = investmentMaturity(i);
+    return !!end && end < _periodEnd;
   });
   /* Newest first, but on the date each table is actually about: an active
      holding is placed by when it STARTED (which is what its Date column
      shows), a matured one by when it MATURED. Sorting both by maturity date
      put the active table in an order its own first column did not explain. */
-  const _ms = v => { const d = new Date(v); return isNaN(d.getTime()) ? null : d.getTime(); };
   const _byNewest = pick => (a, b) => {
     const x = pick(a), y = pick(b);
     if (x === null && y === null) return 0;
@@ -483,13 +523,16 @@ function _openAccountStatementWindow(data) {
     if (y === null) return -1;
     return y - x;
   };
-  const _startMs    = i => _ms(i.start_date) ?? _ms(i.created_at);
-  const _maturityMs = i => _ms(i.maturity_date) ?? _ms(i.pool_end_date);
+  const _startMs    = i => { const d = investmentStart(i);    return d ? d.getTime() : null; };
+  const _maturityMs = i => { const d = investmentMaturity(i); return d ? d.getTime() : null; };
   activeInvests.sort(_byNewest(_startMs));
   maturedInvests.sort(_byNewest(_maturityMs));
 
-  const activeHead  = '<thead><tr><th>Date</th><th>Pool Name</th><th>Product</th><th class="num">Capital</th><th>Pool Start</th><th>Pool End</th><th>Status</th></tr></thead>';
-  const maturedHead = '<thead><tr><th>Date</th><th>Pool Name</th><th>Product</th><th class="num">Capital</th><th class="num">Return</th><th class="num">Rand Return</th><th>Pool Start</th><th>Pool End</th><th>Maturity Instruction</th><th>Status</th></tr></thead>';
+  /* The leading "Date" column has gone. It rendered start_date — the same
+     value the new Investment Start column now shows — so keeping both would
+     print the same date twice on every row. */
+  const activeHead  = '<thead><tr><th>Investment Start</th><th>Investment Maturity</th><th>Pool Name</th><th>Product</th><th class="num">Capital</th><th>Status</th></tr></thead>';
+  const maturedHead = '<thead><tr><th>Investment Start</th><th>Investment Maturity</th><th>Pool Name</th><th>Product</th><th class="num">Capital</th><th class="num">Return</th><th class="num">Rand Return</th><th>Maturity Instruction</th><th>Status</th></tr></thead>';
 
   const getInstr = i => {
     const raw = i.maturity_instruction || i.payout_option || '';
@@ -563,13 +606,17 @@ function _openAccountStatementWindow(data) {
     // 4. Last resort: prorate the contracted annual rate over the term. Only
     //    reached when nothing settled and nothing recorded exists, and only a
     //    target rate is ever prorated here.
-    const rate    = b && !b.posted ? b.rate : 0;
-    const startMs = new Date(i.start_date || i.created_at).getTime();
-    const endMs   = new Date(i.maturity_date || i.pool_end_date).getTime();
-    if (!principal || !rate || isNaN(startMs) || isNaN(endMs) || endMs <= startMs) {
+    const rate  = b && !b.posted ? b.rate : 0;
+    /* The term is the INVESTMENT's, not the pool's raise window. Measuring to
+       the pool close prorated an annual rate over the wrong number of days —
+       usually far too few, since a pool shuts to new money long before
+       anything in it matures. */
+    const start = investmentStart(i);
+    const end   = investmentMaturity(i);
+    if (!principal || !rate || !start || !end || end <= start) {
       return { value: 0, basis: 'none' };
     }
-    return { value: principal * rate * ((endMs - startMs) / 86400000 / 365), basis: 'projected' };
+    return { value: principal * rate * ((end - start) / 86400000 / 365), basis: 'projected' };
   }
 
   /* Anything that is not a settled figure is marked, so an investor reading
@@ -592,12 +639,11 @@ function _openAccountStatementWindow(data) {
     const cfg  = STATUS_CFG[i.status] || { cls:'sb-pending', lbl: i.status || '' };
     const prod = PROD_LABELS[i.product_type] || i.pool_name || '—';
     return '<tr>' +
-      '<td>' + fmtDate(i.start_date || i.created_at) + '</td>' +
+      '<td>' + fmtDate(investmentStart(i)) + '</td>' +
+      '<td>' + fmtDate(investmentMaturity(i)) + '</td>' +
       '<td>' + esc(i.pool_name || '—') + '</td>' +
       '<td>' + esc(prod) + '</td>' +
       '<td class="num">' + fmt(i.amount) + '</td>' +
-      '<td>' + fmtDate(i.pool_start_date) + '</td>' +
-      '<td>' + fmtDate(i.pool_end_date) + '</td>' +
       '<td><span class="sb ' + cfg.cls + '">' + cfg.lbl + '</span></td>' +
       '</tr>';
   }).join('');
@@ -606,27 +652,27 @@ function _openAccountStatementWindow(data) {
     const cfg  = STATUS_CFG[i.status] || { cls:'sb-pending', lbl: i.status || '' };
     const prod = PROD_LABELS[i.product_type] || i.pool_name || '—';
     return '<tr>' +
-      '<td>' + fmtDate(i.start_date || i.created_at) + '</td>' +
+      '<td>' + fmtDate(investmentStart(i)) + '</td>' +
+      '<td>' + fmtDate(investmentMaturity(i)) + '</td>' +
       '<td>' + esc(i.pool_name || '—') + '</td>' +
       '<td>' + esc(prod) + '</td>' +
       '<td class="num">' + fmt(i.amount) + '</td>' +
       '<td class="num earn">' + getRate(i) + '</td>' +
       '<td class="num earn">' + randReturnCell(i) + '</td>' +
-      '<td>' + fmtDate(i.pool_start_date) + '</td>' +
-      '<td>' + fmtDate(i.pool_end_date) + '</td>' +
       '<td>' + esc(getInstr(i)) + '</td>' +
       '<td><span class="sb ' + cfg.cls + '">' + cfg.lbl + '</span></td>' +
       '</tr>';
   }).join('');
 
-  const emptyActive  = '<tr><td colspan="7" class="empty-row">No active investments in this period</td></tr>';
-  const emptyMatured = '<tr><td colspan="10" class="empty-row">No matured investments in this period</td></tr>';
+  const emptyActive  = '<tr><td colspan="6" class="empty-row">No active investments in this period</td></tr>';
+  const emptyMatured = '<tr><td colspan="9" class="empty-row">No matured investments in this period</td></tr>';
 
   // Build CSV for download button
   const csvRows = [
-    ['Date','Pool Name','Product','Capital','Return','Return Basis','Rand Return','Rand Return Basis','Pool Start Date','Pool End Date','Maturity Instruction','Status']
+    ['Investment Start Date','Investment Maturity Date','Pool Name','Product','Capital','Return','Return Basis','Rand Return','Rand Return Basis','Maturity Instruction','Status']
   ].concat(investments.map(i => [
-    fmtDate(i.start_date || i.created_at),
+    fmtDate(investmentStart(i)),
+    fmtDate(investmentMaturity(i)),
     i.pool_name || '',
     PROD_LABELS[i.product_type] || i.pool_name || '',
     parseFloat(i.amount || 0).toFixed(2),
@@ -637,8 +683,6 @@ function _openAccountStatementWindow(data) {
     (Utils.rateBasis(i) ? (Utils.rateBasis(i).posted ? 'Achieved over the period' : 'Annual target') : ''),
     randReturn(i).value.toFixed(2),
     RETURN_BASIS_LABEL[randReturn(i).basis] || '',
-    fmtDate(i.pool_start_date),
-    fmtDate(i.pool_end_date),
     getInstr(i),
     (STATUS_CFG[i.status] || {}).lbl || i.status || '',
   ]));
