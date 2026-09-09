@@ -2814,21 +2814,87 @@ async function autoSetup() {
     });
 
     await step("8. Migrate product type smme short", async () => {
-      // 8. Migrate product_type 'smme' → 'short_term' everywhere.
-      //    SMME products are now unified under the Short Term Investment type.
-      //    Safe to run repeatedly — WHERE clause prevents no-op re-runs.
+      /* 'smme' → 'short_term' everywhere. SMME products are unified under the
+         Short Term Investment type. Safe to run repeatedly — every WHERE
+         clause is self-limiting.
+
+         "Everywhere" used to mean two tables. product_type is a bare string
+         in nine places, with no foreign key to hold them together, so the
+         other seven kept their dead value: a recurring instruction pointing
+         at a product type that no longer exists, allocations and gifts and
+         fund runs the same, and reports grouping by product_type showing a
+         phantom SMME bucket. The columns are looked up rather than assumed,
+         because several are added by later ALTERs and this step must not
+         depend on having run after them. */
+      const TARGETS = [
+        ['investment_pools',     'product_type'],
+        ['investments',          'product_type'],
+        ['investments',          'switch_product_type'],
+        ['investors',            'recurring_product_type'],
+        ['investor_allocations', 'product_type'],
+        ['gifts',                'product_type'],
+        ['fund_runs',            'product_type'],
+        ['product_faqs',         'product_type'],
+        ['invest_funnel_events', 'product_type'],
+      ];
+
       try {
-        const { rowCount: poolRows } = await pool.query(`
-          UPDATE investment_pools SET product_type = 'short_term' WHERE product_type = 'smme'
-        `);
-        const { rowCount: invRows } = await pool.query(`
-          UPDATE investments SET product_type = 'short_term' WHERE product_type = 'smme'
-        `);
-        const { rowCount: prodRows } = await pool.query(`
-          UPDATE products SET product_type = 'short_term' WHERE product_type = 'smme'
-        `).catch(() => ({ rowCount: 0 }));
-        const total = poolRows + invRows + prodRows;
-        if (total > 0) console.log(`✅ Migrated smme→short_term: ${poolRows} pools, ${invRows} investments, ${prodRows} products.`);
+        const live = [];
+        for (const [table, col] of TARGETS) {
+          const { rows } = await pool.query(
+            `SELECT 1 FROM information_schema.columns
+              WHERE table_schema = 'public' AND table_name = $1 AND column_name = $2`,
+            [table, col]
+          );
+          if (rows.length) live.push([table, col]);
+        }
+
+        const moved = [];
+        for (const [table, col] of live) {
+          const { rowCount } = await pool.query(
+            `UPDATE ${table} SET ${col} = 'short_term' WHERE ${col} = 'smme'`
+          );
+          if (rowCount > 0) moved.push(`${rowCount} ${table}.${col}`);
+        }
+
+        /* products.product_type is UNIQUE, so where a short_term product
+           already exists the rename cannot happen — it raised a duplicate-key
+           error on EVERY boot, swallowed by a .catch() that reported zero rows
+           migrated. The SMME row is a leftover duplicate of the row that
+           replaced it, and while it stays active the marketplace lists a
+           second tile for a product type nothing else refers to any more.
+
+           It is deleted rather than renamed, and only once nothing anywhere
+           still points at 'smme' — if a table above failed to migrate, the row
+           it depends on must outlive the failure. */
+        const { rows: [smme] } = await pool.query(
+          `SELECT id, label FROM products WHERE product_type = 'smme'`
+        );
+        if (smme) {
+          const { rows: [short] } = await pool.query(
+            `SELECT id FROM products WHERE product_type = 'short_term'`
+          );
+          if (!short) {
+            await pool.query(`UPDATE products SET product_type = 'short_term' WHERE product_type = 'smme'`);
+            moved.push('1 products.product_type');
+          } else {
+            let stragglers = 0;
+            for (const [table, col] of live) {
+              const { rows } = await pool.query(
+                `SELECT COUNT(*)::int AS n FROM ${table} WHERE ${col} = 'smme'`
+              );
+              stragglers += rows[0].n;
+            }
+            if (stragglers > 0) {
+              console.warn(`⚠️  SMME product row kept — ${stragglers} record(s) still reference 'smme'.`);
+            } else {
+              await pool.query(`DELETE FROM products WHERE product_type = 'smme'`);
+              console.log(`✅ Removed the leftover SMME product ("${smme.label}") — superseded by Short Term Investment.`);
+            }
+          }
+        }
+
+        if (moved.length) console.log(`✅ Migrated smme→short_term: ${moved.join(', ')}.`);
       } catch (bfErr) {
         console.warn('⚠️  smme→short_term migration skipped:', bfErr.message);
       }
