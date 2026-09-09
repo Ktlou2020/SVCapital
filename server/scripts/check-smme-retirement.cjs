@@ -57,6 +57,42 @@ const hasColumn = async (table, col) => (await pool.query(
   try {
     await runSetup();   // schema first; the fixtures below need the tables
 
+    console.log('\nthe seed does not recreate what the migration retires');
+    {
+      /* A fresh database seeded an SMME product and then reported deleting it
+         as a legacy leftover on the same boot. Harmless in itself, but it made
+         the removal notice meaningless — it fired on every new environment,
+         describing a row the seed had just written. */
+      ok('no SMME product survives a fresh setup',
+         (await count('products', 'product_type', 'smme')) === 0);
+      ok('and no SMME pool does either',
+         (await count('investment_pools', 'product_type', 'smme')) === 0);
+
+      const src = fs.readFileSync(path.join(ROOT, 'server', 'db', 'setup.js'), 'utf8');
+      const catalogue = src.slice(src.indexOf('const DEFAULT_PRODUCTS = ['),
+                                  src.indexOf('async function seedProducts'));
+      ok('the seed catalogue no longer carries a product of that type',
+         !/product_type:\s*'smme'/.test(catalogue),
+         'seeding it means creating a row purely so the next step can delete it');
+
+      /* The assertions above would also pass on a seed that creates the row
+         and a migration that deletes it again. This separates the two:
+         seedProducts returns early while ANY product exists, so emptying the
+         table is what makes a boot re-run the catalogue in full. If the
+         retired type is still in there, it is created here and the removal
+         notice fires — on a database that had nothing to remove. */
+      await pool.query('DELETE FROM products');
+      const out = await runSetup();
+      ok('a boot that re-seeds the catalogue creates nothing to remove',
+         !/Removed the leftover SMME product/.test(out),
+         out.split('\n').filter(l => /SMME/.test(l)).join(' | '));
+      ok('and the catalogue it just wrote has no SMME product in it',
+         (await count('products', 'product_type', 'smme')) === 0);
+      ok('the seed really did run, so that proves something',
+         (await count('products', 'product_type', 'short_term')) > 0,
+         'the products table is empty — the assertions above are vacuous');
+    }
+
     console.log('\nit moves every column that carries the dead value');
     {
       /* Two tables were migrated and seven were not. Each one here is a place

@@ -122,9 +122,25 @@ const ROOT = path.join(__dirname, '..', '..');
 
       const db = new Pool({ connectionString: url, ssl: false });
 
-      // Step 8 runs after the COO step. Under the old code it never ran.
+      /* A step that runs after the failing one, proved by what it PUT IN THE
+         DATABASE rather than by what it printed.
+
+         This used to look for the word "smme" in the log, which worked only
+         because the seed created SMME rows for step 8 to migrate. Retiring
+         that product type left step 8 with nothing to say on a fresh database
+         and this assertion failed — reporting a regression in the step runner
+         when the step runner was fine. A witness that depends on there being
+         data to migrate is not a witness that a step ran.
+
+         The seeded pools are step 4, the first step below the COO step, and
+         nothing else in setup.js inserts POOL-001. Products are NOT usable
+         here: seedProducts runs well above the COO step, so a products-based
+         witness is satisfied before the failure and proves nothing. */
+      const { rows: [late] } = await db.query(
+        `SELECT COUNT(*)::int AS n FROM investment_pools WHERE id = 'POOL-001'`
+      );
       ok('a later step still applied despite the earlier failure',
-         log.some(l => /smme/.test(l)),
+         late.n > 0,
          'nothing after the failing step ran');
 
       /* ── The production case: the COO already exists ──────────────── */

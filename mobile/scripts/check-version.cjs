@@ -109,5 +109,60 @@ console.log('\na bad version.json is refused, not written');
   }
 }
 
+console.log('\nthe build numbers only ever go up');
+{
+  /* Play rejected a production release with:
+       "it doesn't allow any existing users to upgrade to the newly added
+        app bundles"
+     — which is what it says when the bundle's versionCode is not above the one
+     those users already have. Only Play knows the highest code ever uploaded,
+     so nothing here can confirm a number is free. What it CAN confirm is the
+     cheaper half: that the number never goes backwards or sideways in this
+     repository, which is how a code gets reused. A reverted file, a bad merge
+     resolution or an edit that lands on the previous value all show up here
+     instead of after a build, an upload and a rejected release. */
+  let history = [];
+  try {
+    const shas = execFileSync('git', ['log', '--format=%H', '--', VERSION_FILE],
+      { cwd: MOBILE, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+      .split('\n').filter(Boolean);
+    for (const sha of shas) {
+      try {
+        const past = JSON.parse(execFileSync('git', ['show', `${sha}:mobile/version.json`],
+          { cwd: MOBILE, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }));
+        history.push({ sha: sha.slice(0, 7), ...past });
+      } catch { /* the path did not exist at that commit */ }
+    }
+  } catch { history = []; }
+
+  if (!history.length) {
+    console.log('  SKIP  no git history for version.json (shallow clone or not a repo)');
+  } else {
+    /* history[0] is HEAD's copy. Whether it counts as "earlier" depends on
+       whether the working file has been edited since: on an unmodified file it
+       IS the value under test and comparing would fail against itself, but on
+       an edited one it is the last committed number and the new value has to
+       clear it. Getting this wrong is not academic — dropping HEAD
+       unconditionally let an edit back to the previously shipped code pass. */
+    let dirty = false;
+    try {
+      execFileSync('git', ['diff', '--quiet', 'HEAD', '--', VERSION_FILE],
+        { cwd: MOBILE, stdio: 'ignore' });
+    } catch { dirty = true; }
+    const older = dirty ? history : history.slice(1);
+    const maxCode  = older.reduce((m, h) => Math.max(m, h.androidVersionCode || 0), 0);
+    const maxBuild = older.reduce((m, h) => Math.max(m, h.iosBuildNumber   || 0), 0);
+    const worstCode  = older.find(h => h.androidVersionCode === maxCode);
+    const worstBuild = older.find(h => h.iosBuildNumber === maxBuild);
+
+    ok(`androidVersionCode ${v.androidVersionCode} is above every earlier value`,
+       !older.length || v.androidVersionCode > maxCode,
+       `${maxCode} was already committed in ${worstCode && worstCode.sha} — Play refuses a code it has seen`);
+    ok(`iosBuildNumber ${v.iosBuildNumber} is above every earlier value`,
+       !older.length || v.iosBuildNumber > maxBuild,
+       `${maxBuild} was already committed in ${worstBuild && worstBuild.sha} — App Store Connect refuses it (error 90062)`);
+  }
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

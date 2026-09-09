@@ -1661,14 +1661,10 @@ const DEFAULT_PRODUCTS = [
     risk_profile: 'Medium', risk_color: '#fec24f', icon: 'fa-bolt', color: '#656565',
     badge_class: 'badge--blue', sort_order: 5,
   },
-  {
-    product_type: 'smme', label: 'SMME', headline: 'Back local business.',
-    description: 'Fund vetted small, medium and micro enterprises through short-cycle asset finance.',
-    key_details: ['Capital deployed to vetted SMMEs', 'Short investment cycles'].join('\n'),
-    min_investment: 1000, term_months: 1, benchmark_rate: 0.13, performance_fee_pct: 0.20,
-    risk_profile: 'Medium', risk_color: '#fec24f', icon: 'fa-bolt', color: '#656565',
-    badge_class: 'badge--blue', sort_order: 6,
-  },
+  /* No 'smme' product. The type was retired into 'short_term', and step 8
+     deletes any row still carrying it — seeding one here meant a fresh
+     database created the product and then reported removing it as a legacy
+     leftover on the same boot. */
   {
     product_type: 'delivery_bike', label: 'Delivery Bikes', headline: 'Steady wheels, steady returns.',
     description: 'Fleet funding for delivery riders working with platforms like Mr D, Takealot and Uber Eats. Steady, predictable returns.',
@@ -2738,7 +2734,7 @@ async function autoSetup() {
            '2024-01-01','2024-07-01','6-month cattle finance cycle — Limpopo region.','medium',8),
           ('POOL-002','Solar Energy 7-Year','solar','open',5000000,3250000,10000,0.2140,84,
            '2024-03-01','2031-03-01','Premium 7-year solar PPA — guaranteed offtake.','low',12),
-          ('POOL-003','SMME Short-Term Q2','smme','open',1000000,870000,1000,0.1392,5,
+          ('POOL-003','SMME Short-Term Q2','short_term','open',1000000,870000,1000,0.1392,5,
            '2024-04-01','2024-09-01','Short-term SMME bridge lending.','high',15),
           ('POOL-004','Delivery Bikes Cycle 3','delivery_bikes','open',1500000,1100000,2500,0.1600,12,
            '2024-02-01','2025-02-01','E-commerce delivery fleet.','medium',10),
@@ -2746,7 +2742,7 @@ async function autoSetup() {
            '2024-07-01','2025-01-01','Second cattle cycle — Mpumalanga herd.','medium',5),
           ('POOL-006','Solar Energy 5-Year','solar','open',3000000,750000,10000,0.0641,60,
            '2024-06-01','2029-06-01','Community solar energy 5-year PPA.','low',7),
-          ('POOL-007','SMME Q3 Batch','smme','open',800000,400000,1000,0.1392,5,
+          ('POOL-007','SMME Q3 Batch','short_term','open',800000,400000,1000,0.1392,5,
            '2024-08-01','2025-01-01','Q3 SMME lending pool.','high',9),
           ('POOL-008','Solar 6-Year Premium','solar','open',4000000,500000,10000,0.1553,72,
            '2024-09-01','2030-09-01','6-year solar with mid-term liquidity window.','low',3),

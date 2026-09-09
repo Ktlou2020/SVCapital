@@ -31,6 +31,6 @@
     "Run `npm run apply:android` / `npm run apply:ios` after changing this."
   ],
   "versionName": "5.2",
-  "androidVersionCode": 88,
-  "iosBuildNumber": 88
+  "androidVersionCode": 89,
+  "iosBuildNumber": 89
 }
