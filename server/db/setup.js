@@ -2538,6 +2538,107 @@ async function autoSetup() {
       }
     });
 
+    await step("2f. Provision the staging director account", async () => {
+      /* Staging runs against its OWN database, so a person who administers
+         production has no row here at all and the login page answers the
+         deliberately vague "if an account exists" — indistinguishable from a
+         typo. Somebody has to be able to get in before anybody can add anyone.
+
+         This step must never run on production, and the guard is the host
+         rather than a flag someone could set by accident: the staging domain
+         is already a constant in server/index.js for CORS, and production
+         serves a different one. STAGING_SEED_DIRECTOR=1 is the escape hatch
+         for a staging service on some other hostname — it is checked second,
+         and refused outright if the host IS production, so setting it there
+         cannot mint a director on the live console. */
+      const PRODUCTION_HOSTS = ['platform.svcapital.co.za', 'svcapital.co.za', 'www.svcapital.co.za'];
+      const STAGING_HOSTS    = ['svcapital-staging.up.railway.app'];
+      const host = String(process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PUBLIC_HOST || '')
+        .replace(/^https?:\/\//, '').replace(/[/:].*$/, '').toLowerCase();
+
+      if (PRODUCTION_HOSTS.includes(host)) return;               // never, under any flag
+      const onStaging = STAGING_HOSTS.includes(host) ||
+                        process.env.STAGING_SEED_DIRECTOR === '1';
+      if (!onStaging) {
+        /* Silent on production (the host matched above). Anywhere else, say so
+           — a staging service whose hostname this does not recognise would
+           otherwise skip with no explanation and leave nobody able to log in. */
+        if (host) console.log(`ℹ️  Staging director seed skipped — host "${host}" is not the staging domain. Set STAGING_SEED_DIRECTOR=1 on that service if it is staging.`);
+        return;
+      }
+
+      const email = String(process.env.STAGING_DIRECTOR_EMAIL || 'kagiso@svcapital.co.za')
+        .trim().toLowerCase();
+      if (!email.endsWith('@svcapital.co.za')) {
+        console.warn(`⚠️  Staging director seed skipped — "${email}" is not an @svcapital.co.za address, and PIN login refuses anything else.`);
+        return;
+      }
+
+      /* app_access is authoritative over the role fallback wherever it is set,
+         so it is listed in full rather than left to a role name to imply. */
+      const APPS = ['employee', 'team', 'fund', 'admin', 'ifa', 'portal', 'director',
+                    'accounting', 'pe_monitor', 'change_requests', 'moolalend',
+                    'beefcor_recon', 'staging', 'staging_admin'];
+
+      try {
+        const { rows: [existing] } = await pool.query(
+          'SELECT id, pin_set FROM employees WHERE email = $1 LIMIT 1', [email]
+        );
+
+        /* A PIN this person already chose is theirs. Re-seeding it on every
+           deploy would silently reset their login and hand the new one to
+           whoever reads the build log. */
+        const keepPin = !!(existing && existing.pin_set);
+        let pin = null, pinHash = null;
+        if (!keepPin) {
+          const supplied = String(process.env.STAGING_DIRECTOR_PIN || '').trim();
+          pin = /^\d{4,6}$/.test(supplied)
+            ? supplied
+            : String(require('crypto').randomInt(0, 1000000)).padStart(6, '0');
+          pinHash = await bcrypt.hash(pin, 12);
+        }
+
+        const first = email.split('@')[0].split(/[._-]/)[0];
+        const name  = first.charAt(0).toUpperCase() + first.slice(1);
+
+        await pool.query(`
+          INSERT INTO employees
+            (id, first_name, last_name, email, role, level, department, status,
+             avatar_initials, avatar_color, app_access, pin_hash, pin_set,
+             login_attempts, login_locked_until, hire_date)
+          VALUES ($1, $2, 'SV Capital', $3, 'Director', 'executive', 'Executive',
+                  'active', $4, '#eda5ff', $5::TEXT[], $6, true, 0, NULL, NOW())
+          ON CONFLICT (email) DO UPDATE SET
+            role       = 'Director',
+            level      = 'executive',
+            department = 'Executive',
+            status     = 'active',
+            app_access = EXCLUDED.app_access,
+            pin_hash   = COALESCE(EXCLUDED.pin_hash, employees.pin_hash),
+            /* pin_set drives which branch /staff-token takes. It is true once
+               a hash exists — the one just generated, or the one already on
+               the row that this deploy deliberately left alone. */
+            pin_set    = employees.pin_set OR (EXCLUDED.pin_hash IS NOT NULL),
+            /* A lockout from failed attempts against an account that did not
+               exist yet must not outlive the account being created. */
+            login_attempts     = 0,
+            login_locked_until = NULL
+        `, ['EMP-STG-DIR-1', name, email, name.slice(0, 2).toUpperCase(),
+            APPS, pinHash]);
+
+        if (keepPin) {
+          console.log(`✅ Staging director ${email} confirmed — existing PIN left alone.`);
+        } else if (process.env.STAGING_DIRECTOR_PIN) {
+          console.log(`✅ Staging director ${email} provisioned with the PIN from STAGING_DIRECTOR_PIN.`);
+        } else {
+          console.log(`✅ Staging director ${email} provisioned. One-time PIN: ${pin}`);
+          console.log('   Set STAGING_DIRECTOR_PIN on this service to choose it yourself and keep it out of this log.');
+        }
+      } catch (sdErr) {
+        console.warn('⚠️  Staging director seed warning:', sdErr.message);
+      }
+    });
+
     await step("2d. Migrate change requests id from", async () => {
       // 2d. Migrate change_requests.id from UUID to TEXT if created before fix
       try {
