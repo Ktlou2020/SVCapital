@@ -1136,6 +1136,11 @@ CREATE TABLE IF NOT EXISTS products (
   partner_name        TEXT,
   sector              TEXT,                   -- e.g. "Agriculture", "Energy"
   category            TEXT DEFAULT 'standard',-- 'standard' | 'eif' (Ethical and Interest-Free)
+  /* Show this product ONLY under its own category tab, not in the general
+     "All products" grid. Meaningless on a standard product — 'standard' has
+     no tab of its own, so an exclusive one would appear nowhere at all — and
+     the console and the portal both refuse to honour it there. */
+  category_exclusive  BOOLEAN DEFAULT false,
   factsheet_url       TEXT,                   -- base64 data URL or external link
   factsheet_name      TEXT,
   is_active           BOOLEAN DEFAULT true,
@@ -1846,6 +1851,17 @@ async function autoSetup() {
              category from its product_type, so nothing about how pools are
              created, filled or matured changes. */
           BEGIN ALTER TABLE products ADD COLUMN category TEXT DEFAULT 'standard'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          /* Whether the product shows ONLY under its category's own tab. The
+             EIF tab has always excluded standard products; this is the other
+             direction — an EIF product that should not appear in the general
+             grid alongside the interest-bearing ones. */
+          BEGIN ALTER TABLE products ADD COLUMN category_exclusive BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          /* A standard product marked exclusive would be filtered out of the
+             only grid that shows it. Nothing writes that combination, but a
+             direct database edit could, and the row would then be invisible in
+             the portal while looking active in the console. */
+          UPDATE products SET category_exclusive = false
+           WHERE category_exclusive = true AND COALESCE(category, 'standard') = 'standard';
           BEGIN ALTER TABLE transactions ADD COLUMN date_updated TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE push_tokens ADD COLUMN app_version TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE push_tokens ADD COLUMN device_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;

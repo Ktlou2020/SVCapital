@@ -3159,6 +3159,24 @@ function EIF_ICON()     { return 'fa-mosque'; }
 
 function _isEifProduct(p) { return ((p && p.category) || 'standard') === EIF_CATEGORY(); }
 
+/* Does this product belong ONLY to its own category's tab?
+
+   The EIF tab has always excluded standard products. This is the other
+   direction: an EIF product the admin does not want listed in the general
+   grid beside the interest-bearing ones — a client browsing "All products"
+   never sees it, and it is reached through the Ethical & Interest-Free tab.
+
+   Never honoured on a standard product. 'standard' has no tab of its own —
+   the general grid IS its listing — so an exclusive standard product would
+   appear nowhere while still reading as active in the console. The console
+   refuses to save that combination and setup clears any that exists; this is
+   the third place it cannot happen, because the one that matters is the one
+   the client actually looks at. */
+function _isCategoryExclusive(p) {
+  if (!p || !(p.category_exclusive === true || p.category_exclusive === 't' || p.category_exclusive === 'true')) return false;
+  return ((p.category) || 'standard') !== 'standard';
+}
+
 /* ── How each structure actually earns ─────────────────────────────────────
  *
  * The substance of this offering, and the part a paragraph of copy cannot
@@ -3608,13 +3626,18 @@ function renderProductsGrid() {
   // sorted by sort order. Products with open pools rank first.
   // Filtered by risk level (Conservative / Moderate / Aggressive).
   const mf = PORTAL.marketFilter || 'all';
-  /* The category narrows first, then risk within it. "All products" really is
-     all of them — an EIF product is a product, and a client browsing
-     everything should see it, badged. The EIF tab is the one that excludes. */
+  /* The category narrows first, then risk within it. "All products" shows
+     every product a client may browse, EIF ones included and badged — except
+     any the admin has marked as belonging to its own tab only. The EIF tab
+     excludes standard products; category_exclusive is the other direction. */
   const cat = _mktCategory();
   const products = (_mktProducts || []).filter(p => {
     if (!p.is_active) return false;
     if (cat === 'eif' && !_isEifProduct(p)) return false;
+    /* A category-exclusive product is reached through its own tab and nowhere
+       else. Without this the flag would be a half-truth: the product would
+       still be sitting in the general grid it was marked as staying out of. */
+    if (cat === 'all' && _isCategoryExclusive(p)) return false;
     if (mf === 'all') return true;
     return (p.risk_profile || 'Medium') === mf;   // risk from the product (admin console)
   }).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
@@ -4633,8 +4656,20 @@ async function openMaturityModal(investmentId) {
     : (inv.maturity_instruction || '');
 
   // All product types for switch option (resolved at maturity, pool may not be open yet)
+  /* Switch targets come from the open pools, so a category-exclusive product
+     with an open pool would be offered here to every client — including one
+     switching out of a conventional product, which is exactly what "EIF only"
+     is meant to prevent. It is left out of this list entirely; a client who
+     wants it invests through the Ethical & Interest-Free tab, deliberately.
+
+     This does NOT settle the larger question of whether a client who has
+     elected interest-free should be offered conventional products at maturity
+     — that picker is still category-blind and needs its own decision. */
   const allProductTypes = [...new Set(
-    (PORTAL.pools || []).filter(p => p.product_type && p.product_type !== inv.product_type).map(p => p.product_type)
+    (PORTAL.pools || [])
+      .filter(p => p.product_type && p.product_type !== inv.product_type)
+      .filter(p => !_isCategoryExclusive((_mktProducts || []).find(x => x.product_type === p.product_type)))
+      .map(p => p.product_type)
   )];
   const canSwitch = allProductTypes.length > 0;
   const switchProductsHtml = canSwitch

@@ -5697,7 +5697,7 @@ async function removeProductFactsheet(productId) {
 
 function openProductModal() {
   document.getElementById('productModalTitle').textContent = 'New Product';
-  ['productId','prodType','prodLabel','prodHeadline','prodDescription','prodKeyDetails','prodMin','prodTerm','prodSort','prodBenchmark','prodPerfFee','prodPartner','prodSector','prodRisk','prodIcon','prodColor','prodRiskColor','prodCategory'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  ['productId','prodType','prodLabel','prodHeadline','prodDescription','prodKeyDetails','prodMin','prodTerm','prodSort','prodBenchmark','prodPerfFee','prodPartner','prodSector','prodRisk','prodIcon','prodColor','prodRiskColor','prodCategory','prodExclusive'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   document.getElementById('prodActive').value = 'true';
   document.getElementById('prodHomepage').value = 'true';
   document.getElementById('prodRisk').value = 'Medium';   // default risk profile for new products
@@ -5705,6 +5705,8 @@ function openProductModal() {
      the select above leaves it on '' — an empty category would drop the product
      out of both the standard grid and the EIF tab and it would look deleted. */
   document.getElementById('prodCategory').value = 'standard';
+  document.getElementById('prodExclusive').value = 'false';
+  onProdCategoryChange();
   document.getElementById('prodType').removeAttribute('readonly');
   const ff = document.getElementById('prodFactsheetFile'); if (ff) ff.value = '';
   document.getElementById('prodFactsheetCurrent').textContent = '';
@@ -5733,6 +5735,12 @@ function editProduct(id) {
   document.getElementById('prodPartner').value     = p.partner_name || '';
   document.getElementById('prodSector').value      = p.sector || '';
   document.getElementById('prodCategory').value    = p.category || 'standard';
+  /* Postgres BOOLEAN comes back as true/false through the JSON API, but a
+     stored 't' from a direct edit is just as real — read both rather than
+     silently opening the form on the wrong answer and saving it back. */
+  document.getElementById('prodExclusive').value =
+    (p.category_exclusive === true || p.category_exclusive === 't' || p.category_exclusive === 'true') ? 'true' : 'false';
+  onProdCategoryChange();
   document.getElementById('prodRisk').value        = p.risk_profile || '';
   document.getElementById('prodIcon').value        = p.icon || '';
   document.getElementById('prodColor').value       = p.color || '';
@@ -5789,6 +5797,20 @@ function _onProdColorText(hex) {
   _renderProdColorSwatches();
 }
 
+/* The exclusivity control only means anything for a product with a tab of its
+   own, so it is shown only for one. Hiding it also stops a value being left
+   behind from a previous choice — though saveProduct forces it false anyway,
+   because a hidden control is still a control with a value in it. */
+function onProdCategoryChange() {
+  const cat = document.getElementById('prodCategory');
+  const grp = document.getElementById('prodExclusiveGroup');
+  const sel = document.getElementById('prodExclusive');
+  if (!cat || !grp) return;
+  const isEif = cat.value === 'eif';
+  grp.style.display = isEif ? '' : 'none';
+  if (!isEif && sel) sel.value = 'false';
+}
+
 async function saveProduct(btn) {
   const productType = document.getElementById('prodType').value.trim().toLowerCase().replace(/\s+/g, '_');
   const label = document.getElementById('prodLabel').value.trim();
@@ -5813,6 +5835,13 @@ async function saveProduct(btn) {
        grid nor the EIF tab, which on the portal looks exactly like a product
        that has been deleted. */
     category:            document.getElementById('prodCategory').value || 'standard',
+    /* Only meaningful on a product that HAS a tab of its own. 'standard' is
+       the general grid, so an exclusive standard product would be filtered
+       out of the only place it appears — active in this console and invisible
+       in the portal. Forced false rather than trusted, because the control is
+       hidden in that case and a hidden control still has a value. */
+    category_exclusive:  document.getElementById('prodCategory').value === 'eif' &&
+                         document.getElementById('prodExclusive').value === 'true',
     risk_profile:        document.getElementById('prodRisk').value.trim() || null,
     icon:                document.getElementById('prodIcon').value.trim() || null,
     color:               document.getElementById('prodColor').value.trim() || null,
