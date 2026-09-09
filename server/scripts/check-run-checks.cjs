@@ -40,10 +40,18 @@ const ok = (name, cond, detail) => {
   else { fail++; console.log(`  ✗ ${name}${detail ? `\n      ${detail}` : ''}`); }
 };
 
+/* A key set to null is REMOVED from the child's environment rather than
+   passed as the string "null". The scratch-database guard is the reason: it
+   reads CHECK_ALLOW_RESET, and whoever runs this suite may well have that
+   set in their own shell — inheriting it silently disarmed the guard the
+   check exists to test, and the check then reported the runner as broken
+   when the only broken thing was the environment it inherited. */
 function run(args, env) {
+  const childEnv = { ...process.env, ...(env || {}) };
+  for (const [k, v] of Object.entries(env || {})) if (v === null) delete childEnv[k];
   try {
     return { code: 0, out: execFileSync('node', [RUNNER, ...args],
-      { env: { ...process.env, ...(env || {}) }, encoding: 'utf8',
+      { env: childEnv, encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe'], timeout: 300000 }) };
   } catch (err) {
     return { code: err.status == null ? -1 : err.status,
@@ -113,7 +121,8 @@ const scratchDbs = async () => (await admin.query(
          the wrong host that is not a failing test, it is an incident. */
       const baseline = new Set(await scratchDbs());
       const r = run(['--filter', 'maturity'],
-        { DATABASE_URL: 'postgres://u:p@db.production.example.com:5432/svcapital' });
+        { DATABASE_URL: 'postgres://u:p@db.production.example.com:5432/svcapital',
+          CHECK_ALLOW_RESET: null });
       ok('it exits rather than proceeding', r.code === 2, `exit ${r.code}`);
       ok('and says why', /does not look like a scratch database/.test(r.out), r.out.slice(0, 300));
       ok('naming the override rather than leaving it undiscoverable',
