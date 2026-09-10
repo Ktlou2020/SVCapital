@@ -10525,3 +10525,235 @@ function portalCmdKeyNav(e) {
     closePortalCmd();
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   Signing an investment agreement
+
+   Sits between "how much" and the money leaving the wallet. The order is
+   the whole point: a wallet debited against an unsigned agreement has to
+   be found, held and reversed by hand, so the server refuses it too —
+   this is the screen that lets an investor satisfy that refusal, not the
+   thing that enforces it.
+
+   Built in JS rather than added to three index.html shells, so the
+   portal, the mobile shell and the native build all get one copy.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* State lives in a bag created on first use, not in a top-level `let`.
+   portal-core.js is loaded by three shells and may declare no load-time
+   state of its own — a const or let here is a redeclaration the moment two
+   scripts carry it.
+
+   docHtml holds the document as served to this screen. Opening the full-size
+   copy writes those bytes into a new window rather than re-requesting the
+   endpoint, because the native shell authenticates with a bearer token that
+   a plain new tab does not carry — there the link 401s and the investor is
+   told their own agreement does not exist. */
+function _agrBag() {
+  if (!window.__svcAgreement) window.__svcAgreement = { state: null, docHtml: '' };
+  return window.__svcAgreement;
+}
+
+function _agrOpenFull() {
+  if (!_agrBag().docHtml) return;
+  const w = window.open('', '_blank');
+  if (!w) { Toast.error('Your browser blocked the new window. Please allow pop-ups for this site.'); return; }
+  w.document.open(); w.document.write(_agrBag().docHtml); w.document.close();
+}
+
+function _agrEnsureModal() {
+  let el = document.getElementById('agreementModal');
+  if (el) return el;
+  el = document.createElement('div');
+  el.className = 'modal-overlay';
+  el.id = 'agreementModal';
+  el.innerHTML = `
+    <div class="modal" style="max-width:640px">
+      <div class="modal__header">
+        <span class="modal__title" id="agrTitle">Investment Agreement</span>
+        <button class="modal__close" aria-label="Close" onclick="_agrCancel()"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal__body" id="agrBody"></div>
+      <div class="modal__footer">
+        <button class="btn btn--secondary" onclick="_agrCancel()">Cancel</button>
+        <button class="btn btn--primary" id="agrSignBtn" disabled onclick="_agrSign()">
+          <i class="fa-solid fa-pen-nib"></i> Sign &amp; continue
+        </button>
+      </div>
+    </div>`;
+  document.body.appendChild(el);
+  return el;
+}
+
+/* Draws the agreement, shows it, and resolves true only once it is signed.
+   Resolves false on cancel — the caller must treat that as "do not invest",
+   not as an error to report. */
+async function signAgreementFor(pool, walletSpend, subAccountId) {
+  let drawn;
+  try {
+    drawn = await API._fetch('POST', 'agreements/draw', {
+      pool_id: pool.id, amount: walletSpend,
+      sub_account_id: subAccountId || undefined,
+    });
+  } catch (e) {
+    Toast.error(e.message || 'Could not prepare your agreement. Please try again.');
+    return false;
+  }
+
+  _agrEnsureModal();
+  document.getElementById('agrTitle').textContent = drawn.title || 'Investment Agreement';
+
+  const acks = drawn.acknowledgements || [];
+  document.getElementById('agrBody').innerHTML = `
+    <div style="font-family:ui-monospace,monospace;font-size:0.74rem;letter-spacing:.06em;
+                text-transform:uppercase;color:var(--text-muted);margin-bottom:10px">
+      ${_esc(drawn.agreement_no)}
+    </div>
+
+    <div id="agrDoc" style="border:1px solid rgba(0,0,0,0.12);border-radius:10px;height:280px;
+         overflow-y:auto;background:#fff;padding:0" onscroll="_agrScrolled(this)">
+      <iframe id="agrFrame" title="Investment agreement" style="width:100%;height:1200px;border:0"></iframe>
+    </div>
+    <div id="agrReadHint" style="font-size:0.78rem;color:var(--text-muted);margin-top:6px">
+      Scroll to the end of the agreement to continue.
+    </div>
+    <div style="margin-top:8px">
+      <button class="btn btn--secondary btn--sm" onclick="_agrOpenFull()">
+        <i class="fa-solid fa-arrow-up-right-from-square"></i> Open full size to read or save
+      </button>
+    </div>
+
+    <div style="margin-top:16px;display:flex;flex-direction:column;gap:10px" id="agrAcks">
+      ${acks.map((a, i) => `
+        <label style="display:flex;gap:10px;align-items:flex-start;font-size:0.85rem;line-height:1.5;cursor:pointer">
+          <input type="checkbox" id="agrAck${i}" data-key="${_esc(a.key)}" onchange="_agrRecheck()"
+                 style="margin-top:3px;flex-shrink:0;width:17px;height:17px">
+          <span>${_esc(a.text)}</span>
+        </label>`).join('')}
+    </div>
+
+    <div class="form-group" style="margin-top:16px">
+      <label class="form-label" for="agrName">Type your full name to sign</label>
+      <input type="text" class="form-input" id="agrName" autocomplete="name"
+             placeholder="As it appears on your account" oninput="_agrRecheck()">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Draw your signature</label>
+      <canvas id="agrPad" height="120"
+              style="width:100%;height:120px;border:1px dashed rgba(0,0,0,0.25);border-radius:10px;
+                     background:#fff;touch-action:none;display:block"></canvas>
+      <button class="btn btn--secondary btn--sm" style="margin-top:6px" onclick="_agrClearPad()">Clear</button>
+    </div>
+
+    <div style="font-size:0.75rem;color:var(--text-muted);margin-top:6px">
+      Signed electronically in terms of the Electronic Communications and Transactions Act 25 of 2002.
+      Your funds move only after this is signed.
+    </div>`;
+
+  /* srcdoc, not a blob URL or innerHTML: the document is self-contained and
+     must render as its own document without inheriting the portal's styles
+     or reaching the portal's DOM. */
+  const frame = document.getElementById('agrFrame');
+  frame.setAttribute('sandbox', '');
+  frame.srcdoc = drawn.document_html || '';
+  _agrBag().docHtml = drawn.document_html || '';
+
+  _agrSetupPad();
+
+  return new Promise(resolve => {
+    _agrBag().state = { id: drawn.id, acks, resolve, read: false, drawnSig: false };
+    Modal.open('agreementModal');
+    _agrRecheck();
+  });
+}
+
+/* A document nobody scrolled is a document nobody read. Not proof, but the
+   difference between "we showed it" and "we put it behind a tick box". */
+function _agrScrolled(el) {
+  if (!_agrBag().state) return;
+  if (el.scrollTop + el.clientHeight >= el.scrollHeight - 24) {
+    _agrBag().state.read = true;
+    const hint = document.getElementById('agrReadHint');
+    if (hint) { hint.textContent = 'You have reached the end of the agreement.'; hint.style.color = 'var(--green-mid, #22c55e)'; }
+    _agrRecheck();
+  }
+}
+
+function _agrSetupPad() {
+  const c = document.getElementById('agrPad');
+  if (!c) return;
+  const ratio = window.devicePixelRatio || 1;
+  c.width  = c.clientWidth * ratio;
+  c.height = 120 * ratio;
+  const ctx = c.getContext('2d');
+  ctx.scale(ratio, ratio);
+  ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#14180f';
+  let drawing = false;
+  const pt = e => {
+    const r = c.getBoundingClientRect();
+    const t = e.touches ? e.touches[0] : e;
+    return { x: t.clientX - r.left, y: t.clientY - r.top };
+  };
+  const start = e => { e.preventDefault(); drawing = true; const p = pt(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); };
+  const move  = e => { if (!drawing) return; e.preventDefault(); const p = pt(e); ctx.lineTo(p.x, p.y); ctx.stroke();
+                       if (_agrBag().state) { _agrBag().state.drawnSig = true; _agrRecheck(); } };
+  const end   = () => { drawing = false; };
+  c.addEventListener('mousedown', start);  c.addEventListener('touchstart', start, { passive: false });
+  c.addEventListener('mousemove', move);   c.addEventListener('touchmove',  move,  { passive: false });
+  window.addEventListener('mouseup', end); c.addEventListener('touchend',   end);
+}
+
+function _agrClearPad() {
+  const c = document.getElementById('agrPad');
+  if (!c) return;
+  c.getContext('2d').clearRect(0, 0, c.width, c.height);
+  if (_agrBag().state) { _agrBag().state.drawnSig = false; _agrRecheck(); }
+}
+
+/* Every condition, every time. The button is the only place the rules are
+   visible to the person, and the server checks them again anyway. */
+function _agrRecheck() {
+  const btn = document.getElementById('agrSignBtn');
+  if (!btn || !_agrBag().state) return;
+  const allTicked = _agrBag().state.acks.every((_, i) => {
+    const el = document.getElementById('agrAck' + i);
+    return el && el.checked;
+  });
+  const named = String((document.getElementById('agrName') || {}).value || '').trim().length > 1;
+  btn.disabled = !(allTicked && named && _agrBag().state.drawnSig && _agrBag().state.read);
+}
+
+function _agrCancel() {
+  const st = _agrBag().state;
+  _agrBag().state = null;
+  Modal.close('agreementModal');
+  if (st) st.resolve(false);
+}
+
+async function _agrSign() {
+  if (!_agrBag().state) return;
+  const btn  = document.getElementById('agrSignBtn');
+  const pad  = document.getElementById('agrPad');
+  const name = String((document.getElementById('agrName') || {}).value || '').trim();
+  const acknowledged = _agrBag().state.acks
+    .map((a, i) => (document.getElementById('agrAck' + i) || {}).checked ? a.key : null)
+    .filter(Boolean);
+
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Signing…'; }
+  try {
+    const r = await API._fetch('POST', `agreements/${encodeURIComponent(_agrBag().state.id)}/sign`, {
+      signer_name: name,
+      signature_png: pad ? pad.toDataURL('image/png') : null,
+      acknowledged,
+    });
+    const st = _agrBag().state;
+    _agrBag().state = null;
+    Modal.close('agreementModal');
+    Toast.success(`Agreement ${r.agreement_no} signed.`);
+    st.resolve(true);
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-pen-nib"></i> Sign &amp; continue'; }
+    Toast.error(e.message || 'Could not record your signature. Please try again.');
+  }
+}

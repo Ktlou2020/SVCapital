@@ -1117,6 +1117,46 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
           );
           walletBal = parseFloat(iv[0]?.wallet_balance) || 0;
         }
+        /* ── Signed agreement gate ────────────────────────────────────
+           An investor's money does not move without a signed agreement for
+           this pool and this exact amount. The check sits INSIDE the wallet
+           transaction and claims the agreement with the same statement that
+           reads it, so two tabs cannot spend one signature twice: the second
+           finds nothing in 'signed' and is refused.
+
+           Cents, because the match has to be exact and an exact comparison
+           on a float is not one — R1 000 signed must not fund R1 000.004.
+
+           Investors only, and not reinvestments. Staff place corrections
+           against a closed pool by hand, and maturityCron rolls capital over
+           under the instruction already on file; neither has a person at a
+           screen to sign anything, and blocking them would stop maturity
+           processing outright. */
+        if (req.user.role === 'investor' && !isReinvestment) {
+          const _reqCents = Math.round(required * 100);
+          const { rows: _agr } = await _invClient.query(
+            `UPDATE investment_agreements
+                SET status = 'funded', funded_at = NOW(), investment_id = $4
+              WHERE id = (
+                SELECT id FROM investment_agreements
+                 WHERE investor_id = $1 AND pool_id = $2
+                   AND amount_cents = $3 AND status = 'signed'
+                 ORDER BY signed_at ASC
+                 LIMIT 1
+                 FOR UPDATE SKIP LOCKED)
+            RETURNING id, agreement_no`,
+            [body.investor_id, body.pool_id || null, _reqCents, body.id || null]
+          );
+          if (!_agr.length) {
+            await _invClient.query('ROLLBACK');
+            return res.status(412).json({
+              error: 'This investment has not been signed for. Please review and sign the investment agreement before your funds are transferred.',
+              code: 'agreement_required',
+            });
+          }
+          body.agreement_no = _agr[0].agreement_no;
+        }
+
         if (required - walletBal > 0.001) {
           await _invClient.query('ROLLBACK');
           return res.status(400).json({

@@ -1648,6 +1648,16 @@ async function confirmInvestment(pool) {
   // Pool amount = what actually goes to the pool (fee is taken from wallet spend)
   const poolAmount = Math.round((walletSpend / (1 + PLATFORM_FEE_RATE)) * 100) / 100;
 
+  /* The agreement is signed before the money moves, not after. The server
+     refuses an investor's investment that has no signed agreement for this
+     pool and this exact amount, so reaching the create call without one is
+     a 412 the investor cannot act on — this is where they can.
+
+     A cancelled signature is a decision, not a failure: leave the invest
+     modal exactly as it was so the amount does not have to be typed again. */
+  const _signed = await signAgreementFor(pool, walletSpend, _pmSaId);
+  if (!_signed) { _investConfirmed = false; return; }
+
   try {
     const expectedReturn = poolAmount * pool.annual_rate * (pool.term_months / 12);
     const maturityDate = new Date();

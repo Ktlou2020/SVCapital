@@ -93,6 +93,9 @@ CREATE TABLE IF NOT EXISTS investments (
   expected_return NUMERIC(18,2) DEFAULT 0, actual_return NUMERIC(18,2) DEFAULT 0,
   annual_rate NUMERIC(8,4) DEFAULT 0, product_type TEXT, term_months INT,
   payout_option TEXT DEFAULT 'reinvest', notes TEXT,
+  -- The agreement this investment was made under. Written by the gate in
+  -- tables.js as it claims the signature, so the link exists both ways.
+  agreement_no TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS investments_investor_idx ON investments(investor_id);
@@ -329,6 +332,7 @@ DO $$ BEGIN
   BEGIN ALTER TABLE investment_pools ADD COLUMN partner_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investment_pools ADD COLUMN actual_rate NUMERIC(8,4) DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investments ADD COLUMN pool_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE investments ADD COLUMN agreement_no TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investments ADD COLUMN payout_date TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investments ADD COLUMN maturity_alert_sent_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investments ADD COLUMN maturity_3day_alert_sent_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
@@ -1200,6 +1204,58 @@ CREATE INDEX IF NOT EXISTS products_category_idx ON products(category);
  *
  * Scoped by category, and optionally narrowed to one product_type — an Ijara
  * question does not belong on a Mudarabah card. */
+/* ── Investment agreements ──────────────────────────────────────────────
+ * The contract an investor signs BEFORE the money moves. The order is the
+ * control: a wallet debited against an unsigned agreement has to be found,
+ * held and reversed by hand, so tables.js refuses an investor-created
+ * investment that has no signed agreement matching it.
+ *
+ * The signed document is stored, not regenerated. A contract rebuilt from a
+ * template each time it is opened cannot be shown to be the one that was
+ * signed — the template changes, and the old wording is gone. document_html
+ * holds the exact bytes that were on screen and document_sha256 detects any
+ * later edit to them.
+ *
+ * amount_cents, not NUMERIC, for the one comparison that matters: the
+ * agreement is matched to the investment on an exact amount, and an exact
+ * comparison on a float is not a comparison. */
+CREATE TABLE IF NOT EXISTS investment_agreements (
+  id                TEXT PRIMARY KEY,
+  agreement_no      TEXT UNIQUE NOT NULL,
+  investor_id       TEXT NOT NULL,
+  pool_id           TEXT,
+  product_type      TEXT,
+  sub_account_id    TEXT,
+  -- What was agreed, in cents, exactly as presented
+  amount_cents      BIGINT NOT NULL,
+  pool_amount_cents BIGINT NOT NULL,
+  fee_cents         BIGINT NOT NULL,
+  -- Which wording. Kept so we can always say what was signed, after it changes
+  template_key      TEXT NOT NULL,
+  template_version  TEXT NOT NULL,
+  -- drawn -> signed -> funded, or lapsed
+  status            TEXT NOT NULL DEFAULT 'drawn'
+                      CHECK (status IN ('drawn','signed','funded','lapsed')),
+  acknowledgements  JSONB DEFAULT '[]',
+  signer_name       TEXT,
+  signature_png     TEXT,
+  document_html     TEXT,
+  document_sha256   TEXT,
+  signed_ip         TEXT,
+  signed_user_agent TEXT,
+  drawn_at          TIMESTAMPTZ DEFAULT NOW(),
+  signed_at         TIMESTAMPTZ,
+  funded_at         TIMESTAMPTZ,
+  lapsed_at         TIMESTAMPTZ,
+  expires_at        TIMESTAMPTZ,
+  investment_id     TEXT
+);
+CREATE INDEX IF NOT EXISTS inv_agreements_investor_idx
+  ON investment_agreements(investor_id, status);
+/* The lookup tables.js does on every investor investment. */
+CREATE INDEX IF NOT EXISTS inv_agreements_match_idx
+  ON investment_agreements(investor_id, pool_id, amount_cents, status);
+
 CREATE TABLE IF NOT EXISTS product_faqs (
   id           TEXT PRIMARY KEY,
   category     TEXT NOT NULL DEFAULT 'standard',
@@ -1545,6 +1601,7 @@ const EIF_PRODUCTS = [
       'The mark-up is fixed and disclosed in the contract — it never increases',
       'No penalty interest: a late payer owes the same amount they always owed',
       'Backed by the goods and by the buyer\'s trade receivables',
+      'Typical assets: production printers, maize inputs bought ahead of planting, weaner calves sold on to a feedlot',
       'Shorter term than most products on the platform',
     ].join('\n'),
     min_investment: 500, term_months: 6, benchmark_rate: 0.115, performance_fee_pct: 0,
@@ -1561,6 +1618,7 @@ const EIF_PRODUCTS = [
       'Ownership risk sits with the pool — rent stops if the asset cannot be used',
       'Major maintenance and insurance are the owner\'s cost, not the lessee\'s',
       'Option to transfer the asset to the lessee at the end of the term',
+      'Typical assets: delivery vehicles leased to a logistics operator, production printers leased to their user',
     ].join('\n'),
     min_investment: 1000, term_months: 36, benchmark_rate: 0.125, performance_fee_pct: 0,
     risk_profile: 'Medium', risk_color: '#fec24f', icon: 'fa-file-contract',
@@ -1576,6 +1634,7 @@ const EIF_PRODUCTS = [
       'Losses are borne by the capital; the operating partner forfeits their share of profit',
       'Quarterly reporting on the underlying venture',
       'Highest risk of the three EIF structures, and the highest potential share',
+      'Typical ventures: a 120-day cattle feedlot cycle, a maize season funded from inputs through to harvest',
     ].join('\n'),
     min_investment: 2500, term_months: 12, benchmark_rate: 0.145, performance_fee_pct: 0.20,
     risk_profile: 'Medium-High', risk_color: '#ffb782', icon: 'fa-scale-balanced',
@@ -3287,6 +3346,37 @@ async function autoSetup() {
       }
       if (faqs) console.log(`✅ EIF FAQs installed (${faqs}).`);
     });
+    await step("13b. Add the asset examples to the EIF products", async () => {
+      /* The catalogue in EIF_PRODUCTS only ever reaches a BRAND-NEW database:
+         step 13 installs with ON CONFLICT DO NOTHING, so an environment that
+         already has the three rows never sees a word of edited copy again.
+         Staging and production both already have them, so the examples would
+         have shipped to nobody.
+
+         Appended rather than rewritten, and only when absent. key_details is
+         admin-editable, and replacing it wholesale would silently discard
+         whatever the console had been used to change. */
+      const EXAMPLES = {
+        eif_murabaha:  'Typical assets: production printers, maize inputs bought ahead of planting, weaner calves sold on to a feedlot',
+        eif_ijara:     'Typical assets: delivery vehicles leased to a logistics operator, production printers leased to their user',
+        eif_mudarabah: 'Typical ventures: a 120-day cattle feedlot cycle, a maize season funded from inputs through to harvest',
+      };
+      let added = 0;
+      for (const [type, line] of Object.entries(EXAMPLES)) {
+        const { rowCount } = await pool.query(
+          `UPDATE products
+              SET key_details = COALESCE(NULLIF(key_details, ''), '') ||
+                                CASE WHEN COALESCE(key_details, '') = '' THEN '' ELSE E'\\n' END || $2,
+                  updated_at  = NOW()
+            WHERE product_type = $1
+              AND POSITION($3 IN COALESCE(key_details, '')) = 0`,
+          [type, line, line.split(':')[0]]
+        );
+        added += rowCount;
+      }
+      if (added) console.log(`✅ Asset examples added to ${added} EIF product(s).`);
+    });
+
 
   } catch (err) {
     // Anything outside a step — the runner itself, or a connection that dies

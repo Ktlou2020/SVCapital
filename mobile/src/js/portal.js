@@ -1713,6 +1713,20 @@ async function confirmInvestment(pool) {
   const totalDeducted = amount + platformFee;
   if (totalDeducted > wallet) { Toast.error(`Insufficient balance. This investment requires ${Utils.rand(totalDeducted)} (${Utils.rand(amount)} + ${Utils.rand(platformFee)} platform fee).`); return; }
 
+  /* The agreement is signed before the money moves, not after. The server
+     refuses an investor's investment that has no signed agreement for this
+     pool and this exact amount, so reaching the create call without one is
+     a 412 the investor cannot act on — this is where they can.
+
+     Drawn against totalDeducted, not amount: this shell adds the fee on top
+     of what the investor typed, so the total is what leaves the wallet and
+     what the server matches the signature against.
+
+     A cancelled signature is a decision, not a failure: leave the invest
+     modal as it was so the amount does not have to be typed again. */
+  const _signed = await signAgreementFor(pool, totalDeducted, _pmSaId);
+  if (!_signed) { _investConfirmed = false; return; }
+
   try {
     const expectedReturn = amount * pool.annual_rate * (pool.term_months / 12);
     const maturityDate = new Date();
