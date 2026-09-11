@@ -3013,8 +3013,17 @@ async function viewInvestor(id) {
         <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
           <div class="form-group" style="margin:0;flex:1;min-width:180px">
             <label class="form-label">Tax Year (ending February)</label>
+            <!-- Completed tax years only. This listed the current CALENDAR
+                 year, so through January and February it offered a tax year
+                 that had not ended — a certificate covering eleven months
+                 under a heading naming twelve. A tax year runs 1 March to the
+                 last day of February and is named for the year it ends in. -->
             <select class="form-control" id="adminTaxCertYear">
-              ${[new Date().getFullYear(), new Date().getFullYear()-1, new Date().getFullYear()-2, new Date().getFullYear()-3].map(y => `<option value="${y}">${y-1} / ${y}</option>`).join('')}
+              ${(() => { const n = new Date();
+                         const latest = n.getMonth() >= 2 ? n.getFullYear() : n.getFullYear() - 1;
+                         return [0,1,2,3].map(i => latest - i)
+                           .filter(y => y >= 2019)
+                           .map(y => `<option value="${y}">March ${y-1} &ndash; February ${y}</option>`).join(''); })()}
             </select>
           </div>
           <button class="btn btn--primary btn--sm" id="adminTaxCertBtn" onclick="_generateAdminTaxCert('${inv.id}')">

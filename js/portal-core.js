@@ -5036,6 +5036,10 @@ function initStatementView() {
   const toEl   = document.getElementById('stmtTo');
   if (fromEl && !fromEl.value) fromEl.value = fromDate;
   if (toEl && !toEl.value)     toEl.value   = toDate;
+  /* The certificate's year list is built here rather than written into the
+     markup, which is how it came to be missing the year that ended seven
+     months ago. */
+  svcFillTaxYearSelect(null, today, PORTAL.investor && PORTAL.investor.date_joined);
   bindStatementAssist();
   updateStmtQuickStats();
   renderStatementAssistCard({ trigger: 'init' });
@@ -10936,3 +10940,70 @@ function svcMaxInvestable(walletBalance) {
    a client on a phone without a session actually lands, and the sign-in page
    is the one they see for longest. A widget that only works behind the
    sign-in prompts the people who already signed in. */
+
+/* ═══════════════════════════════════════════════════════════════════
+   South African tax years, for the income certificate
+
+   A tax year runs 1 March to the last day of February and is named for the
+   year it ENDS in: "March 2025 – February 2026" is the 2026 tax year.
+
+   These were three hard-coded <option> tags, last edited when 2025 was the
+   newest. By September 2026 the newest year a client could ask for had ended
+   seven months earlier and was not on the list — and it would have fallen a
+   year further behind every March. Derived from the date instead, so it
+   cannot go stale again.
+
+   Only COMPLETED years are offered. A certificate for a year still running
+   would show part of a year beside a heading that names the whole of it,
+   which is worse than not offering it.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* The tax year a date falls in. March onwards belongs to the year that ends
+   next February; January and February belong to the one ending this one. */
+function svcTaxYearOf(date) {
+  const d = date instanceof Date ? date : new Date(date);
+  if (isNaN(d)) return null;
+  return d.getMonth() >= 2 ? d.getFullYear() + 1 : d.getFullYear();
+}
+
+/* The most recent tax year that has actually ended. */
+function svcLatestCompleteTaxYear(now) {
+  const d = now instanceof Date ? now : (now ? new Date(now) : new Date());
+  return d.getMonth() >= 2 ? d.getFullYear() : d.getFullYear() - 1;
+}
+
+/* Newest first. Starts at the client's first tax year on the platform, so
+   somebody who joined last year is not offered five certificates that are
+   all empty; falls back to a five-year span when the join date is unknown,
+   and never goes below 2019, which is the earliest the server will build. */
+function svcTaxYears(now, joinedAt) {
+  const MAX = 6;   /* SARS asks taxpayers to keep records for five years; a
+                      longer list is clutter, and staff can generate any year
+                      from the console. */
+  const latest = svcLatestCompleteTaxYear(now);
+  const joined = joinedAt ? svcTaxYearOf(joinedAt) : null;
+  let earliest = joined && joined <= latest ? joined : latest - (MAX - 1);
+  if (earliest < latest - (MAX - 1)) earliest = latest - (MAX - 1);
+  if (earliest < 2019) earliest = 2019;
+  if (earliest > latest) earliest = latest;
+
+  const out = [];
+  for (let y = latest; y >= earliest; y--) {
+    out.push({ value: y, label: `March ${y - 1} – February ${y}` });
+  }
+  return out;
+}
+
+/* Fills the certificate's year picker. Called when the statement view opens,
+   so it is right on the day the tax year turns over rather than on the day
+   somebody remembers to edit the markup. */
+function svcFillTaxYearSelect(el, now, joinedAt) {
+  const sel = el || document.getElementById('taxYearSelect');
+  if (!sel) return;
+  const years = svcTaxYears(now, joinedAt);
+  const keep = sel.value;
+  sel.innerHTML = years
+    .map(y => `<option value="${y.value}">${y.label}</option>`).join('');
+  /* A year the client had already picked stays picked across a re-render. */
+  if (keep && years.some(y => String(y.value) === String(keep))) sel.value = keep;
+}
