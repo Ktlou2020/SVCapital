@@ -7,6 +7,12 @@
   <link rel="apple-touch-icon" sizes="192x192" href="../assets/logo-192.png" />
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <!-- Apple Smart App Banner. Safari on iOS draws this itself, at the top of
+       the page, and it is the only banner that can tell whether the app is
+       already installed — it then offers OPEN rather than VIEW, which nothing
+       in JavaScript can determine. The portal's own bottom banner stands down
+       on iOS Safari so the two never appear together. -->
+  <meta name="apple-itunes-app" content="app-id=6670504520" />
   <title>SV Capital — Investor Portal</title>
   <meta name="robots" content="noindex, nofollow">
   <meta name="theme-color" content="#FF9B0C" />
@@ -23,7 +29,7 @@
   <link rel="stylesheet" href="css/portal.css?v=5" />
   <link rel="stylesheet" href="../css/ci-theme.css?v=1" />
   <!-- sv-intelligence hidden -->
-  <link rel="stylesheet" href="css/portal-premium.css?v=10" />
+  <link rel="stylesheet" href="css/portal-premium.css?v=11" />
   <!-- Payment modal must retain dark theme — isolate from ci-theme overrides -->
   <style>
     #topUpModal.modal-overlay { background: rgba(0,0,0,0.82) !important; }
@@ -3004,9 +3010,9 @@ if (window.Capacitor) {
 }
 </script>
 <script src="/js/native.js"></script>
-<script src="../js/portal-core.js?v=24"></script>
+<script src="../js/portal-core.js?v=25"></script>
 <script src="../js/investor-documents.js?v=5"></script>
-<script src="js/portal.js?v=120"></script>
+<script src="js/portal.js?v=121"></script>
 <!-- sv-intelligence.js hidden -->
 <script>
 // Service worker: web browsers only (not Capacitor). Handles web push notifications.

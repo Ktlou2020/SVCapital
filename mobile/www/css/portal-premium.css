@@ -3983,6 +3983,48 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
   .view [style*="font-size:0.75"], .view [style*="font-size: 0.75"] { font-size: 12px !important; }
 }
 
+/* ── Get-the-app banner (mobile browsers only) ─────────────────────────
+   Bottom, not top: the portal's own header lives at the top and a bar above
+   it pushes the whole page down on every load. Bottom also keeps it clear of
+   Apple's Smart App Banner, which is always at the top, on the one platform
+   where both could appear. safe-area-inset keeps it off the iPhone home
+   indicator. */
+.svc-app-banner {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 1200;
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px calc(12px + env(safe-area-inset-bottom, 0px));
+  background: #fff; color: #1a1a1a;
+  border-top: 1px solid rgba(0, 0, 0, 0.10);
+  box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.10);
+  animation: svcAppBannerIn 0.28s ease-out;
+}
+@keyframes svcAppBannerIn { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .svc-app-banner { animation: none; } }
+
+.svc-app-banner__icon { border-radius: 10px; flex-shrink: 0; }
+.svc-app-banner__text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.svc-app-banner__text strong { font-size: 0.86rem; font-weight: 700; }
+.svc-app-banner__text span {
+  font-size: 0.74rem; color: #6b7280; line-height: 1.35;
+  overflow: hidden; text-overflow: ellipsis; display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.svc-app-banner__cta {
+  flex-shrink: 0; border: 0; cursor: pointer;
+  background: #eda5ff; color: #1a1a1a;
+  font-size: 0.8rem; font-weight: 700;
+  padding: 9px 16px; border-radius: 20px;
+}
+.svc-app-banner__cta:hover { filter: brightness(0.95); }
+.svc-app-banner__x {
+  flex-shrink: 0; border: 0; background: none; cursor: pointer;
+  color: #9ca3af; font-size: 0.95rem; padding: 6px 4px; line-height: 1;
+}
+.svc-app-banner__x:hover { color: #4b5563; }
+
+body.dark-mode .svc-app-banner { background: #161b22; color: #e5e7eb; border-top-color: rgba(255,255,255,0.12); }
+body.dark-mode .svc-app-banner__text span { color: #9aa4b2; }
+
 /* ═══════════════════════════════════════════════════════════════════════
    Ethical and Interest-Free (EIF)
    ═══════════════════════════════════════════════════════════════════════

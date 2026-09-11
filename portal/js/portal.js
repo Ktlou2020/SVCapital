@@ -3642,40 +3642,33 @@ const PUSH_PREF_KEY = 'svc_push_pref';
 
 
 /* ═══════════════════════════════════════════════════════════════
-   PWA INSTALL PROMPT
-   ═══════════════════════════════════════════════════════════════ */
-let _pwaPromptEvt = null;
+   GET THE APP  (mobile browsers only)
 
-window.addEventListener('beforeinstallprompt', e => {
-  e.preventDefault();
-  _pwaPromptEvt = e;
-  if (!localStorage.getItem('pwa_installed') && !localStorage.getItem('pwa_dismissed')) {
-    setTimeout(() => {
-      const banner = document.getElementById('pwaInstallBanner');
-      if (banner) banner.style.display = 'flex';
-    }, 8000);
-  }
-});
+   What stood here listened for beforeinstallprompt and then looked for
+   elements named pwaInstallBanner and iosPwaBanner. Neither exists in any
+   HTML file in this repository, so it showed nothing to anybody, on either
+   platform, for as long as it has been shipped. Chrome would not have fired
+   the event regardless — it requires a linked web app manifest, and the
+   portal links none.
+
+   It also offered the wrong thing. That was a prompt to install the
+   progressive web app; what a client on a phone wants is the app on their
+   store. svcInitAppBanner does that, and stands down on iOS Safari where
+   Apple's own Smart App Banner (the apple-itunes-app meta tag in the page
+   head) does it better — only Apple's banner can tell that the app is
+   already installed and offer OPEN instead.
+
+   appinstalled is kept: it still fires if somebody installs the web app from
+   the browser menu, and the banner should go when they do.
+   ═══════════════════════════════════════════════════════════════ */
 
 window.addEventListener('appinstalled', () => {
-  localStorage.setItem('pwa_installed', '1');
-  const banner = document.getElementById('pwaInstallBanner');
-  if (banner) banner.style.display = 'none';
-  Toast.success('App installed! You can now open SV Capital from your home screen.');
+  try { localStorage.setItem('pwa_installed', '1'); } catch (_) {}
+  const el = document.getElementById('svcAppBanner');
+  if (el) el.remove();
 });
 
-
-/* ── iOS / Safari "Add to Home Screen" prompt ── */
-(function _initIOSBanner() {
-  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) && !window.MSStream;
-  const isStandalone = window.navigator.standalone === true;
-  if (!isIOS || isStandalone) return;
-  if (localStorage.getItem('ios_pwa_dismissed')) return;
-  setTimeout(() => {
-    const el = document.getElementById('iosPwaBanner');
-    if (el) el.style.display = 'flex';
-  }, 8000);
-})();
+window.addEventListener('load', () => svcInitAppBanner());
 
 
 /* ═══════════════════════════════════════════════════════════════

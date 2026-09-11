@@ -7,6 +7,12 @@
   <link rel="apple-touch-icon" sizes="192x192" href="../assets/logo-192.png" />
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <!-- Apple Smart App Banner. Safari on iOS draws this itself, at the top of
+       the page, and it is the only banner that can tell whether the app is
+       already installed — it then offers OPEN rather than VIEW, which nothing
+       in JavaScript can determine. The portal's own bottom banner stands down
+       on iOS Safari so the two never appear together. -->
+  <meta name="apple-itunes-app" content="app-id=6670504520" />
   <title>SV Capital — Investor Portal</title>
   <meta name="theme-color" content="#FF9B0C" />
   <meta name="mobile-web-app-capable" content="yes" />
@@ -28,7 +34,7 @@
   <link rel="stylesheet" href="/css/portal.css?v=5" />
   <link rel="stylesheet" href="/css/ci-theme.css?v=2" />
   <!-- sv-intelligence hidden -->
-  <link rel="stylesheet" href="/css/portal-premium.css?v=10" />
+  <link rel="stylesheet" href="/css/portal-premium.css?v=11" />
   <!-- Everything the app styles differently from the web portal. Must stay here:
        after the four shared sheets, before mobile-app.css. -->
   <link rel="stylesheet" href="/css/mobile-overrides.css?v=1" />
@@ -3058,9 +3064,9 @@
 </nav>
 
 <script src="../js/api.js?v=25"></script>
-<script src="../js/portal-core.js?v=20"></script>
+<script src="../js/portal-core.js?v=21"></script>
 <script src="../js/investor-documents.js?v=5"></script>
-<script src="js/portal.js?v=49"></script>
+<script src="js/portal.js?v=50"></script>
 <!-- sv-intelligence.js hidden -->
 <script>
 if ('serviceWorker' in navigator && !window.__SVC_NATIVE__) {
