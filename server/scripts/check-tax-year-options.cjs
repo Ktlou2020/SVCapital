@@ -34,7 +34,7 @@ const MOB   = read('mobile/src/index.html');
 
 /* The shipped functions, lifted and run. */
 function lift() {
-  const names = ['svcTaxYearOf', 'svcLatestCompleteTaxYear', 'svcTaxYears'];
+  const names = ['svcTaxYearOf', 'svcLatestCompleteTaxYear', 'svcTaxYears', 'svcTaxYearEndLabel'];
   let src = '';
   for (const n of names) {
     const m = CORE.match(new RegExp(`function ${n}\\([\\s\\S]*?\\n\\}`, 'm'));
@@ -107,9 +107,71 @@ console.log('\nthe list it builds is right for the client looking at it');
   ok('never before 2019, which the server will not build',
      A.svcTaxYears(now, '2005-01-01').every(y => y.value >= 2019),
      JSON.stringify(A.svcTaxYears(now, '2005-01-01').map(y => y.value)));
-  ok('a join date in the future does not empty the list',
-     A.svcTaxYears(now, '2030-01-01').length >= 1,
+  /* This used to assert the opposite — that a future join date still filled
+     the list. That WAS the bug: a client who has not lived through a full tax
+     year was handed certificates for years before they existed. */
+  ok('a join date after the last completed year empties the list',
+     A.svcTaxYears(now, '2030-01-01').length === 0,
      JSON.stringify(A.svcTaxYears(now, '2030-01-01')));
+}
+
+console.log('\na client with no completed tax year is offered none');
+{
+  const now = new Date('2026-09-11');   // latest complete year: 2026
+
+  /* April 2026 falls in the year ending February 2027, which has not ended.
+     This returned SIX certificates — every year from 2021 — because the test
+     for "joined after the last completed year" fell through to the branch
+     meant for "we do not know when they joined". */
+  ok('a client who joined in April 2026 gets nothing',
+     A.svcTaxYears(now, '2026-04-15').length === 0,
+     JSON.stringify(A.svcTaxYears(now, '2026-04-15').map(y => y.value)));
+  ok('nor one who joined on 1 March 2026, the first day of that year',
+     A.svcTaxYears(now, '2026-03-01').length === 0,
+     JSON.stringify(A.svcTaxYears(now, '2026-03-01').map(y => y.value)));
+  ok('but one who joined on 27 February 2026 gets that year',
+     A.svcTaxYears(now, '2026-02-27').map(y => y.value).join() === '2026',
+     JSON.stringify(A.svcTaxYears(now, '2026-02-27').map(y => y.value)));
+  ok('and one who joined on the last day of it does too',
+     A.svcTaxYears(now, '2026-02-28').map(y => y.value).join() === '2026',
+     JSON.stringify(A.svcTaxYears(now, '2026-02-28').map(y => y.value)));
+
+  /* An unknown join date still gets the fallback span — the two cases were
+     conflated, and separating them must not have silenced the other one. */
+  ok('an unknown join date still gets the full span',
+     A.svcTaxYears(now, null).length === 6,
+     JSON.stringify(A.svcTaxYears(now, null).map(y => y.value)));
+  ok('and so does an unparseable one',
+     A.svcTaxYears(now, 'not a date').length === 6,
+     JSON.stringify(A.svcTaxYears(now, 'not a date').map(y => y.value)));
+
+  ok('the date they are told to wait for is the end of February',
+     A.svcTaxYearEndLabel(2027) === '28 February 2027', A.svcTaxYearEndLabel(2027));
+  ok('and it knows February has 29 days in a leap year',
+     A.svcTaxYearEndLabel(2028) === '29 February 2028', A.svcTaxYearEndLabel(2028));
+}
+
+console.log('\nthe screen and the endpoint both refuse it');
+{
+  const CORE_SRC = CORE;
+  ok('the picker is emptied and disabled rather than left blank',
+     /if \(!years\.length\) \{[\s\S]{0,400}sel\.disabled = true;[\s\S]{0,200}btns\.forEach\(b => \{ b\.disabled = true; \}\);/.test(CORE_SRC),
+     'an empty picker beside a live button invites a press');
+  ok('and the client is told when theirs will be ready',
+     /Your first certificate will be available after/.test(CORE_SRC));
+  ok('the generator refuses to build one without a year',
+     /if \(!Number\.isFinite\(taxYear\)\) \{/.test(CORE_SRC),
+     'a disabled button is a UI state, not a guard');
+
+  const SVC = read('server/services/incomeReference.js');
+  ok('the endpoint refuses a tax year that has not ended',
+     /if \(taxYear > latest\) \{/.test(SVC),
+     'the endpoint is reachable without the portal');
+  ok('and says which year is the most recent one available',
+     /most recent certificate available is for the year ending February/.test(SVC));
+  ok('its rule for a completed year matches the portal\u2019s',
+     /return d\.getMonth\(\) >= 2 \? d\.getFullYear\(\) : d\.getFullYear\(\) - 1;/.test(SVC),
+     'two definitions of the same boundary drift');
 }
 
 console.log('\nnothing is hard-coded any more');

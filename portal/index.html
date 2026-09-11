@@ -1377,11 +1377,14 @@
                     <option value="">Loading tax years…</option>
                   </select>
                 </div>
+                <!-- Shown when the client has no completed tax year yet, and the
+                     two buttons are disabled with it. -->
+                <p id="taxCertNote" style="display:none;font-size:0.78rem;color:#6b7280;margin:0 0 10px;line-height:1.6"></p>
                 <div style="display:flex;gap:10px;flex-wrap:wrap">
-                  <button class="btn btn--success" style="flex:1;min-width:160px" onclick="generateTaxCertificate()">
+                  <button class="btn btn--success" id="taxCertPreviewBtn" style="flex:1;min-width:160px" onclick="generateTaxCertificate()">
                     <i class="fa-solid fa-file-arrow-down"></i> Preview / Print Certificate
                   </button>
-                  <button class="btn btn--secondary" style="flex:1;min-width:130px" onclick="generateTaxCertificate();setTimeout(()=>downloadTaxCertPDF(PORTAL._lastTaxCertHTML),200)">
+                  <button class="btn btn--secondary" id="taxCertPdfBtn" style="flex:1;min-width:130px" onclick="generateTaxCertificate();setTimeout(()=>downloadTaxCertPDF(PORTAL._lastTaxCertHTML),200)">
                     <i class="fa-solid fa-file-pdf"></i> Download PDF
                   </button>
                 </div>
@@ -3033,7 +3036,7 @@ if (window.Capacitor) {
 }
 </script>
 <script src="/js/native.js"></script>
-<script src="../js/portal-core.js?v=31"></script>
+<script src="../js/portal-core.js?v=32"></script>
 <script src="../js/investor-documents.js?v=5"></script>
 <script src="js/portal.js?v=124"></script>
 <!-- sv-intelligence.js hidden -->

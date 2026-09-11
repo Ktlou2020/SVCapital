@@ -7771,7 +7771,14 @@ async function generateTaxCertificate() {
   if (!PORTAL.investor) { Toast.error('Portfolio data still loading — please wait'); return; }
 
   const taxYearEl = document.getElementById('taxYearSelect');
-  const taxYear = taxYearEl ? parseInt(taxYearEl.value) : new Date().getFullYear();
+  const taxYear = taxYearEl ? parseInt(taxYearEl.value, 10) : NaN;
+  /* Second line of defence. The picker is emptied and the buttons disabled for
+     a client with no completed tax year, but a disabled button is a UI state
+     and this is the function that would build the document. */
+  if (!Number.isFinite(taxYear)) {
+    Toast.info('Your first tax certificate will be available once your first full tax year has ended.');
+    return;
+  }
 
   let data;
   try {
@@ -10982,7 +10989,20 @@ function svcTaxYears(now, joinedAt) {
                       from the console. */
   const latest = svcLatestCompleteTaxYear(now);
   const joined = joinedAt ? svcTaxYearOf(joinedAt) : null;
-  let earliest = joined && joined <= latest ? joined : latest - (MAX - 1);
+
+  /* A client who joined in April 2026 is in the year ending February 2027,
+     which has not ended: they have NO completed tax year and belong on none
+     of these certificates.
+
+     This returned six of them. The test was `joined <= latest ? joined :
+     fallback`, which conflated "we do not know when they joined" with
+     "they joined after the last completed year" and answered the second with
+     the first — so a client of five months was offered certificates for five
+     years before they existed. Empty is the honest answer, and the caller
+     says so rather than showing a picker with nothing in it. */
+  if (joined && joined > latest) return [];
+
+  let earliest = joined || latest - (MAX - 1);
   if (earliest < latest - (MAX - 1)) earliest = latest - (MAX - 1);
   if (earliest < 2019) earliest = 2019;
   if (earliest > latest) earliest = latest;
@@ -11001,9 +11021,41 @@ function svcFillTaxYearSelect(el, now, joinedAt) {
   const sel = el || document.getElementById('taxYearSelect');
   if (!sel) return;
   const years = svcTaxYears(now, joinedAt);
+  const note  = document.getElementById('taxCertNote');
+  const btns  = ['taxCertPreviewBtn', 'taxCertPdfBtn']
+    .map(id => document.getElementById(id)).filter(Boolean);
+
+  /* Nothing to offer. Disabling the controls and saying why beats an empty
+     picker beside a live button, which invites a client to press it and get
+     a certificate covering a year they were not here for. */
+  if (!years.length) {
+    sel.innerHTML = '<option value="">No completed tax year yet</option>';
+    sel.disabled = true;
+    btns.forEach(b => { b.disabled = true; });
+    if (note) {
+      note.style.display = '';
+      note.textContent = 'Your first certificate will be available after '
+        + svcTaxYearEndLabel(svcLatestCompleteTaxYear(now) + 1)
+        + ', once your first full tax year has ended.';
+    }
+    return;
+  }
+
+  sel.disabled = false;
+  btns.forEach(b => { b.disabled = false; });
+  if (note) { note.style.display = 'none'; note.textContent = ''; }
+
   const keep = sel.value;
   sel.innerHTML = years
     .map(y => `<option value="${y.value}">${y.label}</option>`).join('');
   /* A year the client had already picked stays picked across a re-render. */
   if (keep && years.some(y => String(y.value) === String(keep))) sel.value = keep;
+}
+
+/* "28 February 2027" — the day a tax year ends, for telling somebody when
+   their first certificate becomes available. 2028 is a leap year, so the
+   last day is not always the 28th. */
+function svcTaxYearEndLabel(taxYear) {
+  const last = new Date(taxYear, 2, 0);   // day 0 of March is the last of Feb
+  return `${last.getDate()} February ${taxYear}`;
 }

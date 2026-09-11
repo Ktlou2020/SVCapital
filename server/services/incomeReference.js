@@ -51,10 +51,27 @@ class NotFound extends Error {
 
 /* Returns the exact payload both documents are rendered from. Throws NotFound
    when the investor does not exist; the caller decides the status code. */
-async function buildIncomeReference(pool, { investorId, year }) {
+/* The most recent tax year that has ENDED. A South African tax year runs
+   1 March to the last day of February and is named for the year it ends in,
+   so on any date from 1 March the year named for that calendar year is done. */
+function latestCompleteTaxYear(now) {
+  const d = now || new Date();
+  return d.getMonth() >= 2 ? d.getFullYear() : d.getFullYear() - 1;
+}
+
+async function buildIncomeReference(pool, { investorId, year, now }) {
   const taxYear = parseInt(year, 10);
   if (isNaN(taxYear) || taxYear < 2019 || taxYear > 2040) {
     const e = new Error('Invalid year'); e.code = 'BAD_REQUEST'; throw e;
+  }
+  /* A year that has not ended cannot be certified. The portal no longer offers
+     one, but the endpoint is reachable on its own and a certificate covering
+     a part-year under a heading naming the whole of it is worse than an
+     error — somebody would file it. */
+  const latest = latestCompleteTaxYear(now);
+  if (taxYear > latest) {
+    const e = new Error(`The ${taxYear} tax year has not ended yet. The most recent certificate available is for the year ending February ${latest}.`);
+    e.code = 'BAD_REQUEST'; throw e;
   }
   const { from, to } = taxYearWindow(taxYear);
 
@@ -173,4 +190,4 @@ async function buildIncomeReference(pool, { investorId, year }) {
   };
 }
 
-module.exports = { buildIncomeReference, taxYearWindow, NotFound };
+module.exports = { buildIncomeReference, taxYearWindow, latestCompleteTaxYear, NotFound };
