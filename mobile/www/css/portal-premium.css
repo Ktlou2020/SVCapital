@@ -1741,6 +1741,17 @@ body.dark-mode .deposit-prompt-products span {
 }
 .invest-qp-btn:hover { background: #656565; border-color: #656565; color: #fff; }
 
+/* The whole-balance pick. Marked because it is the one people reach for and
+   the one that used to be impossible to express: under an additive fee there
+   was no amount you could type that spent the balance exactly. */
+.invest-qp-btn--all {
+  border-color: #eda5ff;
+  color: #7b2d9e;
+  background: rgba(237, 165, 255, 0.10);
+}
+.invest-qp-btn--all:hover { background: #eda5ff; border-color: #eda5ff; color: #1a1a1a; }
+body.dark-mode .invest-qp-btn--all { color: #eda5ff !important; border-color: rgba(237,165,255,0.45) !important; background: rgba(237,165,255,0.12) !important; }
+
 .invest-calc-box {
   background: var(--dark-3, #f9fafb);
   border: 1px solid var(--border-color, #e5e7eb);

@@ -1449,16 +1449,15 @@ let _solarStatsCache = null;
 
 
 /* Platform fee is taken FROM the wallet spend (fee-inclusive model).
-   User enters total wallet amount; fee ≈ 0.99% of that; pool gets the rest. */
+   The arithmetic lives in portal-core so this shell and the mobile one
+   cannot drift apart again — they did, and the mobile one charged the fee
+   on top. See svcPlatformFee for why the fee is the remainder rather than a
+   second rounded percentage. */
 const PLATFORM_FEE_RATE = 0.01;
-function _platformFee(walletAmount) {
-  return Math.round((parseFloat(walletAmount) || 0) * (PLATFORM_FEE_RATE / (1 + PLATFORM_FEE_RATE)) * 100) / 100;
-}
+function _platformFee(walletAmount) { return svcPlatformFee(walletAmount); }
 /* Minimum wallet balance needed to invest in this pool.
    Fee comes from the amount, so no extra top-up required. */
-function _minPlusFee(pool) {
-  return parseFloat(pool.min_investment) || 0;
-}
+function _minPlusFee(pool) { return svcMinWalletFor(pool); }
 
 function openInvestModal(poolId) {
   const pool = PORTAL.pools.find(p => p.id === poolId);
@@ -1526,6 +1525,12 @@ function openInvestModal(poolId) {
         ${[pool.min_investment, 5000, 10000, 25000].filter(v => v <= walletBal || v === pool.min_investment).map(v =>
           `<button class="invest-qp-btn" onclick="document.getElementById('investAmount').value=${v};_updateInvestCalc(${v},${pool.annual_rate},${pool.term_months},${pool.min_investment},${walletBal})">${Utils.rand(v)}</button>`
         ).join('')}
+        ${walletBal >= (parseFloat(pool.min_investment) || 0)
+          ? `<button class="invest-qp-btn invest-qp-btn--all" title="Invest your whole balance, fee included"
+                     onclick="document.getElementById('investAmount').value=${svcMaxInvestable(walletBal)};_updateInvestCalc(${svcMaxInvestable(walletBal)},${pool.annual_rate},${pool.term_months},${pool.min_investment},${walletBal})">
+               Everything (${Utils.rand(svcMaxInvestable(walletBal))})
+             </button>`
+          : ''}
       </div>
       <input type="number" class="form-input" id="investAmount"
         placeholder="Enter amount (min ${Utils.rand(pool.min_investment)})"

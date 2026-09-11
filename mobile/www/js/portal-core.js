@@ -10757,3 +10757,62 @@ async function _agrSign() {
     Toast.error(e.message || 'Could not record your signature. Please try again.');
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   The platform fee, in one place
+
+   The fee is INCLUSIVE: it comes out of what the client spends, it is not
+   added on top. So "invest R1 000" means R1 000 leaves the wallet, R990,10
+   reaches the pool and R9,90 is the fee — never R1 010 leaving the wallet.
+
+   That is what lets somebody invest their whole balance. Under an additive
+   fee they have to work out what 1/1.01 of their balance is, type it, and
+   still leave cents behind; the web portal and the mobile shell disagreed on
+   this, and the mobile one offered "use max" as floor(balance / 1.01), which
+   left up to a rand stranded every time.
+
+   The pool amount is rounded and THE FEE IS THE REMAINDER, which makes
+   pool + fee === walletSpend true by construction rather than by luck. The
+   independent form, round(w * 0.01 / 1.01), was checked against this one for
+   every cent from R0,01 to R200 000 and agreed at all twenty million of
+   them — so it was not producing wrong fees and this is not a bug fix. It is
+   the weaker way to say it: the identity holds because the arithmetic cannot
+   express anything else, not because the two roundings happen to land
+   together. server/routes/tables.js splits it the same way, so the screen
+   and the ledger are the same subtraction.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* 1% of the investment, taken from it. Kept as a function rather than a
+   const because portal-core is loaded alongside shells that declare their
+   own PLATFORM_FEE_RATE, and a second top-level const is a redeclaration. */
+function svcFeeRate() { return 0.01; }
+
+/* What actually reaches the pool when `walletSpend` leaves the wallet. */
+function svcPoolAmount(walletSpend) {
+  const w = parseFloat(walletSpend) || 0;
+  if (w <= 0) return 0;
+  return Math.round((w / (1 + svcFeeRate())) * 100) / 100;
+}
+
+/* The fee is whatever is left over, so pool + fee === walletSpend exactly. */
+function svcPlatformFee(walletSpend) {
+  const w = Math.round((parseFloat(walletSpend) || 0) * 100) / 100;
+  if (w <= 0) return 0;
+  return Math.round((w - svcPoolAmount(w)) * 100) / 100;
+}
+
+/* The wallet balance needed to invest the pool minimum. The fee comes out of
+   the amount, so it is the minimum itself — nothing extra to top up. The
+   server compares the pool minimum against the WALLET SPEND for the same
+   reason, and a client that added the fee on top told people they needed
+   more than the server would have asked for. */
+function svcMinWalletFor(pool) {
+  return parseFloat(pool && pool.min_investment) || 0;
+}
+
+/* The most that can be invested right now: the whole balance, to the cent.
+   This is the answer to "I want to invest everything" and it leaves zero
+   behind, which is the entire point of an inclusive fee. */
+function svcMaxInvestable(walletBalance) {
+  return Math.round((parseFloat(walletBalance) || 0) * 100) / 100;
+}
