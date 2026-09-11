@@ -117,15 +117,110 @@
         const h = frame.contentDocument.body.scrollHeight;
         if (h) frame.style.height = (h + 24) + 'px';
       } catch (_) {}
+      /* The documents carry their own "Print / Save PDF" button, for when one
+         is opened in a window of its own. Inside this overlay it is a second
+         button beside the one in the bar above — and in the packaged app it is
+         the DEAD one, since it calls window.print(). Hidden rather than
+         removed from the templates, so a document opened on its own still has
+         it. */
+      try {
+        frame.contentDocument
+          .querySelectorAll('.no-print button, .btn-print, button[onclick*="print"]')
+          .forEach(b => { b.style.display = 'none'; });
+      } catch (_) {}
     });
     frame.srcdoc = html;
     ov.querySelector('#svc-doc-close').onclick = () => ov.remove();
-    ov.querySelector('#svc-doc-print').onclick = () => {
-      /* Print the frame, not the overlay: the document carries its own @page
-         size and margins, and the overlay chrome is not part of it. */
+    ov.querySelector('#svc-doc-print').onclick = () => _printOrShare(frame);
+  }
+
+  /* Whether we are inside the packaged app rather than a browser tab. */
+  function _isNativeApp() {
+    return !!(window.__SVC_NATIVE__ || window.Capacitor);
+  }
+
+  /* "Print / Save PDF".
+   *
+   * On the web this prints the IFRAME, not the overlay: the document carries
+   * its own @page size and margins and the overlay chrome is not part of it.
+   *
+   * In the packaged app it cannot. window.print() does not exist in the iOS
+   * WKWebView, so the button threw and reported a browser problem the client
+   * could do nothing about; on Android it exists but does nothing at all, so
+   * the button was silent. Neither can be fixed from JavaScript.
+   *
+   * So the app takes the route the statement screen already uses and has
+   * shipped with for some time: render the document to a canvas, slice it
+   * into A4 pages with jsPDF, and hand the file to the operating system's
+   * share sheet — "Save to Files" or "Print" on iOS, the share tray on
+   * Android. Same document, and it ends up somewhere the client keeps. */
+  async function _printOrShare(frame) {
+    if (!_isNativeApp()) {
       try { frame.contentWindow.focus(); frame.contentWindow.print(); }
       catch (_) { Toast.error('This browser could not open the print dialog'); }
-    };
+      return;
+    }
+
+    const doc = frame.contentDocument;
+    const body = doc && doc.body;
+    if (!body) { Toast.error('The document is still loading — please try again.'); return; }
+
+    const jsPDFCtor = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+    if (typeof html2canvas === 'undefined' || !jsPDFCtor) {
+      Toast.error('The PDF tools did not load. Check your connection and reopen this document.');
+      return;
+    }
+
+    Toast.info('Preparing your PDF\u2026');
+    try {
+      const canvas = await html2canvas(body, {
+        scale: 1.5, useCORS: true, allowTaint: true, logging: false,
+        backgroundColor: '#ffffff',
+        windowWidth: Math.max(body.scrollWidth, 794),
+      });
+
+      const pdf  = new jsPDFCtor({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pgW  = pdf.internal.pageSize.getWidth();
+      const pgH  = pdf.internal.pageSize.getHeight();
+      const imgH = (canvas.height * pgW) / canvas.width;
+      const img  = canvas.toDataURL('image/jpeg', 0.92);
+
+      /* One tall image, drawn once per page at a negative offset — the same
+         slicing the statement screen uses, so a long document does not end
+         up squeezed onto a single page. */
+      let remaining = imgH, y = 0;
+      pdf.addImage(img, 'JPEG', 0, y, pgW, imgH);
+      remaining -= pgH;
+      while (remaining > 0) {
+        y -= pgH;
+        pdf.addPage();
+        pdf.addImage(img, 'JPEG', 0, y, pgW, imgH);
+        remaining -= pgH;
+      }
+
+      const name = (doc.title || 'SV Capital document').replace(/[^\w\-. ]+/g, '').trim() + '.pdf';
+      const blob = pdf.output('blob');
+      const file = new File([blob], name, { type: 'application/pdf' });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: doc.title || 'SV Capital document' });
+        return;
+      }
+      /* No share sheet: fall back to a download, which some Android WebViews
+         do honour. If neither works the client is told, rather than left
+         watching a button that appears to do nothing. */
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = name;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 15000);
+      Toast.success('PDF saved to your downloads.');
+    } catch (err) {
+      /* A share the client cancels is not a failure. */
+      if (err && (err.name === 'AbortError' || /abort/i.test(err.message || ''))) return;
+      console.error('[documents] PDF export failed:', err);
+      Toast.error('Could not prepare the PDF. Please try again.');
+    }
   }
 
 function _openAdminTaxCertWindow(data) {
