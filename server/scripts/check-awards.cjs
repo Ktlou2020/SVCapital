@@ -32,18 +32,27 @@ const MAIN    = read('js/main.js');
 /* The page's own <style> block, which is where the collision happened. */
 const inlineCss = (HTML.match(/<style>([\s\S]*?)<\/style>/) || ['', ''])[1];
 
-console.log('\nthe award is on the page');
+console.log('\nthe award is in the list, with the others');
 {
-  ok('there is an awards section', /class="awards-section"/.test(HTML));
-  ok('it is labelled as awards and recognition',
-     /Awards &amp; recognition/i.test(HTML) || /Awards &amp;amp; recognition/i.test(HTML),
-     'the strip has no heading');
-  ok('the award is named in full',
+  ok('there is one awards block, not two',
+     (HTML.match(/Awards &(amp;)? ?Recognition/gi) || []).length === 1,
+     'a second strip was added instead of using the list that already existed');
+  ok('it is the block inside the compliance section',
+     /class="trust-awards"/.test(HTML));
+  ok('the new award is named in full',
      /Best Alternative Investment Solutions &mdash; South Africa/.test(HTML),
      'the award title is missing or reworded');
   ok('the body that gave it is credited',
-     /Global Financial Market Review/.test(HTML), 'an award with no issuer is a claim');
+     /Awarded by Global Financial Market Review/.test(HTML),
+     'an award with no issuer is a claim');
   ok('and the year is shown', /award-card__year">2025</.test(HTML));
+
+  /* Newest first, which is the order the three already there were in. */
+  const years = [...HTML.matchAll(/award-card__year">(\d{4})</g)].map(m => Number(m[1]));
+  ok('all four awards are listed', years.length === 4, JSON.stringify(years));
+  ok('and the newest is first',
+     JSON.stringify(years) === JSON.stringify([...years].sort((a, b) => b - a)),
+     JSON.stringify(years));
 }
 
 console.log('\nit uses the component that already existed');
@@ -59,23 +68,18 @@ console.log('\nit uses the component that already existed');
      !/^\s*\.award-card__(year|content|title|issuer|icon)\s*[,{]/m.test(inlineCss),
      'the year pill and the content block belong to the component');
   ok('the markup matches the shape the component expects',
-     /<span class="award-card__year">[\s\S]{0,40}<div class="award-card__content">[\s\S]{0,200}<strong>/.test(HTML),
+     /<div class="award-card__year">2025<\/div>\s*<div class="award-card__content">\s*<strong>/.test(HTML),
      'the component styles .award-card__content strong and .award-card__content p');
   ok('the reveal animation already covers it',
      /'\.award-card',/.test(MAIN),
      'the card would sit invisible if the reveal list did not name it');
 }
 
-console.log('\nthe section around it is the page’s own, and is light');
+console.log('\nand no second strip was left behind');
 {
-  ok('the section wrapper is defined in the page', /\.awards-section\s*\{/.test(inlineCss));
-  ok('on a light ground, because the card is light',
-     /\.awards-section\s*\{[^}]*background:\s*#fff/.test(inlineCss),
-     'a light card on a dark band is the bug this replaced');
-  ok('the card keeps its own look, with only layout overridden',
-     /\.awards-row \.award-card\s*\{[^}]*margin-bottom:0/.test(inlineCss) &&
-     !/\.awards-row \.award-card\s*\{[^}]*background/.test(inlineCss),
-     'overriding its colours here recreates the two-definitions problem');
+  ok('the page defines no awards section of its own',
+     !/\.awards-section|\.awards-row/.test(inlineCss + HTML),
+     'the duplicate strip is still in the page');
 }
 
 console.log('\nsearch engines are told about it too');

@@ -8194,27 +8194,44 @@ async function loadReferralDashboard() {
   // Points, not rand — referring earns XP towards the next level, not cash.
   set('refStatBonuses',  points ? `${points} XP` : '0 XP');
 
+  /* The two shells hold this list in different containers: the web portal in
+     a <tbody>, the mobile one in a <div class="ref-people-list">. Writing
+     <tr> into a div is invalid markup — the browser throws the tags away and
+     leaves the text bare — so the shape follows the container rather than
+     being assumed. */
   const body = document.getElementById('referredInvestorsBody');
   if (!body) return;
+  const asRows = body.tagName === 'TBODY';
+
   if (!referred.length) {
-    body.innerHTML = `<tr><td colspan="5" class="text-center text-muted" style="padding:16px">No referrals yet — share your code to get started <i class="fa-solid fa-arrow-up-right-from-square" style="margin-left:4px"></i></td></tr>`;
+    body.innerHTML = asRows
+      ? `<tr><td colspan="4" class="text-center text-muted" style="padding:20px">No referrals yet &mdash; share your code to get started</td></tr>`
+      : `<div class="text-center text-muted" style="padding:20px">No referrals yet &mdash; share your code to get started</div>`;
     return;
   }
+
+  const invBadge = r => r.invested
+    ? `<span class="badge badge--green">Invested</span>`
+    : `<span class="badge badge--gray">Not yet</span>`;
+
   body.innerHTML = referred.map(r => {
-    // Every signup earns the same points; there is no per-referral cash to
-    // chase up, so nothing here is ever "pending".
-    const bonusCell = `<span style="font-weight:700;color:#22c55e">+${POINTS_PER_REFERRAL} XP</span>`;
-    return `
+    const name = `${_esc(r.firstName)} ${_esc(r.lastName)}`;
+    if (asRows) return `
     <tr>
-      <td><div style="font-weight:600;font-size:0.82rem;color:#1a1a1a">${_esc(r.firstName)} ${_esc(r.lastName)}</div></td>
+      <td><div style="font-weight:600;font-size:0.82rem;color:#1a1a1a">${name}</div></td>
       <td>${Utils.statusBadge(r.status)}</td>
-      <td>${r.invested
-        ? `<span class="badge badge--green">Invested</span>`
-        : `<span class="badge badge--gray">Not yet</span>`}</td>
+      <td>${invBadge(r)}</td>
       <td style="font-size:0.75rem;color:#6b7280">${Utils.date(r.joinedAt)}</td>
-      <td>${bonusCell}</td>
-    </tr>
-  `}).join('');
+    </tr>`;
+    return `
+    <div class="ref-person">
+      <div class="ref-person__main">
+        <div class="ref-person__name">${name}</div>
+        <div class="ref-person__date">Joined ${Utils.date(r.joinedAt)}</div>
+      </div>
+      <div class="ref-person__badges">${Utils.statusBadge(r.status)} ${invBadge(r)}</div>
+    </div>`;
+  }).join('');
 }
 
 function _kycFileSelected(file) {

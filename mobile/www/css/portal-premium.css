@@ -2419,11 +2419,94 @@ body {
 .badge-paid-out { background: rgba(47,140,155,0.1) !important; color: #656565 !important; border-radius: 20px !important; padding: 3px 10px !important; font-size: 0.68rem !important; font-weight: 700 !important; }
 .badge-pending  { background: rgba(254,194,79,0.1) !important; color: #b45309 !important; border-radius: 20px !important; padding: 3px 10px !important; font-size: 0.68rem !important; font-weight: 700 !important; }
 
-/* ─── REFERRAL / HERO SECTIONS ─── */
+/* ─── REFERRAL ────────────────────────────────────────────────────────
+   Every colour here comes from the CI tokens: --ci-orange (#fec24f) through
+   --ci-orange-dark (#ff5229) is the same gradient the award year pill and
+   the primary button already use.
+
+   Scoped through .page-content where it has to beat .page-content h2 / p in
+   ci-theme.css — one class loses to a class plus an element, which is how
+   the hero came to render near-black text on a dark navy band. */
 .referral-hero {
   background: linear-gradient(140deg, #0d1724 0%, #122438 100%) !important;
   border-radius: 22px !important;
   border: 1px solid rgba(255,255,255,0.07) !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 20px !important;
+  padding: 26px 30px !important;
+}
+.referral-hero__icon {
+  flex-shrink: 0;
+  width: 54px; height: 54px; border-radius: 16px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.45rem; color: #1a1a1a;
+  background: linear-gradient(135deg, var(--ci-orange, #fec24f), var(--ci-orange-dark, #ff5229));
+  box-shadow: 0 6px 18px rgba(255,82,41,0.28);
+}
+.page-content .referral-hero__title {
+  font-size: 1.3rem !important; font-weight: 800 !important;
+  line-height: 1.25 !important; margin: 0 0 6px !important;
+}
+.page-content .referral-hero__sub {
+  font-size: 0.86rem !important; line-height: 1.6 !important;
+  margin: 0 !important; max-width: 62ch;
+}
+
+/* The code is the thing on this page people came for, so it is the largest
+   thing on it. tabular-nums because a code is read one character at a time. */
+.referral-code {
+  font-size: 2.6rem !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.16em !important;
+  font-variant-numeric: tabular-nums;
+  background: linear-gradient(135deg, var(--ci-orange-dark, #ff5229), var(--ci-orange, #fec24f)) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+  line-height: 1.1 !important;
+}
+/* The gradient-clipped text above has no fallback of its own — a browser that
+   does not support background-clip:text would paint nothing at all. */
+@supports not ((-webkit-background-clip: text) or (background-clip: text)) {
+  .referral-code { -webkit-text-fill-color: #ff5229 !important; color: #ff5229 !important; }
+}
+
+.referral-link-box {
+  display: flex !important; align-items: center !important; gap: 8px !important;
+  justify-content: space-between !important;
+  padding: 8px 8px 8px 14px !important;
+  border-radius: 12px !important;
+  border: 1.5px solid var(--ci-orange-border, rgba(254,194,79,0.25)) !important;
+  background: var(--ci-orange-pale, rgba(254,194,79,0.08)) !important;
+}
+.referral-link-box > span {
+  font-size: 0.82rem; color: #4b5563; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; direction: ltr;
+}
+.referral-link-box:hover { border-color: rgba(254,194,79,0.55) !important; }
+
+/* The step numbers were bare text — "1 2 3 4" running down the panel with no
+   shape to them. A numbered list needs its numbers to look like markers. */
+.ref-step { display: flex; align-items: flex-start; gap: 14px; }
+.ref-step__num {
+  flex-shrink: 0;
+  width: 30px; height: 30px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.9rem; font-weight: 800;
+  color: var(--ci-orange-dark, #ff5229);
+  background: var(--ci-orange-pale, rgba(254,194,79,0.12));
+  border: 1.5px solid var(--ci-orange-border, rgba(254,194,79,0.3));
+}
+.ref-step strong { display: block; font-size: 0.9rem; font-weight: 700; margin-bottom: 3px; }
+.page-content .ref-step p { font-size: 0.86rem !important; line-height: 1.6 !important; margin: 0 !important; }
+
+@media (max-width: 640px) {
+  .referral-hero { flex-direction: column !important; align-items: flex-start !important; padding: 22px !important; }
+  .referral-code { font-size: 2rem !important; letter-spacing: 0.12em !important; }
+  /* Not shrunk below the portal's own legibility floor — see
+     check-portal-mobile-layout.cjs. The link ellipsises instead. */
+  .referral-link-box > span { font-size: 0.86rem; }
 }
 
 /* ─── INFO ROWS ─── */

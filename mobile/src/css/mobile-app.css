@@ -3529,3 +3529,21 @@ input[disabled].form-input {
     scroll-behavior: auto !important;
   }
 }
+
+/* ─── Referral: the people you have referred ──────────────────────────
+   The mobile shell holds this list in a div rather than a table, because a
+   five-column table in a phone-width column is a horizontal scrollbar. One
+   row per person, with the badges under the name. */
+.ref-people-list { display: flex; flex-direction: column; }
+.ref-person {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 4px; border-bottom: 1px solid rgba(0,0,0,0.06);
+}
+.ref-person:last-child { border-bottom: none; }
+.ref-person__main { min-width: 0; }
+.ref-person__name { font-size: 0.86rem; font-weight: 700; color: #1a1a1a;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ref-person__date { font-size: 0.72rem; color: #6b7280; margin-top: 2px; }
+.ref-person__badges { display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+body.dark-mode .ref-person { border-bottom-color: rgba(255,255,255,0.08); }
+body.dark-mode .ref-person__name { color: #e2e8f0; }

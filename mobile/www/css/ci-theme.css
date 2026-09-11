@@ -560,10 +560,16 @@
 .my-ticket-meta     { color: var(--ci-text-dim) !important; }
 .my-ticket-response { background: var(--ci-bg-light) !important; border-left-color: var(--ci-orange) !important; color: var(--ci-text-body) !important; }
 
-/* Referral hero on dark-ish bg — keep text white */
-.referral-hero__title { color: #ffffff !important; }
-.referral-hero__sub   { color: rgba(255,255,255,0.80) !important; }
-.ref-step p { color: rgba(255,255,255,0.70) !important; }
+/* Referral hero. These used to be written as .referral-hero__title, which
+   LOSES to .page-content h2 further down this file — one class against a
+   class plus an element — so the hero rendered near-black text on a dark
+   navy band. Scoped through .page-content to win on the same terms.
+
+   .ref-step p is gone rather than strengthened: the steps sit in a white
+   panel, not on the hero, so white text there was wrong. It only ever looked
+   right because .page-content p happened to beat it. */
+.page-content .referral-hero__title { color: #ffffff !important; }
+.page-content .referral-hero__sub   { color: rgba(255,255,255,0.78) !important; }
 
 /* Maturity card */
 .maturity-card {
