@@ -2526,6 +2526,7 @@ async function viewInvestor(id) {
     <button class="tab-btn inv-tab-btn"        id="invTab-activity"      onclick="_invTab('activity');_loadInvestorActivity('${inv.id}')"><i class="fa-solid fa-mobile-screen" style="margin-right:5px"></i>Activity</button>
     <button class="tab-btn inv-tab-btn"        id="invTab-admin"         onclick="_invTab('admin')"><i class="fa-solid fa-shield-halved" style="margin-right:5px"></i>Admin</button>
     <button class="tab-btn inv-tab-btn"        id="invTab-statements"    onclick="_invTab('statements');_loadInvestorStatements('${inv.id}')"><i class="fa-solid fa-file-lines" style="margin-right:5px"></i>Statements</button>
+    <button class="tab-btn inv-tab-btn"        id="invTab-agreements"    onclick="_invTab('agreements');_loadInvestorAgreements('${inv.id}')"><i class="fa-solid fa-file-signature" style="margin-right:5px"></i>Agreements</button>
     ${invSubAccounts.length ? `<button class="tab-btn inv-tab-btn" id="invTab-subaccounts" onclick="_invTab('subaccounts')"><i class="fa-solid fa-users" style="margin-right:5px"></i>Sub-accounts (${invSubAccounts.length})</button>` : ''}
     <button class="tab-btn inv-tab-btn"        id="invTab-comms"         onclick="_invTab('comms')"><i class="fa-solid fa-envelope" style="margin-right:5px"></i>Comms</button>
   </div>
@@ -2957,6 +2958,23 @@ async function viewInvestor(id) {
       </div>
       <div class="panel__body" id="invActivity-sessions">
         <div style="text-align:center;padding:16px;color:var(--text-dim);font-size:0.8rem"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Agreements ── -->
+  <div id="invPanel-agreements" style="display:none">
+    <div class="panel">
+      <div class="panel__header">
+        <span class="panel__title"><i class="fa-solid fa-file-signature" style="color:#eda5ff;margin-right:6px"></i>Signed Investment Agreements</span>
+      </div>
+      <div class="panel__body">
+        <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px">
+          Every agreement this client has signed, as stored. The document opens exactly as
+          it was signed — it is not rebuilt from a template, so the wording is the wording
+          they agreed to. The checksum is of those stored bytes.
+        </p>
+        <div id="invAgreementsList"></div>
       </div>
     </div>
   </div>
@@ -17370,6 +17388,81 @@ async function _generateAdminTaxCert(investorId) {
    chip behind it to be visible at all, and that chip would swallow this one. */
 /* Moved to js/investor-documents.js, which the investor portal loads too. */
 function _openAdminTaxCertWindow(data) { return SVCDocs.openIncomeReference(data); }
+
+/* ── A client's signed agreements, under their profile ────────────────
+   The question this answers on a support call is "what did they actually
+   sign?", so it opens the STORED document rather than rebuilding one from
+   the current template. The two differ the moment the wording changes, and
+   the stored copy is the only one that was ever agreed to. */
+async function _loadInvestorAgreements(investorId) {
+  const el = document.getElementById('invAgreementsList');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin fa-2x"></i></div>';
+
+  let list = [];
+  try {
+    const res = await API._fetch('GET', 'agreements', null, { investor_id: investorId });
+    list = res.agreements || [];
+  } catch (err) {
+    el.innerHTML = `<div style="padding:20px;color:var(--red);font-size:0.85rem">Could not load agreements: ${_esc(err.message || 'unknown error')}</div>`;
+    return;
+  }
+  if (!list.length) {
+    el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.85rem"><i class="fa-solid fa-file-circle-xmark" style="font-size:2rem;display:block;margin-bottom:10px;opacity:0.3"></i>No agreements signed yet</div>';
+    return;
+  }
+
+  const STATUS = {
+    signed: ['badge--yellow', 'Signed \u2014 awaiting funds'],
+    funded: ['badge--green',  'Active'],
+    lapsed: ['badge--gray',   'Lapsed'],
+    drawn:  ['badge--gray',   'Drawn, not signed'],
+  };
+  const money = c => Utils.rand((Number(c) || 0) / 100);
+
+  el.innerHTML = `<div style="overflow-x:auto">
+    <table class="data-table">
+      <thead><tr>
+        <th>Agreement</th><th>Pool</th><th>Structure</th><th>Signed</th>
+        <th>Invested</th><th>Fee</th><th>Total</th><th>Status</th><th>Checksum</th><th></th>
+      </tr></thead>
+      <tbody>${list.map(a => {
+        const [cls, label] = STATUS[a.status] || ['badge--gray', a.status || '\u2014'];
+        return `<tr>
+          <td style="font-family:monospace;font-size:0.75rem">${_esc(a.agreement_no)}</td>
+          <td>${_esc(a.pool_id || '\u2014')}</td>
+          <td style="font-size:0.78rem">${_esc(a.template_key || '\u2014')} <span style="color:var(--text-muted)">${_esc(a.template_version || '')}</span></td>
+          <td>${a.signed_at ? Utils.date(a.signed_at) : '\u2014'}</td>
+          <td>${money(a.pool_amount_cents)}</td>
+          <td>${money(a.fee_cents)}</td>
+          <td style="font-weight:700">${money(a.amount_cents)}</td>
+          <td><span class="badge ${cls}">${_esc(label)}</span></td>
+          <td style="font-family:monospace;font-size:0.68rem;color:var(--text-muted)" title="${_esc(a.document_sha256 || '')}">${_esc((a.document_sha256 || '\u2014').slice(0, 10))}</td>
+          <td><button class="btn btn--secondary btn--sm" onclick="_openAgreementDoc('${_esc(a.id)}')"><i class="fa-solid fa-file-lines"></i> Open</button></td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>
+  </div>`;
+}
+
+/* Fetched with the console's credentials and written into a new window: the
+   endpoint requires authentication, and a plain link carries none. */
+async function _openAgreementDoc(id) {
+  try {
+    const token = Auth.getToken();
+    const res = await fetch(`/api/agreements/${encodeURIComponent(id)}/document`, {
+      credentials: 'include',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error('Agreement not found.');
+    const html = await res.text();
+    const w = window.open('', '_blank');
+    if (!w) { Toast.error('Pop-up blocked \u2014 allow pop-ups to open the agreement.'); return; }
+    w.document.open(); w.document.write(html); w.document.close();
+  } catch (err) {
+    Toast.error(err.message || 'Could not open that agreement.');
+  }
+}
 
 async function _loadInvestorStatements(investorId) {
   const el = document.getElementById('invStatementsList');

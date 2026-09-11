@@ -8836,8 +8836,82 @@ function _launchGiftConfetti() {
 function loadDocuments() {
   if (!PORTAL.investor) { Toast.error('Portfolio data still loading'); return; }
   _renderKycDocsList();
+  _renderAgreementsTable();
   _renderCertificatesTable();
   _renderReceiptsTable();
+}
+
+/* ── Signed agreements ────────────────────────────────────────────────
+   The contract a client signed is the one document on this screen they did
+   not generate themselves — the certificate and the receipt are rendered on
+   demand from data, and this is the stored bytes they actually put their
+   name to. It is served from the server rather than rebuilt here, because a
+   copy rebuilt in the browser is not the document that was signed. */
+async function _renderAgreementsTable() {
+  const body = document.getElementById('docAgreementsBody');
+  if (!body) return;
+  const cols = 7;
+  const row = html => `<tr><td colspan="${cols}" class="text-center text-muted" style="padding:24px">${html}</td></tr>`;
+
+  let list = [];
+  try {
+    const r = await API._fetch('GET', 'agreements');
+    list = (r && r.agreements) || [];
+  } catch (e) {
+    body.innerHTML = row('Could not load your agreements. Please try again.');
+    return;
+  }
+  if (!list.length) {
+    body.innerHTML = row('No signed agreements yet. You sign one each time you invest.');
+    return;
+  }
+
+  const STATUS = {
+    signed: ['badge--yellow', 'Signed — awaiting funds'],
+    funded: ['badge--green',  'Active'],
+    lapsed: ['badge--gray',   'Lapsed'],
+  };
+  body.innerHTML = list.map(a => {
+    const [cls, label] = STATUS[a.status] || ['badge--gray', a.status || '—'];
+    const pool = (PORTAL.pools || []).find(p => p.id === a.pool_id);
+    const total = (Number(a.amount_cents) || 0) / 100;
+    const fee   = (Number(a.fee_cents) || 0) / 100;
+    return `<tr>
+      <td style="font-family:monospace;font-size:0.78rem">${_esc(a.agreement_no)}</td>
+      <td>${_esc((pool && pool.name) || a.pool_id || '—')}</td>
+      <td>${a.signed_at ? Utils.date(a.signed_at) : '—'}</td>
+      <td>${Utils.rand(total - fee)}</td>
+      <td>${Utils.rand(total)}</td>
+      <td><span class="badge ${cls}">${_esc(label)}</span></td>
+      <td><button class="btn btn--secondary btn--sm" onclick="viewAgreement('${_esc(a.id)}')">
+            <i class="fa-solid fa-file-lines"></i> View
+          </button></td>
+    </tr>`;
+  }).join('');
+}
+
+/* Fetched with the session's own credentials and written into a new window.
+   A plain link to the endpoint would 401 in the native shell, which
+   authenticates with a bearer token a new tab does not carry. */
+async function viewAgreement(id) {
+  try {
+    const html = await _agreementHtml(id);
+    const w = window.open('', '_blank');
+    if (!w) { Toast.error('Your browser blocked the new window. Please allow pop-ups for this site.'); return; }
+    w.document.open(); w.document.write(html); w.document.close();
+  } catch (e) {
+    Toast.error(e.message || 'Could not open that agreement.');
+  }
+}
+
+async function _agreementHtml(id) {
+  const token = Auth.getToken();
+  const res = await fetch(`/api/agreements/${encodeURIComponent(id)}/document`, {
+    credentials: 'include',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new Error('Could not load that agreement.');
+  return res.text();
 }
 
 /* ── Investment Certificate PDF (html path) ── */

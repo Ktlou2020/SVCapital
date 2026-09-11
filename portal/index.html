@@ -1161,6 +1161,24 @@
           </div>
         </div>
 
+        <!-- Section 1: Signed Agreements -->
+        <div class="table-card mb-20">
+          <div class="table-card__header">
+            <div>
+              <div class="table-card__title"><i class="fa-solid fa-file-signature" style="color:#eda5ff"></i> Signed Agreements</div>
+              <div class="table-card__sub">The contract you signed for each investment, exactly as you signed it</div>
+            </div>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead><tr><th>Agreement</th><th>Pool</th><th>Signed</th><th>Invested</th><th>Total paid</th><th>Status</th><th>Action</th></tr></thead>
+              <tbody id="docAgreementsBody">
+                <tr><td colspan="7" class="text-center text-muted" style="padding:24px">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <!-- Section 1: Investment Certificates -->
         <div class="table-card mb-20">
           <div class="table-card__header">
@@ -3010,7 +3028,7 @@ if (window.Capacitor) {
 }
 </script>
 <script src="/js/native.js"></script>
-<script src="../js/portal-core.js?v=27"></script>
+<script src="../js/portal-core.js?v=28"></script>
 <script src="../js/investor-documents.js?v=5"></script>
 <script src="js/portal.js?v=123"></script>
 <!-- sv-intelligence.js hidden -->

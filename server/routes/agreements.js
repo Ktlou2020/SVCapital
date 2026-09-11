@@ -24,6 +24,20 @@ const VALID_MINUTES = 30;
 
 const investorOf = req => req.user.investorId || req.user.investor_id;
 
+/* Who may read somebody else's agreement. Without this, "not an investor" was
+   enough — any authenticated non-investor account could fetch any signed
+   contract by id. The console needs it; nothing else does. */
+const STAFF_ROLES = ['admin', 'director', 'fund_manager'];
+const isStaff = req => STAFF_ROLES.includes(req.user && req.user.role);
+
+/* The owner, or staff. Returns false for everyone else, and the caller
+   answers 404 rather than 403 so an id cannot be probed for existence. */
+function mayRead(req, agreementInvestorId) {
+  const me = investorOf(req);
+  if (me) return me === agreementInvestorId;
+  return isStaff(req);
+}
+
 /* AGR-2026-000481. Sequential within the year so the number itself says
    roughly when, and a gap is visible. */
 async function nextAgreementNo(client) {
@@ -273,9 +287,7 @@ router.get('/:id', requireAuth, async (req, res) => {
               amount_cents, pool_amount_cents, fee_cents, template_key, template_version,
               document_sha256, drawn_at, signed_at, funded_at, expires_at, investment_id
          FROM investment_agreements WHERE id = $1`, [req.params.id]);
-    if (!a) return res.status(404).json({ error: 'Agreement not found.' });
-    const investorId = investorOf(req);
-    if (investorId && a.investor_id !== investorId) return res.status(404).json({ error: 'Agreement not found.' });
+    if (!a || !mayRead(req, a.investor_id)) return res.status(404).json({ error: 'Agreement not found.' });
     res.json({ ok: true, agreement: {
       ...a,
       amount: AG.fromCents(a.amount_cents),
@@ -294,9 +306,9 @@ router.get('/:id/document', requireAuth, async (req, res) => {
     const { rows: [a] } = await pool.query(
       `SELECT investor_id, agreement_no, document_html FROM investment_agreements WHERE id = $1`,
       [req.params.id]);
-    if (!a || !a.document_html) return res.status(404).json({ error: 'Agreement not found.' });
-    const investorId = investorOf(req);
-    if (investorId && a.investor_id !== investorId) return res.status(404).json({ error: 'Agreement not found.' });
+    if (!a || !a.document_html || !mayRead(req, a.investor_id)) {
+      return res.status(404).json({ error: 'Agreement not found.' });
+    }
 
     /* Served as a document, from stored bytes. nosniff because the body is
        HTML we rendered and must not be re-interpreted as anything else. */
@@ -312,11 +324,20 @@ router.get('/:id/document', requireAuth, async (req, res) => {
 
 /* ─── GET / ──────────────────────────────────────────────────────────── */
 router.get('/', requireAuth, async (req, res) => {
-  const investorId = investorOf(req);
-  if (!investorId) return res.status(403).json({ error: 'Only investor accounts have agreements.' });
+  /* An investor sees their own, always. Staff see whoever they name — the
+     console lists them under the client's profile, and without this there
+     was no way to answer "send me what I signed" from the admin side. */
+  const me = investorOf(req);
+  const investorId = me || (isStaff(req) ? String(req.query.investor_id || '') : '');
+  if (!investorId) {
+    return res.status(403).json({ error: me === undefined && !isStaff(req)
+      ? 'Only investor accounts have agreements.'
+      : 'investor_id is required.' });
+  }
   try {
     const { rows } = await pool.query(
-      `SELECT id, agreement_no, pool_id, product_type, status, amount_cents,
+      `SELECT id, agreement_no, pool_id, product_type, status,
+              amount_cents, pool_amount_cents, fee_cents,
               template_key, template_version, document_sha256,
               drawn_at, signed_at, funded_at, investment_id
          FROM investment_agreements
