@@ -1228,6 +1228,13 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
       }
     }
 
+    /* An investor added from the console gets a referral code too. Only
+       signup ever issued one, so every client staff created by hand reached
+       Refer a Friend to find a dash where their code should be. */
+    if (table === 'investors' && !body.referral_code) {
+      body.referral_code = require('../services/referralCode').newCode();
+    }
+
     // Auto-generate ID if missing
     if (!body.id) {
       const prefixMap = {

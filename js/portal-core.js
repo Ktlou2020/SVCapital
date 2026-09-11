@@ -5664,7 +5664,21 @@ function renderQuestView() {
   const refSection = document.getElementById('rewardsReferralSection');
   const refList    = document.getElementById('rewardsReferralList');
   const refTxns    = PORTAL.transactions.filter(t => t.type === 'referral_bonus').sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-  if (refSection) refSection.style.display = 'none';   // Referral Rewards History hidden (feature not live)
+  /* Shown only to somebody who has some. The programme pays XP rather than
+     cash now, so referral_bonus rows are history — an empty "Referral Rewards
+     History" panel on every account would be a promise of money the
+     programme does not make. */
+  if (refSection) refSection.style.display = refTxns.length ? '' : 'none';
+  if (refList && refTxns.length) {
+    refList.innerHTML = refTxns.map(t => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(0,0,0,0.06)">
+        <div>
+          <div style="font-size:0.85rem;font-weight:600;color:#1a1a1a">${_esc(t.description || 'Referral bonus')}</div>
+          <div style="font-size:0.72rem;color:#6b7280">${Utils.date(t.created_at)}</div>
+        </div>
+        <div style="font-weight:700;color:#22c55e;white-space:nowrap">${Utils.rand(t.amount)}</div>
+      </div>`).join('');
+  }
 
   // Load existing feedback state for the Leave a Review card
   loadMyFeedback();

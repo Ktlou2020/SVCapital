@@ -342,23 +342,40 @@ router.post('/register', registerLimiter, async (req, res) => {
     if (userRole === 'investor') {
       const _chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
       const invId = 'SVC-' + Array.from({length: 6}, () => _chars[Math.floor(Math.random() * _chars.length)]).join('');
-      const referralCode = 'SVC' + Math.random().toString(36).substring(2, 7).toUpperCase();
+      /* Unique by construction and retried against the index, rather than
+         5 random characters and hope. See services/referralCode.js. */
+      const referralCode = require('../services/referralCode').newCode();
 
       const { gender, heardAboutUs } = req.body;
-      await pool.query(`
-        INSERT INTO investors
-          (id, first_name, last_name, email, phone, id_number, province, occupation,
-           risk_profile, referred_by, notes, gender, heard_about_us,
-           street_address, suburb, address, postal_code,
-           kyc_status, status, wallet_balance, referral_code, date_joined)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, 'pending', 'active', 0, $18, NOW())
-      `, [invId, firstName.trim(), lastName.trim(),
-          email.toLowerCase().trim(), phone || null,
-          idNumber || null, province || null, occupation || null,
-          riskProfile || 'moderate', referredBy || null, notes || null,
-          gender || null, heardAboutUs || null,
-          streetAddress || null, suburb || null, city || null, postalCode || null,
-          referralCode]);
+      /* Retried on a referral-code collision. The code carries a unique index
+         now, so a clash raises 23505 and would otherwise fail the whole
+         signup — the one moment where failing is least acceptable. Only the
+         code is regenerated; everything else about the row is unchanged. */
+      let code = referralCode;
+      for (let attempt = 0; ; attempt++) {
+        try {
+          await pool.query(`
+            INSERT INTO investors
+              (id, first_name, last_name, email, phone, id_number, province, occupation,
+               risk_profile, referred_by, notes, gender, heard_about_us,
+               street_address, suburb, address, postal_code,
+               kyc_status, status, wallet_balance, referral_code, date_joined)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, 'pending', 'active', 0, $18, NOW())
+          `, [invId, firstName.trim(), lastName.trim(),
+              email.toLowerCase().trim(), phone || null,
+              idNumber || null, province || null, occupation || null,
+              riskProfile || 'moderate', referredBy || null, notes || null,
+              gender || null, heardAboutUs || null,
+              streetAddress || null, suburb || null, city || null, postalCode || null,
+              code]);
+          break;
+        } catch (insErr) {
+          const clash = insErr.code === '23505' &&
+                        /investors_referral_code_uniq/.test(insErr.constraint || insErr.message || '');
+          if (!clash || attempt >= 7) throw insErr;
+          code = require('../services/referralCode').newCode();
+        }
+      }
 
       // Link investor_id on user
       await pool.query('UPDATE users SET investor_id = $1 WHERE id = $2', [invId, newUser.id]);

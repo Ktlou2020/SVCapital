@@ -3376,6 +3376,59 @@ async function autoSetup() {
       }
       if (added) console.log(`✅ Asset examples added to ${added} EIF product(s).`);
     });
+    await step("14. Give every investor a referral code", async () => {
+      /* Refer a Friend is being switched on, and it cannot be switched on for
+         an investor with no code: the screen shows a dash where the code goes
+         and a link nobody can use.
+
+         Only signup ever issued one. An investor added through the admin
+         console, imported, or created before that path existed has none — so
+         the feature would have looked broken to exactly the clients staff
+         had touched most.
+
+         Duplicates are settled first. The lookup that credits a referrer is
+         `WHERE referral_code = $1 LIMIT 1`, so where two investors share a
+         code one of them has been silently losing every referral they make.
+         The older row keeps the code, because it is the one more likely to
+         have been shared already; the newer is reissued. */
+      const { newCode } = require('../services/referralCode');
+      try {
+        const { rows: dupes } = await pool.query(`
+          SELECT id FROM (
+            SELECT id, ROW_NUMBER() OVER (PARTITION BY referral_code
+                                          ORDER BY created_at NULLS LAST, id) AS rn
+              FROM investors
+             WHERE referral_code IS NOT NULL AND referral_code <> ''
+          ) t WHERE rn > 1`);
+        const { rows: missing } = await pool.query(
+          `SELECT id FROM investors WHERE referral_code IS NULL OR referral_code = ''`);
+
+        let fixed = 0;
+        for (const r of [...dupes, ...missing]) {
+          for (let i = 0; i < 8; i++) {
+            try {
+              await pool.query('UPDATE investors SET referral_code = $1 WHERE id = $2',
+                               [newCode(), r.id]);
+              fixed++; break;
+            } catch (e) { if (e.code !== '23505') throw e; }
+          }
+        }
+
+        /* The index is what makes uniqueness true rather than hoped for.
+           Created after the repair, because it cannot be built while
+           duplicates are still there. Partial, so a row with no code yet does
+           not collide with every other row that has none. */
+        await pool.query(`
+          CREATE UNIQUE INDEX IF NOT EXISTS investors_referral_code_uniq
+            ON investors (referral_code)
+            WHERE referral_code IS NOT NULL AND referral_code <> ''`);
+
+        if (fixed) console.log(`✅ Referral codes issued or reissued for ${fixed} investor(s) (${dupes.length} duplicate).`);
+      } catch (rcErr) {
+        console.warn('⚠️  Referral code backfill warning:', rcErr.message);
+      }
+    });
+
 
 
   } catch (err) {
