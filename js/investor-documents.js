@@ -93,13 +93,31 @@
     ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#f1f5f9;' +
                        'display:flex;flex-direction:column';
     ov.innerHTML =
-      '<div style="background:#1f2937;color:#fff;padding:10px 14px;display:flex;' +
-           'align-items:center;gap:10px;flex-wrap:wrap">' +
-        '<span style="font-size:13px;font-weight:700;flex:1;min-width:120px">Document</span>' +
-        '<button id="svc-doc-print" style="border:none;padding:8px 16px;border-radius:6px;' +
-          'font-size:13px;font-weight:700;background:#eda5ff;color:#111;cursor:pointer">Print / Save PDF</button>' +
-        '<button id="svc-doc-close" style="border:none;padding:8px 16px;border-radius:6px;' +
-          'font-size:13px;font-weight:700;background:rgba(255,255,255,0.14);color:#fff;cursor:pointer">Close</button>' +
+      /* One row, on a phone too. The bar wrapped onto two and ate a fifth of
+         the screen before the document started: the title takes whatever is
+         left and truncates, rather than holding a width the controls then
+         have to wrap around. */
+      '<div style="background:#1f2937;color:#fff;padding:8px 10px;display:flex;' +
+           'align-items:center;gap:6px;flex-wrap:nowrap">' +
+        '<span style="font-size:13px;font-weight:700;flex:1 1 auto;min-width:0;' +
+              'overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Document</span>' +
+        /* Zoom, because the app turns pinch off. The viewport meta in the
+           packaged shell carries user-scalable=no — it is there to stop the
+           page jumping when a form field is tapped — and it applies to
+           everything, including a document opened full screen. So a client
+           got an A4 page at full width on a 390px phone and no way at all to
+           pull back and see the shape of it. These buttons do what pinch
+           would have done, and work the same on the web. */
+        '<button id="svc-doc-zoom-out" aria-label="Zoom out" style="border:none;flex:0 0 auto;width:32px;height:32px;' +
+          'border-radius:6px;font-size:17px;font-weight:700;background:rgba(255,255,255,0.14);color:#fff;cursor:pointer">\u2212</button>' +
+        '<button id="svc-doc-zoom-fit" aria-label="Fit to screen" style="border:none;flex:0 0 auto;min-width:46px;padding:8px 6px;' +
+          'border-radius:6px;font-size:12px;font-weight:700;background:rgba(255,255,255,0.14);color:#fff;cursor:pointer">Fit</button>' +
+        '<button id="svc-doc-zoom-in" aria-label="Zoom in" style="border:none;flex:0 0 auto;width:32px;height:32px;' +
+          'border-radius:6px;font-size:17px;font-weight:700;background:rgba(255,255,255,0.14);color:#fff;cursor:pointer">+</button>' +
+        '<button id="svc-doc-print" aria-label="Print or save as PDF" style="border:none;flex:0 0 auto;width:34px;height:32px;' +
+          'border-radius:6px;font-size:15px;background:#eda5ff;color:#111;cursor:pointer" title="Print / Save PDF">\u2913</button>' +
+        '<button id="svc-doc-close" aria-label="Close" style="border:none;flex:0 0 auto;width:32px;height:32px;' +
+          'border-radius:6px;font-size:17px;font-weight:700;background:rgba(255,255,255,0.14);color:#fff;cursor:pointer">\u00d7</button>' +
       '</div>' +
       '<div id="svc-doc-body" style="flex:1;overflow:auto;padding:10px"></div>';
     document.body.appendChild(ov);
@@ -108,15 +126,40 @@
        print, and a 35% A4 landscape page is not readable. It scrolls both ways
        instead. */
     const body  = ov.querySelector('#svc-doc-body');
+    /* The frame keeps the document's own width and is SCALED, rather than
+       being squeezed: reflowing an A4 layout into 390px breaks its columns
+       and its @page rules. The shell is sized to the scaled result so the
+       scrollbars match what is on screen. */
+    const shell = document.createElement('div');
+    shell.style.cssText = 'transform-origin:top left';
     const frame = document.createElement('iframe');
     frame.title = 'Document';
-    frame.style.cssText = 'border:0;display:block;background:#fff;width:' + docWidth + 'px;height:100%';
-    body.appendChild(frame);
+    frame.setAttribute('scrolling', 'no');
+    frame.style.cssText = 'border:0;display:block;background:#fff;width:' + docWidth + 'px';
+    shell.appendChild(frame);
+    body.appendChild(shell);
+    /* Fit is what a phone opens on; 1 is what a desktop opens on. Between
+       0.35 and 3 so neither button can run away. */
+    let scale = 1, docHeight = 0;
+    const fitScale = () => {
+      const avail = (body.clientWidth || docWidth) - 20;
+      return Math.max(0.35, Math.min(1, avail / docWidth));
+    };
+    const apply = () => {
+      shell.style.transform = 'scale(' + scale + ')';
+      shell.style.width  = Math.ceil(docWidth * scale) + 'px';
+      if (docHeight) shell.style.height = Math.ceil(docHeight * scale) + 'px';
+      const pct = ov.querySelector('#svc-doc-zoom-fit');
+      if (pct) pct.textContent = Math.round(scale * 100) + '%';
+    };
+    const setScale = v => { scale = Math.max(0.35, Math.min(3, v)); apply(); };
+
     frame.addEventListener('load', () => {
       try {
         const h = frame.contentDocument.body.scrollHeight;
-        if (h) frame.style.height = (h + 24) + 'px';
+        if (h) { docHeight = h + 24; frame.style.height = docHeight + 'px'; }
       } catch (_) {}
+      setScale(fitScale());
       /* The documents carry their own "Print / Save PDF" button, for when one
          is opened in a window of its own. Inside this overlay it is a second
          button beside the one in the bar above — and in the packaged app it is
@@ -130,7 +173,17 @@
       } catch (_) {}
     });
     frame.srcdoc = html;
-    ov.querySelector('#svc-doc-close').onclick = () => ov.remove();
+    ov.querySelector('#svc-doc-zoom-out').onclick = () => setScale(scale - 0.2);
+    ov.querySelector('#svc-doc-zoom-in').onclick  = () => setScale(scale + 0.2);
+    ov.querySelector('#svc-doc-zoom-fit').onclick = () => setScale(fitScale());
+    /* A phone rotating changes the width the fit was derived from. */
+    const onResize = () => { if (document.body.contains(ov)) setScale(fitScale()); };
+    window.addEventListener('resize', onResize);
+
+    ov.querySelector('#svc-doc-close').onclick = () => {
+      window.removeEventListener('resize', onResize);
+      ov.remove();
+    };
     ov.querySelector('#svc-doc-print').onclick = () => _printOrShare(frame);
   }
 
@@ -1090,6 +1143,8 @@ function _openAccountStatementWindow(data) {
     incomeReferenceHTML:  d => _openAdminTaxCertWindow(d, 'html'),
     /* Preview a document inside a container, scaled to fit a phone. */
     mountScaled: _mountScaled,
+    /* The full-screen reader, exposed so it can be driven in a check. */
+    overlay: _overlay,
     /* The width each document lays out at — the statement is A4 landscape. */
     STATEMENT_WIDTH: 1100,
     CERTIFICATE_WIDTH: 860,
