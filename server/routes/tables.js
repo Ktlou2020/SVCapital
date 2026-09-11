@@ -1029,6 +1029,13 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
       if (rawAmount <= 0) return res.status(400).json({ error: 'Investment amount must be greater than zero.' });
 
       // fee_inclusive: client sends total wallet spend; server splits into pool amount + fee
+      /* The fee is charged ON TOP of the investment. amount is what reaches
+         the pool; the wallet pays that plus 1% of it.
+
+         fee_inclusive is still read, and still means "amount is the wallet
+         spend, split it", because a client left open in a tab from before
+         this changed will keep sending it and its money must still land
+         somewhere sensible. Nothing in this repository sends it any more. */
       const feeInclusive = !!body.fee_inclusive;
       delete body.fee_inclusive; // not a DB column
 
@@ -1043,7 +1050,7 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
       } else {
         poolAmount  = rawAmount;
         platformFee = isReinvestment ? 0 : Math.round(rawAmount * 0.01 * 100) / 100;
-        required    = rawAmount + platformFee;
+        required    = Math.round((rawAmount + platformFee) * 100) / 100;
       }
 
       if (body.pool_id) {
@@ -1051,8 +1058,12 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
           `SELECT min_investment, status, end_date,
                   (end_date IS NOT NULL AND end_date < CURRENT_DATE) AS past_close
              FROM investment_pools WHERE id = $1`, [body.pool_id]);
+        /* Tested against what reaches the POOL, not against what leaves the
+           wallet. The minimum is a rule about the pool, and comparing it to
+           the wallet spend let the fee count towards it: R500 entered against
+           a R500 minimum passed while placing R495,05. */
         const minInv = parseFloat(pr[0]?.min_investment) || 0;
-        if (minInv && required < minInv - 0.005) {
+        if (minInv && poolAmount < minInv - 0.005) {
           return res.status(400).json({ error: `Minimum investment for this pool is R${minInv.toLocaleString('en-ZA')}.` });
         }
 

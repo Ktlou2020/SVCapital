@@ -1592,11 +1592,11 @@ function openInvestModal(poolId) {
     <div class="form-group" style="margin-top:14px">
       <label class="form-label">How much would you like to invest?</label>
       <div class="invest-quickpick mb-8">
-        ${[pool.min_investment, 5000, 10000, 25000].filter(v => v <= walletBal || v === pool.min_investment).map(v =>
+        ${[pool.min_investment, 5000, 10000, 25000].filter(v => svcWalletSpend(v) <= walletBal || v === pool.min_investment).map(v =>
           `<button class="invest-qp-btn" onclick="document.getElementById('investAmount').value=${v};_updateInvestCalc(${v},${pool.annual_rate},${pool.term_months},${pool.min_investment},${walletBal})">${Utils.rand(v)}</button>`
         ).join('')}
-        ${walletBal >= (parseFloat(pool.min_investment) || 0)
-          ? `<button class="invest-qp-btn invest-qp-btn--all" title="Invest your whole balance, fee included"
+        ${svcMaxInvestable(walletBal) >= (parseFloat(pool.min_investment) || 0)
+          ? `<button class="invest-qp-btn invest-qp-btn--all" title="The largest investment your balance covers, fee included"
                      onclick="document.getElementById('investAmount').value=${svcMaxInvestable(walletBal)};_updateInvestCalc(${svcMaxInvestable(walletBal)},${pool.annual_rate},${pool.term_months},${pool.min_investment},${walletBal})">
                Everything (${Utils.rand(svcMaxInvestable(walletBal))})
              </button>`
@@ -1649,14 +1649,13 @@ function _updateInvestCalc(amt, rate, termMonths, minInvest, walletBal) {
   const feeFeeEl = document.getElementById('ic-fee-fee');
   const feeTotEl = document.getElementById('ic-fee-total');
 
-  /* amt is the WALLET SPEND. The pool gets the remainder after the fee, so
-     the total is the amount itself and typing the whole balance spends the
-     whole balance. */
+  /* amt is what reaches the POOL. The fee is charged on top, so the wallet
+     pays amt + fee and that total is what has to fit the balance. */
   const fee         = _platformFee(amt);
   const poolAmt     = svcPoolAmount(amt);
-  const totalNeeded = amt;
+  const totalNeeded = svcWalletSpend(amt);
   const maxAffordable = walletBal != null ? svcMaxInvestable(walletBal) : null;
-  const overBudget  = walletBal != null && amt > walletBal + 0.005;
+  const overBudget  = walletBal != null && totalNeeded > walletBal + 0.005;
 
   if (amt >= minInvest) {
     if (feeAmtEl) feeAmtEl.textContent = Utils.rand(poolAmt, 2);
@@ -1686,9 +1685,9 @@ function _updateInvestCalc(amt, rate, termMonths, minInvest, walletBal) {
           <div style="display:flex;align-items:flex-start;gap:10px">
             <i class="fa-solid fa-circle-exclamation" style="color:#ef4444;margin-top:2px;flex-shrink:0"></i>
             <div style="flex:1">
-              <div style="font-size:0.83rem;font-weight:700;color:#ef4444;margin-bottom:4px">Amount exceeds available balance</div>
+              <div style="font-size:0.83rem;font-weight:700;color:#ef4444;margin-bottom:4px">Not enough in your wallet</div>
               <div style="font-size:0.78rem;color:#6b7280;line-height:1.5">
-                You entered <strong style="color:#1a1a1a">${Utils.rand(amt, 2)}</strong> but your wallet has <strong style="color:#1a1a1a">${Utils.rand(walletBal)}</strong>.
+                ${Utils.rand(amt, 2)} plus the ${Utils.rand(fee, 2)} fee comes to <strong style="color:#1a1a1a">${Utils.rand(totalNeeded, 2)}</strong>, and your wallet has <strong style="color:#1a1a1a">${Utils.rand(walletBal)}</strong>.
                 ${canInvest
                   ? `The most you can invest right now is <strong style="color:#1a1a1a">${Utils.rand(maxAffordable)}</strong>.`
                   : `This exceeds your available balance even at the minimum investment.`}
@@ -1716,30 +1715,31 @@ function _updateInvestCalc(amt, rate, termMonths, minInvest, walletBal) {
 
 async function confirmInvestment(pool) {
   _investConfirmed = true;
-  /* What the client typed is what leaves the wallet. The fee is taken out of
-     it, so typing the whole balance invests the whole balance. */
-  const walletSpend = parseFloat(document.getElementById('investAmount').value);
-  if (!walletSpend || walletSpend < pool.min_investment) { Toast.error(`Minimum investment is ${Utils.rand(pool.min_investment)}`); return; }
+  /* What the client typed is what reaches the POOL. The 1% is charged on top,
+     so the wallet pays the amount plus its fee. */
+  const amount = parseFloat(document.getElementById('investAmount').value);
+  if (!amount || amount < pool.min_investment) { Toast.error(`Minimum investment is ${Utils.rand(pool.min_investment)}`); return; }
 
   const _confSa = _pmSaId ? PORTAL.subAccounts.find(s => s.id === _pmSaId) : null;
   const wallet = _confSa ? (parseFloat(_confSa.wallet_balance) || 0) : (parseFloat(PORTAL.investor?.wallet_balance) || 0);
-  if (walletSpend > wallet + 0.005) { Toast.error(`Insufficient balance. You have ${Utils.rand(wallet)} in your wallet.`); return; }
-
-  const platformFee   = _platformFee(walletSpend);
-  const amount        = svcPoolAmount(walletSpend);
-  const totalDeducted = walletSpend;
+  const platformFee   = _platformFee(amount);
+  const totalDeducted = svcWalletSpend(amount);
+  if (totalDeducted > wallet + 0.005) {
+    Toast.error(`Insufficient balance. ${Utils.rand(amount)} plus the ${Utils.rand(platformFee)} fee comes to ${Utils.rand(totalDeducted)}, and you have ${Utils.rand(wallet)}.`);
+    return;
+  }
 
   /* The agreement is signed before the money moves, not after. The server
      refuses an investor's investment that has no signed agreement for this
      pool and this exact amount, so reaching the create call without one is
      a 412 the investor cannot act on — this is where they can.
 
-     Drawn against what leaves the wallet, which is what the server matches
-     the signature against.
+     Drawn against the pool amount; the route adds the fee and records the
+     total, which is what the server matches the signature against.
 
      A cancelled signature is a decision, not a failure: leave the invest
      modal as it was so the amount does not have to be typed again. */
-  const _signed = await signAgreementFor(pool, totalDeducted, _pmSaId);
+  const _signed = await signAgreementFor(pool, amount, _pmSaId);
   if (!_signed) { _investConfirmed = false; return; }
 
   try {
@@ -1755,13 +1755,8 @@ async function confirmInvestment(pool) {
       pool_id: pool.id,
       product_type: pool.product_type,
       pool_name: pool.name,
-      /* The wallet spend, with the flag that tells the server to take the fee
-         out of it. Sending the pool amount instead made the server re-derive
-         the total as amount + 1%, and that round trip can land a cent away
-         from what left the wallet — which the signed agreement, matched on an
-         exact amount, would then refuse. */
-      amount: walletSpend,
-      fee_inclusive: true,
+      /* What reaches the pool. The server charges the 1% on top of it. */
+      amount,
       annual_rate: pool.annual_rate,
       expected_return: Math.round(expectedReturn),
       actual_return: 0,

@@ -74,16 +74,21 @@ router.post('/draw', requireAuth, async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: 'This pool is no longer open to new investments.' });
     }
+    /* `amount` is what reaches the POOL. The minimum is a rule about the
+       pool, so it is tested against that and not against the wallet spend. */
     const minCents = AG.toCents(p.min_investment);
     if (minCents && amountCents < minCents) {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: `Minimum investment for this pool is ${AG.rand(minCents)}.` });
     }
 
-    /* The same split tables.js applies when the money moves, so the
-       document states the figures the wallet will actually see. */
-    const poolCents = Math.round(amountCents / 1.01);
-    const feeCents  = amountCents - poolCents;
+    /* The same arithmetic tables.js applies when the money moves, so the
+       document states the figures the wallet will actually see. The fee is
+       charged on top, and totalCents is what the gate matches the signature
+       against — it is what leaves the wallet. */
+    const poolCents  = amountCents;
+    const feeCents   = Math.round(poolCents * 0.01);
+    const totalCents = poolCents + feeCents;
 
     /* One live draft per investor per pool. Re-opening the modal should not
        leave a trail of drawn agreements nobody signed. */
@@ -100,13 +105,11 @@ router.post('/draw', requireAuth, async (req, res) => {
     const drawnAt = new Date();
 
     const html = AG.renderAgreement({
+      ...AG.poolFacts(p),
       agreement_no: no, investor_id: investorId,
       investor_name: `${inv.first_name || ''} ${inv.last_name || ''}`.trim(),
-      pool_id: p.id, pool_name: p.name, product_type: p.product_type,
-      term_months: p.term_months,
-      maturity_date: p.maturity_date ? new Date(p.maturity_date).toLocaleDateString('en-ZA', { year: 'numeric', month: 'long', day: 'numeric' }) : null,
-      rate_label: p.annual_rate ? `${(parseFloat(p.annual_rate) * 100).toFixed(2)}% target` : null,
-      amount_cents: amountCents, pool_amount_cents: poolCents, fee_cents: feeCents,
+      investor_email: inv.email,
+      amount_cents: totalCents, pool_amount_cents: poolCents, fee_cents: feeCents,
       drawn_at: drawnAt,
     });
 
@@ -117,7 +120,7 @@ router.post('/draw', requireAuth, async (req, res) => {
           template_key, template_version, status, document_html, drawn_at, expires_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'drawn',$12,$13,$14)`,
       [id, no, investorId, p.id, p.product_type, sub_account_id || null,
-       amountCents, poolCents, feeCents, t.key, t.version, html, drawnAt,
+       totalCents, poolCents, feeCents, t.key, t.version, html, drawnAt,
        new Date(drawnAt.getTime() + VALID_MINUTES * 60000)]
     );
 
@@ -125,7 +128,7 @@ router.post('/draw', requireAuth, async (req, res) => {
     res.json({
       ok: true, id, agreement_no: no, template: t.key, template_version: t.version,
       title: t.title, acknowledgements: acks, document_html: html,
-      amount: AG.fromCents(amountCents), pool_amount: AG.fromCents(poolCents),
+      amount: AG.fromCents(totalCents), pool_amount: AG.fromCents(poolCents),
       fee: AG.fromCents(feeCents), expires_in_minutes: VALID_MINUTES,
     });
   } catch (err) {
@@ -184,7 +187,7 @@ router.post('/:id/sign', requireAuth, async (req, res) => {
     }
 
     const { rows: [inv] } = await client.query(
-      `SELECT first_name, last_name FROM investors WHERE id = $1`, [investorId]);
+      `SELECT first_name, last_name, email FROM investors WHERE id = $1`, [investorId]);
     const expected = `${inv.first_name || ''} ${inv.last_name || ''}`.trim().toLowerCase().replace(/\s+/g, ' ');
     const given    = String(signer_name || '').trim().toLowerCase().replace(/\s+/g, ' ');
     if (!given) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Please type your full name to sign.' }); }
@@ -211,15 +214,25 @@ router.post('/:id/sign', requireAuth, async (req, res) => {
 
     /* Sealed here and never rendered again. The stored bytes are the
        agreement; the hash is what proves they have not moved since. */
+    /* The same facts, through the same helper, as at draw time. Building the
+       two documents from two different SELECTs is how the sealed copy comes
+       to differ from the one that was read — and the hash would then describe
+       a document nobody saw. */
     const { rows: [p] } = await client.query(
-      `SELECT name, term_months, annual_rate, maturity_date FROM investment_pools WHERE id = $1`, [a.pool_id]);
+      `SELECT ip.id, ip.name, ip.product_type, ip.term_months, ip.annual_rate,
+              ip.maturity_date, ip.investment_start_date,
+              ip.management_fee_pct, ip.management_fee_frequency,
+              ip.operational_fee_pct, ip.operational_fee_frequency,
+              pr.performance_fee_pct, pr.benchmark_rate
+         FROM investment_pools ip
+         LEFT JOIN products pr ON pr.product_type = ip.product_type
+        WHERE ip.id = $1`, [a.pool_id]);
     const sealed = AG.renderAgreement({
+      ...AG.poolFacts(p || {}),
+      product_type: a.product_type,
       agreement_no: a.agreement_no, investor_id: investorId,
       investor_name: `${inv.first_name || ''} ${inv.last_name || ''}`.trim(),
-      pool_id: a.pool_id, pool_name: p && p.name, product_type: a.product_type,
-      term_months: p && p.term_months,
-      maturity_date: p && p.maturity_date ? new Date(p.maturity_date).toLocaleDateString('en-ZA', { year: 'numeric', month: 'long', day: 'numeric' }) : null,
-      rate_label: p && p.annual_rate ? `${(parseFloat(p.annual_rate) * 100).toFixed(2)}% target` : null,
+      investor_email: inv.email,
       amount_cents: Number(a.amount_cents),
       pool_amount_cents: Number(a.pool_amount_cents),
       fee_cents: Number(a.fee_cents),

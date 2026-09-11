@@ -27,7 +27,9 @@ does not look like scratch.
 The single canonical purple across the entire platform is `#eda5ff`. No other purple values are permitted.
 
 ## Platform Fee
-Platform fee is 1% of investment amount. Fee transactions must always display as **negative** in all transaction lists and statements.
+Platform fee is 1% of the investment amount, charged **on top of it**. The amount a client enters is what reaches the pool; the wallet pays that amount plus the fee. Enter R500 into a pool with a R500 minimum and R500 reaches the pool, R5,00 is the fee, and R505,00 leaves the wallet.
+
+The pool minimum is a rule about the **pool**, so it is tested against the pool amount, never against the wallet spend. Fee transactions must always display as **negative** in all transaction lists and statements.
 
 ## Sub-Account Invest Gate
-`openSaInvest()` must check `wallet_balance >= min_investment` before navigating to the marketplace. Uses cheapest open pool as the threshold. Fee is inclusive (taken from the wallet amount, not added on top).
+`openSaInvest()` must check `wallet_balance >= min_investment + fee` before navigating to the marketplace. Uses the cheapest open pool as the threshold. A balance equal to the minimum is short by the fee.

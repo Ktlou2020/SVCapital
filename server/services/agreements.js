@@ -109,26 +109,190 @@ function acknowledgementsFor(productType) {
   return templateFor(productType).acks.map(k => ({ key: k, text: ACK[k] }));
 }
 
+/* ─── The clauses every agreement carries ─────────────────────────────
+   The structure-specific clauses in TEMPLATES say what the investment IS.
+   These say how the relationship works, and they are the ones an ombud asks
+   for: what we are and are not doing for the client, what the money buys,
+   when they can have it back, what we may do with their information, and
+   where they go when they are unhappy.
+
+   Numbered when rendered, so a clause can be cited in a letter. */
+const COMMON_CLAUSES = [
+  ['This agreement', 'This agreement records the terms on which the Investor places the Investment Amount with SmartVest Financial Services (Pty) Ltd, trading as SV Capital, an authorised financial services provider, FSP number 52449, for investment in the Pool identified above.'],
+  ['No advice has been given', 'SV Capital has provided factual information about this product. It has NOT provided financial advice as contemplated in the Financial Advisory and Intermediary Services Act. The Investor confirms that they have chosen this investment themselves, that they have satisfied themselves that it suits their circumstances, objectives and risk tolerance, and that they may seek independent advice before signing.'],
+  ['How the capital is applied', 'The Investment Amount is applied to the Pool and deployed into the underlying assets described in this agreement. The Investor does not hold title to any individual asset and has no right to direct how a particular asset is managed.'],
+  ['Fees', 'The fees set out in the Fees and charges table above are the only fees payable on this investment. The platform fee is charged in addition to the Investment Amount and is paid from the Investor’s wallet at the time of investment. Any management or operational fee is deducted from the Pool and reduces the return. No fee not listed in that table will be charged on this investment without the Investor’s written agreement.'],
+  ['Return', 'Any rate shown is a TARGET drawn from the Pool’s own projections. It is not a guarantee, a promise, or a debt owed to the Investor. Returns may be lower than the target, may be nil, and the capital itself may be reduced or lost.'],
+  ['Term and liquidity', 'The Investment Amount is committed for the term stated above and is not repayable on demand. There is no secondary market. Early withdrawal is at SV Capital’s sole discretion, depends on the underlying assets being realisable, and may carry a cost or a reduced return.'],
+  ['Maturity', 'At maturity the Investor’s standing instruction applies. Where no instruction has been given, the capital and any return are reinvested into the next available pool of the same type. An instruction may be changed at any time before maturity through the portal.'],
+  ['Reporting', 'The Investor may view their position in the portal at any time and receives a statement covering the investment, its transactions and its fees. Pools with an operating partner are reported on quarterly.'],
+  ['FICA and sanctions', 'SV Capital is obliged to identify and verify the Investor under the Financial Intelligence Centre Act, and to report certain transactions. The Investor undertakes that the funds invested are from a lawful source and that the information given for verification is true. SV Capital may delay or refuse a transaction to meet these obligations.'],
+  ['Personal information', 'Personal information is processed in terms of the Protection of Personal Information Act and SV Capital’s privacy notice, for the purposes of administering this investment and meeting legal obligations. The signature captured with this agreement is used to evidence this agreement and for no other purpose.'],
+  ['Complaints', 'A complaint should first be made to SV Capital in writing, and will be acknowledged and addressed under its internal complaints process. An Investor who remains dissatisfied may refer the matter to the Ombud for Financial Services Providers.'],
+  ['Conflicts of interest', 'SV Capital maintains a conflicts of interest management policy, available on request. Where SV Capital or an associate has an interest in an underlying asset or counterparty, that interest is disclosed in the Pool documentation.'],
+  ['Cession', 'The Investor may not cede, transfer or encumber this investment or any right under this agreement without SV Capital’s prior written consent.'],
+  ['Changes to these terms', 'These terms apply to this investment for its full term and are not varied by any later change to SV Capital’s standard terms. A variation of this agreement is effective only if recorded in writing and agreed by both parties.'],
+  ['Electronic signature', 'This agreement is signed electronically in terms of the Electronic Communications and Transactions Act 25 of 2002. The parties agree that the electronic signature recorded with this agreement, together with the audit record set out in it, has the same effect as a handwritten signature.'],
+  ['Whole agreement', 'This agreement, together with the Pool documentation it refers to, is the whole agreement between the parties on its subject matter. Governing law is that of the Republic of South Africa.'],
+];
+
+/* ─── Fees ────────────────────────────────────────────────────────────
+   Every charge that touches the investment, in one table, with the rand
+   figure beside the percentage. A fee disclosed only as a percentage is a
+   fee the client has to work out, and the ones they do not work out are the
+   ones they complain about later.
+
+   A fee of zero is LISTED AS NONE rather than omitted. An absent row reads
+   as an oversight; "None" is a statement that the pool does not charge it,
+   and it is the line that protects us when somebody asks whether there was
+   an operational fee. */
+function feeSchedule(o) {
+  const pool = Math.max(0, Number(o.pool_amount_cents) || 0);
+  const pct  = v => {
+    const n = parseFloat(v) || 0;
+    /* Stored as a percentage on the pool (2 means 2%), which is how the
+       console's "Upfront management fee (%)" field writes it. */
+    return n;
+  };
+  const onPool = p => Math.round(pool * (p / 100));
+
+  const FREQ = {
+    once:      'Once, upfront',
+    upfront:   'Once, upfront',
+    annual:    'Each year of the term',
+    annually:  'Each year of the term',
+    monthly:   'Each month of the term',
+    quarterly: 'Each quarter of the term',
+    maturity:  'Once, at maturity',
+  };
+  const freq = f => FREQ[String(f || '').toLowerCase()] || 'Once, upfront';
+
+  const rows = [];
+
+  rows.push({
+    name:   'Platform fee',
+    rate:   '1.00%',
+    base:   'of the amount invested',
+    when:   'Once, when the investment is made',
+    amount: Number(o.fee_cents) || 0,
+    note:   'Charged in addition to the amount invested. The wallet pays both.',
+  });
+
+  const mgmt = pct(o.management_fee_pct);
+  rows.push({
+    name:   'Management fee',
+    rate:   mgmt > 0 ? mgmt.toFixed(2) + '%' : 'None',
+    base:   mgmt > 0 ? 'of the amount invested' : '—',
+    when:   mgmt > 0 ? freq(o.management_fee_frequency) : '—',
+    amount: mgmt > 0 ? onPool(mgmt) : 0,
+    note:   mgmt > 0
+      ? 'Deducted from the pool, not from the wallet. It reduces the return, and the target return shown is stated before it.'
+      : 'This pool charges no management fee.',
+    none:   mgmt <= 0,
+  });
+
+  const ops = pct(o.operational_fee_pct);
+  rows.push({
+    name:   'Operational fee',
+    rate:   ops > 0 ? ops.toFixed(2) + '%' : 'None',
+    base:   ops > 0 ? 'of the amount invested' : '—',
+    when:   ops > 0 ? freq(o.operational_fee_frequency) : '—',
+    amount: ops > 0 ? onPool(ops) : 0,
+    note:   ops > 0
+      ? 'Covers the running costs of the underlying assets and is deducted from the pool.'
+      : 'This pool charges no operational fee.',
+    none:   ops <= 0,
+  });
+
+  const perf = (parseFloat(o.performance_fee_pct) || 0) * 100;
+  const bench = (parseFloat(o.benchmark_rate) || 0) * 100;
+  rows.push({
+    name:   'Performance fee',
+    rate:   perf > 0 ? perf.toFixed(2) + '%' : 'None',
+    base:   perf > 0 ? `of any return above the ${bench.toFixed(2)}% benchmark` : '—',
+    when:   perf > 0 ? 'Once, at maturity, and only if the benchmark is beaten' : '—',
+    amount: null,
+    note:   perf > 0
+      ? 'Nothing is payable unless the return exceeds the benchmark. It cannot be charged on a loss.'
+      : 'This pool charges no performance fee.',
+    none:   perf <= 0,
+  });
+
+  return rows;
+}
+
 /* ─── Rendering ───────────────────────────────────────────────────────
    Plain, self-contained HTML: it is stored verbatim, served back on its
    own, and printed. No stylesheet it could lose, no script. */
+/* The pool's own facts, shaped for the renderer. One place, because the draw
+   and the sign paths both build the document and a field added to one and
+   forgotten in the other changes the bytes between what was read and what was
+   sealed — and the hash would then describe a document nobody saw. */
+function poolFacts(p) {
+  const d = v => v ? new Date(v).toLocaleDateString('en-ZA',
+    { year: 'numeric', month: 'long', day: 'numeric' }) : null;
+  return {
+    pool_id: p.id, pool_name: p.name, product_type: p.product_type,
+    term_months: p.term_months,
+    start_date: d(p.investment_start_date),
+    maturity_date: d(p.maturity_date),
+    rate_label: p.annual_rate ? `${(parseFloat(p.annual_rate) * 100).toFixed(2)}% target` : null,
+    management_fee_pct: p.management_fee_pct,
+    management_fee_frequency: p.management_fee_frequency,
+    operational_fee_pct: p.operational_fee_pct,
+    operational_fee_frequency: p.operational_fee_frequency,
+    performance_fee_pct: p.performance_fee_pct,
+    benchmark_rate: p.benchmark_rate,
+  };
+}
+
 function renderAgreement(o) {
   const t = templateFor(o.product_type);
   const dt = new Date(o.drawn_at || Date.now());
   const when = dt.toLocaleDateString('en-ZA', { year: 'numeric', month: 'long', day: 'numeric' });
+  const fees = feeSchedule(o);
 
-  const parties = [
-    ['Investor',        `${o.investor_name || ''}`],
+  const rows = pairs => pairs
+    .map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join('');
+
+  const parties = rows([
+    ['Provider',        'SmartVest Financial Services (Pty) Ltd t/a SV Capital'],
+    ['FSP number',      '52449'],
+    ['Investor',        o.investor_name || '—'],
     ['Investor ID',     o.investor_id],
-    ['Pool',            o.pool_name || o.pool_id || '—'],
-    ['Structure',       t.gloss ? `${t.title.replace(' Investment Agreement', '')} — ${t.gloss}` : 'Standard'],
-    ['Amount invested', rand(o.pool_amount_cents)],
-    ['Platform fee',    rand(o.fee_cents)],
+    ['Email',           o.investor_email || '—'],
+    ['Agreement number', o.agreement_no],
+    ['Date drawn',      when],
+  ]);
+
+  const investment = rows([
+    ['Pool',              o.pool_name || o.pool_id || '—'],
+    ['Structure',         t.gloss ? `${t.term || t.title.replace(' Investment Agreement', '')} — ${t.gloss}` : 'Standard'],
+    ['Amount invested',   rand(o.pool_amount_cents)],
+    ['Platform fee (1%)', rand(o.fee_cents)],
     ['Total from wallet', rand(o.amount_cents)],
-    ['Term',            o.term_months ? `${o.term_months} months` : '—'],
-    ['Maturity date',   o.maturity_date || '—'],
-    ['Target return',   o.rate_label || '—'],
-  ];
+    ['Term',              o.term_months ? `${o.term_months} months` : '—'],
+    ['Investment starts', o.start_date || '—'],
+    ['Maturity date',     o.maturity_date || '—'],
+    ['Target return',     o.rate_label || '—'],
+    ['At maturity',       o.maturity_instruction || 'Reinvested into the next pool of the same type, unless instructed otherwise'],
+  ]);
+
+  const feeRows = fees.map(f => `
+    <tr${f.none ? ' class="none"' : ''}>
+      <th>${esc(f.name)}</th>
+      <td class="r">${esc(f.rate)}</td>
+      <td>${esc(f.base)}</td>
+      <td>${esc(f.when)}</td>
+      <td class="r">${f.none ? '—' : (f.amount === null ? 'On the return' : rand(f.amount))}</td>
+    </tr>
+    <tr${f.none ? ' class="none"' : ''}><td class="note" colspan="5">${esc(f.note)}</td></tr>`).join('');
+
+  /* Numbered across both sets so a clause can be cited in a letter. */
+  let n = 0;
+  const clause = ([h, b]) => `<div class="clause"><b>${++n}. ${esc(h)}</b>${esc(b)}</div>`;
+  const structureClauses = t.clauses.map(clause).join('');
+  const commonClauses    = COMMON_CLAUSES.map(clause).join('');
 
   const signed = !!o.signed_at;
   const sigBlock = signed ? `
@@ -139,7 +303,7 @@ function renderAgreement(o) {
       <div class="signame">${esc(o.signer_name)}</div>
       <div class="sigmeta">Signed electronically on ${esc(new Date(o.signed_at).toLocaleString('en-ZA'))}</div>
     </div>
-    <h3>Acknowledged</h3>
+    <h3>Acknowledged before signing</h3>
     <ul class="acks">
       ${(o.acknowledgements || []).map(a => `<li>${esc(a.text)}</li>`).join('')}
     </ul>
@@ -158,37 +322,64 @@ function renderAgreement(o) {
 <html lang="en"><head><meta charset="utf-8">
 <title>${esc(t.title)} — ${esc(o.agreement_no)}</title>
 <style>
-  body{font:14px/1.6 Georgia,"Times New Roman",serif;color:#14180f;background:#fff;
-       max-width:760px;margin:0 auto;padding:40px 24px}
+  body{font:14px/1.62 Georgia,"Times New Roman",serif;color:#14180f;background:#fff;
+       max-width:780px;margin:0 auto;padding:40px 24px}
   h1{font-size:1.5rem;margin:0 0 4px}
-  h2{font-size:1.05rem;margin:28px 0 8px;border-bottom:1px solid #ccc;padding-bottom:4px}
+  h2{font-size:1.05rem;margin:30px 0 8px;border-bottom:1px solid #ccc;padding-bottom:4px}
   h3{font-size:.95rem;margin:18px 0 6px}
-  .no{font-family:monospace;font-size:.85rem;color:#555}
+  .no{font-family:monospace;font-size:.82rem;color:#555}
   table{border-collapse:collapse;width:100%;margin:12px 0;font-size:.9rem}
-  th,td{text-align:left;padding:6px 10px;border-bottom:1px solid #e3e3e3;vertical-align:top}
-  th{width:190px;font-weight:600;color:#444}
-  .clause{margin:12px 0}
+  th,td{text-align:left;padding:7px 10px;border-bottom:1px solid #e3e3e3;vertical-align:top}
+  th{font-weight:600;color:#444}
+  table.kv th{width:190px}
+  table.fees th{width:135px}
+  table.fees td.r{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+  table.fees thead th{background:#f4f4f1;font-size:.78rem;text-transform:uppercase;letter-spacing:.04em}
+  table.fees td.note{font-size:.8rem;color:#555;padding-top:0;border-bottom:1px solid #e3e3e3}
+  table.fees tr.none th,table.fees tr.none td{color:#777}
+  .clause{margin:13px 0}
   .clause b{display:block;margin-bottom:2px}
   .acks li{margin-bottom:6px}
   .sigimg{display:block;max-width:280px;border-bottom:1px solid #333;margin-bottom:6px}
   .signame{font-weight:600}
   .sigmeta{font-size:.82rem;color:#555}
   .audit th{width:170px}
-  .foot{margin-top:32px;font-size:.8rem;color:#666;border-top:1px solid #ccc;padding-top:12px}
+  .risk{border-left:3px solid #8f5406;padding:10px 14px;background:#fdf6ec;margin:12px 0}
+  .foot{margin-top:34px;font-size:.8rem;color:#666;border-top:1px solid #ccc;padding-top:12px}
+  @media print{body{padding:0}h2{page-break-after:avoid}.clause{page-break-inside:avoid}}
 </style></head><body>
 <h1>${esc(t.title)}</h1>
 <div class="no">${esc(o.agreement_no)} · drawn ${esc(when)} · template ${esc(t.key)} ${esc(t.version)}</div>
 
-<h2>Parties and particulars</h2>
-<table>${parties.map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join('')}</table>
+<h2>1. Parties</h2>
+<table class="kv">${parties}</table>
 
-<h2>Terms</h2>
-${t.clauses.map(([h, b]) => `<div class="clause"><b>${esc(h)}</b>${esc(b)}</div>`).join('')}
+<h2>2. The investment</h2>
+<table class="kv">${investment}</table>
 
-<h2>Risk</h2>
-<div class="clause">The Investor’s capital is at risk. Past performance is not a guide to future returns. This agreement does not constitute financial advice, and the Investor confirms they have satisfied themselves that this investment is suitable for their circumstances.</div>
+<h2>3. Fees and charges</h2>
+<p style="font-size:.86rem;color:#555;margin:0 0 8px">Every charge that applies to this
+investment is listed here, with the rand amount on the figures above. A fee shown as
+<em>None</em> is not charged on this pool.</p>
+<table class="fees">
+  <thead><tr><th>Fee</th><th class="r">Rate</th><th>Charged on</th><th>When</th><th class="r">Amount</th></tr></thead>
+  <tbody>${feeRows}</tbody>
+</table>
+
+<h2>4. How this structure works</h2>
+${structureClauses}
+
+<h2>5. General terms</h2>
+${commonClauses}
+
+<h2>6. Risk</h2>
+<div class="risk">The Investor’s capital is at risk and may be reduced or lost in full.
+Any return shown is a target and not a guarantee. Past performance is not a guide to future
+returns. This investment is not a deposit, it is not guaranteed by SV Capital or by any
+third party, and it is not covered by any deposit insurance or compensation scheme. The
+Investor confirms that they can bear a loss of the amount invested.</div>
 ${sigBlock}
-<div class="foot">SV Capital · SmartVest Financial Services · FSP #52449<br>
+<div class="foot">SmartVest Financial Services (Pty) Ltd t/a SV Capital · authorised financial services provider, FSP 52449<br>
 Signed electronically in terms of the Electronic Communications and Transactions Act 25 of 2002.</div>
 </body></html>`;
 }
@@ -196,6 +387,6 @@ Signed electronically in terms of the Electronic Communications and Transactions
 const sha256 = text => crypto.createHash('sha256').update(String(text), 'utf8').digest('hex');
 
 module.exports = {
-  ACK, TEMPLATES, templateFor, acknowledgementsFor,
-  renderAgreement, sha256, toCents, fromCents, rand,
+  ACK, TEMPLATES, COMMON_CLAUSES, templateFor, acknowledgementsFor, feeSchedule,
+  renderAgreement, poolFacts, sha256, toCents, fromCents, rand,
 };
