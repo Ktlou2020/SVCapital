@@ -10,6 +10,7 @@
    ═══════════════════════════════════════════════════════════════════ */
 
 const crypto = require('crypto');
+const { WATERMARK_PNG } = require('./agreement-watermark');
 
 /* Money is compared, not displayed, so it is held in cents. A signed
    agreement is matched to an investment on an exact amount, and an exact
@@ -58,7 +59,7 @@ const TEMPLATES = {
     ],
   },
   eif_murabaha: {
-    key: 'eif_murabaha', version: 'v1',
+    key: 'eif_murabaha', version: 'v2', watermark: true,
     title: 'Murabaha Investment Agreement',
     gloss: 'cost-plus sale',
     acks: ['murabaha_fixed', 'fee_inclusive', 'term_locked'],
@@ -71,7 +72,7 @@ const TEMPLATES = {
     ],
   },
   eif_ijara: {
-    key: 'eif_ijara', version: 'v1',
+    key: 'eif_ijara', version: 'v2', watermark: true,
     title: 'Ijara Investment Agreement',
     gloss: 'lease',
     acks: ['ijara_rent_stops', 'fee_inclusive', 'term_locked'],
@@ -84,7 +85,7 @@ const TEMPLATES = {
     ],
   },
   eif_mudarabah: {
-    key: 'eif_mudarabah', version: 'v1',
+    key: 'eif_mudarabah', version: 'v2', watermark: true,
     title: 'Mudarabah Investment Agreement',
     gloss: 'profit-sharing partnership',
     acks: ['mudarabah_loss', 'target_not_promise', 'fee_inclusive', 'term_locked'],
@@ -294,6 +295,22 @@ function renderAgreement(o) {
   const structureClauses = t.clauses.map(clause).join('');
   const commonClauses    = COMMON_CLAUSES.map(clause).join('');
 
+  /* The monogram, tiled faintly behind the text on Ethical & Interest-Free
+     agreements. Two things make it a watermark rather than a picture: it sits
+     BEHIND the content (z-index below, and the page's own text is painted on
+     top), and it prints — `print-color-adjust` is what stops a browser
+     helpfully dropping background images when the client saves a PDF.
+
+     fixed, not repeated in the flow, so a three-page contract carries it on
+     every page rather than once at the top. */
+  const wmCss = t.watermark ? `
+  body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+    background-image:url("${WATERMARK_PNG}");
+    background-repeat:no-repeat;background-position:center center;
+    background-size:min(62%,420px) auto;opacity:.055;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body>*{position:relative;z-index:1}` : '';
+
   const signed = !!o.signed_at;
   const sigBlock = signed ? `
   <section class="sig">
@@ -347,6 +364,7 @@ function renderAgreement(o) {
   .risk{border-left:3px solid #8f5406;padding:10px 14px;background:#fdf6ec;margin:12px 0}
   .foot{margin-top:34px;font-size:.8rem;color:#666;border-top:1px solid #ccc;padding-top:12px}
   @media print{body{padding:0}h2{page-break-after:avoid}.clause{page-break-inside:avoid}}
+${wmCss}
 </style></head><body>
 <h1>${esc(t.title)}</h1>
 <div class="no">${esc(o.agreement_no)} · drawn ${esc(when)} · template ${esc(t.key)} ${esc(t.version)}</div>

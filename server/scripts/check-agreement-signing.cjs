@@ -294,6 +294,54 @@ function call(method, url, body, user) {
          'this is the whole change to the model');
     }
 
+    console.log('\nthe EIF agreements carry the monogram watermark');
+    {
+      const mk = pt => AG.renderAgreement({
+        ...AG.poolFacts({ id: 'P', name: 'P', product_type: pt, term_months: 6,
+                          annual_rate: 0.115, maturity_date: '2026-12-31' }),
+        agreement_no: 'AGR-WM', investor_id: 'INV-X', investor_name: 'Test Investor',
+        pool_amount_cents: 100000, fee_cents: 1000, amount_cents: 101000,
+        drawn_at: new Date('2026-09-11'),
+      });
+      for (const pt of ['eif_murabaha', 'eif_ijara', 'eif_mudarabah']) {
+        ok(`${pt} is watermarked`, /body::before/.test(mk(pt)), 'no mark on this structure');
+      }
+      ok('a standard agreement is not', !/body::before/.test(mk('standard')),
+         'the watermark was asked for on the EIF agreements');
+
+      const eif = mk('eif_ijara');
+      /* Embedded, not linked: a mark fetched from the platform at read time
+         disappears from every contract ever signed the day that path moves,
+         and a copy printed offline carries none at all. */
+      ok('the mark is embedded in the document',
+         /background-image:url\("data:image\/png;base64,/.test(eif),
+         'a linked mark is a mark that can go missing');
+      ok('it sits behind the text rather than over it',
+         /z-index:0/.test(eif) && /body>\*\{position:relative;z-index:1\}/.test(eif));
+      ok('and it survives being printed or saved as a PDF',
+         /print-color-adjust:exact/.test(eif),
+         'browsers drop background images when printing unless told not to');
+      ok('it repeats on every page, not just the first',
+         /position:fixed/.test(eif), 'a long contract would carry it once');
+      ok('and it is faint enough to read through',
+         /opacity:\.0[0-9]/.test(eif), 'a watermark you cannot read through is a stain');
+
+      /* The wording changed with the mark, so a v1 signature stays
+         distinguishable from a v2 one. */
+      for (const pt of ['eif_murabaha', 'eif_ijara', 'eif_mudarabah']) {
+        ok(`${pt} records a new template version`,
+           AG.templateFor(pt).version === 'v2', AG.templateFor(pt).version);
+      }
+
+      /* Every agreement row stores its own copy of the document, so the mark
+         is paid for on each one. The full-colour original is 378 KB. */
+      const { WATERMARK_PNG } = require(path.join(ROOT, 'server', 'services', 'agreement-watermark.js'));
+      const kb = WATERMARK_PNG.length / 1024;
+      ok(`the mark stays small enough to store per agreement (${kb.toFixed(0)} KB)`,
+         kb < 40, `${kb.toFixed(0)} KB is added to every agreement row`);
+      ok('and it is a PNG data URI', /^data:image\/png;base64,/.test(WATERMARK_PNG));
+    }
+
     console.log('\nand it says the things an ombud asks for');
     {
       const doc = AG.renderAgreement({
