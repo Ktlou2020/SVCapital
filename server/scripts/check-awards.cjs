@@ -45,11 +45,15 @@ console.log('\nthe award is in the list, with the others');
   ok('the body that gave it is credited',
      /Awarded by Global Financial Market Review/.test(HTML),
      'an award with no issuer is a claim');
+  ok('the Heavy Chef award is listed',
+     /Top 5 Most Exciting Startups in South Africa/.test(HTML));
+  ok('with the year and the awards it came from',
+     /Awarded at the 2024 Heavy Chef Awards/.test(HTML) && /award-card__year">2024</.test(HTML));
   ok('and the year is shown', /award-card__year">2025</.test(HTML));
 
   /* Newest first, which is the order the three already there were in. */
   const years = [...HTML.matchAll(/award-card__year">(\d{4})</g)].map(m => Number(m[1]));
-  ok('all four awards are listed', years.length === 4, JSON.stringify(years));
+  ok('all five awards are listed', years.length === 5, JSON.stringify(years));
   ok('and the newest is first',
      JSON.stringify(years) === JSON.stringify([...years].sort((a, b) => b - a)),
      JSON.stringify(years));
@@ -91,10 +95,21 @@ console.log('\nsearch engines are told about it too');
      'a broken JSON-LD block costs every rich result on the page');
   const org = parsed && (parsed['@graph'] || []).find(n => n['@type'] === 'Organization');
   ok('the organisation carries an award property', !!(org && org.award), JSON.stringify(org && org.award));
-  ok('naming the award and who gave it',
-     !!(org && /Best Alternative Investment Solutions/.test(org.award) &&
-        /Global Financial Market Review/.test(org.award)),
-     String(org && org.award));
+
+  /* Read as a list, not matched as a string. `/x/.test(array)` passes through
+     toString and would keep passing while entries went missing around it. */
+  const awards = org && org.award ? [].concat(org.award) : [];
+  const cards  = (HTML.match(/award-card__year">/g) || []).length;
+  ok('the schema lists one entry per card on the page',
+     awards.length === cards,
+     `${awards.length} in the schema, ${cards} on the page`);
+  const has = re => awards.some(a => re.test(a));
+  ok('naming the newest award and who gave it',
+     has(/Best Alternative Investment Solutions/) && has(/Global Financial Market Review/),
+     JSON.stringify(awards));
+  ok('and the Heavy Chef award',
+     has(/Top 5 Most Exciting Startups/) && has(/Heavy Chef/),
+     JSON.stringify(awards));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
