@@ -370,14 +370,22 @@ router.get('/attachments/:id', async (req, res) => {
    one with a code. Either way that lands on the app's last error handler as a
    500 with a stack, and the person attaching a screen recording is told
    nothing. A refused upload is an ordinary outcome with an ordinary answer. */
-router.use((err, _req, res, next) => {
+router.use((err, req, res, next) => {
   if (!err) return next();
-  const tooBig = err.code === 'LIMIT_FILE_SIZE';
-  const tooMany = err.code === 'LIMIT_UNEXPECTED_FILE';
-  if (!tooBig && !tooMany && !/Unsupported file type/.test(err.message || '')) return next(err);
+  const tooBig  = err.code === 'LIMIT_FILE_SIZE';
+  /* multer raises LIMIT_UNEXPECTED_FILE for two different things: more files
+     than the route accepts, and a file under a field name it does not expect.
+     Reporting both as "too many files on one comment" sent somebody hunting
+     for a ninth file on a route that takes ONE, under a field that is not
+     called comment. The path says which. */
+  const unexpected = err.code === 'LIMIT_UNEXPECTED_FILE';
+  const onComments = /\/comments$/.test(req.path || '');
+  if (!tooBig && !unexpected && !/Unsupported file type/.test(err.message || '')) return next(err);
   res.status(400).json({
-    error: tooBig  ? `That file is larger than the ${Math.round(MAX_BYTES / 1024 / 1024)} MB limit.`
-         : tooMany ? 'Too many files on one comment — attach up to 8.'
+    error: tooBig ? `That file is larger than the ${Math.round(MAX_BYTES / 1024 / 1024)} MB limit.`
+         : unexpected ? (onComments
+             ? 'Too many files on one comment — attach up to 8.'
+             : 'That upload was not in the form this page sends. Please reload the page and try again.')
          : `${err.message}. Accepted: PNG, JPEG, GIF, WEBP, AVIF, MP4, WEBM, MOV, PDF, Word, Excel, CSV or text.`,
   });
 });

@@ -429,11 +429,27 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 /* ── Auth headers ── */
+/* Authorization: Bearer, which is what requireAuth actually reads.
+
+   This page sent the staff token as X-Staff-Token — a header the server has
+   never looked at. Every call from here therefore worked only while the
+   svc_token COOKIE was still valid, and that cookie lasts eight hours. Once
+   it lapsed, or in any context where it was not sent, the page still looked
+   signed in because the session was in localStorage, and every write came
+   back 401 — including attaching a screenshot to a comment, which is the one
+   people noticed because it is what they were trying to do.
+
+   The header is kept alongside it: harmless, and something may yet read it. */
 function apiHeaders(isJson = true) {
   const s = localStorage.getItem('staffSession');
   const h = {};
   if (isJson) h['Content-Type'] = 'application/json';
-  if (s) { try { h['X-Staff-Token'] = JSON.parse(s).token; } catch(_){} }
+  if (s) {
+    try {
+      const token = JSON.parse(s).token;
+      if (token) { h['Authorization'] = 'Bearer ' + token; h['X-Staff-Token'] = token; }
+    } catch(_){}
+  }
   return h;
 }
 async function apiFetch(url, opts = {}) {
@@ -811,11 +827,16 @@ async function uploadAttachments() {
     const fd = new FormData();
     fd.append('file', file);
     try {
+      /* apiHeaders(false) — the token, without forcing a JSON content type,
+         which would strip the multipart boundary. This call sent no
+         credentials at all and leaned entirely on the cookie. */
       const res = await fetch(`/api/change-requests/${CURRENT_REQUEST_ID}/attachments`,
-        { method:'POST', body:fd, credentials:'include' });
+        { method:'POST', body:fd, credentials:'include', headers: apiHeaders(false) });
       if (res.ok) { ok++; continue; }
       const j = await res.json().catch(() => ({}));
-      failed.push(`${file.name}: ${j.error || 'HTTP ' + res.status}`);
+      failed.push(`${file.name}: ${res.status === 401
+        ? 'your session has expired — sign in again'
+        : (j.error || 'HTTP ' + res.status)}`);
     } catch(e) { failed.push(`${file.name}: ${e.message}`); }
   }
   if (ok) toast(`${ok} attachment${ok === 1 ? '' : 's'} uploaded`);
