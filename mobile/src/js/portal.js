@@ -3793,7 +3793,7 @@ window.addEventListener('appinstalled', () => {
   if (el) el.remove();
 });
 
-window.addEventListener('load', () => svcInitAppBanner());
+/* js/app-banner.js starts itself — see the script tag in the page head. */
 
 
 /* ═══════════════════════════════════════════════════════════════

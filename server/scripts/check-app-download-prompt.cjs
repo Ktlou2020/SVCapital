@@ -29,10 +29,10 @@ const ok = (name, cond, detail) => {
 const read  = p => fs.readFileSync(path.join(ROOT, p), 'utf8');
 const strip = s => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
-const CORE   = read('js/portal-core.js');
+const CORE   = read('js/app-banner.js');
 const WEB    = read('portal/js/portal.js');
 const MOBILE = read('mobile/src/js/portal.js');
-const CSS    = read('portal/css/portal-premium.css');
+const CSS    = read('js/app-banner.js');
 
 /* The shipped detection, lifted and run. Retyping the user-agent tests here
    would prove only that this file agrees with itself. */
@@ -43,7 +43,7 @@ function lift() {
   let src = '';
   for (const n of names) {
     const m = CORE.match(new RegExp(`function ${n.replace(/[$]/g, '\\$')}\\([\\s\\S]*?\\n\\}`, 'm'));
-    if (!m) throw new Error(`could not lift ${n} from js/portal-core.js`);
+    if (!m) throw new Error(`could not lift ${n} from js/app-banner.js`);
     src += m[0] + '\n';
   }
   /* An incomplete lift does not throw here — svcSnoozeAppBanner guards its
@@ -172,8 +172,9 @@ console.log('\nthe banner it draws can actually exist');
 console.log('\nboth shells start it, and Apple’s tag is on the pages');
 {
   for (const [label, src] of [['the web portal', strip(WEB)], ['the mobile shell', strip(MOBILE)]]) {
-    ok(`${label} starts the banner on load`,
-       /svcInitAppBanner\(\)/.test(src), 'nothing calls it');
+    ok(`${label} leaves starting it to the script that owns it`,
+       !/svcInitAppBanner\(\)/.test(src),
+       'two callers would race to build the same banner');
     ok(`${label} no longer reaches for an element that never existed`,
        !/pwaInstallBanner|iosPwaBanner/.test(src));
   }
@@ -189,6 +190,36 @@ console.log('\nboth shells start it, and Apple’s tag is on the pages');
      'the iOS button pointed at a mailing-list redirect');
   ok('and Google Play by package id',
      /play\.google\.com\/store\/apps\/details\?id=co\.za\.svcapital\.app/.test(read('index.html')));
+}
+
+console.log('\nit reaches the pages a client actually lands on');
+{
+  /* The fault that made Apple's banner never appear: the tag was on the
+     landing page and on the portal shell, and the portal shell sits BEHIND
+     the sign-in. A client opening the portal on a phone without a session
+     sees login.html, which had neither the tag nor the script, and that is
+     the page they look at for longest.
+
+     Every page here is one somebody can arrive at with no session. */
+  const ENTRY = ['index.html', 'login.html', 'signup.html', 'portal/index.html'];
+  for (const p of ENTRY) {
+    const html = read(p);
+    ok(`${p} carries Apple's Smart App Banner tag`,
+       /<meta name="apple-itunes-app" content="app-id=6670504520"/.test(html),
+       'iOS Safari shows nothing on this page');
+    ok(`${p} loads the banner script`,
+       /src="[^"]*\/?js\/app-banner\.js/.test(html),
+       'Android and non-Safari iOS get nothing on this page');
+  }
+  ok('the banner script carries its own styles',
+     /svcAppBannerCss/.test(CORE) && /\.svc-app-banner\{/.test(CORE),
+     'it would render unstyled on a page that does not ship the portal CSS');
+  ok('and it does not depend on the portal stylesheet any more',
+     !/svc-app-banner/.test(read('portal/css/portal-premium.css')),
+     'two copies of the same rules drift');
+  ok('it starts itself rather than waiting to be called',
+     /_svcAppBannerBoot/.test(CORE),
+     'pages with no shell JavaScript would never start it');
 }
 
 console.log('\nthe store links agree with the app that is published');

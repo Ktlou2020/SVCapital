@@ -7,6 +7,12 @@
   <link rel="apple-touch-icon" sizes="192x192" href="assets/logo-192.png" />
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <!-- Apple Smart App Banner. Safari on iOS draws this itself, at the top of
+       the page. It belongs on every page a client can LAND on, not only on
+       the app shell behind the sign-in: somebody who opens the portal on a
+       phone without a session sees this page, and a tag they never reach
+       prompts nobody. -->
+  <meta name="apple-itunes-app" content="app-id=6670504520" />
   <title>SV Capital — Sign In</title>
   <meta name="robots" content="noindex, nofollow">
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -997,5 +1003,6 @@ if (window.Capacitor) {
     }
   });
 </script>
+<script src="/js/app-banner.js?v=1"></script>
 </body>
 </html>
