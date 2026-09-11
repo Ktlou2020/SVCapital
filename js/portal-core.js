@@ -2080,8 +2080,11 @@ function renderMyInvestmentCards() {
     const posted = Utils.postedReturnTotal(group);
     const uid = 'pool_' + (inv.pool_id || inv.id);
     const _poolRec = inv.pool_id ? (PORTAL.pools || []).find(p => p.id === inv.pool_id) : null;
-    const _poolInvStart = _poolRec?.investment_start_date || (_poolRec?.end_date ? (() => { const _d = new Date(_poolRec.end_date); _d.setDate(_d.getDate() + 1); return _d.toISOString().split('T')[0]; })() : null);
-    const _invStartDate = _poolInvStart || inv.investment_date || inv.start_date;
+    /* The investment's own start, not the pool's. This preferred the pool —
+       and fell back to its CLOSE date plus a day when the pool had no
+       investment start — so every investment in a pool showed the same date
+       regardless of when it was actually made. */
+    const _invStartDate = svcInvestmentStart(inv, _poolRec);
 
     const breakdownRows = multiple ? group.map(i => `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid var(--border);font-size:0.78rem">
@@ -10471,11 +10474,12 @@ function _renderAnalyticsTimeline() {
   tbody.innerHTML = invs.slice(0, 30).map(i => {
     const pool    = (PORTAL.pools || []).find(p => p.id === i.pool_id) || {};
     const capital = parseFloat(i.amount) || 0;
-    const startVal = pool.start_date || i.start_date || i.created_at;
-    const endVal   = pool.end_date   || i.end_date   || i.maturity_date;
-    const start   = new Date(startVal);
-    const end     = new Date(endVal);
-    const days    = (!isNaN(start) && !isNaN(end)) ? Math.max(0, Math.round((end - start) / 86400000)) : (i.term_days || '—');
+    /* The investment's own dates. These read pool.start_date and pool.end_date
+       first, which are the raise window: a client whose money had been working
+       for two months saw the dates the pool was open for subscription. */
+    const start   = svcInvestmentStart(i, pool);
+    const end     = svcInvestmentMaturity(i, pool);
+    const days    = (start && end) ? Math.max(0, Math.round((end - start) / 86400000)) : (i.term_days || '—');
     const status  = (pool.status === 'matured' || pool.status === 'paid_out') ? 'matured' : (i.status || pool.status);
     const sc      = statusMeta(status);
     // Returns are posted while a pool is still running, not only once it
@@ -10522,11 +10526,12 @@ function exportAnalyticsCSV() {
   PORTAL.investments.forEach(i => {
     const pool = (PORTAL.pools || []).find(p => p.id === i.pool_id) || {};
     const fmt = v => v ? new Date(v).toLocaleDateString('en-ZA') : '';
-    const startVal = pool.start_date || i.start_date || i.created_at;
-    const endVal   = pool.end_date   || i.end_date   || i.maturity_date;
-    const start = new Date(startVal);
-    const end   = new Date(endVal);
-    const days  = (!isNaN(start) && !isNaN(end)) ? Math.max(0, Math.round((end - start) / 86400000)) : (i.term_days || '');
+    /* The investment's own dates. These read pool.start_date and pool.end_date
+       first, which are the raise window: a client whose money had been working
+       for two months saw the dates the pool was open for subscription. */
+    const start = svcInvestmentStart(i, pool);
+    const end   = svcInvestmentMaturity(i, pool);
+    const days  = (start && end) ? Math.max(0, Math.round((end - start) / 86400000)) : (i.term_days || '');
     const status = (pool.status === 'matured' || pool.status === 'paid_out') ? 'matured' : (i.status || pool.status || '');
     rows.push([
       pool.name || i.pool_name || '', parseFloat(i.amount) || 0,
@@ -11058,4 +11063,60 @@ function svcFillTaxYearSelect(el, now, joinedAt) {
 function svcTaxYearEndLabel(taxYear) {
   const last = new Date(taxYear, 2, 0);   // day 0 of March is the last of Feb
   return `${last.getDate()} February ${taxYear}`;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   An investment's own dates
+
+   A pool has two date pairs and they mean different things:
+
+     start_date / end_date       the FUNDRAISING WINDOW — when the pool opens
+                                 to money and when it shuts
+     investment_start_date       when money in it starts earning, which is the
+                                 day after it shuts
+     maturity_date               when the pool's term ends
+
+   The investment cards and the investments table read pool.start_date and
+   pool.end_date FIRST and fell back to the investment's own, so a client
+   whose money had been working for two months saw the dates the pool was
+   open for subscription — usually a month earlier and a month shorter, and
+   never what their certificate or statement said.
+
+   These read the investment first and never touch the raise window at all.
+   The pool's MATURITY is a legitimate fallback; the pool's CLOSE is not.
+   ═══════════════════════════════════════════════════════════════════ */
+
+function _svcDate(v) {
+  if (!v) return null;
+  const d = v instanceof Date ? v : new Date(v);
+  return isNaN(d) ? null : d;
+}
+
+/* When this investment started earning. */
+function svcInvestmentStart(inv, pool) {
+  if (!inv) return null;
+  return _svcDate(inv.start_date)
+      || _svcDate(inv.investment_date)
+      /* The pool's investment start, NOT its open date: the day the pool's
+         money began working, which is the day after the raise shut. */
+      || _svcDate(pool && pool.investment_start_date)
+      || _svcDate(inv.created_at);
+}
+
+/* When it matures. */
+function svcInvestmentMaturity(inv, pool) {
+  if (!inv) return null;
+  const own = _svcDate(inv.maturity_date) || _svcDate(inv.end_date);
+  if (own) return own;
+  const poolMat = _svcDate(inv.pool_maturity_date) || _svcDate(pool && pool.maturity_date);
+  if (poolMat) return poolMat;
+  /* Last resort: the term, counted from the investment's own start. */
+  const start = svcInvestmentStart(inv, pool);
+  const months = parseInt(inv.term_months, 10);
+  if (start && Number.isFinite(months) && months > 0) {
+    const d = new Date(start.getTime());
+    d.setMonth(d.getMonth() + months);
+    return d;
+  }
+  return null;
 }
