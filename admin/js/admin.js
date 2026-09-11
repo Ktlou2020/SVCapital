@@ -12147,10 +12147,79 @@ let _POOL_MATURITY_REPORT = null;
    the summary; a spreadsheet of summaries reconciles nothing. */
 /* The rows, separated from the download, because the report window embeds
    them rather than calling back here. */
+/* CSV-ONLY instruction labels. The report on screen and the PDF keep the full
+   sentences — "Pay out a set amount, switch the rest" tells a client what will
+   happen to their money, and that is the right thing to read there. A
+   spreadsheet column is not read as a sentence: it is sorted, filtered and
+   pivoted, and a phrase with a comma in it sorts badly and pivots worse.
+
+   One or two words each, so every instruction is a value rather than a
+   description. The keys are the report's own tags, so a tag added there
+   without a label here falls back to the long form rather than going blank. */
+const MATURITY_CSV_LABELS = {
+  auto_reinvest:  'Auto-reinvest',
+  reinvest:       'Reinvest',
+  payout_all:     'Payout all',
+  payout_return:  'Payout return',
+  payout_custom:  'Custom payout',
+  custom_switch:  'Custom switch',
+  switch_amount:  'Custom reinvest',
+  switch_product: 'Product switch',
+};
+const _matCsvLabel = r =>
+  MATURITY_CSV_LABELS[r && r.instruction] || (r && r.instructionLabel) || '';
+
+/* Totals per instruction, appended under the detail.
+
+   Counted per INVESTMENT, not per row. The detail writes one line per
+   destination so a two-legged instruction shows both, and counting rows there
+   would report a custom switch twice and double its capital. */
+function _poolMaturitySummaryRows(d) {
+  const order = Object.keys(MATURITY_CSV_LABELS);
+  const acc = new Map();
+  const bump = (tag, n, capital, ret, gross) => {
+    const k = tag || 'unknown';
+    const cur = acc.get(k) || { n: 0, capital: 0, ret: 0, gross: 0 };
+    cur.n += n; cur.capital += capital; cur.ret += ret; cur.gross += gross;
+    acc.set(k, cur);
+  };
+  const r2 = v => Math.round((Number(v) || 0) * 100) / 100;
+
+  for (const r of d.rows) bump(r.instruction, 1, Number(r.principal) || 0,
+                               Number(r.actualReturn) || 0, Number(r.gross) || 0);
+
+  const out = [[], ['Summary — totals by instruction'],
+               ['Instruction', 'Investments', 'Capital', 'Return', 'Gross']];
+  let tn = 0, tc = 0, tr = 0, tg = 0;
+  for (const tag of order) {
+    const v = acc.get(tag);
+    if (!v) continue;
+    out.push([MATURITY_CSV_LABELS[tag], v.n, r2(v.capital), r2(v.ret), r2(v.gross)]);
+    tn += v.n; tc += v.capital; tr += v.ret; tg += v.gross;
+    acc.delete(tag);
+  }
+  /* Any tag the report grew that this file has not been told about. Listed
+     rather than dropped, so the summary always adds up to the detail. */
+  for (const [tag, v] of acc) {
+    out.push([tag, v.n, r2(v.capital), r2(v.ret), r2(v.gross)]);
+    tn += v.n; tc += v.capital; tr += v.ret; tg += v.gross;
+  }
+  out.push(['Total', tn, r2(tc), r2(tr), r2(tg)]);
+
+  /* Held back separately, and never inside the instruction totals: these have
+     no posted return, so they are not part of tonight's allocation. Folding
+     them in would report money as destined somewhere it is not going. */
+  if (d.heldBack.length) {
+    const hc = d.heldBack.reduce((a, h) => a + (Number(h.principal) || 0), 0);
+    out.push([], ['Held back — no posted return', d.heldBack.length, r2(hc), '', '']);
+  }
+  return out;
+}
+
 function _poolMaturityCSVRows(d) {
   const rows = [[
     'Investment ID', 'Holder', 'Holder ID', 'Sub-account', 'Capital', 'Return', 'Gross',
-    'Instruction', 'Instruction (as executed)', 'Named amount', 'To wallet', 'Reinvested',
+    'Instruction', 'Instruction (as executed)', 'To wallet', 'Reinvested',
     'Destination pool', 'Destination closes', 'Switched', 'Processed',
   ]];
   for (const r of d.rows) {
@@ -12160,8 +12229,7 @@ function _poolMaturityCSVRows(d) {
     legs.forEach((leg, idx) => rows.push([
       r.investmentId, r.holderName || '', r.holderId || '', r.isSubAccount ? 'yes' : 'no',
       idx === 0 ? r.principal : '', idx === 0 ? r.actualReturn : '', idx === 0 ? r.gross : '',
-      r.instructionLabel, r.effectiveInstruction || '',
-      r.customAmount == null ? '' : r.customAmount,
+      _matCsvLabel(r), r.effectiveInstruction || '',
       idx === 0 ? r.toWallet : '',
       leg ? leg.amount : '',
       leg ? (leg.fallsBackToWallet ? `No open ${leg.productType} pool — paid to wallet` : (leg.destinationPoolName || '')) : '',
@@ -12172,10 +12240,10 @@ function _poolMaturityCSVRows(d) {
   }
   for (const h of d.heldBack) {
     rows.push([h.investmentId, h.holderName || '', h.holderId || '', h.isSubAccount ? 'yes' : 'no',
-               h.principal, '', '', h.instructionLabel, 'HELD BACK — no posted return', '', '', '',
+               h.principal, '', '', _matCsvLabel(h), 'HELD BACK — no posted return', '', '',
                '', '', 'no', 'no']);
   }
-  return rows;
+  return rows.concat(_poolMaturitySummaryRows(d));
 }
 
 const _poolMaturityFileBase = d =>
