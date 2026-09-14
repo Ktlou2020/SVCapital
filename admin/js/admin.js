@@ -10556,7 +10556,11 @@ function renderSignupFriction(data, panel) {
   step_funnel.forEach(s => { stepByNum[s.step] = s.sessions; });
   const maxSessions = Math.max(...step_funnel.map(s => s.sessions), 1);
 
-  const stepNames = { 1: 'Personal Info', 2: 'Security', 3: 'Profile', 4: 'FICA Docs' };
+  /* Must match what each step actually asks for. Identity moved from step 1 to
+     step 2, so a panel still labelled "Personal Info" and "Security" would
+     describe the form as it was before the change and quietly misread the
+     first week of data comparing the two. */
+  const stepNames = { 1: 'Contact', 2: 'Identity & Security', 3: 'Profile', 4: 'FICA Docs' };
   const stepColors = { 1: '#656565', 2: '#656565', 3: '#fec24f', 4: '#22c55e' };
 
   function fmtMs(ms) {

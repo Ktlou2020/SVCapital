@@ -982,12 +982,12 @@
     <div class="form-steps" id="formSteps">
       <div class="form-step active" id="stepIndicator1">
         <div class="step-num">1</div>
-        <span class="step-label">Personal</span>
+        <span class="step-label">Contact</span>
       </div>
       <div class="step-line" id="stepLine1"></div>
       <div class="form-step" id="stepIndicator2">
         <div class="step-num">2</div>
-        <span class="step-label">Security</span>
+        <span class="step-label">Identity</span>
       </div>
       <div class="step-line" id="stepLine2"></div>
       <div class="form-step" id="stepIndicator3">
@@ -1115,7 +1115,7 @@
 
     </div><!-- /intlWaitlistPanel -->
 
-    <!-- ══ STEP 1: Personal Info ══ -->
+    <!-- ══ STEP 1: Contact ══ -->
     <div id="step1">
 
       <!-- Citizenship selector -->
@@ -1212,6 +1212,87 @@
         <div class="field-hint" id="phoneHint">Enter your number without the leading 0 — e.g. 71 234 5678</div>
       </div>
 
+      <!-- SA address: search + expanded fields -->
+      <div id="saAddressBlock">
+        <div class="form-group" style="position:relative">
+          <label class="form-label" for="addressSearch">Address Search <span>*</span></label>
+          <input type="text" class="form-input" id="addressSearch" placeholder="Start typing your address…" autocomplete="off" />
+          <div id="addressDrop" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:9999;background:#303030;border:1px solid rgba(255,255,255,0.15);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.5);overflow:hidden"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="streetAddress">Street Address <span>*</span></label>
+          <input type="text" class="form-input" id="streetAddress" placeholder="e.g. 10 Main Road" autocomplete="street-address" />
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label" for="suburb">Suburb</label>
+            <input type="text" class="form-input" id="suburb" placeholder="e.g. Sandton" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="city">City <span>*</span></label>
+            <input type="text" class="form-input" id="city" placeholder="e.g. Johannesburg" />
+          </div>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label" for="postalCode">Postal Code <span>*</span></label>
+            <input type="text" class="form-input" id="postalCode" placeholder="e.g. 2196" inputmode="numeric" maxlength="10" />
+          </div>
+          <div class="form-group" id="saProvinceGroup">
+            <label class="form-label" for="province">Province <span>*</span></label>
+            <select class="form-select" id="province">
+              <option value="">Select province</option>
+              <option>Gauteng</option>
+              <option>Western Cape</option>
+              <option>KwaZulu-Natal</option>
+              <option>Eastern Cape</option>
+              <option>Limpopo</option>
+              <option>Mpumalanga</option>
+              <option>North West</option>
+              <option>Free State</option>
+              <option>Northern Cape</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="form-group" id="intlRegionGroup" style="display:none">
+        <label class="form-label" for="region">State / Region <span>*</span></label>
+        <input type="text" class="form-input" id="region" placeholder="State or Province" autocomplete="address-level1" />
+      </div>
+
+      <div class="form-group" id="referralGroup" style="display:none">
+        <label class="form-label" for="referralCode">Referral Code
+          <span style="color:var(--text-dim);font-weight:400;text-transform:none;letter-spacing:0">(optional)</span>
+        </label>
+        <div class="input-icon-wrap">
+          <i class="icon fa-solid fa-gift"></i>
+          <input type="text" class="form-input" id="referralCode" placeholder="e.g. THA002" autocomplete="off" />
+        </div>
+      </div>
+
+      <div class="btn-row" style="margin-top:8px">
+        <button type="button" class="btn-primary" id="btnStep1Next">
+          Continue <i class="fa-solid fa-arrow-right"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- ══ STEP 2: Identity & Security ══ -->
+    <div id="step2">
+
+      <!-- Identity — moved here from step 1.
+           Step 1 was losing 86% of everyone who opened the page: 280 sessions
+           reached it and 39 reached step 2, while every step after it lost a
+           combined 10%. Only 17 validation errors were recorded across the 241
+           lost, so they were not failing the form — most never attempted it.
+           A 13-digit ID number is a large thing to ask for before anything has
+           been offered in return, and 62% of these people are on a phone.
+           Name, email and phone is a lower bar to clear, and effort already
+           spent is what carries someone through the rest.
+
+           The citizenship toggle stays on step 1: it also switches the address
+           block and the phone hint, which are still there. It toggles these two
+           groups by id, so it keeps working across the step boundary. -->
       <!-- SA ID (for SA citizens / permanent residents) -->
       <div id="saIdGroup">
         <div class="form-group">
@@ -1301,73 +1382,6 @@
         </div>
       </div>
 
-      <!-- SA address: search + expanded fields -->
-      <div id="saAddressBlock">
-        <div class="form-group" style="position:relative">
-          <label class="form-label" for="addressSearch">Address Search <span>*</span></label>
-          <input type="text" class="form-input" id="addressSearch" placeholder="Start typing your address…" autocomplete="off" />
-          <div id="addressDrop" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:9999;background:#303030;border:1px solid rgba(255,255,255,0.15);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.5);overflow:hidden"></div>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="streetAddress">Street Address <span>*</span></label>
-          <input type="text" class="form-input" id="streetAddress" placeholder="e.g. 10 Main Road" autocomplete="street-address" />
-        </div>
-        <div class="form-grid">
-          <div class="form-group">
-            <label class="form-label" for="suburb">Suburb</label>
-            <input type="text" class="form-input" id="suburb" placeholder="e.g. Sandton" />
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="city">City <span>*</span></label>
-            <input type="text" class="form-input" id="city" placeholder="e.g. Johannesburg" />
-          </div>
-        </div>
-        <div class="form-grid">
-          <div class="form-group">
-            <label class="form-label" for="postalCode">Postal Code <span>*</span></label>
-            <input type="text" class="form-input" id="postalCode" placeholder="e.g. 2196" inputmode="numeric" maxlength="10" />
-          </div>
-          <div class="form-group" id="saProvinceGroup">
-            <label class="form-label" for="province">Province <span>*</span></label>
-            <select class="form-select" id="province">
-              <option value="">Select province</option>
-              <option>Gauteng</option>
-              <option>Western Cape</option>
-              <option>KwaZulu-Natal</option>
-              <option>Eastern Cape</option>
-              <option>Limpopo</option>
-              <option>Mpumalanga</option>
-              <option>North West</option>
-              <option>Free State</option>
-              <option>Northern Cape</option>
-            </select>
-          </div>
-        </div>
-      </div>
-      <div class="form-group" id="intlRegionGroup" style="display:none">
-        <label class="form-label" for="region">State / Region <span>*</span></label>
-        <input type="text" class="form-input" id="region" placeholder="State or Province" autocomplete="address-level1" />
-      </div>
-
-      <div class="form-group" id="referralGroup" style="display:none">
-        <label class="form-label" for="referralCode">Referral Code
-          <span style="color:var(--text-dim);font-weight:400;text-transform:none;letter-spacing:0">(optional)</span>
-        </label>
-        <div class="input-icon-wrap">
-          <i class="icon fa-solid fa-gift"></i>
-          <input type="text" class="form-input" id="referralCode" placeholder="e.g. THA002" autocomplete="off" />
-        </div>
-      </div>
-
-      <div class="btn-row" style="margin-top:8px">
-        <button type="button" class="btn-primary" id="btnStep1Next">
-          Continue <i class="fa-solid fa-arrow-right"></i>
-        </button>
-      </div>
-    </div>
-
-    <!-- ══ STEP 2: Security ══ -->
-    <div id="step2">
       <div class="form-group">
         <label class="form-label" for="password">Create Password <span>*</span></label>
         <div class="input-icon-wrap" style="position:relative">
@@ -2252,6 +2266,21 @@ function validateStep(n) {
     if (!phone || phone.replace(/\D/g, '').length < 6)
       return showError('Please enter a valid phone number.', 'phone');
 
+    if (!v('streetAddress')) return showError('Please enter your street address.', 'streetAddress');
+    if (!v('city')) return showError('Please enter your city.', 'city');
+    if (!v('postalCode')) return showError('Please enter your postal code.', 'postalCode');
+    if (clientType === 'sa' && !v('province'))
+      return showError('Please select your province.', 'province');
+    if (clientType !== 'sa' && !v('region'))
+      return showError('Please enter your state or region.', 'region');
+  }
+
+  if (n === 2) {
+    /* Identity is checked here now, with the fields. It used to sit in the
+       n === 1 branch; leaving it there after the markup moved would have made
+       step 1 refuse to advance over an ID number no longer on the page — an
+       error about a field the person cannot see is the worst outcome this
+       change could have produced, so the two moved together. */
     if (clientType === 'sa') {
       const idNumber = v('idNumber');
       const idClean  = idNumber.replace(/[\s\-]/g, '');
@@ -2274,16 +2303,6 @@ function validateStep(n) {
       if (!country) return showError('Please select your country of residence.', 'countryResidence');
     }
 
-    if (!v('streetAddress')) return showError('Please enter your street address.', 'streetAddress');
-    if (!v('city')) return showError('Please enter your city.', 'city');
-    if (!v('postalCode')) return showError('Please enter your postal code.', 'postalCode');
-    if (clientType === 'sa' && !v('province'))
-      return showError('Please select your province.', 'province');
-    if (clientType !== 'sa' && !v('region'))
-      return showError('Please enter your state or region.', 'region');
-  }
-
-  if (n === 2) {
     const pw    = v('password'), pw2 = v('passwordConfirm'),
           terms = document.getElementById('termsCheck').checked,
           fica  = document.getElementById('ficaConsentCheck').checked,
