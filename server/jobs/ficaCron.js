@@ -22,12 +22,25 @@ async function runFicaSweep() {
   const startedAt = new Date().toISOString();
   console.log(`[FICA Cron] Sweep started at ${startedAt}`);
 
+  /* Both SELECTs below named two columns that do not exist — nationality,
+     which has now been created, and fica_last_checked_at, which never has and
+     is not what the rest of the codebase calls this. The timestamp is
+     last_auto_fica_check: ficaService writes it, routes/fica.js reads it, and
+     the WHERE clause four lines down filters on it. Nothing ever read the
+     value under the wrong name, so the wrong name is simply gone.
+
+     notes and date_of_birth are new to these lists and are not cosmetic.
+     runFicaCheck destructures both, and it uses notes to decide whether it is
+     verifying a passport or an SA ID. Selecting them was the difference
+     between this job verifying a foreign passport correctly and submitting the
+     passport number as a national ID — which nobody could have noticed,
+     because the job had never got past its first statement. */
   let annualCount = 0, firstDepositCount = 0, errorCount = 0;
 
   try {
     /* ── Batch 1: Annual re-checks ── */
     const { rows: annualDue } = await pool.query(`
-      SELECT id, email, first_name, last_name, id_number, nationality, kyc_status, fica_status, fica_last_checked_at, fica_resubmit_requested_at
+      SELECT id, email, first_name, last_name, id_number, nationality, notes, date_of_birth, kyc_status, fica_status, last_auto_fica_check, fica_resubmit_requested_at
       FROM investors
       WHERE last_auto_fica_check IS NOT NULL
         AND last_auto_fica_check < NOW() - INTERVAL '1 year'
@@ -41,7 +54,7 @@ async function runFicaSweep() {
     let firstDeposit = [];
     if (remainingSlots > 0) {
       const { rows } = await pool.query(`
-        SELECT i.id, i.email, i.first_name, i.last_name, i.id_number, i.nationality, i.kyc_status, i.fica_status, i.fica_last_checked_at, i.fica_resubmit_requested_at
+        SELECT i.id, i.email, i.first_name, i.last_name, i.id_number, i.nationality, i.notes, i.date_of_birth, i.kyc_status, i.fica_status, i.last_auto_fica_check, i.fica_resubmit_requested_at
         FROM investors i
         WHERE i.last_auto_fica_check IS NULL
           AND COALESCE(i.status, '') <> 'suspended'

@@ -68,6 +68,21 @@ DO $$ BEGIN
 EXCEPTION WHEN OTHERS THEN NULL;
 END $$;
 
+/* nationality was read by the FICA cron and had never been created. Both of
+   that job's queries name it, so both threw on their first statement and the
+   nightly sweep — annual re-checks and first-deposit checks alike — had never
+   verified a single investor. It reported "errors:0" while doing so, because
+   the summary line sits outside the try.
+
+   The default is South African: the signup form only asks for a nationality on
+   the international path, so an investor who registered with an SA ID number
+   has one by construction and no field to have answered. Step 16 backfills the
+   international ones from what they did answer. */
+DO $$ BEGIN
+  ALTER TABLE investors ADD COLUMN IF NOT EXISTS nationality TEXT DEFAULT 'South African';
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
 CREATE TABLE IF NOT EXISTS investment_pools (
   id TEXT PRIMARY KEY, name TEXT NOT NULL,
   product_type TEXT NOT NULL, status TEXT DEFAULT 'open',
@@ -3506,6 +3521,39 @@ async function autoSetup() {
                     (skipped ? `, ${skipped} row(s) left untouched` : '') + '.');
       else
         console.log('✅ investor_notes: nothing stranded in investors.notes.');
+    });
+
+    await step("16. Give every investor a nationality", async () => {
+      /* The column above defaults every row to South African, which is right
+         for the SA path — that form never asks the question, because a 13-digit
+         SA ID number answers it.
+
+         It is wrong for the international path, which does ask, requires an
+         answer, and then puts it in the notes field rather than a column of its
+         own: "DocType: Passport. Nationality: Zimbabwean. Country: …". Leaving
+         those rows on the default would write South African into a FICA field
+         for a Zimbabwean passport holder, which is worse than the crash it
+         replaces — a null tells you that you do not know, and a confident wrong
+         answer does not.
+
+         So the answer they gave is taken back out of notes. The pattern is the
+         one signup writes, anchored to DocType: Passport so a stray mention of
+         a nationality anywhere else in the field cannot be mistaken for one. */
+      const { rowCount: fromNotes } = await pool.query(`
+        UPDATE investors
+           SET nationality = btrim(substring(notes FROM 'Nationality:\\s*([^.]+)'))
+         WHERE notes LIKE '%DocType: Passport%'
+           AND notes ~ 'Nationality:\\s*[^.]+'
+           AND btrim(COALESCE(substring(notes FROM 'Nationality:\\s*([^.]+)'), '')) <> ''
+           AND COALESCE(nationality, '') IN ('', 'South African')`);
+
+      /* A row that predates the column default, or was inserted by something
+         that wrote an explicit NULL. */
+      const { rowCount: defaulted } = await pool.query(
+        `UPDATE investors SET nationality = 'South African' WHERE nationality IS NULL`);
+
+      console.log(`✅ nationality: ${fromNotes} recovered from passport details, ` +
+                  `${defaulted} defaulted to South African.`);
     });
 
 

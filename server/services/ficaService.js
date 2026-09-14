@@ -9,6 +9,13 @@ const stitch = require('./stitch');
 
 /* ─── Country code lookup ─────────────────────────────── */
 const NATIONALITY_TO_CODE = {
+  /* investors.nationality defaults to South African, so this map has to be able
+     to answer for it. It could not: every other entry here is a foreign
+     nationality, because the only caller is the passport branch below and the
+     signup form only asks the question on the international path. A default
+     the codebase's own mapper throws on is a trap laid for whoever wires the
+     column into a verification call. */
+  'south african':  'ZA',
   zimbabwean:       'ZW', namibian:    'NA', batswana:    'BW', zambian:    'ZM',
   mozambican:       'MZ', basotho:     'LS', swazi:       'SZ', kenyan:     'KE',
   nigerian:         'NG', ghanaian:    'GH', tanzanian:   'TZ', ugandan:    'UG',

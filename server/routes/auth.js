@@ -290,7 +290,7 @@ router.post('/register', registerLimiter, async (req, res) => {
   try {
     const {
       email, password, phone,
-      idNumber, province, occupation, role = 'investor',
+      idNumber, province, occupation, role = 'investor', nationality,
       riskProfile = 'moderate', referredBy = '', notes = '',
       termsAccepted = true, ficaConsent = true, popiaAccepted = true,
       streetAddress, suburb, city, postalCode,
@@ -358,15 +358,27 @@ router.post('/register', registerLimiter, async (req, res) => {
             INSERT INTO investors
               (id, first_name, last_name, email, phone, id_number, province, occupation,
                risk_profile, referred_by, notes, gender, heard_about_us,
-               street_address, suburb, address, postal_code,
+               street_address, suburb, address, postal_code, nationality,
                kyc_status, status, wallet_balance, referral_code, date_joined)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, 'pending', 'active', 0, $18, NOW())
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 'pending', 'active', 0, $19, NOW())
           `, [invId, firstName.trim(), lastName.trim(),
               email.toLowerCase().trim(), phone || null,
               idNumber || null, province || null, occupation || null,
               riskProfile || 'moderate', referredBy || null, notes || null,
               gender || null, heardAboutUs || null,
               streetAddress || null, suburb || null, city || null, postalCode || null,
+              /* The signup form asks this of international clients and requires
+                 an answer, then buried it in the notes string. Stored properly
+                 now, so the nightly FICA sweep reads a column instead of a
+                 backfill guessing at one.
+
+                 Spelled out rather than left to the column DEFAULT: an INSERT
+                 that names a column and passes NULL stores NULL — the default
+                 only fires when the column is omitted from the statement
+                 altogether, which this one cannot do because it is positional.
+                 An SA registration sends no nationality and gets the same
+                 answer its ID number already gives. */
+              stripHtml(nationality) || 'South African',
               code]);
           break;
         } catch (insErr) {

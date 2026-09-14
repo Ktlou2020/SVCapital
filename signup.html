@@ -2664,6 +2664,11 @@ async function _doSubmit(skippedFica) {
       email, password, firstName, lastName,
       phone: fullPhone,
       idNumber, province,
+      /* The form requires this of an international client and has always sent
+         it only inside the notes string. investors.nationality is a real column
+         now, and the nightly FICA sweep reads it. An SA client is not asked —
+         a 13-digit SA ID number is the answer — and the server defaults them. */
+      nationality:   isSA ? undefined : (v('nationality') || undefined),
       streetAddress: v('streetAddress') || undefined,
       suburb:        v('suburb') || undefined,
       city:          v('city') || undefined,
