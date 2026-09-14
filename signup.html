@@ -851,7 +851,17 @@
     .intl-waitlist-success__icon i { font-size: 1.6rem; color: #22c55e; }
     .intl-waitlist-success__title { font-size: 1.2rem; font-weight: 900; color: var(--text-h); margin-bottom: 8px; }
     .intl-waitlist-success__sub { font-size: 0.84rem; color: var(--text-muted); line-height: 1.6; }
-  </style>
+      /* Step 4's second option — see the comment on .fica-alt in the markup. */
+    .fica-alt { margin-top: 14px; display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+    .fica-alt__or {
+      text-align: center; font-size: 0.72rem; color: var(--text-dim);
+      text-transform: uppercase; letter-spacing: 0.08em;
+    }
+    .fica-alt__btn { width: 100%; max-width: none; }
+    .fica-alt__note {
+      font-size: 0.72rem; color: var(--text-dim); text-align: center; line-height: 1.5;
+    }
+</style>
   <!-- Google Analytics 4 -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-5LEPWC7EFP"></script>
   <script>
@@ -1658,12 +1668,24 @@
         </button>
       </div>
 
-      <p style="font-size:0.71rem;color:var(--text-dim);text-align:center;margin-top:12px;line-height:1.5">
-        You can also skip FICA upload now and submit documents later via your investor portal.<br>
-        <button type="button" id="btnSkipFica" style="background:none;border:none;color:var(--orange);font-weight:600;cursor:pointer;font-size:0.71rem;font-family:inherit;text-decoration:underline">
-          Skip for now — submit FICA documents later
+      <!-- The other way to finish.
+           This was one line of 11px grey text with an underlined link inside
+           it, sitting under a primary button that refuses to submit until all
+           three required documents are attached. Someone at this step without
+           a proof of address to hand saw a button that errored at them and,
+           in practice, no alternative — which is the last thing the funnel
+           sees before they leave. The option already existed in the product;
+           it just could not be found. It is a button now, at the same size as
+           the one above it. The FICA requirement itself is unchanged: the
+           account is created either way, and investing still needs approved
+           documents. -->
+      <div class="fica-alt">
+        <span class="fica-alt__or">or</span>
+        <button type="button" class="btn-secondary fica-alt__btn" id="btnSkipFica">
+          <i class="fa-regular fa-clock"></i> Create account — upload documents later
         </button>
-      </p>
+        <span class="fica-alt__note">Your account is created now. You can upload FICA documents any time in your portal; they are only needed before your first investment.</span>
+      </div>
 
     </div><!-- /step4 -->
 
@@ -1998,7 +2020,7 @@ async function checkIdDuplicate() {
         box.className = 'id-validation id-validation--error';
         box.innerHTML = `<i class="fa-solid fa-circle-exclamation"></i><div class="id-validation__body">
           <span class="id-validation__main">This ID number is already registered.</span>
-          <span class="id-validation__sub">You already have an account — <a href="/login.html" style="color:inherit;font-weight:700">Log in</a> or <a href="/forgot-password.html" style="color:inherit;font-weight:700">reset your password</a>.</span>
+          <span class="id-validation__sub">You already have an account — <a href="/login.html" style="color:inherit;font-weight:700">Log in</a> or <a href="/login#forgot" style="color:inherit;font-weight:700">reset your password</a>.</span>
         </div>`;
       }
     } else {
@@ -2614,7 +2636,12 @@ async function submitRegistration() {
   if (missingDocs.length > 0) {
     missingDocs.forEach(k => document.getElementById(`card-${k}`)?.classList.add('required-missing'));
     const labels = { id: 'ID / Passport', address: 'Proof of Address', selfie: 'Selfie / Liveness Photo' };
-    return showError(`Please upload the following required documents: ${missingDocs.map(k => labels[k]).join(', ')}.`);
+    /* Naming the other route out. This error used to be the whole of what a
+       person without a proof of address was told, and the way past it was an
+       11px link they had to notice underneath. */
+    return showError(
+      `Still needed: ${missingDocs.map(k => labels[k]).join(', ')}. ` +
+      `If you do not have these to hand, choose "Create account — upload documents later" below.`);
   }
 
   _doSubmit(false);
@@ -2622,10 +2649,12 @@ async function submitRegistration() {
 
 async function skipFicaAndSubmit() {
   hideError();
+  /* Kept, but it is now a confirmation rather than a deterrent: this is a
+     supported way to finish, not a mistake to talk someone out of. */
   const confirmed = confirm(
-    'Are you sure you want to skip FICA document upload?\n\n' +
-    'You will not be able to invest until your documents have been submitted and approved. ' +
-    'You can upload them later in your investor portal.'
+    'Create your account now and upload FICA documents later?\n\n' +
+    'Your account will be ready straight away. You can upload your documents ' +
+    'any time in your investor portal — they are only needed before your first investment.'
   );
   if (!confirmed) return;
   _FT.ficaSkipped();
@@ -2658,6 +2687,7 @@ async function _doSubmit(skippedFica) {
     : `DocType: Passport. Nationality: ${v('nationality')}. Country: ${v('countryResidence')}. Expiry: ${v('passportExpiry')}.`;
 
   const uploadedDocs = Object.entries(ficaFiles).filter(([, f]) => f !== null).map(([k]) => k);
+  let docsStored = 0, docsFailed = 0;
 
   try {
     const regData = await Auth.register({
@@ -2700,7 +2730,15 @@ async function _doSubmit(skippedFica) {
         r.onerror = () => rej(new Error('Could not read file'));
         r.readAsDataURL(file);
       });
-      await Promise.allSettled(
+      /* The results are READ. allSettled never rejects, so discarding what it
+         returns meant every upload could fail — a 413 on a phone photo, a
+         dropped connection, a null investor id — and the success screen still
+         told the investor "Your FICA documents have been submitted. Our
+         compliance team will review them within 1–2 business days." Nobody was
+         reviewing anything, and the investor waited for an email that had no
+         reason to arrive. Telling someone their compliance documents are in
+         when they are not is the worst of the three outcomes here. */
+      const outcomes = await Promise.allSettled(
         Object.entries(ficaFiles)
           .filter(([, f]) => f !== null)
           .map(async ([key, file]) => {
@@ -2715,6 +2753,12 @@ async function _doSubmit(skippedFica) {
             });
           })
       );
+      docsStored  = outcomes.filter(o => o.status === 'fulfilled').length;
+      docsFailed  = outcomes.length - docsStored;
+      if (docsFailed) {
+        console.error('[signup] %d of %d FICA uploads failed', docsFailed, outcomes.length,
+                      outcomes.filter(o => o.status === 'rejected').map(o => o.reason && o.reason.message));
+      }
     }
 
     if (!skippedFica) {
@@ -2722,7 +2766,8 @@ async function _doSubmit(skippedFica) {
         investor_id: assignedId,
         subject: `FICA Documents Submitted — ${firstName} ${lastName}`,
         category: 'kyc', priority: 'high', status: 'open',
-        message: `New investor ${firstName} ${lastName} (${assignedId}) submitted FICA docs: ${uploadedDocs.join(', ')}.`,
+        message: `New investor ${firstName} ${lastName} (${assignedId}) submitted FICA docs: ${uploadedDocs.join(', ')}.` +
+                 (docsFailed ? `\n\n⚠️ ${docsFailed} of ${docsStored + docsFailed} upload(s) FAILED and are not attached — ask the investor to re-upload.` : ''),
       }).catch(() => {});
     }
 
@@ -2731,11 +2776,17 @@ async function _doSubmit(skippedFica) {
     const successScreen = document.getElementById('successScreen');
     successScreen.style.display = 'block';
     requestAnimationFrame(() => successScreen.classList.add('visible'));
+    /* Three outcomes, three different sentences — the account is created in all
+       of them, which is the part that matters and the part that is always true. */
     document.getElementById('successMsg').textContent =
       `Welcome, ${firstName}! Your investor account has been created. ` +
       (skippedFica
         ? 'Please upload your FICA documents in your portal to start investing.'
-        : 'Your FICA documents have been submitted. Our compliance team will review them within 1–2 business days and notify you by email.');
+        : docsFailed === 0
+          ? 'Your FICA documents have been submitted. Our compliance team will review them within 1–2 business days and notify you by email.'
+          : docsStored === 0
+            ? 'Your documents could not be uploaded — please upload them in your portal. Your account is ready and nothing else is outstanding.'
+            : `${docsStored} of ${docsStored + docsFailed} documents were uploaded. Please re-upload the rest in your portal.`);
 
     clearDraft();
     _FT.submitSuccess();
