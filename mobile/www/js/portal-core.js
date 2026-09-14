@@ -432,6 +432,28 @@ function _poolEndMs(dateStr) {
  *
  * A pool with no close date is left alone: it has not demonstrably closed,
  * and guessing that it has would take a live pool off the marketplace. */
+/* One product can be spelled two ways, and the marketplace matches on the
+   string.
+
+   The products table seeds `delivery_bike`; pools carry `delivery_bikes` —
+   that is what server/scripts/migrate-from-firebase.js assigns to every
+   "Delivery Bike Investment" it brings over, and the POOL-MIGR-* rows in
+   production came through it. The marketplace is product-first: it lists
+   products, then filters pools with `p.product_type !== type`. A plural pool
+   can never match a singular product, so Delivery Bikes shows as a product with
+   no pools behind it — a dead end one click into the marketplace.
+
+   Both spellings already appear side by side in the KNOWN lists in js/api.js
+   and in an exclusion at the mobile-activity roll-up, which is what working
+   around this looks like when it is done a site at a time. Normalised here
+   instead, at the point of comparison. The stored values are untouched: nothing
+   re-labels a pool, and history keeps whatever it was written with. */
+function svcCanonProductType(t) {
+  const ALIASES = { delivery_bikes: 'delivery_bike' };
+  const k = String(t == null ? '' : t).trim().toLowerCase();
+  return ALIASES[k] || k;
+}
+
 function _poolPastClose(p) {
   const endMs = _poolEndMs(p && p.end_date);
   return endMs !== null && !isNaN(endMs) && Date.now() > endMs;
@@ -8040,13 +8062,17 @@ function openInvestNowPicker() {
 
   const openCounts = {};
   (PORTAL.pools || []).forEach(p => {
-    if (p.status === 'open' && !_poolPastClose(p)) openCounts[p.product_type] = (openCounts[p.product_type] || 0) + 1;
+    if (p.status === 'open' && !_poolPastClose(p)) {
+      const k = svcCanonProductType(p.product_type);
+      openCounts[k] = (openCounts[k] || 0) + 1;
+    }
   });
 
   body.innerHTML = products.map(prod => {
     const pi = Utils.productInfo(prod.product_type);
     const meta = _POOL_META[prod.product_type] || {};
-    const open = openCounts[prod.product_type] || 0;
+    const _canonType = svcCanonProductType(prod.product_type);
+    const open = openCounts[_canonType] || 0;
     return `
       <div onclick="selectInvestNowProduct('${_esc(prod.product_type)}')" style="display:flex;align-items:center;gap:14px;padding:14px;border:1.5px solid rgba(0,0,0,0.07);border-radius:14px;cursor:pointer;background:var(--panel-bg,#fff);transition:border-color 0.15s" onmouseenter="this.style.borderColor='#fec24f'" onmouseleave="this.style.borderColor='rgba(0,0,0,0.07)'">
         <div style="width:46px;height:46px;border-radius:12px;background:${pi.color}1a;color:${pi.color};display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0">

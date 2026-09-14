@@ -87,6 +87,10 @@ if (!CHROME) {
   fs.writeFileSync(path.join(tmp, 'stub.js'), `
 ${sliceFn(CORE, '_poolEndMs')}
 ${sliceFn(CORE, '_poolPastClose')}
+/* Both per-product filters now compare canonical product types, so the
+   normaliser has to come across with them or they throw on a name that is
+   not defined in here. */
+${sliceFn(CORE, 'svcCanonProductType')}
 ${sliceFn(CORE, '_getOpenMarketplacePools')}
 /* The per-product lists, taken from each platform's own file and renamed so
    the two can be exercised side by side. They differ — mobile also admits
@@ -177,7 +181,7 @@ const SITES = [
   ["the marketplace list",            /function _getOpenMarketplacePools\(\)[\s\S]{0,300}_poolPastClose/],
   ["the affordable/cheapest figures", /const openPools = ranked\.filter\(p => p\.status === 'open' && !_poolPastClose\(p\)\)/],
   ["the sub-account invest gate",     /function openSaInvest\([\s\S]{0,400}_poolPastClose/],
-  ["the per-product open counts",     /openCounts\[p\.product_type\][\s\S]{0,10}/],
+  ["the per-product open counts",     /!_poolPastClose\(p\)\) \{[\s\S]{0,120}openCounts\[k\]/],
   ["the calculator's pool dropdown",  /calcPoolSelect[\s\S]{0,400}_poolPastClose/],
   ["recurring investment products",   /openProductTypes[\s\S]{0,200}_poolPastClose/],
   ["recurring minimum validation",    /const openPool = \(PORTAL\.pools \|\| \[\]\)\.find\(p => p\.status === 'open' && !_poolPastClose\(p\)/],
@@ -186,8 +190,11 @@ for (const [label, re] of SITES) {
   ok(label, re.test(CORE), 'no close-date guard at this site');
 }
 /* That one entry is deliberately loose above; assert the count site properly. */
+/* The count is keyed by the canonical product type now (a delivery_bikes pool
+   belongs to the delivery_bike product), so the statement is no longer one
+   line. What must not change is that the close-date guard still wraps it. */
 ok('the per-product open counts, precisely',
-   /if \(p\.status === 'open' && !_poolPastClose\(p\)\) openCounts/.test(CORE),
+   /if \(p\.status === 'open' && !_poolPastClose\(p\)\) \{\s*\n\s*const k = svcCanonProductType\(p\.product_type\);\s*\n\s*openCounts\[k\]/.test(CORE),
    'a product still advertising "1 open pool" that cannot be invested in');
 
 ok('the web portal\'s per-product list', /_poolPastClose\(p\)\) return false;/.test(WEB));

@@ -1136,7 +1136,9 @@ const _RISK_COLORS = { 'Low': '#22c55e', 'Medium': '#fec24f', 'Medium-High': '#f
 // Count of open/waitlist pools for a product type
 function _openPoolsForProduct(type) {
   return PORTAL.pools.filter(p => {
-    if (p.product_type !== type) return false;
+    /* Canonical on both sides: a `delivery_bikes` pool belongs to the
+       `delivery_bike` product. See svcCanonProductType in portal-core.js. */
+    if (svcCanonProductType(p.product_type) !== svcCanonProductType(type)) return false;
     if (_poolPastClose(p)) return false;
     return p.status === 'open' || p.status === 'waitlist';
   });

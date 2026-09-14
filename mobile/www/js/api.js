@@ -1059,8 +1059,16 @@ const Utils = {
       other:          { label: 'Other',                   icon: 'fa-circle',      color: '#656565', badgeClass: 'badge--gray' },
     };
     const KNOWN_CI = new Set(['cattle','solar','solar_5yr','solar_6yr','solar_7yr','short_term','smme','delivery_bike','delivery_bikes','cattle_12j','ilobola','gridfarmer']);
-    const base = map[type] || { label: type || 'Other', icon: 'fa-circle', color: '#656565', badgeClass: 'badge--gray' };
-    const cached = this._productCache[type];
+    /* `delivery_bikes` has no entry in the map above, so a pool carrying the
+       plural fell to the Other fallback and was labelled with its own raw
+       product_type and a grey circle. Resolved to the singular before lookup;
+       the KNOWN_CI set still lists both because it is asked about the stored
+       value, not this one. */
+    const _t = (typeof svcCanonProductType === 'function') ? svcCanonProductType(type) : type;
+    const base = map[_t] || { label: type || 'Other', icon: 'fa-circle', color: '#656565', badgeClass: 'badge--gray' };
+    /* The cache is keyed by whatever the products table calls it — the
+       singular — so it is looked up by the canonical name too. */
+    const cached = this._productCache[_t] || this._productCache[type];
     if (!cached) return base;
     return {
       ...base,
