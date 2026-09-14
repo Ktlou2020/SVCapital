@@ -271,11 +271,85 @@ async function cycleExpiredPools() {
   return cycled;
 }
 
+/* ── Pools that stop raising but have no successor ─────────
+
+   cycleExpiredPools only looks at cattle and short_term, because those are the
+   two product types with a defined succession rule — a cattle round raises
+   across two whole months, a short_term round to the end of the month it opens
+   in. Nothing else has one, so nothing else was ever cycled, and a
+   delivery_bike, solar or EIF pool sat at status 'open' for ever: past its
+   close date, past its investment start date, invisible to every client
+   because _poolPastClose hides it, and still listed as open to every member of
+   staff looking at the console.
+
+   That divergence is the bug. A pool stops raising when its investment start
+   date arrives — that is this file's own rule, stated at the top — and it is
+   true of every product, successor or not. So the deployment half is applied
+   to all of them here; only the successor half stays limited to the two types
+   that know how to build one.
+
+   'active', not 'closed', for the same reason the cycler gives: closed is the
+   end of a pool's life, after maturity, and this is the middle of it. It also
+   matters mechanically — cycleExpiredPools excludes status 'closed', so
+   writing that here would strand any pool this touched.
+
+   Straight SQL rather than a PATCH through /api/tables: that route notifies
+   every waitlisted investor when a pool goes to 'active'. Flipping a batch of
+   long-lapsed pools would have emailed people that a round they were waiting
+   for had opened, months after it shut.
+
+   Idempotent by construction — the predicate is status = 'open', so a pool
+   this moves cannot be moved again. */
+const CYCLED_TYPES = ['cattle', 'short_term'];
+
+async function stopRaisingLapsedPools() {
+  const { rows: moved } = await pool.query(`
+    UPDATE investment_pools
+       SET status = 'active', updated_at = NOW()
+     WHERE status = 'open'
+       AND end_date IS NOT NULL
+       AND ${INVESTMENT_START} <= CURRENT_DATE
+       AND product_type <> ALL($1::text[])
+    RETURNING id, name, product_type, end_date`, [CYCLED_TYPES]);
+
+  for (const p of moved) {
+    console.log(`[poolCycler] ${p.id} (${p.name}) closed ${toISO(new Date(p.end_date))} ` +
+                `and has no successor rule — deployed.`);
+  }
+
+  /* Left alone on purpose. A cattle or short_term pool still open past its
+     investment start date is outside cycleExpiredPools' 60-day window, and
+     deploying it here would settle the question of its successor by never
+     opening one. That is a commercial decision, so it is reported instead. */
+  const { rows: stranded } = await pool.query(`
+    SELECT id, name, product_type, end_date, ${INVESTMENT_START} AS deploy_on
+      FROM investment_pools
+     WHERE status = 'open'
+       AND end_date IS NOT NULL
+       AND ${INVESTMENT_START} <= CURRENT_DATE
+       AND product_type = ANY($1::text[])
+     ORDER BY end_date`, [CYCLED_TYPES]);
+
+  if (stranded.length) {
+    console.warn(`⚠️  [poolCycler] ${stranded.length} cycling pool(s) are past their investment ` +
+                 `start date and still open — too old for the 60-day cycle window, so no successor ` +
+                 `will be opened. Deploy or close these by hand:`);
+    for (const p of stranded) {
+      console.warn(`   · ${p.id} (${p.name}) — ${p.product_type}, should have deployed ${toISO(new Date(p.deploy_on))}`);
+    }
+  }
+
+  console.log(`[poolCycler] lapsed sweep — ${moved.length} deployed, ${stranded.length} needing a decision.`);
+  return { moved: moved.length, stranded: stranded.length };
+}
+
 /* ── Scheduler ────────────────────────────────────────────── */
 
 function startPoolCyclerCron() {
   // Run once immediately so anything missed while the server was down is caught
-  cycleExpiredPools().catch(err => console.error('[poolCycler] startup run failed:', err.message));
+  cycleExpiredPools()
+    .then(stopRaisingLapsedPools)
+    .catch(err => console.error('[poolCycler] startup run failed:', err.message));
 
   /* 00:01 SAST daily. The time is the requirement, not an implementation
      detail: a pool is deployed on its investment start date, at one minute
@@ -284,7 +358,11 @@ function startPoolCyclerCron() {
      drift onto the server's UTC midnight — two hours early, on the wrong day. */
   cron.schedule('1 0 * * *', async () => {
     try {
+      /* The sweep runs after the cycle pass, never before: the cycler is what
+         deploys a cattle or short_term pool AND opens its successor, and a
+         sweep that moved it first would leave the cycler nothing to find. */
       await cycleExpiredPools();
+      await stopRaisingLapsedPools();
     } catch (err) {
       console.error('[poolCycler] cron error:', err.message);
     }
@@ -295,5 +373,5 @@ function startPoolCyclerCron() {
 }
 
 module.exports = {
-  startPoolCyclerCron, cycleExpiredPools, INVESTMENT_START,
+  startPoolCyclerCron, cycleExpiredPools, stopRaisingLapsedPools, INVESTMENT_START,
 };
