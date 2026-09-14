@@ -2847,20 +2847,57 @@ async function autoSetup() {
     });
 
     await step("6. Seed COO employee record for", async () => {
-      // 6. Seed COO employee record (for team/login.html staff portal access)
+      /* 6. Seed COO employee record (for team/login.html staff portal access)
+       *
+       * This was a single INSERT … ON CONFLICT (email) DO UPDATE with the id
+       * hardcoded to 'EMP-COO-001'. In production that id already belongs to a
+       * DIFFERENT employee — one whose email is not coo@svcapital.co.za — so
+       * the insert collided on the PRIMARY KEY, which a conflict clause naming
+       * `email` does not catch:
+       *
+       *     duplicate key value violates unique constraint "employees_pkey"
+       *     Key (id)=(EMP-COO-001) already exists.
+       *
+       * The step therefore failed on EVERY production boot, and had done for
+       * as long as that row has existed.
+       *
+       * Split in two so each conflict is handled where it actually arises.
+       * The email is the identity here — it is what the staff portal logs in
+       * with, and the column is UNIQUE — so an existing COO row is found and
+       * updated by email, and the id is only chosen when a row has to be
+       * created. Nothing overwrites the employee already holding EMP-COO-001:
+       * that is someone's real staff record, and taking their id to satisfy a
+       * seed would be a far worse outcome than the failing step. */
+      const COO_EMAIL = 'coo@svcapital.co.za';
+
+      const { rowCount } = await pool.query(
+        `UPDATE employees
+            SET role = 'CEO', level = 'executive', department = 'Executive',
+                status = 'active', id_number = '0000000009001',
+                avatar_initials = 'CO', avatar_color = '#eda5ff'
+          WHERE email = $1`, [COO_EMAIL]);
+      if (rowCount) return;
+
+      const { rows: [held] } = await pool.query(
+        `SELECT email FROM employees WHERE id = 'EMP-COO-001'`);
+      const id = held
+        ? 'EMP-COO-' + Date.now().toString(36).toUpperCase()
+        : 'EMP-COO-001';
+      if (held) {
+        console.warn(`⚠️  EMP-COO-001 already belongs to ${held.email} — ` +
+                     `seeding the COO staff record as ${id} instead.`);
+      }
+
       await pool.query(`
         INSERT INTO employees
           (id, first_name, last_name, email, role, level, department,
            status, id_number, avatar_initials, avatar_color, xp_points, hire_date)
         VALUES
-          ('EMP-COO-001', 'COO', 'SV Capital', 'coo@svcapital.co.za',
+          ($1, 'COO', 'SV Capital', $2,
            'CEO', 'executive', 'Executive',
            'active', '0000000009001', 'CO', '#eda5ff', 0, NOW())
-        ON CONFLICT (email) DO UPDATE SET
-          role = 'CEO', level = 'executive', department = 'Executive',
-          status = 'active', id_number = '0000000009001',
-          avatar_initials = 'CO', avatar_color = '#eda5ff'
-      `);
+      `, [id, COO_EMAIL]);
+      console.log(`✅ COO staff record created as ${id}.`);
     });
 
     await step("7. Backfill investments end date to", async () => {
