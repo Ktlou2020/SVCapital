@@ -2870,13 +2870,72 @@ async function autoSetup() {
        * seed would be a far worse outcome than the failing step. */
       const COO_EMAIL = 'coo@svcapital.co.za';
 
-      const { rowCount } = await pool.query(
-        `UPDATE employees
-            SET role = 'CEO', level = 'executive', department = 'Executive',
-                status = 'active', id_number = '0000000009001',
-                avatar_initials = 'CO', avatar_color = '#eda5ff'
-          WHERE email = $1`, [COO_EMAIL]);
-      if (rowCount) return;
+      /* ── The credential ───────────────────────────────────────────────
+         This step used to write id_number = '0000000009001' on every boot, on
+         every environment including production.
+
+         /staff-token's first-login branch validates a submitted PIN against
+         the LAST FOUR DIGITS of id_number when pin_set is false. So that value
+         published the COO's PIN — 9001 — to anyone who could read this
+         repository, for an account seeded at level 'executive', which
+         empToJwtRole maps to 'director' and elevateRoleByApps grants all
+         fourteen apps. Full admin console.
+
+         There is no admin path to reset a staff PIN: ALWAYS_PROTECTED_COLS
+         blocks pin_hash and pin_set through the table API, and /set-pin only
+         accepts the 15-minute token that /staff-token issues on a successful
+         first login. Clearing id_number therefore locks the account rather
+         than securing it, so the fix has to replace the credential, not remove
+         it — the same temp-PIN path step 2f uses for the staging director, and
+         the same path every other employee is onboarded down.
+
+         Three rules, in order of how much they matter:
+
+           1. A chosen PIN is never touched. pin_set true means somebody has
+              been through /set-pin and the published default was never their
+              way in.
+           2. A real id_number is never overwritten. It is PII on a
+              FICA-relevant column, and overwriting it is precisely how the
+              placeholder came to sit on a live row.
+           3. Only the exact published placeholder is rotated, so this runs
+              once: after it, id_number is no longer that value and the branch
+              is not taken again. */
+      const PUBLISHED_PIN_ID = '0000000009001';
+
+      const { rows: [existing] } = await pool.query(
+        `SELECT id, id_number, pin_set FROM employees WHERE email = $1`, [COO_EMAIL]);
+
+      /* The fields that are safe to assert on every boot. id_number is not
+         among them. */
+      const ROLE_FIELDS = `role = 'CEO', level = 'executive', department = 'Executive',
+                           status = 'active', avatar_initials = 'CO', avatar_color = '#eda5ff'`;
+
+      const freshTempId = () => {
+        const supplied = String(process.env.COO_TEMP_PIN || '').trim();
+        const pin = /^\d{4}$/.test(supplied)
+          ? supplied
+          : String(require('crypto').randomInt(0, 10000)).padStart(4, '0');
+        return { pin, idNumber: '000000000' + pin, supplied: /^\d{4}$/.test(supplied) };
+      };
+
+      if (existing) {
+        await pool.query(`UPDATE employees SET ${ROLE_FIELDS} WHERE email = $1`, [COO_EMAIL]);
+
+        if (!existing.pin_set && existing.id_number === PUBLISHED_PIN_ID) {
+          const { pin, idNumber, supplied } = freshTempId();
+          await pool.query(
+            `UPDATE employees SET id_number = $1, login_attempts = 0, login_locked_until = NULL
+              WHERE email = $2`, [idNumber, COO_EMAIL]);
+          console.warn(`🔐 ${COO_EMAIL} was still on the PIN published in this repository. ` +
+                       `Rotated.${supplied ? ' New PIN taken from COO_TEMP_PIN.'
+                                           : ` One-time PIN: ${pin}`}`);
+          console.warn(`   Log in and set a PIN of your own — this one is only valid until you do.`);
+        } else if (!existing.pin_set && !existing.id_number) {
+          console.warn(`⚠️  ${COO_EMAIL} has no PIN and no id_number to derive one from — ` +
+                       `nobody can log in as the COO. Set COO_TEMP_PIN and redeploy to issue one.`);
+        }
+        return;
+      }
 
       const { rows: [held] } = await pool.query(
         `SELECT email FROM employees WHERE id = 'EMP-COO-001'`);
@@ -2888,16 +2947,18 @@ async function autoSetup() {
                      `seeding the COO staff record as ${id} instead.`);
       }
 
+      const { pin, idNumber, supplied } = freshTempId();
       await pool.query(`
         INSERT INTO employees
           (id, first_name, last_name, email, role, level, department,
-           status, id_number, avatar_initials, avatar_color, xp_points, hire_date)
+           status, id_number, pin_hash, pin_set, avatar_initials, avatar_color, xp_points, hire_date)
         VALUES
           ($1, 'COO', 'SV Capital', $2,
            'CEO', 'executive', 'Executive',
-           'active', '0000000009001', 'CO', '#eda5ff', 0, NOW())
-      `, [id, COO_EMAIL]);
-      console.log(`✅ COO staff record created as ${id}.`);
+           'active', $3, NULL, false, 'CO', '#eda5ff', 0, NOW())
+      `, [id, COO_EMAIL, idNumber]);
+      console.log(`✅ COO staff record created as ${id}.` +
+                  (supplied ? ' PIN taken from COO_TEMP_PIN.' : ` One-time PIN: ${pin}`));
     });
 
     await step("7. Backfill investments end date to", async () => {
