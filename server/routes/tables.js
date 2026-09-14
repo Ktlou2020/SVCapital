@@ -158,7 +158,26 @@ const ALLOWED_TABLES = {
   pe_bee_verifications:     'id',
   pe_afs_requests:          'id',
   change_requests:          'id',
+  /* Admin notes about an investor. The table has existed since the schema was
+     written, but it was never added here, so validateTable 404'd every request
+     the console made — 170 a week, all failing. The console caught that and
+     wrote the note into investors.notes instead, a free-text column that also
+     holds banking JSON; see the migration in server/db/setup.js. Admin-only
+     for both read and write: there is no INVESTOR_COLS entry for this table,
+     so without the ADMIN_ONLY_TABLES guard an investor would read every note
+     staff have written about every client. */
+  investor_notes:           'id',
 };
+
+/* ─── Tables whose primary key is a UUID carrying a database default ───
+   The prefix generator in the POST handler produces ids like 'REC-1712…',
+   which Postgres refuses for a uuid column. For these tables the column's own
+   gen_random_uuid() default is the id generator: any client-supplied id that
+   is not a UUID is dropped rather than passed through. The admin console sent
+   'NOTE-<timestamp>' with every note; it did so against a 404 for so long that
+   nobody found out it would also have failed on the type. */
+const UUID_PK_TABLES = new Set(['investor_notes']);
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /* ─── Tables that require admin/director role for READ ─── */
 const ADMIN_ONLY_TABLES = new Set([
@@ -167,6 +186,7 @@ const ADMIN_ONLY_TABLES = new Set([
   'return_schedules', 'investor_allocations',
   'fica_checks', 'accepted_client_documents',
   'compliance_calendar',
+  'investor_notes',
 ]);
 // NOTE: `employees` is intentionally NOT admin-only — it is row-isolated via
 // EMPLOYEE_OWNED_COLS so each staff member can read only their own record.
@@ -184,6 +204,7 @@ const ADMIN_WRITE_TABLES = new Set([
   'products', 'product_faqs',
   'investment_pools', 'platform_settings', 'fund_runs', 'ifas',
   'fica_checks', 'compliance_calendar', 'accepted_client_documents',
+  'investor_notes',
 ]);
 
 /* ─── Columns that must never be written via the generic API (any role) ─── */
@@ -1235,8 +1256,11 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
       body.referral_code = require('../services/referralCode').newCode();
     }
 
+    // A uuid primary key generates itself; a supplied non-UUID id is not usable.
+    if (UUID_PK_TABLES.has(table) && (!body.id || !UUID_RE.test(String(body.id)))) delete body.id;
+
     // Auto-generate ID if missing
-    if (!body.id) {
+    if (!body.id && !UUID_PK_TABLES.has(table)) {
       const prefixMap = {
         investors:             'INV',
         investment_pools:      'POOL',

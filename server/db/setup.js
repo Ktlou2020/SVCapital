@@ -3429,6 +3429,78 @@ async function autoSetup() {
       }
     });
 
+    await step("15. Move admin notes out of investors.notes", async () => {
+      /* investor_notes has existed since the schema was written, but the table
+         was never added to ALLOWED_TABLES in server/routes/tables.js, so the
+         generic table router 404'd every request the admin console made —
+         around 170 a week in production, none of which ever succeeded.
+
+         The console caught that failure and wrote the note into
+         investors.notes instead, as JSON.stringify of an array of
+         {note, admin_email, created_at}. That column also carries banking
+         JSON, which is why the read path tests raw.startsWith('{') to tell the
+         two apart: a client whose banking details were captured had their
+         notes rendered as an empty list from then on.
+
+         The route is fixed; this moves the stranded notes to where they were
+         always meant to live.
+
+         Only a value that parses as a JSON ARRAY is touched. That shape is
+         unambiguously the fallback's — an object is banking JSON, and plain
+         text is a legitimate note typed into the field by hand or carried in
+         from registration, which has its own meaning and is left where it is.
+         Anything else, including a row the parse cannot make sense of, stays
+         exactly as it was rather than being guessed at and lost. */
+      const { rows } = await pool.query(
+        `SELECT id, notes FROM investors
+          WHERE notes IS NOT NULL AND btrim(notes) LIKE '[%'`);
+
+      let moved = 0, cleared = 0, skipped = 0;
+      for (const r of rows) {
+        let parsed;
+        try { parsed = JSON.parse(r.notes); } catch (_) { skipped++; continue; }
+        if (!Array.isArray(parsed)) { skipped++; continue; }
+
+        /* One transaction per investor: every note lands and the column is
+           cleared, or neither happens and the row is retried on the next boot
+           unchanged. Inserting outside a transaction gives you the two ways to
+           get this wrong — clear first and a failed insert loses the only copy
+           of the notes; insert first and a failed clear duplicates them all on
+           the next run. */
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          let n_moved = 0;
+          for (const n of parsed) {
+            const text = n && typeof n === 'object' ? (n.note || n.text || '') : String(n || '');
+            if (!String(text).trim()) continue;
+            await client.query(
+              `INSERT INTO investor_notes (investor_id, admin_email, note, created_at)
+               VALUES ($1, $2, $3, COALESCE($4::timestamptz, NOW()))`,
+              [r.id,
+               (n && n.admin_email) || 'unknown',
+               String(text),
+               (n && n.created_at) || null]);
+            n_moved++;
+          }
+          await client.query(`UPDATE investors SET notes = NULL WHERE id = $1`, [r.id]);
+          await client.query('COMMIT');
+          moved += n_moved;
+          cleared++;
+        } catch (e) {
+          await client.query('ROLLBACK').catch(() => {});
+          skipped++;
+          console.warn(`⚠️  investor_notes move failed for ${r.id}, row left as it was:`, e.message);
+        } finally {
+          client.release();
+        }
+      }
+
+      if (moved || skipped)
+        console.log(`✅ investor_notes: ${moved} note(s) recovered from ${cleared} investor row(s)` +
+                    (skipped ? `, ${skipped} row(s) left untouched` : '') + '.');
+    });
+
 
 
   } catch (err) {

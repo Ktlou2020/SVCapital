@@ -14133,25 +14133,32 @@ async function loadInvestorNotes(investorId) {
     }).join('');
   };
 
+  /* Whatever is left in investors.notes.
+     Notes written while investor_notes was 404ing went into that column, and
+     the migration in server/db/setup.js moves the JSON-array ones out. It
+     deliberately does not touch anything else — an object is banking JSON, and
+     plain text may be a note somebody typed straight into the field — so this
+     stays as the way to see what remains rather than having it silently
+     disappear the day the table started working. */
+  const legacyNotes = () => {
+    const inv = STATE.investors.find(i => i.id === investorId);
+    const raw = (inv?.notes || '').trim();
+    if (!raw || raw.startsWith('{')) return [];   // empty, or banking JSON
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    } catch (_) {}
+    return [{ note: raw, admin_email: 'system', created_at: inv?.created_at }];
+  };
+
   try {
     const res = await API._fetch('GET', 'tables/investor_notes', null, { investor_id: investorId, limit: 50 });
     const notes = (res.data || []).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    renderNotes(notes);
+    /* The table is the record. The column is only consulted when the table has
+       nothing for this investor, so a migrated note is never shown twice. */
+    renderNotes(notes.length ? notes : legacyNotes());
   } catch (_) {
-    // investor_notes table not available — read from investor.notes field
-    const inv = STATE.investors.find(i => i.id === investorId);
-    const raw = inv?.notes || '';
-    if (!raw || raw.startsWith('{')) {
-      // Either empty or contains bank JSON — show empty state
-      renderNotes([]);
-      return;
-    }
-    try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) { renderNotes(parsed); return; }
-    } catch (_2) {}
-    // Plain text stored in notes field — show as single entry
-    renderNotes([{ note: raw, admin_email: 'system', created_at: inv?.created_at }]);
+    renderNotes(legacyNotes());
   }
 }
 
@@ -14165,8 +14172,10 @@ async function addInvestorNote(investorId) {
   const saveBtn = document.querySelector(`button[onclick*="addInvestorNote"]`);
   if (saveBtn) saveBtn.disabled = true;
   try {
+    /* No id. investor_notes.id is a uuid with a gen_random_uuid() default;
+       the `NOTE-<timestamp>` this used to send is not a uuid and would have
+       been refused on the type even once the route worked. */
     await API._fetch('POST', 'tables/investor_notes', {
-      id:          `NOTE-${Date.now()}`,
       investor_id: investorId,
       admin_email: adminEmail,
       note:        noteText,
@@ -14175,26 +14184,13 @@ async function addInvestorNote(investorId) {
     ta.value = '';
     Toast.success('Note added');
     await loadInvestorNotes(investorId);
-  } catch (_) {
-    // Fallback: store as JSON array in investor.notes field
-    try {
-      const inv = STATE.investors.find(i => i.id === investorId);
-      const raw = inv?.notes || '';
-      let existing = [];
-      // Only try to parse if it's NOT bank JSON (bank JSON starts with '{')
-      if (raw && !raw.startsWith('{')) {
-        try { const p = JSON.parse(raw); if (Array.isArray(p)) existing = p; } catch (_2) {}
-      }
-      existing.unshift({ note: noteText, admin_email: adminEmail, created_at: new Date().toISOString() });
-      const newVal = JSON.stringify(existing);
-      await API._fetch('PATCH', `tables/investors/${investorId}`, { notes: newVal });
-      if (inv) inv.notes = newVal;
-      ta.value = '';
-      Toast.success('Note saved');
-      await loadInvestorNotes(investorId);
-    } catch (e2) {
-      Toast.error('Failed to save note: ' + (e2.message || 'unknown error'));
-    }
+  } catch (err) {
+    /* This used to fall back to writing the note into investors.notes as a
+       JSON array. That column also holds banking JSON, so the two formats
+       fought over one field and a note saved behind bank details was never
+       shown again — and because the fallback reported "Note saved", nobody
+       could tell the difference. The failure is now simply reported. */
+    Toast.error('Failed to save note: ' + (err.message || 'unknown error'));
   } finally {
     if (saveBtn) saveBtn.disabled = false;
   }
