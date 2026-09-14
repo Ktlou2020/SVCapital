@@ -3496,9 +3496,16 @@ async function autoSetup() {
         }
       }
 
+      /* Logged on every boot, including the boot that finds nothing to do.
+         A step that stays silent when it has no work cannot be told apart in
+         a deploy log from a step that is not deployed at all — which was the
+         first question asked of this migration, and one the log could not
+         answer. */
       if (moved || skipped)
         console.log(`✅ investor_notes: ${moved} note(s) recovered from ${cleared} investor row(s)` +
                     (skipped ? `, ${skipped} row(s) left untouched` : '') + '.');
+      else
+        console.log('✅ investor_notes: nothing stranded in investors.notes.');
     });
 
 

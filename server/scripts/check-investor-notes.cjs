@@ -272,6 +272,29 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
          /if \(!Array\.isArray\(parsed\)\) \{ skipped\+\+; continue; \}/.test(body));
     }
 
+    console.log('\nthe step says so in the deploy log even when it finds nothing');
+    {
+      /* The first deploy of this migration logged nothing, because there was
+         nothing to move — and a silent step is indistinguishable in a deploy
+         log from a step that was never deployed. Nobody could answer "did it
+         ship?" from the log, which is the one question a deploy log is read
+         for. Now it always reports. */
+      const lines = [];
+      const orig = console.log;
+      console.log = (...a) => lines.push(a.join(' '));
+      try {
+        delete require.cache[require.resolve(path.join(ROOT, 'server', 'db', 'setup.js'))];
+        await require(path.join(ROOT, 'server', 'db', 'setup.js'))().catch(() => {});
+      } finally { console.log = orig; }
+
+      ok('a boot with nothing to migrate still names the step',
+         lines.some(l => /investor_notes:/.test(l)),
+         'no investor_notes line — the step is silent, so the log cannot prove it ran');
+      ok('and says plainly that there was nothing to move',
+         lines.some(l => /investor_notes: nothing stranded/.test(l)),
+         lines.filter(l => /investor_notes/.test(l)).join(' | ') || '(no line at all)');
+    }
+
     console.log('\nthe console no longer writes notes into the wrong column');
     {
       const src = decomment(ADMIN_SRC);
