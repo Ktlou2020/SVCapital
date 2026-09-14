@@ -701,7 +701,13 @@ router.post('/forgot-password', forgotLimiter, async (req, res) => {
 router.post('/reset-password', async (req, res) => {
   const { token, password } = req.body;
   if (!token || !password) return res.status(400).json({ error: 'Token and new password are required.' });
-  if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+  /* 10, matching registration (line 310) and the change-password route (534).
+     This route alone accepted 8, so a password reset could set a password that
+     registration would have refused — the weakest rule in the system was the
+     one reachable from an emailed link. Aligning upward: nothing that was
+     allowed before is now allowed by a lower bar, and no existing password is
+     affected, since login does not re-check length. */
+  if (password.length < 10) return res.status(400).json({ error: 'Password must be at least 10 characters.' });
 
   try {
     const payload = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });

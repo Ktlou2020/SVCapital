@@ -1376,7 +1376,7 @@
         <div class="input-icon-wrap" style="position:relative">
           <i class="icon fa-solid fa-lock"></i>
           <input type="password" class="form-input" id="password"
-                 placeholder="Min 8 characters" autocomplete="new-password" />
+                 placeholder="Min 10 characters" autocomplete="new-password" />
           <button type="button" class="input-toggle" id="btnPwToggle" aria-label="Show password">
             <i class="fa-solid fa-eye"></i>
           </button>
@@ -1402,7 +1402,7 @@
       <div style="background:#f8fafc;border:1px solid rgba(0,0,0,0.06);border-radius:10px;padding:14px 16px;margin-bottom:18px">
         <div style="font-size:0.71rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px">Password requirements</div>
         <div style="display:flex;flex-direction:column;gap:6px">
-          <div id="req-len"><i class="fa-solid fa-circle fa-xs" style="color:#d1d5db;margin-right:6px"></i><span style="font-size:0.77rem;color:var(--text-muted)">At least 8 characters</span></div>
+          <div id="req-len"><i class="fa-solid fa-circle fa-xs" style="color:#d1d5db;margin-right:6px"></i><span style="font-size:0.77rem;color:var(--text-muted)">At least 10 characters</span></div>
           <div id="req-upper"><i class="fa-solid fa-circle fa-xs" style="color:#d1d5db;margin-right:6px"></i><span style="font-size:0.77rem;color:var(--text-muted)">One uppercase letter</span></div>
           <div id="req-num"><i class="fa-solid fa-circle fa-xs" style="color:#d1d5db;margin-right:6px"></i><span style="font-size:0.77rem;color:var(--text-muted)">One number</span></div>
           <div id="req-special"><i class="fa-solid fa-circle fa-xs" style="color:#d1d5db;margin-right:6px"></i><span style="font-size:0.77rem;color:var(--text-muted)">One special character (!@#$...)</span></div>
@@ -1797,8 +1797,17 @@ const _FT = (function() {
     stepBacked(fromStep) {
       _push('step_back', { step: fromStep });
     },
-    validationError(step, msg) {
-      _push('validation_error', { step, error_message: String(msg).slice(0, 200), client_type: clientType });
+    validationError(step, msg, field) {
+      /* field_name carries. Without it the console's "Most Friction — Fields"
+         panel had nothing to group by and read "No field data yet" for the
+         whole of its existence — while step 1 was losing 86% of everyone who
+         opened the page and the one question worth answering was WHICH field
+         they gave up on. The error message alone cannot answer it: three
+         different fields can produce "Please enter a valid…". */
+      _push('validation_error', {
+        step, field_name: field || null,
+        error_message: String(msg).slice(0, 200), client_type: clientType,
+      });
     },
     ficaUploaded(docType) {
       _push('fica_upload', { step: 4, field_name: docType });
@@ -2239,40 +2248,40 @@ function validateStep(n) {
     const firstName = v('firstName'), lastName = v('lastName'),
           email     = v('email'),     phone    = v('phone');
 
-    if (!firstName) return showError('Please enter your first name.');
-    if (!lastName)  return showError('Please enter your last name.');
+    if (!firstName) return showError('Please enter your first name.', 'firstName');
+    if (!lastName)  return showError('Please enter your last name.', 'lastName');
     if (!email || !email.includes('@') || !email.includes('.'))
-      return showError('Please enter a valid email address.');
+      return showError('Please enter a valid email address.', 'email');
     if (!phone || phone.replace(/\D/g, '').length < 6)
-      return showError('Please enter a valid phone number.');
+      return showError('Please enter a valid phone number.', 'phone');
 
     if (clientType === 'sa') {
       const idNumber = v('idNumber');
       const idClean  = idNumber.replace(/[\s\-]/g, '');
       if (!idClean || idClean.length !== 13 || !/^\d{13}$/.test(idClean))
-        return showError('Please enter a valid 13-digit South African ID number.');
+        return showError('Please enter a valid 13-digit South African ID number.', 'idNumber');
       if (_idDuplicateBlocked)
-        return showError('This ID number is already registered. Please log in or reset your password.');
+        return showError('This ID number is already registered. Please log in or reset your password.', 'idNumber');
     } else {
       const passport = v('passportNumber');
       const expiry   = v('passportExpiry');
       const nat      = v('nationality');
       const country  = v('countryResidence');
       if (!passport || passport.length < 5)
-        return showError('Please enter a valid passport number.');
+        return showError('Please enter a valid passport number.', 'passportNumber');
       if (!expiry)
-        return showError('Please enter your passport expiry date.');
+        return showError('Please enter your passport expiry date.', 'passportExpiry');
       if (new Date(expiry) < new Date())
-        return showError('Your passport has expired — please use a valid, unexpired passport.');
-      if (!nat)     return showError('Please select your nationality.');
-      if (!country) return showError('Please select your country of residence.');
+        return showError('Your passport has expired — please use a valid, unexpired passport.', 'passportExpiry');
+      if (!nat)     return showError('Please select your nationality.', 'nationality');
+      if (!country) return showError('Please select your country of residence.', 'countryResidence');
     }
 
-    if (!v('city')) return showError('Please enter your city.');
+    if (!v('city')) return showError('Please enter your city.', 'city');
     if (clientType === 'sa' && !v('province'))
-      return showError('Please select your province.');
+      return showError('Please select your province.', 'province');
     if (clientType !== 'sa' && !v('region'))
-      return showError('Please enter your state or region.');
+      return showError('Please enter your state or region.', 'region');
   }
 
   if (n === 2) {
@@ -2281,19 +2290,26 @@ function validateStep(n) {
           fica  = document.getElementById('ficaConsentCheck').checked,
           popia = document.getElementById('popiaCheck').checked;
 
-    if (!pw || pw.length < 8) return showError('Password must be at least 8 characters.');
-    if (pw !== pw2)            return showError('Passwords do not match. Please try again.');
-    if (!terms) return showError('Please accept the Terms of Use to continue.');
-    if (!fica)  return showError('Please confirm your FICA consent to continue.');
-    if (!popia) return showError('Please confirm your POPIA consent to continue.');
+    /* 10, because that is what the server requires. This said 8, and the
+       server said 10 (server/routes/auth.js:310), so a 8- or 9-character
+       password passed step 2, survived steps 3 and 4, and was refused at the
+       moment of submission — after the documents had been uploaded — with
+       "Password must be at least 10 characters." about a field three steps
+       back. The friction data recorded those refusals against STEP 4, which is
+       where the person was standing when they were told. */
+    if (!pw || pw.length < 10) return showError('Password must be at least 10 characters.', 'password');
+    if (pw !== pw2)            return showError('Passwords do not match. Please try again.', 'passwordConfirm');
+    if (!terms) return showError('Please accept the Terms of Use to continue.', 'termsCheck');
+    if (!fica)  return showError('Please confirm your FICA consent to continue.', 'ficaConsentCheck');
+    if (!popia) return showError('Please confirm your POPIA consent to continue.', 'popiaCheck');
   }
 
   if (n === 3) {
-    if (!selectedRisk)  return showError('Please select an investment risk profile.');
-    if (!v('investExp')) return showError('Please select your investment experience level.');
-    if (!v('hearAbout')) return showError('Please tell us how you heard about us.');
+    if (!selectedRisk)  return showError('Please select an investment risk profile.', 'riskProfile');
+    if (!v('investExp')) return showError('Please select your investment experience level.', 'investExp');
+    if (!v('hearAbout')) return showError('Please tell us how you heard about us.', 'hearAbout');
     if (v('hearAbout') === 'other' && !v('hearAboutOther'))
-      return showError('Please describe how you heard about us.');
+      return showError('Please describe how you heard about us.', 'hearAboutOther');
   }
 
   return true;
@@ -2301,8 +2317,8 @@ function validateStep(n) {
 
 function v(id) { return document.getElementById(id)?.value?.trim() || ''; }
 
-function showError(msg) {
-  _FT.validationError(currentStep, msg);
+function showError(msg, field) {
+  _FT.validationError(currentStep, msg, field);
   const el = document.getElementById('formError');
   document.getElementById('formErrorMsg').textContent = msg;
   el.style.display = 'block';
@@ -2418,7 +2434,7 @@ function checkPasswordStrength(pw) {
   const label = document.getElementById('pwLabel');
 
   const checks = {
-    len:     pw.length >= 8,
+    len:     pw.length >= 10,
     upper:   /[A-Z]/.test(pw),
     num:     /\d/.test(pw),
     special: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pw),
