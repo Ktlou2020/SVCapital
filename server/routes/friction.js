@@ -170,7 +170,22 @@ router.get('/personas', requireAuth, requireRole('admin', 'director', 'staff'), 
     const { rows } = await require('../db/pool').query(`
       SELECT
         i.id,
-        i.name,
+        /* investors has first_name and last_name; there has never been a
+           column called name, so this endpoint threw on its only statement and
+           has never returned data:
+
+               [personas] error: column i.name does not exist
+
+           The same file already builds this correctly for the invest funnel's
+           by_investor rows — COALESCE(i.first_name || ' ' || i.last_name,
+           i.email). Spelled out further here because || with a NULL operand
+           yields NULL: a client with a first name and no surname would fall
+           all the way through to their email address rather than showing the
+           name that is on file. */
+        COALESCE(
+          NULLIF(BTRIM(COALESCE(i.first_name, '') || ' ' || COALESCE(i.last_name, '')), ''),
+          i.email
+        ) AS name,
         i.email,
         i.xp_points,
         i.xp_level,
