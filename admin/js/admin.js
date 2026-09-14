@@ -10560,7 +10560,7 @@ function renderSignupFriction(data, panel) {
      step 2, so a panel still labelled "Personal Info" and "Security" would
      describe the form as it was before the change and quietly misread the
      first week of data comparing the two. */
-  const stepNames = { 1: 'Contact', 2: 'Identity & Security', 3: 'Profile', 4: 'FICA Docs' };
+  const stepNames = { 1: 'Contact', 2: 'Identity & Security', 3: 'Address & Profile', 4: 'FICA Docs' };
   const stepColors = { 1: '#656565', 2: '#656565', 3: '#fec24f', 4: '#22c55e' };
 
   function fmtMs(ms) {

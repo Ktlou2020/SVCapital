@@ -46,6 +46,16 @@ const PAGES = ['signup.html',
 /* Identity, and the things that must NOT have travelled with it. */
 const IDENTITY = ['idNumber', 'passportNumber', 'passportExpiry', 'nationality', 'countryResidence'];
 const CONTACT  = ['firstName', 'lastName', 'email', 'phone'];
+/* The web form asks for all of these; the app form has only city and the
+   province/region pair and never had the rest, so each is asserted only where
+   it exists. Requiring the full list everywhere would fail on the app for
+   something that was never there. */
+const ADDRESS  = ['addressSearch', 'streetAddress', 'suburb', 'city', 'postalCode', 'province', 'region'];
+/* Not every address field is required: addressSearch is the autocomplete box
+   that fills the others, and suburb is optional. Asserting validation for all
+   of ADDRESS failed on two fields that never had any — which would have been a
+   check reporting a regression that did not exist. */
+const ADDRESS_REQUIRED = ['streetAddress', 'city', 'postalCode', 'province', 'region'];
 
 for (const rel of PAGES) {
   const s = fs.readFileSync(path.join(ROOT, rel), 'utf8');
@@ -66,6 +76,13 @@ for (const rel of PAGES) {
     ok(`${id} stays on step 1`,
        step1.includes(`id="${id}"`) && !step2.includes(`id="${id}"`),
        'step 1 is the low bar — moving these defeats the point');
+  }
+  const step3 = s.slice(i3, s.indexOf('<div id="step4">'));
+  for (const id of ADDRESS) {
+    if (!s.includes(`id="${id}"`)) { console.log(`  ·   ${id} is not on this form`); continue; }
+    ok(`${id} is on step 3`,
+       step3.includes(`id="${id}"`) && !step1.includes(`id="${id}"`),
+       step1.includes(`id="${id}"`) ? 'still on step 1' : 'not on step 3 either');
   }
 
   /* The toggle switches the identity groups AND the address block and phone
@@ -97,12 +114,25 @@ for (const rel of PAGES) {
        'the returning user must be stopped and sent to the reset link, not let through');
     ok('step 1 still checks name, email and phone',
        CONTACT.every(id => s1.includes(`'${id}'`)));
+    const s3 = vs.slice(vs.indexOf('if (n === 3)'), vs.indexOf('return true;'));
+    for (const id of ADDRESS) {
+      if (!s.includes(`id="${id}"`)) continue;
+      ok(`step 1 no longer demands ${id}`, !s1.includes(`'${id}'`),
+         'the field is on step 3 — an error about it on step 1 names something invisible');
+      if (ADDRESS_REQUIRED.includes(id))
+        ok(`step 3 checks ${id}`, s3.includes(`'${id}'`), 'moved markup with no validation behind it');
+    }
+    ok('step 1 is down to contact details only',
+       !/streetAddress|postalCode|idNumber|passportNumber/.test(s1),
+       'this is the whole point of both moves');
     ok('step 2 still checks the password', /pw\.length < 10/.test(s2));
   }
 
   console.log(`${rel} — the step names describe what they now ask`);
   {
     ok('step 1 reads Contact', /<span class="step-label">Contact<\/span>/.test(s));
+    ok('step 3 reads Address', /<span class="step-label">Address<\/span>/.test(s));
+    ok('and no longer Profile alone', !/<span class="step-label">Profile<\/span>/.test(s));
     ok('step 2 reads Identity', /<span class="step-label">Identity<\/span>/.test(s));
     ok('neither still says Personal', !/<span class="step-label">Personal<\/span>/.test(s));
     ok('nor Security alone', !/<span class="step-label">Security<\/span>/.test(s),
@@ -132,11 +162,11 @@ console.log('\nthe console labels the steps the way the form is built');
 {
   const adm = fs.readFileSync(path.join(ROOT, 'admin', 'js', 'admin.js'), 'utf8');
   ok('step names match the new order',
-     /1: 'Contact', 2: 'Identity & Security', 3: 'Profile', 4: 'FICA Docs'/.test(adm),
+     /1: 'Contact', 2: 'Identity & Security', 3: 'Address & Profile', 4: 'FICA Docs'/.test(adm),
      'a panel still reading "Personal Info" would misdescribe the first week of comparison data');
   const idx = fs.readFileSync(path.join(ROOT, 'admin', 'index.html'), 'utf8');
   const m = idx.match(/js\/admin\.js\?v=(\d+)/);
-  ok('admin.js is version-bumped', m && Number(m[1]) >= 174, m && m[0]);
+  ok('admin.js is version-bumped', m && Number(m[1]) >= 175, m && m[0]);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
