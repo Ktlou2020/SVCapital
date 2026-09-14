@@ -2,16 +2,20 @@
 const cron         = require('node-cron');
 const pool         = require('../db/pool');
 const emailService = require('../services/email');
+const { staffRecipients, warnIfNotUsers } = require('../services/staffRecipients');
 
 async function runDirectorReport() {
   console.log('[directorReportCron] Running monthly director report job…');
   try {
-    // 1. Fetch all directors/admins from users table
-    const { rows: directors } = await pool.query(
-      "SELECT id, email, first_name, last_name, role FROM users WHERE role IN ('director', 'admin') AND email IS NOT NULL"
-    );
+    /* 1. Who gets the report.
+       This asked `users` for role director or admin. In this platform `users`
+       holds investors; staff live in `employees` and their privilege is derived
+       at login rather than stored, so the query returned nobody and the branch
+       below skipped the month — quietly, at info level, every month. */
+    const { to: directors, source } = await staffRecipients();
+    warnIfNotUsers(source, 'directorReportCron');
     if (!directors.length) {
-      console.log('[directorReportCron] No directors/admins found — skipping.');
+      console.log('[directorReportCron] No recipients resolved — skipping.');
       return;
     }
 

@@ -17,6 +17,7 @@ const emailService = require('../services/email');
 const { KYC_TICKET_MATCH, KYC_TICKET_OPEN } = require('../services/kycTickets');
 const smsService   = require('../services/sms');
 const audit        = require('../services/audit');
+const { staffRecipients, warnIfNotUsers } = require('../services/staffRecipients');
 
 /* ─── Lazy-load push service (graceful if web-push not installed yet) ─── */
 let _pushSvc = null;
@@ -1497,9 +1498,10 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
           const employeeName = `${emp.first_name || ''} ${emp.last_name || ''}`.trim() || created.employee_id;
 
           // Email every director/admin
-          const { rows: directors } = await pool.query(
-            "SELECT email, first_name, last_name FROM users WHERE role IN ('director','admin') AND email IS NOT NULL AND is_active = true"
-          );
+          /* Same resolver, same reason — nobody was being told about leave
+             requests either. */
+          const { to: directors, source: leaveSrc } = await staffRecipients();
+          warnIfNotUsers(leaveSrc, 'leave_requests');
           for (const d of directors) {
             await emailService.sendLeaveRequestSubmitted(d, {
               employeeName,
@@ -1528,9 +1530,13 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
         // New KYC document → notify all admins/directors + SSE broadcast
         if (table === 'kyc_documents' && created.investor_id) {
           const investorName = created.investor_name || created.investor_id;
-          const { rows: kycAdmins } = await pool.query(
-            "SELECT email, first_name, last_name FROM users WHERE role IN ('director','admin') AND email IS NOT NULL AND is_active = true"
-          );
+          /* `users` holds investors; staff live in `employees` and their role is
+             derived at login, never stored. This query returned nobody, so a
+             client could upload their identity documents and no one was told —
+             while the signup screen had just promised them a review within
+             1–2 business days. See server/services/staffRecipients.js. */
+          const { to: kycAdmins, source: kycSrc } = await staffRecipients();
+          warnIfNotUsers(kycSrc, 'kyc_documents');
           for (const kycAdmin of kycAdmins) {
             await emailService.sendKycDocumentReceived(kycAdmin, {
               investorName,

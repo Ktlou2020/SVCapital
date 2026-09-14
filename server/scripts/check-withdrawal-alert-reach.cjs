@@ -57,10 +57,30 @@ const clearStaff = async () => {
   try {
     await require(path.join(ROOT, 'server', 'db', 'setup.js'))().catch(() => {});
 
-    /* The shipped resolver, not a copy of it. */
-    const { alertRecipients } = require(path.join(ROOT, 'server', 'jobs', 'withdrawalAlertCron.js'));
-    ok('the job exposes how it picks recipients', typeof alertRecipients === 'function',
+    /* The shipped resolver, not a copy of it. It moved out of the cron and into
+       a service once three other sites turned out to have the same fault. */
+    const { staffRecipients } = require(path.join(ROOT, 'server', 'services', 'staffRecipients.js'));
+    const alertRecipients = staffRecipients;
+    ok('the shared resolver is importable', typeof staffRecipients === 'function',
        'without this the check can only read the source, which is how the bug survived');
+
+    /* Every site that needs a staff list uses the one resolver. A fourth copy
+       of the broken query is exactly how this got to four sites. */
+    const SITES = [
+      [path.join('server', 'jobs', 'withdrawalAlertCron.js'), 'withdrawalAlertCron'],
+      [path.join('server', 'jobs', 'directorReportCron.js'),  'directorReportCron'],
+      [path.join('server', 'routes', 'tables.js'),            'tables (kyc + leave)'],
+    ];
+    for (const [rel, label] of SITES) {
+      const src = decomment(fs.readFileSync(path.join(ROOT, rel), 'utf8'));
+      ok(`${label} calls the shared resolver`, /staffRecipients\(\)/.test(src));
+      ok(`${label} reports a fallback`, /warnIfNotUsers\(/.test(src),
+         'a silent fallback is indistinguishable from a delivery in a log');
+      ok(`${label} no longer asks users for a staff role`,
+         !/FROM users WHERE role IN \('director'\s*,\s*'admin'\)/.test(src) &&
+         !/role IN \('admin', 'director'\)/.test(src),
+         'users holds investors — that query has always returned nobody');
+    }
 
     /* Anything already in the database would decide the answer before the
        fixtures do — this check has to own the whole staff list. */
@@ -118,9 +138,19 @@ const clearStaff = async () => {
     console.log('\nreaching nobody is reported as a failure, not as a send');
     {
       const src = decomment(CRON);
-      ok('an empty primary source logs an error',
-         /if \(source !== 'users'\) \{[\s\S]{0,200}console\.error/.test(src),
+      /* The reporting moved into the service with the resolver, so the cron
+         calls it and the service is what must actually raise the error. Both
+         halves are asserted: a call to a function that says nothing is the same
+         silence with an extra hop. */
+      ok('the cron reports an empty primary source', /warnIfNotUsers\(source, 'withdrawalAlertCron'\)/.test(src),
          'production printed "Alerted 0 admin(s)" on console.log three times a day');
+      const svc = decomment(fs.readFileSync(path.join(ROOT, 'server', 'services', 'staffRecipients.js'), 'utf8'));
+      ok('and the shared reporter raises it as an error',
+         /function warnIfNotUsers[\s\S]{0,300}console\.error/.test(svc),
+         'console.log for this reads exactly like a successful delivery');
+      ok('it says nothing when the primary source worked',
+         /if \(source === 'users'\) return;/.test(svc),
+         'a warning on every send trains people to ignore it');
       ok('and the count line says where they came from',
          /recipient\(s\) from \$\{source\}/.test(src),
          '"Alerted 3 admin(s)" does not tell you the fallback caught it');
