@@ -9528,6 +9528,155 @@ async function loadPersonas() {
 }
 
 function _renderPersonas(data) {
+
+/* A character and a campaign brief for each persona.
+   The panel counted people and described them in one line, which tells a
+   marketer the size of a segment and nothing they can write to. These are
+   built from what the survey actually returned — the goal, employment,
+   income and horizon distributions rendered below — and pinned to real
+   products: the minimum, term and benchmark are the ones seeded in
+   server/db/setup.js, not invented.
+   Each campaign carries a compliance note. SV Capital markets under FAIS
+   through FSP 52449, so "guaranteed" is not a word that may appear next to
+   any of these products, and the note is kept beside the copy rather than in
+   a policy document nobody opens while writing an email. */
+const PERSONA_PLAYBOOK = {
+  "Explorer": {
+    who: "Lerato Mokoena, 29 \u00b7 Tembisa, works in Sandton",
+    life: "Operations admin on about R22 000 a month. Has a savings pocket she tops up when she remembers and a TFSA she opened once. Nobody in her family invests.",
+    quote: "Everyone says I should be investing. Everything I look at wants R10 000 and a financial adviser.",
+    wants: "To start with an amount she will not miss, in something she can explain to her mother.",
+    blocks: "Jargon. Big minimums. Being asked for a 13-digit ID number before she has seen what is actually on offer.",
+    fit: "Cattle (R500, 12 months) \u00b7 Short Term (R500, 6 months) \u00b7 Refer a Friend",
+    campaigns: [
+      { ch: "WhatsApp / SMS \u2192 landing page", hl: "R500. One animal. Twelve months.",
+        body: "Lead with the real minimum, because she assumes it is ten thousand. One line on what happens to the money: it buys cattle that are backgrounded at Beefcor and sold at the end of the cycle. No percentages in the hook \u2014 the number she needs first is the entry price, not the return.",
+        cta: "See what R500 buys \u2192", comp: "State the 12-month term and that the return depends on the market price at sale. Never \"guaranteed\"." },
+      { ch: "Instagram / TikTok, 30 seconds", hl: "Where your R500 actually goes",
+        body: "Follow one animal: intake weight, 60 days backgrounding, feedlot, sale. She has never seen inside an investment before. This answers \"can I explain this to my mother\" in half a minute.",
+        cta: "Start with R500", comp: "Show the risk profile on screen (Medium-High). Do not imply the herd cannot lose value." },
+      { ch: "Referral, in-app + email", hl: "Someone you know already invests here",
+        body: "Explorers came in through a colleague, not an advert. Put the referrer front and centre and let the code carry the introduction \u2014 the trust is borrowed, which is exactly what a first-time investor is short of.",
+        cta: "Use their code", comp: "Disclose what the referrer receives." },
+    ],
+  },
+  "Growth Seeker": {
+    who: "Sipho Ndlovu, 34 \u00b7 Centurion, self-employed",
+    life: "IT contractor billing around R750 000 a year. Already holds ETFs and some crypto. Seven-year-plus horizon, comfortable watching a number fall.",
+    quote: "Do not sell me safety. Show me the mechanics and tell me what happens when it goes wrong.",
+    wants: "Rate, term, structure, and an honest account of the downside.",
+    blocks: "Anything that reads like a pitch. Vague numbers. Being talked to as though he is new.",
+    fit: "Solar 7-year \u00b7 Cattle (13% benchmark, 20% performance fee above it) \u00b7 GridFarmer",
+    campaigns: [
+      { ch: "Email + LinkedIn long-form", hl: "The full mechanics of a 7-year solar project",
+        body: "Not a brochure. The PPA, who the offtaker is, what their credit looks like, what happens to the rand if they default, and where the 20% performance fee sits. He will read 1 200 words if every one of them is load-bearing.",
+        cta: "Read the structure", comp: "Target return, never a promise. Name offtaker default as a real risk, not a footnote." },
+      { ch: "Product comparison page", hl: "Cattle at 12 months against solar at 7 years",
+        body: "Put them side by side: minimum, term, benchmark, fee, what backs the asset, and what stops paying if it goes wrong. He is comparing you against his ETFs anyway \u2014 do it for him and you own the frame.",
+        cta: "Compare the two", comp: "Equal prominence to both risk profiles. No selective date ranges on any track record shown." },
+    ],
+  },
+  "Income Investor": {
+    who: "Naledi Khumalo, 52 \u00b7 Bloemfontein, employed",
+    life: "Earns between R500 000 and R1 million. Supports a parent and a daughter at university. Has capital but needs it to do something on a schedule.",
+    quote: "It does not need to double. It needs to pay, on a date I can plan around.",
+    wants: "Predictable, dated income she can build a month around.",
+    blocks: "Lock-ups that pay nothing until maturity. Returns quoted annually when she thinks monthly.",
+    fit: "Delivery Bikes (R3 100, 18 months, lease income) \u00b7 Solar 5-year \u00b7 Short Term (6 months)",
+    campaigns: [
+      { ch: "Email, segmented on goal = regular income", hl: "Rent, not interest",
+        body: "The bike fleet leases motorcycles to riders working Mr D, Takealot and Uber Eats. The income is rent on an asset the pool owns. Say that plainly \u2014 it is the clearest story in the catalogue and it is currently buried under a product tile nobody opens.",
+        cta: "See the fleet", comp: "The pool owns the asset and carries its risks: if the bikes cannot be used, the rent stops. That sentence belongs in the email, not only in the agreement." },
+      { ch: "Retargeting + statement insert", hl: "Six months, then you decide again",
+        body: "Short Term at a 6-month term suits someone who does not want to commit for years. Frame the maturity as a decision point she controls rather than an end date.",
+        cta: "See the current pool", comp: "Do not describe a 6-month term as \"short-term savings\" \u2014 it is an investment and must be labelled as one." },
+    ],
+  },
+  "Long-Term Planner": {
+    who: "Johan & Marika Botha, 44 \u00b7 Stellenbosch",
+    life: "Two children, nine and thirteen. Thinking about school fees, then university, then themselves. Already have an RA and feel it is not enough.",
+    quote: "We are not trying to get rich. We are trying to not be caught short in 2038.",
+    wants: "Something that fits a decade-long plan and a tax position.",
+    blocks: "Products that mature before the goal does.",
+    fit: "12J Cattle (R5 000, 5-year hold, SARS s12J deduction) \u00b7 Solar 7-year",
+    campaigns: [
+      { ch: "Email, February and again in late July", hl: "The deduction you have until the end of February to use",
+        body: "12J is the only product in the catalogue with a tax story, and tax stories are seasonal. Two sends: one at the start of the year, one three weeks before the tax year ends on the last day of February.",
+        cta: "See the 12J pool", comp: "A s12J deduction is subject to SARS rules and the 5-year minimum hold. State both, and that tax treatment depends on the investor\u2019s own circumstances." },
+    ],
+  },
+  "Conservative Saver": {
+    who: "Mr Devan Pillay, 67 \u00b7 Chatsworth, retired",
+    life: "Lives on a pension and the interest from a fixed deposit that renewed at a rate he was not happy with. Will not risk capital he cannot replace.",
+    quote: "I am not chasing anything. I just do not want to go backwards.",
+    wants: "Capital preservation first, a modest return second.",
+    blocks: "Volatility. Anything he cannot exit. Being sold to.",
+    fit: "Short Term (6 months, 11.5% benchmark) \u00b7 Solar 5-year",
+    campaigns: [
+      { ch: "Print / direct mail + a phone number", hl: "Six months. Then your money and your decision.",
+        body: "This persona does not convert in an app funnel. A letter, a real number to call, and a named person at the other end. The message is term length and control, not upside.",
+        cta: "Call and ask", comp: "Never use the words guaranteed, safe or capital-protected. Every SV Capital product can lose value, and this is the persona most likely to be misled by a softened phrase." },
+    ],
+  }
+};
+
+/* The character and campaign briefs, folded away under each persona card.
+   <details> rather than a JS toggle: five of these open at once would bury the
+   distribution charts below, and the browser already knows how to do this
+   accessibly and how to keep it open across a re-render of the rest. */
+function _personaPlaybookHtml(pb, count, color) {
+  if (!pb) return '';
+
+  /* A persona standing on two people is a description of two people. Saying so
+     next to the brief is the difference between a segment and an anecdote —
+     and this panel is read by someone deciding where to spend. */
+  const thin = count < 5
+    ? `<div style="margin:0 0 10px;padding:8px 10px;border-radius:6px;background:rgba(239,68,68,0.10);
+                  border:1px solid rgba(239,68,68,0.25);font-size:0.72rem;color:#fca5a5">
+         Only ${count} investor${count !== 1 ? 's' : ''} in this persona — too few to budget against.
+         Treat the brief below as a hypothesis to test, not a segment to buy media for.
+       </div>` : '';
+
+  const campaigns = (pb.campaigns || []).map(c => `
+    <div style="border-left:2px solid ${color};padding:0 0 0 10px;margin-bottom:12px">
+      <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted)">${_esc(c.ch)}</div>
+      <div style="font-weight:600;font-size:0.84rem;margin:3px 0 4px">${_esc(c.hl)}</div>
+      <div style="font-size:0.76rem;color:var(--text-muted);line-height:1.55">${_esc(c.body)}</div>
+      <div style="font-size:0.74rem;margin-top:5px"><span style="color:${color};font-weight:600">${_esc(c.cta)}</span></div>
+      <div style="font-size:0.71rem;color:#fbbf24;margin-top:5px;display:flex;gap:6px;align-items:flex-start">
+        <i class="fa-solid fa-scale-balanced" style="margin-top:2px;flex-shrink:0"></i>
+        <span>${_esc(c.comp)}</span>
+      </div>
+    </div>`).join('');
+
+  const row = (label, value) => `
+    <div style="display:flex;gap:8px;margin-bottom:4px">
+      <div style="min-width:62px;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);flex-shrink:0">${label}</div>
+      <div style="font-size:0.76rem;color:var(--text);line-height:1.5">${_esc(value)}</div>
+    </div>`;
+
+  return `
+    <details style="margin-top:4px">
+      <summary style="cursor:pointer;font-size:0.74rem;color:${color};font-weight:600;list-style:none">
+        Character &amp; campaign brief
+      </summary>
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+        ${thin}
+        <div style="font-weight:600;font-size:0.86rem;margin-bottom:2px">${_esc(pb.who)}</div>
+        <div style="font-size:0.76rem;color:var(--text-muted);line-height:1.55;margin-bottom:8px">${_esc(pb.life)}</div>
+        <div style="font-size:0.8rem;font-style:italic;color:${color};border-left:2px solid ${color};
+                    padding-left:9px;margin:0 0 10px;line-height:1.5">&ldquo;${_esc(pb.quote)}&rdquo;</div>
+        ${row('Wants', pb.wants)}
+        ${row('Blocks', pb.blocks)}
+        ${row('Fit', pb.fit)}
+        <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin:12px 0 8px">
+          Campaigns that would land
+        </div>
+        ${campaigns}
+      </div>
+    </details>`;
+}
+
   const panel = document.getElementById('personasPanel');
   if (!panel) return;
 
@@ -9540,6 +9689,8 @@ function _renderPersonas(data) {
     'Explorer':           { icon: 'fa-compass',        color: '#fec24f', desc: 'Just getting started. Goals and risk profile still taking shape.' },
   };
 
+
+
   const total = data.total || 1;
 
   // Archetype cards
@@ -9548,6 +9699,13 @@ function _renderPersonas(data) {
     .map(([name, count]) => {
       const m = PERSONA_META[name] || PERSONA_META['Explorer'];
       const pct = Math.round(count / total * 100);
+      /* Resolved here rather than inside the helper so the persona name never
+         appears inside a template literal. check-markup-interpolation treats a
+         bare `name` in a substitution as a field somebody can type — it cannot
+         see that this one indexes a constant and is never printed — and the
+         answer to that is to keep it out of the markup, not to escape a helper
+         whose own HTML would come back as entities. */
+      const pb = PERSONA_PLAYBOOK[name] || null;
       return `
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:8px">
           <div style="display:flex;align-items:center;gap:10px">
@@ -9563,6 +9721,7 @@ function _renderPersonas(data) {
             <div style="height:4px;width:${pct}%;background:${m.color};border-radius:2px"></div>
           </div>
           <div style="font-size:0.75rem;color:var(--text-muted)">${m.desc}</div>
+          ${_personaPlaybookHtml(pb, count, m.color)}
         </div>`;
     }).join('');
 
