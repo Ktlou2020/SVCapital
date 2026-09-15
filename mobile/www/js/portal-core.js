@@ -2673,7 +2673,7 @@ function _pmInvestorId() {
  * openTopUpModal(gateway?)
  * Call with no arg (generic) or 'paystack' / 'ozow' to pre-select.
  */
-function openTopUpModal(gateway, saId) {
+function openTopUpModal(gateway, saId, prefillAmount) {
   _pmAmount  = 0;
   _pmGateway = null;
   _pmSaId    = saId || null;
@@ -2681,8 +2681,14 @@ function openTopUpModal(gateway, saId) {
   SVC.track('svc_topup_modal_opened', { gateway: gateway || 'default' });
 
   // Reset to step 1
-  _pmEl('pmAmount').value = '';
-  _pmEl('pmAmountHint').textContent = 'Minimum deposit: R100';
+  /* Pre-filled when the client got here from a shortfall on the invest modal.
+     They already told us what they were trying to invest; asking them to work
+     out the difference and type it again is the step where they leave. */
+  const _pre = Math.max(100, Math.ceil((Number(prefillAmount) || 0) / 100) * 100);
+  _pmEl('pmAmount').value = prefillAmount ? String(_pre) : '';
+  _pmEl('pmAmountHint').textContent = prefillAmount
+    ? `Enough to cover the ${Utils.rand(Number(prefillAmount))} you are short, rounded up to the nearest R100.`
+    : 'Minimum deposit: R100';
   _pmEl('pmAmountHint').style.color = 'var(--text-muted)';
   document.querySelectorAll('.pm-chip').forEach(c => c.classList.remove('active'));
   document.querySelectorAll('.pm-gateway-card').forEach(c => c.classList.remove('selected'));
@@ -3129,13 +3135,65 @@ async function _recordDeposit(gateway, reference, status, showSuccess = true) {
   _pmSaId = null;
 }
 
+/* Where the client was when their wallet came up short.
+
+   Both shortfall prompts in the invest modal used to do the same thing:
+       Modal.close('investModal'); navigate('wallet', …)
+   which drops the pool they had chosen and the amount they had typed, and
+   leaves them on the wallet page to work out the difference, top up, find the
+   marketplace again, find the pool again and start over. Every one of those
+   steps is a place to give up, and the funnel records the give-up as
+   'insufficient_funds' with no idea that we caused most of it.
+
+   Held in a lazily-created holder rather than a top-level `let`, because
+   check-portal-split forbids load-time state in this file. */
+function _resumeBag() {
+  if (!window.__svcInvestResume) window.__svcInvestResume = { poolId: null, amount: 0 };
+  return window.__svcInvestResume;
+}
+
+/* Called from the shortfall prompts. Remembers the pool and the amount, then
+   opens the top-up modal with the difference already in it. */
+function topUpForShortfall(poolId, shortfall, intendedAmount) {
+  const bag = _resumeBag();
+  bag.poolId = poolId || null;
+  bag.amount = Number(intendedAmount) || 0;
+  SVC.track('svc_topup_from_shortfall', { pool_id: poolId, shortfall_bucket: _amtBucket(shortfall) });
+  _trackFunnel('topup_started', { pool_id: poolId, stage: 'shortfall', shortfall_bucket: _amtBucket(shortfall) });
+  Modal.close('investModal');
+  openTopUpModal(undefined, undefined, shortfall);
+}
+
 /* ── modal close ────────────────────────────── */
 function closePaymentModal() {
+  const succeeded = _pmEl('pmStep3Success') && _pmEl('pmStep3Success').style.display !== 'none';
   Modal.close('topUpModal');
-  // If success was shown, refresh wallet display
-  if (_pmEl('pmStep3Success') && _pmEl('pmStep3Success').style.display !== 'none') {
-    loadPortalData().then(() => loadWallet());
-  }
+  const bag = _resumeBag();
+  const resumePool = bag.poolId, resumeAmt = bag.amount;
+  bag.poolId = null; bag.amount = 0;
+
+  if (!succeeded) return;
+
+  loadPortalData().then(() => {
+    loadWallet();
+    /* Straight back to the pool they were buying, with the amount they typed.
+       Only on success, and only once — the bag is cleared above whichever way
+       this goes, so an abandoned top-up does not reopen an invest modal the
+       next time somebody tops up for an unrelated reason. */
+    if (!resumePool || typeof openInvestModal !== 'function') return;
+    const pool = (PORTAL.pools || []).find(p => p.id === resumePool);
+    if (!pool) return;
+    SVC.track('svc_invest_resumed_after_topup', { pool_id: resumePool });
+    openInvestModal(pool);
+    if (resumeAmt > 0) {
+      setTimeout(() => {
+        const el = document.getElementById('investAmount');
+        if (!el) return;
+        el.value = resumeAmt;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      }, 60);
+    }
+  });
 }
 
 function filterMarket(type, btn) {
@@ -10018,7 +10076,7 @@ function updateRecurringToggleStyle() {
   slider.style.background = on ? '#fec24f' : '#ccc';
 }
 
-function openRecurringModal() {
+function openRecurringModal(prefill) {
   const inv     = PORTAL.investor;
   const toggle  = document.getElementById('recurringEnabledToggle');
   const amtEl   = document.getElementById('recurringAmount');
@@ -10029,8 +10087,13 @@ function openRecurringModal() {
     toggle.checked = !!(inv && inv.recurring_enabled);
     updateRecurringToggleStyle();
   }
-  if (amtEl && inv?.recurring_amount) amtEl.value = inv.recurring_amount;
+  /* A prefill arrives when this was opened straight off an investment the
+     client has just made: the amount and the product are the ones they chose a
+     second ago, so asking them again is asking them to decide twice. Their own
+     saved settings still win if they already have a schedule. */
+  if (amtEl) amtEl.value = inv?.recurring_amount || (prefill && prefill.amount) || '';
   if (daySel && inv?.recurring_day)   daySel.value = inv.recurring_day;
+  if (toggle && prefill && !inv?.recurring_enabled) { toggle.checked = true; updateRecurringToggleStyle(); }
 
   // Populate product types from pools that currently have an open pool
   if (prodSel) {
@@ -10042,10 +10105,60 @@ function openRecurringModal() {
     )];
     prodSel.innerHTML = '<option value="">Select a product…</option>' +
       openProductTypes.map(pt => `<option value="${pt}">${Utils.productInfo(pt).label || pt}</option>`).join('');
-    if (inv?.recurring_product_type) prodSel.value = inv.recurring_product_type;
+    const wanted = inv?.recurring_product_type || (prefill && prefill.productType);
+    if (wanted) {
+      /* Matched canonically: a pool carrying `delivery_bikes` has to select the
+         `delivery_bike` option, or the product silently comes back unset and
+         the client is looking at a form that lost their answer. */
+      const want = (typeof svcCanonProductType === 'function') ? svcCanonProductType(wanted) : wanted;
+      const opt = [...prodSel.options].find(o => o.value &&
+        ((typeof svcCanonProductType === 'function') ? svcCanonProductType(o.value) : o.value) === want);
+      if (opt) prodSel.value = opt.value;
+    }
   }
 
   Modal.open('recurringModal');
+}
+
+/* Offered at the moment an investment completes, which is the only moment a
+   client has just proved they want this product and knows what it costs.
+
+   Recurring contribution is the whole machinery for investing more over time —
+   the columns, the nightly cron and a portal tab all exist — and production
+   reports "0 investor(s) scheduled for today" because it lives two levels down,
+   as a sub-tab inside the wallet. Nobody finds it. This does not move it; it
+   asks once, at the point where the answer is most likely to be yes.
+
+   A toast rather than a modal: they have just finished a task and interrupting
+   a success with another form is how a helpful prompt becomes a nuisance. */
+function offerRecurringAfterInvest(pool, poolAmount) {
+  try {
+    if (!pool || !(poolAmount > 0)) return;
+    if (PORTAL.investor?.recurring_enabled) return;   // they already have one
+
+    /* Asked at most once a fortnight. Somebody who invests weekly and keeps
+       ignoring this should stop being asked; localStorage can throw or come
+       back empty, so nothing here depends on it succeeding. */
+    const KEY = 'svc_recurring_offer_at';
+    let last = 0;
+    try { last = parseInt(localStorage.getItem(KEY) || '0', 10) || 0; } catch (_) {}
+    if (Date.now() - last < 14 * 24 * 60 * 60 * 1000) return;
+    try { localStorage.setItem(KEY, String(Date.now())); } catch (_) {}
+
+    const label = Utils.productInfo(pool.product_type).label || pool.product_type;
+    SVC.track('svc_recurring_offer_shown', { pool_id: pool.id, product_type: pool.product_type });
+    Toast.action(
+      `Invest ${Utils.rand(poolAmount)} in ${label} every month?`,
+      'Set it up',
+      () => {
+        SVC.track('svc_recurring_offer_taken', { pool_id: pool.id, product_type: pool.product_type });
+        openRecurringModal({ amount: poolAmount, productType: pool.product_type });
+      },
+      'info');
+  } catch (e) {
+    /* An offer is not worth breaking a completed investment over. */
+    console.warn('[recurring offer]', e && e.message);
+  }
 }
 
 async function saveRecurringInvestment() {

@@ -1510,8 +1510,8 @@ function openInvestModal(poolId) {
                <div style="font-size:0.78rem;color:#6b7280;margin-top:2px">You have <strong style="color:#1a1a1a">${Utils.rand(walletBal)}</strong> — you need <strong style="color:#1a1a1a">${Utils.rand(_minPlusFee(pool))}</strong> to invest. The 1% platform fee is included in that amount.</div>
              </div>
            </div>
-           <button class="btn btn--primary btn--sm" style="width:100%" onclick="Modal.close('investModal');navigate('wallet',document.querySelector('[data-view=wallet]'))">
-             <i class="fa-solid fa-plus"></i> Top Up Wallet
+           <button class="btn btn--primary btn--sm" style="width:100%" onclick="topUpForShortfall('${pool.id}',${_minPlusFee(pool) - walletBal},${pool.min_investment})">
+             <i class="fa-solid fa-plus"></i> Top up ${Utils.rand(_minPlusFee(pool) - walletBal)} and come back
            </button>
          </div>`
       : `<div class="invest-wallet-indicator invest-wallet-ok" style="margin-bottom:14px">
@@ -1626,7 +1626,7 @@ function _updateInvestCalc(amt, rate, termMonths, minInvest, walletBal) {
               </div>
               <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
                 ${canInvest ? `<button class="btn btn--secondary btn--sm" onclick="document.getElementById('investAmount').value=${maxInvestable};_updateInvestCalc(${maxInvestable},${rate},${termMonths},${minInvest},${walletBal})">Use max (${Utils.rand(maxInvestable)})</button>` : ''}
-                <button class="btn btn--primary btn--sm" onclick="Modal.close('investModal');navigate('wallet',document.querySelector('[data-view=wallet]'))"><i class="fa-solid fa-plus"></i> Top Up Wallet</button>
+                <button class="btn btn--primary btn--sm" onclick="topUpForShortfall('${_investModalPool?.id || ''}',${total - walletBal},${amt})"><i class="fa-solid fa-plus"></i> Top up ${Utils.rand(total - walletBal)} and come back</button>
               </div>
             </div>
           </div>
@@ -1736,6 +1736,11 @@ async function confirmInvestment(pool) {
     // Reload data
     await loadPortalData();
     renderOverview();
+
+    /* Asked after the reload so the offer is suppressed correctly for somebody
+       who already has a schedule — recurring_enabled is on the investor record
+       that loadPortalData just refreshed. */
+    offerRecurringAfterInvest(pool, poolAmount);
   } catch (e) {
     SVC.error('investment', e.message);
     Toast.error('Investment failed. Please try again.');
