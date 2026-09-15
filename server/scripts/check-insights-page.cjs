@@ -157,6 +157,96 @@ const meta = (html, prop) => {
       ok('and before the .html redirect', mountAt < redirectAt || redirectAt < 0);
     }
 
+    console.log('\na header image becomes the share picture');
+    {
+      /* A genuine 8x4 PNG rather than a string that looks like one, because the
+         hero route decodes the base64 and serves the bytes. */
+      const png = Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAECAIAAAB9c2IwAAAAHElEQVQI12P8//8/AzbAxIAH' +
+        'jEqOSo5KjkqOSgYAcMwD/1sJZ4kAAAAASUVORK5CYII=', 'base64');
+      const uri = 'data:image/png;base64,' + png.toString('base64');
+      await db.query(`UPDATE insights SET hero_image = $1, hero_alt = $2 WHERE slug = 'chk-xss'`,
+                     [uri, 'A test image & "quoted" alt']);
+
+      const { html } = await get('/insights/chk-xss');
+      ok('og:image points at the article, not the site default',
+         meta(html, 'og:image') === 'https://platform.svcapital.co.za/insights/chk-xss/hero',
+         String(meta(html, 'og:image')));
+      ok('twitter:image follows it', meta(html, 'twitter:image') === meta(html, 'og:image'));
+      ok('the fixed 1200x630 dimensions are dropped',
+         !/og:image:width/.test(html),
+         'a staff-supplied photo is rarely exactly 1200x630 and claiming it is misdraws the card');
+
+      /* The one that only breaks away from production. */
+      const img = (html.match(/<img class="hero" src="([^"]*)"/) || [])[1];
+      ok('the on-page <img> is host-relative', img === '/insights/chk-xss/hero',
+         `got ${img} — an absolute production URL loads production's image on staging`);
+      ok('and its alt text is escaped',
+         /<img class="hero"[^>]*alt="A test image &amp; &quot;quoted&quot; alt"/.test(html),
+         'alt is an attribute, so an unescaped quote closes it early');
+
+      const r = await fetch(base + '/insights/chk-xss/hero');
+      const bytes = Buffer.from(await r.arrayBuffer());
+      ok('the hero route serves the image', r.status === 200, String(r.status));
+      ok('with the stored content type', r.headers.get('content-type') === 'image/png',
+         String(r.headers.get('content-type')));
+      ok('and the exact bytes back', bytes.equals(png), `${bytes.length} vs ${png.length}`);
+      ok('cached, since it never changes under its URL',
+         /max-age=\d{4,}/.test(r.headers.get('cache-control') || ''),
+         String(r.headers.get('cache-control')));
+
+      const none = await fetch(base + '/insights/rent-is-not-interest/hero');
+      ok('an article with no image 404s rather than serving nothing', none.status === 404, String(none.status));
+      const nh = (await get('/insights/rent-is-not-interest')).html;
+      ok('and falls back to the site card',
+         meta(nh, 'og:image') === 'https://platform.svcapital.co.za/assets/svcapital-og.png',
+         String(meta(nh, 'og:image')));
+
+      /* A draft's image must not leak either. */
+      await db.query(`UPDATE insights SET hero_image = $1 WHERE slug = 'chk-draft'`, [uri]);
+      ok("a draft's image is not served", (await fetch(base + '/insights/chk-draft/hero')).status === 404,
+         'published = false has to mean the whole article, picture included');
+
+      const list = (await get('/insights')).html;
+      ok('the listing card shows a thumbnail', /<img class="card-hero" src="\/insights\/chk-xss\/hero"/.test(list));
+
+      /* Staff can also paste a URL instead of uploading. Nothing covered that
+         until a mutation removed the redirect and went unnoticed. */
+      const EXT = 'https://images.example.com/solar.jpg';
+      await db.query(`UPDATE insights SET hero_image = $1 WHERE slug = 'chk-xss'`, [EXT]);
+      const extHtml = (await get('/insights/chk-xss')).html;
+      ok('an external URL is used directly as og:image', meta(extHtml, 'og:image') === EXT,
+         String(meta(extHtml, 'og:image')));
+      ok('and directly in the <img>, not proxied',
+         new RegExp(`<img class="hero" src="${EXT.replace(/[.*+?^$()|[\]\\]/g, '\\$&')}"`).test(extHtml),
+         'sending it through our own route would make us the host of somebody else\'s image');
+      const red = await fetch(base + '/insights/chk-xss/hero', { redirect: 'manual' });
+      ok('the hero route redirects to it rather than 404ing',
+         red.status === 302 && red.headers.get('location') === EXT,
+         `${red.status} ${red.headers.get('location')}`);
+      await db.query(`UPDATE insights SET hero_image = $1 WHERE slug = 'chk-xss'`, [uri]);
+    }
+
+    console.log('\nand the console can attach one');
+    {
+      const idx = fs.readFileSync(path.join(ROOT, 'admin', 'index.html'), 'utf8');
+      const js  = fs.readFileSync(path.join(ROOT, 'admin', 'js', 'admin.js'), 'utf8');
+      ok('there is a file picker', /id="insHeroFile"[\s\S]{0,160}accept="image\//.test(idx));
+      ok('and a place for alt text', /id="insHeroAlt"/.test(idx));
+      ok('with a preview', /id="insHeroPreview"/.test(idx));
+      ok('and a way to remove it', /_insClearHero\(\)/.test(js));
+      ok('the size is refused in the browser', /_INS_HERO_MAX = 2 \* 1024 \* 1024/.test(js),
+         'finding out at save time means finding out after writing the article');
+      ok('only real image types are accepted', /\^image\\\/\(png\|jpe\?g\|webp\)\$/.test(js));
+      ok('it is saved on the row', /hero_image: v\('insHero'\) \|\| null/.test(js));
+      ok('and cleared as null, not an empty string', /hero_alt:\s+v\('insHeroAlt'\) \|\| null/.test(js),
+         "'' is a value the hero parser would keep trying to read");
+      const idxSrv = fs.readFileSync(path.join(ROOT, 'server', 'index.js'), 'utf8');
+      ok('the body limit allows for an encoded photo',
+         /app\.use\('\/api\/tables\/insights', express\.json\(\{ limit: '8mb' \}\)\)/.test(idxSrv),
+         'base64 inflates a 2MB photo past the 2mb global limit');
+    }
+
     console.log('\nthe landing page points at it');
     {
       const land = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
@@ -206,8 +296,18 @@ const meta = (html, prop) => {
       const css = fs.readFileSync(path.join(ROOT, 'css', 'home-ci.css'), 'utf8');
       ok('the submenu opens on keyboard focus too', /\.nav-has-sub:focus-within > \.nav-sub/.test(css),
          'hover alone is unreachable without a pointer');
-      ok('and falls back to inline on small screens', /@media \(max-width: 900px\)[\s\S]{0,200}\.nav-sub/.test(css),
-         'there is no hover on a phone');
+      /* The inline fallback must not start until the horizontal nav has gone.
+         css/style.css swaps the nav for a slide-in panel at 768px; set at 900
+         the submenu expanded while the row was still horizontal, so between
+         769 and 900 both items sat permanently under Products. */
+      ok('the inline fallback waits for the slide-in panel',
+         /@media \(max-width: 768px\)[\s\S]{0,260}\.nav-sub/.test(css),
+         'above the panel breakpoint the dropdown is hover and focus only');
+      ok('and not a pixel earlier', !/@media \(max-width: 900px\)[\s\S]{0,260}\.nav-sub/.test(css));
+      const styleCss = fs.readFileSync(path.join(ROOT, 'css', 'style.css'), 'utf8');
+      ok('which is where the nav actually collapses',
+         /@media \(max-width: 768px\)/.test(styleCss),
+         'the two breakpoints have to agree or a band of widths gets both layouts');
     }
 
     console.log('\nand staff can publish without a deploy');

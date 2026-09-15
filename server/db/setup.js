@@ -79,6 +79,12 @@ END $$;
    has one by construction and no field to have answered. Step 16 backfills the
    international ones from what they did answer. */
 DO $$ BEGIN
+  ALTER TABLE insights ADD COLUMN IF NOT EXISTS hero_image TEXT;
+  ALTER TABLE insights ADD COLUMN IF NOT EXISTS hero_alt   TEXT;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+DO $$ BEGIN
   ALTER TABLE investors ADD COLUMN IF NOT EXISTS nationality TEXT DEFAULT 'South African';
 EXCEPTION WHEN OTHERS THEN NULL;
 END $$;
@@ -487,6 +493,12 @@ CREATE TABLE IF NOT EXISTS insights (
   author       TEXT,
   read_minutes INT DEFAULT 4,
   hero_colour  TEXT DEFAULT '#eda5ff',
+  /* Either a data: URI uploaded through the console or an http(s) URL. Served
+     back as real bytes at /insights/:slug/hero so og:image can point at a
+     fetchable address — a share crawler cannot read a data: URI, so storing one
+     and using it directly would give every article the generic card. */
+  hero_image   TEXT,
+  hero_alt     TEXT,
   published    BOOLEAN DEFAULT false,
   published_at TIMESTAMPTZ,
   created_at   TIMESTAMPTZ DEFAULT NOW(),

@@ -134,6 +134,10 @@ app.use('/api/payments/paystack/webhook', (req, res, next) => {
 app.use('/api/tables/kyc_documents', express.json({ limit: '15mb' }));
 app.use('/api/tables/kyc_documents', express.urlencoded({ extended: true, limit: '15mb' }));
 app.use('/api/tables/support_tickets', express.json({ limit: '15mb' }));
+/* Insight hero images arrive as a data: URI inside the article row. A photo
+   sized for a 1200px header is a few hundred KB, which base64 inflates past the
+   2mb global limit on a large one. */
+app.use('/api/tables/insights', express.json({ limit: '8mb' }));
 app.use('/api/tables/support_tickets', express.urlencoded({ extended: true, limit: '15mb' }));
 // Large platform export JSON uploads
 app.use('/api/admin/import', express.json({ limit: '50mb' }));

@@ -38,7 +38,7 @@ const fmtDate = d => d
 
 /* Shared chrome. Kept in one place so an article and the index cannot drift
    into looking like two different sites. */
-function page({ title, description, url, bodyHtml, articleMeta }) {
+function page({ title, description, url, bodyHtml, articleMeta, image }) {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -52,13 +52,13 @@ function page({ title, description, url, bodyHtml, articleMeta }) {
 <meta property="og:url" content="${esc(url)}">
 <meta property="og:title" content="${attr(title, 120)}">
 <meta property="og:description" content="${attr(description, 300)}">
-<meta property="og:image" content="${SITE}/assets/svcapital-og.png">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
+<meta property="og:image" content="${image || `${SITE}/assets/svcapital-og.png`}">
+${image ? '' : `<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">`}
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="${attr(title, 120)}">
 <meta name="twitter:description" content="${attr(description, 200)}">
-<meta name="twitter:image" content="${SITE}/assets/svcapital-og.png">
+<meta name="twitter:image" content="${image || `${SITE}/assets/svcapital-og.png`}">
 ${articleMeta || ''}
 <link rel="icon" href="/assets/favicon-32.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -94,6 +94,13 @@ ${articleMeta || ''}
        padding:5px 10px;border-radius:999px;background:var(--mark);color:#15121b}
   .meta{font-size:.82rem;color:var(--faint);margin-bottom:26px}
   article p{font-family:'Source Serif 4',Georgia,serif;font-size:1.12rem;color:var(--ink);margin:0 0 20px;max-width:66ch}
+  /* A hero is decorative chrome around the words, so it is capped rather than
+     allowed to push the headline off a short screen. */
+  img.hero{display:block;width:100%;max-height:420px;object-fit:cover;border-radius:12px;
+           margin:22px 0 18px;background:var(--rule)}
+  .card-hero{display:block;width:calc(100% + 36px);height:150px;object-fit:cover;
+             margin:-18px -18px 4px;border-radius:12px 12px 0 0;background:var(--rule)}
+  @media (max-width:520px){img.hero{max-height:240px}}
   .grid{display:grid;gap:18px;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));margin-top:26px}
   .card{background:var(--panel);border:1px solid var(--rule);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:9px;text-decoration:none;color:inherit}
   /* align-self, not display:inline-block — a flex column stretches its children
@@ -143,23 +150,81 @@ ${articleMeta || ''}
 
 const WA_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 14.4c-.3-.2-1.7-.9-2-1-.3-.1-.5-.2-.7.1-.2.3-.7 1-.9 1.2-.2.2-.3.2-.6.1-.3-.2-1.2-.5-2.3-1.4-.9-.8-1.4-1.7-1.6-2-.2-.3 0-.5.1-.6l.5-.5c.1-.2.2-.3.3-.5 0-.2 0-.4 0-.5 0-.2-.7-1.6-.9-2.2-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.5s1.1 2.9 1.2 3.1c.2.2 2.1 3.2 5.1 4.4.7.3 1.3.5 1.7.6.7.2 1.4.2 1.9.1.6-.1 1.7-.7 2-1.4.2-.7.2-1.3.2-1.4-.1-.1-.3-.2-.6-.3zM12 2C6.5 2 2 6.5 2 12c0 1.8.5 3.4 1.3 4.9L2 22l5.3-1.4c1.4.8 3 1.2 4.7 1.2 5.5 0 10-4.5 10-10S17.5 2 12 2z"/></svg>';
 
+/* A stored hero is either a data: URI from the console or an http(s) URL a
+   member of staff pasted. Split once, here, so the page and the hero route
+   cannot disagree about which it is. */
+function heroKind(v) {
+  const t = String(v || '').trim();
+  if (!t) return null;
+  if (/^https?:\/\//i.test(t)) return { type: 'url', value: t };
+  const m = /^data:(image\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/=\s]+)$/i.exec(t);
+  if (!m) return null;
+  return { type: 'data', mime: m[1].toLowerCase(), b64: m[2].replace(/\s+/g, '') };
+}
+
+/* Two addresses for the same picture, deliberately.
+
+   og:image is read by a crawler on another machine, so it has to be absolute
+   and pointed at the canonical host. An <img> on the page must NOT be: an
+   absolute production URL in the markup means staging and local both load
+   production's image, or 404 against it, while looking perfectly correct in
+   production. That is the kind of bug that only ever shows up somewhere you are
+   not looking. */
+function heroUrl(a) {                      // absolute — for og:image
+  const h = heroKind(a.hero_image);
+  if (!h) return null;
+  return h.type === 'url' ? h.value : `${SITE}/insights/${encodeURIComponent(a.slug)}/hero`;
+}
+function heroPath(a) {                     // host-relative — for <img>
+  const h = heroKind(a.hero_image);
+  if (!h) return null;
+  return h.type === 'url' ? h.value : `/insights/${encodeURIComponent(a.slug)}/hero`;
+}
+
+/* ── GET /insights/:slug/hero ──────────────────────────────
+   Declared before /:slug. Serves the stored bytes so a share card, an <img> and
+   a browser cache all have a normal URL to work with. */
+router.get('/:slug/hero', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT hero_image FROM insights WHERE slug = $1 AND published = true LIMIT 1`,
+      [String(req.params.slug)]);
+    const h = rows[0] && heroKind(rows[0].hero_image);
+    if (!h) return res.status(404).end();
+    if (h.type === 'url') return res.redirect(302, h.value);
+
+    const buf = Buffer.from(h.b64, 'base64');
+    if (!buf.length) return res.status(404).end();
+    res.set('Content-Type', h.mime);
+    res.set('Cache-Control', 'public, max-age=86400');
+    return res.send(buf);
+  } catch (err) {
+    console.error('[insights] hero error:', err.message);
+    return res.status(404).end();
+  }
+});
+
 /* ── GET /insights ─────────────────────────────────────── */
 router.get('/', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT slug, title, industry, excerpt, read_minutes, hero_colour, published_at
+      `SELECT slug, title, industry, excerpt, read_minutes, hero_colour, hero_image, hero_alt, published_at
          FROM insights
         WHERE published = true
         ORDER BY published_at DESC NULLS LAST, created_at DESC
         LIMIT 60`);
 
-    const cards = rows.map(a => `
+    const cards = rows.map(a => {
+      const hu = heroPath(a);
+      return `
       <a class="card" href="/insights/${encodeURIComponent(a.slug)}">
+        ${hu ? `<img class="card-hero" src="${esc(hu)}" alt="${attr(a.hero_alt || '', 160)}" loading="lazy">` : ''}
         <span class="tag" style="background:${esc(a.hero_colour || '#eda5ff')}">${esc(a.industry)}</span>
         <h2>${esc(a.title)}</h2>
         <p>${esc(a.excerpt)}</p>
         <p class="meta">${fmtDate(a.published_at)} &middot; ${Number(a.read_minutes) || 4} min read</p>
-      </a>`).join('');
+      </a>`;
+    }).join('');
 
     res.set('Cache-Control', 'public, max-age=300');
     res.type('html').send(page({
@@ -188,7 +253,8 @@ router.get('/', async (req, res) => {
 router.get('/:slug', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT slug, title, industry, excerpt, body, author, read_minutes, hero_colour, published_at
+      `SELECT slug, title, industry, excerpt, body, author, read_minutes, hero_colour,
+              hero_image, hero_alt, published_at
          FROM insights WHERE slug = $1 AND published = true LIMIT 1`, [String(req.params.slug)]);
 
     if (!rows[0]) {
@@ -208,15 +274,22 @@ router.get('/:slug', async (req, res) => {
        the headline and the link rather than a naked URL. */
     const waText = encodeURIComponent(`${a.title}\n\n${url}`);
 
+    const hu    = heroPath(a);   // the <img> on this page
+    const huAbs = heroUrl(a);    // the share card, read from another machine
+
     res.set('Cache-Control', 'public, max-age=300');
     res.type('html').send(page({
       title: `${a.title} — SV Capital`,
       description: a.excerpt,
       url,
+      /* The article's own picture becomes the share card, which is the whole
+         reason the hero is worth having. Falls back to the site image. */
+      image: huAbs,
       articleMeta:
         `<meta property="article:section" content="${attr(a.industry, 60)}">` +
         (a.published_at ? `\n<meta property="article:published_time" content="${new Date(a.published_at).toISOString()}">` : ''),
       bodyHtml: `
+        ${hu ? `<img class="hero" src="${esc(hu)}" alt="${attr(a.hero_alt || '', 160)}">` : ''}
         <span class="tag" style="background:${esc(a.hero_colour || '#eda5ff')}">${esc(a.industry)}</span>
         <h1>${esc(a.title)}</h1>
         <p class="lede">${esc(a.excerpt)}</p>

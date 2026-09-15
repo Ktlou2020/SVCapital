@@ -14372,6 +14372,45 @@ async function addInvestorNote(investorId) {
    to the public site would be quite the bug.
    ═══════════════════════════════════════════════ */
 
+
+/* Header image. Read to a data: URI and carried in the row — the public route
+   at /insights/:slug/hero turns it back into real bytes so a share crawler has
+   a normal URL to fetch. */
+const _INS_HERO_MAX = 2 * 1024 * 1024;
+
+function _insPickHero(input) {
+  const f = input.files && input.files[0];
+  if (!f) return;
+  if (!/^image\/(png|jpe?g|webp)$/i.test(f.type)) {
+    Toast.error('Use a PNG, JPEG or WebP.'); input.value = ''; return;
+  }
+  if (f.size > _INS_HERO_MAX) {
+    /* Refused here rather than at the server, so the author finds out before
+       they have written the article and pressed save. */
+    Toast.error(`That image is ${(f.size / 1048576).toFixed(1)} MB. Keep it under 2 MB.`);
+    input.value = ''; return;
+  }
+  const r = new FileReader();
+  r.onload = e => { _insShowHero(String(e.target.result)); };
+  r.onerror = () => Toast.error('Could not read that file.');
+  r.readAsDataURL(f);
+}
+
+function _insShowHero(dataUri) {
+  const hid = document.getElementById('insHero');
+  const img = document.getElementById('insHeroPreview');
+  const clr = document.getElementById('insHeroClear');
+  if (hid) hid.value = dataUri || '';
+  if (img) { img.src = dataUri || ''; img.style.display = dataUri ? 'block' : 'none'; }
+  if (clr) clr.style.display = dataUri ? 'inline-flex' : 'none';
+}
+
+function _insClearHero() {
+  _insShowHero('');
+  const f = document.getElementById('insHeroFile');
+  if (f) f.value = '';
+}
+
 function _insSlugify(t) {
   return String(t || '').toLowerCase().trim()
     .replace(/['’]/g, '')
@@ -14413,9 +14452,14 @@ async function loadInsights() {
 
     list.innerHTML = rows.map(a => {
       const live = !!a.published;
+      const thumb = a.hero_image
+        ? `<img src="${_esc(a.hero_image)}" alt="" style="width:74px;height:48px;object-fit:cover;
+             border-radius:6px;border:1px solid var(--border);flex-shrink:0">`
+        : '';
       return `
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
         <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
+          ${thumb}
           <span style="font-size:0.66rem;font-weight:800;letter-spacing:0.07em;text-transform:uppercase;
                        padding:4px 9px;border-radius:999px;background:${_esc(a.hero_colour || '#eda5ff')};color:#15121b">${_esc(a.industry || '—')}</span>
           <span style="font-size:0.68rem;font-weight:700;padding:4px 9px;border-radius:999px;
@@ -14458,6 +14502,9 @@ function openInsightEditor(id) {
   set('insBody', a ? a.body : '');
   set('insMins', a ? (a.read_minutes || 4) : 4);
   set('insColour', a ? (a.hero_colour || '#eda5ff') : '#eda5ff');
+  set('insHeroAlt', a ? (a.hero_alt || '') : '');
+  _insShowHero(a ? (a.hero_image || '') : '');
+  const hf = document.getElementById('insHeroFile'); if (hf) hf.value = '';
   const pub = document.getElementById('insPublished');
   if (pub) pub.checked = !!(a && a.published);
   _insEchoSlug();
@@ -14485,6 +14532,10 @@ async function saveInsight() {
     author: 'SV Capital',
     read_minutes: parseInt(v('insMins'), 10) || 4,
     hero_colour: v('insColour') || '#eda5ff',
+    /* null, not '', so clearing the image actually removes it — an empty string
+       is a value the hero parser would go on trying to read. */
+    hero_image: v('insHero') || null,
+    hero_alt:   v('insHeroAlt') || null,
     published,
   };
   /* Stamped the first time it goes live and left alone afterwards, so the
