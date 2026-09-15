@@ -523,7 +523,7 @@ function renderMarketConversionPanel(pools) {
   const wallet = parseFloat(inv.wallet_balance) || 0;
   const ranked = _rankMarketPools((pools || []).filter(Boolean), wallet);
   const openPools = ranked.filter(p => p.status === 'open' && !_poolPastClose(p));
-  const affordable = openPools.filter(p => wallet >= (parseFloat(p.min_investment) || 0));
+  const affordable = openPools.filter(p => wallet >= svcMinWalletFor(p));
   const cheapest = openPools.slice().sort((a, b) => (parseFloat(a.min_investment) || 0) - (parseFloat(b.min_investment) || 0))[0] || null;
   const ficaApproved = _isInvestorFicaApproved(inv);
   const featured = ranked.slice(0, 3);
@@ -541,9 +541,9 @@ function renderMarketConversionPanel(pools) {
     actionLabel = 'Open best-fit pool';
     accent = '#22c55e';
   } else if (cheapest) {
-    const gap = Math.max(0, (parseFloat(cheapest.min_investment) || 0) - wallet);
-    title = `Top up ${Utils.rand(gap)} to unlock your next eligible pool.`;
-    sub = `${cheapest.name} has the lowest reachable minimum among current opportunities.`;
+    const gap = Math.max(0, svcMinWalletFor(cheapest) - wallet);
+    title = `Top up ${Utils.rand(gap)} to afford your next eligible pool.`;
+    sub = `${cheapest.name} has the lowest reachable minimum. The figure includes the 1% platform fee, which is charged on top of what you invest.`;
     action = "openTopUpModal()";
     actionLabel = 'Top up wallet';
     accent = '#fec24f';

@@ -214,7 +214,7 @@ function renderWalletReadinessPanel() {
   if (!panel || !inv) return;
   const wallet = parseFloat(inv.wallet_balance) || 0;
   const pools = _rankMarketPools(_getOpenMarketplacePools().filter(p => p.status === 'open'), wallet);
-  const affordable = pools.filter(p => wallet >= (parseFloat(p.min_investment) || 0));
+  const affordable = pools.filter(p => wallet >= svcMinWalletFor(p));
   const cheapest = [...pools].sort((a, b) => (parseFloat(a.min_investment) || 0) - (parseFloat(b.min_investment) || 0))[0] || null;
   const pendingDeposit = (PORTAL.transactions || []).find(t => t.type === 'deposit' && t.status === 'pending');
   const pendingWithdrawal = (PORTAL.transactions || []).find(t => t.type === 'withdrawal' && t.status === 'pending');
@@ -236,9 +236,9 @@ function renderWalletReadinessPanel() {
     ctaAction = "navigate('marketplace', document.querySelector('[data-view=marketplace]'))";
     accent = '#22C55E';
   } else if (cheapest) {
-    const gap = Math.max(0, (parseFloat(cheapest.min_investment) || 0) - wallet);
-    headline = `Top up ${Utils.rand(gap)} to reach the lowest open minimum.`;
-    subcopy = `${cheapest.name} is currently the most reachable pool for your next step.`;
+    const gap = Math.max(0, svcMinWalletFor(cheapest) - wallet);
+    headline = `Top up ${Utils.rand(gap)} to afford the lowest open minimum.`;
+    subcopy = `${cheapest.name} is the most reachable pool for your next step. The figure includes the 1% platform fee, which is charged on top of what you invest.`;
     ctaLabel = 'Top up now';
     ctaAction = "openTopUpModal()";
     accent = '#fec24f';
@@ -262,7 +262,7 @@ function renderWalletReadinessPanel() {
         <div style="padding:12px 14px;border:1px solid rgba(0,0,0,0.06);border-radius:12px;background:#fff">
           <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;font-weight:800">Wallet balance</div>
           <div style="font-size:1.12rem;font-weight:900;color:#1a1a1a;margin-top:4px">${Utils.rand(wallet)}</div>
-          <div style="font-size:0.74rem;color:var(--text-muted);margin-top:4px">${affordable.length ? `${affordable.length} pool${affordable.length === 1 ? '' : 's'} you can join now` : cheapest ? `${Utils.rand(Math.max(0, (parseFloat(cheapest.min_investment) || 0) - wallet))} short of the next minimum` : 'No open pools to compare right now'}</div>
+          <div style="font-size:0.74rem;color:var(--text-muted);margin-top:4px">${affordable.length ? `${affordable.length} pool${affordable.length === 1 ? '' : 's'} you can join now` : cheapest ? `${Utils.rand(Math.max(0, svcMinWalletFor(cheapest) - wallet))} short of the next minimum, fee included` : 'No open pools to compare right now'}</div>
         </div>
         <div style="padding:12px 14px;border:1px solid rgba(0,0,0,0.06);border-radius:12px;background:#fff">
           <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;font-weight:800">Verification</div>
