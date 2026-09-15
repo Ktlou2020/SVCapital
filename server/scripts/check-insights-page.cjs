@@ -170,6 +170,32 @@ const meta = (html, prop) => {
       ok('insights is writable through the admin API', /insights:\s+'id',/.test(t));
       ok('by admins only', /'investor_notes', 'insights',/.test(t),
          'anything less and a client could publish to the public site');
+      ok('and readable only by staff', /'investor_notes',\s*\n(?:\s*\/\*[\s\S]*?\*\/\s*\n)?\s*'insights',\n\]\);/.test(t),
+         'without this an investor could GET the table and read unpublished drafts');
+    }
+
+    console.log('\nthe console has somewhere to write them');
+    {
+      /* The API permission alone is not an authoring surface. The first version
+         of this feature shipped the table, the routes and the write access, and
+         nothing in the admin console — so there was nothing to click. */
+      const idx = fs.readFileSync(path.join(ROOT, 'admin', 'index.html'), 'utf8');
+      const js  = fs.readFileSync(path.join(ROOT, 'admin', 'js', 'admin.js'), 'utf8');
+      ok('there is a nav item', /data-view="insights"/.test(idx));
+      ok('and a view for it', /id="view-insights"/.test(idx));
+      ok('and an editor', /id="insightModal"/.test(idx));
+      ok('the loader is registered', /insights: loadInsights,/.test(js),
+         'a view with no loader renders whatever the previous screen left behind');
+      ok('the title is registered', /insights: 'Insight Articles',/.test(js));
+      for (const fn of ['loadInsights', 'openInsightEditor', 'saveInsight',
+                        'toggleInsightPublished', 'deleteInsight'])
+        ok(`  ${fn} exists`, new RegExp(`function ${fn}\\(`).test(js));
+      ok('a published slug is never silently rewritten',
+         /if \(slug && title && !slug\.value\.trim\(\)\)/.test(js),
+         'changing the slug of a live article breaks every link already sent');
+      ok('and published_at is stamped once, not on every edit',
+         /published && !\(existing && existing\.published_at\)/.test(js),
+         'otherwise the public date jumps each time somebody fixes a typo');
     }
 
     await db.query(`DELETE FROM insights WHERE id LIKE 'INS-CHK-%'`);

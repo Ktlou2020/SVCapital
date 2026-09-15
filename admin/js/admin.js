@@ -460,6 +460,7 @@ function navigate(view, btnEl) {
     terms: 'Legal Documents', privacy: 'Privacy Policy &amp; POPIA Notice', intlinterest: 'International Interest',
     opsconsole: 'Operations Console', feedback: 'Client Feedback', emaillogs: 'Email Logs',
     'fica-pipeline': 'FICA Pipeline',
+    insights: 'Insight Articles',
     handbook: 'Platform Handbook', rewards: 'Rewards',
   };
   document.getElementById('topbarTitle').textContent = titles[view] || view;
@@ -481,6 +482,7 @@ function navigate(view, btnEl) {
     settings: loadSettings,
     withdrawals: loadWithdrawals,
     comms: loadComms,
+    insights: loadInsights,
     compliance: loadCompliance,
     reconciliation: loadReconciliation,
     'platform-fees': () => loadPlatformFees('all'),
@@ -14356,6 +14358,185 @@ async function addInvestorNote(investorId) {
     Toast.error('Failed to save note: ' + (err.message || 'unknown error'));
   } finally {
     if (saveBtn) saveBtn.disabled = false;
+  }
+}
+
+
+/* ═══════════════════════════════════════════════
+   INSIGHT ARTICLES
+
+   The public pages at /insights are server-rendered so WhatsApp can read the
+   Open Graph tags off each article; this is where the rows behind them are
+   written. Everything goes through the generic table API, which is why
+   `insights` is in ALLOWED_TABLES and admin-write only — a client publishing
+   to the public site would be quite the bug.
+   ═══════════════════════════════════════════════ */
+
+function _insSlugify(t) {
+  return String(t || '').toLowerCase().trim()
+    .replace(/['’]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 100);
+}
+
+/* Only ever fills an EMPTY slug. A published article's slug is in links people
+   have already sent, and silently rewriting it as somebody edits the headline
+   would break every one of them. */
+function _insSuggestSlug() {
+  const slug = document.getElementById('insSlug');
+  const title = document.getElementById('insTitle');
+  if (slug && title && !slug.value.trim()) slug.value = _insSlugify(title.value);
+  _insEchoSlug();
+}
+function _insEchoSlug() {
+  const echo = document.getElementById('insSlugEcho');
+  const slug = document.getElementById('insSlug');
+  if (echo && slug) echo.textContent = slug.value.trim() || 'slug';
+}
+
+async function loadInsights() {
+  const list = document.getElementById('insightsList');
+  if (!list) return;
+  list.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:40px 0">Loading…</p>';
+  try {
+    const res  = await API._fetch('GET', 'tables/insights', null, { limit: 200, sort: 'created_at', order: 'desc' });
+    const rows = res.data || [];
+    STATE.insights = rows;
+
+    if (!rows.length) {
+      list.innerHTML = `<div class="empty-state" style="padding:40px 0"><i class="fa-solid fa-newspaper"></i>
+        <div class="empty-state__title">No articles yet</div>
+        <div class="empty-state__sub">Write the first one — it appears at /insights as soon as you publish it.</div></div>`;
+      return;
+    }
+
+    list.innerHTML = rows.map(a => {
+      const live = !!a.published;
+      return `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+        <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
+          <span style="font-size:0.66rem;font-weight:800;letter-spacing:0.07em;text-transform:uppercase;
+                       padding:4px 9px;border-radius:999px;background:${_esc(a.hero_colour || '#eda5ff')};color:#15121b">${_esc(a.industry || '—')}</span>
+          <span style="font-size:0.68rem;font-weight:700;padding:4px 9px;border-radius:999px;
+                       background:${live ? 'rgba(34,197,94,0.14)' : 'rgba(148,163,184,0.16)'};
+                       color:${live ? '#22c55e' : '#94a3b8'}">${live ? 'Published' : 'Draft'}</span>
+          <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
+            ${live ? `<a class="btn btn--ghost btn--sm" href="/insights/${encodeURIComponent(a.slug)}" target="_blank" rel="noopener"><i class="fa-solid fa-arrow-up-right-from-square"></i> View</a>` : ''}
+            <button class="btn btn--ghost btn--sm" onclick="openInsightEditor('${_esc(a.id)}')"><i class="fa-solid fa-pen"></i> Edit</button>
+            <button class="btn btn--ghost btn--sm" onclick="toggleInsightPublished('${_esc(a.id)}')">${live ? 'Unpublish' : 'Publish'}</button>
+            <button class="btn btn--ghost btn--sm" style="color:#ef4444" onclick="deleteInsight('${_esc(a.id)}')"><i class="fa-solid fa-trash"></i></button>
+          </div>
+        </div>
+        <div style="font-weight:700;font-size:0.96rem;margin-top:9px">${_esc(a.title)}</div>
+        <div style="font-size:0.82rem;color:var(--text-muted);margin-top:4px">${_esc(a.excerpt)}</div>
+        <div style="font-size:0.72rem;color:var(--text-dim);margin-top:7px">
+          /insights/${_esc(a.slug)} &middot; ${Number(a.read_minutes) || 4} min read
+          ${a.published_at ? ' &middot; published ' + Utils.date(a.published_at) : ''}
+        </div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    /* Named, because "no articles yet" and "the request failed" look identical
+       to an operator and lead to very different next actions. */
+    list.innerHTML = `<div class="text-center" style="padding:30px;color:#ef4444">
+      Could not load the articles: ${_esc(e.message || 'error')}<br>
+      <button class="btn btn--secondary btn--sm" style="margin-top:10px" onclick="loadInsights()">Retry</button></div>`;
+    console.error('[insights]', e);
+  }
+}
+
+function openInsightEditor(id) {
+  const a = id ? (STATE.insights || []).find(x => x.id === id) : null;
+  const set = (el, v) => { const n = document.getElementById(el); if (n) n.value = v; };
+  document.getElementById('insightModalTitle').textContent = a ? 'Edit article' : 'New article';
+  set('insId', a ? a.id : '');
+  set('insTitle', a ? a.title : '');
+  set('insIndustry', a ? a.industry : '');
+  set('insSlug', a ? a.slug : '');
+  set('insExcerpt', a ? a.excerpt : '');
+  set('insBody', a ? a.body : '');
+  set('insMins', a ? (a.read_minutes || 4) : 4);
+  set('insColour', a ? (a.hero_colour || '#eda5ff') : '#eda5ff');
+  const pub = document.getElementById('insPublished');
+  if (pub) pub.checked = !!(a && a.published);
+  _insEchoSlug();
+  Modal.open('insightModal');
+}
+
+async function saveInsight() {
+  const v = id => (document.getElementById(id)?.value || '').trim();
+  const id       = v('insId');
+  const title    = v('insTitle');
+  const industry = v('insIndustry');
+  const excerpt  = v('insExcerpt');
+  const body     = v('insBody');
+  let   slug     = _insSlugify(v('insSlug') || title);
+
+  if (!title)    { Toast.error('The article needs a headline.'); return; }
+  if (!industry) { Toast.error('Give it an industry — it is the tag on the card.'); return; }
+  if (!excerpt)  { Toast.error('The excerpt is what WhatsApp shows under the headline.'); return; }
+  if (!body)     { Toast.error('The article has no body text.'); return; }
+  if (!slug)     { Toast.error('That headline produced an empty URL slug — set one by hand.'); return; }
+
+  const published = !!document.getElementById('insPublished')?.checked;
+  const payload = {
+    slug, title, industry, excerpt, body,
+    author: 'SV Capital',
+    read_minutes: parseInt(v('insMins'), 10) || 4,
+    hero_colour: v('insColour') || '#eda5ff',
+    published,
+  };
+  /* Stamped the first time it goes live and left alone afterwards, so the
+     public date does not jump every time somebody fixes a typo. */
+  const existing = id ? (STATE.insights || []).find(x => x.id === id) : null;
+  if (published && !(existing && existing.published_at)) payload.published_at = new Date().toISOString();
+
+  const btn = document.getElementById('insSaveBtn');
+  if (btn) btn.disabled = true;
+  try {
+    if (id) await API._fetch('PATCH', `tables/insights/${id}`, payload);
+    else    await API._fetch('POST', 'tables/insights', { id: `INS-${Date.now()}`, ...payload });
+    Toast.success(published ? 'Article published.' : 'Draft saved.');
+    Modal.close('insightModal');
+    await loadInsights();
+  } catch (e) {
+    /* A duplicate slug is the one failure an author can actually fix, so it is
+       named rather than folded into a generic message. */
+    const dup = /duplicate|unique/i.test(e.message || '');
+    Toast.error(dup ? 'That URL slug is already used by another article.'
+                    : `Could not save: ${e.message || 'unknown error'}`);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function toggleInsightPublished(id) {
+  const a = (STATE.insights || []).find(x => x.id === id);
+  if (!a) return;
+  const next = !a.published;
+  try {
+    const patch = { published: next };
+    if (next && !a.published_at) patch.published_at = new Date().toISOString();
+    await API._fetch('PATCH', `tables/insights/${id}`, patch);
+    Toast.success(next ? 'Published — it is live at /insights now.' : 'Unpublished. The link now returns 404.');
+    await loadInsights();
+  } catch (e) {
+    Toast.error(`Could not change it: ${e.message || 'unknown error'}`);
+  }
+}
+
+async function deleteInsight(id) {
+  const a = (STATE.insights || []).find(x => x.id === id);
+  if (!a) return;
+  if (!confirm(`Delete "${a.title}"?\n\nAnyone holding a link to it will get a 404. ` +
+               `If you only want it off the site, unpublish it instead.`)) return;
+  try {
+    await API._fetch('DELETE', `tables/insights/${id}`);
+    Toast.success('Article deleted.');
+    await loadInsights();
+  } catch (e) {
+    Toast.error(`Could not delete it: ${e.message || 'unknown error'}`);
   }
 }
 

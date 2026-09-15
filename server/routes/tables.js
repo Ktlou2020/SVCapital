@@ -192,6 +192,11 @@ const ADMIN_ONLY_TABLES = new Set([
   'fica_checks', 'accepted_client_documents',
   'compliance_calendar',
   'investor_notes',
+  /* Reads are staff-only so an unpublished draft is not visible to any
+     signed-in investor who asks for the table. The public site never touches
+     this API — /insights is server-rendered and queries the database directly,
+     filtered on published = true. */
+  'insights',
 ]);
 // NOTE: `employees` is intentionally NOT admin-only — it is row-isolated via
 // EMPLOYEE_OWNED_COLS so each staff member can read only their own record.
