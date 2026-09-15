@@ -19,8 +19,21 @@
        wallet is mid-decision and does not need chasing.
      · Not while a withdrawal is pending. That money is on its way out and they
        have said so.
-     · Only FICA-approved, active investors — anybody else cannot invest even
-       if they wanted to, so the email would be an invitation to a dead end.
+     · Suspended accounts. Nothing in the platform sets that status
+       automatically, so where it IS set a person set it, and inviting somebody
+       to invest more while their account is stopped is wrong whatever the
+       server would technically allow.
+
+   What it does NOT exclude, having checked rather than assumed:
+
+     · Investors whose FICA is not approved. Investing is not FICA-gated —
+       server/routes/tables.js checks the pool's status and close date and
+       nothing else, and FICA gates WITHDRAWALS (line 1248), not investments.
+       An earlier version of this job excluded them on the strength of what the
+       signup screen says rather than what the platform enforces.
+     · Archived investors. archiveCron marks an investor archived after six
+       months with a balance and no investment — which is a precise description
+       of the person this email exists for.
 
    And it does not send at all until somebody turns it on. IDLE_NUDGE_ENABLED
    must be 'true'; until then it does the full selection and logs what it WOULD
@@ -73,8 +86,7 @@ async function runIdleWalletNudge() {
         FROM investors i
        WHERE COALESCE(i.wallet_balance, 0) >= $1
          AND i.email IS NOT NULL AND btrim(i.email) <> ''
-         AND COALESCE(i.status, '') = 'active'
-         AND COALESCE(i.kyc_status, '') = 'approved'
+         AND COALESCE(i.status, '') <> 'suspended'
          AND NOT EXISTS (
            SELECT 1 FROM transactions t
             WHERE t.investor_id = i.id

@@ -16,8 +16,17 @@
  *   · Nobody within three days of a deposit — they are mid-decision.
  *   · Nobody with a withdrawal pending. That money is on its way out and they
  *     have said so.
- *   · Nobody who is not FICA-approved and active, because they cannot invest
- *     even if they want to and the email would invite them to a dead end.
+ *   · Nobody whose account is suspended. Nothing sets that status
+ *     automatically, so where it is set a person set it.
+ *
+ * It deliberately DOES email investors whose FICA is not approved, and
+ * archived ones. Investing is not FICA-gated — tables.js checks the pool's
+ * status and close date and nothing else, and FICA gates withdrawals rather
+ * than investments — and archiveCron marks somebody archived after six months
+ * with a balance and no investment, which is exactly this email's audience. An
+ * earlier version excluded both, on the strength of what the signup screen
+ * claims rather than what the server enforces, and silently withheld the mail
+ * from the people most likely to act on it.
  *
  * And nothing at all until IDLE_NUDGE_ENABLED=true. The default is a dry run
  * that does the whole selection and reports the volume.
@@ -146,8 +155,7 @@ const cleanup = async () => {
     {
       await db.query(`DELETE FROM email_logs WHERE to_email LIKE '%@idlechk.test'`);
       await seedInv('IDLE-SHORT',    504);                      // cannot afford the fee
-      await seedInv('IDLE-NOFICA',   5000, { kyc: 'pending' }); // cannot invest
-      await seedInv('IDLE-INACTIVE', 5000, { status: 'suspended' });
+      await seedInv('IDLE-SUSPENDED', 5000, { status: 'suspended' });
       await seedInv('IDLE-WITHDRAW', 5000);
       await seedInv('IDLE-FRESH',    5000);
       await seedInv('IDLE-MAILED',   5000);
@@ -159,12 +167,21 @@ const cleanup = async () => {
         `INSERT INTO email_logs (to_email, subject, type, status, sent_at)
          VALUES ('idle-mailed@idlechk.test','x','idle_wallet','sent', NOW() - INTERVAL '5 days')`);
 
+      /* Included on purpose: FICA-pending and archived investors CAN invest, and
+         an archived one with a balance is the audience this email exists for. */
+      await seedInv('IDLE-NOFICA',   6000, { kyc: 'pending' });
+      await seedInv('IDLE-ARCHIVED', 7000, { status: 'archived' });
+
       const { to } = await run();
-      const excluded = ['IDLE-SHORT','IDLE-NOFICA','IDLE-INACTIVE','IDLE-WITHDRAW','IDLE-FRESH','IDLE-MAILED'];
+      const excluded = ['IDLE-SHORT','IDLE-SUSPENDED','IDLE-WITHDRAW','IDLE-FRESH','IDLE-MAILED'];
       for (const id of excluded)
         ok(`${id} is not emailed`, !to.includes(id), JSON.stringify(to));
       ok('and IDLE-RICH still is', to.includes('IDLE-RICH'), JSON.stringify(to));
-      ok('exactly one recipient', to.length === 1, JSON.stringify(to));
+      ok('a FICA-pending investor IS emailed', to.includes('IDLE-NOFICA'),
+         'investing is not FICA-gated — tables.js gates withdrawals, not investments');
+      ok('and an archived one too', to.includes('IDLE-ARCHIVED'),
+         'archived means six months with a balance and no investment — this email is for them');
+      ok('exactly three recipients', to.length === 3, JSON.stringify(to));
     }
 
     console.log('\nnobody is emailed twice in a month');
@@ -177,6 +194,7 @@ const cleanup = async () => {
          VALUES ('idle-rich@idlechk.test','x','idle_wallet','sent', NOW() - INTERVAL '2 days')`);
       const { to } = await run();
       ok('the recent recipient is skipped', !to.includes('IDLE-RICH'), JSON.stringify(to));
+      ok('but the others are unaffected', to.includes('IDLE-NOFICA'), JSON.stringify(to));
 
       await db.query(
         `UPDATE email_logs SET sent_at = NOW() - INTERVAL '40 days'
