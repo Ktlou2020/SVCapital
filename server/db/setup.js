@@ -473,6 +473,27 @@ CREATE TABLE IF NOT EXISTS investment_waitlist (
   UNIQUE(investor_id, pool_id)
 );
 
+/* Insight articles for the public site. Server-rendered at /insights so the
+   WhatsApp crawler — which runs no JavaScript — can read the Open Graph tags
+   off each article and build a preview card. A client-rendered list would
+   share as a bare link. */
+CREATE TABLE IF NOT EXISTS insights (
+  id           TEXT PRIMARY KEY,
+  slug         TEXT UNIQUE NOT NULL,
+  title        TEXT NOT NULL,
+  industry     TEXT NOT NULL,
+  excerpt      TEXT NOT NULL,
+  body         TEXT NOT NULL,
+  author       TEXT,
+  read_minutes INT DEFAULT 4,
+  hero_colour  TEXT DEFAULT '#eda5ff',
+  published    BOOLEAN DEFAULT false,
+  published_at TIMESTAMPTZ,
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS insights_published_idx ON insights(published, published_at DESC);
+
 CREATE TABLE IF NOT EXISTS investor_notes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   investor_id TEXT NOT NULL,
@@ -3619,6 +3640,67 @@ async function autoSetup() {
                     (skipped ? `, ${skipped} row(s) left untouched` : '') + '.');
       else
         console.log('✅ investor_notes: nothing stranded in investors.notes.');
+    });
+
+    await step("17. Seed the opening insight articles", async () => {
+      /* Three articles, one per industry the platform actually funds, so the
+         page has something on it the day it goes live. Seeded only when the
+         table is empty: these are editable from the admin console afterwards,
+         and re-asserting them on every boot would overwrite an edit. */
+      const { rows: [{ n }] } = await pool.query('SELECT COUNT(*)::int AS n FROM insights');
+      if (n > 0) return;
+
+      const ART = [
+        {
+          id: 'INS-CATTLE-BACKGROUNDING', slug: 'what-backgrounding-actually-means',
+          industry: 'Agriculture', hero: '#fec24f', mins: 5,
+          title: 'What backgrounding actually means, and why it decides your return',
+          excerpt: 'Sixty days between the auction and the feedlot do more to set the price of an animal than anything that happens afterwards.',
+          body: [
+            'Most people who invest in cattle picture a farm. The part that decides the return is narrower than that, and it happens in about sixty days.',
+            'Backgrounding is the stage between an animal being bought and entering the feedlot. Cattle arrive at a range of weights, off a range of diets, carrying a range of stresses from transport and handling. Backgrounding evens that out: a controlled ration, veterinary attention, and enough time for the animal to start converting feed efficiently rather than recovering from the journey.',
+            'It matters commercially because a feedlot pays for predictability. An animal that enters at a known weight, in known condition, on a known diet is worth more per kilogram than one that does not, and it reaches market weight on less feed.',
+            'This is also where the risk sits. Disease moves fastest in newly mixed groups, and an animal that loses condition in the first three weeks rarely recovers the margin. It is the reason the partner running the operation matters more than the herd size, and the reason cattle carries a Medium-High risk rating on this platform rather than a comfortable one.',
+            'Returns depend on the market price at sale and are not guaranteed. What backgrounding buys is a narrower range of outcomes, not a floor under them.',
+          ].join('\n\n'),
+        },
+        {
+          id: 'INS-SOLAR-PPA', slug: 'a-ppa-is-a-contract-not-a-guarantee',
+          industry: 'Energy', hero: '#22c55e', mins: 6,
+          title: 'A PPA is a contract, not a guarantee',
+          excerpt: 'Power purchase agreements are what make solar returns predictable. Understanding what they do not cover is what makes them investable.',
+          body: [
+            'Every commercial solar project this platform funds is backed by a signed Power Purchase Agreement before a single panel is bought. A business — a factory, a farm, a municipality — commits to buying the electricity the installation produces, at a fixed price, for the length of the term.',
+            'That is what turns sunlight into a cashflow you can model. Without a PPA you are speculating on an electricity price and an offtaker at the same time. With one, the price is settled and only the offtaker is open.',
+            'Which is the part worth understanding. A PPA is a commercial contract between a solar operator and a buyer. If the buyer stops paying, the contract gives the project a claim, not an income. A business in distress is a business in distress whatever it signed, and a plant that cannot sell its electricity holds an asset rather than a revenue stream.',
+            'This is why the credit quality of the offtaker does more work than the size of the installation, and why a seven-year term is a seven-year view on a specific company as much as on the sun.',
+            'Target returns are not guaranteed and your capital is at risk.',
+          ].join('\n\n'),
+        },
+        {
+          id: 'INS-BIKES-RENT', slug: 'rent-is-not-interest',
+          industry: 'Logistics', hero: '#f97316', mins: 4,
+          title: 'Rent is not interest, and the difference is the risk',
+          excerpt: 'A delivery fleet pays you rent on an asset the pool owns. That distinction changes who carries what when something goes wrong.',
+          body: [
+            'When a pool funds a fleet of delivery motorcycles, it buys the bikes and keeps title to them. Riders working Mr D, Takealot and Uber Eats lease them — people who need a machine to earn and would otherwise be renting one on worse terms.',
+            'What reaches the investor is a share of that rent. It is not interest on a loan, and the difference is not a technicality.',
+            'A lender is owed money whatever happens to the thing the money bought. An owner is owed rent only while the asset can be used. Because the pool owns the bikes, it carries the costs of ownership — insurance and major maintenance sit with the pool rather than the rider — and it carries the consequence when bikes come off the road. Bikes not being ridden are bikes not paying.',
+            'That is the honest shape of the product, and it is also why the structure qualifies as an Ijara under the platform\u2019s interest-free range: the income is rent on a real asset whose risks the owner keeps, which is what makes it rent rather than a charge for the use of money.',
+            'Rental income depends on the fleet being deployed and is not guaranteed.',
+          ].join('\n\n'),
+        },
+      ];
+
+      for (const a of ART) {
+        await pool.query(
+          `INSERT INTO insights (id, slug, title, industry, excerpt, body, author,
+                                 read_minutes, hero_colour, published, published_at)
+           VALUES ($1,$2,$3,$4,$5,$6,'SV Capital',$7,$8,true,NOW())
+           ON CONFLICT (id) DO NOTHING`,
+          [a.id, a.slug, a.title, a.industry, a.excerpt, a.body, a.mins, a.hero]);
+      }
+      console.log(`\u2705 Seeded ${ART.length} opening insight article(s).`);
     });
 
     await step("16. Give every investor a nationality", async () => {

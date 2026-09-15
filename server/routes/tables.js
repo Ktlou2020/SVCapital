@@ -168,6 +168,10 @@ const ALLOWED_TABLES = {
      so without the ADMIN_ONLY_TABLES guard an investor would read every note
      staff have written about every client. */
   investor_notes:           'id',
+  /* Public insight articles. Readable by anyone through the server-rendered
+     /insights routes, which do not use this API at all; this entry exists so
+     staff can write them from the admin console. */
+  insights:                 'id',
 };
 
 /* ─── Tables whose primary key is a UUID carrying a database default ───
@@ -205,7 +209,7 @@ const ADMIN_WRITE_TABLES = new Set([
   'products', 'product_faqs',
   'investment_pools', 'platform_settings', 'fund_runs', 'ifas',
   'fica_checks', 'compliance_calendar', 'accepted_client_documents',
-  'investor_notes',
+  'investor_notes', 'insights',
 ]);
 
 /* ─── Columns that must never be written via the generic API (any role) ─── */

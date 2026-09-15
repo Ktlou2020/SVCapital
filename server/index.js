@@ -315,6 +315,12 @@ app.get('/robots.txt',  (_req, res) => res.sendFile(path.join(__dirname, '..', '
   app.get('/reset-password.html', resetHandler);
 }
 
+/* ─── Insights — public, server-rendered ───────────────────────────────
+   Mounted BEFORE express.static and before the .html redirect: these are
+   generated pages with per-article Open Graph tags, and the static handler
+   would answer /insights with index.html long before this router saw it. */
+app.use('/insights', require('./routes/insights'));
+
 /* ─── Redirect legacy .html URLs to clean equivalents ─── */
 // /login.html → /login  |  /fund/index.html → /fund  |  /team/director.html → /team/director
 app.use((req, res, next) => {
