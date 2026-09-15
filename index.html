@@ -265,8 +265,18 @@
       </button>
 
       <ul class="nav-links" id="navLinks">
-        <li><a href="#products" class="nav-link">Products</a></li>
-        <li><a href="#eif" class="nav-link" id="navEifLink" style="display:none">Interest-Free</a></li>
+        <li class="nav-has-sub">
+          <a href="#products" class="nav-link">Products</a>
+          <!-- Interest-Free sits under Products because that is what it is: one
+               range within the product set, not a peer of the whole section.
+               The id stays on the LI so js/main.js can still hide the whole row
+               when no EIF product is visible — hiding only the anchor would
+               leave an empty item in the submenu. -->
+          <ul class="nav-sub">
+            <li><a href="#products" class="nav-link">All products</a></li>
+            <li id="navEifLink" style="display:none"><a href="#eif" class="nav-link">Interest-Free</a></li>
+          </ul>
+        </li>
         <li><a href="#calculator" class="nav-link">Calculator</a></li>
         <li><a href="#how-it-works" class="nav-link">How It Works</a></li>
         <li><a href="#impact" class="nav-link">Impact</a></li>

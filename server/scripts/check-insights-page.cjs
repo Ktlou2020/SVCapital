@@ -164,6 +164,52 @@ const meta = (html, prop) => {
       ok('and a footer link', /<li><a href="\/insights">Insights<\/a><\/li>/.test(land));
     }
 
+    console.log('\nit wears the same logo as the landing page');
+    {
+      const land = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+      const landLogo = (land.match(/src="(assets\/sv-capital-logo-[^"]+)"/) || [])[1];
+      ok('the landing page logo is findable', !!landLogo, String(landLogo));
+      const { html } = await get('/insights');
+      ok('insights uses the same asset', !!landLogo && html.includes(`/${landLogo}`),
+         `landing: ${landLogo}`);
+      ok('and not the bare monogram', !html.includes('logo-inline.svg'),
+         'the monogram alone is not the lockup the rest of the site uses');
+      /* That asset has white text, so it needs a dark ground in BOTH themes —
+         on a light page it would simply disappear. */
+      ok('on a dark band that does not depend on the theme',
+         /\.masthead\{background:#15121b\}/.test(html),
+         'a white-text logo on a light ground is an invisible logo');
+      ok('and the band is full width, outside the content wrapper',
+         html.indexOf('<div class="masthead">') < html.indexOf('<div class="wrap">'),
+         'inside the wrapper it renders as a floating bar rather than a header');
+    }
+
+    console.log('\nInterest-Free sits under Products');
+    {
+      const land = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+      ok('Products has a submenu', /<li class="nav-has-sub">/.test(land));
+      ok('with Interest-Free inside it',
+         /<ul class="nav-sub">[\s\S]{0,400}Interest-Free[\s\S]{0,80}<\/ul>/.test(land));
+      ok('and All products alongside it',
+         /<ul class="nav-sub">[\s\S]{0,200}All products/.test(land));
+      ok('it is no longer a top-level item',
+         !/<li><a href="#eif" class="nav-link" id="navEifLink"/.test(land));
+      /* js/main.js hides this when no EIF product is visible. The id moved to
+         the LI so the whole row goes, rather than leaving an empty bullet in
+         the submenu. */
+      ok('the id is on the list item, not the anchor',
+         /<li id="navEifLink"[^>]*><a href="#eif"/.test(land),
+         'hiding only the anchor leaves a blank row in the dropdown');
+      const main = fs.readFileSync(path.join(ROOT, 'js', 'main.js'), 'utf8');
+      ok('and main.js still toggles it', /getElementById\('navEifLink'\)/.test(main),
+         'the EIF range is hidden when no EIF product is on sale');
+      const css = fs.readFileSync(path.join(ROOT, 'css', 'home-ci.css'), 'utf8');
+      ok('the submenu opens on keyboard focus too', /\.nav-has-sub:focus-within > \.nav-sub/.test(css),
+         'hover alone is unreachable without a pointer');
+      ok('and falls back to inline on small screens', /@media \(max-width: 900px\)[\s\S]{0,200}\.nav-sub/.test(css),
+         'there is no hover on a phone');
+    }
+
     console.log('\nand staff can publish without a deploy');
     {
       const t = fs.readFileSync(path.join(ROOT, 'server', 'routes', 'tables.js'), 'utf8');

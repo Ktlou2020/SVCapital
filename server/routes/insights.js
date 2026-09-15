@@ -78,10 +78,16 @@ ${articleMeta || ''}
        font-family:Manrope,system-ui,sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased}
   a{color:var(--brand)}
   .wrap{max-width:860px;margin:0 auto;padding:0 20px 80px}
-  header.top{display:flex;align-items:center;gap:14px;padding:22px 0;border-bottom:1px solid var(--rule);flex-wrap:wrap}
-  header.top img{height:32px;width:auto}
+  /* The same horizontal lockup the landing page uses, which is a white-text
+     asset — so the header keeps its own dark band in both themes rather than
+     the logo vanishing on a light ground. It also reads as the same site. */
+  .masthead{background:#15121b}
+  header.top{display:flex;align-items:center;gap:14px;padding:16px 20px;flex-wrap:wrap;
+             max-width:860px;margin:0 auto}
+  header.top img{height:40px;width:auto;display:block}
   header.top nav{margin-left:auto;display:flex;gap:18px;font-size:.88rem;font-weight:700}
-  header.top nav a{text-decoration:none}
+  header.top nav a{text-decoration:none;color:#eda5ff}
+  @media (max-width:520px){header.top img{height:32px}header.top nav{gap:13px;font-size:.82rem}}
   h1{font-family:'Source Serif 4',Georgia,serif;font-size:clamp(1.9rem,5vw,2.7rem);line-height:1.15;margin:26px 0 10px;text-wrap:balance}
   .lede{font-size:1.1rem;color:var(--soft);margin:0 0 18px;max-width:62ch}
   .tag{display:inline-block;font-size:.7rem;font-weight:800;letter-spacing:.09em;text-transform:uppercase;
@@ -90,6 +96,11 @@ ${articleMeta || ''}
   article p{font-family:'Source Serif 4',Georgia,serif;font-size:1.12rem;color:var(--ink);margin:0 0 20px;max-width:66ch}
   .grid{display:grid;gap:18px;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));margin-top:26px}
   .card{background:var(--panel);border:1px solid var(--rule);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:9px;text-decoration:none;color:inherit}
+  /* align-self, not display:inline-block — a flex column stretches its children
+     to the full width whatever their display is, which turned every industry
+     tag into a full-width bar. */
+  .card .tag,article + .share .tag{align-self:flex-start}
+  .tag{align-self:flex-start}
   .card:hover{border-color:var(--brand)}
   .card h2{font-family:'Source Serif 4',Georgia,serif;font-size:1.16rem;margin:0;line-height:1.3;text-wrap:balance}
   .card p{margin:0;font-size:.92rem;color:var(--soft)}
@@ -109,15 +120,15 @@ ${articleMeta || ''}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header class="top">
-    <a href="/"><img src="/assets/logo-inline.svg" alt="SV Capital"></a>
+<div class="masthead"><header class="top">
+    <a href="/"><img src="/assets/sv-capital-logo-horizontal-white-text.png" alt="SV Capital"></a>
     <nav>
       <a href="/insights">Insights</a>
       <a href="/#products">Products</a>
       <a href="/signup">Get started</a>
     </nav>
-  </header>
+  </header></div>
+<div class="wrap">
   ${bodyHtml}
   <footer class="legal">
     Nothing on this page is financial advice. Every SV Capital investment carries risk, returns are not
