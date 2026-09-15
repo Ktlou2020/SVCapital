@@ -457,6 +457,12 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
   const { startPoolCyclerCron } = require('./jobs/poolCyclerCron');
   startPoolCyclerCron();
 
+  /* Idle wallet nudge (Tuesdays 09:00 SAST). Registered here so the schedule
+     and the dry-run state are visible in the boot log; it sends nothing until
+     IDLE_NUDGE_ENABLED=true. */
+  const { startIdleWalletCron } = require('./jobs/idleWalletCron');
+  startIdleWalletCron();
+
   // Archive dormant investors (no investments after 6 months) — daily 00:00 UTC
   const { startArchiveCron } = require('./jobs/archiveCron');
   startArchiveCron();

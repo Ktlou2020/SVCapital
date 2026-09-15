@@ -1176,7 +1176,56 @@ function sendChangeRequestSummary(to, { date, stats, requests }) {
   });
 }
 
+/* An idle wallet — money already deposited, sitting where it earns nothing.
+
+   Deliberately plain. This is unsolicited mail about somebody's own money, so
+   it states the balance, what it could buy, and how to stop receiving it, and
+   makes no claim about returns beyond naming the pool. Under FAIS none of
+   these products may be described as guaranteed, safe or capital-protected,
+   and an email that nudges toward an investment is the last place to get
+   loose with that. */
+function sendIdleWalletNudge(investor, { balance, poolName, minNeeded, poolCount }) {
+  const { email, first_name } = investor;
+  const fmtR = v => `R${Number(v || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  return _send({
+    to: email,
+    type: 'idle_wallet',
+    subject: `${fmtR(balance)} is sitting in your SV Capital wallet`,
+    html: _wrap(`
+      <h2>Your wallet balance is not invested</h2>
+      <p>Hi ${escHtml(first_name || 'there')}, you have <strong>${fmtR(balance)}</strong> in your SV Capital
+         wallet. Money in the wallet is held for you &mdash; it is not in a pool, so it is not working.</p>
+      <div class="box">
+        <p style="margin:0">That balance covers the minimum for
+           <strong>${escHtml(poolName)}</strong>${poolCount > 1 ? ` and ${poolCount - 1} other open pool${poolCount > 2 ? 's' : ''}` : ''},
+           which needs <strong>${fmtR(minNeeded)}</strong> including the 1% platform fee.</p>
+      </div>
+      <p>If you would rather it stayed in the wallet, or you are saving towards something larger,
+         no action is needed &mdash; it stays exactly where it is.</p>
+      <p style="margin-top:22px">
+        <a class="btn" href="https://platform.svcapital.co.za/portal/">Open the marketplace</a>
+      </p>
+      <p style="font-size:0.8rem;color:#888;margin-top:26px">
+        Every SV Capital investment carries risk and returns are not guaranteed. You can get back less
+        than you invest. We send this at most once a month, and only when your balance covers an open
+        pool. To stop it, reply to this email and we will switch it off for your account.
+      </p>`),
+    text:
+      `Hi ${first_name || 'there'},\n\n` +
+      `You have ${fmtR(balance)} in your SV Capital wallet. Money in the wallet is held for you — ` +
+      `it is not in a pool, so it is not working.\n\n` +
+      `That balance covers the minimum for ${poolName}, which needs ${fmtR(minNeeded)} including the ` +
+      `1% platform fee.\n\n` +
+      `If you would rather it stayed in the wallet, no action is needed.\n\n` +
+      `https://platform.svcapital.co.za/portal/\n\n` +
+      `Every SV Capital investment carries risk and returns are not guaranteed. You can get back less ` +
+      `than you invest. We send this at most once a month. To stop it, reply to this email.`,
+  });
+}
+
 module.exports = {
+  sendIdleWalletNudge,
   sendWelcome,
   sendLeaveRequestSubmitted,
   sendLeaveOutcome,
