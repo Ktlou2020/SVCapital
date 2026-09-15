@@ -37,37 +37,41 @@ const CSS    = read('js/app-banner.js');
 /* The shipped detection, lifted and run. Retyping the user-agent tests here
    would prove only that this file agrees with itself. */
 function lift() {
-  const names = ['svcAppStore', 'svcMobileOS', 'svcIsIOSSafari', 'svcAppSnoozeKey',
-                 'svcAppBannerSnoozed', 'svcSnoozeAppBanner', 'svcShouldOfferApp',
-                 '_svcIsStandalone'];
+  const names = ['svcAppStore', 'svcMobileOS', 'svcIsIOSSafari',
+                 'svcAppDismissKey', 'svcAppInstalledKey', 'svcAppLegacySnoozeKey',
+                 'svcAppBannerToken', 'svcLoginFingerprint', 'svcAppBannerDismissed',
+                 'svcDismissForThisLogin', 'svcForgetLegacyAppSnooze',
+                 'svcAppInstalledCached', 'svcRememberAppInstalled', 'svcHasMobileApp',
+                 'svcShouldOfferApp', '_svcIsStandalone'];
   let src = '';
   for (const n of names) {
-    const m = CORE.match(new RegExp(`function ${n.replace(/[$]/g, '\\$')}\\([\\s\\S]*?\\n\\}`, 'm'));
+    const m = CORE.match(new RegExp(`(?:async )?function ${n.replace(/[$]/g, '\\$')}\\([\\s\\S]*?\\n\\}`, 'm'));
     if (!m) throw new Error(`could not lift ${n} from js/app-banner.js`);
     src += m[0] + '\n';
   }
-  /* An incomplete lift does not throw here — svcSnoozeAppBanner guards its
-     storage access with try/catch, so a helper left behind reads exactly like
-     a private window and the assertions quietly pass on nothing. */
-  const store = {};
+  /* An incomplete lift does not throw here — every storage access is wrapped
+     in try/catch, so a helper left behind reads exactly like a private window
+     and the assertions quietly pass on nothing. */
+  const local = {}, session = {};
+  const store = (bag) => ({
+    getItem: k => (k in bag ? bag[k] : null),
+    setItem: (k, v) => { bag[k] = String(v); },
+    removeItem: k => { delete bag[k]; },
+  });
   const ctx = {
-    Math, parseInt, Number, String, Date,
-    localStorage: {
-      getItem: k => (k in store ? store[k] : null),
-      setItem: (k, v) => { store[k] = String(v); },
-      removeItem: k => { delete store[k]; },
-    },
+    Math, parseInt, Number, String, Date, Promise, JSON,
+    localStorage: store(local),
+    sessionStorage: store(session),
     navigator: { userAgent: '', maxTouchPoints: 0 },
     window: {},
-    _store: store,
   };
   ctx.window = ctx;
   vm.createContext(ctx);
   vm.runInContext(src + '\nthis.api = { ' + names.join(', ') + ' };', ctx);
-  return { api: ctx.api, ctx, store };
+  return { api: ctx.api, local, session };
 }
 
-const { api: A, store } = lift();
+const { api: A, local, session } = lift();
 
 /* Real strings from real devices, not invented ones. */
 const UA = {
@@ -106,7 +110,7 @@ console.log('\nit stands down where Apple draws its own banner');
 
 console.log('\nit offers the app to the people who can install it');
 {
-  const base = { isNative: false, standalone: false, snoozed: false };
+  const base = { isNative: false, standalone: false, dismissed: false };
   ok('Android Chrome is offered the app',
      A.svcShouldOfferApp({ ...base, ua: UA.androidChrome }) === true);
   ok('Chrome on iOS is offered the app',
@@ -121,23 +125,57 @@ console.log('\nit offers the app to the people who can install it');
      'telling somebody to install what they are using is how a banner gets dismissed for good');
   ok('nor once it runs from the home screen',
      A.svcShouldOfferApp({ ...base, ua: UA.androidChrome, standalone: true }) === false);
-  ok('nor after they have said no',
-     A.svcShouldOfferApp({ ...base, ua: UA.androidChrome, snoozed: true }) === false);
+  ok('nor after they have said no, for as long as that no lasts',
+     A.svcShouldOfferApp({ ...base, ua: UA.androidChrome, dismissed: true }) === false);
 }
 
-console.log('\n"not now" means not now, not never');
+console.log('\n"not now" lasts until the next login, and no longer');
 {
-  const now = Date.UTC(2026, 0, 1);
-  A.svcSnoozeAppBanner(30, now);
-  ok('a dismissal is remembered', A.svcAppBannerSnoozed(now + 86400000) === true);
-  ok('and it wears off', A.svcAppBannerSnoozed(now + 31 * 86400000) === false,
-     'a tombstone silences somebody who tapped the wrong thing once');
-  ok('going to the store buys a longer rest',
-     (A.svcSnoozeAppBanner(120, now), A.svcAppBannerSnoozed(now + 100 * 86400000)) === true,
-     'they have almost certainly installed it');
-  ok('the snooze is a timestamp, not a flag',
-     /^\d{10,}$/.test(String(store['svc_app_banner_snoozed_until'])),
-     JSON.stringify(store));
+  /* The client's rule, and the one this file exists to hold: the banner comes
+     back every time they log in, until they have the app. */
+  const JWT_A = 'eyJhbGciOiJIUzI1NiJ9.aaaaaaaa.signature-for-login-one';
+  const JWT_B = 'eyJhbGciOiJIUzI1NiJ9.bbbbbbbb.signature-for-login-two';
+
+  ok('signed out, everybody shares one bucket',
+     A.svcLoginFingerprint('') === 'anon' && A.svcLoginFingerprint(null) === 'anon');
+  ok('signed in, the fingerprint follows the token',
+     A.svcLoginFingerprint(JWT_A) !== A.svcLoginFingerprint(JWT_B),
+     `${A.svcLoginFingerprint(JWT_A)} vs ${A.svcLoginFingerprint(JWT_B)}`);
+  ok('and it is a tail of the token, not the token',
+     !A.svcLoginFingerprint(JWT_A).includes('eyJhbGciOiJIUzI1NiJ9'),
+     A.svcLoginFingerprint(JWT_A));
+
+  const fpA = A.svcLoginFingerprint(JWT_A);
+  const fpB = A.svcLoginFingerprint(JWT_B);
+
+  ok('nothing is dismissed to begin with', A.svcAppBannerDismissed(fpA) === false);
+  A.svcDismissForThisLogin(fpA);
+  ok('"not now" holds for the rest of that login', A.svcAppBannerDismissed(fpA) === true);
+  ok('but the next login gets the banner again', A.svcAppBannerDismissed(fpB) === false,
+     'this is the whole request: it must come back at every sign-in');
+  ok('and so does signing out', A.svcAppBannerDismissed('anon') === false);
+
+  /* Tapping through to the store used to buy four months of silence on a
+     guess. It is worth exactly the same as "not now" now, because whether
+     they installed it is the server's answer, not this browser's guess. */
+  ok('the dismissal is in sessionStorage, so closing the tab clears it',
+     session[A.svcAppDismissKey()] === fpA && !(A.svcAppDismissKey() in local),
+     JSON.stringify({ session, local }));
+  ok('and it stores which login it belongs to, not a bare flag',
+     session[A.svcAppDismissKey()] !== '1' && session[A.svcAppDismissKey()] !== 'true',
+     String(session[A.svcAppDismissKey()]));
+
+  /* Somebody who tapped "Get it" the week before this shipped is carrying a
+     timestamp 120 days out. Leaving it in place would mean the fix reaches
+     them in December. */
+  local[A.svcAppLegacySnoozeKey()] = String(Date.now() + 120 * 86400000);
+  A.svcForgetLegacyAppSnooze();
+  ok('the old long snooze is thrown away on first run',
+     !(A.svcAppLegacySnoozeKey() in local),
+     'the people it was most wrongly silencing would stay silenced');
+  ok('and nothing reads it any more',
+     !/svc_app_banner_snoozed_until/.test(strip(CORE).replace(/svcAppLegacySnoozeKey\(\)\s*\{[^}]*\}/, '')),
+     'a second reader would keep honouring it');
 }
 
 console.log('\nthe banner it draws can actually exist');
@@ -146,7 +184,7 @@ console.log('\nthe banner it draws can actually exist');
      in any HTML file. This one builds its own, so the id it creates and the
      ids it later looks for have to be the same string. */
   const core = strip(CORE);
-  const initFn  = (core.match(/function svcInitAppBanner\([\s\S]*?\n\}/) || [''])[0];
+  const initFn  = (core.match(/function _svcDrawAppBanner\([\s\S]*?\n\}/) || [''])[0];
   const created = (initFn.match(/el\.id = '([^']+)'/) || [])[1];
   ok('the banner is created rather than assumed to exist',
      created === 'svcAppBanner', String(created));
@@ -234,5 +272,110 @@ console.log('\nthe store links agree with the app that is published');
      'the banner would send people to a listing that is not this app');
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+/* ── the one thing that does stop it ──────────────────────────────
+   Everything above is the browser's own reasoning. Whether the client
+   actually downloaded the app is not something a browser can see: a web
+   session on a phone with the app installed is byte-for-byte the session on a
+   phone without it. Only the server knows, from a push token that nothing but
+   the app can have written. */
+async function serverSide() {
+  console.log('\n"until they download it" is answered by the server');
+
+  const reset = () => { for (const k of Object.keys(session)) delete session[k];
+                        for (const k of Object.keys(local)) delete local[k]; };
+  const reply = (body, opts) => async () => ({ ok: (opts || {}).ok !== false, json: async () => body });
+
+  reset();
+  /* The call has to be counted, not merely allowed to throw: a rejected fetch
+     is swallowed and resolves false, so "it returned false" would pass even
+     if it had asked. */
+  let asked = 0;
+  const counted = body => async () => { asked++; return { ok: true, json: async () => body }; };
+  ok('signed out it does not even ask',
+     (await A.svcHasMobileApp(counted({ hasApp: true }))) === false && asked === 0,
+     `a 401 on every anonymous page load (asked ${asked} times)`);
+
+  reset();
+  local['svc_token'] = 'jwt-header.jwt-body.jwt-signature';
+  ok('a client with the app is not asked to download it',
+     (await A.svcHasMobileApp(reply({ hasApp: true }))) === true);
+  ok('and the answer is remembered for the session, not re-asked per page',
+     A.svcAppInstalledCached() === '1', JSON.stringify(session));
+  asked = 0;
+  ok('so a later page needs no request at all',
+     (await A.svcHasMobileApp(counted({ hasApp: false }))) === true && asked === 0,
+     `asked ${asked} times`);
+
+  reset();
+  local['svc_token'] = 'jwt-header.jwt-body.jwt-signature';
+  ok('a client without it still gets the banner',
+     (await A.svcHasMobileApp(reply({ hasApp: false }))) === false);
+
+  /* Every uncertainty resolves to "show it". A banner suppressed because the
+     endpoint was down is a banner that silently stops working. */
+  reset(); local['svc_token'] = 'jwt-header.jwt-body.jwt-signature';
+  ok('a 500 does not suppress the banner',
+     (await A.svcHasMobileApp(reply({ hasApp: true }, { ok: false }))) === false,
+     'an outage would read as "everybody has the app"');
+  reset(); local['svc_token'] = 'jwt-header.jwt-body.jwt-signature';
+  ok('nor does a network failure',
+     (await A.svcHasMobileApp(async () => { throw new Error('offline'); })) === false);
+  reset(); local['svc_token'] = 'jwt-header.jwt-body.jwt-signature';
+  ok('nor does an answer that is not the shape expected',
+     (await A.svcHasMobileApp(reply({ hasApp: 'yes' }))) === false,
+     'a truthy string is not a yes');
+  reset(); local['svc_token'] = 'jwt-header.jwt-body.jwt-signature';
+  ok('nor does a body with nothing in it',
+     (await A.svcHasMobileApp(reply(null))) === false);
+
+  /* A failed lookup must not be cached either, or one blip silences the
+     banner for the rest of the session. */
+  reset(); local['svc_token'] = 'jwt-header.jwt-body.jwt-signature';
+  await A.svcHasMobileApp(async () => { throw new Error('offline'); });
+  ok('and a failure is not cached as an answer',
+     A.svcAppInstalledCached() === null, JSON.stringify(session));
+
+  console.log('\nthe endpoint it asks exists and means what it says');
+  {
+    const push = read('server/routes/push.js');
+    const route = (push.match(/router\.get\('\/has-mobile-app'[\s\S]*?\n\}\);/) || [''])[0];
+    ok('GET /api/push/has-mobile-app is served', route.length > 0);
+    ok('and it is behind requireAuth',
+       /router\.get\('\/has-mobile-app',\s*requireAuth/.test(push),
+       'anybody could ask whether anybody else has the app');
+    ok('it answers from push_tokens, the only evidence there is',
+       /FROM push_tokens/.test(route));
+    ok('and counts only the app, not the browser subscribing to web push',
+       /platform IN \('ios','android'\)/.test(route) && !/'web'/.test(route),
+       'a web push token would read as an install');
+    ok('it scopes the lookup to the investor asking',
+       /WHERE investor_id = \$1/.test(route),
+       'it would answer yes for anybody as soon as one client had the app');
+    ok('and it fails loudly rather than answering "has it"',
+       /res\.status\(500\)/.test(route) && !/catch[\s\S]*hasApp:\s*true/.test(route),
+       'an error that reads as an install would silence the banner for everyone');
+    ok('the banner asks that exact path',
+       /'\/api\/push\/has-mobile-app'/.test(CORE), 'a typo would 404 forever');
+    ok('and carries the session token when it asks',
+       /Authorization:\s*'Bearer '/.test((CORE.match(/async function svcHasMobileApp[\s\S]*?\n\}/) || [''])[0]),
+       'the request would come back 401 and nobody would ever be recognised');
+  }
+
+  console.log('\nand the banner is only drawn once that answer is in');
+  {
+    const init = (strip(CORE).match(/function svcInitAppBanner\([\s\S]*?\n\}/) || [''])[0];
+    ok('svcInitAppBanner waits on svcHasMobileApp before drawing',
+       /svcHasMobileApp\(\)/.test(init) && /_svcDrawAppBanner\(\)/.test(init),
+       init);
+    ok('and returns without drawing when the answer is yes',
+       /hasApp\)\s*return/.test(init), init);
+    ok('the legacy snooze is cleared on every start, not only on dismissal',
+       /svcForgetLegacyAppSnooze\(\)/.test(init),
+       'a client who never opens the banner again would never shed it');
+  }
+
+  console.log(`\n${pass} passed, ${fail} failed`);
+  process.exit(fail ? 1 : 0);
+}
+
+serverSide().catch(err => { console.error(err); process.exit(1); });
