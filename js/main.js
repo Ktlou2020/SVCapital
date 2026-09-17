@@ -947,6 +947,59 @@ document.querySelectorAll('.tier').forEach(tier => {
   });
 });
 
+/* ═══════════════════════════════════════════════
+   PRODUCTS SUBMENU
+
+   Products is the heading for the two items under it, not a third link beside
+   them. CSS opens the submenu on hover and on keyboard focus; neither of those
+   exists on a phone, where the nav is a slide-in panel, so the click is what
+   makes it reachable at all — and it is what a heading with a chevron looks
+   like it should do anyway.
+
+   The toggle is a <button>, which is also what keeps the panel open long
+   enough to use: every <a> inside the panel closes it, so while Products was a
+   link, tapping it shut the menu and jumped to the section before either
+   sub-item could be seen.
+   ═══════════════════════════════════════════════ */
+function initProductsSubmenu() {
+  const li     = document.querySelector('.nav-has-sub');
+  const toggle = document.getElementById('navProductsToggle');
+  const sub    = document.getElementById('navProductsSub');
+  if (!li || !toggle || !sub) return;
+
+  const setOpen = (open) => {
+    li.classList.toggle('open', open);
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
+
+  toggle.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setOpen(!li.classList.contains('open'));
+  });
+
+  /* Choosing something closes it, so coming back to the panel does not find it
+     already open on a heading nobody pressed. */
+  sub.querySelectorAll('a').forEach(a => a.addEventListener('click', () => setOpen(false)));
+
+  document.addEventListener('click', (e) => {
+    if (!li.contains(e.target)) setOpen(false);
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || !li.classList.contains('open')) return;
+    setOpen(false);
+    toggle.focus();
+  });
+
+  /* Crossing the breakpoint swaps a floating card for an inline list. Leaving
+     it open across that means arriving at the other layout with a menu open
+     that nothing on screen explains. */
+  window.addEventListener('resize', () => setOpen(false));
+}
+
+document.addEventListener('DOMContentLoaded', initProductsSubmenu);
+
 /* ─── Active Nav Link Highlighting ─── */
 function initActiveNav() {
   const sections = document.querySelectorAll('section[id]');

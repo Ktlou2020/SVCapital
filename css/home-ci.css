@@ -53,9 +53,27 @@
 }
 
 /* Products submenu — Interest-Free is a range within Products, not a peer of
-   it. Opens on hover and on keyboard focus, so it is reachable without a
-   pointer. */
+   it. Products is the heading; the two under it appear on hover, on keyboard
+   focus, or on a click, and are not shown otherwise at any width.
+
+   All three, because no one of them covers everybody: hover is what a mouse
+   expects and a touch screen does not have; focus-within is what a keyboard
+   has and neither of the others gives it; and the click is the only one that
+   works on a phone, where the whole nav is a slide-in panel. */
 .nav-has-sub { position: relative; }
+.nav-sub-toggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: none; border: 0; cursor: pointer;
+  font-family: inherit; font-size: inherit; font-weight: inherit; line-height: inherit;
+  color: inherit;
+}
+.nav-sub-chev {
+  width: 0; height: 0; flex-shrink: 0;
+  border-left: 4px solid transparent; border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+  transition: transform .16s ease;
+}
+.nav-has-sub.open > .nav-sub-toggle .nav-sub-chev { transform: rotate(180deg); }
 .nav-sub {
   position: absolute; top: 100%; left: 0; min-width: 190px; margin: 0; padding: 8px 0;
   list-style: none; background: #fff; border: 1px solid rgba(0,0,0,0.08);
@@ -65,20 +83,33 @@
   z-index: 60;
 }
 .nav-has-sub:hover > .nav-sub,
-.nav-has-sub:focus-within > .nav-sub { opacity: 1; visibility: visible; transform: translateY(0); }
+.nav-has-sub:focus-within > .nav-sub,
+.nav-has-sub.open > .nav-sub { opacity: 1; visibility: visible; transform: translateY(0); }
 .nav-sub li { display: block; }
 .nav-sub .nav-link { display: block; padding: 8px 16px; white-space: nowrap; color: #303030 !important; }
 .nav-sub .nav-link:hover { background: rgba(254,194,79,0.14); color: #1a1a1a !important; }
-@media (prefers-reduced-motion: reduce) { .nav-sub { transition: none; } }
-/* Inline only inside the slide-in panel, which takes over at 768px in
-   css/style.css — the same breakpoint, deliberately. Set at 900 it expanded the
-   submenu while the horizontal nav was still showing, so between 769 and 900
-   both items sat permanently under Products and pushed the row apart.
-   Above that the dropdown is hover and focus only. */
+@media (prefers-reduced-motion: reduce) { .nav-sub, .nav-sub-chev { transition: none; } }
+
+/* Inside the slide-in panel, which takes over at 768px in css/style.css — the
+   same breakpoint, deliberately. Set at 900 it expanded the submenu while the
+   horizontal nav was still showing, so between 769 and 900 both items sat
+   permanently under Products and pushed the row apart.
+
+   Here the submenu is a list that pushes the items below it down rather than a
+   card floating over them, and it stays closed until Products is tapped:
+   hover does not exist on a phone, and leaving it open made Products look like
+   a third link rather than the heading of the two under it. */
 @media (max-width: 768px) {
-  .nav-sub { position: static; opacity: 1; visibility: visible; transform: none;
-             background: transparent; border: 0; box-shadow: none; padding: 2px 0 0 12px; min-width: 0; }
+  .nav-sub { position: static; transform: none; background: transparent; border: 0;
+             box-shadow: none; padding: 0; min-width: 0; opacity: 1; visibility: visible;
+             display: none; }
+  .nav-has-sub.open > .nav-sub { display: block; padding: 2px 0 6px 12px; }
+  .nav-has-sub:hover > .nav-sub,
+  .nav-has-sub:focus-within > .nav-sub { display: none; }
+  .nav-has-sub.open:hover > .nav-sub,
+  .nav-has-sub.open:focus-within > .nav-sub { display: block; }
   .nav-sub .nav-link { padding: 5px 0; font-size: 0.92em; }
+  .nav-sub-toggle { width: 100%; justify-content: flex-start; }
 }
 
 /* Logo */

@@ -279,9 +279,9 @@ const meta = (html, prop) => {
       const land = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
       ok('Products has a submenu', /<li class="nav-has-sub">/.test(land));
       ok('with Interest-Free inside it',
-         /<ul class="nav-sub">[\s\S]{0,400}Interest-Free[\s\S]{0,80}<\/ul>/.test(land));
+         /<ul class="nav-sub"[^>]*>[\s\S]{0,400}Interest-Free[\s\S]{0,80}<\/ul>/.test(land));
       ok('and All products alongside it',
-         /<ul class="nav-sub">[\s\S]{0,200}All products/.test(land));
+         /<ul class="nav-sub"[^>]*>[\s\S]{0,200}All products/.test(land));
       ok('it is no longer a top-level item',
          !/<li><a href="#eif" class="nav-link" id="navEifLink"/.test(land));
       /* js/main.js hides this when no EIF product is visible. The id moved to
@@ -308,6 +308,57 @@ const meta = (html, prop) => {
       ok('which is where the nav actually collapses',
          /@media \(max-width: 768px\)/.test(styleCss),
          'the two breakpoints have to agree or a band of widths gets both layouts');
+
+      /* Products is the heading of the two under it, and a heading is not a
+         third link beside them: the submenu is closed until somebody hovers,
+         focuses or presses it, at every width. It used to sit permanently
+         open inside the slide-in panel, where Products read as one of three
+         peers. */
+      ok('Products is a button, not a link',
+         /<button type="button" class="nav-link nav-sub-toggle" id="navProductsToggle"/.test(land),
+         'in the panel every <a> closes the menu, so tapping it left before the submenu showed');
+      ok('and it says whether it is open',
+         /id="navProductsToggle"[\s\S]{0,160}aria-expanded="false"[\s\S]{0,120}aria-controls="navProductsSub"/.test(land));
+      ok('naming the list it controls',
+         /<ul class="nav-sub" id="navProductsSub">/.test(land));
+      ok('All products carries the link to the section instead',
+         /<li><a href="#products" class="nav-link">All products<\/a><\/li>/.test(land),
+         'Products navigated and opened at once, and did neither well');
+
+      /* Anchored at the rule's own closing brace and terminator, or
+         .nav-has-sub.open > .nav-sub-toggle .nav-sub-chev — the chevron
+         rotation, which is decoration — satisfies it on its own. */
+      ok('a click opens it',
+         /\.nav-has-sub\.open > \.nav-sub\s*[,{]/.test(css),
+         'a phone has no hover, so there would be no way to reach it at all');
+      ok('the floating card opens on a click as well as a hover',
+         /\.nav-has-sub:hover > \.nav-sub,[\s\S]{0,140}\.nav-has-sub\.open > \.nav-sub \{[^}]*visibility: visible/.test(css));
+      /* Pinned to the base .nav-sub rule by a declaration only it carries.
+         Matching "display: none" anywhere in the block is satisfied by the
+         hover override three lines below, which is the opposite rule. */
+      ok('and inside the panel it starts closed',
+         /@media \(max-width: 768px\) \{\s*\.nav-sub \{[^}]*position: static[^}]*display: none;[^}]*\}/.test(css),
+         'Products reads as a third link rather than the heading of the two under it');
+      ok('with hover alone not enough to open it there',
+         /@media \(max-width: 768px\)[\s\S]{0,900}\.nav-has-sub:hover > \.nav-sub[\s\S]{0,120}display: none;/.test(css),
+         'a tap registers as a hover on touch and leaves it stuck open');
+
+      ok('main.js drives the toggle', /function initProductsSubmenu\(\)/.test(main));
+      ok('it keeps aria-expanded in step',
+         /toggle\.setAttribute\('aria-expanded', open \? 'true' : 'false'\)/.test(main));
+      ok('choosing something closes it',
+         /sub\.querySelectorAll\('a'\)\.forEach\(a => a\.addEventListener\('click', \(\) => setOpen\(false\)\)\)/.test(main),
+         'it would still be open the next time the panel is opened');
+      ok('clicking away closes it',
+         /if \(!li\.contains\(e\.target\)\) setOpen\(false\)/.test(main));
+      ok('Escape closes it and gives the heading the focus back',
+         /e\.key !== 'Escape'[\s\S]{0,140}toggle\.focus\(\)/.test(main));
+      ok('and crossing the breakpoint closes it',
+         /window\.addEventListener\('resize', \(\) => setOpen\(false\)\)/.test(main),
+         'a floating card becomes an inline list mid-open');
+      ok('the toggle stops the click reaching the document handler',
+         /toggle\.addEventListener\('click'[\s\S]{0,200}e\.stopPropagation\(\)/.test(main),
+         'the outside-click handler would close it in the same tick it opened');
     }
 
     console.log('\nand staff can publish without a deploy');
