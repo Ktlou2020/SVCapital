@@ -6305,17 +6305,129 @@ function _togglePolicy(secId) {
   renderPoliciesView();
 }
 
-function shareReferral(method) {
+/* ═══════════════════════════════════════════════════════════════════
+   Sharing a referral
+
+   One message, one picture, one link, wherever it goes from.
+
+     the link    /register?ref=CODE. It used to be built here and nowhere
+                 else pointed at it, because /register was not a route — the
+                 SPA catch-all answered with the landing page and ?ref= went
+                 with it, so nobody who clicked a shared link reached the
+                 signup form and no referral was ever attributed. The server
+                 now serves the form at /register, which keeps every link
+                 already sitting in somebody's WhatsApp history working.
+
+     the picture Two ways, because no single one reaches everybody:
+
+                   attached   navigator.share with a file puts the image in
+                              the conversation as a real photo. Android
+                              Chrome and iOS Safari do this; desktop browsers
+                              almost universally do not, and refuse the whole
+                              share rather than dropping the file, so it is
+                              asked first and never assumed.
+
+                   as a card  the signup page carries Open Graph tags naming
+                              the same image, so WhatsApp draws the invite as
+                              a preview under the link on its own. This is
+                              what the recipient sees when the file could not
+                              be attached — and it needs nothing of the
+                              sender's device at all.
+
+   Fetching the image can fail — offline, cache miss, a 404 while the asset is
+   still deploying. None of that is a reason to lose the share: the text and
+   the link are what actually carry the referral, and they go either way.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Where the referral link should point.
+
+   Not window.location.origin, which is the one thing this must not be inside
+   the app: Capacitor serves the bundle from https://localhost on Android and
+   capacitor://localhost on iOS, so every referral shared from the app would
+   have been https://localhost/register?ref=CODE — a link that opens nothing
+   on the recipient's phone. The app's API base is the Railway host rather
+   than the public one, so that is no better to hand somebody either.
+
+   A share leaves this device. It gets the public address, always — anywhere
+   that is plainly not a browser sitting on the real site. */
+/* A function, not a top-level const: portal-core declares no load-time state
+   of its own — it is loaded beside two shells and a const here is a
+   redeclaration waiting to happen. */
+function svcPublicOrigin() { return 'https://platform.svcapital.co.za'; }
+
+function svcShareOrigin(env) {
+  const e = env || (typeof window !== 'undefined' ? window : {});
+  const loc = e.location && e.location.origin ? String(e.location.origin) : '';
+  if (e.__SVC_NATIVE__) return svcPublicOrigin();
+  if (!loc) return svcPublicOrigin();
+  if (/^(capacitor|ionic|file):/i.test(loc)) return svcPublicOrigin();
+  if (/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|$)/i.test(loc)) return svcPublicOrigin();
+  return loc;
+}
+
+function svcReferralLink(code, origin) {
+  const base = origin || svcShareOrigin();
+  return `${base}/register?ref=${encodeURIComponent(code)}`;
+}
+
+function svcReferralMessage(code, link) {
+  return `Join SV Capital and start earning inflation-beating returns! Use my referral code ${code}: ${link}`;
+}
+
+/* The invite card. Returns null rather than throwing: a missing picture must
+   not cost somebody the share. */
+async function svcReferralImageFile(fetchImpl) {
+  const f = fetchImpl || (typeof fetch === 'function' ? fetch : null);
+  if (!f) return null;
+  try {
+    const r = await f('/assets/referral-invite.png');
+    if (!r || !r.ok) return null;
+    const blob = await r.blob();
+    if (!blob || !blob.size) return null;
+    if (typeof File !== 'function') return null;
+    return new File([blob], 'sv-capital-invite.png', { type: 'image/png' });
+  } catch (_) { return null; }
+}
+
+/* canShare({files}) is the only honest test. A browser that supports
+   navigator.share may still refuse files, and it rejects the whole call
+   rather than sending the message without the picture. */
+function svcCanShareFiles(file, nav) {
+  const n = nav || (typeof navigator !== 'undefined' ? navigator : null);
+  if (!n || !file || typeof n.share !== 'function' || typeof n.canShare !== 'function') return false;
+  try { return n.canShare({ files: [file] }); } catch (_) { return false; }
+}
+
+async function shareReferral(method) {
   const code = PORTAL.investor?.referral_code || '';
-  const link = `${window.location.origin}/register?ref=${code}`;
-  if (method === 'whatsapp') {
-    const msg = `Join SV Capital and start earning inflation-beating returns! Use my referral code ${code}: ${link}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
-  } else {
+  if (!code) { Toast.error('Your referral code has not been issued yet.'); return; }
+  const link = svcReferralLink(code);
+
+  if (method !== 'whatsapp') {
     navigator.clipboard.writeText(link)
       .then(() => Toast.success('Referral link copied to clipboard!'))
       .catch(() => Toast.error('Copy failed — please copy the link manually'));
+    return;
   }
+
+  const msg  = svcReferralMessage(code, link);
+  const file = await svcReferralImageFile();
+
+  if (svcCanShareFiles(file)) {
+    try {
+      await navigator.share({ files: [file], text: msg, title: 'Join SV Capital' });
+      SVC.track('svc_referral_shared', { referral_code: code, channel: 'share_sheet', image: true });
+      return;
+    } catch (err) {
+      /* The share sheet was dismissed — they chose not to send it, so
+         throwing them into WhatsApp instead would be the app arguing. */
+      if (err && err.name === 'AbortError') return;
+    }
+  }
+
+  /* No file share: the link's Open Graph card carries the picture instead. */
+  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+  SVC.track('svc_referral_shared', { referral_code: code, channel: 'whatsapp', image: false });
 }
 
 function initDarkMode() {
@@ -8258,14 +8370,13 @@ async function loadReferralDashboard() {
   const inv  = PORTAL.investor;
   const code = inv?.referral_code || '';
 
-  /* The link used to point at /register, which is not a route — it fell
-     through to the SPA catch-all and served the landing page, so nobody
-     clicking a referral link ever reached the signup form. The page is
-     /signup, and it reads ?ref= to pre-fill the code. */
+  /* The same builder the WhatsApp share uses, so what is shown here and what
+     gets sent are one string. They used to be two: this said /signup and the
+     share said /register, and only one of them was a route. */
   const codeEl = document.getElementById('referralCode');
   const linkEl = document.getElementById('referralLink');
   if (codeEl) codeEl.textContent = code || '—';
-  const refLink = code ? `${window.location.origin}/signup?ref=${code}` : '—';
+  const refLink = code ? svcReferralLink(code) : '—';
   if (linkEl) linkEl.textContent = refLink;
 
   /* Who signed up under this code has to come from the server. This used to

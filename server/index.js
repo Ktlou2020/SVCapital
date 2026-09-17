@@ -319,6 +319,23 @@ app.get('/robots.txt',  (_req, res) => res.sendFile(path.join(__dirname, '..', '
   app.get('/reset-password.html', resetHandler);
 }
 
+/* ─── /register → the signup form ─────────────────────────────────────
+   Every referral link ever shared points at /register?ref=CODE. There has
+   never been a /register: the catch-all at the bottom of this file served the
+   landing page instead, and ?ref= went with it, so nobody arriving on a
+   referral link reached the form and no referral was ever attributed. The
+   page is signup.html, which reads ?ref= to pre-fill the code.
+
+   An alias rather than a redirect, and registered here rather than left to
+   the catch-all, so the query string survives and the links already out in
+   the world start working rather than needing to be re-sent. */
+{
+  const signupFile = path.join(__dirname, '..', 'signup.html');
+  app.get('/register', (_req, res) => res.sendFile(signupFile, {
+    headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', Pragma: 'no-cache', Expires: '0' },
+  }));
+}
+
 /* ─── Insights — public, server-rendered ───────────────────────────────
    Mounted BEFORE express.static and before the .html redirect: these are
    generated pages with per-article Open Graph tags, and the static handler

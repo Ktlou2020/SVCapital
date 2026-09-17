@@ -14,6 +14,25 @@
   <meta name="apple-itunes-app" content="app-id=6670504520" />
   <title>SV Capital — Create Account</title>
   <meta name="robots" content="noindex, nofollow">
+  <!-- Open Graph, so a referral link pasted into WhatsApp arrives as the
+       invite card rather than a bare URL. WhatsApp, Facebook and LinkedIn
+       crawlers do not run JavaScript, so this has to be in the served HTML;
+       og:image has to be absolute and publicly fetchable, because the crawler
+       resolves it with no page context. One image for everybody — the
+       referral code travels in the message text, not in the picture. -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="SV Capital" />
+  <meta property="og:title" content="I'm inviting you to invest better with SV Capital" />
+  <meta property="og:description" content="Sign up, get KYC approved, add funds to your wallet and invest. Inflation-beating returns from South African alternative assets." />
+  <meta property="og:url" content="https://platform.svcapital.co.za/register" />
+  <meta property="og:image" content="https://platform.svcapital.co.za/assets/referral-invite.png" />
+  <meta property="og:image:width" content="1080" />
+  <meta property="og:image:height" content="1080" />
+  <meta property="og:image:alt" content="Three steps to join SV Capital: register, get KYC approved, add funds and invest." />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="I'm inviting you to invest better with SV Capital" />
+  <meta name="twitter:description" content="Sign up, get KYC approved, add funds to your wallet and invest." />
+  <meta name="twitter:image" content="https://platform.svcapital.co.za/assets/referral-invite.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
