@@ -5351,10 +5351,17 @@ function openSaDeposit(saId) {
 }
 
 /* ─── Referral ─── */
-function copyReferralLink() {
-  const link = document.getElementById('referralLink').textContent;
-  navigator.clipboard.writeText(link).then(() => Toast.success('Link copied to clipboard!')).catch(() => Toast.error('Copy failed'));
-  SVC.track('svc_referral_link_copied', { referral_code: PORTAL.investor?.referral_code });
+/* The small button beside the displayed link. It copies the same thing the
+   big one does — the whole invite — because a bare URL pasted into a chat
+   arrives as a preview card with no sentence and no code to type in. The link
+   stays on screen next to it for anyone who wants to read it. */
+async function copyReferralLink() {
+  const code = PORTAL.investor?.referral_code || '';
+  if (!code) { Toast.error('Your referral code has not been issued yet.'); return; }
+  const copied = await svcCopyToClipboard(svcReferralMessage(code, svcReferralLink(code)));
+  if (copied) Toast.success('Invite copied — paste it into any chat.');
+  else Toast.error('Copy failed');
+  SVC.track('svc_referral_link_copied', { referral_code: code });
 }
 
 function _getLevelForXP(xp) {
@@ -6308,36 +6315,33 @@ function _togglePolicy(secId) {
 /* ═══════════════════════════════════════════════════════════════════
    Sharing a referral
 
-   One message, one picture, one link, wherever it goes from.
+   One message, and every button produces the whole of it: the sentence, the
+   code, and the link — with the invite card riding along as the link's
+   preview.
 
-     the link    /register?ref=CODE. It used to be built here and nowhere
-                 else pointed at it, because /register was not a route — the
-                 SPA catch-all answered with the landing page and ?ref= went
-                 with it, so nobody who clicked a shared link reached the
-                 signup form and no referral was ever attributed. The server
-                 now serves the form at /register, which keeps every link
-                 already sitting in somebody's WhatsApp history working.
+   The picture does NOT travel as an attached file, and the first version of
+   this was wrong about that. navigator.share({ files, text }) looks like it
+   sends both; WhatsApp takes the file and throws the text away, on Android
+   and on iOS alike, because its share handler ignores the text when a stream
+   is present. So the client got a picture with no sentence, no code and no
+   link — the one part that actually carries the referral.
 
-     the picture Two ways, because no single one reaches everybody:
+   The link's Open Graph card is what puts the image in the conversation
+   instead. /register carries og:image, so WhatsApp draws the invite under the
+   message on its own, from any device, without the sender having to attach
+   anything. Text and picture, which is what was asked for, and the way round
+   that keeps the link.
 
-                   attached   navigator.share with a file puts the image in
-                              the conversation as a real photo. Android
-                              Chrome and iOS Safari do this; desktop browsers
-                              almost universally do not, and refuse the whole
-                              share rather than dropping the file, so it is
-                              asked first and never assumed.
-
-                   as a card  the signup page carries Open Graph tags naming
-                              the same image, so WhatsApp draws the invite as
-                              a preview under the link on its own. This is
-                              what the recipient sees when the file could not
-                              be attached — and it needs nothing of the
-                              sender's device at all.
-
-   Fetching the image can fail — offline, cache miss, a 404 while the asset is
-   still deploying. None of that is a reason to lose the share: the text and
-   the link are what actually carry the referral, and they go either way.
+   Copying works the same way for the same reason: it copies the message, not
+   the bare URL. A pasted URL on its own produced the card and nothing else —
+   no sentence and, worse, no referral code for somebody who prefers to type
+   it in.
    ═══════════════════════════════════════════════════════════════════ */
+
+/* A function, not a top-level const: portal-core declares no load-time state
+   of its own — it is loaded beside two shells and a const here is a
+   redeclaration waiting to happen. */
+function svcPublicOrigin() { return 'https://platform.svcapital.co.za'; }
 
 /* Where the referral link should point.
 
@@ -6350,11 +6354,6 @@ function _togglePolicy(secId) {
 
    A share leaves this device. It gets the public address, always — anywhere
    that is plainly not a browser sitting on the real site. */
-/* A function, not a top-level const: portal-core declares no load-time state
-   of its own — it is loaded beside two shells and a const here is a
-   redeclaration waiting to happen. */
-function svcPublicOrigin() { return 'https://platform.svcapital.co.za'; }
-
 function svcShareOrigin(env) {
   const e = env || (typeof window !== 'undefined' ? window : {});
   const loc = e.location && e.location.origin ? String(e.location.origin) : '';
@@ -6374,60 +6373,48 @@ function svcReferralMessage(code, link) {
   return `Join SV Capital and start earning inflation-beating returns! Use my referral code ${code}: ${link}`;
 }
 
-/* The invite card. Returns null rather than throwing: a missing picture must
-   not cost somebody the share. */
-async function svcReferralImageFile(fetchImpl) {
-  const f = fetchImpl || (typeof fetch === 'function' ? fetch : null);
-  if (!f) return null;
+/* navigator.clipboard is unavailable outside a secure context and in older
+   WebViews, where it is undefined rather than failing — so the old path is
+   kept as a fallback rather than letting the copy silently do nothing. */
+async function svcCopyToClipboard(text, nav, doc) {
+  const n = nav || (typeof navigator !== 'undefined' ? navigator : {});
+  const d = doc || (typeof document !== 'undefined' ? document : null);
+  if (n.clipboard && typeof n.clipboard.writeText === 'function') {
+    try { await n.clipboard.writeText(text); return true; } catch (_) { /* fall through */ }
+  }
+  if (!d || typeof d.execCommand !== 'function') return false;
   try {
-    const r = await f('/assets/referral-invite.png');
-    if (!r || !r.ok) return null;
-    const blob = await r.blob();
-    if (!blob || !blob.size) return null;
-    if (typeof File !== 'function') return null;
-    return new File([blob], 'sv-capital-invite.png', { type: 'image/png' });
-  } catch (_) { return null; }
-}
-
-/* canShare({files}) is the only honest test. A browser that supports
-   navigator.share may still refuse files, and it rejects the whole call
-   rather than sending the message without the picture. */
-function svcCanShareFiles(file, nav) {
-  const n = nav || (typeof navigator !== 'undefined' ? navigator : null);
-  if (!n || !file || typeof n.share !== 'function' || typeof n.canShare !== 'function') return false;
-  try { return n.canShare({ files: [file] }); } catch (_) { return false; }
+    const ta = d.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    d.body.appendChild(ta);
+    ta.select();
+    const okay = d.execCommand('copy');
+    d.body.removeChild(ta);
+    return !!okay;
+  } catch (_) { return false; }
 }
 
 async function shareReferral(method) {
   const code = PORTAL.investor?.referral_code || '';
   if (!code) { Toast.error('Your referral code has not been issued yet.'); return; }
-  const link = svcReferralLink(code);
+  const msg = svcReferralMessage(code, svcReferralLink(code));
 
-  if (method !== 'whatsapp') {
-    navigator.clipboard.writeText(link)
-      .then(() => Toast.success('Referral link copied to clipboard!'))
-      .catch(() => Toast.error('Copy failed — please copy the link manually'));
+  if (method === 'whatsapp') {
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+    SVC.track('svc_referral_shared', { referral_code: code, channel: 'whatsapp' });
     return;
   }
 
-  const msg  = svcReferralMessage(code, link);
-  const file = await svcReferralImageFile();
-
-  if (svcCanShareFiles(file)) {
-    try {
-      await navigator.share({ files: [file], text: msg, title: 'Join SV Capital' });
-      SVC.track('svc_referral_shared', { referral_code: code, channel: 'share_sheet', image: true });
-      return;
-    } catch (err) {
-      /* The share sheet was dismissed — they chose not to send it, so
-         throwing them into WhatsApp instead would be the app arguing. */
-      if (err && err.name === 'AbortError') return;
-    }
+  const copied = await svcCopyToClipboard(msg);
+  if (copied) {
+    Toast.success('Invite copied — paste it into any chat.');
+    SVC.track('svc_referral_shared', { referral_code: code, channel: 'copy' });
+  } else {
+    Toast.error('Copy failed — please copy the link manually');
   }
-
-  /* No file share: the link's Open Graph card carries the picture instead. */
-  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
-  SVC.track('svc_referral_shared', { referral_code: code, channel: 'whatsapp', image: false });
 }
 
 function initDarkMode() {

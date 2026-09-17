@@ -1098,14 +1098,16 @@
               <div class="panel__header"><span class="panel__title">Your Referral Code</span></div>
               <div class="panel__body text-center" style="padding:28px">
                 <div class="referral-code" id="referralCode">—</div>
-                <p style="font-size:0.78rem;color:#6b7280;margin:12px 0">Share this code or your personal link</p>
+                <p style="font-size:0.78rem;color:#6b7280;margin:12px 0">Both buttons send the full invite &mdash; the message, your code and your link</p>
                 <div class="referral-link-box">
                   <span id="referralLink">Loading your link…</span>
-                  <button class="btn btn--secondary btn--sm" onclick="copyReferralLink()"><i class="fa-solid fa-copy"></i> Copy</button>
+                  <button class="btn btn--secondary btn--sm" onclick="copyReferralLink()"><i class="fa-solid fa-copy"></i> Copy invite</button>
                 </div>
                 <div style="display:flex;gap:10px;margin-top:16px;justify-content:center">
+                  <!-- Copy lives beside the link it copies, above. A second
+                       button doing the same thing here only made the pair
+                       look like two different things. -->
                   <button class="btn btn--primary" onclick="shareReferral('whatsapp')"><i class="fa-brands fa-whatsapp"></i> Share on WhatsApp</button>
-                  <button class="btn btn--secondary" onclick="shareReferral('copy')"><i class="fa-solid fa-link"></i> Copy Link</button>
                 </div>
               </div>
             </div>
@@ -3087,7 +3089,7 @@
 </nav>
 
 <script src="../js/api.js?v=26"></script>
-<script src="../js/portal-core.js?v=33"></script>
+<script src="../js/portal-core.js?v=34"></script>
 <script src="../js/investor-documents.js?v=7"></script>
 <script src="js/portal.js?v=56"></script>
 <!-- sv-intelligence.js hidden -->

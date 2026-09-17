@@ -35,7 +35,8 @@ const SIGNUP = read('signup.html');
 
 /* The shipped builders, lifted and run. */
 function lift() {
-  const names = ['svcPublicOrigin', 'svcShareOrigin', 'svcReferralLink', 'svcReferralMessage', 'svcCanShareFiles', 'svcReferralImageFile'];
+  const names = ['svcPublicOrigin', 'svcShareOrigin', 'svcReferralLink',
+                 'svcReferralMessage', 'svcCopyToClipboard'];
   let src = '';
   for (const n of names) {
     const m = CORE.match(new RegExp(`(?:async )?function ${n}\\([\\s\\S]*?\\n\\}`, 'm'));
@@ -142,9 +143,11 @@ console.log('\nthe page shows the link it actually sends');
   ok('and not from this device\u2019s own address',
      !/window\.location\.origin/.test(dash),
      'the app would show a client a localhost link to copy');
-  ok('Copy Link copies what is on screen',
-     /getElementById\('referralLink'\)\.textContent/.test(
-       (CORE.match(/function copyReferralLink\([\s\S]*?\n\}/) || [''])[0]));
+  /* It used to copy exactly what was on screen — the bare URL — which is the
+     paste the client reported. The link stays on screen to be read; what goes
+     to the clipboard is the invite around it. */
+  ok('the link is still shown, so it can be read',
+     /linkEl\.textContent = refLink/.test(dash));
 }
 
 console.log('\nthe message says what the client asked it to say');
@@ -157,24 +160,20 @@ console.log('\nthe message says what the client asked it to say');
      msg.trim().endsWith(LINK), msg);
 }
 
-console.log('\nthe picture reaches the recipient either way');
+console.log('\nthe picture rides on the link, not on an attachment');
 {
-  /* Attached, where the device allows it. */
-  const file = { name: 'sv-capital-invite.png', type: 'image/png' };
-  ok('a browser with no share sheet does not claim it can attach files',
-     A.svcCanShareFiles(file, {}) === false);
-  ok('nor one that shares but refuses files',
-     A.svcCanShareFiles(file, { share: () => {}, canShare: () => false }) === false,
-     'navigator.share rejects the whole call, so the message would be lost too');
-  ok('nor one that throws when asked',
-     A.svcCanShareFiles(file, { share: () => {}, canShare: () => { throw new Error('nope'); } }) === false);
-  ok('and never with no file to attach',
-     A.svcCanShareFiles(null, { share: () => {}, canShare: () => true }) === false);
-  ok('but a phone that can, does',
-     A.svcCanShareFiles(file, { share: () => {}, canShare: () => true }) === true);
+  /* This is the bug, and the first version of this file asserted the cause of
+     it. navigator.share({ files, text }) looks like it sends both; WhatsApp
+     keeps the file and drops the text, so the client got a picture with no
+     sentence, no code and no link — which is the only part that carries the
+     referral at all. */
+  const core = strip(CORE);
+  ok('nothing is attached as a file',
+     !/navigator\.share\s*\(/.test(core) && !/canShare/.test(core),
+     'WhatsApp keeps the attachment and throws the message away');
 
-  /* As a card, for everybody else — this is the path that needs nothing of
-     the sender's device, so it is the one that must never be missing. */
+  /* Which makes the Open Graph card the only thing putting the image in the
+     conversation — so it is not a nicety any more, it is the mechanism. */
   ok('the invite image is shipped',
      fs.existsSync(path.join(ROOT, 'assets/referral-invite.png')));
   {
@@ -182,23 +181,21 @@ console.log('\nthe picture reaches the recipient either way');
     const w = d.readUInt32BE(16), h = d.readUInt32BE(20);
     ok('and it is square at 1080, which is what the networks crop to',
        w === 1080 && h === 1080, `${w}x${h}`);
-    /* The header survives a truncated file, so the dimensions above would
-       still read 1080x1080 on a picture that renders as a grey box. IEND is
-       the last chunk of a complete PNG. */
     ok('and the file is whole, not a header with nothing behind it',
        d.length > 20000 && d.slice(-8).toString('latin1').includes('IEND'),
-       `${d.length} bytes, tail ${JSON.stringify(d.slice(-8).toString('latin1'))}`);
+       `${d.length} bytes`);
+    /* WhatsApp gives up on a preview image well before this; 88KB is nowhere
+       near it, but a replacement dropped in by hand could be. */
+    ok('and small enough for WhatsApp to fetch as a preview',
+       d.length < 600 * 1024, `${Math.round(d.length / 1024)}KB`);
   }
   ok('the signup page carries og:image',
      /<meta property="og:image" content="([^"]+)"/.test(SIGNUP));
   const ogImage = (SIGNUP.match(/<meta property="og:image" content="([^"]+)"/) || [])[1] || '';
-  ok('pointing at that same file',
+  ok('pointing at that file',
      ogImage.endsWith('/assets/referral-invite.png'), ogImage);
   ok('by absolute URL, because the crawler has no page to resolve against',
      /^https:\/\//.test(ogImage), ogImage);
-  ok('and the share fetches that same path for the attachment',
-     strip(CORE).includes("'/assets/referral-invite.png'"),
-     'two different pictures for the same invite');
   ok('og:url names the link the message actually contains',
      ((SIGNUP.match(/<meta property="og:url" content="([^"]+)"/) || [])[1] || '').endsWith('/register'),
      'the card would describe a different page from the one being opened');
@@ -206,24 +203,74 @@ console.log('\nthe picture reaches the recipient either way');
      /og:image:width" content="1080"/.test(SIGNUP) && /og:image:height" content="1080"/.test(SIGNUP));
 }
 
-console.log('\nnothing here can cost somebody the share');
+console.log('\nevery button hands over the whole message');
 {
   const share = (CORE.match(/async function shareReferral\([\s\S]*?\n\}/) || [''])[0];
-  ok('a missing or unreachable image still sends the message',
-     /const file = await svcReferralImageFile\(\);/.test(share) &&
-     /svcCanShareFiles\(file\)/.test(share) &&
-     /wa\.me/.test(share),
-     share);
-  ok('and the fetch itself never throws',
-     /catch \(_\) \{ return null; \}/.test(
-       (CORE.match(/async function svcReferralImageFile\([\s\S]*?\n\}/) || [''])[0]));
-  ok('dismissing the share sheet is taken as no, not as a failure',
-     /AbortError/.test(share),
-     'closing the sheet would drop them into WhatsApp anyway');
-  ok('and a client with no code yet is told, not given a broken link',
-     /if \(!code\) \{[\s\S]{0,120}return; \}/.test(share),
-     'they would share /register?ref= with nothing after it');
+  const copy  = (CORE.match(/async function copyReferralLink\([\s\S]*?\n\}/) || [''])[0];
+
+  ok('WhatsApp gets the message, not just the link',
+     /wa\.me\/\?text=\$\{encodeURIComponent\(msg\)\}/.test(share) &&
+     /const msg = svcReferralMessage\(/.test(share), share);
+  ok('copying gets the message too',
+     /svcCopyToClipboard\(msg\)/.test(share),
+     'a pasted URL arrives as a card with no sentence and no code to type in');
+  ok('and so does the small button beside the link',
+     /svcCopyToClipboard\(svcReferralMessage\(/.test(copy), copy);
+  ok('neither copies the bare URL any more',
+     !/writeText\(link\)/.test(CORE) && !/getElementById\('referralLink'\)\.textContent/.test(copy),
+     'that is the paste the client reported');
+
+  /* Both buttons in both shells call into the above, so a shell that wired a
+     button to something else would not be covered by any of it. */
+  for (const shell of ['portal/index.html', 'mobile/src/index.html']) {
+    const html = read(shell);
+    ok(`${shell} wires WhatsApp to the shared function`,
+       /onclick="shareReferral\('whatsapp'\)"/.test(html));
+    ok(`${shell} wires copy to the shared function`,
+       /onclick="copyReferralLink\(\)"/.test(html));
+    ok(`${shell} does not still offer a bare-link copy`,
+       !/Copy Link<\/button>/.test(html),
+       'the label promised a link and that is what it gave');
+  }
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+console.log('\ncopying works where the modern clipboard does not');
+{
+  /* navigator.clipboard is undefined outside a secure context and in older
+     WebViews — not failing, absent — so without a fallback the button did
+     nothing at all and said nothing about it. */
+  const seen = [];
+  const doc = () => ({
+    createElement: () => ({ setAttribute() {}, select() {}, style: {}, set value(v) { seen.push(v); } }),
+    body: { appendChild() {}, removeChild() {} },
+    execCommand: () => true,
+  });
+  const run = async (nav, d) => A.svcCopyToClipboard('the whole invite', nav, d);
+
+  (async () => {
+    let written = null;
+    ok('the modern API is used when it is there',
+       (await run({ clipboard: { writeText: async t => { written = t; } } }, doc())) === true &&
+       written === 'the whole invite');
+
+    seen.length = 0;
+    ok('and the old one when it is not',
+       (await run({}, doc())) === true && seen[0] === 'the whole invite',
+       JSON.stringify(seen));
+
+    seen.length = 0;
+    ok('a rejected write falls back rather than failing silently',
+       (await run({ clipboard: { writeText: async () => { throw new Error('denied'); } } }, doc())) === true &&
+       seen[0] === 'the whole invite');
+
+    ok('and when neither works it says so rather than claiming success',
+       (await run({}, { createElement: doc().createElement, body: doc().body, execCommand: () => false })) === false);
+    ok('with no document at all, it does not throw',
+       (await run({}, null)) === false);
+
+    console.log(`\n${pass} passed, ${fail} failed`);
+    process.exit(fail ? 1 : 0);
+  })();
+}
+
+
