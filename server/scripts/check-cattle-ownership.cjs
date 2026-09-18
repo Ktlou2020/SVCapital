@@ -258,5 +258,31 @@ console.log('\nthe money moves once, and in the right direction');
      /payout_due_at/.test(route) && /CO\.payoutDueFor\(soldAt\)/.test(route));
 }
 
+console.log('\nthe test herd is only ever seeded where it was asked for');
+{
+  const setup = read('server/db/setup.js');
+  const stepSrc = (setup.match(/await step\("18\. Seed cattle for testing[\s\S]*?\n    \}\);/) || [''])[0];
+  ok('the seed step exists', stepSrc.length > 0);
+  /* The same shape as the agreements switch, for the same reason: a seed that
+     decides for itself whether it is in a test environment eventually decides
+     wrongly, and the wrong answer is a fake herd in production. */
+  ok('it returns unless the variable is the literal "true"',
+     /String\(process\.env\.SEED_CATTLE_DEMO \|\| ''\)\.toLowerCase\(\) !== 'true'\) return;/.test(stepSrc),
+     'a truthy-looking value would put test cattle in front of real clients');
+  ok('and it is the first thing the step does',
+     stepSrc.indexOf('SEED_CATTLE_DEMO') < stepSrc.indexOf('INSERT INTO'),
+     'a row would be written before the guard was consulted');
+  ok('the animals are tagged so they can be told apart and removed',
+     /SVC-TEST-/.test(stepSrc), 'test animals indistinguishable from a real herd');
+  ok('and it can be run twice without multiplying the herd',
+     /ON CONFLICT \(id\) DO NOTHING/.test(stepSrc) &&
+     (stepSrc.match(/ON CONFLICT \(id\) DO NOTHING/g) || []).length >= 2,
+     'every redeploy would add another twelve animals and reopen the intake');
+  ok('nothing else in the repository sets that variable',
+     !/SEED_CATTLE_DEMO\s*[:=]\s*['"]true/.test(
+       read('server/db/setup.js') + read('server/index.js')),
+     'it has to be an environment decision, not a committed one');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

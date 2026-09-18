@@ -3790,6 +3790,53 @@ async function autoSetup() {
       console.log(`\u2705 Seeded ${ART.length} opening insight article(s).`);
     });
 
+    await step("18. Seed cattle for testing the ownership product", async () => {
+      /* Test data, and only where somebody asked for it: this runs when
+         SEED_CATTLE_DEMO is the literal string "true", which is set on the
+         Future Developments environment and nowhere else. The same shape as
+         the agreements switch, and for the same reason — a seed that decides
+         for itself whether it is in a test environment eventually decides
+         wrongly in production.
+
+         The animals it writes are tagged SVC-TEST-#### so they can be told
+         apart from a real herd at a glance and removed in one statement:
+
+           DELETE FROM cattle_ownerships WHERE tag_number LIKE 'SVC-TEST-%';
+           DELETE FROM cattle_animals    WHERE tag_number LIKE 'SVC-TEST-%';
+           DELETE FROM cattle_intakes    WHERE id = 'INTK-TEST-2026-09';
+
+         Idempotent: the intake is inserted once and the animals skip on
+         conflict, so a redeploy does not multiply the herd or reopen an
+         intake somebody deliberately closed. */
+      if (String(process.env.SEED_CATTLE_DEMO || '').toLowerCase() !== 'true') return;
+
+      const HEAD = 12;
+      let added = 0;
+      for (let i = 1; i <= HEAD; i++) {
+        const tag = `SVC-TEST-${String(1000 + i)}`;
+        const { rowCount } = await pool.query(
+          `INSERT INTO cattle_animals (id, tag_number, status, gender, breed, entry_mass, notes)
+           VALUES ($1, $2, 'active', $3, 'Bonsmara cross', $4, 'Test animal for the ownership product')
+           ON CONFLICT (id) DO NOTHING`,
+          [`AN-${tag}`, tag, i % 3 === 0 ? 'heifer' : 'steer', 232 + (i * 3)]);
+        added += rowCount;
+      }
+
+      const { rowCount: intakeAdded } = await pool.query(
+        `INSERT INTO cattle_intakes
+           (id, name, feedlot, status, purchase_price, feed_cost, feed_days,
+            sale_deduction, head_available, opens_at, closes_at, placed_at, notes)
+         VALUES ('INTK-TEST-2026-09', 'Feedlot Intake — September (test)',
+                 'Beefcor, Bronkhorstspruit', 'open', 12000, 4800, 120, 1450, $1,
+                 CURRENT_DATE, CURRENT_DATE + 30, CURRENT_DATE,
+                 'Test intake. Prices are illustrative.')
+         ON CONFLICT (id) DO NOTHING`, [HEAD]);
+
+      console.log(`\u2705 Cattle test data: ${added} animal(s) added, ` +
+                  `intake ${intakeAdded ? 'created' : 'already present'} ` +
+                  `(R12 000 + R4 800 feed + 1% = R16 968 per head, ${HEAD} available).`);
+    });
+
     await step("16. Give every investor a nationality", async () => {
       /* The column above defaults every row to South African, which is right
          for the SA path — that form never asks the question, because a 13-digit
