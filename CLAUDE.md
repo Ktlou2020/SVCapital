@@ -3,6 +3,22 @@
 ## Branch Strategy
 Develop on `staging`. Commit and push all changes to `staging`. Merge `staging` → `main` only when ready to deploy to production.
 
+Three branches, one Railway environment each, in the SV Capital project:
+
+| Branch                | Railway environment   | Deploys to                                     |
+| --------------------- | --------------------- | ---------------------------------------------- |
+| `main`                | production            | platform.svcapital.co.za — real clients, real money |
+| `staging`             | staging               | svcapital-staging.up.railway.app                |
+| `future-developments` | Future Developments   | svcapital-future-developments.up.railway.app    |
+
+Each environment has its own Postgres, so nothing on a branch can reach
+another's data. `future-developments` is for work that is not ready to sit in
+the staging queue; it branched from `staging` and is merged back into
+`staging`, never straight into `main`.
+
+Push to the branch the work belongs on. Do not push to a branch the user did
+not name.
+
 ## Pull Requests
 Do not create pull requests. Push commits directly to `staging` during development.
 
