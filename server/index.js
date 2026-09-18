@@ -68,11 +68,32 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '')
 // These must never be dropped when ALLOWED_ORIGINS overrides the web origins.
 const NATIVE_ORIGINS  = ['capacitor://localhost', 'ionic://localhost', 'http://localhost', 'https://localhost'];
 const STAGING_ORIGINS = ['https://svcapital-staging.up.railway.app'];
-const DEFAULT_PROD_ORIGINS = ['https://platform.svcapital.co.za', 'https://svcapital.co.za', 'https://www.svcapital.co.za', ...STAGING_ORIGINS, ...NATIVE_ORIGINS];
-const DEFAULT_DEV_ORIGINS  = ['http://localhost:3000', 'http://localhost:8080', 'http://localhost:5173', 'http://127.0.0.1:3000', 'http://127.0.0.1:8080', ...NATIVE_ORIGINS];
-// Merge env-var list with native + staging origins so ALLOWED_ORIGINS only needs to list production web domains.
+
+/* The address THIS instance is actually served from.
+ *
+ * Every environment was expected to appear in a hand-kept list, and the list
+ * only ever had staging in it. So a new environment served itself a sign-in
+ * page and then refused the sign-in — "CORS: origin
+ * https://svcapital-future-developments.up.railway.app not allowed" — with
+ * the browser naming the very host the page had come from. Production's own
+ * railway.app address was refused the same way, for the same reason.
+ *
+ * Railway injects the public domain, so an instance can simply allow itself
+ * and nobody has to remember. A list of every environment's hostname is a
+ * list that is wrong the day the next one is created. */
+const SELF_ORIGINS = [process.env.RAILWAY_PUBLIC_DOMAIN, process.env.RAILWAY_STATIC_URL]
+  .filter(Boolean)
+  .map(h => String(h).trim().replace(/\/+$/, ''))
+  .map(h => (/^https?:\/\//.test(h) ? h : `https://${h}`));
+
+const DEFAULT_PROD_ORIGINS = ['https://platform.svcapital.co.za', 'https://svcapital.co.za', 'https://www.svcapital.co.za', ...STAGING_ORIGINS, ...SELF_ORIGINS, ...NATIVE_ORIGINS];
+const DEFAULT_DEV_ORIGINS  = ['http://localhost:3000', 'http://localhost:8080', 'http://localhost:5173', 'http://127.0.0.1:3000', 'http://127.0.0.1:8080', ...SELF_ORIGINS, ...NATIVE_ORIGINS];
+/* Merge the env-var list with the native, staging and self origins, so
+   ALLOWED_ORIGINS only ever needs to list the public web domains — and so an
+   environment that inherited somebody else's ALLOWED_ORIGINS still answers
+   its own. */
 const EFFECTIVE_ORIGINS = ALLOWED_ORIGINS.length > 0
-  ? [...new Set([...ALLOWED_ORIGINS, ...NATIVE_ORIGINS, ...STAGING_ORIGINS])]
+  ? [...new Set([...ALLOWED_ORIGINS, ...NATIVE_ORIGINS, ...STAGING_ORIGINS, ...SELF_ORIGINS])]
   : (IS_PROD ? DEFAULT_PROD_ORIGINS : DEFAULT_DEV_ORIGINS);
 if (IS_PROD && ALLOWED_ORIGINS.length === 0) {
   console.info(`[cors] ALLOWED_ORIGINS env var not set — defaulting to: ${DEFAULT_PROD_ORIGINS.join(', ')}. Set ALLOWED_ORIGINS to override.`);
@@ -83,6 +104,9 @@ app.use(cors({
     // Same-origin requests (no Origin header) are always allowed
     if (!origin) return cb(null, true);
     if (EFFECTIVE_ORIGINS.includes(origin)) return cb(null, true);
+      /* Named, because the message reaches a browser console and the first
+       question is always "allowed where?". */
+    console.warn(`[cors] refused ${origin} — allowed: ${EFFECTIVE_ORIGINS.join(', ')}`);
     cb(new Error(`CORS: origin ${origin} not allowed`));
   },
   credentials: true,
