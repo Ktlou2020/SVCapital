@@ -1165,7 +1165,8 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
            under the instruction already on file; neither has a person at a
            screen to sign anything, and blocking them would stop maturity
            processing outright. */
-        if (req.user.role === 'investor' && !isReinvestment) {
+        if (req.user.role === 'investor' && !isReinvestment &&
+            require('../services/agreements').agreementsEnabled()) {
           const _reqCents = Math.round(required * 100);
           const { rows: _agr } = await _invClient.query(
             `UPDATE investment_agreements
