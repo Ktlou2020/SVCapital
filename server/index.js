@@ -228,6 +228,7 @@ app.use('/api/factsheets',   require('./routes/factsheets'));
 app.use('/api/products',     require('./routes/products'));
 app.use('/api/opsconsole',  require('./routes/opsconsole'));
 app.use('/api/cattle',      require('./routes/cattle'));
+app.use('/api/cattle-ownership', require('./routes/cattleOwnership'));
 app.use('/api/fund',        require('./routes/fundRuns'));
 app.use('/api/pe',             require('./routes/pe-extract'));
 app.use('/api/pe',             require('./routes/pe-insights'));
@@ -489,6 +490,12 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
      IDLE_NUDGE_ENABLED=true. */
   const { startIdleWalletCron } = require('./jobs/idleWalletCron');
   startIdleWalletCron();
+
+  /* The certificate promises proceeds within seven working days of the sale.
+     A promise that depends on somebody remembering is kept on the days they
+     are at their desk. */
+  const { startCattlePayoutCron } = require('./jobs/cattlePayoutCron');
+  startCattlePayoutCron();
 
   // Archive dormant investors (no investments after 6 months) — daily 00:00 UTC
   const { startArchiveCron } = require('./jobs/archiveCron');

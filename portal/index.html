@@ -85,6 +85,9 @@
       <button class="nav-item" data-view="marketplace" onclick="navigate('marketplace', this)">
         <i class="fa-solid fa-box-open"></i> Invest
       </button>
+      <button class="nav-item" data-view="mycattle" onclick="navigate('mycattle', this)">
+        <i class="fa-solid fa-cow"></i> My Cattle
+      </button>
       <button class="nav-item" data-view="wallet" onclick="navigate('wallet', this)">
         <i class="fa-solid fa-wallet"></i> Wallet
       </button>
@@ -1057,6 +1060,30 @@
       <!-- ══════════════════════════════════
            VIEW: REFER & EARN
       ══════════════════════════════════ -->
+      <div class="view" id="view-mycattle">
+        <div class="panel mb-16">
+          <div class="panel__header"><span class="panel__title">Own a beef animal</span></div>
+          <div class="panel__body">
+            <p style="font-size:0.85rem;color:#374151;line-height:1.7;margin:0 0 6px">
+              You buy one animal, by tag number. The purchase price and the feed for the whole
+              standing period are paid up front, so there is nothing further to pay. Mortality
+              cover is included. When your animal is sold you receive what it fetched, less the
+              cost of getting it to market, within seven working days.
+            </p>
+            <p style="font-size:0.78rem;color:#6b7280;line-height:1.6;margin:0">
+              There is no target return on this product. A heavier animal in a stronger market
+              returns more; a lighter animal in a weaker market returns less, and may return less
+              than you paid.
+            </p>
+          </div>
+        </div>
+        <div id="cattleOffers"></div>
+        <div class="panel">
+          <div class="panel__header"><span class="panel__title">My animals</span></div>
+          <div class="panel__body" id="myCattleBody"></div>
+        </div>
+      </div>
+
       <div class="view" id="view-referral">
         <div class="referral-hero mb-20">
           <div class="referral-hero__icon"><i class="fa-solid fa-gift"></i></div>
@@ -3040,7 +3067,7 @@ if (window.Capacitor) {
 <script src="/js/native.js"></script>
 <script src="../js/portal-core.js?v=39"></script>
 <script src="../js/investor-documents.js?v=7"></script>
-<script src="js/portal.js?v=128"></script>
+<script src="js/portal.js?v=129"></script>
 <!-- sv-intelligence.js hidden -->
 <script>
 // Service worker: web browsers only (not Capacitor). Handles web push notifications.

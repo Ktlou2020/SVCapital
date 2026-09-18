@@ -277,6 +277,81 @@ CREATE TABLE IF NOT EXISTS cattle_animals (
 );
 CREATE INDEX IF NOT EXISTS cattle_animals_cycle_idx ON cattle_animals(cycle_id);
 
+/* ─── Own a beef animal ───────────────────────────────────────────────
+   A client buys ONE animal, by tag, and gets what it actually sells for.
+   cattle_animals above is the fund's own herd book; these two tables are the
+   client-facing product beside it, and an animal is linked to an owner rather
+   than duplicated into a second herd. */
+CREATE TABLE IF NOT EXISTS cattle_intakes (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  feedlot TEXT,
+  status TEXT DEFAULT 'draft',              -- draft | open | closed | placed | settled
+  purchase_price NUMERIC(18,2) NOT NULL,    -- per head, fixed for the intake
+  feed_cost      NUMERIC(18,2) NOT NULL,    -- per head, whole standing period, up front
+  feed_days      INT NOT NULL DEFAULT 120,
+  sale_deduction NUMERIC(18,2) NOT NULL DEFAULT 0,  -- per head, taken off the sale value
+  head_available INT NOT NULL DEFAULT 0,
+  opens_at DATE, closes_at DATE, placed_at DATE,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS cattle_intakes_status_idx ON cattle_intakes(status);
+
+/* Numbers that must never be reused.
+
+   The first version read the highest invoice number back out of
+   cattle_ownerships. That is not a sequence, it is a high-water mark: delete
+   or archive a row and the next purchase reissues a number that has already
+   been on a tax invoice, and the ledger reference built from it collides with
+   the one already there. A counter that only goes up cannot do that, whatever
+   happens to the rows. */
+CREATE TABLE IF NOT EXISTS document_sequences (
+  key TEXT PRIMARY KEY,
+  next_value BIGINT NOT NULL DEFAULT 1,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS cattle_ownerships (
+  id TEXT PRIMARY KEY,
+  investor_id TEXT NOT NULL REFERENCES investors(id) ON DELETE RESTRICT,
+  intake_id   TEXT NOT NULL REFERENCES cattle_intakes(id) ON DELETE RESTRICT,
+  animal_id   TEXT REFERENCES cattle_animals(id) ON DELETE SET NULL,
+  tag_number  TEXT,
+  status TEXT NOT NULL DEFAULT 'owned',     -- owned | sold | settled | mortality | refunded
+  /* Frozen at purchase. The intake's prices can be corrected afterwards
+     without rewriting what somebody was actually charged. */
+  purchase_price NUMERIC(18,2) NOT NULL,
+  feed_cost      NUMERIC(18,2) NOT NULL,
+  platform_fee   NUMERIC(18,2) NOT NULL,
+  total_paid     NUMERIC(18,2) NOT NULL,
+  feed_days      INT NOT NULL DEFAULT 120,
+  invoice_no     TEXT UNIQUE,
+  certificate_no TEXT UNIQUE,
+  invoice_html   TEXT,
+  certificate_html TEXT,
+  purchased_at TIMESTAMPTZ DEFAULT NOW(),
+  expected_sale_date DATE,
+  sale_value     NUMERIC(18,2),
+  sale_deduction NUMERIC(18,2),
+  proceeds       NUMERIC(18,2),
+  sold_at DATE,
+  payout_due_at DATE,
+  paid_at TIMESTAMPTZ,
+  payout_reference TEXT,
+  mortality_at DATE, mortality_note TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS cattle_ownerships_investor_idx ON cattle_ownerships(investor_id);
+CREATE INDEX IF NOT EXISTS cattle_ownerships_status_idx   ON cattle_ownerships(status);
+CREATE INDEX IF NOT EXISTS cattle_ownerships_payout_idx   ON cattle_ownerships(payout_due_at)
+  WHERE paid_at IS NULL;
+/* One animal, one owner. The whole product is that a tag belongs to a person;
+   without this two clients can be sold the same beast and both certificates
+   are true documents saying incompatible things. */
+CREATE UNIQUE INDEX IF NOT EXISTS cattle_ownerships_animal_uniq
+  ON cattle_ownerships(animal_id) WHERE animal_id IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS employees (
   id TEXT PRIMARY KEY, first_name TEXT NOT NULL, last_name TEXT NOT NULL,
   email TEXT UNIQUE NOT NULL, phone TEXT,

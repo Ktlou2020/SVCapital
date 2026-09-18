@@ -1420,7 +1420,7 @@ function navigate(view, btnEl) {
     support: 'Support', referral: 'Refer & Earn', statement: 'Account Statement',
     quests: 'Earn Rewards', learn: 'Learning Hub', subaccounts: 'My Accounts',
     documents: 'Document Vault', policies: 'Platform Policies',
-    gifts: 'Send a Gift',
+    gifts: 'Send a Gift', mycattle: 'My Cattle',
   };
   document.getElementById('topbarTitle').textContent = titles[view] || view;
 
@@ -1440,6 +1440,7 @@ function navigate(view, btnEl) {
     documents: loadDocuments,
     policies: renderPoliciesView,
     gifts: loadGiftsView,
+    mycattle: loadMyCattle,
     profile: () => { renderRiskProfile(); _initPushNotifToggle(); _refreshInvestorThenKyc(); },
   };
   if (loaders[view]) loaders[view]();
@@ -6414,6 +6415,142 @@ async function shareReferral(method) {
     SVC.track('svc_referral_shared', { referral_code: code, channel: 'copy' });
   } else {
     Toast.error('Copy failed — please copy the link manually');
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   My Cattle
+
+   Every other holding on this platform is a number. This one is an animal
+   with a tag, so the tag is what the card leads with — a client checking on
+   their cow is looking for the cow, not for a line item.
+
+   What is deliberately NOT shown: a projected value, a running return, a
+   percentage. There is no target on this product and nothing here should
+   imply one. Until the animal is sold the only honest figures are what was
+   paid and when it is expected to go, and those are the two that are shown.
+   ═══════════════════════════════════════════════════════════════════ */
+/* A function, not a top-level const: portal-core declares no load-time state
+   of its own — it is loaded beside two shells and a const here is a
+   redeclaration waiting to happen. */
+function cowStatus(status) {
+  return ({
+    owned:    { label: 'On feed',   colour: '#2563eb', note: 'In the feedlot' },
+    sold:     { label: 'Sold',      colour: '#b45309', note: 'Proceeds on the way' },
+    settled:  { label: 'Paid out',  colour: '#15803d', note: 'Proceeds in your wallet' },
+    refunded: { label: 'Refunded',  colour: '#6b7280', note: 'Insured — paid back in full' },
+  })[status] || { label: status || 'Unknown', colour: '#6b7280', note: '' };
+}
+
+async function loadMyCattle() {
+  const wrap = document.getElementById('myCattleBody');
+  const offers = document.getElementById('cattleOffers');
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="text-center text-muted" style="padding:20px">Loading…</div>';
+
+  let mine = [], intakes = [];
+  try { mine    = (await API._fetch('GET', 'cattle-ownership/mine'))?.data || []; } catch (e) { mine = []; }
+  try { intakes = (await API._fetch('GET', 'cattle-ownership/intakes'))?.data || []; } catch (e) { intakes = []; }
+
+  if (offers) {
+    offers.innerHTML = !intakes.length
+      ? `<div class="text-center text-muted" style="padding:20px">No intake is open right now. We will let you know when the next one opens.</div>`
+      : intakes.map(i => {
+          const p = i.price || {};
+          const left = Number(i.head_remaining) || 0;
+          return `
+      <div class="panel" style="margin-bottom:12px">
+        <div class="panel__body">
+          <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start">
+            <div>
+              <div style="font-weight:700">${_esc(i.name)}</div>
+              <div style="font-size:0.8rem;color:#6b7280">${_esc(i.feedlot || 'Feedlot to be confirmed')}
+                &middot; about ${Number(i.feed_days) || 120} days on feed</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-weight:800;font-size:1.05rem">${Utils.rand(p.total)}</div>
+              <div style="font-size:0.72rem;color:#6b7280">per animal, all in</div>
+            </div>
+          </div>
+          <div style="margin-top:12px;font-size:0.82rem;line-height:1.7;color:#374151">
+            Animal ${Utils.rand(p.purchase)} &middot; feed for the whole period ${Utils.rand(p.feed)}
+            &middot; platform fee ${Utils.rand(p.fee)}<br>
+            Mortality cover included. Nothing further to pay.
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap">
+            <button class="btn btn--primary" ${left ? '' : 'disabled'}
+                    onclick="buyOneCow('${_esc(i.id)}','${_esc(i.name)}',${Number(p.total) || 0})">
+              <i class="fa-solid fa-cow"></i> ${left ? 'Buy one animal' : 'Fully taken'}
+            </button>
+            <span style="font-size:0.78rem;color:#6b7280">${left} of ${Number(i.head_available) || 0} left</span>
+          </div>
+        </div>
+      </div>`;
+        }).join('');
+  }
+
+  if (!mine.length) {
+    wrap.innerHTML = `<div class="text-center text-muted" style="padding:20px">
+      You do not own any cattle yet.</div>`;
+    return;
+  }
+
+  wrap.innerHTML = mine.map(c => {
+    const st = cowStatus(c.status);
+    /* Proceeds only once there are proceeds. A zero standing in for "not sold
+       yet" reads as an animal that sold for nothing. */
+    const outcome = c.status === 'settled' || c.status === 'sold'
+      ? `<tr><th>Sold for</th><td>${Utils.rand(c.sale_value)}</td></tr>
+         <tr><th>Costs to market</th><td>${Utils.rand(c.sale_deduction)}</td></tr>
+         <tr><th>Paid to you</th><td><b>${Utils.rand(c.proceeds)}</b>${
+           c.paid_at ? '' : ` &middot; due ${_esc(String(c.payout_due_at || '').slice(0, 10))}`}</td></tr>`
+      : c.status === 'refunded'
+        ? `<tr><th>Refunded</th><td><b>${Utils.rand(c.proceeds)}</b> &middot; insured in full</td></tr>`
+        : `<tr><th>Expected sale</th><td>${_esc(String(c.expected_sale_date || '').slice(0, 10) || '—')}</td></tr>`;
+    return `
+    <div class="panel" style="margin-bottom:12px">
+      <div class="panel__body">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap">
+          <div style="font-family:ui-monospace,monospace;font-size:1.25rem;font-weight:700;letter-spacing:.06em">
+            ${_esc(c.tag_number || '—')}
+          </div>
+          <span style="background:${st.colour}1a;color:${st.colour};font-size:0.72rem;font-weight:700;
+                       padding:4px 12px;border-radius:999px">${_esc(st.label)}</span>
+        </div>
+        <div style="font-size:0.78rem;color:#6b7280;margin-top:2px">${_esc(c.intake_name || '')}
+          ${c.feedlot ? '&middot; ' + _esc(c.feedlot) : ''} &middot; ${_esc(st.note)}</div>
+        <table class="table" style="margin-top:12px">
+          <tr><th style="width:44%">You paid</th><td>${Utils.rand(c.total_paid)}</td></tr>
+          ${outcome}
+        </table>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <a class="btn btn--secondary btn--sm" target="_blank"
+             href="${(window.__SVC_API_BASE__ || '/api/')}cattle-ownership/${_esc(c.id)}/certificate">
+            <i class="fa-solid fa-certificate"></i> Certificate</a>
+          <a class="btn btn--secondary btn--sm" target="_blank"
+             href="${(window.__SVC_API_BASE__ || '/api/')}cattle-ownership/${_esc(c.id)}/invoice">
+            <i class="fa-solid fa-file-invoice"></i> Invoice</a>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function buyOneCow(intakeId, intakeName, total) {
+  /* Confirmed against the figure on screen, and the figure is repeated in the
+     question: this is the whole price of an animal leaving a wallet in one
+     go, and it is not a small number. */
+  if (!confirm(`Buy one animal from ${intakeName}?\n\n${Utils.rand(total)} will leave your wallet now — `
+             + `the animal, its feed for the whole period, and the 1% platform fee.\n\n`
+             + `You will be issued an invoice and a certificate of ownership with your animal's tag number.`)) return;
+  try {
+    const r = await API._fetch('POST', 'cattle-ownership/buy', { intake_id: intakeId });
+    Toast.success(`Animal ${r.tag_number} is yours. Certificate ${r.certificate_no} issued.`);
+    SVC.track('svc_cattle_bought', { intake_id: intakeId, tag: r.tag_number });
+    await loadPortalData();
+    loadMyCattle();
+  } catch (e) {
+    Toast.error(e.message || 'Could not complete the purchase.');
   }
 }
 
