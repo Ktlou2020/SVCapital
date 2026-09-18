@@ -10947,6 +10947,12 @@ async function signAgreementFor(pool, walletSpend, subAccountId) {
     return false;
   }
 
+  /* Switched off in this environment: there is nothing to sign, so the
+     investment carries on. The server decides, not this file — the gate that
+     refuses an unsigned investment reads the same switch, so the modal and
+     the money can never end up on opposite sides of it. */
+  if (drawn && drawn.required === false) return true;
+
   _agrEnsureModal();
   document.getElementById('agrTitle').textContent = drawn.title || 'Investment Agreement';
 

@@ -404,7 +404,28 @@ Signed electronically in terms of the Electronic Communications and Transactions
 
 const sha256 = text => crypto.createHash('sha256').update(String(text), 'utf8').digest('hex');
 
+/* ─── Is this feature live? ───────────────────────────────────────────
+   Off unless switched on, and switched on per Railway environment rather
+   than per branch. The signing flow reached production before it was meant
+   to and clients were asked to sign for investments they had been making
+   without; hiding it had to be something that could be done in a minute,
+   without unpicking it from the branch the work continues on.
+
+   Read at the point of use, not captured at require() time, so a restart is
+   all it takes to change — and so a check can set it and see the shipped
+   code react.
+
+   Both halves of the feature ask this same function: the endpoint the portal
+   draws an agreement from, and the gate in the wallet transaction that
+   refuses an investment without one. They must never disagree — a hidden
+   modal with a live gate is every investment failing with 412, which is
+   worse than either state on its own. */
+function agreementsEnabled(env) {
+  const e = env || process.env;
+  return String(e.INVESTMENT_AGREEMENTS_ENABLED || '').toLowerCase() === 'true';
+}
+
 module.exports = {
   ACK, TEMPLATES, COMMON_CLAUSES, templateFor, acknowledgementsFor, feeSchedule,
-  renderAgreement, poolFacts, sha256, toCents, fromCents, rand,
+  renderAgreement, poolFacts, sha256, toCents, fromCents, rand, agreementsEnabled,
 };

@@ -39,6 +39,14 @@ const AG    = require(path.join(ROOT, 'server', 'services', 'agreements.js'));
    different secret and every call comes back "invalid or expired token". */
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'check-agreement-signing-secret';
 
+/* The feature is off unless switched on, so this file switches it on for
+   itself. Everything below is about what the signing flow DOES when it is
+   live; whether it is live in a given environment is check-agreement-switch's
+   question, and it is answered there rather than twice. Set explicitly rather
+   than left to inherit, so this passes the same way on a machine that happens
+   to have it exported and one that does not. */
+process.env.INVESTMENT_AGREEMENTS_ENABLED = 'true';
+
 /* The shipped router, driven directly. Assertions about refusals have to be
    about what the route DOES: a regex proving the words "Please confirm every
    statement" appear in the file still matches after the condition that

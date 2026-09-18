@@ -51,6 +51,12 @@ async function nextAgreementNo(client) {
 
 /* ─── POST /draw ─────────────────────────────────────────────────────── */
 router.post('/draw', requireAuth, async (req, res) => {
+  /* The one answer both halves of the feature take their cue from. 200 with
+     required:false rather than a 404: the portal has to be able to tell "you
+     do not need to sign anything" apart from "something went wrong", and only
+     the first of those should let an investment carry on. */
+  if (!AG.agreementsEnabled()) return res.json({ required: false });
+
   const investorId = investorOf(req);
   if (!investorId) return res.status(403).json({ error: 'Only investor accounts can sign investment agreements.' });
 
