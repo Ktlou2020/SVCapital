@@ -3832,9 +3832,59 @@ async function autoSetup() {
                  'Test intake. Prices are illustrative.')
          ON CONFLICT (id) DO NOTHING`, [HEAD]);
 
+      /* A client to buy them with. The animals and the intake are no use
+         without one, and a fresh environment has no FICA-approved investor
+         with a funded wallet — which is every gate the purchase checks.
+
+         The password is NOT in this file. It comes from
+         SEED_CATTLE_DEMO_PASSWORD, for the same reason the COO's does: a
+         credential committed here is a credential in every clone, every fork
+         and every backup of this repository, and it stays there after
+         somebody changes it. Without the variable the investor is still
+         created — an admin can set a password for it — and the log says so
+         rather than inventing one. */
+      const demoEmail = 'testclient@svcapital.co.za';
+      const TOP_UP_TO = 100000;
+      const { rows: [existing] } = await pool.query(
+        'SELECT id, wallet_balance FROM investors WHERE LOWER(email) = $1', [demoEmail]);
+
+      if (!existing) {
+        await pool.query(
+          `INSERT INTO investors
+             (id, first_name, last_name, email, phone, status, fica_status, kyc_status,
+              wallet_balance, nationality, date_joined, referral_code)
+           VALUES ('INV-TESTCLIENT', 'Test', 'Client', $1, '+27 79 111 5476',
+                   'active', 'approved', 'approved', $2, 'South African', NOW(), 'SVCTEST01')
+           ON CONFLICT (id) DO NOTHING`, [demoEmail, TOP_UP_TO]);
+      } else if (Number(existing.wallet_balance) < 16968) {
+        /* Topped back up rather than left flat: the only purpose of this
+           account is to keep buying animals, and a tester who runs it dry has
+           to go and find an admin console. Logged, so money appearing is never
+           a mystery. */
+        await pool.query(
+          'UPDATE investors SET wallet_balance = $1, updated_at = NOW() WHERE id = $2',
+          [TOP_UP_TO, existing.id]);
+        console.log(`\uD83D\uDCB0 Test client wallet topped back up to R${TOP_UP_TO.toLocaleString('en-ZA')}.`);
+      }
+
+      const demoPassword = process.env.SEED_CATTLE_DEMO_PASSWORD;
+      if (demoPassword) {
+        const hash = await bcrypt.hash(demoPassword, 12);
+        await pool.query(
+          `INSERT INTO users (email, password_hash, role, first_name, last_name, investor_id)
+           VALUES ($1, $2, 'investor', 'Test', 'Client', 'INV-TESTCLIENT')
+           ON CONFLICT (email) DO UPDATE
+             SET password_hash = EXCLUDED.password_hash,
+                 investor_id   = COALESCE(users.investor_id, EXCLUDED.investor_id),
+                 updated_at    = NOW()`, [demoEmail, hash]);
+      }
+
       console.log(`\u2705 Cattle test data: ${added} animal(s) added, ` +
                   `intake ${intakeAdded ? 'created' : 'already present'} ` +
-                  `(R12 000 + R4 800 feed + 1% = R16 968 per head, ${HEAD} available).`);
+                  `(R12 000 + R4 800 feed + 1% = R16 968 per head, ${HEAD} available). ` +
+                  `Client ${demoEmail}` +
+                  (demoPassword ? ' — password set from SEED_CATTLE_DEMO_PASSWORD.'
+                                : ' — NO password set; set SEED_CATTLE_DEMO_PASSWORD to sign in as them.'));
     });
 
     await step("16. Give every investor a nationality", async () => {

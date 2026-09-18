@@ -282,6 +282,30 @@ console.log('\nthe test herd is only ever seeded where it was asked for');
      !/SEED_CATTLE_DEMO\s*[:=]\s*['"]true/.test(
        read('server/db/setup.js') + read('server/index.js')),
      'it has to be an environment decision, not a committed one');
+
+  /* The test client that buys them. Every gate the purchase checks has to be
+     satisfied or the seed is decorative: FICA approved, active, funded. */
+  ok('a client is seeded to buy with',
+     /INSERT INTO investors[\s\S]{0,400}'INV-TESTCLIENT'/.test(stepSrc));
+  ok('past FICA, or the purchase refuses them',
+     /'active', 'approved', 'approved'/.test(stepSrc));
+  ok('and with enough in the wallet for an animal',
+     /const TOP_UP_TO = 100000;/.test(stepSrc) && /16968/.test(stepSrc));
+
+  /* The COO's PIN was published in this repository once already. */
+  ok('the password is read from the environment, not written here',
+     /process\.env\.SEED_CATTLE_DEMO_PASSWORD/.test(stepSrc),
+     'a credential committed here is in every clone, fork and backup of it');
+  ok('and no literal password is anywhere near it',
+     !/password\s*[:=]\s*['"][^'"]{6,}['"]/i.test(stepSrc), stepSrc.slice(0, 200));
+  ok('without one the client is still created, and the log says so',
+     /if \(demoPassword\) \{/.test(stepSrc) && /NO password set/.test(stepSrc),
+     'an unusable account with no explanation of why');
+  ok('the wallet is only topped up when it is too low to buy anything',
+     /Number\(existing\.wallet_balance\) < 16968/.test(stepSrc),
+     'a redeploy would wipe out whatever the tester had spent or earned');
+  ok('and a top-up is logged rather than silent',
+     /topped back up/.test(stepSrc), 'money appearing would be a mystery');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
