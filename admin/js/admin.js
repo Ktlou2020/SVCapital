@@ -4476,12 +4476,13 @@ async function _submitRejection() {
           if (inv?.email) {
             const DOC_LABELS = { id_document: 'Identity Document', proof_of_address: 'Proof of Address', proof_of_bank: 'Proof of Bank Account' };
             const docLabel = DOC_LABELS[doc.doc_type] || 'KYC document';
-            const firstName = inv.first_name || 'Investor';
             const rejectionReason = reason || 'Please re-upload a clearer, current document that meets our requirements.';
             await API._fetch('POST', 'admin/send-investor-email', {
               investor_id: inv.id,
               subject: `Action required: Your ${docLabel} — SV Capital`,
-              message: `Dear ${firstName},\n\nThank you for submitting your documents. Unfortunately, we were unable to accept your ${docLabel} at this time.\n\nReason: ${rejectionReason}\n\nTo resubmit, please log in to your SV Capital investor portal, navigate to your profile or KYC section, and upload a new copy of the document.\n\nIf you have any questions or need assistance, please contact us at support@svcapital.co.za.\n\nKind regards,\nSV Capital Compliance Team`,
+              /* No greeting: sendAlert adds one, and two of them is what the
+                 client saw — "Hi Karel," followed by "Dear Karel,". */
+              message: `Thank you for submitting your documents. Unfortunately, we were unable to accept your ${docLabel} at this time.\n\nReason: ${rejectionReason}\n\nTo resubmit, please log in to your SV Capital investor portal, navigate to your profile or KYC section, and upload a new copy of the document.\n\nIf you have any questions or need assistance, please contact us at support@svcapital.co.za.\n\nKind regards,\nSV Capital Compliance Team`,
             }).catch(e => console.warn('[kycReject] email notification failed:', e.message));
           }
         }
@@ -13280,7 +13281,8 @@ async function _executeBulkKycReject(reason, shouldEmail) {
           await API._fetch('POST', 'admin/send-investor-email', {
             investor_id: inv.id,
             subject: `Action required: Your ${docLabel} — SV Capital`,
-            message: `Dear ${inv.first_name || 'Investor'},\n\nYour ${docLabel} requires attention.\n\nReason: ${reason || 'Please re-upload a valid document.'}\n\nLog in to your investor portal to resubmit.\n\nKind regards,\nSV Capital Compliance Team`,
+            /* No greeting here either — sendAlert writes it. */
+            message: `Your ${docLabel} requires attention.\n\nReason: ${reason || 'Please re-upload a valid document.'}\n\nLog in to your investor portal to resubmit.\n\nKind regards,\nSV Capital Compliance Team`,
           }).catch(() => {});
         }
       }

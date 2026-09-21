@@ -978,9 +978,46 @@ function sendKycDocumentReceived(admin, { investorName, docType, investorId }) {
 }
 
 /* ── Generic alert (used by cron jobs) ───────────────────── */
+/* ── A message that already says hello ─────────────────────────────
+   sendAlert greets the recipient itself, because it is the one thing here
+   that knows their name. Callers do not always know that: the KYC rejection
+   built in the admin console opened with "Dear Karel," and the client got
+
+     Hi Karel,
+     Dear Karel,
+
+   It is not only that one caller. This endpoint also carries whatever an
+   admin types into the free-text composer, and a person writing an email
+   naturally starts it with a greeting. Fixing the two hardcoded messages
+   would leave the human path broken, so the greeting is stripped here — the
+   layer that knows one has already been written.
+
+   Deliberately narrow, because eating a line of somebody's message is worse
+   than the duplicate it was written to prevent. Three things have to be true
+   at once, and each rules out a real sentence:
+
+     it is the FIRST thing in the message — anchored, so "We said hello to the
+       team," in a covering note is not a salutation;
+     what follows the greeting word is at most 40 characters and contains no
+       comma or colon — a name, not a clause;
+     the line ENDS there. "Dear Karel, thank you for your patience" is a
+       sentence and keeps its words.
+
+   A length guard sat here as well, and was dead: the 40-character bound above
+   already caps the whole match below it, so nothing could reach it. */
+const GREETING_RE =
+  /^[ \t]*(?:hi|hey|hello|dear|greetings|good\s+(?:morning|afternoon|evening|day))\b[^\n,:]{0,40}[,:][ \t]*(?:\r?\n)+/i;
+
+function stripLeadingGreeting(text) {
+  const s = String(text == null ? '' : text);
+  const m = s.match(GREETING_RE);
+  return m ? s.slice(m[0].length) : s;
+}
+
 function sendAlert(investor, { subject, message }) {
   const { email, first_name, id } = investor;
   if (!email) return Promise.resolve();
+  message = stripLeadingGreeting(message);
   if (id) setImmediate(() => push.sendPushToInvestor(id, {
     title: subject,
     body: String(message || '').slice(0, 120),
@@ -1237,6 +1274,7 @@ module.exports = {
   sendInvestmentMatured,
   sendTicketResponse,
   sendTicketAssigned,
+  stripLeadingGreeting,
   sendPasswordReset,
   sendAccountSetup,
   sendWithdrawalRequested,
