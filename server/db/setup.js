@@ -3783,6 +3783,11 @@ async function autoSetup() {
           body: 'The \u201cget the app\u201d banner reappears each time a client logs in, and stops for good once they have actually installed it \u2014 rather than going quiet for four months after one tap.',
           where: 'Client portal and the sign-in page, on a phone. Nothing to configure.' },
 
+        { id: 'ANN-2026-ACTION-CENTRE', area: 'portal', icon: 'fa-list-check',
+          title: 'One checklist on the client overview, not two',
+          body: 'The Getting Started panel is gone. It listed the same steps as the Action Centre in different words, with its own completion rules, so a client was asked to add funds three times on one screen and the two panels could disagree about whether FICA was done. The Action Centre also no longer repeats its next step underneath itself \u2014 the outstanding one is marked Next up in the list. And "Add funds to your wallet" now stays completed once a client has funded: it was measured on the balance right now, so anyone who invested their whole wallet went back to incomplete permanently.',
+          where: 'Client portal \u2192 Portfolio Overview, under the welcome banner. It hides itself once all five steps are done.' },
+
         { id: 'ANN-2026-SUPPORT-NUMBER', area: 'both', icon: 'fa-phone',
           title: 'Support WhatsApp number changed',
           body: 'The support number is now 079 111 5476. Every WhatsApp link on the site, the portal and the app points at it.',

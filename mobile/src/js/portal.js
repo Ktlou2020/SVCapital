@@ -837,7 +837,7 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
     clearStaleDataNotice();
 
     renderOverview(_opts.skipCharts);
-    renderOnboardingWizard();
+    /* The Getting Started panel is gone; the Action Centre is the one list. */
     updateStmtQuickStats();
     _renderBankDetailsPanel();
     // Re-populate profile if user navigated there before data loaded
