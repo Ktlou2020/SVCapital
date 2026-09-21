@@ -820,6 +820,9 @@ async function _refreshDashboardTotals() {
 
 async function loadDashboard() {
   _showLoadingBar();
+  /* Not awaited: the dashboard's figures are what somebody opened it for, and
+     a notice about a new feature must never be the reason they wait. */
+  _loadAnnouncements();
   try {
     const _dash = await _refreshDashboardTotals();
     const nonArchived = STATE.investors.filter(i => i.status !== 'archived');
@@ -3112,6 +3115,82 @@ async function viewInvestor(id) {
   loadInvestorTimeline(inv, invsts, txns);
   _loadInvestorRewards(inv.id);
   _loadClientDocuments(inv.id);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   WHAT CHANGED — new features, and where to find them
+
+   A feature nobody is told about is a feature nobody uses, and the people it
+   costs most are the staff answering a client's question about a screen that
+   moved under them overnight.
+
+   Each notice says what the thing is AND where it is. The second half is what
+   release notes leave out and the only half somebody can act on.
+
+   Dismissal is per person and per notice, held on the server rather than in
+   this browser: somebody who reads it on the office machine should not be
+   told again on their laptop.
+   ═══════════════════════════════════════════════════════════ */
+const ANN_AREA = {
+  admin:  { label: 'Admin console', colour: '#eda5ff' },
+  portal: { label: 'Client portal', colour: '#22c55e' },
+  both:   { label: 'Admin & client portal', colour: '#fec24f' },
+};
+
+async function _loadAnnouncements() {
+  const host = document.getElementById('adminAnnouncements');
+  if (!host) return;
+  let items = [];
+  try {
+    items = (await API._fetch('GET', 'announcements'))?.data || [];
+  } catch (e) {
+    /* Silent on purpose, and the only place in this file that is. A banner
+       about new features is not worth an error where the operational figures
+       go; nothing is blocked by its absence. */
+    console.warn('[announcements] could not load:', e.message);
+    return;
+  }
+  if (!items.length) { host.innerHTML = ''; return; }
+
+  host.innerHTML = `<div style="display:grid;gap:10px;margin-bottom:16px">${items.map(a => {
+    const area = ANN_AREA[a.area] || ANN_AREA.admin;
+    return `<div class="panel" id="ann-${_esc(a.id)}" style="border-left:3px solid ${area.colour}">
+      <div class="panel__body" style="display:flex;gap:14px;align-items:flex-start">
+        <i class="fa-solid ${_esc(a.icon || 'fa-sparkles')}" style="color:${area.colour};font-size:1.1rem;margin-top:2px;flex-shrink:0"></i>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <span style="font-weight:800;font-size:0.92rem;color:var(--text)">${_esc(a.title)}</span>
+            <span class="badge" style="background:${area.colour}22;color:${area.colour};font-size:0.62rem">${_esc(area.label)}</span>
+            ${a.published_at ? `<span style="font-size:0.7rem;color:var(--text-muted)">${Utils.date(a.published_at)}</span>` : ''}
+          </div>
+          <div style="font-size:0.84rem;color:var(--text-muted);line-height:1.6;margin-top:4px">${_esc(a.body)}</div>
+          ${a.where_to_find ? `<div style="font-size:0.82rem;color:var(--text);line-height:1.6;margin-top:6px">
+            <i class="fa-solid fa-location-arrow" style="color:${area.colour};margin-right:5px"></i>
+            <b>Where to find it:</b> ${_esc(a.where_to_find)}</div>` : ''}
+        </div>
+        <button class="btn btn--ghost btn--sm" style="flex-shrink:0"
+                onclick="_dismissAnnouncement('${_esc(a.id)}', this)">
+          <i class="fa-solid fa-check"></i> Got it</button>
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+async function _dismissAnnouncement(id, btn) {
+  /* Removed only once the server has it. Taking it off screen first and
+     failing quietly is how a notice comes back tomorrow and the person who
+     dismissed it decides the button does not work. */
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>'; }
+  try {
+    await API._fetch('POST', `announcements/${encodeURIComponent(id)}/dismiss`, {});
+    const card = document.getElementById(`ann-${id}`);
+    if (card) card.remove();
+    const host = document.getElementById('adminAnnouncements');
+    if (host && !host.querySelector('.panel')) host.innerHTML = '';
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-check"></i> Got it'; }
+    Toast.error(e.message || 'Could not dismiss that — please try again.');
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════

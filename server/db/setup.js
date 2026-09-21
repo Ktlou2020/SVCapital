@@ -1607,6 +1607,44 @@ CREATE TABLE IF NOT EXISTS cr_events (
 );
 CREATE INDEX IF NOT EXISTS cr_events_created_idx ON cr_events(created_at DESC);
 
+/* ─── "There is a new thing, and here is where it is" ────────────────
+   A feature nobody is told about is a feature nobody uses, and the people it
+   costs most are the staff answering a client's question about a screen that
+   changed under them.
+
+   Two columns rather than one body of prose: what it is, and where to find
+   it. The second is the one that gets left out of release notes and the only
+   one that turns an announcement into something somebody can act on.
+
+   Dismissal is per person and per announcement, not a "seen everything up to
+   here" watermark: somebody who clears one notice has not read the other
+   three, and a watermark cannot tell the difference. */
+CREATE TABLE IF NOT EXISTS feature_announcements (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  body  TEXT NOT NULL,
+  where_to_find TEXT,
+  area     TEXT NOT NULL DEFAULT 'admin',    -- admin | portal | both
+  audience TEXT NOT NULL DEFAULT 'staff',    -- staff | clients | everyone
+  icon TEXT,
+  active BOOLEAN NOT NULL DEFAULT true,
+  published_at TIMESTAMPTZ DEFAULT NOW(),
+  created_by TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS feature_announcements_live_idx
+  ON feature_announcements(published_at DESC) WHERE active;
+
+CREATE TABLE IF NOT EXISTS feature_announcement_reads (
+  announcement_id TEXT NOT NULL REFERENCES feature_announcements(id) ON DELETE CASCADE,
+  /* The person, lowercased email. Staff exist in users and in employees and
+     the two do not share an id, but everybody who can sign in has an address
+     and it is the same one on both sides. */
+  user_key TEXT NOT NULL,
+  read_at TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (announcement_id, user_key)
+);
+
 CREATE TABLE IF NOT EXISTS cr_notification_clears (
   employee_id TEXT PRIMARY KEY,
   cleared_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -3713,6 +3751,55 @@ async function autoSetup() {
           [a.id, a.slug, a.title, a.industry, a.excerpt, a.body, a.mins, a.hero]);
       }
       console.log(`\u2705 Seeded ${ART.length} opening insight article(s).`);
+    });
+
+    await step("19. Announce the features nobody has been told about", async () => {
+      /* Everything shipped recently, each with the one thing release notes
+         leave out: where to find it.
+
+         Inserted once and never re-asserted. ON CONFLICT DO NOTHING rather
+         than an upsert, so editing the wording of a notice in the console —
+         or switching one off — is not undone by the next deploy. A notice
+         that comes back after somebody dismissed the idea of it is worse than
+         no notice at all. */
+      const NOTICES = [
+        { id: 'ANN-2026-CLIENT-DOCS', area: 'admin', icon: 'fa-folder-open',
+          title: 'Every document a client uploaded, in one place',
+          body: 'FICA documents and files attached to support tickets now appear together on the client record, newest first, with the status of each and who reviewed it. Before this, a deposit slip could only be found by remembering which ticket it was attached to.',
+          where: 'Clients \u2192 open any client \u2192 the Overview tab, under Bank Account.' },
+
+        { id: 'ANN-2026-INSIGHTS', area: 'admin', icon: 'fa-newspaper',
+          title: 'Insights articles are written from the console',
+          body: 'The public Insights page is edited here \u2014 write an article, add a header image, publish or unpublish it. Articles are shareable to WhatsApp and carry their own preview card.',
+          where: 'The Insights item in the left-hand menu.' },
+
+        { id: 'ANN-2026-REFERRAL-SHARE', area: 'portal', icon: 'fa-share-nodes',
+          title: 'Referral sharing sends the whole invite',
+          body: 'The WhatsApp button and Copy both hand over the full message now \u2014 the sentence, the client\u2019s code and their link \u2014 and WhatsApp draws the invite card from the link. Before this, sharing sent a picture with no text and copying sent a bare URL.',
+          where: 'Client portal \u2192 Refer & Earn. Referral links now open the signup form rather than the landing page.' },
+
+        { id: 'ANN-2026-APP-BANNER', area: 'portal', icon: 'fa-mobile-screen',
+          title: 'The app prompt returns at every sign-in',
+          body: 'The \u201cget the app\u201d banner reappears each time a client logs in, and stops for good once they have actually installed it \u2014 rather than going quiet for four months after one tap.',
+          where: 'Client portal and the sign-in page, on a phone. Nothing to configure.' },
+
+        { id: 'ANN-2026-SUPPORT-NUMBER', area: 'both', icon: 'fa-phone',
+          title: 'Support WhatsApp number changed',
+          body: 'The support number is now 079 111 5476. Every WhatsApp link on the site, the portal and the app points at it.',
+          where: 'Landing page footer and floating button, and the portal\u2019s support panel.' },
+      ];
+
+      let added = 0;
+      for (const n of NOTICES) {
+        const { rowCount } = await pool.query(
+          `INSERT INTO feature_announcements
+             (id, title, body, where_to_find, area, audience, icon, published_at, created_by)
+           VALUES ($1,$2,$3,$4,$5,'staff',$6, NOW(), 'setup')
+           ON CONFLICT (id) DO NOTHING`,
+          [n.id, n.title, n.body, n.where, n.area, n.icon]);
+        added += rowCount;
+      }
+      if (added) console.log(`\u2705 Announced ${added} feature(s) to staff.`);
     });
 
     await step("16. Give every investor a nationality", async () => {

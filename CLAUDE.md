@@ -22,6 +22,29 @@ not name.
 ## Pull Requests
 Do not create pull requests. Push commits directly to `staging` during development.
 
+## Announcing a New Feature
+Every feature added to the admin console or the live client portal gets a row
+in `feature_announcements`, so staff are told it exists and where to find it.
+
+Add it as a step in `server/db/setup.js` alongside the others, with
+`ON CONFLICT (id) DO NOTHING` so a redeploy never overwrites wording somebody
+has edited or switched off. Each notice carries:
+
+| Field | What goes in it |
+| --- | --- |
+| `title` | The feature, in a line. |
+| `body` | What it does, and what it replaced if that is why it matters. |
+| `where_to_find` | **The path to it.** "Clients → open a client → Overview tab." This is the field release notes leave out and the only one somebody can act on — a notice without it is not worth publishing. |
+| `area` | `admin`, `portal`, or `both` — where the feature lives. |
+| `audience` | `staff` (default), `clients`, or `everyone`. |
+
+Staff see undismissed notices at the top of the admin dashboard and dismiss
+them one at a time; the dismissal is per person and per notice, held server
+side, so reading it on one machine settles it on all of them.
+
+Fixes to existing behaviour do not need one. A change to where something is,
+what it is called, or what it now does, does.
+
 ## Service Worker Cache
 Bump `mobile/www/sw.js` CACHE version (svc-portal-vN) with every JS/CSS change to mobile.
 
