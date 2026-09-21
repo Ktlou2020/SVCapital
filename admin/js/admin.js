@@ -2612,6 +2612,21 @@ async function viewInvestor(id) {
       </div>
     </div>
 
+    <!-- Everything the client has uploaded, in one place. Filled by
+         _loadClientDocuments() rather than rendered here: the modal opens on
+         the figures somebody came for, and the documents — which need a
+         second query and may be none — arrive a moment later rather than
+         holding the whole record up. -->
+    <div class="panel mb-12">
+      <div class="panel__header flex-between">
+        <span class="panel__title"><i class="fa-solid fa-folder-open" style="color:#eda5ff;margin-right:6px"></i>Uploaded Documents</span>
+        <span id="invDocsCount" style="font-size:0.72rem;color:var(--text-muted)"></span>
+      </div>
+      <div class="panel__body" id="invDocsBody" style="font-size:0.82rem;color:var(--text-muted)">
+        <i class="fa-solid fa-spinner fa-spin"></i> Loading documents…
+      </div>
+    </div>
+
     <!-- Rewards level and Learning Hub stage. Filled by _loadInvestorRewards()
          so the modal opens on the figures that matter without waiting on it. -->
     <div id="invRewardsCard" class="mt-16"></div>
@@ -3096,6 +3111,94 @@ async function viewInvestor(id) {
   loadInvestorNotes(inv.id);
   loadInvestorTimeline(inv, invsts, txns);
   _loadInvestorRewards(inv.id);
+  _loadClientDocuments(inv.id);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   UPLOADED DOCUMENTS — everything the client has sent us
+
+   The files were never missing; finding them was. A FICA document is
+   reachable from the FICA queue, a deposit slip from whichever support
+   ticket it happened to be attached to, and "did this client ever send
+   their proof of address" meant searching two screens and hoping.
+
+   The list the server returns carries no files, only what is needed to
+   choose one — a photographed ID is a couple of megabytes of base64 and a
+   client with six would make this modal a twelve-megabyte download. The file
+   is fetched when somebody asks to see it.
+   ═══════════════════════════════════════════════════════════ */
+const DOC_STATUS_BADGE = {
+  approved: 'badge--green', verified: 'badge--green',
+  pending:  'badge--yellow', submitted: 'badge--yellow',
+  rejected: 'badge--red', expired: 'badge--red',
+};
+
+function _docBytes(n) {
+  if (!n) return '';
+  /* Bytes below a kilobyte, because rounding them to KB prints "0 KB" — which
+     reads as an empty file rather than a small one. */
+  if (n < 1024)             return `${n} B`;
+  if (n < 1024 * 1024)      return `${Math.round(n / 1024)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function _docIcon(contentType) {
+  if (/^image\//.test(contentType || '')) return 'fa-file-image';
+  if (/pdf/.test(contentType || ''))       return 'fa-file-pdf';
+  return 'fa-file-lines';
+}
+
+async function _loadClientDocuments(investorId) {
+  const body  = document.getElementById('invDocsBody');
+  const count = document.getElementById('invDocsCount');
+  if (!body) return;
+  try {
+    const res  = await API._fetch('GET', `client-documents/${encodeURIComponent(investorId)}`);
+    const docs = res?.data || [];
+    if (count) count.textContent = docs.length ? `${docs.length} document${docs.length === 1 ? '' : 's'}` : '';
+
+    if (!docs.length) {
+      body.innerHTML = '<span style="color:var(--text-muted)"><i class="fa-solid fa-folder-open" style="margin-right:6px"></i>This client has not uploaded anything yet.</span>';
+      return;
+    }
+
+    body.innerHTML = `<div style="display:grid;gap:8px">${docs.map(d => {
+      /* The file is fetched by URL rather than embedded, so the browser
+         streams it and the modal never holds it in memory. */
+      const href = `${(window.__SVC_API_BASE__ || '/api/')}client-documents/`
+                 + `${encodeURIComponent(investorId)}/${encodeURIComponent(d.source)}/`
+                 + `${encodeURIComponent(d.id)}/file`;
+      const badge = d.status ? `<span class="badge ${DOC_STATUS_BADGE[String(d.status).toLowerCase()] || 'badge--grey'}" style="font-size:0.62rem">${_esc(d.status)}</span>` : '';
+      const where = d.source === 'ticket'
+        ? `<span style="color:var(--text-muted)">Support ticket${d.ticket_subject ? ' — ' + _esc(d.ticket_subject) : ''}</span>`
+        : `<span style="color:var(--text-muted)">FICA</span>`;
+      const meta = [
+        d.at ? Utils.date(d.at) : null,
+        d.file_name && d.file_name !== d.label ? _esc(d.file_name) : null,
+        _docBytes(d.bytes) || null,
+        d.expiry_date ? `expires ${_esc(String(d.expiry_date).slice(0, 10))}` : null,
+      ].filter(Boolean).join(' · ');
+
+      return `<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <i class="fa-solid ${_docIcon(d.content_type)}" style="color:#eda5ff;font-size:1.05rem;flex-shrink:0"></i>
+        <div style="flex:1;min-width:140px">
+          <div style="font-weight:700;font-size:0.84rem;color:var(--text)">${_esc(d.label)} ${badge}</div>
+          <div style="font-size:0.72rem">${where}${meta ? ' · ' + meta : ''}</div>
+          ${d.reviewed_by ? `<div style="font-size:0.68rem;color:var(--text-muted)">Reviewed by ${_esc(d.reviewed_by)}</div>` : ''}
+        </div>
+        ${d.has_file
+          ? `<a class="btn btn--secondary btn--sm" href="${href}" target="_blank" rel="noopener"><i class="fa-solid fa-eye"></i> View</a>
+             <a class="btn btn--ghost btn--sm" href="${href}" download="${_esc(d.file_name || d.label)}"><i class="fa-solid fa-download"></i> Download</a>`
+          : `<span style="font-size:0.72rem;color:var(--text-muted);font-style:italic">Recorded, no file attached</span>`}
+      </div>`;
+    }).join('')}</div>`;
+  } catch (e) {
+    /* Named, and retryable: a documents panel that fails silently is
+       indistinguishable from a client who has uploaded nothing, and that is
+       the wrong thing to tell somebody checking whether FICA can be approved. */
+    body.innerHTML = `<span style="color:#ef4444"><i class="fa-solid fa-triangle-exclamation" style="margin-right:6px"></i>Could not load documents: ${_esc(e.message || 'unknown error')}</span>
+      <button class="btn btn--ghost btn--sm" style="margin-left:8px" onclick="_loadClientDocuments('${_esc(investorId)}')">Retry</button>`;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════
