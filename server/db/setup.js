@@ -1574,6 +1574,44 @@ CREATE TABLE IF NOT EXISTS cr_events (
 );
 CREATE INDEX IF NOT EXISTS cr_events_created_idx ON cr_events(created_at DESC);
 
+/* ─── "There is a new thing, and here is where it is" ────────────────
+   A feature nobody is told about is a feature nobody uses, and the people it
+   costs most are the staff answering a client's question about a screen that
+   changed under them.
+
+   Two columns rather than one body of prose: what it is, and where to find
+   it. The second is the one that gets left out of release notes and the only
+   one that turns an announcement into something somebody can act on.
+
+   Dismissal is per person and per announcement, not a "seen everything up to
+   here" watermark: somebody who clears one notice has not read the other
+   three, and a watermark cannot tell the difference. */
+CREATE TABLE IF NOT EXISTS feature_announcements (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  body  TEXT NOT NULL,
+  where_to_find TEXT,
+  area     TEXT NOT NULL DEFAULT 'admin',    -- admin | portal | both
+  audience TEXT NOT NULL DEFAULT 'staff',    -- staff | clients | everyone
+  icon TEXT,
+  active BOOLEAN NOT NULL DEFAULT true,
+  published_at TIMESTAMPTZ DEFAULT NOW(),
+  created_by TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS feature_announcements_live_idx
+  ON feature_announcements(published_at DESC) WHERE active;
+
+CREATE TABLE IF NOT EXISTS feature_announcement_reads (
+  announcement_id TEXT NOT NULL REFERENCES feature_announcements(id) ON DELETE CASCADE,
+  /* The person, lowercased email. Staff exist in users and in employees and
+     the two do not share an id, but everybody who can sign in has an address
+     and it is the same one on both sides. */
+  user_key TEXT NOT NULL,
+  read_at TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (announcement_id, user_key)
+);
+
 CREATE TABLE IF NOT EXISTS cr_notification_clears (
   employee_id TEXT PRIMARY KEY,
   cleared_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -3619,6 +3657,41 @@ async function autoSetup() {
                     (skipped ? `, ${skipped} row(s) left untouched` : '') + '.');
       else
         console.log('✅ investor_notes: nothing stranded in investors.notes.');
+    });
+
+    await step("19. Announce the features nobody has been told about", async () => {
+      /* Each notice describes something on THIS branch. Three of the notices
+         written alongside this one describe work that is still on staging —
+         Insights, referral sharing, the app banner — and announcing them here
+         would point staff at a menu item that is not there, which is the
+         exact failure the mechanism exists to prevent. They come with the
+         features.
+
+         Inserted once and never re-asserted, so editing the wording in the
+         console — or switching one off — is not undone by the next deploy. */
+      const NOTICES = [
+        { id: 'ANN-2026-CLIENT-DOCS', area: 'admin', icon: 'fa-folder-open',
+          title: 'Every document a client uploaded, in one place',
+          body: 'FICA documents and files attached to support tickets now appear together on the client record, newest first, with the status of each and who reviewed it. Before this, a deposit slip could only be found by remembering which ticket it was attached to.',
+          where: 'Clients \u2192 open any client \u2192 the Overview tab, under Bank Account.' },
+
+        { id: 'ANN-2026-SUPPORT-NUMBER', area: 'both', icon: 'fa-phone',
+          title: 'Support WhatsApp number changed',
+          body: 'The support number is now 079 111 5476. Every WhatsApp link on the site, the portal and the app points at it.',
+          where: 'Landing page footer and floating button, and the portal\u2019s support panel.' },
+      ];
+
+      let added = 0;
+      for (const n of NOTICES) {
+        const { rowCount } = await pool.query(
+          `INSERT INTO feature_announcements
+             (id, title, body, where_to_find, area, audience, icon, published_at, created_by)
+           VALUES ($1,$2,$3,$4,$5,'staff',$6, NOW(), 'setup')
+           ON CONFLICT (id) DO NOTHING`,
+          [n.id, n.title, n.body, n.where, n.area, n.icon]);
+        added += rowCount;
+      }
+      if (added) console.log(`\u2705 Announced ${added} feature(s) to staff.`);
     });
 
     await step("16. Give every investor a nationality", async () => {

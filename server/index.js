@@ -225,6 +225,7 @@ app.use('/api/products',     require('./routes/products'));
 app.use('/api/opsconsole',  require('./routes/opsconsole'));
 app.use('/api/cattle',      require('./routes/cattle'));
 app.use('/api/client-documents', require('./routes/clientDocuments'));
+app.use('/api/announcements', require('./routes/announcements'));
 app.use('/api/fund',        require('./routes/fundRuns'));
 app.use('/api/pe',             require('./routes/pe-extract'));
 app.use('/api/pe',             require('./routes/pe-insights'));

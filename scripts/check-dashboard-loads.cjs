@@ -165,6 +165,11 @@ function makeEnv({ serverKpis = true, seriesOk = true, ticketsOk = true } = {}) 
        failure at a time — a stub found by trial and error is a stub whose
        absence looked exactly like the defect under test. */
     loadAdminNotifications: rec('loadAdminNotifications'),
+    /* The feature-announcement panel. Deliberately NOT awaited by
+       loadDashboard — a notice about a new feature must never be the reason
+       somebody waits for the operational figures — so it is stubbed here
+       rather than lifted, and the assertion below is that it was called. */
+    _loadAnnouncements: rec('_loadAnnouncements'),
     Auth: { getUser: () => ({ name: 'Admin', role: 'admin', email: 'a@b.c' }) },
     /* Real helpers need a real-shaped storage: absent, not throwing. */
     localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
@@ -233,6 +238,15 @@ async function run(opts) {
          `Chart constructed ${r.reached.filter(x => x === 'Chart').length} time(s)`);
       ok('and hides the loading bar it showed', r.reached.includes('_hideLoadingBar'),
          'a load that throws leaves the bar up forever');
+
+      /* CLAUDE.md requires a notice for every new feature, so the dashboard
+         has to ask for them — and must not wait, because the figures are
+         what somebody opened it for. */
+      ok('it asks for the feature notices', r.reached.includes('_loadAnnouncements'),
+         JSON.stringify(r.reached));
+      ok('and does not wait for them',
+         !/await\s+_loadAnnouncements/.test(SRC),
+         'a notice about a new feature would delay the operational figures');
       ok('the welcome strip is given a KYC count, not an undefined',
          r.reached.includes('_populateAdminWelcomeStrip'));
     }

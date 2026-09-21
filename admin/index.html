@@ -214,6 +214,11 @@
       ══════════════════════════════════ -->
       <div class="view active" id="view-dashboard">
 
+        <!-- What changed, and where to find it. Filled by _loadAnnouncements();
+             stays empty and invisible when there is nothing undismissed, so it
+             costs a reader nothing once they are up to date. -->
+        <div id="adminAnnouncements"></div>
+
         <!-- Admin Welcome Strip -->
         <div class="admin-welcome-strip" id="adminWelcomeStrip">
           <div class="admin-welcome-strip__left">
@@ -4995,7 +5000,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=19"></script>
 <script src="../js/investor-documents.js?v=5"></script>
-<script src="js/admin.js?v=177"></script>
+<script src="js/admin.js?v=178"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>
