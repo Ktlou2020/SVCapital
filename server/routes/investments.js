@@ -13,6 +13,7 @@ const pool   = require('../db/pool');
 const audit  = require('../services/audit');
 const email  = require('../services/email');
 const { requireAuth } = require('../middleware/auth');
+const { instructionRefusal } = require('../services/maturityPolicy');
 
 const VALID_INSTRUCTIONS = ['payout_all', 'payout_return', 'payout_custom', 'reinvest', 'switch_product', 'custom_switch', 'switch_amount'];
 const STAFF_ROLES = ['admin', 'director', 'fund_manager', 'staff'];
@@ -123,6 +124,19 @@ router.post('/:id/instruction', requireAuth, async (req, res) => {
         await client.query('ROLLBACK');
         return res.status(409).json({ error: 'This investment can no longer be changed.' });
       }
+    }
+
+    /* Some products may only be settled in cash. The portal offers no other
+       option for them, so this refuses a stale page or a direct call rather
+       than a mistake anyone can make through the UI — but it has to be here,
+       because the one thing that must not happen is an EIF holding silently
+       entering a new contract the client never agreed to. Enforced for staff
+       too: acting on a client's behalf does not create a rollover the product
+       cannot carry. */
+    const refusal = instructionRefusal(instruction, inv.product_type);
+    if (refusal) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: refusal, code: 'INSTRUCTION_NOT_AVAILABLE' });
     }
 
     if (NEEDS_AMOUNT.includes(instruction) && payoutExceedsInvestment(inv, custom_payout_amount)) {
@@ -241,6 +255,15 @@ router.post('/pool/:poolId/instruction', requireAuth, async (req, res) => {
         error: 'Instructions close at 17:00 (SA time) on the maturity date. Please contact support.',
         code: 'INSTRUCTION_CUTOFF',
       });
+    }
+
+    /* Same rule as the single-investment route, applied to the whole pool —
+       one pool is one product, so any investment refusing the instruction
+       refuses it for all of them. */
+    const poolRefusal = invs.map(i => instructionRefusal(instruction, i.product_type)).find(Boolean);
+    if (poolRefusal) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: poolRefusal, code: 'INSTRUCTION_NOT_AVAILABLE' });
     }
 
     if (NEEDS_AMOUNT.includes(instruction)) {

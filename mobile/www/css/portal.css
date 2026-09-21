@@ -2164,9 +2164,14 @@ html body .my-inv-card .progress-fill {
   border-radius: 100px !important;
   background: linear-gradient(90deg, #fec24f 0%, #fec24f 100%) !important;
 }
+/* Three equal columns squeezed an amount like R199,009.90 into an 81px tile.
+   A rand figure has no break opportunity inside it, so it did not wrap — it
+   ran straight out past the tile edge. auto-fit drops to two columns (and on
+   a very narrow card, one) before that happens, so the amount always has a
+   track wide enough to sit in. */
 html body .my-inv-card__stats {
   display: grid !important;
-  grid-template-columns: repeat(3, 1fr) !important;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)) !important;
   gap: 8px !important;
   margin: 16px 0 !important;
 }
@@ -2198,6 +2203,11 @@ html body .my-inv-card .mic-stat__value {
   color: #ffffff !important;
   -webkit-text-fill-color: #ffffff !important;
   line-height: 1.2 !important;
+  /* The layout above gives a rand figure room; this is the floor under it.
+     A figure in the millions still has no break opportunity of its own, so
+     without `anywhere` it would overflow the tile rather than wrap. */
+  overflow-wrap: anywhere !important;
+  min-width: 0 !important;
 }
 html body .my-inv-card .mic-stat__value--gold {
   color: #fec24f !important;
@@ -2281,13 +2291,6 @@ body:not(.dark-mode) .prod-type-tile span { color: #1f2937; }
 body:not(.dark-mode) .prod-type-tile:hover:not(.active) {
   background: #d1d5db;
   border-color: rgba(0,0,0,0.25);
-}
-
-/* ── Investment card stats: 2-col on narrow mobile (beats the 3-col !important above) ── */
-@media (max-width: 640px) {
-  html body .my-inv-card__stats {
-    grid-template-columns: 1fr 1fr !important;
-  }
 }
 
 /* ─────────────────────────────────────────────────────────────

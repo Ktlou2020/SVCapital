@@ -3776,6 +3776,31 @@ async function autoSetup() {
       if (rowCount) console.log(`\u2705 Recoloured ${rowCount} EIF product(s) to the CI blue.`);
     });
 
+    await step("21. Settle Ethical & Interest-Free holdings on payout", async () => {
+      /* An EIF pool is a concluded contract, so the only thing that can
+         happen at maturity is a cash settlement. The engine now enforces that
+         whatever the column says, but rows carrying 'reinvest' or a switch
+         from before the rule still READ as rollovers — in the console, in the
+         CSV export, in the instruction report's raw tag. A figure that says
+         one thing and does another is how somebody ends up reassuring a
+         client about a rollover that will not happen.
+
+         So the stored value is brought into line with the behaviour. Narrow:
+         only eif_ products, only active investments, and only where it is not
+         already payout_all, so a re-run does nothing. Nothing about the money
+         changes — the engine was already going to pay these out. */
+      const { rowCount } = await pool.query(
+        `UPDATE investments
+            SET maturity_instruction = 'payout_all',
+                custom_payout_amount = NULL,
+                switch_product_type  = NULL,
+                updated_at           = NOW()
+          WHERE product_type ~* '^eif(_|$)'   -- same predicate as maturityPolicy.isPayoutOnlyProduct
+            AND status = 'active'
+            AND COALESCE(maturity_instruction, '') <> 'payout_all'`);
+      if (rowCount) console.log(`\u2705 Set ${rowCount} EIF investment(s) to pay out at maturity.`);
+    });
+
     await step("19. Announce the features nobody has been told about", async () => {
       /* Everything shipped recently, each with the one thing release notes
          leave out: where to find it.
@@ -3815,6 +3840,16 @@ async function autoSetup() {
           title: 'Ethical & Interest-Free is blue, and quotes the pool\u2019s minimum',
           body: 'Two changes from the review. The section is now the CI blue (#0096ff) instead of the lime \u2014 the lime was hard to keep consistent across the site and had to be darkened by hand wherever it carried text. And the minimum on a product card is now the cheapest OPEN pool\u2019s minimum, not the figure on the product record: the two are set in different places and had drifted, so the page offered a Murabaha at R500 while the open pool would not take under R1 000. Where no pool is open the product figure is shown, marked indicative.',
           where: 'Client portal \u2192 Invest \u2192 the Ethical & Interest-Free tab, and the same section on the public site. Pool minimums are set per pool under Pools in this console.' },
+
+        { id: 'ANN-2026-EIF-PAYOUT-ONLY', area: 'both', icon: 'fa-scale-balanced',
+          title: 'Ethical & Interest-Free pays out at maturity \u2014 and nothing else',
+          body: 'EIF holdings can no longer be reinvested, switched or split at maturity. Each EIF pool is its own concluded contract \u2014 a murabaha sale, an ijara lease, a mudarabah venture \u2014 so rolling one over would enter the client into a NEW contract they never agreed to, which is the one thing an interest-free client is here to avoid. The maturity screen now offers Payout All alone, says why, and pays out in full whether or not an instruction is set. The maturity engine, the pre-flight and the instruction report all apply the same rule, so an EIF holding still carrying \u2018reinvest\u2019 from before is paid out, not rolled. Staff cannot set another instruction on one either. Applies to every eif_ product, including any added later.',
+          where: 'Client portal \u2192 My Investments and the Maturity screen. In this console: Investments \u2192 open an EIF investment \u2192 the "Set instruction on behalf of client" panel, where the dropdown is now fixed to Pay out all.' },
+
+        { id: 'ANN-2026-STAT-TILE-OVERFLOW', area: 'portal', icon: 'fa-money-bill-wave',
+          title: 'Amounts no longer run off the investment cards',
+          body: 'The three stat tiles on a My Investments card were fixed at a third of the card each. A rand figure has no place to break inside it, so anything from about R100 000 up ran straight out past the tile edge and was cut off \u2014 exactly the number a client most wants to read. The tiles now fit themselves to the card, taking two columns where three will not hold the figure.',
+          where: 'Client portal \u2192 My Investments, on the web and in the app.' },
 
         { id: 'ANN-2026-SUPPORT-NUMBER', area: 'both', icon: 'fa-phone',
           title: 'Support WhatsApp number changed',

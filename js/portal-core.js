@@ -1268,6 +1268,9 @@ function loadNotifications() {
   // 5. Maturity overdue — investment has matured but no instruction yet
   const overdue = investments.filter(i => {
     if (i.status !== 'matured') return false;
+    /* Not overdue on a product that pays out by its own terms — there is no
+       instruction to submit, so an "Urgent" notice would never clear. */
+    if (Utils.isPayoutOnlyProduct(i.product_type)) return false;
     return !i.maturity_instruction;
   });
   if (overdue.length) {
@@ -2105,6 +2108,21 @@ function renderMyInvestmentCards() {
           const call = multiple
             ? `openPoolMaturityModal(${JSON.stringify(inv.pool_id)})`
             : `openMaturityModal(${JSON.stringify(inv.id)})`;
+
+          /* A payout-only product has nothing to decide. Left to the cue
+             below it would carry the amber "No instruction set" warning and a
+             "Set Maturity Instruction" button leading to a form with one
+             disabled option — chasing a client for a choice that does not
+             exist, on the product whose whole point is that it concludes. */
+          if (Utils.isPayoutOnlyProduct(inv.product_type)) {
+            return `
+          <div style="display:flex;align-items:center;gap:7px;margin-top:8px;padding:7px 10px;border-radius:8px;
+                      background:${EIF_ACCENT()}14;border:1px solid ${EIF_ACCENT()}33;font-size:0.74rem">
+            <i class="fa-solid fa-circle-check" style="color:${EIF_ACCENT()}"></i>
+            <span style="color:var(--text-muted)">At maturity</span>
+            <span style="margin-left:auto;color:${EIF_ACCENT()};font-weight:700;text-align:right">Paid out in full</span>
+          </div>`;
+          }
 
           const CUE = {
             all:     { icon: 'fa-circle-check',           color: '#22c55e', lead: 'Instruction set' },
@@ -4477,15 +4495,20 @@ async function loadMaturity() {
       const _instrState = Utils.maturityInstructionState(group);
       const poolInstr   = _instrState.instruction;
       const hasMixed    = _instrState.state === 'mixed';
-      const instrSet    = _instrState.state !== 'none';
-      const instrLabel  = _instrState.state === 'none' ? 'No instruction set yet' : _instrState.label;
+      /* A payout-only product settles by its own contract — the client has
+         nothing to choose, so the card reports it as decided rather than
+         showing an "Awaiting instruction" warning it can never clear. */
+      const payoutOnly  = Utils.isPayoutOnlyProduct(inv.product_type);
+      const instrSet    = payoutOnly || _instrState.state !== 'none';
+      const instrLabel  = payoutOnly ? 'Paid out in full at maturity'
+                        : _instrState.state === 'none' ? 'No instruction set yet' : _instrState.label;
 
       const modalCall = multiple
         ? `openPoolMaturityModal(${JSON.stringify(inv.pool_id)})`
         : `openMaturityModal(${JSON.stringify(inv.id)})`;
 
       const indivRows = multiple ? group.map(i => {
-        const hasInstr = !!i.maturity_instruction;
+        const hasInstr = payoutOnly || !!i.maturity_instruction;
         return `
           <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-top:1px solid var(--border);gap:8px">
             <div style="font-size:0.78rem;min-width:0">
@@ -4495,10 +4518,10 @@ async function loadMaturity() {
             <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
               <span style="font-size:0.72rem;color:${hasInstr ? 'var(--green)' : 'var(--text-muted)'}">
                 <i class="fa-solid fa-${hasInstr ? 'circle-check' : 'circle-exclamation'}"></i>
-                ${hasInstr ? _maturityInstructionLabel(i.maturity_instruction) : 'Not set'}
+                ${payoutOnly ? 'Paid out' : hasInstr ? _maturityInstructionLabel(i.maturity_instruction) : 'Not set'}
               </span>
               <button class="btn btn--ghost btn--sm" style="font-size:0.72rem;padding:3px 8px" onclick='openMaturityModal(${JSON.stringify(i.id)})'>
-                ${hasInstr ? 'Update' : 'Set'}
+                ${payoutOnly ? 'View' : hasInstr ? 'Update' : 'Set'}
               </button>
             </div>
           </div>`;
@@ -4555,8 +4578,8 @@ async function loadMaturity() {
             </div>
             <button class="mc2__cta ${instrSet ? 'mc2__cta--secondary' : 'mc2__cta--primary'}"
                     onclick='${modalCall}'>
-              <i class="fa-solid fa-${instrSet ? 'pen' : 'paper-plane'}"></i>
-              ${instrSet ? 'Update' : 'Set Instruction'}
+              <i class="fa-solid fa-${payoutOnly ? 'circle-info' : instrSet ? 'pen' : 'paper-plane'}"></i>
+              ${payoutOnly ? 'View' : instrSet ? 'Update' : 'Set Instruction'}
             </button>
           </div>
 
@@ -4604,8 +4627,13 @@ async function loadMaturity() {
       const _instrState2 = Utils.maturityInstructionState(group);
       const poolInstr   = _instrState2.instruction;
       const hasMixed    = _instrState2.state === 'mixed';
-      const instrSet    = _instrState2.state !== 'none';
-      const instrLabel  = _instrState2.state === 'none' ? 'Awaiting instruction' : _instrState2.label;
+      /* A payout-only product settles by its own contract — the client has
+         nothing to choose, so the card reports it as decided rather than
+         showing an "Awaiting instruction" warning it can never clear. */
+      const payoutOnly  = Utils.isPayoutOnlyProduct(inv.product_type);
+      const instrSet    = payoutOnly || _instrState2.state !== 'none';
+      const instrLabel  = payoutOnly ? 'Paid out in full at maturity'
+                        : _instrState2.state === 'none' ? 'Awaiting instruction' : _instrState2.label;
 
       return `
       <div class="mc2 mc2--matured">
@@ -4701,19 +4729,49 @@ function _switchUnavailableNote(canSwitch) {
   return canSwitch ? '' : ` <span style="opacity:.7">(no other product is open right now)</span>`;
 }
 
+/* Why an Ethical & Interest-Free holding offers nothing but a payout.
+
+   A greyed-out dropdown with no explanation reads as a fault. The reason is
+   the substance of the product, not a limitation of the form: a murabaha sale
+   is concluded when the goods are paid for, an ijara when the lease ends, a
+   mudarabah when the venture is wound up. There is no continuing contract to
+   roll into. Rolling one over would mean entering the client into a NEW
+   contract they never signed — which is the opposite of the care that brought
+   them to an interest-free product in the first place.
+
+   Named by structure where we know it, so the sentence is about the contract
+   the client actually holds rather than a category in the abstract. */
+function _payoutOnlyNote(productType) {
+  const term = (EIF_STRUCTURES()[productType] || {}).term;
+  return `<div style="font-size:0.72rem;color:var(--text-dim);margin-top:6px;padding:9px 11px;background:rgba(0,150,255,0.07);border:1px solid rgba(0,150,255,0.22);border-radius:8px;line-height:1.55">
+    <i class="fa-solid fa-scale-balanced" style="color:${EIF_ACCENT()};margin-right:5px"></i>
+    ${term ? `Your ${_esc(term)} contract is` : 'Ethical &amp; Interest-Free contracts are'} concluded at the end of the term, so there is nothing to roll over.
+    The full capital and return are paid into your wallet. To invest again, choose a new pool from the Ethical &amp; Interest-Free tab.
+  </div>`;
+}
+
 async function openMaturityModal(investmentId) {
   const inv = PORTAL.investments.find(i => i.id === investmentId);
   if (!inv) return;
 
   const isDeliveryBike = (inv.product_type || '').includes('delivery_bike');
+  /* Ethical & Interest-Free: settled in cash, always. Each pool is its own
+     concluded contract, so there is nothing to roll into and a reinvest would
+     enter the client into a new one they never agreed to. The server refuses
+     anything else; this is the same rule, so the form never offers a choice
+     that comes back as an error. */
+  const payoutOnly    = Utils.isPayoutOnlyProduct(inv.product_type);
   const isActive      = inv.status === 'active';
   const hasActualRate = !!(inv.actual_return_amount && inv.actual_return_amount > 0);
   const total         = hasActualRate ? inv.amount + inv.actual_return_amount : null;
 
-  // Delivery bike: force payout_all — no reinvest options
-  const existing = isDeliveryBike
-    ? (inv.maturity_instruction === 'reinvest' || !inv.maturity_instruction ? 'payout_all' : inv.maturity_instruction)
-    : (inv.maturity_instruction || '');
+  // Payout-only products are pinned to payout_all; delivery bikes default to
+  // it but may still switch.
+  const existing = payoutOnly
+    ? 'payout_all'
+    : isDeliveryBike
+      ? (inv.maturity_instruction === 'reinvest' || !inv.maturity_instruction ? 'payout_all' : inv.maturity_instruction)
+      : (inv.maturity_instruction || '');
 
   // All product types for switch option (resolved at maturity, pool may not be open yet)
   /* Switch targets come from the open pools, so a category-exclusive product
@@ -4754,9 +4812,9 @@ async function openMaturityModal(investmentId) {
 
     <div class="form-group">
       <label class="form-label">Instruction Type *</label>
-      <select class="form-select" id="matInstructionType">
+      <select class="form-select" id="matInstructionType"${payoutOnly ? ' disabled' : ''}>
         <option value="payout_all"     ${existing==='payout_all'    ?'selected':''}>Payout All — Receive full capital + returns</option>
-        ${isDeliveryBike ? `
+        ${payoutOnly ? '' : isDeliveryBike ? `
         <option value="switch_product" ${existing==='switch_product'?'selected':''}${_switchOptionAttrs(canSwitch)}>Switch Product — into a different product${_switchUnavailableNote(canSwitch)}</option>
         ` : `
         <option value="payout_return"  ${existing==='payout_return' ?'selected':''}>Payout Returns Only — keep capital invested</option>
@@ -4766,9 +4824,10 @@ async function openMaturityModal(investmentId) {
         <option value="custom_switch"  ${existing==='custom_switch' ?'selected':''}${_switchOptionAttrs(canSwitch)}>Custom Switch — take an amount, switch the rest${_switchUnavailableNote(canSwitch)}</option>
         `}
       </select>
+      ${payoutOnly ? _payoutOnlyNote(inv.product_type) : ''}
     </div>
 
-    ${!isDeliveryBike ? `
+    ${(!isDeliveryBike && !payoutOnly) ? `
     <div id="reinvestGroup" style="display:${existing==='reinvest'?'block':'none'}">
       <div style="font-size:0.72rem;color:var(--text-dim);padding:10px 12px;background:rgba(254,194,79,0.06);border-radius:8px;border:1px solid rgba(254,194,79,0.15)">
         <i class="fa-solid fa-rotate" style="color:var(--gold);margin-right:4px"></i>
@@ -4777,6 +4836,7 @@ async function openMaturityModal(investmentId) {
     </div>
     ` : ''}
 
+    ${payoutOnly ? `<div id="switchProductGroup" style="display:none"></div>` : `
     <div id="switchProductGroup" style="display:${(existing==='switch_product'||existing==='custom_switch')?'block':'none'}">
       <div class="form-group">
         <label class="form-label">Switch to Product *</label>
@@ -4785,9 +4845,9 @@ async function openMaturityModal(investmentId) {
         </select>
         ${poolNote}
       </div>
-    </div>
+    </div>`}
 
-    ${!isDeliveryBike ? `
+    ${(!isDeliveryBike && !payoutOnly) ? `
     <div id="customPayoutGroup" style="display:${(existing==='payout_custom'||existing==='custom_switch')?'block':'none'}">
       <div class="form-group">
         <label class="form-label">Amount to Pay Out (R)</label>
@@ -4799,9 +4859,11 @@ async function openMaturityModal(investmentId) {
 
     <div style="font-size:0.72rem;color:var(--text-dim);line-height:1.6;margin-top:8px">
       <i class="fa-solid fa-clock" style="color:var(--gold)"></i>
-      ${isActive
-        ? `You can update this instruction at any time before maturity. If not submitted, funds will be automatically ${isDeliveryBike ? 'paid out to your wallet' : 'reinvested'}.`
-        : `Instruction must be submitted before <strong>5:00 PM on ${Utils.date(inv.maturity_date)}</strong>. If not submitted, funds will be automatically ${isDeliveryBike ? 'paid out to your wallet' : 'reinvested'}.`
+      ${payoutOnly
+        ? `Nothing to submit — this happens automatically on the maturity date.`
+        : isActive
+          ? `You can update this instruction at any time before maturity. If not submitted, funds will be automatically ${isDeliveryBike ? 'paid out to your wallet' : 'reinvested'}.`
+          : `Instruction must be submitted before <strong>5:00 PM on ${Utils.date(inv.maturity_date)}</strong>. If not submitted, funds will be automatically ${isDeliveryBike ? 'paid out to your wallet' : 'reinvested'}.`
       }
     </div>
   `;
@@ -4810,7 +4872,7 @@ async function openMaturityModal(investmentId) {
     _matClearError();
     const v = e.target.value;
     document.getElementById('switchProductGroup').style.display  = (v === 'switch_product' || v === 'custom_switch') ? 'block' : 'none';
-    if (!isDeliveryBike) {
+    if (!isDeliveryBike && !payoutOnly) {
       document.getElementById('reinvestGroup').style.display      = v === 'reinvest'       ? 'block' : 'none';
       document.getElementById('customPayoutGroup').style.display  = (v === 'payout_custom' || v === 'custom_switch') ? 'block' : 'none';
     }
@@ -4873,12 +4935,14 @@ async function openPoolMaturityModal(poolId) {
   const first = poolInvs[0];
 
   const isDeliveryBike = (first.product_type || '').includes('delivery_bike');
+  const payoutOnly     = Utils.isPayoutOnlyProduct(first.product_type);
   const totalAmount    = poolInvs.reduce((s, i) => s + (i.amount || 0), 0);
 
   // Preselects the dropdown. Same semantics as before — an instruction when
   // one choice covers the pool or part of it, blank when they differ.
   let   existing     = Utils.maturityInstructionState(poolInvs).instruction || '';
-  if (isDeliveryBike && (existing === 'reinvest' || !existing)) existing = 'payout_all';
+  if (payoutOnly) existing = 'payout_all';
+  else if (isDeliveryBike && (existing === 'reinvest' || !existing)) existing = 'payout_all';
 
   const allProductTypes = [...new Set(
     (PORTAL.pools || []).filter(p => p.product_type && p.product_type !== first.product_type).map(p => p.product_type)
@@ -4902,9 +4966,9 @@ async function openPoolMaturityModal(poolId) {
     </div>
     <div class="form-group">
       <label class="form-label">Instruction Type *</label>
-      <select class="form-select" id="matInstructionType">
+      <select class="form-select" id="matInstructionType"${payoutOnly ? ' disabled' : ''}>
         <option value="payout_all"     ${existing==='payout_all'    ?'selected':''}>Payout All — Receive full capital + returns</option>
-        ${isDeliveryBike ? `
+        ${payoutOnly ? '' : isDeliveryBike ? `
         <option value="switch_product" ${existing==='switch_product'?'selected':''}${_switchOptionAttrs(canSwitch)}>Switch Product — into a different product${_switchUnavailableNote(canSwitch)}</option>
         ` : `
         <option value="payout_return"  ${existing==='payout_return' ?'selected':''}>Payout Returns Only — keep capital invested</option>
@@ -4914,8 +4978,9 @@ async function openPoolMaturityModal(poolId) {
         <option value="custom_switch"  ${existing==='custom_switch' ?'selected':''}${_switchOptionAttrs(canSwitch)}>Custom Switch — take an amount, switch the rest${_switchUnavailableNote(canSwitch)}</option>
         `}
       </select>
+      ${payoutOnly ? _payoutOnlyNote(first.product_type) : ''}
     </div>
-    ${!isDeliveryBike ? `
+    ${(!isDeliveryBike && !payoutOnly) ? `
     <div id="reinvestGroup" style="display:${existing==='reinvest'?'block':'none'}">
       <div style="font-size:0.72rem;color:var(--text-dim);padding:10px 12px;background:rgba(254,194,79,0.06);border-radius:8px;border:1px solid rgba(254,194,79,0.15)">
         <i class="fa-solid fa-rotate" style="color:var(--gold);margin-right:4px"></i>
@@ -4923,14 +4988,15 @@ async function openPoolMaturityModal(poolId) {
       </div>
     </div>
     ` : ''}
+    ${payoutOnly ? `<div id="switchProductGroup" style="display:none"></div>` : `
     <div id="switchProductGroup" style="display:${(existing==='switch_product'||existing==='custom_switch')?'block':'none'}">
       <div class="form-group">
         <label class="form-label">Switch to Product *</label>
         <select class="form-select" id="matSwitchProductType">${switchProductsHtml}</select>
         ${poolNote}
       </div>
-    </div>
-    ${!isDeliveryBike ? `
+    </div>`}
+    ${(!isDeliveryBike && !payoutOnly) ? `
     <div id="customPayoutGroup" style="display:${(existing==='payout_custom'||existing==='custom_switch')?'block':'none'}">
       <div class="form-group">
         <label class="form-label">Amount to Pay Out (R) — applied per investment</label>
@@ -4940,7 +5006,9 @@ async function openPoolMaturityModal(poolId) {
     ` : `<div id="customPayoutGroup" style="display:none"></div>`}
     <div style="font-size:0.72rem;color:var(--text-dim);line-height:1.6;margin-top:8px">
       <i class="fa-solid fa-clock" style="color:var(--gold)"></i>
-      You can update this instruction at any time before maturity. If not submitted, funds will be automatically ${isDeliveryBike ? 'paid out to your wallet' : 'reinvested'}.
+      ${payoutOnly
+        ? `Nothing to submit — this happens automatically on the maturity date.`
+        : `You can update this instruction at any time before maturity. If not submitted, funds will be automatically ${isDeliveryBike ? 'paid out to your wallet' : 'reinvested'}.`}
     </div>
   `;
 
@@ -4948,7 +5016,7 @@ async function openPoolMaturityModal(poolId) {
     _matClearError();
     const v = e.target.value;
     document.getElementById('switchProductGroup').style.display  = (v === 'switch_product' || v === 'custom_switch') ? 'block' : 'none';
-    if (!isDeliveryBike) {
+    if (!isDeliveryBike && !payoutOnly) {
       document.getElementById('reinvestGroup').style.display      = v === 'reinvest' ? 'block' : 'none';
       document.getElementById('customPayoutGroup').style.display  = (v === 'payout_custom' || v === 'custom_switch') ? 'block' : 'none';
     }
@@ -7080,7 +7148,7 @@ function _saNormalDetail(sa, meta) {
           <td>${Utils.statusBadge(inv.status)}</td>
           <td class="td-muted">${daysLeft !== null ? `${daysLeft}d` : '—'}</td>
           <td class="td-green fw-700">${Utils.rand(inv.amount)}</td>
-          <td>${inv.status === 'matured' && !inv.maturity_instruction ? `<button class="btn btn--ghost btn--sm" style="font-size:0.7rem;padding:2px 8px;white-space:nowrap" onclick="event.stopPropagation();Modal.close('saDetailModal');openMaturityModal('${inv.id}')">Give Instruction</button>` : ''}</td>
+          <td>${inv.status === 'matured' && !inv.maturity_instruction && !Utils.isPayoutOnlyProduct(inv.product_type) ? `<button class="btn btn--ghost btn--sm" style="font-size:0.7rem;padding:2px 8px;white-space:nowrap" onclick="event.stopPropagation();Modal.close('saDetailModal');openMaturityModal('${inv.id}')">Give Instruction</button>` : ''}</td>
         </tr>`;
       }).join('')}</tbody>
     </table>` : ''}

@@ -7906,6 +7906,12 @@ function _renderInvestmentDetail(inv, backTo, backKind) {
     : null;
   const _matPlan   = Utils.maturityPlan(inv, _switchLbl);
 
+  /* Ethical & Interest-Free holdings settle in cash — each pool is its own
+     concluded contract, so there is nothing to reinvest or switch into. The
+     server refuses anything else on these, for staff as well as clients, so
+     offering the full list here would only produce an error nobody can act on. */
+  const _admPayoutOnly = Utils.isPayoutOnlyProduct(inv.product_type);
+
   const _investorName = inv.investor_name || invRecord
     ? _esc(inv.investor_name || `${invRecord?.first_name || ''} ${invRecord?.last_name || ''}`.trim())
     : '';
@@ -7943,7 +7949,10 @@ function _renderInvestmentDetail(inv, backTo, backKind) {
     <div class="panel" style="padding:14px;margin-bottom:14px;background:var(--ci-bg-light,#F7F8FA)">
       <div style="font-size:0.8rem;font-weight:700;color:#1a1a1a;margin-bottom:8px"><i class="fa-solid fa-user-pen" style="color:var(--gold);margin-right:6px"></i>Set instruction on behalf of client</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <select id="admMatInstruction" class="form-select" style="flex:1;min-width:180px" onchange="_admMatToggle()">
+        <select id="admMatInstruction" class="form-select" style="flex:1;min-width:180px" onchange="_admMatToggle()"${_admPayoutOnly ? ' disabled' : ''}>
+          ${_admPayoutOnly ? `
+          <option value="payout_all" selected>Pay out all (capital + returns)</option>
+          ` : `
           <option value="reinvest"${inv.maturity_instruction === 'reinvest' ? ' selected' : ''}>Reinvest into next pool</option>
           <option value="payout_all"${inv.maturity_instruction === 'payout_all' ? ' selected' : ''}>Pay out all (capital + returns)</option>
           <option value="payout_return"${inv.maturity_instruction === 'payout_return' ? ' selected' : ''}>Pay out returns only</option>
@@ -7951,11 +7960,18 @@ function _renderInvestmentDetail(inv, backTo, backKind) {
           <option value="switch_product"${inv.maturity_instruction === 'switch_product' ? ' selected' : ''}>Switch product</option>
           <option value="custom_switch"${inv.maturity_instruction === 'custom_switch' ? ' selected' : ''}>Custom payout &amp; switch the rest</option>
           <option value="switch_amount"${inv.maturity_instruction === 'switch_amount' ? ' selected' : ''}>Switch an amount &amp; reinvest the rest</option>
+          `}
         </select>
         <button class="btn btn--primary btn--sm" onclick='adminSetInstruction(${_esc(JSON.stringify(inv.id))})'>
           <i class="fa-solid fa-check"></i> Set Instruction
         </button>
       </div>
+      ${_admPayoutOnly ? `
+      <div style="font-size:0.68rem;color:var(--text-muted);margin-top:6px;line-height:1.5">
+        <i class="fa-solid fa-scale-balanced" style="color:#0096ff;margin-right:4px"></i>
+        Ethical &amp; Interest-Free: concluded at the end of the term and paid out in full.
+        This is what the maturity engine does whether or not an instruction is set.
+      </div>` : ''}
 
       <!-- The custom instructions are meaningless without their companion
            field, and the server refuses them without it. Shown only when the

@@ -633,7 +633,13 @@ const Utils = {
   maturityPlan(inv, productLabel) {
     if (!inv) return null;
     const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
-    const instr = inv.maturity_instruction || 'pending';
+    /* What the engine will DO, not what the column says. On a payout-only
+       product they can differ — an Ethical & Interest-Free holding carrying
+       'reinvest' from before the rule still settles in cash — and this panel
+       is the one staff read to know what is about to happen to the money. */
+    const instr = Utils.isPayoutOnlyProduct(inv.product_type)
+      ? 'payout_all'
+      : (inv.maturity_instruction || 'pending');
 
     const capital = num(inv.amount);
     const rate    = Utils.effectiveRate(inv);
@@ -777,6 +783,26 @@ const Utils = {
   instructionLabel(key) {
     if (!key || key === 'pending') return null;
     return Utils.INSTRUCTION_LABELS[key] || String(key).replace(/_/g, ' ');
+  },
+
+  /* Products that can only be settled in cash at maturity.
+
+     Ethical & Interest-Free pools (product_type `eif_*`) are each a discrete
+     contract — a murabaha sale, an ijara lease, a mudarabah venture — and are
+     concluded when the underlying transaction concludes. There is nothing to
+     roll into. Offering "reinvest" would enter a client into a NEW contract
+     they never agreed, which is precisely what someone who will not take riba
+     came here to avoid. So the only instruction is Payout All, and that is
+     also what happens when they set none.
+
+     Matched on the prefix, not on the three products that exist today, so a
+     fourth EIF structure inherits the rule rather than quietly defaulting to
+     reinvest.
+
+     Mirrors server/services/maturityPolicy.js. A check asserts the two agree:
+     a form offering an option the server refuses is a dead end. */
+  isPayoutOnlyProduct(productType) {
+    return /^eif(_|$)/i.test(String(productType == null ? '' : productType).trim());
   },
 
   /* Whether a maturity instruction is set, across the investments a client

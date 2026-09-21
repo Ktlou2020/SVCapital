@@ -34,6 +34,7 @@
 'use strict';
 
 const { postedReturn, resolveRolloverTarget } = require('./maturityPreflight');
+const { effectiveInstruction } = require('./maturityPolicy');
 
 const num    = v => parseFloat(v) || 0;
 const round2 = n => Math.round((Number(n) || 0) * 100) / 100;
@@ -144,14 +145,18 @@ async function buildMaturityReport(db, poolId) {
       amount: i.amount, actualReturn: i.actual_return, poolActualRate: i.pool_actual_rate });
 
     /* What the client chose, and what the engine will do with it. They differ
-       for exactly one case, and it is not cosmetic: a delivery-bike holding
-       left on reinvest is paid OUT. Reporting the tag alone would put that
-       money in the reinvest column and understate the cash leaving. */
+       for two cases, and neither is cosmetic: a delivery-bike holding left on
+       reinvest is paid OUT, and an Ethical & Interest-Free holding is settled
+       in cash whatever its column says, because each EIF pool is its own
+       concluded contract. Reporting the tag alone would put that money in the
+       reinvest column and understate the cash leaving. The rule is imported
+       from maturityPolicy, so this report and the engine cannot drift. */
     const raw  = String(i.maturity_instruction || '').trim();
     const tag  = raw === '' ? AUTO_REINVEST : raw;
-    const asEngine = raw === '' ? 'reinvest' : raw;
-    const effective = (asEngine === 'reinvest' && String(i.product_type || '').includes('delivery_bike'))
-      ? 'payout_all' : asEngine;
+    /* What the tag alone implies — blank means the reinvest default. Kept
+       so the row can say whether the engine departs from it. */
+    const asEngine  = raw === '' ? 'reinvest' : raw;
+    const effective = effectiveInstruction(raw, i.product_type);
 
     if (ret === null) {
       /* The engine skips these and retries the next night. They are not part
