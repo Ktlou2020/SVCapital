@@ -1692,7 +1692,7 @@ const EIF_PRODUCTS = [
     ].join('\n'),
     min_investment: 500, term_months: 6, benchmark_rate: 0.115, performance_fee_pct: 0,
     risk_profile: 'Low-Medium', risk_color: '#22c55e', icon: 'fa-handshake',
-    color: '#65ed00', badge_class: 'badge--green', sector: 'Trade Finance', sort_order: 40,
+    color: '#0096ff', badge_class: 'badge--blue', sector: 'Trade Finance', sort_order: 40,
   },
   {
     product_type: 'eif_ijara', label: 'Ijara Asset Leasing',
@@ -1708,7 +1708,7 @@ const EIF_PRODUCTS = [
     ].join('\n'),
     min_investment: 1000, term_months: 36, benchmark_rate: 0.125, performance_fee_pct: 0,
     risk_profile: 'Medium', risk_color: '#fec24f', icon: 'fa-file-contract',
-    color: '#65ed00', badge_class: 'badge--green', sector: 'Asset Leasing', sort_order: 41,
+    color: '#0096ff', badge_class: 'badge--blue', sector: 'Asset Leasing', sort_order: 41,
   },
   {
     product_type: 'eif_mudarabah', label: 'Mudarabah Enterprise',
@@ -1724,7 +1724,7 @@ const EIF_PRODUCTS = [
     ].join('\n'),
     min_investment: 2500, term_months: 12, benchmark_rate: 0.145, performance_fee_pct: 0.20,
     risk_profile: 'Medium-High', risk_color: '#ffb782', icon: 'fa-scale-balanced',
-    color: '#65ed00', badge_class: 'badge--green', sector: 'Enterprise Finance', sort_order: 42,
+    color: '#0096ff', badge_class: 'badge--blue', sector: 'Enterprise Finance', sort_order: 42,
   },
 ];
 
@@ -3753,6 +3753,29 @@ async function autoSetup() {
       console.log(`\u2705 Seeded ${ART.length} opening insight article(s).`);
     });
 
+    await step("20. Recolour the Ethical & Interest-Free offering", async () => {
+      /* Step 13 installs the EIF products with ON CONFLICT DO NOTHING, which
+         is right — it must never overwrite what an admin has edited. It also
+         means changing a colour in EIF_PRODUCTS reaches a brand-new database
+         and nowhere else, which is every environment that matters.
+
+         The client asked for the lime to go: it was hard to keep consistent
+         across the site, drifted into mismatched shades, and measures 1.5:1
+         on white so anything set in it had to be darkened by hand. #0096ff is
+         the CI blue and already in the palette.
+
+         Narrow on purpose. It moves ONLY the three EIF rows, and only while
+         they still carry the exact colour they were installed with — an admin
+         who has since chosen their own is left alone, and a second run does
+         nothing because the value no longer matches. */
+      const { rowCount } = await pool.query(
+        `UPDATE products
+            SET color = '#0096ff', badge_class = 'badge--blue', updated_at = NOW()
+          WHERE product_type IN ('eif_murabaha','eif_ijara','eif_mudarabah')
+            AND color = '#65ed00'`);
+      if (rowCount) console.log(`\u2705 Recoloured ${rowCount} EIF product(s) to the CI blue.`);
+    });
+
     await step("19. Announce the features nobody has been told about", async () => {
       /* Everything shipped recently, each with the one thing release notes
          leave out: where to find it.
@@ -3787,6 +3810,11 @@ async function autoSetup() {
           title: 'One checklist on the client overview, not two',
           body: 'The Getting Started panel is gone. It listed the same steps as the Action Centre in different words, with its own completion rules, so a client was asked to add funds three times on one screen and the two panels could disagree about whether FICA was done. The Action Centre also no longer repeats its next step underneath itself \u2014 the outstanding one is marked Next up in the list. And "Add funds to your wallet" now stays completed once a client has funded: it was measured on the balance right now, so anyone who invested their whole wallet went back to incomplete permanently.',
           where: 'Client portal \u2192 Portfolio Overview, under the welcome banner. It hides itself once all five steps are done.' },
+
+        { id: 'ANN-2026-EIF-FEEDBACK', area: 'both', icon: 'fa-mosque',
+          title: 'Ethical & Interest-Free is blue, and quotes the pool\u2019s minimum',
+          body: 'Two changes from the review. The section is now the CI blue (#0096ff) instead of the lime \u2014 the lime was hard to keep consistent across the site and had to be darkened by hand wherever it carried text. And the minimum on a product card is now the cheapest OPEN pool\u2019s minimum, not the figure on the product record: the two are set in different places and had drifted, so the page offered a Murabaha at R500 while the open pool would not take under R1 000. Where no pool is open the product figure is shown, marked indicative.',
+          where: 'Client portal \u2192 Invest \u2192 the Ethical & Interest-Free tab, and the same section on the public site. Pool minimums are set per pool under Pools in this console.' },
 
         { id: 'ANN-2026-SUPPORT-NUMBER', area: 'both', icon: 'fa-phone',
           title: 'Support WhatsApp number changed',

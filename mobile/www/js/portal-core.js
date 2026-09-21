@@ -3169,13 +3169,43 @@ function _productRisk(productType) {
    portal — the is_active switch the platform already has, rather than a second
    flag somebody has to remember. */
 
-function EIF_ACCENT()   { return '#65ed00'; }        /* CI lime — see css/ci-theme.css */
+/* #0096ff, the CI blue, already in Utils.ciProductPalette. It replaced the
+   CI lime at the client's request: the lime was hard to keep consistent
+   across the site and drifted into mismatched shades, and it measures 1.5:1
+   on white, so anything set in it had to be darkened by hand before it could
+   be read. The blue is 3.1:1, and --eif-ink carries the dark version for
+   text. The lime is still the platform's elsewhere — quests, solar,
+   GridFarmer — and is deliberately left there. */
+function EIF_ACCENT()   { return '#0096ff'; }
 function EIF_CATEGORY() { return 'eif'; }
 function EIF_LABEL()    { return 'Ethical &amp; Interest-Free'; }
 /* The mark for the offering, used in three places that must agree: the
    category tab, the section banner, and the badge an EIF product carries when
    it appears in the all-products grid. Change it here and all three follow. */
 function EIF_ICON()     { return 'fa-mosque'; }
+
+/* ─── The minimum a client can actually put in ─────────────────────────
+   The card used to print products.min_investment. Nobody invests in a
+   product: they invest in a POOL, and the pool carries its own minimum. The
+   two are set in different places in the admin console and they drift — the
+   Invest page offered a Murabaha at R500 while the open pool would not take
+   less than R1 000, and the client found out at the point of paying.
+
+   So the figure is the cheapest OPEN pool, which is the cheapest thing that
+   can be bought today. With nothing open there is nothing to buy and the
+   product's own figure is the only one there is; it is returned marked
+   indicative so the label can say so rather than state it as fact.
+
+   CLAUDE.md is explicit that the pool minimum is a rule about the pool. This
+   is the same rule, said on the page where somebody decides. */
+function eifCardMinimum(product, openPools) {
+  const mins = (openPools || [])
+    .map(o => parseFloat(o.min_investment))
+    .filter(v => Number.isFinite(v) && v > 0);
+  if (mins.length) return { amount: Math.min(...mins), indicative: false };
+  const fallback = parseFloat(product && product.min_investment);
+  return { amount: Number.isFinite(fallback) && fallback > 0 ? fallback : 0, indicative: true };
+}
 
 function _isEifProduct(p) { return ((p && p.category) || 'standard') === EIF_CATEGORY(); }
 
@@ -3327,12 +3357,19 @@ function _eifCompareHtml() {
             </tr>
             <tr class="eif-compare__nums">
               <th scope="row">Term &middot; minimum</th>
-              ${prods.map(p => `<td>${p.term_months || '—'} mo &middot; ${Utils.rand(p.min_investment || 0)}</td>`).join('')}
+              ${prods.map(p => {
+                /* Same rule as the cards: the cheapest open pool is the
+                   cheapest thing that can actually be bought. A comparison
+                   table quoting a different minimum from the card above it is
+                   worse than either number on its own. */
+                const m = eifCardMinimum(p, _openPoolsForProduct(p.product_type));
+                return `<td>${p.term_months || '—'} mo &middot; ${Utils.rand(m.amount)}${m.indicative ? '*' : ''}</td>`;
+              }).join('')}
             </tr>
           </tbody>
         </table>
       </div>
-      <p class="eif-compare__foot">Targets are drawn from the underlying trade, lease or venture. Murabaha and Ijara returns come from contracted amounts and are the more predictable of the three; a Mudarabah target is a projection and nothing more.</p>
+      <p class="eif-compare__foot">A minimum marked * is the product's own figure, shown because no pool of that kind is open; what a pool will take is set by the pool. Targets are drawn from the underlying trade, lease or venture. Murabaha and Ijara returns come from contracted amounts and are the more predictable of the three; a Mudarabah target is a projection and nothing more.</p>
     </div>`;
 }
 
@@ -3697,6 +3734,9 @@ function renderProductsGrid() {
     // soonest closing among the open pools
     const days = open.map(o => Utils.daysRemaining(o.end_date)).filter(d => d !== null);
     const soonest = days.length ? Math.min(...days) : null;
+    /* What the cheapest open pool will actually take, not what the product
+       record happens to say. */
+    const cardMin = eifCardMinimum(p, open);
     return `
       <div class="market-pool-card mpc-v2${eif ? ' mpc-v2--eif' : ''}" style="cursor:pointer" onclick="openProductDetail('${p.product_type}')">
         <div class="mpc2-accent" style="background:linear-gradient(90deg,${color},${color}88)"></div>
@@ -3718,8 +3758,8 @@ function renderProductsGrid() {
           </div>
           <div class="mpc2-metric-sep"></div>
           <div class="mpc2-metric">
-            <div class="mpc2-metric__val" style="font-size:1.25rem">${Utils.rand(p.min_investment || 0)}</div>
-            <div class="mpc2-metric__lbl">minimum</div>
+            <div class="mpc2-metric__val" style="font-size:1.25rem">${Utils.rand(cardMin.amount)}</div>
+            <div class="mpc2-metric__lbl">${cardMin.indicative ? 'minimum &middot; indicative' : 'minimum'}</div>
           </div>
           <div class="mpc2-metric-sep"></div>
           <div class="mpc2-metric">

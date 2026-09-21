@@ -4077,7 +4077,7 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
 
    A distinct section inside the same marketplace. The brief was "a slightly
    different look and feel, staying true to our CI", so this borrows nothing
-   from outside the CI palette: the accent is #65ed00, already the CI lime and
+   from outside the CI palette: the accent is #0096ff, already in the CI palette and
    already in Utils.ciProductPalette. Everything else — radii, spacing, type
    scale, card shape — is the platform's, so the section reads as a room in the
    same building rather than a different one.
@@ -4092,11 +4092,11 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
 
 /* One accent, two roles. --eif is the CI lime, used for rules, borders, tints
    and fills. --eif-ink is the same hue taken dark enough to read as text: this
-   section renders on the light CI ground, where #65ed00 measures about 1.7:1
+   section renders on the light CI ground, where #0096ff measures about 3.1:1
    and is unreadable at any size. Anything a person reads uses the ink. */
 .eif-banner, .eif-election, .eif-structure, .eif-compare, .eif-faq, .eif-tag,
 .mkt-cat-tab--eif, .mpc-v2--eif {
-  --eif-ink: #2f6b00;
+  --eif-ink: #0060a8;
 }
 
 .mkt-cat-tabs {
@@ -4286,9 +4286,9 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
   margin-top: 10px;
   padding: 3px 9px;
   border-radius: 4px 10px 10px 10px;
-  border: 1px solid color-mix(in srgb, #65ed00 30%, transparent);
-  background: color-mix(in srgb, #65ed00 10%, transparent);
-  color: var(--eif-ink, #2f6b00);
+  border: 1px solid color-mix(in srgb, #0096ff 30%, transparent);
+  background: color-mix(in srgb, #0096ff 10%, transparent);
+  color: var(--eif-ink, #0060a8);
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.02em;

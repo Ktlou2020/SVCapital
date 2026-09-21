@@ -208,14 +208,14 @@ console.log('\nthe offering shows how each structure earns, rather than assertin
 
 console.log('\nand the accent is never used as text on the light ground');
 {
-  /* #65ed00 measures about 1.7:1 on white. It is the section's accent and it
+  /* #0096ff measures about 3.1:1 on white. It is the section's accent and it
      belongs to rules, borders, tints and fills — never to a word. */
   ok('there is a separate ink for text',
-     /--eif-ink: #2f6b00;/.test(CSS));
+     /--eif-ink: #0060a8;/.test(CSS));
 
   const eifCss = (CSS.match(/ETHICAL AND INTEREST-FREE|Ethical and Interest-Free \(EIF\)[\s\S]*$/) || [''])[0];
   const textProps = [...strip(eifCss).matchAll(/^\s*color:\s*([^;]+);/gm)].map(m => m[1].trim());
-  const rawAccent = textProps.filter(v => /var\(--eif\)|#65ed00/.test(v));
+  const rawAccent = textProps.filter(v => /var\(--eif\)|#0096ff/.test(v));
   ok('no colour declaration uses the raw accent',
      rawAccent.length === 0,
      'found: ' + rawAccent.join(', '));
@@ -318,22 +318,27 @@ console.log('\nthe FAQs are rows, and the claim is the one we can make');
 
 console.log('\nthe look and feel stays inside the CI');
 {
-  ok('the accent is the CI lime',
-     /function EIF_ACCENT\(\)\s*\{ return '#65ed00'; \}/.test(CORE),
+  /* Was the CI lime. The client asked for the blue: the lime was hard to
+     keep consistent across the site and drifted into mismatched shades. Both
+     are in the CI palette, which is the property this assertion is really
+     about — a new hue invented for one section is how a brand stops being
+     one. */
+  ok('the accent is the CI blue',
+     /function EIF_ACCENT\(\)\s*\{ return '#0096ff'; \}/.test(CORE),
      'the CI palette is fixed — a new hue for a new section is how a brand ' +
      'stops being one');
 
   const palette = read('js/api.js');
   ok('and that colour really is in the CI palette',
-     /ciProductPalette:[^\]]*#65ed00/.test(palette));
+     /ciProductPalette:[^\]]*#0096ff/.test(palette));
 
   /* One canonical purple, and no second brand colour smuggled in beside it. */
   const eifCss = (CSS.match(/Ethical and Interest-Free \(EIF\)[\s\S]*$/) || [''])[0];
   const hexes = [...new Set((strip(eifCss).match(/#[0-9a-fA-F]{6}/g) || []).map(h => h.toLowerCase()))];
-  /* #2f6b00 is the same lime taken dark enough to read as text on the light
+  /* #0060a8 is the same blue taken dark enough to read as text on the light
      CI ground — a role of the accent, not a second colour. #0d1a00 is the ink
      that sits ON the accent. */
-  const allowed = ['#65ed00', '#2f6b00', '#0d1a00', '#1a1a1a'];
+  const allowed = ['#0096ff', '#0060a8', '#0d1a00', '#1a1a1a'];
   ok('the EIF stylesheet introduces no colour of its own',
      hexes.every(h => allowed.includes(h)),
      `found ${hexes.filter(h => !allowed.includes(h)).join(', ')} — everything ` +
@@ -414,16 +419,16 @@ console.log('\nthe homepage carries it, on the same switches');
      !/Sharia[- ]certified\b|fully Sharia compliant/i.test(HOME));
 
   /* _applyLiveProductAverages paints each card's stat value and icon with the
-     product's colour, inline. #65ed00 on a white card is about 1.7:1 — the
+     product's colour, inline. #0096ff on a white card is about 3.1:1 — the
      headline figure would be the least legible thing on the card. */
   ok('the accent never becomes body text on the light homepage',
      /\.product-card--eif \.stat__value--gold \{ color: var\(--eif-ink\) !important; \}/.test(HOMECSS) &&
-     /--eif-ink:\s*#2f6b00/.test(HOMECSS),
+     /--eif-ink:\s*#0060a8/.test(HOMECSS),
      'only !important beats the inline style the live sync writes');
 
   const eifCss = (HOMECSS.match(/ETHICAL AND INTEREST-FREE \(EIF\)[\s\S]*$/) || [''])[0];
   const hexes = [...new Set((strip(eifCss).match(/#[0-9a-fA-F]{6}/g) || []).map(h => h.toLowerCase()))];
-  const allowed = ['#65ed00', '#2f6b00', '#fbfef8', '#ffffff', '#f0f2f5', '#fff'];
+  const allowed = ['#0096ff', '#0060a8', '#fbfef8', '#ffffff', '#f0f2f5', '#fff'];
   ok('and the homepage block introduces no colour of its own either',
      hexes.every(h => allowed.includes(h)),
      `found ${hexes.filter(h => !allowed.includes(h)).join(', ')}`);
