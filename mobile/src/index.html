@@ -285,23 +285,13 @@
           <div class="xp-progress-next" id="xpProgressNext"></div>
         </div>
 
-        <!-- Onboarding Wizard (single Getting Started panel) -->
-        <div id="onboardingWizard" style="display:none;margin-bottom:20px">
-          <div class="panel" style="border:1.5px solid rgba(255,155,12,0.3);background:linear-gradient(135deg,rgba(255,155,12,0.06),rgba(255,82,41,0.04))">
-            <div class="panel__header">
-              <span class="panel__title"><i class="fa-solid fa-rocket" style="color:#FF9B0C;margin-right:8px"></i>Getting Started</span>
-              <button onclick="dismissOnboarding()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.8rem">Dismiss</button>
-            </div>
-            <div class="panel__body">
-              <div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px">Complete these steps to start earning returns:</div>
-              <div id="wizardSteps" style="display:flex;flex-direction:column;gap:8px"></div>
-              <div style="margin-top:14px;height:6px;border-radius:3px;background:rgba(0,0,0,0.08);overflow:hidden">
-                <div id="wizardProgressBar" style="height:100%;background:linear-gradient(90deg,#FF9B0C,#FF5229);border-radius:3px;transition:width 0.4s ease;width:0%"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
+        <!-- The Getting Started panel stood here. It listed the same steps as
+             the Action Centre below, in different words and with its own
+             completion rules, so "Add funds" was asked for twice on one screen
+             and the two panels could disagree about whether FICA was done.
+             The Action Centre is the survivor: it has the fuller list and the
+             completion check that copes with an external provider's
+             capitalisation. -->
         <!-- Hero KPI Banner -->
         <div class="portfolio-hero">
           <div class="portfolio-hero__left">
@@ -3087,7 +3077,7 @@
 </nav>
 
 <script src="../js/api.js?v=26"></script>
-<script src="../js/portal-core.js?v=33"></script>
+<script src="../js/portal-core.js?v=34"></script>
 <script src="../js/investor-documents.js?v=7"></script>
 <script src="js/portal.js?v=56"></script>
 <!-- sv-intelligence.js hidden -->

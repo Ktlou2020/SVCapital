@@ -127,7 +127,9 @@ function _setInlineMessage(id, msg, color = 'var(--text-muted)') {
 function _ensureTaskCompletionPanel() {
   let wrap = document.getElementById('taskCompletionPanel');
   if (wrap) return wrap;
-  const anchor = document.getElementById('onboardingWizard') || document.getElementById('welcomeBanner');
+  /* Sits under the welcome banner. It used to prefer #onboardingWizard, the
+     Getting Started panel it duplicated — which has gone. */
+  const anchor = document.getElementById('welcomeBanner');
   if (!anchor || !anchor.parentNode) return null;
   wrap = document.createElement('div');
   wrap.id = 'taskCompletionPanel';
@@ -360,14 +362,21 @@ function renderTaskCompletionPanel() {
   if (!wrap || !body || !meta || !PORTAL.investor) return;
   const inv = PORTAL.investor;
   const hasInvestments = (PORTAL.investments || []).length > 0;
-  const hasWallet = (parseFloat(inv.wallet_balance) || 0) > 0;
+  /* "Add funds to your wallet" was measured on the balance RIGHT NOW, so a
+     client who funded their wallet and then invested all of it went back to
+     incomplete — permanently. That is the screenshot: 4/5 complete, two live
+     investments, and a panel still asking for the one thing already done.
+     A wallet that has been funded stays funded for the purpose of a
+     checklist; having invested is proof the money arrived. */
+  const walletFunded = (parseFloat(inv.wallet_balance) || 0) > 0 || hasInvestments
+    || (PORTAL.transactions || []).some(t => t.type === 'deposit' && t.status !== 'rejected');
   const bankReady = !!(inv.bank_account_number || (inv.bank_account_status && inv.bank_account_status !== 'none' && inv.bank_account_status !== 'pending'));
   const riskReady = !!inv.risk_profile;
   const ficaReady = _isInvestorFicaApproved(inv);
   const tasks = [
     { label: 'Complete identity verification', done: ficaReady, tone: '#fec24f', action: 'openKycUploadModal()', cta: 'Upload documents' },
     { label: 'Add a withdrawal bank account', done: bankReady, tone: '#656565', action: 'openBankDetailsModal()', cta: 'Add bank account' },
-    { label: 'Add funds to your wallet', done: hasWallet, tone: '#22c55e', action: 'openTopUpModal()', cta: 'Add funds' },
+    { label: 'Add funds to your wallet', done: walletFunded, tone: '#22c55e', action: 'openTopUpModal()', cta: 'Add funds' },
     { label: 'Confirm your risk profile', done: riskReady, tone: '#eda5ff', action: 'navigate(\'profile\', document.querySelector(\'[data-view=profile]\'))', cta: 'Review profile' },
     { label: 'Make your first investment', done: hasInvestments, tone: '#fec24f', action: 'navigate(\'marketplace\', document.querySelector(\'[data-view=marketplace]\'))', cta: 'Browse products' },
   ];
@@ -376,26 +385,27 @@ function renderTaskCompletionPanel() {
   meta.textContent = `${doneCount}/${tasks.length} complete`;
   if (!pending.length) { wrap.style.display = 'none'; return; }
   wrap.style.display = 'block';
+  /* The next step is MARKED, not repeated. It used to be listed again
+     underneath with its own button, so "Add funds to your wallet" appeared
+     twice inside one panel — and a third time in the Getting Started panel
+     that has since gone. */
+  const next = pending[0];
   body.innerHTML = `
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-bottom:14px">
-      ${tasks.map(task => `
-        <div class="ac-task${task.done ? ' ac-task--done' : ''}" ${task.done ? '' : `role="button" tabindex="0" onclick="${task.action}"`} style="padding:12px 14px;border-radius:12px;border:1px solid rgba(0,0,0,0.06);background:${task.done ? 'rgba(34,197,94,0.06)' : 'rgba(255,255,255,0.82)'};display:flex;gap:10px;align-items:center;${task.done ? '' : 'cursor:pointer'}">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px">
+      ${tasks.map(task => {
+        const isNext = task === next;
+        return `
+        <div class="ac-task${task.done ? ' ac-task--done' : ''}${isNext ? ' ac-task--next' : ''}" ${task.done ? '' : `role="button" tabindex="0" onclick="${task.action}"`} style="padding:12px 14px;border-radius:12px;border:1px solid ${isNext ? task.tone + '66' : 'rgba(0,0,0,0.06)'};background:${task.done ? 'rgba(34,197,94,0.06)' : isNext ? task.tone + '14' : 'rgba(255,255,255,0.82)'};display:flex;gap:10px;align-items:center;${task.done ? '' : 'cursor:pointer'}">
           <div style="width:24px;height:24px;border-radius:999px;display:flex;align-items:center;justify-content:center;background:${task.done ? '#22c55e' : task.tone + '22'};color:${task.done ? '#fff' : task.tone};flex-shrink:0">
-            <i class="fa-solid ${task.done ? 'fa-check' : 'fa-circle'}" style="font-size:0.7rem"></i>
+            <i class="fa-solid ${task.done ? 'fa-check' : isNext ? 'fa-bolt' : 'fa-circle'}" style="font-size:0.7rem"></i>
           </div>
           <div style="min-width:0;flex:1">
             <div style="font-size:0.8rem;font-weight:700;color:#1a1a1a;line-height:1.35">${task.label}</div>
-            <div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px">${task.done ? 'Completed' : task.cta}</div>
+            <div style="font-size:0.72rem;color:${isNext ? task.tone : 'var(--text-muted)'};font-weight:${isNext ? '700' : '400'};margin-top:4px">${task.done ? 'Completed' : isNext ? 'Next up &mdash; tap to continue' : task.cta}</div>
           </div>
           ${task.done ? '' : `<i class="fa-solid fa-chevron-right" style="color:${task.tone};font-size:0.8rem;flex-shrink:0"></i>`}
-        </div>`).join('')}
-    </div>
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding-top:4px;border-top:1px solid rgba(0,0,0,0.06)">
-      <div>
-        <div style="font-size:0.78rem;font-weight:800;color:#1a1a1a">Recommended next step</div>
-        <div style="font-size:0.76rem;color:var(--text-muted);margin-top:4px">${pending[0].label}</div>
-      </div>
-      <button class="btn btn--primary btn--sm" onclick="${pending[0].action}"><i class="fa-solid fa-bolt"></i> ${pending[0].cta}</button>
+        </div>`;
+      }).join('')}
     </div>`;
 }
 
@@ -1702,90 +1712,17 @@ function renderOverview(skipCharts) {
 }
 
 /* ─── Onboarding Wizard ──────────────────────────────────────────── */
-function renderOnboardingWizard() {
-  const wizard = document.getElementById('onboardingWizard');
-  if (!wizard) return;
+/* renderOnboardingWizard and dismissOnboarding stood here.
 
-  // Check dismiss state first
-  if (localStorage.getItem('svc_onboard_dismissed') === '1') {
-    wizard.style.display = 'none';
-    return;
-  }
+   They drew a "Getting Started" checklist above the Action Centre with the
+   same four steps in different words, its own completion rules, and its own
+   buttons — so a client was asked to add funds twice on one screen, and the
+   two panels could disagree: this one tested fica_status === 'approved'
+   exactly, while the Action Centre normalises what an external provider
+   sends, so a client verified as "Approved" was complete in one panel and
+   outstanding in the other.
 
-  const inv = PORTAL.investor;
-  if (!inv) return;
-
-  const ficaDone   = inv.fica_status === 'approved';
-  const bankDone   = inv.bank_account_status && inv.bank_account_status !== 'none';
-  const walletDone = parseFloat(inv.wallet_balance) > 0;
-  const investDone = !!(PORTAL.investments && PORTAL.investments.length > 0);
-
-  // If all steps done, hide
-  if (ficaDone && bankDone && walletDone && investDone) {
-    wizard.style.display = 'none';
-    return;
-  }
-
-  const stepDefs = [
-    {
-      label: 'Identity Verification',
-      icon: 'id-card',
-      done: ficaDone,
-      action: 'openKycUploadModal()',
-      actionLabel: 'Upload Docs'
-    },
-    {
-      label: 'Add Bank Account',
-      icon: 'building-columns',
-      done: bankDone,
-      action: 'openBankDetailsModal()',
-      actionLabel: 'Add Account'
-    },
-    {
-      label: 'Add Funds',
-      icon: 'wallet',
-      done: walletDone,
-      action: 'openTopUpModal()',
-      actionLabel: 'Add Funds'
-    },
-    {
-      label: 'Make First Investment',
-      icon: 'coins',
-      done: investDone,
-      action: "navigate('marketplace', document.querySelector('[data-view=marketplace]'))",
-      actionLabel: 'Browse Products'
-    }
-  ];
-
-  const doneCount = stepDefs.filter(s => s.done).length;
-  const progressPct = (doneCount / stepDefs.length) * 100;
-
-  const stepsEl = document.getElementById('wizardSteps');
-  if (stepsEl) {
-    stepsEl.innerHTML = stepDefs.map(s => `
-      <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;background:rgba(0,0,0,0.04)">
-        <div style="width:22px;height:22px;border-radius:50%;background:${s.done ? '#22c55e' : 'rgba(254,194,79,0.2)'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <i class="fa-solid ${s.done ? 'fa-check' : 'fa-' + s.icon}" style="font-size:0.65rem;color:${s.done ? '#fff' : '#fec24f'}"></i>
-        </div>
-        <div style="flex:1">
-          <div style="font-size:0.82rem;font-weight:${s.done ? '600' : '700'};color:${s.done ? '#9ca3af' : '#1a1a1a'};${s.done ? 'text-decoration:line-through' : ''}">${s.label}</div>
-        </div>
-        ${!s.done ? `<button onclick="${s.action}" class="btn btn--primary btn--sm" style="padding:4px 12px;font-size:0.72rem">${s.actionLabel}</button>` : ''}
-      </div>
-    `).join('');
-  }
-
-  const bar = document.getElementById('wizardProgressBar');
-  if (bar) bar.style.width = progressPct + '%';
-
-  wizard.style.display = 'block';
-}
-
-function dismissOnboarding() {
-  localStorage.setItem('svc_onboard_dismissed', '1');
-  const wizard = document.getElementById('onboardingWizard');
-  if (wizard) wizard.style.display = 'none';
-}
+   One list, in the Action Centre. */
 
 function renderPortfolioTrendChart() {
   const canvas = document.getElementById('portfolioTrendChart');

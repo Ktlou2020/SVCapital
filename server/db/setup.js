@@ -3675,6 +3675,15 @@ async function autoSetup() {
           body: 'FICA documents and files attached to support tickets now appear together on the client record, newest first, with the status of each and who reviewed it. Before this, a deposit slip could only be found by remembering which ticket it was attached to.',
           where: 'Clients \u2192 open any client \u2192 the Overview tab, under Bank Account.' },
 
+        /* Insights, referral sharing and the app banner are announced
+           alongside them on staging; they describe work that is not on this
+           branch, and a notice pointing at a menu item that is not there is
+           the exact failure this mechanism exists to prevent. */
+        { id: 'ANN-2026-ACTION-CENTRE', area: 'portal', icon: 'fa-list-check',
+          title: 'One checklist on the client overview, not two',
+          body: 'The Getting Started panel is gone. It listed the same steps as the Action Centre in different words, with its own completion rules, so a client was asked to add funds three times on one screen and the two panels could disagree about whether FICA was done. The Action Centre also no longer repeats its next step underneath itself \u2014 the outstanding one is marked Next up in the list. And "Add funds to your wallet" now stays completed once a client has funded: it was measured on the balance right now, so anyone who invested their whole wallet went back to incomplete permanently.',
+          where: 'Client portal \u2192 Portfolio Overview, under the welcome banner. It hides itself once all five steps are done.' },
+
         { id: 'ANN-2026-SUPPORT-NUMBER', area: 'both', icon: 'fa-phone',
           title: 'Support WhatsApp number changed',
           body: 'The support number is now 079 111 5476. Every WhatsApp link on the site, the portal and the app points at it.',
