@@ -3851,6 +3851,16 @@ async function autoSetup() {
           body: 'The three stat tiles on a My Investments card were fixed at a third of the card each. A rand figure has no place to break inside it, so anything from about R100 000 up ran straight out past the tile edge and was cut off \u2014 exactly the number a client most wants to read. The tiles now fit themselves to the card, taking two columns where three will not hold the figure.',
           where: 'Client portal \u2192 My Investments, on the web and in the app.' },
 
+        { id: 'ANN-2026-AGREEMENT-SIGNABLE', area: 'portal', icon: 'fa-file-signature',
+          title: 'The investment agreement can actually be signed',
+          body: '"Sign & continue" did nothing. The button unlocks once the client has read to the end of the agreement, ticked every box, typed their name and drawn a signature \u2014 but the reading could never be satisfied: the document went into a frame fixed at 1 200px inside a 280px window, the agreement runs to about 4 000px, and because a frame scrolls its own content the outer window never saw the scroll. The frame now holds the whole document and reports for itself. A blocked button also lists what is still outstanding, and a disabled button across the platform now looks disabled instead of identical to a live one.',
+          where: 'Client portal \u2192 Invest \u2192 choose a pool and confirm. The agreement screen is the step before the money leaves the wallet, and only appears where INVESTMENT_AGREEMENTS_ENABLED is on.' },
+
+        { id: 'ANN-2026-AGREEMENT-FEE-WORDING', area: 'both', icon: 'fa-scale-unbalanced',
+          title: 'The agreement no longer contradicts itself about the platform fee',
+          body: 'The fee is 1% charged ON TOP of the investment: enter R500 and R500 reaches the pool, R5,00 is the fee, R505,00 leaves the wallet. The agreement said so in its fee table and its Fees clause \u2014 and then asked the client to tick "the 1% platform fee is taken from the amount I am investing, not added to it", which is the opposite. The tick box and two clauses are corrected, and the templates move to new versions (standard v2, the three EIF structures v3) so anything already signed stays explicable in the words it was signed under. Worth checking whether any client signed under the old wording.',
+          where: 'Client portal \u2192 the agreement screen, and every agreement PDF from Clients \u2192 open a client \u2192 Documents.' },
+
         { id: 'ANN-2026-SUPPORT-NUMBER', area: 'both', icon: 'fa-phone',
           title: 'Support WhatsApp number changed',
           body: 'The support number is now 079 111 5476. Every WhatsApp link on the site, the portal and the app points at it.',

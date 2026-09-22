@@ -335,10 +335,17 @@ function call(method, url, body, user) {
          /opacity:\.0[0-9]/.test(eif), 'a watermark you cannot read through is a stain');
 
       /* The wording changed with the mark, so a v1 signature stays
-         distinguishable from a v2 one. */
+         distinguishable from what came after it.
+
+         Past v1, not equal to v2. Pinning the exact number turns every later
+         correction into a failure here, which teaches whoever makes it to
+         edit this line rather than think about the version — the opposite of
+         what "never edit a version in place" is for. */
+      const vnum = v => parseInt(String(v).replace(/^v/, ''), 10);
       for (const pt of ['eif_murabaha', 'eif_ijara', 'eif_mudarabah']) {
-        ok(`${pt} records a new template version`,
-           AG.templateFor(pt).version === 'v2', AG.templateFor(pt).version);
+        const v = AG.templateFor(pt).version;
+        ok(`${pt} records a template version past the unmarked v1`,
+           /^v\d+$/.test(v) && vnum(v) > 1, v);
       }
 
       /* Every agreement row stores its own copy of the document, so the mark

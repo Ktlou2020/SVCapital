@@ -10951,6 +10951,11 @@ function _agrOpenFull() {
   const w = window.open('', '_blank');
   if (!w) { Toast.error('Your browser blocked the new window. Please allow pop-ups for this site.'); return; }
   w.document.open(); w.document.write(_agrBag().docHtml); w.document.close();
+  /* Reading the full copy IS reading it, and it is the honest way out if the
+     embedded frame cannot report for itself — an extension blocking frame
+     scripts, say. Without this the investor would be stuck again, with no
+     route to the end of a document they are looking at in another window. */
+  _agrMarkRead('opened');
 }
 
 function _agrEnsureModal() {
@@ -10966,6 +10971,7 @@ function _agrEnsureModal() {
         <button class="modal__close" aria-label="Close" onclick="_agrCancel()"><i class="fa-solid fa-xmark"></i></button>
       </div>
       <div class="modal__body" id="agrBody"></div>
+      <div id="agrWhy" style="padding:0 20px 8px;font-size:0.78rem;color:#b45309;display:none"></div>
       <div class="modal__footer">
         <button class="btn btn--secondary" onclick="_agrCancel()">Cancel</button>
         <button class="btn btn--primary" id="agrSignBtn" disabled onclick="_agrSign()">
@@ -11009,8 +11015,8 @@ async function signAgreementFor(pool, walletSpend, subAccountId) {
     </div>
 
     <div id="agrDoc" style="border:1px solid rgba(0,0,0,0.12);border-radius:10px;height:280px;
-         overflow-y:auto;background:#fff;padding:0" onscroll="_agrScrolled(this)">
-      <iframe id="agrFrame" title="Investment agreement" style="width:100%;height:1200px;border:0"></iframe>
+         overflow:hidden;background:#fff;padding:0">
+      <iframe id="agrFrame" title="Investment agreement" style="width:100%;height:100%;border:0;display:block"></iframe>
     </div>
     <div id="agrReadHint" style="font-size:0.78rem;color:var(--text-muted);margin-top:6px">
       Scroll to the end of the agreement to continue.
@@ -11053,11 +11059,17 @@ async function signAgreementFor(pool, walletSpend, subAccountId) {
      must render as its own document without inheriting the portal's styles
      or reaching the portal's DOM. */
   const frame = document.getElementById('agrFrame');
-  frame.setAttribute('sandbox', '');
+  /* allow-scripts and nothing else. The document runs the few lines that
+     report it has been scrolled to the end; without allow-same-origin it
+     stays in an opaque origin, so it still cannot read the portal's DOM,
+     cookies or storage, and cannot navigate the top window. */
+  frame.setAttribute('sandbox', 'allow-scripts');
   frame.srcdoc = drawn.document_html || '';
   _agrBag().docHtml = drawn.document_html || '';
 
   _agrSetupPad();
+
+  _agrListen();
 
   return new Promise(resolve => {
     _agrBag().state = { id: drawn.id, acks, resolve, read: false, drawnSig: false };
@@ -11067,15 +11079,42 @@ async function signAgreementFor(pool, walletSpend, subAccountId) {
 }
 
 /* A document nobody scrolled is a document nobody read. Not proof, but the
-   difference between "we showed it" and "we put it behind a tick box". */
-function _agrScrolled(el) {
-  if (!_agrBag().state) return;
-  if (el.scrollTop + el.clientHeight >= el.scrollHeight - 24) {
-    _agrBag().state.read = true;
-    const hint = document.getElementById('agrReadHint');
-    if (hint) { hint.textContent = 'You have reached the end of the agreement.'; hint.style.color = 'var(--green-mid, #22c55e)'; }
-    _agrRecheck();
+   difference between "we showed it" and "we put it behind a tick box".
+
+   Judged from INSIDE the document now. It used to be judged from outside: the
+   agreement went into a 1200px-tall iframe inside a 280px scrolling box, and
+   that box's onscroll was the signal. The agreement runs to about 4 000px, so
+   1200px of frame showed less than a third of it and the rest could not be
+   reached at all; and because an iframe scrolls its own content, a wheel over
+   it never reached the box, so the box's onscroll never fired either. The
+   investor ticked every acknowledgement, typed their name, drew their
+   signature, and "Sign & continue" did nothing and said nothing.
+
+   The frame is the scroller now and the document reports for itself. This
+   believes the report only from the frame it put there — a sandboxed frame
+   posts from an opaque origin, so identity is the window, not the origin. */
+function _agrMarkRead(why) {
+  const st = _agrBag().state;
+  if (!st || st.read) return;
+  st.read = true;
+  const hint = document.getElementById('agrReadHint');
+  if (hint) {
+    hint.textContent = why === 'opened'
+      ? 'You opened the full agreement.'
+      : 'You have reached the end of the agreement.';
+    hint.style.color = 'var(--green-mid, #22c55e)';
   }
+  _agrRecheck();
+}
+
+function _agrListen() {
+  if (window.__svcAgreementListening) return;
+  window.__svcAgreementListening = true;
+  window.addEventListener('message', e => {
+    const frame = document.getElementById('agrFrame');
+    if (!frame || e.source !== frame.contentWindow) return;
+    if (e.data && e.data.svcAgreement === 'read') _agrMarkRead('scrolled');
+  });
 }
 
 function _agrSetupPad() {
@@ -11109,17 +11148,42 @@ function _agrClearPad() {
   if (_agrBag().state) { _agrBag().state.drawnSig = false; _agrRecheck(); }
 }
 
-/* Every condition, every time. The button is the only place the rules are
-   visible to the person, and the server checks them again anyway. */
+/* Every condition, every time, and the reason when one is not met.
+
+   A disabled button is invisible on this platform — nothing styles
+   .btn:disabled, so it looks exactly like a live one. That is half of why a
+   gate that could never be satisfied was reported as "nothing happens when I
+   click Sign & continue" rather than "the button is greyed out": there was
+   nothing to see and nothing to read. The list below is the answer to "why
+   can I not continue", written where the question is asked. */
+function _agrOutstanding() {
+  const st = _agrBag().state;
+  if (!st) return [];
+  const missing = [];
+  if (!st.read) missing.push('read to the end of the agreement');
+  if (!st.acks.every((_, i) => (document.getElementById('agrAck' + i) || {}).checked)) {
+    missing.push('tick every box');
+  }
+  if (String((document.getElementById('agrName') || {}).value || '').trim().length <= 1) {
+    missing.push('type your full name');
+  }
+  if (!st.drawnSig) missing.push('draw your signature');
+  return missing;
+}
+
 function _agrRecheck() {
   const btn = document.getElementById('agrSignBtn');
   if (!btn || !_agrBag().state) return;
-  const allTicked = _agrBag().state.acks.every((_, i) => {
-    const el = document.getElementById('agrAck' + i);
-    return el && el.checked;
-  });
-  const named = String((document.getElementById('agrName') || {}).value || '').trim().length > 1;
-  btn.disabled = !(allTicked && named && _agrBag().state.drawnSig && _agrBag().state.read);
+  const missing = _agrOutstanding();
+  btn.disabled = missing.length > 0;
+
+  const why = document.getElementById('agrWhy');
+  if (why) {
+    why.textContent = missing.length
+      ? `Still to do: ${missing.join(', ')}.`
+      : '';
+    why.style.display = missing.length ? '' : 'none';
+  }
 }
 
 function _agrCancel() {
