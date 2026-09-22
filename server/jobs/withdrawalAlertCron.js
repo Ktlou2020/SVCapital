@@ -2,7 +2,7 @@
 const cron         = require('node-cron');
 const pool         = require('../db/pool');
 const emailService = require('../services/email');
-const { staffRecipients, warnIfNotUsers } = require('../services/staffRecipients');
+const { staffRecipients, warnIfNotUsers, withStandingCopies } = require('../services/staffRecipients');
 
 /* The recipient list is resolved by the shared service now — this file grew
    its own copy first, and three other sites had the same fault, so keeping a
@@ -43,7 +43,12 @@ async function runWithdrawalAlert() {
       LIMIT 20
     `);
 
-    const { to: admins, source } = await staffRecipients();
+    /* Plus the people who are copied on this alert whether or not they hold a
+       staff account. Deduplicated against the resolved list, so somebody who
+       is both is still mailed once. */
+    const { to: staff, source } = await staffRecipients();
+    const admins = withStandingCopies(staff, 'withdrawal');
+    const copied = admins.filter(a => a.standingCopy).length;
 
     for (const admin of admins) {
       await emailService.sendWithdrawalAlert(admin, {
@@ -57,7 +62,9 @@ async function runWithdrawalAlert() {
        Production logged "Alerted 0 admin(s) — 3 pending withdrawal(s)." at
        info level, three times a day, while client withdrawals sat unapproved. */
     warnIfNotUsers(source, 'withdrawalAlertCron');
-    console.log(`[withdrawalAlertCron] Alerted ${admins.length} recipient(s) from ${source} — ${count} pending withdrawal(s).`);
+    console.log(`[withdrawalAlertCron] Alerted ${admins.length} recipient(s) from ${source}` +
+                (copied ? ` plus ${copied} standing copy/copies` : '') +
+                ` — ${count} pending withdrawal(s).`);
   } catch (e) {
     console.error('[withdrawalAlertCron] Fatal error:', e.message);
   }

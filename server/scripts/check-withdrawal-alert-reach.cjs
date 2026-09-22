@@ -219,6 +219,72 @@ const clearStaff = async () => {
          JSON.stringify(after));
     }
 
+    /* ── Standing copies on the withdrawal alert ────────────────────────
+       Two people are copied on this alert whether or not they hold a staff
+       account. They are additive to whoever staffRecipients() resolves, and
+       they must not produce a second copy for somebody already on that list
+       — the alert fires three times a day, and a duplicate three times a day
+       is how a real alert becomes something people filter away. */
+    console.log('\nthe standing copies on the withdrawal alert');
+    {
+      const SR = require(path.join(ROOT, 'server', 'services', 'staffRecipients.js'));
+      const staff = [{ id: 'u1', email: 'kagiso@svcapital.co.za', first_name: 'Kagiso' }];
+      const out   = SR.withStandingCopies(staff, 'withdrawal');
+      const mails = out.map(r => String(r.email).toLowerCase());
+
+      ok('Odireleng is copied', mails.includes('odireleng@svcapital.co.za'), mails.join(', '));
+      ok('Balepi is copied',    mails.includes('balepi@svcapital.co.za'),    mails.join(', '));
+      ok('the resolved staff are still there', mails.includes('kagiso@svcapital.co.za'));
+      ok('and nobody is added twice', new Set(mails).size === mails.length, mails.join(', '));
+
+      /* The address is written with a capital in one place and lowercase in
+         another; they are one person either way. */
+      const dup = SR.withStandingCopies(
+        [{ id: 'u1', email: 'ODIRELENG@SVCAPITAL.CO.ZA', first_name: 'Odi' }], 'withdrawal');
+      ok('somebody already on the list is not copied again, whatever the case',
+         dup.filter(r => String(r.email).toLowerCase() === 'odireleng@svcapital.co.za').length === 1,
+         JSON.stringify(dup.map(r => r.email)));
+
+      ok('the copies are marked as such, so the log can say so',
+         out.filter(r => r.standingCopy).length === 2);
+      ok('and they carry a name, so the email does not open "Hi there"',
+         out.filter(r => r.standingCopy).every(r => /^[A-Z][a-z]+$/.test(r.first_name || '')),
+         JSON.stringify(out.filter(r => r.standingCopy).map(r => r.first_name)));
+
+      ok('a local part that is not a plain name falls back rather than mangling',
+         SR.nameFromEmail('finance.team@x.co') === null &&
+         SR.nameFromEmail('ops-2@x.co') === null &&
+         SR.nameFromEmail('Balepi@x.co') === 'Balepi');
+
+      /* Only this alert. FICA, leave and the director report resolve their
+         recipients the same way and were not asked for. */
+      ok('no other notification gains these recipients',
+         SR.withStandingCopies(staff, 'fica').length === 1 &&
+         SR.withStandingCopies(staff, 'director_report').length === 1);
+
+      const prev = process.env.WITHDRAWAL_ALERT_ALSO;
+      try {
+        process.env.WITHDRAWAL_ALERT_ALSO = 'someone@else.co';
+        const overridden = SR.withStandingCopies(staff, 'withdrawal').map(r => r.email);
+        ok('the list can be changed without a deploy',
+           overridden.includes('someone@else.co') &&
+           !overridden.some(e => /odireleng/i.test(e)), JSON.stringify(overridden));
+        process.env.WITHDRAWAL_ALERT_ALSO = '';
+        ok('and switched off entirely',
+           SR.withStandingCopies(staff, 'withdrawal').length === 1);
+      } finally {
+        if (prev === undefined) delete process.env.WITHDRAWAL_ALERT_ALSO;
+        else process.env.WITHDRAWAL_ALERT_ALSO = prev;
+      }
+
+      const cron = fs.readFileSync(
+        path.join(ROOT, 'server', 'jobs', 'withdrawalAlertCron.js'), 'utf8');
+      ok('the cron actually mails the combined list, not the resolved one',
+         /const admins = withStandingCopies\(staff, 'withdrawal'\)/.test(cron) &&
+         /for \(const admin of admins\)/.test(cron),
+         'building the list and then mailing something else is the whole failure this check exists for');
+    }
+
     await clearStaff();
     await db.query(`DELETE FROM employees WHERE id = 'EMP-COO-001'`);
     await db.query(`UPDATE users SET role = 'director' WHERE role = 'chk_parked'`).catch(() => {});
