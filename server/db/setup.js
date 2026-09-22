@@ -407,6 +407,11 @@ DO $$ BEGIN
   BEGIN ALTER TABLE investors ADD COLUMN auto_topup_enabled BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investors ADD COLUMN auto_topup_amount NUMERIC(12,2); EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investors ADD COLUMN auto_topup_day INT DEFAULT 1; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  -- When this investor last said "not now" to the automatic top-up offer made
+  -- after a card deposit. Held server side rather than in the browser so
+  -- declining it on a phone settles it on the laptop too, and so a cleared
+  -- cache does not start the asking over.
+  BEGIN ALTER TABLE investors ADD COLUMN auto_topup_prompt_dismissed_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
   -- Withdrawal notes column on transactions
   BEGIN ALTER TABLE transactions ADD COLUMN notes TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
   -- Investment pool capacity columns (Feature: waitlist)
@@ -3860,6 +3865,11 @@ async function autoSetup() {
           title: 'The agreement no longer contradicts itself about the platform fee',
           body: 'The fee is 1% charged ON TOP of the investment: enter R500 and R500 reaches the pool, R5,00 is the fee, R505,00 leaves the wallet. The agreement said so in its fee table and its Fees clause \u2014 and then asked the client to tick "the 1% platform fee is taken from the amount I am investing, not added to it", which is the opposite. The tick box and two clauses are corrected, and the templates move to new versions (standard v2, the three EIF structures v3) so anything already signed stays explicable in the words it was signed under. Worth checking whether any client signed under the old wording.',
           where: 'Client portal \u2192 the agreement screen, and every agreement PDF from Clients \u2192 open a client \u2192 Documents.' },
+
+        { id: 'ANN-2026-AUTO-ORDER-OFFER', area: 'portal', icon: 'fa-rotate',
+          title: 'Clients are offered a monthly top-up after paying by card',
+          body: 'Automatic wallet top-ups and recurring investments both already existed \u2014 a saved card charged on a chosen day, and the wallet invested into a chosen product the next hour \u2014 and the cron reported "0 investor(s) scheduled for today", because both live two levels down inside the wallet tab and nobody found them. When a client finishes a card top-up they are now asked, once, whether to repeat it every month, and then which product to invest it into. The amount suggested is the one the top-up actually covers: the 1% platform fee is charged on top, so a R1 000 top-up buys R990,10 of product, and where that is under the pool minimum the offer says so and can raise the top-up in one tap. Days 1\u201328 only, so the date exists in every month. It is not offered if auto top-up is already on, if no card was saved, on a sub-account top-up, to someone mid-purchase, or within 60 days of a client saying "Not now" \u2014 that refusal is stored against the client, not the browser.',
+          where: 'Client portal \u2192 Wallet \u2192 Add Funds \u2192 pay by card. Existing settings stay where they were, under Wallet \u2192 Auto Top-Up and Wallet \u2192 Recurring; this console shows them on the client record.' },
 
         { id: 'ANN-2026-SUPPORT-NUMBER', area: 'both', icon: 'fa-phone',
           title: 'Support WhatsApp number changed',

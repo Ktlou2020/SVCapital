@@ -2839,6 +2839,15 @@ function launchPaystack() {
             // If Paystack returned a reusable authorization, refresh the auto top-up card
             if (result.authSaved) _loadAutoTopUpCard().catch(() => {});
 
+            /* Remembered rather than acted on here. The offer is made once the
+               client closes the success screen, so two modals are never
+               stacked on one another. */
+            _atoRemember({
+              amount:     _pmAmount,
+              subAccount: !!_pmSaId,
+              cardSaved:  !!result.authSaved,
+            });
+
             await _showDepositSuccess('paystack', transaction.reference);
           } catch (verifyErr) {
             console.error('Paystack verify error:', verifyErr);
@@ -3135,6 +3144,14 @@ function closePaymentModal() {
        Only on success, and only once — the bag is cleared above whichever way
        this goes, so an abandoned top-up does not reopen an invest modal the
        next time somebody tops up for an unrelated reason. */
+      /* Not while they are mid-purchase. Someone who topped up in order to buy
+       a specific pool is about to be handed back the invest modal, and an
+       offer about next month on top of that is an interruption, not a
+       suggestion. The remembered offer is dropped rather than deferred —
+       they will top up again, and it will be asked then. */
+    if (resumePool) _atoBag().pending = null;
+    else _maybeOfferAutoTopUp().catch(() => {});
+
     if (!resumePool || typeof openInvestModal !== 'function') return;
     const pool = (PORTAL.pools || []).find(p => p.id === resumePool);
     if (!pool) return;
@@ -11297,6 +11314,439 @@ function svcMaxInvestable(walletBalance) {
     best = Math.round((best - 0.01) * 100) / 100;
   }
   return best;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   The standing order, offered once the money has landed
+
+   Both halves of this already existed and almost nobody used them. A card
+   saved from a Paystack top-up can be charged again on a chosen day
+   (auto_topup_*, charged by recurringCron at 03:00 UTC), and a wallet can be
+   invested on a chosen day into a chosen product (recurring_*, placed by the
+   same file an hour later at 04:00). The machinery, the crons and two portal
+   screens were all in place, and production reported "0 investor(s)
+   scheduled for today", because both live two levels down inside the wallet
+   tab and nobody finds them.
+
+   So this does not build a feature. It asks, once, at the only moment a
+   client has just proved they want to fund the account and has a card on
+   file to do it with: the card top-up they have just finished.
+
+   Two steps, in the order the money moves. First the top-up, because a
+   monthly investment with nothing arriving to pay for it just fails on the
+   day. Then the product, which is the question that makes the top-up worth
+   setting up at all.
+
+   Not offered when: auto top-up is already on, no reusable card was saved
+   (an EFT or a one-off card saves none, and without one there is nothing to
+   debit), the deposit was into a sub-account (the debit credits the main
+   wallet, so offering it there would set up something the client did not
+   ask for), or they said "not now" recently.
+   ═══════════════════════════════════════════════════════════════════ */
+
+function _atoBag() {
+  if (!window.__svcAutoTopUp) {
+    window.__svcAutoTopUp = { pending: null, card: null, settings: null, amount: 0, day: 1 };
+  }
+  return window.__svcAutoTopUp;
+}
+
+/* How long "not now" lasts. A prompt that returns on every deposit is one
+   people learn to dismiss without reading, and then it is worth nothing on
+   the occasion they would have said yes. */
+function _atoQuietDays() { return 60; }
+
+function _atoDismissedRecently(settings) {
+  const at = settings && settings.auto_topup_prompt_dismissed_at;
+  if (!at) return false;
+  const then = new Date(at).getTime();
+  if (!Number.isFinite(then)) return false;
+  return (Date.now() - then) < _atoQuietDays() * 86400000;
+}
+
+/* Days 1–28 only. Every month has them, so a client cannot pick a date that
+   does not exist in February and then wonder why nothing happened. The crons
+   clamp 29–31 to the month's last day for anyone who set one on the older
+   screen; this simply never creates the question. */
+function _atoDefaultDay() {
+  return Math.min(new Date().getDate(), 28);
+}
+
+/* Products with an open pool, and the cheapest open pool's minimum for each.
+
+   The minimum is read from the POOL, not the product record — they are set in
+   different places and drift, and it is the pool that will refuse the money.
+   Category-exclusive products are left out: they are reached deliberately
+   from their own tab, and a general picker is how somebody ends up with a
+   monthly order into a product they never chose to look at. */
+function _atoProductOptions() {
+  const byType = new Map();
+  for (const p of (PORTAL.pools || [])) {
+    if (!p || p.status !== 'open' || _poolPastClose(p)) continue;
+    const pt = p.product_type;
+    if (!pt) continue;
+    if (_isCategoryExclusive((_mktProducts || []).find(x => x.product_type === pt))) continue;
+    const min = parseFloat(p.min_investment);
+    const cur = byType.get(pt);
+    if (!cur) byType.set(pt, { productType: pt, label: Utils.productInfo(pt).label || pt, min: Number.isFinite(min) && min > 0 ? min : 0 });
+    else if (Number.isFinite(min) && min > 0 && (!cur.min || min < cur.min)) cur.min = min;
+  }
+  /* Cheapest first. The default selection is the first entry, and a default
+     the client's top-up cannot cover hands them a disabled button on open. */
+  return [...byType.values()].sort((a, b) => (a.min || 0) - (b.min || 0) || a.label.localeCompare(b.label));
+}
+
+/* Remembered after a successful card top-up so the offer can be made once the
+   client has closed the payment screen, rather than stacked on top of it. */
+function _atoRemember(info) { _atoBag().pending = info; }
+
+async function _maybeOfferAutoTopUp() {
+  const bag = _atoBag();
+  const pending = bag.pending;
+  bag.pending = null;
+  if (!pending) return;
+
+  /* The debit credits the main wallet, so a sub-account top-up is not the
+     thing this sets up. */
+  if (pending.subAccount) return;
+  if (!PORTAL.investor) return;
+
+  let card, settings;
+  try {
+    [card, settings] = await Promise.all([
+      API._fetch('GET', 'payments/topup-card').then(r => r && r.card),
+      API._fetch('GET', 'payments/auto-topup'),
+    ]);
+  } catch (e) { return; }
+
+  if (!card) return;                                  // nothing to debit
+  if (settings && settings.auto_topup_enabled) return; // already set up
+  if (_atoDismissedRecently(settings)) return;
+
+  bag.card     = card;
+  bag.settings = settings;
+  bag.amount   = Math.round((parseFloat(pending.amount) || 0) * 100) / 100;
+  bag.day      = _atoDefaultDay();
+
+  _atoEnsureModal();
+  _atoRenderStepTopUp();
+  Modal.open('autoOrderModal');
+  SVC.track('svc_auto_order_offered', { amount: bag.amount });
+}
+
+function _atoEnsureModal() {
+  let el = document.getElementById('autoOrderModal');
+  if (el) return el;
+  el = document.createElement('div');
+  el.className = 'modal-overlay';
+  el.id = 'autoOrderModal';
+  el.innerHTML = `
+    <div class="modal" style="max-width:520px">
+      <div class="modal__header">
+        <span class="modal__title" id="atoTitle">Make this automatic?</span>
+        <button class="modal__close" aria-label="Close" onclick="_atoDismiss()"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal__body" id="atoBody"></div>
+      <div id="atoWhy" style="padding:0 20px 8px;font-size:0.78rem;color:#b45309;display:none"></div>
+      <div class="modal__footer" id="atoFooter"></div>
+    </div>`;
+  document.body.appendChild(el);
+  return el;
+}
+
+function _atoCardLine(card) {
+  const brand = (card && card.card_type) ? String(card.card_type).toUpperCase() : 'Card';
+  const last4 = (card && card.last4) ? card.last4 : '••••';
+  return `${_esc(brand)} ending ${_esc(last4)}`;
+}
+
+function _atoDayOptions(selected) {
+  let out = '';
+  for (let d = 1; d <= 28; d++) {
+    out += `<option value="${d}"${d === selected ? ' selected' : ''}>${d}${_atoOrdinal(d)}</option>`;
+  }
+  return out;
+}
+
+function _atoOrdinal(d) {
+  if (d > 3 && d < 21) return 'th';
+  return { 1: 'st', 2: 'nd', 3: 'rd' }[d % 10] || 'th';
+}
+
+/* ── Step 1: the top-up ─────────────────────────────────────────────── */
+function _atoRenderStepTopUp() {
+  const bag = _atoBag();
+  document.getElementById('atoTitle').textContent = 'Top up automatically every month?';
+  document.getElementById('atoBody').innerHTML = `
+    <div style="font-size:0.88rem;line-height:1.6;color:var(--text-muted);margin-bottom:16px">
+      You have just added <strong style="color:var(--gold)">${Utils.rand(bag.amount)}</strong> with your
+      ${_atoCardLine(bag.card)}. We can charge that card the same amount each month, like a debit order,
+      so your wallet is funded without you having to remember.
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="atoAmount">Amount each month</label>
+      <input type="number" class="form-input" id="atoAmount" min="50" step="1"
+             value="${bag.amount || ''}" oninput="_atoRecheck()">
+      <div id="atoFeeLine" style="font-size:0.74rem;color:var(--text-dim);margin-top:5px"></div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="atoDay">On the</label>
+      <select class="form-select" id="atoDay" onchange="_atoRecheck()">${_atoDayOptions(bag.day)}</select>
+      <div style="font-size:0.72rem;color:var(--text-dim);margin-top:5px">
+        <i class="fa-solid fa-circle-info"></i> Days 1&ndash;28, so the date exists in every month.
+      </div>
+    </div>
+
+    <div style="font-size:0.74rem;color:var(--text-dim);line-height:1.6;margin-top:4px">
+      You can change the amount, change the day, or stop it altogether at any time from
+      <strong>Wallet &rarr; Auto Top-Up</strong>. Nothing is charged today.
+    </div>`;
+
+  document.getElementById('atoFooter').innerHTML = `
+    <button class="btn btn--secondary" onclick="_atoDismiss()">Not now</button>
+    <button class="btn btn--primary" id="atoGoBtn" onclick="_atoSaveTopUp()">
+      <i class="fa-solid fa-rotate"></i> Turn on automatic top-ups
+    </button>`;
+  _atoRecheck();
+}
+
+/* What the card is actually charged. The cron grosses the amount up so the
+   wallet receives exactly what was asked for, which means the card is debited
+   with more than the figure typed here. Saying so now is the difference
+   between a standing order and a surprise. */
+function _atoRecheck() {
+  const amtEl = document.getElementById('atoAmount');
+  const btn   = document.getElementById('atoGoBtn');
+  const why   = document.getElementById('atoWhy');
+  const line  = document.getElementById('atoFeeLine');
+  if (!amtEl || !btn) return;
+
+  const amount = parseFloat(amtEl.value);
+  const valid  = Number.isFinite(amount) && amount >= 50;
+
+  if (line) {
+    if (!valid) line.textContent = '';
+    else {
+      const fee   = Math.min(_pmFee(amount), 800);
+      const gross = Math.round((amount + fee) * 100) / 100;
+      line.innerHTML = `Your card is charged ${Utils.rand(gross)} so ${Utils.rand(amount)} reaches your wallet ` +
+                       `(${Utils.rand(Math.round(fee * 100) / 100)} Paystack fee).`;
+    }
+  }
+
+  btn.disabled = !valid;
+  if (why) {
+    why.textContent = valid ? '' : 'The smallest automatic top-up is R50.';
+    why.style.display = valid ? 'none' : '';
+  }
+}
+
+async function _atoSaveTopUp() {
+  const bag    = _atoBag();
+  const amount = parseFloat(document.getElementById('atoAmount').value);
+  const day    = parseInt(document.getElementById('atoDay').value, 10);
+  const btn    = document.getElementById('atoGoBtn');
+
+  if (!Number.isFinite(amount) || amount < 50) return;
+
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Setting up…'; }
+  try {
+    await API._fetch('POST', 'payments/auto-topup', { enabled: true, amount, day });
+    bag.amount = amount;
+    bag.day    = day;
+    SVC.track('svc_auto_order_topup_set', { amount, day });
+    Toast.success(`Automatic top-up of ${Utils.rand(amount)} set for the ${day}${_atoOrdinal(day)} of each month`);
+    if (typeof _loadAutoTopUpCard === 'function') _loadAutoTopUpCard().catch(() => {});
+    _atoRenderStepInvest();
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-rotate"></i> Turn on automatic top-ups'; }
+    const why = document.getElementById('atoWhy');
+    if (why) { why.textContent = e.message || 'Could not set that up. Please try again.'; why.style.display = ''; }
+  }
+}
+
+/* ── Step 2: what the money buys ────────────────────────────────────── */
+function _atoRenderStepInvest() {
+  const bag      = _atoBag();
+  const products = _atoProductOptions();
+
+  document.getElementById('atoTitle').textContent = 'And invest it automatically?';
+
+  if (!products.length) {
+    document.getElementById('atoBody').innerHTML = `
+      <div style="font-size:0.88rem;line-height:1.6;color:var(--text-muted)">
+        <i class="fa-solid fa-circle-check" style="color:#22c55e"></i>
+        Your automatic top-up is on. No product has an open pool right now, so there is nothing to
+        invest into automatically yet — set that up from <strong>Wallet &rarr; Recurring</strong>
+        once a pool opens.
+      </div>`;
+    document.getElementById('atoFooter').innerHTML =
+      `<button class="btn btn--primary" onclick="_atoClose()">Done</button>`;
+    return;
+  }
+
+  /* The largest investment the monthly top-up covers, fee included. The 1%
+     platform fee is charged ON TOP, so a R1 000 top-up does not buy R1 000 of
+     product — svcMaxInvestable solves for the figure whose total the top-up
+     actually covers. Suggesting the top-up amount itself would set up an order
+     that is short by the fee every single month. */
+  const covered = svcMaxInvestable(bag.amount);
+  /* Never open on a figure the chosen product refuses. Where the top-up does
+     not stretch to the cheapest minimum, the field opens at that minimum and
+     the line below says plainly what the shortfall is and what top-up would
+     cover it — rather than a disabled button and no way to see why. */
+  const cheapest  = products[0].min || 0;
+  const suggested = Math.max(covered, cheapest);
+
+  document.getElementById('atoBody').innerHTML = `
+    <div style="display:flex;align-items:flex-start;gap:9px;padding:10px 12px;border-radius:9px;
+                background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.22);margin-bottom:16px">
+      <i class="fa-solid fa-circle-check" style="color:#22c55e;margin-top:2px"></i>
+      <div id="atoTopUpSummary" style="font-size:0.82rem;line-height:1.55;color:var(--text-muted)">
+        <strong style="color:var(--text)">Automatic top-up is on.</strong>
+        ${Utils.rand(bag.amount)} on the ${bag.day}${_atoOrdinal(bag.day)} of each month.
+      </div>
+    </div>
+
+    <div style="font-size:0.86rem;line-height:1.6;color:var(--text-muted);margin-bottom:16px">
+      Money sitting in a wallet earns nothing. Choose a product and we will invest for you on the
+      same day, an hour after the top-up lands.
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="atoProduct">Invest into</label>
+      <select class="form-select" id="atoProduct" onchange="_atoRecheckInvest()">
+        ${products.map(p => `<option value="${_esc(p.productType)}">${_esc(p.label)}${p.min ? ` — from ${Utils.rand(p.min)}` : ''}</option>`).join('')}
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="atoInvestAmount">Amount each month</label>
+      <input type="number" class="form-input" id="atoInvestAmount" min="0" step="1"
+             value="${suggested > 0 ? suggested : ''}" oninput="_atoRecheckInvest()">
+      <div id="atoInvestLine" style="font-size:0.74rem;color:var(--text-dim);margin-top:5px"></div>
+    </div>`;
+
+  document.getElementById('atoFooter').innerHTML = `
+    <button class="btn btn--secondary" onclick="_atoClose()">Just the top-up</button>
+    <button class="btn btn--primary" id="atoInvestBtn" onclick="_atoSaveInvest()">
+      <i class="fa-solid fa-seedling"></i> Invest it automatically
+    </button>`;
+  _atoRecheckInvest();
+}
+
+function _atoRecheckInvest() {
+  const bag   = _atoBag();
+  const amtEl = document.getElementById('atoInvestAmount');
+  const selEl = document.getElementById('atoProduct');
+  const btn   = document.getElementById('atoInvestBtn');
+  const line  = document.getElementById('atoInvestLine');
+  const why   = document.getElementById('atoWhy');
+  if (!amtEl || !selEl || !btn) return;
+
+  const amount  = parseFloat(amtEl.value);
+  const product = _atoProductOptions().find(p => p.productType === selEl.value);
+  const min     = product ? product.min : 0;
+
+  let problem = '';
+  if (!Number.isFinite(amount) || amount <= 0) problem = 'Enter the amount to invest each month.';
+  /* The minimum is a rule about the POOL, so it is tested against the amount
+     that reaches the pool, never against what leaves the wallet. */
+  else if (min && amount < min) problem = `${product.label} takes ${Utils.rand(min)} or more.`;
+
+  if (line) {
+    if (!Number.isFinite(amount) || amount <= 0) line.textContent = '';
+    else {
+      const fee   = svcPlatformFee(amount);
+      const spend = svcWalletSpend(amount);
+      const short = Math.round((spend - bag.amount) * 100) / 100;
+      line.innerHTML =
+        `${Utils.rand(amount)} into the pool plus ${Utils.rand(fee)} platform fee &mdash; ` +
+        `${Utils.rand(spend)} from your wallet.` +
+        (short > 0
+          ? ` <span style="color:#b45309">That is ${Utils.rand(short)} more than your ` +
+            `${Utils.rand(bag.amount)} monthly top-up, so the difference has to already be in your wallet.</span> ` +
+            `<button type="button" class="btn btn--secondary btn--sm" style="margin-top:6px" ` +
+            `onclick="_atoRaiseTopUp(${spend})">Raise my top-up to ${Utils.rand(spend)}</button>`
+          : '');
+    }
+  }
+
+  btn.disabled = !!problem;
+  if (why) {
+    why.textContent = problem;
+    why.style.display = problem ? '' : 'none';
+  }
+}
+
+async function _atoSaveInvest() {
+  const bag     = _atoBag();
+  const amount  = parseFloat(document.getElementById('atoInvestAmount').value);
+  const product = document.getElementById('atoProduct').value;
+  const btn     = document.getElementById('atoInvestBtn');
+  const id      = PORTAL.investor && PORTAL.investor.id;
+  if (!id || !product || !Number.isFinite(amount) || amount <= 0) return;
+
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Setting up…'; }
+  try {
+    /* Same day as the top-up on purpose: the top-up cron runs at 03:00 UTC and
+       the investment cron at 04:00, so the money is in the wallet an hour
+       before it is spent. */
+    await API._fetch('PATCH', `tables/investors/${id}`, {
+      recurring_enabled:      true,
+      recurring_amount:       amount,
+      recurring_product_type: product,
+      recurring_day:          bag.day,
+    });
+    if (PORTAL.investor) {
+      PORTAL.investor.recurring_enabled      = true;
+      PORTAL.investor.recurring_amount       = amount;
+      PORTAL.investor.recurring_product_type = product;
+      PORTAL.investor.recurring_day          = bag.day;
+    }
+    SVC.track('svc_auto_order_invest_set', { amount, product_type: product, day: bag.day });
+    Toast.success(`${Utils.rand(amount)} into ${Utils.productInfo(product).label || product} each month`);
+    _atoClose();
+    loadPortalData().catch(() => {});
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-seedling"></i> Invest it automatically'; }
+    const why = document.getElementById('atoWhy');
+    if (why) { why.textContent = e.message || 'Could not set that up. Please try again.'; why.style.display = ''; }
+  }
+}
+
+/* The way out of a shortfall, in one tap. Without it the client is told the
+   monthly investment costs more than the monthly top-up and left to find the
+   auto top-up screen themselves to fix a number this screen already knows. */
+async function _atoRaiseTopUp(toAmount) {
+  const bag    = _atoBag();
+  const amount = Math.round((parseFloat(toAmount) || 0) * 100) / 100;
+  if (!(amount >= 50)) return;
+  try {
+    await API._fetch('POST', 'payments/auto-topup', { enabled: true, amount, day: bag.day });
+    bag.amount = amount;
+    SVC.track('svc_auto_order_topup_raised', { amount, day: bag.day });
+    Toast.success(`Monthly top-up raised to ${Utils.rand(amount)}`);
+    if (typeof _loadAutoTopUpCard === 'function') _loadAutoTopUpCard().catch(() => {});
+    const banner = document.getElementById('atoTopUpSummary');
+    if (banner) banner.innerHTML = `<strong style="color:var(--text)">Automatic top-up is on.</strong> ` +
+      `${Utils.rand(bag.amount)} on the ${bag.day}${_atoOrdinal(bag.day)} of each month.`;
+    _atoRecheckInvest();
+  } catch (e) {
+    Toast.error(e.message || 'Could not change the top-up amount.');
+  }
+}
+
+function _atoClose() { Modal.close('autoOrderModal'); }
+
+/* "Not now" — recorded server side so declining on a phone settles it on the
+   laptop too, and a cleared cache does not start the asking over. */
+function _atoDismiss() {
+  Modal.close('autoOrderModal');
+  SVC.track('svc_auto_order_declined', {});
+  API._fetch('POST', 'payments/auto-topup/dismiss', {}).catch(() => {});
 }
 
 /* The "get the app" banner moved to js/app-banner.js. It has to run on pages
