@@ -1517,18 +1517,26 @@ let _cattleStatsCache = null;
 let _solarStatsCache = null;
 
 
-/* Platform fee is taken FROM the wallet spend (fee-inclusive model).
-   This shell used to add it on top: the client typed R1 000 and R1 010 left
-   the wallet, "use max" offered floor(balance / 1.01) in whole rands, and
-   investing the whole balance was impossible — there was always a remainder.
-   The web portal had always been inclusive, and so is the server, so this
-   shell was the odd one out and the one the rule in CLAUDE.md described.
+/* The 1% platform fee is charged ON TOP of the investment, not taken out of
+   it: the amount the client enters is what reaches the pool, and the wallet
+   pays that amount plus the fee. Enter R500 into a pool with a R500 minimum
+   and R500 reaches the pool, R5,00 is the fee, and R505,00 leaves the wallet.
 
-   The arithmetic now lives in portal-core, shared by both shells. */
+   The arithmetic lives in portal-core so this shell and the other one cannot
+   drift apart again — they did, and for a while they disagreed about which
+   direction the fee went.
+
+   These comments described the opposite until now. The platform ran a
+   fee-INCLUSIVE model once, the notes survived the change to on-top, and a
+   comment that contradicts the line under it is worse than none: the next
+   person to read it "fixes" working code. */
 const PLATFORM_FEE_RATE = 0.01;
-function _platformFee(walletAmount) { return svcPlatformFee(walletAmount); }
-/* Wallet needed to make the smallest allowed investment: the minimum itself,
-   because the fee comes out of it rather than being added to it. */
+/* Takes the POOL amount — what the client entered — and returns the fee
+   charged on top of it. */
+function _platformFee(poolAmount) { return svcPlatformFee(poolAmount); }
+/* Wallet needed to make the smallest allowed investment: the pool's minimum
+   PLUS its fee, because the minimum is a rule about the pool and the fee is
+   charged on top of it. A balance equal to the minimum is short by the fee. */
 function _minPlusFee(pool) { return svcMinWalletFor(pool); }
 
 function openInvestModal(poolId) {

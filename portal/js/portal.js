@@ -1450,15 +1450,26 @@ let _cattleStatsCache = null;
 let _solarStatsCache = null;
 
 
-/* Platform fee is taken FROM the wallet spend (fee-inclusive model).
-   The arithmetic lives in portal-core so this shell and the mobile one
-   cannot drift apart again — they did, and the mobile one charged the fee
-   on top. See svcPlatformFee for why the fee is the remainder rather than a
-   second rounded percentage. */
+/* The 1% platform fee is charged ON TOP of the investment, not taken out of
+   it: the amount the client enters is what reaches the pool, and the wallet
+   pays that amount plus the fee. Enter R500 into a pool with a R500 minimum
+   and R500 reaches the pool, R5,00 is the fee, and R505,00 leaves the wallet.
+
+   The arithmetic lives in portal-core so this shell and the other one cannot
+   drift apart again — they did, and for a while they disagreed about which
+   direction the fee went.
+
+   These comments described the opposite until now. The platform ran a
+   fee-INCLUSIVE model once, the notes survived the change to on-top, and a
+   comment that contradicts the line under it is worse than none: the next
+   person to read it "fixes" working code. */
 const PLATFORM_FEE_RATE = 0.01;
-function _platformFee(walletAmount) { return svcPlatformFee(walletAmount); }
-/* Minimum wallet balance needed to invest in this pool.
-   Fee comes from the amount, so no extra top-up required. */
+/* Takes the POOL amount — what the client entered — and returns the fee
+   charged on top of it. */
+function _platformFee(poolAmount) { return svcPlatformFee(poolAmount); }
+/* Wallet needed to make the smallest allowed investment: the pool's minimum
+   PLUS its fee, because the minimum is a rule about the pool and the fee is
+   charged on top of it. A balance equal to the minimum is short by the fee. */
 function _minPlusFee(pool) { return svcMinWalletFor(pool); }
 
 function openInvestModal(poolId) {
@@ -1542,7 +1553,7 @@ function openInvestModal(poolId) {
     <div id="investInsufficientBanner" style="display:none"></div>
 
 
-    <!-- Wallet deduction breakdown (fee-inclusive: user enters wallet spend) -->
+    <!-- Wallet deduction breakdown: the client enters the POOL amount, the fee is added to it -->
     <div id="investFeeBreakdown" style="margin-top:12px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;padding:10px 14px;font-size:0.84rem">
       <div style="display:flex;justify-content:space-between;padding:3px 0;color:var(--text-muted)">
         <span>Pool investment</span><span id="ic-fee-amount" style="font-weight:600;color:#1a1a1a">—</span>

@@ -14,7 +14,7 @@
  * "invest everything" becomes a search for the largest amount whose total the
  * balance covers. Most of this file is about that search not overdrawing.
  *
- * Run: node server/scripts/check-platform-fee-inclusive.cjs
+ * Run: node server/scripts/check-platform-fee.cjs
  */
 'use strict';
 
