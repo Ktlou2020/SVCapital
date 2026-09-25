@@ -1763,11 +1763,6 @@ input[type="file"] { font-size: 16px !important; }
 .prod-type-tile.active i { color: #fec24f !important; }
 .prod-type-tile.active span { color: #FF5229 !important; }
 
-/* MY INVESTMENTS stats — force equal column widths */
-.my-inv-card__stats {
-  grid-template-columns: repeat(3, 1fr) !important;
-}
-
 /* ─────────────────────────────────────────────────────────────
    FORM INPUTS — consistent font size (including readonly email)
    ───────────────────────────────────────────────────────────── */

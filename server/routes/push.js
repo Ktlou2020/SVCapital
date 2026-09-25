@@ -124,6 +124,39 @@ router.delete('/unsubscribe', requireAuth, async (req, res) => {
    POST /api/investors/push-token   (also at /api/push/mobile-token)
    Saves a Capacitor FCM/APNs device token for push delivery
 ══════════════════════════════════════════════════════════════ */
+/* ── GET /api/push/has-mobile-app ──────────────────────────
+   Whether this investor has actually run the app.
+
+   The download banner is meant to keep appearing until somebody has the app,
+   and the browser cannot tell: a web session looks the same whether or not an
+   app is installed on the same phone. A registered ios or android push token
+   can only have been written by the app itself, from this account, so it is
+   the one piece of evidence there is.
+
+   A 'web' token proves nothing — that is the browser subscribing for web push
+   — so it is deliberately not counted. */
+router.get('/has-mobile-app', requireAuth, async (req, res) => {
+  try {
+    let investorId = req.user.investorId || req.user.investor_id || null;
+    if (!investorId && req.user.email) {
+      const { rows } = await pool.query(
+        'SELECT id FROM investors WHERE LOWER(email) = LOWER($1) LIMIT 1', [req.user.email]);
+      investorId = rows[0]?.id || null;
+    }
+    if (!investorId) return res.json({ hasApp: false });
+
+    const { rows } = await pool.query(
+      `SELECT 1 FROM push_tokens
+        WHERE investor_id = $1 AND platform IN ('ios','android') LIMIT 1`, [investorId]);
+    res.json({ hasApp: rows.length > 0 });
+  } catch (err) {
+    /* Never the reason a banner is suppressed: on failure the caller keeps its
+       default, which is to offer the app. */
+    console.error('[push] has-mobile-app error:', err.message);
+    res.status(500).json({ error: 'lookup failed' });
+  }
+});
+
 router.post('/mobile-token', requireAuth, async (req, res) => {
   const { token, platform, app_version, device_name } = req.body || {};
   if (!token) return res.status(400).json({ error: 'token is required' });

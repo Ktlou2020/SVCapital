@@ -79,6 +79,61 @@ async function staffRecipients() {
   };
 }
 
+/* ─── Standing copies ─────────────────────────────────────────────────
+   People who must receive a particular notification whether or not they
+   hold a staff account.
+
+   Kept apart from staffRecipients() on purpose. That function answers "who
+   are the staff", and its sources are tried in order so that senior people
+   appearing in both are not mailed twice. This answers a different question
+   — "who else always wants this one" — and the answer is additive.
+
+   Set WITHDRAWAL_ALERT_ALSO to a comma-separated list to change it without a
+   deploy; the names below are the default, not a hard-coded ceiling. An
+   empty value means nobody, which is how the copy is switched off.
+   ─────────────────────────────────────────────────────────────────── */
+const ALWAYS_COPY = {
+  withdrawal: () => process.env.WITHDRAWAL_ALERT_ALSO !== undefined
+    ? process.env.WITHDRAWAL_ALERT_ALSO
+    : 'Odireleng@svcapital.co.za, Balepi@svcapital.co.za',
+};
+
+const normalise = e => String(e || '').trim().toLowerCase();
+
+/* "Odireleng@svcapital.co.za" greets as Odireleng rather than "there".
+
+   Only a single run of letters is used. A local part like finance.team or
+   ops-2 would produce "Finance.team" in a greeting, which reads worse than
+   the neutral fallback the template already has. */
+function nameFromEmail(email) {
+  const local = String(email || '').split('@')[0] || '';
+  if (!/^[A-Za-z]{2,}$/.test(local)) return null;
+  return local[0].toUpperCase() + local.slice(1).toLowerCase();
+}
+
+/* The resolved staff list plus the standing copies for `kind`, with anybody
+   already on it left where they are.
+
+   Deduplicated on the lowercased address, because a standing copy written
+   with a capital and a staff record written without it are one person, and
+   two copies of "3 withdrawals are waiting" three times a day is how an
+   alert becomes something people filter. */
+function withStandingCopies(list, kind) {
+  const out  = (list || []).slice();
+  const seen = new Set(out.map(r => normalise(r.email)).filter(Boolean));
+
+  const extra = String((ALWAYS_COPY[kind] || (() => ''))() || '')
+    .split(',').map(e => e.trim()).filter(Boolean);
+
+  for (const email of extra) {
+    const key = normalise(email);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push({ id: null, email, first_name: nameFromEmail(email), last_name: null, role: null, standingCopy: true });
+  }
+  return out;
+}
+
 /* Says so, once, and loudly enough to find. Called by every site so that a
    silent fallback cannot look like a successful delivery in a log. */
 function warnIfNotUsers(source, label) {
@@ -89,4 +144,7 @@ function warnIfNotUsers(source, label) {
     `hold none; check that the fallback reaches the right people.`);
 }
 
-module.exports = { staffRecipients, warnIfNotUsers, STAFF_USER_ROLES, SENIOR_LEVELS };
+module.exports = {
+  staffRecipients, warnIfNotUsers, withStandingCopies, nameFromEmail,
+  STAFF_USER_ROLES, SENIOR_LEVELS, ALWAYS_COPY,
+};

@@ -25,11 +25,11 @@
   <script src="https://js.paystack.co/v2/inline.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
-  <link rel="stylesheet" href="../css/admin.css?v=5" />
-  <link rel="stylesheet" href="css/portal.css?v=5" />
+  <link rel="stylesheet" href="../css/admin.css?v=6" />
+  <link rel="stylesheet" href="css/portal.css?v=6" />
   <link rel="stylesheet" href="../css/ci-theme.css?v=2" />
   <!-- sv-intelligence hidden -->
-  <link rel="stylesheet" href="css/portal-premium.css?v=13" />
+  <link rel="stylesheet" href="css/portal-premium.css?v=15" />
   <!-- Payment modal must retain dark theme — isolate from ci-theme overrides -->
   <style>
     #topUpModal.modal-overlay { background: rgba(0,0,0,0.82) !important; }
@@ -1062,14 +1062,16 @@
               <div class="panel__header"><span class="panel__title">Your Referral Code</span></div>
               <div class="panel__body text-center" style="padding:28px">
                 <div class="referral-code" id="referralCode">—</div>
-                <p style="font-size:0.78rem;color:#6b7280;margin:12px 0">Share this code or your personal link</p>
+                <p style="font-size:0.78rem;color:#6b7280;margin:12px 0">Both buttons send the full invite &mdash; the message, your code and your link</p>
                 <div class="referral-link-box">
                   <span id="referralLink">Loading your link…</span>
-                  <button class="btn btn--secondary btn--sm" onclick="copyReferralLink()"><i class="fa-solid fa-copy"></i> Copy</button>
+                  <button class="btn btn--secondary btn--sm" onclick="copyReferralLink()"><i class="fa-solid fa-copy"></i> Copy invite</button>
                 </div>
                 <div style="display:flex;gap:10px;margin-top:16px;justify-content:center">
+                  <!-- Copy lives beside the link it copies, above. A second
+                       button doing the same thing here only made the pair
+                       look like two different things. -->
                   <button class="btn btn--primary" onclick="shareReferral('whatsapp')"><i class="fa-brands fa-whatsapp"></i> Share on WhatsApp</button>
-                  <button class="btn btn--secondary" onclick="shareReferral('copy')"><i class="fa-solid fa-link"></i> Copy Link</button>
                 </div>
               </div>
             </div>
@@ -3016,7 +3018,7 @@
   </div>
 </nav>
 
-<script src="../js/api.js?v=26"></script>
+<script src="../js/api.js?v=28"></script>
 <!-- Capacitor native bridge — detects Capacitor WebView and activates native features
      (push notifications, haptics, status bar, back button, network monitoring) -->
 <script>
@@ -3026,9 +3028,9 @@ if (window.Capacitor) {
 }
 </script>
 <script src="/js/native.js"></script>
-<script src="../js/portal-core.js?v=38"></script>
+<script src="../js/portal-core.js?v=46"></script>
 <script src="../js/investor-documents.js?v=7"></script>
-<script src="js/portal.js?v=128"></script>
+<script src="js/portal.js?v=132"></script>
 <!-- sv-intelligence.js hidden -->
 <script>
 // Service worker: web browsers only (not Capacitor). Handles web push notifications.
@@ -3041,6 +3043,6 @@ if ('serviceWorker' in navigator && !window.__SVC_NATIVE__) {
   });
 }
 </script>
-<script src="../js/app-banner.js?v=1"></script>
+<script src="../js/app-banner.js?v=2"></script>
 </body>
 </html>

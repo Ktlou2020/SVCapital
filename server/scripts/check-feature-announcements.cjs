@@ -164,9 +164,18 @@ const unread = async u => (await call('GET', '/', u)).body.unread;
       ok('there is a seeding step', step.length > 0);
       ok('it never re-asserts a notice', /ON CONFLICT \(id\) DO NOTHING/.test(step),
          'a notice would come back after somebody edited or switched it off');
+      /* Per notice, not by counting the word. Comparing how many times
+         "where:" appears against how many times "title:" does is fooled by
+         prose: a body containing "elsewhere:" counts as a where, and a notice
+         that genuinely has none passes because another sentence made up the
+         difference. It did exactly that. */
+      const notices = [...step.matchAll(/\{ id: '([^']+)'[\s\S]*?\n\n/g)]
+        .map(m => ({ id: m[1], src: m[0] }));
+      const noWhere = notices.filter(n => !/\n\s*where:/.test(n.src)).map(n => n.id);
       ok('every seeded notice says where to find it',
-         (step.match(/where:/g) || []).length === (step.match(/title:/g) || []).length,
-         'a notice without it is not worth publishing');
+         notices.length > 0 && noWhere.length === 0,
+         noWhere.length ? `${noWhere.join(', ')} — a notice without it is not worth publishing`
+                        : 'no notices were parsed at all');
       ok('and the rule is written down',
          /## Announcing a New Feature/.test(read('CLAUDE.md')),
          'a convention nobody recorded is a convention that lasts one session');

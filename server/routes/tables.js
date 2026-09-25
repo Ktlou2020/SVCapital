@@ -17,6 +17,7 @@ const emailService = require('../services/email');
 const { KYC_TICKET_MATCH, KYC_TICKET_OPEN } = require('../services/kycTickets');
 const smsService   = require('../services/sms');
 const audit        = require('../services/audit');
+const { validateStoredFile } = require('../services/uploadedFile');
 const { staffRecipients, warnIfNotUsers } = require('../services/staffRecipients');
 
 /* ─── Lazy-load push service (graceful if web-push not installed yet) ─── */
@@ -168,6 +169,10 @@ const ALLOWED_TABLES = {
      so without the ADMIN_ONLY_TABLES guard an investor would read every note
      staff have written about every client. */
   investor_notes:           'id',
+  /* Public insight articles. Readable by anyone through the server-rendered
+     /insights routes, which do not use this API at all; this entry exists so
+     staff can write them from the admin console. */
+  insights:                 'id',
 };
 
 /* ─── Tables whose primary key is a UUID carrying a database default ───
@@ -188,6 +193,11 @@ const ADMIN_ONLY_TABLES = new Set([
   'fica_checks', 'accepted_client_documents',
   'compliance_calendar',
   'investor_notes',
+  /* Reads are staff-only so an unpublished draft is not visible to any
+     signed-in investor who asks for the table. The public site never touches
+     this API — /insights is server-rendered and queries the database directly,
+     filtered on published = true. */
+  'insights',
 ]);
 // NOTE: `employees` is intentionally NOT admin-only — it is row-isolated via
 // EMPLOYEE_OWNED_COLS so each staff member can read only their own record.
@@ -205,7 +215,7 @@ const ADMIN_WRITE_TABLES = new Set([
   'products', 'product_faqs',
   'investment_pools', 'platform_settings', 'fund_runs', 'ifas',
   'fica_checks', 'compliance_calendar', 'accepted_client_documents',
-  'investor_notes',
+  'investor_notes', 'insights',
 ]);
 
 /* ─── Columns that must never be written via the generic API (any role) ─── */
@@ -1004,6 +1014,45 @@ router.get('/:table/:id', requireAuth, validateTable, async (req, res) => {
 });
 
 /* ─── POST /api/tables/:table ─── */
+/* ─── Stored documents written through the generic table route ─────────
+   Some columns hold a whole file as a base64 data: URL. They reach the
+   database through this route like any other string, and nothing checked
+   what was in them — products.factsheet_url is written this way by the
+   product editor, and it is the copy the client portal pins as "Current".
+
+   A stored `data:text/html;base64,…` is not inert. Opening a document builds
+   a blob URL from it, and a blob inherits the origin that built it, so the
+   markup would run as this platform, with the reader's session.
+
+   Validated on the bytes, on every write path — create, replace and update.
+   Only the columns listed here are touched; every other field on every other
+   table passes through exactly as before. */
+const STORED_FILE_COLS = {
+  products:       { factsheet_url: { allow: ['application/pdf'] } },
+  /* A client photographs an ID book as often as they scan it. */
+  kyc_documents:  {
+    file_url:  { allow: ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'], maxBytes: 12 * 1024 * 1024 },
+    file_data: { allow: ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'], maxBytes: 12 * 1024 * 1024 },
+  },
+};
+
+/* Returns an error string, or null when every stored-file column present in
+   `body` holds something this platform is willing to hand back to a browser.
+   A column that is absent, or explicitly cleared, is not a file — clearing
+   one is how a factsheet is removed. */
+function storedFileRefusal(table, body) {
+  const cols = STORED_FILE_COLS[table];
+  if (!cols || !body) return null;
+  for (const [col, opts] of Object.entries(cols)) {
+    if (!Object.prototype.hasOwnProperty.call(body, col)) continue;
+    const v = body[col];
+    if (v === null || v === undefined || String(v).trim() === '') continue;
+    const r = validateStoredFile(v, { maxBytes: 2 * 1024 * 1024, ...opts });
+    if (!r.ok) return `${col}: ${r.error}`;
+  }
+  return null;
+}
+
 router.post('/:table', requireAuth, validateTable, async (req, res) => {
   try {
     const table = req.params.table;
@@ -1015,6 +1064,9 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
       return res.status(403).json({ error: 'Forbidden.' });
 
     const body = { ...req.body };
+
+    const _fileRefusal = storedFileRefusal(table, body);
+    if (_fileRefusal) return res.status(400).json({ error: _fileRefusal });
 
     const isPrivileged = ['admin', 'director', 'fund_manager'].includes(req.user.role);
     ALWAYS_PROTECTED_COLS.forEach(c => delete body[c]);
@@ -1750,6 +1802,9 @@ router.put('/:table/:id', requireAuth, validateTable, async (req, res) => {
     delete body.created_at;
     body.updated_at = new Date().toISOString();
 
+    const _fileRefusal = storedFileRefusal(table, body);
+    if (_fileRefusal) return res.status(400).json({ error: _fileRefusal });
+
     const isPrivileged = ['admin', 'director', 'fund_manager'].includes(req.user.role);
     ALWAYS_PROTECTED_COLS.forEach(c => delete body[c]);
     if (!isPrivileged) {
@@ -1820,6 +1875,9 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
     delete body[key];
     delete body.created_at;
     body.updated_at = new Date().toISOString();
+
+    const _fileRefusal = storedFileRefusal(table, body);
+    if (_fileRefusal) return res.status(400).json({ error: _fileRefusal });
 
     const isPrivileged = ['admin', 'director', 'fund_manager'].includes(req.user.role);
     ALWAYS_PROTECTED_COLS.forEach(c => delete body[c]);

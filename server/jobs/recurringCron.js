@@ -34,7 +34,18 @@ async function runRecurringInvestments() {
      WHERE i.recurring_enabled = true
        AND i.recurring_amount  > 0
        AND i.recurring_product_type IS NOT NULL
-       AND COALESCE(i.recurring_day, 1) = $1
+       /* Clamped to the last day of the month, exactly as auto_topup_day is
+          below. Without it an investor who picks the 31st is skipped in
+          February, April, June, September and November — five months a year
+          in which their recurring investment silently does not happen and
+          nothing tells them. The top-up half of the same feature has always
+          clamped; this half did not, and the two are now set together from
+          one offer, so the day chosen for one is the day chosen for both. */
+       AND LEAST(COALESCE(i.recurring_day, 1),
+             DATE_PART('days',
+               DATE_TRUNC('month', NOW()) + INTERVAL '1 month' - INTERVAL '1 day'
+             )::int
+           ) = $1
        AND i.status = 'active'`,
     [todayDay]
   );

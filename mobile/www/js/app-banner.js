@@ -106,40 +106,125 @@ function svcIsIOSSafari(ua) {
   return /Safari/i.test(agent);
 }
 
-/* A function, not a top-level const: portal-core is loaded beside two shells
-   and declares no load-time state of its own. */
-function svcAppSnoozeKey() { return 'svc_app_banner_snoozed_until'; }
+/* ═══════════════════════════════════════════════════════════════════
+   When it comes back
 
-/* Dismissal is a snooze, not a tombstone: somebody who says "not now" on a
-   borrowed phone should not be silenced for ever, and somebody who taps
-   through to the store almost certainly installed it and should be left
-   alone for much longer. Storage can throw in a private window, so every
-   read and write is guarded. */
-function svcAppBannerSnoozed(now) {
+   The rule is the client's: the banner appears every time they log in, and
+   keeps appearing until they have the app. That rules out the thing this
+   code used to do — dismissing wrote a timestamp thirty days ahead into
+   localStorage, and tapping through to the store wrote one a hundred and
+   twenty days ahead, so a single tap on the wrong day bought four months of
+   silence whether or not anything was installed.
+
+   Two questions replace the one snooze, because they are different questions:
+
+     have they got it?   Answered by the server, not by this browser. A web
+                         session looks identical whether or not the app is on
+                         the same phone; the only evidence is an ios/android
+                         push token, which nothing but the app can write.
+                         That answer is a real stop: they downloaded it.
+
+     have they waved it  Answered here, and only for as long as this login
+     away just now?      lasts. "Not now" should hold while they finish what
+                         they came to do and then let go.
+
+   The dismissal is keyed on the login it was made under, so a new sign-in is
+   a new banner without anything having to clear anything: sessionStorage
+   empties when the tab closes, and within one tab the token changes at every
+   login, including a log-out and back in as the same person. Signed out, the
+   key is the string 'anon', which is what makes the banner on login.html
+   stay gone until they are through it.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Functions, not top-level consts: this file is loaded beside two shells and
+   declares no load-time state of its own. */
+function svcAppDismissKey()   { return 'svc_app_banner_dismissed_for'; }
+function svcAppInstalledKey() { return 'svc_app_installed'; }
+function svcAppLegacySnoozeKey() { return 'svc_app_banner_snoozed_until'; }
+
+/* Whoever is signed in, as far as this browser is concerned. Both stores are
+   read because "remember me" decides which one login.html wrote to. */
+function svcAppBannerToken() {
   try {
-    const until = parseInt(localStorage.getItem(svcAppSnoozeKey()) || '0', 10);
-    return Number.isFinite(until) && until > (now || Date.now());
+    return (typeof localStorage !== 'undefined' && localStorage.getItem('svc_token')) ||
+           (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('svc_token')) || '';
+  } catch (_) { return ''; }
+}
+
+/* A tail of the JWT, which changes at every login — not the email, which does
+   not, and not the whole token, which has no business being copied around. */
+function svcLoginFingerprint(token) {
+  const t = token !== undefined && token !== null ? token : svcAppBannerToken();
+  return t ? 'in:' + String(t).slice(-16) : 'anon';
+}
+
+function svcAppBannerDismissed(fingerprint) {
+  try {
+    const seen = sessionStorage.getItem(svcAppDismissKey());
+    return !!seen && seen === (fingerprint || svcLoginFingerprint());
   } catch (_) { return false; }
 }
 
-function svcSnoozeAppBanner(days, now) {
-  try {
-    const until = (now || Date.now()) + (days * 24 * 60 * 60 * 1000);
-    localStorage.setItem(svcAppSnoozeKey(), String(until));
-  } catch (_) { /* private window — the banner simply reappears next visit */ }
+function svcDismissForThisLogin(fingerprint) {
+  try { sessionStorage.setItem(svcAppDismissKey(), fingerprint || svcLoginFingerprint()); }
+  catch (_) { /* private window — it simply comes back on the next page */ }
 }
 
-/* Every reason not to draw it, in one place so the check can drive it. */
+/* Somebody carrying the old long snooze would otherwise stay silenced for up
+   to four months after this shipped, which is the bug rather than the fix. */
+function svcForgetLegacyAppSnooze() {
+  try { localStorage.removeItem(svcAppLegacySnoozeKey()); } catch (_) {}
+}
+
+/* The server's answer, cached for this session only. One request per login
+   rather than one per page, and an uninstall is noticed at the next session
+   instead of never — a permanent flag in localStorage could never be undone. */
+function svcAppInstalledCached() {
+  try { return sessionStorage.getItem(svcAppInstalledKey()); } catch (_) { return null; }
+}
+
+function svcRememberAppInstalled(hasApp) {
+  try { sessionStorage.setItem(svcAppInstalledKey(), hasApp ? '1' : '0'); } catch (_) {}
+}
+
+/* Resolves false for every uncertainty — signed out, offline, endpoint down,
+   malformed answer. Not knowing is never a reason to withhold the banner;
+   only the server saying yes is. */
+async function svcHasMobileApp(fetchImpl) {
+  const cached = svcAppInstalledCached();
+  if (cached === '1') return true;
+  if (cached === '0') return false;
+
+  const token = svcAppBannerToken();
+  if (!token) return false;              // signed out: nothing to ask about yet
+
+  const f = fetchImpl || (typeof fetch === 'function' ? fetch : null);
+  if (!f) return false;
+  try {
+    const r = await f('/api/push/has-mobile-app', {
+      headers: { Authorization: 'Bearer ' + token },
+      credentials: 'same-origin',
+    });
+    if (!r || !r.ok) return false;
+    const j = await r.json();
+    const has = !!(j && j.hasApp === true);
+    svcRememberAppInstalled(has);
+    return has;
+  } catch (_) { return false; }
+}
+
+/* Every reason not to draw it that can be decided without asking the server,
+   in one place so the check can drive it. */
 function svcShouldOfferApp(env) {
   const e = env || {};
   const ua        = e.ua        !== undefined ? e.ua        : (typeof navigator !== 'undefined' ? navigator.userAgent : '');
   const isNative  = e.isNative  !== undefined ? e.isNative  : (typeof window !== 'undefined' && !!window.__SVC_NATIVE__);
   const standalone= e.standalone!== undefined ? e.standalone: _svcIsStandalone();
-  const snoozed   = e.snoozed   !== undefined ? e.snoozed   : svcAppBannerSnoozed();
+  const dismissed = e.dismissed !== undefined ? e.dismissed : svcAppBannerDismissed();
 
   if (isNative)   return false;   // already in the app
   if (standalone) return false;   // already installed to the home screen
-  if (snoozed)    return false;   // asked already, recently
+  if (dismissed)  return false;   // waved away, for this login only
   const os = svcMobileOS(ua, e.nav);
   if (!os)        return false;   // desktop: the store link is on the site
   if (svcIsIOSSafari(ua)) return false;  // Apple draws its own, better, banner
@@ -155,17 +240,18 @@ function _svcIsStandalone() {
 }
 
 function svcDismissAppBanner() {
-  svcSnoozeAppBanner(30);
+  svcDismissForThisLogin();
   const el = document.getElementById('svcAppBanner');
   if (el) el.remove();
 }
 
 function svcOpenAppStore() {
   const os = svcMobileOS();
-  /* Long snooze: they have gone to the store, so either they installed it —
-     in which case the next visit is inside the app — or they decided not to
-     and do not need asking again for a season. */
-  svcSnoozeAppBanner(120);
+  /* Also only for this login. Whether they installed it is not this browser's
+     guess to make — the next session asks the server, and if they did, the
+     answer stops the banner for good. If they did not, they are asked again,
+     which is the point. */
+  svcDismissForThisLogin();
   const url = os === 'ios' ? svcAppStore().ios : svcAppStore().android;
   window.open(url, '_blank', 'noopener');
   const el = document.getElementById('svcAppBanner');
@@ -174,34 +260,45 @@ function svcOpenAppStore() {
 
 /* Drawn after a delay so it does not land on top of a page still loading,
    and so somebody who opened the portal to do one quick thing can finish it.
-   Called by each shell on load; core declares nothing at load time itself. */
+   The server is asked only once the delay is over and the cheap guards have
+   all passed, so a desktop browser and the app itself never make the call. */
 function svcInitAppBanner(delayMs) {
   if (typeof document === 'undefined') return;
+  svcForgetLegacyAppSnooze();
   if (!svcShouldOfferApp()) return;
   setTimeout(() => {
     if (!svcShouldOfferApp()) return;          // re-checked: they may have dismissed
     if (document.getElementById('svcAppBanner')) return;
-    const os = svcMobileOS();
-    const store = os === 'ios' ? 'the App Store' : 'Google Play';
-    _svcAppBannerStyles();
-    const el = document.createElement('div');
-    el.id = 'svcAppBanner';
-    el.className = 'svc-app-banner';
-    el.setAttribute('role', 'region');
-    el.setAttribute('aria-label', 'Get the SV Capital app');
-    el.innerHTML = `
-      <img class="svc-app-banner__icon" src="/assets/logo-192.png" alt="" width="44" height="44">
-      <div class="svc-app-banner__text">
-        <strong>SV Capital app</strong>
-        <span>Faster sign-in, and alerts when a pool opens or matures.</span>
-      </div>
-      <button type="button" class="svc-app-banner__cta" onclick="svcOpenAppStore()">Get it</button>
-      <button type="button" class="svc-app-banner__x" aria-label="Not now" onclick="svcDismissAppBanner()">
-        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
-      </button>`;
-    el.title = `Open ${store}`;
-    document.body.appendChild(el);
+    Promise.resolve(svcHasMobileApp()).then(hasApp => {
+      if (hasApp) return;                      // they downloaded it — the one real stop
+      if (!svcShouldOfferApp()) return;        // re-checked again: the await took time
+      if (document.getElementById('svcAppBanner')) return;
+      _svcDrawAppBanner();
+    });
   }, typeof delayMs === 'number' ? delayMs : 6000);
+}
+
+function _svcDrawAppBanner() {
+  const os = svcMobileOS();
+  const store = os === 'ios' ? 'the App Store' : 'Google Play';
+  _svcAppBannerStyles();
+  const el = document.createElement('div');
+  el.id = 'svcAppBanner';
+  el.className = 'svc-app-banner';
+  el.setAttribute('role', 'region');
+  el.setAttribute('aria-label', 'Get the SV Capital app');
+  el.innerHTML = `
+    <img class="svc-app-banner__icon" src="/assets/logo-192.png" alt="" width="44" height="44">
+    <div class="svc-app-banner__text">
+      <strong>SV Capital app</strong>
+      <span>Faster sign-in, and alerts when a pool opens or matures.</span>
+    </div>
+    <button type="button" class="svc-app-banner__cta" onclick="svcOpenAppStore()">Get it</button>
+    <button type="button" class="svc-app-banner__x" aria-label="Not now" onclick="svcDismissAppBanner()">
+      <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+    </button>`;
+  el.title = `Open ${store}`;
+  document.body.appendChild(el);
 }
 
 /* Starts itself. Every page that loads this script gets the banner, and the

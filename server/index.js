@@ -40,7 +40,12 @@ app.use(helmet({
       // Narrowed from '*' — external images only allowed from trusted chart/QR sources
       imgSrc:        ["'self'", 'data:', 'blob:', 'api.qrserver.com', 'chart.googleapis.com', 'img.youtube.com', 'i.ytimg.com'],
       connectSrc:    ["'self'", 'cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com', 'api.paystack.co', '*.paystack.co', 'pay.ozow.com'],
-      frameSrc:      ["'self'", 'checkout.paystack.com'],
+      /* blob: so a stored document can be previewed inline. The viewer
+         converts the base64 data: URL it holds into a blob first; framing
+         the data: URL directly was refused here and rendered blank.
+         data: is deliberately NOT admitted — a data: frame can carry
+         arbitrary HTML, and that is a cross-site-scripting vector. */
+      frameSrc:      ["'self'", 'blob:', 'checkout.paystack.com'],
       objectSrc:     ["'none'"],
     },
   },
@@ -134,6 +139,10 @@ app.use('/api/payments/paystack/webhook', (req, res, next) => {
 app.use('/api/tables/kyc_documents', express.json({ limit: '15mb' }));
 app.use('/api/tables/kyc_documents', express.urlencoded({ extended: true, limit: '15mb' }));
 app.use('/api/tables/support_tickets', express.json({ limit: '15mb' }));
+/* Insight hero images arrive as a data: URI inside the article row. A photo
+   sized for a 1200px header is a few hundred KB, which base64 inflates past the
+   2mb global limit on a large one. */
+app.use('/api/tables/insights', express.json({ limit: '8mb' }));
 app.use('/api/tables/support_tickets', express.urlencoded({ extended: true, limit: '15mb' }));
 // Large platform export JSON uploads
 app.use('/api/admin/import', express.json({ limit: '50mb' }));
@@ -316,6 +325,29 @@ app.get('/robots.txt',  (_req, res) => res.sendFile(path.join(__dirname, '..', '
   app.get('/reset-password', resetHandler);
   app.get('/reset-password.html', resetHandler);
 }
+
+/* ─── /register → the signup form ─────────────────────────────────────
+   Every referral link ever shared points at /register?ref=CODE. There has
+   never been a /register: the catch-all at the bottom of this file served the
+   landing page instead, and ?ref= went with it, so nobody arriving on a
+   referral link reached the form and no referral was ever attributed. The
+   page is signup.html, which reads ?ref= to pre-fill the code.
+
+   An alias rather than a redirect, and registered here rather than left to
+   the catch-all, so the query string survives and the links already out in
+   the world start working rather than needing to be re-sent. */
+{
+  const signupFile = path.join(__dirname, '..', 'signup.html');
+  app.get('/register', (_req, res) => res.sendFile(signupFile, {
+    headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', Pragma: 'no-cache', Expires: '0' },
+  }));
+}
+
+/* ─── Insights — public, server-rendered ───────────────────────────────
+   Mounted BEFORE express.static and before the .html redirect: these are
+   generated pages with per-article Open Graph tags, and the static handler
+   would answer /insights with index.html long before this router saw it. */
+app.use('/insights', require('./routes/insights'));
 
 /* ─── Redirect legacy .html URLs to clean equivalents ─── */
 // /login.html → /login  |  /fund/index.html → /fund  |  /team/director.html → /team/director

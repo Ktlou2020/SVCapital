@@ -30,11 +30,11 @@
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
-  <link rel="stylesheet" href="../css/admin.css?v=2" />
-  <link rel="stylesheet" href="/css/portal.css?v=5" />
+  <link rel="stylesheet" href="../css/admin.css?v=3" />
+  <link rel="stylesheet" href="/css/portal.css?v=6" />
   <link rel="stylesheet" href="/css/ci-theme.css?v=2" />
   <!-- sv-intelligence hidden -->
-  <link rel="stylesheet" href="/css/portal-premium.css?v=13" />
+  <link rel="stylesheet" href="/css/portal-premium.css?v=15" />
   <!-- Everything the app styles differently from the web portal. Must stay here:
        after the four shared sheets, before mobile-app.css. -->
   <link rel="stylesheet" href="/css/mobile-overrides.css?v=1" />
@@ -70,7 +70,7 @@
     window.__SVC_API_BASE__ = 'https://svcapital-production.up.railway.app/api/';
   </script>
   <script src="/js/native.js?v=1"></script>
-  <link rel="stylesheet" href="/css/mobile-app.css?v=25">
+  <link rel="stylesheet" href="/css/mobile-app.css?v=26">
   <!-- Kill viewFadeIn animation synchronously before first paint — prevents Android WebView blank screen -->
   <script>
   (function(){
@@ -1088,14 +1088,16 @@
               <div class="panel__header"><span class="panel__title">Your Referral Code</span></div>
               <div class="panel__body text-center" style="padding:28px">
                 <div class="referral-code" id="referralCode">—</div>
-                <p style="font-size:0.78rem;color:#6b7280;margin:12px 0">Share this code or your personal link</p>
+                <p style="font-size:0.78rem;color:#6b7280;margin:12px 0">Both buttons send the full invite &mdash; the message, your code and your link</p>
                 <div class="referral-link-box">
                   <span id="referralLink">Loading your link…</span>
-                  <button class="btn btn--secondary btn--sm" onclick="copyReferralLink()"><i class="fa-solid fa-copy"></i> Copy</button>
+                  <button class="btn btn--secondary btn--sm" onclick="copyReferralLink()"><i class="fa-solid fa-copy"></i> Copy invite</button>
                 </div>
                 <div style="display:flex;gap:10px;margin-top:16px;justify-content:center">
+                  <!-- Copy lives beside the link it copies, above. A second
+                       button doing the same thing here only made the pair
+                       look like two different things. -->
                   <button class="btn btn--primary" onclick="shareReferral('whatsapp')"><i class="fa-brands fa-whatsapp"></i> Share on WhatsApp</button>
-                  <button class="btn btn--secondary" onclick="shareReferral('copy')"><i class="fa-solid fa-link"></i> Copy Link</button>
                 </div>
               </div>
             </div>
@@ -3076,10 +3078,10 @@
   </div>
 </nav>
 
-<script src="../js/api.js?v=26"></script>
-<script src="../js/portal-core.js?v=34"></script>
+<script src="../js/api.js?v=28"></script>
+<script src="../js/portal-core.js?v=42"></script>
 <script src="../js/investor-documents.js?v=7"></script>
-<script src="js/portal.js?v=56"></script>
+<script src="js/portal.js?v=59"></script>
 <!-- sv-intelligence.js hidden -->
 <script>
 if ('serviceWorker' in navigator && !window.__SVC_NATIVE__) {
@@ -3093,6 +3095,6 @@ if ('serviceWorker' in navigator && !window.__SVC_NATIVE__) {
   });
 }
 </script>
-<script src="../js/app-banner.js?v=1"></script>
+<script src="../js/app-banner.js?v=2"></script>
 </body>
 </html>

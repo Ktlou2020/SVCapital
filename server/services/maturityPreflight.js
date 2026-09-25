@@ -23,6 +23,13 @@ const STOP = 'STOP', ATTENTION = 'ATTENTION', OK = 'OK';
    at the same pools. */
 const { INVESTMENT_START } = require('../jobs/poolCyclerCron');
 
+/* What the engine will actually do with an instruction, as against what the
+   column says — delivery bikes pay out rather than reinvest, and Ethical &
+   Interest-Free pools settle in cash whatever they carry. Imported for the
+   same reason INVESTMENT_START is: a pre-flight that predicts a different
+   outcome from the job it previews is worse than none. */
+const { effectiveInstruction, isPayoutOnlyProduct } = require('./maturityPolicy');
+
 /* The posted return. investment_pools.actual_rate is the achieved return for
    the pool's PERIOD, for every product — not per annum, not prorated over
    term_months. Same rule as Utils.postedReturn in the portal and as
@@ -185,7 +192,7 @@ async function runMaturityPreflight(db, { horizonDays = 14 } = {}) {
   }
 
   /* ── Where reinvested money will go ──────────────────────────────── */
-  const willRoll = maturing.filter(m => (m.maturity_instruction || 'reinvest') !== 'payout_all');
+  const willRoll = maturing.filter(m => effectiveInstruction(m.maturity_instruction, m.product_type) !== 'payout_all');
   result.totals.rollingOver = willRoll.length;
 
   /* Cached: a pool's investments almost always share one product type. */
@@ -233,7 +240,7 @@ async function runMaturityPreflight(db, { horizonDays = 14 } = {}) {
      which is the question anyone actually asks of a succession. */
   for (const entry of result.pools) {
     const list = byPool.get(entry.poolId) || [];
-    const rolling = list.filter(m => (m.maturity_instruction || 'reinvest') !== 'payout_all');
+    const rolling = list.filter(m => effectiveInstruction(m.maturity_instruction, m.product_type) !== 'payout_all');
     entry.rollsInto = [];
     for (const pt of [...new Set(rolling.flatMap(targetProductTypes))]) {
       const t = await resolveTarget(pt);
@@ -347,7 +354,10 @@ async function runMaturityPreflight(db, { horizonDays = 14 } = {}) {
     const k = m.maturity_instruction || 'none';
     counts[k] = (counts[k] || 0) + 1;
   }
-  const missing   = maturing.filter(m => !m.maturity_instruction);
+  /* A blank instruction is only a gap where the product has a choice to make.
+     A payout-only product does not: it settles in cash, that is the agreed
+     default, and flagging it would bury the rows that genuinely need chasing. */
+  const missing   = maturing.filter(m => !m.maturity_instruction && !isPayoutOnlyProduct(m.product_type));
   const badCustom = maturing.filter(m =>
     ['payout_custom', 'custom_switch', 'switch_amount'].includes(m.maturity_instruction) && !(num(m.custom_payout_amount) > 0));
   const badSwitch = maturing.filter(m =>

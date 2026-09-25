@@ -460,6 +460,7 @@ function navigate(view, btnEl) {
     terms: 'Legal Documents', privacy: 'Privacy Policy &amp; POPIA Notice', intlinterest: 'International Interest',
     opsconsole: 'Operations Console', feedback: 'Client Feedback', emaillogs: 'Email Logs',
     'fica-pipeline': 'FICA Pipeline',
+    insights: 'Insight Articles',
     handbook: 'Platform Handbook', rewards: 'Rewards',
   };
   document.getElementById('topbarTitle').textContent = titles[view] || view;
@@ -481,6 +482,7 @@ function navigate(view, btnEl) {
     settings: loadSettings,
     withdrawals: loadWithdrawals,
     comms: loadComms,
+    insights: loadInsights,
     compliance: loadCompliance,
     reconciliation: loadReconciliation,
     'platform-fees': () => loadPlatformFees('all'),
@@ -5632,13 +5634,13 @@ async function openKycReview(id) {
             ${_zoomBar()}
             <div style="flex:1;overflow:auto">
               <div id="docZoomTarget" style="transition:transform 0.15s;transform-origin:top center">
-                <iframe src="${doc.file_url}" style="width:100%;height:800px;border:none;display:block"></iframe>
+                <iframe src="${_esc(Utils.documentUrl(doc.file_url) || '')}" style="width:100%;height:800px;border:none;display:block"></iframe>
               </div>
             </div>
             ${_dlBtn(doc.file_url, fname, true)}
           </div>`;
       } else {
-        docContent.innerHTML = `<div style="text-align:center;padding:40px"><a href="${doc.file_url}" target="_blank" rel="noopener" class="btn btn--primary"><i class="fa-solid fa-external-link"></i> Open Document</a></div>`;
+        docContent.innerHTML = `<div style="text-align:center;padding:40px"><button class="btn btn--primary" onclick='Utils.openDocument(${_esc(JSON.stringify(doc.file_url))}) || Toast.error("Could not open this document")'><i class="fa-solid fa-external-link"></i> Open Document</button></div>`;
       }
     } else {
       docContent.innerHTML = `<div style="text-align:center;padding:60px 0;color:var(--text-muted)"><i class="fa-solid fa-file-circle-question fa-3x" style="opacity:0.3;display:block;margin-bottom:12px"></i><div>No file attached</div><div style="font-size:0.78rem;margin-top:6px">The investor has not uploaded a file for this document.</div></div>`;
@@ -5976,15 +5978,17 @@ function renderProductsGrid() {
 function _viewProductFactsheet(id) {
   const p = (STATE.products || []).find(x => x.id === id);
   if (!p || !p.factsheet_url) return;
-  const raw = p.factsheet_url;
-  if (raw.startsWith('http')) { window.open(raw, '_blank', 'noopener'); return; }
-  try {
-    const [header, b64] = raw.split(',');
-    const mime = header.match(/:(.*?);/)?.[1] || 'application/pdf';
-    const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-    const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
-    window.open(url, '_blank', 'noopener');
-  } catch (_) { Toast.error('Could not open factsheet'); }
+  if (!Utils.openDocument(p.factsheet_url)) Toast.error('Could not open factsheet');
+}
+
+/* The factsheet rows in the manager. Looked up by id rather than having the
+   URL written into the handler: these are base64 PDFs, and putting a couple
+   of megabytes of them into an onclick attribute is how the list stops
+   rendering. */
+let _adminFsCache = [];
+function _openStoredDoc(fsId) {
+  const s = (_adminFsCache || []).find(x => String(x.id) === String(fsId));
+  if (!s || !Utils.openDocument(s.file_url)) Toast.error('Could not open this factsheet');
 }
 
 async function removeProductFactsheet(productId) {
@@ -6838,6 +6842,7 @@ async function _loadAdminFactsheets(poolId, listEl) {
   try {
     const res = await API._fetch('GET', `factsheets?pool_id=${poolId}`);
     const sheets = res.data || [];
+    _adminFsCache = sheets;
     if (!sheets.length) {
       listEl.innerHTML = '<div style="color:var(--text-dim);font-size:0.78rem;text-align:center;padding:16px">No factsheets yet — upload one above.</div>';
       return;
@@ -6856,7 +6861,7 @@ async function _loadAdminFactsheets(poolId, listEl) {
             s.period_label ? `<span style="color:var(--text-primary);font-weight:700">${_esc(s.period_label)}</span> · ` : '<span style="color:#f59e0b">No period · </span>'
           }${s.version ? `v${_esc(s.version)} · ` : ''}uploaded ${Utils.date(s.created_at)}${s.uploaded_by ? ` · ${_esc(s.uploaded_by)}` : ''}</div>
         </div>
-        <a href="${s.file_url}" target="_blank" rel="noopener" class="btn btn--ghost btn--sm" title="Open"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
+        <button class="btn btn--ghost btn--sm" onclick='_openStoredDoc(${_esc(JSON.stringify(s.id))})' title="Open"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
         <button class="btn btn--ghost btn--sm" style="color:#ef4444" onclick="deleteFactsheet('${s.id}','${poolId}')" title="Delete"><i class="fa-solid fa-trash"></i></button>
       </div>`).join('');
   } catch (e) {
@@ -7904,6 +7909,12 @@ function _renderInvestmentDetail(inv, backTo, backKind) {
     : null;
   const _matPlan   = Utils.maturityPlan(inv, _switchLbl);
 
+  /* Ethical & Interest-Free holdings settle in cash — each pool is its own
+     concluded contract, so there is nothing to reinvest or switch into. The
+     server refuses anything else on these, for staff as well as clients, so
+     offering the full list here would only produce an error nobody can act on. */
+  const _admPayoutOnly = Utils.isPayoutOnlyProduct(inv.product_type);
+
   const _investorName = inv.investor_name || invRecord
     ? _esc(inv.investor_name || `${invRecord?.first_name || ''} ${invRecord?.last_name || ''}`.trim())
     : '';
@@ -7941,7 +7952,10 @@ function _renderInvestmentDetail(inv, backTo, backKind) {
     <div class="panel" style="padding:14px;margin-bottom:14px;background:var(--ci-bg-light,#F7F8FA)">
       <div style="font-size:0.8rem;font-weight:700;color:#1a1a1a;margin-bottom:8px"><i class="fa-solid fa-user-pen" style="color:var(--gold);margin-right:6px"></i>Set instruction on behalf of client</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <select id="admMatInstruction" class="form-select" style="flex:1;min-width:180px" onchange="_admMatToggle()">
+        <select id="admMatInstruction" class="form-select" style="flex:1;min-width:180px" onchange="_admMatToggle()"${_admPayoutOnly ? ' disabled' : ''}>
+          ${_admPayoutOnly ? `
+          <option value="payout_all" selected>Pay out all (capital + returns)</option>
+          ` : `
           <option value="reinvest"${inv.maturity_instruction === 'reinvest' ? ' selected' : ''}>Reinvest into next pool</option>
           <option value="payout_all"${inv.maturity_instruction === 'payout_all' ? ' selected' : ''}>Pay out all (capital + returns)</option>
           <option value="payout_return"${inv.maturity_instruction === 'payout_return' ? ' selected' : ''}>Pay out returns only</option>
@@ -7949,11 +7963,18 @@ function _renderInvestmentDetail(inv, backTo, backKind) {
           <option value="switch_product"${inv.maturity_instruction === 'switch_product' ? ' selected' : ''}>Switch product</option>
           <option value="custom_switch"${inv.maturity_instruction === 'custom_switch' ? ' selected' : ''}>Custom payout &amp; switch the rest</option>
           <option value="switch_amount"${inv.maturity_instruction === 'switch_amount' ? ' selected' : ''}>Switch an amount &amp; reinvest the rest</option>
+          `}
         </select>
         <button class="btn btn--primary btn--sm" onclick='adminSetInstruction(${_esc(JSON.stringify(inv.id))})'>
           <i class="fa-solid fa-check"></i> Set Instruction
         </button>
       </div>
+      ${_admPayoutOnly ? `
+      <div style="font-size:0.68rem;color:var(--text-muted);margin-top:6px;line-height:1.5">
+        <i class="fa-solid fa-scale-balanced" style="color:#078e07;margin-right:4px"></i>
+        Ethical &amp; Interest-Free: concluded at the end of the term and paid out in full.
+        This is what the maturity engine does whether or not an instruction is set.
+      </div>` : ''}
 
       <!-- The custom instructions are meaningless without their companion
            field, and the server refuses them without it. Shown only when the
@@ -14637,6 +14658,236 @@ async function addInvestorNote(investorId) {
     Toast.error('Failed to save note: ' + (err.message || 'unknown error'));
   } finally {
     if (saveBtn) saveBtn.disabled = false;
+  }
+}
+
+
+/* ═══════════════════════════════════════════════
+   INSIGHT ARTICLES
+
+   The public pages at /insights are server-rendered so WhatsApp can read the
+   Open Graph tags off each article; this is where the rows behind them are
+   written. Everything goes through the generic table API, which is why
+   `insights` is in ALLOWED_TABLES and admin-write only — a client publishing
+   to the public site would be quite the bug.
+   ═══════════════════════════════════════════════ */
+
+
+/* Header image. Read to a data: URI and carried in the row — the public route
+   at /insights/:slug/hero turns it back into real bytes so a share crawler has
+   a normal URL to fetch. */
+const _INS_HERO_MAX = 2 * 1024 * 1024;
+
+function _insPickHero(input) {
+  const f = input.files && input.files[0];
+  if (!f) return;
+  if (!/^image\/(png|jpe?g|webp)$/i.test(f.type)) {
+    Toast.error('Use a PNG, JPEG or WebP.'); input.value = ''; return;
+  }
+  if (f.size > _INS_HERO_MAX) {
+    /* Refused here rather than at the server, so the author finds out before
+       they have written the article and pressed save. */
+    Toast.error(`That image is ${(f.size / 1048576).toFixed(1)} MB. Keep it under 2 MB.`);
+    input.value = ''; return;
+  }
+  const r = new FileReader();
+  r.onload = e => { _insShowHero(String(e.target.result)); };
+  r.onerror = () => Toast.error('Could not read that file.');
+  r.readAsDataURL(f);
+}
+
+function _insShowHero(dataUri) {
+  const hid = document.getElementById('insHero');
+  const img = document.getElementById('insHeroPreview');
+  const clr = document.getElementById('insHeroClear');
+  if (hid) hid.value = dataUri || '';
+  if (img) { img.src = dataUri || ''; img.style.display = dataUri ? 'block' : 'none'; }
+  if (clr) clr.style.display = dataUri ? 'inline-flex' : 'none';
+}
+
+function _insClearHero() {
+  _insShowHero('');
+  const f = document.getElementById('insHeroFile');
+  if (f) f.value = '';
+}
+
+function _insSlugify(t) {
+  return String(t || '').toLowerCase().trim()
+    .replace(/['’]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 100);
+}
+
+/* Only ever fills an EMPTY slug. A published article's slug is in links people
+   have already sent, and silently rewriting it as somebody edits the headline
+   would break every one of them. */
+function _insSuggestSlug() {
+  const slug = document.getElementById('insSlug');
+  const title = document.getElementById('insTitle');
+  if (slug && title && !slug.value.trim()) slug.value = _insSlugify(title.value);
+  _insEchoSlug();
+}
+function _insEchoSlug() {
+  const echo = document.getElementById('insSlugEcho');
+  const slug = document.getElementById('insSlug');
+  if (echo && slug) echo.textContent = slug.value.trim() || 'slug';
+}
+
+async function loadInsights() {
+  const list = document.getElementById('insightsList');
+  if (!list) return;
+  list.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:40px 0">Loading…</p>';
+  try {
+    const res  = await API._fetch('GET', 'tables/insights', null, { limit: 200, sort: 'created_at', order: 'desc' });
+    const rows = res.data || [];
+    STATE.insights = rows;
+
+    if (!rows.length) {
+      list.innerHTML = `<div class="empty-state" style="padding:40px 0"><i class="fa-solid fa-newspaper"></i>
+        <div class="empty-state__title">No articles yet</div>
+        <div class="empty-state__sub">Write the first one — it appears at /insights as soon as you publish it.</div></div>`;
+      return;
+    }
+
+    list.innerHTML = rows.map(a => {
+      const live = !!a.published;
+      const thumb = a.hero_image
+        ? `<img src="${_esc(a.hero_image)}" alt="" style="width:74px;height:48px;object-fit:cover;
+             border-radius:6px;border:1px solid var(--border);flex-shrink:0">`
+        : '';
+      return `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+        <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
+          ${thumb}
+          <span style="font-size:0.66rem;font-weight:800;letter-spacing:0.07em;text-transform:uppercase;
+                       padding:4px 9px;border-radius:999px;background:${_esc(a.hero_colour || '#eda5ff')};color:#15121b">${_esc(a.industry || '—')}</span>
+          <span style="font-size:0.68rem;font-weight:700;padding:4px 9px;border-radius:999px;
+                       background:${live ? 'rgba(34,197,94,0.14)' : 'rgba(148,163,184,0.16)'};
+                       color:${live ? '#22c55e' : '#94a3b8'}">${live ? 'Published' : 'Draft'}</span>
+          <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
+            ${live ? `<a class="btn btn--ghost btn--sm" href="/insights/${encodeURIComponent(a.slug)}" target="_blank" rel="noopener"><i class="fa-solid fa-arrow-up-right-from-square"></i> View</a>` : ''}
+            <button class="btn btn--ghost btn--sm" onclick="openInsightEditor('${_esc(a.id)}')"><i class="fa-solid fa-pen"></i> Edit</button>
+            <button class="btn btn--ghost btn--sm" onclick="toggleInsightPublished('${_esc(a.id)}')">${live ? 'Unpublish' : 'Publish'}</button>
+            <button class="btn btn--ghost btn--sm" style="color:#ef4444" onclick="deleteInsight('${_esc(a.id)}')"><i class="fa-solid fa-trash"></i></button>
+          </div>
+        </div>
+        <div style="font-weight:700;font-size:0.96rem;margin-top:9px">${_esc(a.title)}</div>
+        <div style="font-size:0.82rem;color:var(--text-muted);margin-top:4px">${_esc(a.excerpt)}</div>
+        <div style="font-size:0.72rem;color:var(--text-dim);margin-top:7px">
+          /insights/${_esc(a.slug)} &middot; ${Number(a.read_minutes) || 4} min read
+          ${a.published_at ? ' &middot; published ' + Utils.date(a.published_at) : ''}
+        </div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    /* Named, because "no articles yet" and "the request failed" look identical
+       to an operator and lead to very different next actions. */
+    list.innerHTML = `<div class="text-center" style="padding:30px;color:#ef4444">
+      Could not load the articles: ${_esc(e.message || 'error')}<br>
+      <button class="btn btn--secondary btn--sm" style="margin-top:10px" onclick="loadInsights()">Retry</button></div>`;
+    console.error('[insights]', e);
+  }
+}
+
+function openInsightEditor(id) {
+  const a = id ? (STATE.insights || []).find(x => x.id === id) : null;
+  const set = (el, v) => { const n = document.getElementById(el); if (n) n.value = v; };
+  document.getElementById('insightModalTitle').textContent = a ? 'Edit article' : 'New article';
+  set('insId', a ? a.id : '');
+  set('insTitle', a ? a.title : '');
+  set('insIndustry', a ? a.industry : '');
+  set('insSlug', a ? a.slug : '');
+  set('insExcerpt', a ? a.excerpt : '');
+  set('insBody', a ? a.body : '');
+  set('insMins', a ? (a.read_minutes || 4) : 4);
+  set('insColour', a ? (a.hero_colour || '#eda5ff') : '#eda5ff');
+  set('insHeroAlt', a ? (a.hero_alt || '') : '');
+  _insShowHero(a ? (a.hero_image || '') : '');
+  const hf = document.getElementById('insHeroFile'); if (hf) hf.value = '';
+  const pub = document.getElementById('insPublished');
+  if (pub) pub.checked = !!(a && a.published);
+  _insEchoSlug();
+  Modal.open('insightModal');
+}
+
+async function saveInsight() {
+  const v = id => (document.getElementById(id)?.value || '').trim();
+  const id       = v('insId');
+  const title    = v('insTitle');
+  const industry = v('insIndustry');
+  const excerpt  = v('insExcerpt');
+  const body     = v('insBody');
+  let   slug     = _insSlugify(v('insSlug') || title);
+
+  if (!title)    { Toast.error('The article needs a headline.'); return; }
+  if (!industry) { Toast.error('Give it an industry — it is the tag on the card.'); return; }
+  if (!excerpt)  { Toast.error('The excerpt is what WhatsApp shows under the headline.'); return; }
+  if (!body)     { Toast.error('The article has no body text.'); return; }
+  if (!slug)     { Toast.error('That headline produced an empty URL slug — set one by hand.'); return; }
+
+  const published = !!document.getElementById('insPublished')?.checked;
+  const payload = {
+    slug, title, industry, excerpt, body,
+    author: 'SV Capital',
+    read_minutes: parseInt(v('insMins'), 10) || 4,
+    hero_colour: v('insColour') || '#eda5ff',
+    /* null, not '', so clearing the image actually removes it — an empty string
+       is a value the hero parser would go on trying to read. */
+    hero_image: v('insHero') || null,
+    hero_alt:   v('insHeroAlt') || null,
+    published,
+  };
+  /* Stamped the first time it goes live and left alone afterwards, so the
+     public date does not jump every time somebody fixes a typo. */
+  const existing = id ? (STATE.insights || []).find(x => x.id === id) : null;
+  if (published && !(existing && existing.published_at)) payload.published_at = new Date().toISOString();
+
+  const btn = document.getElementById('insSaveBtn');
+  if (btn) btn.disabled = true;
+  try {
+    if (id) await API._fetch('PATCH', `tables/insights/${id}`, payload);
+    else    await API._fetch('POST', 'tables/insights', { id: `INS-${Date.now()}`, ...payload });
+    Toast.success(published ? 'Article published.' : 'Draft saved.');
+    Modal.close('insightModal');
+    await loadInsights();
+  } catch (e) {
+    /* A duplicate slug is the one failure an author can actually fix, so it is
+       named rather than folded into a generic message. */
+    const dup = /duplicate|unique/i.test(e.message || '');
+    Toast.error(dup ? 'That URL slug is already used by another article.'
+                    : `Could not save: ${e.message || 'unknown error'}`);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function toggleInsightPublished(id) {
+  const a = (STATE.insights || []).find(x => x.id === id);
+  if (!a) return;
+  const next = !a.published;
+  try {
+    const patch = { published: next };
+    if (next && !a.published_at) patch.published_at = new Date().toISOString();
+    await API._fetch('PATCH', `tables/insights/${id}`, patch);
+    Toast.success(next ? 'Published — it is live at /insights now.' : 'Unpublished. The link now returns 404.');
+    await loadInsights();
+  } catch (e) {
+    Toast.error(`Could not change it: ${e.message || 'unknown error'}`);
+  }
+}
+
+async function deleteInsight(id) {
+  const a = (STATE.insights || []).find(x => x.id === id);
+  if (!a) return;
+  if (!confirm(`Delete "${a.title}"?\n\nAnyone holding a link to it will get a 404. ` +
+               `If you only want it off the site, unpublish it instead.`)) return;
+  try {
+    await API._fetch('DELETE', `tables/insights/${id}`);
+    Toast.success('Article deleted.');
+    await loadInsights();
+  } catch (e) {
+    Toast.error(`Could not delete it: ${e.message || 'unknown error'}`);
   }
 }
 

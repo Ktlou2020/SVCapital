@@ -520,6 +520,26 @@ img { max-width: 100%; display: block; }
 .btn--lg { padding: 11px 24px; font-size: 0.9rem; }
 .btn--full { width: 100%; justify-content: center; }
 
+/* A disabled button has to look disabled.
+
+   Nothing styled this, so every :disabled button on the platform rendered
+   identically to a live one — including the gold primary. On the investment
+   agreement screen that produced a bug report reading "nothing happens when I
+   click Sign & continue": the button was disabled, looked enabled, and gave
+   no sign either way. Hover lift and brightness are cancelled too, or a dead
+   button still answers the pointer as though it were alive. */
+.btn:disabled,
+.btn[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: grayscale(0.35);
+}
+.btn:disabled:hover,
+.btn[disabled]:hover {
+  transform: none;
+  filter: grayscale(0.35);
+}
+
 /* ─── FORM ELEMENTS ─── */
 .form-group { margin-bottom: 16px; }
 .form-label { display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.06em; }

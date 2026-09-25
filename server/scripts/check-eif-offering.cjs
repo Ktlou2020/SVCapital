@@ -208,14 +208,15 @@ console.log('\nthe offering shows how each structure earns, rather than assertin
 
 console.log('\nand the accent is never used as text on the light ground');
 {
-  /* #65ed00 measures about 1.7:1 on white. It is the section's accent and it
-     belongs to rules, borders, tints and fills — never to a word. */
+  /* #078e07 measures 4.3:1 on white — under the 4.5:1 body text needs. It is
+     the section's accent and it belongs to rules, borders, tints and fills —
+     never to a word. */
   ok('there is a separate ink for text',
-     /--eif-ink: #2f6b00;/.test(CSS));
+     /--eif-ink: #056b05;/.test(CSS));
 
   const eifCss = (CSS.match(/ETHICAL AND INTEREST-FREE|Ethical and Interest-Free \(EIF\)[\s\S]*$/) || [''])[0];
   const textProps = [...strip(eifCss).matchAll(/^\s*color:\s*([^;]+);/gm)].map(m => m[1].trim());
-  const rawAccent = textProps.filter(v => /var\(--eif\)|#65ed00/.test(v));
+  const rawAccent = textProps.filter(v => /var\(--eif\)|#078e07/.test(v));
   ok('no colour declaration uses the raw accent',
      rawAccent.length === 0,
      'found: ' + rawAccent.join(', '));
@@ -318,22 +319,33 @@ console.log('\nthe FAQs are rows, and the claim is the one we can make');
 
 console.log('\nthe look and feel stays inside the CI');
 {
-  ok('the accent is the CI lime',
-     /function EIF_ACCENT\(\)\s*\{ return '#65ed00'; \}/.test(CORE),
-     'the CI palette is fixed — a new hue for a new section is how a brand ' +
-     'stops being one');
+  /* Lime, then the CI blue, now #078e07. The first two were both in the CI
+     palette, which is what this assertion used to be about — a new hue
+     invented for a section is how a brand stops being one.
+
+     The green is the documented exception, and the reason is not a design
+     preference: green is the colour the Islamic tradition this offering
+     serves reads as its own, and the client asked for it directly. So the
+     rule is not dropped, it is narrowed: the accent must be in the CI
+     palette OR be this one exception, named here. Anything else still
+     fails, which is the property worth keeping. */
+  const EIF_EXCEPTION = '#078e07';
+  const accent = (CORE.match(/function EIF_ACCENT\(\)\s*\{ return '(#[0-9a-fA-F]{6})'; \}/) || [])[1];
+  ok('the accent is the dark green', accent === EIF_EXCEPTION, String(accent));
 
   const palette = read('js/api.js');
-  ok('and that colour really is in the CI palette',
-     /ciProductPalette:[^\]]*#65ed00/.test(palette));
+  const inPalette = new RegExp(`ciProductPalette:[^\\]]*${accent}`, 'i').test(palette);
+  ok('and it is either in the CI palette or the one documented exception',
+     inPalette || accent === EIF_EXCEPTION,
+     'a hue that is neither is a second brand colour nobody agreed to');
 
   /* One canonical purple, and no second brand colour smuggled in beside it. */
   const eifCss = (CSS.match(/Ethical and Interest-Free \(EIF\)[\s\S]*$/) || [''])[0];
   const hexes = [...new Set((strip(eifCss).match(/#[0-9a-fA-F]{6}/g) || []).map(h => h.toLowerCase()))];
-  /* #2f6b00 is the same lime taken dark enough to read as text on the light
+  /* #056b05 is the same green taken dark enough to read as text on the light
      CI ground — a role of the accent, not a second colour. #0d1a00 is the ink
      that sits ON the accent. */
-  const allowed = ['#65ed00', '#2f6b00', '#0d1a00', '#1a1a1a'];
+  const allowed = ['#078e07', '#056b05', '#0d1a00', '#1a1a1a'];
   ok('the EIF stylesheet introduces no colour of its own',
      hexes.every(h => allowed.includes(h)),
      `found ${hexes.filter(h => !allowed.includes(h)).join(', ')} — everything ` +
@@ -414,16 +426,17 @@ console.log('\nthe homepage carries it, on the same switches');
      !/Sharia[- ]certified\b|fully Sharia compliant/i.test(HOME));
 
   /* _applyLiveProductAverages paints each card's stat value and icon with the
-     product's colour, inline. #65ed00 on a white card is about 1.7:1 — the
-     headline figure would be the least legible thing on the card. */
+     product's colour, inline. #078e07 on a white card is 4.3:1, under what
+     body text needs — the headline figure would be the least legible thing
+     on the card. */
   ok('the accent never becomes body text on the light homepage',
      /\.product-card--eif \.stat__value--gold \{ color: var\(--eif-ink\) !important; \}/.test(HOMECSS) &&
-     /--eif-ink:\s*#2f6b00/.test(HOMECSS),
+     /--eif-ink:\s*#056b05/.test(HOMECSS),
      'only !important beats the inline style the live sync writes');
 
   const eifCss = (HOMECSS.match(/ETHICAL AND INTEREST-FREE \(EIF\)[\s\S]*$/) || [''])[0];
   const hexes = [...new Set((strip(eifCss).match(/#[0-9a-fA-F]{6}/g) || []).map(h => h.toLowerCase()))];
-  const allowed = ['#65ed00', '#2f6b00', '#fbfef8', '#ffffff', '#f0f2f5', '#fff'];
+  const allowed = ['#078e07', '#056b05', '#fbfef8', '#ffffff', '#f0f2f5', '#fff'];
   ok('and the homepage block introduces no colour of its own either',
      hexes.every(h => allowed.includes(h)),
      `found ${hexes.filter(h => !allowed.includes(h)).join(', ')}`);

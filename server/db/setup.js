@@ -79,6 +79,12 @@ END $$;
    has one by construction and no field to have answered. Step 16 backfills the
    international ones from what they did answer. */
 DO $$ BEGIN
+  ALTER TABLE insights ADD COLUMN IF NOT EXISTS hero_image TEXT;
+  ALTER TABLE insights ADD COLUMN IF NOT EXISTS hero_alt   TEXT;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+DO $$ BEGIN
   ALTER TABLE investors ADD COLUMN IF NOT EXISTS nationality TEXT DEFAULT 'South African';
 EXCEPTION WHEN OTHERS THEN NULL;
 END $$;
@@ -401,6 +407,11 @@ DO $$ BEGIN
   BEGIN ALTER TABLE investors ADD COLUMN auto_topup_enabled BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investors ADD COLUMN auto_topup_amount NUMERIC(12,2); EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investors ADD COLUMN auto_topup_day INT DEFAULT 1; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  -- When this investor last said "not now" to the automatic top-up offer made
+  -- after a card deposit. Held server side rather than in the browser so
+  -- declining it on a phone settles it on the laptop too, and so a cleared
+  -- cache does not start the asking over.
+  BEGIN ALTER TABLE investors ADD COLUMN auto_topup_prompt_dismissed_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
   -- Withdrawal notes column on transactions
   BEGIN ALTER TABLE transactions ADD COLUMN notes TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
   -- Investment pool capacity columns (Feature: waitlist)
@@ -472,6 +483,33 @@ CREATE TABLE IF NOT EXISTS investment_waitlist (
   notified BOOLEAN DEFAULT false,
   UNIQUE(investor_id, pool_id)
 );
+
+/* Insight articles for the public site. Server-rendered at /insights so the
+   WhatsApp crawler — which runs no JavaScript — can read the Open Graph tags
+   off each article and build a preview card. A client-rendered list would
+   share as a bare link. */
+CREATE TABLE IF NOT EXISTS insights (
+  id           TEXT PRIMARY KEY,
+  slug         TEXT UNIQUE NOT NULL,
+  title        TEXT NOT NULL,
+  industry     TEXT NOT NULL,
+  excerpt      TEXT NOT NULL,
+  body         TEXT NOT NULL,
+  author       TEXT,
+  read_minutes INT DEFAULT 4,
+  hero_colour  TEXT DEFAULT '#eda5ff',
+  /* Either a data: URI uploaded through the console or an http(s) URL. Served
+     back as real bytes at /insights/:slug/hero so og:image can point at a
+     fetchable address — a share crawler cannot read a data: URI, so storing one
+     and using it directly would give every article the generic card. */
+  hero_image   TEXT,
+  hero_alt     TEXT,
+  published    BOOLEAN DEFAULT false,
+  published_at TIMESTAMPTZ,
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS insights_published_idx ON insights(published, published_at DESC);
 
 CREATE TABLE IF NOT EXISTS investor_notes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1659,7 +1697,7 @@ const EIF_PRODUCTS = [
     ].join('\n'),
     min_investment: 500, term_months: 6, benchmark_rate: 0.115, performance_fee_pct: 0,
     risk_profile: 'Low-Medium', risk_color: '#22c55e', icon: 'fa-handshake',
-    color: '#65ed00', badge_class: 'badge--green', sector: 'Trade Finance', sort_order: 40,
+    color: '#078e07', badge_class: 'badge--green', sector: 'Trade Finance', sort_order: 40,
   },
   {
     product_type: 'eif_ijara', label: 'Ijara Asset Leasing',
@@ -1675,7 +1713,7 @@ const EIF_PRODUCTS = [
     ].join('\n'),
     min_investment: 1000, term_months: 36, benchmark_rate: 0.125, performance_fee_pct: 0,
     risk_profile: 'Medium', risk_color: '#fec24f', icon: 'fa-file-contract',
-    color: '#65ed00', badge_class: 'badge--green', sector: 'Asset Leasing', sort_order: 41,
+    color: '#078e07', badge_class: 'badge--green', sector: 'Asset Leasing', sort_order: 41,
   },
   {
     product_type: 'eif_mudarabah', label: 'Mudarabah Enterprise',
@@ -1691,7 +1729,7 @@ const EIF_PRODUCTS = [
     ].join('\n'),
     min_investment: 2500, term_months: 12, benchmark_rate: 0.145, performance_fee_pct: 0.20,
     risk_profile: 'Medium-High', risk_color: '#ffb782', icon: 'fa-scale-balanced',
-    color: '#65ed00', badge_class: 'badge--green', sector: 'Enterprise Finance', sort_order: 42,
+    color: '#078e07', badge_class: 'badge--green', sector: 'Enterprise Finance', sort_order: 42,
   },
 ];
 
@@ -3659,30 +3697,223 @@ async function autoSetup() {
         console.log('✅ investor_notes: nothing stranded in investors.notes.');
     });
 
-    await step("19. Announce the features nobody has been told about", async () => {
-      /* Each notice describes something on THIS branch. Three of the notices
-         written alongside this one describe work that is still on staging —
-         Insights, referral sharing, the app banner — and announcing them here
-         would point staff at a menu item that is not there, which is the
-         exact failure the mechanism exists to prevent. They come with the
-         features.
+    await step("17. Seed the opening insight articles", async () => {
+      /* Three articles, one per industry the platform actually funds, so the
+         page has something on it the day it goes live. Seeded only when the
+         table is empty: these are editable from the admin console afterwards,
+         and re-asserting them on every boot would overwrite an edit. */
+      const { rows: [{ n }] } = await pool.query('SELECT COUNT(*)::int AS n FROM insights');
+      if (n > 0) return;
 
-         Inserted once and never re-asserted, so editing the wording in the
-         console — or switching one off — is not undone by the next deploy. */
+      const ART = [
+        {
+          id: 'INS-CATTLE-BACKGROUNDING', slug: 'what-backgrounding-actually-means',
+          industry: 'Agriculture', hero: '#fec24f', mins: 5,
+          title: 'What backgrounding actually means, and why it decides your return',
+          excerpt: 'Sixty days between the auction and the feedlot do more to set the price of an animal than anything that happens afterwards.',
+          body: [
+            'Most people who invest in cattle picture a farm. The part that decides the return is narrower than that, and it happens in about sixty days.',
+            'Backgrounding is the stage between an animal being bought and entering the feedlot. Cattle arrive at a range of weights, off a range of diets, carrying a range of stresses from transport and handling. Backgrounding evens that out: a controlled ration, veterinary attention, and enough time for the animal to start converting feed efficiently rather than recovering from the journey.',
+            'It matters commercially because a feedlot pays for predictability. An animal that enters at a known weight, in known condition, on a known diet is worth more per kilogram than one that does not, and it reaches market weight on less feed.',
+            'This is also where the risk sits. Disease moves fastest in newly mixed groups, and an animal that loses condition in the first three weeks rarely recovers the margin. It is the reason the partner running the operation matters more than the herd size, and the reason cattle carries a Medium-High risk rating on this platform rather than a comfortable one.',
+            'Returns depend on the market price at sale and are not guaranteed. What backgrounding buys is a narrower range of outcomes, not a floor under them.',
+          ].join('\n\n'),
+        },
+        {
+          id: 'INS-SOLAR-PPA', slug: 'a-ppa-is-a-contract-not-a-guarantee',
+          industry: 'Energy', hero: '#22c55e', mins: 6,
+          title: 'A PPA is a contract, not a guarantee',
+          excerpt: 'Power purchase agreements are what make solar returns predictable. Understanding what they do not cover is what makes them investable.',
+          body: [
+            'Every commercial solar project this platform funds is backed by a signed Power Purchase Agreement before a single panel is bought. A business — a factory, a farm, a municipality — commits to buying the electricity the installation produces, at a fixed price, for the length of the term.',
+            'That is what turns sunlight into a cashflow you can model. Without a PPA you are speculating on an electricity price and an offtaker at the same time. With one, the price is settled and only the offtaker is open.',
+            'Which is the part worth understanding. A PPA is a commercial contract between a solar operator and a buyer. If the buyer stops paying, the contract gives the project a claim, not an income. A business in distress is a business in distress whatever it signed, and a plant that cannot sell its electricity holds an asset rather than a revenue stream.',
+            'This is why the credit quality of the offtaker does more work than the size of the installation, and why a seven-year term is a seven-year view on a specific company as much as on the sun.',
+            'Target returns are not guaranteed and your capital is at risk.',
+          ].join('\n\n'),
+        },
+        {
+          id: 'INS-BIKES-RENT', slug: 'rent-is-not-interest',
+          industry: 'Logistics', hero: '#f97316', mins: 4,
+          title: 'Rent is not interest, and the difference is the risk',
+          excerpt: 'A delivery fleet pays you rent on an asset the pool owns. That distinction changes who carries what when something goes wrong.',
+          body: [
+            'When a pool funds a fleet of delivery motorcycles, it buys the bikes and keeps title to them. Riders working Mr D, Takealot and Uber Eats lease them — people who need a machine to earn and would otherwise be renting one on worse terms.',
+            'What reaches the investor is a share of that rent. It is not interest on a loan, and the difference is not a technicality.',
+            'A lender is owed money whatever happens to the thing the money bought. An owner is owed rent only while the asset can be used. Because the pool owns the bikes, it carries the costs of ownership — insurance and major maintenance sit with the pool rather than the rider — and it carries the consequence when bikes come off the road. Bikes not being ridden are bikes not paying.',
+            'That is the honest shape of the product, and it is also why the structure qualifies as an Ijara under the platform\u2019s interest-free range: the income is rent on a real asset whose risks the owner keeps, which is what makes it rent rather than a charge for the use of money.',
+            'Rental income depends on the fleet being deployed and is not guaranteed.',
+          ].join('\n\n'),
+        },
+      ];
+
+      for (const a of ART) {
+        await pool.query(
+          `INSERT INTO insights (id, slug, title, industry, excerpt, body, author,
+                                 read_minutes, hero_colour, published, published_at)
+           VALUES ($1,$2,$3,$4,$5,$6,'SV Capital',$7,$8,true,NOW())
+           ON CONFLICT (id) DO NOTHING`,
+          [a.id, a.slug, a.title, a.industry, a.excerpt, a.body, a.mins, a.hero]);
+      }
+      console.log(`\u2705 Seeded ${ART.length} opening insight article(s).`);
+    });
+
+    await step("20. Recolour the Ethical & Interest-Free offering", async () => {
+      /* Step 13 installs the EIF products with ON CONFLICT DO NOTHING, which
+         is right — it must never overwrite what an admin has edited. It also
+         means changing a colour in EIF_PRODUCTS reaches a brand-new database
+         and nowhere else, which is every environment that matters.
+
+         The client asked for the lime to go: it was hard to keep consistent
+         across the site, drifted into mismatched shades, and measures 1.5:1
+         on white so anything set in it had to be darkened by hand. #0096ff is
+         the CI blue and already in the palette.
+
+         Narrow on purpose. It moves ONLY the three EIF rows, and only while
+         they still carry the exact colour they were installed with — an admin
+         who has since chosen their own is left alone, and a second run does
+         nothing because the value no longer matches. */
+      const { rowCount } = await pool.query(
+        `UPDATE products
+            SET color = '#0096ff', badge_class = 'badge--blue', updated_at = NOW()
+          WHERE product_type IN ('eif_murabaha','eif_ijara','eif_mudarabah')
+            AND color = '#65ed00'`);
+      if (rowCount) console.log(`\u2705 Recoloured ${rowCount} EIF product(s) to the CI blue.`);
+    });
+
+    await step("22. Ethical & Interest-Free wears green", async () => {
+      /* Third accent for this section, and the only one chosen for a reason
+         that is not a design preference: green is the colour the Islamic
+         tradition the offering serves reads as its own. The client asked for
+         it directly, over the blue that step 20 installed.
+
+         Step 13 seeds the products with ON CONFLICT DO NOTHING, so editing
+         EIF_PRODUCTS reaches a brand-new database and nowhere else. Step 20
+         is left exactly as it was: it is the record of how these rows got
+         their blue, and rewriting it would make the history of a row
+         unreadable. This moves them on from there.
+
+         Narrow, like step 20. Only the three EIF rows, and only while they
+         still carry the exact blue step 20 gave them — an admin who has since
+         chosen their own colour is left alone, and a second run does nothing
+         because the value no longer matches. */
+      const { rowCount } = await pool.query(
+        `UPDATE products
+            SET color = '#078e07', badge_class = 'badge--green', updated_at = NOW()
+          WHERE product_type IN ('eif_murabaha','eif_ijara','eif_mudarabah')
+            AND color = '#0096ff'`);
+      if (rowCount) console.log(`\u2705 Recoloured ${rowCount} EIF product(s) to the dark green.`);
+    });
+
+    await step("21. Settle Ethical & Interest-Free holdings on payout", async () => {
+      /* An EIF pool is a concluded contract, so the only thing that can
+         happen at maturity is a cash settlement. The engine now enforces that
+         whatever the column says, but rows carrying 'reinvest' or a switch
+         from before the rule still READ as rollovers — in the console, in the
+         CSV export, in the instruction report's raw tag. A figure that says
+         one thing and does another is how somebody ends up reassuring a
+         client about a rollover that will not happen.
+
+         So the stored value is brought into line with the behaviour. Narrow:
+         only eif_ products, only active investments, and only where it is not
+         already payout_all, so a re-run does nothing. Nothing about the money
+         changes — the engine was already going to pay these out. */
+      const { rowCount } = await pool.query(
+        `UPDATE investments
+            SET maturity_instruction = 'payout_all',
+                custom_payout_amount = NULL,
+                switch_product_type  = NULL,
+                updated_at           = NOW()
+          WHERE product_type ~* '^eif(_|$)'   -- same predicate as maturityPolicy.isPayoutOnlyProduct
+            AND status = 'active'
+            AND COALESCE(maturity_instruction, '') <> 'payout_all'`);
+      if (rowCount) console.log(`\u2705 Set ${rowCount} EIF investment(s) to pay out at maturity.`);
+    });
+
+    await step("19. Announce the features nobody has been told about", async () => {
+      /* Everything shipped recently, each with the one thing release notes
+         leave out: where to find it.
+
+         Inserted once and never re-asserted. ON CONFLICT DO NOTHING rather
+         than an upsert, so editing the wording of a notice in the console —
+         or switching one off — is not undone by the next deploy. A notice
+         that comes back after somebody dismissed the idea of it is worse than
+         no notice at all. */
       const NOTICES = [
         { id: 'ANN-2026-CLIENT-DOCS', area: 'admin', icon: 'fa-folder-open',
           title: 'Every document a client uploaded, in one place',
           body: 'FICA documents and files attached to support tickets now appear together on the client record, newest first, with the status of each and who reviewed it. Before this, a deposit slip could only be found by remembering which ticket it was attached to.',
           where: 'Clients \u2192 open any client \u2192 the Overview tab, under Bank Account.' },
 
-        /* Insights, referral sharing and the app banner are announced
-           alongside them on staging; they describe work that is not on this
-           branch, and a notice pointing at a menu item that is not there is
-           the exact failure this mechanism exists to prevent. */
+        { id: 'ANN-2026-INSIGHTS', area: 'admin', icon: 'fa-newspaper',
+          title: 'Insights articles are written from the console',
+          body: 'The public Insights page is edited here \u2014 write an article, add a header image, publish or unpublish it. Articles are shareable to WhatsApp and carry their own preview card.',
+          where: 'The Insights item in the left-hand menu.' },
+
+        { id: 'ANN-2026-REFERRAL-SHARE', area: 'portal', icon: 'fa-share-nodes',
+          title: 'Referral sharing sends the whole invite',
+          body: 'The WhatsApp button and Copy both hand over the full message now \u2014 the sentence, the client\u2019s code and their link \u2014 and WhatsApp draws the invite card from the link. Before this, sharing sent a picture with no text and copying sent a bare URL.',
+          where: 'Client portal \u2192 Refer & Earn. Referral links now open the signup form rather than the landing page.' },
+
+        { id: 'ANN-2026-APP-BANNER', area: 'portal', icon: 'fa-mobile-screen',
+          title: 'The app prompt returns at every sign-in',
+          body: 'The \u201cget the app\u201d banner reappears each time a client logs in, and stops for good once they have actually installed it \u2014 rather than going quiet for four months after one tap.',
+          where: 'Client portal and the sign-in page, on a phone. Nothing to configure.' },
+
         { id: 'ANN-2026-ACTION-CENTRE', area: 'portal', icon: 'fa-list-check',
           title: 'One checklist on the client overview, not two',
           body: 'The Getting Started panel is gone. It listed the same steps as the Action Centre in different words, with its own completion rules, so a client was asked to add funds three times on one screen and the two panels could disagree about whether FICA was done. The Action Centre also no longer repeats its next step underneath itself \u2014 the outstanding one is marked Next up in the list. And "Add funds to your wallet" now stays completed once a client has funded: it was measured on the balance right now, so anyone who invested their whole wallet went back to incomplete permanently.',
           where: 'Client portal \u2192 Portfolio Overview, under the welcome banner. It hides itself once all five steps are done.' },
+
+        { id: 'ANN-2026-EIF-FEEDBACK', area: 'both', icon: 'fa-mosque',
+          title: 'Ethical & Interest-Free is blue, and quotes the pool\u2019s minimum',
+          body: 'Two changes from the review. The section is now the CI blue (#0096ff) instead of the lime \u2014 the lime was hard to keep consistent across the site and had to be darkened by hand wherever it carried text. And the minimum on a product card is now the cheapest OPEN pool\u2019s minimum, not the figure on the product record: the two are set in different places and had drifted, so the page offered a Murabaha at R500 while the open pool would not take under R1 000. Where no pool is open the product figure is shown, marked indicative.',
+          where: 'Client portal \u2192 Invest \u2192 the Ethical & Interest-Free tab, and the same section on the public site. Pool minimums are set per pool under Pools in this console.' },
+
+        { id: 'ANN-2026-EIF-PAYOUT-ONLY', area: 'both', icon: 'fa-scale-balanced',
+          title: 'Ethical & Interest-Free pays out at maturity \u2014 and nothing else',
+          body: 'EIF holdings can no longer be reinvested, switched or split at maturity. Each EIF pool is its own concluded contract \u2014 a murabaha sale, an ijara lease, a mudarabah venture \u2014 so rolling one over would enter the client into a NEW contract they never agreed to, which is the one thing an interest-free client is here to avoid. The maturity screen now offers Payout All alone, says why, and pays out in full whether or not an instruction is set. The maturity engine, the pre-flight and the instruction report all apply the same rule, so an EIF holding still carrying \u2018reinvest\u2019 from before is paid out, not rolled. Staff cannot set another instruction on one either. Applies to every eif_ product, including any added later.',
+          where: 'Client portal \u2192 My Investments and the Maturity screen. In this console: Investments \u2192 open an EIF investment \u2192 the "Set instruction on behalf of client" panel, where the dropdown is now fixed to Pay out all.' },
+
+        { id: 'ANN-2026-STAT-TILE-OVERFLOW', area: 'portal', icon: 'fa-money-bill-wave',
+          title: 'Amounts no longer run off the investment cards',
+          body: 'The three stat tiles on a My Investments card were fixed at a third of the card each. A rand figure has no place to break inside it, so anything from about R100 000 up ran straight out past the tile edge and was cut off \u2014 exactly the number a client most wants to read. The tiles now fit themselves to the card, taking two columns where three will not hold the figure.',
+          where: 'Client portal \u2192 My Investments, on the web and in the app.' },
+
+        { id: 'ANN-2026-AGREEMENT-SIGNABLE', area: 'portal', icon: 'fa-file-signature',
+          title: 'The investment agreement can actually be signed',
+          body: '"Sign & continue" did nothing. The button unlocks once the client has read to the end of the agreement, ticked every box, typed their name and drawn a signature \u2014 but the reading could never be satisfied: the document went into a frame fixed at 1 200px inside a 280px window, the agreement runs to about 4 000px, and because a frame scrolls its own content the outer window never saw the scroll. The frame now holds the whole document and reports for itself. A blocked button also lists what is still outstanding, and a disabled button across the platform now looks disabled instead of identical to a live one.',
+          where: 'Client portal \u2192 Invest \u2192 choose a pool and confirm. The agreement screen is the step before the money leaves the wallet, and only appears where INVESTMENT_AGREEMENTS_ENABLED is on.' },
+
+        { id: 'ANN-2026-AGREEMENT-FEE-WORDING', area: 'both', icon: 'fa-scale-unbalanced',
+          title: 'The agreement no longer contradicts itself about the platform fee',
+          body: 'The fee is 1% charged ON TOP of the investment: enter R500 and R500 reaches the pool, R5,00 is the fee, R505,00 leaves the wallet. The agreement said so in its fee table and its Fees clause \u2014 and then asked the client to tick "the 1% platform fee is taken from the amount I am investing, not added to it", which is the opposite. The tick box and two clauses are corrected, and the templates move to new versions (standard v2, the three EIF structures v3) so anything already signed stays explicable in the words it was signed under. Worth checking whether any client signed under the old wording.',
+          where: 'Client portal \u2192 the agreement screen, and every agreement PDF from Clients \u2192 open a client \u2192 Documents.' },
+
+        { id: 'ANN-2026-AUTO-ORDER-OFFER', area: 'portal', icon: 'fa-rotate',
+          title: 'Clients are offered a monthly top-up after paying by card',
+          body: 'Automatic wallet top-ups and recurring investments both already existed \u2014 a saved card charged on a chosen day, and the wallet invested into a chosen product the next hour \u2014 and the cron reported "0 investor(s) scheduled for today", because both live two levels down inside the wallet tab and nobody found them. When a client finishes a card top-up they are now asked, once, whether to repeat it every month, and then which product to invest it into. The amount suggested is the one the top-up actually covers: the 1% platform fee is charged on top, so a R1 000 top-up buys R990,10 of product, and where that is under the pool minimum the offer says so and can raise the top-up in one tap. Days 1\u201328 only, so the date exists in every month. It is not offered if auto top-up is already on, if no card was saved, on a sub-account top-up, to someone mid-purchase, or within 60 days of a client saying "Not now" \u2014 that refusal is stored against the client, not the browser.',
+          where: 'Client portal \u2192 Wallet \u2192 Add Funds \u2192 pay by card. Existing settings stay where they were, under Wallet \u2192 Auto Top-Up and Wallet \u2192 Recurring; this console shows them on the client record.' },
+
+        { id: 'ANN-2026-EIF-GREEN', area: 'both', icon: 'fa-palette',
+          title: 'Ethical & Interest-Free is dark green',
+          body: 'The section is now #078e07 instead of the blue it wore for a week. Green is the colour the Islamic tradition the offering serves reads as its own, which is the reason for the change \u2014 not a design preference. The blue remains the platform\u2019s elsewhere: the Learning Hub, the XP bars, the statement tiles, the gift card and the short-term product all keep it, exactly as the lime stayed on solar and GridFarmer when EIF stopped using that. Product badges move from blue to green with it.',
+          where: 'Public site \u2192 the Ethical & Interest-Free section, and Client portal \u2192 Invest \u2192 the Ethical & Interest-Free tab. Per-product colours are on the product record under Products in this console.' },
+
+        { id: 'ANN-2026-INVEST-MINIMUM-CHIPS', area: 'portal', icon: 'fa-coins',
+          title: 'The invest screen stops offering amounts the pool will refuse',
+          body: 'The quick-pick buttons were filtered on whether the wallet could afford them and nothing else, so a pool with a R100 000 minimum offered R5 000, R10 000 and R25 000 beside it. Tapping one filled the amount with a figure the pool refuses, blanked the fee breakdown to dashes, and left Confirm live \u2014 the client\u2019s next move was a server error. Rungs below the minimum are gone. The minimum itself is always shown even when the wallet cannot cover it, since that is the figure the client needs to know. And typing an amount below the minimum now says so, names what the pool takes, offers a one-tap correction, and disables Confirm.',
+          where: 'Client portal \u2192 Invest \u2192 open any pool. Pool minimums are set per pool under Pools in this console.' },
+
+        { id: 'ANN-2026-AGREEMENT-POPPINS', area: 'both', icon: 'fa-font',
+          title: 'The investment agreement is set in Poppins',
+          body: 'The agreement was set in Georgia, which belonged to nothing else on the platform. It now uses Poppins throughout, including the reference line that was monospace \u2014 that keeps its alignment through tabular figures instead. The font is linked rather than embedded, because each agreement is stored whole and served back byte for byte; a copy saved to disk and opened offline falls back to the system sans-serif. Agreements signed before today keep the document exactly as it was signed.',
+          where: 'Client portal \u2192 the agreement screen shown before an investment is funded, and every agreement PDF under Clients \u2192 open a client \u2192 Documents. The agreement step only appears where INVESTMENT_AGREEMENTS_ENABLED is on \u2014 and when it is, it applies to every product, not only EIF.' },
+
+        { id: 'ANN-2026-DOCS-OPEN', area: 'both', icon: 'fa-file-arrow-up',
+          title: 'Factsheets and documents open again',
+          body: 'They were doing nothing, or opening blank, depending on the screen \u2014 and both failures were silent. Factsheets, FICA documents and agreements are stored as base64 data: URLs. Chrome has refused to navigate to a data: URL since 2017, so the factsheet manager\u2019s open link did nothing at all; and the platform\u2019s security policy refused to frame one, so the document viewer\u2019s preview came up blank. The portal\u2019s FICA \u201cView\u201d button had a third version of the same fault. Everything now goes through one opener that converts the stored file into something the browser will open, and the security policy admits those previews. It still refuses data: frames, which are a way to smuggle scripts in, and the opener now serves anything that is not a PDF, image or plain text as a download instead of rendering it.',
+          where: 'Admin \u2192 Pools \u2192 the factsheet button on any pool; Admin \u2192 Clients \u2192 open a client \u2192 Documents; Client portal \u2192 Invest \u2192 open a product \u2192 Factsheets & documents, and Profile \u2192 FICA.' },
 
         { id: 'ANN-2026-SUPPORT-NUMBER', area: 'both', icon: 'fa-phone',
           title: 'Support WhatsApp number changed',

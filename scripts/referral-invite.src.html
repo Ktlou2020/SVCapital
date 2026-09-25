@@ -1,0 +1,119 @@
+<!-- Source for assets/referral-invite.png — the card shared with a referral.
+
+     Rendered at 1080x1080, which is what WhatsApp, Instagram and Facebook all
+     want; anything else is cropped by somebody.
+
+     To re-render after an edit, screenshot this file at that size, e.g.
+
+       npx playwright screenshot --viewport-size=1080,1080 \
+         scripts/referral-invite.src.html assets/referral-invite.png
+
+     Keep it a file rather than a generated-on-request image: it is fetched by
+     WhatsApp's crawler for the link preview, which will not wait on a render.
+-->
+<!doctype html><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{width:1080px;height:1080px;background:#F7F6F3;font-family:Poppins,sans-serif;
+       color:#2E2E2E;position:relative;overflow:hidden}
+  .logo{position:absolute;top:58px;left:84px;width:268px}
+  .head{position:absolute;top:186px;left:0;right:0;text-align:center;
+        font-weight:800;font-size:76px;line-height:1.18;letter-spacing:-1.5px}
+  .hl{position:relative;display:inline-block;padding:0 10px}
+  .hl::before{content:"";position:absolute;left:0;right:0;bottom:0px;height:36px;
+              background:#5DE80C;z-index:-1}
+  .hl::after{content:"";position:absolute;left:0;right:0;bottom:-2px;height:7px;background:#2E2E2E}
+  .steps{position:absolute;top:500px;left:0;right:0;display:flex;
+         justify-content:center;align-items:flex-start;gap:0}
+  .pin{width:250px;display:flex;flex-direction:column;align-items:center}
+  .disc{width:186px;height:186px;border-radius:50%;background:#5DE80C;
+        display:flex;align-items:center;justify-content:center;position:relative}
+  .disc::after{content:"";position:absolute;bottom:-30px;left:50%;transform:translateX(-50%);
+               width:0;height:0;border-left:32px solid transparent;border-right:32px solid transparent;
+               border-top:40px solid #5DE80C}
+  .inner{width:144px;height:144px;border-radius:50%;background:#ECECEC;
+         display:flex;align-items:center;justify-content:center}
+  .inner svg{width:88px;height:88px}
+  .num{margin-top:78px;font-weight:700;font-size:27px;letter-spacing:.5px}
+  .cap{margin-top:14px;font-weight:500;font-size:23px;line-height:1.35;
+       text-transform:uppercase;text-align:center;letter-spacing:.2px}
+  .arrow{width:118px;margin-top:83px;display:flex;align-items:center;justify-content:center}
+  .pill{position:absolute;bottom:60px;left:50%;transform:translateX(-50%);
+        background:#5DE80C;border-radius:7px;padding:17px 46px;
+        font-weight:600;font-size:27px;color:#1A1A1A;letter-spacing:.2px}
+</style>
+
+<img class="logo" src="../assets/sv-capital-logo-horizontal-outline-1.png" alt="">
+
+<div class="head">
+  I&rsquo;m Inviting You to<br>
+  <span class="hl">Invest Better</span><br>
+  with SV Capital
+</div>
+
+<div class="steps">
+  <div class="pin">
+    <div class="disc"><div class="inner">
+      <svg viewBox="0 0 100 100" fill="none" stroke="#111" stroke-width="4.5"
+           stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2" y="56" width="70" height="30" rx="15"/>
+        <text x="37" y="76" font-family="Poppins" font-size="15" font-weight="700"
+              fill="#111" stroke="none" text-anchor="middle">SIGN UP</text>
+        <g stroke-width="5" transform="translate(14,-8) scale(0.8)">
+          <path d="M55 44V20a5 5 0 0 1 10 0v18"/>
+          <path d="M65 38v-4a5 5 0 0 1 10 0v6"/>
+          <path d="M75 40v-2a5 5 0 0 1 10 0v14a16 16 0 0 1-16 16h-4a15 15 0 0 1-11-5l-9-10a5 5 0 0 1 7-7l6 4"/>
+        </g>
+      </svg>
+    </div></div>
+    <div class="num">01</div>
+    <div class="cap">Click the link<br>below to<br>register</div>
+  </div>
+
+  <div class="arrow">
+    <svg viewBox="0 0 118 20" width="118" height="20">
+      <line x1="2" y1="10" x2="96" y2="10" stroke="#1A1A1A" stroke-width="5"
+            stroke-dasharray="14 11" stroke-linecap="round"/>
+      <path d="M98 2l16 8-16 8z" fill="#1A1A1A"/>
+    </svg>
+  </div>
+
+  <div class="pin">
+    <div class="disc"><div class="inner">
+      <svg viewBox="0 0 100 100" fill="none" stroke="#111" stroke-width="4.5"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="M50 10 84 24v26c0 20-14 33-34 40-20-7-34-20-34-40V24z"/>
+        <path d="M35 49l11 11 20-21"/>
+      </svg>
+    </div></div>
+    <div class="num">02</div>
+    <div class="cap">Get KYC<br>approved</div>
+  </div>
+
+  <div class="arrow">
+    <svg viewBox="0 0 118 20" width="118" height="20">
+      <line x1="2" y1="10" x2="96" y2="10" stroke="#1A1A1A" stroke-width="5"
+            stroke-dasharray="14 11" stroke-linecap="round"/>
+      <path d="M98 2l16 8-16 8z" fill="#1A1A1A"/>
+    </svg>
+  </div>
+
+  <div class="pin">
+    <div class="disc"><div class="inner">
+      <svg viewBox="0 0 100 100" fill="none" stroke="#111" stroke-width="4.5"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 82h72"/>
+        <rect x="20" y="58" width="15" height="24"/>
+        <rect x="43" y="44" width="15" height="38"/>
+        <rect x="66" y="30" width="15" height="52"/>
+        <path d="M22 40l18-14 14 10 22-22"/>
+        <path d="M64 14h14v14"/>
+      </svg>
+    </div></div>
+    <div class="num">03</div>
+    <div class="cap">Add funds to<br>your wallet<br>&amp; invest</div>
+  </div>
+</div>
+
+<div class="pill">www.svcapital.co.za</div>

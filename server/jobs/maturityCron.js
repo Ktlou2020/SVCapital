@@ -29,6 +29,7 @@ const emailService = require('../services/email');
 const smsService   = require('../services/sms');
 const pushService  = require('../services/pushService');
 const { cycleExpiredPools } = require('./poolCyclerCron');
+const { effectiveInstruction } = require('../services/maturityPolicy');
 
 // Reinvestments are NOT charged a platform fee — the full matured amount rolls over.
 const round2 = n => Math.round((Number(n) || 0) * 100) / 100;
@@ -131,10 +132,13 @@ async function runMaturityProcessing() {
       const principal    = parseFloat(inv.amount) || 0;
       const actualReturn = postedReturn;   // posted, never projected — see postedReturnFor
       const gross        = round2(principal + actualReturn);
-      const rawInstruction = inv.maturity_instruction || 'reinvest';
-      // Delivery bike investments without an explicit non-reinvest instruction pay out to wallet
-      const instruction  = (rawInstruction === 'reinvest' && (inv.product_type || '').includes('delivery_bike'))
-        ? 'payout_all' : rawInstruction;
+      /* What this product is allowed to do at maturity, not merely what the
+         column says. Delivery bikes pay out rather than reinvest by default;
+         Ethical & Interest-Free pools are settled in cash always, because each
+         is its own concluded contract and there is nothing to roll into.
+         Shared with the pre-flight and the instruction report so a preview
+         cannot promise something this engine will not do. */
+      const instruction  = effectiveInstruction(inv.maturity_instruction, inv.product_type);
       const poolName     = inv.pool_name || inv.pool_id || 'your investment';
       const custom       = Math.max(0, Math.min(gross, round2(parseFloat(inv.custom_payout_amount) || 0)));
       const switchType   = inv.switch_product_type || inv.product_type;

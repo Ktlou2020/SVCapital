@@ -1268,6 +1268,9 @@ function loadNotifications() {
   // 5. Maturity overdue — investment has matured but no instruction yet
   const overdue = investments.filter(i => {
     if (i.status !== 'matured') return false;
+    /* Not overdue on a product that pays out by its own terms — there is no
+       instruction to submit, so an "Urgent" notice would never clear. */
+    if (Utils.isPayoutOnlyProduct(i.product_type)) return false;
     return !i.maturity_instruction;
   });
   if (overdue.length) {
@@ -2106,6 +2109,21 @@ function renderMyInvestmentCards() {
             ? `openPoolMaturityModal(${JSON.stringify(inv.pool_id)})`
             : `openMaturityModal(${JSON.stringify(inv.id)})`;
 
+          /* A payout-only product has nothing to decide. Left to the cue
+             below it would carry the amber "No instruction set" warning and a
+             "Set Maturity Instruction" button leading to a form with one
+             disabled option — chasing a client for a choice that does not
+             exist, on the product whose whole point is that it concludes. */
+          if (Utils.isPayoutOnlyProduct(inv.product_type)) {
+            return `
+          <div style="display:flex;align-items:center;gap:7px;margin-top:8px;padding:7px 10px;border-radius:8px;
+                      background:${EIF_ACCENT()}14;border:1px solid ${EIF_ACCENT()}33;font-size:0.74rem">
+            <i class="fa-solid fa-circle-check" style="color:${EIF_ACCENT()}"></i>
+            <span style="color:var(--text-muted)">At maturity</span>
+            <span style="margin-left:auto;color:${EIF_ACCENT()};font-weight:700;text-align:right">Paid out in full</span>
+          </div>`;
+          }
+
           const CUE = {
             all:     { icon: 'fa-circle-check',           color: '#22c55e', lead: 'Instruction set' },
             partial: { icon: 'fa-circle-half-stroke',     color: '#fec24f', lead: 'Partly set' },
@@ -2821,6 +2839,15 @@ function launchPaystack() {
             // If Paystack returned a reusable authorization, refresh the auto top-up card
             if (result.authSaved) _loadAutoTopUpCard().catch(() => {});
 
+            /* Remembered rather than acted on here. The offer is made once the
+               client closes the success screen, so two modals are never
+               stacked on one another. */
+            _atoRemember({
+              amount:     _pmAmount,
+              subAccount: !!_pmSaId,
+              cardSaved:  !!result.authSaved,
+            });
+
             await _showDepositSuccess('paystack', transaction.reference);
           } catch (verifyErr) {
             console.error('Paystack verify error:', verifyErr);
@@ -3117,6 +3144,14 @@ function closePaymentModal() {
        Only on success, and only once — the bag is cleared above whichever way
        this goes, so an abandoned top-up does not reopen an invest modal the
        next time somebody tops up for an unrelated reason. */
+      /* Not while they are mid-purchase. Someone who topped up in order to buy
+       a specific pool is about to be handed back the invest modal, and an
+       offer about next month on top of that is an interruption, not a
+       suggestion. The remembered offer is dropped rather than deferred —
+       they will top up again, and it will be asked then. */
+    if (resumePool) _atoBag().pending = null;
+    else _maybeOfferAutoTopUp().catch(() => {});
+
     if (!resumePool || typeof openInvestModal !== 'function') return;
     const pool = (PORTAL.pools || []).find(p => p.id === resumePool);
     if (!pool) return;
@@ -3169,13 +3204,52 @@ function _productRisk(productType) {
    portal — the is_active switch the platform already has, rather than a second
    flag somebody has to remember. */
 
-function EIF_ACCENT()   { return '#65ed00'; }        /* CI lime — see css/ci-theme.css */
+/* #078e07, a dark green. Third accent this section has worn, and the reason
+   for this one is not a design preference: green is the colour the Islamic
+   tradition the offering serves reads as its own, and a client who will not
+   take riba meets the section before they read a word of it.
+
+   It replaced the CI blue, which replaced the CI lime. The lime measured
+   1.5:1 on white and had to be darkened by hand anywhere it carried text;
+   the blue was 3.1:1. The green is 4.3:1 — better, still under the 4.5:1
+   body text needs, so --eif-ink (#056b05, 6.8:1) carries the dark version
+   for anything that has to be read rather than merely seen.
+
+   Both older colours are still the platform's elsewhere and are deliberately
+   left there: the lime on quests, solar and GridFarmer, the blue on the
+   Learning Hub, the XP bars, the statement tiles and the short-term product.
+   Neither belonged to EIF, and a blanket replace of either repaints half the
+   platform. */
+function EIF_ACCENT()   { return '#078e07'; }
 function EIF_CATEGORY() { return 'eif'; }
 function EIF_LABEL()    { return 'Ethical &amp; Interest-Free'; }
 /* The mark for the offering, used in three places that must agree: the
    category tab, the section banner, and the badge an EIF product carries when
    it appears in the all-products grid. Change it here and all three follow. */
 function EIF_ICON()     { return 'fa-mosque'; }
+
+/* ─── The minimum a client can actually put in ─────────────────────────
+   The card used to print products.min_investment. Nobody invests in a
+   product: they invest in a POOL, and the pool carries its own minimum. The
+   two are set in different places in the admin console and they drift — the
+   Invest page offered a Murabaha at R500 while the open pool would not take
+   less than R1 000, and the client found out at the point of paying.
+
+   So the figure is the cheapest OPEN pool, which is the cheapest thing that
+   can be bought today. With nothing open there is nothing to buy and the
+   product's own figure is the only one there is; it is returned marked
+   indicative so the label can say so rather than state it as fact.
+
+   CLAUDE.md is explicit that the pool minimum is a rule about the pool. This
+   is the same rule, said on the page where somebody decides. */
+function eifCardMinimum(product, openPools) {
+  const mins = (openPools || [])
+    .map(o => parseFloat(o.min_investment))
+    .filter(v => Number.isFinite(v) && v > 0);
+  if (mins.length) return { amount: Math.min(...mins), indicative: false };
+  const fallback = parseFloat(product && product.min_investment);
+  return { amount: Number.isFinite(fallback) && fallback > 0 ? fallback : 0, indicative: true };
+}
 
 function _isEifProduct(p) { return ((p && p.category) || 'standard') === EIF_CATEGORY(); }
 
@@ -3327,12 +3401,19 @@ function _eifCompareHtml() {
             </tr>
             <tr class="eif-compare__nums">
               <th scope="row">Term &middot; minimum</th>
-              ${prods.map(p => `<td>${p.term_months || '—'} mo &middot; ${Utils.rand(p.min_investment || 0)}</td>`).join('')}
+              ${prods.map(p => {
+                /* Same rule as the cards: the cheapest open pool is the
+                   cheapest thing that can actually be bought. A comparison
+                   table quoting a different minimum from the card above it is
+                   worse than either number on its own. */
+                const m = eifCardMinimum(p, _openPoolsForProduct(p.product_type));
+                return `<td>${p.term_months || '—'} mo &middot; ${Utils.rand(m.amount)}${m.indicative ? '*' : ''}</td>`;
+              }).join('')}
             </tr>
           </tbody>
         </table>
       </div>
-      <p class="eif-compare__foot">Targets are drawn from the underlying trade, lease or venture. Murabaha and Ijara returns come from contracted amounts and are the more predictable of the three; a Mudarabah target is a projection and nothing more.</p>
+      <p class="eif-compare__foot">A minimum marked * is the product's own figure, shown because no pool of that kind is open; what a pool will take is set by the pool. Targets are drawn from the underlying trade, lease or venture. Murabaha and Ijara returns come from contracted amounts and are the more predictable of the three; a Mudarabah target is a projection and nothing more.</p>
     </div>`;
 }
 
@@ -3697,6 +3778,9 @@ function renderProductsGrid() {
     // soonest closing among the open pools
     const days = open.map(o => Utils.daysRemaining(o.end_date)).filter(d => d !== null);
     const soonest = days.length ? Math.min(...days) : null;
+    /* What the cheapest open pool will actually take, not what the product
+       record happens to say. */
+    const cardMin = eifCardMinimum(p, open);
     return `
       <div class="market-pool-card mpc-v2${eif ? ' mpc-v2--eif' : ''}" style="cursor:pointer" onclick="openProductDetail('${p.product_type}')">
         <div class="mpc2-accent" style="background:linear-gradient(90deg,${color},${color}88)"></div>
@@ -3718,8 +3802,8 @@ function renderProductsGrid() {
           </div>
           <div class="mpc2-metric-sep"></div>
           <div class="mpc2-metric">
-            <div class="mpc2-metric__val" style="font-size:1.25rem">${Utils.rand(p.min_investment || 0)}</div>
-            <div class="mpc2-metric__lbl">minimum</div>
+            <div class="mpc2-metric__val" style="font-size:1.25rem">${Utils.rand(cardMin.amount)}</div>
+            <div class="mpc2-metric__lbl">${cardMin.indicative ? 'minimum &middot; indicative' : 'minimum'}</div>
           </div>
           <div class="mpc2-metric-sep"></div>
           <div class="mpc2-metric">
@@ -4023,6 +4107,14 @@ function _toggleFsList() {
 }
 
 /* Reads the input directly, so nothing has to be kept in step with it. */
+/* One opener for every stored document in the portal. Utils.documentUrl
+   turns the base64 the database holds into a blob the browser will navigate
+   to; a data: URL is refused outright by Chrome and a data: frame is refused
+   by this platform's CSP, and both fail silently. */
+function _viewStoredDoc(url) {
+  if (!Utils.openDocument(url)) Toast.error('Could not open this document');
+}
+
 function _filterFsRows() { _fsApplyVisibility(); }
 
 async function _renderProductFactsheets(type, product) {
@@ -4437,15 +4529,20 @@ async function loadMaturity() {
       const _instrState = Utils.maturityInstructionState(group);
       const poolInstr   = _instrState.instruction;
       const hasMixed    = _instrState.state === 'mixed';
-      const instrSet    = _instrState.state !== 'none';
-      const instrLabel  = _instrState.state === 'none' ? 'No instruction set yet' : _instrState.label;
+      /* A payout-only product settles by its own contract — the client has
+         nothing to choose, so the card reports it as decided rather than
+         showing an "Awaiting instruction" warning it can never clear. */
+      const payoutOnly  = Utils.isPayoutOnlyProduct(inv.product_type);
+      const instrSet    = payoutOnly || _instrState.state !== 'none';
+      const instrLabel  = payoutOnly ? 'Paid out in full at maturity'
+                        : _instrState.state === 'none' ? 'No instruction set yet' : _instrState.label;
 
       const modalCall = multiple
         ? `openPoolMaturityModal(${JSON.stringify(inv.pool_id)})`
         : `openMaturityModal(${JSON.stringify(inv.id)})`;
 
       const indivRows = multiple ? group.map(i => {
-        const hasInstr = !!i.maturity_instruction;
+        const hasInstr = payoutOnly || !!i.maturity_instruction;
         return `
           <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-top:1px solid var(--border);gap:8px">
             <div style="font-size:0.78rem;min-width:0">
@@ -4455,10 +4552,10 @@ async function loadMaturity() {
             <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
               <span style="font-size:0.72rem;color:${hasInstr ? 'var(--green)' : 'var(--text-muted)'}">
                 <i class="fa-solid fa-${hasInstr ? 'circle-check' : 'circle-exclamation'}"></i>
-                ${hasInstr ? _maturityInstructionLabel(i.maturity_instruction) : 'Not set'}
+                ${payoutOnly ? 'Paid out' : hasInstr ? _maturityInstructionLabel(i.maturity_instruction) : 'Not set'}
               </span>
               <button class="btn btn--ghost btn--sm" style="font-size:0.72rem;padding:3px 8px" onclick='openMaturityModal(${JSON.stringify(i.id)})'>
-                ${hasInstr ? 'Update' : 'Set'}
+                ${payoutOnly ? 'View' : hasInstr ? 'Update' : 'Set'}
               </button>
             </div>
           </div>`;
@@ -4515,8 +4612,8 @@ async function loadMaturity() {
             </div>
             <button class="mc2__cta ${instrSet ? 'mc2__cta--secondary' : 'mc2__cta--primary'}"
                     onclick='${modalCall}'>
-              <i class="fa-solid fa-${instrSet ? 'pen' : 'paper-plane'}"></i>
-              ${instrSet ? 'Update' : 'Set Instruction'}
+              <i class="fa-solid fa-${payoutOnly ? 'circle-info' : instrSet ? 'pen' : 'paper-plane'}"></i>
+              ${payoutOnly ? 'View' : instrSet ? 'Update' : 'Set Instruction'}
             </button>
           </div>
 
@@ -4564,8 +4661,13 @@ async function loadMaturity() {
       const _instrState2 = Utils.maturityInstructionState(group);
       const poolInstr   = _instrState2.instruction;
       const hasMixed    = _instrState2.state === 'mixed';
-      const instrSet    = _instrState2.state !== 'none';
-      const instrLabel  = _instrState2.state === 'none' ? 'Awaiting instruction' : _instrState2.label;
+      /* A payout-only product settles by its own contract — the client has
+         nothing to choose, so the card reports it as decided rather than
+         showing an "Awaiting instruction" warning it can never clear. */
+      const payoutOnly  = Utils.isPayoutOnlyProduct(inv.product_type);
+      const instrSet    = payoutOnly || _instrState2.state !== 'none';
+      const instrLabel  = payoutOnly ? 'Paid out in full at maturity'
+                        : _instrState2.state === 'none' ? 'Awaiting instruction' : _instrState2.label;
 
       return `
       <div class="mc2 mc2--matured">
@@ -4661,19 +4763,49 @@ function _switchUnavailableNote(canSwitch) {
   return canSwitch ? '' : ` <span style="opacity:.7">(no other product is open right now)</span>`;
 }
 
+/* Why an Ethical & Interest-Free holding offers nothing but a payout.
+
+   A greyed-out dropdown with no explanation reads as a fault. The reason is
+   the substance of the product, not a limitation of the form: a murabaha sale
+   is concluded when the goods are paid for, an ijara when the lease ends, a
+   mudarabah when the venture is wound up. There is no continuing contract to
+   roll into. Rolling one over would mean entering the client into a NEW
+   contract they never signed — which is the opposite of the care that brought
+   them to an interest-free product in the first place.
+
+   Named by structure where we know it, so the sentence is about the contract
+   the client actually holds rather than a category in the abstract. */
+function _payoutOnlyNote(productType) {
+  const term = (EIF_STRUCTURES()[productType] || {}).term;
+  return `<div style="font-size:0.72rem;color:var(--text-dim);margin-top:6px;padding:9px 11px;background:rgba(0,150,255,0.07);border:1px solid rgba(0,150,255,0.22);border-radius:8px;line-height:1.55">
+    <i class="fa-solid fa-scale-balanced" style="color:${EIF_ACCENT()};margin-right:5px"></i>
+    ${term ? `Your ${_esc(term)} contract is` : 'Ethical &amp; Interest-Free contracts are'} concluded at the end of the term, so there is nothing to roll over.
+    The full capital and return are paid into your wallet. To invest again, choose a new pool from the Ethical &amp; Interest-Free tab.
+  </div>`;
+}
+
 async function openMaturityModal(investmentId) {
   const inv = PORTAL.investments.find(i => i.id === investmentId);
   if (!inv) return;
 
   const isDeliveryBike = (inv.product_type || '').includes('delivery_bike');
+  /* Ethical & Interest-Free: settled in cash, always. Each pool is its own
+     concluded contract, so there is nothing to roll into and a reinvest would
+     enter the client into a new one they never agreed to. The server refuses
+     anything else; this is the same rule, so the form never offers a choice
+     that comes back as an error. */
+  const payoutOnly    = Utils.isPayoutOnlyProduct(inv.product_type);
   const isActive      = inv.status === 'active';
   const hasActualRate = !!(inv.actual_return_amount && inv.actual_return_amount > 0);
   const total         = hasActualRate ? inv.amount + inv.actual_return_amount : null;
 
-  // Delivery bike: force payout_all — no reinvest options
-  const existing = isDeliveryBike
-    ? (inv.maturity_instruction === 'reinvest' || !inv.maturity_instruction ? 'payout_all' : inv.maturity_instruction)
-    : (inv.maturity_instruction || '');
+  // Payout-only products are pinned to payout_all; delivery bikes default to
+  // it but may still switch.
+  const existing = payoutOnly
+    ? 'payout_all'
+    : isDeliveryBike
+      ? (inv.maturity_instruction === 'reinvest' || !inv.maturity_instruction ? 'payout_all' : inv.maturity_instruction)
+      : (inv.maturity_instruction || '');
 
   // All product types for switch option (resolved at maturity, pool may not be open yet)
   /* Switch targets come from the open pools, so a category-exclusive product
@@ -4714,9 +4846,9 @@ async function openMaturityModal(investmentId) {
 
     <div class="form-group">
       <label class="form-label">Instruction Type *</label>
-      <select class="form-select" id="matInstructionType">
+      <select class="form-select" id="matInstructionType"${payoutOnly ? ' disabled' : ''}>
         <option value="payout_all"     ${existing==='payout_all'    ?'selected':''}>Payout All — Receive full capital + returns</option>
-        ${isDeliveryBike ? `
+        ${payoutOnly ? '' : isDeliveryBike ? `
         <option value="switch_product" ${existing==='switch_product'?'selected':''}${_switchOptionAttrs(canSwitch)}>Switch Product — into a different product${_switchUnavailableNote(canSwitch)}</option>
         ` : `
         <option value="payout_return"  ${existing==='payout_return' ?'selected':''}>Payout Returns Only — keep capital invested</option>
@@ -4726,9 +4858,10 @@ async function openMaturityModal(investmentId) {
         <option value="custom_switch"  ${existing==='custom_switch' ?'selected':''}${_switchOptionAttrs(canSwitch)}>Custom Switch — take an amount, switch the rest${_switchUnavailableNote(canSwitch)}</option>
         `}
       </select>
+      ${payoutOnly ? _payoutOnlyNote(inv.product_type) : ''}
     </div>
 
-    ${!isDeliveryBike ? `
+    ${(!isDeliveryBike && !payoutOnly) ? `
     <div id="reinvestGroup" style="display:${existing==='reinvest'?'block':'none'}">
       <div style="font-size:0.72rem;color:var(--text-dim);padding:10px 12px;background:rgba(254,194,79,0.06);border-radius:8px;border:1px solid rgba(254,194,79,0.15)">
         <i class="fa-solid fa-rotate" style="color:var(--gold);margin-right:4px"></i>
@@ -4737,6 +4870,7 @@ async function openMaturityModal(investmentId) {
     </div>
     ` : ''}
 
+    ${payoutOnly ? `<div id="switchProductGroup" style="display:none"></div>` : `
     <div id="switchProductGroup" style="display:${(existing==='switch_product'||existing==='custom_switch')?'block':'none'}">
       <div class="form-group">
         <label class="form-label">Switch to Product *</label>
@@ -4745,9 +4879,9 @@ async function openMaturityModal(investmentId) {
         </select>
         ${poolNote}
       </div>
-    </div>
+    </div>`}
 
-    ${!isDeliveryBike ? `
+    ${(!isDeliveryBike && !payoutOnly) ? `
     <div id="customPayoutGroup" style="display:${(existing==='payout_custom'||existing==='custom_switch')?'block':'none'}">
       <div class="form-group">
         <label class="form-label">Amount to Pay Out (R)</label>
@@ -4759,9 +4893,11 @@ async function openMaturityModal(investmentId) {
 
     <div style="font-size:0.72rem;color:var(--text-dim);line-height:1.6;margin-top:8px">
       <i class="fa-solid fa-clock" style="color:var(--gold)"></i>
-      ${isActive
-        ? `You can update this instruction at any time before maturity. If not submitted, funds will be automatically ${isDeliveryBike ? 'paid out to your wallet' : 'reinvested'}.`
-        : `Instruction must be submitted before <strong>5:00 PM on ${Utils.date(inv.maturity_date)}</strong>. If not submitted, funds will be automatically ${isDeliveryBike ? 'paid out to your wallet' : 'reinvested'}.`
+      ${payoutOnly
+        ? `Nothing to submit — this happens automatically on the maturity date.`
+        : isActive
+          ? `You can update this instruction at any time before maturity. If not submitted, funds will be automatically ${isDeliveryBike ? 'paid out to your wallet' : 'reinvested'}.`
+          : `Instruction must be submitted before <strong>5:00 PM on ${Utils.date(inv.maturity_date)}</strong>. If not submitted, funds will be automatically ${isDeliveryBike ? 'paid out to your wallet' : 'reinvested'}.`
       }
     </div>
   `;
@@ -4770,7 +4906,7 @@ async function openMaturityModal(investmentId) {
     _matClearError();
     const v = e.target.value;
     document.getElementById('switchProductGroup').style.display  = (v === 'switch_product' || v === 'custom_switch') ? 'block' : 'none';
-    if (!isDeliveryBike) {
+    if (!isDeliveryBike && !payoutOnly) {
       document.getElementById('reinvestGroup').style.display      = v === 'reinvest'       ? 'block' : 'none';
       document.getElementById('customPayoutGroup').style.display  = (v === 'payout_custom' || v === 'custom_switch') ? 'block' : 'none';
     }
@@ -4833,12 +4969,14 @@ async function openPoolMaturityModal(poolId) {
   const first = poolInvs[0];
 
   const isDeliveryBike = (first.product_type || '').includes('delivery_bike');
+  const payoutOnly     = Utils.isPayoutOnlyProduct(first.product_type);
   const totalAmount    = poolInvs.reduce((s, i) => s + (i.amount || 0), 0);
 
   // Preselects the dropdown. Same semantics as before — an instruction when
   // one choice covers the pool or part of it, blank when they differ.
   let   existing     = Utils.maturityInstructionState(poolInvs).instruction || '';
-  if (isDeliveryBike && (existing === 'reinvest' || !existing)) existing = 'payout_all';
+  if (payoutOnly) existing = 'payout_all';
+  else if (isDeliveryBike && (existing === 'reinvest' || !existing)) existing = 'payout_all';
 
   const allProductTypes = [...new Set(
     (PORTAL.pools || []).filter(p => p.product_type && p.product_type !== first.product_type).map(p => p.product_type)
@@ -4862,9 +5000,9 @@ async function openPoolMaturityModal(poolId) {
     </div>
     <div class="form-group">
       <label class="form-label">Instruction Type *</label>
-      <select class="form-select" id="matInstructionType">
+      <select class="form-select" id="matInstructionType"${payoutOnly ? ' disabled' : ''}>
         <option value="payout_all"     ${existing==='payout_all'    ?'selected':''}>Payout All — Receive full capital + returns</option>
-        ${isDeliveryBike ? `
+        ${payoutOnly ? '' : isDeliveryBike ? `
         <option value="switch_product" ${existing==='switch_product'?'selected':''}${_switchOptionAttrs(canSwitch)}>Switch Product — into a different product${_switchUnavailableNote(canSwitch)}</option>
         ` : `
         <option value="payout_return"  ${existing==='payout_return' ?'selected':''}>Payout Returns Only — keep capital invested</option>
@@ -4874,8 +5012,9 @@ async function openPoolMaturityModal(poolId) {
         <option value="custom_switch"  ${existing==='custom_switch' ?'selected':''}${_switchOptionAttrs(canSwitch)}>Custom Switch — take an amount, switch the rest${_switchUnavailableNote(canSwitch)}</option>
         `}
       </select>
+      ${payoutOnly ? _payoutOnlyNote(first.product_type) : ''}
     </div>
-    ${!isDeliveryBike ? `
+    ${(!isDeliveryBike && !payoutOnly) ? `
     <div id="reinvestGroup" style="display:${existing==='reinvest'?'block':'none'}">
       <div style="font-size:0.72rem;color:var(--text-dim);padding:10px 12px;background:rgba(254,194,79,0.06);border-radius:8px;border:1px solid rgba(254,194,79,0.15)">
         <i class="fa-solid fa-rotate" style="color:var(--gold);margin-right:4px"></i>
@@ -4883,14 +5022,15 @@ async function openPoolMaturityModal(poolId) {
       </div>
     </div>
     ` : ''}
+    ${payoutOnly ? `<div id="switchProductGroup" style="display:none"></div>` : `
     <div id="switchProductGroup" style="display:${(existing==='switch_product'||existing==='custom_switch')?'block':'none'}">
       <div class="form-group">
         <label class="form-label">Switch to Product *</label>
         <select class="form-select" id="matSwitchProductType">${switchProductsHtml}</select>
         ${poolNote}
       </div>
-    </div>
-    ${!isDeliveryBike ? `
+    </div>`}
+    ${(!isDeliveryBike && !payoutOnly) ? `
     <div id="customPayoutGroup" style="display:${(existing==='payout_custom'||existing==='custom_switch')?'block':'none'}">
       <div class="form-group">
         <label class="form-label">Amount to Pay Out (R) — applied per investment</label>
@@ -4900,7 +5040,9 @@ async function openPoolMaturityModal(poolId) {
     ` : `<div id="customPayoutGroup" style="display:none"></div>`}
     <div style="font-size:0.72rem;color:var(--text-dim);line-height:1.6;margin-top:8px">
       <i class="fa-solid fa-clock" style="color:var(--gold)"></i>
-      You can update this instruction at any time before maturity. If not submitted, funds will be automatically ${isDeliveryBike ? 'paid out to your wallet' : 'reinvested'}.
+      ${payoutOnly
+        ? `Nothing to submit — this happens automatically on the maturity date.`
+        : `You can update this instruction at any time before maturity. If not submitted, funds will be automatically ${isDeliveryBike ? 'paid out to your wallet' : 'reinvested'}.`}
     </div>
   `;
 
@@ -4908,7 +5050,7 @@ async function openPoolMaturityModal(poolId) {
     _matClearError();
     const v = e.target.value;
     document.getElementById('switchProductGroup').style.display  = (v === 'switch_product' || v === 'custom_switch') ? 'block' : 'none';
-    if (!isDeliveryBike) {
+    if (!isDeliveryBike && !payoutOnly) {
       document.getElementById('reinvestGroup').style.display      = v === 'reinvest' ? 'block' : 'none';
       document.getElementById('customPayoutGroup').style.display  = (v === 'payout_custom' || v === 'custom_switch') ? 'block' : 'none';
     }
@@ -5288,10 +5430,17 @@ function openSaDeposit(saId) {
 }
 
 /* ─── Referral ─── */
-function copyReferralLink() {
-  const link = document.getElementById('referralLink').textContent;
-  navigator.clipboard.writeText(link).then(() => Toast.success('Link copied to clipboard!')).catch(() => Toast.error('Copy failed'));
-  SVC.track('svc_referral_link_copied', { referral_code: PORTAL.investor?.referral_code });
+/* The small button beside the displayed link. It copies the same thing the
+   big one does — the whole invite — because a bare URL pasted into a chat
+   arrives as a preview card with no sentence and no code to type in. The link
+   stays on screen next to it for anyone who wants to read it. */
+async function copyReferralLink() {
+  const code = PORTAL.investor?.referral_code || '';
+  if (!code) { Toast.error('Your referral code has not been issued yet.'); return; }
+  const copied = await svcCopyToClipboard(svcReferralMessage(code, svcReferralLink(code)));
+  if (copied) Toast.success('Invite copied — paste it into any chat.');
+  else Toast.error('Copy failed');
+  SVC.track('svc_referral_link_copied', { referral_code: code });
 }
 
 function _getLevelForXP(xp) {
@@ -6242,16 +6391,108 @@ function _togglePolicy(secId) {
   renderPoliciesView();
 }
 
-function shareReferral(method) {
+/* ═══════════════════════════════════════════════════════════════════
+   Sharing a referral
+
+   One message, and every button produces the whole of it: the sentence, the
+   code, and the link — with the invite card riding along as the link's
+   preview.
+
+   The picture does NOT travel as an attached file, and the first version of
+   this was wrong about that. navigator.share({ files, text }) looks like it
+   sends both; WhatsApp takes the file and throws the text away, on Android
+   and on iOS alike, because its share handler ignores the text when a stream
+   is present. So the client got a picture with no sentence, no code and no
+   link — the one part that actually carries the referral.
+
+   The link's Open Graph card is what puts the image in the conversation
+   instead. /register carries og:image, so WhatsApp draws the invite under the
+   message on its own, from any device, without the sender having to attach
+   anything. Text and picture, which is what was asked for, and the way round
+   that keeps the link.
+
+   Copying works the same way for the same reason: it copies the message, not
+   the bare URL. A pasted URL on its own produced the card and nothing else —
+   no sentence and, worse, no referral code for somebody who prefers to type
+   it in.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* A function, not a top-level const: portal-core declares no load-time state
+   of its own — it is loaded beside two shells and a const here is a
+   redeclaration waiting to happen. */
+function svcPublicOrigin() { return 'https://platform.svcapital.co.za'; }
+
+/* Where the referral link should point.
+
+   Not window.location.origin, which is the one thing this must not be inside
+   the app: Capacitor serves the bundle from https://localhost on Android and
+   capacitor://localhost on iOS, so every referral shared from the app would
+   have been https://localhost/register?ref=CODE — a link that opens nothing
+   on the recipient's phone. The app's API base is the Railway host rather
+   than the public one, so that is no better to hand somebody either.
+
+   A share leaves this device. It gets the public address, always — anywhere
+   that is plainly not a browser sitting on the real site. */
+function svcShareOrigin(env) {
+  const e = env || (typeof window !== 'undefined' ? window : {});
+  const loc = e.location && e.location.origin ? String(e.location.origin) : '';
+  if (e.__SVC_NATIVE__) return svcPublicOrigin();
+  if (!loc) return svcPublicOrigin();
+  if (/^(capacitor|ionic|file):/i.test(loc)) return svcPublicOrigin();
+  if (/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|$)/i.test(loc)) return svcPublicOrigin();
+  return loc;
+}
+
+function svcReferralLink(code, origin) {
+  const base = origin || svcShareOrigin();
+  return `${base}/register?ref=${encodeURIComponent(code)}`;
+}
+
+function svcReferralMessage(code, link) {
+  return `Join SV Capital and start earning inflation-beating returns! Use my referral code ${code}: ${link}`;
+}
+
+/* navigator.clipboard is unavailable outside a secure context and in older
+   WebViews, where it is undefined rather than failing — so the old path is
+   kept as a fallback rather than letting the copy silently do nothing. */
+async function svcCopyToClipboard(text, nav, doc) {
+  const n = nav || (typeof navigator !== 'undefined' ? navigator : {});
+  const d = doc || (typeof document !== 'undefined' ? document : null);
+  if (n.clipboard && typeof n.clipboard.writeText === 'function') {
+    try { await n.clipboard.writeText(text); return true; } catch (_) { /* fall through */ }
+  }
+  if (!d || typeof d.execCommand !== 'function') return false;
+  try {
+    const ta = d.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    d.body.appendChild(ta);
+    ta.select();
+    const okay = d.execCommand('copy');
+    d.body.removeChild(ta);
+    return !!okay;
+  } catch (_) { return false; }
+}
+
+async function shareReferral(method) {
   const code = PORTAL.investor?.referral_code || '';
-  const link = `${window.location.origin}/register?ref=${code}`;
+  if (!code) { Toast.error('Your referral code has not been issued yet.'); return; }
+  const msg = svcReferralMessage(code, svcReferralLink(code));
+
   if (method === 'whatsapp') {
-    const msg = `Join SV Capital and start earning inflation-beating returns! Use my referral code ${code}: ${link}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+    SVC.track('svc_referral_shared', { referral_code: code, channel: 'whatsapp' });
+    return;
+  }
+
+  const copied = await svcCopyToClipboard(msg);
+  if (copied) {
+    Toast.success('Invite copied — paste it into any chat.');
+    SVC.track('svc_referral_shared', { referral_code: code, channel: 'copy' });
   } else {
-    navigator.clipboard.writeText(link)
-      .then(() => Toast.success('Referral link copied to clipboard!'))
-      .catch(() => Toast.error('Copy failed — please copy the link manually'));
+    Toast.error('Copy failed — please copy the link manually');
   }
 }
 
@@ -6941,7 +7182,7 @@ function _saNormalDetail(sa, meta) {
           <td>${Utils.statusBadge(inv.status)}</td>
           <td class="td-muted">${daysLeft !== null ? `${daysLeft}d` : '—'}</td>
           <td class="td-green fw-700">${Utils.rand(inv.amount)}</td>
-          <td>${inv.status === 'matured' && !inv.maturity_instruction ? `<button class="btn btn--ghost btn--sm" style="font-size:0.7rem;padding:2px 8px;white-space:nowrap" onclick="event.stopPropagation();Modal.close('saDetailModal');openMaturityModal('${inv.id}')">Give Instruction</button>` : ''}</td>
+          <td>${inv.status === 'matured' && !inv.maturity_instruction && !Utils.isPayoutOnlyProduct(inv.product_type) ? `<button class="btn btn--ghost btn--sm" style="font-size:0.7rem;padding:2px 8px;white-space:nowrap" onclick="event.stopPropagation();Modal.close('saDetailModal');openMaturityModal('${inv.id}')">Give Instruction</button>` : ''}</td>
         </tr>`;
       }).join('')}</tbody>
     </table>` : ''}
@@ -8195,14 +8436,13 @@ async function loadReferralDashboard() {
   const inv  = PORTAL.investor;
   const code = inv?.referral_code || '';
 
-  /* The link used to point at /register, which is not a route — it fell
-     through to the SPA catch-all and served the landing page, so nobody
-     clicking a referral link ever reached the signup form. The page is
-     /signup, and it reads ?ref= to pre-fill the code. */
+  /* The same builder the WhatsApp share uses, so what is shown here and what
+     gets sent are one string. They used to be two: this said /signup and the
+     share said /register, and only one of them was a route. */
   const codeEl = document.getElementById('referralCode');
   const linkEl = document.getElementById('referralLink');
   if (codeEl) codeEl.textContent = code || '—';
-  const refLink = code ? `${window.location.origin}/signup?ref=${code}` : '—';
+  const refLink = code ? svcReferralLink(code) : '—';
   if (linkEl) linkEl.textContent = refLink;
 
   /* Who signed up under this code has to come from the server. This used to
@@ -8547,7 +8787,11 @@ async function _renderKycDocsList(preloadedDocs) {
                 d.status === 'rejected'
                   ? `<button class="btn btn--secondary btn--sm" onclick="openKycUploadModal('${d.doc_type}')"><i class="fa-solid fa-rotate-right"></i> Resubmit</button>`
                   : d.file_url
-                    ? `<a href="${_safeUrl(d.file_url)}" target="_blank" rel="noopener" class="btn btn--secondary btn--sm"><i class="fa-solid fa-download"></i> View</a>`
+                    /* _safeUrl passes http(s) and rewrites everything else to
+                       "#", which is right for a javascript: URL and wrong for
+                       the base64 data: URLs these are actually stored as: the
+                       link rendered, and clicking it did nothing. */
+                    ? `<button class="btn btn--secondary btn--sm" onclick='_viewStoredDoc(${_esc(JSON.stringify(d.file_url))})'><i class="fa-solid fa-download"></i> View</button>`
                     : d.file_data
                       ? `<button class="btn btn--secondary btn--sm" onclick="_viewKycDoc('${d.id}')"><i class="fa-solid fa-eye"></i> View</button>`
                       : '—'
@@ -10745,6 +10989,11 @@ function _agrOpenFull() {
   const w = window.open('', '_blank');
   if (!w) { Toast.error('Your browser blocked the new window. Please allow pop-ups for this site.'); return; }
   w.document.open(); w.document.write(_agrBag().docHtml); w.document.close();
+  /* Reading the full copy IS reading it, and it is the honest way out if the
+     embedded frame cannot report for itself — an extension blocking frame
+     scripts, say. Without this the investor would be stuck again, with no
+     route to the end of a document they are looking at in another window. */
+  _agrMarkRead('opened');
 }
 
 function _agrEnsureModal() {
@@ -10760,6 +11009,7 @@ function _agrEnsureModal() {
         <button class="modal__close" aria-label="Close" onclick="_agrCancel()"><i class="fa-solid fa-xmark"></i></button>
       </div>
       <div class="modal__body" id="agrBody"></div>
+      <div id="agrWhy" style="padding:0 20px 8px;font-size:0.78rem;color:#b45309;display:none"></div>
       <div class="modal__footer">
         <button class="btn btn--secondary" onclick="_agrCancel()">Cancel</button>
         <button class="btn btn--primary" id="agrSignBtn" disabled onclick="_agrSign()">
@@ -10803,8 +11053,8 @@ async function signAgreementFor(pool, walletSpend, subAccountId) {
     </div>
 
     <div id="agrDoc" style="border:1px solid rgba(0,0,0,0.12);border-radius:10px;height:280px;
-         overflow-y:auto;background:#fff;padding:0" onscroll="_agrScrolled(this)">
-      <iframe id="agrFrame" title="Investment agreement" style="width:100%;height:1200px;border:0"></iframe>
+         overflow:hidden;background:#fff;padding:0">
+      <iframe id="agrFrame" title="Investment agreement" style="width:100%;height:100%;border:0;display:block"></iframe>
     </div>
     <div id="agrReadHint" style="font-size:0.78rem;color:var(--text-muted);margin-top:6px">
       Scroll to the end of the agreement to continue.
@@ -10847,11 +11097,17 @@ async function signAgreementFor(pool, walletSpend, subAccountId) {
      must render as its own document without inheriting the portal's styles
      or reaching the portal's DOM. */
   const frame = document.getElementById('agrFrame');
-  frame.setAttribute('sandbox', '');
+  /* allow-scripts and nothing else. The document runs the few lines that
+     report it has been scrolled to the end; without allow-same-origin it
+     stays in an opaque origin, so it still cannot read the portal's DOM,
+     cookies or storage, and cannot navigate the top window. */
+  frame.setAttribute('sandbox', 'allow-scripts');
   frame.srcdoc = drawn.document_html || '';
   _agrBag().docHtml = drawn.document_html || '';
 
   _agrSetupPad();
+
+  _agrListen();
 
   return new Promise(resolve => {
     _agrBag().state = { id: drawn.id, acks, resolve, read: false, drawnSig: false };
@@ -10861,15 +11117,42 @@ async function signAgreementFor(pool, walletSpend, subAccountId) {
 }
 
 /* A document nobody scrolled is a document nobody read. Not proof, but the
-   difference between "we showed it" and "we put it behind a tick box". */
-function _agrScrolled(el) {
-  if (!_agrBag().state) return;
-  if (el.scrollTop + el.clientHeight >= el.scrollHeight - 24) {
-    _agrBag().state.read = true;
-    const hint = document.getElementById('agrReadHint');
-    if (hint) { hint.textContent = 'You have reached the end of the agreement.'; hint.style.color = 'var(--green-mid, #22c55e)'; }
-    _agrRecheck();
+   difference between "we showed it" and "we put it behind a tick box".
+
+   Judged from INSIDE the document now. It used to be judged from outside: the
+   agreement went into a 1200px-tall iframe inside a 280px scrolling box, and
+   that box's onscroll was the signal. The agreement runs to about 4 000px, so
+   1200px of frame showed less than a third of it and the rest could not be
+   reached at all; and because an iframe scrolls its own content, a wheel over
+   it never reached the box, so the box's onscroll never fired either. The
+   investor ticked every acknowledgement, typed their name, drew their
+   signature, and "Sign & continue" did nothing and said nothing.
+
+   The frame is the scroller now and the document reports for itself. This
+   believes the report only from the frame it put there — a sandboxed frame
+   posts from an opaque origin, so identity is the window, not the origin. */
+function _agrMarkRead(why) {
+  const st = _agrBag().state;
+  if (!st || st.read) return;
+  st.read = true;
+  const hint = document.getElementById('agrReadHint');
+  if (hint) {
+    hint.textContent = why === 'opened'
+      ? 'You opened the full agreement.'
+      : 'You have reached the end of the agreement.';
+    hint.style.color = 'var(--green-mid, #22c55e)';
   }
+  _agrRecheck();
+}
+
+function _agrListen() {
+  if (window.__svcAgreementListening) return;
+  window.__svcAgreementListening = true;
+  window.addEventListener('message', e => {
+    const frame = document.getElementById('agrFrame');
+    if (!frame || e.source !== frame.contentWindow) return;
+    if (e.data && e.data.svcAgreement === 'read') _agrMarkRead('scrolled');
+  });
 }
 
 function _agrSetupPad() {
@@ -10903,17 +11186,42 @@ function _agrClearPad() {
   if (_agrBag().state) { _agrBag().state.drawnSig = false; _agrRecheck(); }
 }
 
-/* Every condition, every time. The button is the only place the rules are
-   visible to the person, and the server checks them again anyway. */
+/* Every condition, every time, and the reason when one is not met.
+
+   A disabled button is invisible on this platform — nothing styles
+   .btn:disabled, so it looks exactly like a live one. That is half of why a
+   gate that could never be satisfied was reported as "nothing happens when I
+   click Sign & continue" rather than "the button is greyed out": there was
+   nothing to see and nothing to read. The list below is the answer to "why
+   can I not continue", written where the question is asked. */
+function _agrOutstanding() {
+  const st = _agrBag().state;
+  if (!st) return [];
+  const missing = [];
+  if (!st.read) missing.push('read to the end of the agreement');
+  if (!st.acks.every((_, i) => (document.getElementById('agrAck' + i) || {}).checked)) {
+    missing.push('tick every box');
+  }
+  if (String((document.getElementById('agrName') || {}).value || '').trim().length <= 1) {
+    missing.push('type your full name');
+  }
+  if (!st.drawnSig) missing.push('draw your signature');
+  return missing;
+}
+
 function _agrRecheck() {
   const btn = document.getElementById('agrSignBtn');
   if (!btn || !_agrBag().state) return;
-  const allTicked = _agrBag().state.acks.every((_, i) => {
-    const el = document.getElementById('agrAck' + i);
-    return el && el.checked;
-  });
-  const named = String((document.getElementById('agrName') || {}).value || '').trim().length > 1;
-  btn.disabled = !(allTicked && named && _agrBag().state.drawnSig && _agrBag().state.read);
+  const missing = _agrOutstanding();
+  btn.disabled = missing.length > 0;
+
+  const why = document.getElementById('agrWhy');
+  if (why) {
+    why.textContent = missing.length
+      ? `Still to do: ${missing.join(', ')}.`
+      : '';
+    why.style.display = missing.length ? '' : 'none';
+  }
 }
 
 function _agrCancel() {
@@ -11013,6 +11321,36 @@ function svcMinWalletFor(pool) {
    figure whose fee, itself rounded to a cent, still fits. Divide, floor to a
    cent, then step up while the total still fits — at most a step or two, and
    it lands on an exact drain of the wallet wherever one exists. */
+/* The quick-pick amounts offered in the invest modal.
+
+   The ladder used to be [minimum, 5 000, 10 000, 25 000] filtered on whether
+   the wallet could afford each one — and nothing else. On a pool with a
+   R100 000 minimum that offered R5 000, R10 000 and R25 000 beside it, all
+   three below the minimum the pool will accept. Tapping one filled the
+   amount field with a figure the pool refuses, blanked the fee breakdown to
+   dashes, and left Confirm live: the client's next move was a server error.
+
+   So a rung has to clear the pool's minimum before it is offered at all.
+
+   The minimum itself is always offered, even when the wallet cannot cover it
+   — that chip is what the pool costs, and hiding it would leave a client
+   short of funds looking at an empty row with nothing to tell them the
+   figure they need. The wallet warning above it already says the rest.
+
+   Deduplicated, because a pool whose minimum IS 5 000 would otherwise show
+   R5 000 twice, and sorted, because a ladder that runs R5 000, R10 000,
+   R25 000, R12 500 reads as a mistake. */
+function svcInvestQuickPicks(minInvestment, walletBalance) {
+  const min = Math.max(0, parseFloat(minInvestment) || 0);
+  const bal = parseFloat(walletBalance) || 0;
+  /* The minimum goes in LAST so the sort below is doing real work rather
+     than restating the order the list was written in. */
+  const rungs = [...new Set([5000, 10000, 25000, min])]
+    .filter(v => v > 0 && v >= min)
+    .sort((a, b) => a - b);
+  return rungs.filter(v => v === min || svcWalletSpend(v) <= bal);
+}
+
 function svcMaxInvestable(walletBalance) {
   const w = Math.round((parseFloat(walletBalance) || 0) * 100) / 100;
   if (w <= 0) return 0;
@@ -11027,6 +11365,439 @@ function svcMaxInvestable(walletBalance) {
     best = Math.round((best - 0.01) * 100) / 100;
   }
   return best;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   The standing order, offered once the money has landed
+
+   Both halves of this already existed and almost nobody used them. A card
+   saved from a Paystack top-up can be charged again on a chosen day
+   (auto_topup_*, charged by recurringCron at 03:00 UTC), and a wallet can be
+   invested on a chosen day into a chosen product (recurring_*, placed by the
+   same file an hour later at 04:00). The machinery, the crons and two portal
+   screens were all in place, and production reported "0 investor(s)
+   scheduled for today", because both live two levels down inside the wallet
+   tab and nobody finds them.
+
+   So this does not build a feature. It asks, once, at the only moment a
+   client has just proved they want to fund the account and has a card on
+   file to do it with: the card top-up they have just finished.
+
+   Two steps, in the order the money moves. First the top-up, because a
+   monthly investment with nothing arriving to pay for it just fails on the
+   day. Then the product, which is the question that makes the top-up worth
+   setting up at all.
+
+   Not offered when: auto top-up is already on, no reusable card was saved
+   (an EFT or a one-off card saves none, and without one there is nothing to
+   debit), the deposit was into a sub-account (the debit credits the main
+   wallet, so offering it there would set up something the client did not
+   ask for), or they said "not now" recently.
+   ═══════════════════════════════════════════════════════════════════ */
+
+function _atoBag() {
+  if (!window.__svcAutoTopUp) {
+    window.__svcAutoTopUp = { pending: null, card: null, settings: null, amount: 0, day: 1 };
+  }
+  return window.__svcAutoTopUp;
+}
+
+/* How long "not now" lasts. A prompt that returns on every deposit is one
+   people learn to dismiss without reading, and then it is worth nothing on
+   the occasion they would have said yes. */
+function _atoQuietDays() { return 60; }
+
+function _atoDismissedRecently(settings) {
+  const at = settings && settings.auto_topup_prompt_dismissed_at;
+  if (!at) return false;
+  const then = new Date(at).getTime();
+  if (!Number.isFinite(then)) return false;
+  return (Date.now() - then) < _atoQuietDays() * 86400000;
+}
+
+/* Days 1–28 only. Every month has them, so a client cannot pick a date that
+   does not exist in February and then wonder why nothing happened. The crons
+   clamp 29–31 to the month's last day for anyone who set one on the older
+   screen; this simply never creates the question. */
+function _atoDefaultDay() {
+  return Math.min(new Date().getDate(), 28);
+}
+
+/* Products with an open pool, and the cheapest open pool's minimum for each.
+
+   The minimum is read from the POOL, not the product record — they are set in
+   different places and drift, and it is the pool that will refuse the money.
+   Category-exclusive products are left out: they are reached deliberately
+   from their own tab, and a general picker is how somebody ends up with a
+   monthly order into a product they never chose to look at. */
+function _atoProductOptions() {
+  const byType = new Map();
+  for (const p of (PORTAL.pools || [])) {
+    if (!p || p.status !== 'open' || _poolPastClose(p)) continue;
+    const pt = p.product_type;
+    if (!pt) continue;
+    if (_isCategoryExclusive((_mktProducts || []).find(x => x.product_type === pt))) continue;
+    const min = parseFloat(p.min_investment);
+    const cur = byType.get(pt);
+    if (!cur) byType.set(pt, { productType: pt, label: Utils.productInfo(pt).label || pt, min: Number.isFinite(min) && min > 0 ? min : 0 });
+    else if (Number.isFinite(min) && min > 0 && (!cur.min || min < cur.min)) cur.min = min;
+  }
+  /* Cheapest first. The default selection is the first entry, and a default
+     the client's top-up cannot cover hands them a disabled button on open. */
+  return [...byType.values()].sort((a, b) => (a.min || 0) - (b.min || 0) || a.label.localeCompare(b.label));
+}
+
+/* Remembered after a successful card top-up so the offer can be made once the
+   client has closed the payment screen, rather than stacked on top of it. */
+function _atoRemember(info) { _atoBag().pending = info; }
+
+async function _maybeOfferAutoTopUp() {
+  const bag = _atoBag();
+  const pending = bag.pending;
+  bag.pending = null;
+  if (!pending) return;
+
+  /* The debit credits the main wallet, so a sub-account top-up is not the
+     thing this sets up. */
+  if (pending.subAccount) return;
+  if (!PORTAL.investor) return;
+
+  let card, settings;
+  try {
+    [card, settings] = await Promise.all([
+      API._fetch('GET', 'payments/topup-card').then(r => r && r.card),
+      API._fetch('GET', 'payments/auto-topup'),
+    ]);
+  } catch (e) { return; }
+
+  if (!card) return;                                  // nothing to debit
+  if (settings && settings.auto_topup_enabled) return; // already set up
+  if (_atoDismissedRecently(settings)) return;
+
+  bag.card     = card;
+  bag.settings = settings;
+  bag.amount   = Math.round((parseFloat(pending.amount) || 0) * 100) / 100;
+  bag.day      = _atoDefaultDay();
+
+  _atoEnsureModal();
+  _atoRenderStepTopUp();
+  Modal.open('autoOrderModal');
+  SVC.track('svc_auto_order_offered', { amount: bag.amount });
+}
+
+function _atoEnsureModal() {
+  let el = document.getElementById('autoOrderModal');
+  if (el) return el;
+  el = document.createElement('div');
+  el.className = 'modal-overlay';
+  el.id = 'autoOrderModal';
+  el.innerHTML = `
+    <div class="modal" style="max-width:520px">
+      <div class="modal__header">
+        <span class="modal__title" id="atoTitle">Make this automatic?</span>
+        <button class="modal__close" aria-label="Close" onclick="_atoDismiss()"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal__body" id="atoBody"></div>
+      <div id="atoWhy" style="padding:0 20px 8px;font-size:0.78rem;color:#b45309;display:none"></div>
+      <div class="modal__footer" id="atoFooter"></div>
+    </div>`;
+  document.body.appendChild(el);
+  return el;
+}
+
+function _atoCardLine(card) {
+  const brand = (card && card.card_type) ? String(card.card_type).toUpperCase() : 'Card';
+  const last4 = (card && card.last4) ? card.last4 : '••••';
+  return `${_esc(brand)} ending ${_esc(last4)}`;
+}
+
+function _atoDayOptions(selected) {
+  let out = '';
+  for (let d = 1; d <= 28; d++) {
+    out += `<option value="${d}"${d === selected ? ' selected' : ''}>${d}${_atoOrdinal(d)}</option>`;
+  }
+  return out;
+}
+
+function _atoOrdinal(d) {
+  if (d > 3 && d < 21) return 'th';
+  return { 1: 'st', 2: 'nd', 3: 'rd' }[d % 10] || 'th';
+}
+
+/* ── Step 1: the top-up ─────────────────────────────────────────────── */
+function _atoRenderStepTopUp() {
+  const bag = _atoBag();
+  document.getElementById('atoTitle').textContent = 'Top up automatically every month?';
+  document.getElementById('atoBody').innerHTML = `
+    <div style="font-size:0.88rem;line-height:1.6;color:var(--text-muted);margin-bottom:16px">
+      You have just added <strong style="color:var(--gold)">${Utils.rand(bag.amount)}</strong> with your
+      ${_atoCardLine(bag.card)}. We can charge that card the same amount each month, like a debit order,
+      so your wallet is funded without you having to remember.
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="atoAmount">Amount each month</label>
+      <input type="number" class="form-input" id="atoAmount" min="50" step="1"
+             value="${bag.amount || ''}" oninput="_atoRecheck()">
+      <div id="atoFeeLine" style="font-size:0.74rem;color:var(--text-dim);margin-top:5px"></div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="atoDay">On the</label>
+      <select class="form-select" id="atoDay" onchange="_atoRecheck()">${_atoDayOptions(bag.day)}</select>
+      <div style="font-size:0.72rem;color:var(--text-dim);margin-top:5px">
+        <i class="fa-solid fa-circle-info"></i> Days 1&ndash;28, so the date exists in every month.
+      </div>
+    </div>
+
+    <div style="font-size:0.74rem;color:var(--text-dim);line-height:1.6;margin-top:4px">
+      You can change the amount, change the day, or stop it altogether at any time from
+      <strong>Wallet &rarr; Auto Top-Up</strong>. Nothing is charged today.
+    </div>`;
+
+  document.getElementById('atoFooter').innerHTML = `
+    <button class="btn btn--secondary" onclick="_atoDismiss()">Not now</button>
+    <button class="btn btn--primary" id="atoGoBtn" onclick="_atoSaveTopUp()">
+      <i class="fa-solid fa-rotate"></i> Turn on automatic top-ups
+    </button>`;
+  _atoRecheck();
+}
+
+/* What the card is actually charged. The cron grosses the amount up so the
+   wallet receives exactly what was asked for, which means the card is debited
+   with more than the figure typed here. Saying so now is the difference
+   between a standing order and a surprise. */
+function _atoRecheck() {
+  const amtEl = document.getElementById('atoAmount');
+  const btn   = document.getElementById('atoGoBtn');
+  const why   = document.getElementById('atoWhy');
+  const line  = document.getElementById('atoFeeLine');
+  if (!amtEl || !btn) return;
+
+  const amount = parseFloat(amtEl.value);
+  const valid  = Number.isFinite(amount) && amount >= 50;
+
+  if (line) {
+    if (!valid) line.textContent = '';
+    else {
+      const fee   = Math.min(_pmFee(amount), 800);
+      const gross = Math.round((amount + fee) * 100) / 100;
+      line.innerHTML = `Your card is charged ${Utils.rand(gross)} so ${Utils.rand(amount)} reaches your wallet ` +
+                       `(${Utils.rand(Math.round(fee * 100) / 100)} Paystack fee).`;
+    }
+  }
+
+  btn.disabled = !valid;
+  if (why) {
+    why.textContent = valid ? '' : 'The smallest automatic top-up is R50.';
+    why.style.display = valid ? 'none' : '';
+  }
+}
+
+async function _atoSaveTopUp() {
+  const bag    = _atoBag();
+  const amount = parseFloat(document.getElementById('atoAmount').value);
+  const day    = parseInt(document.getElementById('atoDay').value, 10);
+  const btn    = document.getElementById('atoGoBtn');
+
+  if (!Number.isFinite(amount) || amount < 50) return;
+
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Setting up…'; }
+  try {
+    await API._fetch('POST', 'payments/auto-topup', { enabled: true, amount, day });
+    bag.amount = amount;
+    bag.day    = day;
+    SVC.track('svc_auto_order_topup_set', { amount, day });
+    Toast.success(`Automatic top-up of ${Utils.rand(amount)} set for the ${day}${_atoOrdinal(day)} of each month`);
+    if (typeof _loadAutoTopUpCard === 'function') _loadAutoTopUpCard().catch(() => {});
+    _atoRenderStepInvest();
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-rotate"></i> Turn on automatic top-ups'; }
+    const why = document.getElementById('atoWhy');
+    if (why) { why.textContent = e.message || 'Could not set that up. Please try again.'; why.style.display = ''; }
+  }
+}
+
+/* ── Step 2: what the money buys ────────────────────────────────────── */
+function _atoRenderStepInvest() {
+  const bag      = _atoBag();
+  const products = _atoProductOptions();
+
+  document.getElementById('atoTitle').textContent = 'And invest it automatically?';
+
+  if (!products.length) {
+    document.getElementById('atoBody').innerHTML = `
+      <div style="font-size:0.88rem;line-height:1.6;color:var(--text-muted)">
+        <i class="fa-solid fa-circle-check" style="color:#22c55e"></i>
+        Your automatic top-up is on. No product has an open pool right now, so there is nothing to
+        invest into automatically yet — set that up from <strong>Wallet &rarr; Recurring</strong>
+        once a pool opens.
+      </div>`;
+    document.getElementById('atoFooter').innerHTML =
+      `<button class="btn btn--primary" onclick="_atoClose()">Done</button>`;
+    return;
+  }
+
+  /* The largest investment the monthly top-up covers, fee included. The 1%
+     platform fee is charged ON TOP, so a R1 000 top-up does not buy R1 000 of
+     product — svcMaxInvestable solves for the figure whose total the top-up
+     actually covers. Suggesting the top-up amount itself would set up an order
+     that is short by the fee every single month. */
+  const covered = svcMaxInvestable(bag.amount);
+  /* Never open on a figure the chosen product refuses. Where the top-up does
+     not stretch to the cheapest minimum, the field opens at that minimum and
+     the line below says plainly what the shortfall is and what top-up would
+     cover it — rather than a disabled button and no way to see why. */
+  const cheapest  = products[0].min || 0;
+  const suggested = Math.max(covered, cheapest);
+
+  document.getElementById('atoBody').innerHTML = `
+    <div style="display:flex;align-items:flex-start;gap:9px;padding:10px 12px;border-radius:9px;
+                background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.22);margin-bottom:16px">
+      <i class="fa-solid fa-circle-check" style="color:#22c55e;margin-top:2px"></i>
+      <div id="atoTopUpSummary" style="font-size:0.82rem;line-height:1.55;color:var(--text-muted)">
+        <strong style="color:var(--text)">Automatic top-up is on.</strong>
+        ${Utils.rand(bag.amount)} on the ${bag.day}${_atoOrdinal(bag.day)} of each month.
+      </div>
+    </div>
+
+    <div style="font-size:0.86rem;line-height:1.6;color:var(--text-muted);margin-bottom:16px">
+      Money sitting in a wallet earns nothing. Choose a product and we will invest for you on the
+      same day, an hour after the top-up lands.
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="atoProduct">Invest into</label>
+      <select class="form-select" id="atoProduct" onchange="_atoRecheckInvest()">
+        ${products.map(p => `<option value="${_esc(p.productType)}">${_esc(p.label)}${p.min ? ` — from ${Utils.rand(p.min)}` : ''}</option>`).join('')}
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="atoInvestAmount">Amount each month</label>
+      <input type="number" class="form-input" id="atoInvestAmount" min="0" step="1"
+             value="${suggested > 0 ? suggested : ''}" oninput="_atoRecheckInvest()">
+      <div id="atoInvestLine" style="font-size:0.74rem;color:var(--text-dim);margin-top:5px"></div>
+    </div>`;
+
+  document.getElementById('atoFooter').innerHTML = `
+    <button class="btn btn--secondary" onclick="_atoClose()">Just the top-up</button>
+    <button class="btn btn--primary" id="atoInvestBtn" onclick="_atoSaveInvest()">
+      <i class="fa-solid fa-seedling"></i> Invest it automatically
+    </button>`;
+  _atoRecheckInvest();
+}
+
+function _atoRecheckInvest() {
+  const bag   = _atoBag();
+  const amtEl = document.getElementById('atoInvestAmount');
+  const selEl = document.getElementById('atoProduct');
+  const btn   = document.getElementById('atoInvestBtn');
+  const line  = document.getElementById('atoInvestLine');
+  const why   = document.getElementById('atoWhy');
+  if (!amtEl || !selEl || !btn) return;
+
+  const amount  = parseFloat(amtEl.value);
+  const product = _atoProductOptions().find(p => p.productType === selEl.value);
+  const min     = product ? product.min : 0;
+
+  let problem = '';
+  if (!Number.isFinite(amount) || amount <= 0) problem = 'Enter the amount to invest each month.';
+  /* The minimum is a rule about the POOL, so it is tested against the amount
+     that reaches the pool, never against what leaves the wallet. */
+  else if (min && amount < min) problem = `${product.label} takes ${Utils.rand(min)} or more.`;
+
+  if (line) {
+    if (!Number.isFinite(amount) || amount <= 0) line.textContent = '';
+    else {
+      const fee   = svcPlatformFee(amount);
+      const spend = svcWalletSpend(amount);
+      const short = Math.round((spend - bag.amount) * 100) / 100;
+      line.innerHTML =
+        `${Utils.rand(amount)} into the pool plus ${Utils.rand(fee)} platform fee &mdash; ` +
+        `${Utils.rand(spend)} from your wallet.` +
+        (short > 0
+          ? ` <span style="color:#b45309">That is ${Utils.rand(short)} more than your ` +
+            `${Utils.rand(bag.amount)} monthly top-up, so the difference has to already be in your wallet.</span> ` +
+            `<button type="button" class="btn btn--secondary btn--sm" style="margin-top:6px" ` +
+            `onclick="_atoRaiseTopUp(${spend})">Raise my top-up to ${Utils.rand(spend)}</button>`
+          : '');
+    }
+  }
+
+  btn.disabled = !!problem;
+  if (why) {
+    why.textContent = problem;
+    why.style.display = problem ? '' : 'none';
+  }
+}
+
+async function _atoSaveInvest() {
+  const bag     = _atoBag();
+  const amount  = parseFloat(document.getElementById('atoInvestAmount').value);
+  const product = document.getElementById('atoProduct').value;
+  const btn     = document.getElementById('atoInvestBtn');
+  const id      = PORTAL.investor && PORTAL.investor.id;
+  if (!id || !product || !Number.isFinite(amount) || amount <= 0) return;
+
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Setting up…'; }
+  try {
+    /* Same day as the top-up on purpose: the top-up cron runs at 03:00 UTC and
+       the investment cron at 04:00, so the money is in the wallet an hour
+       before it is spent. */
+    await API._fetch('PATCH', `tables/investors/${id}`, {
+      recurring_enabled:      true,
+      recurring_amount:       amount,
+      recurring_product_type: product,
+      recurring_day:          bag.day,
+    });
+    if (PORTAL.investor) {
+      PORTAL.investor.recurring_enabled      = true;
+      PORTAL.investor.recurring_amount       = amount;
+      PORTAL.investor.recurring_product_type = product;
+      PORTAL.investor.recurring_day          = bag.day;
+    }
+    SVC.track('svc_auto_order_invest_set', { amount, product_type: product, day: bag.day });
+    Toast.success(`${Utils.rand(amount)} into ${Utils.productInfo(product).label || product} each month`);
+    _atoClose();
+    loadPortalData().catch(() => {});
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-seedling"></i> Invest it automatically'; }
+    const why = document.getElementById('atoWhy');
+    if (why) { why.textContent = e.message || 'Could not set that up. Please try again.'; why.style.display = ''; }
+  }
+}
+
+/* The way out of a shortfall, in one tap. Without it the client is told the
+   monthly investment costs more than the monthly top-up and left to find the
+   auto top-up screen themselves to fix a number this screen already knows. */
+async function _atoRaiseTopUp(toAmount) {
+  const bag    = _atoBag();
+  const amount = Math.round((parseFloat(toAmount) || 0) * 100) / 100;
+  if (!(amount >= 50)) return;
+  try {
+    await API._fetch('POST', 'payments/auto-topup', { enabled: true, amount, day: bag.day });
+    bag.amount = amount;
+    SVC.track('svc_auto_order_topup_raised', { amount, day: bag.day });
+    Toast.success(`Monthly top-up raised to ${Utils.rand(amount)}`);
+    if (typeof _loadAutoTopUpCard === 'function') _loadAutoTopUpCard().catch(() => {});
+    const banner = document.getElementById('atoTopUpSummary');
+    if (banner) banner.innerHTML = `<strong style="color:var(--text)">Automatic top-up is on.</strong> ` +
+      `${Utils.rand(bag.amount)} on the ${bag.day}${_atoOrdinal(bag.day)} of each month.`;
+    _atoRecheckInvest();
+  } catch (e) {
+    Toast.error(e.message || 'Could not change the top-up amount.');
+  }
+}
+
+function _atoClose() { Modal.close('autoOrderModal'); }
+
+/* "Not now" — recorded server side so declining on a phone settles it on the
+   laptop too, and a cleared cache does not start the asking over. */
+function _atoDismiss() {
+  Modal.close('autoOrderModal');
+  SVC.track('svc_auto_order_declined', {});
+  API._fetch('POST', 'payments/auto-topup/dismiss', {}).catch(() => {});
 }
 
 /* The "get the app" banner moved to js/app-banner.js. It has to run on pages

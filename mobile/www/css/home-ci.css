@@ -52,6 +52,66 @@
   box-shadow: 0 2px 20px rgba(0,0,0,0.07) !important;
 }
 
+/* Products submenu — Interest-Free is a range within Products, not a peer of
+   it. Products is the heading; the two under it appear on hover, on keyboard
+   focus, or on a click, and are not shown otherwise at any width.
+
+   All three, because no one of them covers everybody: hover is what a mouse
+   expects and a touch screen does not have; focus-within is what a keyboard
+   has and neither of the others gives it; and the click is the only one that
+   works on a phone, where the whole nav is a slide-in panel. */
+.nav-has-sub { position: relative; }
+.nav-sub-toggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: none; border: 0; cursor: pointer;
+  font-family: inherit; font-size: inherit; font-weight: inherit; line-height: inherit;
+  color: inherit;
+}
+.nav-sub-chev {
+  width: 0; height: 0; flex-shrink: 0;
+  border-left: 4px solid transparent; border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+  transition: transform .16s ease;
+}
+.nav-has-sub.open > .nav-sub-toggle .nav-sub-chev { transform: rotate(180deg); }
+.nav-sub {
+  position: absolute; top: 100%; left: 0; min-width: 190px; margin: 0; padding: 8px 0;
+  list-style: none; background: #fff; border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 10px; box-shadow: 0 10px 34px rgba(0,0,0,0.14);
+  opacity: 0; visibility: hidden; transform: translateY(-4px);
+  transition: opacity .16s ease, transform .16s ease, visibility .16s;
+  z-index: 60;
+}
+.nav-has-sub:hover > .nav-sub,
+.nav-has-sub:focus-within > .nav-sub,
+.nav-has-sub.open > .nav-sub { opacity: 1; visibility: visible; transform: translateY(0); }
+.nav-sub li { display: block; }
+.nav-sub .nav-link { display: block; padding: 8px 16px; white-space: nowrap; color: #303030 !important; }
+.nav-sub .nav-link:hover { background: rgba(254,194,79,0.14); color: #1a1a1a !important; }
+@media (prefers-reduced-motion: reduce) { .nav-sub, .nav-sub-chev { transition: none; } }
+
+/* Inside the slide-in panel, which takes over at 768px in css/style.css — the
+   same breakpoint, deliberately. Set at 900 it expanded the submenu while the
+   horizontal nav was still showing, so between 769 and 900 both items sat
+   permanently under Products and pushed the row apart.
+
+   Here the submenu is a list that pushes the items below it down rather than a
+   card floating over them, and it stays closed until Products is tapped:
+   hover does not exist on a phone, and leaving it open made Products look like
+   a third link rather than the heading of the two under it. */
+@media (max-width: 768px) {
+  .nav-sub { position: static; transform: none; background: transparent; border: 0;
+             box-shadow: none; padding: 0; min-width: 0; opacity: 1; visibility: visible;
+             display: none; }
+  .nav-has-sub.open > .nav-sub { display: block; padding: 2px 0 6px 12px; }
+  .nav-has-sub:hover > .nav-sub,
+  .nav-has-sub:focus-within > .nav-sub { display: none; }
+  .nav-has-sub.open:hover > .nav-sub,
+  .nav-has-sub.open:focus-within > .nav-sub { display: block; }
+  .nav-sub .nav-link { padding: 5px 0; font-size: 0.92em; }
+  .nav-sub-toggle { width: 100%; justify-content: flex-start; }
+}
+
 /* Logo */
 .nav-logo { gap: 10px; }
 .nav-logo-img { display:block; height:46px; width:auto; }
@@ -566,27 +626,28 @@ input[type="range"] { accent-color: var(--ci-orange) !important; }
    ═══════════════════════════════════════════════════════════════
 
    The homepage's own treatment of the offering the portal carries. Same
-   accent as the portal — #65ed00, the CI lime, already in
-   Utils.ciProductPalette — and the same one deliberate departure: a flat
+   accent as the portal — #078e07, a dark green, chosen over the blue it
+   replaced because green is the colour the Islamic tradition this offering
+   serves actually reads as its own — and the same one deliberate departure: a flat
    top-left corner, so the section reads as its own room without a second
    design language.
 
-   The homepage runs light, so the lime is used as a rule, a tint and a mark
-   rather than as a fill. Lime type on white does not pass contrast, and the
-   two places a reader must actually read — the card titles and the FAQ — keep
-   the page's normal ink. */
+   The homepage runs light, so the green is used as a rule, a tint and a mark
+   rather than as a fill. #078e07 on white measures 4.3:1, still short of the
+   4.5:1 body text needs, and the two places a reader must actually read — the
+   card titles and the FAQ — keep the page's normal ink. */
 
 .eif-section {
-  --eif: #65ed00;
-  --eif-ink: #2f6b00;          /* the lime taken dark enough to read on white */
+  --eif: #078e07;
+  --eif-ink: #056b05;          /* the green taken dark enough to read on white: 6.8:1 */
   background: linear-gradient(180deg, #fbfef8 0%, #ffffff 60%) !important;
   color: var(--ci-text-body) !important;
   padding: 88px 0;
 }
 
 .eif-eyebrow {
-  background: rgba(101,237,0,0.10) !important;
-  border-color: rgba(101,237,0,0.30) !important;
+  background: rgba(7,142,7,0.10) !important;
+  border-color: rgba(7,142,7,0.30) !important;
   color: var(--eif-ink) !important;
 }
 .eif-eyebrow i { margin-right: 6px; }
@@ -600,7 +661,7 @@ input[type="range"] { accent-color: var(--ci-orange) !important; }
 }
 .eif-principle-card {
   background: #fff;
-  border: 1.5px solid rgba(101,237,0,0.24);
+  border: 1.5px solid rgba(7,142,7,0.24);
   border-radius: 4px 16px 16px 16px;
   padding: 22px 20px;
   box-shadow: 0 2px 16px rgba(0,0,0,0.05);
@@ -629,11 +690,11 @@ input[type="range"] { accent-color: var(--ci-orange) !important; }
 
 .product-card--eif {
   border-top-left-radius: 4px !important;
-  border-color: rgba(101,237,0,0.28) !important;
+  border-color: rgba(7,142,7,0.28) !important;
 }
 .product-card--eif:hover {
-  border-color: rgba(101,237,0,0.55) !important;
-  box-shadow: 0 8px 32px rgba(101,237,0,0.16) !important;
+  border-color: rgba(7,142,7,0.55) !important;
+  box-shadow: 0 8px 32px rgba(7,142,7,0.16) !important;
 }
 .product-card--eif .product-card__icon { color: var(--eif-ink) !important; }
 
@@ -643,8 +704,8 @@ input[type="range"] { accent-color: var(--ci-orange) !important; }
   gap: 6px;
   padding: 4px 10px;
   border-radius: 4px 12px 12px 12px;
-  background: rgba(101,237,0,0.12);
-  border: 1px solid rgba(101,237,0,0.30);
+  background: rgba(7,142,7,0.12);
+  border: 1px solid rgba(7,142,7,0.30);
   color: var(--eif-ink);
   font-size: 0.72rem;
   font-weight: 800;
@@ -751,9 +812,10 @@ input[type="range"] { accent-color: var(--ci-orange) !important; }
  *
  * _applyLiveProductAverages() paints each card's stat value and icon with the
  * product's colour from the API, inline. That is right for the gold and amber
- * products and wrong here: #65ed00 is the section's accent and it is roughly
- * 1.7:1 against a white card — the headline number, the one figure a reader
- * came to the card for, would be the least legible thing on it.
+ * products and wrong here: #078e07 is the section's accent and it is 4.3:1
+ * against a white card — under the 4.5:1 body text needs, so the headline
+ * number, the one figure a reader came to the card for, would be the least
+ * legible thing on it.
  *
  * !important beats an inline style, which is the only way to win against JS
  * that writes to style.color. The tint the same function applies to

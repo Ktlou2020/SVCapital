@@ -633,7 +633,13 @@ const Utils = {
   maturityPlan(inv, productLabel) {
     if (!inv) return null;
     const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
-    const instr = inv.maturity_instruction || 'pending';
+    /* What the engine will DO, not what the column says. On a payout-only
+       product they can differ — an Ethical & Interest-Free holding carrying
+       'reinvest' from before the rule still settles in cash — and this panel
+       is the one staff read to know what is about to happen to the money. */
+    const instr = Utils.isPayoutOnlyProduct(inv.product_type)
+      ? 'payout_all'
+      : (inv.maturity_instruction || 'pending');
 
     const capital = num(inv.amount);
     const rate    = Utils.effectiveRate(inv);
@@ -774,9 +780,97 @@ const Utils = {
     custom_switch:  'Custom payout & switch',
   },
 
+  /* ─── Opening a stored document ───────────────────────────────────────
+     Factsheets, KYC documents and agreements are stored as base64 `data:`
+     URLs. A browser will not open one of those the obvious ways, and both
+     failures are silent:
+
+       <a href="data:…">        Chrome has refused top-level navigation to
+                                data: URLs since v60. The click does nothing
+                                at all — no error, no tab.
+       <iframe src="data:…">    refused by this platform's CSP, whose
+                                frame-src is 'self' and Paystack. The frame
+                                renders blank.
+
+     Both were in the console at once, which is why factsheets were reported
+     as "not opening OR opening blank" depending on which screen you were on.
+
+     A blob: URL fixes the first — it is same-origin and navigable — and the
+     CSP now admits blob: in frame-src for the second. data: is deliberately
+     NOT admitted there: a data: frame can carry arbitrary HTML, which is a
+     cross-site-scripting vector, while a blob this code created is not.
+
+     Returns null for anything that is not http(s), data: or blob:, so a
+     javascript: URL that reached the database cannot be turned into a link. */
+  documentUrl(stored) {
+    const raw = String(stored == null ? '' : stored).trim();
+    if (!raw) return null;
+    if (/^https?:\/\//i.test(raw) || /^blob:/i.test(raw)) return raw;
+    if (!/^data:/i.test(raw)) return null;
+    try {
+      const comma = raw.indexOf(',');
+      if (comma < 0) return null;
+      const header = raw.slice(0, comma);
+      if (!/;base64$/i.test(header)) return null;
+      /* The blob is built with a SAFE type, not the type the data URL claims.
+
+         A blob URL inherits the origin that created it, so opening a blob of
+         type text/html runs its script as this site. data:text/html;base64
+         reaches here as readily as a PDF does, and the upload route only
+         validates the mime when one is present — a row with no mime_type and
+         a non-data file_url skips the check entirely, and nothing validates
+         the KYC documents or anything already in the table.
+
+         image/svg+xml is excluded for the same reason: an SVG is a document
+         and can carry script. Anything not on the list still opens, as an
+         octet-stream, which browsers download rather than render. */
+      const claimed = ((header.match(/^data:([^;,]*)/i) || [])[1] || '').toLowerCase();
+      const RENDERABLE = ['application/pdf', 'application/x-pdf', 'text/plain',
+                          'image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+      const mime  = RENDERABLE.includes(claimed) ? claimed : 'application/octet-stream';
+      const b64   = raw.slice(comma + 1);
+      const bin   = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return URL.createObjectURL(new Blob([bytes], { type: mime }));
+    } catch (_) { return null; }
+  },
+
+  /* Opens it in a new tab and returns whether it could. Revoked on a timer
+     rather than immediately: the new tab has not finished reading the blob
+     when this returns, and revoking early gives it an empty document — the
+     same blank screen by another route. */
+  openDocument(stored) {
+    const url = Utils.documentUrl(stored);
+    if (!url) return false;
+    const w = window.open(url, '_blank', 'noopener');
+    if (url.startsWith('blob:')) setTimeout(() => { try { URL.revokeObjectURL(url); } catch (_) {} }, 60000);
+    return !!w || url.startsWith('blob:');
+  },
+
   instructionLabel(key) {
     if (!key || key === 'pending') return null;
     return Utils.INSTRUCTION_LABELS[key] || String(key).replace(/_/g, ' ');
+  },
+
+  /* Products that can only be settled in cash at maturity.
+
+     Ethical & Interest-Free pools (product_type `eif_*`) are each a discrete
+     contract — a murabaha sale, an ijara lease, a mudarabah venture — and are
+     concluded when the underlying transaction concludes. There is nothing to
+     roll into. Offering "reinvest" would enter a client into a NEW contract
+     they never agreed, which is precisely what someone who will not take riba
+     came here to avoid. So the only instruction is Payout All, and that is
+     also what happens when they set none.
+
+     Matched on the prefix, not on the three products that exist today, so a
+     fourth EIF structure inherits the rule rather than quietly defaulting to
+     reinvest.
+
+     Mirrors server/services/maturityPolicy.js. A check asserts the two agree:
+     a form offering an option the server refuses is a dead end. */
+  isPayoutOnlyProduct(productType) {
+    return /^eif(_|$)/i.test(String(productType == null ? '' : productType).trim());
   },
 
   /* Whether a maturity instruction is set, across the investments a client

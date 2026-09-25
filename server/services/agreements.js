@@ -34,7 +34,20 @@ const esc = s => String(s == null ? '' : s)
    separates the return from interest. */
 const ACK = {
   target_not_promise: 'I understand the figure shown is a target, not a promise, and that my capital is at risk.',
+
+  /* SUPERSEDED by fee_on_top, and wrong: the fee is charged ON TOP of the
+     investment, never taken out of it. Enter R500 into a pool with a R500
+     minimum and R500 reaches the pool, R5,00 is the fee, and R505,00 leaves
+     the wallet. The document said so correctly in its Fees clause and in its
+     fee table, and then asked the investor to tick the opposite.
+
+     Kept, not deleted. The key is stored against every agreement signed
+     before this was found, and an agreement has to remain explicable in the
+     words it was signed under — including when those words were wrong.
+     No current template uses it. */
   fee_inclusive:      'I understand the 1% platform fee is taken from the amount I am investing, not added to it.',
+
+  fee_on_top:         'I understand the 1% platform fee is charged on top of the amount I am investing — the full amount I enter reaches the pool, and my wallet pays that amount plus the fee.',
   term_locked:        'I understand my capital is committed until the maturity date and cannot be withdrawn on demand.',
   mudarabah_loss:     'I understand that if the venture loses money the loss falls on the capital I provided, and the operating partner forfeits their share of the profit instead of covering it.',
   ijara_rent_stops:   'I understand my return is rent on an asset the pool owns, and that the rent stops if the asset cannot be used.',
@@ -47,35 +60,35 @@ const ACK = {
    explained after v2 ships. Never edit a version in place. */
 const TEMPLATES = {
   standard: {
-    key: 'standard', version: 'v1',
+    key: 'standard', version: 'v2',
     title: 'Investment Agreement',
-    acks: ['target_not_promise', 'fee_inclusive', 'term_locked'],
+    acks: ['target_not_promise', 'fee_on_top', 'term_locked'],
     clauses: [
-      ['The investment', 'The Investor commits the Investment Amount to the Pool named above for the stated term. The amount placed in the Pool is the Investment Amount less the platform fee.'],
+      ['The investment', 'The Investor commits the Investment Amount to the Pool named above for the stated term. The amount placed in the Pool is the Investment Amount in full; the platform fee is charged in addition to it.'],
       ['Return', 'The rate shown is a target return based on the Pool’s own projections. It is not guaranteed. The Investor’s capital is at risk and may be returned in part or not at all.'],
       ['Term', 'Capital is committed until the maturity date and is not repayable on demand. Early withdrawal is at SV Capital’s discretion and may carry a cost.'],
-      ['Platform fee', 'A platform fee of 1% is taken from the Investment Amount at the time of investment. It is deducted from the amount invested and is not charged in addition to it.'],
+      ['Platform fee', 'A platform fee of 1% of the Investment Amount is charged when the investment is made. It is charged IN ADDITION to the Investment Amount and is not deducted from it: the full Investment Amount reaches the Pool, and the Investor’s wallet is debited with the Investment Amount plus the fee.'],
       ['Maturity', 'At maturity the Investor’s standing instruction applies. Where no instruction is given, the capital and any return are reinvested into the next available pool of the same type.'],
     ],
   },
   eif_murabaha: {
-    key: 'eif_murabaha', version: 'v2', watermark: true,
+    key: 'eif_murabaha', version: 'v3', watermark: true,
     title: 'Murabaha Investment Agreement',
     gloss: 'cost-plus sale',
-    acks: ['murabaha_fixed', 'fee_inclusive', 'term_locked'],
+    acks: ['murabaha_fixed', 'fee_on_top', 'term_locked'],
     clauses: [
       ['The structure', 'SV Capital purchases goods and takes ownership of them before selling them on to a buyer at a price and mark-up disclosed in full before the sale. The Investor’s return is a share of that mark-up.'],
       ['Why this is not interest', 'The return arises from a trade in goods that were actually bought and actually sold. It is fixed at the moment of sale and does not increase with time or with late payment.'],
       ['Assets financed', 'Typical assets include production equipment sold on to an operator, agricultural inputs purchased ahead of a planting season, and livestock sold on to a feedlot.'],
       ['Late payment', 'A buyer who pays late owes the same amount they always owed. No penalty charge accrues to the Investor.'],
-      ['Platform fee', 'A platform fee of 1% is taken from the Investment Amount at the time of investment, not added to it.'],
+      ['Platform fee', 'A platform fee of 1% of the Investment Amount is charged when the investment is made. It is charged IN ADDITION to the Investment Amount and is not deducted from it: the full Investment Amount reaches the Pool, and the Investor’s wallet is debited with the Investment Amount plus the fee.'],
     ],
   },
   eif_ijara: {
-    key: 'eif_ijara', version: 'v2', watermark: true,
+    key: 'eif_ijara', version: 'v3', watermark: true,
     title: 'Ijara Investment Agreement',
     gloss: 'lease',
-    acks: ['ijara_rent_stops', 'fee_inclusive', 'term_locked'],
+    acks: ['ijara_rent_stops', 'fee_on_top', 'term_locked'],
     clauses: [
       ['The structure', 'The Pool purchases an income-producing asset and holds title to it for the life of the lease. The asset is leased to an operator and the Investor’s return is a share of the rental.'],
       ['Why this is not interest', 'Because the Pool owns the asset it carries the risks of ownership. If the asset cannot be used, the rent stops. That risk is what makes the income rent rather than a charge for the use of money.'],
@@ -85,10 +98,10 @@ const TEMPLATES = {
     ],
   },
   eif_mudarabah: {
-    key: 'eif_mudarabah', version: 'v2', watermark: true,
+    key: 'eif_mudarabah', version: 'v3', watermark: true,
     title: 'Mudarabah Investment Agreement',
     gloss: 'profit-sharing partnership',
-    acks: ['mudarabah_loss', 'target_not_promise', 'fee_inclusive', 'term_locked'],
+    acks: ['mudarabah_loss', 'target_not_promise', 'fee_on_top', 'term_locked'],
     clauses: [
       ['The structure', 'The Investor provides capital (rabb al-mal) and a vetted operating partner provides the work (mudarib). Profit is divided on a ratio agreed before any capital is deployed, being 80% to investors and 20% to the operating partner.'],
       ['Loss', 'A loss of the venture falls on the capital. The operating partner forfeits their share of the profit rather than contributing to the loss, and does not owe the Investor the shortfall.'],
@@ -247,6 +260,66 @@ function poolFacts(p) {
   };
 }
 
+/* ─── Telling the portal the document has been read ───────────────────
+   The signing modal will not enable its button until the investor has
+   reached the end of the agreement. It used to try to judge that from
+   outside: the document went into a 1200px-tall iframe inside a 280px
+   scrolling box, and the box's own onscroll was the signal.
+
+   Neither half worked. The document is about 4 000px tall, so 1200px showed
+   less than a third of it and the rest was simply unreachable; and because
+   the iframe scrolls its own content, a wheel over it never reached the box,
+   so the box's onscroll never fired at all. The investor ticked every
+   acknowledgement, typed their name, drew their signature, and the button
+   stayed disabled with nothing to say why.
+
+   So the document reports for itself. The frame is the scroller now, and
+   this says when it has been scrolled to the bottom — or, if it is short
+   enough to need no scrolling, immediately.
+
+   Inert outside a frame: a copy opened full size or saved to disk has
+   window.parent === window and this does nothing. postMessage carries no
+   data about the investor and the frame stays sandboxed without
+   allow-same-origin, so it still cannot reach the portal's DOM or storage;
+   the portal checks the message came from this frame before believing it. */
+const READ_REPORTER = `<script>
+(function () {
+  if (window.parent === window) return;
+  var sent = false, ready = false;
+
+  function atEnd() {
+    var h = window.innerHeight, d = document.documentElement;
+    /* A frame that has not been laid out reports both of these as 0, or
+       reports scrollHeight as the viewport height, either of which satisfies
+       "scrolled to the end" on a document thousands of pixels long. */
+    if (!h || !d.scrollHeight) return false;
+    return (window.scrollY + h) >= (d.scrollHeight - 24);
+  }
+
+  function tell() {
+    if (sent || !ready || !atEnd()) return;
+    sent = true;
+    window.parent.postMessage({ svcAgreement: 'read' }, '*');
+  }
+
+  window.addEventListener('scroll', tell, { passive: true });
+  window.addEventListener('resize', tell);
+
+  /* Not until the document has loaded AND a frame of layout has been
+     painted. scrollHeight read during parsing can still equal the viewport
+     height, and the gate would open itself before a word had been seen.
+     Once ready, tell() also covers the short agreement that needs no
+     scrolling at all \u2014 there is nothing left to scroll to. */
+  function arm() {
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () { ready = true; tell(); });
+    });
+  }
+  if (document.readyState === 'complete') arm();
+  else window.addEventListener('load', arm);
+})();
+<\/script>`;
+
 function renderAgreement(o) {
   const t = templateFor(o.product_type);
   const dt = new Date(o.drawn_at || Date.now());
@@ -338,13 +411,32 @@ function renderAgreement(o) {
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <title>${esc(t.title)} — ${esc(o.agreement_no)}</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
-  body{font:14px/1.62 Georgia,"Times New Roman",serif;color:#14180f;background:#fff;
+  /* Poppins, the platform's own face, so the agreement reads as part of the
+     product rather than a legal document borrowed from somewhere else.
+
+     Linked, not embedded. The document is stored per agreement in
+     investment_agreements.document_html and served back byte for byte, so a
+     base64 font would be carried in every row for ever. The portal's CSP
+     already allows fonts.googleapis.com for styles and fonts.gstatic.com for
+     the font itself, which is what the signing modal's sandboxed frame needs
+     in order to render it.
+
+     The fallback stack is the point of failure worth designing for: a copy
+     saved to disk and opened later has no network, and a system sans-serif
+     is the right thing to land on then. */
+  body{font:14px/1.62 'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+       color:#14180f;background:#fff;
        max-width:780px;margin:0 auto;padding:40px 24px}
   h1{font-size:1.5rem;margin:0 0 4px}
   h2{font-size:1.05rem;margin:30px 0 8px;border-bottom:1px solid #ccc;padding-bottom:4px}
   h3{font-size:.95rem;margin:18px 0 6px}
-  .no{font-family:monospace;font-size:.82rem;color:#555}
+  /* The reference line was monospace so the agreement number lined up.
+     Poppins throughout was asked for, so it keeps the alignment through
+     tabular figures and a little tracking instead of a second face. */
+  .no{font-size:.82rem;color:#555;font-variant-numeric:tabular-nums;letter-spacing:.04em}
   table{border-collapse:collapse;width:100%;margin:12px 0;font-size:.9rem}
   th,td{text-align:left;padding:7px 10px;border-bottom:1px solid #e3e3e3;vertical-align:top}
   th{font-weight:600;color:#444}
@@ -399,6 +491,7 @@ Investor confirms that they can bear a loss of the amount invested.</div>
 ${sigBlock}
 <div class="foot">SmartVest Financial Services (Pty) Ltd t/a SV Capital · authorised financial services provider, FSP 52449<br>
 Signed electronically in terms of the Electronic Communications and Transactions Act 25 of 2002.</div>
+${READ_REPORTER}
 </body></html>`;
 }
 

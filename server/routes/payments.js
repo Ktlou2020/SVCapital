@@ -413,10 +413,15 @@ router.get('/auto-topup', requireAuth, async (req, res) => {
     const investorId = req.user.investorId;
     if (!investorId) return res.status(400).json({ error: 'investorId required' });
     const { rows } = await pool.query(
-      `SELECT auto_topup_enabled, auto_topup_amount, auto_topup_day FROM investors WHERE id=$1`,
+      `SELECT auto_topup_enabled, auto_topup_amount, auto_topup_day,
+              auto_topup_prompt_dismissed_at
+         FROM investors WHERE id=$1`,
       [investorId]
     );
-    res.json(rows[0] || { auto_topup_enabled: false, auto_topup_amount: null, auto_topup_day: 1 });
+    res.json(rows[0] || {
+      auto_topup_enabled: false, auto_topup_amount: null, auto_topup_day: 1,
+      auto_topup_prompt_dismissed_at: null,
+    });
   } catch (err) {
     console.error('[payments]', err);
     res.status(500).json({ error: 'Internal server error.' });
@@ -449,6 +454,32 @@ router.post('/auto-topup', requireAuth, async (req, res) => {
        WHERE id=$4`,
       [!!enabled, enabled ? amountNum : null, enabled ? dayNum : 1, investorId]
     );
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[payments]', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+/* ──────────────────────────────────────────────────────────
+   POST /api/payments/auto-topup/dismiss
+
+   "Not now" on the offer made after a card top-up. Recorded so the offer
+   can wait a while before being made again — a prompt that returns on every
+   deposit is a prompt people learn to dismiss without reading, and then it
+   is worth nothing on the one occasion they would have said yes.
+
+   The server stamps the time. A client-supplied timestamp could be set into
+   the future to silence the offer for ever, which is not the client's call
+   to make silently.
+────────────────────────────────────────────────────────── */
+router.post('/auto-topup/dismiss', requireAuth, async (req, res) => {
+  try {
+    const investorId = req.user.investorId;
+    if (!investorId) return res.status(400).json({ error: 'investorId required' });
+    await pool.query(
+      `UPDATE investors SET auto_topup_prompt_dismissed_at = NOW(), updated_at = NOW()
+        WHERE id = $1`, [investorId]);
     res.json({ success: true });
   } catch (err) {
     console.error('[payments]', err);
