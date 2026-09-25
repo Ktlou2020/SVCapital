@@ -1524,7 +1524,7 @@ function openInvestModal(poolId) {
     <div class="form-group" style="margin-top:14px">
       <label class="form-label">How much would you like to invest?</label>
       <div class="invest-quickpick mb-8">
-        ${[pool.min_investment, 5000, 10000, 25000].filter(v => svcWalletSpend(v) <= walletBal || v === pool.min_investment).map(v =>
+        ${svcInvestQuickPicks(pool.min_investment, walletBal).map(v =>
           `<button class="invest-qp-btn" onclick="document.getElementById('investAmount').value=${v};_updateInvestCalc(${v},${pool.annual_rate},${pool.term_months},${pool.min_investment},${walletBal})">${Utils.rand(v)}</button>`
         ).join('')}
         ${svcMaxInvestable(walletBal) >= (parseFloat(pool.min_investment) || 0)
@@ -1587,6 +1587,11 @@ function _updateInvestCalc(amt, rate, termMonths, minInvest, walletBal) {
   const poolAmt    = svcPoolAmount(amt);
   const total      = svcWalletSpend(amt);
   const overBudget = walletBal != null && total > walletBal + 0.005;
+  /* Typed, or arrived at some other way — the quick-pick chips no longer
+     offer a rung under the minimum, but the field is free text and the
+     minimum is a rule about the POOL, so it is tested against what reaches
+     the pool and not against what leaves the wallet. */
+  const belowMin   = amt > 0 && amt < minInvest;
 
   if (amt >= minInvest) {
     if (feeAmtEl) feeAmtEl.textContent = Utils.rand(poolAmt, 2);
@@ -1606,9 +1611,32 @@ function _updateInvestCalc(amt, rate, termMonths, minInvest, walletBal) {
     if (feeTotEl) { feeTotEl.textContent = '—'; feeTotEl.style.color = '#1a1a1a'; }
   }
 
-  // Over-budget: show top-up prompt
+  // Below the pool's minimum, or over budget — either way, say which.
   if (banner) {
-    if (overBudget) {
+    if (belowMin) {
+      /* This state used to be silent: the breakdown blanked to dashes and
+         Confirm stayed live, so the next thing the client saw was the
+         server refusing the investment. */
+      const minAffordable = walletBal == null || svcWalletSpend(minInvest) <= walletBal + 0.005;
+      banner.style.display = 'block';
+      banner.innerHTML = `
+        <div style="margin-top:10px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:10px;padding:12px 14px">
+          <div style="display:flex;align-items:flex-start;gap:10px">
+            <i class="fa-solid fa-circle-info" style="color:#b45309;margin-top:2px;flex-shrink:0"></i>
+            <div style="flex:1">
+              <div style="font-size:0.83rem;font-weight:700;color:#b45309;margin-bottom:4px">Below this pool's minimum</div>
+              <div style="font-size:0.78rem;color:#6b7280;line-height:1.5">
+                This pool takes <strong style="color:#1a1a1a">${Utils.rand(minInvest)}</strong> or more.
+                ${Utils.rand(amt, 2)} is under that, so it cannot be placed.
+              </div>
+              ${minAffordable ? `<div style="margin-top:10px">
+                <button class="btn btn--secondary btn--sm" onclick="document.getElementById('investAmount').value=${minInvest};_updateInvestCalc(${minInvest},${rate},${termMonths},${minInvest},${walletBal})">Use the minimum (${Utils.rand(minInvest)})</button>
+              </div>` : ''}
+            </div>
+          </div>
+        </div>`;
+      if (confirmBtn) confirmBtn.disabled = true;
+    } else if (overBudget) {
       const maxInvestable = svcMaxInvestable(walletBal);
       const canInvest = maxInvestable >= minInvest;
       banner.style.display = 'block';

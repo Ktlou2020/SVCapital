@@ -7968,7 +7968,7 @@ function _renderInvestmentDetail(inv, backTo, backKind) {
       </div>
       ${_admPayoutOnly ? `
       <div style="font-size:0.68rem;color:var(--text-muted);margin-top:6px;line-height:1.5">
-        <i class="fa-solid fa-scale-balanced" style="color:#0096ff;margin-right:4px"></i>
+        <i class="fa-solid fa-scale-balanced" style="color:#078e07;margin-right:4px"></i>
         Ethical &amp; Interest-Free: concluded at the end of the term and paid out in full.
         This is what the maturity engine does whether or not an instruction is set.
       </div>` : ''}

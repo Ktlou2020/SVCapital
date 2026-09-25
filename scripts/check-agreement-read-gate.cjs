@@ -276,6 +276,46 @@ console.log('\nthe agreement states the fee the way the platform charges it');
      `${pool} + ${fee} = ${pool + fee}`);
 }
 
+console.log('\nthe agreement is set in the platform\u2019s own face');
+{
+  const doc = AG.renderAgreement({
+    agreement_no: 'AGR-2026-000007', product_type: 'eif_ijara', pool_name: 'Pool',
+    amount_cents: 505000, pool_amount_cents: 500000, fee_cents: 5000, drawn_at: new Date(),
+  });
+  const css = doc.slice(doc.indexOf('<style>'), doc.indexOf('</style>'));
+
+  ok('the body is set in Poppins', /font:[^;]*'Poppins'/.test(css), (css.match(/body\{font:[^;]*/) || [''])[0]);
+  ok('the stylesheet is linked', /fonts\.googleapis\.com\/css2\?family=Poppins/.test(doc));
+  ok('and the font host is preconnected', /fonts\.gstatic\.com/.test(doc));
+  ok('no second typeface is left anywhere',
+     !/Georgia|Times New Roman|font-family:\s*monospace/.test(css),
+     (css.match(/.{0,50}(Georgia|Times New Roman|font-family:\s*monospace).{0,30}/) || [''])[0]);
+  ok('the reference line keeps its alignment without one',
+     /font-variant-numeric:tabular-nums/.test(css),
+     'it was monospace so the agreement number lined up');
+  /* In the declaration, not in the comment above it — the note explaining
+     why the fallback matters contains the word too. */
+  const bodyFont = (css.match(/body\{font:[^;]*/) || [''])[0];
+  ok('a copy opened with no network still has a face to fall back to',
+     /sans-serif/.test(bodyFont) && /,/.test(bodyFont), bodyFont);
+
+  /* Linked rather than embedded, and that is not a detail: the document is
+     stored per agreement in investment_agreements.document_html and served
+     back byte for byte, so a base64 face would be carried in every row for
+     ever. */
+  ok('the font is not embedded in every stored agreement',
+     !/@font-face|data:font|data:application\/font/.test(doc),
+     'document_html is stored per row; the EIF watermark is a base64 SVG and is meant to be there');
+
+  /* The signing modal renders this inside a sandboxed iframe, which inherits
+     the portal's CSP. A face the CSP refuses is a face that silently does not
+     load. */
+  const csp = read('server/index.js');
+  ok('the CSP admits the stylesheet host',
+     /styleSrc:[^\]]*fonts\.googleapis\.com/.test(csp));
+  ok('and the font host', /fontSrc:[^\]]*fonts\.gstatic\.com/.test(csp));
+}
+
 console.log('\nchanged wording ships under a new template version');
 {
   /* Past the version that carried the wrong fee wording, not equal to the

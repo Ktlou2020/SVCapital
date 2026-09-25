@@ -411,13 +411,32 @@ function renderAgreement(o) {
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <title>${esc(t.title)} — ${esc(o.agreement_no)}</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
-  body{font:14px/1.62 Georgia,"Times New Roman",serif;color:#14180f;background:#fff;
+  /* Poppins, the platform's own face, so the agreement reads as part of the
+     product rather than a legal document borrowed from somewhere else.
+
+     Linked, not embedded. The document is stored per agreement in
+     investment_agreements.document_html and served back byte for byte, so a
+     base64 font would be carried in every row for ever. The portal's CSP
+     already allows fonts.googleapis.com for styles and fonts.gstatic.com for
+     the font itself, which is what the signing modal's sandboxed frame needs
+     in order to render it.
+
+     The fallback stack is the point of failure worth designing for: a copy
+     saved to disk and opened later has no network, and a system sans-serif
+     is the right thing to land on then. */
+  body{font:14px/1.62 'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+       color:#14180f;background:#fff;
        max-width:780px;margin:0 auto;padding:40px 24px}
   h1{font-size:1.5rem;margin:0 0 4px}
   h2{font-size:1.05rem;margin:30px 0 8px;border-bottom:1px solid #ccc;padding-bottom:4px}
   h3{font-size:.95rem;margin:18px 0 6px}
-  .no{font-family:monospace;font-size:.82rem;color:#555}
+  /* The reference line was monospace so the agreement number lined up.
+     Poppins throughout was asked for, so it keeps the alignment through
+     tabular figures and a little tracking instead of a second face. */
+  .no{font-size:.82rem;color:#555;font-variant-numeric:tabular-nums;letter-spacing:.04em}
   table{border-collapse:collapse;width:100%;margin:12px 0;font-size:.9rem}
   th,td{text-align:left;padding:7px 10px;border-bottom:1px solid #e3e3e3;vertical-align:top}
   th{font-weight:600;color:#444}

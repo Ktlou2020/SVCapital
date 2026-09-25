@@ -9,7 +9,10 @@
  *
  * THE COLOUR. The lime was hard to keep consistent and measures 1.5:1 on
  * white, so anything set in it had to be darkened by hand before it could be
- * read. #0096ff is the CI blue, already in the palette.
+ * read. The accent has since moved again, from that blue to #078e07, a dark
+ * green — asked for because green is the colour the Islamic tradition this
+ * offering serves reads as its own. Both of the colours it has worn belong to
+ * the platform elsewhere, so both have a section below holding them there.
  *
  * The colour half needs a boundary as much as a value. #65ed00 is the
  * PLATFORM's lime — GridFarmer's NDVI scale, quest badges, the solar
@@ -99,12 +102,9 @@ console.log('\nand both places that quote it agree');
      /A minimum marked \* is the product's own figure/.test(CORE));
 }
 
-console.log('\nthe offering is the CI blue');
+console.log('\nthe offering is the dark green');
 {
-  ok('the accent is #0096ff', EIF_ACCENT() === '#0096ff', EIF_ACCENT());
-  ok('which is already in the CI palette',
-     /'#0096ff'/.test(read('js/api.js')) || /#0096ff/.test(read('admin/js/admin.js')),
-     'a colour invented for one section is a colour that drifts');
+  ok('the accent is #078e07', EIF_ACCENT() === '#078e07', EIF_ACCENT());
 
   /* Scanned as a BLOCK, from the section's banner comment to its last rule,
      rather than line by line. A line-by-line filter only sees lines that
@@ -124,8 +124,15 @@ console.log('\nthe offering is the CI blue');
        `${strays.length} left: ${[...new Set(strays)].join(', ')}`);
     /* And the block really does reach the tints, or the assertion above is
        checking an empty string. */
+    /* The blue is now somebody else's too, so a stray one here is the same
+       kind of fault the lime was. */
+    const blues = block.match(/0096ff|0,\s*150,\s*255/g) || [];
+    ok(`${f}: no blue left anywhere in the EIF block`, blues.length === 0,
+       `${blues.length} left: ${[...new Set(blues)].join(', ')}`);
+    /* And the block really does reach the tints, or the assertions above are
+       checking an empty string. */
     ok(`${f}: the block reaches the section's tints`,
-       /rgba\(0,\s*150,\s*255|color-mix\(in srgb, #0096ff/.test(block),
+       /rgba\(7,\s*142,\s*7|color-mix\(in srgb, #078e07/.test(block),
        'the slice missed the rules it was meant to cover');
   }
 
@@ -180,8 +187,47 @@ console.log('\nthe recolour reaches databases that already exist');
   ok('so running it twice changes nothing the second time',
      /AND color = '#65ed00'/.test(step));
   ok('the seed itself was updated too',
-     (setup.match(/color: '#0096ff', badge_class: 'badge--blue'/g) || []).length === 3,
+     (setup.match(/color: '#078e07', badge_class: 'badge--green'/g) || []).length === 3,
      'a fresh database would install the old colour again');
+
+  /* The blue step is history and stays exactly as it was. A row's colour has
+     to be explicable from the steps that ran, and rewriting step 20 to say
+     green would make the row that went lime → blue → green unreadable. */
+  ok('the step that installed the blue is left alone',
+     /AND color = '#65ed00'/.test(step) && /SET color = '#0096ff'/.test(step),
+     'step 20 is the record of how these rows got their blue');
+
+  const green = (setup.match(/await step\("22\. Ethical[\s\S]*?\n    \}\);/) || [''])[0];
+  ok('and a later step moves them on to the green', green.length > 0);
+  ok('only the three EIF rows again',
+     /product_type IN \('eif_murabaha','eif_ijara','eif_mudarabah'\)/.test(green));
+  ok('and only while they still carry the blue it replaces',
+     /AND color = '#0096ff'/.test(green),
+     'an admin who chose their own colour would have it overwritten');
+  ok('so it too does nothing on a second run', /AND color = '#0096ff'/.test(green));
+  ok('the badge moves with the colour',
+     /badge_class = 'badge--green'/.test(green));
+}
+
+console.log('\nand the platform blue is untouched');
+{
+  /* Everything the blue meant before EIF borrowed it. A search-and-replace
+     of #0096ff across the repository repaints every one of these — the same
+     mistake the lime section below exists to prevent, one colour later. */
+  for (const [f, what, pattern] of [
+    ['server/routes/quests.js', 'the referral quest', /first_referral[\s\S]{0,200}#0096ff/],
+    ['server/routes/quests.js', 'the learning quests', /learn_what_is_svc[\s\S]{0,160}#0096ff/],
+    ['admin/js/admin.js', 'the cultivator XP tier', /cultivator:'#0096ff'/],
+    ['admin/js/admin.js', 'the Learning Hub panel', /fa-graduation-cap[^\n]*#0096ff/],
+    ['js/api.js', 'the CI palette itself', /ciProductPalette:[^\]]*#0096ff/],
+    ['js/portal-core.js', 'the short-term product', /includes\('short'\)[^\n]*#0096ff/],
+    ['js/portal-core.js', 'the "how SV Capital works" panel', /fa-seedling[^\n]*#0096ff/],
+    ['portal/js/portal.js', 'the statement wallet tile', /stmtKPIBox\('Wallet Balance'[^\n]*#0096ff/],
+    ['portal/css/portal-premium.css', 'the gift card', /gift-card\s*\{[^}]*#0096ff/],
+    ['mobile/src/css/mobile-app.css', 'the statement badge', /color: #0096ff !important/],
+  ]) {
+    ok(`${what} keeps the blue`, pattern.test(read(f)), `${f}: ${pattern}`);
+  }
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

@@ -626,27 +626,28 @@ input[type="range"] { accent-color: var(--ci-orange) !important; }
    ═══════════════════════════════════════════════════════════════
 
    The homepage's own treatment of the offering the portal carries. Same
-   accent as the portal — #0096ff, the CI blue, already in
-   Utils.ciProductPalette — and the same one deliberate departure: a flat
+   accent as the portal — #078e07, a dark green, chosen over the blue it
+   replaced because green is the colour the Islamic tradition this offering
+   serves actually reads as its own — and the same one deliberate departure: a flat
    top-left corner, so the section reads as its own room without a second
    design language.
 
-   The homepage runs light, so the blue is used as a rule, a tint and a mark
-   rather than as a fill. #0096ff on white measures 3.1:1, short of the 4.5:1 body text needs, and the
-   two places a reader must actually read — the card titles and the FAQ — keep
-   the page's normal ink. */
+   The homepage runs light, so the green is used as a rule, a tint and a mark
+   rather than as a fill. #078e07 on white measures 4.3:1, still short of the
+   4.5:1 body text needs, and the two places a reader must actually read — the
+   card titles and the FAQ — keep the page's normal ink. */
 
 .eif-section {
-  --eif: #0096ff;
-  --eif-ink: #0060a8;          /* the blue taken dark enough to read on white */
+  --eif: #078e07;
+  --eif-ink: #056b05;          /* the green taken dark enough to read on white: 6.8:1 */
   background: linear-gradient(180deg, #fbfef8 0%, #ffffff 60%) !important;
   color: var(--ci-text-body) !important;
   padding: 88px 0;
 }
 
 .eif-eyebrow {
-  background: rgba(0,150,255,0.10) !important;
-  border-color: rgba(0,150,255,0.30) !important;
+  background: rgba(7,142,7,0.10) !important;
+  border-color: rgba(7,142,7,0.30) !important;
   color: var(--eif-ink) !important;
 }
 .eif-eyebrow i { margin-right: 6px; }
@@ -660,7 +661,7 @@ input[type="range"] { accent-color: var(--ci-orange) !important; }
 }
 .eif-principle-card {
   background: #fff;
-  border: 1.5px solid rgba(0,150,255,0.24);
+  border: 1.5px solid rgba(7,142,7,0.24);
   border-radius: 4px 16px 16px 16px;
   padding: 22px 20px;
   box-shadow: 0 2px 16px rgba(0,0,0,0.05);
@@ -689,11 +690,11 @@ input[type="range"] { accent-color: var(--ci-orange) !important; }
 
 .product-card--eif {
   border-top-left-radius: 4px !important;
-  border-color: rgba(0,150,255,0.28) !important;
+  border-color: rgba(7,142,7,0.28) !important;
 }
 .product-card--eif:hover {
-  border-color: rgba(0,150,255,0.55) !important;
-  box-shadow: 0 8px 32px rgba(0,150,255,0.16) !important;
+  border-color: rgba(7,142,7,0.55) !important;
+  box-shadow: 0 8px 32px rgba(7,142,7,0.16) !important;
 }
 .product-card--eif .product-card__icon { color: var(--eif-ink) !important; }
 
@@ -703,8 +704,8 @@ input[type="range"] { accent-color: var(--ci-orange) !important; }
   gap: 6px;
   padding: 4px 10px;
   border-radius: 4px 12px 12px 12px;
-  background: rgba(0,150,255,0.12);
-  border: 1px solid rgba(0,150,255,0.30);
+  background: rgba(7,142,7,0.12);
+  border: 1px solid rgba(7,142,7,0.30);
   color: var(--eif-ink);
   font-size: 0.72rem;
   font-weight: 800;
@@ -811,9 +812,10 @@ input[type="range"] { accent-color: var(--ci-orange) !important; }
  *
  * _applyLiveProductAverages() paints each card's stat value and icon with the
  * product's colour from the API, inline. That is right for the gold and amber
- * products and wrong here: #0096ff is the section's accent and it is roughly
- * 3.1:1 against a white card — the headline number, the one figure a reader
- * came to the card for, would be the least legible thing on it.
+ * products and wrong here: #078e07 is the section's accent and it is 4.3:1
+ * against a white card — under the 4.5:1 body text needs, so the headline
+ * number, the one figure a reader came to the card for, would be the least
+ * legible thing on it.
  *
  * !important beats an inline style, which is the only way to win against JS
  * that writes to style.color. The tint the same function applies to

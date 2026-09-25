@@ -3204,14 +3204,23 @@ function _productRisk(productType) {
    portal — the is_active switch the platform already has, rather than a second
    flag somebody has to remember. */
 
-/* #0096ff, the CI blue, already in Utils.ciProductPalette. It replaced the
-   CI lime at the client's request: the lime was hard to keep consistent
-   across the site and drifted into mismatched shades, and it measures 1.5:1
-   on white, so anything set in it had to be darkened by hand before it could
-   be read. The blue is 3.1:1, and --eif-ink carries the dark version for
-   text. The lime is still the platform's elsewhere — quests, solar,
-   GridFarmer — and is deliberately left there. */
-function EIF_ACCENT()   { return '#0096ff'; }
+/* #078e07, a dark green. Third accent this section has worn, and the reason
+   for this one is not a design preference: green is the colour the Islamic
+   tradition the offering serves reads as its own, and a client who will not
+   take riba meets the section before they read a word of it.
+
+   It replaced the CI blue, which replaced the CI lime. The lime measured
+   1.5:1 on white and had to be darkened by hand anywhere it carried text;
+   the blue was 3.1:1. The green is 4.3:1 — better, still under the 4.5:1
+   body text needs, so --eif-ink (#056b05, 6.8:1) carries the dark version
+   for anything that has to be read rather than merely seen.
+
+   Both older colours are still the platform's elsewhere and are deliberately
+   left there: the lime on quests, solar and GridFarmer, the blue on the
+   Learning Hub, the XP bars, the statement tiles and the short-term product.
+   Neither belonged to EIF, and a blanket replace of either repaints half the
+   platform. */
+function EIF_ACCENT()   { return '#078e07'; }
 function EIF_CATEGORY() { return 'eif'; }
 function EIF_LABEL()    { return 'Ethical &amp; Interest-Free'; }
 /* The mark for the offering, used in three places that must agree: the
@@ -11300,6 +11309,36 @@ function svcMinWalletFor(pool) {
    figure whose fee, itself rounded to a cent, still fits. Divide, floor to a
    cent, then step up while the total still fits — at most a step or two, and
    it lands on an exact drain of the wallet wherever one exists. */
+/* The quick-pick amounts offered in the invest modal.
+
+   The ladder used to be [minimum, 5 000, 10 000, 25 000] filtered on whether
+   the wallet could afford each one — and nothing else. On a pool with a
+   R100 000 minimum that offered R5 000, R10 000 and R25 000 beside it, all
+   three below the minimum the pool will accept. Tapping one filled the
+   amount field with a figure the pool refuses, blanked the fee breakdown to
+   dashes, and left Confirm live: the client's next move was a server error.
+
+   So a rung has to clear the pool's minimum before it is offered at all.
+
+   The minimum itself is always offered, even when the wallet cannot cover it
+   — that chip is what the pool costs, and hiding it would leave a client
+   short of funds looking at an empty row with nothing to tell them the
+   figure they need. The wallet warning above it already says the rest.
+
+   Deduplicated, because a pool whose minimum IS 5 000 would otherwise show
+   R5 000 twice, and sorted, because a ladder that runs R5 000, R10 000,
+   R25 000, R12 500 reads as a mistake. */
+function svcInvestQuickPicks(minInvestment, walletBalance) {
+  const min = Math.max(0, parseFloat(minInvestment) || 0);
+  const bal = parseFloat(walletBalance) || 0;
+  /* The minimum goes in LAST so the sort below is doing real work rather
+     than restating the order the list was written in. */
+  const rungs = [...new Set([5000, 10000, 25000, min])]
+    .filter(v => v > 0 && v >= min)
+    .sort((a, b) => a - b);
+  return rungs.filter(v => v === min || svcWalletSpend(v) <= bal);
+}
+
 function svcMaxInvestable(walletBalance) {
   const w = Math.round((parseFloat(walletBalance) || 0) * 100) / 100;
   if (w <= 0) return 0;

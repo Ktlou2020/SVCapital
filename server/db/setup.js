@@ -1697,7 +1697,7 @@ const EIF_PRODUCTS = [
     ].join('\n'),
     min_investment: 500, term_months: 6, benchmark_rate: 0.115, performance_fee_pct: 0,
     risk_profile: 'Low-Medium', risk_color: '#22c55e', icon: 'fa-handshake',
-    color: '#0096ff', badge_class: 'badge--blue', sector: 'Trade Finance', sort_order: 40,
+    color: '#078e07', badge_class: 'badge--green', sector: 'Trade Finance', sort_order: 40,
   },
   {
     product_type: 'eif_ijara', label: 'Ijara Asset Leasing',
@@ -1713,7 +1713,7 @@ const EIF_PRODUCTS = [
     ].join('\n'),
     min_investment: 1000, term_months: 36, benchmark_rate: 0.125, performance_fee_pct: 0,
     risk_profile: 'Medium', risk_color: '#fec24f', icon: 'fa-file-contract',
-    color: '#0096ff', badge_class: 'badge--blue', sector: 'Asset Leasing', sort_order: 41,
+    color: '#078e07', badge_class: 'badge--green', sector: 'Asset Leasing', sort_order: 41,
   },
   {
     product_type: 'eif_mudarabah', label: 'Mudarabah Enterprise',
@@ -1729,7 +1729,7 @@ const EIF_PRODUCTS = [
     ].join('\n'),
     min_investment: 2500, term_months: 12, benchmark_rate: 0.145, performance_fee_pct: 0.20,
     risk_profile: 'Medium-High', risk_color: '#ffb782', icon: 'fa-scale-balanced',
-    color: '#0096ff', badge_class: 'badge--blue', sector: 'Enterprise Finance', sort_order: 42,
+    color: '#078e07', badge_class: 'badge--green', sector: 'Enterprise Finance', sort_order: 42,
   },
 ];
 
@@ -3781,6 +3781,30 @@ async function autoSetup() {
       if (rowCount) console.log(`\u2705 Recoloured ${rowCount} EIF product(s) to the CI blue.`);
     });
 
+    await step("22. Ethical & Interest-Free wears green", async () => {
+      /* Third accent for this section, and the only one chosen for a reason
+         that is not a design preference: green is the colour the Islamic
+         tradition the offering serves reads as its own. The client asked for
+         it directly, over the blue that step 20 installed.
+
+         Step 13 seeds the products with ON CONFLICT DO NOTHING, so editing
+         EIF_PRODUCTS reaches a brand-new database and nowhere else. Step 20
+         is left exactly as it was: it is the record of how these rows got
+         their blue, and rewriting it would make the history of a row
+         unreadable. This moves them on from there.
+
+         Narrow, like step 20. Only the three EIF rows, and only while they
+         still carry the exact blue step 20 gave them — an admin who has since
+         chosen their own colour is left alone, and a second run does nothing
+         because the value no longer matches. */
+      const { rowCount } = await pool.query(
+        `UPDATE products
+            SET color = '#078e07', badge_class = 'badge--green', updated_at = NOW()
+          WHERE product_type IN ('eif_murabaha','eif_ijara','eif_mudarabah')
+            AND color = '#0096ff'`);
+      if (rowCount) console.log(`\u2705 Recoloured ${rowCount} EIF product(s) to the dark green.`);
+    });
+
     await step("21. Settle Ethical & Interest-Free holdings on payout", async () => {
       /* An EIF pool is a concluded contract, so the only thing that can
          happen at maturity is a cash settlement. The engine now enforces that
@@ -3870,6 +3894,21 @@ async function autoSetup() {
           title: 'Clients are offered a monthly top-up after paying by card',
           body: 'Automatic wallet top-ups and recurring investments both already existed \u2014 a saved card charged on a chosen day, and the wallet invested into a chosen product the next hour \u2014 and the cron reported "0 investor(s) scheduled for today", because both live two levels down inside the wallet tab and nobody found them. When a client finishes a card top-up they are now asked, once, whether to repeat it every month, and then which product to invest it into. The amount suggested is the one the top-up actually covers: the 1% platform fee is charged on top, so a R1 000 top-up buys R990,10 of product, and where that is under the pool minimum the offer says so and can raise the top-up in one tap. Days 1\u201328 only, so the date exists in every month. It is not offered if auto top-up is already on, if no card was saved, on a sub-account top-up, to someone mid-purchase, or within 60 days of a client saying "Not now" \u2014 that refusal is stored against the client, not the browser.',
           where: 'Client portal \u2192 Wallet \u2192 Add Funds \u2192 pay by card. Existing settings stay where they were, under Wallet \u2192 Auto Top-Up and Wallet \u2192 Recurring; this console shows them on the client record.' },
+
+        { id: 'ANN-2026-EIF-GREEN', area: 'both', icon: 'fa-palette',
+          title: 'Ethical & Interest-Free is dark green',
+          body: 'The section is now #078e07 instead of the blue it wore for a week. Green is the colour the Islamic tradition the offering serves reads as its own, which is the reason for the change \u2014 not a design preference. The blue remains the platform\u2019s elsewhere: the Learning Hub, the XP bars, the statement tiles, the gift card and the short-term product all keep it, exactly as the lime stayed on solar and GridFarmer when EIF stopped using that. Product badges move from blue to green with it.',
+          where: 'Public site \u2192 the Ethical & Interest-Free section, and Client portal \u2192 Invest \u2192 the Ethical & Interest-Free tab. Per-product colours are on the product record under Products in this console.' },
+
+        { id: 'ANN-2026-INVEST-MINIMUM-CHIPS', area: 'portal', icon: 'fa-coins',
+          title: 'The invest screen stops offering amounts the pool will refuse',
+          body: 'The quick-pick buttons were filtered on whether the wallet could afford them and nothing else, so a pool with a R100 000 minimum offered R5 000, R10 000 and R25 000 beside it. Tapping one filled the amount with a figure the pool refuses, blanked the fee breakdown to dashes, and left Confirm live \u2014 the client\u2019s next move was a server error. Rungs below the minimum are gone. The minimum itself is always shown even when the wallet cannot cover it, since that is the figure the client needs to know. And typing an amount below the minimum now says so, names what the pool takes, offers a one-tap correction, and disables Confirm.',
+          where: 'Client portal \u2192 Invest \u2192 open any pool. Pool minimums are set per pool under Pools in this console.' },
+
+        { id: 'ANN-2026-AGREEMENT-POPPINS', area: 'both', icon: 'fa-font',
+          title: 'The investment agreement is set in Poppins',
+          body: 'The agreement was set in Georgia, which belonged to nothing else on the platform. It now uses Poppins throughout, including the reference line that was monospace \u2014 that keeps its alignment through tabular figures instead. The font is linked rather than embedded, because each agreement is stored whole and served back byte for byte; a copy saved to disk and opened offline falls back to the system sans-serif. Agreements signed before today keep the document exactly as it was signed.',
+          where: 'Client portal \u2192 the agreement screen shown before an investment is funded, and every agreement PDF under Clients \u2192 open a client \u2192 Documents. The agreement step only appears where INVESTMENT_AGREEMENTS_ENABLED is on \u2014 and when it is, it applies to every product, not only EIF.' },
 
         { id: 'ANN-2026-SUPPORT-NUMBER', area: 'both', icon: 'fa-phone',
           title: 'Support WhatsApp number changed',
