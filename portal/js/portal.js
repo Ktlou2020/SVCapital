@@ -72,14 +72,12 @@ let _fsDocCache = [];
 function _openFsDoc(i) {
   const url = (_fsDocCache[i] || {}).file_url;
   if (!url) return;
-  if (/^https?:\/\//i.test(url)) { window.open(url, '_blank', 'noopener'); return; }
-  try {
-    const [header, b64] = url.split(',');
-    const mime = header.match(/:(.*?);/)?.[1] || 'application/pdf';
-    const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-    const objUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));
-    window.open(objUrl, '_blank', 'noopener');
-  } catch (_) { if (typeof Toast !== 'undefined') Toast.error('Could not open document'); }
+  /* Utils.documentUrl does the data: -> blob: conversion, and constrains the
+     blob's type so a document claiming to be text/html cannot run as this
+     site. One copy, shared with the admin console. */
+  if (!Utils.openDocument(url) && typeof Toast !== 'undefined') {
+    Toast.error('Could not open document');
+  }
 }
 
 /* ─── Partner info profiles ─── */

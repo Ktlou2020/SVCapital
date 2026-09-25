@@ -81,31 +81,24 @@ function _openFsDoc(i) {
     return;
   }
 
-  // Web: open in new tab
-  if (/^https?:\/\//i.test(url)) { window.open(url, '_blank', 'noopener'); return; }
-  try {
-    const [header, b64] = url.split(',');
-    const mime = header.match(/:(.*?);/)?.[1] || 'application/pdf';
-    const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-    const objUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));
-    const win = window.open(objUrl, '_blank', 'noopener');
-    if (!win) _openFsOverlay(url, doc.file_name || 'Document');
-  } catch (_) { if (typeof Toast !== 'undefined') Toast.error('Could not open document'); }
+  /* Web: a new tab. Utils.documentUrl does the data: -> blob: conversion and
+     constrains the blob's type, so a document claiming to be text/html cannot
+     run as this site. One copy, shared with the admin console. */
+  const objUrl = Utils.documentUrl(url);
+  if (!objUrl) { if (typeof Toast !== 'undefined') Toast.error('Could not open document'); return; }
+  const win = window.open(objUrl, '_blank', 'noopener');
+  if (!win && !/^https?:/i.test(objUrl)) _openFsOverlay(url, doc.file_name || 'Document');
 }
 
 function _openFsOverlay(url, name) {
   document.getElementById('_fsNativeOverlay')?.remove();
 
-  // Decode base-64 data URIs to blob URLs so the iframe can display them
-  let iframeSrc = url;
-  if (/^data:/i.test(url)) {
-    try {
-      const [header, b64] = url.split(',');
-      const mime = header.match(/:(.*?);/)?.[1] || 'application/pdf';
-      const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-      iframeSrc = URL.createObjectURL(new Blob([bytes], { type: mime }));
-    } catch (_) { iframeSrc = url; }
-  }
+  /* A blob, never the data: URL itself: the CSP's frame-src admits blob: and
+     refuses data:, so framing the original rendered blank. Falling back to
+     the raw url on failure, as this did, framed the very thing that is
+     refused — so an unusable document now says so instead. */
+  const iframeSrc = Utils.documentUrl(url);
+  if (!iframeSrc) { if (typeof Toast !== 'undefined') Toast.error('Could not open document'); return; }
 
   const isHttps = /^https?:\/\//i.test(url);
   const overlay = document.createElement('div');

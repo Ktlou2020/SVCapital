@@ -5634,13 +5634,13 @@ async function openKycReview(id) {
             ${_zoomBar()}
             <div style="flex:1;overflow:auto">
               <div id="docZoomTarget" style="transition:transform 0.15s;transform-origin:top center">
-                <iframe src="${doc.file_url}" style="width:100%;height:800px;border:none;display:block"></iframe>
+                <iframe src="${_esc(Utils.documentUrl(doc.file_url) || '')}" style="width:100%;height:800px;border:none;display:block"></iframe>
               </div>
             </div>
             ${_dlBtn(doc.file_url, fname, true)}
           </div>`;
       } else {
-        docContent.innerHTML = `<div style="text-align:center;padding:40px"><a href="${doc.file_url}" target="_blank" rel="noopener" class="btn btn--primary"><i class="fa-solid fa-external-link"></i> Open Document</a></div>`;
+        docContent.innerHTML = `<div style="text-align:center;padding:40px"><button class="btn btn--primary" onclick='Utils.openDocument(${_esc(JSON.stringify(doc.file_url))}) || Toast.error("Could not open this document")'><i class="fa-solid fa-external-link"></i> Open Document</button></div>`;
       }
     } else {
       docContent.innerHTML = `<div style="text-align:center;padding:60px 0;color:var(--text-muted)"><i class="fa-solid fa-file-circle-question fa-3x" style="opacity:0.3;display:block;margin-bottom:12px"></i><div>No file attached</div><div style="font-size:0.78rem;margin-top:6px">The investor has not uploaded a file for this document.</div></div>`;
@@ -5978,15 +5978,17 @@ function renderProductsGrid() {
 function _viewProductFactsheet(id) {
   const p = (STATE.products || []).find(x => x.id === id);
   if (!p || !p.factsheet_url) return;
-  const raw = p.factsheet_url;
-  if (raw.startsWith('http')) { window.open(raw, '_blank', 'noopener'); return; }
-  try {
-    const [header, b64] = raw.split(',');
-    const mime = header.match(/:(.*?);/)?.[1] || 'application/pdf';
-    const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-    const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
-    window.open(url, '_blank', 'noopener');
-  } catch (_) { Toast.error('Could not open factsheet'); }
+  if (!Utils.openDocument(p.factsheet_url)) Toast.error('Could not open factsheet');
+}
+
+/* The factsheet rows in the manager. Looked up by id rather than having the
+   URL written into the handler: these are base64 PDFs, and putting a couple
+   of megabytes of them into an onclick attribute is how the list stops
+   rendering. */
+let _adminFsCache = [];
+function _openStoredDoc(fsId) {
+  const s = (_adminFsCache || []).find(x => String(x.id) === String(fsId));
+  if (!s || !Utils.openDocument(s.file_url)) Toast.error('Could not open this factsheet');
 }
 
 async function removeProductFactsheet(productId) {
@@ -6840,6 +6842,7 @@ async function _loadAdminFactsheets(poolId, listEl) {
   try {
     const res = await API._fetch('GET', `factsheets?pool_id=${poolId}`);
     const sheets = res.data || [];
+    _adminFsCache = sheets;
     if (!sheets.length) {
       listEl.innerHTML = '<div style="color:var(--text-dim);font-size:0.78rem;text-align:center;padding:16px">No factsheets yet — upload one above.</div>';
       return;
@@ -6858,7 +6861,7 @@ async function _loadAdminFactsheets(poolId, listEl) {
             s.period_label ? `<span style="color:var(--text-primary);font-weight:700">${_esc(s.period_label)}</span> · ` : '<span style="color:#f59e0b">No period · </span>'
           }${s.version ? `v${_esc(s.version)} · ` : ''}uploaded ${Utils.date(s.created_at)}${s.uploaded_by ? ` · ${_esc(s.uploaded_by)}` : ''}</div>
         </div>
-        <a href="${s.file_url}" target="_blank" rel="noopener" class="btn btn--ghost btn--sm" title="Open"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
+        <button class="btn btn--ghost btn--sm" onclick='_openStoredDoc(${_esc(JSON.stringify(s.id))})' title="Open"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
         <button class="btn btn--ghost btn--sm" style="color:#ef4444" onclick="deleteFactsheet('${s.id}','${poolId}')" title="Delete"><i class="fa-solid fa-trash"></i></button>
       </div>`).join('');
   } catch (e) {

@@ -3910,6 +3910,11 @@ async function autoSetup() {
           body: 'The agreement was set in Georgia, which belonged to nothing else on the platform. It now uses Poppins throughout, including the reference line that was monospace \u2014 that keeps its alignment through tabular figures instead. The font is linked rather than embedded, because each agreement is stored whole and served back byte for byte; a copy saved to disk and opened offline falls back to the system sans-serif. Agreements signed before today keep the document exactly as it was signed.',
           where: 'Client portal \u2192 the agreement screen shown before an investment is funded, and every agreement PDF under Clients \u2192 open a client \u2192 Documents. The agreement step only appears where INVESTMENT_AGREEMENTS_ENABLED is on \u2014 and when it is, it applies to every product, not only EIF.' },
 
+        { id: 'ANN-2026-DOCS-OPEN', area: 'both', icon: 'fa-file-arrow-up',
+          title: 'Factsheets and documents open again',
+          body: 'They were doing nothing, or opening blank, depending on the screen \u2014 and both failures were silent. Factsheets, FICA documents and agreements are stored as base64 data: URLs. Chrome has refused to navigate to a data: URL since 2017, so the factsheet manager\u2019s open link did nothing at all; and the platform\u2019s security policy refused to frame one, so the document viewer\u2019s preview came up blank. The portal\u2019s FICA \u201cView\u201d button had a third version of the same fault. Everything now goes through one opener that converts the stored file into something the browser will open, and the security policy admits those previews. It still refuses data: frames, which are a way to smuggle scripts in, and the opener now serves anything that is not a PDF, image or plain text as a download instead of rendering it.',
+          where: 'Admin \u2192 Pools \u2192 the factsheet button on any pool; Admin \u2192 Clients \u2192 open a client \u2192 Documents; Client portal \u2192 Invest \u2192 open a product \u2192 Factsheets & documents, and Profile \u2192 FICA.' },
+
         { id: 'ANN-2026-SUPPORT-NUMBER', area: 'both', icon: 'fa-phone',
           title: 'Support WhatsApp number changed',
           body: 'The support number is now 079 111 5476. Every WhatsApp link on the site, the portal and the app points at it.',

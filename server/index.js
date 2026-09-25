@@ -40,7 +40,12 @@ app.use(helmet({
       // Narrowed from '*' — external images only allowed from trusted chart/QR sources
       imgSrc:        ["'self'", 'data:', 'blob:', 'api.qrserver.com', 'chart.googleapis.com', 'img.youtube.com', 'i.ytimg.com'],
       connectSrc:    ["'self'", 'cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com', 'api.paystack.co', '*.paystack.co', 'pay.ozow.com'],
-      frameSrc:      ["'self'", 'checkout.paystack.com'],
+      /* blob: so a stored document can be previewed inline. The viewer
+         converts the base64 data: URL it holds into a blob first; framing
+         the data: URL directly was refused here and rendered blank.
+         data: is deliberately NOT admitted — a data: frame can carry
+         arbitrary HTML, and that is a cross-site-scripting vector. */
+      frameSrc:      ["'self'", 'blob:', 'checkout.paystack.com'],
       objectSrc:     ["'none'"],
     },
   },

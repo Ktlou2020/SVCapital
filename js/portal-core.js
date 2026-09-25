@@ -4107,6 +4107,14 @@ function _toggleFsList() {
 }
 
 /* Reads the input directly, so nothing has to be kept in step with it. */
+/* One opener for every stored document in the portal. Utils.documentUrl
+   turns the base64 the database holds into a blob the browser will navigate
+   to; a data: URL is refused outright by Chrome and a data: frame is refused
+   by this platform's CSP, and both fail silently. */
+function _viewStoredDoc(url) {
+  if (!Utils.openDocument(url)) Toast.error('Could not open this document');
+}
+
 function _filterFsRows() { _fsApplyVisibility(); }
 
 async function _renderProductFactsheets(type, product) {
@@ -8779,7 +8787,11 @@ async function _renderKycDocsList(preloadedDocs) {
                 d.status === 'rejected'
                   ? `<button class="btn btn--secondary btn--sm" onclick="openKycUploadModal('${d.doc_type}')"><i class="fa-solid fa-rotate-right"></i> Resubmit</button>`
                   : d.file_url
-                    ? `<a href="${_safeUrl(d.file_url)}" target="_blank" rel="noopener" class="btn btn--secondary btn--sm"><i class="fa-solid fa-download"></i> View</a>`
+                    /* _safeUrl passes http(s) and rewrites everything else to
+                       "#", which is right for a javascript: URL and wrong for
+                       the base64 data: URLs these are actually stored as: the
+                       link rendered, and clicking it did nothing. */
+                    ? `<button class="btn btn--secondary btn--sm" onclick='_viewStoredDoc(${_esc(JSON.stringify(d.file_url))})'><i class="fa-solid fa-download"></i> View</button>`
                     : d.file_data
                       ? `<button class="btn btn--secondary btn--sm" onclick="_viewKycDoc('${d.id}')"><i class="fa-solid fa-eye"></i> View</button>`
                       : '—'
