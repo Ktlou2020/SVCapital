@@ -2,6 +2,7 @@
 const router = require('express').Router();
 const pool   = require('../db/pool');
 const { requireAuth, requireRole } = require('../middleware/auth');
+const { validateStoredFile } = require('../services/uploadedFile');
 
 const MONTHS = ['January','February','March','April','May','June',
                 'July','August','September','October','November','December'];
@@ -51,6 +52,7 @@ router.get('/', requireAuth, async (req, res) => {
     const { rows } = await pool.query(q, pool_id ? [pool_id] : []);
     res.json({ data: rows.map(r => ({ ...r, period_label: periodLabel(r.period_date) })) });
   } catch (err) {
+    console.error('[factsheets] list failed:', err.message);
     res.status(500).json({ error: 'Internal server error.' });
   }
 });
@@ -77,11 +79,21 @@ router.post('/upload', requireAuth, requireRole('admin', 'director'), async (req
       return res.status(400).json({
         error: 'A factsheet name is required — this pool has no close date to derive one from.' });
     }
-    // Validate by mime_type or data-URL prefix — file_name is a display label, not a filename
-    const effectiveMime = mime_type || (typeof file_url === 'string' && file_url.startsWith('data:') ? file_url.split(';')[0].slice(5) : '');
-    if (effectiveMime && !['application/pdf', 'application/x-pdf'].includes(effectiveMime)) {
-      return res.status(400).json({ error: 'Only PDF files are allowed.' });
-    }
+    /* Validated on the BYTES, not on what the caller says they are.
+
+       This used to read `if (effectiveMime && …)`, deriving the mime from
+       req.body.mime_type or from the data: prefix. Both were the caller's
+       word: a body with no mime_type and a file_url that did not begin
+       `data:` produced an empty string, which is falsy, so the whole check
+       was skipped — and where a mime WAS present, claiming application/pdf
+       beside a text/html payload passed. A stored text/html document opened
+       from the portal runs its script as this platform, because a blob URL
+       inherits the origin that built it. */
+    const checked = validateStoredFile(file_url, {
+      allow: ['application/pdf'],
+      maxBytes: 2 * 1024 * 1024,      // the /api body limit is 2mb
+    });
+    if (!checked.ok) return res.status(400).json({ error: checked.error });
     const id = `FS-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
     // Mark all previous factsheets for this pool as not current
     await pool.query(`UPDATE product_factsheets SET is_current=false WHERE pool_id=$1`, [pool_id]);
@@ -90,7 +102,9 @@ router.post('/upload', requireAuth, requireRole('admin', 'director'), async (req
          (id,pool_id,pool_name,file_name,file_url,file_size,mime_type,version,period_date,uploaded_by,is_current,created_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,true,NOW()) RETURNING *`,
       [id, pool_id, pool_name || pr[0].name || null, file_name, file_url,
-       file_size || null, mime_type || 'application/pdf', version || null,
+       /* The sniffed type, never the submitted one — the column is what a
+          later reader trusts. A remote link has no bytes to sniff. */
+       checked.size || file_size || null, checked.mime || 'application/pdf', version || null,
        periodDate, req.user?.email || null]
     );
     res.json({ success: true, data: { ...rows[0], period_label: periodLabel(rows[0].period_date) } });
