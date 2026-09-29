@@ -4206,6 +4206,11 @@ async function autoSetup() {
           body: 'The note about the banner that keeps asking said Apple\u2019s own Smart App Banner might still appear at the top of a client\u2019s first page while ours sat at the bottom. It will not: the apple-itunes-app tag has been taken off the landing page, the sign-in and sign-up pages, the portal and the app shell, so Safari no longer draws its banner at all. Ours is the only one, on every phone. Apple\u2019s was kept because it is the affordance iPhone users know and because it could say OPEN rather than VIEW when the app was already installed \u2014 something no JavaScript can work out. Neither reason held: it cannot be shown again once a client taps its x, so it could never keep asking, and we answer the installed question from the server using the push token only the app can write, which is a better answer than the browser\u2019s and does not depend on the tag.',
           where: 'Nothing to click. On an iPhone in Safari, the client portal, sign-in and landing pages now show only the SV Capital banner at the bottom of the screen.' },
 
+        { id: 'ANN-2026-EIF-MOSAIC', area: 'both', icon: 'fa-shapes',
+          title: 'A mosaic on the Ethical & Interest-Free section',
+          body: 'Square-Kufic strapwork \u2014 interlocking bands and a square turned on its point \u2014 dissolving out of the top-left corner of the section, on the public site and on the portal\u2019s Ethical & Interest-Free tab. It sits behind the corner and fades out well before it reaches any text. It is drawn as vector rather than placed as a picture, about a kilobyte in total, and it takes its colour from the section\u2019s accent, so if that green ever changes the mosaic changes with it.',
+          where: 'Public site \u2192 the Ethical & Interest-Free section. Client portal \u2192 Invest \u2192 the Ethical & Interest-Free tab, at the top of the banner.' },
+
         { id: 'ANN-2026-SUPPORT-NUMBER', area: 'both', icon: 'fa-phone',
           title: 'Support WhatsApp number changed',
           body: 'The support number is now 079 111 5476. Every WhatsApp link on the site, the portal and the app points at it.',
