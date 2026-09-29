@@ -654,6 +654,141 @@ router.patch('/animals/:id', requireFund, async (req, res) => {
   }
 });
 
+/* ── POST /api/cattle/cycles/:id/sell-animals ───────────────
+   Sell many animals out of one batch in a single action.
+
+   Selling 113 animals one at a time is 113 dialogs and 113 writes, and the
+   operator's real unit of work is the load that left the farm, not the beast.
+
+   The money is entered ONCE, as the total the lot fetched, and divided across
+   the animals here. That is an allocation, not a measurement — the animals
+   did not each fetch the same — and it is done this way because the total is
+   the number that exists on the invoice and the per-head figure is not.
+   What must survive the division is the total: the cycle's realised value is
+   SUMMED back off these rows, so a split that loses a cent understates the
+   fund's return by that cent for ever.
+
+   So it is split in CENTS with the remainder handed out one cent at a time,
+   which sums back exactly. R400 000 over 3 animals is 13333334 + 13333333 +
+   13333333 cents, not three times R133 333.33 — that loses a cent.
+
+   A value is required, as it is for a whole cycle, and for the same reason:
+   a sale recorded at nothing books the entire purchase as a loss, quietly.
+
+   The whole thing is one transaction. A half-applied batch sale leaves the
+   cycle's counts disagreeing with its animals and nothing on screen saying
+   which half landed.
+
+   sale_batch carries a shared reference so the lot can be recognised — and
+   reversed — as one sale afterwards, the way DISC-<cycle> lets a discontinue
+   be undone without releasing animals that were genuinely sold. */
+router.post('/cycles/:id/sell-animals', requireFund, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+    const { animal_ids, sale_date, total_value, exit_mass } = req.body || {};
+
+    if (!Array.isArray(animal_ids) || animal_ids.length === 0) {
+      return res.status(400).json({ error: 'Select at least one animal to sell.' });
+    }
+    const ids = [...new Set(animal_ids.map(String))];
+
+    const total = Number(total_value);
+    if (!isFinite(total) || total < 0) {
+      return res.status(400).json({ error: 'Enter the total the lot sold for.' });
+    }
+    let exit = null;
+    if (exit_mass !== undefined && exit_mass !== null && exit_mass !== '') {
+      exit = Number(exit_mass);
+      if (!isFinite(exit) || exit <= 0) return res.status(400).json({ error: 'Exit mass must be a positive number.' });
+    }
+
+    await client.query('BEGIN');
+
+    const { rows: [cycle] } = await client.query(
+      `SELECT id, status FROM cattle_cycles WHERE id = $1 FOR UPDATE`, [id]);
+    if (!cycle) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Batch not found.' }); }
+    if (['sold', 'discontinued'].includes(cycle.status)) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: `This batch is ${cycle.status} — a closed record. Reopen it to change its animals.` });
+    }
+
+    /* Locked and filtered in the same statement: only animals that are in
+       THIS batch and still live are sold. An id from another cycle, or one
+       already sold, is not an error to argue with — it is simply not part of
+       the sale, and the count that comes back says how many were. */
+    const { rows: eligible } = await client.query(
+      `SELECT id FROM cattle_animals
+        WHERE cycle_id = $1 AND id = ANY($2::text[])
+          AND COALESCE(sold,false) = false AND COALESCE(mortality,false) = false
+        ORDER BY tag_number, id
+          FOR UPDATE`, [id, ids]);
+
+    if (!eligible.length) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'None of those animals are still live in this batch.' });
+    }
+
+    const n          = eligible.length;
+    const totalCents = Math.round(total * 100);
+    const base       = Math.floor(totalCents / n);
+    const remainder  = totalCents - base * n;
+    const saleBatch  = `SALE-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${Math.random().toString(36).slice(2,7).toUpperCase()}`;
+
+    let allocated = 0;
+    for (let i = 0; i < n; i++) {
+      const cents = base + (i < remainder ? 1 : 0);
+      allocated += cents;
+      await client.query(
+        `UPDATE cattle_animals
+            SET status = 'sold', sold = true, mortality = false, mortality_date = NULL,
+                sale_date  = COALESCE($2::date, CURRENT_DATE),
+                sale_value = $3,
+                sale_batch = $4,
+                exit_mass  = COALESCE($5, exit_mass),
+                updated_at = NOW()
+          WHERE id = $1`,
+        [eligible[i].id, sale_date || null, cents / 100, saleBatch, exit]);
+    }
+    /* The arithmetic is asserted, not assumed. If this ever fails the batch is
+       rolled back rather than written with a total that is not the total. */
+    if (allocated !== totalCents) {
+      await client.query('ROLLBACK');
+      return res.status(500).json({ error: 'Sale value did not divide exactly; nothing was changed.' });
+    }
+
+    const { rows: [c] } = await client.query(
+      `UPDATE cattle_cycles c
+          SET no_live     = s.live,
+              mortalities = s.dead,
+              no_sold     = s.sold,
+              updated_at  = NOW()
+         FROM (SELECT
+                 COUNT(*) FILTER (WHERE COALESCE(sold,false) = false
+                                    AND COALESCE(mortality,false) = false)::int AS live,
+                 COUNT(*) FILTER (WHERE COALESCE(mortality,false) = true)::int  AS dead,
+                 COUNT(*) FILTER (WHERE COALESCE(sold,false) = true)::int       AS sold
+                 FROM cattle_animals WHERE cycle_id = $1) s
+        WHERE c.id = $1 AND c.status NOT IN ('sold','discontinued')
+      RETURNING c.id, c.no_live, c.mortalities, c.no_sold`, [id]);
+
+    const { rows: animals } = await client.query(
+      `SELECT id, cycle_id, tag_number, status, sold, mortality, sale_date,
+              mortality_date, sale_value, exit_mass
+         FROM cattle_animals WHERE sale_batch = $1`, [saleBatch]);
+
+    await client.query('COMMIT');
+    res.json({ success: true, sold: n, requested: ids.length, sale_batch: saleBatch,
+               total_value: totalCents / 100, animals, cycle: c || null });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[cattle/sell-animals]', err.message);
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
 /* ── POST /api/cattle/cycles/bulk-status ────────────────────
    Mark many cycles sold, discontinue them, or reopen a discontinued one.
 

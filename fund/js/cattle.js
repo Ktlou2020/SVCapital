@@ -2253,6 +2253,13 @@ function renderCycleAnimals() {
   const shownFrom = st.offset + 1, shownTo = st.offset + st.rows.length;
   const soldValue = st.rows.reduce((n, a) => n + (parseFloat(a.sale_value) || 0), 0);
 
+  /* Which of the rows on this page can still be sold, and which of those are
+     ticked. The selection is dropped whenever a different page or batch is
+     loaded — carrying it across would offer to sell animals nobody can see. */
+  if (!(st.selected instanceof Set)) st.selected = new Set();
+  const liveOnPage = st.rows.filter(a => !isTrue(a.sold) && !isTrue(a.mortality)).length;
+  const sel = st.selected;
+
   el.innerHTML = `
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
       <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px">Animals in this batch</div>
@@ -2261,9 +2268,23 @@ function renderCycleAnimals() {
     </div>
     ${closed ? `<div style="background:var(--surface-2);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--text-muted);margin-bottom:10px">
       This batch is ${escapeHtml(cycle.status)} &mdash; a closed record. Reopen it to change individual animals.</div>` : ''}
+    ${!closed && liveOnPage ? `
+      <div id="animSelectBar" style="display:${sel.size ? 'flex' : 'none'};align-items:center;gap:12px;flex-wrap:wrap;
+                  background:var(--surface-2);border:1px solid var(--border);border-radius:8px;
+                  padding:10px 14px;margin-bottom:10px">
+        <strong style="font-size:13px"><span id="animSelCount">${sel.size}</span> selected</strong>
+        <button class="btn btn-xs btn-primary" onclick="openBatchSale()">
+          <i class="fa-solid fa-tag"></i> Mark sold&hellip;
+        </button>
+        <button class="btn btn-xs btn-secondary" onclick="clearAnimalSelection()">Clear</button>
+        ${st.total > st.rows.length ? `<span style="font-size:12px;color:var(--text-muted);margin-left:auto">
+          Applies to the ${fmt.num(st.rows.length)} shown &mdash; this batch has ${fmt.num(st.total)} on file.</span>` : ''}
+      </div>` : ''}
     <div style="overflow-x:auto">
       <table class="data-table" style="min-width:640px">
         <thead><tr>
+          ${closed ? '' : `<th style="width:34px"><input type="checkbox" id="animSelectAll" onchange="toggleAllAnimals(this.checked)"
+                                  title="Select every live animal on this page"></th>`}
           <th>Tag</th><th>Breed</th><th class="num">Entry kg</th><th class="num">Exit kg</th>
           <th>Status</th><th class="num">Sale value</th><th style="width:150px"></th>
         </tr></thead>
@@ -2275,6 +2296,10 @@ function renderCycleAnimals() {
                        : '<span style="color:var(--text-muted)">Live</span>';
             return `
             <tr>
+              ${closed ? '' : `<td>${status === 'active'
+                ? `<input type="checkbox" class="anim-pick" value="${escapeHtml(a.id)}"
+                          ${sel.has(a.id) ? 'checked' : ''} onchange="toggleAnimal('${escapeHtml(a.id)}', this.checked)">`
+                : ''}</td>`}
               <td style="font-weight:600">${escapeHtml(a.tag_number || a.id)}</td>
               <td style="color:var(--text-muted)">${escapeHtml(a.breed || '—')}</td>
               <td class="num">${a.entry_mass ? fmt.num(a.entry_mass) : '—'}</td>
@@ -2303,6 +2328,158 @@ function renderCycleAnimals() {
                 onclick="loadCycleAnimals('${escapeHtml(st.cycleId)}', ${st.offset + 200})">Next</button>
       </div>` : ''}
   `;
+}
+
+/* ── SELLING A WHOLE LOT ───────────────────────────────────────────────
+   Selling 113 animals one at a time is 113 dialogs. The operator's unit of
+   work is the load that left the farm, so the list lets them tick the lot and
+   price it once.
+
+   The selection lives on S.cycleAnimals and is thrown away whenever a
+   different page or batch is loaded — see renderCycleAnimals — because a
+   selection that outlives the rows it was made on offers to sell animals
+   nobody can see. */
+function _animSel() {
+  const st = S.cycleAnimals;
+  if (!st) return null;
+  if (!(st.selected instanceof Set)) st.selected = new Set();
+  return st;
+}
+
+/* The bar is shown and counted without redrawing the table. Re-rendering on
+   every tick would rebuild 113 rows and lose the operator's scroll position,
+   which is the same fault the single-animal path already avoids. */
+function _syncAnimBar() {
+  const st = _animSel(); if (!st) return;
+  const bar = document.getElementById('animSelectBar');
+  const num = document.getElementById('animSelCount');
+  if (num) num.textContent = st.selected.size;
+  if (bar) bar.style.display = st.selected.size ? 'flex' : 'none';
+  const all = document.getElementById('animSelectAll');
+  if (all) {
+    const live = st.rows.filter(a => !isTrue(a.sold) && !isTrue(a.mortality));
+    all.checked       = live.length > 0 && st.selected.size === live.length;
+    all.indeterminate = st.selected.size > 0 && st.selected.size < live.length;
+  }
+}
+
+function toggleAnimal(id, on) {
+  const st = _animSel(); if (!st) return;
+  if (on) st.selected.add(id); else st.selected.delete(id);
+  _syncAnimBar();
+}
+
+function toggleAllAnimals(on) {
+  const st = _animSel(); if (!st) return;
+  st.selected.clear();
+  if (on) {
+    st.rows.filter(a => !isTrue(a.sold) && !isTrue(a.mortality))
+           .forEach(a => st.selected.add(a.id));
+  }
+  document.querySelectorAll('.anim-pick').forEach(cb => { cb.checked = st.selected.has(cb.value); });
+  _syncAnimBar();
+}
+
+function clearAnimalSelection() { toggleAllAnimals(false); }
+
+/* One price for the lot, not one per animal. The total is the figure that
+   exists on the invoice; the per-head number is arithmetic, and it is shown
+   live so nobody has to trust it unseen. */
+function openBatchSale() {
+  const st = _animSel(); if (!st || !st.selected.size) return;
+  const n = st.selected.size;
+  const tags = st.rows.filter(a => st.selected.has(a.id)).map(a => a.tag_number || a.id);
+  const preview = tags.slice(0, 6).join(', ') + (tags.length > 6 ? ` and ${tags.length - 6} more` : '');
+
+  const body = `
+    <div style="font-size:13px;color:var(--text-muted);margin-bottom:14px">
+      <strong style="color:var(--text)">${fmt.num(n)} animal${n === 1 ? '' : 's'}</strong> from this batch.<br>
+      <span style="font-size:12px">${escapeHtml(preview)}</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px">
+      <div class="form-group">
+        <label>Total the lot sold for (R)</label>
+        <input type="number" step="0.01" min="0" id="batchSaleTotal" placeholder="e.g. 1 250 000.00"
+               oninput="_batchSalePreview()">
+      </div>
+      <div class="form-group">
+        <label>Sale date &mdash; defaults to today</label>
+        <input type="date" id="batchSaleDate">
+      </div>
+      <div class="form-group">
+        <label>Exit mass each (kg) &mdash; optional</label>
+        <input type="number" step="0.1" min="0" id="batchExitMass" placeholder="leave blank to keep what is on file">
+      </div>
+    </div>
+    <div id="batchSaleSplit" style="font-size:12px;color:var(--text-muted);margin:12px 0 0"></div>
+    <p style="font-size:12px;color:var(--text-muted);margin:10px 0 0">
+      The total is divided across the ${fmt.num(n)} animals to the cent, so the batch's
+      realised value is exactly what you enter here. It is an allocation, not a
+      measurement &mdash; the animals did not each fetch the same.
+    </p>`;
+
+  _openModal(`Mark ${fmt.num(n)} animals sold`, body,
+    `<button class="btn btn-secondary" onclick="_closeModal()">Cancel</button>
+     <button class="btn btn-primary" onclick="confirmBatchSale(this)">Mark ${fmt.num(n)} sold</button>`);
+  setTimeout(() => { const f = document.getElementById('batchSaleTotal'); if (f) f.focus(); }, 30);
+}
+
+/* Shows the division the server is about to do, including the odd cents, so
+   the number on screen is the number that gets written. */
+function _batchSalePreview() {
+  const st = _animSel(); if (!st) return;
+  const out = document.getElementById('batchSaleSplit'); if (!out) return;
+  const n = st.selected.size;
+  const total = parseFloat(document.getElementById('batchSaleTotal').value);
+  if (!isFinite(total) || total < 0 || !n) { out.textContent = ''; return; }
+  const cents = Math.round(total * 100);
+  const base  = Math.floor(cents / n);
+  const rem   = cents - base * n;
+  out.innerHTML = rem === 0
+    ? `That is <strong>${fmt.zar(base / 100)}</strong> each.`
+    : `That is <strong>${fmt.zar((base + 1) / 100)}</strong> for ${fmt.num(rem)} of them and
+       <strong>${fmt.zar(base / 100)}</strong> for the other ${fmt.num(n - rem)}, which adds back to
+       exactly ${fmt.zar(cents / 100)}.`;
+}
+
+async function confirmBatchSale(btn) {
+  const st = _animSel(); if (!st || !st.selected.size) return;
+  const total = document.getElementById('batchSaleTotal').value;
+  const date  = document.getElementById('batchSaleDate').value;
+  const mass  = document.getElementById('batchExitMass').value;
+
+  if (total === '' || !isFinite(parseFloat(total)) || parseFloat(total) < 0) {
+    CToast.show('Enter the total the lot sold for', 'error');
+    return;
+  }
+  const ids = [...st.selected];
+  btn.disabled = true;
+  _closeModal();
+  try {
+    const r = await apiPost(`cattle/cycles/${encodeURIComponent(st.cycleId)}/sell-animals`, {
+      animal_ids: ids, total_value: total, sale_date: date || null, exit_mass: mass || null,
+    });
+    /* Patched in place, like the single-animal path, so the operator keeps
+       their position in the list. */
+    (r.animals || []).forEach(a => {
+      const i = st.rows.findIndex(x => x.id === a.id);
+      if (i > -1) st.rows[i] = { ...st.rows[i], ...a };
+    });
+    st.selected.clear();
+    if (r.cycle) {
+      const c = S.cycles.find(x => x.id === r.cycle.id);
+      if (c) Object.assign(c, r.cycle);
+    }
+    try { S.herd = await apiGet('cattle/herd-summary'); } catch (_) { /* figures stay as they were */ }
+    openCycleDetail(st.cycleId, true);
+    /* Says how many actually moved, not how many were asked for — they differ
+       if something was sold from another screen while this one was open. */
+    CToast.show(r.sold === ids.length
+      ? `${fmt.num(r.sold)} animals marked sold for ${fmt.zar(r.total_value)}`
+      : `${fmt.num(r.sold)} of ${fmt.num(ids.length)} marked sold — the rest were no longer live`);
+  } catch (e) {
+    CToast.show(e.message || 'Could not complete that sale', 'error');
+  }
 }
 
 /* Marking one animal sold asks for what it fetched. Deceased and Undo do not:
