@@ -395,6 +395,40 @@ const meta = (html, prop) => {
          'otherwise the public date jumps each time somebody fixes a typo');
     }
 
+    console.log('\nthe page is set in Poppins, and in nothing else');
+    {
+      /* It used to load two faces, neither of them the platform's: Manrope
+         for the interface and Source Serif 4 for the headlines and the
+         article body. Insights therefore read as a different product from
+         every other page a client sees, which is what was reported. */
+      const src = fs.readFileSync(path.join(ROOT, 'server', 'routes', 'insights.js'), 'utf8');
+
+      const links = src.match(/fonts\.googleapis\.com\/css2\?family=[^"']*/g) || [];
+      ok('exactly one font stylesheet is loaded', links.length === 1, JSON.stringify(links));
+      ok('and it is Poppins',
+         links.length === 1 && /css2\?family=Poppins:/.test(links[0]), String(links[0]));
+      ok('nothing else is fetched alongside it',
+         links.length === 1 && !/&family=/.test(links[0]),
+         'a second family in the same request is a second face on the page');
+
+      const decls = [...src.matchAll(/font-family\s*:\s*([^;}]+)/g)].map(m => m[1].trim());
+      ok('at least one face is declared', decls.length > 0);
+      for (const d of decls) {
+        ok(`declares Poppins first: ${d.slice(0, 44)}`, /^'Poppins'/.test(d), d);
+      }
+      /* Comments may name the faces that were removed; declarations may not. */
+      const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/sans-serif/g, '');
+      ok('no serif face survives in the page itself',
+         !/Source Serif|Manrope|Georgia|DM Serif|\bserif\b/.test(code));
+
+      /* Swapping a serif text face for a geometric sans and changing nothing
+         else leaves a denser, tighter page: Poppins has a far larger x-height. */
+      const article = (src.match(/article p\{[^}]*\}/) || [''])[0];
+      ok('the reading column was re-set for the new face',
+         /line-height:1\.7/.test(article), article);
+      ok('and kept to a readable measure', /max-width:6[0-9]ch/.test(article), article);
+    }
+
     await db.query(`DELETE FROM insights WHERE id LIKE 'INS-CHK-%'`);
 
   } catch (err) {

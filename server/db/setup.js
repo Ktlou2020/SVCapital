@@ -3920,6 +3920,11 @@ async function autoSetup() {
           body: 'Square-Kufic strapwork \u2014 interlocking bands and a square turned on its point \u2014 dissolving out of the top-left corner of the section, on the public site and on the portal\u2019s Ethical & Interest-Free tab. It sits behind the corner and fades out well before it reaches any text. It is drawn as vector rather than placed as a picture, about a kilobyte in total, and it takes its colour from the section\u2019s accent, so if that green ever changes the mosaic changes with it.',
           where: 'Public site \u2192 the Ethical & Interest-Free section. Client portal \u2192 Invest \u2192 the Ethical & Interest-Free tab, at the top of the banner.' },
 
+        { id: 'ANN-2026-INSIGHTS-POPPINS', area: 'both', icon: 'fa-font',
+          title: 'Insights is set in Poppins, like everything else',
+          body: 'The Insights list and the article pages were loading two typefaces, and neither was the platform\u2019s \u2014 Manrope for the interface and Source Serif 4 for the headlines and the article body \u2014 so Insights read as a different product from every other page a client sees. Both are gone. The pages are Poppins throughout, with the headline tracking and the article leading re-set for it: a geometric sans has a much larger x-height than a serif, so the same size reads bigger and tighter and needs more space between the lines.',
+          where: 'The public Insights page and any article opened from it, including a shared link. Articles are written under Insights in this console.' },
+
         { id: 'ANN-2026-SUPPORT-NUMBER', area: 'both', icon: 'fa-phone',
           title: 'Support WhatsApp number changed',
           body: 'The support number is now 079 111 5476. Every WhatsApp link on the site, the portal and the app points at it.',
