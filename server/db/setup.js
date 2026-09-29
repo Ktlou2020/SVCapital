@@ -3925,6 +3925,11 @@ async function autoSetup() {
           body: 'The Insights list and the article pages were loading two typefaces, and neither was the platform\u2019s \u2014 Manrope for the interface and Source Serif 4 for the headlines and the article body \u2014 so Insights read as a different product from every other page a client sees. Both are gone. The pages are Poppins throughout, with the headline tracking and the article leading re-set for it: a geometric sans has a much larger x-height than a serif, so the same size reads bigger and tighter and needs more space between the lines.',
           where: 'The public Insights page and any article opened from it, including a shared link. Articles are written under Insights in this console.' },
 
+        { id: 'ANN-2026-CATTLE-BATCH-SALE', area: 'admin', icon: 'fa-cow',
+          title: 'Sell a load of cattle in one action instead of one animal at a time',
+          body: 'Closing out a batch meant opening each animal and marking it sold \u2014 113 animals, 113 dialogs. The animal list now has a tick box on every live row and a select-all in the header, and once anything is ticked a bar appears with \u201cMark sold\u2026\u201d. That asks for the sale date and the total the load fetched, once, and divides the total across the animals ticked. The division is done in cents with the remainder handed out a cent at a time, so the figures add back to exactly what was typed \u2014 R1 000 000 over 113 head is 85 at R8 849,56 and 28 at R8 849,55, not 113 roundings that miss by 28 cents. The dialog shows that split before it is confirmed. The whole sale is one transaction and the animals share one SALE-<date>-<ref> reference, so the load can be recognised afterwards as the one sale it was. Animals already sold, or belonging to another batch, are left alone and the result says how many actually moved.',
+          where: 'Fund Ops \u2192 Cattle \u2192 Cycles \u2192 open a batch \u2192 the Animals list. Tick the rows, or the header box for all of them, then Mark sold\u2026' },
+
         { id: 'ANN-2026-SUPPORT-NUMBER', area: 'both', icon: 'fa-phone',
           title: 'Support WhatsApp number changed',
           body: 'The support number is now 079 111 5476. Every WhatsApp link on the site, the portal and the app points at it.',
