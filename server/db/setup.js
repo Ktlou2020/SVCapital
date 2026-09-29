@@ -3915,6 +3915,11 @@ async function autoSetup() {
           body: 'They were doing nothing, or opening blank, depending on the screen \u2014 and both failures were silent. Factsheets, FICA documents and agreements are stored as base64 data: URLs. Chrome has refused to navigate to a data: URL since 2017, so the factsheet manager\u2019s open link did nothing at all; and the platform\u2019s security policy refused to frame one, so the document viewer\u2019s preview came up blank. The portal\u2019s FICA \u201cView\u201d button had a third version of the same fault. Everything now goes through one opener that converts the stored file into something the browser will open, and the security policy admits those previews. It still refuses data: frames, which are a way to smuggle scripts in, and the opener now serves anything that is not a PDF, image or plain text as a download instead of rendering it.',
           where: 'Admin \u2192 Pools \u2192 the factsheet button on any pool; Admin \u2192 Clients \u2192 open a client \u2192 Documents; Client portal \u2192 Invest \u2192 open a product \u2192 Factsheets & documents, and Profile \u2192 FICA.' },
 
+        { id: 'ANN-2026-EIF-MOSAIC', area: 'both', icon: 'fa-shapes',
+          title: 'A mosaic on the Ethical & Interest-Free section',
+          body: 'Square-Kufic strapwork \u2014 interlocking bands and a square turned on its point \u2014 dissolving out of the top-left corner of the section, on the public site and on the portal\u2019s Ethical & Interest-Free tab. It sits behind the corner and fades out well before it reaches any text. It is drawn as vector rather than placed as a picture, about a kilobyte in total, and it takes its colour from the section\u2019s accent, so if that green ever changes the mosaic changes with it.',
+          where: 'Public site \u2192 the Ethical & Interest-Free section. Client portal \u2192 Invest \u2192 the Ethical & Interest-Free tab, at the top of the banner.' },
+
         { id: 'ANN-2026-SUPPORT-NUMBER', area: 'both', icon: 'fa-phone',
           title: 'Support WhatsApp number changed',
           body: 'The support number is now 079 111 5476. Every WhatsApp link on the site, the portal and the app points at it.',
