@@ -4043,6 +4043,11 @@ async function autoSetup() {
           body: 'The solar article opened \u201cPower purchase agreements are what make solar returns predictable.\u201d A PPA fixes the price, not the return \u2014 it leaves the offtaker\u2019s ability to pay entirely open, which is what the rest of that article spends four paragraphs explaining and what its own closing line says outright. It now reads \u201c\u2026what make solar cashflows more predictable.\u201d That line is also the page\u2019s meta description, so it was the sentence a search result and a shared link led with. The logistics article said the delivery-bike structure \u201cqualifies as an Ijara\u201d, which asserts a ruling; the platform holds no Sharia certificate and says so in its own FAQ, so it now reads \u201cis offered as an Ijara within the platform\u2019s interest-free range\u201d. A paragraph was added to that article saying what has to happen for the rent to reach an investor: the income comes from the productive use of the asset, so if the fleet is deployed investors share the rental income, and if it is not the income can be affected.',
           where: 'The public Insights page and both articles \u2014 \u201cA PPA is a contract, not a guarantee\u201d and \u201cRent is not interest, and the difference is the risk\u201d. Article text is edited under Insights in this console; the wording is applied to the stored articles and will not overwrite an edit made there.' },
 
+        { id: 'ANN-2026-EIF-STAFF-COURSES', area: 'admin', icon: 'fa-graduation-cap',
+          title: 'Three required courses on Murabaha, Ijara and Mudarabah',
+          body: 'The Ethical & Interest-Free range is the one place on the platform where a confident, helpful, wrong sentence from a staff member is a compliance problem rather than a service one \u2014 \u201cit\u2019s Sharia certified\u201d (it is not, and the platform\u2019s own FAQ says so), or \u201cyou\u2019ll get 14,5%\u201d on a Mudarabah (a projection off a venture\u2019s own numbers, never a promise). Each structure now has its own course: four modules, the real product figures, the acknowledgements the client ticks, the objections you will actually get, and what you may and may not say. Murabaha is 220 XP, Ijara 230 XP and Mudarabah 250 XP, and all three are marked Required. Each ends with a quiz \u2014 37 questions across the three, pass mark 70% \u2014 that puts the certification claim in front of you as a wrong answer, because that is the sentence most likely to be quoted back at us.',
+          where: 'Team portal \u2192 My Learning \u2192 Required Training. Course text and quiz questions are editable under the training section of this console without a deploy.' },
+
         { id: 'ANN-2026-SUPPORT-NUMBER', area: 'both', icon: 'fa-phone',
           title: 'Support WhatsApp number changed',
           body: 'The support number is now 079 111 5476. Every WhatsApp link on the site, the portal and the app points at it.',
@@ -4128,6 +4133,13 @@ autoSetup.lastResult = () => _lastResult;
 /* ─────────────────────────────────────────────────────────────
    Standard SV Capital course library — seeded once, idempotent
 ───────────────────────────────────────────────────────────── */
+/* The three Ethical & Interest-Free structures are taught in their own file.
+   They are long — the offering is the one place where a confident, wrong
+   sentence from a staff member is a compliance problem rather than a service
+   one — and inlining them here would add several hundred lines to a file that
+   is already the longest in the repository. */
+const { EIF_COURSES } = require('./courses-eif');
+
 const STANDARD_COURSES = [
   {
     id: 'CRS-OB-001',
@@ -4566,6 +4578,7 @@ const STANDARD_COURSES = [
       },
     ],
   },
+  ...EIF_COURSES,
 ];
 
 async function seedStandardCourses(pool) {
