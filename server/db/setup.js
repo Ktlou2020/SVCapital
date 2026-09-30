@@ -3723,7 +3723,7 @@ async function autoSetup() {
           id: 'INS-SOLAR-PPA', slug: 'a-ppa-is-a-contract-not-a-guarantee',
           industry: 'Energy', hero: '#22c55e', mins: 6,
           title: 'A PPA is a contract, not a guarantee',
-          excerpt: 'Power purchase agreements are what make solar returns predictable. Understanding what they do not cover is what makes them investable.',
+          excerpt: 'Power purchase agreements are what make solar cashflows more predictable. Understanding what they do not cover is what makes them investable.',
           body: [
             'Every commercial solar project this platform funds is backed by a signed Power Purchase Agreement before a single panel is bought. A business — a factory, a farm, a municipality — commits to buying the electricity the installation produces, at a fixed price, for the length of the term.',
             'That is what turns sunlight into a cashflow you can model. Without a PPA you are speculating on an electricity price and an offtaker at the same time. With one, the price is settled and only the offtaker is open.',
@@ -3741,7 +3741,8 @@ async function autoSetup() {
             'When a pool funds a fleet of delivery motorcycles, it buys the bikes and keeps title to them. Riders working Mr D, Takealot and Uber Eats lease them — people who need a machine to earn and would otherwise be renting one on worse terms.',
             'What reaches the investor is a share of that rent. It is not interest on a loan, and the difference is not a technicality.',
             'A lender is owed money whatever happens to the thing the money bought. An owner is owed rent only while the asset can be used. Because the pool owns the bikes, it carries the costs of ownership — insurance and major maintenance sit with the pool rather than the rider — and it carries the consequence when bikes come off the road. Bikes not being ridden are bikes not paying.',
-            'That is the honest shape of the product, and it is also why the structure qualifies as an Ijara under the platform\u2019s interest-free range: the income is rent on a real asset whose risks the owner keeps, which is what makes it rent rather than a charge for the use of money.',
+            'For an investor, the important question is not simply where the return comes from, but what has to happen for that return to be earned. In an Ijara structure, the income comes from the productive use of an asset. If the asset is generating rent, investors participate in that rental income; if the asset is not deployed, the income can be affected.',
+            'That is the honest shape of the product, and it is also why the structure is offered as an Ijara within the platform\u2019s interest-free range: the income is rent on a real asset whose risks the owner keeps, which is what makes it rent rather than a charge for the use of money.',
             'Rental income depends on the fleet being deployed and is not guaranteed.',
           ].join('\n\n'),
         },
@@ -3827,6 +3828,74 @@ async function autoSetup() {
           WHERE category = 'eif'
             AND POSITION('That is the honest answer' IN COALESCE(answer, '')) > 0`);
       if (rowCount) console.log(`\u2705 Reworded ${rowCount} EIF FAQ answer(s).`);
+    });
+
+    await step("24. Correct two claims in the opening insight articles", async () => {
+      /* Both are compliance wording, not style.
+
+         The solar lede said a PPA makes "solar returns predictable". It does
+         not: it fixes the PRICE, which makes the contracted cashflow more
+         predictable, and leaves the offtaker's ability to pay entirely open —
+         which is what the rest of that article spends four paragraphs saying,
+         and what its own closing line ("Target returns are not guaranteed")
+         says outright. The lede is also the page's meta description, so it was
+         the sentence a search result and a shared link led with.
+
+         The logistics article said the structure "qualifies as an Ijara". That
+         asserts a ruling. The platform holds no Sharia certificate and says so
+         in its own FAQ, so the claim it can make is that the structure is
+         OFFERED as an Ijara within the interest-free range. And a reader was
+         told where the rent comes from without being told what has to happen
+         for it to reach them, which is the question an investor is actually
+         asking; that paragraph is added.
+
+         Step 17 seeds these articles only when the whole insights table is
+         empty, so editing ART above reaches a brand-new database and nowhere
+         else. Every update below is matched on the exact old text, so an
+         article someone has since edited in the console keeps their wording
+         and a second run finds nothing to do. */
+      let fixed = 0;
+
+      const { rowCount: lede } = await pool.query(`
+        UPDATE insights
+           SET excerpt = replace(excerpt,
+                 'what make solar returns predictable',
+                 'what make solar cashflows more predictable'),
+               updated_at = NOW()
+         WHERE id = 'INS-SOLAR-PPA'
+           AND POSITION('what make solar returns predictable' IN COALESCE(excerpt, '')) > 0`);
+      fixed += lede;
+
+      const { rowCount: ijara } = await pool.query(`
+        UPDATE insights
+           SET body = replace(body,
+                 'why the structure qualifies as an Ijara under the platform',
+                 'why the structure is offered as an Ijara within the platform'),
+               updated_at = NOW()
+         WHERE id = 'INS-BIKES-RENT'
+           AND POSITION('qualifies as an Ijara under the platform' IN COALESCE(body, '')) > 0`);
+      fixed += ijara;
+
+      /* Placed after the paragraph that ends "bikes not paying", which is
+         where the reader has just been told the asset carries the risk and
+         has not yet been told what that means for their own income. */
+      const { rowCount: added } = await pool.query(`
+        UPDATE insights
+           SET body = replace(body,
+                 'are bikes not paying.' || E'\n\n',
+                 'are bikes not paying.' || E'\n\n' ||
+                 'For an investor, the important question is not simply where the return comes ' ||
+                 'from, but what has to happen for that return to be earned. In an Ijara ' ||
+                 'structure, the income comes from the productive use of an asset. If the asset ' ||
+                 'is generating rent, investors participate in that rental income; if the asset ' ||
+                 'is not deployed, the income can be affected.' || E'\n\n'),
+               updated_at = NOW()
+         WHERE id = 'INS-BIKES-RENT'
+           AND POSITION('are bikes not paying.' IN COALESCE(body, '')) > 0
+           AND POSITION('what has to happen for that return to be earned' IN COALESCE(body, '')) = 0`);
+      fixed += added;
+
+      if (fixed) console.log(`\u2705 Corrected ${fixed} claim(s) in the insight articles.`);
     });
 
     await step("21. Settle Ethical & Interest-Free holdings on payout", async () => {
@@ -3968,6 +4037,11 @@ async function autoSetup() {
           title: 'Investment agreements name the provider and the fund manager correctly',
           body: 'Every agreement described the provider as \u201cSmartVest Financial Services (Pty) Ltd t/a SV Capital\u201d. That is not the relationship: SV Capital is its own company managing the fund under SmartVest\u2019s licence, not a trading name SmartVest operates under. The parties table now names SmartVest Financial Services (Pty) Ltd as the provider carrying FSP 52449, with a new <b>Fund manager: SV Capital</b> row beside it; the general terms, the risk clause and the page footer say the same. This applies to all four templates \u2014 the standard agreement and the three Ethical & Interest-Free ones. Template versions moved with the wording (standard to v3, the EIF three to v4), so an agreement already signed still renders in the exact words it was signed under.',
           where: 'Client portal \u2192 the agreement shown before an investment is funded, and every agreement under Clients \u2192 open a client \u2192 Documents. The agreement step only appears where INVESTMENT_AGREEMENTS_ENABLED is on.' },
+
+        { id: 'ANN-2026-INSIGHTS-CLAIMS', area: 'both', icon: 'fa-file-pen',
+          title: 'Two claims corrected in the Insights articles',
+          body: 'The solar article opened \u201cPower purchase agreements are what make solar returns predictable.\u201d A PPA fixes the price, not the return \u2014 it leaves the offtaker\u2019s ability to pay entirely open, which is what the rest of that article spends four paragraphs explaining and what its own closing line says outright. It now reads \u201c\u2026what make solar cashflows more predictable.\u201d That line is also the page\u2019s meta description, so it was the sentence a search result and a shared link led with. The logistics article said the delivery-bike structure \u201cqualifies as an Ijara\u201d, which asserts a ruling; the platform holds no Sharia certificate and says so in its own FAQ, so it now reads \u201cis offered as an Ijara within the platform\u2019s interest-free range\u201d. A paragraph was added to that article saying what has to happen for the rent to reach an investor: the income comes from the productive use of the asset, so if the fleet is deployed investors share the rental income, and if it is not the income can be affected.',
+          where: 'The public Insights page and both articles \u2014 \u201cA PPA is a contract, not a guarantee\u201d and \u201cRent is not interest, and the difference is the risk\u201d. Article text is edited under Insights in this console; the wording is applied to the stored articles and will not overwrite an edit made there.' },
 
         { id: 'ANN-2026-SUPPORT-NUMBER', area: 'both', icon: 'fa-phone',
           title: 'Support WhatsApp number changed',
