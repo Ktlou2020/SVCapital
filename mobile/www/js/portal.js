@@ -1832,7 +1832,9 @@ async function confirmInvestment(pool) {
       }
     }
 
-    Toast.success(`Successfully invested ${Utils.rand(amount)} in ${pool.name}!`);
+    /* Amount invested, fee, wallet spend — all three, so the fee is never
+       mistaken for capital in either direction. */
+    Toast.success(`Invested ${Utils.rand(amount)} in ${pool.name}. The 1% platform fee of ${Utils.rand(platformFee)} was charged on top, so ${Utils.rand(totalDeducted)} left your wallet.`);
     Modal.close('investModal');
 
     SVC.track('purchase', { transaction_id: investmentId, value: amount, currency: 'ZAR', items: [{ item_id: pool.id, item_name: pool.name, item_category: pool.product_type, price: amount, quantity: 1 }] });
@@ -3258,37 +3260,48 @@ const TOUR_STEPS = [
     target: '[data-view="wallet"]',
     position: 'right',
     icon: 'fa-wallet',
-    title: 'Fund Your Wallet',
-    body: 'Top up your wallet via EFT bank transfer or card. Your wallet balance is what you use to invest in pools.',
+    title: 'Wallet',
+    body: 'Top up by card or by EFT, then invest from your wallet balance. If you pay by EFT the account is in the name <strong>Smartvest Financial Services</strong> &mdash; that is the licensed FSP (FSP 52449) that holds client funds, so it is the name you will see on your bank statement rather than SV Capital. Always use your <strong>Investor ID</strong> as the payment reference.',
   },
   {
     id: 'nav_marketplace',
     target: '[data-view="marketplace"]',
     position: 'right',
-    icon: 'fa-store',
-    title: 'Browse Investment Pools',
-    body: 'Explore open pools across solar, cattle, and loans. Each shows its rate, term, and how much is still available.',
+    icon: 'fa-box-open',
+    title: 'Invest',
+    body: 'Browse the open products &mdash; cattle, solar, short-term lending and the Ethical &amp; Interest-Free range. Each one shows its target return, its term and its minimum. The amount you enter is what reaches the pool; the <strong>1% platform fee is charged on top of it</strong>, so your wallet pays the amount plus the fee.',
+  },
+  {
+    id: 'nav_investments',
+    target: '[data-view="investments"]',
+    position: 'right',
+    icon: 'fa-chart-line',
+    title: 'My Investments',
+    body: 'Every investment you hold, with what you put in, what it is projected to return and how long is left to run. Open one to see its agreement and its maturity instruction.',
   },
   {
     id: 'nav_maturity',
     target: '[data-view="maturity"]',
     position: 'right',
+    reveal: 'navMore',
     icon: 'fa-hourglass-end',
-    title: 'Maturity Instructions',
-    body: 'Tell us what to do when your investment matures — reinvest automatically, add to wallet, or transfer to your bank account.',
+    title: 'When Investment Ends',
+    body: 'Under <strong>More</strong> in the menu. Tell us what should happen at maturity &mdash; take the whole thing, take only the returns, roll it over into the same product, or switch it into a different one. Whatever is paid out lands in your wallet, and you withdraw to your bank from there.',
   },
   {
     id: 'nav_quests',
     target: '[data-view="quests"]',
     position: 'right',
+    reveal: 'navMore',
     icon: 'fa-trophy',
     title: 'Earn Rewards',
-    body: 'Complete quests and surveys to earn XP and climb through 8 levels — from Seed to Luminary. Unlock badges and show off your progress.',
+    body: 'Complete quests and surveys to earn XP and climb through 8 levels &mdash; from Seed to Luminary. Unlock badges and show off your progress.',
   },
   {
     id: 'nav_learn',
     target: '[data-view="learn"]',
     position: 'right',
+    reveal: 'navMore',
     icon: 'fa-graduation-cap',
     title: 'Learning Hub',
     body: 'Educational modules tailored to your investment level. Complete them to earn XP and become a more confident investor.',
@@ -3297,7 +3310,7 @@ const TOUR_STEPS = [
     id: 'complete',
     type: 'center',
     icon: 'fa-trophy',
-    title: 'You\'re all set! 🎉',
+    title: 'You\'re all set! \ud83c\udf89',
     body: 'You now know your way around. Head to <strong>Earn Rewards</strong> to complete your first quest and start climbing the XP ladder.',
     isLast: true,
   },

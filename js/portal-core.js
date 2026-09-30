@@ -6529,6 +6529,8 @@ function startTour() {
   const pc = document.querySelector('.page-content');
   if (pc) pc.scrollTop = 0;
   document.getElementById('tourOverlay').style.display = 'block';
+  window.addEventListener('scroll', _tourTrack, true);
+  window.addEventListener('resize', _tourTrack);
   const pulse = document.querySelector('.tour-btn-pulse');
   if (pulse) pulse.style.display = 'none';
   _renderTourStep(_tourStep);
@@ -6556,7 +6558,12 @@ function prevTourStep() {
 
 function _endTour(completed) {
   _tourActive = false;
+  window.removeEventListener('scroll', _tourTrack, true);
+  window.removeEventListener('resize', _tourTrack);
   document.getElementById('tourOverlay').style.display = 'none';
+  /* The tour opens the phone sidebar to point at items that live only there.
+     Leaving it open would hand the client a menu they never asked for. */
+  closeSidebar();
 
   localStorage.setItem('svc_tour_done', '1');
 
@@ -6579,6 +6586,69 @@ function _endTour(completed) {
       }).catch(() => {});
     }
   }
+}
+
+/* Which element a tour step should spotlight.
+
+   Two things make the obvious `querySelector(step.target)` wrong.
+
+   The sidebar folds its less-used items into a "More" group that is
+   display:none until it is opened, so a step pointing at one of them
+   measured zero and the spotlight silently fell back to a centred tooltip —
+   the step described a menu item while highlighting nothing.
+
+   And several data-view selectors match twice: once in the desktop sidebar
+   and once in the phone bottom bar. querySelector returns the first in
+   document order, which is the sidebar — and on a phone the sidebar is slid
+   off-canvas rather than hidden, so it still measures 260x44 and still wins.
+   That is why this tests for being ON SCREEN and not merely laid out: the
+   same test _positionTour applies before it will draw anything.
+
+   When nothing is on screen, the target may be a menu item that only exists
+   in the sidebar — My Investments and everything under More. On a phone
+   that means opening the sidebar, which is what a client would have to do
+   to reach it anyway. */
+function _tourOnScreen(el) {
+  const r = el.getBoundingClientRect();
+  return r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0
+      && r.top < window.innerHeight && r.left < window.innerWidth;
+}
+
+/* The spotlight follows its target rather than being placed once and hoped
+   for. scrollIntoView is smooth, so the position taken straight afterwards is
+   a position the element is still moving away from — and the client can
+   scroll during the tour too, which used to strand the cut-out somewhere the
+   highlighted thing no longer is. Throttled to a frame; the pending flag
+   lives on the function so portal-core keeps its no-top-level-state rule. */
+function _tourTrack() {
+  if (_tourTrack.pending) return;
+  _tourTrack.pending = true;
+  requestAnimationFrame(() => {
+    _tourTrack.pending = false;
+    if (!_tourActive) return;
+    const step = TOUR_STEPS[_tourStep];
+    if (step) _positionTour(step);
+  });
+}
+
+function _tourEl(step) {
+  if (!step || !step.target) return null;
+
+  if (step.reveal === 'navMore') {
+    const sec = document.getElementById('navMoreSection');
+    if (sec && sec.style.display === 'none') toggleNavMore();
+  }
+
+  const all = [...document.querySelectorAll(step.target)];
+  let hit = all.find(_tourOnScreen);
+  if (hit) return hit;
+
+  const sidebar = document.getElementById('sidebar');
+  if (sidebar && all.some(el => sidebar.contains(el)) && !sidebar.classList.contains('open')) {
+    toggleSidebar();
+    hit = all.find(_tourOnScreen);
+  }
+  return hit || all[0] || null;
 }
 
 function _renderTourStep(idx) {
@@ -6622,12 +6692,18 @@ function _renderTourStep(idx) {
   // On mobile one rAF is not enough — the scroll hasn't completed yet, so
   // getBoundingClientRect() returns stale positions and the tooltip jumps.
   if (step.target && step.type !== 'center') {
-    const el = document.querySelector(step.target);
+    const el = _tourEl(step);
     if (el) el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
   }
   // Native mobile needs extra time for scroll to settle
   const scrollDelay = window.__SVC_NATIVE__ ? 350 : 80;
   setTimeout(() => _positionTour(step), scrollDelay);
+  /* A step that had to open the More group or slide the sidebar in is being
+     measured mid-transition by the pass above. Measure once more when it has
+     finished, and only if this is still the step on screen. */
+  setTimeout(() => {
+    if (_tourActive && _tourStep === idx) _positionTour(step);
+  }, scrollDelay + 340);
 }
 
 function _positionTour(step) {
@@ -6668,7 +6744,7 @@ function _positionTour(step) {
 
   if (step.type === 'center' || !step.target) { _centerTooltip(); return; }
 
-  const el = document.querySelector(step.target);
+  const el = _tourEl(step);
   if (!el) { isMobile ? _mobileTooltip(null) : _centerTooltip(); return; }
 
   const r  = el.getBoundingClientRect();

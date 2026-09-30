@@ -1748,7 +1748,7 @@ const EIF_FAQS = [
   { q: 'Is the 1% platform fee permissible?',
     a: 'The platform fee is a fee for the work of running the platform — administration, reporting, custody of the paperwork, and the operations behind each pool. It is a fixed percentage of the amount you invest, charged once, and it is the same whether the investment does well or badly. It is a fee for a service rendered, not a charge for the use of money.' },
   { q: 'What happens if a pool makes a loss?',
-    a: 'You would receive less than you invested. That is the honest answer, and it applies across the platform. In a Mudarabah the loss falls specifically on the capital, and the operating partner loses their share of the profit rather than sharing the loss — which is the structure working as intended, not a term against you. No product on this platform guarantees a return.' },
+    a: 'You would receive less than you invested, and that applies across the platform. In a Mudarabah the loss falls specifically on the capital, and the operating partner loses their share of the profit rather than sharing the loss — which is the structure working as intended, not a term against you. No product on this platform guarantees a return.' },
   { q: 'Are the returns shown a promise?',
     a: 'No. The figure on each product is a target, drawn from the underlying trade, lease or venture. Murabaha and Ijara returns come from contracted amounts and are the more predictable of the three; a Mudarabah target is a projection and nothing more. Actual returns are published on each pool once it matures.' },
   { q: 'Can I hold these alongside your other products?',
@@ -3805,6 +3805,30 @@ async function autoSetup() {
       if (rowCount) console.log(`\u2705 Recoloured ${rowCount} EIF product(s) to the dark green.`);
     });
 
+    await step("23. Take the aside out of the loss FAQ", async () => {
+      /* "That is the honest answer" reads as the platform reassuring itself.
+         The answer is stronger without it: a client asking what happens when a
+         pool loses money wants the fact, not the tone.
+
+         Step 13 seeds the FAQs with ON CONFLICT DO NOTHING, so editing
+         EIF_FAQS above reaches a brand-new database and nowhere else. These
+         rows exist on staging and production already.
+
+         Matched on the exact old sentence rather than on the id, because
+         these answers are editable in the admin console — whoever has since
+         reworded this row keeps their wording, and a second run finds
+         nothing to do. */
+      const { rowCount } = await pool.query(
+        `UPDATE product_faqs
+            SET answer = replace(answer,
+                  'You would receive less than you invested. That is the honest answer, and it applies across the platform.',
+                  'You would receive less than you invested, and that applies across the platform.'),
+                updated_at = NOW()
+          WHERE category = 'eif'
+            AND POSITION('That is the honest answer' IN COALESCE(answer, '')) > 0`);
+      if (rowCount) console.log(`\u2705 Reworded ${rowCount} EIF FAQ answer(s).`);
+    });
+
     await step("21. Settle Ethical & Interest-Free holdings on payout", async () => {
       /* An EIF pool is a concluded contract, so the only thing that can
          happen at maturity is a cash settlement. The engine now enforces that
@@ -3929,6 +3953,21 @@ async function autoSetup() {
           title: 'Sell a load of cattle in one action instead of one animal at a time',
           body: 'Closing out a batch meant opening each animal and marking it sold \u2014 113 animals, 113 dialogs. The animal list now has a tick box on every live row and a select-all in the header, and once anything is ticked a bar appears with \u201cMark sold\u2026\u201d. That asks for the sale date and the total the load fetched, once, and divides the total across the animals ticked. The division is done in cents with the remainder handed out a cent at a time, so the figures add back to exactly what was typed \u2014 R1 000 000 over 113 head is 85 at R8 849,56 and 28 at R8 849,55, not 113 roundings that miss by 28 cents. The dialog shows that split before it is confirmed. The whole sale is one transaction and the animals share one SALE-<date>-<ref> reference, so the load can be recognised afterwards as the one sale it was. Animals already sold, or belonging to another batch, are left alone and the result says how many actually moved.',
           where: 'Fund Ops \u2192 Cattle \u2192 Cycles \u2192 open a batch \u2192 the Animals list. Tick the rows, or the header box for all of them, then Mark sold\u2026' },
+
+        { id: 'ANN-2026-TOUR-ACCURACY', area: 'portal', icon: 'fa-map',
+          title: 'The guided tour points at the right things again',
+          body: 'The welcome tour highlights a part of the screen for each step, and when its selector stopped matching it drew no highlight at all rather than complaining \u2014 so three steps had been describing menu items while spotlighting nothing since those items were folded into the sidebar\u2019s \u201cMore\u201d group, and on a phone six of them were. The tour now opens the More group, and on a phone opens the sidebar, so each step highlights the thing it is talking about; where a menu item exists in both the sidebar and the bottom bar it highlights the one on screen. The wording was re-set against the menu too: \u201cBrowse Investment Pools\u201d is now \u201cInvest\u201d, \u201cMaturity Instructions\u201d is \u201cWhen Investment Ends\u201d, and the maturity step no longer offers to transfer to a bank account, which was never one of the options \u2014 a payout lands in the wallet and is withdrawn from there. A step for My Investments has been added, and the Wallet step now says that an EFT goes to an account in the name Smartvest Financial Services, so the name on the bank statement is not a surprise.',
+          where: 'Client portal \u2192 the tour that runs on first sign-in, or the tour button in the top bar at any time.' },
+
+        { id: 'ANN-2026-INVEST-SUCCESS-AMOUNT', area: 'portal', icon: 'fa-receipt',
+          title: 'The invest confirmation no longer counts the fee as capital',
+          body: 'The message shown after a successful investment read \u201cSuccessfully invested R505\u201d for an R500 investment \u2014 it was reporting what left the wallet, which is the amount plus the 1% platform fee charged on top of it. R500 is what reached the pool and R500 is what earns a return, so the one message the client actually reads was overstating their investment by the fee. It now names all three figures: the amount invested, the fee, and the total that left the wallet.',
+          where: 'Client portal \u2192 Invest \u2192 confirm an investment. The same message on the mobile app already showed the right figure and now shows the fee alongside it.' },
+
+        { id: 'ANN-2026-AGREEMENT-PARTIES', area: 'both', icon: 'fa-file-signature',
+          title: 'Investment agreements name the provider and the fund manager correctly',
+          body: 'Every agreement described the provider as \u201cSmartVest Financial Services (Pty) Ltd t/a SV Capital\u201d. That is not the relationship: SV Capital is its own company managing the fund under SmartVest\u2019s licence, not a trading name SmartVest operates under. The parties table now names SmartVest Financial Services (Pty) Ltd as the provider carrying FSP 52449, with a new <b>Fund manager: SV Capital</b> row beside it; the general terms, the risk clause and the page footer say the same. This applies to all four templates \u2014 the standard agreement and the three Ethical & Interest-Free ones. Template versions moved with the wording (standard to v3, the EIF three to v4), so an agreement already signed still renders in the exact words it was signed under.',
+          where: 'Client portal \u2192 the agreement shown before an investment is funded, and every agreement under Clients \u2192 open a client \u2192 Documents. The agreement step only appears where INVESTMENT_AGREEMENTS_ENABLED is on.' },
 
         { id: 'ANN-2026-SUPPORT-NUMBER', area: 'both', icon: 'fa-phone',
           title: 'Support WhatsApp number changed',

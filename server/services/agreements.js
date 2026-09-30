@@ -60,7 +60,7 @@ const ACK = {
    explained after v2 ships. Never edit a version in place. */
 const TEMPLATES = {
   standard: {
-    key: 'standard', version: 'v2',
+    key: 'standard', version: 'v3',
     title: 'Investment Agreement',
     acks: ['target_not_promise', 'fee_on_top', 'term_locked'],
     clauses: [
@@ -72,7 +72,7 @@ const TEMPLATES = {
     ],
   },
   eif_murabaha: {
-    key: 'eif_murabaha', version: 'v3', watermark: true,
+    key: 'eif_murabaha', version: 'v4', watermark: true,
     title: 'Murabaha Investment Agreement',
     gloss: 'cost-plus sale',
     acks: ['murabaha_fixed', 'fee_on_top', 'term_locked'],
@@ -85,7 +85,7 @@ const TEMPLATES = {
     ],
   },
   eif_ijara: {
-    key: 'eif_ijara', version: 'v3', watermark: true,
+    key: 'eif_ijara', version: 'v4', watermark: true,
     title: 'Ijara Investment Agreement',
     gloss: 'lease',
     acks: ['ijara_rent_stops', 'fee_on_top', 'term_locked'],
@@ -98,7 +98,7 @@ const TEMPLATES = {
     ],
   },
   eif_mudarabah: {
-    key: 'eif_mudarabah', version: 'v3', watermark: true,
+    key: 'eif_mudarabah', version: 'v4', watermark: true,
     title: 'Mudarabah Investment Agreement',
     gloss: 'profit-sharing partnership',
     acks: ['mudarabah_loss', 'target_not_promise', 'fee_on_top', 'term_locked'],
@@ -132,7 +132,7 @@ function acknowledgementsFor(productType) {
 
    Numbered when rendered, so a clause can be cited in a letter. */
 const COMMON_CLAUSES = [
-  ['This agreement', 'This agreement records the terms on which the Investor places the Investment Amount with SmartVest Financial Services (Pty) Ltd, trading as SV Capital, an authorised financial services provider, FSP number 52449, for investment in the Pool identified above.'],
+  ['This agreement', 'This agreement records the terms on which the Investor places the Investment Amount with SmartVest Financial Services (Pty) Ltd, an authorised financial services provider, FSP number 52449, for investment in the Pool identified above. SV Capital is the fund manager of the Pool and administers it under that licence.'],
   ['No advice has been given', 'SV Capital has provided factual information about this product. It has NOT provided financial advice as contemplated in the Financial Advisory and Intermediary Services Act. The Investor confirms that they have chosen this investment themselves, that they have satisfied themselves that it suits their circumstances, objectives and risk tolerance, and that they may seek independent advice before signing.'],
   ['How the capital is applied', 'The Investment Amount is applied to the Pool and deployed into the underlying assets described in this agreement. The Investor does not hold title to any individual asset and has no right to direct how a particular asset is managed.'],
   ['Fees', 'The fees set out in the Fees and charges table above are the only fees payable on this investment. The platform fee is charged in addition to the Investment Amount and is paid from the Investor’s wallet at the time of investment. Any management or operational fee is deducted from the Pool and reduces the return. No fee not listed in that table will be charged on this investment without the Investor’s written agreement.'],
@@ -330,8 +330,9 @@ function renderAgreement(o) {
     .map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join('');
 
   const parties = rows([
-    ['Provider',        'SmartVest Financial Services (Pty) Ltd t/a SV Capital'],
+    ['Provider',        'SmartVest Financial Services (Pty) Ltd'],
     ['FSP number',      '52449'],
+    ['Fund manager',    'SV Capital'],
     ['Investor',        o.investor_name || '—'],
     ['Investor ID',     o.investor_id],
     ['Email',           o.investor_email || '—'],
@@ -485,11 +486,11 @@ ${commonClauses}
 <h2>6. Risk</h2>
 <div class="risk">The Investor’s capital is at risk and may be reduced or lost in full.
 Any return shown is a target and not a guarantee. Past performance is not a guide to future
-returns. This investment is not a deposit, it is not guaranteed by SV Capital or by any
-third party, and it is not covered by any deposit insurance or compensation scheme. The
+returns. This investment is not a deposit, it is not guaranteed by SmartVest Financial
+Services, by SV Capital or by any third party, and it is not covered by any deposit insurance or compensation scheme. The
 Investor confirms that they can bear a loss of the amount invested.</div>
 ${sigBlock}
-<div class="foot">SmartVest Financial Services (Pty) Ltd t/a SV Capital · authorised financial services provider, FSP 52449<br>
+<div class="foot">SmartVest Financial Services (Pty) Ltd · authorised financial services provider, FSP 52449 · SV Capital, fund manager<br>
 Signed electronically in terms of the Electronic Communications and Transactions Act 25 of 2002.</div>
 ${READ_REPORTER}
 </body></html>`;
