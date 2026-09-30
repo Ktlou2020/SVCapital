@@ -23,7 +23,13 @@
                  close = last day of the month that is
                  2 calendar months after the previous close
    short_term  → open on the investment start date,
-                 close = last day of the month it opens in
+                 close = the first month end AFTER it opens —
+                 the end of the month it opens in on any
+                 ordinary day, and the end of the NEXT month
+                 when it opens on a month end, because a pool
+                 cannot close on the day it opens. See the
+                 month-end note on the guard in
+                 cycleExpiredPools.
 
    In both cases the successor's own investment start date is
    set to its close date + 1, which is the same rule the admin
@@ -164,7 +170,39 @@ async function cycleExpiredPools() {
       /* An investment start date set far enough past the close date can put
          the successor's close before its open — a pool that shut before it
          opened, invisible to every query that looks for one still raising.
-         Push it out by whole months until it is a real window. */
+         Push it out by whole months until it is a real window.
+
+         It is also what makes the short_term rule at the top of this file read
+         "the first month end AFTER it opens" rather than the shorter "the end
+         of the month it opens in". Those two differ on one day a month and no
+         other: a successor opening ON a month end has its close computed as
+         that very day, so close === open, and this loop pushes it to the end of
+         the following month.
+
+         The <= is therefore load-bearing, and it was settled — September 2026,
+         when check-pool-cycle-trigger asserted the shorter wording and so
+         failed on the 30th and passed on the 29th — in favour of the guard
+         rather than the assertion:
+
+           · A same-day window is not a short raise, it is no raise. Money comes
+             in between start_date and end_date, so open === close describes a
+             round that was never open for subscription, and a month-long
+             product is not meant to raise for part of a single day.
+           · The database refuses it outright. investment_pools_window_ck is
+             CHECK (end_date > start_date), so a < here would have the INSERT
+             below throw and the transaction roll back — taking the deployment
+             of the PREDECESSOR with it. That pool would sit at 'open' with
+             cycled_at NULL, fail again every night, and finally age out of the
+             60-day window into stopRaisingLapsedPools' stranded list, leaving
+             the product with no pool taking money at all. Which is the one
+             thing doing both halves in one transaction exists to prevent.
+
+         So on a month end the successor raises to the end of the NEXT month,
+         and its name, investment_start_date and maturity_date all follow the
+         pushed-out close — correctly, because it genuinely is that month's
+         pool. Moving the open date instead fixes nothing: it is already the day
+         after the predecessor closed, and the degenerate window comes from that
+         day landing on a month end, not from the open date being wrong. */
       let guard = 0;
       while (closeDate <= openDate && guard++ < 24) {
         closeDate = lastDayOfMonth(closeDate.getFullYear(), closeDate.getMonth() + 1);
