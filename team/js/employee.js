@@ -541,9 +541,35 @@ function renderLessonContent(mod, scores) {
     </div>`;
 }
 
+/* course_modules.quiz is JSONB, so node-pg hands it back as an ARRAY and the
+   tables route sends that array through as JSON. Both readers here did
+   JSON.parse(mod.quiz || '[]'), which throws
+   "Unexpected token 'o', \"[object Obj\"... is not valid JSON" on every module
+   the server has round-tripped — and both caught the throw and returned [].
+
+   An empty quiz means "this module has none, generate one", so every SEEDED
+   course fell straight through to AI generation and, when that could not run,
+   showed "Quiz Unavailable — could not generate quiz questions" on a module
+   that had its questions sitting in the database all along. It went unseen
+   because the AI path patches the cache with a STRING, so a quiz generated in
+   the same session parsed correctly and a seeded one never did.
+
+   Same fault, same shape, same file as _courseScores above. Accepts the array
+   the driver returns and the string the AI path caches, and drops anything
+   that is not a usable question rather than rendering a blank option list. */
+function _moduleQuiz(mod) {
+  const raw = mod && mod.quiz;
+  if (!raw) return [];
+  let v = raw;
+  if (typeof v === 'string') {
+    try { v = JSON.parse(v); } catch (_) { return []; }
+  }
+  if (!Array.isArray(v)) return [];
+  return v.filter(q => q && typeof q.question === 'string' && Array.isArray(q.options) && q.options.length);
+}
+
 function renderQuiz(mod) {
-  let questions = [];
-  try { questions = JSON.parse(mod.quiz||'[]'); } catch { questions=[]; }
+  const questions = _moduleQuiz(mod);
   if (!questions.length) {
     // Auto-generate quiz if missing — replace content area with spinner then reload
     setTimeout(() => _autoGenerateQuiz(mod), 50);
@@ -597,7 +623,7 @@ async function _autoGenerateQuiz(mod) {
     const { questions } = await res.json();
     // Patch the cached module so re-renders work without refetching
     const cached = _readerModules.find(m => m.id === mod.id);
-    if (cached) cached.quiz = JSON.stringify(questions);
+    if (cached) cached.quiz = questions;      // an array, like the database gives
     // Re-render the quiz now that we have questions
     renderReader();
   } catch (e) {
@@ -617,7 +643,7 @@ function selectAnswer(qi, oi) {
     el.querySelector('.opt-radio').style.background = idx===oi?'var(--accent)':'';
   });
   const mod = _readerModules[_readerModIdx];
-  let qs=[]; try{qs=JSON.parse(mod.quiz||'[]');}catch{}
+  const qs = _moduleQuiz(mod);
   const btn = document.getElementById('submit-quiz-btn');
   if (btn) btn.disabled = Object.keys(_quizAnswers).length < qs.length;
 }
