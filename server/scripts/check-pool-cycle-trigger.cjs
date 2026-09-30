@@ -64,6 +64,23 @@ async function ensureSchema() {
   return true;
 }
 
+/* A short_term round raises until the end of a month — the first month end
+   that is strictly after the day it opens. On any day but a month end that is
+   the end of the month it opens in; on a month end it is the next one,
+   because a pool cannot close on the day it opens (end_date > start_date). */
+function closesOnFirstMonthEndAfterOpen(s) {
+  const open  = new Date(s.start_date);
+  const close = new Date(s.end_date);
+  const isMonthEnd = d =>
+    new Date(d.getTime() + 86400000).getUTCMonth() !== d.getUTCMonth();
+  if (!isMonthEnd(close)) return false;
+  if (!(close > open)) return false;
+  // Nothing earlier would have done: the month end before this one is not
+  // after the open date.
+  const previousMonthEnd = new Date(Date.UTC(close.getUTCFullYear(), close.getUTCMonth(), 0));
+  return !(previousMonthEnd > open);
+}
+
 const wipe = async () => {
   await pool.query(`DELETE FROM investments     WHERE id LIKE 'PC-%' OR investor_id LIKE 'PC-%'`);
   await pool.query(`DELETE FROM investors       WHERE id LIKE 'PC-%'`);
@@ -240,13 +257,74 @@ const iso = d => (d instanceof Date ? d : new Date(d)).toISOString().slice(0, 10
     await run();
     {
       const s = await successorOf('PC-ST');
-      ok('a short_term successor closes at the end of the month it opens in',
-         !!s && new Date(s.end_date).getUTCMonth() === new Date(s.start_date).getUTCMonth() &&
-         new Date(new Date(s.end_date).getTime() + 86400000).getUTCMonth() !==
-         new Date(s.end_date).getUTCMonth(),
+      ok('a short_term successor closes on the first month end after it opens',
+         !!s && closesOnFirstMonthEndAfterOpen(s),
          s ? `opens ${iso(s.start_date)}, closes ${iso(s.end_date)}` : '');
       ok('and it is a short_term pool, like its predecessor',
          !!s && s.product_type === stBefore.product_type);
+    }
+
+    /* ── The month end a successor opens on ──────────────────────────
+       This assertion used to read "closes at the end of the month it OPENS
+       in", which is the rule for every day of the month but one. A successor
+       that opens on the last day of a month would have to close the same day
+       to satisfy it, and investment_pools_window_ck is CHECK (end_date >
+       start_date) — so that INSERT is refused, the cycler's transaction rolls
+       back, and the product is left with no pool taking money at all. Which is
+       the one thing the whole cycle-in-one-transaction design exists to stop.
+
+       The cycler already handles it: closeDate is pushed out by whole months
+       while it is not strictly after the open. The rule is therefore "the
+       first month end AFTER it opens", and that is what is asserted above.
+
+       The bug in the old assertion could only fail on the 28th to 31st, so it
+       went unseen for as long as nobody ran the suite on a month end. These
+       two cases pin both sides of the boundary explicitly, on any day of the
+       year, by choosing the open date rather than inheriting today's. */
+    console.log('\nand the boundary is the same on every day of the month');
+    /* The cycler picks up any pool whose investment start date fell within the
+       last 60 days, and that date is also the successor's open date — so the
+       open date can be CHOSEN here rather than inherited from today. Both
+       sides of the month-end boundary are then exercised on any day of the
+       year, which is what the old assertion could not do: it could only fail
+       between the 28th and the 31st, and so it did not, for years. */
+    const DAY   = 86400000;
+    const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+    const monthEnd = d => new Date(d.getTime() + DAY).getUTCMonth() !== d.getUTCMonth();
+
+    /* The last day of the previous month: strictly before today, and never
+       more than 31 days ago, so always inside the 60-day window. */
+    const opensOnMonthEnd = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 0));
+    /* Ten days ago, or eleven if that happened to be a month end. */
+    const opensMidMonth = (() => {
+      const d = new Date(today.getTime() - 10 * DAY);
+      return monthEnd(d) ? new Date(d.getTime() - DAY) : d;
+    })();
+
+    for (const [label, openOn, wantMonthEnd] of [
+      ['mid-month',   opensMidMonth,   false],
+      ['a month end', opensOnMonthEnd, true],
+    ]) {
+      await wipe();
+      const offset = Math.round((openOn - today) / DAY);
+      await makePool('PC-ST-EDGE', { product: 'short_term', close: offset - 1,
+                                     investStart: offset, term: 1 });
+      await run();
+      const s = await successorOf('PC-ST-EDGE');
+
+      /* Asserted, not assumed: a fixture that quietly opened on some other day
+         would make both cases the same case and both would pass. */
+      ok(`opening ${label}: the successor really does open on ${iso(openOn)}`,
+         !!s && iso(s.start_date) === iso(openOn),
+         s ? `opened ${iso(s.start_date)}` : 'no successor');
+      ok(`opening ${label}: and that day ${wantMonthEnd ? 'is' : 'is not'} a month end`,
+         !!s && monthEnd(new Date(s.start_date)) === wantMonthEnd);
+      ok(`opening ${label}: it closes on the first month end after it opens`,
+         !!s && closesOnFirstMonthEndAfterOpen(s),
+         s ? `opens ${iso(s.start_date)}, closes ${iso(s.end_date)}` : 'no successor');
+      ok(`opening ${label}: in a window the schema will accept`,
+         !!s && new Date(s.end_date) > new Date(s.start_date),
+         s ? `${iso(s.start_date)} → ${iso(s.end_date)}` : 'no successor');
     }
 
     /* ── Running twice must not open two successors ──────────────────── */
