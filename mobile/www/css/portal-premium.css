@@ -4582,3 +4582,95 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
   .eif-structure__earns { text-align: left; }
   .eif-compare { padding: 14px; }
 }
+/* ═══════════════════════════════════════════════════════════════════
+   Switch
+   ───────────────────────────────────────────────────────────────────
+   The auto top-up control was a 48x26 capsule that changed colour and
+   nothing else: no knob, nothing that moved, and no word for the state it
+   was in. A client looking at it could not tell whether their card was
+   about to be charged every month or not, which was the report.
+
+   Two states, said three ways — the knob's position, the colour, and the
+   word — because colour alone fails for anyone who cannot separate the
+   two hues, and a capsule with no knob does not read as a switch at all.
+
+   State comes from :checked, never from JavaScript writing inline styles.
+   The old one was painted from three different places and two of them
+   disagreed about which orange meant on.
+   ═══════════════════════════════════════════════════════════════════ */
+.svc-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* Kept in the layout and focusable rather than display:none, so it still
+   takes keyboard focus and still announces itself. */
+.svc-switch__input {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0; border: 0;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.svc-switch__track {
+  position: relative;
+  display: block;
+  width: 52px; height: 30px;
+  flex-shrink: 0;
+  border-radius: 30px;
+  background: #cfd4dc;
+  border: 1px solid rgba(0,0,0,0.08);
+  transition: background .2s ease, border-color .2s ease;
+}
+
+.svc-switch__knob {
+  position: absolute;
+  top: 3px; left: 3px;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  transition: transform .2s ease;
+}
+
+.svc-switch__state {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: .02em;
+  color: #6b7280;
+  min-width: 22px;              /* "Off" and "On" must not shift the layout */
+  transition: color .2s ease;
+}
+.svc-switch__state .on  { display: none; }
+.svc-switch__state .off { display: inline; }
+
+/* ── On ─────────────────────────────────────────────────────────────── */
+.svc-switch__input:checked ~ .svc-switch__track {
+  background: #ff9b0c;
+  border-color: #ff9b0c;
+}
+.svc-switch__input:checked ~ .svc-switch__track .svc-switch__knob {
+  transform: translateX(22px);
+}
+.svc-switch__input:checked ~ .svc-switch__state { color: #b45309; }
+.svc-switch__input:checked ~ .svc-switch__state .on  { display: inline; }
+.svc-switch__input:checked ~ .svc-switch__state .off { display: none; }
+
+/* Keyboard users get the same ring the rest of the portal uses. */
+.svc-switch__input:focus-visible ~ .svc-switch__track {
+  outline: 2px solid #ff9b0c;
+  outline-offset: 2px;
+}
+
+.svc-switch:hover .svc-switch__track { border-color: rgba(0,0,0,0.2); }
+
+@media (prefers-reduced-motion: reduce) {
+  .svc-switch__track,
+  .svc-switch__knob,
+  .svc-switch__state { transition: none; }
+}

@@ -362,7 +362,17 @@ console.log('\nthe look and feel stays inside the CI');
      'a hue that is neither is a second brand colour nobody agreed to');
 
   /* One canonical purple, and no second brand colour smuggled in beside it. */
-  const eifCss = (CSS.match(/Ethical and Interest-Free \(EIF\)[\s\S]*$/) || [''])[0];
+  /* Bounded at the next section banner, not at the end of the file. It used
+     to run to EOF, so anything appended to portal-premium.css afterwards was
+     counted as EIF colour and failed this — which is a trap for whoever adds
+     the next component, not a finding about the offering. */
+  const eifCss = (() => {
+    const at = CSS.indexOf('Ethical and Interest-Free (EIF)');
+    if (at < 0) return '';
+    const rest = CSS.slice(at);
+    const next = rest.search(/\n\/\* ═+\n/);
+    return next < 0 ? rest : rest.slice(0, next);
+  })();
   const hexes = [...new Set((strip(eifCss).match(/#[0-9a-fA-F]{6}/g) || []).map(h => h.toLowerCase()))];
   /* #056b05 is the same green taken dark enough to read as text on the light
      CI ground — a role of the accent, not a second colour. #0d1a00 is the ink
