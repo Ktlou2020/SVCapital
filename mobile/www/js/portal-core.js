@@ -2492,10 +2492,10 @@ function openAutoTopUpModal() {
   const el = id => document.getElementById(id);
   if (!el('autoTopUpModal')) return;
   const isEnabled = !!settings.auto_topup_enabled;
+  /* The switch paints itself from :checked. It used to be painted from here
+     with #fec24f and from an inline onchange with #ff9b0c, so an already-
+     enabled schedule opened one orange and toggled to a different one. */
   if (el('atuEnabled'))  el('atuEnabled').checked = isEnabled;
-  // Sync the custom toggle span colour to match the checkbox state
-  const toggleSpan = el('autoTopUpModal').querySelector('label span');
-  if (toggleSpan) toggleSpan.style.background = isEnabled ? '#fec24f' : '#ccc';
   if (el('atuAmount'))   el('atuAmount').value    = settings.auto_topup_amount || '';
   if (el('atuDay'))      el('atuDay').value       = settings.auto_topup_day || 1;
   updateAutoTopUpFee();
