@@ -395,6 +395,47 @@ const meta = (html, prop) => {
          'otherwise the public date jumps each time somebody fixes a typo');
     }
 
+    console.log('\nthe seeded articles claim only what the platform can claim');
+    {
+      const SETUP = fs.readFileSync(path.join(ROOT, 'server', 'db', 'setup.js'), 'utf8');
+      const seed  = (SETUP.match(/const ART = \[[\s\S]*?\n      \];/) || [''])[0];
+
+      /* A PPA fixes the PRICE. It leaves the offtaker's ability to pay wide
+         open, which is what the body of that article says and what its own
+         last line says outright. The lede is also the page's meta description,
+         so it is the sentence a search result and a shared link lead with. */
+      ok('the solar lede promises a predictable cashflow, not a predictable return',
+         /what make solar cashflows more predictable/.test(seed)
+         && !/what make solar returns predictable/.test(seed),
+         'a PPA settles the price; the return still depends on the offtaker paying');
+      ok('and the article still closes by saying the return is not guaranteed',
+         /Target returns are not guaranteed and your capital is at risk/.test(seed));
+
+      /* The platform holds no Sharia certificate and says so in its own FAQ,
+         so "qualifies as" asserts a ruling it does not have. */
+      ok('the Ijara article says the structure is OFFERED as an Ijara',
+         /is offered as an Ijara within the platform/.test(seed));
+      ok('and does not say it qualifies as one',
+         !/qualifies as an Ijara/.test(seed),
+         'that asserts a ruling; the platform holds no certificate');
+      ok('it tells the investor what has to happen for the rent to reach them',
+         /what has to happen for that return to be earned/.test(seed)
+         && /if the asset is not deployed, the income can be affected/.test(seed));
+
+      /* Step 17 seeds these only into an EMPTY insights table, so a wording
+         fix that lives only in ART never reaches staging or production. */
+      const fix = (SETUP.match(/await step\("24\.[\s\S]*?\n    \}\);/) || [''])[0];
+      ok('a setup step carries the corrections to rows that already exist',
+         /UPDATE insights/.test(fix) && /INS-SOLAR-PPA/.test(fix) && /INS-BIKES-RENT/.test(fix),
+         'editing ART alone only reaches a brand-new database');
+      ok('and none of them can overwrite an article somebody has edited',
+         (fix.match(/POSITION\(/g) || []).length >= 3
+         && /what make solar returns predictable' IN COALESCE\(excerpt/.test(fix)
+         && /qualifies as an Ijara under the platform' IN COALESCE\(body/.test(fix));
+      ok('and the new paragraph cannot be added twice',
+         /POSITION\('what has to happen for that return to be earned' IN COALESCE\(body, ''\)\) = 0/.test(fix));
+    }
+
     await db.query(`DELETE FROM insights WHERE id LIKE 'INS-CHK-%'`);
 
   } catch (err) {
