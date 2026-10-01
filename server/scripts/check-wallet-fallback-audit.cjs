@@ -37,6 +37,8 @@ const ROUTE = read('server/routes/manualCredit.js');
 const HTML  = read('admin/index.html');
 const ADMIN = read('admin/js/admin.js');
 const CLI   = read('server/scripts/audit-maturity-wallet-fallbacks.cjs');
+const FIXSVC = read('server/services/walletFallbackReinvest.js');
+const FIXCLI = read('server/scripts/reinvest-wallet-fallbacks.cjs');
 
 let pass = 0, fail = 0;
 const ok = (name, cond, detail) => {
@@ -50,9 +52,11 @@ console.log('\nit is a report, and only a report');
      !/\b(INSERT|UPDATE|DELETE|ALTER|DROP|TRUNCATE)\b/.test(strip(SVC)),
      'a report that writes is not a report');
   ok('and says so where somebody would look', /READ-ONLY/.test(SVC));
-  ok('the panel tells the operator the same thing',
-     /Read-only &mdash; changes nothing|Read-only — changes nothing/
-       .test(HTML.slice(HTML.indexOf('Matured Into Wallets'), HTML.indexOf('Matured Into Wallets') + 400)));
+  /* The panel now carries a button that moves money, so a bare "read-only"
+     badge on it would be a lie. It has to say which half is which. */
+  const head = HTML.slice(HTML.indexOf('Matured Into Wallets'), HTML.indexOf('Matured Into Wallets') + 400);
+  ok('the panel says the report is read-only and the correction is not',
+     /The report is read-only — the correction below is not/.test(head), head.slice(0, 160));
 }
 
 console.log('\nonly an admin can run it');
@@ -124,6 +128,93 @@ console.log('\nthe panel is wired up');
        const m = HTML.match(/js\/admin\.js\?v=(\d+)/);
        return !!m && Number(m[1]) >= 186;
      })(), 'a stamped asset is cached for a year');
+}
+
+console.log('\nand the button that moves money is built like one');
+{
+  const code = strip(FIXSVC);
+  const route = strip(ROUTE);
+
+  ok('plan and apply are separate endpoints',
+     /router\.post\('\/maturity-wallet-fallbacks\/plan'/.test(route)
+     && /router\.post\('\/maturity-wallet-fallbacks\/apply'/.test(route));
+  ok('and the plan writes nothing',
+     !/\b(INSERT|UPDATE|DELETE)\b/.test((FIXSVC.match(/async function planReinvest[\s\S]*?\n\}/) || [''])[0]));
+
+  /* A page that could post its own list of investments and amounts would be
+     telling the server which money to take. */
+  ok('apply re-derives the plan instead of trusting the request',
+     /const plan = await planReinvest\(pool, opts\);/.test(route)
+     && !/req\.body\.(chosen|items|investments|amount)/.test(route));
+  ok('and the confirmation names the count and the target',
+     /const want = `REINVEST \$\{plan\.count\} INTO \$\{plan\.target\.id\}`/.test(route),
+     'a mis-click cannot produce it, and neither can a stale tab');
+  /* The COMPARISON, not the message. An `if (false)` keeps the message and
+     drops the guard, which is exactly the mutation that survived the first
+     time this was written. */
+  ok('a mismatch refuses',
+     /if \(String\(req\.body\.confirm \|\| ''\)\.trim\(\) !== want\)/.test(route)
+     && /Confirmation does not match/.test(route),
+     'asserting the message alone passes on a guard that never runs');
+  /* Scoped to THIS handler: manualCredit.js has several audit.log calls, and
+     indexOf would otherwise find one belonging to another endpoint. */
+  const applyFn = route.slice(route.indexOf("router.post('/maturity-wallet-fallbacks/apply'"));
+  ok('and who did it is recorded afterwards',
+     /action: 'maturity_wallet_fallback_reinvested'/.test(applyFn)
+     && applyFn.indexOf('await audit.log') > applyFn.indexOf('await applyReinvest'),
+     'an audit row records what happened and must not be able to undo it');
+
+  ok('each investor is written in their own transaction',
+     /for \(const c of plan\.chosen\)[\s\S]{0,200}pool\.connect\(\)[\s\S]{0,120}BEGIN/.test(code),
+     'one failure must not take the other 56 down');
+  ok('the balance is re-read under a lock before the debit',
+     /FROM sub_accounts WHERE id=\$1 FOR UPDATE/.test(code)
+     && /FROM investors {4}WHERE id=\$1 FOR UPDATE/.test(code),
+     'the plan is a snapshot; a client who spends in between must be caught');
+  ok('and a wallet is never driven negative',
+     /Number\(bal\.b\) \+ 0\.005 < c\.amount/.test(code));
+  ok('the target pool is locked and its capacity re-checked',
+     /FROM investment_pools WHERE id=\$1 FOR UPDATE/.test(code)
+     && /max_investment \+ /.test(code.replace(/\s+/g, ' ')) === false
+     && /current_invested \|\| 0\) \+ c\.amount > Number\(lock\.max_investment\)/.test(code));
+  ok('it is idempotent on a UNIQUE reference',
+     /'REINV-FIX-' \+ c\.investment_id/.test(code)
+     && /REINV-FIX-/.test(strip(SVC)),
+     'the audit drops a corrected row, and the reference index refuses a second');
+  /* No fee: the wallet is debited by exactly the amount that reaches the
+     pool. The 1% is charged on a client's own investment, not on a
+     correction of ours — and the engine's own rollover is fee-free too. */
+  ok('no platform fee is charged anywhere in this path',
+     !/platform_fee|fee_cents|svcPlatformFee|PLATFORM_FEE|\* 0\.01/.test(code));
+  ok('and the wallet is debited by the same figure that reaches the pool',
+     /wallet_balance = wallet_balance - \$1[\s\S]{0,120}\[c\.amount,/.test(code)
+     && /current_invested,0\) \+ \$1[\s\S]{0,200}\[c\.amount, plan\.target\.id\]/.test(code),
+     'one amount, used for both sides — there is nowhere for a fee to appear');
+
+  /* It has to read as a reinvestment, not as a fresh investment the client
+     chose to make. _stmtDirection puts both in DEBIT, so the running balance
+     is unaffected; _stmtLabel is what differs. */
+  ok('the statement row is typed reinvestment',
+     /VALUES \(gen_random_uuid\(\),\$1,\$2,'reinvestment'/.test(code),
+     "_stmtLabel renders 'investment' as Investment and 'reinvestment' as Reinvestment");
+  ok('and the investment record carries is_reinvestment',
+     /is_reinvestment[\s\S]{0,260}true/.test(code));
+  ok('reinvestment is still a debit on the statement, so the balance agrees',
+     /DEBIT {2}= \[[^\]]*'reinvestment'/.test(read('js/portal-core.js')),
+     'if it ever moves to CREDIT, this debit would stop being reflected');
+
+  ok('the CLI and the button share this one module',
+     /walletFallbackReinvest/.test(strip(FIXCLI)) && /walletFallbackReinvest/.test(route),
+     'two copies would move the same money on different rules');
+
+  ok('a selection naming an investment that is not there refuses',
+     /has no wallet-fallback credit in/.test(code),
+     'a typo would otherwise correct nobody and report success');
+  ok('a target that has stopped raising is named',
+     /stopped raising on/.test(FIXSVC));
+  ok('and that warning does not fire once the pool has deployed',
+     /const closedToNew = target\.status === 'open'/.test(code),
+     'it would otherwise claim the status is still open when it is not');
 }
 
 /* ── Against a database ────────────────────────────────────────────── */
