@@ -33,6 +33,10 @@
  *   (default)   Plan. Prints every line it would write. Changes nothing.
  *   --apply     Executes it. One transaction per investor.
  *
+ * --only <investment id,…> narrows the run. Correcting a switch means a second
+ * run at the pool of the product the client actually chose, and without --only
+ * the --include-switches that allows it would sweep everything else in too.
+ *
  * Idempotent: each correction writes transactions.reference 'REINV-FIX-<id>',
  * which is UNIQUE, and an investment already carrying one is skipped. Running
  * it twice does not reinvest twice.
@@ -56,6 +60,11 @@ const flag  = n => { const i = ARGV.indexOf(n); return i > -1 ? (ARGV[i + 1] || 
 const APPLY = ARGV.includes('--apply');
 const SWITCHES = ARGV.includes('--include-switches');
 const EXCLUDE  = new Set((flag('--exclude') || '').split(',').map(x => x.trim()).filter(Boolean));
+/* --only narrows the run to named investments. It exists because a switch
+   belongs in the product the client chose, so correcting one means a second
+   run at a DIFFERENT target — and without this, --include-switches would
+   sweep every other row into that pool too. */
+const ONLY     = new Set((flag('--only') || '').split(',').map(x => x.trim()).filter(Boolean));
 const SRC   = flag('--pool');
 const TGT   = flag('--target');
 
@@ -152,6 +161,7 @@ const SAME_PRODUCT = new Set(['reinvest', 'auto_reinvest', '', 'pending',
       const rec = { ...r, amt, bal,
                     who: `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.investor_id };
       if (r.already_done) { done.push(rec); continue; }
+      if (ONLY.size && !ONLY.has(r.investment_id)) { rec.why = 'not in --only'; excluded.push(rec); continue; }
       if (EXCLUDE.has(r.investment_id)) { rec.why = 'named in --exclude'; excluded.push(rec); continue; }
       const same = SAME_PRODUCT.has(r.instruction);
       if (!same && !SWITCHES) { rec.why = 'asked for a different product'; excluded.push(rec); continue; }
@@ -178,6 +188,14 @@ const SAME_PRODUCT = new Set(['reinvest', 'auto_reinvest', '', 'pending',
     if (done.length) {
       H(`Already corrected (${done.length})`);
       console.log('  These carry a REINV-FIX- reference already and are left alone.');
+    }
+
+    for (const id of ONLY) {
+      if (!rows.some(r => r.investment_id === id)) {
+        console.error(`\n--only names ${id}, which has no wallet-fallback credit in ${SRC}.`);
+        console.error('Refusing to run on a list that does not say what somebody thinks it says.');
+        process.exit(2);
+      }
     }
 
     const total = chosen.reduce((a, c) => a + c.amt, 0);
