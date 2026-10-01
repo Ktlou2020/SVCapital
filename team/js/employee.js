@@ -7,6 +7,13 @@
 /* ─── API helpers ────────────────────────────────────────────────────── */
 const BASE = '/api/';
 let _authFailed = false;
+/* This file had no HTML escaper, and every view here builds markup with
+   template literals. Anything that came from a person — a policy title, a
+   filename somebody chose — goes through this before it reaches innerHTML. */
+const esc = v => String(v == null ? '' : v)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
 const get = async p => {
   if (_authFailed) return { data: [], total: 0 };
   try {
@@ -266,6 +273,7 @@ function navigate(view, btn) {
   const renders = {
     dashboard:    renderDashboard,
     courses:      renderCourses,
+    policies:     renderPolicies,
     kpis:         renderMyKpis,
     checkin:      renderCheckin,
     leave:        renderMyLeave,
@@ -1381,6 +1389,192 @@ function renderDashboard() {
 }
 
 /* ═══ VIEW: COURSES ═════════════════════════════════════════════════ */
+/* ═══ VIEW: POLICIES ════════════════════════════════════════════════
+   The company's policies: written by the directors, read by everyone.
+
+   The list carries metadata only — the file bytes are megabytes a row and
+   nobody opening this screen needs all of them. Each document is fetched
+   from its own endpoint when it is opened, which is also why it opens at all:
+   Chrome has refused to navigate to a data: URL since 2017 and the platform's
+   CSP refuses to frame one, so serving real bytes is what makes the difference
+   between a policy opening and a blank tab.
+   ═══════════════════════════════════════════════════════════════════ */
+let _policies = [];
+
+const POLICY_LABELS = {
+  hr: 'People & HR', compliance: 'Compliance', finance: 'Finance',
+  operations: 'Operations', it: 'IT & Security', health_safety: 'Health & Safety',
+  general: 'General',
+};
+const POLICY_ICONS = {
+  hr: 'fa-users', compliance: 'fa-scale-balanced', finance: 'fa-coins',
+  operations: 'fa-gears', it: 'fa-shield-halved', health_safety: 'fa-kit-medical',
+  general: 'fa-file-lines',
+};
+
+function _canPublishPolicies() {
+  const r = String((_emp && _emp.jwtRole) || (StaffAuth.getSession && StaffAuth.getSession()?.role) || '').toLowerCase();
+  const apps = (StaffAuth.getSession && StaffAuth.getSession()?.appAccess) || [];
+  return r === 'director' || r === 'admin' || apps.includes('director') || apps.includes('admin');
+}
+
+async function renderPolicies() {
+  const el = document.getElementById('view-policies');
+  el.innerHTML = `<div class="view-header"><div><h1>Policies</h1>
+      <div class="view-sub">The company's policies, current versions</div></div></div>
+    <div class="empty-state"><i class="fa-solid fa-spinner fa-spin"></i><p>Loading…</p></div>`;
+  try {
+    const r = await get('staff-policies');
+    _policies = r.policies || [];
+  } catch (e) {
+    el.innerHTML = `<div class="view-header"><div><h1>Policies</h1></div></div>
+      <div class="empty-state"><i class="fa-solid fa-circle-exclamation"></i>
+      <p>${esc(e.message || 'Could not load the policies.')}</p></div>`;
+    return;
+  }
+
+  const byCat = {};
+  for (const p of _policies) (byCat[p.category] = byCat[p.category] || []).push(p);
+
+  const size = n => !n ? '' : n >= 1048576 ? `${(n/1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n/1024))} KB`;
+  const when = d => d ? new Date(d).toLocaleDateString('en-ZA', { year:'numeric', month:'short', day:'numeric' }) : '';
+
+  const card = p => `
+    <div class="policy-card" onclick="openPolicy('${esc(p.id)}')" role="button" tabindex="0"
+         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openPolicy('${esc(p.id)}')}">
+      <div class="policy-card__icon"><i class="fa-solid ${POLICY_ICONS[p.category] || 'fa-file-lines'}"></i></div>
+      <div class="policy-card__body">
+        <div class="policy-card__title">${esc(p.title)}${p.version ? ` <span class="policy-ver">v${esc(p.version)}</span>` : ''}</div>
+        ${p.summary ? `<div class="policy-card__sub">${esc(p.summary)}</div>` : ''}
+        <div class="policy-card__meta">
+          ${p.effective_date ? `Effective ${esc(when(p.effective_date))} · ` : ''}
+          ${esc(p.filename)}${p.file_size ? ` · ${esc(size(p.file_size))}` : ''}
+          ${p.uploaded_by_name ? ` · published by ${esc(p.uploaded_by_name)}` : ''}
+          ${p.supersedes_title ? ` · replaces “${esc(p.supersedes_title)}”` : ''}
+        </div>
+      </div>
+      <div class="policy-card__open"><i class="fa-solid fa-arrow-up-right-from-square"></i></div>
+    </div>`;
+
+  el.innerHTML = `
+    <div class="view-header">
+      <div><h1>Policies</h1><div class="view-sub">The company's policies, current versions</div></div>
+      ${_canPublishPolicies() ? `<div class="view-header-actions">
+        <button class="btn btn--primary" onclick="openPolicyUpload()">
+          <i class="fa-solid fa-upload"></i> Publish a policy</button></div>` : ''}
+    </div>
+    ${!_policies.length ? `<div class="empty-state"><i class="fa-solid fa-file-shield"></i>
+        <p>No policies have been published yet.${_canPublishPolicies() ? ' Publish the first one.' : ''}</p></div>` : ''}
+    ${Object.keys(byCat).sort().map(cat => `
+      <div class="section-head"><i class="fa-solid ${POLICY_ICONS[cat] || 'fa-file-lines'}"></i>
+        ${esc(POLICY_LABELS[cat] || cat)} <span class="section-count">${byCat[cat].length}</span></div>
+      <div class="policy-list">${byCat[cat].map(card).join('')}</div>`).join('')}`;
+}
+
+/* Opened through the API, with the session's own credentials, so a policy is
+   never a public URL somebody can forward out of the building. */
+async function openPolicy(id) {
+  const p = _policies.find(x => x.id === id);
+  try {
+    /* This portal signs in with an svc_token COOKIE, not a bearer token, and
+       requireAuth prefers the header when one is present — so sending
+       "Bearer null" because localStorage happens to be empty would 401 every
+       open. The header goes on only when there is actually a token. */
+    const token = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
+    const res = await fetch(`${BASE}staff-policies/${encodeURIComponent(id)}/file`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: 'same-origin',
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Could not open that policy.');
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const w = window.open(url, '_blank', 'noopener');
+    if (!w) { /* popup blocked — fall back to a download the person asked for */
+      const a = document.createElement('a');
+      a.href = url; a.download = (p && p.filename) || 'policy'; a.click();
+    }
+    /* Released on the next tick rather than immediately: revoking before the
+       new tab has read it gives a blank page. */
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e) {
+    showToast(e.message || 'Could not open that policy.', 'error');
+  }
+}
+
+function openPolicyUpload() {
+  if (!_canPublishPolicies()) { showToast('Only directors can publish a policy.', 'error'); return; }
+  const live = _policies.filter(p => p.is_active);
+  const m = document.getElementById('generic-modal');
+  m.innerHTML = `<div class="modal">
+    <div class="modal-header"><h3>Publish a policy</h3>
+      <button class="btn btn--ghost btn--sm" onclick="closeModal('generic-modal')"><i class="fa-solid fa-xmark"></i></button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Title</label>
+        <input id="polTitle" placeholder="e.g. Leave Policy"></div>
+      <div class="form-row">
+        <div class="form-group"><label>Category</label>
+          <select id="polCategory">${Object.entries(POLICY_LABELS).map(([k,v]) => `<option value="${esc(k)}">${esc(v)}</option>`).join('')}</select></div>
+        <div class="form-group"><label>Version</label>
+          <input id="polVersion" placeholder="e.g. 2.1"></div>
+      </div>
+      <div class="form-group"><label>Effective from</label>
+        <input type="date" id="polEffective"></div>
+      <div class="form-group"><label>Summary</label>
+        <textarea id="polSummary" rows="2" placeholder="One line on what it covers — this is what people read before opening it"></textarea></div>
+      <div class="form-group"><label>Replaces</label>
+        <select id="polSupersedes">
+          <option value="">Nothing — this is a new policy</option>
+          ${live.map(p => `<option value="${esc(p.id)}">${esc(p.title)}${p.version ? ' v' + esc(p.version) : ''}</option>`).join('')}
+        </select></div>
+      <div class="form-group"><label>File</label>
+        <input type="file" id="polFile" accept=".pdf,image/png,image/jpeg,image/webp">
+        <div style="font-size:0.76rem;color:var(--muted);margin-top:4px">PDF or an image, up to 12 MB. Replacing one withdraws it at the same moment, so there is never a day with two live versions.</div></div>
+      <div id="polError" style="color:#ef4444;font-size:0.82rem;display:none"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn--secondary" onclick="closeModal('generic-modal')">Cancel</button>
+      <button class="btn btn--primary" onclick="submitPolicy()">Publish to all staff</button>
+    </div>
+  </div>`;
+  m.classList.add('open');
+}
+
+async function submitPolicy() {
+  const err = document.getElementById('polError');
+  const fail = m => { err.textContent = m; err.style.display = 'block'; };
+  const title = document.getElementById('polTitle').value.trim();
+  const file  = document.getElementById('polFile').files[0];
+  if (!title) return fail('Give the policy a title.');
+  if (!file)  return fail('Choose a file.');
+  if (file.size > 12 * 1024 * 1024) return fail('That file is over 12 MB.');
+
+  const dataUrl = await new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = () => reject(new Error('Could not read that file.'));
+    r.readAsDataURL(file);
+  }).catch(e => { fail(e.message); return null; });
+  if (!dataUrl) return;
+
+  try {
+    await post('staff-policies', {
+      title,
+      category:       document.getElementById('polCategory').value,
+      summary:        document.getElementById('polSummary').value.trim(),
+      version:        document.getElementById('polVersion').value.trim(),
+      effective_date: document.getElementById('polEffective').value || null,
+      supersedes_id:  document.getElementById('polSupersedes').value || null,
+      filename:       file.name,
+      file_data:      dataUrl,
+    });
+    closeModal('generic-modal');
+    showToast('Policy published to all staff', 'success');
+    renderPolicies();
+  } catch (e) {
+    fail(e.message || 'Could not publish that policy.');
+  }
+}
+
 function renderCourses() {
   const completedIds  = _progress.filter(p=>p.status==='completed').map(p=>p.course_id);
   const enrolledIds   = _progress.map(p=>p.course_id);

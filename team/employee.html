@@ -111,6 +111,10 @@
 
     <!-- Learn -->
     <div class="nav-section-label">Learn</div>
+    <button class="sidebar-nav-btn" data-view="policies" onclick="navigate('policies',this)">
+      <i class="fa-solid fa-file-shield"></i>
+      <span class="nav-label">Policies</span>
+    </button>
     <button class="sidebar-nav-btn" data-view="courses" onclick="navigate('courses',this)">
       <i class="fa-solid fa-book-open"></i>
       <span class="nav-label">My Courses</span>
@@ -214,6 +218,9 @@
 
     <!-- Courses -->
     <div class="emp-view" id="view-courses"></div>
+
+    <!-- Policies -->
+    <div class="emp-view" id="view-policies"></div>
 
     <!-- Learning Paths -->
     <div class="emp-view" id="view-paths"></div>
@@ -382,6 +389,6 @@
 <!-- Note Editor -->
 <div class="note-editor" id="note-editor"></div>
 
-<script src="js/employee.js?v=5"></script>
+<script src="js/employee.js?v=6"></script>
 </body>
 </html>

@@ -1470,6 +1470,40 @@ CREATE INDEX IF NOT EXISTS pe_reviews_next_idx    ON pe_reviews(next_review_date
    it sits in, silently rolling back every other column with it. Declared here
    so the schema build owns it; the route's own CREATE IF NOT EXISTS is then a
    no-op. */
+/* Company policies, written by the directors and read by everyone.
+
+   The file lives in a text column as a base64 data: URL, which is how every
+   other document on this platform is stored — kyc_documents, pe_documents,
+   product factsheets. It is served back as REAL BYTES from its own endpoint
+   rather than handed to the browser as a data: URL, because Chrome has
+   refused to navigate to one since 2017 and the content-security policy
+   refuses to frame one; that combination is what made factsheets open blank.
+
+   supersedes_id, not a version number on its own: a policy is replaced by a
+   new document rather than edited, and the chain says which one replaced
+   which. The old row stays, inactive, because "what did the policy say in
+   March" is a question somebody eventually asks. */
+CREATE TABLE IF NOT EXISTS staff_policies (
+  id             TEXT PRIMARY KEY,
+  title          TEXT NOT NULL,
+  category       TEXT NOT NULL DEFAULT 'general',
+  summary        TEXT,
+  filename       TEXT NOT NULL,
+  mimetype       TEXT NOT NULL,
+  file_size      INTEGER,
+  file_data      TEXT NOT NULL,
+  version        TEXT,
+  effective_date DATE,
+  supersedes_id  TEXT REFERENCES staff_policies(id) ON DELETE SET NULL,
+  uploaded_by    TEXT,
+  uploaded_by_name TEXT,
+  is_active      BOOLEAN NOT NULL DEFAULT true,
+  created_at     TIMESTAMPTZ DEFAULT NOW(),
+  updated_at     TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS staff_policies_live_idx
+  ON staff_policies(category, effective_date DESC) WHERE is_active;
+
 CREATE TABLE IF NOT EXISTS pe_documents (
   id          TEXT PRIMARY KEY,
   company_id  TEXT,
@@ -4077,6 +4111,11 @@ async function autoSetup() {
           title: 'The pre-flight warns when a pool would hand over to the wrong round',
           body: 'A succession depends on one date. At 23:00 on the day a pool matures, whatever reinvests has to land in the pool that is still open and closing at midnight; at 00:01 the next morning that pool goes active and a new one opens for the product. What holds the two apart is the investment start date, which the console fills in as the day after the pool closes \u2014 so at 23:00 the pool has not reached it, is not deployed yet, and is there to take the money. Set it to the close date instead and the pool deploys in the same 23:00 run: the maturities then find its successor, which is open and raising, so nothing errors and nothing is lost \u2014 the client\u2019s money simply raises for another full cycle before being deployed, a month later than it should have gone to work, and nothing on any screen says so afterwards. The pre-flight now names any cattle or short-term pool whose investment start date is on or before its close date, and says what to change it to. It reports it even on a night when nothing matures, because that is when there is still time to fix it.',
           where: 'Admin console \u2192 Maturity Pre-flight \u2192 Run Pre-flight. The date itself is on the pool, under Pools \u2192 edit \u2192 Investment Start Date.' },
+
+        { id: 'ANN-2026-STAFF-POLICIES', area: 'admin', icon: 'fa-file-shield',
+          title: 'Company policies now live in the staff portal',
+          body: 'Directors publish a policy; everyone on staff can open it. The list is grouped by area \u2014 People & HR, Compliance, Finance, Operations, IT & Security, Health & Safety \u2014 and each one shows its version, when it took effect, who published it and which policy it replaced. Publishing a replacement withdraws the one it replaces at the same moment, so there is never a day with two live versions, and the old one is kept rather than deleted because \u201cwhat did the policy say in March\u201d is a question somebody eventually asks. Only PDFs and images are accepted, and the type is read from the file itself rather than from what the uploader calls it. A policy opens through the portal with your own sign-in, so it is never a public link that can be forwarded out of the building, and investors cannot see this section at all.',
+          where: 'Team portal \u2192 Policies, under Learn in the sidebar. Directors and admins see a \u201cPublish a policy\u201d button there; everyone else sees the shelf.' },
 
         { id: 'ANN-2026-SUPPORT-NUMBER', area: 'both', icon: 'fa-phone',
           title: 'Support WhatsApp number changed',

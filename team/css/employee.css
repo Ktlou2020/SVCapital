@@ -1681,3 +1681,53 @@ html, body {
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   Policies
+   ───────────────────────────────────────────────────────────────────
+   A shelf, not a table. A policy is a thing you open, so each row is a
+   target the whole width of the list rather than a link buried in a cell,
+   and it carries what somebody needs to decide whether to open it: what it
+   is, when it took effect, and what it replaced.
+   ═══════════════════════════════════════════════════════════════════ */
+.policy-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+
+.policy-card {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 16px;
+  background: var(--card, #161922);
+  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color .15s, transform .15s;
+}
+.policy-card:hover { border-color: var(--accent, #eda5ff); transform: translateY(-1px); }
+.policy-card:focus-visible { outline: 2px solid var(--accent, #eda5ff); outline-offset: 2px; }
+
+.policy-card__icon {
+  flex-shrink: 0;
+  width: 40px; height: 40px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 9px;
+  background: rgba(237,165,255,0.12);
+  color: var(--accent, #eda5ff);
+}
+.policy-card__body  { flex: 1; min-width: 0; }
+.policy-card__title { font-weight: 700; font-size: 0.92rem; }
+.policy-card__sub   { font-size: 0.82rem; color: var(--muted, #9ca3af); margin-top: 2px; }
+.policy-card__meta  { font-size: 0.74rem; color: var(--muted, #9ca3af); margin-top: 4px; }
+.policy-card__open  { flex-shrink: 0; color: var(--muted, #9ca3af); }
+.policy-card:hover .policy-card__open { color: var(--accent, #eda5ff); }
+
+.policy-ver {
+  font-size: 0.7rem; font-weight: 800;
+  padding: 1px 7px; border-radius: 20px;
+  background: rgba(255,255,255,0.08);
+  color: var(--muted, #9ca3af);
+  vertical-align: middle;
+}
+
+@media (max-width: 560px) {
+  .policy-card { gap: 10px; padding: 12px; }
+  .policy-card__icon { width: 34px; height: 34px; }
+}
