@@ -16260,6 +16260,9 @@ async function runWalletFallbackAudit(btn) {
   btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Checking…';
   el.innerHTML = '';
   document.getElementById('wfaCsvBtn').style.display = 'none';
+  const fixWrap = document.getElementById('wfaFixWrap');
+  if (fixWrap) { fixWrap.style.display = 'none'; fixWrap.innerHTML = ''; }
+  _wfaPlan = null;
   try {
     const r = await API._fetch('GET',
       'admin/maturity-wallet-fallbacks' + (since ? `?since=${encodeURIComponent(since)}` : ''));
@@ -16336,12 +16339,148 @@ async function runWalletFallbackAudit(btn) {
         <ul style="margin:0;padding-left:18px;color:var(--text)">${targets}</ul>
       </div>`;
     document.getElementById('wfaCsvBtn').style.display = '';
+    const fix = document.getElementById('wfaFixWrap');
+    if (fix) { fix.innerHTML = _wfaFixPanel(); fix.style.display = s.outstanding ? '' : 'none'; }
   } catch (e) {
     el.innerHTML = `<span style="color:#ef4444"><i class="fa-solid fa-circle-exclamation"></i> ${_esc(e.message || 'Audit failed')}</span>`;
   } finally {
     btn.disabled = false;
     btn.innerHTML = orig;
   }
+}
+
+/* ─── Putting the money back ──────────────────────────────────────────
+   A button that moves money, so it is built like one.
+
+   · It does not appear until the audit has been run. Nobody moves this
+     money without having first looked at it.
+   · Preview and Reinvest are two steps. The preview comes from the server,
+     not from the audit already on screen, because the plan is what the write
+     will actually do.
+   · The confirmation phrase names the COUNT and the TARGET. A mis-click
+     cannot produce it, and a stale tab cannot either: if the plan moved, the
+     phrase the operator was given no longer matches the one the server wants.
+   · The request carries arguments, never a list of investments and amounts.
+     The server re-derives what to move. A page that could post its own list
+     would be telling the server which money to take. */
+let _wfaPlan = null;
+
+function _wfaFixPanel() {
+  if (!_wfaReport || !_wfaReport.summary.outstanding) return '';
+  const pools = _wfaReport.byPool || [];
+  const targets = _wfaReport.rolloverTargets || [];
+  return `
+    <div style="font-weight:800;margin-bottom:8px">
+      <i class="fa-solid fa-rotate-left" style="color:#f59e0b;margin-right:6px"></i>Put this money back
+    </div>
+    <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px">
+      Debits each wallet and creates the investment it should have had. Fee-free, one client at a
+      time, and it will not take a wallet negative. Running it twice does not reinvest twice.
+      ${targets.length
+        ? `Open pools today: ${targets.map(t => `<strong>${_esc(t.product_type)}</strong> ${_esc(t.id)}`).join(' · ')}`
+        : '<strong>No pool is open and still raising</strong> — whatever you target has stopped taking subscriptions.'}
+    </p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-bottom:10px">
+      <label style="font-size:0.78rem;color:var(--text-muted)">From pool
+        <select id="wfaSrc" class="form-input" style="width:100%;margin-top:4px">
+          ${pools.map(p => `<option value="${_esc(p.pool_id)}">${_esc(p.pool_name)} — ${p.count} · ${Utils.rand(p.total)}</option>`).join('')}
+        </select>
+      </label>
+      <label style="font-size:0.78rem;color:var(--text-muted)">Into pool (id)
+        <input id="wfaTgt" class="form-input" style="width:100%;margin-top:4px" placeholder="POOL-…">
+      </label>
+      <label style="font-size:0.78rem;color:var(--text-muted)">Only these investments (optional, comma separated)
+        <input id="wfaOnly" class="form-input" style="width:100%;margin-top:4px" placeholder="INV-…">
+      </label>
+    </div>
+    <label style="font-size:0.78rem;color:var(--text-muted);display:flex;gap:6px;align-items:center;margin-bottom:10px">
+      <input type="checkbox" id="wfaSwitches">
+      Include the ones that asked to switch product — only when this target IS the product they chose
+    </label>
+    <button class="btn btn--secondary" onclick="wfaPreview(this)">
+      <i class="fa-solid fa-list-check"></i> Preview
+    </button>
+    <div id="wfaPlanOut" style="margin-top:14px"></div>`;
+}
+
+async function wfaPreview(btn) {
+  const out = document.getElementById('wfaPlanOut');
+  const body = {
+    source_pool_id: document.getElementById('wfaSrc')?.value,
+    target_pool_id: (document.getElementById('wfaTgt')?.value || '').trim(),
+    include_switches: !!document.getElementById('wfaSwitches')?.checked,
+    only: (document.getElementById('wfaOnly')?.value || '').split(',').map(x => x.trim()).filter(Boolean),
+  };
+  if (!body.target_pool_id) { Toast.error('Which pool should it go into?'); return; }
+  const orig = btn.innerHTML; btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Checking…';
+  out.innerHTML = '';
+  try {
+    const plan = await API._fetch('POST', 'admin/maturity-wallet-fallbacks/plan', body);
+    _wfaPlan = { plan, body };
+    if (!plan.count) {
+      out.innerHTML = `<span style="color:var(--text-muted)">Nothing to move with those settings.</span>`;
+      return;
+    }
+    const phrase = `REINVEST ${plan.count} INTO ${plan.target.id}`;
+    out.innerHTML = `
+      ${plan.warnings.map(w => `<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:10px 12px;margin-bottom:8px;color:#f59e0b"><i class="fa-solid fa-triangle-exclamation"></i> ${_esc(w)}</div>`).join('')}
+      <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:12px">
+        <div style="font-weight:800;margin-bottom:8px">
+          ${plan.count} client(s) · ${Utils.rand(plan.total)} → ${_esc(plan.target.name)}
+        </div>
+        <div style="max-height:260px;overflow:auto">
+          <table style="width:100%;font-size:0.76rem;border-collapse:collapse">
+            <tr style="color:var(--text-muted);text-align:left">
+              <th style="padding:3px 6px">Client</th><th style="padding:3px 6px">Instruction</th>
+              <th style="padding:3px 6px;text-align:right">Amount</th><th style="padding:3px 6px;text-align:right">Wallet after</th></tr>
+            ${plan.chosen.map(c => `<tr>
+              <td style="padding:3px 6px">${_esc(c.who)}</td>
+              <td style="padding:3px 6px;color:var(--text-muted)">${_esc(c.instruction || '(none set)')}</td>
+              <td style="padding:3px 6px;text-align:right;font-variant-numeric:tabular-nums">${Utils.rand(c.amount)}</td>
+              <td style="padding:3px 6px;text-align:right;font-variant-numeric:tabular-nums">${Utils.rand(c.balance_after)}</td></tr>`).join('')}
+          </table>
+        </div>
+        ${plan.skipped.length ? `<div style="margin-top:8px;font-size:0.76rem;color:var(--text-muted)">
+           Left out: ${plan.skipped.length} — ${_esc([...new Set(plan.skipped.map(s => s.why))].join(', '))}</div>` : ''}
+      </div>
+      <div style="margin-top:12px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.25);border-radius:8px;padding:12px">
+        <div style="font-size:0.8rem;margin-bottom:6px">This moves real money. To go ahead, type
+          <code style="background:rgba(255,255,255,.08);padding:2px 6px;border-radius:4px">${_esc(phrase)}</code></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input id="wfaConfirm" class="form-input" style="flex:1;min-width:260px" placeholder="type the phrase above" autocomplete="off">
+          <button class="btn btn--primary" onclick="wfaApply(this)"><i class="fa-solid fa-rotate-left"></i> Reinvest</button>
+        </div>
+      </div>`;
+  } catch (e) {
+    out.innerHTML = `<span style="color:#ef4444"><i class="fa-solid fa-circle-exclamation"></i> ${_esc(e.message || 'Preview failed')}</span>`;
+  } finally { btn.disabled = false; btn.innerHTML = orig; }
+}
+
+async function wfaApply(btn) {
+  if (!_wfaPlan) { Toast.error('Preview it first'); return; }
+  const confirm = (document.getElementById('wfaConfirm')?.value || '').trim();
+  const out = document.getElementById('wfaPlanOut');
+  const orig = btn.innerHTML; btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Reinvesting…';
+  try {
+    const r = await API._fetch('POST', 'admin/maturity-wallet-fallbacks/apply',
+      { ..._wfaPlan.body, confirm });
+    out.innerHTML = `
+      <div style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.3);border-radius:8px;padding:12px">
+        <strong style="color:#22c55e">Reinvested ${r.appliedCount} · ${Utils.rand(r.appliedTotal)} into ${_esc(r.target.name)}</strong>
+        ${r.failedCount ? `<div style="color:#ef4444;margin-top:6px">${r.failedCount} failed: ${
+          _esc(r.failed.map(f => `${f.who} (${f.error})`).join('; '))}</div>` : ''}
+        <div style="color:var(--text-muted);margin-top:6px;font-size:0.78rem">
+          Run the audit again to see what is left. The product type on these investments is still
+          wrong — until that is corrected, the next maturity does the same thing.</div>
+      </div>`;
+    Toast.success(`Reinvested ${r.appliedCount}`);
+    _wfaPlan = null;
+  } catch (e) {
+    out.insertAdjacentHTML('afterbegin',
+      `<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:10px 12px;margin-bottom:8px;color:#ef4444">${_esc(e.message || 'Failed')}</div>`);
+  } finally { btn.disabled = false; btn.innerHTML = orig; }
 }
 
 async function runMaturityPreflight(btn) {

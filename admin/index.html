@@ -1400,7 +1400,7 @@
         <div class="panel mb-16">
           <div class="panel__header">
             <span class="panel__title"><i class="fa-solid fa-wallet" style="color:#f59e0b;margin-right:6px"></i>Matured Into Wallets</span>
-            <span style="font-size:0.72rem;color:var(--text-muted)">Read-only — changes nothing</span>
+            <span style="font-size:0.72rem;color:var(--text-muted)">The report is read-only — the correction below is not</span>
           </div>
           <div class="panel__body">
             <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px">
@@ -1421,6 +1421,10 @@
               </button>
             </div>
             <div id="wfaResult" style="margin-top:14px;font-size:0.82rem"></div>
+            <!-- The correction. Hidden until the audit has been run, because
+                 nobody should be able to move this money without first having
+                 looked at it. -->
+            <div id="wfaFixWrap" style="display:none;margin-top:18px;padding-top:16px;border-top:1px solid var(--border)"></div>
           </div>
         </div>
 
@@ -5142,7 +5146,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=21"></script>
 <script src="../js/investor-documents.js?v=5"></script>
-<script src="js/admin.js?v=186"></script>
+<script src="js/admin.js?v=187"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>

@@ -525,6 +525,97 @@ router.get('/maturity-wallet-fallbacks', async (req, res) => {
   }
 });
 
+/* ─── POST /api/admin/maturity-wallet-fallbacks/plan ──────────────────
+   What putting this money back would do. Writes nothing: it exists so the
+   operator reads the consequence before the consequence happens.
+   ──────────────────────────────────────────────────────────────────── */
+router.post('/maturity-wallet-fallbacks/plan', async (req, res) => {
+  try {
+    const { planReinvest } = require('../services/walletFallbackReinvest');
+    const plan = await planReinvest(pool, {
+      sourcePoolId:   req.body.source_pool_id,
+      targetPoolId:   req.body.target_pool_id,
+      includeSwitches: !!req.body.include_switches,
+      only:    Array.isArray(req.body.only)    ? req.body.only    : [],
+      exclude: Array.isArray(req.body.exclude) ? req.body.exclude : [],
+    });
+    return res.json(plan);
+  } catch (err) {
+    console.error('[wallet-fallback-plan]', err.message);
+    return res.status(400).json({ error: err.message });
+  }
+});
+
+/* ─── POST /api/admin/maturity-wallet-fallbacks/apply ─────────────────
+   Moves money: debits each wallet and creates the investment it should have
+   had. Two things gate it beyond the admin guard on this router.
+
+   FIRST, `confirm` must be the exact phrase the plan asked for, which names
+   the count and the target. A mis-click cannot produce it, and a stale tab
+   cannot either — if the plan changed under the operator, the phrase they
+   were given no longer matches the one required now.
+
+   SECOND, the plan is RE-DERIVED here from the same arguments rather than
+   taken from the request. A client that posted its own list of investments
+   and amounts would be telling the server which money to move.
+   ──────────────────────────────────────────────────────────────────── */
+router.post('/maturity-wallet-fallbacks/apply', async (req, res) => {
+  try {
+    const { planReinvest, applyReinvest } = require('../services/walletFallbackReinvest');
+    const opts = {
+      sourcePoolId:   req.body.source_pool_id,
+      targetPoolId:   req.body.target_pool_id,
+      includeSwitches: !!req.body.include_switches,
+      only:    Array.isArray(req.body.only)    ? req.body.only    : [],
+      exclude: Array.isArray(req.body.exclude) ? req.body.exclude : [],
+    };
+
+    const plan = await planReinvest(pool, opts);
+    if (!plan.count) return res.status(400).json({ error: 'Nothing to reinvest.' });
+    if (plan.blocked) return res.status(400).json({ error: plan.warnings.join(' ') });
+
+    const want = `REINVEST ${plan.count} INTO ${plan.target.id}`;
+    if (String(req.body.confirm || '').trim() !== want) {
+      return res.status(400).json({
+        error: 'Confirmation does not match what this plan would do.',
+        expected: want,
+      });
+    }
+
+    const result = await applyReinvest(pool, opts);
+
+    /* After the writes, like every other money path here: an audit row
+       records what happened and must not be able to undo it. */
+    await audit.log({
+      actorId: req.user?.id || null,
+      actorEmail: req.user?.email || null,
+      actorRole: req.user?.role || null,
+      action: 'maturity_wallet_fallback_reinvested',
+      entityType: 'investment_pool',
+      entityId: result.target.id,
+      description: `Reinvested ${result.appliedCount} wallet-fallback maturity(ies), ` +
+                   `R${result.appliedTotal.toFixed(2)}, from ${opts.sourcePoolId} into ${result.target.id}` +
+                   (result.failedCount ? ` — ${result.failedCount} failed` : ''),
+      before: { source_pool_id: opts.sourcePoolId, planned: plan.count, planned_total: plan.total },
+      after: {
+        applied: result.appliedCount, applied_total: result.appliedTotal,
+        failed: result.failedCount,
+        investments: result.applied.map(a => ({
+          from: a.investment_id, to: a.new_investment_id,
+          investor_id: a.investor_id, amount: a.amount,
+        })),
+      },
+      ip: req.ip || null,
+      platform: 'admin',
+    });
+
+    return res.json(result);
+  } catch (err) {
+    console.error('[wallet-fallback-apply]', err.message);
+    return res.status(400).json({ error: err.message });
+  }
+});
+
 /* ─── GET /api/admin/pool-maturity-report?pool_id=X ───────────────────
    One maturing pool: every investment in it, the maturity instruction each
    client gave, and where that instruction sends the money — including the
