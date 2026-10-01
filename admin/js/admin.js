@@ -16493,8 +16493,23 @@ async function runMaturityPreflight(btn) {
   try {
     const r = await API._fetch('GET', `admin/maturity-preflight?days=${encodeURIComponent(days)}`);
 
-    if (r.nothingDue) {
+    /* "Nothing matures" is not the same as "nothing to look at". The handover
+       check reports a pool whose dates would send its rollovers into the wrong
+       round, and that is worth saying on a quiet night above all — it is when
+       there is still time to change the date. */
+    if (r.nothingDue && !(r.findings || []).length) {
       resultEl.innerHTML = `<span style="color:var(--text-muted)"><i class="fa-solid fa-circle-check"></i> Nothing matures in the next ${_esc(r.horizonDays)} days.</span>`;
+      return;
+    }
+    if (r.nothingDue) {
+      resultEl.innerHTML =
+        `<div style="color:var(--text-muted);margin-bottom:10px"><i class="fa-solid fa-circle-check"></i> ` +
+        `Nothing matures in the next ${_esc(r.horizonDays)} days — but there is something to fix before it does.</div>` +
+        (r.findings || []).map(f => `
+          <div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:10px 12px;margin-bottom:8px">
+            <strong style="color:#f59e0b">${_esc(f.section)}</strong>
+            <div style="color:var(--text-muted);margin-top:4px">${_esc(f.message)}</div>
+          </div>`).join('');
       return;
     }
 

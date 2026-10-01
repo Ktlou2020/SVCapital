@@ -17,6 +17,10 @@
 
 const STOP = 'STOP', ATTENTION = 'ATTENTION', OK = 'OK';
 
+/* A DATE column arrives as a JS Date from node-postgres; this is the day it
+   names, for a message somebody reads. */
+const iso = d => (d ? new Date(d).toISOString().slice(0, 10) : '—');
+
 /* The cycler's own trigger expression. Importing it costs a module load that
    only defines a cron schedule (nothing is scheduled until startPoolCyclerCron
    is called), and buys a guarantee that this report and that job are looking
@@ -146,8 +150,57 @@ async function runMaturityPreflight(db, { horizonDays = 14 } = {}) {
     blockers: [], notifications: {}, findings, summary: {},
   };
 
+  /* ── The handover ────────────────────────────────────────────────
+     The sequence a succession depends on:
+
+       23:00 on the close date   the maturing pool pays out, and whatever
+                                 reinvests lands in the pool that is STILL
+                                 OPEN and closing at midnight
+       00:01 the next day        that pool deploys, and its successor opens
+
+     What holds the two apart is one date. The cycler fires on a pool's
+     INVESTMENT START DATE, and the console auto-fills that as close + 1 — so
+     at 23:00 on the close date the pool has not reached it, survives the
+     cycle pass, and is there to receive the money.
+
+     Set it to the close date, or earlier, and the pool deploys during that
+     same 23:00 run. The maturities then find the SUCCESSOR instead, which is
+     open and raising, so nothing is lost and nothing errors — the money
+     simply sits raising for another whole cycle before it is deployed, a
+     month later than the client's capital should have gone to work. Nothing
+     on any screen says so afterwards, which is why it is said here, before
+     the night it happens. */
+  const { rows: badHandover } = await db.query(`
+    SELECT id, name, product_type, end_date,
+           ${INVESTMENT_START} AS investment_start
+      FROM investment_pools
+     WHERE status = 'open'
+       AND end_date IS NOT NULL
+       AND product_type IN ('cattle','short_term')
+       AND ${INVESTMENT_START} <= end_date
+     ORDER BY end_date`);
+  result.handover = badHandover.map(p => ({
+    poolId: p.id, name: p.name, productType: p.product_type,
+    endDate: p.end_date, investmentStartDate: p.investment_start }));
+  for (const p of badHandover) {
+    add(ATTENTION, 'handover',
+      `${p.id} "${p.name}": it stops raising on ${iso(p.end_date)} but deploys on ` +
+      `${iso(p.investment_start)} — on or before that. It will be deployed in the same ` +
+      `23:00 run that pays out anything maturing that day, so those rollovers go into its ` +
+      `successor and raise for another full cycle before being deployed. Set the investment ` +
+      `start date to the day after it closes.`);
+  }
+
   if (!maturing.length) {
-    result.summary = { stops: 0, attentions: 0, verdict: 'nothing-due' };
+    /* Counted, not zeroed. The handover check above runs before this return
+       precisely so a badly dated pool is reported on a quiet night — which is
+       when there is still time to change it — and a summary that said "0
+       attentions" would hide the finding it just made. */
+    result.summary = {
+      stops: findings.filter(f => f.level === STOP).length,
+      attentions: findings.filter(f => f.level === ATTENTION).length,
+      verdict: findings.length ? 'review' : 'nothing-due',
+    };
     return result;
   }
 
