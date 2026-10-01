@@ -78,13 +78,21 @@ console.log('\nthe console and the command line read the same module');
 console.log('\nthe question it answers is the right one');
 {
   const code = strip(SVC);
-  ok('it decides "full reinvest" on maturity_instruction', /maturity_instruction/.test(code));
+  ok('it decides the product on maturity_instruction', /maturity_instruction/.test(code));
   ok('and never on payout_option',
      !/payout_option/.test(code),
      'that column DEFAULTs to reinvest and would report every row as one');
   ok('a blank instruction counts as a reinvest',
-     /FULL_REINVEST = new Set\(\[[^\]]*''/.test(code),
+     /SAME_PRODUCT = new Set\(\[[^\]]*''/.test(code),
      'a blank instruction already defaults to reinvest in the engine');
+  /* The fallback amount is only ever the portion the engine tried to
+     reinvest — the cash part was paid out first — and for these two it
+     routes to inv.product_type, the same product. */
+  ok('payout_return and payout_custom count as the same product',
+     /SAME_PRODUCT = new Set\(\[[\s\S]{0,120}'payout_return', 'payout_custom'/.test(code),
+     'their fallback amount IS the portion that was meant to be reinvested');
+  ok('and a switch does not, because it names a different one',
+     !/'switch_product'/.test(code.slice(code.indexOf('SAME_PRODUCT'), code.indexOf('SAME_PRODUCT') + 220)));
   ok('it reports whether the wallet still holds the money',
      /wallet_holds_it/.test(code) && /shortfall/.test(code));
   ok('per ACCOUNT, not per credit',
@@ -109,8 +117,8 @@ console.log('\nthe panel is wired up');
      /admin\/maturity-wallet-fallbacks/.test(ADMIN));
   ok('it leads with what can actually be put back',
      /Can be put back/.test(ADMIN) && /Wallet spent/.test(ADMIN));
-  ok('and names the ones that asked for something else',
-     /other than a full reinvest/.test(ADMIN));
+  ok('and names the ones that asked for a different product',
+     /switch into a different product/.test(ADMIN));
   ok('the console JS was re-stamped',
      (() => {
        const m = HTML.match(/js\/admin\.js\?v=(\d+)/);
@@ -167,9 +175,10 @@ console.log('\nthe panel is wired up');
     const r = await runWalletFallbackAudit(db, { poolId: 'WFA-SRC' });
     const s = r.summary;
     ok('finds all four credits', s.credits === 4 && Math.abs(s.total - 31000) < 0.01, JSON.stringify(s));
-    ok('three are a full reinvest (one of them blank)', s.fullReinvest === 3, String(s.fullReinvest));
-    ok('one asked for something else, and is kept apart',
-       s.partial === 1 && Math.abs(s.partialTotal - 9000) < 0.01, JSON.stringify([s.partial, s.partialTotal]));
+    ok('three go back into the same product (one of them blank)', s.sameProduct === 3, String(s.sameProduct));
+    ok('the switch is kept apart, because it names a different product',
+       s.otherProduct === 1 && Math.abs(s.otherProductTotal - 9000) < 0.01,
+       JSON.stringify([s.otherProduct, s.otherProductTotal]));
     ok('two can actually be put back', s.movable === 2 && Math.abs(s.movableTotal - 14000) < 0.01,
        JSON.stringify([s.movable, s.movableTotal]));
     ok('and the spent wallet is blocked, not quietly included',

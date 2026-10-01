@@ -16235,13 +16235,13 @@ function _wfaExportCsv() {
   if (!_wfaReport) { Toast.error('Run the audit first'); return; }
   const head = ['paid_at', 'investor', 'email', 'investor_id', 'investment_id', 'sub_account',
                 'from_pool', 'from_pool_id', 'investment_product_type', 'instruction',
-                'full_reinvest', 'amount', 'wallet_balance_now', 'wallet_holds_it',
+                'same_product', 'amount', 'wallet_balance_now', 'wallet_holds_it',
                 'already_corrected'];
   const esc = v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
   const body = _wfaReport.items.map(i => [
     (i.paid_at || '').slice(0, 10), i.name, i.email, i.investor_id, i.investment_id,
     i.sub_name || '', i.pool_name, i.pool_id, i.investment_product_type, i.instruction || '(none set)',
-    i.full_reinvest ? 'yes' : 'no', i.amount, i.wallet_balance, i.wallet_holds_it ? 'yes' : 'no',
+    i.same_product ? 'yes' : 'no', i.amount, i.wallet_balance, i.wallet_holds_it ? 'yes' : 'no',
     i.already_corrected ? 'yes' : 'no',
   ].map(esc).join(','));
   const blob = new Blob([[head.join(',')].concat(body).join('\n')], { type: 'text/csv' });
@@ -16302,12 +16302,12 @@ async function runWalletFallbackAudit(btn) {
          </div>`
       : '';
 
-    const partial = s.partial
+    const other = s.otherProduct
       ? `<div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:8px;padding:12px;margin-top:14px">
-           <strong style="color:#f59e0b">${s.partial} asked for something other than a full reinvest.</strong>
+           <strong style="color:#f59e0b">${s.otherProduct} asked to switch into a different product.</strong>
            <div style="color:var(--text-muted);margin-top:4px">
-             ${Utils.rand(s.partialTotal)} across instructions like payout return, custom payout and product switch.
-             Rolling these in full would overrule the instruction rather than correct a failure.
+             ${Utils.rand(s.otherProductTotal)}. This money belongs in that product's pool, not this one,
+             so it is kept apart rather than counted as something to put back here.
            </div>
          </div>`
       : '';
@@ -16315,11 +16315,11 @@ async function runWalletFallbackAudit(btn) {
     el.innerHTML = `
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
         ${tile('Paid to wallets', s.outstanding, s.outstandingTotal, '#f59e0b', 'still uncorrected')}
-        ${tile('Can be put back', s.movable, s.movableTotal, '#22c55e', 'full reinvest, wallet holds it')}
+        ${tile('Can be put back', s.movable, s.movableTotal, '#22c55e', 'same product, wallet holds it')}
         ${tile('Wallet spent', s.blocked, s.blockedTotal, '#ef4444', 'needs a decision')}
-        ${tile('Other instruction', s.partial, s.partialTotal, '#9ca3af', 'not a full reinvest')}
+        ${tile('Other product', s.otherProduct, s.otherProductTotal, '#9ca3af', 'asked to switch')}
       </div>
-      ${partial}
+      ${other}
       ${blocked}
       <div style="margin-top:14px">
         <div style="font-weight:700;margin-bottom:6px">Product type on the investment</div>

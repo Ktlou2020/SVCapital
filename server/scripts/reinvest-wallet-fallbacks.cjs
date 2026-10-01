@@ -14,15 +14,17 @@
  *
  * ── What it will and will not touch ───────────────────────────────────
  *
- * By default only the instructions that mean "reinvest the whole thing":
- * reinvest, auto_reinvest, and blank (which already defaults to reinvest).
+ * By default every instruction that reinvests into the SAME product:
+ * reinvest, auto_reinvest, blank — and also payout_return and payout_custom,
+ * because the fallback amount on those is precisely the portion the engine
+ * tried to reinvest, the cash part having already been paid out.
  *
- * It EXCLUDES, unless --include-partial is given:
- *   payout_return   the investor asked for the return in cash
- *   payout_custom   the investor asked for part of it in cash
+ * It EXCLUDES, unless --include-switches is given:
  *   switch_product  the investor asked for a DIFFERENT product
- * Rolling those in full would not correct a failure, it would overrule an
- * instruction. They are listed either way so the decision is visible.
+ *   custom_switch   the same, for part of it
+ * Those name a product this target is not, so the pool their money belongs in
+ * is a different one. --include-switches overrides it; --exclude <id,…> drops
+ * any row by investment id. Everything excluded is listed either way.
  *
  * It skips, and reports, any account whose wallet no longer holds the amount.
  *
@@ -52,7 +54,8 @@ const { Pool } = require('pg');
 const ARGV  = process.argv.slice(2);
 const flag  = n => { const i = ARGV.indexOf(n); return i > -1 ? (ARGV[i + 1] || '') : ''; };
 const APPLY = ARGV.includes('--apply');
-const PARTIAL = ARGV.includes('--include-partial');
+const SWITCHES = ARGV.includes('--include-switches');
+const EXCLUDE  = new Set((flag('--exclude') || '').split(',').map(x => x.trim()).filter(Boolean));
 const SRC   = flag('--pool');
 const TGT   = flag('--target');
 
@@ -73,11 +76,19 @@ const rand = n => 'R' + Number(n || 0).toLocaleString('en-US',
 const pad  = (s, n) => String(s == null ? '—' : s).padEnd(n).slice(0, n);
 const H    = s => console.log(`\n${s}\n${'─'.repeat(s.length)}`);
 
-/* A blank instruction already resolves to reinvest, so it belongs with them.
+/* A MAT-FALLBACK credit is never the whole maturity: whatever the client
+   asked to take in cash was paid out first, and only the portion the engine
+   then tried to reinvest can fall through. payout_return and payout_custom
+   both reinvest into inv.product_type — the SAME product — so moving their
+   fallback amount completes the instruction rather than overruling it.
+
+   The switches are the exception: they name a different product, so the pool
+   this money belongs in is not the one being targeted here.
+
    payout_option is NOT consulted: it carries a column default of 'reinvest'
-   and would report every row as a full reinvest. */
-const FULL_REINVEST = new Set(['reinvest', 'auto_reinvest', '', 'pending']);
-const PARTIAL_KINDS = new Set(['payout_return', 'payout_custom', 'switch_product', 'custom_switch']);
+   and would report every row as a reinvest. */
+const SAME_PRODUCT = new Set(['reinvest', 'auto_reinvest', '', 'pending',
+                              'payout_return', 'payout_custom']);
 
 (async () => {
   let planned = 0, skippedShort = 0, skippedDone = 0, held = 0, wrote = 0, failed = 0;
@@ -96,6 +107,19 @@ const PARTIAL_KINDS = new Set(['payout_return', 'payout_custom', 'switch_product
     if (tgt.status !== 'open') {
       console.log(`  ⚠  This pool is "${tgt.status}", not open. It has stopped raising, and once it`);
       console.log('     has deployed, money added here joins a round that is already running.');
+    } else if (tgt.end_date) {
+      /* status 'open' is not the same as still raising. A pool keeps that
+         status until the cycler deploys it, which happens at 00:01 on its
+         investment start date — so between its close date and that moment it
+         reads as open while being shut. Putting money in then is a decision,
+         not an accident, so it is named rather than silently allowed. */
+      const closes = new Date(tgt.end_date).toISOString().slice(0, 10);
+      const today  = new Date(Date.now() + 2 * 3600 * 1000).toISOString().slice(0, 10); // SAST
+      if (closes < today) {
+        console.log(`  ⚠  This pool closed raising on ${closes}. Its status is still "open" only`);
+        console.log('     because the cycler has not deployed it yet. Adding money now puts it into');
+        console.log('     a round that has stopped taking subscriptions — deliberate, or a mistake?');
+      }
     }
 
     /* Every fallback credit out of the source pool, with the instruction the
@@ -128,20 +152,21 @@ const PARTIAL_KINDS = new Set(['payout_return', 'payout_custom', 'switch_product
       const rec = { ...r, amt, bal,
                     who: `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.investor_id };
       if (r.already_done) { done.push(rec); continue; }
-      const full = FULL_REINVEST.has(r.instruction);
-      if (!full && !PARTIAL) { excluded.push(rec); continue; }
+      if (EXCLUDE.has(r.investment_id)) { rec.why = 'named in --exclude'; excluded.push(rec); continue; }
+      const same = SAME_PRODUCT.has(r.instruction);
+      if (!same && !SWITCHES) { rec.why = 'asked for a different product'; excluded.push(rec); continue; }
       if (bal + 0.005 < amt) { short.push(rec); continue; }
       chosen.push(rec);
     }
     skippedDone = done.length; skippedShort = short.length; planned = chosen.length;
 
     if (excluded.length) {
-      H(`Excluded — the investor asked for something other than a full reinvest (${excluded.length})`);
+      H(`Excluded (${excluded.length})`);
       for (const e of excluded.sort((a, b) => b.amt - a.amt)) {
-        console.log(`  ${pad(e.who, 26)} ${pad(e.instruction, 16)} ${rand(e.amt).padStart(14)}`);
+        console.log(`  ${pad(e.who, 26)} ${pad(e.instruction, 16)} ${rand(e.amt).padStart(14)}  ${e.why || ''}`);
       }
-      console.log('\n  Rolling these in full would overrule the instruction, not correct a failure.');
-      console.log('  Add --include-partial only if that is a decision somebody has taken.');
+      console.log('\n  A switch names a DIFFERENT product, so this target is not where that money');
+      console.log('  belongs. --include-switches overrides that; --exclude <id,…> drops any row.');
     }
     if (short.length) {
       H(`Skipped — the wallet no longer holds the money (${short.length})`);
@@ -267,7 +292,7 @@ const PARTIAL_KINDS = new Set(['payout_return', 'payout_custom', 'switch_product
     console.log(`  failed              ${failed}`);
     console.log(`  skipped (wallet)    ${skippedShort}`);
     console.log(`  skipped (done)      ${skippedDone}`);
-    if (!PARTIAL) console.log(`  excluded (partial)  ${excluded.length}`);
+    if (excluded.length) console.log(`  excluded            ${excluded.length}`);
     console.log('\n  The product_type on these investments is still wrong. Until it is corrected');
     console.log('  with remap-pool-product-type.cjs, the next maturity does the same thing.\n');
   } catch (err) {
