@@ -18,11 +18,35 @@
    READ-ONLY. Every statement here is a SELECT.
    ═══════════════════════════════════════════════════════════════════ */
 
-/* A blank instruction already resolves to reinvest, so it belongs with them.
-   investments.payout_option is deliberately NOT consulted: it carries a
-   column DEFAULT of 'reinvest' and would report every row as a full
+/* Which instructions meant "put this back into a pool of the SAME product".
+
+   A MAT-FALLBACK credit is never the whole maturity. The engine pays out
+   whatever the client asked to take in cash FIRST, and only the portion it
+   then tried to reinvest can fall through to the wallet. So the amount on
+   one of these rows is, by construction, money that was meant to reach a
+   pool — including for the instructions that sound like a payout:
+
+     payout_return   reinvestAmount(principal,      inv.product_type)
+     payout_custom   reinvestAmount(gross - custom, inv.product_type)
+
+   Both route to the investment's OWN product type, so reinvesting that
+   amount completes the instruction rather than overruling it. Roderick
+   Harris asked for his R221.47 return in cash and got it; the R9,931.22 of
+   capital he asked to keep invested is what fell through.
+
+   The switches are the exception, and the only real one:
+
+     switch_product  reinvestAmount(gross,          switchType)
+     custom_switch   reinvestAmount(gross - custom, switchType)
+
+   Those name a DIFFERENT product, so the pool they belong in is not the one
+   this product's money goes to. They are kept apart for that reason alone.
+
+   investments.payout_option is deliberately NOT consulted anywhere: it
+   carries a column DEFAULT of 'reinvest' and would report every row as a
    reinvest, which is how this question gets answered wrongly. */
-const FULL_REINVEST = new Set(['reinvest', 'auto_reinvest', '', 'pending']);
+const SAME_PRODUCT = new Set(['reinvest', 'auto_reinvest', '', 'pending',
+                              'payout_return', 'payout_custom']);
 
 const r2 = n => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -101,7 +125,7 @@ async function runWalletFallbackAudit(db, opts = {}) {
       pool_product_type: r.pool_product_type || null,
       investment_product_type: r.investment_product_type || null,
       instruction: r.instruction,
-      full_reinvest: FULL_REINVEST.has(r.instruction),
+      same_product: SAME_PRODUCT.has(r.instruction),
       amount: r2(r.amount),
       paid_at: r.paid_at,
       wallet_balance: acc.balance,
@@ -112,10 +136,10 @@ async function runWalletFallbackAudit(db, opts = {}) {
 
   const sum = xs => r2(xs.reduce((a, x) => a + x.amount, 0));
   const outstanding  = items.filter(i => !i.already_corrected);
-  const fullReinvest = outstanding.filter(i => i.full_reinvest);
-  const partial      = outstanding.filter(i => !i.full_reinvest);
-  const movable      = fullReinvest.filter(i => i.wallet_holds_it);
-  const blocked      = fullReinvest.filter(i => !i.wallet_holds_it);
+  const sameProduct  = outstanding.filter(i => i.same_product);
+  const otherProduct = outstanding.filter(i => !i.same_product);
+  const movable      = sameProduct.filter(i => i.wallet_holds_it);
+  const blocked      = sameProduct.filter(i => !i.wallet_holds_it);
 
   const byType = {};
   for (const i of outstanding) {
@@ -139,14 +163,14 @@ async function runWalletFallbackAudit(db, opts = {}) {
       alreadyCorrected: items.filter(i => i.already_corrected).length,
       outstanding: outstanding.length,
       outstandingTotal: sum(outstanding),
-      fullReinvest: fullReinvest.length,
-      fullReinvestTotal: sum(fullReinvest),
+      sameProduct: sameProduct.length,
+      sameProductTotal: sum(sameProduct),
       movable: movable.length,
       movableTotal: sum(movable),
       blocked: blocked.length,
       blockedTotal: sum(blocked),
-      partial: partial.length,
-      partialTotal: sum(partial),
+      otherProduct: otherProduct.length,
+      otherProductTotal: sum(otherProduct),
       accounts: accounts.size,
     },
     byProductType: byType,
@@ -161,4 +185,4 @@ async function runWalletFallbackAudit(db, opts = {}) {
   };
 }
 
-module.exports = { runWalletFallbackAudit, FULL_REINVEST };
+module.exports = { runWalletFallbackAudit, SAME_PRODUCT };
