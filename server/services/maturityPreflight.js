@@ -21,7 +21,13 @@ const STOP = 'STOP', ATTENTION = 'ATTENTION', OK = 'OK';
    only defines a cron schedule (nothing is scheduled until startPoolCyclerCron
    is called), and buys a guarantee that this report and that job are looking
    at the same pools. */
-const { INVESTMENT_START } = require('../jobs/poolCyclerCron');
+/* TODAY comes from the job for the same reason INVESTMENT_START does. The
+   cycler reasons on the South African business day, because that is the wall
+   clock its 00:01 schedule is pinned to; the database's own date is UTC.
+   Between 00:00 and 02:00 SAST those are different days — and 00:01 SAST is
+   exactly when the job runs, so a pre-flight on the database's date would
+   disagree with the job at the only moment the disagreement matters. */
+const { INVESTMENT_START, TODAY } = require('../jobs/poolCyclerCron');
 
 /* What the engine will actually do with an instruction, as against what the
    column says — delivery bikes pay out rather than reinvest, and Ethical &
@@ -54,7 +60,7 @@ async function resolveRolloverTarget(db, productType) {
       FROM investment_pools
      WHERE status = 'open'
        AND product_type = $1
-       AND (end_date IS NULL OR end_date >= CURRENT_DATE)
+       AND (end_date IS NULL OR end_date >= ${TODAY})
        AND (max_investment IS NULL OR COALESCE(current_invested,0) < max_investment)
      ORDER BY end_date ASC NULLS LAST, created_at ASC
      LIMIT 1`, [productType]);
@@ -126,7 +132,7 @@ async function runMaturityPreflight(db, { horizonDays = 14 } = {}) {
      WHERE i.status = 'active'
        AND i.end_date IS NOT NULL
        AND i.maturity_processed_at IS NULL
-       AND i.end_date <= CURRENT_DATE + $1::int
+       AND i.end_date <= ${TODAY} + $1::int
      ORDER BY i.end_date, i.pool_id`, [horizon]);
 
   const result = {
@@ -224,8 +230,8 @@ async function runMaturityPreflight(db, { horizonDays = 14 } = {}) {
            ${INVESTMENT_START} AS investment_start
       FROM investment_pools
      WHERE end_date IS NOT NULL
-       AND ${INVESTMENT_START} <= CURRENT_DATE
-       AND ${INVESTMENT_START} >= CURRENT_DATE - INTERVAL '60 days'
+       AND ${INVESTMENT_START} <= ${TODAY}
+       AND ${INVESTMENT_START} >= ${TODAY} - INTERVAL '60 days'
        AND cycled_at IS NULL
        AND product_type IN ('cattle','short_term')
        AND COALESCE(status, '') <> 'closed'
@@ -315,10 +321,10 @@ async function runMaturityPreflight(db, { horizonDays = 14 } = {}) {
   const { rows: stale } = await db.query(`
     SELECT id, name, product_type, status, end_date,
            ${INVESTMENT_START} AS investment_start,
-           (CURRENT_DATE - end_date) AS days_closed,
-           (${INVESTMENT_START} > CURRENT_DATE) AS awaiting_start
+           (${TODAY} - end_date) AS days_closed,
+           (${INVESTMENT_START} > ${TODAY}) AS awaiting_start
       FROM investment_pools
-     WHERE status = 'open' AND end_date IS NOT NULL AND end_date < CURRENT_DATE
+     WHERE status = 'open' AND end_date IS NOT NULL AND end_date < ${TODAY}
      ORDER BY end_date`);
   result.stalePools = stale.map(s => ({
     poolId: s.id, name: s.name, productType: s.product_type, endDate: s.end_date,

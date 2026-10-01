@@ -375,12 +375,69 @@ const iso = d => (d instanceof Date ? d : new Date(d)).toISOString().slice(0, 10
        'the sweep must respect a deployment date an admin set by hand');
 
     /* ── The schedule ───────────────────────────────────────────────── */
-    console.log('\nthe time it runs');
+    console.log('\nthe time it runs, and the day it thinks it is');
     {
-      const src = fs.readFileSync(path.join(ROOT, 'server', 'jobs', 'poolCyclerCron.js'), 'utf8');
-      ok('00:01, daily', /cron\.schedule\('1 0 \* \* \*'/.test(src));
-      ok('in SAST, not the server\'s UTC', /timezone: 'Africa\/Johannesburg'/.test(src),
-         'without this it fires at 02:01 SAST, and on the last day of the month at 00:01 UTC it fires a day early');
+      const src  = fs.readFileSync(path.join(ROOT, 'server', 'jobs', 'poolCyclerCron.js'), 'utf8');
+      const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+      const job  = require(path.join(ROOT, 'server', 'jobs', 'poolCyclerCron.js'));
+
+      ok('00:01, daily', /cron\.schedule\('1 0 \* \* \*'/.test(code));
+      ok('in SAST, not the server\'s UTC', job.BUSINESS_TZ === 'Africa/Johannesburg', String(job.BUSINESS_TZ));
+
+      /* The schedule and the query have to take their timezone from the SAME
+         place. Pinning the cron and leaving the SQL on CURRENT_DATE is the
+         bug this section exists for: the job woke at the right local time and
+         then asked the database a question in the wrong timezone. */
+      ok('the schedule takes the timezone from the shared constant',
+         /timezone: BUSINESS_TZ/.test(code) && !/timezone: 'Africa\/Johannesburg'/.test(code),
+         'a second literal is a second thing to forget');
+      ok('and so does the date the queries compare against',
+         /const TODAY = `\(now\(\) AT TIME ZONE '\$\{BUSINESS_TZ\}'\)::date`/.test(code),
+         String(job.TODAY));
+      ok('no query in the job still asks for CURRENT_DATE',
+         !/CURRENT_DATE/.test(code),
+         'Postgres evaluates CURRENT_DATE in the DATABASE timezone, which is UTC');
+      ok('every date comparison in the job uses it',
+         (code.match(/\$\{TODAY\}/g) || []).length >= 5,
+         `found ${(code.match(/\$\{TODAY\}/g) || []).length}`);
+
+      /* The boundary, tested against the real expression at the real firing
+         moment rather than whenever this check happens to run.
+
+         00:01 SAST on the 1st IS 22:01 UTC on the 30th. A pool due to deploy
+         on the 1st has to be visible to that run; under CURRENT_DATE it was
+         not, and the pool sat open until 23:00 SAST the same evening. */
+      const at = t => job.TODAY.replace('now()', `TIMESTAMPTZ '${t}'`);
+      const FIRES   = '2026-09-30 22:01:00+00';   // 00:01 SAST, 1 October
+      const DAY_BEF = '2026-09-29 22:01:00+00';   // 00:01 SAST, 30 September
+
+      const { rows: [b] } = await pool.query(
+        `SELECT ${at(FIRES)}                                   AS today_now,
+                (TIMESTAMPTZ '${FIRES}' AT TIME ZONE 'UTC')::date AS today_before,
+                DATE '2026-10-01' <= ${at(FIRES)}              AS due_pool_selected,
+                DATE '2026-10-01' <= (TIMESTAMPTZ '${FIRES}' AT TIME ZONE 'UTC')::date AS was_selected_before,
+                DATE '2026-10-01' <= ${at(DAY_BEF)}            AS selected_a_day_early`);
+
+      ok('at 00:01 SAST on the 1st the job knows it is the 1st',
+         iso(b.today_now) === '2026-10-01', iso(b.today_now));
+      ok('and a pool due that day is picked up', b.due_pool_selected === true);
+      ok('which is exactly what CURRENT_DATE got wrong',
+         iso(b.today_before) === '2026-09-30' && b.was_selected_before === false,
+         'if this ever passes, the database timezone changed and this fix is moot');
+      ok('and it still does not run a day early',
+         b.selected_a_day_early === false,
+         'a pool must not deploy before its investment start date');
+
+      /* The pre-flight exists to predict what the job will do. It imported
+         INVESTMENT_START to avoid a second definition of the trigger and then
+         kept its own notion of today, which would disagree with the job in
+         the 00:00–02:00 SAST window the job actually runs in. */
+      const pf = fs.readFileSync(path.join(ROOT, 'server', 'services', 'maturityPreflight.js'), 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+      ok('the pre-flight takes its date from the job too',
+         /require\('\.\.\/jobs\/poolCyclerCron'\)/.test(pf) && /TODAY/.test(pf));
+      ok('and keeps no second notion of today', !/CURRENT_DATE/.test(pf),
+         'it would predict a different set from the job at 00:01 SAST');
     }
 
     /* ── The pre-flight agrees with the job ─────────────────────────── */
