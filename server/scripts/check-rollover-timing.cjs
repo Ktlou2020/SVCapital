@@ -250,8 +250,12 @@ const statusOf = async id => (await pool.query(
          'the ordering is what makes the sweep able to move the target');
       const cyc = require('fs').readFileSync(
         path.join(ROOT, 'server', 'jobs', 'poolCyclerCron.js'), 'utf8');
+      /* The cycler now takes its timezone from one exported constant, which
+         the SQL's idea of "today" is built from as well — the two drifting
+         apart is what had every pool deploying a day late. */
       ok('the cycler runs at 00:01 SAST',
-         /cron\.schedule\('1 0 \* \* \*'/.test(cyc) && /timezone: 'Africa\/Johannesburg'/.test(cyc));
+         /cron\.schedule\('1 0 \* \* \*'/.test(cyc)
+         && require(path.join(ROOT, 'server', 'jobs', 'poolCyclerCron.js')).BUSINESS_TZ === 'Africa/Johannesburg');
 
       /* Behavioural, not a regex on the source: run the job against a pool
          closing today and see whether it survives. Its investment start date

@@ -40,6 +40,33 @@
 const cron = require('node-cron');
 const pool = require('../db/pool');
 
+/* The business day — and the one timezone this job reasons in.
+
+   This has to be ONE constant used by both the schedule and the SQL, because
+   the two disagreeing is the bug it replaced. The cron was pinned to
+   Africa/Johannesburg and fired at 00:01 SAST, which is 22:01 UTC the day
+   BEFORE. The queries then asked CURRENT_DATE, which Postgres evaluates in the
+   DATABASE's timezone — nothing sets one, so UTC — and at that instant the
+   database's today was still yesterday.
+
+   A pool whose investment start date was the 1st was therefore invisible to
+   the run at 00:01 on the 1st:
+
+     DATE '2026-10-01' <= CURRENT_DATE   -- 2026-09-30 in UTC  ->  false
+
+   It only deployed at 23:00 SAST that evening, when maturityCron calls this
+   again and 21:00 UTC is finally the same calendar day. So every cattle and
+   short_term pool had been deploying, and opening its successor, a day late —
+   a two-hour timezone gap turned into a one-day delay by a date boundary.
+
+   The comment on the schedule below already warned about exactly this and
+   pinned the cron; what it could not pin was the database's idea of today. */
+const BUSINESS_TZ = 'Africa/Johannesburg';
+
+/* Today, on the wall clock the schedule is pinned to. Interpolated from the
+   constant above, which is a module literal and never user input. */
+const TODAY = `(now() AT TIME ZONE '${BUSINESS_TZ}')::date`;
+
 /* The trigger date, as SQL. A pool without an explicit investment start date
    falls back to the day after it closes, which is exactly what
    _autoCalcInvStartDate fills into the console form — so a pool created before
@@ -99,8 +126,8 @@ async function cycleExpiredPools() {
     SELECT *, ${INVESTMENT_START} AS effective_investment_start
     FROM investment_pools
     WHERE end_date IS NOT NULL
-      AND ${INVESTMENT_START} <= CURRENT_DATE
-      AND ${INVESTMENT_START} >= CURRENT_DATE - INTERVAL '60 days'
+      AND ${INVESTMENT_START} <= ${TODAY}
+      AND ${INVESTMENT_START} >= ${TODAY} - INTERVAL '60 days'
       AND cycled_at IS NULL
       AND product_type IN ('cattle','short_term')
       AND status NOT IN ('closed')
@@ -285,7 +312,7 @@ async function cycleExpiredPools() {
             AND status = 'open'
             AND id <> $2
             AND end_date IS NOT NULL
-            AND ${INVESTMENT_START} <= CURRENT_DATE`,
+            AND ${INVESTMENT_START} <= ${TODAY}`,
         [p.product_type, newId]
       );
 
@@ -346,7 +373,7 @@ async function stopRaisingLapsedPools() {
        SET status = 'active', updated_at = NOW()
      WHERE status = 'open'
        AND end_date IS NOT NULL
-       AND ${INVESTMENT_START} <= CURRENT_DATE
+       AND ${INVESTMENT_START} <= ${TODAY}
        AND product_type <> ALL($1::text[])
     RETURNING id, name, product_type, end_date`, [CYCLED_TYPES]);
 
@@ -364,7 +391,7 @@ async function stopRaisingLapsedPools() {
       FROM investment_pools
      WHERE status = 'open'
        AND end_date IS NOT NULL
-       AND ${INVESTMENT_START} <= CURRENT_DATE
+       AND ${INVESTMENT_START} <= ${TODAY}
        AND product_type = ANY($1::text[])
      ORDER BY end_date`, [CYCLED_TYPES]);
 
@@ -405,11 +432,14 @@ function startPoolCyclerCron() {
       console.error('[poolCycler] cron error:', err.message);
     }
   }, {
-    timezone: 'Africa/Johannesburg',
+    /* The same constant the queries compute their date from. Pinning one
+       without the other is what put every pool a day late. */
+    timezone: BUSINESS_TZ,
   });
   console.log('[poolCycler] scheduled: daily at 00:01 SAST — deploy pools reaching their investment start date, open successors');
 }
 
 module.exports = {
-  startPoolCyclerCron, cycleExpiredPools, stopRaisingLapsedPools, INVESTMENT_START,
+  startPoolCyclerCron, cycleExpiredPools, stopRaisingLapsedPools,
+  INVESTMENT_START, BUSINESS_TZ, TODAY,
 };
