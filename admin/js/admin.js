@@ -16219,6 +16219,131 @@ async function runStoredMarkupAudit(btn) {
   }
 }
 
+/* ─── Matured into wallets ────────────────────────────────────────────
+   The engine matches the rollover target on product_type alone. An
+   investment carrying a type no pool uses matches nothing, and the money is
+   paid to the wallet instead of reinvested.
+
+   The figure that cannot be read off a maturity report is whether the wallet
+   STILL holds it — a client who has spent or withdrawn since cannot be rolled
+   over without going negative — so that is what this leads with.
+
+   Read-only. The endpoint issues SELECTs and nothing else. */
+let _wfaReport = null;
+
+function _wfaExportCsv() {
+  if (!_wfaReport) { Toast.error('Run the audit first'); return; }
+  const head = ['paid_at', 'investor', 'email', 'investor_id', 'investment_id', 'sub_account',
+                'from_pool', 'from_pool_id', 'investment_product_type', 'instruction',
+                'full_reinvest', 'amount', 'wallet_balance_now', 'wallet_holds_it',
+                'already_corrected'];
+  const esc = v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+  const body = _wfaReport.items.map(i => [
+    (i.paid_at || '').slice(0, 10), i.name, i.email, i.investor_id, i.investment_id,
+    i.sub_name || '', i.pool_name, i.pool_id, i.investment_product_type, i.instruction || '(none set)',
+    i.full_reinvest ? 'yes' : 'no', i.amount, i.wallet_balance, i.wallet_holds_it ? 'yes' : 'no',
+    i.already_corrected ? 'yes' : 'no',
+  ].map(esc).join(','));
+  const blob = new Blob([[head.join(',')].concat(body).join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `matured-into-wallets-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+async function runWalletFallbackAudit(btn) {
+  const el = document.getElementById('wfaResult');
+  const since = document.getElementById('wfaSince')?.value || '';
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Checking…';
+  el.innerHTML = '';
+  document.getElementById('wfaCsvBtn').style.display = 'none';
+  try {
+    const r = await API._fetch('GET',
+      'admin/maturity-wallet-fallbacks' + (since ? `?since=${encodeURIComponent(since)}` : ''));
+    _wfaReport = r;
+
+    if (!r.summary.credits) {
+      el.innerHTML = `<span style="color:var(--text-muted)"><i class="fa-solid fa-circle-check"></i> ` +
+        `No maturity has been paid to a wallet for want of a matching pool${since ? ' since ' + _esc(since) : ''}.</span>`;
+      return;
+    }
+
+    const s = r.summary;
+    const tile = (label, n, amt, colour, note) => `
+      <div style="flex:1;min-width:150px;background:rgba(255,255,255,0.03);border:1px solid var(--border);
+                  border-left:3px solid ${colour};border-radius:8px;padding:10px 12px">
+        <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em">${label}</div>
+        <div style="font-size:1.15rem;font-weight:800;color:${colour};font-variant-numeric:tabular-nums">${n}</div>
+        <div style="font-size:0.78rem;color:var(--text-muted);font-variant-numeric:tabular-nums">${Utils.rand(amt)}</div>
+        ${note ? `<div style="font-size:0.7rem;color:var(--text-muted);margin-top:3px">${_esc(note)}</div>` : ''}
+      </div>`;
+
+    const targets = (r.rolloverTargets || [])
+      .map(t => `<li><strong>${_esc(t.product_type)}</strong> → ${_esc(t.name)} <span style="color:var(--text-muted)">(${_esc(t.id)})</span></li>`)
+      .join('') || '<li style="color:var(--text-muted)">No pool is open and still raising for any product type.</li>';
+
+    const blocked = (r.blockedAccounts || []).length
+      ? `<div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);border-radius:8px;padding:12px;margin-top:14px">
+           <strong style="color:#ef4444">${r.blockedAccounts.length} account(s) no longer hold the money.</strong>
+           <div style="color:var(--text-muted);margin:4px 0 8px">Putting these back would take the wallet negative — each needs its own decision.</div>
+           <table style="width:100%;font-size:0.78rem;border-collapse:collapse">
+             <tr style="color:var(--text-muted);text-align:left">
+               <th style="padding:3px 6px">Client</th><th style="padding:3px 6px;text-align:right">Owed</th>
+               <th style="padding:3px 6px;text-align:right">In wallet</th><th style="padding:3px 6px;text-align:right">Short by</th></tr>
+             ${r.blockedAccounts.map(a => `<tr>
+               <td style="padding:3px 6px">${_esc(a.name)}${a.sub_name ? ` <span style="color:var(--text-muted)">· ${_esc(a.sub_name)}</span>` : ''}</td>
+               <td style="padding:3px 6px;text-align:right;font-variant-numeric:tabular-nums">${Utils.rand(a.owed)}</td>
+               <td style="padding:3px 6px;text-align:right;font-variant-numeric:tabular-nums">${Utils.rand(a.balance)}</td>
+               <td style="padding:3px 6px;text-align:right;color:#ef4444;font-variant-numeric:tabular-nums">${Utils.rand(a.shortfall)}</td></tr>`).join('')}
+           </table>
+         </div>`
+      : '';
+
+    const partial = s.partial
+      ? `<div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:8px;padding:12px;margin-top:14px">
+           <strong style="color:#f59e0b">${s.partial} asked for something other than a full reinvest.</strong>
+           <div style="color:var(--text-muted);margin-top:4px">
+             ${Utils.rand(s.partialTotal)} across instructions like payout return, custom payout and product switch.
+             Rolling these in full would overrule the instruction rather than correct a failure.
+           </div>
+         </div>`
+      : '';
+
+    el.innerHTML = `
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+        ${tile('Paid to wallets', s.outstanding, s.outstandingTotal, '#f59e0b', 'still uncorrected')}
+        ${tile('Can be put back', s.movable, s.movableTotal, '#22c55e', 'full reinvest, wallet holds it')}
+        ${tile('Wallet spent', s.blocked, s.blockedTotal, '#ef4444', 'needs a decision')}
+        ${tile('Other instruction', s.partial, s.partialTotal, '#9ca3af', 'not a full reinvest')}
+      </div>
+      ${partial}
+      ${blocked}
+      <div style="margin-top:14px">
+        <div style="font-weight:700;margin-bottom:6px">Product type on the investment</div>
+        <table style="width:100%;font-size:0.78rem;border-collapse:collapse">
+          ${Object.entries(r.byProductType).sort((a, b) => b[1].total - a[1].total).map(([k, v]) => `
+            <tr><td style="padding:3px 6px">${_esc(k)}</td>
+                <td style="padding:3px 6px;text-align:right;font-variant-numeric:tabular-nums">${v.count}</td>
+                <td style="padding:3px 6px;text-align:right;font-variant-numeric:tabular-nums">${Utils.rand(v.total)}</td>
+                <td style="padding:3px 6px;color:var(--text-muted)">${['cattle','short_term'].includes(k) ? '' : 'no pool uses this type'}</td></tr>`).join('')}
+        </table>
+      </div>
+      <div style="margin-top:14px">
+        <div style="font-weight:700;margin-bottom:6px">Where each type would roll into today</div>
+        <ul style="margin:0;padding-left:18px;color:var(--text)">${targets}</ul>
+      </div>`;
+    document.getElementById('wfaCsvBtn').style.display = '';
+  } catch (e) {
+    el.innerHTML = `<span style="color:#ef4444"><i class="fa-solid fa-circle-exclamation"></i> ${_esc(e.message || 'Audit failed')}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }
+}
+
 async function runMaturityPreflight(btn) {
   const resultEl = document.getElementById('preflightResult');
   const days = document.getElementById('preflightDays')?.value || 14;

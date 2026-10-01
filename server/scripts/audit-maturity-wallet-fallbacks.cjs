@@ -29,6 +29,10 @@
  * It also names the pool each one WOULD have gone to had the product_type been
  * right, so the correction has a target that is derived rather than assumed.
  *
+ * The queries live in server/services/walletFallbackAudit.js, which the admin
+ * console's "Matured Into Wallets" panel also calls — one module, so the
+ * console and the command line cannot describe the same money differently.
+ *
  * READ-ONLY. Every statement is a SELECT, under a statement timeout. It writes
  * nothing, and it is safe to point at production.
  *

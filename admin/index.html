@@ -1396,6 +1396,34 @@
           </div>
         </div>
 
+        <!-- Maturities paid to a wallet because no pool matched -->
+        <div class="panel mb-16">
+          <div class="panel__header">
+            <span class="panel__title"><i class="fa-solid fa-wallet" style="color:#f59e0b;margin-right:6px"></i>Matured Into Wallets</span>
+            <span style="font-size:0.72rem;color:var(--text-muted)">Read-only — changes nothing</span>
+          </div>
+          <div class="panel__body">
+            <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px">
+              The engine picks the pool to roll into by <strong>product type</strong> and nothing else.
+              Where an investment carries a type no pool uses, nothing matches and the money is paid to
+              the client's wallet instead of being reinvested. This finds those, and &mdash; the part a
+              maturity report cannot tell you &mdash; whether <strong>the wallet still holds the money</strong>,
+              which is what decides whether they can be put back.
+            </p>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+              <label style="font-size:0.8rem;color:var(--text-muted)">Since</label>
+              <input id="wfaSince" type="date" class="form-input" style="width:auto;padding:6px 10px;font-size:0.82rem">
+              <button class="btn btn--secondary" onclick="runWalletFallbackAudit(this)">
+                <i class="fa-solid fa-magnifying-glass-dollar"></i> Run Audit
+              </button>
+              <button class="btn btn--secondary" onclick="_wfaExportCsv()" id="wfaCsvBtn" style="display:none">
+                <i class="fa-solid fa-file-csv"></i> Export CSV
+              </button>
+            </div>
+            <div id="wfaResult" style="margin-top:14px;font-size:0.82rem"></div>
+          </div>
+        </div>
+
         <!-- Stranded EFT deposits -->
         <div class="panel mb-16">
           <div class="panel__header">
@@ -5114,7 +5142,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=21"></script>
 <script src="../js/investor-documents.js?v=5"></script>
-<script src="js/admin.js?v=185"></script>
+<script src="js/admin.js?v=186"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>
