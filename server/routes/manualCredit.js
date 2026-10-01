@@ -500,6 +500,31 @@ router.get('/maturity-preflight', async (req, res) => {
   }
 });
 
+/* ─── GET /api/admin/maturity-wallet-fallbacks ────────────────────────
+   Maturities that were credited to a wallet because no pool matched the
+   investment's product_type. Says who, how much, under which instruction,
+   and — the part that cannot be read off a maturity report — whether the
+   wallet still holds the money.
+
+   Read-only: the service it calls issues SELECTs and nothing else, so the
+   route writes nothing and audits nothing because nothing happens.
+
+   Admin/director only, via the router-level guard at the top of this file.
+   ──────────────────────────────────────────────────────────────────── */
+router.get('/maturity-wallet-fallbacks', async (req, res) => {
+  try {
+    const { runWalletFallbackAudit } = require('../services/walletFallbackAudit');
+    const report = await runWalletFallbackAudit(pool, {
+      since:  req.query.since,
+      poolId: req.query.pool_id,
+    });
+    return res.json(report);
+  } catch (err) {
+    console.error('[maturity-wallet-fallbacks]', err);
+    return res.status(500).json({ error: 'Audit failed: ' + err.message });
+  }
+});
+
 /* ─── GET /api/admin/pool-maturity-report?pool_id=X ───────────────────
    One maturing pool: every investment in it, the maturity instruction each
    client gave, and where that instruction sends the money — including the
