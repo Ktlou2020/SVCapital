@@ -1400,6 +1400,11 @@ function renderDashboard() {
    between a policy opening and a blank tab.
    ═══════════════════════════════════════════════════════════════════ */
 let _policies = [];
+/* Which policies this person has opened in this sitting. Acknowledging is
+   enabled only after the document has actually been fetched — "I have read
+   this" should not be pressable from a list of titles. */
+const _policyOpened = new Set();
+let _policyOutstanding = 0;
 
 const POLICY_LABELS = {
   hr: 'People & HR', compliance: 'Compliance', finance: 'Finance',
@@ -1426,6 +1431,7 @@ async function renderPolicies() {
   try {
     const r = await get('staff-policies');
     _policies = r.policies || [];
+    _policyOutstanding = r.outstanding || 0;
   } catch (e) {
     el.innerHTML = `<div class="view-header"><div><h1>Policies</h1></div></div>
       <div class="empty-state"><i class="fa-solid fa-circle-exclamation"></i>
@@ -1439,8 +1445,23 @@ async function renderPolicies() {
   const size = n => !n ? '' : n >= 1048576 ? `${(n/1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n/1024))} KB`;
   const when = d => d ? new Date(d).toLocaleDateString('en-ZA', { year:'numeric', month:'short', day:'numeric' }) : '';
 
+  const ackBit = p => {
+    if (!p.requires_ack) return '';
+    if (p.acknowledged_at) {
+      return `<span class="policy-ack policy-ack--done"><i class="fa-solid fa-circle-check"></i> Read ${esc(when(p.acknowledged_at))}</span>`;
+    }
+    const opened = _policyOpened.has(p.id);
+    return `<button class="policy-ack policy-ack--todo" ${opened ? '' : 'disabled'}
+              title="${opened ? 'Record that you have read this' : 'Open the policy first'}"
+              onclick="event.stopPropagation();acknowledgePolicy('${esc(p.id)}')">
+              <i class="fa-solid ${opened ? 'fa-check' : 'fa-lock'}"></i>
+              ${opened ? 'I have read this' : 'Open it first'}
+            </button>`;
+  };
+
   const card = p => `
-    <div class="policy-card" onclick="openPolicy('${esc(p.id)}')" role="button" tabindex="0"
+    <div class="policy-card${p.requires_ack && !p.acknowledged_at ? ' policy-card--todo' : ''}"
+         onclick="openPolicy('${esc(p.id)}')" role="button" tabindex="0"
          onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openPolicy('${esc(p.id)}')}">
       <div class="policy-card__icon"><i class="fa-solid ${POLICY_ICONS[p.category] || 'fa-file-lines'}"></i></div>
       <div class="policy-card__body">
@@ -1453,7 +1474,13 @@ async function renderPolicies() {
           ${p.supersedes_title ? ` · replaces “${esc(p.supersedes_title)}”` : ''}
         </div>
       </div>
-      <div class="policy-card__open"><i class="fa-solid fa-arrow-up-right-from-square"></i></div>
+      <div class="policy-card__actions">
+        ${ackBit(p)}
+        ${_canPublishPolicies() ? `<button class="policy-who" title="Who has read it"
+            onclick="event.stopPropagation();showPolicyReaders('${esc(p.id)}')">
+            <i class="fa-solid fa-users"></i> ${p.ack_count || 0}</button>` : ''}
+        <span class="policy-card__open"><i class="fa-solid fa-arrow-up-right-from-square"></i></span>
+      </div>
     </div>`;
 
   el.innerHTML = `
@@ -1463,6 +1490,11 @@ async function renderPolicies() {
         <button class="btn btn--primary" onclick="openPolicyUpload()">
           <i class="fa-solid fa-upload"></i> Publish a policy</button></div>` : ''}
     </div>
+    ${_policyOutstanding ? `<div class="policy-banner">
+        <i class="fa-solid fa-circle-exclamation"></i>
+        <div><strong>${_policyOutstanding} ${_policyOutstanding === 1 ? 'policy needs' : 'policies need'} your acknowledgement.</strong>
+        <div style="color:var(--muted);font-size:0.8rem;margin-top:2px">Open each one, then confirm you have read it.</div></div>
+      </div>` : ''}
     ${!_policies.length ? `<div class="empty-state"><i class="fa-solid fa-file-shield"></i>
         <p>No policies have been published yet.${_canPublishPolicies() ? ' Publish the first one.' : ''}</p></div>` : ''}
     ${Object.keys(byCat).sort().map(cat => `
@@ -1496,8 +1528,73 @@ async function openPolicy(id) {
     /* Released on the next tick rather than immediately: revoking before the
        new tab has read it gives a blank page. */
     setTimeout(() => URL.revokeObjectURL(url), 60000);
+    /* Fetched, so the button stops being a lock. Re-rendered rather than
+       patched so the card and the banner cannot disagree. */
+    if (!_policyOpened.has(id)) { _policyOpened.add(id); renderPolicies(); }
   } catch (e) {
     showToast(e.message || 'Could not open that policy.', 'error');
+  }
+}
+
+async function acknowledgePolicy(id) {
+  try {
+    const r = await post(`staff-policies/${encodeURIComponent(id)}/acknowledge`, {});
+    const p = _policies.find(x => x.id === id);
+    if (p) { p.acknowledged_at = r.acknowledged_at; p.ack_count = (p.ack_count || 0) + (r.already ? 0 : 1); }
+    /* Only when this press is what recorded it. An "already" answer means the
+       shelf never counted it as outstanding, so taking one off the banner
+       would leave it a policy short of the truth. */
+    if (!r.already) _policyOutstanding = Math.max(0, _policyOutstanding - 1);
+    showToast(r.already ? 'Already recorded' : 'Recorded — thank you', 'success');
+    renderPolicies();
+  } catch (e) {
+    showToast(e.message || 'Could not record that.', 'error');
+  }
+}
+
+/* Who has read it, and who has not. The second list is the one worth having;
+   a report of who HAS read it answers the easy question. */
+async function showPolicyReaders(id) {
+  const m = document.getElementById('generic-modal');
+  m.innerHTML = `<div class="modal"><div class="modal-body">Loading…</div></div>`;
+  m.classList.add('open');
+  try {
+    const r = await get(`staff-policies/${encodeURIComponent(id)}/acknowledgements`);
+    const when = d => d ? new Date(d).toLocaleString('en-ZA', { dateStyle:'medium', timeStyle:'short' }) : '';
+    m.innerHTML = `<div class="modal">
+      <div class="modal-header">
+        <h3>${esc(r.policy.title)}${r.policy.version ? ' v' + esc(r.policy.version) : ''}</h3>
+        <button class="btn btn--ghost btn--sm" onclick="closeModal('generic-modal')"><i class="fa-solid fa-xmark"></i></button></div>
+      <div class="modal-body">
+        ${!r.policy.requires_ack ? `<p style="color:var(--muted)">This policy does not ask for an acknowledgement.</p>` : ''}
+        <div style="display:flex;gap:10px;margin-bottom:14px">
+          <div style="flex:1;padding:10px 12px;border:1px solid var(--border);border-left:3px solid #22c55e;border-radius:8px">
+            <div style="font-size:0.7rem;color:var(--muted);text-transform:uppercase">Read it</div>
+            <div style="font-size:1.2rem;font-weight:800;color:#22c55e">${r.readCount}</div></div>
+          <div style="flex:1;padding:10px 12px;border:1px solid var(--border);border-left:3px solid #f59e0b;border-radius:8px">
+            <div style="font-size:0.7rem;color:var(--muted);text-transform:uppercase">Have not</div>
+            <div style="font-size:1.2rem;font-weight:800;color:#f59e0b">${r.outstandingCount}</div></div>
+        </div>
+        ${r.outstandingCount ? `<div style="font-weight:700;margin-bottom:6px">Still to read it</div>
+          <table style="width:100%;font-size:0.8rem;border-collapse:collapse;margin-bottom:14px">
+            ${r.outstanding.map(e => `<tr>
+              <td style="padding:3px 6px">${esc([e.first_name, e.last_name].filter(Boolean).join(' ') || e.id)}</td>
+              <td style="padding:3px 6px;color:var(--muted)">${esc(e.role || '')}</td>
+              <td style="padding:3px 6px;color:var(--muted)">${esc(e.email || '')}</td></tr>`).join('')}
+          </table>` : `<p style="color:#22c55e;margin-bottom:14px"><i class="fa-solid fa-circle-check"></i> Everyone on staff has read it.</p>`}
+        ${r.readCount ? `<div style="font-weight:700;margin-bottom:6px">Read it</div>
+          <table style="width:100%;font-size:0.8rem;border-collapse:collapse">
+            ${r.read.map(a => `<tr>
+              <td style="padding:3px 6px">${esc(a.employee_name || a.employee_id)}</td>
+              <td style="padding:3px 6px;color:var(--muted)">${esc(when(a.acknowledged_at))}</td></tr>`).join('')}
+          </table>` : ''}
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn--secondary" onclick="closeModal('generic-modal')">Close</button></div>
+    </div>`;
+  } catch (e) {
+    m.innerHTML = `<div class="modal"><div class="modal-body" style="color:#ef4444">${esc(e.message || 'Could not load that.')}</div>
+      <div class="modal-footer"><button class="btn btn--secondary" onclick="closeModal('generic-modal')">Close</button></div></div>`;
   }
 }
 
@@ -1526,6 +1623,9 @@ function openPolicyUpload() {
           <option value="">Nothing — this is a new policy</option>
           ${live.map(p => `<option value="${esc(p.id)}">${esc(p.title)}${p.version ? ' v' + esc(p.version) : ''}</option>`).join('')}
         </select></div>
+      <div class="form-group"><label style="display:flex;gap:8px;align-items:center">
+        <input type="checkbox" id="polRequiresAck" checked>
+        Staff must confirm they have read it</label></div>
       <div class="form-group"><label>File</label>
         <input type="file" id="polFile" accept=".pdf,image/png,image/jpeg,image/webp">
         <div style="font-size:0.76rem;color:var(--muted);margin-top:4px">PDF or an image, up to 12 MB. Replacing one withdraws it at the same moment, so there is never a day with two live versions.</div></div>
@@ -1564,6 +1664,7 @@ async function submitPolicy() {
       version:        document.getElementById('polVersion').value.trim(),
       effective_date: document.getElementById('polEffective').value || null,
       supersedes_id:  document.getElementById('polSupersedes').value || null,
+      requires_ack:   document.getElementById('polRequiresAck').checked,
       filename:       file.name,
       file_data:      dataUrl,
     });

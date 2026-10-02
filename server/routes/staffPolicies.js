@@ -49,18 +49,25 @@ const requireAuthor = [requireAuth, requireRole('admin', 'director')];
 router.get('/', requireAuth, requireStaff, async (req, res) => {
   try {
     const all = String(req.query.include_superseded || '') === 'true';
+    /* acknowledged is for the person asking, not a count for everyone — the
+       shelf has to be able to say "you still owe this one". */
     const { rows } = await pool.query(`
       SELECT p.id, p.title, p.category, p.summary, p.filename, p.mimetype, p.file_size,
              p.version, p.effective_date, p.supersedes_id, p.uploaded_by_name,
-             p.is_active, p.created_at, p.updated_at,
+             p.is_active, p.requires_ack, p.created_at, p.updated_at,
              s.title AS supersedes_title,
-             r.id    AS superseded_by_id, r.title AS superseded_by_title
+             r.id    AS superseded_by_id, r.title AS superseded_by_title,
+             a.acknowledged_at,
+             (SELECT COUNT(*)::int FROM staff_policy_acks x WHERE x.policy_id = p.id) AS ack_count
         FROM staff_policies p
         LEFT JOIN staff_policies s ON s.id = p.supersedes_id
         LEFT JOIN staff_policies r ON r.supersedes_id = p.id AND r.is_active
+        LEFT JOIN staff_policy_acks a ON a.policy_id = p.id AND a.employee_id = $1
        ${all ? '' : 'WHERE p.is_active'}
-       ORDER BY p.category, COALESCE(p.effective_date, p.created_at::date) DESC, p.title`);
-    return res.json({ categories: CATEGORIES, policies: rows });
+       ORDER BY p.category, COALESCE(p.effective_date, p.created_at::date) DESC, p.title`,
+      [req.user.empId]);
+    const outstanding = rows.filter(r => r.is_active && r.requires_ack && !r.acknowledged_at).length;
+    return res.json({ categories: CATEGORIES, outstanding, policies: rows });
   } catch (err) {
     console.error('[staff-policies] list', err.message);
     return res.status(500).json({ error: 'Could not load the policies.' });
@@ -96,11 +103,87 @@ router.get('/:id/file', requireAuth, requireStaff, async (req, res) => {
   }
 });
 
+/* ─── POST /api/staff-policies/:id/acknowledge ────────────────────────
+   "I have read this." One row per person per policy — and because a policy is
+   replaced rather than edited, that is one per VERSION, which is the only
+   reading of "has read the policy" worth recording.
+
+   Idempotent: pressing it twice is pressing it once, and the FIRST time is
+   the one kept. A later press must not quietly move the date somebody was
+   relying on.
+   ──────────────────────────────────────────────────────────────────── */
+router.post('/:id/acknowledge', requireAuth, requireStaff, async (req, res) => {
+  try {
+    const { rows: [p] } = await pool.query(
+      'SELECT id, title, is_active, requires_ack FROM staff_policies WHERE id = $1', [req.params.id]);
+    if (!p) return res.status(404).json({ error: 'Policy not found.' });
+    if (!p.is_active) return res.status(409).json({ error: 'That policy has been withdrawn.' });
+    if (!p.requires_ack) return res.status(400).json({ error: 'That policy does not need acknowledging.' });
+
+    const name = [req.user?.firstName, req.user?.lastName].filter(Boolean).join(' ') || req.user?.email || null;
+    const { rows: [ack] } = await pool.query(`
+      INSERT INTO staff_policy_acks (policy_id, employee_id, employee_name, employee_email, ip_address)
+      VALUES ($1,$2,$3,$4,$5)
+      ON CONFLICT (policy_id, employee_id) DO NOTHING
+      RETURNING acknowledged_at`,
+      [p.id, req.user.empId, name, req.user?.email || null, req.ip || null]);
+
+    /* DO NOTHING returns no row when it was already there, so the existing
+       date is read back rather than invented. */
+    const when = ack ? ack.acknowledged_at : (await pool.query(
+      'SELECT acknowledged_at FROM staff_policy_acks WHERE policy_id = $1 AND employee_id = $2',
+      [p.id, req.user.empId])).rows[0]?.acknowledged_at;
+
+    return res.json({ ok: true, policy_id: p.id, acknowledged_at: when, already: !ack });
+  } catch (err) {
+    console.error('[staff-policies] acknowledge', err.message);
+    return res.status(500).json({ error: 'Could not record that.' });
+  }
+});
+
+/* ─── GET /api/staff-policies/:id/acknowledgements ────────────────────
+   Who has read it, and — the half that matters — who has not.
+
+   The outstanding list is every ACTIVE employee without a row, computed here
+   rather than left to the reader to work out from a list of names. A report
+   that only says who has read it answers the easy question.
+   ──────────────────────────────────────────────────────────────────── */
+router.get('/:id/acknowledgements', requireAuthor, async (req, res) => {
+  try {
+    const { rows: [p] } = await pool.query(
+      'SELECT id, title, version, requires_ack FROM staff_policies WHERE id = $1', [req.params.id]);
+    if (!p) return res.status(404).json({ error: 'Policy not found.' });
+
+    const { rows: read } = await pool.query(`
+      SELECT employee_id, employee_name, employee_email, acknowledged_at
+        FROM staff_policy_acks WHERE policy_id = $1
+       ORDER BY acknowledged_at`, [p.id]);
+
+    const { rows: outstanding } = await pool.query(`
+      SELECT e.id, e.first_name, e.last_name, e.email, e.role
+        FROM employees e
+       WHERE COALESCE(e.status, 'active') = 'active'
+         AND NOT EXISTS (SELECT 1 FROM staff_policy_acks a
+                          WHERE a.policy_id = $1 AND a.employee_id = e.id)
+       ORDER BY e.first_name, e.last_name`, [p.id]);
+
+    return res.json({
+      policy: p,
+      read, outstanding,
+      readCount: read.length, outstandingCount: outstanding.length,
+    });
+  } catch (err) {
+    console.error('[staff-policies] acknowledgements', err.message);
+    return res.status(500).json({ error: 'Could not load that.' });
+  }
+});
+
 /* ─── POST /api/staff-policies ────────────────────────────────────────
    Upload. Directors and admins only. */
 router.post('/', requireAuthor, async (req, res) => {
   try {
     const { title, category, summary, filename, file_data, version, effective_date, supersedes_id } = req.body || {};
+    const requiresAck = req.body.requires_ack === undefined ? true : !!req.body.requires_ack;
     if (!String(title || '').trim())     return res.status(400).json({ error: 'Give the policy a title.' });
     if (!String(filename || '').trim())  return res.status(400).json({ error: 'The file needs a name.' });
 
@@ -127,13 +210,13 @@ router.post('/', requireAuthor, async (req, res) => {
       await client.query(`
         INSERT INTO staff_policies
           (id, title, category, summary, filename, mimetype, file_size, file_data,
-           version, effective_date, supersedes_id, uploaded_by, uploaded_by_name)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+           version, effective_date, supersedes_id, uploaded_by, uploaded_by_name, requires_ack)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
         [id, String(title).trim(), cat, String(summary || '').trim() || null,
          String(filename).trim(), check.mime || 'application/octet-stream', check.size || null,
          String(file_data), String(version || '').trim() || null,
          effective_date || null, supersedes_id || null,
-         req.user?.empId || req.user?.id || null, actorName]);
+         req.user?.empId || req.user?.id || null, actorName, requiresAck]);
 
       /* Replacing retires the old one in the same breath. Two steps would
          leave both live for however long the second took to be remembered. */
@@ -186,6 +269,7 @@ router.patch('/:id', requireAuthor, async (req, res) => {
     if (req.body.version        !== undefined) put('version', String(req.body.version).trim() || null);
     if (req.body.effective_date !== undefined) put('effective_date', req.body.effective_date || null);
     if (req.body.is_active      !== undefined) put('is_active', !!req.body.is_active);
+    if (req.body.requires_ack   !== undefined) put('requires_ack', !!req.body.requires_ack);
     if (!sets.length) return res.status(400).json({ error: 'Nothing to change.' });
 
     vals.push(req.params.id);

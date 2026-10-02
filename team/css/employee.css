@@ -1731,3 +1731,47 @@ html, body {
   .policy-card { gap: 10px; padding: 12px; }
   .policy-card__icon { width: 34px; height: 34px; }
 }
+
+/* Acknowledgements. A policy somebody still owes reads differently from one
+   they have signed off, at a glance and without relying on colour alone. */
+.policy-card__actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.policy-card--todo { border-left: 3px solid #f59e0b; }
+
+.policy-ack {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 0.74rem; font-weight: 700;
+  padding: 5px 10px; border-radius: 20px;
+  border: 1px solid transparent; white-space: nowrap;
+}
+.policy-ack--done { background: rgba(34,197,94,0.12); color: #22c55e; }
+.policy-ack--todo { background: #f59e0b; color: #1a1a1a; cursor: pointer; }
+.policy-ack--todo:disabled {
+  background: rgba(255,255,255,0.06);
+  color: var(--muted, #9ca3af);
+  cursor: not-allowed;
+}
+.policy-ack--todo:not(:disabled):hover { filter: brightness(1.08); }
+
+.policy-who {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 0.74rem; font-weight: 700;
+  padding: 5px 9px; border-radius: 20px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  color: var(--muted, #9ca3af); cursor: pointer;
+}
+.policy-who:hover { color: var(--accent, #eda5ff); border-color: var(--accent, #eda5ff); }
+
+.policy-banner {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 12px 14px; margin-bottom: 16px;
+  background: rgba(245,158,11,0.08);
+  border: 1px solid rgba(245,158,11,0.3);
+  border-radius: 10px;
+  color: #f59e0b;
+}
+
+@media (max-width: 680px) {
+  .policy-card { flex-wrap: wrap; }
+  .policy-card__actions { width: 100%; justify-content: flex-end; }
+}
