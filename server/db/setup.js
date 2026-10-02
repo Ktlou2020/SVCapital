@@ -1504,6 +1504,34 @@ CREATE TABLE IF NOT EXISTS staff_policies (
 CREATE INDEX IF NOT EXISTS staff_policies_live_idx
   ON staff_policies(category, effective_date DESC) WHERE is_active;
 
+/* Not every policy needs signing. A reference document is published the same
+   way and should not sit on somebody's list for ever. */
+DO $$ BEGIN
+  BEGIN ALTER TABLE staff_policies ADD COLUMN requires_ack BOOLEAN NOT NULL DEFAULT true; EXCEPTION WHEN duplicate_column THEN NULL; END;
+END $$;
+
+/* Who has read what.
+
+   The key is (policy_id, employee_id), so acknowledging twice is the same as
+   acknowledging once and the button is safe to press again. Because a policy
+   is REPLACED rather than edited — a new row with a new id — this is per
+   VERSION without a version column: acknowledging v2 says nothing about v3,
+   which is the only reading of "has read the policy" that is worth anything.
+
+   The name and email are copied in rather than joined at read time. An
+   acknowledgement is a record about a person at a moment, and it has to
+   survive that person leaving and their employee row going with them. */
+CREATE TABLE IF NOT EXISTS staff_policy_acks (
+  policy_id       TEXT NOT NULL REFERENCES staff_policies(id) ON DELETE CASCADE,
+  employee_id     TEXT NOT NULL,
+  employee_name   TEXT,
+  employee_email  TEXT,
+  acknowledged_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ip_address      TEXT,
+  PRIMARY KEY (policy_id, employee_id)
+);
+CREATE INDEX IF NOT EXISTS staff_policy_acks_emp_idx ON staff_policy_acks(employee_id);
+
 CREATE TABLE IF NOT EXISTS pe_documents (
   id          TEXT PRIMARY KEY,
   company_id  TEXT,
@@ -4116,6 +4144,11 @@ async function autoSetup() {
           title: 'Company policies now live in the staff portal',
           body: 'Directors publish a policy; everyone on staff can open it. The list is grouped by area \u2014 People & HR, Compliance, Finance, Operations, IT & Security, Health & Safety \u2014 and each one shows its version, when it took effect, who published it and which policy it replaced. Publishing a replacement withdraws the one it replaces at the same moment, so there is never a day with two live versions, and the old one is kept rather than deleted because \u201cwhat did the policy say in March\u201d is a question somebody eventually asks. Only PDFs and images are accepted, and the type is read from the file itself rather than from what the uploader calls it. A policy opens through the portal with your own sign-in, so it is never a public link that can be forwarded out of the building, and investors cannot see this section at all.',
           where: 'Team portal \u2192 Policies, under Learn in the sidebar. Directors and admins see a \u201cPublish a policy\u201d button there; everyone else sees the shelf.' },
+
+        { id: 'ANN-2026-POLICY-ACKS', area: 'admin', icon: 'fa-user-check',
+          title: 'Policies now ask you to confirm you have read them',
+          body: 'A policy nobody can show was read is a document, not a policy. Each one may now ask for an acknowledgement, and the shelf opens with a line telling you how many you still owe. The button beside a policy you have not signed stays locked until you have actually opened the file \u2014 a one-click confirmation next to a document nobody opened records the click and nothing else. Pressing it twice is pressing it once, and the first date is the one kept, so a later press cannot quietly move a date somebody is relying on. Because a policy is replaced rather than edited, an acknowledgement belongs to the version: signing v1 leaves v2 outstanding, which is the only reading of \u201chas read the policy\u201d worth recording. Directors and admins get the other half \u2014 a count on every policy that opens a list of who has read it and, above it, who has not, drawn from everyone currently employed rather than left to be worked out from a list of names.',
+          where: 'Team portal \u2192 Policies, under Learn in the sidebar \u2014 the button on each policy card. Directors: the people icon on a card shows who has not read it. The \u201cStaff must confirm they have read it\u201d tick is on the Publish a policy form.' },
 
         { id: 'ANN-2026-SUPPORT-NUMBER', area: 'both', icon: 'fa-phone',
           title: 'Support WhatsApp number changed',
