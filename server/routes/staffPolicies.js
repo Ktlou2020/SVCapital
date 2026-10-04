@@ -10,8 +10,10 @@
                req.user.empId is what distinguishes staff from an investor,
                and it is the same test the generic table router uses.
 
-     WRITING   admin or director, the pairing every other authoring surface
-               on this platform uses.
+     WRITING   director, and nothing else. Publishing a policy and reading
+               who has not acknowledged one are both director acts, done in
+               the director portal; the staff portal only ever shows the
+               shelf and your own acknowledgement.
 
    The file is validated from its BYTES, never from what the uploader says it
    is, and served back from its own endpoint as real bytes rather than as a
@@ -41,7 +43,11 @@ function requireStaff(req, res, next) {
   next();
 }
 
-const requireAuthor = [requireAuth, requireRole('admin', 'director')];
+/* Directors only. Publishing a policy is an act of the board, and the record
+   of who has read one names colleagues and their standing — neither belongs
+   to whoever happens to hold the admin console. The same 'director' role
+   gates the director portal, which is where both now live. */
+const requireDirector = [requireAuth, requireRole('director')];
 
 /* ─── GET /api/staff-policies ─────────────────────────────────────────
    The shelf. Metadata only: file_data is megabytes per row and nobody
@@ -67,6 +73,12 @@ router.get('/', requireAuth, requireStaff, async (req, res) => {
        ORDER BY p.category, COALESCE(p.effective_date, p.created_at::date) DESC, p.title`,
       [req.user.empId]);
     const outstanding = rows.filter(r => r.is_active && r.requires_ack && !r.acknowledged_at).length;
+
+    /* How many colleagues have signed a policy is a director's figure, not a
+       staff-wide one. The staff shelf answers "have I read this", never
+       "who else has". */
+    if (req.user.role !== 'director') for (const r of rows) delete r.ack_count;
+
     return res.json({ categories: CATEGORIES, outstanding, policies: rows });
   } catch (err) {
     console.error('[staff-policies] list', err.message);
@@ -148,7 +160,7 @@ router.post('/:id/acknowledge', requireAuth, requireStaff, async (req, res) => {
    rather than left to the reader to work out from a list of names. A report
    that only says who has read it answers the easy question.
    ──────────────────────────────────────────────────────────────────── */
-router.get('/:id/acknowledgements', requireAuthor, async (req, res) => {
+router.get('/:id/acknowledgements', requireDirector, async (req, res) => {
   try {
     const { rows: [p] } = await pool.query(
       'SELECT id, title, version, requires_ack FROM staff_policies WHERE id = $1', [req.params.id]);
@@ -179,8 +191,8 @@ router.get('/:id/acknowledgements', requireAuthor, async (req, res) => {
 });
 
 /* ─── POST /api/staff-policies ────────────────────────────────────────
-   Upload. Directors and admins only. */
-router.post('/', requireAuthor, async (req, res) => {
+   Upload. Directors only. */
+router.post('/', requireDirector, async (req, res) => {
   try {
     const { title, category, summary, filename, file_data, version, effective_date, supersedes_id } = req.body || {};
     const requiresAck = req.body.requires_ack === undefined ? true : !!req.body.requires_ack;
@@ -253,7 +265,7 @@ router.post('/', requireAuthor, async (req, res) => {
    Title, category, summary, version, effective date, and whether it is
    still live. The FILE is never edited — a replacement is a new row, so the
    bytes behind an id are the bytes somebody read under that id. */
-router.patch('/:id', requireAuthor, async (req, res) => {
+router.patch('/:id', requireDirector, async (req, res) => {
   try {
     const sets = [], vals = [];
     const put = (col, val) => { vals.push(val); sets.push(`${col} = $${vals.length}`); };
@@ -294,7 +306,7 @@ router.patch('/:id', requireAuthor, async (req, res) => {
 /* ─── DELETE /api/staff-policies/:id ──────────────────────────────────
    Withdraws rather than deletes. "What did the policy say in March" is a
    question somebody eventually asks, and a deleted row cannot answer it. */
-router.delete('/:id', requireAuthor, async (req, res) => {
+router.delete('/:id', requireDirector, async (req, res) => {
   try {
     const { rows: [row] } = await pool.query(
       `UPDATE staff_policies SET is_active = false, updated_at = NOW()

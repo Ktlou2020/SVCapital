@@ -53,6 +53,12 @@ async function fetchAll(table) {
 }
 
 /* ─── Formatters ──────────────────────────────────────────────────── */
+/* HTML escaper. Everything a person typed — a policy title, a colleague's
+   name — goes through this before it reaches innerHTML. */
+const escH = v => String(v == null ? '' : v)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
 const zarM = v => { const n=Number(v)||0; return n>=1e6?`R${(n/1e6).toFixed(1)}M`:n>=1e3?`R${(n/1e3).toFixed(0)}k`:`R${n.toLocaleString()}`; };
 const fmtDate = iso => iso ? new Date(iso).toLocaleDateString('en-ZA',{day:'numeric',month:'short',year:'numeric'}) : '—';
 
@@ -255,6 +261,7 @@ const PAGE_META = {
   leave:       { title:'Leave Requests',   sub:'Approve or decline employee leave' },
   access:      { title:'Access & Roles',   sub:'Role-based access control matrix' },
   courses:     { title:'Course Library',   sub:'All available training courses' },
+  policies:    { title:'Policies',         sub:'Publish company policies and see who has read them' },
   payslips:    { title:'Payslips',         sub:'Generate and manage employee payslips' },
   performance:    { title:'Performance',    sub:'KPI leaderboard, scores and team analytics' },
   'fee-settings': { title:'Fee Settings',  sub:'Configure platform-wide fee rates and EVA allocation' },
@@ -280,6 +287,8 @@ function navTo(view, btn) {
       <button class="btn btn--ghost btn--sm" onclick="exportEmployeesCSV()"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
       <button class="btn btn--ghost btn--sm" onclick="exportEmployeesPDF()"><i class="fa-solid fa-file-pdf"></i> Export PDF</button>
       <button class="btn btn--gold btn--sm" onclick="navTo('create',document.querySelector('[data-view=create]'))"><i class="fa-solid fa-user-plus"></i> Add Employee</button>`;
+  } else if (view === 'policies') {
+    actEl.innerHTML = `<button class="btn btn--gold btn--sm" onclick="openPolicyUpload()"><i class="fa-solid fa-upload"></i> Publish a policy</button>`;
   } else if (view === 'payslips') {
     actEl.innerHTML = `<button class="btn btn--ghost btn--sm" onclick="exportPayslipsSummaryCSV()"><i class="fa-solid fa-file-csv"></i> Export Summary</button>`;
   } else if (view === 'performance') {
@@ -296,6 +305,7 @@ function navTo(view, btn) {
     leave:         renderLeave,
     access:        renderAccessMatrix,
     courses:       renderCourseLibrary,
+    policies:      renderPolicies,
     payslips:      renderPayslips,
     performance:   renderPerformanceView,
     'fee-settings': loadFeeSettings,
@@ -1808,6 +1818,294 @@ function obStatusChip(status) {
   return `<span class="chip ${map[status]||'chip--off'}" style="font-size:0.7rem">${(status||'').replace('_',' ')}</span>`;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════
+   POLICIES — publishing, and the record of who has read what.
+
+   Both halves are director-only and the server enforces it with
+   requireRole('director'); the staff portal shows the shelf, the document
+   and a person's own acknowledgement, and nothing else. Hiding a button is
+   not a permission, so neither of the two calls below is reachable from
+   there even with the console open.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+const POLICY_LABELS = {
+  hr: 'People & HR', compliance: 'Compliance', finance: 'Finance',
+  operations: 'Operations', it: 'IT & Security', health_safety: 'Health & Safety',
+  general: 'General',
+};
+const POLICY_ICONS = {
+  hr: 'fa-users', compliance: 'fa-scale-balanced', finance: 'fa-coins',
+  operations: 'fa-gears', it: 'fa-shield-halved', health_safety: 'fa-kit-medical',
+  general: 'fa-file-lines',
+};
+
+let _policies = [];
+let _policyReaders = null;   // the report currently open, for the CSV export
+
+async function renderPolicies() {
+  const wrap = document.getElementById('policyContent');
+  wrap.innerHTML = `<div style="padding:30px;text-align:center;color:var(--muted)">Loading policies…</div>`;
+
+  const r = await get('staff-policies?include_superseded=true');
+  if (r._error) {
+    wrap.innerHTML = `<div style="padding:30px;text-align:center;color:#ef4444">
+      ${r._error === 403 ? 'Only directors can manage policies.' : 'Could not load the policies.'}</div>`;
+    return;
+  }
+  _policies = r.policies || [];
+
+  const live     = _policies.filter(p => p.is_active);
+  const needAck  = live.filter(p => p.requires_ack);
+  const headcount = await _activeHeadcount();
+  /* Signatures still owed across every policy that asks for one. It is the
+     number a director is actually chasing, so it leads. */
+  const gap = needAck.reduce((n, p) => n + Math.max(0, headcount - (p.ack_count || 0)), 0);
+
+  document.getElementById('policyStats').innerHTML = `
+    ${_statCard('fa-file-shield', '#eda5ff', live.length, 'Live policies')}
+    ${_statCard('fa-user-check', '#00d4aa', needAck.length, 'Ask for a signature')}
+    ${_statCard('fa-hourglass-half', gap ? '#f59e0b' : '#00d4aa', gap, 'Signatures outstanding')}
+    ${_statCard('fa-box-archive', '#8b8b9e', _policies.length - live.length, 'Withdrawn')}`;
+
+  const badge = document.getElementById('policy-gap-badge');
+  if (badge) { badge.textContent = gap; badge.style.display = gap ? '' : 'none'; }
+
+  if (!_policies.length) {
+    wrap.innerHTML = `<div style="padding:50px;text-align:center;color:var(--muted)">
+      <i class="fa-solid fa-file-shield" style="font-size:2rem;opacity:0.35;display:block;margin-bottom:12px"></i>
+      No policies published yet. Use <strong>Publish a policy</strong> above to add the first one.</div>`;
+    return;
+  }
+
+  const byCat = {};
+  for (const p of _policies) (byCat[p.category] = byCat[p.category] || []).push(p);
+
+  const row = p => {
+    const signed  = p.ack_count || 0;
+    const owing   = p.requires_ack && p.is_active ? Math.max(0, headcount - signed) : 0;
+    return `<tr${p.is_active ? '' : ' style="opacity:0.5"'}>
+      <td style="padding:10px 8px">
+        <div style="font-weight:700">${escH(p.title)}${p.version ? ` <span style="font-size:0.7rem;color:var(--muted)">v${escH(p.version)}</span>` : ''}</div>
+        ${p.summary ? `<div style="font-size:0.76rem;color:var(--muted);margin-top:2px">${escH(p.summary)}</div>` : ''}
+        ${p.superseded_by_title ? `<div style="font-size:0.72rem;color:#f59e0b;margin-top:2px">Replaced by “${escH(p.superseded_by_title)}”</div>` : ''}
+      </td>
+      <td style="padding:10px 8px;color:var(--muted);font-size:0.8rem">${escH(fmtDate(p.effective_date))}</td>
+      <td style="padding:10px 8px;font-size:0.8rem">
+        ${!p.is_active ? '<span class="chip chip--off" style="font-size:0.7rem">withdrawn</span>'
+          : !p.requires_ack ? '<span style="color:var(--muted)">not required</span>'
+          : owing ? `<span style="color:#f59e0b;font-weight:700">${signed} of ${headcount}</span>`
+                  : `<span style="color:#00d4aa;font-weight:700">all ${headcount}</span>`}
+      </td>
+      <td style="padding:10px 8px;text-align:right;white-space:nowrap">
+        <button class="btn btn--ghost btn--sm" onclick="openPolicyFile('${escH(p.id)}')" title="Open the document"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
+        <button class="btn btn--ghost btn--sm" onclick="showPolicyReaders('${escH(p.id)}')" title="Who has read it"><i class="fa-solid fa-users"></i></button>
+        ${p.is_active ? `<button class="btn btn--ghost btn--sm" style="color:#ef4444;border-color:rgba(239,68,68,0.3)"
+            onclick="withdrawPolicy('${escH(p.id)}')" title="Withdraw"><i class="fa-solid fa-box-archive"></i></button>` : ''}
+      </td>
+    </tr>`;
+  };
+
+  wrap.innerHTML = Object.keys(byCat).sort().map(cat => `
+    <div class="dir-sec-head" style="margin-top:18px">
+      <div class="dir-sec-title"><i class="fa-solid ${POLICY_ICONS[cat] || 'fa-file-lines'}"></i>
+        ${escH(POLICY_LABELS[cat] || cat)} (${byCat[cat].length})</div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse;font-size:0.86rem;table-layout:fixed">
+        <thead><tr style="background:rgba(255,255,255,0.03);text-align:left;font-size:0.72rem;text-transform:uppercase;color:var(--muted)">
+          <th style="padding:8px">Policy</th><th style="padding:8px;width:120px">Effective</th>
+          <th style="padding:8px;width:110px">Read</th><th style="padding:8px;width:150px"></th></tr></thead>
+        <tbody>${byCat[cat].map(row).join('')}</tbody>
+      </table>
+    </div>`).join('');
+}
+
+function _statCard(icon, colour, value, label) {
+  return `<div class="dir-stat">
+    <div class="dir-stat-icon" style="background:${colour}22;color:${colour}"><i class="fa-solid ${icon}"></i></div>
+    <div><div class="dir-stat-val">${value}</div><div class="dir-stat-label">${label}</div></div>
+  </div>`;
+}
+
+/* The denominator for "x of y have read it". Asked of the same table the
+   server's outstanding list is built from, so the two cannot disagree. */
+async function _activeHeadcount() {
+  try {
+    const all = await fetchAll('employees');
+    return all.filter(e => (e.status || 'active') === 'active').length;
+  } catch (_) { return 0; }
+}
+
+/* Opened through the API with the director's own session, so a policy is
+   never a public URL that can be forwarded out of the building. */
+async function openPolicyFile(id) {
+  try {
+    const res = await fetch(`${BASE}staff-policies/${encodeURIComponent(id)}/file`,
+      { credentials: 'include', headers: _authHeader() });
+    if (!res.ok) throw new Error('Could not open that policy.');
+    const url = URL.createObjectURL(await res.blob());
+    if (!window.open(url, '_blank', 'noopener')) {
+      const a = document.createElement('a');
+      a.href = url; a.download = (_policies.find(p => p.id === id) || {}).filename || 'policy'; a.click();
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e) { showToast(e.message || 'Could not open that policy.', 'error'); }
+}
+
+/* ─── Who has read it, and who has not ──────────────────────────────── */
+async function showPolicyReaders(id) {
+  const body = document.getElementById('policyReadersBody');
+  body.innerHTML = `<div style="padding:24px;text-align:center;color:var(--muted)">Loading…</div>`;
+  openModal('policyReadersModal');
+
+  const r = await get(`staff-policies/${encodeURIComponent(id)}/acknowledgements`);
+  if (r._error) {
+    body.innerHTML = `<div style="padding:24px;text-align:center;color:#ef4444">
+      ${r._error === 403 ? 'Only directors can see this.' : 'Could not load that.'}</div>`;
+    return;
+  }
+  _policyReaders = r;
+  document.getElementById('policyReadersTitle').textContent =
+    r.policy.title + (r.policy.version ? ' v' + r.policy.version : '');
+
+  const when = d => d ? new Date(d).toLocaleString('en-ZA', { dateStyle:'medium', timeStyle:'short' }) : '';
+  body.innerHTML = `
+    ${!r.policy.requires_ack ? `<div style="padding:10px 12px;margin-bottom:14px;border-radius:8px;
+        background:rgba(255,255,255,0.04);color:var(--muted);font-size:0.82rem">
+        This policy does not ask for an acknowledgement, so nobody is being chased for it.</div>` : ''}
+    <div style="display:flex;gap:12px;margin-bottom:18px">
+      <div style="flex:1;padding:12px 14px;border:1px solid var(--border);border-left:3px solid #00d4aa;border-radius:10px">
+        <div style="font-size:0.7rem;color:var(--muted);text-transform:uppercase">Read it</div>
+        <div style="font-size:1.4rem;font-weight:800;color:#00d4aa">${r.readCount}</div></div>
+      <div style="flex:1;padding:12px 14px;border:1px solid var(--border);border-left:3px solid ${r.outstandingCount ? '#f59e0b' : '#00d4aa'};border-radius:10px">
+        <div style="font-size:0.7rem;color:var(--muted);text-transform:uppercase">Have not</div>
+        <div style="font-size:1.4rem;font-weight:800;color:${r.outstandingCount ? '#f59e0b' : '#00d4aa'}">${r.outstandingCount}</div></div>
+    </div>
+    ${r.outstandingCount ? `
+      <div style="font-weight:700;margin-bottom:8px">Still to read it</div>
+      <table style="width:100%;font-size:0.82rem;border-collapse:collapse;margin-bottom:18px">
+        ${r.outstanding.map(e => `<tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:6px 8px">${escH([e.first_name, e.last_name].filter(Boolean).join(' ') || e.id)}</td>
+          <td style="padding:6px 8px;color:var(--muted)">${escH(e.role || '')}</td>
+          <td style="padding:6px 8px;color:var(--muted)">${escH(e.email || '')}</td></tr>`).join('')}
+      </table>`
+    : `<div style="padding:10px 12px;margin-bottom:18px;border-radius:8px;background:rgba(0,212,170,0.08);color:#00d4aa">
+        <i class="fa-solid fa-circle-check"></i> Everyone on staff has read it.</div>`}
+    ${r.readCount ? `
+      <div style="font-weight:700;margin-bottom:8px">Read it</div>
+      <table style="width:100%;font-size:0.82rem;border-collapse:collapse">
+        ${r.read.map(a => `<tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:6px 8px">${escH(a.employee_name || a.employee_id)}</td>
+          <td style="padding:6px 8px;color:var(--muted)">${escH(a.employee_email || '')}</td>
+          <td style="padding:6px 8px;color:var(--muted)">${escH(when(a.acknowledged_at))}</td></tr>`).join('')}
+      </table>` : ''}`;
+}
+
+/* The list a director actually acts on is the outstanding one, so the export
+   leads with it and says plainly which half each row is. */
+function exportPolicyReadersCSV() {
+  const r = _policyReaders;
+  if (!r) return;
+  const q = v => { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const rows = [['Policy', 'Version', 'Status', 'Name', 'Email', 'Role', 'Acknowledged at']];
+  for (const e of r.outstanding) {
+    rows.push([r.policy.title, r.policy.version || '', 'NOT READ',
+               [e.first_name, e.last_name].filter(Boolean).join(' ') || e.id, e.email || '', e.role || '', '']);
+  }
+  for (const a of r.read) {
+    rows.push([r.policy.title, r.policy.version || '', 'read',
+               a.employee_name || a.employee_id, a.employee_email || '', '', a.acknowledged_at || '']);
+  }
+  const blob = new Blob([rows.map(x => x.map(q).join(',')).join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `policy-acknowledgements-${(r.policy.title || 'policy').replace(/[^\w]+/g, '-').toLowerCase()}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+/* ─── Publishing ────────────────────────────────────────────────────── */
+function openPolicyUpload() {
+  const live = _policies.filter(p => p.is_active);
+  /* One gap between every field. .form-group sets the gap INSIDE a field;
+     director.css has nothing that spaces one field from the next. */
+  document.getElementById('policyModalBody').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:15px">
+    <div class="form-group"><label>Title</label>
+      <input id="polTitle" placeholder="e.g. Leave Policy"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-group"><label>Category</label>
+        <select id="polCategory">${Object.entries(POLICY_LABELS).map(([k, v]) => `<option value="${escH(k)}">${escH(v)}</option>`).join('')}</select></div>
+      <div class="form-group"><label>Version</label>
+        <input id="polVersion" placeholder="e.g. 2.1"></div>
+    </div>
+    <div class="form-group"><label>Effective from</label>
+      <input type="date" id="polEffective"></div>
+    <div class="form-group"><label>Summary</label>
+      <textarea id="polSummary" rows="2" placeholder="One line on what it covers — this is what staff read before opening it"></textarea></div>
+    <div class="form-group"><label>Replaces</label>
+      <select id="polSupersedes">
+        <option value="">Nothing — this is a new policy</option>
+        ${live.map(p => `<option value="${escH(p.id)}">${escH(p.title)}${p.version ? ' v' + escH(p.version) : ''}</option>`).join('')}
+      </select>
+      <div style="font-size:0.76rem;color:var(--muted);margin-top:4px">Replacing withdraws the old one at the same moment, so there is never a day with two live versions. Staff who signed the old one will be asked again.</div></div>
+    <label style="display:flex;gap:9px;align-items:center;cursor:pointer;padding:11px 13px;
+                  border:1px solid var(--border);border-radius:9px;font-size:0.84rem">
+      <input type="checkbox" id="polRequiresAck" checked style="width:auto;margin:0">
+      Staff must confirm they have read it</label>
+    <div class="form-group"><label>File</label>
+      <input type="file" id="polFile" accept=".pdf,image/png,image/jpeg,image/webp">
+      <div style="font-size:0.76rem;color:var(--muted);margin-top:4px">PDF or an image, up to 12 MB.</div></div>
+    <div id="polError" style="color:#ef4444;font-size:0.82rem;display:none"></div>
+    </div>`;
+  openModal('policyModal');
+}
+
+async function submitPolicy() {
+  const err  = document.getElementById('polError');
+  const fail = m => { err.textContent = m; err.style.display = 'block'; };
+  const title = document.getElementById('polTitle').value.trim();
+  const file  = document.getElementById('polFile').files[0];
+  if (!title) return fail('Give the policy a title.');
+  if (!file)  return fail('Choose a file.');
+  if (file.size > 12 * 1024 * 1024) return fail('That file is over 12 MB.');
+
+  const dataUrl = await new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload  = () => resolve(fr.result);
+    fr.onerror = () => reject(new Error('Could not read that file.'));
+    fr.readAsDataURL(file);
+  }).catch(e => { fail(e.message); return null; });
+  if (!dataUrl) return;
+
+  const r = await post('staff-policies', {
+    title,
+    category:       document.getElementById('polCategory').value,
+    summary:        document.getElementById('polSummary').value.trim(),
+    version:        document.getElementById('polVersion').value.trim(),
+    effective_date: document.getElementById('polEffective').value || null,
+    supersedes_id:  document.getElementById('polSupersedes').value || null,
+    requires_ack:   document.getElementById('polRequiresAck').checked,
+    filename:       file.name,
+    file_data:      dataUrl,
+  });
+  if (r && r.error) return fail(r.error);
+
+  closeModal('policyModal');
+  showToast('Policy published to all staff');
+  renderPolicies();
+}
+
+/* Withdrawing does not delete. "What did it say in March" cannot be answered
+   by a deleted row. */
+async function withdrawPolicy(id) {
+  const p = _policies.find(x => x.id === id) || {};
+  if (!confirm(`Withdraw “${p.title || id}”?\n\nStaff stop seeing it immediately. It is kept, not deleted, and the acknowledgements already recorded against it stay with it.`)) return;
+  await del(`staff-policies/${encodeURIComponent(id)}`);
+  showToast('Policy withdrawn');
+  renderPolicies();
+}
+
 function openModal(id)  { document.getElementById(id).classList.add('show'); }
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 
@@ -1913,6 +2211,21 @@ const DIR_HELP = {
         text: 'Tick/untick the apps for each employee in this Access tab and click Save. Changes take effect on the employee\'s next login. New employees start with only My Dashboard until you grant more.' },
       { heading: 'Director Panel Access', icon: 'fa-crown', color: '#e84393',
         text: 'Only CEO role and executive-level employees can access the Director Panel. This is enforced by StaffAuth.isDirector() which checks role === "CEO" OR level === "executive".' },
+    ]
+  },
+  policies: {
+    title: 'Policies',
+    icon:  'fa-file-shield',
+    intro: 'Publish the company\u2019s policies and keep the record of who has read them. Both are director-only \u2014 staff see the shelf and sign for what they have read, nothing more.',
+    sections: [
+      { heading: 'Publish a policy', icon: 'fa-upload', color: '#eda5ff',
+        text: 'Title, category, version, effective date and a one-line summary, then a PDF or image up to 12 MB. The file type is read from the bytes, not from what it is called, so a renamed file is refused. Tick \u201cStaff must confirm they have read it\u201d for anything people are held to; leave it unticked for reference material like an office map, which should not sit on everyone\u2019s list.' },
+      { heading: 'Replacing one', icon: 'fa-rotate', color: '#fec24f',
+        text: 'Pick the policy it replaces and the old one is withdrawn the moment the new one publishes \u2014 there is never a day with two live versions. The old one is kept rather than deleted, so \u201cwhat did it say in March\u201d stays answerable. An acknowledgement belongs to the version, so everyone who signed the old one will be asked to sign the new one.' },
+      { heading: 'Who has read it', icon: 'fa-users', color: '#00d4aa',
+        text: 'The people icon on a row opens the record: who has signed and when, and above it who has not, drawn from everyone currently employed. Leavers are excluded, so the outstanding list is a list you can actually act on. Export sends both halves to CSV with the outstanding names first.' },
+      { heading: 'The Read column', icon: 'fa-chart-simple', color: '#8b8b9e',
+        text: 'Signed against active headcount, per policy. Amber means somebody still owes it; the sidebar badge is the total still outstanding across every policy that asks for a signature.' },
     ]
   },
   courses: {

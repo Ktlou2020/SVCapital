@@ -39,6 +39,8 @@ const HTML  = read('team/employee.html');
 const JS    = read('team/js/employee.js');
 const INDEX = read('server/index.js');
 const CSS   = read('team/css/employee.css');
+const DIR    = read('team/js/director.js');
+const DIRHTML= read('team/director.html');
 
 let pass = 0, fail = 0;
 const ok = (name, cond, detail) => {
@@ -58,11 +60,18 @@ console.log('\nwho may read, and who may write');
   ok('and so is the file itself',
      /router\.get\('\/:id\/file', requireAuth, requireStaff/.test(CODE),
      'the document is the thing worth protecting, not the list of titles');
-  ok('writing is admin or director',
-     /const requireAuthor = \[requireAuth, requireRole\('admin', 'director'\)\]/.test(CODE));
+  ok('writing is directors and nobody else',
+     /const requireDirector = \[requireAuth, requireRole\('director'\)\]/.test(CODE),
+     'publishing a policy is a board act, not a console one');
+  ok('and admin is not quietly still on the list',
+     !/requireRole\('admin'/.test(CODE));
   for (const verb of ['post', 'patch', 'delete']) {
-    ok(`${verb} uses it`, new RegExp(`router\\.${verb}\\('[^']*', requireAuthor`).test(CODE));
+    ok(`${verb} uses it`, new RegExp(`router\\.${verb}\\('[^']*', requireDirector`).test(CODE));
   }
+  ok('an admin can still read the shelf and sign for their own reading',
+     /router\.get\('\/', requireAuth, requireStaff/.test(CODE)
+     && /router\.post\('\/:id\/acknowledge', requireAuth, requireStaff/.test(CODE),
+     'an admin is staff; they are held to the policies like everybody else');
 }
 
 console.log('\nwhat may be uploaded');
@@ -132,8 +141,11 @@ console.log('\nI have read this');
      'a name on the row survives the employee record being renamed');
 
   ok('who has NOT read it is a director question',
-     /router\.get\('\/:id\/acknowledgements', requireAuthor/.test(CODE),
+     /router\.get\('\/:id\/acknowledgements', requireDirector/.test(CODE),
      'it names colleagues and their standing — not a staff-wide list');
+  ok('and how many colleagues signed does not reach the staff shelf either',
+     /if \(req\.user\.role !== 'director'\) for \(const r of rows\) delete r\.ack_count/.test(CODE),
+     'the staff shelf answers "have I read this", never "who else has"');
   ok('and it is the half the report computes',
      /NOT EXISTS \(SELECT 1 FROM staff_policy_acks a/.test(CODE),
      'a list of who HAS read it answers the easy question');
@@ -153,11 +165,18 @@ console.log('\nthe screen');
   ok('Policies is in the staff sidebar', /data-view="policies"/.test(HTML));
   ok('and has a view to render into', /id="view-policies"/.test(HTML));
   ok('navigate knows how to render it', /policies: *renderPolicies/.test(JS));
-  ok('the publish button is shown only to a director or admin',
-     /_canPublishPolicies\(\) \? `<div class="view-header-actions">/.test(JS));
-  ok('and the server does not rely on that',
-     /requireAuthor/.test(CODE),
-     'hiding a button is not a permission');
+  /* Publishing, and the record of who has not read a policy, left this
+     portal for the director one. Both are enforced server side, so what
+     matters here is that the surfaces are genuinely gone rather than
+     hidden behind a role test somebody can edit in the console. */
+  ok('the staff portal cannot publish', !/openPolicyUpload|submitPolicy/.test(JS));
+  ok('and does not show who else has read a policy',
+     !/showPolicyReaders|policy-who/.test(JS));
+  ok('and no longer carries a role test of its own',
+     !/_canPublishPolicies/.test(JS),
+     'a role test on the reading side is a thing to keep in step for no gain');
+  ok('what it keeps is the shelf, the document and your own signature',
+     /async function openPolicy\(/.test(JS) && /async function acknowledgePolicy\(/.test(JS));
 
   /* This file had no escaper at all before policies were added to it. */
   ok('there is an HTML escaper in this file now', /const esc = v => String\(v == null/.test(JS));
@@ -178,17 +197,16 @@ console.log('\nthe screen');
      /_policyOutstanding \?/.test(JS) && /your acknowledgement/.test(JS));
   ok('a card still owing one is marked',
      /policy-card--todo/.test(JS) && /\.policy-card--todo/.test(CSS));
-  ok('the "who has read it" button is a director one',
-     /_canPublishPolicies\(\) \? `<button class="policy-who"/.test(JS));
   {
     /* Inverted deliberately: every ${…} in this modal must START with
        something known to be safe, rather than every ${…} merely not looking
        like a bare identifier. A colleague's name reaches this screen from
        their own employee record, and ${[e.first_name, e.last_name]...} is
        not a bare identifier. */
-    const modal = JS.slice(JS.indexOf('async function showPolicyReaders('), JS.indexOf('function openPolicyUpload('));
-    const SAFE = ['esc(', 'encodeURIComponent(', 'r.readCount', 'r.outstandingCount',
-                  'r.outstanding.map(', 'r.read.map(', '!r.policy.requires_ack', 'r.policy.version ?'];
+    const modal = DIR.slice(DIR.indexOf('async function showPolicyReaders('), DIR.indexOf('function exportPolicyReadersCSV('));
+    const SAFE = ['escH(', 'encodeURIComponent(', 'r.readCount', 'r.outstandingCount',
+                  'r.outstanding.map(', 'r.read.map(', '!r.policy.requires_ack',
+                  'r.outstandingCount ?', "r._error === 403 ?"];
     const raw = [...modal.matchAll(/\$\{/g)]
       .map(m => modal.slice(m.index + 2, m.index + 42))
       .filter(tail => !SAFE.some(s => tail.startsWith(s)))
@@ -196,14 +214,56 @@ console.log('\nthe screen');
     ok('and the names in it are escaped', raw.length === 0, raw.join(' | '));
   }
   ok('publishing can say whether it needs acknowledging',
-     /id="polRequiresAck"/.test(JS)
-     && /requires_ack: *document\.getElementById\('polRequiresAck'\)\.checked/.test(JS));
+     /id="polRequiresAck"/.test(DIR)
+     && /requires_ack: *document\.getElementById\('polRequiresAck'\)\.checked/.test(DIR));
 
   /* requireAuth prefers the Authorization header over the cookie, and this
      portal signs in with a cookie — so "Bearer null" would 401 every open. */
   ok('the file fetch only sends a token when there is one',
      /headers: token \? \{ Authorization: `Bearer \$\{token\}` \} : \{\}/.test(JS),
      'requireAuth prefers the header, so Bearer null beats the cookie and 401s');
+}
+
+console.log('\nthe director portal, which is where both halves now live');
+{
+  ok('Policies is in the director sidebar', /data-view="policies"/.test(DIRHTML));
+  ok('and has a view to render into', /id="view-policies"/.test(DIRHTML));
+  ok('navTo knows how to render it', /policies: *renderPolicies/.test(DIR));
+  ok('Publish a policy is the screen\u2019s action',
+     /view === 'policies'[\s\S]{0,200}openPolicyUpload\(\)/.test(DIR));
+  ok('the publish form is here', /function openPolicyUpload\(\)/.test(DIR) && /async function submitPolicy\(\)/.test(DIR));
+  ok('and so is the record of who has read what', /async function showPolicyReaders\(/.test(DIR));
+  ok('withdrawing is offered, and it withdraws rather than deletes',
+     /async function withdrawPolicy\(/.test(DIR)
+     && /await del\(`staff-policies\//.test(DIR)
+     && /kept, not deleted/.test(DIR));
+
+  /* director.js had no HTML escaper at all — the one by the CSV export is a
+     quoter for a different job. */
+  ok('there is an HTML escaper in this file now',
+     /const escH = v => String\(v == null/.test(DIR));
+  {
+    const view = DIR.slice(DIR.indexOf('async function renderPolicies()'), DIR.indexOf('function _statCard('));
+    const SAFE = ['escH(', 'encodeURIComponent(', 'r._error === 403 ?', 'byCat[cat]',
+                  'POLICY_ICONS[cat]', 'live.length', 'needAck.length', 'gap ', 'gap ?',
+                  '_policies.length - live.length', '_statCard(', 'p.is_active ?',
+                  '!p.is_active ?', 'p.summary ?', 'p.superseded_by_title ?', 'p.version ?',
+                  'signed} of ${headcount}', 'headcount}', 'owing ?', 'p.requires_ack'];
+    const raw = [...view.matchAll(/\$\{/g)]
+      .map(m => view.slice(m.index + 2, m.index + 42))
+      .filter(t => !SAFE.some(x => t.startsWith(x)))
+      .map(t => t.split('\n')[0].slice(0, 30));
+    ok('and everything a person supplied goes through it', raw.length === 0, raw.join(' | '));
+  }
+
+  /* The denominator has to be the same population the server computes the
+     outstanding list from, or the two disagree on screen. */
+  ok('the read count is measured against people still employed',
+     /\(e\.status \|\| 'active'\) === 'active'/.test(DIR),
+     'counting leavers makes "3 of 20" permanently wrong');
+  ok('the export leads with who has NOT read it',
+     /for \(const e of r\.outstanding\)[\s\S]{0,300}for \(const a of r\.read\)/.test(DIR),
+     'the outstanding list is the one somebody acts on');
 }
 
 /* ── Against a database ────────────────────────────────────────────── */

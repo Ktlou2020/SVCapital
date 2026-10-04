@@ -1399,6 +1399,9 @@ function renderDashboard() {
    CSP refuses to frame one, so serving real bytes is what makes the difference
    between a policy opening and a blank tab.
    ═══════════════════════════════════════════════════════════════════ */
+/* Read-only here by design. Publishing a policy and reading who has not
+   acknowledged one are director acts and live in the director portal; this
+   screen is the shelf, the document, and your own acknowledgement. */
 let _policies = [];
 /* Which policies this person has opened in this sitting. Acknowledging is
    enabled only after the document has actually been fetched — "I have read
@@ -1416,12 +1419,6 @@ const POLICY_ICONS = {
   operations: 'fa-gears', it: 'fa-shield-halved', health_safety: 'fa-kit-medical',
   general: 'fa-file-lines',
 };
-
-function _canPublishPolicies() {
-  const r = String((_emp && _emp.jwtRole) || (StaffAuth.getSession && StaffAuth.getSession()?.role) || '').toLowerCase();
-  const apps = (StaffAuth.getSession && StaffAuth.getSession()?.appAccess) || [];
-  return r === 'director' || r === 'admin' || apps.includes('director') || apps.includes('admin');
-}
 
 async function renderPolicies() {
   const el = document.getElementById('view-policies');
@@ -1476,9 +1473,6 @@ async function renderPolicies() {
       </div>
       <div class="policy-card__actions">
         ${ackBit(p)}
-        ${_canPublishPolicies() ? `<button class="policy-who" title="Who has read it"
-            onclick="event.stopPropagation();showPolicyReaders('${esc(p.id)}')">
-            <i class="fa-solid fa-users"></i> ${p.ack_count || 0}</button>` : ''}
         <span class="policy-card__open"><i class="fa-solid fa-arrow-up-right-from-square"></i></span>
       </div>
     </div>`;
@@ -1486,9 +1480,6 @@ async function renderPolicies() {
   el.innerHTML = `
     <div class="view-header">
       <div><h1>Policies</h1><div class="view-sub">The company's policies, current versions</div></div>
-      ${_canPublishPolicies() ? `<div class="view-header-actions">
-        <button class="btn btn--primary" onclick="openPolicyUpload()">
-          <i class="fa-solid fa-upload"></i> Publish a policy</button></div>` : ''}
     </div>
     ${_policyOutstanding ? `<div class="policy-banner">
         <i class="fa-solid fa-circle-exclamation"></i>
@@ -1496,7 +1487,7 @@ async function renderPolicies() {
         <div style="color:var(--muted);font-size:0.8rem;margin-top:2px">Open each one, then confirm you have read it.</div></div>
       </div>` : ''}
     ${!_policies.length ? `<div class="empty-state"><i class="fa-solid fa-file-shield"></i>
-        <p>No policies have been published yet.${_canPublishPolicies() ? ' Publish the first one.' : ''}</p></div>` : ''}
+        <p>No policies have been published yet.</p></div>` : ''}
     ${Object.keys(byCat).sort().map(cat => `
       <div class="section-head"><i class="fa-solid ${POLICY_ICONS[cat] || 'fa-file-lines'}"></i>
         ${esc(POLICY_LABELS[cat] || cat)} <span class="section-count">${byCat[cat].length}</span></div>
@@ -1552,129 +1543,6 @@ async function acknowledgePolicy(id) {
   }
 }
 
-/* Who has read it, and who has not. The second list is the one worth having;
-   a report of who HAS read it answers the easy question. */
-async function showPolicyReaders(id) {
-  const m = document.getElementById('generic-modal');
-  m.innerHTML = `<div class="modal"><div class="modal-body">Loading…</div></div>`;
-  m.classList.add('open');
-  try {
-    const r = await get(`staff-policies/${encodeURIComponent(id)}/acknowledgements`);
-    const when = d => d ? new Date(d).toLocaleString('en-ZA', { dateStyle:'medium', timeStyle:'short' }) : '';
-    m.innerHTML = `<div class="modal">
-      <div class="modal-header">
-        <h3>${esc(r.policy.title)}${r.policy.version ? ' v' + esc(r.policy.version) : ''}</h3>
-        <button class="btn btn--ghost btn--sm" onclick="closeModal('generic-modal')"><i class="fa-solid fa-xmark"></i></button></div>
-      <div class="modal-body">
-        ${!r.policy.requires_ack ? `<p style="color:var(--muted)">This policy does not ask for an acknowledgement.</p>` : ''}
-        <div style="display:flex;gap:10px;margin-bottom:14px">
-          <div style="flex:1;padding:10px 12px;border:1px solid var(--border);border-left:3px solid #22c55e;border-radius:8px">
-            <div style="font-size:0.7rem;color:var(--muted);text-transform:uppercase">Read it</div>
-            <div style="font-size:1.2rem;font-weight:800;color:#22c55e">${r.readCount}</div></div>
-          <div style="flex:1;padding:10px 12px;border:1px solid var(--border);border-left:3px solid #f59e0b;border-radius:8px">
-            <div style="font-size:0.7rem;color:var(--muted);text-transform:uppercase">Have not</div>
-            <div style="font-size:1.2rem;font-weight:800;color:#f59e0b">${r.outstandingCount}</div></div>
-        </div>
-        ${r.outstandingCount ? `<div style="font-weight:700;margin-bottom:6px">Still to read it</div>
-          <table style="width:100%;font-size:0.8rem;border-collapse:collapse;margin-bottom:14px">
-            ${r.outstanding.map(e => `<tr>
-              <td style="padding:3px 6px">${esc([e.first_name, e.last_name].filter(Boolean).join(' ') || e.id)}</td>
-              <td style="padding:3px 6px;color:var(--muted)">${esc(e.role || '')}</td>
-              <td style="padding:3px 6px;color:var(--muted)">${esc(e.email || '')}</td></tr>`).join('')}
-          </table>` : `<p style="color:#22c55e;margin-bottom:14px"><i class="fa-solid fa-circle-check"></i> Everyone on staff has read it.</p>`}
-        ${r.readCount ? `<div style="font-weight:700;margin-bottom:6px">Read it</div>
-          <table style="width:100%;font-size:0.8rem;border-collapse:collapse">
-            ${r.read.map(a => `<tr>
-              <td style="padding:3px 6px">${esc(a.employee_name || a.employee_id)}</td>
-              <td style="padding:3px 6px;color:var(--muted)">${esc(when(a.acknowledged_at))}</td></tr>`).join('')}
-          </table>` : ''}
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn--secondary" onclick="closeModal('generic-modal')">Close</button></div>
-    </div>`;
-  } catch (e) {
-    m.innerHTML = `<div class="modal"><div class="modal-body" style="color:#ef4444">${esc(e.message || 'Could not load that.')}</div>
-      <div class="modal-footer"><button class="btn btn--secondary" onclick="closeModal('generic-modal')">Close</button></div></div>`;
-  }
-}
-
-function openPolicyUpload() {
-  if (!_canPublishPolicies()) { showToast('Only directors can publish a policy.', 'error'); return; }
-  const live = _policies.filter(p => p.is_active);
-  const m = document.getElementById('generic-modal');
-  m.innerHTML = `<div class="modal">
-    <div class="modal-header"><h3>Publish a policy</h3>
-      <button class="btn btn--ghost btn--sm" onclick="closeModal('generic-modal')"><i class="fa-solid fa-xmark"></i></button></div>
-    <div class="modal-body">
-      <div class="form-group"><label>Title</label>
-        <input id="polTitle" placeholder="e.g. Leave Policy"></div>
-      <div class="form-row">
-        <div class="form-group"><label>Category</label>
-          <select id="polCategory">${Object.entries(POLICY_LABELS).map(([k,v]) => `<option value="${esc(k)}">${esc(v)}</option>`).join('')}</select></div>
-        <div class="form-group"><label>Version</label>
-          <input id="polVersion" placeholder="e.g. 2.1"></div>
-      </div>
-      <div class="form-group"><label>Effective from</label>
-        <input type="date" id="polEffective"></div>
-      <div class="form-group"><label>Summary</label>
-        <textarea id="polSummary" rows="2" placeholder="One line on what it covers — this is what people read before opening it"></textarea></div>
-      <div class="form-group"><label>Replaces</label>
-        <select id="polSupersedes">
-          <option value="">Nothing — this is a new policy</option>
-          ${live.map(p => `<option value="${esc(p.id)}">${esc(p.title)}${p.version ? ' v' + esc(p.version) : ''}</option>`).join('')}
-        </select></div>
-      <div class="form-group"><label style="display:flex;gap:8px;align-items:center">
-        <input type="checkbox" id="polRequiresAck" checked>
-        Staff must confirm they have read it</label></div>
-      <div class="form-group"><label>File</label>
-        <input type="file" id="polFile" accept=".pdf,image/png,image/jpeg,image/webp">
-        <div style="font-size:0.76rem;color:var(--muted);margin-top:4px">PDF or an image, up to 12 MB. Replacing one withdraws it at the same moment, so there is never a day with two live versions.</div></div>
-      <div id="polError" style="color:#ef4444;font-size:0.82rem;display:none"></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn--secondary" onclick="closeModal('generic-modal')">Cancel</button>
-      <button class="btn btn--primary" onclick="submitPolicy()">Publish to all staff</button>
-    </div>
-  </div>`;
-  m.classList.add('open');
-}
-
-async function submitPolicy() {
-  const err = document.getElementById('polError');
-  const fail = m => { err.textContent = m; err.style.display = 'block'; };
-  const title = document.getElementById('polTitle').value.trim();
-  const file  = document.getElementById('polFile').files[0];
-  if (!title) return fail('Give the policy a title.');
-  if (!file)  return fail('Choose a file.');
-  if (file.size > 12 * 1024 * 1024) return fail('That file is over 12 MB.');
-
-  const dataUrl = await new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(r.result);
-    r.onerror = () => reject(new Error('Could not read that file.'));
-    r.readAsDataURL(file);
-  }).catch(e => { fail(e.message); return null; });
-  if (!dataUrl) return;
-
-  try {
-    await post('staff-policies', {
-      title,
-      category:       document.getElementById('polCategory').value,
-      summary:        document.getElementById('polSummary').value.trim(),
-      version:        document.getElementById('polVersion').value.trim(),
-      effective_date: document.getElementById('polEffective').value || null,
-      supersedes_id:  document.getElementById('polSupersedes').value || null,
-      requires_ack:   document.getElementById('polRequiresAck').checked,
-      filename:       file.name,
-      file_data:      dataUrl,
-    });
-    closeModal('generic-modal');
-    showToast('Policy published to all staff', 'success');
-    renderPolicies();
-  } catch (e) {
-    fail(e.message || 'Could not publish that policy.');
-  }
-}
 
 function renderCourses() {
   const completedIds  = _progress.filter(p=>p.status==='completed').map(p=>p.course_id);
