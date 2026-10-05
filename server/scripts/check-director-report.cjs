@@ -91,6 +91,18 @@ console.log('\nthe bridge');
      !/expected[\s\S]{0,120}realised|opening\.aum[^;]*returns/.test(SVCC)
      && /never inside it/.test(DIR),
      'a return is earned on principal, so subtracting it breaks the bridge by that amount');
+  /* investments.status can be NULL on an old row. A bare negation is NULL and
+     drops it; COALESCE to 'active' makes it read as still live and ALSO drops
+     it, while looking guarded. Either way it sits in opening, leaves closing,
+     and appears in no movement. */
+  ok('a NULL status does not drop an investment out of the movements',
+     !/i\.status <> 'active'/.test(SVCC)
+     && !/COALESCE\(i\.status, 'active'\) <> 'active'/.test(SVCC)
+     && (SVCC.match(/COALESCE\(i\.status, ''\) <> 'active'/g) || []).length >= 4,
+     "COALESCE to '' — defaulting to 'active' is the same bug wearing a guard");
+  ok('and LIVE_AT agrees with it, so the two sides cannot disagree',
+     /i\.status = 'active'/.test(SVCC),
+     'LIVE_AT treats a NULL status as not active and lets the date decide');
   ok('a rollover is shown on both sides rather than netted away',
      /rolledOut: outRoll, returnedToInvestors: outPaid/.test(SVCC)
      && /reinvested: inRe/.test(SVCC));
@@ -315,6 +327,18 @@ console.log('\nthe screen and the PDF');
        && rep.investors.withdrawals.total === 30);
     ok('and the pending one is counted apart',
        rep.investors.withdrawals.pendingCount === 1 && rep.investors.withdrawals.pendingTotal === 12);
+
+    /* The same month again, with the paid-out investment's status NULLed — the
+       state every row written before the column got its default is in. */
+    await db.query(`UPDATE investments SET status = NULL WHERE id = 'RI-PAID'`);
+    const nulled = await svc.buildReport('2026-09');
+    ok('a NULL-status maturity still counts as money returned',
+       nulled.aum.movement.returnedToInvestors === 50,
+       `got ${nulled.aum.movement.returnedToInvestors}`);
+    ok('and the bridge still ties',
+       nulled.aum.movement.reconciles && nulled.aum.movement.residual === 0,
+       `residual ${nulled.aum.movement.residual}`);
+    await db.query(`UPDATE investments SET status = 'matured' WHERE id = 'RI-PAID'`);
 
     /* A maturity dated 20 Sep 23:00 SAST is 21:00 UTC the same day — but one
        dated 1 Oct 00:30 SAST is 30 Sep 22:30 UTC, and a UTC month would put
