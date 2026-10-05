@@ -152,4 +152,23 @@ router.post('/beef-prices', requireDirector, async (req, res) => {
   }
 });
 
+/* Run the fetch now. The schedule does this weekly; this exists so the
+   extractor can be proved against the live page the moment the network policy
+   allows the host, and so a director can pull a correction the same day the
+   report is republished. Directors only, and the run is logged like any other. */
+router.post('/beef-prices/fetch', requireDirector, async (req, res) => {
+  try {
+    const { runBeefPriceFetch } = require('../services/beefPriceFetch');
+    const who = [req.user?.firstName, req.user?.lastName].filter(Boolean).join(' ')
+                || req.user?.email || req.user?.empId || 'a director';
+    const result = await runBeefPriceFetch({ triggeredBy: who });
+    /* Always 200: "I read the page and would not trust what I found" is an
+       answer, not a server fault, and the body says which it was. */
+    return res.json(result);
+  } catch (err) {
+    console.error('[director-report] beef fetch', err.message);
+    return res.status(500).json({ error: 'The fetch could not be run.' });
+  }
+});
+
 module.exports = router;

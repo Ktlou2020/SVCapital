@@ -871,6 +871,29 @@ CREATE TABLE IF NOT EXISTS beef_market_prices (
 );
 CREATE INDEX IF NOT EXISTS beef_market_prices_week_idx ON beef_market_prices(week_ending DESC);
 
+/* Every attempt to fetch the published price, whether it worked or not.
+ *
+ * A fetcher that quietly stops working is worse than no fetcher: the report
+ * keeps showing last month's price and nothing says the pipe has broken. So
+ * each run writes a row — found, rejected, unreachable, or changed-page — and
+ * the report shows when it last succeeded. Silence becomes visible.
+ *
+ * "rejected" is a success of a kind: the page was read, a number was found,
+ * and it did not survive the checks. That is the fetcher refusing to publish
+ * something it is not sure of, and it has to be distinguishable from the pipe
+ * being down. */
+CREATE TABLE IF NOT EXISTS beef_price_fetches (
+  id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+  ran_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  outcome     TEXT NOT NULL,              -- stored | rejected | unreachable | no_match
+  http_status INT,
+  stored      INT NOT NULL DEFAULT 0,     -- how many prices were written
+  detail      TEXT,                       -- why, in words a person can act on
+  candidates  JSONB,                      -- what it saw, so a rejection can be diagnosed
+  triggered_by TEXT                       -- null for the schedule, a name for a manual run
+);
+CREATE INDEX IF NOT EXISTS beef_price_fetches_ran_idx ON beef_price_fetches(ran_at DESC);
+
 CREATE TABLE IF NOT EXISTS shortterm_loans (
   id TEXT PRIMARY KEY,
   business_name TEXT NOT NULL, business_reg TEXT,
@@ -4147,6 +4170,11 @@ async function autoSetup() {
           title: 'The beef market price now sits beside what we actually got for cattle',
           body: 'The report already showed our realised selling price per head, cycle by cycle \u2014 a true figure, but a lagging one from sales already done. Beside it now sits the published weekly market price: Class A, Class C and weaner, where the market opened and closed the month, and what a finished animal would fetch at that price. That projection is the target sale weight times the dressing percentage times the carcass price, and the report shows all three numbers rather than just the answer, because an estimate that hides its inputs reads as a measurement. Class A and Class C are carcass prices and a weaner is quoted live; the basis is set from the category, not chosen on the form, since multiplying a live weight by a carcass price overstates the animal by about 43%. The dressing percentage is a stored assumption the fund manager can correct without a deploy. Prices are captured by hand from the RPO weekly report \u2014 enter the rand per KILOGRAM, not per head, and the form refuses a number too large to be one. Each row keeps who captured it and when, and a price more than a week old says on the report how old it is.',
           where: 'Director Panel \u2192 Monthly Report \u2192 the \u201cBeef market price\u201d panel under The assets behind the money. The + button on that panel captures a week. Source: https://rpo.co.za/weeklikse-bees-en-skaap-markverslag/' },
+
+        { id: 'ANN-2026-BEEF-PRICE-FETCH', area: 'admin', icon: 'fa-rotate',
+          title: 'The beef price now updates itself every Thursday',
+          body: 'The weekly RPO market report is fetched on Thursday mornings and the Class A, Class C and weaner prices go straight onto the monthly report. There is a \u201cFetch now\u201d button beside the panel if you want it the same day the report is republished. Two things it will not do. It will not overwrite a price somebody captured by hand \u2014 that is a judgement, so the fetch only fills gaps and updates its own rows, and it says how many it left alone. And it will not guess: the source page is the weekly CATTLE AND SHEEP report, both are quoted in rands per kilogram, and their Class A prices overlap \u2014 beef runs around R65 to R75 and lamb around R70 to R100 \u2014 so a price range cannot tell them apart. The fetch locates the beef section by name, stops at the first sheep heading, and refuses the whole run rather than store anything it is not certain of: a page with no beef table, a price outside R15 to R250 a kilogram, an archived week, prices with no date, or two prices for one category all store nothing. Every attempt is written down and the report shows the last one, so a fetch that quietly stops working is visible instead of leaving a two-month-old price reading as this week\u2019s.',
+          where: 'Director Panel \u2192 Monthly Report \u2192 the Beef market price panel. The circular arrow fetches now, the plus still enters a week by hand, and the line underneath says how the last fetch went.' },
 
         { id: 'ANN-2026-SUPPORT-NUMBER', area: 'both', icon: 'fa-phone',
           title: 'Support WhatsApp number changed',

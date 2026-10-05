@@ -485,6 +485,10 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
   const { startDirectorReportCron } = require('./jobs/directorReportCron');
   startDirectorReportCron();
 
+  // Start the weekly beef price fetch (Thursdays 07:17 SAST)
+  const { startBeefPriceCron } = require('./jobs/beefPriceCron');
+  startBeefPriceCron();
+
   // Start recurring investment cron (1st of month, 03:00 UTC / 05:00 SAST)
   const { startRecurringCron } = require('./jobs/recurringCron');
   startRecurringCron();

@@ -2550,8 +2550,13 @@ function _rptBeefMarket(mk) {
     return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px">
       <div style="font-weight:700;margin-bottom:12px"><i class="fa-solid fa-tag" style="color:${RPT.down}"></i> Beef market price</div>
       <div style="font-size:0.78rem;color:var(--muted);line-height:1.6">${escH((mk && mk.note) || 'No price captured.')}</div>
-      <button class="btn btn--ghost btn--sm" style="margin-top:12px" onclick="openBeefPriceEntry()">
-        <i class="fa-solid fa-plus"></i> Capture this week’s price</button>
+      ${_rptFetchLine(mk && mk.lastFetch)}
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn btn--ghost btn--sm" onclick="fetchBeefPriceNow()">
+          <i class="fa-solid fa-rotate"></i> Fetch now</button>
+        <button class="btn btn--ghost btn--sm" onclick="openBeefPriceEntry()">
+          <i class="fa-solid fa-plus"></i> Enter by hand</button>
+      </div>
     </div>`;
   }
   const up = mk.classAChangePct;
@@ -2559,7 +2564,12 @@ function _rptBeefMarket(mk) {
   return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px">
     <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:12px">
       <div style="font-weight:700"><i class="fa-solid fa-tag" style="color:${RPT.down}"></i> Beef market price</div>
-      <button class="btn btn--ghost btn--sm" onclick="openBeefPriceEntry()"><i class="fa-solid fa-plus"></i></button>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn--ghost btn--sm" title="Fetch the RPO report now" onclick="fetchBeefPriceNow()">
+          <i class="fa-solid fa-rotate"></i></button>
+        <button class="btn btn--ghost btn--sm" title="Enter a week by hand" onclick="openBeefPriceEntry()">
+          <i class="fa-solid fa-plus"></i></button>
+      </div>
     </div>
     ${mk.prices.map(p => _rptRow(
        `${escH(_beefLabel(p.category))} <span style="color:var(--muted);font-size:0.7rem">${escH(p.basis)}</span>`,
@@ -2590,9 +2600,38 @@ function _rptBeefMarket(mk) {
     <div style="font-size:0.68rem;color:var(--muted);margin-top:8px;line-height:1.5">
       ${escH(mk.basisNote)}
       ${mk.prices[0] ? ` Week ending ${escH(mk.prices[0].weekEnding)}, from ${escH(mk.prices[0].source)}${
-        mk.prices[0].capturedBy ? `, captured by ${escH(mk.prices[0].capturedBy)}` : ''}.` : ''}
+        mk.prices[0].capturedBy ? `, captured by ${escH(mk.prices[0].capturedBy)}` : ', fetched automatically'}.` : ''}
     </div>
+    ${_rptFetchLine(mk.lastFetch)}
   </div>`;
+}
+
+/* Whether the weekly fetch is working, in a line. A fetcher that quietly
+   stopped is how a board reads a two-month-old price as this week's, so the
+   outcome is on the report rather than in a log nobody opens. */
+function _rptFetchLine(f) {
+  if (!f) return `<div style="font-size:0.7rem;color:var(--muted);margin-top:8px">
+    The weekly fetch has not run yet. It runs on Thursdays.</div>`;
+  const when = new Date(f.ran_at).toLocaleString('en-ZA', { dateStyle: 'medium', timeStyle: 'short' });
+  const good = f.outcome === 'stored';
+  const colour = good ? RPT.up : f.outcome === 'rejected' ? RPT.down : RPT.bad;
+  const word = { stored: 'fetched', rejected: 'read the page but would not trust what it found',
+                 no_match: 'could not find the prices on the page',
+                 unreachable: 'could not reach the page' }[f.outcome] || escH(f.outcome);
+  return `<div style="font-size:0.7rem;margin-top:8px;color:${colour};line-height:1.5">
+    <i class="fa-solid ${good ? 'fa-circle-check' : 'fa-triangle-exclamation'}"></i>
+    Last automatic fetch ${escH(when)} — ${word}${f.triggered_by ? `, run by ${escH(f.triggered_by)}` : ''}.
+    ${f.detail ? `<div style="color:var(--muted);margin-top:2px">${escH(f.detail)}</div>` : ''}
+  </div>`;
+}
+
+async function fetchBeefPriceNow() {
+  showToast('Fetching the RPO report…');
+  const r = await post('director-report/beef-prices/fetch', {});
+  if (r && r.error) { showToast(r.error, 'error'); return; }
+  showToast(r.outcome === 'stored' ? `Stored ${r.stored} price${r.stored === 1 ? '' : 's'}`
+                                   : (r.detail || r.outcome), r.outcome === 'stored' ? 'success' : 'error');
+  renderMonthlyReport();
 }
 
 const _beefLabel = c => ({ class_a: 'Class A', class_c: 'Class C', weaner: 'Weaner calf' })[c] || c;
