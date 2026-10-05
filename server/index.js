@@ -242,6 +242,7 @@ app.use('/api/pe/documents',   require('./routes/pe-documents'));
 app.use('/api/ai',             require('./routes/aiCourses'));
 app.use('/api/change-requests',require('./routes/changeRequests'));
 app.use('/api/staff-policies', require('./routes/staffPolicies'));
+app.use('/api/director-report', require('./routes/directorReport'));
 
 
 /* ─── Health Check ─────────────────────────────────────────────────────────

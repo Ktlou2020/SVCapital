@@ -651,9 +651,12 @@ function sendMonthlyStatement(investor, { investments, recentTransactions }) {
 /* ── 13. Director monthly report ────────────────────────── */
 function sendDirectorReport(director, data) {
   const { email, first_name } = director;
-  const { monthLabel, aum, newInvestors, returnsTotal, depositsTotal, totalInvestors, pools } = data;
+  const { monthLabel, aum, aumChangePct, newInvestors, returnsTotal, depositsTotal,
+          totalInvestors, reinvestedPct, pools, reportUrl } = data;
   const fmtR = v => `R${Number(v || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const fmtN = v => Number(v || 0).toLocaleString('en-ZA');
+  const fmtP = v => v == null ? '—' : `${v >= 0 ? '+' : ''}${Number(v).toFixed(1)}%`;
+  const fmtD = d => d ? new Date(d).toLocaleDateString('en-ZA', { day:'numeric', month:'short', year:'numeric' }) : '—';
 
   const poolRows = (pools && pools.length)
     ? pools.map(p => `
@@ -661,9 +664,10 @@ function sendDirectorReport(director, data) {
         <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:0.86rem">${p.pool_name || '—'}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:0.86rem;text-transform:capitalize">${p.product_type || '—'}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:0.86rem;color:#fec24f;font-weight:600">${fmtR(p.invested)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:0.86rem">${fmtD(p.maturity_date)}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:0.86rem;text-align:right">${fmtN(p.investors)}</td>
       </tr>`).join('')
-    : '<tr><td colspan="4" style="padding:12px;text-align:center;color:#aaa;font-size:0.85rem">No active pool data</td></tr>';
+    : '<tr><td colspan="5" style="padding:12px;text-align:center;color:#aaa;font-size:0.85rem">No active pool data</td></tr>';
 
   return _send({
     to: email,
@@ -674,29 +678,32 @@ function sendDirectorReport(director, data) {
 
       <div class="box">
         <div class="row"><span class="lbl">Total AUM (Active Investments)</span><span class="val gold">${fmtR(aum)}</span></div>
-        <div class="row"><span class="lbl">Total Active Investors</span><span class="val">${fmtN(totalInvestors)}</span></div>
+        <div class="row"><span class="lbl">Month on Month</span><span class="val ${(aumChangePct || 0) < 0 ? '' : 'green'}">${fmtP(aumChangePct)}</span></div>
+        <div class="row"><span class="lbl">Active Investors (money in a pool)</span><span class="val">${fmtN(totalInvestors)}</span></div>
         <div class="row"><span class="lbl">New Investors This Month</span><span class="val green">${fmtN(newInvestors)}</span></div>
-        <div class="row"><span class="lbl">Returns Distributed This Month</span><span class="val green">${fmtR(returnsTotal)}</span></div>
-        <div class="row"><span class="lbl">Deposits Received This Month</span><span class="val">${fmtR(depositsTotal)}</span></div>
+        <div class="row"><span class="lbl">Investment Income Accrued</span><span class="val green">${fmtR(returnsTotal)}</span></div>
+        <div class="row"><span class="lbl">New Capital Invested</span><span class="val">${fmtR(depositsTotal)}</span></div>
+        <div class="row"><span class="lbl">Maturities Reinvested</span><span class="val">${reinvestedPct == null ? '—' : Number(reinvestedPct).toFixed(1) + '%'}</span></div>
       </div>
 
-      <h2 style="margin-top:24px">Pool Breakdown (Top 10 Active)</h2>
+      <h2 style="margin-top:24px">Largest Pools</h2>
       <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-top:10px;border-radius:10px;overflow:hidden;border:1px solid #eee">
         <thead>
           <tr style="background:#f7f9fc">
             <th style="padding:9px 12px;text-align:left;font-size:0.78rem;color:#888;font-weight:600;text-transform:uppercase">Pool</th>
             <th style="padding:9px 12px;text-align:left;font-size:0.78rem;color:#888;font-weight:600;text-transform:uppercase">Type</th>
             <th style="padding:9px 12px;text-align:left;font-size:0.78rem;color:#888;font-weight:600;text-transform:uppercase">Total Invested</th>
+            <th style="padding:9px 12px;text-align:left;font-size:0.78rem;color:#888;font-weight:600;text-transform:uppercase">Matures</th>
             <th style="padding:9px 12px;text-align:right;font-size:0.78rem;color:#888;font-weight:600;text-transform:uppercase"># Investors</th>
           </tr>
         </thead>
         <tbody>${poolRows}</tbody>
       </table>
 
-      <p style="margin-top:22px">Log in to the admin panel to view full breakdowns, transaction details, and investor activity.</p>
-      <a href="${BASE_URL}/admin/" class="btn">Go to Admin Panel →</a>
+      <p style="margin-top:22px">The full report — the AUM bridge, the six-month trend, investor concentration, compliance, and the herd, solar and lending books behind the money — is in the Director Panel, and downloads as a PDF.</p>
+      <a href="${reportUrl || BASE_URL + '/team/director.html'}" class="btn">Open the full report →</a>
     `),
-    text: `Director Report — ${monthLabel}\n\nAUM: ${fmtR(aum)}\nTotal Investors: ${fmtN(totalInvestors)}\nNew Investors: ${fmtN(newInvestors)}\nReturns Distributed: ${fmtR(returnsTotal)}\nDeposits: ${fmtR(depositsTotal)}\n\nLog in at ${BASE_URL}/admin/`,
+    text: `Director Report — ${monthLabel}\n\nAUM: ${fmtR(aum)} (${fmtP(aumChangePct)} month on month)\nActive Investors: ${fmtN(totalInvestors)}\nNew Investors: ${fmtN(newInvestors)}\nIncome Accrued: ${fmtR(returnsTotal)}\nNew Capital: ${fmtR(depositsTotal)}\n\nFull report: ${reportUrl || BASE_URL + '/team/director.html'}`,
   });
 }
 
