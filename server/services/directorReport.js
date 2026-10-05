@@ -548,9 +548,16 @@ async function beefMarket(w) {
       WHERE week_ending < $1::date
       ORDER BY category, week_ending DESC`, [w.next]);
 
+  /* Whether the automatic fetch is working is part of the report. A fetcher
+     that quietly stopped is how a board ends up reading a two-month-old price
+     as though it were this week's. */
+  let lastFetch = null;
+  try { lastFetch = await require('./beefPriceFetch').lastFetch(); } catch (_) {}
+
   if (!latest.length) {
     return {
       available: false,
+      lastFetch,
       note: 'No published beef price has been captured yet, so the market half of this section is empty. ' +
             'Our own realised price per head above is unaffected — it comes from completed sales.',
       prices: [], trend: [],
@@ -593,6 +600,7 @@ async function beefMarket(w) {
 
   return {
     available: true,
+    lastFetch,
     prices: latest.map(r => ({
       category: r.category, basis: r.basis, randPerKg: num(r.rand_per_kg),
       weekEnding: isoDate(r.week_ending), source: r.source, sourceUrl: r.source_url,
