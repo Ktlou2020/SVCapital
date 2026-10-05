@@ -69,4 +69,87 @@ router.get('/months', requireDirector, async (req, res) => {
   }
 });
 
+/* ─── Beef market prices ──────────────────────────────────────────────
+   The published weekly price, kept beside our own realised price so a
+   director can see where the market went as well as what we got.
+
+   Entered by hand today. There is no fetch from the RPO report yet: writing a
+   parser against a page nobody has read would put prices on a board pack that
+   nobody has checked, and a wrong price there is worse than an empty section.
+   Every row records who captured it and when, so the report can say so.
+   ──────────────────────────────────────────────────────────────────── */
+const CATEGORIES = { class_a: 'carcass', class_c: 'carcass', weaner: 'live' };
+
+router.get('/beef-prices', requireDirector, async (req, res) => {
+  try {
+    const pool = require('../db/pool');
+    const { rows } = await pool.query(
+      `SELECT id, week_ending, category, basis, rand_per_kg, source, source_url,
+              captured_by, captured_at, notes
+         FROM beef_market_prices ORDER BY week_ending DESC, category LIMIT 120`);
+    return res.json({ categories: Object.keys(CATEGORIES), prices: rows });
+  } catch (err) {
+    console.error('[director-report] beef-prices', err.message);
+    return res.status(500).json({ error: 'Could not load the prices.' });
+  }
+});
+
+router.post('/beef-prices', requireDirector, async (req, res) => {
+  try {
+    const pool = require('../db/pool');
+    const { week_ending, category, rand_per_kg, notes } = req.body || {};
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(week_ending || ''))) {
+      return res.status(400).json({ error: 'week_ending must be a date, as YYYY-MM-DD.' });
+    }
+    if (!Object.prototype.hasOwnProperty.call(CATEGORIES, category)) {
+      return res.status(400).json({ error: `category must be one of ${Object.keys(CATEGORIES).join(', ')}.` });
+    }
+    const price = Number(rand_per_kg);
+    /* A rand-per-kilogram figure. The guard is deliberately wide but closed at
+       both ends: somebody keying a price per HEAD — about R19 000 — must not
+       land it in a column the report multiplies by 475 kilograms. */
+    if (!isFinite(price) || price <= 0 || price > 500) {
+      return res.status(400).json({ error: 'rand_per_kg must be a price per kilogram, between 0 and 500.' });
+    }
+    if (new Date(week_ending) > new Date()) {
+      return res.status(400).json({ error: 'That week has not happened yet.' });
+    }
+
+    /* The basis belongs to the category, not to the person entering it. Class A
+       is a carcass price and a weaner is quoted live; letting the form choose
+       is letting it be wrong, and the projection multiplies by it. */
+    const basis = CATEGORIES[category];
+    const who = [req.user?.firstName, req.user?.lastName].filter(Boolean).join(' ')
+                || req.user?.email || req.user?.empId || null;
+
+    const { rows: [row] } = await pool.query(
+      `INSERT INTO beef_market_prices
+         (week_ending, category, basis, rand_per_kg, source, source_url, captured_by, notes)
+       VALUES ($1,$2,$3,$4,'RPO weekly report','https://rpo.co.za/weeklikse-bees-en-skaap-markverslag/',$5,$6)
+       ON CONFLICT (week_ending, category) DO UPDATE
+         SET rand_per_kg = EXCLUDED.rand_per_kg, basis = EXCLUDED.basis,
+             captured_by = EXCLUDED.captured_by, captured_at = NOW(),
+             notes = EXCLUDED.notes
+       RETURNING *`,
+      [week_ending, category, basis, price, who, notes || null]);
+
+    audit.log({
+      action:      'beef_price.capture',
+      actorId:     req.user.empId || req.user.id || null,
+      actorEmail:  req.user.email || null,
+      actorRole:   req.user.role || null,
+      entityType:  'beef_market_prices',
+      entityId:    row.id,
+      description: `Captured ${category} at R${price}/kg for the week ending ${week_ending}`,
+      ip:          req.ip || null,
+    }).catch(() => {});
+
+    return res.json({ ok: true, price: row });
+  } catch (err) {
+    console.error('[director-report] beef-prices save', err.message);
+    return res.status(500).json({ error: 'Could not save that price.' });
+  }
+});
+
 module.exports = router;

@@ -2504,6 +2504,8 @@ function _rptUnderlying(r) {
         <div style="font-size:0.68rem;color:var(--muted);margin-top:8px;line-height:1.5">${escH(c.priceBasis)}</div>
       </div>
 
+      ${_rptBeefMarket(c.market)}
+
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px">
         <div style="font-weight:700;margin-bottom:12px"><i class="fa-solid fa-solar-panel" style="color:#fec24f"></i> Solar</div>
         ${_rptRow('Projects', `${rNum(s.activeProjects)} active of ${rNum(s.projects)}`)}
@@ -2535,6 +2537,109 @@ function _rptUnderlying(r) {
                   st.overdueDeals ? RPT.bad : RPT.up)}
       </div>
     </div>`;
+}
+
+/* The published beef market, beside our own realised price.
+ *
+ * Two different claims, and the panel keeps them apart: what we GOT, which is
+ * in the cattle panel, and what the market IS, which is here. The projection
+ * is labelled as an estimate and shows the three numbers it was built from, so
+ * nobody reads it as a sale. A price older than a week says how old it is.   */
+function _rptBeefMarket(mk) {
+  if (!mk || !mk.available) {
+    return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px">
+      <div style="font-weight:700;margin-bottom:12px"><i class="fa-solid fa-tag" style="color:${RPT.down}"></i> Beef market price</div>
+      <div style="font-size:0.78rem;color:var(--muted);line-height:1.6">${escH((mk && mk.note) || 'No price captured.')}</div>
+      <button class="btn btn--ghost btn--sm" style="margin-top:12px" onclick="openBeefPriceEntry()">
+        <i class="fa-solid fa-plus"></i> Capture this week’s price</button>
+    </div>`;
+  }
+  const up = mk.classAChangePct;
+  const stale = mk.prices.filter(p => p.staleWeeks > 0);
+  return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px">
+    <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:12px">
+      <div style="font-weight:700"><i class="fa-solid fa-tag" style="color:${RPT.down}"></i> Beef market price</div>
+      <button class="btn btn--ghost btn--sm" onclick="openBeefPriceEntry()"><i class="fa-solid fa-plus"></i></button>
+    </div>
+    ${mk.prices.map(p => _rptRow(
+       `${escH(_beefLabel(p.category))} <span style="color:var(--muted);font-size:0.7rem">${escH(p.basis)}</span>`,
+       `${rZAR(p.randPerKg)}/kg`)).join('')}
+    ${_rptRow('Through the month', up == null ? '—' : rSigned(up), up == null ? null : up >= 0 ? RPT.up : RPT.down)}
+    ${mk.classAAtMonthStart ? `<div style="font-size:0.68rem;color:var(--muted);margin-top:4px">
+        Class A opened the month at ${rZAR(mk.classAAtMonthStart)}/kg and closed at ${rZAR(mk.classANow)}/kg.</div>` : ''}
+
+    <div style="margin-top:14px;padding:11px 13px;border:1px solid var(--border);border-radius:9px">
+      <div style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em">
+        What a finished animal would fetch at this price</div>
+      <div style="font-size:1.15rem;font-weight:800;color:${RPT.ink};font-variant-numeric:tabular-nums">
+        ${mk.projectedPerHead == null ? '—' : rZAR(mk.projectedPerHead)}</div>
+      <div style="font-size:0.7rem;color:var(--muted);margin-top:3px">
+        ${rNum(mk.assumptions.targetSaleWeightKg)} kg live × ${rPct(mk.assumptions.dressingPct * 100, 0)} dressing
+        × ${mk.classANow == null ? '—' : rZAR(mk.classANow)}/kg carcass</div>
+      ${mk.projectedAgainstRealisedPct == null ? '' : `<div style="font-size:0.74rem;margin-top:6px;
+          color:${mk.projectedAgainstRealisedPct >= 0 ? RPT.up : RPT.down}">
+        ${rSigned(mk.projectedAgainstRealisedPct)} against the ${rZAR(mk.lastRealisedPerHead)} we last realised</div>`}
+      ${mk.projectedMarginPerHead == null ? '' : _rptRow('Projected margin a head', rZAR(mk.projectedMarginPerHead),
+        mk.projectedMarginPerHead >= 0 ? RPT.up : RPT.bad)}
+    </div>
+
+    ${mk.trend.length ? `<div style="height:130px;margin-top:12px"><canvas id="rptBeefPrice"></canvas></div>` : ''}
+    ${stale.length ? `<div style="font-size:0.7rem;color:${RPT.down};margin-top:8px">
+        <i class="fa-solid fa-clock"></i> ${stale.map(p => `${escH(_beefLabel(p.category))} is
+        ${rNum(p.staleWeeks)} week${p.staleWeeks === 1 ? '' : 's'} old`).join('; ')}.</div>` : ''}
+    <div style="font-size:0.68rem;color:var(--muted);margin-top:8px;line-height:1.5">
+      ${escH(mk.basisNote)}
+      ${mk.prices[0] ? ` Week ending ${escH(mk.prices[0].weekEnding)}, from ${escH(mk.prices[0].source)}${
+        mk.prices[0].capturedBy ? `, captured by ${escH(mk.prices[0].capturedBy)}` : ''}.` : ''}
+    </div>
+  </div>`;
+}
+
+const _beefLabel = c => ({ class_a: 'Class A', class_c: 'Class C', weaner: 'Weaner calf' })[c] || c;
+
+/* Captured by hand. There is no fetch from the RPO report yet — a parser
+   written against a page nobody has read would put unchecked prices on a board
+   pack, and a wrong price there is worse than an empty section. */
+function openBeefPriceEntry() {
+  const friday = (() => { const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 2) % 7)); return d.toISOString().slice(0, 10); })();
+  const body = document.getElementById('beefModalBody');
+  body.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:15px">
+      <div class="form-group"><label>Week ending</label>
+        <input type="date" id="beefWeek" value="${friday}"></div>
+      <div class="form-group"><label>Category</label>
+        <select id="beefCategory">
+          <option value="class_a">Class A (carcass)</option>
+          <option value="class_c">Class C (carcass)</option>
+          <option value="weaner">Weaner calf (live)</option>
+        </select></div>
+      <div class="form-group"><label>Rand per kilogram</label>
+        <input id="beefPrice" type="number" step="0.01" placeholder="e.g. 72.50">
+        <div style="font-size:0.76rem;color:var(--muted);margin-top:4px">
+          Per KILOGRAM, not per head. Class A and Class C are carcass prices; a weaner is quoted live —
+          the report applies the dressing percentage itself.</div></div>
+      <div class="form-group"><label>Note</label>
+        <input id="beefNote" placeholder="optional"></div>
+      <div style="font-size:0.76rem;color:var(--muted)">
+        Source is recorded as the RPO weekly report, with your name and the time.</div>
+      <div id="beefError" style="color:#ef4444;font-size:0.82rem;display:none"></div>
+    </div>`;
+  openModal('beefModal');
+}
+
+async function submitBeefPrice() {
+  const err = document.getElementById('beefError');
+  const fail = m => { err.textContent = m; err.style.display = 'block'; };
+  const r = await post('director-report/beef-prices', {
+    week_ending: document.getElementById('beefWeek').value,
+    category:    document.getElementById('beefCategory').value,
+    rand_per_kg: document.getElementById('beefPrice').value,
+    notes:       document.getElementById('beefNote').value.trim() || null,
+  });
+  if (r && r.error) return fail(r.error);
+  closeModal('beefModal');
+  showToast('Price captured');
+  renderMonthlyReport();
 }
 
 /* ─── Charts ────────────────────────────────────────────────────────────
@@ -2640,6 +2745,36 @@ function _drawReportCharts(r) {
           labels: { color: RPT.ink, boxWidth: 10, font: { family: 'Poppins', size: 10 } } },
           tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.parsed.y == null ? '—' : c.parsed.y.toFixed(1) + '%'}` } } },
         scales: { x: axis, y: { ...axis, ticks: { ...axis.ticks, callback: v => v + '%' } } },
+      },
+    });
+  }
+
+  /* The published market price. Separate chart from our realised price per
+     head on purpose: one is rands per kilogram and the other rands per
+     animal, and putting two scales on one axis is the chart mistake that
+     makes both unreadable. */
+  const bp = document.getElementById('rptBeefPrice');
+  const mk = r.underlying.cattle.market;
+  if (bp && mk && mk.available && mk.trend.length) {
+    const weeks = [...new Set(mk.trend.map(x => x.weekEnding))].sort();
+    const series = [...new Set(mk.trend.map(x => x.category))];
+    const hues = { class_a: RPT.down, class_c: '#f97316', weaner: RPT.up };
+    _rptCharts.bp = new Chart(bp, {
+      type: 'line',
+      data: { labels: weeks.map(d => d.slice(5)), datasets: series.map(cat => ({
+        label: ({ class_a: 'Class A', class_c: 'Class C', weaner: 'Weaner' })[cat] || cat,
+        data: weeks.map(wk => { const h = mk.trend.find(x => x.weekEnding === wk && x.category === cat);
+                                return h ? h.randPerKg : null; }),
+        borderColor: hues[cat] || RPT.brand, borderWidth: 2, pointRadius: 3,
+        pointBackgroundColor: hues[cat] || RPT.brand, spanGaps: true, tension: 0.25, fill: false,
+      })) },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { display: series.length > 1,
+            labels: { color: RPT.ink, boxWidth: 10, font: { family: 'Poppins', size: 10 } } },
+          tooltip: { callbacks: { label: c => `${c.dataset.label}: ${rZAR(c.parsed.y)}/kg` } } },
+        scales: { x: axis, y: { ...axis, ticks: { ...axis.ticks, callback: v => 'R' + v } } },
       },
     });
   }

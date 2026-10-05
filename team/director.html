@@ -577,6 +577,21 @@
 </div>
 
 <!-- Leave Requests Sign-in Alert -->
+<div class="dir-modal-overlay" id="beefModal">
+  <div class="dir-modal" style="max-width:480px">
+    <div class="dir-modal-header">
+      <div class="modal-icon" style="background:rgba(254,194,79,0.1);color:#fec24f"><i class="fa-solid fa-tag"></i></div>
+      <h3>Capture a beef price</h3>
+      <button class="btn btn--ghost btn--sm" onclick="closeModal('beefModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="dir-modal-body" id="beefModalBody"></div>
+    <div class="dir-modal-footer">
+      <button class="btn btn--ghost" onclick="closeModal('beefModal')">Cancel</button>
+      <button class="btn btn--gold btn--sm" onclick="submitBeefPrice()"><i class="fa-solid fa-check"></i> Save</button>
+    </div>
+  </div>
+</div>
+
 <div class="dir-modal-overlay" id="policyModal">
   <div class="dir-modal" style="max-width:620px">
     <div class="dir-modal-header">
@@ -730,6 +745,6 @@
   @media (max-width: 760px)  { .rpt-steps { grid-template-columns: repeat(2, 1fr); } }
   @media (max-width: 420px)  { .rpt-steps { grid-template-columns: 1fr; } }
 </style>
-<script src="js/director.js?v=6"></script>
+<script src="js/director.js?v=7"></script>
 </body>
 </html>

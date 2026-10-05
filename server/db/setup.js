@@ -839,6 +839,38 @@ CREATE TABLE IF NOT EXISTS cattle_nav_settings (
   created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+/* The beef market, as published rather than as we realised it.
+ *
+ * The report already carries OUR selling price per head, cycle by cycle. That
+ * is a lagging figure from completed sales. This is the other half: the
+ * weekly market price, so a director can see where the market went during the
+ * month and what that does to the cattle still in the kraal.
+ *
+ * Every row says where it came from and how it got here. A price that was
+ * keyed in by a person and a price that was fetched are both legitimate, but
+ * they are not the same claim, and a board pack has to be able to say which
+ * it is reading. captured_by is null for a fetch and names the person for a
+ * manual entry.
+ *
+ * basis matters and is the easiest thing to get wrong: Class A and Class C are
+ * CARCASS prices, a weaner calf is quoted LIVE. Multiplying a live weight by a
+ * carcass price overstates the animal by the dressing percentage — about 43%.
+ */
+CREATE TABLE IF NOT EXISTS beef_market_prices (
+  id            TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+  week_ending   DATE NOT NULL,
+  category      TEXT NOT NULL,              -- class_a | class_c | weaner
+  basis         TEXT NOT NULL,              -- carcass | live
+  rand_per_kg   NUMERIC(10,2) NOT NULL,
+  source        TEXT NOT NULL,              -- e.g. 'RPO weekly report'
+  source_url    TEXT,
+  captured_by   TEXT,                       -- null when fetched, the person's name when keyed in
+  captured_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  notes         TEXT,
+  UNIQUE (week_ending, category)
+);
+CREATE INDEX IF NOT EXISTS beef_market_prices_week_idx ON beef_market_prices(week_ending DESC);
+
 CREATE TABLE IF NOT EXISTS shortterm_loans (
   id TEXT PRIMARY KEY,
   business_name TEXT NOT NULL, business_reg TEXT,
@@ -4111,6 +4143,11 @@ async function autoSetup() {
           body: 'It was an email with five figures and a list of pools. It is now a board pack in the Director Panel, for any month you pick, and the email carries the headlines and a link to it. AUM leads: the closing figure, the move on last month, and a bridge from opening to closing \u2014 new capital in, maturities reinvested, capital rolled out, capital returned \u2014 that states whether it reconciles rather than quietly plugging its own gap. Returns paid out sit beside that bridge and never inside it, because a return is earned on the principal rather than added to it and subtracting it would make the bridge wrong by exactly that amount. Then six months of AUM, the split by product, the five largest pools WITH the date each matures, and the investor picture: active investors (meaning money in a pool, not a row marked active), growth on the month, average holding and average ticket, what share of the book the ten largest investors hold, withdrawals and how many people made them, KYC and FICA side by side because they disagree, and province and age. Returns show what proportion of maturing money was rolled over against taken as cash, and the realised return per product over six months. Last, the assets themselves: head of cattle under management, what was sold in the month and at what price, our realised price per head cycle by cycle, solar capacity and generation, and the short-term deals funded, repaid and overdue. Directors only \u2014 it names the ten largest investors and what each of them holds.',
           where: 'Director Panel \u2192 Monthly Report, under Platform in the sidebar. Pick the month top left; \u201cDownload PDF\u201d is top right. The monthly email now links straight to it.' },
 
+        { id: 'ANN-2026-BEEF-MARKET-PRICE', area: 'admin', icon: 'fa-tag',
+          title: 'The beef market price now sits beside what we actually got for cattle',
+          body: 'The report already showed our realised selling price per head, cycle by cycle \u2014 a true figure, but a lagging one from sales already done. Beside it now sits the published weekly market price: Class A, Class C and weaner, where the market opened and closed the month, and what a finished animal would fetch at that price. That projection is the target sale weight times the dressing percentage times the carcass price, and the report shows all three numbers rather than just the answer, because an estimate that hides its inputs reads as a measurement. Class A and Class C are carcass prices and a weaner is quoted live; the basis is set from the category, not chosen on the form, since multiplying a live weight by a carcass price overstates the animal by about 43%. The dressing percentage is a stored assumption the fund manager can correct without a deploy. Prices are captured by hand from the RPO weekly report \u2014 enter the rand per KILOGRAM, not per head, and the form refuses a number too large to be one. Each row keeps who captured it and when, and a price more than a week old says on the report how old it is.',
+          where: 'Director Panel \u2192 Monthly Report \u2192 the \u201cBeef market price\u201d panel under The assets behind the money. The + button on that panel captures a week. Source: https://rpo.co.za/weeklikse-bees-en-skaap-markverslag/' },
+
         { id: 'ANN-2026-SUPPORT-NUMBER', area: 'both', icon: 'fa-phone',
           title: 'Support WhatsApp number changed',
           body: 'The support number is now 079 111 5476. Every WhatsApp link on the site, the portal and the app points at it.',
@@ -4128,6 +4165,18 @@ async function autoSetup() {
         added += rowCount;
       }
       if (added) console.log(`\u2705 Announced ${added} feature(s) to staff.`);
+    });
+
+    await step("16b. Cattle dressing percentage assumption", async () => {
+      /* Needed to turn a CARCASS price into a price per live animal. Stored
+         beside the other cattle assumptions rather than written into code, so
+         the fund manager can correct it without a deploy — and so the report
+         can show the reader which number the projection used. */
+      const { rowCount } = await pool.query(
+        `INSERT INTO cattle_nav_settings (setting_key, setting_value)
+         VALUES ('dressing_pct', '0.57')
+         ON CONFLICT (setting_key) DO NOTHING`);
+      if (rowCount) console.log('\u2705 Cattle dressing percentage seeded at 57%.');
     });
 
     await step("16. Give every investor a nationality", async () => {
