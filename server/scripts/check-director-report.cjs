@@ -47,6 +47,7 @@ const CRON  = strip(read('server/jobs/directorReportCron.js'));
 const DIR   = read('team/js/director.js');
 const HTML  = read('team/director.html');
 const INDEX = strip(read('server/index.js'));
+const SETUP = read('server/db/setup.js');
 
 let pass = 0, fail = 0;
 const ok = (name, cond, detail) => {
@@ -151,6 +152,54 @@ console.log('\nthe assets behind the money');
      /catch \(e\) \{ generationError = e\.message; \}/.test(SVCC));
   ok('short term reports what was funded and what is overdue',
      /fundedThisMonth/.test(SVCC) && /overdueDeals/.test(SVCC));
+}
+
+console.log('\nthe beef market, which is not the same claim as our own price');
+{
+  ok('the market price is stored with where it came from and who captured it',
+     /CREATE TABLE IF NOT EXISTS beef_market_prices/.test(SETUP)
+     && /captured_by   TEXT/.test(SETUP) && /source        TEXT NOT NULL/.test(SETUP),
+     'a fetched price and a keyed-in price are both legitimate but not the same claim');
+  ok('one price per category per week',
+     /UNIQUE \(week_ending, category\)/.test(SETUP));
+  ok('the basis is set from the category, never taken from the caller',
+     /const basis = CATEGORIES\[category\];/.test(ROUTE)
+     && !/req\.body[\s\S]{0,40}basis/.test(ROUTE),
+     'Class A is a carcass price and a weaner is live; letting a form choose is letting it be wrong');
+  ok('and a price per HEAD cannot be keyed into a per-kilogram column',
+     /price <= 0 \|\| price > 500/.test(ROUTE),
+     'R19 000 in that column gets multiplied by 475 kilograms');
+  ok('a week that has not happened is refused',
+     /new Date\(week_ending\) > new Date\(\)/.test(ROUTE));
+  ok('capturing a price is directors only, like the rest of the report',
+     /router\.post\('\/beef-prices', requireDirector/.test(ROUTE));
+  ok('and it is audited', /action:\s*'beef_price\.capture'/.test(ROUTE));
+
+  ok('a carcass price gets the dressing step and a live one does not',
+     /classA\.basis === 'carcass' \? dressing : 1/.test(SVCC),
+     'skipping it overstates every animal by about 43%');
+  ok('the dressing percentage is a stored assumption, not a number in code',
+     /setting_key IN \('target_sale_weight_kg','dressing_pct'\)/.test(SVCC)
+     && /'dressing_pct', '0\.57'/.test(SETUP));
+  ok('and the projection shows the three numbers it was built from',
+     /kg live[\s\S]{0,120}dressing[\s\S]{0,120}carcass/.test(DIR),
+     'an estimate that hides its inputs reads as a measurement');
+  ok('our realised price and the market price stay apart',
+     /priceBasis:/.test(SVCC) && /basisNote:/.test(SVCC)
+     && /not a sale/.test(SVCC),
+     'what we got and what the market is are different claims');
+  ok('a stale price says how old it is',
+     /staleWeeks:/.test(SVCC) && /week\$\{p\.staleWeeks === 1 \? '' : 's'\} old/.test(DIR),
+     'a board pack must not present a month-old price as current');
+  ok('and an empty section says so rather than showing a zero',
+     /available: false/.test(SVCC) && /No published beef price has been captured yet/.test(SVCC));
+
+  /* There is no fetcher yet, on purpose. If one is added it must be written
+     against the real page, not guessed — this assertion is here so that
+     adding one is a deliberate act that updates the check. */
+  ok('nothing claims to fetch the RPO report automatically',
+     !/fetch\(['"`]https:\/\/rpo\.co\.za/.test(SVCC) && !/cheerio|jsdom/.test(SVCC),
+     'a parser written against a page nobody has read puts unchecked prices on a board pack');
 }
 
 console.log('\nwho may read it');
@@ -327,6 +376,30 @@ console.log('\nthe screen and the PDF');
        && rep.investors.withdrawals.total === 30);
     ok('and the pending one is counted apart',
        rep.investors.withdrawals.pendingCount === 1 && rep.investors.withdrawals.pendingTotal === 12);
+
+    /* The beef projection, worked out by hand first:
+       72.50 R/kg carcass x 475 kg live x 0.57 dressing = 19 629.375 a head. */
+    await db.query(`DELETE FROM beef_market_prices`);
+    await db.query(`INSERT INTO beef_market_prices (week_ending, category, basis, rand_per_kg, source)
+                    VALUES ('2026-08-29','class_a','carcass',69.40,'check'),
+                           ('2026-09-26','class_a','carcass',72.50,'check')`);
+    const beef = (await svc.buildReport('2026-09')).underlying.cattle.market;
+    ok('the market price is picked up', beef.available && beef.classANow === 72.5,
+       `got ${beef.classANow}`);
+    ok('the move across the month is +4.47%',
+       Math.abs(beef.classAChangePct - 4.4668) < 0.01, `got ${beef.classAChangePct}`);
+    ok('a finished animal projects at 19 629.38',
+       Math.abs(beef.projectedPerHead - 19629.375) < 0.01, `got ${beef.projectedPerHead}`);
+
+    /* The same price quoted LIVE must not get the dressing step. */
+    await db.query(`UPDATE beef_market_prices SET basis = 'live' WHERE category = 'class_a'`);
+    const live = (await svc.buildReport('2026-09')).underlying.cattle.market;
+    ok('and a live-basis price skips the dressing step',
+       Math.abs(live.projectedPerHead - 72.50 * 475) < 0.01, `got ${live.projectedPerHead}`);
+    await db.query(`DELETE FROM beef_market_prices`);
+    const none = (await svc.buildReport('2026-09')).underlying.cattle.market;
+    ok('with nothing captured the section is empty, not zero',
+       none.available === false && none.projectedPerHead === undefined);
 
     /* The same month again, with the paid-out investment's status NULLed — the
        state every row written before the column got its default is in. */

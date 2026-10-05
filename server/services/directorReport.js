@@ -524,6 +524,103 @@ async function cattleStats(w) {
   };
 }
 
+/* The beef market during the month, and what it implies for the cattle still
+   in the kraal.
+ *
+ * Two prices are easy to confuse and they are not the same claim:
+ *
+ *   OURS      selling price per head from completed cycles. Realised, lagging,
+ *             and already in cattleStats above.
+ *   THE MARKET the weekly published price per kilogram. Current, forward
+ *             looking, and nothing to do with what we actually got.
+ *
+ * The projection multiplies the market CARCASS price by the target sale weight
+ * and the dressing percentage, because Class A is quoted per kilogram of
+ * carcass and the target weight is a LIVE animal. Skipping the dressing step
+ * overstates each animal by about 43%. All three inputs are shown on the
+ * report with the projection, so nobody reads it as a measurement.
+ */
+async function beefMarket(w) {
+  const { rows: latest } = await pool.query(
+    `SELECT DISTINCT ON (category) category, basis, rand_per_kg, week_ending,
+            source, source_url, captured_by, captured_at
+       FROM beef_market_prices
+      WHERE week_ending < $1::date
+      ORDER BY category, week_ending DESC`, [w.next]);
+
+  if (!latest.length) {
+    return {
+      available: false,
+      note: 'No published beef price has been captured yet, so the market half of this section is empty. ' +
+            'Our own realised price per head above is unaffected — it comes from completed sales.',
+      prices: [], trend: [],
+    };
+  }
+
+  /* Twelve weeks of Class A, which is the series a cattle return moves with. */
+  const { rows: trend } = await pool.query(
+    `SELECT week_ending, category, rand_per_kg
+       FROM beef_market_prices
+      WHERE week_ending < $1::date AND category IN ('class_a','weaner')
+      ORDER BY week_ending DESC LIMIT 24`, [w.next]);
+
+  /* Where the market sat at the start of the month, for the move across it. */
+  const { rows: [atStart] } = await pool.query(
+    `SELECT rand_per_kg FROM beef_market_prices
+      WHERE category = 'class_a' AND week_ending < $1::date
+      ORDER BY week_ending DESC LIMIT 1`, [w.start]);
+
+  const { rows: setRows } = await pool.query(
+    `SELECT setting_key, setting_value FROM cattle_nav_settings
+      WHERE setting_key IN ('target_sale_weight_kg','dressing_pct')`);
+  const set = Object.fromEntries(setRows.map(r => [r.setting_key, r.setting_value]));
+  const targetWeight = parseFloat(set.target_sale_weight_kg) || 475;
+  const dressing     = parseFloat(set.dressing_pct) || 0.57;
+
+  const classA = latest.find(r => r.category === 'class_a');
+  const opening = atStart ? num(atStart.rand_per_kg) : null;
+
+  /* What a finished animal is worth at today's published price. */
+  const projectedPerHead = classA
+    ? num(classA.rand_per_kg) * targetWeight * (classA.basis === 'carcass' ? dressing : 1)
+    : null;
+
+  /* And what that does against what we actually realised last cycle. */
+  const { rows: [lastCycle] } = await pool.query(
+    `SELECT selling_price_per_head, avg_cattle_cost FROM cattle_cycles
+      WHERE sale_date IS NOT NULL AND sale_date < $1::date
+      ORDER BY sale_date DESC LIMIT 1`, [w.next]);
+
+  return {
+    available: true,
+    prices: latest.map(r => ({
+      category: r.category, basis: r.basis, randPerKg: num(r.rand_per_kg),
+      weekEnding: isoDate(r.week_ending), source: r.source, sourceUrl: r.source_url,
+      capturedBy: r.captured_by, capturedAt: r.captured_at,
+      /* A price nobody fetched or keyed in recently is a stale price, and a
+         board pack must say so rather than presenting it as current. */
+      staleWeeks: Math.max(0, Math.round((new Date(w.next) - new Date(r.week_ending)) / 604800000) - 1),
+    })),
+    trend: trend.slice().reverse().map(r => ({
+      weekEnding: isoDate(r.week_ending), category: r.category, randPerKg: num(r.rand_per_kg),
+    })),
+    classANow: classA ? num(classA.rand_per_kg) : null,
+    classAAtMonthStart: opening,
+    classAChangePct: classA && opening ? pct(num(classA.rand_per_kg) - opening, opening) : null,
+    assumptions: { targetSaleWeightKg: targetWeight, dressingPct: dressing },
+    projectedPerHead,
+    lastRealisedPerHead: lastCycle ? num(lastCycle.selling_price_per_head) : null,
+    projectedAgainstRealisedPct: projectedPerHead && lastCycle && num(lastCycle.selling_price_per_head)
+      ? pct(projectedPerHead - num(lastCycle.selling_price_per_head), num(lastCycle.selling_price_per_head))
+      : null,
+    projectedMarginPerHead: projectedPerHead && lastCycle && num(lastCycle.avg_cattle_cost)
+      ? projectedPerHead - num(lastCycle.avg_cattle_cost) : null,
+    basisNote: 'Class A and Class C are carcass prices; a weaner is quoted live. The projection applies the ' +
+               'dressing percentage to the carcass price and the target sale weight, and is an estimate of ' +
+               'what a finished animal would fetch at the published price — not a sale.',
+  };
+}
+
 /* Solar. Capacity and capital are ours; generation comes from the inverters
    through the FoxESS cloud, so it can be unavailable without that meaning
    anything is wrong with the fleet. Absent is reported as absent. */
@@ -611,11 +708,11 @@ async function buildReport(month) {
   const w = await monthWindow(month);
   const [movement, trend, byProduct, pools, investors, withdrawals,
          compliance, demo, reinvest, returns, retTrend,
-         cattle, solar, shortTerm] = await Promise.all([
+         cattle, solar, shortTerm, beef] = await Promise.all([
     aumMovement(w), aumTrend(w, 6), aumByProduct(w), topPools(w, 5),
     investorStats(w), withdrawalStats(w), complianceStats(), demographics(w),
     reinvestmentRate(w), returnsStats(w), returnsTrend(w, 6),
-    cattleStats(w), solarStats(), shortTermStats(w),
+    cattleStats(w), solarStats(), shortTermStats(w), beefMarket(w),
   ]);
 
   const prev = trend.length > 1 ? trend[trend.length - 2].aum : movement.opening;
@@ -632,7 +729,7 @@ async function buildReport(month) {
     pools,
     investors: { ...investors, withdrawals, compliance, demographics: demo },
     returns: { ...returns, reinvestment: reinvest, trend: retTrend },
-    underlying: { cattle, solar, shortTerm },
+    underlying: { cattle: { ...cattle, market: beef }, solar, shortTerm },
   };
 }
 
@@ -640,6 +737,6 @@ module.exports = {
   monthWindow, aumAt, aumMovement, aumTrend, aumByProduct, topPools,
   investorStats, withdrawalStats, complianceStats, demographics,
   reinvestmentRate, returnsStats, returnsTrend,
-  cattleStats, solarStats, shortTermStats, buildReport,
+  cattleStats, solarStats, shortTermStats, beefMarket, buildReport,
   LIVE_AT, BUSINESS_TZ, num, pct, isoDate,
 };
