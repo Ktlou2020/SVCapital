@@ -144,13 +144,23 @@ console.log('\nno new site sums a payout into something called a return');
 
 console.log('\nthe five sites that were wrong are still right');
 {
-  const dir = strip(read('server/jobs/directorReportCron.js'));
+  /* The cron's own queries moved into services/directorReport, which the
+     emailed report and the Director Panel dashboard now both read — so the
+     property is checked where the SQL actually lives. */
+  const dir  = strip(read('server/services/directorReport.js'));
+  const cron = strip(read('server/jobs/directorReportCron.js'));
   ok('the director report sums income, not payouts',
-     /incomeTypesSQL\(\)/.test(dir) && !/IN \('return','payout'\)/.test(dir),
+     /incomeTypesSQL\(\)/.test(dir) && !/IN \('return','payout'\)/.test(dir)
+     && !/type = 'payout'/.test(dir),
      '"Returns Distributed This Month" goes to the board');
   ok('and windows it on the date the money moved',
      /COALESCE\(transaction_date, created_at\) >= \$1/.test(dir),
      'created_at puts a back-dated transaction in the wrong month');
+  ok('and the emailed report reads that service rather than its own queries',
+     /buildReport\(/.test(cron) && !/SELECT COALESCE\(SUM\(amount\),0\) AS aum/.test(cron),
+     'two sets of queries drift, and only one of them gets fixed');
+  ok('the figure the email sends is the accrued income, not a payout total',
+     /returnsTotal:\s*data\.returns\.accruedThisMonth/.test(cron));
 
   const an = strip(read('server/routes/analytics-extra.js'));
   ok('analytics "Returns Paid" and "Returns YTD" sum income',

@@ -119,8 +119,17 @@ async function aumMovement(w) {
 
   /* Out: investments that left AUM during the month, split by whether the
      capital went back to the investor or straight into a new investment.
-     The rolled-over half is the same money as `reinvested` above — it appears
-     on both sides and nets to nothing, which is what a rollover is. */
+     The rolled-over half is the same money as the reinvested figure above —
+     it appears on both sides and nets to nothing, which is what a rollover is.
+
+     The status test COALESCEs to '', not to 'active'. Two traps, one line.
+     A bare negation is NULL for a NULL status, not true, so the row drops out.
+     But defaulting to 'active' makes it read as still live — which also drops
+     it, and silently, because it looks guarded. LIVE_AT treats a NULL status
+     as NOT active: the equality is not true, so the date decides. This side
+     has to agree, or an investment sits in the opening balance, leaves the
+     closing one, and appears in neither movement — and the bridge stops tying
+     with nothing on screen to say why. */
   const { rows: [outflow] } = await pool.query(
     `SELECT
        COALESCE(SUM(i.amount) FILTER (WHERE i.maturity_instruction = 'reinvest'
@@ -133,7 +142,7 @@ async function aumMovement(w) {
        SELECT 1 AS id FROM transactions t2
         WHERE t2.investment_id = i.id AND t2.type = 'matured_funds' AND t2.status = 'completed'
         LIMIT 1) r ON true
-    WHERE i.status <> 'active'
+    WHERE COALESCE(i.status, '') <> 'active'
       AND COALESCE(i.maturity_processed_at::date, i.payout_date::date, i.end_date) >= $1::date
       AND COALESCE(i.maturity_processed_at::date, i.payout_date::date, i.end_date) <  $2::date`,
     [w.start, w.next]);
@@ -389,7 +398,7 @@ async function reinvestmentRate(w) {
        SELECT 1 AS id FROM transactions t
         WHERE t.investment_id = i.id AND t.type = 'matured_funds' AND t.status = 'completed'
         LIMIT 1) roll ON true
-    WHERE i.status <> 'active'
+    WHERE COALESCE(i.status, '') <> 'active'
       AND COALESCE(i.maturity_processed_at::date, i.payout_date::date, i.end_date) >= $1::date
       AND COALESCE(i.maturity_processed_at::date, i.payout_date::date, i.end_date) <  $2::date`,
     [w.start, w.next]);
@@ -417,7 +426,7 @@ async function returnsStats(w) {
             COALESCE(SUM(i.actual_return),0) AS realised,
             COALESCE(SUM(i.amount),0) AS capital, COUNT(*)::int AS matured
        FROM investments i LEFT JOIN products p ON p.product_type = i.product_type
-      WHERE i.status <> 'active'
+      WHERE COALESCE(i.status, '') <> 'active'
         AND COALESCE(i.maturity_processed_at::date, i.payout_date::date, i.end_date) >= $1::date
         AND COALESCE(i.maturity_processed_at::date, i.payout_date::date, i.end_date) <  $2::date
       GROUP BY 1,2 ORDER BY realised DESC`, [w.start, w.next]);
@@ -443,7 +452,7 @@ async function returnsTrend(w, months = 6) {
             COALESCE(p.label, INITCAP(REPLACE(COALESCE(NULLIF(i.product_type,''),'unknown'),'_',' '))) AS label,
             COALESCE(SUM(i.actual_return),0) AS realised, COALESCE(SUM(i.amount),0) AS capital
        FROM investments i LEFT JOIN products p ON p.product_type = i.product_type
-      WHERE i.status <> 'active'
+      WHERE COALESCE(i.status, '') <> 'active'
         AND COALESCE(i.maturity_processed_at::date, i.payout_date::date, i.end_date) >= ($1::date - ($3::int - 1) * INTERVAL '1 month')
         AND COALESCE(i.maturity_processed_at::date, i.payout_date::date, i.end_date) <  $2::date
       GROUP BY 1,2,3 ORDER BY 1`, [w.start, w.next, months]);
