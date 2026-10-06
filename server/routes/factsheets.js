@@ -3,6 +3,7 @@ const router = require('express').Router();
 const pool   = require('../db/pool');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { validateStoredFile } = require('../services/uploadedFile');
+const audit  = require('../services/audit');
 
 const MONTHS = ['January','February','March','April','May','June',
                 'July','August','September','October','November','December'];
@@ -109,7 +110,86 @@ router.post('/upload', requireAuth, requireRole('admin', 'director'), async (req
     );
     res.json({ success: true, data: { ...rows[0], period_label: periodLabel(rows[0].period_date) } });
   } catch (err) {
+    /* This answered 500 and logged nothing, so an upload that failed left no
+       trace to work from — the console just said "Upload failed". */
+    console.error('[factsheets] upload failed:', err.message);
     res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+/* PATCH /api/factsheets/:id — correct the period, the name or the version.
+ *
+ * The period was write-once: it could only be set on upload, so a sheet filed
+ * under the wrong month could not be corrected without deleting it and
+ * uploading the file again. Worse, the upload form carries a period field, so
+ * changing it there and pressing the button looked like an edit and was not —
+ * it either did nothing or, with a file attached, made a second copy.
+ *
+ * The FILE is never touched. The bytes behind an id must stay the bytes
+ * somebody read under that id; a replacement is a new upload, which is what
+ * the upload route is for.
+ */
+router.patch('/:id', requireAuth, requireRole('admin', 'director'), async (req, res) => {
+  try {
+    const { rows: [existing] } = await pool.query(
+      'SELECT id, pool_id, period_date, file_name FROM product_factsheets WHERE id = $1', [req.params.id]);
+    if (!existing) return res.status(404).json({ error: 'Factsheet not found.' });
+
+    const sets = [], vals = [];
+    const put = (col, val) => { vals.push(val); sets.push(`${col} = $${vals.length}`); };
+
+    let newPeriod = existing.period_date;
+    if (req.body.period_date !== undefined) {
+      /* Blank clears it — a document that is not a monthly sheet has no
+         period, and the list sorts those last on purpose. */
+      if (req.body.period_date === null || req.body.period_date === '') {
+        newPeriod = null; put('period_date', null);
+      } else {
+        const m = monthStart(req.body.period_date);
+        if (!m) return res.status(400).json({ error: 'period_date must be a date, as YYYY-MM-DD.' });
+        newPeriod = m; put('period_date', m);
+      }
+    }
+
+    if (req.body.file_name !== undefined) {
+      const name = String(req.body.file_name || '').trim();
+      if (!name) return res.status(400).json({ error: 'Give the factsheet a name.' });
+      put('file_name', name);
+    } else if (req.body.period_date !== undefined) {
+      /* The name was filled in from the old period. If it still carries the
+         house pattern, move it with the period rather than leaving "April
+         2026 - Factsheet" filed under September. A name somebody chose
+         deliberately is left exactly as typed. */
+      const wasCanonical = existing.file_name === canonicalName(existing.period_date);
+      const next = canonicalName(newPeriod);
+      if (wasCanonical && next) put('file_name', next);
+    }
+
+    if (req.body.version !== undefined) {
+      put('version', String(req.body.version || '').trim() || null);
+    }
+
+    if (!sets.length) return res.status(400).json({ error: 'Nothing to change.' });
+
+    const { rows } = await pool.query(
+      `UPDATE product_factsheets SET ${sets.join(', ')} WHERE id = $${vals.length + 1} RETURNING *`,
+      [...vals, req.params.id]);
+
+    audit.log({
+      action:      'factsheet.update',
+      actorId:     req.user.empId || req.user.id || null,
+      actorEmail:  req.user.email || null,
+      actorRole:   req.user.role || null,
+      entityType:  'product_factsheets',
+      entityId:    req.params.id,
+      description: `Changed factsheet ${req.params.id}: ` + sets.join(', '),
+      ip:          req.ip || null,
+    }).catch(() => {});
+
+    return res.json({ success: true, data: { ...rows[0], period_label: periodLabel(rows[0].period_date) } });
+  } catch (err) {
+    console.error('[factsheets] patch', err.message);
+    return res.status(500).json({ error: 'Could not update that factsheet.' });
   }
 });
 

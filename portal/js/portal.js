@@ -1735,10 +1735,19 @@ async function confirmInvestment(pool) {
     });
 
     // Investment transaction records the pool amount (fee is a separate 'fee' transaction)
+    /* The name on the row is whoever's money it is. This sent the parent's
+       name on every transaction including a sub-account's, so a minor's
+       investment was filed under the parent in every list, export and email
+       that reads this column. The id was always right; the name was not. */
+    const _actorName = _pmSaId
+      ? ((PORTAL.subAccounts || []).find(s => s.id === _pmSaId)?.name
+         || `${PORTAL.investor.first_name} ${PORTAL.investor.last_name}`)
+      : `${PORTAL.investor.first_name} ${PORTAL.investor.last_name}`;
+
     await API.transactions.create({
       id:          Utils.genId('TXN'),
       investor_id: PORTAL.investor?.id,
-      investor_name:    `${PORTAL.investor.first_name} ${PORTAL.investor.last_name}`,
+      investor_name:    _actorName,
       type:             'investment',
       amount:           poolAmount,
       status:           'completed',
