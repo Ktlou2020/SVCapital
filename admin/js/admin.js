@@ -78,10 +78,16 @@ async function _withBtn(btn, asyncFn) {
 
 /* ─── Custom confirm dialog (replaces browser confirm()) ─── */
 const Confirm = {
-  ask(title, { body = '', confirmLabel = 'Confirm', danger = false } = {}) {
+  /* `body` is TEXT and goes in as textContent — that is the safe default and
+     every existing caller depends on it. `bodyHtml` is for the few dialogs
+     that are a small form rather than a sentence; a caller passing it owns
+     escaping what it interpolates. */
+  ask(title, { body = '', bodyHtml = '', confirmLabel = 'Confirm', danger = false } = {}) {
     return new Promise(resolve => {
       document.getElementById('confirmModalTitle').textContent = title;
-      document.getElementById('confirmModalBody').textContent = body;
+      const bodyEl = document.getElementById('confirmModalBody');
+      if (bodyHtml) bodyEl.innerHTML = bodyHtml;
+      else bodyEl.textContent = body;
       const okBtn = document.getElementById('confirmModalOk');
       const cancelBtn = document.getElementById('confirmModalCancel');
       okBtn.textContent = confirmLabel;
@@ -92,6 +98,9 @@ const Confirm = {
       document.body.style.overflow = 'hidden';
 
       const cleanup = (result) => {
+        /* Read the form BEFORE anything clears it: a caller that passed
+           bodyHtml reads its own inputs after the await, and the next plain
+           confirm would otherwise inherit this form. */
         overlay.classList.remove('open');
         document.body.style.overflow = '';
         okBtn.replaceWith(okBtn.cloneNode(true));
@@ -1034,10 +1043,11 @@ function renderRecentInvestments() {
   if (!recent.length) { body.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:24px">No investments yet</td></tr>'; return; }
 
   body.innerHTML = recent.map(inv => {
-    const investor = STATE.investors.find(i => i.id === inv.investor_id);
-    const name = inv.investor_name
-      || (investor ? `${investor.first_name || ''} ${investor.last_name || ''}`.trim() : '')
-      || inv.investor_id || '—';
+    /* _actorOf, not investor_name: a sub-account investment named the parent.
+       The plain name feeds the avatar initials; the cell is already markup and
+       must not be escaped again. */
+    const actor = _actorOf(inv);
+    const name  = actor.name;
     // Resolve product_type from the investment, falling back to the associated pool
     const pool = inv.pool_id ? STATE.pools.find(p => p.id === inv.pool_id) : null;
     const productType = inv.product_type || pool?.product_type || '';
@@ -1045,7 +1055,7 @@ function renderRecentInvestments() {
     return `<tr>
       <td><div class="flex-center gap-8">
         <div class="avatar avatar--sm avatar--gold" style="flex-shrink:0">${Utils.initials(name)}</div>
-        <span class="td-strong clip">${_esc(name)}</span>
+        <span class="td-strong clip">${_actorCell(inv)}</span>
       </div></td>
       <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
       <td class="td-gold fw-700 clip">${Utils.rand(inv.amount)}</td>
@@ -1182,7 +1192,7 @@ function renderActivityFeed(page) {
     events.push({
       ts: new Date(ts),
       icon: 'fa-coins', color: '#fec24f',
-      text: `<strong>${_esc(inv.investor_name || inv.investor_id)}</strong> invested ${Utils.rand(inv.amount)}`,
+      text: `<strong>${_esc(_actorLine(inv))}</strong> invested ${Utils.rand(inv.amount)}`,
       sub: _esc(inv.pool_name || inv.pool_id || ''),
       view: 'investments',
     });
@@ -1195,7 +1205,7 @@ function renderActivityFeed(page) {
     events.push({
       ts: new Date(ts),
       icon: 'fa-arrow-trend-up', color: '#22c55e',
-      text: `<strong>${_esc(t.investor_name || t.investor_id)}</strong> received ${Utils.rand(t.amount)} ${t.type}`,
+      text: `<strong>${_esc(_actorLine(t))}</strong> received ${Utils.rand(t.amount)} ${t.type}`,
       sub: _esc(t.reference || ''),
       view: 'transactions',
     });
@@ -1728,6 +1738,60 @@ const _investorLabel = id => {
   return i ? (`${i.first_name || ''} ${i.last_name || ''}`.trim() || id) : id;
 };
 
+/* ─── Who a row actually belongs to ───────────────────────────────────────
+   A sub-account investment is made BY the sub-account out of the
+   sub-account's own wallet. Every list here resolved the name as
+   `investor_name || look up investor_id`, and both of those are the PARENT —
+   so a minor's investment read as the parent's, and nothing on the row said
+   otherwise.
+
+   sub_account_id is checked FIRST, ahead of the stored investor_name. That
+   matters for history as much as for new rows: the portal wrote the parent's
+   name into transactions.investor_name on every sub-account transaction ever
+   made, so trusting that column would keep every past row wrong. Resolving
+   from the id corrects them all without touching a single stored value.    */
+function _actorOf(row) {
+  const saId = row && row.sub_account_id;
+  if (saId) {
+    const sa = (STATE.subAccounts || []).find(s => s.id === saId);
+    const parentId = (sa && sa.parent_investor_id) || row.investor_id;
+    return {
+      isSub:      true,
+      name:       (sa && sa.name) || saId,
+      parentName: parentId ? _investorLabel(parentId) : null,
+      parentId,
+      subId:      saId,
+      type:       sa && sa.account_type,
+    };
+  }
+  return {
+    isSub: false,
+    name:  row && (row.investor_name || _investorLabel(row.investor_id)) || '—',
+    parentName: null, parentId: row && row.investor_id, subId: null,
+  };
+}
+
+/* The name as a cell: the sub-account leads, the parent sits under it, so the
+   money is attributed to whom it belongs and stays traceable to the account
+   that holds it. */
+function _actorCell(row) {
+  const a = _actorOf(row);
+  if (!a.isSub) return _esc(a.name);
+  return `<div style="line-height:1.3">
+    <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+      <span>${_esc(a.name)}</span>
+      <span style="background:rgba(237,165,255,.15);color:#eda5ff;border-radius:4px;padding:0 5px;font-size:0.6rem;font-weight:800;letter-spacing:.02em">SUB-ACCOUNT</span>
+    </div>
+    ${a.parentName ? `<div style="font-size:0.68rem;color:var(--text-dim)">via ${_esc(a.parentName)}</div>` : ''}
+  </div>`;
+}
+
+/* The same thing on one line, for a dense list or an export. */
+function _actorLine(row) {
+  const a = _actorOf(row);
+  return a.isSub && a.parentName ? `${a.name} (sub-account of ${a.parentName})` : a.name;
+}
+
 async function bulkSendLoginInvites() {
   const ids = [...selectedInvestors];
   if (!ids.length) return;
@@ -2250,6 +2314,16 @@ function viewSubAccount(saId) {
   const activeInv  = (STATE.investments || []).filter(i => i.sub_account_id === sa.id && i.status === 'active').length;
   const totalInvested = (STATE.investments || []).filter(i => i.sub_account_id === sa.id)
     .reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+  /* The rows behind those counts. This modal reported invCount and
+     totalInvested and then listed nothing, so a sub-account showed numbers
+     with no way to see what made them up — and the transactions, which are
+     the record of what this account actually did, were absent entirely. */
+  const saInvRows = (STATE.investments || [])
+    .filter(i => i.sub_account_id === sa.id)
+    .sort((a, b) => new Date(b.start_date || b.created_at || 0) - new Date(a.start_date || a.created_at || 0));
+  const saTxnRows = (STATE.transactions || [])
+    .filter(t => t.sub_account_id === sa.id)
+    .sort((a, b) => new Date(Utils.txnDate(b) || 0) - new Date(Utils.txnDate(a) || 0));
   const ficaStatus = parent.fica_status || '';
   const _ficaNorm  = s => { const m = { Approved:'approved',Verified:'approved',Declined:'rejected',Unverified:'not_started',Outstanding:'pending',Pending:'pending' }; return m[s] || s; };
   const ficaNorm   = _ficaNorm(ficaStatus);
@@ -2340,6 +2414,52 @@ function viewSubAccount(saId) {
       <div style="font-weight:700;font-size:0.88rem;margin-bottom:2px">${_esc(parentName)}</div>
       <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:10px">${_esc(parent.email||'')} · ${_esc(parent.id||'')}</div>
       <button class="btn btn--primary btn--sm" onclick="Modal.close('subAccountModal');viewInvestor('${sa.parent_investor_id}')"><i class="fa-solid fa-arrow-up-right-from-square" style="margin-right:6px"></i>View Parent Account</button>
+    </div>
+
+    <div style="margin-top:14px">
+      <div style="font-size:0.78rem;font-weight:800;margin-bottom:8px;display:flex;align-items:center;gap:6px">
+        <i class="fa-solid fa-chart-line" style="color:#eda5ff"></i> Investments (${saInvRows.length})</div>
+      ${saInvRows.length ? `
+      <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden">
+        <table style="width:100%;border-collapse:collapse;font-size:0.78rem">
+          <thead><tr style="background:var(--dark-3);text-align:left;font-size:0.66rem;text-transform:uppercase;color:var(--text-dim)">
+            <th style="padding:7px 9px">Pool</th><th style="padding:7px 9px;text-align:right">Amount</th>
+            <th style="padding:7px 9px">Started</th><th style="padding:7px 9px">Matures</th>
+            <th style="padding:7px 9px">Status</th></tr></thead>
+          <tbody>${saInvRows.map(i => `<tr style="border-top:1px solid var(--border)">
+            <td style="padding:7px 9px">${_esc(i.pool_name || i.pool_id || '—')}</td>
+            <td style="padding:7px 9px;text-align:right;font-weight:700">${Utils.rand(i.amount)}</td>
+            <td style="padding:7px 9px;color:var(--text-dim)">${i.start_date ? Utils.date(i.start_date) : '—'}</td>
+            <td style="padding:7px 9px;color:var(--text-dim)">${i.end_date ? Utils.date(i.end_date) : '—'}</td>
+            <td style="padding:7px 9px">${Utils.statusBadge(i.status)}</td></tr>`).join('')}</tbody>
+        </table>
+      </div>` : `<div style="font-size:0.78rem;color:var(--text-dim);padding:10px 0">
+        This sub-account has not invested yet.</div>`}
+    </div>
+
+    <div style="margin-top:14px">
+      <div style="font-size:0.78rem;font-weight:800;margin-bottom:8px;display:flex;align-items:center;gap:6px">
+        <i class="fa-solid fa-receipt" style="color:#eda5ff"></i> Transactions (${saTxnRows.length})</div>
+      ${saTxnRows.length ? `
+      <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;${saTxnRows.length > 12 ? 'max-height:340px;overflow-y:auto' : ''}">
+        <table style="width:100%;border-collapse:collapse;font-size:0.78rem">
+          <thead><tr style="background:var(--dark-3);text-align:left;font-size:0.66rem;text-transform:uppercase;color:var(--text-dim)">
+            <th style="padding:7px 9px">Type</th><th style="padding:7px 9px;text-align:right">Amount</th>
+            <th style="padding:7px 9px">Reference</th><th style="padding:7px 9px">Date</th>
+            <th style="padding:7px 9px">Status</th></tr></thead>
+          <tbody>${saTxnRows.map(t => {
+            /* Same sign rule the statements use, so this list and a statement
+               cannot disagree about which way the money went. */
+            const out = ['withdrawal','investment','reinvestment','fee','platform_fee','gift_sent'].includes(t.type);
+            return `<tr style="border-top:1px solid var(--border)">
+            <td style="padding:7px 9px"><span class="badge badge--gray">${_esc(t.type)}</span></td>
+            <td style="padding:7px 9px;text-align:right;font-weight:700;color:${out ? '#ef4444' : '#22c55e'}">${out ? '-' : ''}${Utils.rand(Math.abs(parseFloat(t.amount) || 0))}</td>
+            <td style="padding:7px 9px;color:var(--text-dim);font-family:monospace;font-size:0.7rem">${_esc(t.reference || '—')}</td>
+            <td style="padding:7px 9px;color:var(--text-dim)">${Utils.date(Utils.txnDate(t))}</td>
+            <td style="padding:7px 9px">${Utils.statusBadge(t.status)}</td></tr>`; }).join('')}</tbody>
+        </table>
+      </div>` : `<div style="font-size:0.78rem;color:var(--text-dim);padding:10px 0">
+        Nothing has moved through this sub-account yet.</div>`}
     </div>`;
   Modal.open('subAccountModal');
 }
@@ -4370,7 +4490,7 @@ async function _bulkApplyWithdrawalStatus() {
   const res = await _bulkRun(ids, id => API._fetch('PATCH', `tables/transactions/${id}`, { status }),
     { label: id => {
         const t = (STATE.transactions || []).find(x => x.id === id);
-        return t ? (t.investor_name || _investorLabel(t.investor_id) || id) : id;
+        return t ? _actorLine(t) : id;
       } });
   _bulkReport('withdrawal', `marked as ${labelMap[status] || status}`, res);
 
@@ -6862,6 +6982,7 @@ async function _loadAdminFactsheets(poolId, listEl) {
           }${s.version ? `v${_esc(s.version)} · ` : ''}uploaded ${Utils.date(s.created_at)}${s.uploaded_by ? ` · ${_esc(s.uploaded_by)}` : ''}</div>
         </div>
         <button class="btn btn--ghost btn--sm" onclick='_openStoredDoc(${_esc(JSON.stringify(s.id))})' title="Open"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
+        <button class="btn btn--ghost btn--sm" onclick="editFactsheetMeta('${s.id}','${poolId}')" title="Change the period or name"><i class="fa-solid fa-pen"></i></button>
         <button class="btn btn--ghost btn--sm" style="color:#ef4444" onclick="deleteFactsheet('${s.id}','${poolId}')" title="Delete"><i class="fa-solid fa-trash"></i></button>
       </div>`).join('');
   } catch (e) {
@@ -6920,6 +7041,64 @@ async function uploadFactsheet() {
     }
   };
   reader.readAsDataURL(file);
+}
+
+/* Correct the period, name or version of a factsheet that is already up.
+ *
+ * The form above this list is an UPLOAD form: changing its period field and
+ * pressing the button either did nothing, because no file was attached, or
+ * made a second copy. There was no way at all to correct a sheet filed under
+ * the wrong month — this is it. The file itself is never touched; replacing
+ * the document is an upload. */
+async function editFactsheetMeta(fsId, poolId) {
+  const s = (_adminFsCache || []).find(x => x.id === fsId);
+  if (!s) return;
+  /* The month input wants YYYY-MM; the column is the first of the month. */
+  const asMonth = s.period_date ? String(s.period_date).slice(0, 7) : '';
+
+  const body = `
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div>
+        <label style="font-size:0.7rem;color:var(--text-dim);text-transform:uppercase;font-weight:700">Reporting period</label>
+        <input type="month" id="fsEditPeriod" value="${_esc(asMonth)}" class="input" style="width:100%">
+        <div style="font-size:0.7rem;color:var(--text-dim);margin-top:4px">
+          The month this sheet reports on — investors see the archive in this order. Leave it blank for a document that is not a monthly sheet.</div>
+      </div>
+      <div>
+        <label style="font-size:0.7rem;color:var(--text-dim);text-transform:uppercase;font-weight:700">Name</label>
+        <input id="fsEditName" value="${_esc(s.file_name || '')}" class="input" style="width:100%">
+        <div style="font-size:0.7rem;color:var(--text-dim);margin-top:4px">
+          Left on the house pattern, this follows the period. Renamed deliberately, it stays as typed.</div>
+      </div>
+      <div>
+        <label style="font-size:0.7rem;color:var(--text-dim);text-transform:uppercase;font-weight:700">Version (optional)</label>
+        <input id="fsEditVersion" value="${_esc(s.version || '')}" class="input" style="width:100%" placeholder="e.g. 1.2">
+      </div>
+      <div style="font-size:0.72rem;color:var(--text-dim);border-top:1px solid var(--border);padding-top:10px">
+        The PDF itself is not changed. To replace the document, upload a new one.</div>
+    </div>`;
+
+  const okd = await Confirm.ask('Edit factsheet', { bodyHtml: body, confirmLabel: 'Save' });
+  if (!okd) return;
+
+  const periodVal = document.getElementById('fsEditPeriod')?.value || '';
+  const nameVal   = document.getElementById('fsEditName')?.value?.trim() || '';
+  const verVal    = document.getElementById('fsEditVersion')?.value?.trim() || '';
+  if (!nameVal) { Toast.error('Give the factsheet a name'); return; }
+
+  /* The name is sent only when it was actually changed, so the server can
+     move a house-pattern name with the period on its own. */
+  const payload = { period_date: periodVal ? `${periodVal}-01` : null, version: verVal };
+  if (nameVal !== (s.file_name || '')) payload.file_name = nameVal;
+
+  try {
+    const res = await API._fetch('PATCH', `factsheets/${fsId}`, payload);
+    if (res.error) throw new Error(res.error);
+    Toast.success('Factsheet updated');
+    await _loadAdminFactsheets(poolId, document.getElementById('adminFsList'));
+  } catch (e) {
+    Toast.error('Could not update: ' + e.message);
+  }
 }
 
 async function deleteFactsheet(fsId, poolId) {
@@ -7229,7 +7408,7 @@ async function loadUnmergeInvestments() {
   }
 
   itemsEl.innerHTML = invs.map(i => {
-    const name = i.investor_name || i.investor_id || '—';
+    const name = _actorLine(i);
     const amt  = Utils.rand(i.amount);
     const date = i.start_date ? new Date(i.start_date).toLocaleDateString('en-ZA') : '—';
     return `<label style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-bottom:1px solid var(--border);cursor:pointer;font-size:0.83rem">
@@ -7354,7 +7533,7 @@ async function loadMoveInvestmentsList() {
   }
 
   itemsEl.innerHTML = invs.map(i => {
-    const name  = i.investor_name || i.investor_id || '—';
+    const name  = _actorLine(i);
     const saId  = i.sub_account_id || '—';
     const amt   = Utils.rand(i.amount);
     const edate = i.end_date ? new Date(i.end_date).toLocaleDateString('en-ZA') : '—';
