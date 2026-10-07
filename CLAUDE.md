@@ -46,7 +46,14 @@ Fixes to existing behaviour do not need one. A change to where something is,
 what it is called, or what it now does, does.
 
 ## Service Worker Cache
-Bump `mobile/www/sw.js` CACHE version (svc-portal-vN) with every JS/CSS change to mobile.
+Bump `mobile/src/sw.js` CACHE version (svc-portal-vN) with every JS/CSS change to
+mobile, then rebuild: `node mobile/scripts/build.js`.
+
+`mobile/www` is a BUILD OUTPUT, generated from `portal/` plus the overrides in
+`mobile/src/`. Editing the bump into `mobile/www/sw.js` looks right and is
+wiped by the next build — leaving the app serving the stale cache the bump
+exists to clear. `check-mobile-build-reproducible` catches it: it rebuilds and
+compares byte for byte, and names any file edited in `www` instead of `src`.
 
 ## Web Portal Versioning
 Bump `portal/index.html` query string (`js/portal.js?v=N`) with every web portal JS change.
