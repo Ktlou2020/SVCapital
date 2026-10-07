@@ -41,6 +41,8 @@ function lift() {
                  'svcAppDismissKey', 'svcAppInstalledKey', 'svcAppLegacySnoozeKey',
                  'svcAppBannerToken', 'svcLoginFingerprint', 'svcAppBannerDismissed',
                  'svcDismissForThisLogin', 'svcForgetLegacyAppSnooze',
+                 'svcAppSnoozeMs', 'svcSnoozeAppBanner', 'svcAppSnoozeRemaining',
+                 'svcForgetAppInstalledCache',
                  'svcAppInstalledCached', 'svcRememberAppInstalled', 'svcHasMobileApp',
                  'svcShouldOfferApp', '_svcIsStandalone'];
   let src = '';
@@ -115,8 +117,14 @@ console.log('\nit offers the app to the people who can install it');
      A.svcShouldOfferApp({ ...base, ua: UA.androidChrome }) === true);
   ok('Chrome on iOS is offered the app',
      A.svcShouldOfferApp({ ...base, ua: UA.iphoneChrome }) === true);
-  ok('iOS Safari is not, because Apple already did',
-     A.svcShouldOfferApp({ ...base, ua: UA.iphoneSafari }) === false);
+  /* iOS Safari used to be left to Apple's Smart App Banner. Apple's is nicer
+     and the meta tag still asks for it — but once the client taps its x,
+     Safari remembers that for the site and there is no way to ask again. On
+     the device most clients read the portal on, that made "keep asking until
+     they have the app" impossible, so ours is drawn there too. */
+  ok('iOS Safari is offered the app as well',
+     A.svcShouldOfferApp({ ...base, ua: UA.iphoneSafari }) === true,
+     'Apple\u2019s banner cannot be brought back once dismissed');
   ok('a desktop browser is not asked at all',
      A.svcShouldOfferApp({ ...base, ua: UA.windows }) === false);
 
@@ -125,8 +133,65 @@ console.log('\nit offers the app to the people who can install it');
      'telling somebody to install what they are using is how a banner gets dismissed for good');
   ok('nor once it runs from the home screen',
      A.svcShouldOfferApp({ ...base, ua: UA.androidChrome, standalone: true }) === false);
-  ok('nor after they have said no, for as long as that no lasts',
+  ok('nor while a "not now" is still running',
      A.svcShouldOfferApp({ ...base, ua: UA.androidChrome, dismissed: true }) === false);
+}
+
+console.log('\n"not now" is a snooze, not a silence');
+{
+  const fp = 'in:aaaaaaaaaaaaaaaa';
+  const t0 = 1_000_000_000_000;
+
+  delete session[A.svcAppDismissKey()];
+  ok('nothing is snoozed to begin with', A.svcAppBannerDismissed(fp, t0) === false);
+
+  A.svcSnoozeAppBanner(fp, t0);
+  ok('right after "not now", the banner stays down',
+     A.svcAppBannerDismissed(fp, t0 + 1000) === true);
+  ok('and a minute later it is still down',
+     A.svcAppBannerDismissed(fp, t0 + 60_000) === true,
+     'a snooze that does not hold is a banner that nags mid-task');
+
+  ok('but it comes BACK once the snooze runs out',
+     A.svcAppBannerDismissed(fp, t0 + A.svcAppSnoozeMs() + 1) === false,
+     'this is the whole point: it keeps asking until they have the app');
+  ok('the snooze is minutes, not the whole session',
+     A.svcAppSnoozeMs() > 0 && A.svcAppSnoozeMs() <= 60 * 60 * 1000,
+     `${A.svcAppSnoozeMs()}ms`);
+
+  ok('the page can tell how long is left, so it returns without a reload',
+     A.svcAppSnoozeRemaining(fp, t0 + 1000) > 0
+     && A.svcAppSnoozeRemaining(fp, t0 + A.svcAppSnoozeMs() + 1) === 0);
+
+  ok('another login does not inherit it',
+     A.svcAppBannerDismissed('in:bbbbbbbbbbbbbbbb', t0 + 1000) === false);
+
+  /* Anybody carrying a value written by the previous build has a bare
+     fingerprint and no expiry. Reading that as "snoozed" would silence them
+     for the whole session on the day this ships — the bug, not the fix. */
+  session[A.svcAppDismissKey()] = fp;
+  ok('a value from the old build reads as expired, not as silence',
+     A.svcAppBannerDismissed(fp, t0) === false);
+
+  /* They are on their way to the store precisely because they do not have it
+     yet; the cached "no" is about to be wrong. */
+  session[A.svcAppInstalledKey()] = '0';
+  A.svcForgetAppInstalledCache();
+  ok('going to the store forgets the cached "they do not have it"',
+     A.svcAppInstalledCached() === null,
+     'otherwise it nags somebody who installed it ten minutes ago');
+  /* Asserted on the SOURCE too: the helper working is no use if the button
+     that sends them to the store never calls it. */
+  {
+    const open = CORE.slice(CORE.indexOf('function svcOpenAppStore('),
+                            CORE.indexOf('function svcInitAppBanner('));
+    ok('and the store button is what calls it',
+       /svcForgetAppInstalledCache\(\)/.test(open),
+       'the helper is useless if the button does not use it');
+    ok('the store button snoozes rather than silences',
+       /svcSnoozeAppBanner\(\)/.test(open) && !/svcRememberAppInstalled\(true\)/.test(open),
+       'tapping through to a store is not evidence that anything was installed');
+  }
 }
 
 console.log('\n"not now" lasts until the next login, and no longer');
@@ -159,10 +224,14 @@ console.log('\n"not now" lasts until the next login, and no longer');
      guess. It is worth exactly the same as "not now" now, because whether
      they installed it is the server's answer, not this browser's guess. */
   ok('the dismissal is in sessionStorage, so closing the tab clears it',
-     session[A.svcAppDismissKey()] === fpA && !(A.svcAppDismissKey() in local),
+     String(session[A.svcAppDismissKey()] || '').startsWith(fpA + '|')
+     && !(A.svcAppDismissKey() in local),
      JSON.stringify({ session, local }));
   ok('and it stores which login it belongs to, not a bare flag',
      session[A.svcAppDismissKey()] !== '1' && session[A.svcAppDismissKey()] !== 'true',
+     String(session[A.svcAppDismissKey()]));
+  ok('with an expiry beside it, so the no runs out',
+     /\|\d+$/.test(String(session[A.svcAppDismissKey()] || '')),
      String(session[A.svcAppDismissKey()]));
 
   /* Somebody who tapped "Get it" the week before this shipped is carrying a

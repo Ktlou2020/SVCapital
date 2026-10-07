@@ -124,17 +124,29 @@ function svcIsIOSSafari(ua) {
                          push token, which nothing but the app can write.
                          That answer is a real stop: they downloaded it.
 
-     have they waved it  Answered here, and only for as long as this login
-     away just now?      lasts. "Not now" should hold while they finish what
-                         they came to do and then let go.
+     have they waved it  Answered here, and only for a WHILE. "Not now" holds
+     away just now?      long enough to finish what they came to do, and then
+                         the banner comes back.
 
-   The dismissal is keyed on the login it was made under, so a new sign-in is
-   a new banner without anything having to clear anything: sessionStorage
-   empties when the tab closes, and within one tab the token changes at every
-   login, including a log-out and back in as the same person. Signed out, the
-   key is the string 'anon', which is what makes the banner on login.html
-   stay gone until they are through it.
+   That second answer used to last the whole login: one tap on the x and the
+   banner was gone until the tab was closed or they signed in again. The rule
+   is that it keeps asking until they have the app, so a dismissal that lasts
+   a whole session is a dismissal that defeats the rule on the one device the
+   client actually reads the portal on. It is a snooze now — long enough not
+   to nag somebody mid-task, short enough that the next thing they do brings
+   it back.
+
+   The snooze is still keyed on the login it was made under and still lives in
+   sessionStorage, so a new sign-in or a closed tab starts clean. Signed out,
+   the key is the string 'anon', which is what keeps login.html quiet while
+   they are getting through it.
    ═══════════════════════════════════════════════════════════════════ */
+
+/* Long enough to finish paying something; short enough that it is a snooze
+   rather than a silence. */
+function svcAppSnoozeMs() {
+  return 15 * 60 * 1000;
+}
 
 /* Functions, not top-level consts: this file is loaded beside two shells and
    declares no load-time state of its own. */
@@ -158,17 +170,49 @@ function svcLoginFingerprint(token) {
   return t ? 'in:' + String(t).slice(-16) : 'anon';
 }
 
-function svcAppBannerDismissed(fingerprint) {
+/* Stored as "<login fingerprint>|<expiry in ms>". The fingerprint is still
+   part of it so a different login never inherits somebody else's snooze, and
+   a value written by the older build — a bare fingerprint, no expiry — reads
+   as expired, which brings the banner back rather than silencing it for the
+   session on the day this ships. */
+function svcAppBannerDismissed(fingerprint, now) {
   try {
-    const seen = sessionStorage.getItem(svcAppDismissKey());
-    return !!seen && seen === (fingerprint || svcLoginFingerprint());
+    const raw = sessionStorage.getItem(svcAppDismissKey());
+    if (!raw) return false;
+    const at = raw.lastIndexOf('|');
+    if (at === -1) return false;                       // old format: treat as over
+    const who = raw.slice(0, at);
+    const until = Number(raw.slice(at + 1));
+    if (who !== (fingerprint || svcLoginFingerprint())) return false;
+    if (!isFinite(until)) return false;
+    return (now !== undefined ? now : Date.now()) < until;
   } catch (_) { return false; }
 }
 
-function svcDismissForThisLogin(fingerprint) {
-  try { sessionStorage.setItem(svcAppDismissKey(), fingerprint || svcLoginFingerprint()); }
-  catch (_) { /* private window — it simply comes back on the next page */ }
+/* How long is left on the snooze, so the page can bring the banner back
+   without waiting for a reload. Zero when nothing is snoozed. */
+function svcAppSnoozeRemaining(fingerprint, now) {
+  try {
+    const raw = sessionStorage.getItem(svcAppDismissKey());
+    if (!raw) return 0;
+    const at = raw.lastIndexOf('|');
+    if (at === -1) return 0;
+    if (raw.slice(0, at) !== (fingerprint || svcLoginFingerprint())) return 0;
+    const until = Number(raw.slice(at + 1));
+    if (!isFinite(until)) return 0;
+    return Math.max(0, until - (now !== undefined ? now : Date.now()));
+  } catch (_) { return 0; }
 }
+
+function svcSnoozeAppBanner(fingerprint, now, ms) {
+  const until = (now !== undefined ? now : Date.now()) + (ms !== undefined ? ms : svcAppSnoozeMs());
+  try { sessionStorage.setItem(svcAppDismissKey(), (fingerprint || svcLoginFingerprint()) + '|' + until); }
+  catch (_) { /* private window — it simply comes back on the next page */ }
+  return until;
+}
+
+/* Kept under the old name because other files call it. */
+function svcDismissForThisLogin(fingerprint) { return svcSnoozeAppBanner(fingerprint); }
 
 /* Somebody carrying the old long snooze would otherwise stay silenced for up
    to four months after this shipped, which is the bug rather than the fix. */
@@ -185,6 +229,12 @@ function svcAppInstalledCached() {
 
 function svcRememberAppInstalled(hasApp) {
   try { sessionStorage.setItem(svcAppInstalledKey(), hasApp ? '1' : '0'); } catch (_) {}
+}
+
+/* Forget a "no" so the server is asked again. Used when they have just gone
+   to the store, where the answer is about to change. */
+function svcForgetAppInstalledCache() {
+  try { sessionStorage.removeItem(svcAppInstalledKey()); } catch (_) {}
 }
 
 /* Resolves false for every uncertainty — signed out, offline, endpoint down,
@@ -224,10 +274,17 @@ function svcShouldOfferApp(env) {
 
   if (isNative)   return false;   // already in the app
   if (standalone) return false;   // already installed to the home screen
-  if (dismissed)  return false;   // waved away, for this login only
+  if (dismissed)  return false;   // snoozed; it comes back
   const os = svcMobileOS(ua, e.nav);
   if (!os)        return false;   // desktop: the store link is on the site
-  if (svcIsIOSSafari(ua)) return false;  // Apple draws its own, better, banner
+  /* iOS Safari used to be left to Apple's Smart App Banner, which the meta tag
+     in the page head still asks for. Apple's is prettier and it is free — but
+     it CANNOT be made to persist: once the client taps its x, Safari remembers
+     that for the site and there is no way to ask again. On the one device
+     where most clients read the portal, that made "keep asking until they have
+     the app" impossible. So ours is drawn here too. Apple's may appear at the
+     top of the first page they open; ours sits at the bottom and is the one
+     that comes back. */
   return true;
 }
 
@@ -240,18 +297,38 @@ function _svcIsStandalone() {
 }
 
 function svcDismissAppBanner() {
-  svcDismissForThisLogin();
+  svcSnoozeAppBanner();
   const el = document.getElementById('svcAppBanner');
   if (el) el.remove();
+  /* It comes back without needing a reload. The portal is one long page: a
+     client who taps x at nine in the morning and keeps the tab open all day
+     would otherwise never be asked again, which is the whole thing this is
+     supposed to prevent. */
+  svcScheduleAppBannerReturn();
+}
+
+/* Re-offer when the snooze runs out, while they are still on the page. */
+function svcScheduleAppBannerReturn() {
+  if (typeof setTimeout !== 'function') return;
+  const left = svcAppSnoozeRemaining();
+  if (left <= 0) return;
+  clearTimeout(svcScheduleAppBannerReturn._t);
+  svcScheduleAppBannerReturn._t = setTimeout(() => svcInitAppBanner(0), left + 250);
 }
 
 function svcOpenAppStore() {
   const os = svcMobileOS();
-  /* Also only for this login. Whether they installed it is not this browser's
-     guess to make — the next session asks the server, and if they did, the
-     answer stops the banner for good. If they did not, they are asked again,
-     which is the point. */
-  svcDismissForThisLogin();
+  /* A snooze, not a stop. Whether they installed it is not this browser's
+     guess to make — the server is asked, and if they did, that answer stops
+     the banner for good. If they did not, they are asked again, which is the
+     point.
+
+     The cached answer is cleared on the way out: it was written when they did
+     NOT have the app, and they are on their way to the store to change that.
+     Leaving the stale '0' in place would have the banner nagging somebody who
+     installed it ten minutes ago. */
+  svcForgetAppInstalledCache();
+  svcSnoozeAppBanner();
   const url = os === 'ios' ? svcAppStore().ios : svcAppStore().android;
   window.open(url, '_blank', 'noopener');
   const el = document.getElementById('svcAppBanner');
