@@ -739,12 +739,50 @@ router.post('/investment_pools/:id/merge', requireAuth, async (req, res) => {
     if (!target_pool_id)    return res.status(400).json({ error: 'target_pool_id required' });
     if (target_pool_id === sourceId) return res.status(400).json({ error: 'Cannot merge a pool into itself' });
 
+    /* The target has to exist. Moving investments onto a pool id that is not
+       there leaves them pointing at nothing, and the source is deleted a line
+       later, so there would be no way back. */
+    const { rows: [tgt] } = await pool.query(
+      'SELECT id, name, product_type FROM investment_pools WHERE id = $1', [target_pool_id]);
+    if (!tgt) return res.status(400).json({ error: 'That target pool does not exist.' });
+    const { rows: [src] } = await pool.query(
+      'SELECT id, name, product_type FROM investment_pools WHERE id = $1', [sourceId]);
+    if (!src) return res.status(404).json({ error: 'That pool does not exist.' });
+
     const { rowCount: merged } = await pool.query(
       `UPDATE investments SET pool_id = $1 WHERE pool_id = $2`,
       [target_pool_id, sourceId]
     );
+
+    /* The investments were carried across and the factsheets were not — they
+       went with the source pool when it was deleted, because the key used to
+       cascade. A merge is a tidy-up of duplicate pool ROWS; it is not a
+       decision to destroy the documents investors were shown. They move with
+       everything else. */
+    const { rowCount: sheets } = await pool.query(
+      `UPDATE product_factsheets
+          SET pool_id = $1, pool_name = $2,
+              product_type = COALESCE(product_type, $3)
+        WHERE pool_id = $4`,
+      [target_pool_id, tgt.name || null, tgt.product_type || null, sourceId]);
+
     await pool.query(`DELETE FROM investment_pools WHERE id = $1`, [sourceId]);
-    res.json({ merged, deleted: sourceId });
+
+    /* Neither the merge nor the deletion was recorded anywhere, so a pool
+       vanishing left nothing to work back from. */
+    audit.log({
+      action:      'pool.merge',
+      actorId:     req.user.empId || req.user.id || null,
+      actorEmail:  req.user.email || null,
+      actorRole:   req.user.role || null,
+      entityType:  'investment_pools',
+      entityId:    sourceId,
+      description: `Merged "${src.name || sourceId}" into "${tgt.name || target_pool_id}": ` +
+                   `${merged} investment(s) and ${sheets} factsheet(s) moved, source pool deleted`,
+      ip:          req.ip || null,
+    }).catch(() => {});
+
+    res.json({ merged, factsheets_moved: sheets, deleted: sourceId });
   } catch (err) {
     console.error('[merge pool]', err);
     res.status(500).json({ error: err.message });

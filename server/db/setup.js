@@ -1248,7 +1248,12 @@ CREATE INDEX IF NOT EXISTS email_logs_to_email_idx ON email_logs(to_email);
 
 CREATE TABLE IF NOT EXISTS product_factsheets (
   id          TEXT PRIMARY KEY,
-  pool_id     TEXT REFERENCES investment_pools(id) ON DELETE CASCADE,
+  /* SET NULL, never CASCADE. A factsheet is a published document: losing it
+     because somebody tidied up a pool row is not a tidy-up, it is destruction
+     of a record investors were shown. product_type is what keeps it findable
+     once the pool is gone. */
+  pool_id     TEXT REFERENCES investment_pools(id) ON DELETE SET NULL,
+  product_type TEXT,
   pool_name   TEXT,
   file_name   TEXT NOT NULL,
   file_url    TEXT NOT NULL,
@@ -4186,6 +4191,11 @@ async function autoSetup() {
           body: 'The reporting period could only be set when the file was uploaded. Changing it on the upload form did nothing without a file attached, and made a second copy with one \u2014 so a sheet filed under the wrong month could only be fixed by deleting it and uploading the document again. Each factsheet in the list now has a pencil: change the period, the name or the version. A name left on the house pattern follows the period, so correcting September to April renames it too; a name somebody chose deliberately is left exactly as typed. Clearing the period is allowed, for a document that is not a monthly sheet. The PDF itself is never touched \u2014 replacing the document is still an upload \u2014 and every edit is written to the audit trail.',
           where: 'Admin console \u2192 Products \u2192 a pool \u2192 Factsheets \u2192 the pencil on any sheet in the History list.' },
 
+        { id: 'ANN-2026-FACTSHEET-SURVIVAL', area: 'admin', icon: 'fa-shield-halved',
+          title: 'Factsheets stopped disappearing \u2014 and you can see which months are gone',
+          body: 'A factsheet was attached to a POOL, not to a product, and the link was set to delete the factsheet whenever the pool went. A new pool is created every month, so one product\u2019s archive sat across dozens of pool rows \u2014 and deleting any of them destroyed that month\u2019s document silently. Merging two pools did the same thing and was worse: the merge moved the investments across carefully and then deleted the source pool, taking its factsheets with it, with nothing written to the audit trail. Four things changed. Deleting a pool now leaves the factsheet standing instead of destroying it. A merge carries the factsheets across with the investments, refuses a target pool that does not exist, and is audited. Each factsheet records its own product, so it stays visible even once its pool is gone. And the investor archive is fetched by product rather than by whichever pools the page happened to load, so nothing falls out of the list. There was also a quieter fault: two months that shared a document and a title collapsed into one entry, so an archive could be missing a month that had been uploaded correctly. What was already destroyed cannot be recovered, so there is now a coverage report naming, per product, exactly which months have no sheet \u2014 those are the ones to upload again.',
+          where: 'Admin console \u2192 Products \u2192 a pool \u2192 Factsheets \u2192 \u201cCoverage\u201d beside the title. It covers every product, not just that pool.' },
+
         { id: 'ANN-2026-SUPPORT-NUMBER', area: 'both', icon: 'fa-phone',
           title: 'Support WhatsApp number changed',
           body: 'The support number is now 079 111 5476. Every WhatsApp link on the site, the portal and the app points at it.',
@@ -4203,6 +4213,51 @@ async function autoSetup() {
         added += rowCount;
       }
       if (added) console.log(`\u2705 Announced ${added} feature(s) to staff.`);
+    });
+
+    await step("16c. A factsheet outlives the pool it was uploaded against", async () => {
+      /* product_factsheets.pool_id was declared ON DELETE CASCADE, and a
+         factsheet is attached to a POOL rather than to the product. A new pool
+         is created every month, so the archive for one product is scattered
+         across dozens of pool rows — and deleting ANY of them destroyed that
+         month's published document, permanently and without a word.
+
+         The pool merge made it worse. It moves the investments to the target
+         pool and then deletes the source, so a routine tidy-up of duplicate
+         pools took the source pool's factsheets with it. The investments were
+         carefully preserved; the documents were not.
+
+         Two changes. The factsheet now carries its own product_type, so it is
+         findable without the pool at all; and the key becomes SET NULL, so a
+         deleted pool orphans a document rather than destroying it. */
+      await pool.query(
+        `ALTER TABLE product_factsheets ADD COLUMN IF NOT EXISTS product_type TEXT`);
+
+      /* Backfill from the pool while the link still exists. */
+      const { rowCount: filled } = await pool.query(`
+        UPDATE product_factsheets f SET product_type = ip.product_type
+          FROM investment_pools ip
+         WHERE ip.id = f.pool_id AND f.product_type IS NULL AND ip.product_type IS NOT NULL`);
+      if (filled) console.log(`\u2705 Factsheets: product recorded on ${filled} sheet(s).`);
+
+      const { rows: [fk] } = await pool.query(`
+        SELECT conname, confdeltype FROM pg_constraint
+         WHERE conrelid = 'product_factsheets'::regclass AND contype = 'f'
+           AND conname LIKE '%pool_id%' LIMIT 1`);
+      if (fk && fk.confdeltype === 'c') {
+        await pool.query(`ALTER TABLE product_factsheets DROP CONSTRAINT ${fk.conname}`);
+        await pool.query(`
+          ALTER TABLE product_factsheets
+            ADD CONSTRAINT product_factsheets_pool_id_fkey
+            FOREIGN KEY (pool_id) REFERENCES investment_pools(id) ON DELETE SET NULL`);
+        console.log('\u2705 Factsheets no longer die with their pool (CASCADE \u2192 SET NULL).');
+      }
+
+      /* An orphan with no product cannot be shown anywhere, so it is the one
+         state worth reporting rather than leaving to be discovered. */
+      const { rows: [lost] } = await pool.query(
+        `SELECT COUNT(*)::int AS n FROM product_factsheets WHERE product_type IS NULL AND pool_id IS NULL`);
+      if (lost.n) console.log(`\u26a0\ufe0f  ${lost.n} factsheet(s) have neither a pool nor a product and will not appear anywhere.`);
     });
 
     await step("16b. Cattle dressing percentage assumption", async () => {
