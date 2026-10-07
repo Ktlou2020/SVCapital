@@ -4124,8 +4124,13 @@ async function _renderProductFactsheets(type, product) {
   const poolIds = new Set(PORTAL.pools.filter(p => p.product_type === type).map(p => p.id));
   let sheets = [];
   try {
-    const res = await API._fetch('GET', 'factsheets');
-    sheets = (res.data || []).filter(s => poolIds.has(s.pool_id));
+    /* Asked by PRODUCT, not by which pools happen to be loaded.
+       This fetched every factsheet and kept the ones whose pool_id was in
+       PORTAL.pools — so a sheet lost its place the moment its pool was merged
+       away, deleted, or simply not in the page the pools call returned. The
+       archive belongs to the product; the pool is only where it came in. */
+    const res = await API._fetch('GET', `factsheets?product_type=${encodeURIComponent(type)}`);
+    sheets = res.data || [];
   } catch (_) {}
   // Reveal factsheet buttons for pools that have at least one sheet
   sheets.forEach(s => {
@@ -4137,12 +4142,17 @@ async function _renderProductFactsheets(type, product) {
     created_at: product.updated_at, _product: true,
   } : null;
 
-  /* The same sheet reaches this list once per pool it is attached to, so
-     "April 2024 - Factsheet" appeared twice in a row with nothing to tell the
-     two entries apart. Keyed on the file, since that is what opens. */
+  /* The same sheet can reach this list once per pool it is attached to, so
+     "April 2024 - Factsheet" appeared twice with nothing to tell them apart.
+     But the key was the file plus the name, which also collapses two DIFFERENT
+     months that happen to share a document and a title — an archive quietly
+     missing a month because the same PDF was filed twice. The period is part
+     of the key now: one entry per month, and a sheet with no period keeps its
+     own id so it can never swallow another. */
   const seen = new Set();
   const archive = sheets.filter(s => {
-    const key = `${s.file_url || ''}|${s.file_name || ''}`;
+    const when = s.period_date || s.period_label || `#${s.id}`;
+    const key = `${when}|${s.file_url || ''}|${s.file_name || ''}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;

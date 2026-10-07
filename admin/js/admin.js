@@ -6928,7 +6928,14 @@ async function openFactsheetManager(poolId, poolName) {
   const title = document.getElementById('adminFsTitle');
   const list  = document.getElementById('adminFsList');
   if (!modal) return;
-  if (title) title.textContent = `${poolName} — Factsheets`;
+  /* The title says which POOL's factsheets these are, because that is still
+     what the upload attaches to — but the archive an investor sees is the
+     whole product's, so the coverage link is here where somebody is already
+     thinking about a gap. */
+  if (title) title.innerHTML = `${_esc(poolName)} — Factsheets
+    <button class="btn btn--ghost btn--sm" style="margin-left:10px;font-size:0.7rem"
+            onclick="openFactsheetCoverage()" title="Which months are missing, across every product">
+      <i class="fa-solid fa-list-check"></i> Coverage</button>`;
   modal.dataset.poolId   = poolId;
   modal.dataset.poolName = poolName;
   // Reset file input
@@ -7041,6 +7048,48 @@ async function uploadFactsheet() {
     }
   };
   reader.readAsDataURL(file);
+}
+
+/* What survived, and which months are missing.
+ *
+ * product_factsheets.pool_id used to cascade on delete, and a factsheet is
+ * attached to a pool rather than to a product — so deleting a pool, or merging
+ * one (which deletes the source), destroyed that month's published document
+ * silently. Both are fixed, but what was already lost cannot be undone and the
+ * gaps are invisible because the rows are gone. This names them. */
+async function openFactsheetCoverage() {
+  const body = `<div id="fsCoverageBody" style="min-height:120px">
+      <div style="text-align:center;color:var(--text-dim);padding:24px">
+        <i class="fa-solid fa-spinner fa-spin"></i> Checking every product…</div></div>`;
+  Confirm.ask('Factsheet coverage', { bodyHtml: body, confirmLabel: 'Close' });
+
+  const el = document.getElementById('fsCoverageBody');
+  let r;
+  try { r = await API._fetch('GET', 'factsheets/coverage'); }
+  catch (e) { if (el) el.innerHTML = `<div style="color:#ef4444">${_esc(e.message)}</div>`; return; }
+  if (!el) return;
+  if (r.error) { el.innerHTML = `<div style="color:#ef4444">${_esc(r.error)}</div>`; return; }
+
+  const month = m => {
+    const [y, mo] = String(m).split('-');
+    return new Date(Date.UTC(+y, +mo - 1, 1)).toLocaleString('en-ZA', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+  };
+  el.innerHTML = (r.products || []).map(p => {
+    const lost = p.total > 0 && p.missingCount > 0;
+    return `<div style="border:1px solid var(--border);border-left:3px solid ${lost ? '#f59e0b' : p.total ? '#22c55e' : 'var(--border)'};
+                        border-radius:10px;padding:11px 13px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">
+        <strong style="font-size:0.86rem">${_esc(p.label)}</strong>
+        <span style="font-size:0.76rem;color:var(--text-dim)">
+          ${p.total} sheet${p.total === 1 ? '' : 's'}${p.orphaned ? ` · ${p.orphaned} kept after their pool was deleted` : ''}${p.undated ? ` · ${p.undated} with no period` : ''}</span>
+      </div>
+      ${p.missingCount ? `<div style="margin-top:6px;font-size:0.78rem;color:${lost ? '#f59e0b' : 'var(--text-dim)'}">
+          ${p.total ? 'No sheet for' : 'Never had a sheet for'} ${p.missingCount} month${p.missingCount === 1 ? '' : 's'}:
+          <span style="color:var(--text-dim)">${p.missing.map(month).join(', ')}</span></div>`
+        : `<div style="margin-top:6px;font-size:0.78rem;color:#22c55e">
+            <i class="fa-solid fa-circle-check"></i> Every month the product ran has a sheet.</div>`}
+    </div>`;
+  }).join('') || '<div style="color:var(--text-dim)">No products to report on.</div>';
 }
 
 /* Correct the period, name or version of a factsheet that is already up.

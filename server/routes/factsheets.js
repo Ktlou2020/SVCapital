@@ -44,17 +44,125 @@ function canonicalName(periodDate) {
    document nobody was looking for. */
 router.get('/', requireAuth, async (req, res) => {
   try {
-    const { pool_id } = req.query;
-    const q = pool_id
-      ? `SELECT * FROM product_factsheets WHERE pool_id=$1
-          ORDER BY is_current DESC, period_date DESC NULLS LAST, created_at DESC`
-      : `SELECT * FROM product_factsheets
-          ORDER BY pool_id, is_current DESC, period_date DESC NULLS LAST, created_at DESC`;
-    const { rows } = await pool.query(q, pool_id ? [pool_id] : []);
-    res.json({ data: rows.map(r => ({ ...r, period_label: periodLabel(r.period_date) })) });
+    const { pool_id, product_type } = req.query;
+    /* product_type is the one that answers "show me this product's archive".
+       A factsheet belongs to the PRODUCT; the pool it was uploaded against is
+       just where it came in, and that pool may since have been merged away or
+       deleted — in which case pool_id is null and only the product can find
+       it. Asking by pool alone is how a sheet became invisible. */
+    let q, params;
+    if (product_type) {
+      q = `SELECT f.*, ip.product_type AS pool_product_type
+             FROM product_factsheets f
+             LEFT JOIN investment_pools ip ON ip.id = f.pool_id
+            WHERE COALESCE(f.product_type, ip.product_type) = $1
+            ORDER BY f.is_current DESC, f.period_date DESC NULLS LAST, f.created_at DESC`;
+      params = [product_type];
+    } else if (pool_id) {
+      q = `SELECT * FROM product_factsheets WHERE pool_id=$1
+            ORDER BY is_current DESC, period_date DESC NULLS LAST, created_at DESC`;
+      params = [pool_id];
+    } else {
+      q = `SELECT f.*, ip.product_type AS pool_product_type
+             FROM product_factsheets f
+             LEFT JOIN investment_pools ip ON ip.id = f.pool_id
+            ORDER BY f.pool_id, f.is_current DESC, f.period_date DESC NULLS LAST, f.created_at DESC`;
+      params = [];
+    }
+    const { rows } = await pool.query(q, params);
+    res.json({ data: rows.map(r => ({
+      ...r,
+      /* So a reader never has to join back to the pool to know the product. */
+      product_type: r.product_type || r.pool_product_type || null,
+      period_label: periodLabel(r.period_date),
+    })) });
   } catch (err) {
     console.error('[factsheets] list failed:', err.message);
     res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+/* GET /api/factsheets/coverage — what survived, and which months are missing.
+ *
+ * Factsheets used to die with their pool: the key cascaded, so deleting a pool
+ * — or merging one, which deletes the source — destroyed its published
+ * documents without a word. That is fixed, but it cannot be undone, and the
+ * gaps it left are invisible precisely because the rows are gone.
+ *
+ * So this reports, per product, the months a sheet exists for against the
+ * months the product actually ran, and names the difference. A missing month
+ * here is a month to re-upload.
+ */
+router.get('/coverage', requireAuth, requireRole('admin', 'director'), async (req, res) => {
+  try {
+    const { rows: sheets } = await pool.query(`
+      SELECT COALESCE(f.product_type, ip.product_type) AS product_type,
+             to_char(f.period_date, 'YYYY-MM') AS month,
+             COUNT(*)::int AS n,
+             COUNT(*) FILTER (WHERE f.pool_id IS NULL)::int AS orphaned
+        FROM product_factsheets f
+        LEFT JOIN investment_pools ip ON ip.id = f.pool_id
+       GROUP BY 1, 2`);
+
+    /* The months a product ran, from its pools. A product with no pools has
+       nothing to be missing. */
+    const { rows: months } = await pool.query(`
+      SELECT product_type, to_char(d, 'YYYY-MM') AS month
+        FROM investment_pools ip,
+             LATERAL generate_series(
+               date_trunc('month', COALESCE(ip.start_date, ip.created_at::date)),
+               date_trunc('month', COALESCE(ip.end_date, ip.start_date, ip.created_at::date)),
+               INTERVAL '1 month') d
+       WHERE ip.product_type IS NOT NULL
+       GROUP BY 1, 2`);
+
+    const { rows: products } = await pool.query(
+      `SELECT product_type, label FROM products WHERE COALESCE(is_active, true)`);
+    const labelOf = Object.fromEntries(products.map(p => [p.product_type, p.label]));
+
+    const byProduct = {};
+    const touch = pt => (byProduct[pt] = byProduct[pt] || {
+      productType: pt, label: labelOf[pt] || pt,
+      have: [], expected: new Set(), orphaned: 0, undated: 0, total: 0,
+    });
+    for (const r of months) touch(r.product_type).expected.add(r.month);
+    for (const r of sheets) {
+      if (!r.product_type) continue;
+      const p = touch(r.product_type);
+      p.total += r.n;
+      p.orphaned += r.orphaned;
+      if (r.month) p.have.push(r.month); else p.undated += r.n;
+    }
+
+    const out = Object.values(byProduct).map(p => {
+      const have = new Set(p.have);
+      /* Only months in the past are "missing" — a month that has not happened
+         has no sheet to be missing. */
+      const now = new Date().toISOString().slice(0, 7);
+      const missing = [...p.expected].filter(m => !have.has(m) && m <= now).sort();
+      return {
+        productType: p.productType, label: p.label,
+        total: p.total, months: [...have].sort().reverse(),
+        missing, missingCount: missing.length,
+        orphaned: p.orphaned, undated: p.undated,
+        /* An orphan is a sheet whose pool was deleted. It still shows on the
+           product, which is the point of the fix, but it is worth naming. */
+      };
+    }).sort((a, b) => {
+      /* A product that has sheets AND gaps is where a document was lost, which
+         is what this report is for. A product with no sheets at all has never
+         had any — that is a backlog, not a loss, and it sorts below. */
+      const aLost = a.total > 0 && a.missingCount > 0;
+      const bLost = b.total > 0 && b.missingCount > 0;
+      if (aLost !== bLost) return aLost ? -1 : 1;
+      if (a.total !== b.total && (a.total === 0 || b.total === 0)) return b.total - a.total;
+      return b.missingCount - a.missingCount || a.label.localeCompare(b.label);
+    });
+
+    return res.json({ products: out, generatedAt: new Date().toISOString() });
+  } catch (err) {
+    console.error('[factsheets] coverage', err.message);
+    return res.status(500).json({ error: 'Could not build the coverage report.' });
   }
 });
 
@@ -71,7 +179,7 @@ router.post('/upload', requireAuth, requireRole('admin', 'director'), async (req
        blank — which the console no longer does, because it pre-fills the same
        convention and shows it before the upload. */
     const { rows: pr } = await pool.query(
-      'SELECT name, end_date FROM investment_pools WHERE id = $1', [pool_id]);
+      'SELECT name, end_date, product_type FROM investment_pools WHERE id = $1', [pool_id]);
     if (!pr.length) return res.status(400).json({ error: 'Unknown pool.' });
 
     const periodDate = monthStart(req.body.period_date) || monthStart(pr[0].end_date);
@@ -100,9 +208,11 @@ router.post('/upload', requireAuth, requireRole('admin', 'director'), async (req
     await pool.query(`UPDATE product_factsheets SET is_current=false WHERE pool_id=$1`, [pool_id]);
     const { rows } = await pool.query(
       `INSERT INTO product_factsheets
-         (id,pool_id,pool_name,file_name,file_url,file_size,mime_type,version,period_date,uploaded_by,is_current,created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,true,NOW()) RETURNING *`,
-      [id, pool_id, pool_name || pr[0].name || null, file_name, file_url,
+         (id,pool_id,product_type,pool_name,file_name,file_url,file_size,mime_type,version,period_date,uploaded_by,is_current,created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,true,NOW()) RETURNING *`,
+      /* The product is recorded at upload, so the sheet stays findable if the
+         pool is later merged away or deleted. */
+      [id, pool_id, pr[0].product_type || null, pool_name || pr[0].name || null, file_name, file_url,
        /* The sniffed type, never the submitted one — the column is what a
           later reader trusts. A remote link has no bytes to sniff. */
        checked.size || file_size || null, checked.mime || 'application/pdf', version || null,
