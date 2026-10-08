@@ -3725,10 +3725,12 @@ const PUSH_PREF_KEY = 'svc_push_pref';
 
    It also offered the wrong thing. That was a prompt to install the
    progressive web app; what a client on a phone wants is the app on their
-   store. svcInitAppBanner does that, and stands down on iOS Safari where
-   Apple's own Smart App Banner (the apple-itunes-app meta tag in the page
-   head) does it better — only Apple's banner can tell that the app is
-   already installed and offer OPEN instead.
+   store. svcInitAppBanner does that, on every phone including iOS Safari.
+   Apple's own Smart App Banner used to cover iOS, from an apple-itunes-app
+   meta tag; that tag is gone, because Apple's banner cannot be shown again
+   once a client dismisses it and the rule is that it keeps asking until they
+   have the app. Whether it is already installed comes from the server, not
+   from the browser.
 
    appinstalled is kept: it still fires if somebody installs the web app from
    the browser menu, and the banner should go when they do.

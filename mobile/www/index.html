@@ -7,12 +7,14 @@
   <link rel="apple-touch-icon" sizes="192x192" href="../assets/logo-192.png" />
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <!-- Apple Smart App Banner. Safari on iOS draws this itself, at the top of
-       the page, and it is the only banner that can tell whether the app is
-       already installed — it then offers OPEN rather than VIEW, which nothing
-       in JavaScript can determine. The portal's own bottom banner stands down
-       on iOS Safari so the two never appear together. -->
-  <meta name="apple-itunes-app" content="app-id=6670504520" />
+  <!-- No apple-itunes-app tag, deliberately. Safari's Smart App Banner is
+       prettier and free, but once a client taps its x Safari remembers that
+       for the site and there is no way to ask again — so it cannot satisfy
+       "keep asking until they have the app", which is the rule. js/app-banner.js
+       draws our own on iOS Safari too, and it snoozes rather than silences.
+       Whether the app is already installed is answered by the server from the
+       push token, which only the app can write; that is a better answer than
+       Apple's and does not depend on this tag. -->
   <title>SV Capital — Investor Portal</title>
   <meta name="theme-color" content="#FF9B0C" />
   <meta name="mobile-web-app-capable" content="yes" />
@@ -3096,6 +3098,6 @@ if ('serviceWorker' in navigator && !window.__SVC_NATIVE__) {
   });
 }
 </script>
-<script src="../js/app-banner.js?v=3"></script>
+<script src="../js/app-banner.js?v=4"></script>
 </body>
 </html>
