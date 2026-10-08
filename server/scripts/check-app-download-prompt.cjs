@@ -287,9 +287,13 @@ console.log('\nboth shells start it, and Apple’s tag is on the pages');
   }
   for (const p of ['portal/index.html', 'index.html']) {
     const html = read(p);
-    ok(`${p} carries the Smart App Banner tag`,
-       /<meta name="apple-itunes-app" content="app-id=6670504520"/.test(html),
-       'iOS Safari users get no prompt at all');
+    /* Apple's Smart App Banner is gone on purpose. It cannot be shown again
+       once a client taps its x — Safari remembers that for the site — so it
+       cannot satisfy "keep asking until they have the app", and leaving the
+       tag in place only meant two banners on a client's first visit. */
+    ok(`${p} does not ask for Apple's Smart App Banner`,
+       !/<meta[^>]*apple-itunes-app/i.test(html),
+       'it cannot be brought back once dismissed, and ours would overlap it');
   }
   ok('the landing page links the App Store directly',
      /apps\.apple\.com\/za\/app\/id6670504520/.test(read('index.html')) &&
@@ -307,13 +311,17 @@ console.log('\nit reaches the pages a client actually lands on');
      sees login.html, which had neither the tag nor the script, and that is
      the page they look at for longest.
 
-     Every page here is one somebody can arrive at with no session. */
+     Every page here is one somebody can arrive at with no session.
+
+     Apple's tag has since been removed from all of them: our banner now draws
+     on iOS Safari too, because Apple's cannot be shown again once dismissed.
+     So what each page needs is the SCRIPT, on every device. */
   const ENTRY = ['index.html', 'login.html', 'signup.html', 'portal/index.html'];
   for (const p of ENTRY) {
     const html = read(p);
-    ok(`${p} carries Apple's Smart App Banner tag`,
-       /<meta name="apple-itunes-app" content="app-id=6670504520"/.test(html),
-       'iOS Safari shows nothing on this page');
+    ok(`${p} does not ask for Apple's Smart App Banner`,
+       !/<meta[^>]*apple-itunes-app/i.test(html),
+       'ours is the one that persists; Apple\u2019s would sit on top of it');
     ok(`${p} loads the banner script`,
        /src="[^"]*\/?js\/app-banner\.js/.test(html),
        'Android and non-Safari iOS get nothing on this page');

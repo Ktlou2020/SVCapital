@@ -57,14 +57,23 @@ function _svcAppBannerStyles() {
    code also prompted for the PROGRESSIVE WEB APP, which is a different thing
    from the app on the store.
 
-   Two mechanisms, chosen by what the device does best:
+   One banner, everywhere.
 
-     iOS Safari  — Apple's own Smart App Banner, from a meta tag in the page
-                   head. It is the affordance iOS users recognise, and it is
-                   the only one that can tell whether the app is already
-                   installed: it says OPEN rather than VIEW. Nothing in
-                   JavaScript can determine that, so this beats anything we
-                   could draw. The banner below stands down for it.
+   There used to be two. iOS Safari was left to Apple's own Smart App Banner,
+   from an apple-itunes-app meta tag in the page head, on the grounds that it
+   is the affordance iOS users recognise and the only one that can tell
+   whether the app is already installed — it says OPEN rather than VIEW.
+
+   Both halves of that turned out to be the wrong trade. Apple's banner cannot
+   be brought back: once a client taps its x, Safari remembers that for the
+   site and nothing can ask again, which makes "keep asking until they have
+   the app" impossible on the device most clients read the portal on. And the
+   install question is answered better here anyway — by the server, from a
+   push token only the app can write — so the one advantage Apple's had is one
+   this has too, from a source that does not depend on the browser.
+
+   The meta tag is gone, so Apple's banner does not appear at all and the two
+   never overlap.
 
      everywhere   — the banner below: Android of any browser, and iOS in
      else on a     Chrome/Firefox/Edge where Apple's banner does not appear.
@@ -277,14 +286,13 @@ function svcShouldOfferApp(env) {
   if (dismissed)  return false;   // snoozed; it comes back
   const os = svcMobileOS(ua, e.nav);
   if (!os)        return false;   // desktop: the store link is on the site
-  /* iOS Safari used to be left to Apple's Smart App Banner, which the meta tag
-     in the page head still asks for. Apple's is prettier and it is free — but
-     it CANNOT be made to persist: once the client taps its x, Safari remembers
-     that for the site and there is no way to ask again. On the one device
-     where most clients read the portal, that made "keep asking until they have
-     the app" impossible. So ours is drawn here too. Apple's may appear at the
-     top of the first page they open; ours sits at the bottom and is the one
-     that comes back. */
+  /* iOS Safari used to be left to Apple's Smart App Banner. Apple's is
+     prettier and free, but it CANNOT be made to persist: once the client taps
+     its x, Safari remembers that for the site and there is no way to ask
+     again. On the one device where most clients read the portal, that made
+     "keep asking until they have the app" impossible. The apple-itunes-app
+     meta tag has been removed from every page, so Apple's does not appear and
+     this is the only banner on any phone. */
   return true;
 }
 
