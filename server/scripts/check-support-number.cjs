@@ -23,7 +23,7 @@ const path = require('path');
 /* International format, digits only — what api.whatsapp.com expects. South
    African mobile: 27 followed by nine digits, the leading 0 dropped.
    27 79 111 5476 is 079 111 5476. */
-const NUMBER = '27791115476';
+const NUMBER = '27722269415';
 
 const ROOT   = path.join(__dirname, '..', '..');
 const UPDATE = process.argv.includes('--update');
