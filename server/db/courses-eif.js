@@ -34,7 +34,7 @@ const COMMON_COMPLIANCE = `<h3>What you may say, and what you may not</h3>
 <p>These three products are the platform's Ethical &amp; Interest-Free range. Everything below applies to all three, and getting it wrong is a compliance matter rather than a style preference.</p>
 <p><strong>Certification.</strong> The offering is <em>not</em> Sharia certified. It is <em>structured on</em> established Islamic finance principles — no riba, no gharar, no prohibited sectors, and a real asset or enterprise behind every return — and independent Sharia advisory review is under way. Until a certificate is issued and published, the sentence you use is: "These are structured on Islamic finance principles, and independent Sharia advisory review is under way. We do not yet hold a certificate, and we will not claim one." Never say "certified", "compliant", "approved" or "halaal-approved". If a client needs certainty before investing, tell them to take their own advice — that answer costs you nothing and protects both of you.</p>
 <p><strong>Excluded sectors.</strong> No pool finances conventional interest-based lending, alcohol, tobacco, pork, gambling, adult entertainment or weapons. Every business a pool finances is screened against that list before the pool opens, and a business that moves into an excluded activity during the term is exited.</p>
-<p><strong>The platform fee.</strong> 1% of the amount invested, charged <strong>on top of it</strong>, once. Enter R500 into a pool with a R500 minimum and R500 reaches the pool, R5,00 is the fee, and R505,00 leaves the wallet. It is the same whether the investment does well or badly, because it is a fee for the work of running the platform — administration, reporting, custody of the paperwork — and not a charge for the use of money. Never describe it as coming out of the investment.</p>
+<p><strong>The platform fee.</strong> 1% of the amount invested, charged <strong>on top of it</strong>, once. Enter R100 000 into a pool with a R100 000 minimum and R100 000 reaches the pool, R1 000,00 is the fee, and R101 000,00 leaves the wallet. It is the same whether the investment does well or badly, because it is a fee for the work of running the platform — administration, reporting, custody of the paperwork — and not a charge for the use of money. Never describe it as coming out of the investment.</p>
 <p><strong>At maturity.</strong> Every EIF holding settles in cash to the client's wallet. There is no rollover and no switch into another product: each of these is a concluded contract over a specific trade, asset or venture, so when it ends the only thing that can happen is that it pays out. The maturity screen shows Payout All and nothing else for these products, and that is deliberate.</p>
 <p><strong>Interest on the wallet.</strong> A client who holds an EIF product still keeps their money in the ordinary platform wallet, and interest earned on client balances is normally credited to them. Holding an EIF product does <em>not</em> switch that off — some clients hold both kinds and want it. There is a separate switch, "Decline interest on my wallet balance", under Invest → Ethical &amp; Interest-Free. Point a client at it rather than assuming either way.</p>
 <p><strong>Who the client is contracting with.</strong> The provider is SmartVest Financial Services (Pty) Ltd, an authorised financial services provider, FSP 52449. SV Capital is the fund manager. Both names appear on the agreement, and the EFT account a client pays into is in the name Smartvest Financial Services — say so before they see it on a bank statement and worry.</p>
@@ -43,7 +43,7 @@ const COMMON_COMPLIANCE = `<h3>What you may say, and what you may not</h3>
 const COMMON_COMPLIANCE_POINTS = [
   'NOT certified: say "structured on Islamic finance principles, review under way, no certificate yet" — never "certified" or "compliant"',
   'Excluded sectors: conventional lending, alcohol, tobacco, pork, gambling, adult entertainment, weapons — screened before the pool opens',
-  'Platform fee is 1% charged ON TOP, once: R500 invested means R505 leaves the wallet and R500 reaches the pool',
+  'Platform fee is 1% charged ON TOP, once: R100\u00a0000 invested means R101\u00a0000 leaves the wallet and R100\u00a0000 reaches the pool',
   'Every EIF holding pays out in cash at maturity — no rollover, no switch, by design',
   'Holding an EIF product does not stop wallet interest; the client elects that separately under Invest → Ethical & Interest-Free',
   'Provider is SmartVest Financial Services (Pty) Ltd, FSP 52449; SV Capital is the fund manager',
@@ -184,7 +184,7 @@ const EIF_COURSES = [
         content: `<h3>Murabaha Trade Finance — the actual terms</h3>
 <p>These are the figures on the product page. Know them without looking.</p>
 <ul>
-<li><strong>Minimum investment:</strong> R500 — the lowest of the three EIF structures</li>
+<li><strong>Minimum investment:</strong> R100 000 — the same across all three EIF structures</li>
 <li><strong>Term:</strong> 6 months — the shortest of the three</li>
 <li><strong>Benchmark rate:</strong> 11.5% per annum, prorated over the term</li>
 <li><strong>Risk profile:</strong> Low-Medium — the lowest of the three</li>
@@ -194,7 +194,7 @@ const EIF_COURSES = [
 </ul>
 <p>The benchmark is a target drawn from the trade, not a promise. Murabaha and Ijara returns come from contracted amounts and are the more predictable of the three structures; that is a statement about predictability, not about guarantee.</p>
 <h3>Who this suits</h3>
-<p>The R500 minimum and six-month term make Murabaha the natural entry point into the range — a client who wants to hold something in the Ethical &amp; Interest-Free section without committing for three years, and a client who is testing the offering before moving more. It is also the one to reach for when a client says the returns elsewhere in the range are too uncertain for them: a fixed, disclosed mark-up over six months is the most predictable thing in this part of the platform.</p>
+<p>All three EIF structures take the same R100 000 minimum, so the minimum never decides between them. What makes Murabaha the natural entry point is the six-month term and the lowest risk profile of the three — a client who wants to hold something in the Ethical &amp; Interest-Free section without committing for three years, and a client who is testing the offering before moving more. It is also the one to reach for when a client says the returns elsewhere in the range are too uncertain for them: a fixed, disclosed mark-up over six months is the most predictable thing in this part of the platform.</p>
 <h3>What the client signs</h3>
 <p>Before any money moves, the client signs a <strong>Murabaha Investment Agreement</strong> — its own contract, not the standard one. They tick three acknowledgements individually:</p>
 <ul>
@@ -204,8 +204,8 @@ const EIF_COURSES = [
 </ul>
 <p>If a client pushes back on any of those three at the signing screen, that is the conversation to have properly rather than to talk them through. The agreement records that they were told, and it is the first document an ombud asks for.</p>`,
         key_points: [
-          'Murabaha Trade Finance: R500 minimum, 6-month term, 11.5% benchmark, Low-Medium risk, no performance fee',
-          'Shortest term and lowest minimum of the three EIF structures — the natural entry point',
+          'Murabaha Trade Finance: R100\u00a0000 minimum, 6-month term, 11.5% benchmark, Low-Medium risk, no performance fee',
+          'Shortest term and lowest risk of the three EIF structures — the natural entry point. The minimum is the same on all three',
           'The benchmark is a target drawn from the trade, not a promise',
           'Pays out in cash at maturity like every EIF product',
           'The client signs a Murabaha Investment Agreement and ticks three acknowledgements one at a time',
@@ -214,13 +214,13 @@ const EIF_COURSES = [
           {
             question: "What are the minimum investment and term for Murabaha Trade Finance?",
             options: [
-              "R2 500 and twelve months",
-              "R1 000 and thirty-six months",
-              "R500 and twelve months",
-              "R500 and six months",
+              "R100 000 and twelve months",
+              "R250 000 and six months",
+              "R100 000 and thirty-six months",
+              "R100 000 and six months",
             ],
             correct: 3,
-            explanation: "R500 and six months — the lowest minimum and the shortest term of the three EIF structures, which is what makes it the usual entry point into the range.",
+            explanation: "R100 000 and six months. All three EIF structures take the same R100 000 minimum, so the minimum never tells you which product you are looking at — the term does, and six months is the shortest of the three.",
           },
           {
             question: "A client says the Ethical & Interest-Free returns feel too uncertain. Which structure is most predictable?",
@@ -271,11 +271,11 @@ ${COMMON_COMPLIANCE}`,
             explanation: "No certificate has been issued. The platform's own FAQ says \"Not yet, and we will not say otherwise.\" Claiming certification is a claim the business cannot stand behind, and inviting the client to take their own advice is a complete answer rather than a failed close.",
           },
           {
-            question: "A client invests R2 000 into an EIF pool with a R2 000 minimum. What happens to the money?",
+            question: "A client invests R100 000 into an EIF pool, which is the minimum. What happens to the money?",
             options: [
-              "R2 000 reaches the pool, R20 is charged on top, and R2 020 leaves the wallet",
-              "R1 980 reaches the pool and R20 is retained as the platform fee",
-              "R2 000 leaves the wallet and the fee is taken from the return at maturity",
+              "R100 000 reaches the pool, R1 000 is charged on top, R101 000 leaves the wallet",
+              "R99 000 reaches the pool and R1 000 is retained as the platform fee",
+              "R100 000 leaves the wallet and the fee is taken from the return at maturity",
               "No fee applies, because interest-free products are exempt from it",
             ],
             correct: 0,
@@ -425,7 +425,7 @@ ${COMMON_COMPLIANCE}`,
         module_index: 3, title: 'The product as a client meets it', estimated_minutes: 13, xp_reward: 55,
         content: `<h3>Ijara Asset Leasing — the actual terms</h3>
 <ul>
-<li><strong>Minimum investment:</strong> R1 000</li>
+<li><strong>Minimum investment:</strong> R100 000 — the same across all three EIF structures</li>
 <li><strong>Term:</strong> 36 months — the longest of the three</li>
 <li><strong>Benchmark rate:</strong> 12.5% per annum</li>
 <li><strong>Risk profile:</strong> Medium</li>
@@ -445,7 +445,7 @@ ${COMMON_COMPLIANCE}`,
 </ul>
 <p>The first of those is the one clients skim and the one that matters most. If they have not understood that the income depends on the asset being in productive use, they have not understood the product, and signing does not fix that.</p>`,
         key_points: [
-          'Ijara Asset Leasing: R1 000 minimum, 36-month term, 12.5% benchmark, Medium risk, no performance fee',
+          'Ijara Asset Leasing: R100\u00a0000 minimum, 36-month term, 12.5% benchmark, Medium risk, no performance fee',
           'The longest term of the three structures — capital is not repayable on demand for three years',
           'Ask the suitability question: a client who may need the capital within three years should not be here',
           'The agreement\'s key acknowledgement is that the rent stops if the asset cannot be used',
@@ -455,13 +455,13 @@ ${COMMON_COMPLIANCE}`,
           {
             question: "What are the minimum investment and term for Ijara Asset Leasing?",
             options: [
-              "R1 000 and thirty-six months",
-              "R500 and six months",
-              "R2 500 and twelve months",
-              "R1 000 and twelve months",
+              "R100 000 and thirty-six months",
+              "R100 000 and six months",
+              "R250 000 and thirty-six months",
+              "R100 000 and twelve months",
             ],
             correct: 0,
-            explanation: "R1 000 and thirty-six months — the longest term of the three EIF structures, because the pool has to hold a real asset long enough for the rental to repay it.",
+            explanation: "R100 000 — the same minimum as the other two structures — and thirty-six months, the longest term of the three, because the pool has to hold a real asset long enough for the rental to repay it.",
           },
           {
             question: "A client has R30 000 they will need for a house deposit in about eighteen months. What do you do?",
@@ -494,7 +494,7 @@ ${COMMON_COMPLIANCE}`,
 <p>"The pool buys delivery motorcycles and keeps them in its own name. Riders working Mr D, Takealot and Uber Eats lease them — people who need a machine to earn and would otherwise be renting one on worse terms. Your return is a share of that rent. We insure the bikes and we pay for the major maintenance, because we own them."</p>
 <p>Then the part that is easy to leave out and should not be: "And because we own them, when the bikes are not being ridden they are not paying. A lender would still be owed the money. We would not. That is the difference between rent and interest, and it is also the risk you are taking."</p>
 <h3>The objection you will actually get</h3>
-<p><em>"Three years is a long time."</em> It is. Do not talk it down — explain it: the pool bought physical assets and has to hold them long enough for the rental to repay the purchase and produce a return. Then offer the honest alternative rather than pushing: Murabaha runs six months at a R500 minimum, and a client who is not ready to commit for three years should start there. A client placed into the wrong term is a complaint waiting to be written, and the shorter product is a real answer, not a consolation.</p>
+<p><em>"Three years is a long time."</em> It is. Do not talk it down — explain it: the pool bought physical assets and has to hold them long enough for the rental to repay the purchase and produce a return. Then offer the honest alternative rather than pushing: Murabaha runs six months at the same minimum, and a client who is not ready to commit for three years should start there. A client placed into the wrong term is a complaint waiting to be written, and the shorter product is a real answer, not a consolation.</p>
 ${COMMON_COMPLIANCE}`,
         key_points: [
           'Lead with the fleet — concrete, real, and every client has seen the bikes',
@@ -658,7 +658,7 @@ ${COMMON_COMPLIANCE}`,
               "Mudarabah, on the basis that it targets the highest return",
               "Ijara, because the pool holds title to a physical asset throughout",
               "Murabaha — the lowest risk profile, a fixed mark-up and six months",
-              "Whichever carries the lowest minimum, without reference to risk",
+              "Whichever pool happens to be open for subscription, without reference to risk",
             ],
             correct: 2,
             explanation: "Murabaha carries the Low-Medium profile, the shortest term and the most predictable return of the three. Mudarabah is Medium-High and the least predictable; placing a nervous first-time investor there because the headline number is biggest is a suitability failure.",
@@ -669,7 +669,7 @@ ${COMMON_COMPLIANCE}`,
         module_index: 3, title: 'The product as a client meets it', estimated_minutes: 14, xp_reward: 60,
         content: `<h3>Mudarabah Enterprise — the actual terms</h3>
 <ul>
-<li><strong>Minimum investment:</strong> R2 500 — the highest of the three</li>
+<li><strong>Minimum investment:</strong> R100 000 — the same across all three EIF structures</li>
 <li><strong>Term:</strong> 12 months</li>
 <li><strong>Target rate:</strong> 14.5% per annum — the highest of the three, and a projection rather than a benchmark on contracted amounts</li>
 <li><strong>Risk profile:</strong> Medium-High — the highest of the three</li>
@@ -694,7 +694,7 @@ ${COMMON_COMPLIANCE}`,
 </ul>
 <p>Four separate boxes, because a single box covering everything acknowledges nothing in particular — and it is the first thing an ombud asks about.</p>`,
         key_points: [
-          'Mudarabah Enterprise: R2 500 minimum, 12-month term, 14.5% target, Medium-High risk',
+          'Mudarabah Enterprise: R100\u00a0000 minimum, 12-month term, 14.5% target, Medium-High risk',
           'The 14.5% is a projection off the venture\'s own numbers, not a benchmark on contracted amounts',
           'Two different fees: the 1% platform fee charged on top at investment, and the operator\'s 20% share of PROFIT only',
           'Quarterly reporting on the underlying venture',
@@ -704,13 +704,13 @@ ${COMMON_COMPLIANCE}`,
           {
             question: "What are the minimum investment and target rate for Mudarabah Enterprise?",
             options: [
-              "R500 and 11.5%",
-              "R2 500 and 14.5%",
-              "R1 000 and 12.5%",
-              "R2 500 and 20%",
+              "R100 000 and 11.5%",
+              "R100 000 and 14.5%",
+              "R250 000 and 14.5%",
+              "R100 000 and 20%, the operating partner's share",
             ],
             correct: 1,
-            explanation: "R2 500 and a 14.5% target — the highest minimum and the highest target of the three, matching the highest risk profile. The 20% is the operating partner's share of profit, not a rate offered to investors.",
+            explanation: "R100 000 — the same minimum as the other two structures — and a 14.5% target, the highest of the three and matching the highest risk profile. The 20% is the operating partner's share of profit, not a rate offered to investors.",
           },
           {
             question: "Is the operating partner's 20% deducted even when the venture does badly?",

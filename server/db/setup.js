@@ -1817,7 +1817,7 @@ const EIF_PRODUCTS = [
       'Typical assets: production printers, maize inputs bought ahead of planting, weaner calves sold on to a feedlot',
       'Shorter term than most products on the platform',
     ].join('\n'),
-    min_investment: 500, term_months: 6, benchmark_rate: 0.115, performance_fee_pct: 0,
+    min_investment: 100000, term_months: 6, benchmark_rate: 0.115, performance_fee_pct: 0,
     risk_profile: 'Low-Medium', risk_color: '#22c55e', icon: 'fa-handshake',
     color: '#078e07', badge_class: 'badge--green', sector: 'Trade Finance', sort_order: 40,
   },
@@ -1833,7 +1833,7 @@ const EIF_PRODUCTS = [
       'Option to transfer the asset to the lessee at the end of the term',
       'Typical assets: delivery vehicles leased to a logistics operator, production printers leased to their user',
     ].join('\n'),
-    min_investment: 1000, term_months: 36, benchmark_rate: 0.125, performance_fee_pct: 0,
+    min_investment: 100000, term_months: 36, benchmark_rate: 0.125, performance_fee_pct: 0,
     risk_profile: 'Medium', risk_color: '#fec24f', icon: 'fa-file-contract',
     color: '#078e07', badge_class: 'badge--green', sector: 'Asset Leasing', sort_order: 41,
   },
@@ -1849,7 +1849,7 @@ const EIF_PRODUCTS = [
       'Highest risk of the three EIF structures, and the highest potential share',
       'Typical ventures: a 120-day cattle feedlot cycle, a maize season funded from inputs through to harvest',
     ].join('\n'),
-    min_investment: 2500, term_months: 12, benchmark_rate: 0.145, performance_fee_pct: 0.20,
+    min_investment: 100000, term_months: 12, benchmark_rate: 0.145, performance_fee_pct: 0.20,
     risk_profile: 'Medium-High', risk_color: '#ffb782', icon: 'fa-scale-balanced',
     color: '#078e07', badge_class: 'badge--green', sector: 'Enterprise Finance', sort_order: 42,
   },
@@ -4045,6 +4045,72 @@ async function autoSetup() {
       if (rowCount) console.log(`\u2705 Set ${rowCount} EIF investment(s) to pay out at maturity.`);
     });
 
+    await step("25. Correct the EIF minimum taught to staff", async () => {
+      /* All three Ethical & Interest-Free structures take the same R100 000.
+         They were authored at R500, R1 000 and R2 500, the products were
+         corrected, and the three courses went on teaching the old figures —
+         in the terms list, in the key points, and as the CORRECT ANSWER to
+         four quiz questions. Step 12 was this same mistake on the cattle
+         minimum, one offering ago.
+
+         Courses insert ON CONFLICT DO NOTHING, and their modules only when
+         the course row is new, so a corrected seed reaches a brand-new
+         database and nowhere else. This repairs the rows in place, from the
+         seed, a module at a time.
+
+         Scoped by the stale state rather than by course id: a module is
+         rewritten only while it still calls a figure the minimum that the
+         product does not have, or still carries a figure the corrected text
+         has no use for. Once it is right nothing matches, so an edit made in
+         the console after this correction survives every later boot. */
+      const SUPERSEDED = ['R500', 'R505', 'R1 000', 'R2 000', 'R2 020', 'R2 500',
+                          'lowest minimum', 'highest minimum'];
+      const flat = v => String(v == null ? '' : v).replace(/ /g, ' ');
+      let fixed = 0;
+      for (const course of EIF_COURSES) {
+        const type = `eif_${(course.id.match(/EIF-([A-Z]+)-/) || [, ''])[1].toLowerCase()}`;
+        const product = EIF_PRODUCTS.find(p => p.product_type === type);
+        if (!product) continue;
+        for (const m of course.modules) {
+          /* A superseded figure only counts as stale while the corrected
+             module has no use for it: the fee worked example legitimately
+             says R1 000 now that the fee is 1% of R100 000. */
+          const seed = flat([m.content, JSON.stringify(m.key_points), JSON.stringify(m.quiz)].join(' '));
+          const markers = SUPERSEDED.filter(x => !seed.includes(x));
+          const { rows } = await pool.query(
+            `SELECT id, content, key_points, quiz FROM course_modules
+              WHERE course_id = $1 AND module_index = $2`,
+            [course.id, m.module_index]);
+          for (const row of rows) {
+            /* Field by field, never one joined blob: joining lets a quiz
+               option's figure sit next to the next field's word "minimum". */
+            const fields = [flat(row.content),
+              ...(Array.isArray(row.key_points) ? row.key_points.map(flat) : []),
+              ...(Array.isArray(row.quiz)
+                    ? row.quiz.flatMap(q => [q && q.question, ...((q && q.options) || []), q && q.explanation].map(flat))
+                    : [])];
+            const calledTheMinimum = fields.flatMap(f =>
+              [...f.matchAll(/R\s?(\d[\d ,]*\d|\d)[^.<]{0,60}?\bminimum\b/gi)]
+                .map(h => +h[1].replace(/[ ,]/g, '')));
+            const stale = calledTheMinimum.some(n => n !== Number(product.min_investment))
+                       || markers.some(x => fields.some(f => f.includes(x)));
+            if (!stale) continue;
+            await pool.query(
+              `UPDATE course_modules
+                  SET content = $2, key_points = $3::jsonb, quiz = $4::jsonb, updated_at = NOW()
+                WHERE id = $1`,
+              [row.id, m.content, JSON.stringify(m.key_points), JSON.stringify(m.quiz)]);
+            fixed++;
+          }
+        }
+      }
+      if (fixed) {
+        console.log(`✅ EIF minimum corrected in ${fixed} training module(s).`);
+        console.log('ℹ️  Anyone who passed those quizzes before now answered the old minimum. ' +
+                    'Their score stands; the figure they were taught does not.');
+      }
+    });
+
     await step("19. Announce the features nobody has been told about", async () => {
       /* Everything shipped recently, each with the one thing release notes
          leave out: where to find it.
@@ -4254,6 +4320,11 @@ async function autoSetup() {
           title: 'On iPhones there is now one app banner, not two',
           body: 'The note about the banner that keeps asking said Apple\u2019s own Smart App Banner might still appear at the top of a client\u2019s first page while ours sat at the bottom. It will not: the apple-itunes-app tag has been taken off the landing page, the sign-in and sign-up pages, the portal and the app shell, so Safari no longer draws its banner at all. Ours is the only one, on every phone. Apple\u2019s was kept because it is the affordance iPhone users know and because it could say OPEN rather than VIEW when the app was already installed \u2014 something no JavaScript can work out. Neither reason held: it cannot be shown again once a client taps its x, so it could never keep asking, and we answer the installed question from the server using the push token only the app can write, which is a better answer than the browser\u2019s and does not depend on the tag.',
           where: 'Nothing to click. On an iPhone in Safari, the client portal, sign-in and landing pages now show only the SV Capital banner at the bottom of the screen.' },
+
+        { id: 'ANN-2026-EIF-MINIMUM-100K', area: 'admin', icon: 'fa-graduation-cap',
+          title: 'Ethical & Interest-Free takes R100\u00a0000 \u2014 the courses said R500',
+          body: 'All three EIF structures take the same R100\u00a0000 minimum. The three product courses were written when they were R500 (Murabaha), R1\u00a0000 (Ijara) and R2\u00a0500 (Mudarabah), the products were corrected, and the training went on teaching the old figures \u2014 in the terms list, in the key points, and as the CORRECT ANSWER to four quiz questions. So anyone who passed those quizzes was certified on a figure a client could not invest, and may have quoted it. The courses are corrected and the three modules that carried the figure have been rewritten in place, not just in the seed, so staging and production see it too. Two things that leaned on the minimums differing are rewritten rather than renumbered: Murabaha is the entry point on its six-month term and lowest risk, not on being cheapest; and the worked platform-fee example now reads R100\u00a0000 invested, R1\u00a0000 fee, R101\u00a0000 out of the wallet. Scores stand \u2014 the figure does not. Worth asking anyone who has pitched EIF since whether a R500 minimum was ever mentioned.',
+          where: 'Staff portal \u2192 My Courses \u2192 the three Ethical & Interest-Free product courses. The live minimum is on each product under Products in the admin console.' },
 
         { id: 'ANN-2026-SUPPORT-NUMBER-0722269415', area: 'both', icon: 'fa-phone',
           title: 'Support WhatsApp number changed to 072 226 9415',
