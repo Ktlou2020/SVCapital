@@ -101,6 +101,30 @@ console.log('\nthe figures taught are the product\'s own figures');
     const p = P[type];
     ok(`${type}: the course states the R${p.min} minimum`,
        rands(p.min).some(r => t.includes(r)), `looked for ${rands(p.min).join(' or ')}`);
+
+    /* The right figure appearing somewhere is not enough. The course once
+       stated the live minimum in its terms list while a quiz still keyed to
+       the old one, and that is the half a learner is tested on. So every
+       figure the learner could read AS the minimum has to be it, read field
+       by field rather than from one joined blob — joining lets an option's
+       figure sit next to the next field's word "minimum". */
+    const fields = BY_ID[id].modules.flatMap(m => [m.content,
+      ...(m.key_points || []),
+      ...(m.quiz || []).flatMap(q => [q.question, ...q.options, q.explanation])]);
+    const asMinimum = fields
+      .flatMap(f => [...String(f || '').matchAll(/R\s?(\d[\d  ,]*\d|\d)[^.<]{0,60}?\bminimum\b/gi)])
+      .map(m => +m[1].replace(/[  ,]/g, ''));
+    ok(`${type}: every figure it calls the minimum IS the minimum`,
+       asMinimum.length > 0 && asMinimum.every(n => n === p.min),
+       asMinimum.length ? `found ${[...new Set(asMinimum)].join(', ')}`
+                        : 'nothing in the course calls any figure the minimum');
+
+    /* And a question that asks the minimum has to be answerable with it. */
+    const asks = BY_ID[id].modules.flatMap(m => m.quiz || [])
+      .filter(q => /\bminimum\b/i.test(q.question));
+    ok(`${type}: a question about the minimum keys to an option stating it`,
+       asks.length > 0 && asks.every(q => rands(p.min).some(r => q.options[q.correct].includes(r))),
+       asks.map(q => q.options[q.correct]).join(' | '));
     ok(`${type}: the course states the ${p.term}-month term`,
        new RegExp(`${p.term}[- ]month|${p.term} months`).test(t)
        || (p.term === 6  && /six[- ]month|six months/i.test(t))
@@ -246,6 +270,63 @@ console.log('\nthe quiz is an assessment, not a formality');
          !!r && r.xp_reward === c.xp_reward && r.module_xp === c.xp_reward,
          r ? `course ${r.xp_reward}, modules ${r.module_xp}` : '');
     }
+    /* The seed only ever reaches a brand-new database, so correcting a
+       figure in it does nothing for staging or production unless a step
+       repairs the rows. This drives every EIF module back to the old minimum
+       the way those environments carry it — including the distractor that
+       leaned on the minimums differing, which no figure substitution would
+       reproduce — and asserts the next boot rewrites all of them. */
+    console.log('\nand modules still teaching the old minimum are corrected in place');
+    const setup = () => require(path.join(ROOT, 'server', 'db', 'setup.js'))().catch(() => {});
+    await db.query(
+      `UPDATE course_modules
+          SET content    = REPLACE(REPLACE(content, 'R100 000', 'R500'), 'R100 000', 'R500'),
+              key_points = REPLACE(REPLACE(key_points::text, 'R100 000', 'R500'), 'R100 000', 'R500')::jsonb,
+              quiz       = REPLACE(REPLACE(REPLACE(quiz::text, 'R100 000', 'R500'), 'R100 000', 'R500'),
+                                   'Whichever pool happens to be open for subscription, without reference to risk',
+                                   'Whichever carries the lowest minimum, without reference to risk')::jsonb
+        WHERE course_id LIKE 'CRS-PROD-EIF-%'`);
+    await setup();
+    for (const c of EIF_COURSES) {
+      const { rows } = await db.query(
+        `SELECT module_index, content, key_points, quiz FROM course_modules
+          WHERE course_id = $1 ORDER BY module_index`, [c.id]);
+      /* jsonb sorts object keys, so a stored question bears no resemblance
+         to the JS literal it was written from. Compared canonically. */
+      const canon = v => JSON.stringify(v, (k, x) => (x && typeof x === 'object' && !Array.isArray(x)
+        ? Object.fromEntries(Object.keys(x).sort().map(key => [key, x[key]])) : x));
+      const same = c.modules.every(m => {
+        const r = rows.find(x => x.module_index === m.module_index);
+        return r && r.content === m.content
+          && canon(r.key_points) === canon(m.key_points)
+          && canon(r.quiz) === canon(m.quiz);
+      });
+      ok(`${c.id}: every stale module is rewritten from the seed`, rows.length === c.modules.length && same,
+         rows.filter(r => !c.modules.some(m => m.module_index === r.module_index && m.content === r.content))
+             .map(r => `module ${r.module_index}: ${(r.content.match(/R500[^<]{0,30}/) || ['content differs'])[0]}`)
+             .join(' | '));
+      const qs = rows.flatMap(r => r.quiz || []);
+      ok(`${c.id}: and no quiz keys to the old figure`,
+         qs.filter(q => /\bminimum\b/i.test(q.question || ''))
+           .every(q => /R100[  ]000/.test(q.options[q.correct])),
+         qs.filter(q => /\bminimum\b/i.test(q.question || '')).map(q => q.options[q.correct]).join(' | '));
+    }
+
+    /* And having been corrected, a module is left alone — course content is
+       editable in the console, and a step that rewrote it on every boot would
+       quietly discard whatever was changed there. */
+    await db.query(
+      `UPDATE course_modules SET content = content || '<p data-check="console-edit">Edited in the console.</p>'
+        WHERE course_id = $1 AND module_index = $2`,
+      [EIF_COURSES[0].id, EIF_COURSES[0].modules[0].module_index]);
+    await setup();
+    const { rows: [edited] } = await db.query(
+      `SELECT content FROM course_modules WHERE course_id = $1 AND module_index = $2`,
+      [EIF_COURSES[0].id, EIF_COURSES[0].modules[0].module_index]);
+    ok('a console edit to an already-correct module survives the next boot',
+       !!edited && edited.content.includes('data-check="console-edit"'),
+       'the correction is scoped by the stale figure, not by course id');
+
     ok('and a second run does not duplicate a module',
        await (async () => {
          await require(path.join(ROOT, 'server', 'db', 'setup.js'))().catch(() => {});
