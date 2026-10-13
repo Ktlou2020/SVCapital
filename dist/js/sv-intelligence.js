@@ -639,6 +639,10 @@ function _sviAdminAnswer(q) {
   if (_q(q, ['summary', 'overview', 'platform', 'full', 'brief', 'tell me', 'dashboard', 'snapshot'])) {
     const totalInv      = data.investments.filter(i => i.status === 'active');
     const totalAUM      = totalInv.reduce((s,i) => s + (i.amount||0), 0);
+    /* CASH paid to investors, not income. A payout's amount is capital coming
+       back plus the return on it, so this is deliberately labelled "Paid to
+       Investors" rather than "Returns Paid" — the figure is right, the old
+       label was not. Income is `return` and `interest`; see services/ledger. */
     const totalReturns  = data.transactions.filter(t => t.type === 'return' || t.type === 'payout').reduce((s,t) => s + Math.abs(t.amount||0), 0);
     const activeInv     = data.investors.filter(i => i.status === 'active').length;
     const openPools     = data.pools.filter(p => p.status === 'open').length;
@@ -651,7 +655,7 @@ function _sviAdminAnswer(q) {
       [
         { icon: 'fa-users',       cls: 'blue',   label: 'Active Investors', value: activeInv.toString(),       sub: `of ${data.investors.length} total`            },
         { icon: 'fa-coins',       cls: 'orange', label: 'Total AUM',        value: Utils.rand(totalAUM),        sub: `${totalInv.length} active investments`         },
-        { icon: 'fa-chart-line',  cls: 'green',  label: 'Returns Paid',     value: Utils.rand(totalReturns),    sub: 'total paid out to investors'                  },
+        { icon: 'fa-chart-line',  cls: 'green',  label: 'Paid to Investors', value: Utils.rand(totalReturns),   sub: 'maturity payouts (capital + return) and returns' },
         { icon: 'fa-layer-group', cls: 'teal',   label: 'Open Pools',       value: openPools.toString(),        sub: `of ${data.pools.length} total pools`           },
       ],
       `**Action items:** ${pendingKYC} KYC pending · ${openTickets} open tickets · ${pendingDep} pending deposits\n\n` +
@@ -672,7 +676,7 @@ function _sviAdminAnswer(q) {
     html += _sviDataList([
       { label: 'Active AUM',              value: Utils.rand(activeAUM),     cls: 'gold' },
       { label: 'Total Ever Invested',     value: Utils.rand(allInvested),   cls: ''     },
-      { label: 'Returns Paid to Date',    value: Utils.rand(totalPaid),     cls: 'up'   },
+      { label: 'Paid to Investors to Date', value: Utils.rand(totalPaid),   cls: 'up'   },
       { label: 'Total Investor Wallets',  value: Utils.rand(walletTotal),   cls: 'blue' },
       { label: 'Expected Future Returns', value: Utils.rand(expectedTotal), cls: 'gold' },
       { label: 'Total Deposits (comp.)',  value: Utils.rand(totalDeposits), cls: 'up'   },

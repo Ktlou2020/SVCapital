@@ -34,7 +34,7 @@
 
 /* ── Scrollbar ─────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 7px; }
-::-webkit-scrollbar-track { background: #0d1117; }
+::-webkit-scrollbar-track { background: #1a1a1a; }
 ::-webkit-scrollbar-thumb { background: rgba(255,130,21,0.30); border-radius: 6px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--ci-orange); }
 
@@ -50,6 +50,66 @@
   background: rgba(255,255,255,0.97) !important;
   border-bottom: 1px solid rgba(0,0,0,0.08) !important;
   box-shadow: 0 2px 20px rgba(0,0,0,0.07) !important;
+}
+
+/* Products submenu — Interest-Free is a range within Products, not a peer of
+   it. Products is the heading; the two under it appear on hover, on keyboard
+   focus, or on a click, and are not shown otherwise at any width.
+
+   All three, because no one of them covers everybody: hover is what a mouse
+   expects and a touch screen does not have; focus-within is what a keyboard
+   has and neither of the others gives it; and the click is the only one that
+   works on a phone, where the whole nav is a slide-in panel. */
+.nav-has-sub { position: relative; }
+.nav-sub-toggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: none; border: 0; cursor: pointer;
+  font-family: inherit; font-size: inherit; font-weight: inherit; line-height: inherit;
+  color: inherit;
+}
+.nav-sub-chev {
+  width: 0; height: 0; flex-shrink: 0;
+  border-left: 4px solid transparent; border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+  transition: transform .16s ease;
+}
+.nav-has-sub.open > .nav-sub-toggle .nav-sub-chev { transform: rotate(180deg); }
+.nav-sub {
+  position: absolute; top: 100%; left: 0; min-width: 190px; margin: 0; padding: 8px 0;
+  list-style: none; background: #fff; border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 10px; box-shadow: 0 10px 34px rgba(0,0,0,0.14);
+  opacity: 0; visibility: hidden; transform: translateY(-4px);
+  transition: opacity .16s ease, transform .16s ease, visibility .16s;
+  z-index: 60;
+}
+.nav-has-sub:hover > .nav-sub,
+.nav-has-sub:focus-within > .nav-sub,
+.nav-has-sub.open > .nav-sub { opacity: 1; visibility: visible; transform: translateY(0); }
+.nav-sub li { display: block; }
+.nav-sub .nav-link { display: block; padding: 8px 16px; white-space: nowrap; color: #303030 !important; }
+.nav-sub .nav-link:hover { background: rgba(254,194,79,0.14); color: #1a1a1a !important; }
+@media (prefers-reduced-motion: reduce) { .nav-sub, .nav-sub-chev { transition: none; } }
+
+/* Inside the slide-in panel, which takes over at 768px in css/style.css — the
+   same breakpoint, deliberately. Set at 900 it expanded the submenu while the
+   horizontal nav was still showing, so between 769 and 900 both items sat
+   permanently under Products and pushed the row apart.
+
+   Here the submenu is a list that pushes the items below it down rather than a
+   card floating over them, and it stays closed until Products is tapped:
+   hover does not exist on a phone, and leaving it open made Products look like
+   a third link rather than the heading of the two under it. */
+@media (max-width: 768px) {
+  .nav-sub { position: static; transform: none; background: transparent; border: 0;
+             box-shadow: none; padding: 0; min-width: 0; opacity: 1; visibility: visible;
+             display: none; }
+  .nav-has-sub.open > .nav-sub { display: block; padding: 2px 0 6px 12px; }
+  .nav-has-sub:hover > .nav-sub,
+  .nav-has-sub:focus-within > .nav-sub { display: none; }
+  .nav-has-sub.open:hover > .nav-sub,
+  .nav-has-sub.open:focus-within > .nav-sub { display: block; }
+  .nav-sub .nav-link { padding: 5px 0; font-size: 0.92em; }
+  .nav-sub-toggle { width: 100%; justify-content: flex-start; }
 }
 
 /* Logo */
@@ -418,15 +478,18 @@ input[type="range"] { accent-color: var(--ci-orange) !important; }
 .faq-item {
   background: #fff !important;
   border: 1px solid var(--ci-border) !important;
+  overflow: hidden !important;
 }
 .faq-item.open { border-color: var(--ci-orange-border) !important; }
-.faq-question { color: var(--ci-text) !important; }
+.faq-question { color: var(--ci-text) !important; cursor: pointer !important; }
 .faq-question:hover { color: var(--ci-orange) !important; }
-.faq-question i { color: var(--ci-orange) !important; }
+.faq-question i { color: var(--ci-orange) !important; pointer-events: none; }
 .faq-answer {
   color: var(--ci-text-muted) !important;
   background: var(--ci-section-bg) !important;
+  overflow: hidden !important;
 }
+.faq-item.open .faq-answer { max-height: 600px !important; padding: 0 24px 20px !important; }
 .faq-answer a { color: var(--ci-orange) !important; }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -460,7 +523,7 @@ input[type="range"] { accent-color: var(--ci-orange) !important; }
 /* ═══════════════════════════════════════════════════════════════
    FOOTER — dark with CI orange accents
    ═══════════════════════════════════════════════════════════════ */
-.footer { background: #0a0e15 !important; }
+.footer { background: #1a1a1a !important; }
 .footer-logo .logo-sv { color: var(--ci-orange) !important; }
 .footer-logo .logo-capital { color: #fff !important; }
 .footer-desc { color: rgba(255,255,255,0.50) !important; }
@@ -557,3 +620,205 @@ input[type="range"] { accent-color: var(--ci-orange) !important; }
 .compare-table td:first-child { color: var(--ci-text) !important; }
 .compare-table th, .compare-table td { border-bottom-color: rgba(0,0,0,0.07) !important; }
 .compare-highlight strong { color: var(--ci-orange) !important; }
+
+/* ═══════════════════════════════════════════════════════════════
+   ETHICAL AND INTEREST-FREE (EIF)
+   ═══════════════════════════════════════════════════════════════
+
+   The homepage's own treatment of the offering the portal carries. Same
+   accent as the portal — #078e07, a dark green, chosen over the blue it
+   replaced because green is the colour the Islamic tradition this offering
+   serves actually reads as its own — and the same one deliberate departure: a flat
+   top-left corner, so the section reads as its own room without a second
+   design language.
+
+   The homepage runs light, so the green is used as a rule, a tint and a mark
+   rather than as a fill. #078e07 on white measures 4.3:1, still short of the
+   4.5:1 body text needs, and the two places a reader must actually read — the
+   card titles and the FAQ — keep the page's normal ink. */
+
+.eif-section {
+  --eif: #078e07;
+  --eif-ink: #056b05;          /* the green taken dark enough to read on white: 6.8:1 */
+  background: linear-gradient(180deg, #fbfef8 0%, #ffffff 60%) !important;
+  color: var(--ci-text-body) !important;
+  padding: 88px 0;
+}
+
+.eif-eyebrow {
+  background: rgba(7,142,7,0.10) !important;
+  border-color: rgba(7,142,7,0.30) !important;
+  color: var(--eif-ink) !important;
+}
+.eif-eyebrow i { margin-right: 6px; }
+
+/* ── The four principles ────────────────────────────────────────────────── */
+.eif-principles-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin: 36px 0 44px;
+}
+.eif-principle-card {
+  background: #fff;
+  border: 1.5px solid rgba(7,142,7,0.24);
+  border-radius: 4px 16px 16px 16px;
+  padding: 22px 20px;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.05);
+}
+.eif-principle-card > i {
+  display: block;
+  font-size: 1.25rem;
+  color: var(--eif-ink);
+  margin-bottom: 12px;
+}
+.eif-principle-card h4 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--ci-text);
+}
+.eif-principle-card p {
+  margin: 0;
+  font-size: 0.87rem;
+  line-height: 1.6;
+  color: var(--ci-text-muted);
+}
+
+/* ── Cards ──────────────────────────────────────────────────────────────── */
+.eif-grid { margin-top: 0; }
+
+.product-card--eif {
+  border-top-left-radius: 4px !important;
+  border-color: rgba(7,142,7,0.28) !important;
+}
+.product-card--eif:hover {
+  border-color: rgba(7,142,7,0.55) !important;
+  box-shadow: 0 8px 32px rgba(7,142,7,0.16) !important;
+}
+.product-card--eif .product-card__icon { color: var(--eif-ink) !important; }
+
+.eif-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 4px 12px 12px 12px;
+  background: rgba(7,142,7,0.12);
+  border: 1px solid rgba(7,142,7,0.30);
+  color: var(--eif-ink);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+/* ── Governance ─────────────────────────────────────────────────────────── */
+/* Neutral on purpose: it states what the platform does not yet hold, and the
+   section's colour on that sentence would read as approval. */
+.eif-governance-note {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-top: 36px;
+  padding: 18px 20px;
+  border-radius: 12px;
+  border: 1px solid var(--ci-border);
+  background: var(--ci-bg-light, #f0f2f5);
+}
+.eif-governance-note > i {
+  color: var(--ci-orange);
+  font-size: 1rem;
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+.eif-governance-note p {
+  margin: 0;
+  font-size: 0.87rem;
+  line-height: 1.65;
+  color: var(--ci-text-muted);
+}
+.eif-governance-note strong { color: var(--ci-text); }
+
+/* ── The offering's FAQ ─────────────────────────────────────────────────── */
+.eif-faq { margin-top: 44px; }
+.eif-faq__title {
+  margin: 0 0 18px;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--ci-text);
+}
+.eif-faq__title::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 20px;
+  margin-right: 12px;
+  border-radius: 2px;
+  background: var(--eif);
+  vertical-align: -3px;
+}
+.eif-faq-item {
+  border-bottom: 1px solid var(--ci-border);
+}
+.eif-faq-q {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 4px;
+  background: none;
+  border: 0;
+  font-family: inherit;
+  font-size: 0.97rem;
+  font-weight: 700;
+  color: var(--ci-text);
+  text-align: left;
+  cursor: pointer;
+  transition: color .15s;
+}
+.eif-faq-q:hover { color: var(--eif-ink); }
+.eif-faq-q i {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  color: var(--ci-text-muted);
+  transition: transform .2s, color .15s;
+}
+.eif-faq-item.open .eif-faq-q i { transform: rotate(180deg); color: var(--eif-ink); }
+/* Collapsed by max-height rather than display so the chevron has something to
+   animate against and the row does not jump. */
+.eif-faq-a {
+  max-height: 0;
+  overflow: hidden;
+  padding: 0 4px;
+  font-size: 0.9rem;
+  line-height: 1.7;
+  color: var(--ci-text-muted);
+  transition: max-height .25s ease, padding .25s ease;
+}
+.eif-faq-item.open .eif-faq-a {
+  max-height: 480px;
+  padding: 0 4px 20px;
+}
+
+@media (max-width: 640px) {
+  .eif-section { padding: 60px 0; }
+  .eif-principles-row { grid-template-columns: 1fr; gap: 12px; margin: 28px 0 32px; }
+  .eif-faq__title { font-size: 1.15rem; }
+}
+
+/* The percentage and the icon keep readable ink, whatever the admin sets.
+ *
+ * _applyLiveProductAverages() paints each card's stat value and icon with the
+ * product's colour from the API, inline. That is right for the gold and amber
+ * products and wrong here: #078e07 is the section's accent and it is 4.3:1
+ * against a white card — under the 4.5:1 body text needs, so the headline
+ * number, the one figure a reader came to the card for, would be the least
+ * legible thing on it.
+ *
+ * !important beats an inline style, which is the only way to win against JS
+ * that writes to style.color. The tint the same function applies to
+ * .product-card__bg is left alone: a 6% wash has nothing to read. */
+.product-card--eif .stat__value--gold { color: var(--eif-ink) !important; }
+.product-card--eif .product-card__icon { color: var(--eif-ink) !important; }

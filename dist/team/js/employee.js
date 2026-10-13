@@ -7,6 +7,13 @@
 /* ─── API helpers ────────────────────────────────────────────────────── */
 const BASE = '/api/';
 let _authFailed = false;
+/* This file had no HTML escaper, and every view here builds markup with
+   template literals. Anything that came from a person — a policy title, a
+   filename somebody chose — goes through this before it reaches innerHTML. */
+const esc = v => String(v == null ? '' : v)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
 const get = async p => {
   if (_authFailed) return { data: [], total: 0 };
   try {
@@ -22,9 +29,32 @@ const get = async p => {
     return r.ok ? r.json() : { data: [], total: 0 };
   } catch { return { data: [], total: 0 }; }
 };
-const post   = async (p,b) => { const r = await fetch(BASE+p,{method:'POST',  headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}); return r.json(); };
-const patch  = async (p,b) => { const r = await fetch(BASE+p,{method:'PATCH', headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}); return r.json(); };
-const put    = async (p,b) => { const r = await fetch(BASE+p,{method:'PUT',   headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}); return r.json(); };
+/* A failed write must not read like a successful one.
+
+   These returned r.json() without looking at r.ok, so a 500 came back as
+   { error: '…' } — a truthy object the caller stored as though it were the
+   saved record. That is how a course that could not be completed produced no
+   error at all: the progress row was an error object, the later lookup for it
+   found nothing, and completeModule returned silently. Nobody saw a failure
+   because there was nothing to see. */
+async function _send(method, p, b) {
+  const r = await fetch(BASE + p, {
+    method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b),
+  });
+  let data = null;
+  try { data = await r.json(); } catch (_) { /* a non-JSON body on an error is still an error */ }
+  if (!r.ok) {
+    const why = (data && (data.error || data.message)) || `HTTP ${r.status}`;
+    const err = new Error(why);
+    err.status = r.status;
+    console.error(`[team] ${method} ${p} failed:`, why);
+    throw err;
+  }
+  return data;
+}
+const post   = (p, b) => _send('POST',  p, b);
+const patch  = (p, b) => _send('PATCH', p, b);
+const put    = (p, b) => _send('PUT',   p, b);
 const del    = async p     => { await fetch(BASE+p,{method:'DELETE'}); };
 
 async function fetchAll(table) {
@@ -243,6 +273,7 @@ function navigate(view, btn) {
   const renders = {
     dashboard:    renderDashboard,
     courses:      renderCourses,
+    policies:     renderPolicies,
     kpis:         renderMyKpis,
     checkin:      renderCheckin,
     leave:        renderMyLeave,
@@ -364,9 +395,40 @@ async function autoStreakCheck() {
 }
 
 /* ═══ COURSE ENGINE ═════════════════════════════════════════════════ */
+/* course_progress.quiz_scores is JSONB, so node-pg hands it back as an OBJECT,
+   not a string. Every reader here did JSON.parse(prog.quiz_scores || '{}'),
+   which throws "[object Object] is not valid JSON" on everything the server has
+   round-tripped — and each one caught the throw and returned {}.
+
+   So the scores silently reset to empty on every read. Module 1 saved, module 2
+   read {} and saved only itself, module 3 the same: modules_completed never got
+   past 1, `allDone` was never true for a 3-module course, and the course could
+   not be finished. That is the bug behind "Complete Course does nothing".
+
+   Handles all three shapes the column actually holds: the object the driver
+   returns, the '{}' string the portal seeds, and the '[]' array director.js
+   seeds — an array carries no per-module scores, so it normalises to {}. */
+function _courseScores(prog) {
+  const raw = prog && prog.quiz_scores;
+  if (!raw) return {};
+  let v = raw;
+  if (typeof v === 'string') {
+    try { v = JSON.parse(v); } catch (_) { return {}; }
+  }
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
+  return v;
+}
+
 async function openCourse(courseId) {
   const course = _courses.find(c=>c.id===courseId);
   if (!course) return;
+
+  /* A finished course is not re-openable. Its card already routes to the
+     certificate, but learning paths, the onboarding checklist and direct calls
+     all land here, and re-entering would show module 1 of a completed course
+     with no way to record anything new. */
+  const done = _progress.find(p=>p.course_id===courseId && p.status==='completed');
+  if (done) { openCertificate(done.certificate_id, course); return; }
 
   // Load modules if not cached
   if (!_modules[courseId]) {
@@ -385,20 +447,32 @@ async function openCourse(courseId) {
   // Resume from progress
   let prog = _progress.find(p=>p.course_id===courseId);
   if (!prog) {
-    prog = await post('tables/course_progress', {
+    try {
+      prog = await post('tables/course_progress', {
       employee_id:_emp.id, course_id:courseId,
-      status:'in_progress', current_module:_readerModules[0]?.id||'',
+      /* An index, not an id. current_module is INT and director.js writes 1;
+         this wrote the module's UUID, so every self-enrolment failed with
+         "invalid input syntax for type integer" — invisible, because post()
+         did not look at the status. */
+      status:'in_progress', current_module:1,
       modules_completed:0, quiz_scores:'{}', overall_quiz_score:0,
-      xp_earned:0, kpi_applied:false, started_at:new Date().toISOString()
-    });
-    _progress.push(prog);
+        xp_earned:0, kpi_applied:false, started_at:new Date().toISOString()
+      });
+      _progress.push(prog);
+    } catch (err) {
+      /* Enrolment failing used to push an error object into _progress, so the
+         later lookup for this course found nothing and every module silently
+         did nothing. Better to refuse to open the course than to open one that
+         cannot record anything. */
+      showToast(`Could not start this course: ${err.message}`, 'error');
+      return;
+    }
   } else if (prog.status !== 'completed') {
     await patch(`tables/course_progress/${prog.id}`, {status:'in_progress'});
     prog.status = 'in_progress';
   }
 
-  const doneIds = (() => { try { return JSON.parse(prog.quiz_scores||'{}'); } catch { return {}; } });
-  const completedMods = Object.keys(doneIds());
+  const completedMods = Object.keys(_courseScores(prog));
   _readerModIdx = 0;
   for (let i=0; i<_readerModules.length; i++) {
     if (!completedMods.includes(_readerModules[i].id)) { _readerModIdx = i; break; }
@@ -421,9 +495,20 @@ function closeCourseReader() {
 
 function renderReader() {
   if (!_readerCourse || !_readerModules.length) return;
+
+  /* Clamped. _readerModIdx++ in completeModule was unbounded, so once the index
+     ran past the last module this function set the topbar to "Module 7 of 3",
+     rendered the nav, and then threw reading .title of undefined. The header
+     advanced and the content did not — leaving the previous quiz result frozen
+     on screen with a Complete Course button still bound to a module that was
+     already scored. Clicking it repeated the same no-op, which is exactly what
+     "the button does nothing" looked like. */
+  if (_readerModIdx < 0) _readerModIdx = 0;
+  if (_readerModIdx > _readerModules.length - 1) _readerModIdx = _readerModules.length - 1;
+
   const mod = _readerModules[_readerModIdx];
   const prog = _progress.find(p=>p.course_id===_readerCourse.id);
-  const scores = (() => { try { return JSON.parse(prog?.quiz_scores||'{}'); } catch { return {}; } })();
+  const scores = _courseScores(prog);
   const totalMods = _readerModules.length;
 
   // Topbar
@@ -464,18 +549,45 @@ function renderLessonContent(mod, scores) {
     </div>`;
 }
 
+/* course_modules.quiz is JSONB, so node-pg hands it back as an ARRAY and the
+   tables route sends that array through as JSON. Both readers here did
+   JSON.parse(mod.quiz || '[]'), which throws
+   "Unexpected token 'o', \"[object Obj\"... is not valid JSON" on every module
+   the server has round-tripped — and both caught the throw and returned [].
+
+   An empty quiz means "this module has none, generate one", so every SEEDED
+   course fell straight through to AI generation and, when that could not run,
+   showed "Quiz Unavailable — could not generate quiz questions" on a module
+   that had its questions sitting in the database all along. It went unseen
+   because the AI path patches the cache with a STRING, so a quiz generated in
+   the same session parsed correctly and a seeded one never did.
+
+   Same fault, same shape, same file as _courseScores above. Accepts the array
+   the driver returns and the string the AI path caches, and drops anything
+   that is not a usable question rather than rendering a blank option list. */
+function _moduleQuiz(mod) {
+  const raw = mod && mod.quiz;
+  if (!raw) return [];
+  let v = raw;
+  if (typeof v === 'string') {
+    try { v = JSON.parse(v); } catch (_) { return []; }
+  }
+  if (!Array.isArray(v)) return [];
+  return v.filter(q => q && typeof q.question === 'string' && Array.isArray(q.options) && q.options.length);
+}
+
 function renderQuiz(mod) {
-  let questions = [];
-  try { questions = JSON.parse(mod.quiz||'[]'); } catch { questions=[]; }
+  const questions = _moduleQuiz(mod);
   if (!questions.length) {
-    return `<div class="quiz-wrap">
-      <div class="quiz-title">Quick Knowledge Check</div>
-      <p class="text-muted">No quiz questions for this module.</p>
-      <div class="lesson-actions mt-2">
-        <button class="btn btn--success btn--lg" onclick="completeModule(${JSON.stringify(mod).replace(/"/g,"'")},100,${mod.xp_reward||50})">
-          <i class="fa-solid fa-check"></i> Mark Complete
-        </button>
-      </div></div>`;
+    // Auto-generate quiz if missing — replace content area with spinner then reload
+    setTimeout(() => _autoGenerateQuiz(mod), 50);
+    return `<div class="quiz-wrap" id="quiz-gen-wrap">
+      <div class="quiz-title">Generating Quiz…</div>
+      <p class="text-muted" style="display:flex;align-items:center;gap:10px">
+        <i class="fa-solid fa-spinner fa-spin" style="color:#eda5ff"></i>
+        Generating quiz questions for this module using AI — this takes a few seconds.
+      </p>
+    </div>`;
   }
 
   return `<div class="quiz-wrap">
@@ -507,6 +619,28 @@ function renderQuiz(mod) {
   </div>`;
 }
 
+async function _autoGenerateQuiz(mod) {
+  const token = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
+  try {
+    const res = await fetch(`/api/ai/generate-quiz/${mod.id}`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      credentials: 'include',
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const { questions } = await res.json();
+    // Patch the cached module so re-renders work without refetching
+    const cached = _readerModules.find(m => m.id === mod.id);
+    if (cached) cached.quiz = questions;      // an array, like the database gives
+    // Re-render the quiz now that we have questions
+    renderReader();
+  } catch (e) {
+    console.error('[employee] auto-generate quiz failed:', e);
+    const wrap = document.getElementById('quiz-gen-wrap');
+    if (wrap) wrap.innerHTML = `<div class="quiz-title">Quiz Unavailable</div><p class="text-muted">Could not generate quiz questions. <a href="#" onclick="startQuiz();return false">Try again</a> or contact your administrator.</p>`;
+  }
+}
+
 function startQuiz() { _readerMode='quiz'; _quizAnswers={}; _quizSubmitted=false; renderReader(); }
 
 function selectAnswer(qi, oi) {
@@ -517,7 +651,7 @@ function selectAnswer(qi, oi) {
     el.querySelector('.opt-radio').style.background = idx===oi?'var(--accent)':'';
   });
   const mod = _readerModules[_readerModIdx];
-  let qs=[]; try{qs=JSON.parse(mod.quiz||'[]');}catch{}
+  const qs = _moduleQuiz(mod);
   const btn = document.getElementById('submit-quiz-btn');
   if (btn) btn.disabled = Object.keys(_quizAnswers).length < qs.length;
 }
@@ -552,7 +686,7 @@ function submitQuiz(modId, questionsJson, xpReward) {
     <div class="lesson-actions mt-2" style="justify-content:center">
       ${pass
         ? `<button class="btn btn--success btn--lg" onclick="completeModuleNow('${modId}',${score},${xpReward})">
-             <i class="fa-solid fa-arrow-right"></i> Continue
+             <i class="fa-solid fa-arrow-right"></i> ${_readerModIdx >= _readerModules.length - 1 ? 'Complete Course' : 'Continue'}
            </button>`
         : `<button class="btn btn--primary" onclick="startQuiz()">
              <i class="fa-solid fa-rotate"></i> Retry Quiz
@@ -575,67 +709,107 @@ async function completeModule(mod, score, xpReward) {
   if (!prog) return;
 
   // Update quiz scores
-  let scores = {}; try { scores=JSON.parse(prog.quiz_scores||'{}'); } catch{}
+  const scores = _courseScores(prog);
   scores[mod.id] = score;
-  const modsDone = Object.keys(scores).length;
+
+  /* Counted against the modules this course actually has, and only modules it
+     has: a stale key left by a module that was later removed or regenerated
+     would otherwise inflate the count and complete the course early. */
+  const modIds   = _readerModules.map(m=>m.id);
+  const modsDone = modIds.filter(id=>scores[id] !== undefined).length;
   const allDone  = modsDone >= _readerModules.length;
+  const marks    = modIds.map(id=>Number(scores[id])).filter(n=>!isNaN(n));
 
   const updates = {
     quiz_scores: JSON.stringify(scores),
     modules_completed: modsDone,
+    /* Declared INT and seeded to 1 at enrolment, then never advanced — so the
+       director's progress view read module 1 for everyone, forever. */
+    current_module: Math.min(modsDone + 1, _readerModules.length),
+    overall_quiz_score: marks.length ? Math.round(marks.reduce((a,b)=>a+b,0)/marks.length) : 0,
     xp_earned: (Number(prog.xp_earned)||0) + xpReward
   };
 
   if (allDone) {
     updates.status = 'completed';
     updates.completed_at = new Date().toISOString();
-    updates.certificate_id = `CERT-${_emp.id}-${_readerCourse.id}-${Date.now()}`;
+    updates.certificate_id = prog.certificate_id || `CERT-${_emp.id}-${_readerCourse.id}-${Date.now()}`;
     updates.kpi_applied = true;
+    updates.current_module = _readerModules.length;
   }
-  const updated = await patch(`tables/course_progress/${prog.id}`, updates);
+  let updated;
+  try {
+    updated = await patch(`tables/course_progress/${prog.id}`, updates);
+  } catch (err) {
+    /* This is the submit at the end of a module. Failing it silently is what
+       made a finished course look like a button that does nothing, so say so
+       and stop — the celebration and the XP below would otherwise be awarded
+       for progress that was never stored. */
+    showToast(`Could not save your progress: ${err.message}. Nothing was recorded — please try again.`, 'error');
+    return;
+  }
   Object.assign(prog, updated);
 
-  await awardXP(xpReward, 'Module completion');
-  if (_readerCourse.kpi_dimension) {
-    await autoBoostKpi(_readerCourse.kpi_dimension, Number(_readerCourse.kpi_boost_points)||5);
-  }
+  /* The progress row is saved by this point, so the course IS complete whatever
+     happens below. XP, the KPI boost, the activity feed and the badges are all
+     secondary, and awaiting them unguarded meant any one of them could throw
+     and skip the celebration — leaving a course that finished in the database
+     and looked untouched on screen. Reported, not swallowed, but never fatal. */
+  const _side = async (what, fn) => {
+    try { await fn(); }
+    catch (err) { console.error(`[courses] ${what} failed after completion:`, err.message); }
+  };
 
-  // Log to activity feed
-  await post('tables/activity_feed', {
+  await _side('XP award', () => awardXP(xpReward, 'Module completion'));
+  if (_readerCourse.kpi_dimension) {
+    await _side('KPI boost', () =>
+      autoBoostKpi(_readerCourse.kpi_dimension, Number(_readerCourse.kpi_boost_points)||5));
+  }
+  await _side('activity feed entry', () => post('tables/activity_feed', {
     employee_id:_emp.id, type:'course_complete',
-    title:`Module completed: ${mod.title}`,
+    title: allDone ? `Course completed: ${_readerCourse.title}` : `Module completed: ${mod.title}`,
     body:`+${xpReward} XP earned in ${_readerCourse.title}`,
     icon:'fa-graduation-cap', color:'#eda5ff',
     xp_shown:xpReward, is_public:false,
     created_at:new Date().toISOString()
-  });
+  }));
 
   if (allDone) {
-    await autoAwardCourseBadge(_readerCourse);
-    await autoCheckBadgeUnlocks(_achievements);
+    await _side('course badge', () => autoAwardCourseBadge(_readerCourse));
+    await _side('badge unlocks', () => autoCheckBadgeUnlocks(_achievements));
     showCourseCelebration(_readerCourse, prog.certificate_id);
     return;
   }
 
-  // Move to next module
-  _readerModIdx++;
+  /* Move to the first module still unscored, rather than blindly stepping one
+     forward. A bare ++ walked off the end of the array whenever a module was
+     completed out of order or re-submitted, and nothing clamped it. */
+  const nextIdx = _readerModules.findIndex(m => scores[m.id] === undefined);
+  _readerModIdx = nextIdx === -1 ? _readerModules.length - 1 : nextIdx;
   _readerMode = 'lesson';
   _quizAnswers = {};
   _quizSubmitted = false;
   renderReader();
-  showToast(`Module ${modsDone} complete! +${xpReward} XP`, 'success');
+  showToast(`Module ${modsDone} of ${_readerModules.length} complete! +${xpReward} XP`, 'success');
 }
 
 function showCourseCelebration(course, certId) {
+  // Close the reader first so renderCourses() updates the card to "Done"
+  closeCourseReader();
+  /* The card, the required-training counter and the dashboard tiles all read
+     _progress, and closeCourseReader only re-renders when the courses view is
+     the one on screen. Finishing a course from the dashboard or a learning path
+     left every one of those showing the pre-completion numbers. */
+  renderCourses();
+  if (typeof renderDashboard === 'function' && _currentView === 'dashboard') renderDashboard();
   launchConfetti();
   showToast(`🎉 Course complete! "${course.title}" finished. Certificate issued!`, 'success');
-  // Show certificate
   openCertificate(certId, course);
 }
 
 function jumpToModule(idx) {
   const prog = _progress.find(p=>p.course_id===_readerCourse?.id);
-  const scores = (() => { try { return JSON.parse(prog?.quiz_scores||'{}'); } catch { return {}; } })();
+  const scores = _courseScores(prog);
   const mod = _readerModules[idx];
   if (!mod) return;
   // Allow jump only if previous done or same
@@ -716,10 +890,69 @@ async function startAiGeneration() {
   await runAiGeneration({ title, focus, category: cat, kpi_dimension: dim, difficulty: 'intermediate' });
 }
 
+/* The five labels in the overlay, and which of them each server-side stage
+   lights up. The steps used to advance on a timer while a single request sat
+   open — so they told you how long you had been waiting, not where the work
+   had got to, and they finished long before it did. */
+const AI_STAGE_STEP = {
+  'Queued': 0,
+  'Writing the course': 1,
+  'Generating lesson content': 2,
+  'Saving modules and quizzes': 3,
+  'Ready': 4,
+};
+
+/* Generation runs as a job on the server and this polls it.
+
+   It used to be one POST that the browser held open for the minute or two
+   Claude takes. Anything in between that gives up on an idle response would
+   drop it, and the work went with it — no course, and no record that it had
+   ever been attempted. Now the request returns a job id straight away and the
+   work outlives the connection: close the tab and the course still lands. */
+const AI_POLL_MS      = 2500;
+const AI_POLL_TIMEOUT = 10 * 60 * 1000;   // a course takes 1–2 minutes; this is the giving-up point
+
+async function pollCourseJob(jobId, onStage) {
+  const started = Date.now();
+  let lastStage = null;
+  for (;;) {
+    if (Date.now() - started > AI_POLL_TIMEOUT) {
+      throw new Error('This is taking much longer than usual. It may still finish — check your ' +
+                      'course list in a few minutes before generating another.');
+    }
+    /* fetch directly rather than through get(), which returns
+       { data: [], total: 0 } for every failure. Through that helper a dropped
+       poll and a job that does not exist look identical, and one of them is a
+       reason to stop waiting while the other is not. */
+    let r, body = null;
+    try {
+      r = await fetch(BASE + `ai/course-jobs/${encodeURIComponent(jobId)}`);
+      try { body = await r.json(); } catch (_) { /* handled below */ }
+    } catch (_) {
+      /* The network dropped. The work is on the server; keep asking. */
+      await sleep(AI_POLL_MS);
+      continue;
+    }
+    if (r.status === 404) {
+      throw new Error('The course generation job could not be found. Please try again.');
+    }
+    if (!r.ok || !body || !body.job) {
+      /* A 500 or a garbled body is the server having a bad moment, not the job
+         having failed — the job says when it has failed. */
+      await sleep(AI_POLL_MS);
+      continue;
+    }
+    const job = body.job;
+    if (job.stage && job.stage !== lastStage) { lastStage = job.stage; onStage(job.stage); }
+    if (job.status === 'done')   return body;
+    if (job.status === 'failed') throw new Error(job.error || 'Course generation failed.');
+    await sleep(AI_POLL_MS);
+  }
+}
+
 async function runAiGeneration(params, _unused) {
   const ov = document.getElementById('ai-gen-overlay');
   ov.classList.add('open');
-  const steps = ['Analysing role & objectives','Structuring 3 modules','Generating lesson content','Building quiz questions','Enrolling you in the course'];
 
   function setStep(idx) {
     document.querySelectorAll('.ai-gen-step').forEach((el,i)=>{
@@ -728,22 +961,27 @@ async function runAiGeneration(params, _unused) {
   }
 
   try {
-    setStep(0); await sleep(400);
-    setStep(1);
+    setStep(0);
 
-    const result = await post('ai/generate-course', {
+    const queued = await post('ai/generate-course', {
       title:         params.title,
       focus:         params.focus || params.title,
       category:      params.category || 'professional_development',
       difficulty:    params.difficulty || 'intermediate',
       kpi_dimension: params.kpi_dimension || 'task_completion_rate',
     });
+    if (!queued || !queued.job) throw new Error('Could not start course generation.');
 
-    setStep(2); await sleep(400);
-    setStep(3); await sleep(400);
+    const result = await pollCourseJob(queued.job.id, stage => {
+      const idx = AI_STAGE_STEP[stage];
+      if (idx !== undefined) setStep(idx);
+    });
+
+    setStep(4);
 
     const course  = result.course;
     const modules = result.modules;
+    if (!course) throw new Error('The course finished generating but could not be loaded. Refresh and check your list.');
 
     _courses.push(course);
     _modules[course.id] = modules;
@@ -754,7 +992,7 @@ async function runAiGeneration(params, _unused) {
     if (!_progress.find(p=>p.course_id===course.id)) {
       const prog = await post('tables/course_progress', {
         employee_id:_emp.id, course_id:course.id,
-        status:'in_progress', current_module:modules[0]?.id||'',
+        status:'in_progress', current_module:1,
         modules_completed:0, quiz_scores:'{}', overall_quiz_score:0,
         xp_earned:0, kpi_applied:false, started_at:new Date().toISOString()
       });
@@ -1151,6 +1389,161 @@ function renderDashboard() {
 }
 
 /* ═══ VIEW: COURSES ═════════════════════════════════════════════════ */
+/* ═══ VIEW: POLICIES ════════════════════════════════════════════════
+   The company's policies: written by the directors, read by everyone.
+
+   The list carries metadata only — the file bytes are megabytes a row and
+   nobody opening this screen needs all of them. Each document is fetched
+   from its own endpoint when it is opened, which is also why it opens at all:
+   Chrome has refused to navigate to a data: URL since 2017 and the platform's
+   CSP refuses to frame one, so serving real bytes is what makes the difference
+   between a policy opening and a blank tab.
+   ═══════════════════════════════════════════════════════════════════ */
+/* Read-only here by design. Publishing a policy and reading who has not
+   acknowledged one are director acts and live in the director portal; this
+   screen is the shelf, the document, and your own acknowledgement. */
+let _policies = [];
+/* Which policies this person has opened in this sitting. Acknowledging is
+   enabled only after the document has actually been fetched — "I have read
+   this" should not be pressable from a list of titles. */
+const _policyOpened = new Set();
+let _policyOutstanding = 0;
+
+const POLICY_LABELS = {
+  hr: 'People & HR', compliance: 'Compliance', finance: 'Finance',
+  operations: 'Operations', it: 'IT & Security', health_safety: 'Health & Safety',
+  general: 'General',
+};
+const POLICY_ICONS = {
+  hr: 'fa-users', compliance: 'fa-scale-balanced', finance: 'fa-coins',
+  operations: 'fa-gears', it: 'fa-shield-halved', health_safety: 'fa-kit-medical',
+  general: 'fa-file-lines',
+};
+
+async function renderPolicies() {
+  const el = document.getElementById('view-policies');
+  el.innerHTML = `<div class="view-header"><div><h1>Policies</h1>
+      <div class="view-sub">The company's policies, current versions</div></div></div>
+    <div class="empty-state"><i class="fa-solid fa-spinner fa-spin"></i><p>Loading…</p></div>`;
+  try {
+    const r = await get('staff-policies');
+    _policies = r.policies || [];
+    _policyOutstanding = r.outstanding || 0;
+  } catch (e) {
+    el.innerHTML = `<div class="view-header"><div><h1>Policies</h1></div></div>
+      <div class="empty-state"><i class="fa-solid fa-circle-exclamation"></i>
+      <p>${esc(e.message || 'Could not load the policies.')}</p></div>`;
+    return;
+  }
+
+  const byCat = {};
+  for (const p of _policies) (byCat[p.category] = byCat[p.category] || []).push(p);
+
+  const size = n => !n ? '' : n >= 1048576 ? `${(n/1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n/1024))} KB`;
+  const when = d => d ? new Date(d).toLocaleDateString('en-ZA', { year:'numeric', month:'short', day:'numeric' }) : '';
+
+  const ackBit = p => {
+    if (!p.requires_ack) return '';
+    if (p.acknowledged_at) {
+      return `<span class="policy-ack policy-ack--done"><i class="fa-solid fa-circle-check"></i> Read ${esc(when(p.acknowledged_at))}</span>`;
+    }
+    const opened = _policyOpened.has(p.id);
+    return `<button class="policy-ack policy-ack--todo" ${opened ? '' : 'disabled'}
+              title="${opened ? 'Record that you have read this' : 'Open the policy first'}"
+              onclick="event.stopPropagation();acknowledgePolicy('${esc(p.id)}')">
+              <i class="fa-solid ${opened ? 'fa-check' : 'fa-lock'}"></i>
+              ${opened ? 'I have read this' : 'Open it first'}
+            </button>`;
+  };
+
+  const card = p => `
+    <div class="policy-card${p.requires_ack && !p.acknowledged_at ? ' policy-card--todo' : ''}"
+         onclick="openPolicy('${esc(p.id)}')" role="button" tabindex="0"
+         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openPolicy('${esc(p.id)}')}">
+      <div class="policy-card__icon"><i class="fa-solid ${POLICY_ICONS[p.category] || 'fa-file-lines'}"></i></div>
+      <div class="policy-card__body">
+        <div class="policy-card__title">${esc(p.title)}${p.version ? ` <span class="policy-ver">v${esc(p.version)}</span>` : ''}</div>
+        ${p.summary ? `<div class="policy-card__sub">${esc(p.summary)}</div>` : ''}
+        <div class="policy-card__meta">
+          ${p.effective_date ? `Effective ${esc(when(p.effective_date))} · ` : ''}
+          ${esc(p.filename)}${p.file_size ? ` · ${esc(size(p.file_size))}` : ''}
+          ${p.uploaded_by_name ? ` · published by ${esc(p.uploaded_by_name)}` : ''}
+          ${p.supersedes_title ? ` · replaces “${esc(p.supersedes_title)}”` : ''}
+        </div>
+      </div>
+      <div class="policy-card__actions">
+        ${ackBit(p)}
+        <span class="policy-card__open"><i class="fa-solid fa-arrow-up-right-from-square"></i></span>
+      </div>
+    </div>`;
+
+  el.innerHTML = `
+    <div class="view-header">
+      <div><h1>Policies</h1><div class="view-sub">The company's policies, current versions</div></div>
+    </div>
+    ${_policyOutstanding ? `<div class="policy-banner">
+        <i class="fa-solid fa-circle-exclamation"></i>
+        <div><strong>${_policyOutstanding} ${_policyOutstanding === 1 ? 'policy needs' : 'policies need'} your acknowledgement.</strong>
+        <div style="color:var(--muted);font-size:0.8rem;margin-top:2px">Open each one, then confirm you have read it.</div></div>
+      </div>` : ''}
+    ${!_policies.length ? `<div class="empty-state"><i class="fa-solid fa-file-shield"></i>
+        <p>No policies have been published yet.</p></div>` : ''}
+    ${Object.keys(byCat).sort().map(cat => `
+      <div class="section-head"><i class="fa-solid ${POLICY_ICONS[cat] || 'fa-file-lines'}"></i>
+        ${esc(POLICY_LABELS[cat] || cat)} <span class="section-count">${byCat[cat].length}</span></div>
+      <div class="policy-list">${byCat[cat].map(card).join('')}</div>`).join('')}`;
+}
+
+/* Opened through the API, with the session's own credentials, so a policy is
+   never a public URL somebody can forward out of the building. */
+async function openPolicy(id) {
+  const p = _policies.find(x => x.id === id);
+  try {
+    /* This portal signs in with an svc_token COOKIE, not a bearer token, and
+       requireAuth prefers the header when one is present — so sending
+       "Bearer null" because localStorage happens to be empty would 401 every
+       open. The header goes on only when there is actually a token. */
+    const token = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
+    const res = await fetch(`${BASE}staff-policies/${encodeURIComponent(id)}/file`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: 'same-origin',
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Could not open that policy.');
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const w = window.open(url, '_blank', 'noopener');
+    if (!w) { /* popup blocked — fall back to a download the person asked for */
+      const a = document.createElement('a');
+      a.href = url; a.download = (p && p.filename) || 'policy'; a.click();
+    }
+    /* Released on the next tick rather than immediately: revoking before the
+       new tab has read it gives a blank page. */
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    /* Fetched, so the button stops being a lock. Re-rendered rather than
+       patched so the card and the banner cannot disagree. */
+    if (!_policyOpened.has(id)) { _policyOpened.add(id); renderPolicies(); }
+  } catch (e) {
+    showToast(e.message || 'Could not open that policy.', 'error');
+  }
+}
+
+async function acknowledgePolicy(id) {
+  try {
+    const r = await post(`staff-policies/${encodeURIComponent(id)}/acknowledge`, {});
+    const p = _policies.find(x => x.id === id);
+    if (p) { p.acknowledged_at = r.acknowledged_at; p.ack_count = (p.ack_count || 0) + (r.already ? 0 : 1); }
+    /* Only when this press is what recorded it. An "already" answer means the
+       shelf never counted it as outstanding, so taking one off the banner
+       would leave it a policy short of the truth. */
+    if (!r.already) _policyOutstanding = Math.max(0, _policyOutstanding - 1);
+    showToast(r.already ? 'Already recorded' : 'Recorded — thank you', 'success');
+    renderPolicies();
+  } catch (e) {
+    showToast(e.message || 'Could not record that.', 'error');
+  }
+}
+
+
 function renderCourses() {
   const completedIds  = _progress.filter(p=>p.status==='completed').map(p=>p.course_id);
   const enrolledIds   = _progress.map(p=>p.course_id);
@@ -1221,8 +1614,15 @@ function renderCourses() {
 
 function courseCardHTML(c, mode) {
   const prog = _progress.find(p=>p.course_id===c.id);
-  const pct  = prog ? Math.round((Number(prog.modules_completed)||0)/(Number(c.modules_count)||1)*100) : 0;
   const isDone = prog?.status==='completed';
+  /* Counted from quiz_scores, which is the record of what was actually passed;
+     modules_completed is a denormalised copy and was stuck at 1 for everyone
+     while the JSONB read was throwing. A completed course reads 100% outright
+     rather than being recomputed — the status is the authority, and a course
+     whose module count later changes must not un-fill its own bar. */
+  const total = Number(c.modules_count) || (_modules[c.id]||[]).length || 3;
+  const doneN = Object.keys(_courseScores(prog)).length || Number(prog?.modules_completed) || 0;
+  const pct  = isDone ? 100 : (prog ? Math.min(100, Math.round(doneN/total*100)) : 0);
   const isRequired = c.is_required;
   const diffC = {beginner:'#00d4aa',intermediate:'#fec24f',advanced:'#ff6b6b'}[c.difficulty]||'#6b7280';
   const borderStyle = mode==='required' && !isDone ? 'border:1.5px solid rgba(255,107,107,0.35)' : '';

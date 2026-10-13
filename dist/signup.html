@@ -6,7 +6,35 @@
   <link rel="apple-touch-icon" sizes="192x192" href="assets/logo-192.png" />
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <!-- No apple-itunes-app tag, deliberately. Safari's Smart App Banner is
+       prettier and free, but once a client taps its x Safari remembers that
+       for the site and there is no way to ask again — so it cannot satisfy
+       "keep asking until they have the app", which is the rule. js/app-banner.js
+       draws our own on iOS Safari too, and it snoozes rather than silences.
+       Whether the app is already installed is answered by the server from the
+       push token, which only the app can write; that is a better answer than
+       Apple's and does not depend on this tag. -->
   <title>SV Capital — Create Account</title>
+  <meta name="robots" content="noindex, nofollow">
+  <!-- Open Graph, so a referral link pasted into WhatsApp arrives as the
+       invite card rather than a bare URL. WhatsApp, Facebook and LinkedIn
+       crawlers do not run JavaScript, so this has to be in the served HTML;
+       og:image has to be absolute and publicly fetchable, because the crawler
+       resolves it with no page context. One image for everybody — the
+       referral code travels in the message text, not in the picture. -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="SV Capital" />
+  <meta property="og:title" content="I'm inviting you to invest better with SV Capital" />
+  <meta property="og:description" content="Sign up, get KYC approved, add funds to your wallet and invest. Inflation-beating returns from South African alternative assets." />
+  <meta property="og:url" content="https://platform.svcapital.co.za/register" />
+  <meta property="og:image" content="https://platform.svcapital.co.za/assets/referral-invite.png" />
+  <meta property="og:image:width" content="1080" />
+  <meta property="og:image:height" content="1080" />
+  <meta property="og:image:alt" content="Three steps to join SV Capital: register, get KYC approved, add funds and invest." />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="I'm inviting you to invest better with SV Capital" />
+  <meta name="twitter:description" content="Sign up, get KYC approved, add funds to your wallet and invest." />
+  <meta name="twitter:image" content="https://platform.svcapital.co.za/assets/referral-invite.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
@@ -844,7 +872,17 @@
     .intl-waitlist-success__icon i { font-size: 1.6rem; color: #22c55e; }
     .intl-waitlist-success__title { font-size: 1.2rem; font-weight: 900; color: var(--text-h); margin-bottom: 8px; }
     .intl-waitlist-success__sub { font-size: 0.84rem; color: var(--text-muted); line-height: 1.6; }
-  </style>
+      /* Step 4's second option — see the comment on .fica-alt in the markup. */
+    .fica-alt { margin-top: 14px; display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+    .fica-alt__or {
+      text-align: center; font-size: 0.72rem; color: var(--text-dim);
+      text-transform: uppercase; letter-spacing: 0.08em;
+    }
+    .fica-alt__btn { width: 100%; max-width: none; }
+    .fica-alt__note {
+      font-size: 0.72rem; color: var(--text-dim); text-align: center; line-height: 1.5;
+    }
+</style>
   <!-- Google Analytics 4 -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-5LEPWC7EFP"></script>
   <script>
@@ -905,7 +943,7 @@
         <div class="benefit-icon" style="background:rgba(237,165,255,0.12)">
           <i class="fa-solid fa-users" style="color:#eda5ff"></i>
         </div>
-        <div class="benefit-text"><strong>Refer &amp; earn</strong> R250 bonus on every referral</div>
+        <div class="benefit-text"><strong>Refer &amp; earn</strong> 100 XP for every friend who joins</div>
       </div>
     </div>
 
@@ -965,17 +1003,17 @@
     <div class="form-steps" id="formSteps">
       <div class="form-step active" id="stepIndicator1">
         <div class="step-num">1</div>
-        <span class="step-label">Personal</span>
+        <span class="step-label">Contact</span>
       </div>
       <div class="step-line" id="stepLine1"></div>
       <div class="form-step" id="stepIndicator2">
         <div class="step-num">2</div>
-        <span class="step-label">Security</span>
+        <span class="step-label">Identity</span>
       </div>
       <div class="step-line" id="stepLine2"></div>
       <div class="form-step" id="stepIndicator3">
         <div class="step-num">3</div>
-        <span class="step-label">Profile</span>
+        <span class="step-label">Address</span>
       </div>
       <div class="step-line" id="stepLine3"></div>
       <div class="form-step" id="stepIndicator4">
@@ -1098,7 +1136,7 @@
 
     </div><!-- /intlWaitlistPanel -->
 
-    <!-- ══ STEP 1: Personal Info ══ -->
+    <!-- ══ STEP 1: Contact ══ -->
     <div id="step1">
 
       <!-- Citizenship selector -->
@@ -1195,6 +1233,39 @@
         <div class="field-hint" id="phoneHint">Enter your number without the leading 0 — e.g. 71 234 5678</div>
       </div>
 
+      <div class="form-group" id="referralGroup" style="display:none">
+        <label class="form-label" for="referralCode">Referral Code
+          <span style="color:var(--text-dim);font-weight:400;text-transform:none;letter-spacing:0">(optional)</span>
+        </label>
+        <div class="input-icon-wrap">
+          <i class="icon fa-solid fa-gift"></i>
+          <input type="text" class="form-input" id="referralCode" placeholder="e.g. THA002" autocomplete="off" />
+        </div>
+      </div>
+
+      <div class="btn-row" style="margin-top:8px">
+        <button type="button" class="btn-primary" id="btnStep1Next">
+          Continue <i class="fa-solid fa-arrow-right"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- ══ STEP 2: Identity & Security ══ -->
+    <div id="step2">
+
+      <!-- Identity — moved here from step 1.
+           Step 1 was losing 86% of everyone who opened the page: 280 sessions
+           reached it and 39 reached step 2, while every step after it lost a
+           combined 10%. Only 17 validation errors were recorded across the 241
+           lost, so they were not failing the form — most never attempted it.
+           A 13-digit ID number is a large thing to ask for before anything has
+           been offered in return, and 62% of these people are on a phone.
+           Name, email and phone is a lower bar to clear, and effort already
+           spent is what carries someone through the rest.
+
+           The citizenship toggle stays on step 1: it also switches the address
+           block and the phone hint, which are still there. It toggles these two
+           groups by id, so it keeps working across the step boundary. -->
       <!-- SA ID (for SA citizens / permanent residents) -->
       <div id="saIdGroup">
         <div class="form-group">
@@ -1284,57 +1355,12 @@
         </div>
       </div>
 
-      <div class="form-grid">
-        <div class="form-group">
-          <label class="form-label" for="city">City <span>*</span></label>
-          <input type="text" class="form-input" id="city" placeholder="Johannesburg" autocomplete="address-level2" />
-        </div>
-        <div class="form-group" id="saProvinceGroup">
-          <label class="form-label" for="province">Province <span>*</span></label>
-          <select class="form-select" id="province">
-            <option value="">Select province</option>
-            <option>Gauteng</option>
-            <option>Western Cape</option>
-            <option>KwaZulu-Natal</option>
-            <option>Eastern Cape</option>
-            <option>Limpopo</option>
-            <option>Mpumalanga</option>
-            <option>North West</option>
-            <option>Free State</option>
-            <option>Northern Cape</option>
-          </select>
-        </div>
-        <div class="form-group" id="intlRegionGroup" style="display:none">
-          <label class="form-label" for="region">State / Region <span>*</span></label>
-          <input type="text" class="form-input" id="region" placeholder="State or Province" autocomplete="address-level1" />
-        </div>
-      </div>
-
-      <div class="form-group" id="referralGroup" style="display:none">
-        <label class="form-label" for="referralCode">Referral Code
-          <span style="color:var(--text-dim);font-weight:400;text-transform:none;letter-spacing:0">(optional)</span>
-        </label>
-        <div class="input-icon-wrap">
-          <i class="icon fa-solid fa-gift"></i>
-          <input type="text" class="form-input" id="referralCode" placeholder="e.g. THA002" autocomplete="off" />
-        </div>
-      </div>
-
-      <div class="btn-row" style="margin-top:8px">
-        <button type="button" class="btn-primary" id="btnStep1Next">
-          Continue <i class="fa-solid fa-arrow-right"></i>
-        </button>
-      </div>
-    </div>
-
-    <!-- ══ STEP 2: Security ══ -->
-    <div id="step2">
       <div class="form-group">
         <label class="form-label" for="password">Create Password <span>*</span></label>
         <div class="input-icon-wrap" style="position:relative">
           <i class="icon fa-solid fa-lock"></i>
           <input type="password" class="form-input" id="password"
-                 placeholder="Min 8 characters" autocomplete="new-password" />
+                 placeholder="Min 10 characters" autocomplete="new-password" />
           <button type="button" class="input-toggle" id="btnPwToggle" aria-label="Show password">
             <i class="fa-solid fa-eye"></i>
           </button>
@@ -1360,7 +1386,7 @@
       <div style="background:#f8fafc;border:1px solid rgba(0,0,0,0.06);border-radius:10px;padding:14px 16px;margin-bottom:18px">
         <div style="font-size:0.71rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px">Password requirements</div>
         <div style="display:flex;flex-direction:column;gap:6px">
-          <div id="req-len"><i class="fa-solid fa-circle fa-xs" style="color:#d1d5db;margin-right:6px"></i><span style="font-size:0.77rem;color:var(--text-muted)">At least 8 characters</span></div>
+          <div id="req-len"><i class="fa-solid fa-circle fa-xs" style="color:#d1d5db;margin-right:6px"></i><span style="font-size:0.77rem;color:var(--text-muted)">At least 10 characters</span></div>
           <div id="req-upper"><i class="fa-solid fa-circle fa-xs" style="color:#d1d5db;margin-right:6px"></i><span style="font-size:0.77rem;color:var(--text-muted)">One uppercase letter</span></div>
           <div id="req-num"><i class="fa-solid fa-circle fa-xs" style="color:#d1d5db;margin-right:6px"></i><span style="font-size:0.77rem;color:var(--text-muted)">One number</span></div>
           <div id="req-special"><i class="fa-solid fa-circle fa-xs" style="color:#d1d5db;margin-right:6px"></i><span style="font-size:0.77rem;color:var(--text-muted)">One special character (!@#$...)</span></div>
@@ -1398,8 +1424,67 @@
       </div>
     </div>
 
-    <!-- ══ STEP 3: Investment Profile ══ -->
+    <!-- ══ STEP 3: Address & Investment Profile ══ -->
     <div id="step3">
+
+      <!-- Address — moved here from step 1.
+           Step 1 kept 86% of everyone who opened the page from reaching step 2.
+           Identity went to step 2 in 08f49e7; this was the other weight on it —
+           an address search, street, suburb, city, postal code and province on
+           the web form, before anything had been offered in return. What is
+           left on step 1 is name, email and phone.
+
+           The citizenship toggle stays on step 1 and still switches these two
+           blocks by id, so a person who picks International before continuing
+           sees the region field rather than the SA block when they get here. -->
+      <!-- SA address: search + expanded fields -->
+      <div id="saAddressBlock">
+        <div class="form-group" style="position:relative">
+          <label class="form-label" for="addressSearch">Address Search <span>*</span></label>
+          <input type="text" class="form-input" id="addressSearch" placeholder="Start typing your address…" autocomplete="off" />
+          <div id="addressDrop" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:9999;background:#303030;border:1px solid rgba(255,255,255,0.15);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.5);overflow:hidden"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="streetAddress">Street Address <span>*</span></label>
+          <input type="text" class="form-input" id="streetAddress" placeholder="e.g. 10 Main Road" autocomplete="street-address" />
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label" for="suburb">Suburb</label>
+            <input type="text" class="form-input" id="suburb" placeholder="e.g. Sandton" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="city">City <span>*</span></label>
+            <input type="text" class="form-input" id="city" placeholder="e.g. Johannesburg" />
+          </div>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label" for="postalCode">Postal Code <span>*</span></label>
+            <input type="text" class="form-input" id="postalCode" placeholder="e.g. 2196" inputmode="numeric" maxlength="10" />
+          </div>
+          <div class="form-group" id="saProvinceGroup">
+            <label class="form-label" for="province">Province <span>*</span></label>
+            <select class="form-select" id="province">
+              <option value="">Select province</option>
+              <option>Gauteng</option>
+              <option>Western Cape</option>
+              <option>KwaZulu-Natal</option>
+              <option>Eastern Cape</option>
+              <option>Limpopo</option>
+              <option>Mpumalanga</option>
+              <option>North West</option>
+              <option>Free State</option>
+              <option>Northern Cape</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="form-group" id="intlRegionGroup" style="display:none">
+        <label class="form-label" for="region">State / Region <span>*</span></label>
+        <input type="text" class="form-input" id="region" placeholder="State or Province" autocomplete="address-level1" />
+      </div>
+
       <div class="info-strip">
         <i class="fa-solid fa-chart-pie"></i>
         <p>Your risk profile helps us personalise your investment recommendations. You can update this at any time in your portal settings.</p>
@@ -1457,27 +1542,6 @@
         <input type="text" class="form-input" id="hearAboutOther" placeholder="How did you find out about SV Capital?" maxlength="200" autocomplete="off" />
       </div>
 
-      <!-- Return estimate widget -->
-      <div class="return-estimate">
-        <div class="return-estimate__header">
-          <i class="fa-solid fa-calculator"></i> Your Potential Returns
-        </div>
-        <div class="return-estimate__row">
-          <span class="return-estimate__label">Initial Amount</span>
-          <input type="range" class="return-estimate__slider" id="reSlider" min="500" max="500000" step="500" value="10000" />
-          <span class="return-estimate__val" id="reAmount">R10 000</span>
-        </div>
-        <div class="return-estimate__row">
-          <span class="return-estimate__label">Annual Return</span>
-          <input type="range" class="return-estimate__slider" id="reRateSlider" min="14" max="21" step="1" value="17" />
-          <span class="return-estimate__val" id="reRate">17% p.a.</span>
-        </div>
-        <div class="return-estimate__result">
-          <div class="return-estimate__result-label">Estimated return<br>after 12 months</div>
-          <div class="return-estimate__result-val" id="reResult">+R1 700</div>
-        </div>
-        <div class="return-estimate__disclaimer">* Illustrative only. Past performance is not a guarantee of future returns.</div>
-      </div>
 
       <div class="btn-row">
         <button type="button" class="btn-secondary" id="btnStep3Back" style="max-width:110px">
@@ -1650,12 +1714,24 @@
         </button>
       </div>
 
-      <p style="font-size:0.71rem;color:var(--text-dim);text-align:center;margin-top:12px;line-height:1.5">
-        You can also skip FICA upload now and submit documents later via your investor portal.<br>
-        <button type="button" id="btnSkipFica" style="background:none;border:none;color:var(--orange);font-weight:600;cursor:pointer;font-size:0.71rem;font-family:inherit;text-decoration:underline">
-          Skip for now — submit FICA documents later
+      <!-- The other way to finish.
+           This was one line of 11px grey text with an underlined link inside
+           it, sitting under a primary button that refuses to submit until all
+           three required documents are attached. Someone at this step without
+           a proof of address to hand saw a button that errored at them and,
+           in practice, no alternative — which is the last thing the funnel
+           sees before they leave. The option already existed in the product;
+           it just could not be found. It is a button now, at the same size as
+           the one above it. The FICA requirement itself is unchanged: the
+           account is created either way, and investing still needs approved
+           documents. -->
+      <div class="fica-alt">
+        <span class="fica-alt__or">or</span>
+        <button type="button" class="btn-secondary fica-alt__btn" id="btnSkipFica">
+          <i class="fa-regular fa-clock"></i> Create account — upload documents later
         </button>
-      </p>
+        <span class="fica-alt__note">Your account is created now. You can upload FICA documents any time in your portal; they are only needed before your first investment.</span>
+      </div>
 
     </div><!-- /step4 -->
 
@@ -1707,7 +1783,7 @@
 let currentStep   = 1;
 let selectedRisk  = 'moderate';
 let clientType    = 'sa'; // 'sa' | 'intl'
-let _derivedGender = null;
+let _derivedGender = null; // set when SA ID is validated
 
 const ficaFiles   = { id: null, address: null, selfie: null, bank: null, tax: null };
 const REQUIRED_DOCS = ['id', 'address', 'selfie'];
@@ -1763,8 +1839,17 @@ const _FT = (function() {
     stepBacked(fromStep) {
       _push('step_back', { step: fromStep });
     },
-    validationError(step, msg) {
-      _push('validation_error', { step, error_message: String(msg).slice(0, 200), client_type: clientType });
+    validationError(step, msg, field) {
+      /* field_name carries. Without it the console's "Most Friction — Fields"
+         panel had nothing to group by and read "No field data yet" for the
+         whole of its existence — while step 1 was losing 86% of everyone who
+         opened the page and the one question worth answering was WHICH field
+         they gave up on. The error message alone cannot answer it: three
+         different fields can produce "Please enter a valid…". */
+      _push('validation_error', {
+        step, field_name: field || null,
+        error_message: String(msg).slice(0, 200), client_type: clientType,
+      });
     },
     ficaUploaded(docType) {
       _push('fica_upload', { step: 4, field_name: docType });
@@ -1793,6 +1878,7 @@ window.addEventListener('DOMContentLoaded', () => {
   initReturnEstimate();
   bindDraftAutosave();
   restoreDraft();
+  _initSignupAddressSearch();
 
   // Citizenship toggle (both the in-step1 toggle and the waitlist panel toggle)
   document.getElementById('btnCitizenSA').addEventListener('click',    () => toggleCitizenship('sa'));
@@ -1960,10 +2046,11 @@ function validateSAID(id) {
 /* ── Hear about us — Other field ── */
 function toggleHearAboutOther(val) {
   const grp = document.getElementById('hearAboutOtherGroup');
+  const inp = document.getElementById('hearAboutOther');
   if (grp) grp.style.display = val === 'other' ? '' : 'none';
-  if (val !== 'other') {
-    const inp = document.getElementById('hearAboutOther');
-    if (inp) inp.value = '';
+  if (inp) {
+    inp.required = val === 'other';
+    if (val !== 'other') inp.value = '';
   }
 }
 
@@ -1988,7 +2075,7 @@ async function checkIdDuplicate() {
         box.className = 'id-validation id-validation--error';
         box.innerHTML = `<i class="fa-solid fa-circle-exclamation"></i><div class="id-validation__body">
           <span class="id-validation__main">This ID number is already registered.</span>
-          <span class="id-validation__sub">You already have an account — <a href="/login.html" style="color:inherit;font-weight:700">Log in</a> or <a href="/forgot-password.html" style="color:inherit;font-weight:700">reset your password</a>.</span>
+          <span class="id-validation__sub">You already have an account — <a href="/login.html" style="color:inherit;font-weight:700">Log in</a> or <a href="/login#forgot" style="color:inherit;font-weight:700">reset your password</a>.</span>
         </div>`;
       }
     } else {
@@ -2183,7 +2270,6 @@ function updateStepIndicators(n) {
     if (!ind) return;
     ind.classList.toggle('done',   i < n);
     ind.classList.toggle('active', i === n);
-    ind.classList.toggle('',      i > n);
     const num = ind.querySelector('.step-num');
     if (i < n) {
       num.innerHTML = '<i class="fa-solid fa-check" style="font-size:0.6rem"></i>';
@@ -2205,61 +2291,78 @@ function validateStep(n) {
     const firstName = v('firstName'), lastName = v('lastName'),
           email     = v('email'),     phone    = v('phone');
 
-    if (!firstName) return showError('Please enter your first name.');
-    if (!lastName)  return showError('Please enter your last name.');
+    if (!firstName) return showError('Please enter your first name.', 'firstName');
+    if (!lastName)  return showError('Please enter your last name.', 'lastName');
     if (!email || !email.includes('@') || !email.includes('.'))
-      return showError('Please enter a valid email address.');
+      return showError('Please enter a valid email address.', 'email');
     if (!phone || phone.replace(/\D/g, '').length < 6)
-      return showError('Please enter a valid phone number.');
+      return showError('Please enter a valid phone number.', 'phone');
+  }
 
+  if (n === 2) {
+    /* Identity is checked here now, with the fields. It used to sit in the
+       n === 1 branch; leaving it there after the markup moved would have made
+       step 1 refuse to advance over an ID number no longer on the page — an
+       error about a field the person cannot see is the worst outcome this
+       change could have produced, so the two moved together. */
     if (clientType === 'sa') {
       const idNumber = v('idNumber');
       const idClean  = idNumber.replace(/[\s\-]/g, '');
       if (!idClean || idClean.length !== 13 || !/^\d{13}$/.test(idClean))
-        return showError('Please enter a valid 13-digit South African ID number.');
+        return showError('Please enter a valid 13-digit South African ID number.', 'idNumber');
       if (_idDuplicateBlocked)
-        return showError('This ID number is already registered. Please log in or reset your password.');
+        return showError('This ID number is already registered. Please log in or reset your password.', 'idNumber');
     } else {
       const passport = v('passportNumber');
       const expiry   = v('passportExpiry');
       const nat      = v('nationality');
       const country  = v('countryResidence');
       if (!passport || passport.length < 5)
-        return showError('Please enter a valid passport number.');
+        return showError('Please enter a valid passport number.', 'passportNumber');
       if (!expiry)
-        return showError('Please enter your passport expiry date.');
+        return showError('Please enter your passport expiry date.', 'passportExpiry');
       if (new Date(expiry) < new Date())
-        return showError('Your passport has expired — please use a valid, unexpired passport.');
-      if (!nat)     return showError('Please select your nationality.');
-      if (!country) return showError('Please select your country of residence.');
+        return showError('Your passport has expired — please use a valid, unexpired passport.', 'passportExpiry');
+      if (!nat)     return showError('Please select your nationality.', 'nationality');
+      if (!country) return showError('Please select your country of residence.', 'countryResidence');
     }
 
-    if (!v('city')) return showError('Please enter your city.');
-    if (clientType === 'sa' && !v('province'))
-      return showError('Please select your province.');
-    if (clientType !== 'sa' && !v('region'))
-      return showError('Please enter your state or region.');
-  }
-
-  if (n === 2) {
     const pw    = v('password'), pw2 = v('passwordConfirm'),
           terms = document.getElementById('termsCheck').checked,
           fica  = document.getElementById('ficaConsentCheck').checked,
           popia = document.getElementById('popiaCheck').checked;
 
-    if (!pw || pw.length < 8) return showError('Password must be at least 8 characters.');
-    if (pw !== pw2)            return showError('Passwords do not match. Please try again.');
-    if (!terms) return showError('Please accept the Terms of Use to continue.');
-    if (!fica)  return showError('Please confirm your FICA consent to continue.');
-    if (!popia) return showError('Please confirm your POPIA consent to continue.');
+    /* 10, because that is what the server requires. This said 8, and the
+       server said 10 (server/routes/auth.js:310), so a 8- or 9-character
+       password passed step 2, survived steps 3 and 4, and was refused at the
+       moment of submission — after the documents had been uploaded — with
+       "Password must be at least 10 characters." about a field three steps
+       back. The friction data recorded those refusals against STEP 4, which is
+       where the person was standing when they were told. */
+    if (!pw || pw.length < 10) return showError('Password must be at least 10 characters.', 'password');
+    if (pw !== pw2)            return showError('Passwords do not match. Please try again.', 'passwordConfirm');
+    if (!terms) return showError('Please accept the Terms of Use to continue.', 'termsCheck');
+    if (!fica)  return showError('Please confirm your FICA consent to continue.', 'ficaConsentCheck');
+    if (!popia) return showError('Please confirm your POPIA consent to continue.', 'popiaCheck');
   }
 
   if (n === 3) {
-    if (!selectedRisk)  return showError('Please select an investment risk profile.');
-    if (!v('investExp')) return showError('Please select your investment experience level.');
-    if (!v('hearAbout')) return showError('Please tell us how you heard about us.');
+    /* Address is checked here now, with the fields. Leaving it in the n === 1
+       branch after the markup moved would have made step 1 refuse to advance
+       over a city it no longer shows. */
+    if (!v('streetAddress')) return showError('Please enter your street address.', 'streetAddress');
+    if (!v('city')) return showError('Please enter your city.', 'city');
+    if (!v('postalCode')) return showError('Please enter your postal code.', 'postalCode');
+    if (clientType === 'sa' && !v('province'))
+      return showError('Please select your province.', 'province');
+    if (clientType !== 'sa' && !v('region'))
+      return showError('Please enter your state or region.', 'region');
+
+    if (!selectedRisk)  return showError('Please select an investment risk profile.', 'riskProfile');
+    if (!v('investExp')) return showError('Please select your investment experience level.', 'investExp');
+    if (!v('hearAbout')) return showError('Please tell us how you heard about us.', 'hearAbout');
     if (v('hearAbout') === 'other' && !v('hearAboutOther'))
-      return showError('Please describe how you heard about us.');
+      return showError('Please describe how you heard about us.', 'hearAboutOther');
   }
 
   return true;
@@ -2267,8 +2370,8 @@ function validateStep(n) {
 
 function v(id) { return document.getElementById(id)?.value?.trim() || ''; }
 
-function showError(msg) {
-  _FT.validationError(currentStep, msg);
+function showError(msg, field) {
+  _FT.validationError(currentStep, msg, field);
   const el = document.getElementById('formError');
   document.getElementById('formErrorMsg').textContent = msg;
   el.style.display = 'block';
@@ -2312,7 +2415,10 @@ function persistDraft() {
       passportExpiry: draftValue('passportExpiry'),
       nationality: draftValue('nationality'),
       countryResidence: draftValue('countryResidence'),
+      streetAddress: draftValue('streetAddress'),
+      suburb: draftValue('suburb'),
       city: draftValue('city'),
+      postalCode: draftValue('postalCode'),
       province: draftValue('province'),
       region: draftValue('region'),
       referralCode: draftValue('referralCode'),
@@ -2355,10 +2461,75 @@ function clearDraft() {
   try { localStorage.removeItem(SIGNUP_DRAFT_KEY); } catch (_) {}
 }
 
+function _initSignupAddressSearch() {
+  const searchEl = document.getElementById('addressSearch');
+  const dropEl   = document.getElementById('addressDrop');
+  if (!searchEl || !dropEl) return;
+
+  let _timer = null;
+  let _results = [];
+
+  const _esc = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const _hide = () => { dropEl.style.display = 'none'; };
+
+  const _show = items => {
+    _results = items;
+    if (!items.length) { _hide(); return; }
+    dropEl.innerHTML = items.map((r, i) => {
+      const line1 = [r.housenumber, r.street].filter(Boolean).join(' ') || r.city || r.formatted || '';
+      const line2 = [r.suburb || r.quarter, r.city || r.town, r.postcode].filter(Boolean).join(', ');
+      return `<div data-idx="${i}" style="padding:9px 14px;cursor:pointer;font-size:0.82rem;border-bottom:1px solid rgba(255,255,255,0.08);color:#e8edf2" onmouseover="this.style.background='rgba(237,165,255,0.1)'" onmouseout="this.style.background=''">
+        <div style="font-weight:600">${_esc(line1)}</div>
+        ${line2 ? `<div style="font-size:0.74rem;color:#8899aa;margin-top:2px">${_esc(line2)}</div>` : ''}
+      </div>`;
+    }).join('');
+    dropEl.style.display = 'block';
+  };
+
+  const _fill = r => {
+    const _s = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val; };
+    _s('streetAddress', [r.housenumber, r.street].filter(Boolean).join(' '));
+    _s('suburb',        r.suburb || r.quarter || r.neighbourhood || '');
+    _s('city',          r.city || r.town || r.municipality || '');
+    _s('postalCode',    r.postcode || '');
+    const sel = document.getElementById('province');
+    if (sel && r.state) {
+      const opt = [...sel.options].find(o => o.value.toLowerCase() === r.state.toLowerCase() || o.text.toLowerCase() === r.state.toLowerCase());
+      if (opt) opt.selected = true;
+    }
+    _hide();
+    searchEl.value = '';
+    persistDraft();
+  };
+
+  searchEl.addEventListener('input', () => {
+    clearTimeout(_timer);
+    const q = searchEl.value.trim();
+    if (q.length < 3) { _hide(); return; }
+    _timer = setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/address/autocomplete?q=${encodeURIComponent(q)}`);
+        if (!r.ok) return;
+        const d = await r.json();
+        _show(d.results || []);
+      } catch (_) {}
+    }, 300);
+  });
+
+  dropEl.addEventListener('mousedown', e => {
+    const row = e.target.closest('[data-idx]');
+    if (row) { e.preventDefault(); _fill(_results[+row.dataset.idx]); }
+  });
+
+  document.addEventListener('click', e => {
+    if (!searchEl.contains(e.target) && !dropEl.contains(e.target)) _hide();
+  });
+}
+
 function bindDraftAutosave() {
   const ids = [
     'firstName','lastName','email','phoneDialCode','phone','idNumber','passportNumber','passportExpiry',
-    'nationality','countryResidence','city','province','region','referralCode',
+    'nationality','countryResidence','streetAddress','suburb','city','postalCode','province','region','referralCode',
     'investExp','hearAbout','termsCheck','ficaConsentCheck','popiaCheck'
   ];
 
@@ -2384,7 +2555,7 @@ function checkPasswordStrength(pw) {
   const label = document.getElementById('pwLabel');
 
   const checks = {
-    len:     pw.length >= 8,
+    len:     pw.length >= 10,
     upper:   /[A-Z]/.test(pw),
     num:     /\d/.test(pw),
     special: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pw),
@@ -2535,7 +2706,12 @@ async function submitRegistration() {
   if (missingDocs.length > 0) {
     missingDocs.forEach(k => document.getElementById(`card-${k}`)?.classList.add('required-missing'));
     const labels = { id: 'ID / Passport', address: 'Proof of Address', selfie: 'Selfie / Liveness Photo' };
-    return showError(`Please upload the following required documents: ${missingDocs.map(k => labels[k]).join(', ')}.`);
+    /* Naming the other route out. This error used to be the whole of what a
+       person without a proof of address was told, and the way past it was an
+       11px link they had to notice underneath. */
+    return showError(
+      `Still needed: ${missingDocs.map(k => labels[k]).join(', ')}. ` +
+      `If you do not have these to hand, choose "Create account — upload documents later" below.`);
   }
 
   _doSubmit(false);
@@ -2543,10 +2719,12 @@ async function submitRegistration() {
 
 async function skipFicaAndSubmit() {
   hideError();
+  /* Kept, but it is now a confirmation rather than a deterrent: this is a
+     supported way to finish, not a mistake to talk someone out of. */
   const confirmed = confirm(
-    'Are you sure you want to skip FICA document upload?\n\n' +
-    'You will not be able to invest until your documents have been submitted and approved. ' +
-    'You can upload them later in your investor portal.'
+    'Create your account now and upload FICA documents later?\n\n' +
+    'Your account will be ready straight away. You can upload your documents ' +
+    'any time in your investor portal — they are only needed before your first investment.'
   );
   if (!confirmed) return;
   _FT.ficaSkipped();
@@ -2579,12 +2757,22 @@ async function _doSubmit(skippedFica) {
     : `DocType: Passport. Nationality: ${v('nationality')}. Country: ${v('countryResidence')}. Expiry: ${v('passportExpiry')}.`;
 
   const uploadedDocs = Object.entries(ficaFiles).filter(([, f]) => f !== null).map(([k]) => k);
+  let docsStored = 0, docsFailed = 0;
 
   try {
     const regData = await Auth.register({
       email, password, firstName, lastName,
       phone: fullPhone,
       idNumber, province,
+      /* The form requires this of an international client and has always sent
+         it only inside the notes string. investors.nationality is a real column
+         now, and the nightly FICA sweep reads it. An SA client is not asked —
+         a 13-digit SA ID number is the answer — and the server defaults them. */
+      nationality:   isSA ? undefined : (v('nationality') || undefined),
+      streetAddress: v('streetAddress') || undefined,
+      suburb:        v('suburb') || undefined,
+      city:          v('city') || undefined,
+      postalCode:    v('postalCode') || undefined,
       occupation:   '',
       role:         'investor',
       referredBy:    referral || '',
@@ -2602,13 +2790,45 @@ async function _doSubmit(skippedFica) {
     const assignedId = regData.user.investorId;
 
     if (!skippedFica && uploadedDocs.length > 0) {
-      await API.kyc.create({
-        investor_id: assignedId,
-        doc_type: 'id_document',
-        status: 'pending',
-        file_name: uploadedDocs.join(', '),
-        notes: `Submitted at registration. Files: ${uploadedDocs.join(', ')}.`,
-      }).catch(() => {});
+      const DOC_TYPE_MAP = {
+        id: 'id_document', address: 'proof_of_address',
+        selfie: 'selfie', bank: 'proof_of_bank', tax: 'tax',
+      };
+      const readFile = file => new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload  = e => res(e.target.result);
+        r.onerror = () => rej(new Error('Could not read file'));
+        r.readAsDataURL(file);
+      });
+      /* The results are READ. allSettled never rejects, so discarding what it
+         returns meant every upload could fail — a 413 on a phone photo, a
+         dropped connection, a null investor id — and the success screen still
+         told the investor "Your FICA documents have been submitted. Our
+         compliance team will review them within 1–2 business days." Nobody was
+         reviewing anything, and the investor waited for an email that had no
+         reason to arrive. Telling someone their compliance documents are in
+         when they are not is the worst of the three outcomes here. */
+      const outcomes = await Promise.allSettled(
+        Object.entries(ficaFiles)
+          .filter(([, f]) => f !== null)
+          .map(async ([key, file]) => {
+            const fileData = await readFile(file);
+            return API.kyc.create({
+              investor_id: assignedId,
+              doc_type:    DOC_TYPE_MAP[key] || 'other',
+              status:      'pending',
+              file_name:   file.name,
+              file_data:   fileData,
+              notes:       `Submitted at registration.`,
+            });
+          })
+      );
+      docsStored  = outcomes.filter(o => o.status === 'fulfilled').length;
+      docsFailed  = outcomes.length - docsStored;
+      if (docsFailed) {
+        console.error('[signup] %d of %d FICA uploads failed', docsFailed, outcomes.length,
+                      outcomes.filter(o => o.status === 'rejected').map(o => o.reason && o.reason.message));
+      }
     }
 
     if (!skippedFica) {
@@ -2616,7 +2836,8 @@ async function _doSubmit(skippedFica) {
         investor_id: assignedId,
         subject: `FICA Documents Submitted — ${firstName} ${lastName}`,
         category: 'kyc', priority: 'high', status: 'open',
-        message: `New investor ${firstName} ${lastName} (${assignedId}) submitted FICA docs: ${uploadedDocs.join(', ')}.`,
+        message: `New investor ${firstName} ${lastName} (${assignedId}) submitted FICA docs: ${uploadedDocs.join(', ')}.` +
+                 (docsFailed ? `\n\n⚠️ ${docsFailed} of ${docsStored + docsFailed} upload(s) FAILED and are not attached — ask the investor to re-upload.` : ''),
       }).catch(() => {});
     }
 
@@ -2625,11 +2846,17 @@ async function _doSubmit(skippedFica) {
     const successScreen = document.getElementById('successScreen');
     successScreen.style.display = 'block';
     requestAnimationFrame(() => successScreen.classList.add('visible'));
+    /* Three outcomes, three different sentences — the account is created in all
+       of them, which is the part that matters and the part that is always true. */
     document.getElementById('successMsg').textContent =
       `Welcome, ${firstName}! Your investor account has been created. ` +
       (skippedFica
         ? 'Please upload your FICA documents in your portal to start investing.'
-        : 'Your FICA documents have been submitted. Our compliance team will review them within 1–2 business days and notify you by email.');
+        : docsFailed === 0
+          ? 'Your FICA documents have been submitted. Our compliance team will review them within 1–2 business days and notify you by email.'
+          : docsStored === 0
+            ? 'Your documents could not be uploaded — please upload them in your portal. Your account is ready and nothing else is outstanding.'
+            : `${docsStored} of ${docsStored + docsFailed} documents were uploaded. Please re-upload the rest in your portal.`);
 
     clearDraft();
     _FT.submitSuccess();
@@ -2720,10 +2947,11 @@ function prefillReferral() {
     input.value = ref.toUpperCase();
     const strip = document.createElement('div');
     strip.className = 'referral-strip';
-    strip.innerHTML = `<i class="fa-solid fa-gift"></i> Referral code <strong>${ref.toUpperCase()}</strong> applied — you'll both earn R250 bonus!`;
+    strip.innerHTML = `<i class="fa-solid fa-gift"></i> Referral code <strong>${ref.toUpperCase()}</strong> applied — they'll earn 100 XP when you join!`;
     document.getElementById('referralGroup').before(strip);
   }
 }
 </script>
+<script src="/js/app-banner.js?v=4"></script>
 </body>
 </html>

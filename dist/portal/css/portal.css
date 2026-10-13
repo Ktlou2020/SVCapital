@@ -76,7 +76,7 @@
 }
 
 .ph-stat { display: flex; flex-direction: column; gap: 2px; }
-.ph-stat__label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); font-weight: 700; }
+.ph-stat__label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); font-weight: 700; }
 .ph-stat__value { font-size: 1rem; font-weight: 800; color: var(--white); }
 
 /* ─── Wallet Card ─── */
@@ -194,7 +194,7 @@
 }
 
 .inv-stat__label {
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--text-dim);
@@ -597,33 +597,91 @@
 
 .modal-close:hover { color: var(--white); }
 
-/* ─── Toast ─── */
-.toast {
+/* ─── Toast ────────────────────────────────────────────────────────────
+   This was two implementations fighting, and the client lost both.
+
+   js/api.js builds `<div class="toast toast--error">` inside a
+   `.toast-container`. The rules here styled `.toast.error` — a class the JS
+   never sets — and hid every toast behind `opacity: 0`, revealed by `.toast.show`
+   — a class the JS never adds either. So on the portal a toast was invisible
+   except for the frame or two of admin.css's toast-in animation.
+
+   It was also positioned twice: admin.css puts the CONTAINER at the top right,
+   and this rule made each toast `position: fixed; left: 50%`. Measured at phone
+   width, the result sat 310px off the right edge of the screen.
+
+   Between them, a client submitting a maturity instruction saw no confirmation
+   when it worked and no reason when it failed — so they tapped Submit again.
+   That is the whole of "clients are struggling to submit".
+
+   Now: the CONTAINER positions, the toast is a normal block inside it, and
+   nothing is hidden by default. Errors sit above the bottom nav and clear of
+   the home indicator. */
+.toast-container {
   position: fixed;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%) translateY(20px);
+  top: auto;                       /* admin.css pins it to the top; not here */
+  left: 12px;
+  right: 12px;
+  bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.toast {
+  position: static;                /* the container places it */
+  transform: none;
+  opacity: 1;                      /* visible on arrival, not on a class */
+  width: 100%;
+  max-width: 480px;
+  min-width: 0;                    /* admin.css asks for 280px; phones are narrower */
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
   background: var(--dark-1);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: 12px 20px;
-  font-size: 0.88rem;
+  padding: 13px 16px;
+  font-size: 0.9rem;
+  line-height: 1.45;
   color: var(--white);
   font-weight: 600;
   box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-  z-index: 2000;
-  opacity: 0;
-  transition: opacity 0.3s, transform 0.3s;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;         /* a long reference must wrap, not overflow */
+  text-align: left;                /* centred text is hard to scan on two lines */
+  pointer-events: auto;
+  /* The slide moves the toast; it never touches opacity. A toast whose
+     visibility depends on an animation running is exactly how the last one
+     disappeared — opacity:0 in the base rule, revealed by a .show class the JS
+     never added. Opaque is the resting state, and no animation state, reduced-
+     motion setting or skipped frame can take that away. */
+  animation: svc-toast-in .22s ease-out;
 }
 
-.toast.show {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
+@keyframes svc-toast-in {
+  from { transform: translateY(12px); }
+  to   { transform: translateY(0); }
 }
 
-.toast.success { border-color: rgba(34,197,94,0.4); color: var(--green); }
-.toast.error { border-color: rgba(239,68,68,0.4); color: #ef4444; }
+@media (prefers-reduced-motion: reduce) {
+  .toast { animation: none; }
+}
+
+.toast__msg { flex: 1; min-width: 0; }
+
+/* Both spellings styled: the JS emits toast--error, and .toast.error is kept so
+   any caller still using it is not silently unstyled. */
+.toast--success, .toast.success { border-color: rgba(34,197,94,0.45); }
+.toast--error,   .toast.error   { border-color: rgba(239,68,68,0.55); }
+.toast--warning, .toast.warning { border-color: rgba(254,194,79,0.5); }
+.toast--success i { color: var(--green); }
+.toast--error i   { color: #ef4444; }
+.toast--warning i { color: var(--gold); }
 
 /* ─── Loading skeleton ─── */
 .skeleton {
@@ -826,6 +884,71 @@
   background: rgba(254,194,79,0.1);
   color: var(--gold);
 }
+
+/* ─── Learning Quiz ─── */
+.learn-quiz-section { margin-top: 20px; }
+.learn-quiz-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--gold);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.learn-quiz-q { margin-bottom: 18px; }
+.learn-quiz-q__text {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+.learn-quiz-opts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.learn-quiz-opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--dark-3);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.88rem;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+  font-family: inherit;
+  width: 100%;
+}
+.learn-quiz-opt:hover { border-color: rgba(254,194,79,0.5); background: rgba(254,194,79,0.06); }
+.learn-quiz-opt__letter {
+  font-weight: 800;
+  font-size: 0.78rem;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--dark-4);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.learn-quiz-opt--selected {
+  border-color: var(--gold) !important;
+  background: rgba(254,194,79,0.1) !important;
+}
+.learn-quiz-opt--selected .learn-quiz-opt__letter {
+  background: var(--gold);
+  color: #1a1a1a;
+}
+.learn-quiz-opt--correct { border-color: #22c55e !important; background: rgba(34,197,94,0.1) !important; }
+.learn-quiz-opt--wrong   { border-color: #ef4444 !important; background: rgba(239,68,68,0.1) !important; }
+.learn-quiz-submit-btn { margin-top: 16px; width: 100%; }
 
 /* ─── Investment Opportunity Cards ─── */
 .opp-card {
@@ -1437,6 +1560,9 @@ select option { background: #1a1a2e; color: #fff; }
   gap: 10px;
   margin-bottom: 16px;
 }
+@media (max-width: 640px) {
+  .withdraw-amount-grid { grid-template-columns: 1fr 1fr; }
+}
 
 /* ─── Notification badge ─── */
 .notif-badge {
@@ -1448,7 +1574,7 @@ select option { background: #1a1a2e; color: #fff; }
   padding: 0 5px;
   background: #ef4444;
   color: #fff;
-  font-size: 0.65rem;
+  font-size: 0.72rem;
   font-weight: 700;
   border-radius: 100px;
   line-height: 1;
@@ -2038,9 +2164,14 @@ html body .my-inv-card .progress-fill {
   border-radius: 100px !important;
   background: linear-gradient(90deg, #fec24f 0%, #fec24f 100%) !important;
 }
+/* Three equal columns squeezed an amount like R199,009.90 into an 81px tile.
+   A rand figure has no break opportunity inside it, so it did not wrap — it
+   ran straight out past the tile edge. auto-fit drops to two columns (and on
+   a very narrow card, one) before that happens, so the amount always has a
+   track wide enough to sit in. */
 html body .my-inv-card__stats {
   display: grid !important;
-  grid-template-columns: repeat(3, 1fr) !important;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)) !important;
   gap: 8px !important;
   margin: 16px 0 !important;
 }
@@ -2072,6 +2203,11 @@ html body .my-inv-card .mic-stat__value {
   color: #ffffff !important;
   -webkit-text-fill-color: #ffffff !important;
   line-height: 1.2 !important;
+  /* The layout above gives a rand figure room; this is the floor under it.
+     A figure in the millions still has no break opportunity of its own, so
+     without `anywhere` it would overflow the tile rather than wrap. */
+  overflow-wrap: anywhere !important;
+  min-width: 0 !important;
 }
 html body .my-inv-card .mic-stat__value--gold {
   color: #fec24f !important;
@@ -2156,3 +2292,67 @@ body:not(.dark-mode) .prod-type-tile:hover:not(.active) {
   background: #d1d5db;
   border-color: rgba(0,0,0,0.25);
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Reduced motion
+   Honours the viewer's OS-level setting. Animation is decorative
+   here — count-ups, view transitions, toast slide-ins, chart
+   tweens — so it is removed rather than shortened. Kept to a
+   near-zero duration rather than `none` so animationend and
+   transitionend listeners still fire and nothing waits forever.
+   ───────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Stale data notice
+   Shown only when the background refresh failed and the figures
+   on screen came from the local cache. Amber rather than red:
+   nothing has gone wrong with the money, the numbers are just
+   old, and the wording says so. Sits above the view so it stays
+   put when the user navigates between tabs.
+   ───────────────────────────────────────────────────────────── */
+.stale-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  border-left-width: 3px;
+  border-radius: var(--radius-md);
+  background: rgba(245, 158, 11, 0.10);
+  color: var(--text);
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+.stale-banner[hidden] { display: none; }
+
+.stale-banner__icon { color: #f59e0b; flex-shrink: 0; }
+.stale-banner__text { flex: 1 1 260px; min-width: 0; }
+.stale-banner__text strong { color: var(--text); white-space: nowrap; }
+
+.stale-banner__retry {
+  flex-shrink: 0;
+  padding: 7px 14px;
+  border: 1px solid rgba(245, 158, 11, 0.55);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.stale-banner__retry:hover:not(:disabled) { background: rgba(245, 158, 11, 0.18); }
+.stale-banner__retry:focus-visible { outline: 2px solid #f59e0b; outline-offset: 2px; }
+.stale-banner__retry:disabled { opacity: 0.65; cursor: default; }

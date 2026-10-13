@@ -53,6 +53,12 @@ async function fetchAll(table) {
 }
 
 /* ─── Formatters ──────────────────────────────────────────────────── */
+/* HTML escaper. Everything a person typed — a policy title, a colleague's
+   name — goes through this before it reaches innerHTML. */
+const escH = v => String(v == null ? '' : v)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
 const zarM = v => { const n=Number(v)||0; return n>=1e6?`R${(n/1e6).toFixed(1)}M`:n>=1e3?`R${(n/1e3).toFixed(0)}k`:`R${n.toLocaleString()}`; };
 const fmtDate = iso => iso ? new Date(iso).toLocaleDateString('en-ZA',{day:'numeric',month:'short',year:'numeric'}) : '—';
 
@@ -80,15 +86,18 @@ const ALL_ROLES = [
 ];
 const APP_NAMES = {
   employee:'My Dashboard', team:'Team Dashboard', fund:'Fund Operations',
-  admin:'Admin Console', ifa:'IFA Portal', portal:'Investor Portal', director:'Director Panel'
+  admin:'Admin Console', ifa:'IFA Portal', portal:'Investor Portal', director:'Director Panel',
+  accounting:'Accounting', pe_monitor:'PE Monitor', beefcor_recon:'BEEFCOR Checker'
 };
 const APP_ICONS = {
   employee:'fa-user-circle', team:'fa-people-group', fund:'fa-chart-line',
-  admin:'fa-shield-halved', ifa:'fa-handshake', portal:'fa-building-columns', director:'fa-crown'
+  admin:'fa-shield-halved', ifa:'fa-handshake', portal:'fa-building-columns', director:'fa-crown',
+  accounting:'fa-calculator', pe_monitor:'fa-briefcase', beefcor_recon:'fa-cow'
 };
 const APP_COLORS = {
   employee:'#eda5ff', team:'#00d4aa', fund:'#fec24f',
-  admin:'#e84393', ifa:'#656565', portal:'#10b981', director:'#fec24f'
+  admin:'#e84393', ifa:'#656565', portal:'#10b981', director:'#fec24f',
+  accounting:'#656565', pe_monitor:'#3b82f6', beefcor_recon:'#22c55e'
 };
 
 const LEVEL_LABELS = { junior:'Junior', mid:'Mid-Level', senior:'Senior', lead:'Lead', executive:'Executive' };
@@ -252,6 +261,8 @@ const PAGE_META = {
   leave:       { title:'Leave Requests',   sub:'Approve or decline employee leave' },
   access:      { title:'Access & Roles',   sub:'Role-based access control matrix' },
   courses:     { title:'Course Library',   sub:'All available training courses' },
+  policies:    { title:'Policies',         sub:'Publish company policies and see who has read them' },
+  'monthly-report': { title:'Monthly Report', sub:'The board pack: AUM, investors, returns and the assets behind them' },
   payslips:    { title:'Payslips',         sub:'Generate and manage employee payslips' },
   performance:    { title:'Performance',    sub:'KPI leaderboard, scores and team analytics' },
   'fee-settings': { title:'Fee Settings',  sub:'Configure platform-wide fee rates and EVA allocation' },
@@ -277,6 +288,10 @@ function navTo(view, btn) {
       <button class="btn btn--ghost btn--sm" onclick="exportEmployeesCSV()"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
       <button class="btn btn--ghost btn--sm" onclick="exportEmployeesPDF()"><i class="fa-solid fa-file-pdf"></i> Export PDF</button>
       <button class="btn btn--gold btn--sm" onclick="navTo('create',document.querySelector('[data-view=create]'))"><i class="fa-solid fa-user-plus"></i> Add Employee</button>`;
+  } else if (view === 'monthly-report') {
+    actEl.innerHTML = `<button class="btn btn--gold btn--sm" onclick="downloadReportPDF()"><i class="fa-solid fa-file-pdf"></i> Download PDF</button>`;
+  } else if (view === 'policies') {
+    actEl.innerHTML = `<button class="btn btn--gold btn--sm" onclick="openPolicyUpload()"><i class="fa-solid fa-upload"></i> Publish a policy</button>`;
   } else if (view === 'payslips') {
     actEl.innerHTML = `<button class="btn btn--ghost btn--sm" onclick="exportPayslipsSummaryCSV()"><i class="fa-solid fa-file-csv"></i> Export Summary</button>`;
   } else if (view === 'performance') {
@@ -293,6 +308,8 @@ function navTo(view, btn) {
     leave:         renderLeave,
     access:        renderAccessMatrix,
     courses:       renderCourseLibrary,
+    policies:      renderPolicies,
+    'monthly-report': renderMonthlyReport,
     payslips:      renderPayslips,
     performance:   renderPerformanceView,
     'fee-settings': loadFeeSettings,
@@ -940,8 +957,11 @@ async function createEmployee() {
           course_id:          cid,
           status:             'enrolled',
           current_module:     1,
-          modules_completed:  JSON.stringify([]),
-          quiz_scores:        JSON.stringify([]),
+          /* quiz_scores is a map of module id → score, not a list. Seeding it
+             as [] worked only because every reader treats a non-object as
+             empty; the employee portal seeds {} and the two must agree. */
+          modules_completed:  0,
+          quiz_scores:        JSON.stringify({}),
           overall_quiz_score: 0,
           xp_earned:          0,
           kpi_applied:        false,
@@ -1802,6 +1822,1171 @@ function obStatusChip(status) {
   return `<span class="chip ${map[status]||'chip--off'}" style="font-size:0.7rem">${(status||'').replace('_',' ')}</span>`;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════
+   POLICIES — publishing, and the record of who has read what.
+
+   Both halves are director-only and the server enforces it with
+   requireRole('director'); the staff portal shows the shelf, the document
+   and a person's own acknowledgement, and nothing else. Hiding a button is
+   not a permission, so neither of the two calls below is reachable from
+   there even with the console open.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+const POLICY_LABELS = {
+  hr: 'People & HR', compliance: 'Compliance', finance: 'Finance',
+  operations: 'Operations', it: 'IT & Security', health_safety: 'Health & Safety',
+  general: 'General',
+};
+const POLICY_ICONS = {
+  hr: 'fa-users', compliance: 'fa-scale-balanced', finance: 'fa-coins',
+  operations: 'fa-gears', it: 'fa-shield-halved', health_safety: 'fa-kit-medical',
+  general: 'fa-file-lines',
+};
+
+let _policies = [];
+let _policyReaders = null;   // the report currently open, for the CSV export
+
+async function renderPolicies() {
+  const wrap = document.getElementById('policyContent');
+  wrap.innerHTML = `<div style="padding:30px;text-align:center;color:var(--muted)">Loading policies…</div>`;
+
+  const r = await get('staff-policies?include_superseded=true');
+  if (r._error) {
+    wrap.innerHTML = `<div style="padding:30px;text-align:center;color:#ef4444">
+      ${r._error === 403 ? 'Only directors can manage policies.' : 'Could not load the policies.'}</div>`;
+    return;
+  }
+  _policies = r.policies || [];
+
+  const live     = _policies.filter(p => p.is_active);
+  const needAck  = live.filter(p => p.requires_ack);
+  const headcount = await _activeHeadcount();
+  /* Signatures still owed across every policy that asks for one. It is the
+     number a director is actually chasing, so it leads. */
+  const gap = needAck.reduce((n, p) => n + Math.max(0, headcount - (p.ack_count || 0)), 0);
+
+  document.getElementById('policyStats').innerHTML = `
+    ${_statCard('fa-file-shield', '#eda5ff', live.length, 'Live policies')}
+    ${_statCard('fa-user-check', '#00d4aa', needAck.length, 'Ask for a signature')}
+    ${_statCard('fa-hourglass-half', gap ? '#f59e0b' : '#00d4aa', gap, 'Signatures outstanding')}
+    ${_statCard('fa-box-archive', '#8b8b9e', _policies.length - live.length, 'Withdrawn')}`;
+
+  const badge = document.getElementById('policy-gap-badge');
+  if (badge) { badge.textContent = gap; badge.style.display = gap ? '' : 'none'; }
+
+  if (!_policies.length) {
+    wrap.innerHTML = `<div style="padding:50px;text-align:center;color:var(--muted)">
+      <i class="fa-solid fa-file-shield" style="font-size:2rem;opacity:0.35;display:block;margin-bottom:12px"></i>
+      No policies published yet. Use <strong>Publish a policy</strong> above to add the first one.</div>`;
+    return;
+  }
+
+  const byCat = {};
+  for (const p of _policies) (byCat[p.category] = byCat[p.category] || []).push(p);
+
+  const row = p => {
+    const signed  = p.ack_count || 0;
+    const owing   = p.requires_ack && p.is_active ? Math.max(0, headcount - signed) : 0;
+    return `<tr${p.is_active ? '' : ' style="opacity:0.5"'}>
+      <td style="padding:10px 8px">
+        <div style="font-weight:700">${escH(p.title)}${p.version ? ` <span style="font-size:0.7rem;color:var(--muted)">v${escH(p.version)}</span>` : ''}</div>
+        ${p.summary ? `<div style="font-size:0.76rem;color:var(--muted);margin-top:2px">${escH(p.summary)}</div>` : ''}
+        ${p.superseded_by_title ? `<div style="font-size:0.72rem;color:#f59e0b;margin-top:2px">Replaced by “${escH(p.superseded_by_title)}”</div>` : ''}
+      </td>
+      <td style="padding:10px 8px;color:var(--muted);font-size:0.8rem">${escH(fmtDate(p.effective_date))}</td>
+      <td style="padding:10px 8px;font-size:0.8rem">
+        ${!p.is_active ? '<span class="chip chip--off" style="font-size:0.7rem">withdrawn</span>'
+          : !p.requires_ack ? '<span style="color:var(--muted)">not required</span>'
+          : owing ? `<span style="color:#f59e0b;font-weight:700">${signed} of ${headcount}</span>`
+                  : `<span style="color:#00d4aa;font-weight:700">all ${headcount}</span>`}
+      </td>
+      <td style="padding:10px 8px;text-align:right;white-space:nowrap">
+        <button class="btn btn--ghost btn--sm" onclick="openPolicyFile('${escH(p.id)}')" title="Open the document"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
+        <button class="btn btn--ghost btn--sm" onclick="showPolicyReaders('${escH(p.id)}')" title="Who has read it"><i class="fa-solid fa-users"></i></button>
+        ${p.is_active ? `<button class="btn btn--ghost btn--sm" style="color:#ef4444;border-color:rgba(239,68,68,0.3)"
+            onclick="withdrawPolicy('${escH(p.id)}')" title="Withdraw"><i class="fa-solid fa-box-archive"></i></button>` : ''}
+      </td>
+    </tr>`;
+  };
+
+  wrap.innerHTML = Object.keys(byCat).sort().map(cat => `
+    <div class="dir-sec-head" style="margin-top:18px">
+      <div class="dir-sec-title"><i class="fa-solid ${POLICY_ICONS[cat] || 'fa-file-lines'}"></i>
+        ${escH(POLICY_LABELS[cat] || cat)} (${byCat[cat].length})</div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse;font-size:0.86rem;table-layout:fixed">
+        <thead><tr style="background:rgba(255,255,255,0.03);text-align:left;font-size:0.72rem;text-transform:uppercase;color:var(--muted)">
+          <th style="padding:8px">Policy</th><th style="padding:8px;width:120px">Effective</th>
+          <th style="padding:8px;width:110px">Read</th><th style="padding:8px;width:150px"></th></tr></thead>
+        <tbody>${byCat[cat].map(row).join('')}</tbody>
+      </table>
+    </div>`).join('');
+}
+
+function _statCard(icon, colour, value, label) {
+  return `<div class="dir-stat">
+    <div class="dir-stat-icon" style="background:${colour}22;color:${colour}"><i class="fa-solid ${icon}"></i></div>
+    <div><div class="dir-stat-val">${value}</div><div class="dir-stat-label">${label}</div></div>
+  </div>`;
+}
+
+/* The denominator for "x of y have read it". Asked of the same table the
+   server's outstanding list is built from, so the two cannot disagree. */
+async function _activeHeadcount() {
+  try {
+    const all = await fetchAll('employees');
+    return all.filter(e => (e.status || 'active') === 'active').length;
+  } catch (_) { return 0; }
+}
+
+/* Opened through the API with the director's own session, so a policy is
+   never a public URL that can be forwarded out of the building. */
+async function openPolicyFile(id) {
+  try {
+    const res = await fetch(`${BASE}staff-policies/${encodeURIComponent(id)}/file`,
+      { credentials: 'include', headers: _authHeader() });
+    if (!res.ok) throw new Error('Could not open that policy.');
+    const url = URL.createObjectURL(await res.blob());
+    if (!window.open(url, '_blank', 'noopener')) {
+      const a = document.createElement('a');
+      a.href = url; a.download = (_policies.find(p => p.id === id) || {}).filename || 'policy'; a.click();
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e) { showToast(e.message || 'Could not open that policy.', 'error'); }
+}
+
+/* ─── Who has read it, and who has not ──────────────────────────────── */
+async function showPolicyReaders(id) {
+  const body = document.getElementById('policyReadersBody');
+  body.innerHTML = `<div style="padding:24px;text-align:center;color:var(--muted)">Loading…</div>`;
+  openModal('policyReadersModal');
+
+  const r = await get(`staff-policies/${encodeURIComponent(id)}/acknowledgements`);
+  if (r._error) {
+    body.innerHTML = `<div style="padding:24px;text-align:center;color:#ef4444">
+      ${r._error === 403 ? 'Only directors can see this.' : 'Could not load that.'}</div>`;
+    return;
+  }
+  _policyReaders = r;
+  document.getElementById('policyReadersTitle').textContent =
+    r.policy.title + (r.policy.version ? ' v' + r.policy.version : '');
+
+  const when = d => d ? new Date(d).toLocaleString('en-ZA', { dateStyle:'medium', timeStyle:'short' }) : '';
+  body.innerHTML = `
+    ${!r.policy.requires_ack ? `<div style="padding:10px 12px;margin-bottom:14px;border-radius:8px;
+        background:rgba(255,255,255,0.04);color:var(--muted);font-size:0.82rem">
+        This policy does not ask for an acknowledgement, so nobody is being chased for it.</div>` : ''}
+    <div style="display:flex;gap:12px;margin-bottom:18px">
+      <div style="flex:1;padding:12px 14px;border:1px solid var(--border);border-left:3px solid #00d4aa;border-radius:10px">
+        <div style="font-size:0.7rem;color:var(--muted);text-transform:uppercase">Read it</div>
+        <div style="font-size:1.4rem;font-weight:800;color:#00d4aa">${r.readCount}</div></div>
+      <div style="flex:1;padding:12px 14px;border:1px solid var(--border);border-left:3px solid ${r.outstandingCount ? '#f59e0b' : '#00d4aa'};border-radius:10px">
+        <div style="font-size:0.7rem;color:var(--muted);text-transform:uppercase">Have not</div>
+        <div style="font-size:1.4rem;font-weight:800;color:${r.outstandingCount ? '#f59e0b' : '#00d4aa'}">${r.outstandingCount}</div></div>
+    </div>
+    ${r.outstandingCount ? `
+      <div style="font-weight:700;margin-bottom:8px">Still to read it</div>
+      <table style="width:100%;font-size:0.82rem;border-collapse:collapse;margin-bottom:18px">
+        ${r.outstanding.map(e => `<tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:6px 8px">${escH([e.first_name, e.last_name].filter(Boolean).join(' ') || e.id)}</td>
+          <td style="padding:6px 8px;color:var(--muted)">${escH(e.role || '')}</td>
+          <td style="padding:6px 8px;color:var(--muted)">${escH(e.email || '')}</td></tr>`).join('')}
+      </table>`
+    : `<div style="padding:10px 12px;margin-bottom:18px;border-radius:8px;background:rgba(0,212,170,0.08);color:#00d4aa">
+        <i class="fa-solid fa-circle-check"></i> Everyone on staff has read it.</div>`}
+    ${r.readCount ? `
+      <div style="font-weight:700;margin-bottom:8px">Read it</div>
+      <table style="width:100%;font-size:0.82rem;border-collapse:collapse">
+        ${r.read.map(a => `<tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:6px 8px">${escH(a.employee_name || a.employee_id)}</td>
+          <td style="padding:6px 8px;color:var(--muted)">${escH(a.employee_email || '')}</td>
+          <td style="padding:6px 8px;color:var(--muted)">${escH(when(a.acknowledged_at))}</td></tr>`).join('')}
+      </table>` : ''}`;
+}
+
+/* The list a director actually acts on is the outstanding one, so the export
+   leads with it and says plainly which half each row is. */
+function exportPolicyReadersCSV() {
+  const r = _policyReaders;
+  if (!r) return;
+  const q = v => { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const rows = [['Policy', 'Version', 'Status', 'Name', 'Email', 'Role', 'Acknowledged at']];
+  for (const e of r.outstanding) {
+    rows.push([r.policy.title, r.policy.version || '', 'NOT READ',
+               [e.first_name, e.last_name].filter(Boolean).join(' ') || e.id, e.email || '', e.role || '', '']);
+  }
+  for (const a of r.read) {
+    rows.push([r.policy.title, r.policy.version || '', 'read',
+               a.employee_name || a.employee_id, a.employee_email || '', '', a.acknowledged_at || '']);
+  }
+  const blob = new Blob([rows.map(x => x.map(q).join(',')).join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `policy-acknowledgements-${(r.policy.title || 'policy').replace(/[^\w]+/g, '-').toLowerCase()}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+/* ─── Publishing ────────────────────────────────────────────────────── */
+function openPolicyUpload() {
+  const live = _policies.filter(p => p.is_active);
+  /* One gap between every field. .form-group sets the gap INSIDE a field;
+     director.css has nothing that spaces one field from the next. */
+  document.getElementById('policyModalBody').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:15px">
+    <div class="form-group"><label>Title</label>
+      <input id="polTitle" placeholder="e.g. Leave Policy"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-group"><label>Category</label>
+        <select id="polCategory">${Object.entries(POLICY_LABELS).map(([k, v]) => `<option value="${escH(k)}">${escH(v)}</option>`).join('')}</select></div>
+      <div class="form-group"><label>Version</label>
+        <input id="polVersion" placeholder="e.g. 2.1"></div>
+    </div>
+    <div class="form-group"><label>Effective from</label>
+      <input type="date" id="polEffective"></div>
+    <div class="form-group"><label>Summary</label>
+      <textarea id="polSummary" rows="2" placeholder="One line on what it covers — this is what staff read before opening it"></textarea></div>
+    <div class="form-group"><label>Replaces</label>
+      <select id="polSupersedes">
+        <option value="">Nothing — this is a new policy</option>
+        ${live.map(p => `<option value="${escH(p.id)}">${escH(p.title)}${p.version ? ' v' + escH(p.version) : ''}</option>`).join('')}
+      </select>
+      <div style="font-size:0.76rem;color:var(--muted);margin-top:4px">Replacing withdraws the old one at the same moment, so there is never a day with two live versions. Staff who signed the old one will be asked again.</div></div>
+    <label style="display:flex;gap:9px;align-items:center;cursor:pointer;padding:11px 13px;
+                  border:1px solid var(--border);border-radius:9px;font-size:0.84rem">
+      <input type="checkbox" id="polRequiresAck" checked style="width:auto;margin:0">
+      Staff must confirm they have read it</label>
+    <div class="form-group"><label>File</label>
+      <input type="file" id="polFile" accept=".pdf,image/png,image/jpeg,image/webp">
+      <div style="font-size:0.76rem;color:var(--muted);margin-top:4px">PDF or an image, up to 12 MB.</div></div>
+    <div id="polError" style="color:#ef4444;font-size:0.82rem;display:none"></div>
+    </div>`;
+  openModal('policyModal');
+}
+
+async function submitPolicy() {
+  const err  = document.getElementById('polError');
+  const fail = m => { err.textContent = m; err.style.display = 'block'; };
+  const title = document.getElementById('polTitle').value.trim();
+  const file  = document.getElementById('polFile').files[0];
+  if (!title) return fail('Give the policy a title.');
+  if (!file)  return fail('Choose a file.');
+  if (file.size > 12 * 1024 * 1024) return fail('That file is over 12 MB.');
+
+  const dataUrl = await new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload  = () => resolve(fr.result);
+    fr.onerror = () => reject(new Error('Could not read that file.'));
+    fr.readAsDataURL(file);
+  }).catch(e => { fail(e.message); return null; });
+  if (!dataUrl) return;
+
+  const r = await post('staff-policies', {
+    title,
+    category:       document.getElementById('polCategory').value,
+    summary:        document.getElementById('polSummary').value.trim(),
+    version:        document.getElementById('polVersion').value.trim(),
+    effective_date: document.getElementById('polEffective').value || null,
+    supersedes_id:  document.getElementById('polSupersedes').value || null,
+    requires_ack:   document.getElementById('polRequiresAck').checked,
+    filename:       file.name,
+    file_data:      dataUrl,
+  });
+  if (r && r.error) return fail(r.error);
+
+  closeModal('policyModal');
+  showToast('Policy published to all staff');
+  renderPolicies();
+}
+
+/* Withdrawing does not delete. "What did it say in March" cannot be answered
+   by a deleted row. */
+async function withdrawPolicy(id) {
+  const p = _policies.find(x => x.id === id) || {};
+  if (!confirm(`Withdraw “${p.title || id}”?\n\nStaff stop seeing it immediately. It is kept, not deleted, and the acknowledgements already recorded against it stay with it.`)) return;
+  await del(`staff-policies/${encodeURIComponent(id)}`);
+  showToast('Policy withdrawn');
+  renderPolicies();
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   MONTHLY DIRECTOR REPORT
+
+   Every figure comes from /api/director-report, which is the same service
+   the emailed report reads. Nothing is recomputed here — a number worked out
+   in the browser is a second answer to the same question.
+
+   Charts: colour is never the only thing carrying identity. The platform's
+   product colours fail colour-blind separation against each other (#ff5229
+   against #22c55e is ΔE 5.9 for a deuteranope), and they are the products'
+   identity everywhere else on the platform, so rather than repaint them the
+   product split is a labelled bar chart — the name is on the bar. The
+   waterfall carries direction in the step itself and a signed label, with
+   colour as reinforcement.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+const RPT = {
+  ink:    '#e8eaf6',
+  muted:  '#6b7280',
+  grid:   'rgba(255,255,255,0.06)',
+  brand:  '#eda5ff',   /* the one canonical purple */
+  up:     '#00d4aa',
+  down:   '#fec24f',
+  total:  '#8b93a7',
+  bad:    '#ef4444',
+};
+
+let _report = null;
+let _reportMonth = null;
+let _reportMonths = [];
+const _rptCharts = {};
+
+const rZAR = v => 'R' + Number(v || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const rZARk = v => {
+  const n = Number(v || 0);
+  if (Math.abs(n) >= 1e6) return 'R' + (n / 1e6).toFixed(2) + 'm';
+  if (Math.abs(n) >= 1e3) return 'R' + (n / 1e3).toFixed(0) + 'k';
+  return 'R' + n.toFixed(0);
+};
+const rNum = v => Number(v || 0).toLocaleString('en-ZA');
+const rPct = (v, dp = 1) => v == null || isNaN(v) ? '—' : Number(v).toFixed(dp) + '%';
+const rSigned = (v, dp = 1) => v == null || isNaN(v) ? '—' : (v >= 0 ? '+' : '') + Number(v).toFixed(dp) + '%';
+const rDate = d => d ? new Date(d).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+
+async function renderMonthlyReport() {
+  const wrap = document.getElementById('reportContent');
+  wrap.innerHTML = `<div style="padding:40px;text-align:center;color:var(--muted)">Building the report…</div>`;
+
+  if (!_reportMonths.length) {
+    const m = await get('director-report/months');
+    _reportMonths = m.months || [];
+    /* The month that has ENDED, not the one running — a part-month report
+       reads as a collapse in AUM on the 3rd. */
+    if (!_reportMonth) _reportMonth = _reportMonths[1] || _reportMonths[0] || null;
+  }
+  const r = await get('director-report' + (_reportMonth ? `?month=${encodeURIComponent(_reportMonth)}` : ''));
+  if (r._error) {
+    wrap.innerHTML = `<div style="padding:40px;text-align:center;color:#ef4444">
+      ${r._error === 403 ? 'Only directors can open this report.' : 'Could not build the report.'}</div>`;
+    return;
+  }
+  _report = r;
+
+  wrap.innerHTML = [
+    _rptHeader(r), _rptHero(r), _rptWaterfall(r), _rptTrendAndSplit(r),
+    _rptPools(r), _rptInvestors(r), _rptReturns(r), _rptUnderlying(r),
+    `<div style="margin:26px 0 10px;font-size:0.72rem;color:var(--muted);line-height:1.6">
+       Built ${escH(new Date(r.generatedAt).toLocaleString('en-ZA'))}. AUM is the principal of investments
+       live on the last day of the month; a return is earned on principal and is not part of it.
+       Figures are the same ones the monthly director email carries.</div>`,
+  ].join('');
+
+  _drawReportCharts(r);
+}
+
+function _rptHeader(r) {
+  const months = (_reportMonths || []).map(m =>
+    `<option value="${escH(m)}"${m === r.month ? ' selected' : ''}>${escH(_monthLabel(m))}</option>`).join('');
+  return `<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:20px">
+    <select onchange="_reportMonth=this.value;renderMonthlyReport()"
+            style="background:var(--surface2);border:1px solid var(--border);color:var(--text);
+                   padding:9px 12px;border-radius:9px;font-size:0.86rem;font-family:inherit">${months}</select>
+    <div style="color:var(--muted);font-size:0.8rem">${escH(r.periodStart)} to ${escH(r.periodEnd)} · SAST</div>
+  </div>`;
+}
+
+function _monthLabel(m) {
+  const [y, mo] = String(m).split('-');
+  return new Date(Date.UTC(+y, +mo - 1, 1)).toLocaleString('en-ZA', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+}
+
+/* The four figures a director looks at first. A hero number needs no chart. */
+function _rptHero(r) {
+  const a = r.aum, i = r.investors;
+  const dir = (a.changePct || 0) >= 0;
+  return `<div class="dir-stats">
+    ${_rptTile('fa-sack-dollar', RPT.brand, rZAR(a.closing), 'Closing AUM',
+       `<span style="color:${dir ? RPT.up : RPT.down}">${rSigned(a.changePct)}</span> on last month`)}
+    ${_rptTile('fa-users', RPT.up, rNum(i.activeInvestors), 'Active investors',
+       `${i.growth >= 0 ? '+' : ''}${rNum(i.growth)} · ${rNum(i.joinedThisMonth)} joined`)}
+    ${_rptTile('fa-chart-pie', RPT.down, rZARk(i.avgHoldingPerInvestor), 'Average holding',
+       `${rZARk(i.avgInvestmentSize)} average ticket`)}
+    ${_rptTile('fa-circle-half-stroke', i.top10SharePct > 50 ? RPT.bad : RPT.total,
+       rPct(i.top10SharePct), 'Top 10 investors',
+       `${rZARk(i.top10Aum)} of the book`)}
+  </div>`;
+}
+
+function _rptTile(icon, colour, value, label, sub) {
+  return `<div class="dir-stat">
+    <div class="dir-stat-icon" style="background:${colour}22;color:${colour}"><i class="fa-solid ${icon}"></i></div>
+    <div><div class="dir-stat-val">${value}</div>
+      <div class="dir-stat-label">${label}</div>
+      <div style="font-size:0.7rem;color:var(--muted);margin-top:3px">${sub}</div></div>
+  </div>`;
+}
+
+/* ─── The bridge ────────────────────────────────────────────────────────
+   Opening to closing, with every step named. The reconciliation line is
+   stated either way: a bridge that silently plugs its own gap is worse than
+   no bridge at all. */
+function _rptWaterfall(r) {
+  const m = r.aum.movement;
+  const tie = m.reconciles
+    ? `<span style="color:${RPT.up}"><i class="fa-solid fa-circle-check"></i> Reconciles exactly</span>`
+    : `<span style="color:${RPT.bad}"><i class="fa-solid fa-triangle-exclamation"></i>
+        Does not reconcile — ${rZAR(m.residual)} unexplained by these movements</span>`;
+  return `<div class="dir-sec-head" style="margin-top:26px">
+      <div class="dir-sec-title"><i class="fa-solid fa-stairs"></i> AUM movement</div>
+      <div style="font-size:0.78rem">${tie}</div></div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px">
+      <div style="height:300px"><canvas id="rptWaterfall"></canvas></div>
+      <div class="rpt-steps">
+        ${_rptStep('Opening AUM', m.opening, null, `${rNum(m.openingCount)} investments`)}
+        ${_rptStep('New capital', m.newCapital, 'up', `${rNum(m.newCount)} new investments`)}
+        ${_rptStep('Reinvested at maturity', m.reinvested, 'up', `${rNum(m.reinvestedCount)} rolled in`)}
+        ${_rptStep('Matured and rolled out', -m.rolledOut, 'down', 'the same money, leaving')}
+        ${_rptStep('Returned to investors', -m.returnedToInvestors, 'down', `${rNum(m.maturedCount)} maturities in all`)}
+        ${_rptStep('Closing AUM', m.closing, null, `${rNum(m.closingCount)} investments`)}
+      </div>
+      <div style="margin-top:14px;padding:11px 13px;background:rgba(255,255,255,0.03);border-radius:9px;
+                  font-size:0.78rem;color:var(--muted);line-height:1.6">
+        <strong style="color:var(--text)">Returns paid out: ${rZAR(r.returns.realisedOnMaturity)}</strong>
+        — shown beside the bridge, never inside it. A return is earned on the principal rather than added to it,
+        so it was never part of AUM; subtracting it here would make the bridge wrong by exactly that amount.
+        Reinvested capital appears on both sides because a rollover is money leaving one pool and entering another.
+      </div>
+    </div>`;
+}
+
+function _rptStep(label, value, dir, sub) {
+  const colour = dir === 'up' ? RPT.up : dir === 'down' ? RPT.down : RPT.ink;
+  return `<div style="padding:11px 13px;border:1px solid var(--border);border-radius:10px;
+                      border-left:3px solid ${dir ? colour : RPT.total}">
+    <div style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em">${label}</div>
+    <div style="font-size:1.05rem;font-weight:800;color:${colour};font-variant-numeric:tabular-nums">
+      ${value < 0 ? '−' : dir === 'up' ? '+' : ''}${rZAR(Math.abs(value))}</div>
+    <div style="font-size:0.68rem;color:var(--muted);margin-top:2px">${sub}</div>
+  </div>`;
+}
+
+/* A product's colour comes from the products table and is its identity across
+   the portal and the admin console, so the report uses it. Some of them are
+   greys — short_term is stored as #656565 — and a grey bar on a dark panel for
+   the largest holding in the book cannot be read. Identity here is carried by
+   the label on the bar, not the fill, so a colour with no chroma is swapped
+   for a legible one rather than the product being repainted platform-wide.   */
+function _rptBarColour(hex, idx) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || ''));
+  if (m) {
+    const n = parseInt(m[1], 16);
+    const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    if (mx && (mx - mn) / mx >= 0.22) return '#' + m[1];   /* enough chroma to read as a colour */
+  }
+  return ['#eda5ff', '#00d4aa', '#60a5fa', '#f97316', '#fec24f'][idx % 5];
+}
+
+function _rptTrendAndSplit(r) {
+  const bp = r.aum.byProduct;
+  const max = Math.max(1, ...bp.map(p => p.aum));
+  return `<div style="display:grid;grid-template-columns:1.15fr 1fr;gap:18px;margin-top:26px" class="rpt-split">
+    <div>
+      <div class="dir-sec-head"><div class="dir-sec-title"><i class="fa-solid fa-chart-line"></i> AUM, last six months</div></div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px">
+        <div style="height:260px"><canvas id="rptTrend"></canvas></div>
+      </div>
+    </div>
+    <div>
+      <div class="dir-sec-head"><div class="dir-sec-title"><i class="fa-solid fa-layer-group"></i> Where it sits</div></div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px">
+        ${bp.length ? bp.map((p, idx) => `
+          <div style="margin-bottom:14px">
+            <div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:5px">
+              <span style="font-weight:700">${escH(p.label)}</span>
+              <span style="font-variant-numeric:tabular-nums">${rZARk(p.aum)} · ${rPct(p.sharePct)}</span></div>
+            <div style="height:9px;background:rgba(255,255,255,0.05);border-radius:5px;overflow:hidden">
+              <div style="height:100%;width:${(p.aum / max * 100).toFixed(1)}%;background:${escH(_rptBarColour(p.color, idx))};border-radius:5px"></div></div>
+            <div style="font-size:0.68rem;color:var(--muted);margin-top:3px">
+              ${rNum(p.investments)} investments · ${rNum(p.investors)} investors</div>
+          </div>`).join('')
+        : `<div style="color:var(--muted);text-align:center;padding:30px">Nothing invested in this month.</div>`}
+      </div>
+    </div>
+  </div>`;
+}
+
+function _rptPools(r) {
+  return `<div class="dir-sec-head" style="margin-top:26px">
+      <div class="dir-sec-title"><i class="fa-solid fa-layer-group"></i> Five largest pools</div></div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse;font-size:0.84rem">
+        <thead><tr style="background:rgba(255,255,255,0.03);text-align:left;font-size:0.7rem;
+                          text-transform:uppercase;color:var(--muted)">
+          <th style="padding:9px">Pool</th><th style="padding:9px">Product</th>
+          <th style="padding:9px;text-align:right">AUM</th>
+          <th style="padding:9px;text-align:right">Investors</th>
+          <th style="padding:9px">Matures</th><th style="padding:9px">Status</th></tr></thead>
+        <tbody>${r.pools.length ? r.pools.map(p => `
+          <tr style="border-top:1px solid var(--border)">
+            <td style="padding:9px;font-weight:600">${escH(p.name)}</td>
+            <td style="padding:9px;color:var(--muted)">${escH(p.productLabel)}</td>
+            <td style="padding:9px;text-align:right;font-variant-numeric:tabular-nums;font-weight:700">${rZAR(p.aum)}</td>
+            <td style="padding:9px;text-align:right;font-variant-numeric:tabular-nums">${rNum(p.investors)}</td>
+            <td style="padding:9px">${escH(rDate(p.maturityDate))}</td>
+            <td style="padding:9px"><span class="chip ${p.status === 'open' ? 'chip--onboard' : 'chip--done'}"
+                 style="font-size:0.68rem">${escH(p.status)}</span></td>
+          </tr>`).join('')
+        : `<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--muted)">No pools holding money this month.</td></tr>`}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function _rptInvestors(r) {
+  const i = r.investors, w = i.withdrawals, c = i.compliance, d = i.demographics;
+  const chips = rows => rows.length ? rows.map(x => `
+    <span style="display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:20px;
+                 background:rgba(255,255,255,0.05);font-size:0.74rem;margin:0 5px 5px 0">
+      ${escH(x.status)} <strong>${rNum(x.n)}</strong></span>`).join('')
+    : `<span style="color:var(--muted);font-size:0.78rem">Nothing recorded</span>`;
+
+  return `<div class="dir-sec-head" style="margin-top:26px">
+      <div class="dir-sec-title"><i class="fa-solid fa-users"></i> Investors</div></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:16px">
+
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px">
+        <div style="font-weight:700;margin-bottom:12px">Growth</div>
+        ${_rptRow('Active investors', rNum(i.activeInvestors))}
+        ${_rptRow('Last month', rNum(i.previousActiveInvestors))}
+        ${_rptRow('Change', `${i.growth >= 0 ? '+' : ''}${rNum(i.growth)} (${rSigned(i.growthPct)})`,
+                  (i.growth || 0) >= 0 ? RPT.up : RPT.down)}
+        ${_rptRow('Registered this month', rNum(i.joinedThisMonth))}
+        ${_rptRow('Registered in all', rNum(i.registeredInvestors))}
+        <div style="font-size:0.68rem;color:var(--muted);margin-top:8px;line-height:1.5">
+          "Active" means money in a pool at month end — not a row marked active, which counts everyone who
+          signed up and never invested.</div>
+      </div>
+
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px">
+        <div style="font-weight:700;margin-bottom:12px">Concentration</div>
+        ${_rptRow('Top 10 share of AUM', rPct(i.top10SharePct), i.top10SharePct > 50 ? RPT.bad : RPT.ink)}
+        ${_rptRow('Held by the top 10', rZAR(i.top10Aum))}
+        ${_rptRow('Average holding', rZAR(i.avgHoldingPerInvestor))}
+        ${_rptRow('Average ticket', rZAR(i.avgInvestmentSize))}
+        <div style="margin-top:10px;max-height:150px;overflow:auto">
+          ${i.topInvestors.map(t => `<div style="display:flex;justify-content:space-between;
+              font-size:0.76rem;padding:3px 0;border-bottom:1px solid var(--border)">
+            <span>${t.rank}. ${escH(t.name)}</span>
+            <span style="font-variant-numeric:tabular-nums;color:var(--muted)">${rZARk(t.aum)} · ${rPct(t.sharePct)}</span>
+          </div>`).join('')}
+        </div>
+      </div>
+
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px">
+        <div style="font-weight:700;margin-bottom:12px">Withdrawals</div>
+        ${_rptRow('Withdrawals paid', rNum(w.count))}
+        ${_rptRow('Investors who withdrew', rNum(w.investors))}
+        ${_rptRow('Total paid out', rZAR(w.total))}
+        ${_rptRow('Average withdrawal', rZAR(w.avg))}
+        ${_rptRow('Still pending', `${rNum(w.pendingCount)} · ${rZAR(w.pendingTotal)}`,
+                  w.pendingCount ? RPT.down : RPT.ink)}
+        <div style="font-size:0.68rem;color:var(--muted);margin-top:8px">Completed only — a pending withdrawal is a request, not money gone.</div>
+      </div>
+
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px">
+        <div style="font-weight:700;margin-bottom:12px">KYC and FICA</div>
+        <div style="font-size:0.72rem;color:var(--muted);margin-bottom:5px">KYC status (manual review)</div>
+        <div style="margin-bottom:12px">${chips(c.kycByStatus)}</div>
+        <div style="font-size:0.72rem;color:var(--muted);margin-bottom:5px">FICA checks (automated ID and bank)</div>
+        <div style="margin-bottom:12px">${chips(c.ficaByStatus)}</div>
+        ${_rptRow('Documents awaiting review', rNum(c.documents.pending), c.documents.pending ? RPT.down : RPT.ink)}
+        ${_rptRow('Verified', `${rNum(c.verified)} of ${rNum(c.investorsCounted)} (${rPct(c.verifiedPct, 0)})`)}
+        <div style="font-size:0.68rem;color:var(--muted);margin-top:8px;line-height:1.5">
+          Two different things: KYC is the manual review on the investor, FICA is the automated check. They disagree,
+          and the gap is the point.</div>
+      </div>
+
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px">
+        <div style="font-weight:700;margin-bottom:12px">Where the money is from</div>
+        ${d.provinces.length ? d.provinces.map(p => `
+          <div style="display:flex;justify-content:space-between;font-size:0.78rem;padding:4px 0">
+            <span>${escH(p.province)}</span>
+            <span style="font-variant-numeric:tabular-nums;color:var(--muted)">${rNum(p.investors)} · ${rZARk(p.aum)} · ${rPct(p.sharePct)}</span>
+          </div>`).join('') : `<div style="color:var(--muted);font-size:0.78rem">No provinces recorded.</div>`}
+      </div>
+
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px">
+        <div style="font-weight:700;margin-bottom:12px">Age</div>
+        ${d.ageBands.length ? d.ageBands.map(b => `
+          <div style="display:flex;justify-content:space-between;font-size:0.78rem;padding:4px 0">
+            <span>${escH(b.band)}</span>
+            <span style="font-variant-numeric:tabular-nums;color:var(--muted)">${rNum(b.investors)}</span>
+          </div>`).join('') : `<div style="color:var(--muted);font-size:0.78rem">No dates of birth recorded.</div>`}
+      </div>
+    </div>`;
+}
+
+function _rptRow(label, value, colour) {
+  return `<div style="display:flex;justify-content:space-between;align-items:baseline;
+                      padding:5px 0;border-bottom:1px solid var(--border);font-size:0.82rem">
+    <span style="color:var(--muted)">${label}</span>
+    <span style="font-weight:700;font-variant-numeric:tabular-nums${colour ? `;color:${colour}` : ''}">${value}</span>
+  </div>`;
+}
+
+function _rptReturns(r) {
+  const re = r.returns.reinvestment;
+  return `<div class="dir-sec-head" style="margin-top:26px">
+      <div class="dir-sec-title"><i class="fa-solid fa-arrows-rotate"></i> Returns</div></div>
+    <div style="display:grid;grid-template-columns:1fr 1.3fr;gap:18px" class="rpt-split">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px">
+        <div style="font-weight:700;margin-bottom:14px">What investors did with money that matured</div>
+        ${re.total ? `
+          <div style="display:flex;height:34px;border-radius:9px;overflow:hidden;margin-bottom:12px">
+            <div style="width:${(re.reinvestedPct || 0).toFixed(1)}%;background:${RPT.up};
+                        display:flex;align-items:center;justify-content:center;font-size:0.74rem;
+                        font-weight:800;color:#06241d">${rPct(re.reinvestedPct, 0)}</div>
+            <div style="width:2px;background:var(--surface)"></div>
+            <div style="flex:1;background:${RPT.down};display:flex;align-items:center;justify-content:center;
+                        font-size:0.74rem;font-weight:800;color:#2a1d02">${rPct(re.paidOutPct, 0)}</div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:0.76rem;margin-bottom:14px">
+            <span style="color:${RPT.up}">Reinvested · ${rZAR(re.reinvested)} · ${rNum(re.reinvestedCount)}</span>
+            <span style="color:${RPT.down}">Taken as cash · ${rZAR(re.paidOut)} · ${rNum(re.paidOutCount)}</span>
+          </div>` : `<div style="color:var(--muted);font-size:0.8rem;margin-bottom:14px">Nothing matured this month.</div>`}
+        ${_rptRow('Income accrued in the month', rZAR(r.returns.accruedThisMonth))}
+        ${_rptRow('Realised on maturities', rZAR(r.returns.realisedOnMaturity))}
+        <div style="font-size:0.68rem;color:var(--muted);margin-top:8px;line-height:1.5">
+          Side by side, never added. A maturity whose return was also accrued monthly appears in both,
+          so adding them would declare the same money twice.</div>
+      </div>
+
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px">
+        <div style="font-weight:700;margin-bottom:12px">Realised return by product</div>
+        ${r.returns.byProduct.length ? `
+          <table style="width:100%;border-collapse:collapse;font-size:0.8rem">
+            <thead><tr style="text-align:left;font-size:0.68rem;text-transform:uppercase;color:var(--muted)">
+              <th style="padding:6px 4px">Product</th><th style="padding:6px 4px;text-align:right">Capital matured</th>
+              <th style="padding:6px 4px;text-align:right">Return</th><th style="padding:6px 4px;text-align:right">On capital</th></tr></thead>
+            <tbody>${r.returns.byProduct.map(p => `<tr style="border-top:1px solid var(--border)">
+              <td style="padding:6px 4px">${escH(p.label)}</td>
+              <td style="padding:6px 4px;text-align:right;font-variant-numeric:tabular-nums">${rZAR(p.capital)}</td>
+              <td style="padding:6px 4px;text-align:right;font-variant-numeric:tabular-nums;color:${RPT.up}">${rZAR(p.realised)}</td>
+              <td style="padding:6px 4px;text-align:right;font-variant-numeric:tabular-nums;font-weight:700">${rPct(p.realisedPct)}</td>
+            </tr>`).join('')}</tbody>
+          </table>
+          <div style="height:170px;margin-top:14px"><canvas id="rptReturnsTrend"></canvas></div>`
+        : `<div style="color:var(--muted);font-size:0.8rem">No maturities this month, so no realised return to report.</div>`}
+      </div>
+    </div>`;
+}
+
+function _rptUnderlying(r) {
+  const c = r.underlying.cattle, s = r.underlying.solar, st = r.underlying.shortTerm;
+  const up = c.pricePerHeadChangePct;
+  return `<div class="dir-sec-head" style="margin-top:26px">
+      <div class="dir-sec-title"><i class="fa-solid fa-seedling"></i> The assets behind the money</div></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:16px">
+
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px">
+        <div style="font-weight:700;margin-bottom:12px"><i class="fa-solid fa-cow" style="color:#78b159"></i> Cattle</div>
+        ${_rptRow('Head under management', rNum(c.underManagement))}
+        ${_rptRow('Sold this month', rNum(c.soldThisMonth))}
+        ${_rptRow('Sale value this month', rZAR(c.soldValueThisMonth))}
+        ${_rptRow('Average price per head', rZAR(c.avgSalePriceThisMonth))}
+        ${_rptRow('Mortalities this month', rNum(c.mortalitiesThisMonth), c.mortalitiesThisMonth ? RPT.down : RPT.ink)}
+        ${_rptRow('Latest realised price per head', c.latestPricePerHead == null ? '—' : rZAR(c.latestPricePerHead),
+                  up == null ? null : up >= 0 ? RPT.up : RPT.down)}
+        ${up == null ? '' : _rptRow('Against the cycle before', rSigned(up), up >= 0 ? RPT.up : RPT.down)}
+        ${c.pricePerHeadTrend.length ? `<div style="height:140px;margin-top:12px"><canvas id="rptCattlePrice"></canvas></div>` : ''}
+        <div style="font-size:0.68rem;color:var(--muted);margin-top:8px;line-height:1.5">${escH(c.priceBasis)}</div>
+      </div>
+
+      ${_rptBeefMarket(c.market)}
+
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px">
+        <div style="font-weight:700;margin-bottom:12px"><i class="fa-solid fa-solar-panel" style="color:#fec24f"></i> Solar</div>
+        ${_rptRow('Projects', `${rNum(s.activeProjects)} active of ${rNum(s.projects)}`)}
+        ${_rptRow('Installed capacity', `${rNum(s.capacityKw)} kW`)}
+        ${_rptRow('Capital deployed', rZAR(s.capitalDeployed))}
+        ${s.generation ? `
+          ${_rptRow('Generated this month', `${rNum(s.generation.monthKwh)} kWh`, RPT.up)}
+          ${_rptRow('Generated all time', `${rNum(s.generation.totalKwh)} kWh`)}
+          ${_rptRow('Right now', `${rNum(s.generation.currentKw)} kW`)}`
+        : `<div style="font-size:0.72rem;color:var(--down);margin-top:8px;padding:9px 11px;
+                      background:rgba(254,194,79,0.08);border-radius:8px;line-height:1.5">
+             <i class="fa-solid fa-plug-circle-exclamation"></i> ${escH(s.generationNote)}</div>`}
+        ${s.sites.length ? `<div style="margin-top:10px;font-size:0.74rem">
+          ${s.sites.slice(0, 5).map(x => `<div style="display:flex;justify-content:space-between;padding:3px 0">
+            <span>${escH(x.name)}${x.metered ? '' : ' <span style="color:var(--muted)">(not metered)</span>'}</span>
+            <span style="color:var(--muted);font-variant-numeric:tabular-nums">${rNum(x.capacityKw)} kW</span></div>`).join('')}
+        </div>` : ''}
+      </div>
+
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px">
+        <div style="font-weight:700;margin-bottom:12px"><i class="fa-solid fa-handshake" style="color:${RPT.brand}"></i> Short term lending</div>
+        ${_rptRow('Deals funded this month', rNum(st.fundedThisMonth))}
+        ${_rptRow('Disbursed this month', rZAR(st.disbursedThisMonth))}
+        ${_rptRow('Average rate this month', st.avgRateThisMonth ? rPct(st.avgRateThisMonth * 100) : '—')}
+        ${_rptRow('Repaid this month', `${rNum(st.repaidDeals)} · ${rZAR(st.repaidAmount)}`)}
+        ${_rptRow('Open deals', rNum(st.openDeals))}
+        ${_rptRow('Outstanding', rZAR(st.outstanding))}
+        ${_rptRow('Past their repayment date', `${rNum(st.overdueDeals)} · ${rZAR(st.overdueAmount)}`,
+                  st.overdueDeals ? RPT.bad : RPT.up)}
+      </div>
+    </div>`;
+}
+
+/* The published beef market, beside our own realised price.
+ *
+ * Two different claims, and the panel keeps them apart: what we GOT, which is
+ * in the cattle panel, and what the market IS, which is here. The projection
+ * is labelled as an estimate and shows the three numbers it was built from, so
+ * nobody reads it as a sale. A price older than a week says how old it is.   */
+function _rptBeefMarket(mk) {
+  if (!mk || !mk.available) {
+    return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px">
+      <div style="font-weight:700;margin-bottom:12px"><i class="fa-solid fa-tag" style="color:${RPT.down}"></i> Beef market price</div>
+      <div style="font-size:0.78rem;color:var(--muted);line-height:1.6">${escH((mk && mk.note) || 'No price captured.')}</div>
+      ${_rptFetchLine(mk && mk.lastFetch)}
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn btn--ghost btn--sm" onclick="fetchBeefPriceNow()">
+          <i class="fa-solid fa-rotate"></i> Fetch now</button>
+        <button class="btn btn--ghost btn--sm" onclick="openBeefPriceEntry()">
+          <i class="fa-solid fa-plus"></i> Enter by hand</button>
+      </div>
+    </div>`;
+  }
+  const up = mk.classAChangePct;
+  const stale = mk.prices.filter(p => p.staleWeeks > 0);
+  return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px">
+    <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:12px">
+      <div style="font-weight:700"><i class="fa-solid fa-tag" style="color:${RPT.down}"></i> Beef market price</div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn--ghost btn--sm" title="Fetch the RPO report now" onclick="fetchBeefPriceNow()">
+          <i class="fa-solid fa-rotate"></i></button>
+        <button class="btn btn--ghost btn--sm" title="Enter a week by hand" onclick="openBeefPriceEntry()">
+          <i class="fa-solid fa-plus"></i></button>
+      </div>
+    </div>
+    ${mk.prices.map(p => _rptRow(
+       `${escH(_beefLabel(p.category))} <span style="color:var(--muted);font-size:0.7rem">${escH(p.basis)}</span>`,
+       `${rZAR(p.randPerKg)}/kg`)).join('')}
+    ${_rptRow('Through the month', up == null ? '—' : rSigned(up), up == null ? null : up >= 0 ? RPT.up : RPT.down)}
+    ${mk.classAAtMonthStart ? `<div style="font-size:0.68rem;color:var(--muted);margin-top:4px">
+        Class A opened the month at ${rZAR(mk.classAAtMonthStart)}/kg and closed at ${rZAR(mk.classANow)}/kg.</div>` : ''}
+
+    <div style="margin-top:14px;padding:11px 13px;border:1px solid var(--border);border-radius:9px">
+      <div style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em">
+        What a finished animal would fetch at this price</div>
+      <div style="font-size:1.15rem;font-weight:800;color:${RPT.ink};font-variant-numeric:tabular-nums">
+        ${mk.projectedPerHead == null ? '—' : rZAR(mk.projectedPerHead)}</div>
+      <div style="font-size:0.7rem;color:var(--muted);margin-top:3px">
+        ${rNum(mk.assumptions.targetSaleWeightKg)} kg live × ${rPct(mk.assumptions.dressingPct * 100, 0)} dressing
+        × ${mk.classANow == null ? '—' : rZAR(mk.classANow)}/kg carcass</div>
+      ${mk.projectedAgainstRealisedPct == null ? '' : `<div style="font-size:0.74rem;margin-top:6px;
+          color:${mk.projectedAgainstRealisedPct >= 0 ? RPT.up : RPT.down}">
+        ${rSigned(mk.projectedAgainstRealisedPct)} against the ${rZAR(mk.lastRealisedPerHead)} we last realised</div>`}
+      ${mk.projectedMarginPerHead == null ? '' : _rptRow('Projected margin a head', rZAR(mk.projectedMarginPerHead),
+        mk.projectedMarginPerHead >= 0 ? RPT.up : RPT.bad)}
+    </div>
+
+    ${mk.trend.length ? `<div style="height:130px;margin-top:12px"><canvas id="rptBeefPrice"></canvas></div>` : ''}
+    ${stale.length ? `<div style="font-size:0.7rem;color:${RPT.down};margin-top:8px">
+        <i class="fa-solid fa-clock"></i> ${stale.map(p => `${escH(_beefLabel(p.category))} is
+        ${rNum(p.staleWeeks)} week${p.staleWeeks === 1 ? '' : 's'} old`).join('; ')}.</div>` : ''}
+    <div style="font-size:0.68rem;color:var(--muted);margin-top:8px;line-height:1.5">
+      ${escH(mk.basisNote)}
+      ${mk.prices[0] ? ` Week ending ${escH(mk.prices[0].weekEnding)}, from ${escH(mk.prices[0].source)}${
+        mk.prices[0].capturedBy ? `, captured by ${escH(mk.prices[0].capturedBy)}` : ', fetched automatically'}.` : ''}
+    </div>
+    ${_rptFetchLine(mk.lastFetch)}
+  </div>`;
+}
+
+/* Whether the weekly fetch is working, in a line. A fetcher that quietly
+   stopped is how a board reads a two-month-old price as this week's, so the
+   outcome is on the report rather than in a log nobody opens. */
+function _rptFetchLine(f) {
+  if (!f) return `<div style="font-size:0.7rem;color:var(--muted);margin-top:8px">
+    The weekly fetch has not run yet. It runs on Thursdays.</div>`;
+  const when = new Date(f.ran_at).toLocaleString('en-ZA', { dateStyle: 'medium', timeStyle: 'short' });
+  const good = f.outcome === 'stored';
+  const colour = good ? RPT.up : f.outcome === 'rejected' ? RPT.down : RPT.bad;
+  const word = { stored: 'fetched', rejected: 'read the page but would not trust what it found',
+                 no_match: 'could not find the prices on the page',
+                 unreachable: 'could not reach the page' }[f.outcome] || escH(f.outcome);
+  return `<div style="font-size:0.7rem;margin-top:8px;color:${colour};line-height:1.5">
+    <i class="fa-solid ${good ? 'fa-circle-check' : 'fa-triangle-exclamation'}"></i>
+    Last automatic fetch ${escH(when)} — ${word}${f.triggered_by ? `, run by ${escH(f.triggered_by)}` : ''}.
+    ${f.detail ? `<div style="color:var(--muted);margin-top:2px">${escH(f.detail)}</div>` : ''}
+  </div>`;
+}
+
+async function fetchBeefPriceNow() {
+  showToast('Fetching the RPO report…');
+  const r = await post('director-report/beef-prices/fetch', {});
+  if (r && r.error) { showToast(r.error, 'error'); return; }
+  showToast(r.outcome === 'stored' ? `Stored ${r.stored} price${r.stored === 1 ? '' : 's'}`
+                                   : (r.detail || r.outcome), r.outcome === 'stored' ? 'success' : 'error');
+  renderMonthlyReport();
+}
+
+const _beefLabel = c => ({ class_a: 'Class A', class_c: 'Class C', weaner: 'Weaner calf' })[c] || c;
+
+/* Captured by hand. There is no fetch from the RPO report yet — a parser
+   written against a page nobody has read would put unchecked prices on a board
+   pack, and a wrong price there is worse than an empty section. */
+function openBeefPriceEntry() {
+  const friday = (() => { const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 2) % 7)); return d.toISOString().slice(0, 10); })();
+  const body = document.getElementById('beefModalBody');
+  body.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:15px">
+      <div class="form-group"><label>Week ending</label>
+        <input type="date" id="beefWeek" value="${friday}"></div>
+      <div class="form-group"><label>Category</label>
+        <select id="beefCategory">
+          <option value="class_a">Class A (carcass)</option>
+          <option value="class_c">Class C (carcass)</option>
+          <option value="weaner">Weaner calf (live)</option>
+        </select></div>
+      <div class="form-group"><label>Rand per kilogram</label>
+        <input id="beefPrice" type="number" step="0.01" placeholder="e.g. 72.50">
+        <div style="font-size:0.76rem;color:var(--muted);margin-top:4px">
+          Per KILOGRAM, not per head. Class A and Class C are carcass prices; a weaner is quoted live —
+          the report applies the dressing percentage itself.</div></div>
+      <div class="form-group"><label>Note</label>
+        <input id="beefNote" placeholder="optional"></div>
+      <div style="font-size:0.76rem;color:var(--muted)">
+        Source is recorded as the RPO weekly report, with your name and the time.</div>
+      <div id="beefError" style="color:#ef4444;font-size:0.82rem;display:none"></div>
+    </div>`;
+  openModal('beefModal');
+}
+
+async function submitBeefPrice() {
+  const err = document.getElementById('beefError');
+  const fail = m => { err.textContent = m; err.style.display = 'block'; };
+  const r = await post('director-report/beef-prices', {
+    week_ending: document.getElementById('beefWeek').value,
+    category:    document.getElementById('beefCategory').value,
+    rand_per_kg: document.getElementById('beefPrice').value,
+    notes:       document.getElementById('beefNote').value.trim() || null,
+  });
+  if (r && r.error) return fail(r.error);
+  closeModal('beefModal');
+  showToast('Price captured');
+  renderMonthlyReport();
+}
+
+/* ─── Charts ────────────────────────────────────────────────────────────
+   Dark is the only mode this panel has, so the steps are chosen against
+   #111318 rather than flipped from a light set. Grid and axes are recessive;
+   text wears the text token, never a series colour. */
+function _drawReportCharts(r) {
+  if (typeof Chart === 'undefined') return;          /* offline: the tables still read */
+  Object.values(_rptCharts).forEach(c => { try { c.destroy(); } catch (_) {} });
+
+  const axis = {
+    grid:  { color: RPT.grid, drawTicks: false },
+    ticks: { color: RPT.muted, font: { family: 'Poppins', size: 10 } },
+    border:{ display: false },
+  };
+  const money = v => rZARk(v);
+
+  /* The bridge. Floating bars: each step starts where the last one ended, so
+     the step itself carries the direction and colour only reinforces it. */
+  const m = r.aum.movement;
+  const steps = [
+    { label: 'Opening',     delta: m.opening,                total: true },
+    { label: 'New capital', delta: m.newCapital },
+    { label: 'Reinvested',  delta: m.reinvested },
+    { label: 'Rolled out',  delta: -m.rolledOut },
+    { label: 'Returned',    delta: -m.returnedToInvestors },
+  ];
+  if (!m.reconciles) steps.push({ label: 'Unexplained', delta: m.residual, bad: true });
+  steps.push({ label: 'Closing', delta: m.closing, total: true });
+
+  let run = 0;
+  const bars = steps.map(s => {
+    if (s.total) { run = s.delta; return [0, s.delta]; }
+    const from = run; run += s.delta; return [from, run];
+  });
+  const wf = document.getElementById('rptWaterfall');
+  if (wf) _rptCharts.wf = new Chart(wf, {
+    type: 'bar',
+    data: { labels: steps.map(s => s.label), datasets: [{
+      data: bars,
+      backgroundColor: steps.map(s => s.bad ? RPT.bad : s.total ? RPT.total : s.delta >= 0 ? RPT.up : RPT.down),
+      borderRadius: 4, borderSkipped: false, barPercentage: 0.62,
+    }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },                  /* one dataset — the title names it */
+        tooltip: { callbacks: {
+          label: ctx => {
+            const s = steps[ctx.dataIndex];
+            return s.total ? money(s.delta) : (s.delta >= 0 ? '+' : '−') + money(Math.abs(s.delta));
+          } } },
+      },
+      scales: { x: axis, y: { ...axis, ticks: { ...axis.ticks, callback: money } } },
+    },
+  });
+
+  /* Six months of AUM. One series, so no legend; the last point is labelled. */
+  const t = r.aum.trend;
+  const tr = document.getElementById('rptTrend');
+  if (tr) _rptCharts.tr = new Chart(tr, {
+    type: 'line',
+    data: { labels: t.map(x => x.label), datasets: [{
+      data: t.map(x => x.aum), borderColor: RPT.brand, borderWidth: 2,
+      pointRadius: t.map((_, i) => i === t.length - 1 ? 5 : 4),
+      pointBackgroundColor: RPT.brand, pointBorderColor: '#111318', pointBorderWidth: 2,
+      fill: true, backgroundColor: 'rgba(237,165,255,0.10)', tension: 0.25,
+    }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: false }, tooltip: { callbacks: {
+        label: ctx => money(ctx.parsed.y),
+        afterLabel: ctx => { const p = t[ctx.dataIndex];
+          return p.changePct == null ? '' : `${p.changePct >= 0 ? '+' : ''}${p.changePct.toFixed(1)}% on the month`; } } } },
+      scales: { x: axis, y: { ...axis, ticks: { ...axis.ticks, callback: money } } },
+    },
+  });
+
+  /* Realised return by product over six months. Up to four products get a
+     legend AND direct identification in the tooltip; beyond that the table
+     above carries it. */
+  const rt = document.getElementById('rptReturnsTrend');
+  if (rt && r.returns.trend.length) {
+    const months = [...new Set(r.returns.trend.map(x => x.month))].sort();
+    const products = [...new Set(r.returns.trend.map(x => x.label))];
+    const hues = [RPT.brand, RPT.up, RPT.down, '#60a5fa'];
+    _rptCharts.rt = new Chart(rt, {
+      type: 'line',
+      data: { labels: months, datasets: products.slice(0, 4).map((label, idx) => ({
+        label,
+        data: months.map(mo => {
+          const hit = r.returns.trend.find(x => x.month === mo && x.label === label);
+          return hit ? hit.realisedPct : null;
+        }),
+        borderColor: hues[idx], borderWidth: 2, pointRadius: 4,
+        pointBackgroundColor: hues[idx], spanGaps: true, tension: 0.25, fill: false,
+      })) },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { display: products.length > 1,
+          labels: { color: RPT.ink, boxWidth: 10, font: { family: 'Poppins', size: 10 } } },
+          tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.parsed.y == null ? '—' : c.parsed.y.toFixed(1) + '%'}` } } },
+        scales: { x: axis, y: { ...axis, ticks: { ...axis.ticks, callback: v => v + '%' } } },
+      },
+    });
+  }
+
+  /* The published market price. Separate chart from our realised price per
+     head on purpose: one is rands per kilogram and the other rands per
+     animal, and putting two scales on one axis is the chart mistake that
+     makes both unreadable. */
+  const bp = document.getElementById('rptBeefPrice');
+  const mk = r.underlying.cattle.market;
+  if (bp && mk && mk.available && mk.trend.length) {
+    const weeks = [...new Set(mk.trend.map(x => x.weekEnding))].sort();
+    const series = [...new Set(mk.trend.map(x => x.category))];
+    const hues = { class_a: RPT.down, class_c: '#f97316', weaner: RPT.up };
+    _rptCharts.bp = new Chart(bp, {
+      type: 'line',
+      data: { labels: weeks.map(d => d.slice(5)), datasets: series.map(cat => ({
+        label: ({ class_a: 'Class A', class_c: 'Class C', weaner: 'Weaner' })[cat] || cat,
+        data: weeks.map(wk => { const h = mk.trend.find(x => x.weekEnding === wk && x.category === cat);
+                                return h ? h.randPerKg : null; }),
+        borderColor: hues[cat] || RPT.brand, borderWidth: 2, pointRadius: 3,
+        pointBackgroundColor: hues[cat] || RPT.brand, spanGaps: true, tension: 0.25, fill: false,
+      })) },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { display: series.length > 1,
+            labels: { color: RPT.ink, boxWidth: 10, font: { family: 'Poppins', size: 10 } } },
+          tooltip: { callbacks: { label: c => `${c.dataset.label}: ${rZAR(c.parsed.y)}/kg` } } },
+        scales: { x: axis, y: { ...axis, ticks: { ...axis.ticks, callback: v => 'R' + v } } },
+      },
+    });
+  }
+
+  /* Realised price per head, cycle by cycle. Ours, not a market index. */
+  const cp = document.getElementById('rptCattlePrice');
+  if (cp && r.underlying.cattle.pricePerHeadTrend.length) {
+    const pts = r.underlying.cattle.pricePerHeadTrend;
+    _rptCharts.cp = new Chart(cp, {
+      type: 'line',
+      data: { labels: pts.map(p => p.batch || p.cycleNo || ''), datasets: [{
+        data: pts.map(p => p.pricePerHead), borderColor: '#78b159', borderWidth: 2,
+        pointRadius: 4, pointBackgroundColor: '#78b159', tension: 0.25,
+        fill: true, backgroundColor: 'rgba(120,177,89,0.10)',
+      }] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: {
+          label: c => rZAR(c.parsed.y) + ' a head',
+          afterLabel: c => `margin ${rZAR(pts[c.dataIndex].marginPerHead)}` } } },
+        scales: { x: axis, y: { ...axis, ticks: { ...axis.ticks, callback: money } } },
+      },
+    });
+  }
+}
+
+/* ─── PDF ───────────────────────────────────────────────────────────────
+   The whole report, not one table. Charts go in as images off their own
+   canvases, so the PDF shows what the screen showed. */
+function downloadReportPDF() {
+  const r = _report;
+  if (!r) { showToast('Open the report first', 'error'); return; }
+  const jsPDF = window.jspdf?.jsPDF;
+  if (!jsPDF) { showToast('PDF library not loaded', 'error'); return; }
+
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = doc.internal.pageSize.getWidth(), M = 14;
+  let y = 0;
+
+  const head = () => {
+    doc.setFillColor(11, 12, 16); doc.rect(0, 0, W, 30, 'F');
+    doc.setTextColor(237, 165, 255); doc.setFontSize(15); doc.setFont(undefined, 'bold');
+    doc.text('SV Capital', M, 13);
+    doc.setTextColor(232, 234, 246); doc.setFontSize(10); doc.setFont(undefined, 'normal');
+    doc.text(`Monthly Director Report — ${r.monthLabel}`, M, 21);
+    doc.setTextColor(140, 140, 155); doc.setFontSize(7);
+    doc.text(`${r.periodStart} to ${r.periodEnd} · SAST · built ${new Date(r.generatedAt).toLocaleString('en-ZA')}`, M, 26);
+    y = 38;
+  };
+  const section = title => {
+    if (y > 250) { doc.addPage(); head(); }
+    doc.setTextColor(30, 30, 40); doc.setFontSize(11); doc.setFont(undefined, 'bold');
+    doc.text(title, M, y); y += 2;
+    doc.setDrawColor(220, 220, 228); doc.line(M, y, W - M, y); y += 6;
+    doc.setFont(undefined, 'normal'); doc.setFontSize(9);
+  };
+  const table = (headRow, body) => {
+    doc.autoTable({
+      head: [headRow], body, startY: y, margin: { left: M, right: M },
+      theme: 'grid', styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [34, 37, 47], textColor: [232, 234, 246], fontSize: 7.5 },
+      alternateRowStyles: { fillColor: [247, 247, 250] },
+      didDrawPage: () => {},
+    });
+    y = doc.lastAutoTable.finalY + 8;
+  };
+  const chart = (id, h = 58) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    try {
+      if (y + h > 272) { doc.addPage(); head(); }
+      doc.addImage(el.toDataURL('image/png', 1.0), 'PNG', M, y, W - 2 * M, h);
+      y += h + 8;
+    } catch (_) { /* a tainted or empty canvas must not lose the rest of the PDF */ }
+  };
+
+  head();
+
+  const a = r.aum, m = a.movement, i = r.investors, w = i.withdrawals, c = i.compliance;
+  section('Assets under management');
+  table(['', 'Amount', ''], [
+    ['Closing AUM', rZAR(a.closing), `${rSigned(a.changePct)} on last month`],
+    ['Opening AUM', rZAR(m.opening), `${rNum(m.openingCount)} investments`],
+    ['New capital invested', rZAR(m.newCapital), `${rNum(m.newCount)} new investments`],
+    ['Reinvested at maturity', rZAR(m.reinvested), `${rNum(m.reinvestedCount)} rolled in`],
+    ['Matured and rolled out', '-' + rZAR(m.rolledOut), 'the same money, leaving'],
+    ['Returned to investors', '-' + rZAR(m.returnedToInvestors), `${rNum(m.maturedCount)} maturities`],
+    ['Reconciliation', m.reconciles ? 'Exact' : rZAR(m.residual) + ' unexplained', ''],
+    ['Returns paid out (memo, not in the bridge)', rZAR(r.returns.realisedOnMaturity), 'earned on principal, never part of AUM'],
+  ]);
+  chart('rptWaterfall', 62);
+  chart('rptTrend', 55);
+
+  section('AUM by product');
+  table(['Product', 'AUM', 'Share', 'Investments', 'Investors'],
+    a.byProduct.map(p => [p.label, rZAR(p.aum), rPct(p.sharePct), rNum(p.investments), rNum(p.investors)]));
+
+  section('Five largest pools');
+  table(['Pool', 'Product', 'AUM', 'Investors', 'Matures', 'Status'],
+    r.pools.map(p => [p.name, p.productLabel, rZAR(p.aum), rNum(p.investors), rDate(p.maturityDate), p.status]));
+
+  section('Investors');
+  table(['', ''], [
+    ['Active investors (money in a pool)', rNum(i.activeInvestors)],
+    ['Last month', rNum(i.previousActiveInvestors)],
+    ['Change', `${i.growth >= 0 ? '+' : ''}${rNum(i.growth)} (${rSigned(i.growthPct)})`],
+    ['Registered this month', rNum(i.joinedThisMonth)],
+    ['Average holding per investor', rZAR(i.avgHoldingPerInvestor)],
+    ['Average ticket', rZAR(i.avgInvestmentSize)],
+    ['Top 10 share of AUM', rPct(i.top10SharePct)],
+    ['Withdrawals paid', `${rNum(w.count)} to ${rNum(w.investors)} investors · ${rZAR(w.total)}`],
+    ['Withdrawals pending', `${rNum(w.pendingCount)} · ${rZAR(w.pendingTotal)}`],
+    ['KYC verified', `${rNum(c.verified)} of ${rNum(c.investorsCounted)} (${rPct(c.verifiedPct, 0)})`],
+    ['KYC documents awaiting review', rNum(c.documents.pending)],
+  ]);
+  table(['Rank', 'Investor', 'AUM', 'Share'],
+    i.topInvestors.map(t => [t.rank, t.name, rZAR(t.aum), rPct(t.sharePct)]));
+
+  section('Where the money is from');
+  table(['Province', 'Investors', 'AUM', 'Share'],
+    i.demographics.provinces.map(p => [p.province, rNum(p.investors), rZAR(p.aum), rPct(p.sharePct)]));
+  table(['Age', 'Investors'], i.demographics.ageBands.map(b => [b.band, rNum(b.investors)]));
+
+  section('Returns');
+  const re = r.returns.reinvestment;
+  table(['', ''], [
+    ['Reinvested', `${rZAR(re.reinvested)} (${rPct(re.reinvestedPct)}) · ${rNum(re.reinvestedCount)}`],
+    ['Taken as cash', `${rZAR(re.paidOut)} (${rPct(re.paidOutPct)}) · ${rNum(re.paidOutCount)}`],
+    ['Income accrued in the month', rZAR(r.returns.accruedThisMonth)],
+    ['Realised on maturities', rZAR(r.returns.realisedOnMaturity)],
+  ]);
+  table(['Product', 'Capital matured', 'Return', 'On capital'],
+    r.returns.byProduct.map(p => [p.label, rZAR(p.capital), rZAR(p.realised), rPct(p.realisedPct)]));
+  chart('rptReturnsTrend', 48);
+
+  const u = r.underlying;
+  section('The assets behind the money');
+  table(['Cattle', ''], [
+    ['Head under management', rNum(u.cattle.underManagement)],
+    ['Sold this month', `${rNum(u.cattle.soldThisMonth)} · ${rZAR(u.cattle.soldValueThisMonth)}`],
+    ['Average price per head', rZAR(u.cattle.avgSalePriceThisMonth)],
+    ['Mortalities this month', rNum(u.cattle.mortalitiesThisMonth)],
+    ['Latest realised price per head', u.cattle.latestPricePerHead == null ? '—' : rZAR(u.cattle.latestPricePerHead)],
+    ['Against the cycle before', rSigned(u.cattle.pricePerHeadChangePct)],
+    ['Price basis', u.cattle.priceBasis],
+  ]);
+  chart('rptCattlePrice', 45);
+  table(['Solar', ''], [
+    ['Projects', `${rNum(u.solar.activeProjects)} active of ${rNum(u.solar.projects)}`],
+    ['Installed capacity', `${rNum(u.solar.capacityKw)} kW`],
+    ['Capital deployed', rZAR(u.solar.capitalDeployed)],
+    ['Generated this month', u.solar.generation ? `${rNum(u.solar.generation.monthKwh)} kWh` : u.solar.generationNote],
+    ['Generated all time', u.solar.generation ? `${rNum(u.solar.generation.totalKwh)} kWh` : '—'],
+  ]);
+  table(['Short term lending', ''], [
+    ['Deals funded this month', rNum(u.shortTerm.fundedThisMonth)],
+    ['Disbursed this month', rZAR(u.shortTerm.disbursedThisMonth)],
+    ['Repaid this month', `${rNum(u.shortTerm.repaidDeals)} · ${rZAR(u.shortTerm.repaidAmount)}`],
+    ['Open deals', rNum(u.shortTerm.openDeals)],
+    ['Outstanding', rZAR(u.shortTerm.outstanding)],
+    ['Past their repayment date', `${rNum(u.shortTerm.overdueDeals)} · ${rZAR(u.shortTerm.overdueAmount)}`],
+  ]);
+
+  const pages = doc.internal.getNumberOfPages();
+  for (let p = 1; p <= pages; p++) {
+    doc.setPage(p); doc.setFontSize(7); doc.setTextColor(150, 150, 160);
+    doc.text(`SV Capital — confidential · ${r.monthLabel} · page ${p} of ${pages}`,
+             W / 2, doc.internal.pageSize.getHeight() - 7, { align: 'center' });
+  }
+  doc.save(`sv-capital-director-report-${r.month}.pdf`);
+  showToast('Report downloaded');
+}
+
 function openModal(id)  { document.getElementById(id).classList.add('show'); }
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 
@@ -1907,6 +3092,21 @@ const DIR_HELP = {
         text: 'Tick/untick the apps for each employee in this Access tab and click Save. Changes take effect on the employee\'s next login. New employees start with only My Dashboard until you grant more.' },
       { heading: 'Director Panel Access', icon: 'fa-crown', color: '#e84393',
         text: 'Only CEO role and executive-level employees can access the Director Panel. This is enforced by StaffAuth.isDirector() which checks role === "CEO" OR level === "executive".' },
+    ]
+  },
+  policies: {
+    title: 'Policies',
+    icon:  'fa-file-shield',
+    intro: 'Publish the company\u2019s policies and keep the record of who has read them. Both are director-only \u2014 staff see the shelf and sign for what they have read, nothing more.',
+    sections: [
+      { heading: 'Publish a policy', icon: 'fa-upload', color: '#eda5ff',
+        text: 'Title, category, version, effective date and a one-line summary, then a PDF or image up to 12 MB. The file type is read from the bytes, not from what it is called, so a renamed file is refused. Tick \u201cStaff must confirm they have read it\u201d for anything people are held to; leave it unticked for reference material like an office map, which should not sit on everyone\u2019s list.' },
+      { heading: 'Replacing one', icon: 'fa-rotate', color: '#fec24f',
+        text: 'Pick the policy it replaces and the old one is withdrawn the moment the new one publishes \u2014 there is never a day with two live versions. The old one is kept rather than deleted, so \u201cwhat did it say in March\u201d stays answerable. An acknowledgement belongs to the version, so everyone who signed the old one will be asked to sign the new one.' },
+      { heading: 'Who has read it', icon: 'fa-users', color: '#00d4aa',
+        text: 'The people icon on a row opens the record: who has signed and when, and above it who has not, drawn from everyone currently employed. Leavers are excluded, so the outstanding list is a list you can actually act on. Export sends both halves to CSV with the outstanding names first.' },
+      { heading: 'The Read column', icon: 'fa-chart-simple', color: '#8b8b9e',
+        text: 'Signed against active headcount, per policy. Amber means somebody still owes it; the sidebar badge is the total still outstanding across every policy that asks for a signature.' },
     ]
   },
   courses: {

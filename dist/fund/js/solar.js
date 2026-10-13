@@ -69,11 +69,13 @@ const sfmt = {
 /* ── STATE ──────────────────────────────────────────────────── */
 const SOL = {
   projects: [],
+  periods: [],        // solar_investment_periods — all loaded at once
   currentView: 'dashboard',
   charts: {},
   editingId: null,
   docsProjectId: null,
-  currentDocs: []
+  currentDocs: [],
+  _periodRowIdx: 0,   // counter for unique row ids
 };
 
 /* ══════════════════════════════════════════════════════════════
@@ -82,38 +84,82 @@ const SOL = {
 const SolarNAV = {
 
   /**
-   * Calculate accrued returns for a single project.
-   * AccruedReturn = capital × annualRate × (daysElapsed / 365)
+   * NAV for a single period (tranche).
    */
-  projectNAV(proj) {
-    const capital     = parseFloat(proj.capital_deployed) || 0;
-    const annualRate  = parseFloat(proj.annual_rate) || 0;
-    const startDate   = proj.start_date ? new Date(proj.start_date) : null;
-    const maturityDate= proj.maturity_date ? new Date(proj.maturity_date) : null;
-    const now         = new Date();
+  periodNAV(period) {
+    const capital      = parseFloat(period.capital_deployed) || 0;
+    const annualRate   = parseFloat(period.annual_rate) || 0;
+    const startDate    = period.start_date   ? new Date(period.start_date)   : null;
+    const maturityDate = period.maturity_date ? new Date(period.maturity_date) : null;
+    const now          = new Date();
 
     let daysElapsed = 0;
     if (startDate) {
-      const endPoint = (proj.status === 'matured' && maturityDate) ? maturityDate : now;
+      const endPoint = (period.status === 'matured' && maturityDate) ? maturityDate : now;
       daysElapsed = Math.max(0, Math.round((endPoint - startDate) / 86400000));
     }
-
     const totalTermDays = (startDate && maturityDate)
       ? Math.max(1, Math.round((maturityDate - startDate) / 86400000))
-      : (parseFloat(proj.term_years) || 1) * 365;
+      : (parseFloat(period.term_years) || 1) * 365;
 
-    const accruedReturn   = capital * annualRate * (daysElapsed / 365);
-    const contractedReturn= parseFloat(proj.contracted_return) || (capital * annualRate * (totalTermDays / 365));
-    const actualReturn    = parseFloat(proj.actual_return) || 0;
-    const nav             = capital + accruedReturn;          // NAV = capital + accrued
-    const progressPct     = totalTermDays > 0 ? Math.min(100, (daysElapsed / totalTermDays) * 100) : 0;
-    const returnPct       = capital > 0 ? (accruedReturn / capital) * 100 : 0;
-    const daysRemaining   = Math.max(0, totalTermDays - daysElapsed);
+    const accruedReturn    = capital * annualRate * (daysElapsed / 365);
+    const contractedReturn = parseFloat(period.contracted_return) || (capital * annualRate * (totalTermDays / 365));
+    const actualReturn     = parseFloat(period.actual_return) || 0;
+    const progressPct      = totalTermDays > 0 ? Math.min(100, (daysElapsed / totalTermDays) * 100) : 0;
+    const daysRemaining    = Math.max(0, totalTermDays - daysElapsed);
 
+    return { capital, annualRate, daysElapsed, totalTermDays, daysRemaining, accruedReturn, contractedReturn, actualReturn, progressPct };
+  },
+
+  /**
+   * Aggregate NAV across all periods (tranches) for a project.
+   * Falls back to legacy single-row fields when no periods exist.
+   */
+  projectNAV(proj) {
+    const periods = _periodsForProject(proj.id);
+
+    if (periods.length === 0) {
+      // Legacy fallback: use project-level fields
+      const capital      = parseFloat(proj.capital_deployed) || 0;
+      const annualRate   = parseFloat(proj.annual_rate) || 0;
+      const startDate    = proj.start_date    ? new Date(proj.start_date)    : null;
+      const maturityDate = proj.maturity_date ? new Date(proj.maturity_date) : null;
+      const now          = new Date();
+      let daysElapsed = 0;
+      if (startDate) {
+        const endPoint = (proj.status === 'matured' && maturityDate) ? maturityDate : now;
+        daysElapsed = Math.max(0, Math.round((endPoint - startDate) / 86400000));
+      }
+      const totalTermDays    = (startDate && maturityDate) ? Math.max(1, Math.round((maturityDate - startDate) / 86400000)) : (parseFloat(proj.term_years) || 1) * 365;
+      const accruedReturn    = capital * annualRate * (daysElapsed / 365);
+      const contractedReturn = parseFloat(proj.contracted_return) || (capital * annualRate * (totalTermDays / 365));
+      const actualReturn     = parseFloat(proj.actual_return) || 0;
+      const nav              = capital + accruedReturn;
+      const progressPct      = totalTermDays > 0 ? Math.min(100, (daysElapsed / totalTermDays) * 100) : 0;
+      const returnPct        = capital > 0 ? (accruedReturn / capital) * 100 : 0;
+      return { capital, annualRate, daysElapsed, totalTermDays, daysRemaining: Math.max(0, totalTermDays - daysElapsed), accruedReturn, contractedReturn, actualReturn, nav, progressPct, returnPct, periodCount: 0 };
+    }
+
+    let totalCapital = 0, totalAccrued = 0, totalContracted = 0, totalActual = 0;
+    let minDaysElapsed = Infinity, maxDaysRemaining = 0, maxProgressPct = 0;
+    for (const p of periods) {
+      const n = SolarNAV.periodNAV(p);
+      totalCapital    += n.capital;
+      totalAccrued    += n.accruedReturn;
+      totalContracted += n.contractedReturn;
+      totalActual     += n.actualReturn;
+      if (n.daysElapsed < minDaysElapsed) minDaysElapsed = n.daysElapsed;
+      if (n.daysRemaining > maxDaysRemaining) maxDaysRemaining = n.daysRemaining;
+      if (n.progressPct > maxProgressPct) maxProgressPct = n.progressPct;
+    }
+    const nav       = totalCapital + totalAccrued;
+    const returnPct = totalCapital > 0 ? (totalAccrued / totalCapital) * 100 : 0;
     return {
-      capital, annualRate, daysElapsed, totalTermDays, daysRemaining,
-      accruedReturn, contractedReturn, actualReturn, nav,
-      progressPct, returnPct
+      capital: totalCapital, annualRate: totalCapital > 0 ? (totalAccrued / totalCapital) : 0,
+      daysElapsed: minDaysElapsed === Infinity ? 0 : minDaysElapsed,
+      totalTermDays: 0, daysRemaining: maxDaysRemaining,
+      accruedReturn: totalAccrued, contractedReturn: totalContracted, actualReturn: totalActual,
+      nav, progressPct: maxProgressPct, returnPct, periodCount: periods.length,
     };
   },
 
@@ -121,34 +167,38 @@ const SolarNAV = {
    * Aggregate NAV across all projects
    */
   portfolioNAV(projects) {
-    const active  = projects.filter(p => p.status === 'active');
-    const matured = projects.filter(p => p.status === 'matured');
-
     let totalCapital = 0, totalAccrued = 0, totalContracted = 0, totalActual = 0;
+    let activeCount = 0, maturedCount = 0;
 
-    active.forEach(p => {
-      const n = SolarNAV.projectNAV(p);
-      totalCapital    += n.capital;
-      totalAccrued    += n.accruedReturn;
-      totalContracted += n.contractedReturn;
-    });
+    for (const proj of projects) {
+      const periods = _periodsForProject(proj.id);
+      if (periods.length > 0) {
+        for (const p of periods) {
+          const n = SolarNAV.periodNAV(p);
+          totalCapital    += n.capital;
+          totalContracted += n.contractedReturn;
+          if (p.status === 'matured') { totalActual += n.actualReturn; }
+          else { totalAccrued += n.accruedReturn; }
+        }
+        const hasActive  = periods.some(p => p.status === 'active');
+        const hasMatured = periods.every(p => p.status === 'matured');
+        if (hasActive)  activeCount++;
+        if (hasMatured) maturedCount++;
+      } else {
+        // Legacy fallback
+        const n = SolarNAV.projectNAV(proj);
+        totalCapital    += n.capital;
+        totalAccrued    += n.accruedReturn;
+        totalContracted += n.contractedReturn;
+        totalActual     += n.actualReturn;
+        if (proj.status === 'active')  activeCount++;
+        if (proj.status === 'matured') maturedCount++;
+      }
+    }
 
-    matured.forEach(p => {
-      totalCapital    += parseFloat(p.capital_deployed) || 0;
-      totalContracted += parseFloat(p.contracted_return) || 0;
-      totalActual     += parseFloat(p.actual_return) || 0;
-    });
-
-    const portfolioNAV  = totalCapital + totalAccrued;
+    const portfolioNAV     = totalCapital + totalAccrued;
     const overallReturnPct = totalCapital > 0 ? (totalAccrued / totalCapital) * 100 : 0;
-
-    return {
-      activeCount: active.length,
-      maturedCount: matured.length,
-      totalProjects: projects.length,
-      totalCapital, totalAccrued, totalContracted, totalActual,
-      portfolioNAV, overallReturnPct
-    };
+    return { activeCount, maturedCount, totalProjects: projects.length, totalCapital, totalAccrued, totalContracted, totalActual, portfolioNAV, overallReturnPct };
   }
 };
 
@@ -160,10 +210,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function loadAll() {
-  SOL.projects = await solFetchAll('solar_projects');
+  [SOL.projects, SOL.periods] = await Promise.all([
+    solFetchAll('solar_projects'),
+    solFetchAll('solar_investment_periods'),
+  ]);
   const view = SOL.currentView || 'dashboard';
   const btn  = document.querySelector(`[data-view="${view}"]`);
   solNavigate(view, btn);
+}
+
+function _periodsForProject(projectId) {
+  return SOL.periods
+    .filter(p => p.project_id === projectId)
+    .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
 }
 
 function solNavigate(view, btn) {
@@ -443,32 +502,50 @@ function renderProjectCards(projects) {
       </div>
       <div class="sol-proj-body">
         <div class="sol-proj-row">
-          <span class="sol-proj-row-label">Capital Deployed</span>
+          <span class="sol-proj-row-label">Total Capital</span>
           <span class="sol-proj-row-val">${sfmt.zar(n.capital)}</span>
-        </div>
-        <div class="sol-proj-row">
-          <span class="sol-proj-row-label">Annual Rate</span>
-          <span class="sol-proj-row-val">${sfmt.pct(n.annualRate * 100)}</span>
-        </div>
-        <div class="sol-proj-row">
-          <span class="sol-proj-row-label">Days Elapsed / Remaining</span>
-          <span class="sol-proj-row-val">${n.daysElapsed} / ${n.daysRemaining}</span>
-        </div>
-        <div class="sol-proj-row">
-          <span class="sol-proj-row-label">Start → Maturity</span>
-          <span class="sol-proj-row-val" style="font-size:12px">${sfmt.date(p.start_date)} → ${sfmt.date(p.maturity_date)}</span>
         </div>
         <div class="sol-proj-row">
           <span class="sol-proj-row-label">Capacity</span>
           <span class="sol-proj-row-val">${p.capacity_kw ? p.capacity_kw + ' kW' : '—'}</span>
         </div>
 
-        <!-- Progress bar -->
+        ${(() => {
+          const periods = _periodsForProject(p.id);
+          if (periods.length === 0) return `
+            <div class="sol-proj-row">
+              <span class="sol-proj-row-label">Start → Maturity</span>
+              <span class="sol-proj-row-val" style="font-size:12px">${sfmt.date(p.start_date)} → ${sfmt.date(p.maturity_date)}</span>
+            </div>`;
+          return `<div style="margin:8px 0 4px">
+            <table style="width:100%;border-collapse:collapse;font-size:11px">
+              <thead><tr>
+                <th style="text-align:left;color:rgba(255,255,255,.35);font-weight:600;padding:3px 0">Product</th>
+                <th style="text-align:right;color:rgba(255,255,255,.35);font-weight:600;padding:3px 0">Capital</th>
+                <th style="text-align:right;color:rgba(255,255,255,.35);font-weight:600;padding:3px 0">Rate</th>
+                <th style="text-align:right;color:rgba(255,255,255,.35);font-weight:600;padding:3px 0">Maturity</th>
+                <th style="text-align:right;color:rgba(255,255,255,.35);font-weight:600;padding:3px 0">Status</th>
+              </tr></thead>
+              <tbody>${periods.map(per => {
+                const pn = SolarNAV.periodNAV(per);
+                return `<tr style="border-top:1px solid rgba(255,255,255,.05)">
+                  <td style="padding:4px 0"><span class="sol-term-pill" style="font-size:9px">${per.product_type||'—'}</span></td>
+                  <td style="text-align:right;padding:4px 0">${sfmt.zarM(pn.capital)}</td>
+                  <td style="text-align:right;padding:4px 0">${sfmt.pct(pn.annualRate*100)}</td>
+                  <td style="text-align:right;padding:4px 0;font-size:10px">${sfmt.date(per.maturity_date)}</td>
+                  <td style="text-align:right;padding:4px 0"><span class="sol-badge sol-badge-${per.status||'active'}" style="font-size:9px">${per.status||'active'}</span></td>
+                </tr>`;
+              }).join('')}</tbody>
+            </table>
+          </div>`;
+        })()}
+
+        <!-- Progress bar (longest period) -->
         <div style="margin:4px 0 2px;font-size:11px;color:rgba(255,255,255,.4)">Term progress</div>
         <div class="sol-progress-wrap">
           <div class="sol-progress-fill" style="width:${Math.min(100,n.progressPct).toFixed(1)}%"></div>
         </div>
-        <div style="font-size:11px;color:rgba(255,255,255,.35);margin-bottom:8px">${n.progressPct.toFixed(1)}% of ${p.term_years||'?'}-year term</div>
+        <div style="font-size:11px;color:rgba(255,255,255,.35);margin-bottom:8px">${n.progressPct.toFixed(1)}%</div>
 
         <!-- NAV summary -->
         <div class="sol-proj-nav">
@@ -482,13 +559,27 @@ function renderProjectCards(projects) {
           </div>
         </div>
 
+        ${p.foxess_device_sn ? `
+        <!-- FoxESS live data panel -->
+        <div class="sol-foxess-panel" id="foxess-${p.id}">
+          <div class="sol-foxess-loading">
+            <i class="fa-solid fa-spinner fa-spin" style="margin-right:6px"></i>Loading live data…
+            <button onclick="event.stopPropagation();_retryFoxESSPanel(${JSON.stringify(p)})" title="Retry" style="margin-left:10px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:6px;color:#9ca3af;cursor:pointer;font-size:11px;padding:2px 8px">Retry</button>
+          </div>
+        </div>` : ''}
+
         <!-- Actions -->
         <div class="sol-proj-actions">
           <button class="sol-btn sol-btn-secondary sol-btn-sm" style="flex:1" onclick="openEditProjectModal('${p.id}')">
             <i class="fa-solid fa-pen"></i> Edit
           </button>
+          ${p.documents_url ? `
+          <a class="sol-btn sol-btn-sm" href="${p.documents_url}" target="_blank" rel="noopener"
+             style="background:rgba(237,165,255,.12);border:1px solid rgba(237,165,255,.25);color:#eda5ff;text-decoration:none;display:inline-flex;align-items:center;gap:6px">
+            <i class="fa-brands fa-google-drive"></i> Docs
+          </a>` : ''}
           <button class="sol-doc-btn sol-btn sol-btn-sm" onclick="openSolarDocs('${p.id}')" title="Supporting Documents">
-            <i class="fa-solid fa-paperclip"></i> Docs
+            <i class="fa-solid fa-paperclip"></i> Files
           </button>
           <button class="sol-btn sol-btn-danger sol-btn-sm" onclick="deleteProject('${p.id}')">
             <i class="fa-solid fa-trash"></i>
@@ -497,6 +588,94 @@ function renderProjectCards(projects) {
       </div>
     </div>`;
   }).join('')}</div>`;
+
+  // Load FoxESS live data for any project that has a device SN
+  SOL.projects.filter(p => p.foxess_device_sn).forEach(p => _loadFoxESSPanel(p));
+}
+
+async function _loadFoxESSPanel(p) {
+  const panel = document.getElementById(`foxess-${p.id}`);
+  if (!panel) return;
+  try {
+    // Client-side 20 s timeout so the loading spinner never hangs indefinitely
+    const d = await Promise.race([
+      solGet(`products/solar-device?sn=${encodeURIComponent(p.foxess_device_sn)}`),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('Request timed out — FoxESS did not respond')), 20000)),
+    ]);
+    if (d.unavailable) {
+      panel.innerHTML = `<div class="sol-foxess-unavail"><i class="fa-solid fa-plug-circle-xmark"></i> ${d.error || 'FoxESS data unavailable'}</div>`;
+      return;
+    }
+    panel.innerHTML = `
+      <div class="sol-foxess-hd"><i class="fa-solid fa-sun" style="color:var(--sol-gold)"></i> Live Generation · <span style="opacity:.5;font-size:10px">${new Date(d.updated_at).toLocaleTimeString('en-ZA',{hour:'2-digit',minute:'2-digit'})}</span></div>
+      <div class="sol-foxess-grid">
+        <div class="sol-foxess-stat">
+          <div class="sol-foxess-val">${d.current_power_kw} kW</div>
+          <div class="sol-foxess-lbl">Now</div>
+        </div>
+        <div class="sol-foxess-stat">
+          <div class="sol-foxess-val">${d.today_kwh} kWh</div>
+          <div class="sol-foxess-lbl">Today</div>
+        </div>
+        <div class="sol-foxess-stat">
+          <div class="sol-foxess-val">${d.month_kwh} kWh</div>
+          <div class="sol-foxess-lbl">This month</div>
+        </div>
+        <div class="sol-foxess-stat">
+          <div class="sol-foxess-val">${d.total_kwh.toLocaleString()} kWh</div>
+          <div class="sol-foxess-lbl">Total lifetime</div>
+        </div>
+      </div>`;
+  } catch (e) {
+    panel.innerHTML = `<div class="sol-foxess-unavail"><i class="fa-solid fa-triangle-exclamation"></i> ${e.message}</div>`;
+  }
+}
+
+function _retryFoxESSPanel(p) {
+  const panel = document.getElementById(`foxess-${p.id}`);
+  if (panel) panel.innerHTML = `<div class="sol-foxess-loading"><i class="fa-solid fa-spinner fa-spin" style="margin-right:6px"></i>Retrying…</div>`;
+  _loadFoxESSPanel(p);
+}
+
+/* Test FoxESS connectivity — called from the admin UI to diagnose issues */
+async function runFoxESSPing() {
+  const btn = document.getElementById('foxessPingBtn');
+  const out = document.getElementById('foxessPingResult');
+  if (!btn || !out) return;
+  btn.disabled = true;
+  btn.textContent = 'Testing…';
+  out.style.display = 'none';
+  try {
+    const d = await solGet('products/foxess-ping');
+    const color = d.ok ? '#22c55e' : '#ef4444';
+    const icon  = d.ok ? 'fa-circle-check' : 'fa-triangle-exclamation';
+    let html = `<div style="display:flex;align-items:flex-start;gap:10px;padding:12px;border-radius:8px;background:${d.ok ? 'rgba(34,197,94,.08)' : 'rgba(239,68,68,.08)'};border:1px solid ${color}33">
+      <i class="fa-solid ${icon}" style="color:${color};margin-top:2px"></i>
+      <div style="font-size:0.82rem;color:var(--sol-text)">`;
+    if (d.error) {
+      html += `<strong style="color:${color}">Connection failed</strong><br>${d.error}`;
+    } else if (!d.ok) {
+      html += `<strong style="color:${color}">API error</strong> (errno ${d.errno}): ${d.msg || 'Unknown error'}`;
+    } else {
+      html += `<strong style="color:${color}">Connected</strong> — API key ${d.key_prefix} is valid<br>`;
+      if (d.device_count === 0) {
+        html += `<span style="color:#fec24f">No devices found on this account. Check that the API key belongs to the correct FoxESS account.</span>`;
+      } else {
+        html += `${d.device_count} device(s) found:<ul style="margin:6px 0 0 16px;padding:0">` +
+          d.devices.map(dv => `<li><strong>${dv.sn}</strong> — ${dv.name || 'unnamed'} (${dv.status === true || dv.status === 'online' ? '🟢 online' : '🔴 offline'})</li>`).join('') +
+          `</ul>`;
+      }
+    }
+    html += `</div></div>`;
+    out.innerHTML = html;
+    out.style.display = 'block';
+  } catch (e) {
+    out.innerHTML = `<div style="padding:10px;border-radius:8px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);font-size:0.82rem;color:#ef4444"><i class="fa-solid fa-triangle-exclamation"></i> ${e.message}</div>`;
+    out.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Test Connection';
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -609,6 +788,8 @@ function openAddProjectModal() {
   document.getElementById('solModalTitle').textContent = 'Add Solar Project';
   document.getElementById('sol_form_id').value = '';
   document.getElementById('solProjectForm').reset();
+  document.getElementById('periodsBody').innerHTML = '';
+  addPeriodRow(); // start with one empty row
   document.getElementById('solProjectModal').classList.add('open');
 }
 
@@ -632,8 +813,30 @@ function openEditProjectModal(id) {
   setVal('sp_contracted_return', p.contracted_return);
   setVal('sp_start_date',        p.start_date ? p.start_date.split('T')[0] : '');
   setVal('sp_maturity_date',     p.maturity_date ? p.maturity_date.split('T')[0] : '');
-  setVal('sp_actual_return',     p.actual_return);
-  setVal('sp_notes',             p.notes);
+  setVal('sp_notes',     p.notes);
+  setVal('sp_docs_url',  p.documents_url);
+  setVal('sp_foxess_sn', p.foxess_device_sn);
+
+  // Populate investment periods table
+  const tbody = document.getElementById('periodsBody');
+  tbody.innerHTML = '';
+  const existing = _periodsForProject(id);
+  if (existing.length > 0) {
+    existing.forEach(per => addPeriodRow(per));
+  } else {
+    // Migrate legacy single-period fields into one row
+    addPeriodRow({
+      product_type:      p.product_type,
+      status:            p.status || 'active',
+      capital_deployed:  p.capital_deployed,
+      annual_rate:       p.annual_rate ? (parseFloat(p.annual_rate) * 100).toFixed(4) : '',
+      contracted_return: p.contracted_return,
+      start_date:        p.start_date ? p.start_date.split('T')[0] : '',
+      maturity_date:     p.maturity_date ? p.maturity_date.split('T')[0] : '',
+      actual_return:     p.actual_return,
+      _rateIsDecimal:    false,
+    });
+  }
 
   document.getElementById('solProjectModal').classList.add('open');
 }
@@ -643,29 +846,90 @@ function closeProjectModal() {
   SOL.editingId = null;
 }
 
+function addPeriodRow(data = {}) {
+  const idx = ++SOL._periodRowIdx;
+  const rate = data._rateIsDecimal === false
+    ? (data.annual_rate || '')
+    : (data.annual_rate ? (parseFloat(data.annual_rate) * 100).toFixed(4) : '');
+
+  const tr = document.createElement('tr');
+  tr.id = `period-row-${idx}`;
+  tr.dataset.periodId = data.id || '';
+  tr.innerHTML = `
+    <td><select name="product_type">
+      <option value="5yr"${data.product_type==='5yr'?' selected':''}>5-Year</option>
+      <option value="6yr"${data.product_type==='6yr'?' selected':''}>6-Year</option>
+      <option value="7yr"${(!data.product_type||data.product_type==='7yr')?' selected':''}>7-Year</option>
+    </select></td>
+    <td><select name="status">
+      <option value="active"${(!data.status||data.status==='active')?' selected':''}>Active</option>
+      <option value="pending"${data.status==='pending'?' selected':''}>Pending</option>
+      <option value="matured"${data.status==='matured'?' selected':''}>Matured</option>
+      <option value="cancelled"${data.status==='cancelled'?' selected':''}>Cancelled</option>
+    </select></td>
+    <td><input type="number" name="capital_deployed" step="0.01" min="0" placeholder="0.00" value="${data.capital_deployed||''}"></td>
+    <td><input type="number" name="annual_rate" step="0.0001" min="0" max="100" placeholder="e.g. 14.83" value="${rate}"></td>
+    <td><input type="number" name="contracted_return" step="0.01" min="0" placeholder="Auto" value="${data.contracted_return||''}"></td>
+    <td><input type="date" name="start_date" value="${data.start_date ? data.start_date.split('T')[0] : ''}"></td>
+    <td><input type="date" name="maturity_date" value="${data.maturity_date ? data.maturity_date.split('T')[0] : ''}"></td>
+    <td><input type="number" name="actual_return" step="0.01" min="0" placeholder="0.00" value="${data.actual_return||''}"></td>
+    <td><button type="button" class="del-btn" onclick="removePeriodRow(${idx})"><i class="fa-solid fa-trash"></i></button></td>`;
+  document.getElementById('periodsBody').appendChild(tr);
+}
+
+function removePeriodRow(idx) {
+  const row = document.getElementById(`period-row-${idx}`);
+  if (row) row.remove();
+}
+
+function _readPeriodRows() {
+  const rows = document.querySelectorAll('#periodsBody tr');
+  return Array.from(rows).map((tr, i) => {
+    const g = name => { const el = tr.querySelector(`[name="${name}"]`); return el ? el.value.trim() : ''; };
+    const ratePct = parseFloat(g('annual_rate')) || 0;
+    return {
+      _id:              tr.dataset.periodId || null,
+      product_type:     g('product_type') || '7yr',
+      status:           g('status') || 'active',
+      capital_deployed: parseFloat(g('capital_deployed')) || 0,
+      annual_rate:      ratePct / 100,
+      contracted_return: parseFloat(g('contracted_return')) || null,
+      start_date:       g('start_date') ? new Date(g('start_date')).toISOString() : null,
+      maturity_date:    g('maturity_date') ? new Date(g('maturity_date')).toISOString() : null,
+      actual_return:    parseFloat(g('actual_return')) || 0,
+      sort_order:       i,
+    };
+  });
+}
+
 async function saveProjectForm() {
   const getVal = fid => { const el = document.getElementById(fid); return el ? el.value.trim() : ''; };
 
   const name = getVal('sp_name');
   if (!name) { SToast.show('Project name is required', 'error'); return; }
 
-  const ratePct = parseFloat(getVal('sp_rate_pct')) || 0;
+  const periodRows = _readPeriodRows();
+  if (periodRows.length === 0) { SToast.show('Add at least one investment period', 'error'); return; }
 
-  const data = {
-    project_name:       name,
-    location:           getVal('sp_location') || null,
-    capacity_kw:        parseFloat(getVal('sp_capacity'))          || null,
-    investor_count:     parseInt(getVal('sp_investors'))           || null,
-    product_type:       getVal('sp_product_type') || '7yr',
-    status:             getVal('sp_status') || 'active',
-    term_years:         parseInt(getVal('sp_term_years'))          || null,
-    capital_deployed:   parseFloat(getVal('sp_capital'))           || 0,
-    annual_rate:        ratePct / 100,
-    contracted_return:  parseFloat(getVal('sp_contracted_return')) || null,
-    start_date:         getVal('sp_start_date')    ? new Date(getVal('sp_start_date')).toISOString()    : null,
-    maturity_date:      getVal('sp_maturity_date') ? new Date(getVal('sp_maturity_date')).toISOString() : null,
-    actual_return:      parseFloat(getVal('sp_actual_return'))     || 0,
-    notes:              getVal('sp_notes') || null,
+  // Aggregate totals from periods for project-level summary fields (backward compat)
+  const totalCapital    = periodRows.reduce((s, p) => s + p.capital_deployed, 0);
+  const totalActual     = periodRows.reduce((s, p) => s + p.actual_return, 0);
+  const firstPeriod     = periodRows[0];
+
+  const projectData = {
+    project_name:     name,
+    location:         getVal('sp_location') || null,
+    capacity_kw:      parseFloat(getVal('sp_capacity')) || null,
+    investor_count:   parseInt(getVal('sp_investors'))  || null,
+    // Summary fields derived from periods
+    product_type:     firstPeriod.product_type,
+    status:           firstPeriod.status,
+    capital_deployed: totalCapital,
+    annual_rate:      firstPeriod.annual_rate,
+    actual_return:    totalActual,
+    notes:            getVal('sp_notes') || null,
+    documents_url:    getVal('sp_docs_url') || null,
+    foxess_device_sn: getVal('sp_foxess_sn') || null,
   };
 
   const btn = document.getElementById('solSaveBtn');
@@ -673,19 +937,58 @@ async function saveProjectForm() {
   btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
 
   try {
-    if (SOL.editingId) {
-      const updated = await solPatch(`tables/solar_projects/${SOL.editingId}`, data);
-      const idx = SOL.projects.findIndex(x => x.id === SOL.editingId);
+    let projectId = SOL.editingId;
+
+    if (projectId) {
+      const updated = await solPatch(`tables/solar_projects/${projectId}`, projectData);
+      const idx = SOL.projects.findIndex(x => x.id === projectId);
       if (idx !== -1) SOL.projects[idx] = { ...SOL.projects[idx], ...updated };
-      SToast.show('Project updated', 'success');
     } else {
-      data.id = `SOL-${Date.now()}`;
-      const created = await solPost('tables/solar_projects', data);
+      projectData.id = `SOL-${Date.now()}`;
+      projectId = projectData.id;
+      const created = await solPost('tables/solar_projects', projectData);
       SOL.projects.unshift(created);
-      SToast.show('Project added', 'success');
     }
+
+    // Sync investment periods: upsert each row, delete removed ones
+    const existingPeriods = _periodsForProject(projectId);
+    const submittedIds    = new Set(periodRows.filter(r => r._id).map(r => r._id));
+
+    // Delete periods that were removed in the form
+    await Promise.all(
+      existingPeriods
+        .filter(p => !submittedIds.has(p.id))
+        .map(p => solDelete(`tables/solar_investment_periods/${p.id}`).catch(() => {}))
+    );
+
+    // Upsert each period row
+    const savedPeriods = await Promise.all(periodRows.map(async (row, i) => {
+      const payload = {
+        project_id:       projectId,
+        product_type:     row.product_type,
+        status:           row.status,
+        capital_deployed: row.capital_deployed,
+        annual_rate:      row.annual_rate,
+        contracted_return: row.contracted_return,
+        start_date:       row.start_date,
+        maturity_date:    row.maturity_date,
+        actual_return:    row.actual_return,
+        sort_order:       i,
+      };
+      if (row._id) {
+        return solPatch(`tables/solar_investment_periods/${row._id}`, payload);
+      } else {
+        payload.id = `SOLP-${Date.now()}-${i}`;
+        return solPost('tables/solar_investment_periods', payload);
+      }
+    }));
+
+    // Update local periods cache
+    SOL.periods = SOL.periods.filter(p => p.project_id !== projectId);
+    SOL.periods.push(...savedPeriods);
+
+    SToast.show(SOL.editingId ? 'Project updated' : 'Project added', 'success');
     closeProjectModal();
-    // Re-render current view
     const view = SOL.currentView;
     if (view === 'dashboard') renderDashboard();
     else if (view === 'projects') renderProjectsView();
