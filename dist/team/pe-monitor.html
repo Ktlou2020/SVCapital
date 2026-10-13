@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PE Monitor — SV Capital</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <link rel="stylesheet" href="css/pe-monitor.css?v=2" />
+</head>
+<body>
+
+<div class="app-shell">
+
+  <!-- ── Top Bar ── -->
+  <header class="topbar">
+    <a href="hub.html" class="topbar-back" title="Back to Hub"><i class="fa-solid fa-arrow-left"></i></a>
+    <div class="topbar-logo"><i class="fa-solid fa-briefcase"></i></div>
+    <span class="topbar-title">PE Monitor</span>
+    <span class="topbar-sub">Private Equity</span>
+  </header>
+
+  <div class="main-layout">
+
+    <!-- ── Sidebar ── -->
+    <nav class="sidebar">
+      <div class="nav-section-label">Overview</div>
+      <div class="nav-item active" data-view="dashboard"><i class="fa-solid fa-gauge-high"></i> Dashboard</div>
+      <div class="nav-section-label">Deals</div>
+      <div class="nav-item" data-view="pipeline"><i class="fa-solid fa-sitemap"></i> Pipeline</div>
+      <div class="nav-section-label">Portfolio</div>
+      <div class="nav-item" data-view="portfolio"><i class="fa-solid fa-building"></i> Companies</div>
+      <div class="nav-item" data-view="financials"><i class="fa-solid fa-chart-bar"></i> Financials</div>
+      <div class="nav-section-label">Finance</div>
+      <div class="nav-item" data-view="fees"><i class="fa-solid fa-receipt"></i> Fees &amp; Cashflow</div>
+    </nav>
+
+    <!-- ── Content ── -->
+    <main class="content">
+
+      <!-- ══ DASHBOARD ══ -->
+      <section id="view-dashboard" class="view-section active">
+        <div class="page-header">
+          <div>
+            <h1>Dashboard</h1>
+            <div class="sub">AUM overview, deal pipeline &amp; upcoming fees</div>
+          </div>
+          <button class="btn btn-primary" onclick="openAddCompany()">
+            <i class="fa-solid fa-plus"></i> Add Company
+          </button>
+        </div>
+
+        <div class="stat-grid">
+          <div class="stat-card">
+            <div class="label">Total PE AUM</div>
+            <div class="value" style="color:var(--accent)" id="dash-aum">—</div>
+            <div class="change">Portfolio companies</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">Portfolio Companies</div>
+            <div class="value" id="dash-cos">—</div>
+            <div class="change">Active investments</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">Active Pipeline</div>
+            <div class="value" id="dash-pipe">—</div>
+            <div class="change">Deals under evaluation</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">Fees Collected</div>
+            <div class="value" style="color:var(--teal)" id="dash-fees">—</div>
+            <div class="change" id="dash-overdue">—</div>
+          </div>
+        </div>
+
+        <div class="charts-row">
+          <div class="card" style="flex:1 1 320px">
+            <div class="card-header"><h2>AUM by Sector</h2></div>
+            <div class="card-body" id="sector-donut"></div>
+          </div>
+          <div class="card" style="flex:1 1 260px">
+            <div class="card-header">
+              <h2>Pipeline Summary</h2>
+              <button class="btn btn-ghost btn-sm" onclick="navigate('pipeline')">View all <i class="fa-solid fa-arrow-right"></i></button>
+            </div>
+            <div class="card-body" id="pipeline-mini"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2>Upcoming Fees</h2>
+            <button class="btn btn-ghost btn-sm" onclick="navigate('fees')">View all <i class="fa-solid fa-arrow-right"></i></button>
+          </div>
+          <div class="card-body" id="upcoming-fees"></div>
+        </div>
+
+        <!-- AFS chase list. Statements are requested three months after each
+             client's financial year end; a year with statements already on
+             file never appears here, so the list empties as work is done. -->
+        <div class="card">
+          <div class="card-header">
+            <h2>AFS to Request</h2>
+            <span class="card-sub">Requested three months after financial year end</span>
+          </div>
+          <div class="card-body" id="afs-reminders"></div>
+        </div>
+
+        <!-- What the signed agreements do not record. A client with no
+             financial year end gets no AFS reminder and a client with no
+             escalation clause bills the same fee forever — both silently, so
+             the gap has to be visible rather than inferred from an empty list. -->
+        <div class="card" id="terms-gap-card" hidden>
+          <div class="card-header">
+            <h2>Agreement Terms Outstanding</h2>
+            <span class="card-sub">Not recorded on the signed agreements as filed</span>
+          </div>
+          <div class="card-body" id="terms-gaps"></div>
+        </div>
+      </section>
+
+      <!-- ══ PIPELINE ══ -->
+      <section id="view-pipeline" class="view-section">
+        <div class="page-header">
+          <div>
+            <h1>Deal Pipeline</h1>
+            <div class="sub">Track deals from sourcing through to approval</div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center">
+            <div class="search-bar">
+              <i class="fa-solid fa-search"></i>
+              <input id="pipeline-search" type="text" placeholder="Search deals…" />
+            </div>
+            <button class="btn btn-primary" onclick="openAddDeal()">
+              <i class="fa-solid fa-plus"></i> Add Deal
+            </button>
+          </div>
+        </div>
+        <div class="pipeline-board" id="pipeline-board"></div>
+        <div style="margin-top:16px" class="card">
+          <div class="card-header"><h2>Closed / Declined / Exited</h2></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Company</th><th>Stage</th><th>Type</th><th>Target</th><th>Decision</th><th>Notes</th></tr></thead>
+              <tbody id="pipeline-closed"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ PORTFOLIO ══ -->
+      <section id="view-portfolio" class="view-section">
+        <div class="page-header">
+          <div>
+            <h1>Portfolio Companies</h1>
+            <div class="sub">Grouped by sector</div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <div class="search-bar">
+              <i class="fa-solid fa-search"></i>
+              <input id="portfolio-search" type="text" placeholder="Search…" />
+            </div>
+            <select id="portfolio-status" class="btn btn-ghost btn-sm" style="cursor:pointer">
+              <option value="">All statuses</option>
+              <option value="portfolio">Portfolio</option>
+              <option value="approved">Approved</option>
+              <option value="deal_flow">Deal Flow</option>
+              <option value="exited">Exited</option>
+              <option value="declined">Declined</option>
+            </select>
+            <button class="btn btn-primary" onclick="openAddCompany()">
+              <i class="fa-solid fa-plus"></i> Add Company
+            </button>
+          </div>
+        </div>
+        <div id="portfolio-list"></div>
+      </section>
+
+      <!-- ══ FINANCIALS ══ -->
+      <section id="view-financials" class="view-section">
+        <div class="page-header">
+          <div>
+            <h1>Financials</h1>
+            <div class="sub">Annual financial statements per portfolio company</div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center">
+            <select id="fin-company-select" class="btn btn-ghost btn-sm" style="min-width:200px;cursor:pointer">
+              <option value="">— Select company —</option>
+            </select>
+            <button class="btn btn-primary" onclick="openAddFinancials(document.getElementById('fin-company-select').value)">
+              <i class="fa-solid fa-plus"></i> Add Financials
+            </button>
+          </div>
+        </div>
+        <div id="fin-table-wrap">
+          <div class="empty-state"><i class="fa-solid fa-chart-bar"></i><p>Select a company to view financials</p></div>
+        </div>
+        <div id="fin-docs-wrap"></div>
+      </section>
+
+      <!-- ══ FEES ══ -->
+      <section id="view-fees" class="view-section">
+        <div class="page-header">
+          <div>
+            <h1>Fees &amp; Cashflow</h1>
+            <div class="sub">Management fees, invoices &amp; quarterly projections</div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center">
+            <select id="fee-status-filter" class="btn btn-ghost btn-sm" style="cursor:pointer">
+              <option value="">All statuses</option>
+              <option value="projected">Projected</option>
+              <option value="invoiced">Invoiced</option>
+              <option value="paid">Paid</option>
+              <option value="overdue">Overdue</option>
+              <option value="waived">Waived</option>
+            </select>
+            <button class="btn btn-primary" onclick="openAddFee('')">
+              <i class="fa-solid fa-plus"></i> Add Fee
+            </button>
+          </div>
+        </div>
+
+        <div class="stat-grid">
+          <div class="stat-card">
+            <div class="label">Projected Fees</div>
+            <div class="value" style="color:var(--text-muted)" id="fee-projected">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">Fees Collected</div>
+            <div class="value" style="color:var(--success)" id="fee-paid">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">Overdue</div>
+            <div class="value" style="color:var(--danger)" id="fee-overdue">—</div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-header"><h2>Quarterly Cashflow</h2>
+            <div style="display:flex;gap:14px;font-size:11px">
+              <span><span style="display:inline-block;width:10px;height:10px;background:var(--success);border-radius:2px;margin-right:4px"></span>Paid</span>
+              <span><span style="display:inline-block;width:10px;height:10px;background:var(--accent);opacity:.7;border-radius:2px;margin-right:4px"></span>Projected</span>
+              <span><span style="display:inline-block;width:10px;height:10px;background:var(--danger);border-radius:2px;margin-right:4px"></span>Overdue</span>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="cashflow-bars" id="cashflow-chart"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><h2>Fee Records</h2></div>
+          <div id="fees-table-wrap"></div>
+        </div>
+      </section>
+
+    </main>
+  </div><!-- /.main-layout -->
+</div><!-- /.app-shell -->
+
+<!-- ══ PANEL BACKDROP ══ -->
+<div id="panel-backdrop" class="panel-backdrop"></div>
+
+<!-- ══ COMPANY DETAIL PANEL ══ -->
+<div id="company-panel" class="detail-panel">
+  <div class="panel-header">
+    <div>
+      <h2 id="cp-name"></h2>
+      <div style="margin-top:4px" id="cp-status"></div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="icon-btn" onclick="openEditCompany(_openCompanyId)" title="Edit"><i class="fa-solid fa-pen"></i></button>
+      <button class="icon-btn" onclick="openAddFinancials(_openCompanyId)" title="Add Financials"><i class="fa-solid fa-chart-bar"></i></button>
+      <button class="modal-close" onclick="closePanelOnBackdrop()">&times;</button>
+    </div>
+  </div>
+  <div class="panel-tabs">
+    <div class="panel-tab active" data-tab="overview">Overview</div>
+    <div class="panel-tab" data-tab="position">Position</div>
+    <div class="panel-tab" data-tab="financials">Financials</div>
+    <div class="panel-tab" data-tab="fees">Fees</div>
+    <div class="panel-tab" data-tab="compliance">AFS &amp; BEE</div>
+    <div class="panel-tab" data-tab="meetings">Meetings</div>
+    <div class="panel-tab" data-tab="updates">Updates</div>
+    <div class="panel-tab" data-tab="reviews">Reviews</div>
+    <div class="panel-tab" data-tab="documents">Documents</div>
+  </div>
+  <div id="cp-overview"   class="panel-tab-body active"></div>
+  <div id="cp-position"   class="panel-tab-body"></div>
+  <div id="cp-financials" class="panel-tab-body"></div>
+  <div id="cp-fees"       class="panel-tab-body"></div>
+  <div id="cp-compliance" class="panel-tab-body"></div>
+  <div id="cp-meetings"   class="panel-tab-body"></div>
+  <div id="cp-updates"    class="panel-tab-body"></div>
+  <div id="cp-reviews"    class="panel-tab-body"></div>
+  <div id="cp-documents"  class="panel-tab-body"></div>
+</div>
+
+<!-- ══ DEAL DETAIL PANEL ══ -->
+<div id="deal-panel" class="detail-panel">
+  <div class="panel-header">
+    <div>
+      <h2 id="dp-name"></h2>
+      <div style="margin-top:4px" id="dp-stage"></div>
+    </div>
+    <button class="modal-close" onclick="closePanelOnBackdrop()">&times;</button>
+  </div>
+  <div id="dp-body"  class="panel-body"></div>
+  <div id="dp-docs"  class="panel-body" style="padding-top:0"></div>
+</div>
+
+<!-- ══ ADD/EDIT COMPANY MODAL ══ -->
+<div id="company-modal" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <span id="company-modal-title">Add Company</span>
+      <button class="modal-close" onclick="closeModal('company-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <!-- AI document extraction -->
+      <div class="ai-upload-zone" id="ai-upload-zone" onclick="document.getElementById('ai-doc-input').click()">
+        <input type="file" id="ai-doc-input" accept=".pdf,image/jpeg,image/png,image/webp" style="display:none" onchange="extractFromDocument(this.files[0])">
+        <div id="ai-upload-idle">
+          <i class="fa-solid fa-wand-magic-sparkles" style="color:#eda5ff;font-size:1.25rem"></i>
+          <span>Upload AFS or company doc — AI will pre-fill the form</span>
+          <span class="ai-upload-hint">PDF, JPEG, PNG · max 20 MB</span>
+        </div>
+        <div id="ai-upload-loading" style="display:none">
+          <span class="ai-spinner"></span>
+          <span id="ai-upload-status">Reading document…</span>
+        </div>
+      </div>
+      <form id="company-form" onsubmit="event.preventDefault(); saveCompany()">
+        <div class="form-grid">
+          <div class="form-group full"><label>Company Name *</label><input name="name" required placeholder="e.g. Acme Technologies" /></div>
+          <div class="form-group"><label>Sector *</label>
+            <select name="sector" required>
+              <option value="">Select sector</option>
+              <option>Technology</option><option>Healthcare</option><option>Financial Services</option>
+              <option>Agriculture</option><option>Energy</option><option>Property</option>
+              <option>Retail</option><option>FMCG</option><option>Manufacturing</option><option>Logistics</option>
+              <option>Media</option><option>Education</option><option>Mining</option><option>Other</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Sub-Sector</label><input name="sub_sector" placeholder="e.g. SaaS, Renewables" /></div>
+          <div class="form-group"><label>Status</label>
+            <select name="status">
+              <option value="portfolio">Portfolio</option>
+              <option value="approved">Approved</option>
+              <option value="deal_flow">Deal Flow</option>
+              <option value="due_diligence">Due Diligence</option>
+              <option value="prospect">Prospect</option>
+              <option value="exited">Exited</option>
+              <option value="declined">Declined</option>
+            </select>
+          </div>
+          <div class="form-group"><label>AUM / Investment (R)</label><input name="aum_amount" type="number" step="0.01" placeholder="0.00" /></div>
+          <div class="form-group"><label>Country</label><input name="country" placeholder="South Africa" /></div>
+          <div class="form-group"><label>City</label><input name="city" placeholder="Johannesburg" /></div>
+          <div class="form-group"><label>Founded Year</label><input name="founded_year" type="number" placeholder="2010" /></div>
+          <div class="form-group"><label>Employees</label><input name="employee_count" type="number" placeholder="50" /></div>
+          <div class="form-group"><label>Reg. Number</label><input name="registration_number" placeholder="2012/123456/07" /></div>
+          <div class="form-group"><label>VAT Number</label><input name="vat_number" /></div>
+          <div class="form-group"><label>Website</label><input name="website" placeholder="https://" /></div>
+          <div class="form-group"><label>Contact Name</label><input name="contact_name" /></div>
+          <div class="form-group"><label>Contact Email</label><input name="contact_email" type="email" /></div>
+          <div class="form-group"><label>Contact Phone</label><input name="contact_phone" /></div>
+
+          <!-- ── Business address ── city and country are above; this is the
+               street address the invoice and the agreement carry. -->
+          <div class="form-group full"><h4 class="form-section-head"><i class="fa-solid fa-location-dot"></i> Business Address</h4></div>
+          <div class="form-group full"><label>Address Line 1</label><input name="address_line1" placeholder="12 Fredman Drive" /></div>
+          <div class="form-group full"><label>Address Line 2</label><input name="address_line2" placeholder="Sandown" /></div>
+          <div class="form-group"><label>Province</label>
+            <select name="address_province">
+              <option value="">—</option>
+              <option>Gauteng</option><option>Western Cape</option><option>KwaZulu-Natal</option>
+              <option>Eastern Cape</option><option>Free State</option><option>Limpopo</option>
+              <option>Mpumalanga</option><option>North West</option><option>Northern Cape</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Postal Code</label><input name="address_postal_code" placeholder="2196" /></div>
+
+          <!-- ── The agreement ── the fund management agreement fixes a rand
+               fee escalating on the contract anniversary; the partnership
+               agreement fixes the split of it. Both are terms, not settings. -->
+          <div class="form-group full"><h4 class="form-section-head"><i class="fa-solid fa-file-signature"></i> Fund Management Agreement</h4></div>
+          <div class="form-group"><label>Partnership Name</label>
+            <input name="partnership_name" list="partnership-names" placeholder="SAS SVC Partnership" />
+            <datalist id="partnership-names">
+              <option value="SAS SVC Partnership"></option>
+            </datalist>
+          </div>
+          <div class="form-group"><label>Contract Start Date</label><input name="contract_start_date" type="date" /></div>
+          <div class="form-group"><label>Contract End Date</label><input name="contract_end_date" type="date" /></div>
+          <div class="form-group"><label>Fee Basis</label>
+            <select name="fee_basis" onchange="toggleFeeBasis(this.value)">
+              <option value="amount">Rand amount (per agreement)</option>
+              <option value="percentage">% of AUM</option>
+            </select>
+          </div>
+          <div class="form-group" data-fee-basis="amount"><label>Annual Fee (R, gross)</label><input name="fee_amount" type="number" step="0.01" placeholder="0.00" /></div>
+          <div class="form-group" data-fee-basis="percentage"><label>Annual Fee Rate (e.g. 0.02 = 2%)</label><input name="fee_rate" type="number" step="0.0001" placeholder="0.0200" /></div>
+          <div class="form-group"><label>Fee Billing Period</label>
+            <select name="fee_billing_period">
+              <option value="annual">Annual</option><option value="quarterly">Quarterly</option><option value="monthly">Monthly</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Annual Escalation (%)</label><input name="fee_escalation_pct_display" type="number" step="0.01" placeholder="7.00" /></div>
+          <div class="form-group"><label>SVC Share (%)</label><input name="svc_share_pct_display" type="number" step="0.01" placeholder="51.00" /></div>
+          <div class="form-group"><label>Equity Holding (%)</label><input name="holding_pct_display" type="number" step="0.01" placeholder="51.00" /></div>
+          <div class="form-group"><label>Invoice Payable (days)</label><input name="invoice_terms_days" type="number" placeholder="30" /></div>
+          <div class="form-group full"><label>When Invoice Is Payable — as per agreement</label><input name="invoice_payable_note" placeholder="e.g. Monthly in advance, payable within 30 days of invoice date" /></div>
+          <div class="form-group full"><label>Escalation Clause — as per agreement</label><input name="fee_escalation_note" placeholder="e.g. 7% on each anniversary of the commencement date" /></div>
+          <div class="form-group full" id="fee-preview-wrap"><div id="fee-preview" class="fee-preview"></div></div>
+
+          <div class="form-group full"><h4 class="form-section-head"><i class="fa-solid fa-calendar-check"></i> Reporting</h4></div>
+          <div class="form-group"><label>Financial Year End</label>
+            <select name="financial_year_end_month">
+              <option value="">—</option>
+              <option value="1">31 January</option><option value="2">End February</option>
+              <option value="3">31 March</option><option value="4">30 April</option>
+              <option value="5">31 May</option><option value="6">30 June</option>
+              <option value="7">31 July</option><option value="8">31 August</option>
+              <option value="9">30 September</option><option value="10">31 October</option>
+              <option value="11">30 November</option><option value="12">31 December</option>
+            </select>
+            <span class="field-hint" id="afs-hint">AFS is requested three months after year end.</span>
+          </div>
+          <div class="form-group"><label>Entry Date (legacy)</label><input name="entry_date" type="date" /></div>
+
+          <div class="form-group full"><label>Description</label><textarea name="description" rows="3"></textarea></div>
+          <div class="form-group full"><label>Notes</label><textarea name="notes" rows="2"></textarea></div>
+        </div>
+      </form>
+      <!-- Documents. The kind is chosen before the file is picked so an
+           agreement does not land in the same undifferentiated pile as a
+           working spreadsheet — the panel files them under separate headings. -->
+      <div class="doc-attach-section">
+        <div class="doc-attach-header">
+          <span><i class="fa-solid fa-paperclip"></i> Documents</span>
+          <select id="company-doc-type" class="doc-type-select" title="What kind of document is this?">
+            <option value="AFS">Annual Financial Statements</option>
+            <option value="fund_management">Fund Management Agreement</option>
+            <option value="partnership">Partnership Agreement</option>
+            <option value="bee">BEE Verification</option>
+            <option value="xero_invoice">Xero Invoice</option>
+            <option value="working_spreadsheet">Monthly Working Spreadsheet</option>
+            <option value="general">Other</option>
+          </select>
+          <label class="btn btn-ghost btn-sm doc-attach-btn">
+            <i class="fa-solid fa-plus"></i> Attach
+            <input type="file" id="company-doc-input" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.xlsm,.csv,image/jpeg,image/png,image/webp" style="display:none" onchange="queueCompanyDoc(this.files)">
+          </label>
+        </div>
+        <div id="company-doc-existing"></div>
+        <div id="company-doc-queue"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('company-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCompany()"><i class="fa-solid fa-save"></i> Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ADD/EDIT DEAL MODAL ══ -->
+<div id="deal-modal" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <span id="deal-modal-title">Add Deal</span>
+      <button class="modal-close" onclick="closeModal('deal-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <!-- AI document extraction -->
+      <div class="ai-upload-zone" id="deal-ai-upload-zone" onclick="document.getElementById('deal-ai-doc-input').click()">
+        <input type="file" id="deal-ai-doc-input" accept=".pdf,image/jpeg,image/png,image/webp" style="display:none" onchange="extractFromDealDocument(this.files[0])">
+        <div id="deal-ai-upload-idle">
+          <i class="fa-solid fa-wand-magic-sparkles" style="color:#eda5ff;font-size:1.25rem"></i>
+          <span>Upload pitch deck, IM or term sheet — AI will pre-fill the form</span>
+          <span class="ai-upload-hint">PDF, JPEG, PNG · max 20 MB</span>
+        </div>
+        <div id="deal-ai-upload-loading" style="display:none">
+          <span class="ai-spinner"></span>
+          <span id="deal-ai-upload-status">Reading document…</span>
+        </div>
+      </div>
+      <form id="deal-form" onsubmit="event.preventDefault(); saveDeal()">
+        <div class="form-grid">
+          <div class="form-group full"><label>Company Name *</label><input name="company_name" required placeholder="e.g. Startup Corp" /></div>
+          <div class="form-group full"><label>Linked Company (if in portfolio)</label>
+            <select name="company_id" id="deal-company-select"><option value="">— None —</option></select>
+          </div>
+          <div class="form-group"><label>Stage</label>
+            <select name="stage">
+              <option value="sourcing">Sourcing</option>
+              <option value="intro_meeting">Introductory Meeting &amp; Deal Negotiating</option>
+              <option value="screening">Screening</option>
+              <option value="due_diligence">Due Diligence</option>
+              <option value="drafting">Drafting of Agreements</option>
+              <option value="ic_review">IC Review</option>
+              <option value="approved">Approved</option>
+              <option value="active">Active — Signed &amp; Billing</option>
+              <option value="closed">Closed</option>
+              <option value="declined">Declined</option>
+              <option value="exited">Exited</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Deal Type</label>
+            <select name="deal_type">
+              <option value="equity">Equity</option><option value="debt">Debt</option>
+              <option value="hybrid">Hybrid</option><option value="mezzanine">Mezzanine</option>
+              <option value="convertible">Convertible</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Sector</label>
+            <select name="sector">
+              <option value="">Select sector</option>
+              <option>Technology</option><option>Healthcare</option><option>Financial Services</option>
+              <option>Agriculture</option><option>Energy</option><option>Property</option>
+              <option>Retail</option><option>FMCG</option><option>Manufacturing</option><option>Logistics</option>
+              <option>Media</option><option>Education</option><option>Mining</option><option>Other</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Priority</label>
+            <select name="priority">
+              <option value="low">Low</option><option value="medium" selected>Medium</option>
+              <option value="high">High</option><option value="urgent">Urgent</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Target Amount (R)</label><input name="target_amount" type="number" step="0.01" /></div>
+          <div class="form-group"><label>Committed Amount (R)</label><input name="committed_amount" type="number" step="0.01" /></div>
+          <div class="form-group"><label>Sourced Date</label><input name="sourced_date" type="date" /></div>
+          <div class="form-group"><label>Screening Date</label><input name="screening_date" type="date" /></div>
+          <div class="form-group"><label>DD Start Date</label><input name="dd_start_date" type="date" /></div>
+          <div class="form-group"><label>IC Date</label><input name="ic_date" type="date" /></div>
+          <div class="form-group"><label>Decision Date</label><input name="decision_date" type="date" /></div>
+          <div class="form-group"><label>Originator</label><input name="originator" /></div>
+          <div class="form-group"><label>Assigned Analyst</label><input name="assigned_analyst" /></div>
+          <div class="form-group"><label>Source</label><input name="source" placeholder="How was this deal sourced?" /></div>
+
+          <!-- ── Who we actually deal with, and on what terms. These were
+               being written into the description, where nothing could sort,
+               dial or total them. -->
+          <div class="form-group full"><h4 class="form-section-head"><i class="fa-solid fa-address-card"></i> Contact Person</h4></div>
+          <div class="form-group"><label>Contact Name</label><input name="contact_name" placeholder="Full name" /></div>
+          <div class="form-group"><label>Role</label><input name="contact_role" placeholder="e.g. Managing Director" /></div>
+          <div class="form-group"><label>Contact Email</label><input name="contact_email" type="email" /></div>
+          <div class="form-group"><label>Contact Phone</label><input name="contact_phone" /></div>
+
+          <div class="form-group full"><h4 class="form-section-head"><i class="fa-solid fa-building-circle-check"></i> Company Details</h4></div>
+          <div class="form-group"><label>Website</label><input name="website" placeholder="https://" /></div>
+          <div class="form-group"><label>Reg. Number</label><input name="registration_number" placeholder="2012/123456/07" /></div>
+          <div class="form-group"><label>City</label><input name="city" /></div>
+          <div class="form-group"><label>Employees</label><input name="employee_count" type="number" /></div>
+          <div class="form-group"><label>Equity Holding (%)</label><input name="holding_pct_display" type="number" step="0.01" placeholder="51.00" /></div>
+          <div class="form-group"><label>Prospect Fee (R)</label><input name="prospect_fee" type="number" step="0.01" placeholder="0.00" /></div>
+          <div class="form-group full"><label>Prospect Fee Basis</label><input name="prospect_fee_basis" placeholder="e.g. R45 000 per month once signed, escalating 7% annually" /></div>
+
+          <div class="form-group full"><label>Deal Description</label><textarea name="deal_description" rows="3" placeholder="Overview of the business and transaction…"></textarea></div>
+          <div class="form-group full"><label>Investment Thesis</label><textarea name="investment_thesis" rows="3" placeholder="Why this is a compelling investment…"></textarea></div>
+          <div class="form-group full"><label>Key Risks</label><textarea name="key_risks" rows="2" placeholder="Main risks and mitigants…"></textarea></div>
+          <div class="form-group full"><label>Decision Notes</label><textarea name="decision_notes" rows="2"></textarea></div>
+        </div>
+      </form>
+      <!-- Documents. Same filing as the company modal: without a kind, a
+           financial model uploaded here landed under Annual Financial
+           Statements, which is where you then could not find it. -->
+      <div class="doc-attach-section">
+        <div class="doc-attach-header">
+          <span><i class="fa-solid fa-paperclip"></i> Documents</span>
+          <select id="deal-doc-type" class="doc-type-select" title="What kind of document is this?">
+            <option value="general">Pitch deck / IM / Other</option>
+            <option value="working_spreadsheet">Financial Model / Spreadsheet</option>
+            <option value="AFS">Annual Financial Statements</option>
+            <option value="fund_management">Draft Agreement</option>
+          </select>
+          <label class="btn btn-ghost btn-sm doc-attach-btn">
+            <i class="fa-solid fa-plus"></i> Attach
+            <input type="file" id="deal-doc-input" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.xlsm,.csv,image/jpeg,image/png,image/webp" style="display:none" onchange="queueDealDoc(this.files)">
+          </label>
+        </div>
+        <div id="deal-doc-existing"></div>
+        <div id="deal-doc-queue"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('deal-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveDeal()"><i class="fa-solid fa-save"></i> Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ADD FINANCIALS MODAL ══ -->
+<div id="fin-modal" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <span id="fin-modal-title">Add Financials</span>
+      <button class="modal-close" onclick="closeModal('fin-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <!-- AI AFS extraction — upload triggers both extraction and document storage -->
+      <div class="ai-upload-zone" id="fin-ai-upload-zone" onclick="document.getElementById('fin-ai-doc-input').click()">
+        <input type="file" id="fin-ai-doc-input" accept=".pdf,image/jpeg,image/png,image/webp" style="display:none" onchange="extractFromFinancialsDocument(this.files[0])">
+        <div id="fin-ai-upload-idle">
+          <i class="fa-solid fa-wand-magic-sparkles" style="color:#eda5ff;font-size:1.25rem"></i>
+          <span>Upload AFS — AI will read and fill all financial fields</span>
+          <span class="ai-upload-hint">PDF · max 20 MB · document will also be stored against this record</span>
+        </div>
+        <div id="fin-ai-upload-loading" style="display:none">
+          <span class="ai-spinner"></span>
+          <span id="fin-ai-upload-status">Reading AFS…</span>
+        </div>
+      </div>
+      <form id="fin-form" onsubmit="event.preventDefault(); saveFinancials()">
+        <div class="form-grid">
+          <div class="form-group full"><label>Company *</label>
+            <select name="company_id" id="fin-company-select-modal" required><option value="">— Select —</option></select>
+          </div>
+          <!-- A dropdown, not a free integer. Typing the year produced 202,
+               20255 and 2O24 in a column that a UNIQUE constraint and every
+               year-on-year comparison depend on. The list is built from the
+               company's financial year end. -->
+          <div class="form-group"><label>Financial Year *</label>
+            <select name="financial_year" id="fin-year-select" required><option value="">— Select —</option></select>
+          </div>
+          <div class="form-group" style="align-items:center;justify-content:flex-end;padding-top:22px">
+            <label style="display:flex;gap:8px;align-items:center;cursor:pointer">
+              <input name="audited" type="checkbox" /> <span>Audited</span>
+            </label>
+          </div>
+          <div class="form-group full" style="border-bottom:1px solid var(--border);padding-bottom:10px;margin-bottom:4px">
+            <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted)">Income Statement</span>
+          </div>
+          <div class="form-group"><label>Revenue (R)</label><input name="revenue" type="number" step="0.01" /></div>
+          <div class="form-group"><label>Gross Profit (R)</label><input name="gross_profit" type="number" step="0.01" /></div>
+          <div class="form-group"><label>EBITDA (R)</label><input name="ebitda" type="number" step="0.01" /></div>
+          <div class="form-group"><label>EBIT (R)</label><input name="ebit" type="number" step="0.01" /></div>
+          <div class="form-group"><label>Net Profit (R)</label><input name="net_profit" type="number" step="0.01" /></div>
+
+          <!-- The four add-backs. Many AFS never state EBITDA — it is not an
+               IFRS line item — so when the EBITDA box above is empty the
+               platform rebuilds it: net profit PLUS tax, finance cost,
+               depreciation and amortisation. Enter each as the positive charge
+               for the year, as the income statement reports it. -->
+          <div class="form-group full"><span class="fin-subhead">EBITDA add-backs — only needed when EBITDA is not stated on the AFS</span></div>
+          <div class="form-group"><label>Tax Expense (R)</label><input name="tax_expense" type="number" step="0.01" oninput="previewEbitda()" /></div>
+          <div class="form-group"><label>Finance Cost (R)</label><input name="finance_cost" type="number" step="0.01" oninput="previewEbitda()" /></div>
+          <div class="form-group"><label>Depreciation (R)</label><input name="depreciation" type="number" step="0.01" oninput="previewEbitda()" /></div>
+          <div class="form-group"><label>Amortisation (R)</label><input name="amortisation" type="number" step="0.01" oninput="previewEbitda()" /></div>
+          <div class="form-group full"><div id="ebitda-preview" class="ebitda-preview"></div></div>
+
+          <div class="form-group"><label>EBITDA Margin (e.g. 0.25)</label><input name="ebitda_margin" type="number" step="0.0001" /></div>
+          <div class="form-group"><label>Net Margin (e.g. 0.10)</label><input name="net_margin" type="number" step="0.0001" /></div>
+          <div class="form-group"><label>Revenue Growth (e.g. 0.15)</label><input name="revenue_growth" type="number" step="0.0001" /></div>
+          <div class="form-group full" style="border-bottom:1px solid var(--border);padding-bottom:10px;margin-bottom:4px">
+            <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted)">Balance Sheet</span>
+          </div>
+          <div class="form-group"><label>Total Assets (R)</label><input name="total_assets" type="number" step="0.01" /></div>
+          <div class="form-group"><label>Total Liabilities (R)</label><input name="total_liabilities" type="number" step="0.01" /></div>
+          <div class="form-group"><label>Equity (R)</label><input name="equity" type="number" step="0.01" /></div>
+          <div class="form-group"><label>Cash (R)</label><input name="cash" type="number" step="0.01" /></div>
+          <div class="form-group"><label>Total Debt (R)</label><input name="total_debt" type="number" step="0.01" /></div>
+          <!-- The liquidity test needs the twelve-month subtotals, not just
+               the balance sheet totals: a company can be solvent on assets and
+               still unable to pay what falls due this year. -->
+          <div class="form-group"><label>Current Assets (R)</label><input name="current_assets" type="number" step="0.01" /></div>
+          <div class="form-group"><label>Current Liabilities (R)</label><input name="current_liabilities" type="number" step="0.01" /></div>
+          <div class="form-group full" style="border-bottom:1px solid var(--border);padding-bottom:10px;margin-bottom:4px">
+            <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted)">Cashflows</span>
+          </div>
+          <div class="form-group"><label>Operating Cashflow (R)</label><input name="operating_cashflow" type="number" step="0.01" /></div>
+          <div class="form-group"><label>Free Cashflow (R)</label><input name="free_cashflow" type="number" step="0.01" /></div>
+          <div class="form-group"><label>Capex (R)</label><input name="capex" type="number" step="0.01" /></div>
+          <div class="form-group full"><label>Notes</label><textarea name="notes" rows="2"></textarea></div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('fin-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveFinancials()"><i class="fa-solid fa-save"></i> Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ADD FEE MODAL ══ -->
+<div id="fee-modal" class="modal-overlay">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-header">
+      <span id="fee-modal-title">Add Fee</span>
+      <button class="modal-close" onclick="closeModal('fee-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="fee-form" onsubmit="event.preventDefault(); saveFee()">
+        <div class="form-grid">
+          <div class="form-group full"><label>Company *</label>
+            <select name="company_id" id="fee-company-select" required><option value="">— Select —</option></select>
+          </div>
+          <div class="form-group"><label>Period Start</label><input name="period_start" type="date" /></div>
+          <div class="form-group"><label>Period End</label><input name="period_end" type="date" /></div>
+          <div class="form-group"><label>Fee Type</label>
+            <select name="fee_type">
+              <option value="management">Management</option><option value="performance">Performance</option>
+              <option value="transaction">Transaction</option><option value="monitoring">Monitoring</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Amount (R) *</label><input name="amount" type="number" step="0.01" required /></div>
+          <div class="form-group"><label>Status</label>
+            <select name="status">
+              <option value="projected">Projected</option><option value="invoiced">Invoiced</option>
+              <option value="paid">Paid</option><option value="overdue">Overdue</option><option value="waived">Waived</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Invoice Date</label><input name="invoice_date" type="date" /></div>
+          <div class="form-group"><label>Due Date</label><input name="due_date" type="date" /></div>
+          <div class="form-group"><label>Paid Date</label><input name="paid_date" type="date" /></div>
+          <div class="form-group"><label>Invoice Number</label><input name="invoice_number" placeholder="INV-001" /></div>
+          <div class="form-group full"><label>Notes</label><textarea name="notes" rows="2"></textarea></div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('fee-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveFee()"><i class="fa-solid fa-save"></i> Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ADD REVIEW MODAL ══ -->
+<div id="review-modal" class="modal-overlay">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-header">
+      <span id="review-modal-title">Schedule Review</span>
+      <button class="modal-close" onclick="closeModal('review-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="review-form" onsubmit="event.preventDefault(); saveReview()">
+        <div class="form-grid">
+          <input type="hidden" name="company_id" />
+          <div class="form-group"><label>Review Date *</label><input name="review_date" type="date" required /></div>
+          <div class="form-group"><label>Next Review Date</label><input name="next_review_date" type="date" /></div>
+          <div class="form-group full"><label>Attendees</label><input name="attendees" placeholder="e.g. Jane Smith, John Doe" /></div>
+          <div class="form-group full"><label>Meeting Notes</label><textarea name="notes" rows="5" placeholder="Summary of the meeting, key decisions, action items…"></textarea></div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('review-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveReview()"><i class="fa-solid fa-save"></i> Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ADD UPDATE MODAL ══ -->
+<div id="update-modal" class="modal-overlay">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-header">
+      Add Update
+      <button class="modal-close" onclick="closeModal('update-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="update-form" onsubmit="event.preventDefault(); saveUpdate()">
+        <input type="hidden" name="company_id" />
+        <div class="form-grid">
+          <div class="form-group"><label>Type</label>
+            <select name="update_type">
+              <option value="general">General</option><option value="financial">Financial</option>
+              <option value="operational">Operational</option><option value="governance">Governance</option>
+              <option value="risk">Risk</option><option value="exit">Exit</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Author</label><input name="author" placeholder="Your name" /></div>
+          <!-- The date the thing happened. created_at is the date it was
+               typed, and on anything entered after the fact those are not the
+               same day — which made the update list order by the wrong thing. -->
+          <div class="form-group"><label>Date *</label><input name="update_date" type="date" required /></div>
+          <div class="form-group full"><label>Title *</label><input name="title" required placeholder="Brief summary…" /></div>
+          <div class="form-group full"><label>Body *</label><textarea name="body" required rows="5" placeholder="Detailed update…"></textarea></div>
+        </div>
+      </form>
+      <div class="doc-attach-section">
+        <div class="doc-attach-header">
+          <span><i class="fa-solid fa-paperclip"></i> Attachments</span>
+          <label class="btn btn-ghost btn-sm doc-attach-btn">
+            <i class="fa-solid fa-plus"></i> Attach
+            <input type="file" id="update-doc-input" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.xlsm,.csv,image/jpeg,image/png,image/webp" style="display:none" onchange="queueUpdateDoc(this.files)">
+          </label>
+        </div>
+        <div id="update-doc-existing"></div>
+        <div id="update-doc-queue"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('update-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveUpdate()"><i class="fa-solid fa-save"></i> Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MEETING NOTE MODAL ══ -->
+<div id="meeting-modal" class="modal-overlay">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <span id="meeting-modal-title">Add Meeting Note</span>
+      <button class="modal-close" onclick="closeModal('meeting-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="meeting-form" onsubmit="event.preventDefault(); saveMeetingNote()">
+        <input type="hidden" name="company_id" />
+        <input type="hidden" name="deal_id" />
+        <div class="form-grid">
+          <div class="form-group"><label>Meeting Date *</label><input name="meeting_date" type="date" required /></div>
+          <div class="form-group"><label>Location</label><input name="location" placeholder="e.g. Teams, Sandton office" /></div>
+          <div class="form-group full"><label>Title *</label><input name="title" required placeholder="e.g. Q3 performance review" /></div>
+          <div class="form-group full"><label>Attendees</label><input name="attendees" placeholder="e.g. Jane Smith (SVC), John Doe (client)" /></div>
+          <div class="form-group full"><label>Notes</label><textarea name="body" rows="6" placeholder="What was discussed…"></textarea></div>
+          <div class="form-group full"><label>Action Items</label><textarea name="action_items" rows="3" placeholder="Who is doing what, by when…"></textarea></div>
+          <div class="form-group full"><label>Author</label><input name="author" placeholder="Your name" /></div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('meeting-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveMeetingNote()"><i class="fa-solid fa-save"></i> Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ BEE VERIFICATION MODAL ══ -->
+<div id="bee-modal" class="modal-overlay">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <span id="bee-modal-title">Add BEE Verification</span>
+      <button class="modal-close" onclick="closeModal('bee-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="bee-form" onsubmit="event.preventDefault(); saveBee()">
+        <input type="hidden" name="company_id" />
+        <div class="form-grid">
+          <div class="form-group"><label>Year *</label>
+            <select name="verification_year" id="bee-year-select" required><option value="">— Select —</option></select>
+          </div>
+          <div class="form-group"><label>BEE Level</label>
+            <select name="bee_level">
+              <option value="">—</option>
+              <option>Level 1</option><option>Level 2</option><option>Level 3</option>
+              <option>Level 4</option><option>Level 5</option><option>Level 6</option>
+              <option>Level 7</option><option>Level 8</option><option>Non-compliant</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Certificate Type</label>
+            <select name="certificate_type">
+              <option value="certificate">Verification Certificate</option>
+              <option value="affidavit">Sworn Affidavit (EME/QSE)</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Verification Agency</label><input name="verified_by" placeholder="e.g. Empowerdex" /></div>
+          <div class="form-group"><label>Issue Date</label><input name="issue_date" type="date" onchange="beeSuggestExpiry(this.value)" /></div>
+          <div class="form-group"><label>Expiry Date</label><input name="expiry_date" type="date" /></div>
+          <div class="form-group"><label>Black Ownership (%)</label><input name="black_ownership_pct_display" type="number" step="0.01" /></div>
+          <div class="form-group"><label>Black Women Ownership (%)</label><input name="black_women_pct_display" type="number" step="0.01" /></div>
+          <div class="form-group full"><label>Notes</label><textarea name="notes" rows="2"></textarea></div>
+        </div>
+      </form>
+      <div class="doc-attach-section">
+        <div class="doc-attach-header">
+          <span><i class="fa-solid fa-certificate"></i> Certificate / Affidavit</span>
+          <label class="btn btn-ghost btn-sm doc-attach-btn">
+            <i class="fa-solid fa-plus"></i> Attach
+            <input type="file" id="bee-doc-input" multiple accept=".pdf,.doc,.docx,image/jpeg,image/png,image/webp" style="display:none" onchange="queueBeeDoc(this.files)">
+          </label>
+        </div>
+        <div id="bee-doc-existing"></div>
+        <div id="bee-doc-queue"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('bee-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveBee()"><i class="fa-solid fa-save"></i> Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ XERO INVOICE IMPORT MODAL ══ -->
+<div id="xero-modal" class="modal-overlay">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-header">
+      <span id="xero-modal-title">Import Xero Invoices</span>
+      <button class="modal-close" onclick="closeModal('xero-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="xero-company-id" />
+      <p class="modal-lede">
+        In Xero: <strong>Business → Invoices → Export</strong>, then upload the CSV here.
+        Invoices are matched on their Xero invoice number, so re-uploading the same
+        export refreshes the rows rather than doubling the revenue.
+      </p>
+      <div class="ai-upload-zone" onclick="document.getElementById('xero-file-input').click()">
+        <input type="file" id="xero-file-input" accept=".csv,text/csv" style="display:none" onchange="previewXeroImport(this.files[0])">
+        <div id="xero-idle">
+          <i class="fa-solid fa-file-csv" style="color:#eda5ff;font-size:1.25rem"></i>
+          <span>Choose the Xero invoice export (.csv)</span>
+          <span class="ai-upload-hint">Max 10 MB</span>
+        </div>
+        <div id="xero-loading" style="display:none">
+          <span class="ai-spinner"></span><span id="xero-status">Reading export…</span>
+        </div>
+      </div>
+      <div id="xero-preview"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('xero-modal')">Cancel</button>
+      <button class="btn btn-primary" id="xero-import-btn" disabled onclick="commitXeroImport()">
+        <i class="fa-solid fa-file-import"></i> Import
+      </button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/staff-auth.js"></script>
+<script src="js/pe-monitor.js?v=13"></script>
+</body>
+</html>

@@ -4,6 +4,40 @@
 'use strict';
 
 /* Escape user-controlled strings before inserting into innerHTML */
+/* A swallowed error should be a decision, not a leftover.
+
+   There were 25 bare `catch (_) {}` blocks in this file and no way to tell,
+   reading any one of them, whether the failure was genuinely unimportant or
+   simply never handled. One of them dropped a KYC rejection reason.
+
+   These two helpers cover the cases that really are unimportant, so that what
+   remains is a short list where the empty catch means something. */
+
+/* JSON stored in a text column — investor_profile, notes — which may hold
+   legacy non-JSON. Falling back is the correct behaviour, not a swallowed
+   failure, and saying so once beats seven identical try/catch blocks. */
+const _safeParse = (raw, fallback) => {
+  if (raw == null || raw === '') return fallback;
+  if (typeof raw === 'object') return raw;
+  try { return JSON.parse(raw); } catch (_) { return fallback; }
+};
+
+/* Browser storage throws outright in some privacy modes, so every read is a
+   maybe. A missing session is a normal state here, not an error to report. */
+const _safeStorage = key => { try { return localStorage.getItem(key); } catch (_) { return null; } };
+
+/* The current staff session, or null when there is not a live one.
+
+   Four places read this the same way — parse, check empId, check expiry, fall
+   back — and each carried its own empty catch. No session and a corrupt one
+   are both normal states for a browser, so they are the same answer here; the
+   point of naming it is that the emptiness becomes a decision once, rather
+   than four unexplained catches a reader has to judge individually. */
+function _staffSession() {
+  const s = _safeParse(_safeStorage('staffSession'), null);
+  return (s && s.empId && s.expiresAt > Date.now()) ? s : null;
+}
+
 const _esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 
 /* Cache for ticket document data — avoids embedding large base64 in onclick attributes */
@@ -44,10 +78,16 @@ async function _withBtn(btn, asyncFn) {
 
 /* ─── Custom confirm dialog (replaces browser confirm()) ─── */
 const Confirm = {
-  ask(title, { body = '', confirmLabel = 'Confirm', danger = false } = {}) {
+  /* `body` is TEXT and goes in as textContent — that is the safe default and
+     every existing caller depends on it. `bodyHtml` is for the few dialogs
+     that are a small form rather than a sentence; a caller passing it owns
+     escaping what it interpolates. */
+  ask(title, { body = '', bodyHtml = '', confirmLabel = 'Confirm', danger = false } = {}) {
     return new Promise(resolve => {
       document.getElementById('confirmModalTitle').textContent = title;
-      document.getElementById('confirmModalBody').textContent = body;
+      const bodyEl = document.getElementById('confirmModalBody');
+      if (bodyHtml) bodyEl.innerHTML = bodyHtml;
+      else bodyEl.textContent = body;
       const okBtn = document.getElementById('confirmModalOk');
       const cancelBtn = document.getElementById('confirmModalCancel');
       okBtn.textContent = confirmLabel;
@@ -58,6 +98,9 @@ const Confirm = {
       document.body.style.overflow = 'hidden';
 
       const cleanup = (result) => {
+        /* Read the form BEFORE anything clears it: a caller that passed
+           bodyHtml reads its own inputs after the await, and the next plain
+           confirm would otherwise inherit this form. */
         overlay.classList.remove('open');
         document.body.style.overflow = '';
         okBtn.replaceWith(okBtn.cloneNode(true));
@@ -71,6 +114,11 @@ const Confirm = {
     });
   }
 };
+
+/* ─── Auth token helper ─── */
+function _getToken() {
+  return (typeof Auth !== 'undefined' ? Auth.getToken() : null) || localStorage.getItem('svc_token') || '';
+}
 
 /* ─── Copy to clipboard ─── */
 async function copyToClipboard(text, btn) {
@@ -101,12 +149,8 @@ function _setRefreshLabel(elId, view) {
 
 /* ─── Get current admin's full name (for audit/review fields) ─── */
 function _getAdminName() {
-  try {
-    const s = JSON.parse(localStorage.getItem('staffSession') || 'null');
-    if (s && s.empId && s.expiresAt > Date.now()) {
-      return `${s.firstName || ''} ${s.lastName || ''}`.trim() || 'Admin';
-    }
-  } catch (_) {}
+  const s = _staffSession();
+  if (s) return `${s.firstName || ''} ${s.lastName || ''}`.trim() || 'Admin';
   if (typeof Auth !== 'undefined') {
     const u = Auth.getUser();
     if (u) return `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email || 'Admin';
@@ -119,7 +163,7 @@ function _emptyRow(icon, title, sub, colspan = 6) {
   return `<tr><td colspan="${colspan}" style="padding:0;border:none">
     <div class="empty-state">
       <i class="fa-solid ${icon}"></i>
-      <div class="empty-state__title">${title}</div>
+      <div class="empty-state__title">${_esc(title)}</div>
       <div class="empty-state__sub">${sub}</div>
     </div>
   </td></tr>`;
@@ -216,10 +260,12 @@ function _syncAdminNotifDot() {
 
 const _ADMIN_NOTIF_READ_KEY = 'svc_admin_dismissed_notifs';
 function _getAdminReadNotifs() {
-  try { return new Set(JSON.parse(localStorage.getItem(_ADMIN_NOTIF_READ_KEY) || '[]')); } catch(_) { return new Set(); }
+  return new Set(_safeParse(_safeStorage(_ADMIN_NOTIF_READ_KEY), []));
 }
 function _saveAdminReadNotifs(s) {
-  try { localStorage.setItem(_ADMIN_NOTIF_READ_KEY, JSON.stringify([...s])); } catch(_) {}
+  /* A storage write throws outright in some privacy modes. Losing which
+     notifications were read is a smaller cost than a broken console. */
+  try { localStorage.setItem(_ADMIN_NOTIF_READ_KEY, JSON.stringify([...s])); } catch (_) {}
 }
 
 function adminMarkAllRead() {
@@ -321,7 +367,7 @@ function loadAdminNotifications(investors, transactions, tickets) {
   // 6. Recent deposits (last 24 h) — informational
   const recentDeps = transactions.filter(t => {
     if (t.type !== 'deposit' || t.status !== 'completed') return false;
-    return (now - new Date(t.created_at || t.transaction_date || 0)) < 86400000;
+    return (now - new Date(Utils.txnDate(t) || 0)) < 86400000;
   });
   if (recentDeps.length) {
     const total = recentDeps.reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
@@ -344,7 +390,7 @@ function loadAdminNotifications(investors, transactions, tickets) {
     <div class="notif-item${n.unread ? ' unread' : ''}" data-nid="${_esc(n.nid || '')}" ${n.action ? `onclick="${n.action}" style="cursor:pointer"` : ''}>
       <div class="notif-icon" style="background:${n.iconBg}"><i class="fa-solid ${n.icon}" style="color:${n.iconColor}"></i></div>
       <div class="notif-body">
-        <div class="notif-title">${n.title}</div>
+        <div class="notif-title">${_esc(n.title)}</div>
         <div class="notif-sub">${n.sub}</div>
       </div>
     </div>
@@ -423,7 +469,8 @@ function navigate(view, btnEl) {
     terms: 'Legal Documents', privacy: 'Privacy Policy &amp; POPIA Notice', intlinterest: 'International Interest',
     opsconsole: 'Operations Console', feedback: 'Client Feedback', emaillogs: 'Email Logs',
     'fica-pipeline': 'FICA Pipeline',
-    handbook: 'Platform Handbook',
+    insights: 'Insight Articles',
+    handbook: 'Platform Handbook', rewards: 'Rewards',
   };
   document.getElementById('topbarTitle').textContent = titles[view] || view;
   STATE.currentView = view;
@@ -444,11 +491,14 @@ function navigate(view, btnEl) {
     settings: loadSettings,
     withdrawals: loadWithdrawals,
     comms: loadComms,
+    insights: loadInsights,
     compliance: loadCompliance,
     reconciliation: loadReconciliation,
+    'platform-fees': () => loadPlatformFees('all'),
     terms: loadTermsEditor,
     opsconsole: loadOpsConsole,
     feedback: () => loadFeedback('pending'),
+    rewards: loadRewards,
   };
   if (loaders[view]) loaders[view]();
   // Close mobile sidebar after navigation
@@ -511,19 +561,18 @@ function _populateAdminIdentity(jwtUser) {
 
   // Try staffSession first
   try {
-    const raw = localStorage.getItem('staffSession');
-    if (raw) {
-      const s = JSON.parse(raw);
-      if (s && s.empId && s.expiresAt > Date.now()) {
-        identity.initials   = s.avatarInitials || null;
-        identity.color      = s.avatarColor    || '#eda5ff';
-        identity.name       = `${s.firstName || ''} ${s.lastName || ''}`.trim() || null;
-        identity.role       = s.role           || null;
-        identity.department = s.department     || null;
-        identity.email      = s.email          || identity.email;
-      }
+    const s = _staffSession();
+    if (s) {
+      identity.initials   = s.avatarInitials || null;
+      identity.color      = s.avatarColor    || '#eda5ff';
+      identity.name       = `${s.firstName || ''} ${s.lastName || ''}`.trim() || null;
+      identity.role       = s.role           || null;
+      identity.department = s.department     || null;
+      identity.email      = s.email          || identity.email;
     }
-  } catch (_) {}
+  } catch (err) {
+    console.error('[admin] could not populate identity from the session:', err?.message || err);
+  }
 
   // Fill any gaps from jwtUser (svc_user bridge or real JWT payload)
   if (jwtUser) {
@@ -580,7 +629,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (typeof Auth !== 'undefined') {
     // Staff PIN login users have a staffSession; email+password users do not.
     const hasStaffSession = (() => {
-      try { const s = JSON.parse(localStorage.getItem('staffSession') || 'null'); return !!(s && s.empId && s.expiresAt > Date.now()); } catch (_) { return false; }
+      return !!_staffSession();
     })();
     const loginPage = hasStaffSession ? '/team/login.html' : '/login.html';
 
@@ -599,13 +648,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     _populateAdminIdentity(user);
 
     // ── Extract admin email from JWT for use in notes etc ──────────────
-    try {
-      const token = localStorage.getItem('svc_token');
-      if (token) {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        STATE.adminEmail = payload.email || (user && user.email) || null;
-      }
-    } catch (_) {}
+    /* A JWT that will not decode is not worth reporting — the email falls
+       back to the user record below, which is where it came from anyway. */
+    const _tok = _safeStorage('svc_token');
+    const _claims = _tok ? _safeParse(atob(_tok.split('.')[1] || ''), {}) : {};
+    STATE.adminEmail = _claims.email || (user && user.email) || null;
     if (!STATE.adminEmail && user) STATE.adminEmail = user.email || null;
   }
 
@@ -683,6 +730,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   _initSSE();
 
+  /* Sortable columns. Registered here rather than beside each render function
+     so the list of tables that sort is one thing you can read, and so a table
+     whose header carries data-sort but has no renderer shows up as a header
+     that does nothing rather than a silent no-op. */
+  _registerSortable('investors',    () => { investorPage = 1; renderInvestorsTable(); });
+  _registerSortable('investments',  () => { invPage = 1; renderInvestmentsTable(); });
+  _registerSortable('transactions', () => { txnPage = 1; renderTxnTable(); });
+  _registerSortable('kyc',          () => renderKYCTable());
+  _registerSortable('maturity',     () => renderMaturityTable());
+  _initSortableTables();
+
   // Restore last active view from session (deep-link fix)
   const savedView = sessionStorage.getItem('svc_admin_view');
   if (savedView && savedView !== 'dashboard') {
@@ -694,58 +752,135 @@ document.addEventListener('DOMContentLoaded', async () => {
 /* ═══════════════════════════════════════════════
    DASHBOARD
    ═══════════════════════════════════════════════ */
-async function loadDashboard() {
-  _showLoadingBar();
-  try {
-    const [invRes, poolRes, invstRes, txnRes] = await Promise.all([
-      API.investors.list({ limit: 10000 }),
-      API.pools.list({ limit: 1000 }),
-      API.investments.list({ limit: 5000 }),
-      API.transactions.list({ limit: 5000 })
-    ]);
+/* The four tables the dashboard totals, and the tiles it totals them into.
+   Used by the first load and by the 30-second refresh, so the two cannot
+   disagree about what was read or what it adds up to. */
+const DASH_SOURCES = [
+  { key: 'investors',    label: 'Investors',    load: () => API.investors.list({ limit: 10000 }) },
+  { key: 'pools',        label: 'Pools',        load: () => API.pools.list({ limit: 1000 }) },
+  { key: 'investments',  label: 'Investments',  load: () => API.investments.list({ limit: 5000 }) },
+  { key: 'transactions', label: 'Transactions', load: () => API.transactions.list({ limit: 5000 }) },
+];
 
-    STATE.investors = invRes.data || [];
-    STATE.pools = poolRes.data || [];
-    STATE.investments = invstRes.data || [];
-    STATE.transactions = txnRes.data || [];
+async function _refreshDashboardTotals() {
+  /* allSettled, not all: four independent reads, and one failing query used to
+     blank the entire dashboard. Showing three of four sources and naming the
+     missing one beats showing nothing. */
+  const settled = await Promise.allSettled(DASH_SOURCES.map(s => s.load()));
 
-    // KPI cards — compute from live tables, not denormalized investor fields
+  const failedSources = [], counts = [];
+  settled.forEach((r, i) => {
+    const s = DASH_SOURCES[i];
+    if (r.status === 'fulfilled') {
+      STATE[s.key] = r.value?.data || [];
+      counts.push({ label: s.label, loaded: STATE[s.key].length, total: Number(r.value?.total) });
+    } else {
+      /* Emptied so the rest of the page still renders, and named in the banner:
+         a tile reading R0.00 because its query failed must not be mistaken for
+         one reading R0.00 because the figure is genuinely zero. */
+      STATE[s.key] = [];
+      failedSources.push(s.label);
+      console.error(`[dashboard] ${s.label} failed to load:`, r.reason?.message || r.reason);
+    }
+  });
+
+  _dashboardLoadErrors(failedSources);
+
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+
+  /* Counted in SQL over every row, so the caps above cannot make a tile wrong.
+     The rows are still read — the lists, charts and pending-action widgets are
+     built from them — but the headline figures no longer depend on how many
+     came back. */
+  let k = null;
+  try { k = await API._fetch('GET', 'analytics/dashboard'); }
+  catch (err) { console.error('[dashboard] server figures unavailable:', err?.message || err); }
+
+  _dashboardKpisFromServer = !!(k && Number.isFinite(Number(k.total_investors)));
+
+  /* Shared with the pending-actions widget and the sidebar badges, which used
+     to count these themselves — three definitions of the same queue. */
+  STATE.dashboardCounts = _dashboardKpisFromServer ? k : null;
+
+  if (_dashboardKpisFromServer) {
+    set('ds-investors', k.total_investors);
+    set('ds-invested',  Utils.rand(k.active_capital));
+    set('ds-returns',   Utils.rand(k.returns_total));
+    set('ds-pools',     k.active_pools);
+  } else {
+    /* Fallback: the browser sums, which are only as complete as the page that
+       was read. The truncation banner says so rather than leaving them to be
+       quoted as though they were whole. */
     const totalInvested = STATE.investments.filter(i => i.status === 'active').reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
     const totalReturns  = STATE.transactions.filter(t => t.type === 'return' && t.status === 'completed').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
-    const activePools = STATE.pools.filter(p => ['open', 'active', 'filling'].includes(p.status)).length;
+    const activePools   = STATE.pools.filter(p => ['open', 'active', 'filling'].includes(p.status)).length;
+    set('ds-investors', STATE.investors.length);
+    set('ds-invested',  Utils.rand(totalInvested));
+    set('ds-returns',   Utils.rand(totalReturns));
+    set('ds-pools',     activePools);
+  }
+
+  /* After the tiles, so the banner describes the load that produced what is on
+     screen — and knows whether the headline figures came from SQL. */
+  _dashboardTruncation(counts);
+
+  return { counts, failedSources, kpis: k };
+}
+
+async function loadDashboard() {
+  _showLoadingBar();
+  /* Not awaited: the dashboard's figures are what somebody opened it for, and
+     a notice about a new feature must never be the reason they wait. */
+  _loadAnnouncements();
+  try {
+    const _dash = await _refreshDashboardTotals();
     const nonArchived = STATE.investors.filter(i => i.status !== 'archived');
 
-    document.getElementById('ds-investors').textContent = STATE.investors.length;
-    document.getElementById('ds-invested').textContent = Utils.rand(totalInvested);
-    document.getElementById('ds-returns').textContent = Utils.rand(totalReturns);
-    document.getElementById('ds-pools').textContent = activePools;
+    /* Second KPI row — from SQL when it is available, for the same reason as
+       the first: these are counts over whole tables, not over a page. */
+    const _k = _dash.kpis;
+    const _set2 = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
 
-    // Second KPI row
-    const ficaApproved = nonArchived.filter(i => i.fica_status === 'approved' || i.kyc_status === 'approved').length;
-    const ficaRate = nonArchived.length ? Math.round((ficaApproved / nonArchived.length) * 100) : 0;
-    const dsRate = document.getElementById('ds-fica-rate');
-    if (dsRate) dsRate.textContent = `${ficaRate}%`;
+    /* Declared once and used by the tile, the welcome strip and the badges.
+       Moving this row to SQL removed the const the strip further down was
+       already reading, so loadDashboard threw ReferenceError before it reached
+       the charts, the pending-actions widget or the activity feed — the tiles
+       rendered and everything below them silently did not. */
+    const pendingKycCount = _k ? _k.pending_kyc
+      : nonArchived.filter(i => {
+          const fs = i.fica_status; const ks = i.kyc_status;
+          return fs === 'pending' || fs === 'in_progress' || fs === 'submitted' || ks === 'pending';
+        }).length;
 
-    const pendingKycCount = nonArchived.filter(i => {
-      const fs = i.fica_status; const ks = i.kyc_status;
-      return fs === 'pending' || fs === 'in_progress' || fs === 'submitted' || ks === 'pending';
-    }).length;
-    const dsPendKyc = document.getElementById('ds-pending-kyc');
-    if (dsPendKyc) dsPendKyc.textContent = pendingKycCount;
+    if (_k) {
+      _set2('ds-fica-rate',           `${_k.fica_rate}%`);
+      _set2('ds-pending-kyc',          pendingKycCount);
+      _set2('ds-upcoming-maturities',  _k.upcoming_maturities);
+      _set2('ds-pending-withdrawals',  _k.pending_withdrawals);
+    } else {
+      const ficaApproved = nonArchived.filter(i => i.fica_status === 'approved' || i.kyc_status === 'approved').length;
+      _set2('ds-fica-rate', `${nonArchived.length ? Math.round((ficaApproved / nonArchived.length) * 100) : 0}%`);
 
-    const in90Days = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
-    const now90 = new Date();
-    const upcomingMaturities = STATE.investments.filter(i => {
-      if (i.status !== 'active' || !i.maturity_date) return false;
-      const md = new Date(i.maturity_date);
-      return md >= now90 && md <= in90Days;
-    }).length;
-    const dsUpcoming = document.getElementById('ds-upcoming-maturities');
-    if (dsUpcoming) dsUpcoming.textContent = upcomingMaturities;
+      _set2('ds-pending-kyc', pendingKycCount);
 
-    const pendingWithdrawals = (STATE.transactions || []).filter(t => t.type === 'withdrawal' && t.status === 'pending').length;
-    const dsPendWd = document.getElementById('ds-pending-withdrawals');
-    if (dsPendWd) dsPendWd.textContent = pendingWithdrawals;
+      /* end_date, with maturity_date only as a fallback. This read
+         i.maturity_date alone — a column that lives on investment_pools and
+         does not exist on investments — so `!i.maturity_date` was true for
+         every row and the tile read 0 no matter how many were maturing. Three
+         days before a month-end run, the tile meant to show what is coming was
+         the one guaranteed to show nothing. */
+      const in90Days = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+      const now90 = new Date();
+      _set2('ds-upcoming-maturities', STATE.investments.filter(i => {
+        const raw = i.end_date || i.maturity_date;
+        if (i.status !== 'active' || !raw) return false;
+        const md = new Date(raw);
+        return md >= now90 && md <= in90Days;
+      }).length);
+
+      _set2('ds-pending-withdrawals',
+        (STATE.transactions || []).filter(t => t.type === 'withdrawal' && t.status === 'pending').length);
+    }
 
     // Real month-over-month trend calculations
     (() => {
@@ -786,29 +921,37 @@ async function loadDashboard() {
       _setTrend('ds-trend-invested', _trendPct(aumThis, aumLast));
 
       // Returns: returns paid this month vs last month
-      const retThis = STATE.transactions.filter(t => t.type === 'return' && t.status === 'completed' && new Date(t.created_at || t.transaction_date || 0) >= thisMonthStart).reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+      const retThis = STATE.transactions.filter(t => t.type === 'return' && t.status === 'completed' && new Date(Utils.txnDate(t) || 0) >= thisMonthStart).reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
       const retLast = STATE.transactions.filter(t => {
         if (t.type !== 'return' || t.status !== 'completed') return false;
-        const d = new Date(t.created_at || t.transaction_date || 0);
+        const d = new Date(Utils.txnDate(t) || 0);
         return d >= lastMonthStart && d <= lastMonthEnd;
       }).reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
       _setTrend('ds-trend-returns', _trendPct(retThis, retLast));
     })();
 
-    // Badge counts (reuse pendingKycCount computed above for consistency)
-    document.getElementById('kycBadge').textContent = pendingKycCount;
+    /* Badges are written once, by updateSidebarBadges, from the server counts.
+       They were also set here — a third definition alongside the widget's and
+       the sidebar's — which meant the page briefly showed a browser-derived
+       number before overwriting it with the real one. */
 
-    // Fetch ticket count for welcome strip
+    // Tickets are still fetched: the welcome strip lists them, and STATE.tickets
+    // backs the fallback when the server counts are unavailable.
     let openTickets = 0;
     let tickets = [];
     try {
       const tktRes = await API.tickets.list({ limit: 50 });
       tickets = tktRes.data || [];
       STATE.tickets = tickets;
-      openTickets = tickets.filter(t => t.status === 'open' || t.status === 'in_progress').length;
-      const tktBadge = document.getElementById('ticketBadge');
-      if (tktBadge) { tktBadge.textContent = openTickets; tktBadge.style.display = openTickets > 0 ? '' : 'none'; }
-    } catch (_) {}
+      openTickets = STATE.dashboardCounts
+        ? STATE.dashboardCounts.open_tickets
+        : tickets.filter(t => t.status === 'open' || t.status === 'in_progress').length;
+    } catch (err) {
+      /* Was catch (_) {} — a failure here left the strip silently empty and the
+         count at zero, indistinguishable from having no open tickets. */
+      console.error('[dashboard] tickets failed to load:', err?.message || err);
+      openTickets = STATE.dashboardCounts ? STATE.dashboardCounts.open_tickets : 0;
+    }
 
     // Build dynamic notification panel
     loadAdminNotifications(STATE.investors, STATE.transactions, tickets);
@@ -816,16 +959,11 @@ async function loadDashboard() {
     // Populate welcome strip
     const jwtUser = (typeof Auth !== 'undefined') ? Auth.getUser() : null;
     const wIdent  = { name: null, role: null };
-    try {
-      const raw = localStorage.getItem('staffSession');
-      if (raw) {
-        const s = JSON.parse(raw);
-        if (s && s.empId && s.expiresAt > Date.now()) {
-          wIdent.name = `${s.firstName || ''} ${s.lastName || ''}`.trim();
-          wIdent.role = s.role;
-        }
-      }
-    } catch (_) {}
+    const _sess = _staffSession();
+    if (_sess) {
+      wIdent.name = `${_sess.firstName || ''} ${_sess.lastName || ''}`.trim();
+      wIdent.role = _sess.role;
+    }
     if (!wIdent.name && jwtUser) {
       wIdent.name = `${jwtUser.firstName || ''} ${jwtUser.lastName || ''}`.trim() || jwtUser.email || null;
       wIdent.role = jwtUser.role;
@@ -837,7 +975,11 @@ async function loadDashboard() {
     renderPendingActions();
     _markRefreshed('activity');
     renderActivityFeed();
-    renderAumChart();
+    /* Awaited: renderAumChart fetches the series and the mix chart reads the
+       product_mix from the same response. Unawaited, the mix would render from
+       the browser fallback every first load and only look right after a tab
+       switch — a difference nobody would trace back to here. */
+    await renderAumChart();
     renderProductMixChart();
     updateSidebarBadges();
 
@@ -845,28 +987,15 @@ async function loadDashboard() {
     if (!window._dashRefreshTimer) {
       window._dashRefreshTimer = setInterval(async () => {
         if (STATE.currentView !== 'dashboard') return;
-        try {
-          const [invRes, poolRes, invstRes, txnRes] = await Promise.all([
-            API.investors.list({ limit: 5000 }),
-            API.pools.list({ limit: 1000 }),
-            API.investments.list({ limit: 5000 }),
-            API.transactions.list({ limit: 5000 })
-          ]);
-          STATE.investors = invRes.data || [];
-          STATE.pools = poolRes.data || [];
-          STATE.investments = invstRes.data || [];
-          STATE.transactions = txnRes.data || [];
-          const nonArchived = STATE.investors.filter(i => i.status !== 'archived');
-          const totalInvested = STATE.investments.filter(i => i.status === 'active').reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
-          const totalReturns  = STATE.transactions.filter(t => t.type === 'return' && t.status === 'completed').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
-          const activePools = STATE.pools.filter(p => ['open', 'active', 'filling'].includes(p.status)).length;
-          document.getElementById('ds-investors').textContent = STATE.investors.length;
-          document.getElementById('ds-invested').textContent = Utils.rand(totalInvested);
-          document.getElementById('ds-returns').textContent = Utils.rand(totalReturns);
-          document.getElementById('ds-pools').textContent = activePools;
-          renderPendingActions();
-          updateSidebarBadges();
-        } catch (_) {}
+        /* The same path as the first load. This was a second copy of the load
+           and the four sums, with its own investor limit of 5000 against the
+           first load's 10000 — so the investor count could change 30 seconds
+           after opening the page without anything having changed in the data.
+           It also rewrote the tiles without touching the banners, which would
+           have left a truncation warning describing a load that had since been
+           replaced. One path, one set of numbers, banners kept in step. */
+        try { await _refreshDashboardTotals(); renderPendingActions(); updateSidebarBadges(); }
+        catch (err) { console.error('[dashboard] auto-refresh failed:', err?.message || err); }
       }, 30000);
     }
 
@@ -878,22 +1007,33 @@ async function loadDashboard() {
   }
 }
 
+/* The same counts as the pending-actions widget, from the same place.
+
+   They were computed here a second time, independently. A badge saying 3 above
+   a widget saying 5 is worse than either being wrong alone, because it makes
+   both untrustworthy and there is nothing on screen to say which to believe. */
 function updateSidebarBadges() {
-  const _nonArchived = STATE.investors.filter(i => i.status !== 'archived');
-  const pendingKyc = _nonArchived.filter(i => {
-    const fs = i.fica_status; const ks = i.kyc_status;
-    return fs === 'pending' || fs === 'in_progress' || fs === 'submitted' || ks === 'pending';
-  }).length;
+  const c = STATE.dashboardCounts || null;
+
+  const pendingKyc = c ? c.pending_kyc
+    : STATE.investors.filter(i => i.status !== 'archived').filter(i => {
+        const fs = i.fica_status; const ks = i.kyc_status;
+        return fs === 'pending' || fs === 'in_progress' || fs === 'submitted' || ks === 'pending';
+      }).length;
   const kycBadge = document.getElementById('kycBadge');
   if (kycBadge) kycBadge.textContent = pendingKyc;
 
-  const pendingWith = STATE.transactions.filter(t => t.type === 'withdrawal' && t.status === 'pending').length;
+  const pendingWith = c ? c.pending_withdrawals
+    : STATE.transactions.filter(t => t.type === 'withdrawal' && t.status === 'pending').length;
   const withBadge = document.getElementById('withdrawalBadge');
   if (withBadge) { withBadge.textContent = pendingWith; withBadge.style.display = pendingWith > 0 ? '' : 'none'; }
 
-  const openTkts = STATE.tickets ? STATE.tickets.filter(t => ['open','in_progress'].includes(t.status)).length : 0;
+  const openTkts = c ? c.open_tickets
+    : (STATE.tickets ? STATE.tickets.filter(t => ['open','in_progress'].includes(t.status)).length : 0);
   const tktBadge = document.getElementById('ticketBadge');
-  if (tktBadge) tktBadge.textContent = openTkts;
+  /* Hidden at zero like the withdrawals badge, rather than showing a 0 that
+     reads as a live queue with nothing in it. */
+  if (tktBadge) { tktBadge.textContent = openTkts; tktBadge.style.display = openTkts > 0 ? '' : 'none'; }
 }
 
 function renderRecentInvestments() {
@@ -903,10 +1043,11 @@ function renderRecentInvestments() {
   if (!recent.length) { body.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:24px">No investments yet</td></tr>'; return; }
 
   body.innerHTML = recent.map(inv => {
-    const investor = STATE.investors.find(i => i.id === inv.investor_id);
-    const name = inv.investor_name
-      || (investor ? `${investor.first_name || ''} ${investor.last_name || ''}`.trim() : '')
-      || inv.investor_id || '—';
+    /* _actorOf, not investor_name: a sub-account investment named the parent.
+       The plain name feeds the avatar initials; the cell is already markup and
+       must not be escaped again. */
+    const actor = _actorOf(inv);
+    const name  = actor.name;
     // Resolve product_type from the investment, falling back to the associated pool
     const pool = inv.pool_id ? STATE.pools.find(p => p.id === inv.pool_id) : null;
     const productType = inv.product_type || pool?.product_type || '';
@@ -914,11 +1055,11 @@ function renderRecentInvestments() {
     return `<tr>
       <td><div class="flex-center gap-8">
         <div class="avatar avatar--sm avatar--gold" style="flex-shrink:0">${Utils.initials(name)}</div>
-        <span class="td-strong clip">${_esc(name)}</span>
+        <span class="td-strong clip">${_actorCell(inv)}</span>
       </div></td>
       <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
       <td class="td-gold fw-700 clip">${Utils.rand(inv.amount)}</td>
-      <td class="td-green clip">${Utils.pct(inv.annual_rate || inv.expected_return_rate)}</td>
+      <td class="clip">${Utils.rateCell({ ...inv, pool_actual_rate: inv.pool_actual_rate ?? pool?.actual_rate })}</td>
       <td>${Utils.statusBadge(inv.status)}</td>
       <td class="td-muted clip">${Utils.date(inv.start_date || inv.created_at)}</td>
     </tr>`;
@@ -936,7 +1077,7 @@ function renderOpenPoolsWidget() {
     const pct = Utils.poolFillPct(p);
     return `<div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)">
       <div class="flex-between mb-4">
-        <span style="font-size:0.82rem;font-weight:700;color:var(--text)">${p.name}</span>
+        <span style="font-size:0.82rem;font-weight:700;color:var(--text)">${_esc(p.name)}</span>
         <span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span>
       </div>
       <div class="pool-card__progress-label">
@@ -953,20 +1094,51 @@ function renderPendingActions() {
   const el = document.getElementById('pendingActionsWidget');
   const actions = [];
 
-  const pendingFica = STATE.investors.filter(i => i.status === 'pending_fica' || i.fica_status === 'submitted').length;
+  /* Counted over whole tables when the server answered.
+
+     These decide whether anyone opens a queue today, and every one was taken
+     from a capped page. The cap keeps the most RECENT rows, which inverts
+     what these counts are for: the item sitting unactioned longest is the
+     first to fall outside the window, and it is the one most needing
+     attention. A queue that quietly stops reporting its oldest entries is
+     worse than one reporting nothing.
+
+     The fallbacks below are kept, and each is now at least a correct
+     expression over whatever was loaded. */
+  const c = STATE.dashboardCounts || null;
+
+  const pendingFica = c ? c.pending_fica
+    : STATE.investors.filter(i => i.status === 'pending_fica' || i.fica_status === 'submitted').length;
   if (pendingFica) actions.push({ icon: 'fa-id-card', color: 'var(--orange)', text: `${pendingFica} FICA review(s) pending`, sub: 'Review identity documents before investors can fund or invest.', view: 'kyc', cta: 'Open KYC', priority: 1 });
 
-  const pendingWithdrawals = STATE.transactions.filter(t => t.type === 'withdrawal' && t.status === 'pending').length;
+  const pendingWithdrawals = c ? c.pending_withdrawals
+    : STATE.transactions.filter(t => t.type === 'withdrawal' && t.status === 'pending').length;
   if (pendingWithdrawals) actions.push({ icon: 'fa-arrow-up-from-bracket', color: '#ef4444', text: `${pendingWithdrawals} withdrawal request(s) waiting`, sub: 'Approve or reject payouts to keep cash movement on time.', view: 'withdrawals', cta: 'Review withdrawals', priority: 2 });
 
-  const openSupport = (STATE.tickets || []).filter(t => t.status === 'open' || t.status === 'in_progress').length;
+  /* STATE.tickets is fetched with limit 50, so this counted open tickets among
+     the fifty most recent — a far tighter cap than the 5,000 on the other
+     tables, and one a growing support queue passes quickly. */
+  const openSupport = c ? c.open_tickets
+    : (STATE.tickets || []).filter(t => t.status === 'open' || t.status === 'in_progress').length;
   if (openSupport) actions.push({ icon: 'fa-headset', color: 'var(--blue)', text: `${openSupport} support ticket(s) need replies`, sub: 'Resolve investor questions before they become complaints or churn risk.', view: 'support', cta: 'Open support', priority: 3 });
 
-  const noInstruction = STATE.investments.filter(i => i.status === 'matured' && i.maturity_instruction === 'pending').length;
+  /* NULL, '' and the literal 'pending' all mean "never chose"; this counted
+     only the third. An investor who simply never answered carries NULL, so the
+     commonest case was the one missed — and matured investments started long
+     ago, so under the date-DESC cap they are also the first rows dropped. Two
+     independent reasons this read low, both of which hid work that was due. */
+  const noInstruction = c ? c.missing_instructions
+    : STATE.investments.filter(i => i.status === 'matured' &&
+        !['reinvest','payout_all','payout_return','payout_custom','switch_product','custom_switch','switch_amount']
+          .includes(i.maturity_instruction || '')).length;
   if (noInstruction) actions.push({ icon: 'fa-hourglass-end', color: 'var(--red)', text: `${noInstruction} maturity instruction(s) missing`, sub: 'Investors are waiting to reinvest or pay out matured capital.', view: 'maturity', cta: 'Review maturities', priority: 4 });
 
-  const pendingTransactions = STATE.transactions.filter(t => t.status === 'pending' && t.type !== 'withdrawal').length;
-  if (pendingTransactions) actions.push({ icon: 'fa-arrows-rotate', color: 'var(--green)', text: `${pendingTransactions} transaction(s) pending`, sub: 'Clear deposits, returns and reconciliations to keep reporting current.', view: 'transactions', cta: 'Open transactions', priority: 5 });
+  const pendingTransactions = c ? c.pending_transactions
+    : STATE.transactions.filter(t => t.status === 'pending' && t.type !== 'withdrawal').length;
+  /* `go` opens the FILTERED queue rather than the raw ledger. Counting work on
+     the dashboard and then landing the operator in an unfiltered table of every
+     transaction ever made left them to find the queue by eye. */
+  if (pendingTransactions) actions.push({ icon: 'fa-arrows-rotate', color: 'var(--green)', text: `${pendingTransactions} transaction(s) pending`, sub: 'Clear deposits, returns and reconciliations to keep reporting current.', view: 'transactions', go: 'openPendingDeposits()', cta: 'Open pending queue', priority: 5 });
 
   actions.sort((a, b) => a.priority - b.priority);
 
@@ -976,7 +1148,7 @@ function renderPendingActions() {
   }
 
   el.innerHTML = actions.map(a => `
-    <button type="button" style="width:100%;text-align:left;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--dark-3);margin-bottom:10px;cursor:pointer;transition:transform .15s ease, box-shadow .15s ease" onclick="navigate('${a.view}', document.querySelector('[data-view=${a.view}]'))" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,0.3)';this.style.borderColor='rgba(254,194,79,0.3)'" onmouseout="this.style.transform='';this.style.boxShadow='';this.style.borderColor=''">
+    <button type="button" style="width:100%;text-align:left;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--dark-3);margin-bottom:10px;cursor:pointer;transition:transform .15s ease, box-shadow .15s ease" onclick="${a.go || `navigate('${a.view}', document.querySelector('[data-view=${a.view}]'))`}" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,0.3)';this.style.borderColor='rgba(254,194,79,0.3)'" onmouseout="this.style.transform='';this.style.boxShadow='';this.style.borderColor=''">
       <div style="display:flex;align-items:flex-start;gap:12px">
         <div style="width:34px;height:34px;border-radius:10px;background:${a.color}18;display:flex;align-items:center;justify-content:center;flex-shrink:0">
           <i class="fa-solid ${a.icon}" style="color:${a.color};font-size:0.8rem"></i>
@@ -1020,20 +1192,20 @@ function renderActivityFeed(page) {
     events.push({
       ts: new Date(ts),
       icon: 'fa-coins', color: '#fec24f',
-      text: `<strong>${_esc(inv.investor_name || inv.investor_id)}</strong> invested ${Utils.rand(inv.amount)}`,
+      text: `<strong>${_esc(_actorLine(inv))}</strong> invested ${Utils.rand(inv.amount)}`,
       sub: _esc(inv.pool_name || inv.pool_id || ''),
       view: 'investments',
     });
   });
 
   // Completed transactions (returns/payouts)
-  STATE.transactions.filter(t => ['return','payout'].includes(t.type) && t.status === 'completed').forEach(t => {
+  STATE.transactions.filter(t => ['return','payout'].includes(t.type) && t.status === 'completed').forEach(t => { /* payout-is-cash: the feed says "received" and names the type */
     const ts = t.transaction_date || t.created_at;
     if (!ts) return;
     events.push({
       ts: new Date(ts),
       icon: 'fa-arrow-trend-up', color: '#22c55e',
-      text: `<strong>${_esc(t.investor_name || t.investor_id)}</strong> received ${Utils.rand(t.amount)} ${t.type}`,
+      text: `<strong>${_esc(_actorLine(t))}</strong> received ${Utils.rand(t.amount)} ${t.type}`,
       sub: _esc(t.reference || ''),
       view: 'transactions',
     });
@@ -1113,7 +1285,7 @@ function switchAumTab(range, btn) {
   renderAumChart(range);
 }
 
-function renderAumChart(range) {
+async function renderAumChart(range) {
   const ctx = document.getElementById('aumChart');
   if (!ctx) return;
 
@@ -1129,25 +1301,55 @@ function renderAumChart(range) {
     monthLabels.push(d.toLocaleString('en-ZA', { month: 'short', year: monthCount > 12 ? '2-digit' : undefined }));
   }
 
-  // Cumulative AUM: sum of investments active at end of each month
-  const aumData = monthStarts.map(m => {
-    const end = new Date(m.getFullYear(), m.getMonth() + 1, 0, 23, 59, 59);
-    return STATE.investments.filter(inv => {
-      const created = new Date(inv.created_at || inv.start_date || 0);
-      return created <= end && inv.status === 'active';
-    }).reduce((s, inv) => s + (parseFloat(inv.amount) || 0), 0);
-  });
+  /* Counted in SQL over every investment, and as at each month end.
 
-  // Returns paid per month
-  const returnsData = monthStarts.map(m => {
-    const start = new Date(m.getFullYear(), m.getMonth(), 1);
-    const end   = new Date(m.getFullYear(), m.getMonth() + 1, 0, 23, 59, 59);
-    return STATE.transactions.filter(t => {
-      if (t.type !== 'return' || t.status !== 'completed') return false;
-      const d = new Date(t.created_at || t.transaction_date || 0);
-      return d >= start && d <= end;
-    }).reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
-  });
+     The browser version below is kept as a fallback, but it is wrong in two
+     ways that only the server can fix. It reads a capped page — and the cap
+     keeps the most RECENT rows, so the oldest investments, the ones that make
+     up the early months, are precisely the ones missing. And it filters
+     `inv.status === 'active'`, the status now, so anything that has since
+     matured is absent from every historical point including the months it was
+     live. A 36-month curve built that way slopes up because history is
+     disappearing behind it, not because AUM grew. */
+  let aumData = null, returnsData = null, fromServer = false;
+  try {
+    const s = await API._fetch('GET', `analytics/dashboard-series?months=${monthCount}`);
+    if (s && Array.isArray(s.months) && s.months.length === monthCount) {
+      aumData     = s.months.map(m => m.aum);
+      returnsData = s.months.map(m => m.returns);
+      fromServer  = true;
+      STATE.dashboardSeries = s;
+    }
+  } catch (err) {
+    console.error('[dashboard] AUM series unavailable, falling back to browser sums:', err?.message || err);
+  }
+
+  if (!fromServer) {
+    // Cumulative AUM: sum of investments active at end of each month
+    aumData = monthStarts.map(m => {
+      const end = new Date(m.getFullYear(), m.getMonth() + 1, 0, 23, 59, 59);
+      return STATE.investments.filter(inv => {
+        const created = new Date(Utils.invDate(inv) || 0);
+        /* As at that month end, not as of now: an investment that has since
+           matured was still live then. Without this the past is redrawn every
+           time something matures. */
+        const ended = inv.end_date ? new Date(inv.end_date) : null;
+        const live  = !['cancelled', 'rejected', 'failed'].includes(inv.status || '') && (!ended || ended > end);
+        return created <= end && live;
+      }).reduce((s, inv) => s + (parseFloat(inv.amount) || 0), 0);
+    });
+
+    // Returns paid per month
+    returnsData = monthStarts.map(m => {
+      const start = new Date(m.getFullYear(), m.getMonth(), 1);
+      const end   = new Date(m.getFullYear(), m.getMonth() + 1, 0, 23, 59, 59);
+      return STATE.transactions.filter(t => {
+        if (t.type !== 'return' || t.status !== 'completed') return false;
+        const d = new Date(Utils.txnDate(t) || 0);
+        return d >= start && d <= end;
+      }).reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+    });
+  }
 
   if (STATE.charts.aum) STATE.charts.aum.destroy();
   STATE.charts.aum = new Chart(ctx, {
@@ -1196,23 +1398,51 @@ function renderAumChart(range) {
   });
 }
 
+/* Stable colours per product, so a slice does not change colour when another
+   product appears or disappears. Anything unlisted falls through to the grey,
+   which is a slice the chart draws rather than capital it discards. */
+const PRODUCT_MIX_COLORS = {
+  cattle: '#fec24f', solar_7yr: '#22c55e', solar_6yr: '#4ade80', solar_5yr: '#86efac',
+  solar: '#22c55e', short_term: '#656565', delivery_bikes: '#f97316', delivery_bike: '#f97316',
+  other: '#eda5ff', unclassified: '#9ca3af',
+};
+
 function renderProductMixChart() {
   const ctx = document.getElementById('productMixChart');
   if (!ctx) return;
 
-  const products = { cattle: 0, solar_7yr: 0, solar_6yr: 0, solar_5yr: 0, short_term: 0, delivery_bikes: 0 };
-  STATE.investments.filter(i => i.status === 'active').forEach(i => {
-    // Resolve product_type from investment, falling back to the linked pool
-    const pool = i.pool_id ? STATE.pools.find(p => p.id === i.pool_id) : null;
-    const type = i.product_type || pool?.product_type || '';
-    // Normalise delivery_bike → delivery_bikes
-    const key = type === 'delivery_bike' ? 'delivery_bikes' : type;
-    if (key && products[key] !== undefined) products[key] += (parseFloat(i.amount) || 0);
-  });
+  /* From SQL when it is available, over every active investment.
 
-  const labels = ['Cattle Investment', 'Solar Investment (7yr)', 'Solar Investment (6yr)', 'Solar Investment (5yr)', 'Short Term Investment', 'Delivery Bikes'];
-  const data = Object.values(products);
-  const colors = ['#fec24f', '#22c55e', '#4ade80', '#86efac', '#656565', '#f97316'];
+     The browser version summed into a fixed map and dropped anything absent
+     from it — `if (key && products[key] !== undefined)`. So capital in a
+     product nobody had added a key for simply vanished from the chart rather
+     than showing up as an unfamiliar slice, which is the one thing that would
+     have made it noticeable. The migrated pools carrying 'other' were exactly
+     that case. */
+  let entries = null;
+  const fromServer = STATE.dashboardSeries && Array.isArray(STATE.dashboardSeries.product_mix);
+  if (fromServer) {
+    entries = STATE.dashboardSeries.product_mix
+      .map(r => [r.product_type, Number(r.capital) || 0])
+      .filter(([, v]) => v > 0);
+  } else {
+    const products = {};
+    STATE.investments.filter(i => i.status === 'active').forEach(i => {
+      // Resolve product_type from investment, falling back to the linked pool
+      const pool = i.pool_id ? STATE.pools.find(p => p.id === i.pool_id) : null;
+      const type = i.product_type || pool?.product_type || '';
+      // Normalise delivery_bike → delivery_bikes
+      const key = (type === 'delivery_bike' ? 'delivery_bikes' : type) || 'unclassified';
+      /* Every key, not only the expected ones. An unfamiliar slice is a
+         question someone can ask; silently dropped capital is not. */
+      products[key] = (products[key] || 0) + (parseFloat(i.amount) || 0);
+    });
+    entries = Object.entries(products).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+  }
+
+  const labels = entries.map(([k]) => (Utils.productInfo(k)?.label) || k.replace(/_/g, ' '));
+  const data   = entries.map(([, v]) => v);
+  const colors = entries.map(([k]) => PRODUCT_MIX_COLORS[k] || '#9ca3af');
 
   if (STATE.charts.productMix) STATE.charts.productMix.destroy();
   STATE.charts.productMix = new Chart(ctx, {
@@ -1241,18 +1471,20 @@ let filteredSubAccounts = [];
 
 let selectedInvestors = new Set();
 
+const INVESTOR_SOURCES = [
+  { key: 'investors',   label: 'Investors',     load: () => API.investors.list({ limit: 5000 }) },
+  { key: 'logins',      label: 'Login accounts', load: () => API._fetch('GET', 'tables/users', null, { limit: 10000, role: 'investor' }) },
+  { key: 'subAccounts', label: 'Sub-accounts',  load: () => API._fetch('GET', 'tables/sub_accounts', null, { limit: 5000 }) },
+];
+
 async function loadInvestors() {
   try {
-    const [res, uRes, saRes] = await Promise.all([
-      API.investors.list({ limit: 5000 }),
-      API._fetch('GET', 'tables/users', null, { limit: 10000, role: 'investor' }).catch(() => ({ data: [] })),
-      API._fetch('GET', 'tables/sub_accounts', null, { limit: 5000 }).catch(() => ({ data: [] })),
-    ]);
-    STATE.investors = res.data || [];
-    STATE.subAccounts = saRes.data || [];
+    const { values, counts, failed } = await _loadSources(INVESTOR_SOURCES);
+    STATE.investors = values.investors;
+    STATE.subAccounts = values.subAccounts;
     // Build set of investor_ids that have a login account
     STATE.investorLoginSet = new Set(
-      (uRes.data || []).filter(u => u.investor_id).map(u => u.investor_id)
+      values.logins.filter(u => u.investor_id).map(u => u.investor_id)
     );
     filteredInvestors = [...STATE.investors];
     filteredSubAccounts = [...STATE.subAccounts];
@@ -1261,7 +1493,19 @@ async function loadInvestors() {
     renderInvestorsTable();
     setupInvestorFilters();
     _setRefreshLabel('investorsRefreshed', 'investors');
-  } catch (e) { Toast.error('Failed to load investors'); }
+    _renderLoadErrors('investors-load-errors', failed, 'loadInvestors()');
+    _renderTruncationBanner('investors-truncation', counts, `
+      The tiles above &mdash; investor count, pending KYC, total wallets, AUM &mdash; are summed in
+      the browser from the rows that were read, and the table footer counts the same rows.
+      Search and the filters only see them too, so an investor past the cap cannot be found here
+      at all. Use the Analytics tab for figures you intend to report.`);
+  } catch (e) {
+    // Say what actually failed. This read 'Failed to load investors' and
+    // discarded the reason, so a 403, a 500 and a render bug all looked
+    // identical and none could be diagnosed without devtools.
+    console.error('[load investors]', e);
+    Toast.error(`Failed to load investors` + (e && e.message ? ` — ${e.message}` : ''));
+  }
 }
 
 function updateBulkBar() {
@@ -1327,6 +1571,227 @@ function clearInvestorSelection() {
   updateBulkBar();
 }
 
+/* ─────────────────────────────────────────────────────────────
+   BULK ACTIONS — a bulk operation almost never fails as a unit.
+
+   Several of these ran Promise.all, or a bare loop with no per-item catch.
+   Both turn a partial result into a total one: seventeen investors approved
+   and three refused reported as "Bulk approval failed", with the local table
+   never updated — so the console showed them still pending while the server
+   had already approved them. On KYC and FICA that is a regulated action
+   silently disagreeing with what the operator was told.
+
+   Run every item, keep the outcomes apart, and say what actually happened.
+   The withdrawals bulk already worked this way; this generalises it and adds
+   the names, because "3 failed" without saying which cannot be acted on.
+   ───────────────────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════
+   SORTABLE COLUMNS
+   ═══════════════════════════════════════════════
+
+   Not one table in this console sorted. You could not order investors by wallet
+   balance, investments by amount, or transactions by value — the two ways
+   anyone actually finds the row they want are searching for a name they already
+   know, and sorting by the number they are looking for. Only the first existed.
+
+   Declarative rather than per-table: a table carries data-sort-table, a header
+   carries data-sort and data-sort-type, and one delegated listener does the
+   rest. Sixty-odd inline onclicks would have been sixty-odd chances to wire one
+   to the wrong field.
+
+   Three things this gets right that a naive comparator does not:
+
+     · NUMBERS ARE PARSED. node-pg returns NUMERIC as a STRING, so every amount
+       in STATE arrives as text. Sorting those as strings puts R9,000 above
+       R10,000 — and it looks plausible enough to go unnoticed on a screen full
+       of money.
+     · BLANKS SORT LAST IN BOTH DIRECTIONS. A missing maturity date is not
+       "earliest", it is absent. Flipping direction to bring rows with no value
+       to the top buries the ones you asked to see.
+     · THE SORT IS STABLE and applies to the whole FILTER, not the visible page,
+       so it agrees with what the filter bar says is in scope.
+*/
+const _sortState = {};      // tableKey -> { key, dir, type }
+const _sortRenderers = {};  // tableKey -> () => void
+
+function _registerSortable(tableKey, render) { _sortRenderers[tableKey] = render; }
+
+const _sortValue = (row, key, type) => {
+  const raw = key.split('.').reduce((o, k) => (o == null ? o : o[k]), row);
+  if (raw === null || raw === undefined || raw === '') return null;
+  if (type === 'num')  { const n = parseFloat(raw); return isNaN(n) ? null : n; }
+  if (type === 'date') { const t = new Date(raw).getTime(); return isNaN(t) ? null : t; }
+  return String(raw).trim().toLowerCase() || null;
+};
+
+/* Sorts a copy. Several callers hold the array they pass — filteredTxns is
+   re-read by the pager — and sorting in place made the order depend on how many
+   times the table happened to render. */
+function _sortRows(tableKey, rows, accessors) {
+  const st = _sortState[tableKey];
+  if (!st || !st.key) return rows;
+  const get = (accessors && accessors[st.key]) || null;
+  const val = row => get ? get(row) : _sortValue(row, st.key, st.type);
+  const dir = st.dir === 'desc' ? -1 : 1;
+
+  return rows.map((row, i) => ({ row, i, v: val(row) }))
+    .sort((a, b) => {
+      /* Absent always last, whichever way the column is pointing. */
+      if (a.v === null && b.v === null) return a.i - b.i;
+      if (a.v === null) return 1;
+      if (b.v === null) return -1;
+      let c;
+      if (typeof a.v === 'number' && typeof b.v === 'number') c = a.v - b.v;
+      else c = String(a.v).localeCompare(String(b.v), 'en', { numeric: true, sensitivity: 'base' });
+      return c * dir || a.i - b.i;   // index tiebreak keeps it stable
+    })
+    .map(x => x.row);
+}
+
+function _toggleSort(tableKey, key, type) {
+  const st = _sortState[tableKey];
+  if (st && st.key === key) {
+    st.dir = st.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    /* A number or a date almost always wants its largest first — the biggest
+       balance, the newest transaction. Text wants A→Z. Guessing this correctly
+       is the difference between one click and two, every time. */
+    _sortState[tableKey] = { key, type, dir: (type === 'num' || type === 'date') ? 'desc' : 'asc' };
+  }
+  _paintSortHeaders(tableKey);
+  const render = _sortRenderers[tableKey];
+  if (render) render();
+}
+
+function _paintSortHeaders(tableKey) {
+  const table = document.querySelector(`[data-sort-table="${tableKey}"]`);
+  if (!table) return;
+  const st = _sortState[tableKey] || {};
+  table.querySelectorAll('th[data-sort]').forEach(th => {
+    const active = th.dataset.sort === st.key;
+    const caret = active ? (st.dir === 'asc' ? '▲' : '▼') : '⇅';
+    let mark = th.querySelector('.sort-caret');
+    if (!mark) {
+      mark = document.createElement('span');
+      mark.className = 'sort-caret';
+      th.appendChild(document.createTextNode(' '));
+      th.appendChild(mark);
+    }
+    mark.textContent = caret;
+    mark.style.opacity = active ? '1' : '0.3';
+    mark.style.fontSize = '0.7em';
+    th.setAttribute('aria-sort', active ? (st.dir === 'asc' ? 'ascending' : 'descending') : 'none');
+    th.style.cursor = 'pointer';
+    th.style.userSelect = 'none';
+    if (!th.hasAttribute('tabindex')) th.setAttribute('tabindex', '0');
+    if (!th.title) th.title = 'Sort by this column';
+  });
+}
+
+/* One delegated listener for every sortable table, bound once. Keyboard too —
+   a header that only responds to a mouse is a header half the operators here
+   cannot use. */
+function _initSortableTables() {
+  const act = e => {
+    const th = e.target.closest && e.target.closest('th[data-sort]');
+    if (!th) return;
+    const table = th.closest('[data-sort-table]');
+    if (!table) return;
+    if (e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    _toggleSort(table.dataset.sortTable, th.dataset.sort, th.dataset.sortType || 'text');
+  };
+  document.addEventListener('click', act);
+  document.addEventListener('keydown', act);
+  document.querySelectorAll('[data-sort-table]').forEach(t => _paintSortHeaders(t.dataset.sortTable));
+}
+
+async function _bulkRun(items, worker, { sequential = false, label = i => String(i) } = {}) {
+  const succeeded = [], failed = [];
+  const attempt = async item => {
+    try { await worker(item); succeeded.push(item); }
+    catch (err) { failed.push({ item, label: label(item), message: err?.message || String(err) }); }
+  };
+  /* Sequential where each item makes dependent calls or reports progress;
+     parallel otherwise, matching how these already behaved. */
+  if (sequential) { for (const item of items) await attempt(item); }
+  else await Promise.all(items.map(attempt));
+  return { succeeded, failed };
+}
+
+function _bulkReport(noun, verb, { succeeded, failed }) {
+  const n = succeeded.length;
+  if (!failed.length) {
+    Toast.success(`${n} ${noun}${n === 1 ? '' : 's'} ${verb}`);
+    return true;
+  }
+  const names = failed.slice(0, 3).map(f => f.label).filter(Boolean).join(', ');
+  const more  = failed.length > 3 ? ` and ${failed.length - 3} more` : '';
+  Toast.error(`${n} ${verb}, ${failed.length} failed${names ? ` — ${names}${more}` : ''}`);
+  console.error('[bulk] failures:', failed.map(f => `${f.label || f.item}: ${f.message}`));
+  return false;
+}
+
+/* The label a failure is reported under. An id tells the operator nothing. */
+const _investorLabel = id => {
+  const i = STATE.investors.find(x => x.id === id);
+  return i ? (`${i.first_name || ''} ${i.last_name || ''}`.trim() || id) : id;
+};
+
+/* ─── Who a row actually belongs to ───────────────────────────────────────
+   A sub-account investment is made BY the sub-account out of the
+   sub-account's own wallet. Every list here resolved the name as
+   `investor_name || look up investor_id`, and both of those are the PARENT —
+   so a minor's investment read as the parent's, and nothing on the row said
+   otherwise.
+
+   sub_account_id is checked FIRST, ahead of the stored investor_name. That
+   matters for history as much as for new rows: the portal wrote the parent's
+   name into transactions.investor_name on every sub-account transaction ever
+   made, so trusting that column would keep every past row wrong. Resolving
+   from the id corrects them all without touching a single stored value.    */
+function _actorOf(row) {
+  const saId = row && row.sub_account_id;
+  if (saId) {
+    const sa = (STATE.subAccounts || []).find(s => s.id === saId);
+    const parentId = (sa && sa.parent_investor_id) || row.investor_id;
+    return {
+      isSub:      true,
+      name:       (sa && sa.name) || saId,
+      parentName: parentId ? _investorLabel(parentId) : null,
+      parentId,
+      subId:      saId,
+      type:       sa && sa.account_type,
+    };
+  }
+  return {
+    isSub: false,
+    name:  row && (row.investor_name || _investorLabel(row.investor_id)) || '—',
+    parentName: null, parentId: row && row.investor_id, subId: null,
+  };
+}
+
+/* The name as a cell: the sub-account leads, the parent sits under it, so the
+   money is attributed to whom it belongs and stays traceable to the account
+   that holds it. */
+function _actorCell(row) {
+  const a = _actorOf(row);
+  if (!a.isSub) return _esc(a.name);
+  return `<div style="line-height:1.3">
+    <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+      <span>${_esc(a.name)}</span>
+      <span style="background:rgba(237,165,255,.15);color:#eda5ff;border-radius:4px;padding:0 5px;font-size:0.6rem;font-weight:800;letter-spacing:.02em">SUB-ACCOUNT</span>
+    </div>
+    ${a.parentName ? `<div style="font-size:0.68rem;color:var(--text-dim)">via ${_esc(a.parentName)}</div>` : ''}
+  </div>`;
+}
+
+/* The same thing on one line, for a dense list or an export. */
+function _actorLine(row) {
+  const a = _actorOf(row);
+  return a.isSub && a.parentName ? `${a.name} (sub-account of ${a.parentName})` : a.name;
+}
+
 async function bulkSendLoginInvites() {
   const ids = [...selectedInvestors];
   if (!ids.length) return;
@@ -1367,19 +1832,28 @@ async function bulkArchiveInvestors() {
     return inv ? { id: inv.id, status: inv.status } : null;
   }).filter(Boolean);
   try {
-    await Promise.all(ids.map(id => API.investors.update(id, { status: 'archived' })));
+    const archived = await _bulkRun(ids, id => API.investors.update(id, { status: 'archived' }),
+                                    { label: _investorLabel });
     ids.forEach(id => { const inv = STATE.investors.find(i => i.id === id); if (inv) inv.status = 'archived'; });
     selectedInvestors.clear();
+    archived.failed.forEach(f => selectedInvestors.add(f.item));
     renderInvestorsTable();
     renderInvestorStats();
     updateBulkBar();
-    Toast.action(`${ids.length} investor${ids.length !== 1 ? 's' : ''} archived`, 'Undo', async () => {
+    if (archived.failed.length) _bulkReport('investor', 'archived', archived);
+    /* Undo offered only for what was archived — offering to undo a failure
+       would restore rows that never moved and report success for doing so. */
+    if (archived.succeeded.length) Toast.action(`${archived.succeeded.length} investor${archived.succeeded.length !== 1 ? 's' : ''} archived`, 'Undo', async () => {
       try {
-        await Promise.all(snapshot.map(s => API.investors.update(s.id, { status: s.status || 'active' })));
-        snapshot.forEach(s => { const inv = STATE.investors.find(i => i.id === s.id); if (inv) inv.status = s.status || 'active'; });
+        /* Restore only what actually came back. A partial undo reported as a
+           complete one leaves rows archived that the operator believes are not. */
+        const toRestore = snapshot.filter(s => archived.succeeded.includes(s.id));
+        const undone = await _bulkRun(toRestore, s => API.investors.update(s.id, { status: s.status || 'active' }),
+                                      { label: s => _investorLabel(s.id) });
+        undone.succeeded.forEach(s => { const inv = STATE.investors.find(i => i.id === s.id); if (inv) inv.status = s.status || 'active'; });
         renderInvestorsTable();
         renderInvestorStats();
-        Toast.success('Archive undone');
+        _bulkReport('investor', 'restored', undone);
       } catch (ue) { Toast.error('Undo failed: ' + ue.message); }
     });
   } catch (e) { Toast.error('Archive failed: ' + (e.message || 'unknown error')); }
@@ -1397,15 +1871,21 @@ async function bulkApproveFica() {
     confirmClass: 'btn--success',
   })) return;
   try {
-    await Promise.all(ids.map(id => API.investors.update(id, { fica_status: 'approved', kyc_status: 'approved' })));
-    ids.forEach(id => {
+    const res = await _bulkRun(ids, id => API.investors.update(id, { fica_status: 'approved', kyc_status: 'approved' }),
+                               { label: _investorLabel });
+    /* Only the ones that actually landed. Marking all of them approved locally
+       after a partial run is what made the table disagree with the server. */
+    res.succeeded.forEach(id => {
       const inv = STATE.investors.find(i => i.id === id);
       if (inv) { inv.fica_status = 'approved'; inv.kyc_status = 'approved'; }
     });
+    /* Anything that failed stays selected, so a retry does not need the
+       operator to work out which ones to tick again. */
     selectedInvestors.clear();
+    res.failed.forEach(f => selectedInvestors.add(f.item));
     renderInvestorsTable();
     updateBulkBar();
-    Toast.success(`FICA approved for ${ids.length} investor${ids.length !== 1 ? 's' : ''}`);
+    _bulkReport('investor', 'FICA approved', res);
   } catch (e) { Toast.error('Bulk FICA approval failed: ' + (e.message || 'unknown error')); }
 }
 
@@ -1413,15 +1893,17 @@ function bulkExportSelected() {
   const ids = [...selectedInvestors];
   if (!ids.length) return;
   const rows = STATE.investors.filter(i => ids.includes(i.id));
-  const headers = ['ID','First Name','Last Name','Email','Phone','Status','FICA Status','KYC Status','Wallet Balance','Created'];
+  const headers = ['ID','First Name','Last Name','Email','Phone','Gender','Heard About Us','Status','FICA Status','KYC Status','Wallet Balance','Created'];
   const csv = [
     headers.join(','),
     ...rows.map(r => [
       r.id,
-      `"${(r.first_name || '').replace(/"/g, '""')}"`,
-      `"${(r.last_name  || '').replace(/"/g, '""')}"`,
-      `"${(r.email      || '').replace(/"/g, '""')}"`,
-      `"${(r.phone      || '').replace(/"/g, '""')}"`,
+      `"${(r.first_name     || '').replace(/"/g, '""')}"`,
+      `"${(r.last_name      || '').replace(/"/g, '""')}"`,
+      `"${(r.email          || '').replace(/"/g, '""')}"`,
+      `"${(r.phone          || '').replace(/"/g, '""')}"`,
+      `"${(r.gender         || '').replace(/"/g, '""')}"`,
+      `"${(r.heard_about_us || '').replace(/"/g, '""')}"`,
       r.status        || '',
       r.fica_status   || '',
       r.kyc_status    || '',
@@ -1536,9 +2018,26 @@ function _invAvatarColor(name) {
   return p[Math.abs(h) % p.length];
 }
 
+/* Portfolio and Investments are derived, not columns, so they need accessors.
+   Portfolio is the same figure the row shows — wallet plus live investments —
+   because sorting by a number the operator cannot see is worse than no sort. */
+const INVESTOR_SORT = {
+  last_name:    i => (`${i.last_name || ''} ${i.first_name || ''}`).trim().toLowerCase() || null,
+  _portfolio:   i => {
+    const v = Utils.portfolioValue
+      ? Utils.portfolioValue(STATE.investments.filter(x => x.investor_id === i.id), i.wallet_balance)
+      : parseFloat(i.wallet_balance);
+    return isNaN(v) ? null : v;
+  },
+  _investments: i => STATE.investments.filter(x => x.investor_id === i.id).length,
+};
+
 function renderInvestorsTable() {
   const body = document.getElementById('investorsBody');
   const start = (investorPage - 1) * INV_PAGE_SIZE;
+  /* The dropdown still applies its order in the filter step; a column click
+     takes precedence from then on, so the two cannot both claim the table. */
+  if (_sortState.investors?.key) filteredInvestors = _sortRows('investors', filteredInvestors, INVESTOR_SORT);
   const page = filteredInvestors.slice(start, start + INV_PAGE_SIZE);
 
   document.getElementById('investorCount').textContent = `${filteredInvestors.length.toLocaleString()} investors`;
@@ -1604,13 +2103,13 @@ function renderInvestorsTable() {
           <div style="min-width:0;flex:1">
             <div class="td-strong" style="font-size:0.81rem;${_trunc}">${fullName}</div>
             <div style="font-size:0.67rem;font-family:monospace;color:var(--gold);${_trunc}">${inv.id || ''}</div>
-            ${province ? `<div style="font-size:0.67rem;color:var(--text-muted);${_trunc}">${province}</div>` : ''}
+            ${province ? `<div style="font-size:0.67rem;color:var(--text-muted);${_trunc}">${_esc(province)}</div>` : ''}
           </div>
         </div>
       </td>
       <td style="overflow:hidden">
-        <div style="font-size:0.75rem;${_trunc}">${inv.email || '—'}</div>
-        <div class="td-muted" style="font-size:0.71rem;${_trunc}">${inv.phone || '—'}</div>
+        <div style="font-size:0.75rem;${_trunc}">${_esc(inv.email || '—')}</div>
+        <div class="td-muted" style="font-size:0.71rem;${_trunc}">${_esc(inv.phone || '—')}</div>
       </td>
       <td style="overflow:hidden">
         <div style="display:flex;flex-direction:column;gap:3px">${kycBadge}${stBadge}${loginBadge}</div>
@@ -1625,10 +2124,10 @@ function renderInvestorsTable() {
       </td>
       <td style="overflow:hidden" onclick="event.stopPropagation()">
         <div class="flex-center gap-5">
-          <button class="btn btn--secondary btn--sm" onclick='viewInvestor(${JSON.stringify(inv.id)})'><i class="fa-solid fa-eye"></i></button>
+          <button class="btn btn--secondary btn--sm" onclick='viewInvestor(${_esc(JSON.stringify(inv.id))})'><i class="fa-solid fa-eye"></i></button>
           ${inv.status === 'archived'
-            ? `<button class="btn btn--sm" style="background:rgba(253,186,116,.15);color:#fb923c;border:1px solid rgba(253,186,116,.3)" onclick='unarchiveInvestor(${JSON.stringify(inv.id)}, this)' title="Unarchive investor"><i class="fa-solid fa-box-open"></i></button>`
-            : `<button class="btn btn--sm" style="background:rgba(156,163,175,.1);color:var(--text-muted);border:1px solid rgba(156,163,175,.2)" onclick='confirmArchiveInvestor(${JSON.stringify(inv.id)}, this)' title="Archive investor"><i class="fa-solid fa-box-archive"></i></button>`}
+            ? `<button class="btn btn--sm" style="background:rgba(253,186,116,.15);color:#fb923c;border:1px solid rgba(253,186,116,.3)" onclick='unarchiveInvestor(${_esc(JSON.stringify(inv.id))}, this)' title="Unarchive investor"><i class="fa-solid fa-box-open"></i></button>`
+            : `<button class="btn btn--sm" style="background:rgba(156,163,175,.1);color:var(--text-muted);border:1px solid rgba(156,163,175,.2)" onclick='confirmArchiveInvestor(${_esc(JSON.stringify(inv.id))}, this)' title="Archive investor"><i class="fa-solid fa-box-archive"></i></button>`}
         </div>
       </td>
     </tr>`;
@@ -1815,6 +2314,16 @@ function viewSubAccount(saId) {
   const activeInv  = (STATE.investments || []).filter(i => i.sub_account_id === sa.id && i.status === 'active').length;
   const totalInvested = (STATE.investments || []).filter(i => i.sub_account_id === sa.id)
     .reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+  /* The rows behind those counts. This modal reported invCount and
+     totalInvested and then listed nothing, so a sub-account showed numbers
+     with no way to see what made them up — and the transactions, which are
+     the record of what this account actually did, were absent entirely. */
+  const saInvRows = (STATE.investments || [])
+    .filter(i => i.sub_account_id === sa.id)
+    .sort((a, b) => new Date(b.start_date || b.created_at || 0) - new Date(a.start_date || a.created_at || 0));
+  const saTxnRows = (STATE.transactions || [])
+    .filter(t => t.sub_account_id === sa.id)
+    .sort((a, b) => new Date(Utils.txnDate(b) || 0) - new Date(Utils.txnDate(a) || 0));
   const ficaStatus = parent.fica_status || '';
   const _ficaNorm  = s => { const m = { Approved:'approved',Verified:'approved',Declined:'rejected',Unverified:'not_started',Outstanding:'pending',Pending:'pending' }; return m[s] || s; };
   const ficaNorm   = _ficaNorm(ficaStatus);
@@ -1845,6 +2354,20 @@ function viewSubAccount(saId) {
       <div class="info-row"><span class="info-row__label">Wallet Balance</span><span class="info-row__value td-gold fw-700">${Utils.rand(parseFloat(sa.wallet_balance)||0)}</span></div>
       <div class="info-row"><span class="info-row__label">Total Invested</span><span class="info-row__value fw-700">${Utils.rand(totalInvested)}</span></div>
       <div class="info-row"><span class="info-row__label">Investments</span><span class="info-row__value">${activeInv} active / ${invCount} total</span></div>
+      <div class="info-row" style="align-items:flex-start">
+        <span class="info-row__label">3PIM Ref</span>
+        <span class="info-row__value" style="flex:1">
+          <span id="sa-pim-val" style="font-family:monospace">${_esc(sa.pim_account_ref||'—')}</span>
+          <button onclick="document.getElementById('sa-pim-edit').style.display='';document.getElementById('sa-pim-input').focus()" style="background:none;border:none;cursor:pointer;margin-left:6px;padding:0;opacity:0.6" title="Edit 3PIM reference"><i class="fa-solid fa-pen-to-square" style="font-size:0.7rem;color:var(--text-muted)"></i></button>
+          <div id="sa-pim-edit" style="display:none;margin-top:6px">
+            <div style="display:flex;gap:6px;align-items:center">
+              <input type="text" id="sa-pim-input" class="form-control" value="${_esc(sa.pim_account_ref||'')}" placeholder="e.g. S-111581" style="font-family:monospace;font-size:0.82rem;flex:1">
+              <button class="btn btn--primary btn--sm" onclick="saveSaPimRef('${_esc(sa.id)}')">Save</button>
+              <button class="btn btn--secondary btn--sm" onclick="document.getElementById('sa-pim-edit').style.display='none'">Cancel</button>
+            </div>
+          </div>
+        </span>
+      </div>
     </div>
 
     ${saDocs.length ? `
@@ -1875,7 +2398,7 @@ function viewSubAccount(saId) {
     <div style="background:var(--dark-3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:16px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
         <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted)">Bank Details</div>
-        <button class="btn btn--secondary btn--sm" style="padding:3px 10px;font-size:0.72rem" onclick='editSaBankDetails(${JSON.stringify(sa.id)})'><i class="fa-solid fa-pen-to-square" style="margin-right:4px"></i>Edit</button>
+        <button class="btn btn--secondary btn--sm" style="padding:3px 10px;font-size:0.72rem" onclick='editSaBankDetails(${_esc(JSON.stringify(sa.id))})'><i class="fa-solid fa-pen-to-square" style="margin-right:4px"></i>Edit</button>
       </div>
       ${sa.sa_bank_holder ? `<div class="info-list">
         <div class="info-row"><span class="info-row__label">Account Holder</span><span class="info-row__value">${_esc(sa.sa_bank_holder||'—')}</span></div>
@@ -1883,7 +2406,7 @@ function viewSubAccount(saId) {
         <div class="info-row"><span class="info-row__label">Account Number</span><span class="info-row__value" style="font-family:monospace">${_esc(sa.sa_bank_number||'—')}</span></div>
         <div class="info-row"><span class="info-row__label">Account Type</span><span class="info-row__value">${_esc(sa.sa_bank_type||'—')}</span></div>
         ${sa.sa_bank_branch ? `<div class="info-row"><span class="info-row__label">Branch Code</span><span class="info-row__value" style="font-family:monospace">${_esc(sa.sa_bank_branch)}</span></div>` : ''}
-        <div class="info-row"><span class="info-row__label">Status</span><span class="info-row__value" style="color:${bankColor};font-weight:700">${bankLabel}</span></div>
+        <div class="info-row"><span class="info-row__label">Status</span><span class="info-row__value" style="color:${bankColor};font-weight:700">${bankLabel}${sa.sa_bank_reviewed_by ? `<span style="font-size:0.68rem;font-weight:400;color:var(--text-muted);margin-left:6px">by ${_esc(sa.sa_bank_reviewed_by)}</span>` : ''}</span></div>
       </div>` : `<div style="font-size:0.8rem;color:var(--text-muted)"><i class="fa-solid fa-circle-info" style="margin-right:6px"></i>No banking details on file — click Edit to add.</div>`}
     </div>
     <div style="background:rgba(237,165,255,0.08);border:1px solid rgba(237,165,255,0.2);border-radius:10px;padding:12px 14px">
@@ -1891,8 +2414,75 @@ function viewSubAccount(saId) {
       <div style="font-weight:700;font-size:0.88rem;margin-bottom:2px">${_esc(parentName)}</div>
       <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:10px">${_esc(parent.email||'')} · ${_esc(parent.id||'')}</div>
       <button class="btn btn--primary btn--sm" onclick="Modal.close('subAccountModal');viewInvestor('${sa.parent_investor_id}')"><i class="fa-solid fa-arrow-up-right-from-square" style="margin-right:6px"></i>View Parent Account</button>
+    </div>
+
+    <div style="margin-top:14px">
+      <div style="font-size:0.78rem;font-weight:800;margin-bottom:8px;display:flex;align-items:center;gap:6px">
+        <i class="fa-solid fa-chart-line" style="color:#eda5ff"></i> Investments (${saInvRows.length})</div>
+      ${saInvRows.length ? `
+      <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden">
+        <table style="width:100%;border-collapse:collapse;font-size:0.78rem">
+          <thead><tr style="background:var(--dark-3);text-align:left;font-size:0.66rem;text-transform:uppercase;color:var(--text-dim)">
+            <th style="padding:7px 9px">Pool</th><th style="padding:7px 9px;text-align:right">Amount</th>
+            <th style="padding:7px 9px">Started</th><th style="padding:7px 9px">Matures</th>
+            <th style="padding:7px 9px">Status</th></tr></thead>
+          <tbody>${saInvRows.map(i => `<tr style="border-top:1px solid var(--border)">
+            <td style="padding:7px 9px">${_esc(i.pool_name || i.pool_id || '—')}</td>
+            <td style="padding:7px 9px;text-align:right;font-weight:700">${Utils.rand(i.amount)}</td>
+            <td style="padding:7px 9px;color:var(--text-dim)">${i.start_date ? Utils.date(i.start_date) : '—'}</td>
+            <td style="padding:7px 9px;color:var(--text-dim)">${i.end_date ? Utils.date(i.end_date) : '—'}</td>
+            <td style="padding:7px 9px">${Utils.statusBadge(i.status)}</td></tr>`).join('')}</tbody>
+        </table>
+      </div>` : `<div style="font-size:0.78rem;color:var(--text-dim);padding:10px 0">
+        This sub-account has not invested yet.</div>`}
+    </div>
+
+    <div style="margin-top:14px">
+      <div style="font-size:0.78rem;font-weight:800;margin-bottom:8px;display:flex;align-items:center;gap:6px">
+        <i class="fa-solid fa-receipt" style="color:#eda5ff"></i> Transactions (${saTxnRows.length})</div>
+      ${saTxnRows.length ? `
+      <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;${saTxnRows.length > 12 ? 'max-height:340px;overflow-y:auto' : ''}">
+        <table style="width:100%;border-collapse:collapse;font-size:0.78rem">
+          <thead><tr style="background:var(--dark-3);text-align:left;font-size:0.66rem;text-transform:uppercase;color:var(--text-dim)">
+            <th style="padding:7px 9px">Type</th><th style="padding:7px 9px;text-align:right">Amount</th>
+            <th style="padding:7px 9px">Reference</th><th style="padding:7px 9px">Date</th>
+            <th style="padding:7px 9px">Status</th></tr></thead>
+          <tbody>${saTxnRows.map(t => {
+            /* Same sign rule the statements use, so this list and a statement
+               cannot disagree about which way the money went. */
+            const out = ['withdrawal','investment','reinvestment','fee','platform_fee','gift_sent'].includes(t.type);
+            return `<tr style="border-top:1px solid var(--border)">
+            <td style="padding:7px 9px"><span class="badge badge--gray">${_esc(t.type)}</span></td>
+            <td style="padding:7px 9px;text-align:right;font-weight:700;color:${out ? '#ef4444' : '#22c55e'}">${out ? '-' : ''}${Utils.rand(Math.abs(parseFloat(t.amount) || 0))}</td>
+            <td style="padding:7px 9px;color:var(--text-dim);font-family:monospace;font-size:0.7rem">${_esc(t.reference || '—')}</td>
+            <td style="padding:7px 9px;color:var(--text-dim)">${Utils.date(Utils.txnDate(t))}</td>
+            <td style="padding:7px 9px">${Utils.statusBadge(t.status)}</td></tr>`; }).join('')}</tbody>
+        </table>
+      </div>` : `<div style="font-size:0.78rem;color:var(--text-dim);padding:10px 0">
+        Nothing has moved through this sub-account yet.</div>`}
     </div>`;
   Modal.open('subAccountModal');
+}
+
+async function saveSaPimRef(saId) {
+  const val = (document.getElementById('sa-pim-input')?.value || '').trim() || null;
+  try {
+    const res = await fetch(`/api/tables/sub_accounts/${saId}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${_getToken()}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pim_account_ref: val }),
+    });
+    if (!res.ok) throw new Error((await res.json()).error || 'Save failed');
+    const sa = (STATE.subAccounts || []).find(s => s.id === saId);
+    if (sa) sa.pim_account_ref = val;
+    const el = document.getElementById('sa-pim-val');
+    if (el) el.textContent = val || '—';
+    const editEl = document.getElementById('sa-pim-edit');
+    if (editEl) editEl.style.display = 'none';
+    Toast.success('3PIM reference saved');
+  } catch (e) {
+    Toast.error('Failed to save: ' + e.message);
+  }
 }
 
 function _invTab(name) {
@@ -1935,19 +2525,14 @@ async function _saveInvProfile(btn) {
       address:        document.getElementById('ipf-address').value.trim(),
       postal_code:    document.getElementById('ipf-postal_code').value.trim() || null,
       province:       document.getElementById('ipf-province').value,
-      occupation:   document.getElementById('ipf-occupation').value.trim(),
-      risk_profile: document.getElementById('ipf-risk_profile').value,
+      occupation:       document.getElementById('ipf-occupation').value.trim(),
+      risk_profile:     document.getElementById('ipf-risk_profile').value,
+      pim_account_ref:  document.getElementById('ipf-pim_account_ref').value.trim() || null,
     };
 
     // Merge JSONB profile fields, preserving existing keys
     let invProfile = {};
-    try {
-      if (inv.investor_profile) {
-        invProfile = typeof inv.investor_profile === 'string'
-          ? JSON.parse(inv.investor_profile)
-          : { ...inv.investor_profile };
-      }
-    } catch (_) {}
+    invProfile = { ..._safeParse(inv.investor_profile, {}) };
     invProfile.employer     = document.getElementById('ipf-employer').value.trim();
     invProfile.next_of_kin  = document.getElementById('ipf-next_of_kin').value.trim();
     invProfile.kin_contact  = document.getElementById('ipf-kin_contact').value.trim();
@@ -1989,6 +2574,7 @@ async function viewInvestor(id) {
       API._fetch('GET', 'tables/transactions', null, { investor_id: id, limit: 2000 }),
     ]);
     if (invstRes?.data?.length) invsts = invstRes.data;
+    _investorInvestments = invsts;
     if (txnRes?.data?.length)  txns   = txnRes.data;
   } catch (_) { /* fall back to STATE data already set above */ }
 
@@ -2003,17 +2589,10 @@ async function viewInvestor(id) {
 
   // Parse investor_profile JSONB for fields saved by quests
   let invProfile = {};
-  try {
-    if (inv.investor_profile) {
-      invProfile = typeof inv.investor_profile === 'string'
-        ? JSON.parse(inv.investor_profile)
-        : inv.investor_profile;
-    }
-  } catch (_) {}
+  invProfile = _safeParse(inv.investor_profile, {});
 
   /* Parse bank details stored in notes JSON by migration */
-  let bankNotes = {};
-  try { if (inv.notes && inv.notes.startsWith('{')) bankNotes = JSON.parse(inv.notes); } catch(_) {}
+  const bankNotes = _safeParse(inv.notes, {});
   const bankName   = inv.bank_name    || bankNotes.bank_name    || '—';
   const bankHolder = inv.bank_account_holder || bankNotes.account_holder || '—';
   const bankAcctRaw= inv.bank_account_number || bankNotes.account_number || '';
@@ -2025,8 +2604,42 @@ async function viewInvestor(id) {
   const avatarColor= _invAvatarColor(`${inv.first_name} ${inv.last_name}`);
   const totalInvested  = invsts.filter(i=>i.status==='active').reduce((s,i) => s+(parseFloat(i.amount)||0), 0);
   const activeInvCount = invsts.filter(i=>i.status==='active').length;
-  const totalReturns   = invsts.filter(i=>['matured','paid_out'].includes(i.status)).reduce((s,i)=>s+(parseFloat(i.actual_return)||parseFloat(i.expected_return)||0), 0);
+
+  /* The figure the client sees at the top of their overview, from the same
+     helper that renders it there — active capital, plus the wallet, plus what
+     has actually been posted. Computed rather than restated so the two cannot
+     drift: whoever changes portfolioValue changes both screens at once.
+
+     Support answering "what does your app show?" was previously reading four
+     separate tiles and adding them up by hand, which does not reproduce this
+     number — the client's total counts earned returns on ACTIVE holdings only,
+     while the Returns Earned tile beside it is a lifetime figure. */
+  const portfolioValue = Utils.portfolioValue(invsts, inv.wallet_balance);
+
+  /* Earned, not projected. This was Utils.totalReturns, whose own comment says
+     it falls back to the contracted rate and so must not be used for anything
+     labelled earned. On an investment with no posted rate it answered with a
+     projection, so this tile showed money the client had not been told they
+     had earned — and the client's own screen, which uses earnedReturns, showed
+     a smaller number. That gap is why the two screens disagreed.
+
+     Scope matches the client's badge: every non-cancelled investment, so a
+     matured pool's declared return still counts toward a lifetime total. */
+  const earningInvs    = invsts.filter(i => (i.status || '') !== 'cancelled');
+  const totalReturns   = Utils.earnedReturns(earningInvs);
+  const earnedBase     = earningInvs.filter(i => Utils.postedReturn(i))
+                                    .reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+  const returnPct      = earnedBase > 0 ? (totalReturns / earnedBase * 100).toFixed(1) : '0';
   const totalDeposits  = txns.filter(t=>t.type==='deposit' && t.status==='completed').reduce((s,t)=>s+(parseFloat(t.amount)||0), 0);
+  const invSubAccounts = (STATE.subAccounts || []).filter(sa => sa.parent_investor_id === id);
+  const saWallet   = invSubAccounts.reduce((s, sa) => s + (parseFloat(sa.wallet_balance) || 0), 0);
+  const saInvested = invSubAccounts.reduce((s, sa) => {
+    const saInvs = invsts.filter(i => i.sub_account_id === sa.id);
+    const computed = saInvs.reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
+    return s + (computed > 0 ? computed : (parseFloat(sa.total_invested) || 0));
+  }, 0);
+  const _stmtToday   = new Date().toISOString().slice(0, 10);
+  const _stmtFromDef = _stmtToday.slice(0, 7) + '-01';
 
   document.getElementById('invDetailBody').innerHTML = `
   <div class="tab-bar" style="display:flex;gap:4px;padding:4px;border-radius:10px;margin-bottom:16px;flex-wrap:wrap">
@@ -2038,6 +2651,8 @@ async function viewInvestor(id) {
     <button class="tab-btn inv-tab-btn"        id="invTab-activity"      onclick="_invTab('activity');_loadInvestorActivity('${inv.id}')"><i class="fa-solid fa-mobile-screen" style="margin-right:5px"></i>Activity</button>
     <button class="tab-btn inv-tab-btn"        id="invTab-admin"         onclick="_invTab('admin')"><i class="fa-solid fa-shield-halved" style="margin-right:5px"></i>Admin</button>
     <button class="tab-btn inv-tab-btn"        id="invTab-statements"    onclick="_invTab('statements');_loadInvestorStatements('${inv.id}')"><i class="fa-solid fa-file-lines" style="margin-right:5px"></i>Statements</button>
+    <button class="tab-btn inv-tab-btn"        id="invTab-agreements"    onclick="_invTab('agreements');_loadInvestorAgreements('${inv.id}')"><i class="fa-solid fa-file-signature" style="margin-right:5px"></i>Agreements</button>
+    ${invSubAccounts.length ? `<button class="tab-btn inv-tab-btn" id="invTab-subaccounts" onclick="_invTab('subaccounts')"><i class="fa-solid fa-users" style="margin-right:5px"></i>Sub-accounts (${invSubAccounts.length})</button>` : ''}
     <button class="tab-btn inv-tab-btn"        id="invTab-comms"         onclick="_invTab('comms')"><i class="fa-solid fa-envelope" style="margin-right:5px"></i>Comms</button>
   </div>
 
@@ -2047,11 +2662,26 @@ async function viewInvestor(id) {
       <div style="width:52px;height:52px;border-radius:50%;background:${avatarColor};color:#fff;font-size:1rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">${Utils.initials(inv.first_name + ' ' + inv.last_name)}</div>
       <div>
         <div style="font-size:1.15rem;font-weight:800;color:var(--text)">${_esc(inv.first_name)||''} ${_esc(inv.last_name)||''}</div>
-        <div style="font-family:monospace;font-size:0.78rem;color:var(--text-muted);margin:2px 0">${_esc(inv.id)||''}<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.id||"")},this)' title="Copy account number"><i class="fa-regular fa-copy"></i></button></div>
+        <div style="font-family:monospace;font-size:0.78rem;color:var(--text-muted);margin:2px 0">${_esc(inv.id)||''}<button class="copy-btn" onclick='copyToClipboard(${_esc(JSON.stringify(inv.id||""))},this)' title="Copy account number"><i class="fa-regular fa-copy"></i></button></div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
           ${Utils.statusBadge(inv.status)}
-          ${inv.kyc_status==='approved'?'<span class="badge badge--green"><i class="fa-solid fa-shield-check"></i> KYC Verified</span>':'<span class="badge badge--yellow">KYC Pending</span>'}
+          ${inv.kyc_status==='approved'?`<span class="badge badge--green"><i class="fa-solid fa-shield-check"></i> KYC Verified</span>${inv.fica_reviewed_by?`<span style="font-size:0.65rem;color:var(--text-muted);margin-left:2px">by ${_esc(inv.fica_reviewed_by)}</span>`:''}` : '<span class="badge badge--yellow">KYC Pending</span>'}
         </div>
+      </div>
+    </div>
+    <!-- The client's own headline figure, rendered from the same helper and
+         labelled the same, so a support call can be answered by reading one
+         number off this screen instead of reconstructing it from the tiles. -->
+    <div style="background:var(--bg-secondary);border-radius:10px;padding:14px 16px;margin-bottom:10px">
+      <div style="font-size:0.68rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted)">Total Portfolio Value</div>
+      <div style="font-size:1.7rem;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums;margin-top:2px">${Utils.rand(portfolioValue)}</div>
+      <div style="font-size:0.72rem;font-weight:700;margin-top:4px;color:${totalReturns > 0 ? '#22c55e' : 'var(--text-muted)'}">
+        ${totalReturns > 0
+          ? `<i class="fa-solid fa-arrow-trend-up"></i> +${returnPct}% return posted &middot; ${Utils.rand(totalReturns)} earned`
+          : '<i class="fa-solid fa-hourglass-half"></i> No returns posted yet'}
+      </div>
+      <div style="font-size:0.66rem;color:var(--text-muted);margin-top:5px">
+        What the client sees on their overview — active capital + wallet + posted returns.
       </div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px">
@@ -2076,6 +2706,11 @@ async function viewInvestor(id) {
         <div style="font-size:1.05rem;font-weight:800;color:#656565">${invsts.length}<span style="font-size:0.72rem;font-weight:400"> (${activeInvCount} active)</span></div>
         <div style="font-size:0.72rem;color:var(--text-muted)">Investments</div>
       </div>
+      ${invSubAccounts.length ? `<div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center;cursor:pointer" onclick="_invTab('subaccounts')" title="View sub-accounts">
+        <div style="font-size:1.05rem;font-weight:800;color:#eda5ff">${invSubAccounts.length}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted)">Sub-accounts</div>
+        <div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px;white-space:nowrap">W ${Utils.rand(saWallet)} · I ${Utils.rand(saInvested)}</div>
+      </div>` : ''}
     </div>
     <div class="panel mb-12">
       <div class="panel__header"><span class="panel__title"><i class="fa-solid fa-building-columns" style="color:var(--orange);margin-right:6px"></i>Bank Account</span></div>
@@ -2085,30 +2720,50 @@ async function viewInvestor(id) {
           <div class="info-row"><span class="info-row__label">Account Holder</span><span class="info-row__value">${bankHolder}</span></div>
           <div class="info-row"><span class="info-row__label">Account No.</span><span class="info-row__value" style="font-family:monospace">${bankMasked}</span></div>
           <div class="info-row"><span class="info-row__label">Branch Code</span><span class="info-row__value">${bankBranch}</span></div>
-          <div class="info-row"><span class="info-row__label">Status</span><span class="info-row__value"><span class="badge ${bCls[bStatus]}">${bLbl[bStatus]}</span></span></div>
+          <div class="info-row"><span class="info-row__label">Status</span><span class="info-row__value"><span class="badge ${bCls[bStatus]}">${bLbl[bStatus]}</span>${inv.bank_account_reviewed_by ? `<span style="font-size:0.7rem;color:var(--text-muted);margin-left:6px">by ${_esc(inv.bank_account_reviewed_by)}</span>` : ''}</span></div>
         </div>
         <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-          <button class="btn btn--secondary btn--sm" onclick='editBankDetails(${JSON.stringify(inv.id)})'><i class="fa-solid fa-pen-to-square"></i> Edit</button>
+          <button class="btn btn--secondary btn--sm" onclick='editBankDetails(${_esc(JSON.stringify(inv.id))})'><i class="fa-solid fa-pen-to-square"></i> Edit</button>
           ${bStatus!=='none'?`
-            <button class="btn btn--secondary btn--sm" onclick='viewBankProof(${JSON.stringify(inv.id)})'><i class="fa-solid fa-arrow-up-right-from-square"></i> View Proof of Bank</button>
+            <button class="btn btn--secondary btn--sm" onclick='viewBankProof(${_esc(JSON.stringify(inv.id))})'><i class="fa-solid fa-arrow-up-right-from-square"></i> View Proof of Bank</button>
             ${bStatus==='pending'?`
-              <button class="btn btn--success btn--sm" onclick='approveBankAccount(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-check"></i> Approve</button>
-              <button class="btn btn--danger btn--sm" onclick='rejectBankAccount(${JSON.stringify(inv.id)})'><i class="fa-solid fa-xmark"></i> Reject</button>
+              <button class="btn btn--success btn--sm" onclick='approveBankAccount(${_esc(JSON.stringify(inv.id))}, this)'><i class="fa-solid fa-check"></i> Approve</button>
+              <button class="btn btn--danger btn--sm" onclick='rejectBankAccount(${_esc(JSON.stringify(inv.id))})'><i class="fa-solid fa-xmark"></i> Reject</button>
             `:''}
           `:''}
         </div>
       </div>
     </div>
+
+    <!-- Everything the client has uploaded, in one place. Filled by
+         _loadClientDocuments() rather than rendered here: the modal opens on
+         the figures somebody came for, and the documents — which need a
+         second query and may be none — arrive a moment later rather than
+         holding the whole record up. -->
+    <div class="panel mb-12">
+      <div class="panel__header flex-between">
+        <span class="panel__title"><i class="fa-solid fa-folder-open" style="color:#eda5ff;margin-right:6px"></i>Uploaded Documents</span>
+        <span id="invDocsCount" style="font-size:0.72rem;color:var(--text-muted)"></span>
+      </div>
+      <div class="panel__body" id="invDocsBody" style="font-size:0.82rem;color:var(--text-muted)">
+        <i class="fa-solid fa-spinner fa-spin"></i> Loading documents…
+      </div>
+    </div>
+
+    <!-- Rewards level and Learning Hub stage. Filled by _loadInvestorRewards()
+         so the modal opens on the figures that matter without waiting on it. -->
+    <div id="invRewardsCard" class="mt-16"></div>
+
     <div class="flex-between mt-16" style="flex-wrap:wrap;gap:8px">
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn--success btn--sm" onclick='depositToInvestor(${JSON.stringify(inv.id)}, ${JSON.stringify(inv.first_name + " " + inv.last_name)}, ${inv.wallet_balance || 0})'><i class="fa-solid fa-wallet"></i> Add Funds</button>
-        <button class="btn btn--secondary btn--sm" onclick='approveInvestorFica(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-id-card"></i> Approve FICA</button>
-        ${hasLoginAccount === false ? `<button class="btn btn--secondary btn--sm" id="invInviteBtn" onclick='sendLoginInvite(${JSON.stringify(inv.id)}, ${JSON.stringify(inv.email)}, this)'><i class="fa-solid fa-envelope"></i> Send Login Invite</button>` : hasLoginAccount === true ? `<span class="badge badge--green" style="padding:6px 10px"><i class="fa-solid fa-circle-check"></i> Has login account</span>` : ''}
-        ${userRecord?.totp_enabled ? `<button class="btn btn--sm" style="background:rgba(249,115,22,.15);color:#f97316;border:1px solid rgba(249,115,22,.3)" onclick='adminReset2FA(${JSON.stringify(userRecord.id)}, ${JSON.stringify(inv.first_name + " " + inv.last_name)}, this)'><i class="fa-solid fa-shield-xmark"></i> Reset 2FA</button>` : ''}
+        <button class="btn btn--success btn--sm" onclick='depositToInvestor(${_esc(JSON.stringify(inv.id))}, ${_esc(JSON.stringify(inv.first_name + " " + inv.last_name))}, ${inv.wallet_balance || 0})'><i class="fa-solid fa-wallet"></i> Add Funds</button>
+        <button class="btn btn--secondary btn--sm" onclick='approveInvestorFica(${_esc(JSON.stringify(inv.id))}, this)'><i class="fa-solid fa-id-card"></i> Approve FICA</button>
+        ${hasLoginAccount === false ? `<button class="btn btn--secondary btn--sm" id="invInviteBtn" onclick='sendLoginInvite(${_esc(JSON.stringify(inv.id))}, ${_esc(JSON.stringify(inv.email))}, this)'><i class="fa-solid fa-envelope"></i> Send Login Invite</button>` : hasLoginAccount === true ? `<span class="badge badge--green" style="padding:6px 10px"><i class="fa-solid fa-circle-check"></i> Has login account</span>` : ''}
+        ${userRecord?.totp_enabled ? `<button class="btn btn--sm" style="background:rgba(249,115,22,.15);color:#f97316;border:1px solid rgba(249,115,22,.3)" onclick='adminReset2FA(${_esc(JSON.stringify(userRecord.id))}, ${_esc(JSON.stringify(inv.first_name + " " + inv.last_name))}, this)'><i class="fa-solid fa-shield-xmark"></i> Reset 2FA</button>` : ''}
         ${inv.status === 'archived'
-          ? `<button class="btn btn--sm" style="background:rgba(253,186,116,.15);color:#fb923c;border:1px solid rgba(253,186,116,.3)" onclick='unarchiveInvestor(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-box-open"></i> Unarchive</button>`
-          : `<button class="btn btn--sm" style="background:rgba(156,163,175,.1);color:var(--text-muted);border:1px solid rgba(156,163,175,.2)" onclick='confirmArchiveInvestor(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-box-archive"></i> Archive</button>`}
-        <button class="btn btn--sm" style="background:rgba(237,165,255,.1);color:#eda5ff;border:1px solid rgba(237,165,255,.25)" onclick='viewAsInvestor(${JSON.stringify(inv.id)})'><i class="fa-solid fa-eye"></i> View as Investor</button>
+          ? `<button class="btn btn--sm" style="background:rgba(253,186,116,.15);color:#fb923c;border:1px solid rgba(253,186,116,.3)" onclick='unarchiveInvestor(${_esc(JSON.stringify(inv.id))}, this)'><i class="fa-solid fa-box-open"></i> Unarchive</button>`
+          : `<button class="btn btn--sm" style="background:rgba(156,163,175,.1);color:var(--text-muted);border:1px solid rgba(156,163,175,.2)" onclick='confirmArchiveInvestor(${_esc(JSON.stringify(inv.id))}, this)'><i class="fa-solid fa-box-archive"></i> Archive</button>`}
+        <button class="btn btn--sm" style="background:rgba(237,165,255,.1);color:#eda5ff;border:1px solid rgba(237,165,255,.25)" onclick='viewAsInvestor(${_esc(JSON.stringify(inv.id))})'><i class="fa-solid fa-eye"></i> View as Investor</button>
         <button class="btn btn--sm" style="background:rgba(59,130,246,.1);color:#60a5fa;border:1px solid rgba(59,130,246,.25)" onclick='_invTab("comms")'><i class="fa-solid fa-envelope"></i> Send Email</button>
       </div>
       <button class="btn btn--primary btn--sm" onclick='Modal.close("investorDetailModal")'><i class="fa-solid fa-check"></i> Done</button>
@@ -2120,9 +2775,9 @@ async function viewInvestor(id) {
     <!-- read-only view -->
     <div id="invProfileView">
       <div class="info-list">
-        <div class="info-row"><span class="info-row__label">Email</span><span class="info-row__value">${_esc(inv.email)||'—'}${inv.email?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.email)},this)' title="Copy email"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
-        <div class="info-row"><span class="info-row__label">Phone</span><span class="info-row__value">${_esc(inv.phone)||'—'}${inv.phone?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.phone)},this)' title="Copy phone"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
-        <div class="info-row"><span class="info-row__label">SA ID Number</span><span class="info-row__value">${_esc(inv.id_number)||'—'}${inv.id_number?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.id_number)},this)' title="Copy ID"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
+        <div class="info-row"><span class="info-row__label">Email</span><span class="info-row__value">${_esc(inv.email)||'—'}${inv.email?`<button class="copy-btn" onclick='copyToClipboard(${_esc(JSON.stringify(inv.email))},this)' title="Copy email"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
+        <div class="info-row"><span class="info-row__label">Phone</span><span class="info-row__value">${_esc(inv.phone)||'—'}${inv.phone?`<button class="copy-btn" onclick='copyToClipboard(${_esc(JSON.stringify(inv.phone))},this)' title="Copy phone"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
+        <div class="info-row"><span class="info-row__label">SA ID Number</span><span class="info-row__value">${_esc(inv.id_number)||'—'}${inv.id_number?`<button class="copy-btn" onclick='copyToClipboard(${_esc(JSON.stringify(inv.id_number))},this)' title="Copy ID"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
         ${inv.street_address ? `<div class="info-row"><span class="info-row__label">Street Address</span><span class="info-row__value" style="font-size:0.78rem">${_esc(inv.street_address)}</span></div>` : ''}
         ${inv.suburb ? `<div class="info-row"><span class="info-row__label">Suburb</span><span class="info-row__value">${_esc(inv.suburb)}</span></div>` : ''}
         <div class="info-row"><span class="info-row__label">City</span><span class="info-row__value">${_esc(inv.address)||'—'}</span></div>
@@ -2133,6 +2788,7 @@ async function viewInvestor(id) {
         <div class="info-row"><span class="info-row__label">Next of Kin</span><span class="info-row__value">${_esc(invProfile.next_of_kin||'')||'—'}</span></div>
         <div class="info-row"><span class="info-row__label">Kin Contact</span><span class="info-row__value">${_esc(invProfile.kin_contact||'')||'—'}</span></div>
         <div class="info-row"><span class="info-row__label">Risk Profile</span><span class="info-row__value" style="text-transform:capitalize">${_esc(inv.risk_profile)||'—'}</span></div>
+        ${inv.pim_account_ref ? `<div class="info-row"><span class="info-row__label">3PIM Ref</span><span class="info-row__value" style="font-family:monospace">${_esc(inv.pim_account_ref)}</span></div>` : ''}
         <div class="info-row"><span class="info-row__label">Account Created</span><span class="info-row__value">${Utils.date(inv.date_joined)}</span></div>
       </div>
       <div style="margin-top:14px">
@@ -2198,6 +2854,10 @@ async function viewInvestor(id) {
             ${['','conservative','moderate','aggressive'].map(r=>`<option value="${r}" ${(inv.risk_profile||'')===r?'selected':''}>${r||'— Select —'}</option>`).join('')}
           </select>
         </div>
+        <div class="form-group">
+          <label class="form-label">3PIM Account Reference <span style="font-size:0.7rem;color:var(--text-muted);font-weight:400">(FNB interest distribution matching)</span></label>
+          <input type="text" class="form-control" id="ipf-pim_account_ref" value="${_esc(inv.pim_account_ref||'')}" placeholder="e.g. S-1163">
+        </div>
       </div>
       <div style="display:flex;gap:8px;margin-top:16px">
         <button class="btn btn--primary btn--sm" onclick="_saveInvProfile(this)"><i class="fa-solid fa-floppy-disk"></i> Save Changes</button>
@@ -2261,15 +2921,24 @@ async function viewInvestor(id) {
         <thead style="position:sticky;top:0;z-index:1"><tr><th style="min-width:160px">Pool</th><th style="min-width:130px">Product</th><th>Date Invested</th><th>Amount</th><th>Rate</th><th>Status</th><th>Maturity</th><th></th></tr></thead>
         <tbody>${invsts.length ? invsts.map(i => {
           const pi = Utils.productInfo(i.product_type);
-          return `<tr>
+          /* The row has opened the detail all along, but the only visible control
+             in it was the purple move-pool button — which reads as "the action
+             here is moving pools" and makes the row itself look inert. An
+             explicit eye button, the same one the main investments list has,
+             is what makes the capability findable. */
+          const _open = `viewInvestmentDetail(${JSON.stringify(i.id)},${JSON.stringify(id)})`;
+          return `<tr tabindex="0" style="cursor:pointer" onclick='${_open}' onkeydown='if(event.key==="Enter"||event.key===" "){event.preventDefault();${_open};}' title="Open investment detail">
             <td class="td-strong" title="${_esc(i.pool_name||'')}">${_esc(i.pool_name)||'—'}</td>
             <td title="${_esc(pi.label)}"><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
             <td class="td-muted">${Utils.date(i.start_date||i.created_at)}</td>
             <td class="td-gold fw-700">${Utils.rand(i.amount)}</td>
-            <td class="td-green">${i.annual_rate?Utils.pct(i.annual_rate):'—'}</td>
+            <td>${Utils.rateCell(i)}</td>
             <td>${Utils.statusBadge(i.status)}</td>
             <td class="td-muted">${Utils.date(i.end_date)}</td>
-            <td><button class="btn btn--sm" style="background:rgba(237,165,255,.1);color:#eda5ff;border:1px solid rgba(237,165,255,.25)" onclick='openMoveInvestment(${JSON.stringify(i.id)},${JSON.stringify(i.pool_id)})' title="Move to different pool"><i class="fa-solid fa-right-left"></i></button></td>
+            <td style="white-space:nowrap">
+              <button class="btn btn--secondary btn--sm" onclick='event.stopPropagation();${_open}' title="Open investment detail"><i class="fa-solid fa-eye"></i></button>
+              <button class="btn btn--sm" style="background:rgba(237,165,255,.1);color:#eda5ff;border:1px solid rgba(237,165,255,.25)" onclick='event.stopPropagation();openMoveInvestment(${_esc(JSON.stringify(i.id))},${_esc(JSON.stringify(i.pool_id))})' title="Move to different pool"><i class="fa-solid fa-right-left"></i></button>
+            </td>
           </tr>`;
         }).join(''):'<tr><td colspan="8" class="text-center text-muted" style="padding:16px">No investments on record</td></tr>'}</tbody>
       </table>
@@ -2284,9 +2953,9 @@ async function viewInvestor(id) {
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
           <div>
             <label style="font-size:0.78rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Investment Pool</label>
-            <select id="adminInvestPool-${inv.id}" style="width:100%;padding:8px 10px;border:1.5px solid rgba(0,0,0,0.12);border-radius:8px;font-size:0.85rem;background:var(--bg-secondary);color:var(--text)">
+            <select id="adminInvestPool-${inv.id}" onchange="_adminInvestPoolPicked('${_esc(inv.id)}')" style="width:100%;padding:8px 10px;border:1.5px solid rgba(0,0,0,0.12);border-radius:8px;font-size:0.85rem;background:var(--bg-secondary);color:var(--text)">
               <option value="">— Select pool —</option>
-              ${(STATE.pools||[]).filter(p=>['open','active','filling'].includes(p.status)).sort((a,b)=>(a.name||'').localeCompare(b.name||'')).map(p=>`<option value="${_esc(p.id)}">${_esc(p.name)} (min: ${Utils.rand(p.min_investment||0)}, ${Utils.pct(p.annual_rate||0)} p.a.)</option>`).join('')}
+              ${_adminInvestPoolOptions()}
             </select>
           </div>
           <div>
@@ -2301,8 +2970,9 @@ async function viewInvestor(id) {
           </label>
           <span style="font-size:0.78rem;color:var(--text-muted)">· Wallet: <strong>${Utils.rand(inv.wallet_balance)}</strong></span>
         </div>
+        <div id="adminInvestPoolNote-${inv.id}" style="font-size:0.8rem;margin-bottom:10px"></div>
         <div id="adminInvestResult-${inv.id}" style="font-size:0.82rem;margin-bottom:10px"></div>
-        <button class="btn btn--success btn--sm" onclick='adminInvestOnBehalf(${JSON.stringify(inv.id)},${JSON.stringify(inv.first_name+" "+inv.last_name)},this)'>
+        <button class="btn btn--success btn--sm" onclick='adminInvestOnBehalf(${_esc(JSON.stringify(inv.id))},${_esc(JSON.stringify(inv.first_name+" "+inv.last_name))},this)'>
           <i class="fa-solid fa-arrow-trend-up"></i> Create Investment
         </button>
       </div>
@@ -2318,7 +2988,7 @@ async function viewInvestor(id) {
         <tbody>${txns.length ? txns.map(t => `
           <tr>
             <td>${Utils.statusBadge(t.type)}</td>
-            <td class="${(parseFloat(t.amount)||0)<0?'td-red':'td-green'} fw-700">${(parseFloat(t.amount)||0)<0?'':'+'}${Utils.rand(t.amount)}</td>
+            <td class="${['investment','reinvestment','withdrawal','fee'].includes(t.type)?'td-red':'td-green'} fw-700">${['investment','reinvestment','withdrawal','fee'].includes(t.type)?'-':'+'}${Utils.rand(Math.abs(parseFloat(t.amount)||0))}</td>
             <td>${Utils.statusBadge(t.status)}</td>
             <td class="td-muted" style="font-size:0.78rem;font-family:monospace">${_esc(t.reference)||'—'}</td>
             <td class="td-muted" style="font-size:0.78rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(t.description||t.notes)||'—'}</td>
@@ -2339,8 +3009,8 @@ async function viewInvestor(id) {
           <div style="font-size:0.83rem;font-weight:600;color:var(--text);margin-bottom:4px">Restore Wallet After Re-import</div>
           <div style="font-size:0.77rem;color:var(--text-muted)">Sets wallet balance to the sum of admin-created manual deposits (ADMIN-DEP-* transactions only). Use this if a data migration overwrote the live balance — historical Firebase transactions are intentionally excluded to avoid double-counting.</div>
         </div>
-        <button class="btn btn--warning btn--sm" style="flex-shrink:0" onclick='_recalcInvestorWallet(${JSON.stringify(inv.id)},${JSON.stringify(inv.first_name + " " + inv.last_name)},this)'>
-          <i class="fa-solid fa-calculator"></i> Recalculate Wallet
+        <button class="btn btn--secondary btn--sm" style="flex-shrink:0" onclick='_recalcInvestorWallet(${_esc(JSON.stringify(inv.id))},${_esc(JSON.stringify(inv.first_name + " " + inv.last_name))},this)'>
+          <i class="fa-solid fa-magnifying-glass-chart"></i> Wallet Report
         </button>
       </div>
     </div>
@@ -2354,7 +3024,7 @@ async function viewInvestor(id) {
           <div style="font-size:0.77rem;color:var(--text-muted)">Recomputes wallet balance from all completed deposits, returns and payouts minus withdrawals and fees. Use when a deposit shows as completed but is not reflected in the wallet balance.</div>
           <div id="invReconcileResult-${inv.id}" style="margin-top:8px;font-size:0.77rem"></div>
         </div>
-        <button class="btn btn--sm" style="flex-shrink:0;background:rgba(96,165,250,.12);color:#60a5fa;border:1px solid rgba(96,165,250,.3)" onclick='reconcileInvestorWallet(${JSON.stringify(inv.id)},this)'>
+        <button class="btn btn--sm" style="flex-shrink:0;background:rgba(96,165,250,.12);color:#60a5fa;border:1px solid rgba(96,165,250,.3)" onclick='reconcileInvestorWallet(${_esc(JSON.stringify(inv.id))},this)'>
           <i class="fa-solid fa-scale-balanced"></i> Reconcile Wallet
         </button>
       </div>
@@ -2375,7 +3045,7 @@ async function viewInvestor(id) {
             <label style="font-size:0.77rem;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Reason (optional)</label>
             <input type="text" id="walletOverrideNotes-${inv.id}" class="form-input" placeholder="e.g. correcting reconciliation error" style="width:100%">
           </div>
-          <button class="btn btn--sm" style="flex-shrink:0;background:rgba(239,68,68,.12);color:#f87171;border:1px solid rgba(239,68,68,.3)" onclick='overrideWalletBalance(${JSON.stringify(inv.id)},${JSON.stringify(inv.first_name+' '+inv.last_name)},this)'>
+          <button class="btn btn--sm" style="flex-shrink:0;background:rgba(239,68,68,.12);color:#f87171;border:1px solid rgba(239,68,68,.3)" onclick='overrideWalletBalance(${_esc(JSON.stringify(inv.id))},${_esc(JSON.stringify(inv.first_name+' '+inv.last_name))},this)'>
             <i class="fa-solid fa-pen-to-square"></i> Set Balance
           </button>
         </div>
@@ -2392,7 +3062,7 @@ async function viewInvestor(id) {
       </div>
       <div class="panel__body" style="border-top:1px solid var(--border);padding-top:12px">
         <textarea class="form-input" id="invNewNoteTA" style="width:100%;min-height:70px;font-size:0.82rem;resize:vertical;margin-bottom:8px" placeholder="Add a note visible only to admins…"></textarea>
-        <button class="btn btn--primary btn--sm" onclick='addInvestorNote(${JSON.stringify(inv.id)})'><i class="fa-solid fa-plus"></i> Add Note</button>
+        <button class="btn btn--primary btn--sm" onclick='addInvestorNote(${_esc(JSON.stringify(inv.id))})'><i class="fa-solid fa-plus"></i> Add Note</button>
       </div>
     </div>
     <div class="panel mb-16">
@@ -2432,8 +3102,47 @@ async function viewInvestor(id) {
     </div>
   </div>
 
+  <!-- ── Agreements ── -->
+  <div id="invPanel-agreements" style="display:none">
+    <div class="panel">
+      <div class="panel__header">
+        <span class="panel__title"><i class="fa-solid fa-file-signature" style="color:#eda5ff;margin-right:6px"></i>Signed Investment Agreements</span>
+      </div>
+      <div class="panel__body">
+        <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px">
+          Every agreement this client has signed, as stored. The document opens exactly as
+          it was signed — it is not rebuilt from a template, so the wording is the wording
+          they agreed to. The checksum is of those stored bytes.
+        </p>
+        <div id="invAgreementsList"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- ── Statements ── -->
   <div id="invPanel-statements" style="display:none">
+    <!-- Account Statement -->
+    <div class="panel mb-16">
+      <div class="panel__header">
+        <span class="panel__title"><i class="fa-solid fa-file-lines" style="color:#eda5ff;margin-right:6px"></i>Account Statement</span>
+      </div>
+      <div class="panel__body">
+        <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px">Generate a full account statement for any date range — shows all transactions, a running wallet balance, and the active investment portfolio.</p>
+        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+          <div class="form-group" style="margin:0;flex:1;min-width:140px">
+            <label class="form-label">From</label>
+            <input type="date" class="form-control" id="stmtFromDate" value="${_stmtFromDef}">
+          </div>
+          <div class="form-group" style="margin:0;flex:1;min-width:140px">
+            <label class="form-label">To</label>
+            <input type="date" class="form-control" id="stmtToDate" value="${_stmtToday}">
+          </div>
+          <button class="btn btn--primary btn--sm" id="stmtGenBtn" onclick="_generateAccountStatement('${inv.id}')">
+            <i class="fa-solid fa-file-lines"></i> Generate Statement
+          </button>
+        </div>
+      </div>
+    </div>
     <!-- Tax Certificate -->
     <div class="panel mb-16">
       <div class="panel__header">
@@ -2444,8 +3153,17 @@ async function viewInvestor(id) {
         <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
           <div class="form-group" style="margin:0;flex:1;min-width:180px">
             <label class="form-label">Tax Year (ending February)</label>
+            <!-- Completed tax years only. This listed the current CALENDAR
+                 year, so through January and February it offered a tax year
+                 that had not ended — a certificate covering eleven months
+                 under a heading naming twelve. A tax year runs 1 March to the
+                 last day of February and is named for the year it ends in. -->
             <select class="form-control" id="adminTaxCertYear">
-              ${[new Date().getFullYear(), new Date().getFullYear()-1, new Date().getFullYear()-2, new Date().getFullYear()-3].map(y => `<option value="${y}">${y-1} / ${y}</option>`).join('')}
+              ${(() => { const n = new Date();
+                         const latest = n.getMonth() >= 2 ? n.getFullYear() : n.getFullYear() - 1;
+                         return [0,1,2,3].map(i => latest - i)
+                           .filter(y => y >= 2019)
+                           .map(y => `<option value="${y}">March ${y-1} &ndash; February ${y}</option>`).join(''); })()}
             </select>
           </div>
           <button class="btn btn--primary btn--sm" id="adminTaxCertBtn" onclick="_generateAdminTaxCert('${inv.id}')">
@@ -2471,16 +3189,601 @@ async function viewInvestor(id) {
           <label class="form-label">Message *</label>
           <textarea class="form-input" id="invEmailMessage" style="min-height:140px;resize:vertical" placeholder="Type your message to ${_esc(inv.first_name)}…"></textarea>
         </div>
-        <button class="btn btn--primary" onclick='sendInvestorEmail(${JSON.stringify(inv.id)},${JSON.stringify(inv.email)},this)'><i class="fa-solid fa-paper-plane"></i> Send Email</button>
+        <button class="btn btn--primary" onclick='sendInvestorEmail(${_esc(JSON.stringify(inv.id))},${_esc(JSON.stringify(inv.email))},this)'><i class="fa-solid fa-paper-plane"></i> Send Email</button>
       </div>
     </div>
   </div>
+
+  ${invSubAccounts.length ? `
+  <!-- ── Sub-Accounts ── -->
+  <div id="invPanel-subaccounts" style="display:none">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+      <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center">
+        <div style="font-size:1.05rem;font-weight:800;color:#fec24f">${Utils.rand(saWallet)}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted)">Total Sub-Account Wallet</div>
+      </div>
+      <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center">
+        <div style="font-size:1.05rem;font-weight:800;color:#eda5ff">${Utils.rand(saInvested)}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted)">Total Sub-Account Invested</div>
+      </div>
+    </div>
+    <table class="data-table">
+      <thead><tr><th>Name</th><th>Type</th><th>Wallet</th><th>Invested</th><th>KYC</th><th></th></tr></thead>
+      <tbody>
+        ${invSubAccounts.map(sa => {
+          const saInvs = invsts.filter(i => i.sub_account_id === sa.id);
+          const computed = saInvs.reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
+          const invested = computed > 0 ? computed : (parseFloat(sa.total_invested) || 0);
+          const kycCls = sa.kyc_status === 'approved' ? 'badge--green' : sa.kyc_status === 'under_review' ? 'badge--yellow' : 'badge--grey';
+          return `<tr>
+            <td style="font-weight:600">${_esc(sa.name)}</td>
+            <td style="font-size:0.78rem;text-transform:capitalize">${(sa.account_type||'').replace(/_/g,' ')}</td>
+            <td style="font-weight:700;font-variant-numeric:tabular-nums">${Utils.rand(sa.wallet_balance)}</td>
+            <td style="font-weight:700;font-variant-numeric:tabular-nums">${Utils.rand(invested)}</td>
+            <td><span class="badge ${kycCls}">${sa.kyc_status||'pending'}</span></td>
+            <td><button class="btn btn--ghost btn--sm" onclick="Modal.close('investorDetailModal');viewSubAccount('${sa.id}')"><i class="fa-solid fa-arrow-right"></i></button></td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>` : ''}
   `;
   // Modal already opened above while data was loading
   const ta = document.getElementById('invNewNoteTA');
   if (ta) ta.value = inv.notes || '';
   loadInvestorNotes(inv.id);
   loadInvestorTimeline(inv, invsts, txns);
+  _loadInvestorRewards(inv.id);
+  _loadClientDocuments(inv.id);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   WHAT CHANGED — new features, and where to find them
+
+   A feature nobody is told about is a feature nobody uses, and the people it
+   costs most are the staff answering a client's question about a screen that
+   moved under them overnight.
+
+   Each notice says what the thing is AND where it is. The second half is what
+   release notes leave out and the only half somebody can act on.
+
+   Dismissal is per person and per notice, held on the server rather than in
+   this browser: somebody who reads it on the office machine should not be
+   told again on their laptop.
+   ═══════════════════════════════════════════════════════════ */
+const ANN_AREA = {
+  admin:  { label: 'Admin console', colour: '#eda5ff' },
+  portal: { label: 'Client portal', colour: '#22c55e' },
+  both:   { label: 'Admin & client portal', colour: '#fec24f' },
+};
+
+async function _loadAnnouncements() {
+  const host = document.getElementById('adminAnnouncements');
+  if (!host) return;
+  let items = [];
+  try {
+    items = (await API._fetch('GET', 'announcements'))?.data || [];
+  } catch (e) {
+    /* Silent on purpose, and the only place in this file that is. A banner
+       about new features is not worth an error where the operational figures
+       go; nothing is blocked by its absence. */
+    console.warn('[announcements] could not load:', e.message);
+    return;
+  }
+  if (!items.length) { host.innerHTML = ''; return; }
+
+  host.innerHTML = `<div style="display:grid;gap:10px;margin-bottom:16px">${items.map(a => {
+    const area = ANN_AREA[a.area] || ANN_AREA.admin;
+    return `<div class="panel" id="ann-${_esc(a.id)}" style="border-left:3px solid ${area.colour}">
+      <div class="panel__body" style="display:flex;gap:14px;align-items:flex-start">
+        <i class="fa-solid ${_esc(a.icon || 'fa-sparkles')}" style="color:${area.colour};font-size:1.1rem;margin-top:2px;flex-shrink:0"></i>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <span style="font-weight:800;font-size:0.92rem;color:var(--text)">${_esc(a.title)}</span>
+            <span class="badge" style="background:${area.colour}22;color:${area.colour};font-size:0.62rem">${_esc(area.label)}</span>
+            ${a.published_at ? `<span style="font-size:0.7rem;color:var(--text-muted)">${Utils.date(a.published_at)}</span>` : ''}
+          </div>
+          <div style="font-size:0.84rem;color:var(--text-muted);line-height:1.6;margin-top:4px">${_esc(a.body)}</div>
+          ${a.where_to_find ? `<div style="font-size:0.82rem;color:var(--text);line-height:1.6;margin-top:6px">
+            <i class="fa-solid fa-location-arrow" style="color:${area.colour};margin-right:5px"></i>
+            <b>Where to find it:</b> ${_esc(a.where_to_find)}</div>` : ''}
+        </div>
+        <button class="btn btn--ghost btn--sm" style="flex-shrink:0"
+                onclick="_dismissAnnouncement('${_esc(a.id)}', this)">
+          <i class="fa-solid fa-check"></i> Got it</button>
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+async function _dismissAnnouncement(id, btn) {
+  /* Removed only once the server has it. Taking it off screen first and
+     failing quietly is how a notice comes back tomorrow and the person who
+     dismissed it decides the button does not work. */
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>'; }
+  try {
+    await API._fetch('POST', `announcements/${encodeURIComponent(id)}/dismiss`, {});
+    const card = document.getElementById(`ann-${id}`);
+    if (card) card.remove();
+    const host = document.getElementById('adminAnnouncements');
+    if (host && !host.querySelector('.panel')) host.innerHTML = '';
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-check"></i> Got it'; }
+    Toast.error(e.message || 'Could not dismiss that — please try again.');
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   UPLOADED DOCUMENTS — everything the client has sent us
+
+   The files were never missing; finding them was. A FICA document is
+   reachable from the FICA queue, a deposit slip from whichever support
+   ticket it happened to be attached to, and "did this client ever send
+   their proof of address" meant searching two screens and hoping.
+
+   The list the server returns carries no files, only what is needed to
+   choose one — a photographed ID is a couple of megabytes of base64 and a
+   client with six would make this modal a twelve-megabyte download. The file
+   is fetched when somebody asks to see it.
+   ═══════════════════════════════════════════════════════════ */
+const DOC_STATUS_BADGE = {
+  approved: 'badge--green', verified: 'badge--green',
+  pending:  'badge--yellow', submitted: 'badge--yellow',
+  rejected: 'badge--red', expired: 'badge--red',
+};
+
+function _docBytes(n) {
+  if (!n) return '';
+  /* Bytes below a kilobyte, because rounding them to KB prints "0 KB" — which
+     reads as an empty file rather than a small one. */
+  if (n < 1024)             return `${n} B`;
+  if (n < 1024 * 1024)      return `${Math.round(n / 1024)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function _docIcon(contentType) {
+  if (/^image\//.test(contentType || '')) return 'fa-file-image';
+  if (/pdf/.test(contentType || ''))       return 'fa-file-pdf';
+  return 'fa-file-lines';
+}
+
+async function _loadClientDocuments(investorId) {
+  const body  = document.getElementById('invDocsBody');
+  const count = document.getElementById('invDocsCount');
+  if (!body) return;
+  try {
+    const res  = await API._fetch('GET', `client-documents/${encodeURIComponent(investorId)}`);
+    const docs = res?.data || [];
+    if (count) count.textContent = docs.length ? `${docs.length} document${docs.length === 1 ? '' : 's'}` : '';
+
+    if (!docs.length) {
+      body.innerHTML = '<span style="color:var(--text-muted)"><i class="fa-solid fa-folder-open" style="margin-right:6px"></i>This client has not uploaded anything yet.</span>';
+      return;
+    }
+
+    body.innerHTML = `<div style="display:grid;gap:8px">${docs.map(d => {
+      /* The file is fetched by URL rather than embedded, so the browser
+         streams it and the modal never holds it in memory. */
+      const href = `${(window.__SVC_API_BASE__ || '/api/')}client-documents/`
+                 + `${encodeURIComponent(investorId)}/${encodeURIComponent(d.source)}/`
+                 + `${encodeURIComponent(d.id)}/file`;
+      const badge = d.status ? `<span class="badge ${DOC_STATUS_BADGE[String(d.status).toLowerCase()] || 'badge--grey'}" style="font-size:0.62rem">${_esc(d.status)}</span>` : '';
+      const where = d.source === 'ticket'
+        ? `<span style="color:var(--text-muted)">Support ticket${d.ticket_subject ? ' — ' + _esc(d.ticket_subject) : ''}</span>`
+        : `<span style="color:var(--text-muted)">FICA</span>`;
+      const meta = [
+        d.at ? Utils.date(d.at) : null,
+        d.file_name && d.file_name !== d.label ? _esc(d.file_name) : null,
+        _docBytes(d.bytes) || null,
+        d.expiry_date ? `expires ${_esc(String(d.expiry_date).slice(0, 10))}` : null,
+      ].filter(Boolean).join(' · ');
+
+      return `<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <i class="fa-solid ${_docIcon(d.content_type)}" style="color:#eda5ff;font-size:1.05rem;flex-shrink:0"></i>
+        <div style="flex:1;min-width:140px">
+          <div style="font-weight:700;font-size:0.84rem;color:var(--text)">${_esc(d.label)} ${badge}</div>
+          <div style="font-size:0.72rem">${where}${meta ? ' · ' + meta : ''}</div>
+          ${d.reviewed_by ? `<div style="font-size:0.68rem;color:var(--text-muted)">Reviewed by ${_esc(d.reviewed_by)}</div>` : ''}
+        </div>
+        ${d.has_file
+          ? `<a class="btn btn--secondary btn--sm" href="${href}" target="_blank" rel="noopener"><i class="fa-solid fa-eye"></i> View</a>
+             <a class="btn btn--ghost btn--sm" href="${href}" download="${_esc(d.file_name || d.label)}"><i class="fa-solid fa-download"></i> Download</a>`
+          : `<span style="font-size:0.72rem;color:var(--text-muted);font-style:italic">Recorded, no file attached</span>`}
+      </div>`;
+    }).join('')}</div>`;
+  } catch (e) {
+    /* Named, and retryable: a documents panel that fails silently is
+       indistinguishable from a client who has uploaded nothing, and that is
+       the wrong thing to tell somebody checking whether FICA can be approved. */
+    body.innerHTML = `<span style="color:#ef4444"><i class="fa-solid fa-triangle-exclamation" style="margin-right:6px"></i>Could not load documents: ${_esc(e.message || 'unknown error')}</span>
+      <button class="btn btn--ghost btn--sm" style="margin-left:8px" onclick="_loadClientDocuments('${_esc(investorId)}')">Retry</button>`;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   REWARDS — a client's level, and the whole book ranked
+   ═══════════════════════════════════════════════════════════ */
+
+/* The ladder's colours. The levels themselves come from the server, which is
+   where the thresholds live; only the paint is here. */
+const LEVEL_TINT = {
+  seed:'#94a3b8', sprout:'#22c55e', grower:'#65ed00', cultivator:'#0096ff',
+  harvester:'#fec24f', pioneer:'#f97316', architect:'#eda5ff', luminary:'#facc15',
+};
+const _tint = id => LEVEL_TINT[id] || '#94a3b8';
+
+/* Rank 1-3 read as medals; the rest as a plain number. A leaderboard that
+   gives everyone a trophy is just a list. */
+function _rankBadge(rank) {
+  const M = { 1:['#facc15','#1f2937','fa-trophy'], 2:['#cbd5e1','#1f2937','fa-medal'], 3:['#d8a06a','#1f2937','fa-medal'] };
+  const m = M[rank];
+  if (!m) return `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;border-radius:8px;background:rgba(148,163,184,0.12);color:var(--text-muted);font-size:0.75rem;font-weight:800">${rank}</span>`;
+  return `<span title="Rank ${rank}" style="display:inline-flex;align-items:center;justify-content:center;gap:4px;min-width:26px;height:26px;padding:0 7px;border-radius:8px;background:${m[0]};color:${m[1]};font-size:0.72rem;font-weight:800"><i class="fa-solid ${m[2]}"></i>${rank}</span>`;
+}
+
+function _levelChip(levelId, label) {
+  const c = _tint(levelId);
+  return `<span style="display:inline-block;padding:2px 9px;border-radius:20px;background:${c}1f;color:${c};border:1px solid ${c}44;font-size:0.7rem;font-weight:800;letter-spacing:0.03em">${_esc(label || levelId || '—')}</span>`;
+}
+
+function _xpBar(pct, colour) {
+  const p = Math.max(0, Math.min(100, Number(pct) || 0));
+  return `<div style="height:6px;border-radius:3px;background:rgba(148,163,184,0.18);overflow:hidden">
+    <div style="height:100%;width:${p}%;background:${colour};border-radius:3px"></div></div>`;
+}
+
+/* ── The card on the investor overview ── */
+async function _loadInvestorRewards(investorId) {
+  const el = document.getElementById('invRewardsCard');
+  if (!el) return;
+  el.innerHTML = `<div style="font-size:0.78rem;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i> Loading rewards…</div>`;
+  let d;
+  try {
+    d = await API._fetch('GET', `quests/investor/${encodeURIComponent(investorId)}`);
+  } catch (err) {
+    /* Empty and broken are different things. */
+    el.innerHTML = `<div style="font-size:0.78rem;color:#ef4444">Could not load rewards: ${_esc(err.message || 'error')}
+      <button class="btn btn--ghost btn--sm" style="margin-left:8px" onclick="_loadInvestorRewards('${_esc(investorId)}')">Retry</button></div>`;
+    return;
+  }
+
+  const c = _tint(d.level_id);
+  const learnPct = d.learning_total ? Math.round(d.learning_completed / d.learning_total * 100) : 0;
+  /* The Learning Hub stage is how far through the modules they are, not how
+     much they have invested — an admin asking "where are they up to" means the
+     reading, and the money is already on the tile beside it. */
+  const stage = d.learning_completed === 0 ? 'Not started'
+              : d.learning_completed >= d.learning_total ? 'Complete'
+              : `Module ${d.learning_completed} of ${d.learning_total}`;
+
+  el.innerHTML = `
+  <div class="panel" style="padding:14px 16px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <i class="fa-solid fa-trophy" style="color:${c}"></i>
+      <span style="font-size:0.8rem;font-weight:800;color:var(--text)">Rewards &amp; Learning</span>
+      ${d.level_drifted ? `<span class="badge badge--yellow" style="margin-left:auto" title="investors.xp_level says '${_esc(d.stored_level)}' but ${d.xp} XP is ${_esc(d.level_label)}">stored level disagrees</span>` : ''}
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px">
+      <div style="min-width:0">
+        <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:4px">Rewards level</div>
+        <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px">
+          ${_levelChip(d.level_id, d.level_label)}
+          <span style="font-size:1.05rem;font-weight:800;color:var(--text)">${Number(d.xp).toLocaleString()}<span style="font-size:0.72rem;font-weight:600;color:var(--text-muted)"> XP</span></span>
+        </div>
+        ${_xpBar(d.level_progress, c)}
+        <div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px">
+          ${d.next_level ? `${Number(d.xp_to_next).toLocaleString()} XP to ${_esc(d.next_level)}` : 'Top level reached'}
+          · level ${d.level_index + 1} of ${d.level_count}
+        </div>
+      </div>
+      <div style="min-width:0">
+        <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:4px">Learning Hub stage</div>
+        <div style="font-size:1.05rem;font-weight:800;color:var(--text);margin-bottom:6px">${_esc(stage)}</div>
+        ${_xpBar(learnPct, '#0096ff')}
+        <div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px">${d.learning_completed} of ${d.learning_total} modules read</div>
+      </div>
+      <div style="min-width:0">
+        <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:4px">Quests</div>
+        <div style="font-size:1.05rem;font-weight:800;color:var(--text);margin-bottom:6px">${d.quests_completed} of ${d.quest_total}</div>
+        ${_xpBar(d.quest_total ? d.quests_completed / d.quest_total * 100 : 0, '#22c55e')}
+        <div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px">${d.completions.length ? 'Last: ' + _esc((d.completions[0] || {}).title) : 'None completed yet'}</div>
+      </div>
+    </div>
+    ${d.completions.length ? `
+    <details style="margin-top:12px">
+      <summary style="cursor:pointer;font-size:0.75rem;color:var(--text-muted)">Completed quests (${d.completions.length})</summary>
+      <div style="display:flex;flex-direction:column;gap:4px;margin-top:8px;max-height:220px;overflow-y:auto">
+        ${d.completions.map(q => `<div style="display:flex;align-items:center;gap:8px;font-size:0.76rem">
+          <span style="color:var(--text)">${_esc(q.title)}</span>
+          <span style="font-size:0.66rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${_esc(q.category)}</span>
+          <span style="margin-left:auto;color:#22c55e;font-weight:700">+${q.xp_awarded} XP</span>
+          <span style="color:var(--text-muted);font-size:0.7rem;min-width:78px;text-align:right">${Utils.date(q.completed_at)}</span>
+        </div>`).join('')}
+      </div>
+    </details>` : ''}
+  </div>`;
+}
+
+
+/* ── The Rewards view ── */
+function _rewardsTab(tab) {
+  ['leaderboard', 'levels', 'quests', 'learning'].forEach(t => {
+    const p = document.getElementById('rwPanel-' + t);
+    const b = document.getElementById('rwTab-' + t);
+    if (p) p.style.display = t === tab ? '' : 'none';
+    if (b) b.classList.toggle('active', t === tab);
+  });
+}
+
+async function loadRewards() {
+  const table = document.getElementById('rewardsTable');
+  if (!table) return;
+  table.innerHTML = '<div class="text-center text-muted" style="padding:20px"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div>';
+  try {
+    STATE.rewards = await API._fetch('GET', 'quests/leaderboard');
+  } catch (err) {
+    /* Empty and broken are different things — a 500 must not read as "nobody
+       has earned anything yet". */
+    table.innerHTML = `<div class="text-center" style="padding:20px;color:#ef4444">
+      Could not load rewards: ${_esc(err.message || 'error')}<br>
+      <button class="btn btn--secondary btn--sm" style="margin-top:10px" onclick="loadRewards()">Retry</button></div>`;
+    return;
+  }
+
+  /* The level filter is built from the ladder the server sent, so a new level
+     appears here without anyone remembering to add it. */
+  const sel = document.getElementById('rwLevel');
+  if (sel && sel.options.length <= 1) {
+    STATE.rewards.levels.forEach(l => {
+      const o = document.createElement('option');
+      o.value = l.id; o.textContent = `${l.label} (${l.min}+ XP)`;
+      sel.appendChild(o);
+    });
+  }
+
+  _renderRewardsSummary();
+  _renderRewardsTable();
+  _renderRewardsLevels();
+  _renderRewardsQuests();
+  _renderRewardsLearning();
+}
+
+function _renderRewardsSummary() {
+  const el = STATE.rewards && document.getElementById('rewardsSummary');
+  if (!el) return;
+  const d = STATE.rewards;
+  const earners = d.investors.filter(i => i.xp > 0);
+  const totalXp = d.investors.reduce((s, i) => s + i.xp, 0);
+  const doneLearning = d.investors.filter(i => i.learning_completed >= d.learning_total).length;
+  const drifted = d.investors.filter(i => i.level_drifted || i.xp_drifted).length;
+
+  const tile = (label, value, sub, colour) => `
+    <div class="panel" style="padding:12px 14px">
+      <div style="font-size:0.66rem;text-transform:uppercase;letter-spacing:0.07em;color:var(--text-muted)">${label}</div>
+      <div style="font-size:1.3rem;font-weight:800;color:${colour};margin-top:2px">${value}</div>
+      <div style="font-size:0.7rem;color:var(--text-muted)">${sub}</div>
+    </div>`;
+
+  el.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:14px">
+    ${tile('Playing', earners.length.toLocaleString(),
+           `of ${d.investors.length.toLocaleString()} clients have earned XP`, 'var(--text)')}
+    ${tile('XP awarded', totalXp.toLocaleString(),
+           `${d.xp_available.toLocaleString()} available per client`, '#facc15')}
+    ${tile('Finished the Hub', doneLearning.toLocaleString(),
+           `read all ${d.learning_total} modules`, '#0096ff')}
+    ${tile('Top level reached',
+           (d.investors[0] && d.investors[0].xp > 0) ? _esc(d.investors[0].level_label) : '—',
+           (d.investors[0] && d.investors[0].xp > 0) ? _esc(d.investors[0].name) : 'nobody has scored yet', '#eda5ff')}
+    ${drifted ? tile('Needs attention', drifted.toLocaleString(),
+           'stored level or XP disagrees with the completions', '#f97316') : ''}
+  </div>`;
+}
+
+/* The filtered, sorted rows — recomputed from STATE.rewards on every input so
+   there is one source and no cached half-state. */
+function _rewardsRows() {
+  const d = STATE.rewards;
+  if (!d) return [];
+  const q      = (document.getElementById('rwSearch')?.value || '').trim().toLowerCase();
+  const level  = document.getElementById('rwLevel')?.value || '';
+  const stage  = document.getElementById('rwStage')?.value || '';
+  const sort   = document.getElementById('rwSort')?.value || 'rank';
+  const active = !!document.getElementById('rwActiveOnly')?.checked;
+
+  let rows = d.investors.filter(i => {
+    if (active && i.xp <= 0) return false;
+    if (level && i.level_id !== level) return false;
+    if (stage === 'none' && i.learning_completed !== 0) return false;
+    if (stage === 'done' && i.learning_completed < d.learning_total) return false;
+    if (stage === 'part' && !(i.learning_completed > 0 && i.learning_completed < d.learning_total)) return false;
+    if (q) {
+      const hay = `${i.name} ${i.email || ''} ${i.id}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  const by = {
+    rank:      (a, b) => a.rank - b.rank,
+    xp:        (a, b) => b.xp - a.xp,
+    quests:    (a, b) => b.quests_completed - a.quests_completed,
+    learning:  (a, b) => b.learning_completed - a.learning_completed,
+    invested:  (a, b) => b.total_invested - a.total_invested,
+    recent:    (a, b) => new Date(b.last_activity || 0) - new Date(a.last_activity || 0),
+  };
+  return rows.sort(by[sort] || by.rank);
+}
+
+function _renderRewardsTable() {
+  const el = document.getElementById('rewardsTable');
+  if (!el || !STATE.rewards) return;
+  const d = STATE.rewards;
+  const rows = _rewardsRows();
+
+  if (!rows.length) {
+    el.innerHTML = `<div class="text-center text-muted" style="padding:20px;font-size:0.85rem">
+      ${d.investors.length ? 'No client matches these filters.' : 'No clients yet.'}</div>`;
+    return;
+  }
+
+  el.innerHTML = `
+  <table class="data-table" style="width:100%;border-collapse:collapse">
+    <thead><tr>
+      <th style="width:64px">Rank</th>
+      <th>Client</th>
+      <th>Account no.</th>
+      <th>Level</th>
+      <th style="text-align:right">XP</th>
+      <th style="min-width:130px">Progress</th>
+      <th style="text-align:right">Quests</th>
+      <th style="min-width:120px">Learning Hub</th>
+      <th style="text-align:right">Invested</th>
+      <th>Last activity</th>
+    </tr></thead>
+    <tbody>
+      ${rows.map(i => {
+        const c = _tint(i.level_id);
+        const learnPct = d.learning_total ? Math.round(i.learning_completed / d.learning_total * 100) : 0;
+        return `<tr style="cursor:pointer" onclick="viewInvestor('${_esc(i.id)}')">
+          <td>${_rankBadge(i.rank)}</td>
+          <td style="font-weight:600;color:var(--text)">${_esc(i.name)}
+            ${i.level_drifted || i.xp_drifted ? `<i class="fa-solid fa-triangle-exclamation" style="color:#f97316;margin-left:5px;font-size:0.72rem" title="Stored level or XP total disagrees with the recorded completions"></i>` : ''}
+            <div style="font-size:0.7rem;color:var(--text-muted)">${_esc(i.email || '')}</div></td>
+          <td style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:0.72rem;color:var(--text-muted)">${_esc(i.id)}</td>
+          <td>${_levelChip(i.level_id, i.level_label)}</td>
+          <td style="text-align:right;font-weight:800;font-variant-numeric:tabular-nums;color:var(--text)">${i.xp.toLocaleString()}</td>
+          <td>${_xpBar(i.level_progress, c)}
+            <div style="font-size:0.66rem;color:var(--text-muted);margin-top:3px">${i.next_level ? `${i.xp_to_next.toLocaleString()} to ${_esc(i.next_level)}` : 'max level'}</div></td>
+          <td style="text-align:right;color:var(--text-muted)">${i.quests_completed}<span style="font-size:0.7rem">/${d.quest_total}</span></td>
+          <td>${_xpBar(learnPct, '#0096ff')}
+            <div style="font-size:0.66rem;color:var(--text-muted);margin-top:3px">${i.learning_completed} / ${d.learning_total} modules</div></td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;color:var(--text-muted)">${Utils.rand(i.total_invested)}</td>
+          <td style="color:var(--text-muted);font-size:0.76rem">${i.last_activity ? Utils.date(i.last_activity) : '—'}</td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>
+  <div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px">Showing ${rows.length} of ${d.investors.length} clients</div>`;
+}
+
+/* ── Levels: how the book is distributed across the ladder ── */
+function _renderRewardsLevels() {
+  const el = document.getElementById('rwPanel-levels');
+  if (!el || !STATE.rewards) return;
+  const d = STATE.rewards;
+  const counts = {};
+  d.investors.forEach(i => { counts[i.level_id] = (counts[i.level_id] || 0) + 1; });
+  const max = Math.max(1, ...Object.values(counts));
+
+  el.innerHTML = `<div class="panel"><div class="panel__header">
+      <span class="panel__title"><i class="fa-solid fa-layer-group" style="color:#eda5ff;margin-right:6px"></i>The ladder</span>
+    </div><div class="panel__body">
+    <div style="display:flex;flex-direction:column;gap:10px">
+      ${d.levels.map((l, idx) => {
+        const n = counts[l.id] || 0;
+        const c = _tint(l.id);
+        const next = d.levels[idx + 1];
+        return `<div style="display:flex;align-items:center;gap:12px">
+          <div style="width:120px;flex-shrink:0">${_levelChip(l.id, l.label)}</div>
+          <div style="width:118px;flex-shrink:0;font-size:0.72rem;color:var(--text-muted)">
+            ${l.min.toLocaleString()}${next ? `–${(next.min - 1).toLocaleString()}` : '+'} XP</div>
+          <div style="flex:1;min-width:0">
+            <div style="height:20px;border-radius:5px;background:rgba(148,163,184,0.12);overflow:hidden">
+              <div style="height:100%;width:${Math.round(n / max * 100)}%;background:${c};border-radius:5px"></div>
+            </div>
+          </div>
+          <div style="width:110px;text-align:right;font-size:0.8rem;font-weight:700;color:var(--text)">
+            ${n.toLocaleString()}<span style="font-weight:400;color:var(--text-muted);font-size:0.72rem"> client${n === 1 ? '' : 's'}</span></div>
+        </div>`;
+      }).join('')}
+    </div></div></div>`;
+}
+
+/* ── Quests: which ones actually get done ── */
+function _renderRewardsQuests() {
+  const el = document.getElementById('rwPanel-quests');
+  if (!el || !STATE.rewards) return;
+  const d = STATE.rewards;
+  const total = d.investors.length || 1;
+  const rows  = [...d.catalogue, ...(d.orphaned_quests || [])]
+    .sort((a, b) => b.completed_by - a.completed_by);
+
+  el.innerHTML = `<div class="panel"><div class="panel__header">
+      <span class="panel__title"><i class="fa-solid fa-list-check" style="color:#22c55e;margin-right:6px"></i>The catalogue</span>
+      <span style="margin-left:auto;font-size:0.75rem;color:var(--text-muted)">${d.quest_total} quests · ${d.xp_available.toLocaleString()} XP available per client</span>
+    </div><div class="panel__body" style="overflow-x:auto">
+    <table class="data-table" style="width:100%;border-collapse:collapse">
+      <thead><tr><th>Quest</th><th>Category</th><th style="text-align:right">XP</th>
+        <th style="text-align:right">Completed by</th><th style="min-width:110px">Take-up</th></tr></thead>
+      <tbody>${rows.map(q => {
+        const pct = Math.round(q.completed_by / total * 100);
+        return `<tr>
+        <td style="color:var(--text);font-weight:600">${_esc(q.title)}
+          ${q.orphaned ? `<i class="fa-solid fa-triangle-exclamation" style="color:#f97316;margin-left:5px;font-size:0.72rem" title="Completions exist for this id but it is not in the catalogue the client is served"></i>` : ''}</td>
+        <td><span style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted)">${_esc(q.category)}</span></td>
+        <td style="text-align:right;color:#22c55e;font-weight:700">${q.xp}</td>
+        <td style="text-align:right;font-weight:700;color:${q.completed_by ? 'var(--text)' : '#f97316'}">${q.completed_by.toLocaleString()}</td>
+        <td>${_xpBar(pct, q.completed_by ? '#22c55e' : '#f97316')}
+          <div style="font-size:0.66rem;color:var(--text-muted);margin-top:3px">${pct}% of clients</div></td>
+      </tr>`;
+      }).join('')}</tbody>
+    </table>
+    ${(d.orphaned_quests || []).length ? `<div style="font-size:0.72rem;color:#f97316;margin-top:10px">
+      ${d.orphaned_quests.length} completed quest id${d.orphaned_quests.length === 1 ? ' is' : 's are'} not in the catalogue —
+      the XP was awarded but the client is no longer offered it.</div>` : ''}
+    </div></div>`;
+}
+
+/* ── Learning Hub: how far the book has read ── */
+function _renderRewardsLearning() {
+  const el = document.getElementById('rwPanel-learning');
+  if (!el || !STATE.rewards) return;
+  const d = STATE.rewards;
+  const buckets = { none: 0, part: 0, done: 0 };
+  d.investors.forEach(i => {
+    if (i.learning_completed === 0) buckets.none++;
+    else if (i.learning_completed >= d.learning_total) buckets.done++;
+    else buckets.part++;
+  });
+  const total = d.investors.length || 1;
+  const row = (label, n, colour, note) => `
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="width:130px;flex-shrink:0;font-size:0.8rem;font-weight:700;color:var(--text)">${label}</div>
+      <div style="flex:1;min-width:0"><div style="height:20px;border-radius:5px;background:rgba(148,163,184,0.12);overflow:hidden">
+        <div style="height:100%;width:${Math.round(n / total * 100)}%;background:${colour};border-radius:5px"></div></div></div>
+      <div style="width:150px;text-align:right;font-size:0.8rem;font-weight:700;color:var(--text)">
+        ${n.toLocaleString()} <span style="font-weight:400;color:var(--text-muted);font-size:0.72rem">${_esc(note)}</span></div>
+    </div>`;
+
+  el.innerHTML = `<div class="panel"><div class="panel__header">
+      <span class="panel__title"><i class="fa-solid fa-graduation-cap" style="color:#0096ff;margin-right:6px"></i>Learning Hub</span>
+      <span style="margin-left:auto;font-size:0.75rem;color:var(--text-muted)">${d.learning_total} modules</span>
+    </div><div class="panel__body">
+      <div style="display:flex;flex-direction:column;gap:10px">
+        ${row('Not started', buckets.none, '#94a3b8', `${Math.round(buckets.none / total * 100)}%`)}
+        ${row('In progress', buckets.part, '#fec24f', `${Math.round(buckets.part / total * 100)}%`)}
+        ${row('Completed',   buckets.done, '#22c55e', `${Math.round(buckets.done / total * 100)}%`)}
+      </div>
+    </div></div>`;
+}
+
+function _exportRewardsCSV() {
+  const d = STATE.rewards;
+  if (!d) { Toast.warning('Nothing to export yet'); return; }
+  const rows = _rewardsRows();
+  if (!rows.length) { Toast.warning('No rows match these filters'); return; }
+  const head = ['Rank','Client','Account No.','Email','Level','XP','XP to next','Quests completed',
+                'Quests available','Modules read','Modules total','Total invested','Last activity'];
+  const data = rows.map(i => [i.rank, i.name, i.id, i.email || '', i.level_label, i.xp, i.xp_to_next,
+    i.quests_completed, d.quest_total, i.learning_completed, d.learning_total,
+    Number(i.total_invested).toFixed(2), i.last_activity ? new Date(i.last_activity).toISOString().slice(0, 10) : '']);
+  const esc = v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const csv = [head, ...data].map(r => r.map(esc).join(',')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = `SVC-Rewards-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  Toast.success(`Exported ${rows.length} row${rows.length === 1 ? '' : 's'}`);
 }
 
 async function depositToInvestor(investorId, investorName, currentBalance) {
@@ -2508,20 +3811,44 @@ async function depositToInvestor(investorId, investorName, currentBalance) {
 }
 
 async function _recalcInvestorWallet(investorId, investorName, btn) {
-  if (!await Confirm.ask('Recalculate Wallet Balance?', {
-    body: `This will recompute ${investorName}'s wallet balance from all completed transactions (deposits, returns, payouts minus withdrawals and fees). The current balance will be overwritten. This cannot be undone.`,
-    confirmLabel: 'Recalculate',
-  })) return;
+  /* This used to overwrite the wallet with the total of admin manual deposits,
+     discarding everything else with no undo. The endpoint is now read-only, so
+     there is nothing to confirm — it reports and changes nothing. */
   await _withBtn(btn, async () => {
     try {
-      const res = await API._fetch('POST', `admin/recalculate-wallet/${investorId}`);
-      const newBal = Utils.rand(res.new_balance);
-      Toast.success(`Wallet recalculated — new balance: ${newBal}`);
-      const inv = STATE.investors.find(i => i.id === investorId);
-      if (inv) inv.wallet_balance = res.new_balance;
-      Modal.close('investorDetailModal');
-      await loadInvestors();
-    } catch (e) { Toast.error('Recalculation failed: ' + (e.message || 'unknown error')); }
+      const r = await API._fetch('GET', `admin/wallet-report/${investorId}`);
+      const rows = (r.by_type || [])
+        .map(t => `<tr><td style="padding:3px 10px 3px 0">${t.type}</td>`
+                + `<td style="padding:3px 10px 3px 0;color:var(--text-muted)">${t.status}</td>`
+                + `<td style="padding:3px 10px 3px 0;text-align:right">${t.count}</td>`
+                + `<td style="padding:3px 0;text-align:right">${Utils.rand(t.total)}</td></tr>`)
+        .join('') || '<tr><td colspan="4" style="color:var(--text-muted)">No transactions</td></tr>';
+
+      const diff = r.difference;
+      const diffColour = Math.abs(diff) < 0.01 ? '#22c55e' : '#f59e0b';
+
+      await Confirm.ask(`Wallet report — ${investorName}`, {
+        body: `
+          <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:0.9rem;margin-bottom:14px">
+            <span style="color:var(--text-muted)">Stored balance</span>
+            <strong>${Utils.rand(r.stored_balance)}</strong>
+            <span style="color:var(--text-muted)">Ledger total</span>
+            <span>${Utils.rand(r.ledger_total)}</span>
+            <span style="color:var(--text-muted)">Difference</span>
+            <strong style="color:${diffColour}">${Utils.rand(diff)}</strong>
+          </div>
+          <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:14px">${_esc(r.note)}</div>
+          <div style="font-size:0.8rem;margin-bottom:6px"><strong>Transactions by type</strong></div>
+          <div style="max-height:240px;overflow:auto"><table style="width:100%;font-size:0.8rem">${rows}</table></div>
+          <div style="font-size:0.78rem;color:var(--text-muted);margin-top:12px">
+            Nothing was changed. The old action overwrote this wallet with
+            ${Utils.rand(r.admin_deposits_only)} — the total of admin manual deposits only.
+          </div>`,
+        confirmLabel: 'Close',
+      });
+    } catch (e) {
+      Toast.error('Could not load wallet report: ' + (e.message || 'unknown error'));
+    }
   });
 }
 
@@ -2530,7 +3857,8 @@ async function reconcileInvestorWallet(investorId, btn) {
     try {
       const resultEl = document.getElementById(`invReconcileResult-${investorId}`);
       // Dry-run first to show what would change
-      const preview = await API._fetch('POST', 'admin/reconcile-wallet', { investor_id: investorId, dry_run: true });
+      // Reporting is the default now — no flag needed to avoid writing.
+      const preview = await API._fetch('POST', 'admin/reconcile-wallet', { investor_id: investorId });
       if (!preview.diffs || !preview.diffs[0]) {
         if (resultEl) resultEl.innerHTML = `<span style="color:var(--text-muted)">No transactions found.</span>`;
         Toast.info('No completed transactions found to reconcile.');
@@ -2543,12 +3871,27 @@ async function reconcileInvestorWallet(investorId, btn) {
         return;
       }
       const confirmed = await Confirm.ask('Reconcile wallet balance?', {
-        body: `Current: ${Utils.rand(d.current)} → Computed from transactions: ${Utils.rand(d.computed)} (${d.diff > 0 ? '+' : ''}${Utils.rand(d.diff)}). This will overwrite the current balance.`,
+        body: `Current: ${Utils.rand(d.current)} → Computed from transactions: ${Utils.rand(d.computed)} (${d.diff > 0 ? '+' : ''}${Utils.rand(d.diff)}). This will overwrite the current balance.`
+          + (d.migrated_rows > 0
+              ? `<br><br><strong style="color:#f59e0b">This investor has ${d.migrated_rows} migrated transaction(s).</strong> Their wallet includes an imported opening balance the ledger does not restate, so this will be refused.`
+              : `<br><br><span style="color:var(--text-muted)">wallet_balance is maintained incrementally by each write path — a ledger sum is a cross-check, not a source of truth.</span>`),
         confirmLabel: 'Apply',
         danger: d.computed < 0,
       });
       if (!confirmed) return;
-      await API._fetch('POST', 'admin/reconcile-wallet', { investor_id: investorId });
+      // apply:true is now required — without it the endpoint reports and writes nothing.
+      const applied = await API._fetch('POST', 'admin/reconcile-wallet', { investor_id: investorId, apply: true });
+      const row = (applied.diffs || [])[0] || {};
+      if (row.blocked) {
+        if (resultEl) resultEl.innerHTML = `<span style="color:#f59e0b"><i class="fa-solid fa-triangle-exclamation"></i> Not applied</span>`;
+        await Confirm.ask('Not reconciled', { body: row.blocked, confirmLabel: 'Close' });
+        return;
+      }
+      if (!row.applied) {
+        if (resultEl) resultEl.innerHTML = `<span style="color:var(--text-muted)">No change applied.</span>`;
+        Toast.info('Nothing was changed.');
+        return;
+      }
       if (resultEl) resultEl.innerHTML = `<span style="color:#fec24f"><i class="fa-solid fa-check"></i> Adjusted ${d.diff > 0 ? '+' : ''}${Utils.rand(d.diff)} → ${Utils.rand(d.computed)}</span>`;
       Toast.success(`Wallet reconciled. New balance: ${Utils.rand(d.computed)}`);
       const inv = STATE.investors.find(i => i.id === investorId);
@@ -2647,10 +3990,88 @@ async function overrideWalletBalance(investorId, name, btn) {
         Toast.error(res.error || 'Override failed');
       }
     } catch (e) {
-      if (resultEl) resultEl.innerHTML = `<span style="color:#f87171">${e.message}</span>`;
+      if (resultEl) resultEl.innerHTML = `<span style="color:#f87171">${_esc(e.message)}</span>`;
       Toast.error('Override failed: ' + (e.message || 'unknown error'));
     }
   });
+}
+
+
+/* ── Which pools staff may place money into ──────────────────────────────
+ *
+ * The dropdown used to list open, filling and active pools only, so a pool
+ * that had CLOSED to raising simply was not there — and a late placement had
+ * to be done by editing rows by hand, which is how money goes missing.
+ *
+ * The server has always allowed this. tables.js refuses a closed pool for
+ * `req.user.role === 'investor'` and says why in as many words: staff place
+ * late investments against a closed pool as a correction — an EFT that
+ * cleared after the cut-off, a misallocation being moved. The console was
+ * enforcing a rule the platform does not have.
+ *
+ * So every pool that can still take money is offered, grouped and labelled by
+ * state, and the ones that cannot are left out rather than silently accepted:
+ * a matured, paid-out or cancelled pool has already been closed out and money
+ * placed into it would have nothing to mature into.
+ * ──────────────────────────────────────────────────────────────────────── */
+const _INVEST_OPEN_STATES   = ['open', 'filling', 'waitlist'];
+const _INVEST_CLOSED_STATES = ['active', 'closed'];
+
+function _poolIsPastClose(p) {
+  if (!p || !p.end_date) return false;
+  const d = new Date(p.end_date);
+  if (isNaN(d.getTime())) return false;
+  /* A date column is a DAY: a pool closing today is still open today. */
+  d.setHours(23, 59, 59, 999);
+  return d.getTime() < Date.now();
+}
+
+function _adminInvestPoolOptions() {
+  const all = (STATE.pools || []).slice()
+    .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  const label = p => `${_esc(p.name)} — min ${Utils.rand(p.min_investment || 0)}, ` +
+                     `${Utils.pct(p.annual_rate || 0)} p.a.`;
+
+  const open   = all.filter(p => _INVEST_OPEN_STATES.includes(p.status) && !_poolIsPastClose(p));
+  /* Past its close date but still flagged open is a closed pool that the
+     cycler has not reached yet — it belongs with the late placements. */
+  const closed = all.filter(p => _INVEST_CLOSED_STATES.includes(p.status) ||
+                                 (_INVEST_OPEN_STATES.includes(p.status) && _poolIsPastClose(p)));
+
+  const group = (name, rows) => rows.length
+    ? `<optgroup label="${_esc(name)}">${rows.map(p =>
+        `<option value="${_esc(p.id)}">${label(p)}${
+          _INVEST_OPEN_STATES.includes(p.status) && !_poolIsPastClose(p) ? '' :
+          ` · ${_esc(String(p.status || '').toUpperCase())}`}</option>`).join('')}</optgroup>`
+    : '';
+
+  return '<option value="">— Select pool —</option>' +
+         group('Open for raising', open) +
+         group('Closed to new money — late placement', closed);
+}
+
+/* Say plainly when the chosen pool has stopped raising. This is a correction,
+   and a correction made without noticing is just a mistake. */
+function _adminInvestPoolPicked(investorId) {
+  const note = document.getElementById('adminInvestPoolNote-' + investorId);
+  const sel  = document.getElementById('adminInvestPool-' + investorId);
+  if (!note || !sel) return;
+  const p = (STATE.pools || []).find(x => x.id === sel.value);
+  if (!p) { note.innerHTML = ''; return; }
+
+  const closed = !_INVEST_OPEN_STATES.includes(p.status) || _poolIsPastClose(p);
+  if (!closed) { note.innerHTML = ''; return; }
+
+  const why = _poolIsPastClose(p)
+    ? `Its close date was ${Utils.date(p.end_date)}.`
+    : `Its status is ${_esc(String(p.status || '').toUpperCase())}.`;
+  note.innerHTML = `<div style="background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);
+      color:#f97316;border-radius:8px;padding:9px 11px;line-height:1.5">
+      <i class="fa-solid fa-triangle-exclamation"></i>
+      <strong>This pool has closed to new money.</strong> ${why}
+      Placing an investment here is a late correction — an EFT that cleared after the
+      cut-off, or a misallocation being moved. The client keeps the pool's posted
+      return and its maturity date; nothing about the round changes.</div>`;
 }
 
 async function adminInvestOnBehalf(investorId, name, btn) {
@@ -2679,9 +4100,19 @@ async function adminInvestOnBehalf(investorId, name, btn) {
   const inv       = STATE.investors.find(i => i.id === investorId);
   const balance   = parseFloat(inv?.wallet_balance) || 0;
 
+  /* If the pool has stopped raising, the confirmation says so. The dropdown
+     warns as well, but a dialog is the last thing read before money moves and
+     it should not be the one place that leaves it out. */
+  const _closedPool = pool && (!_INVEST_OPEN_STATES.includes(pool.status) || _poolIsPastClose(pool));
+  const _lateNote = _closedPool
+    ? `\n\n⚠ LATE PLACEMENT — this pool has closed to new money${
+        pool.end_date ? ` (closed ${Utils.date(pool.end_date)})` : ''}, status ${
+        String(pool.status || '').toUpperCase()}. The client keeps the pool's posted return and maturity date.`
+    : '';
+
   const confirmed = await Confirm.ask('Create investment on behalf?', {
-    body: `Investor: ${name}\nPool: ${pool?.name || poolId}\nAmount: R${amt.toFixed(2)}${feeNote}\nTotal deducted from wallet: R${total.toFixed(2)}\nCurrent wallet: R${balance.toFixed(2)}\n\nThis will create an active investment record and deduct from the investor's wallet.`,
-    confirmLabel: 'Create Investment',
+    body: `Investor: ${name}\nPool: ${pool?.name || poolId}\nAmount: R${amt.toFixed(2)}${feeNote}\nTotal deducted from wallet: R${total.toFixed(2)}\nCurrent wallet: R${balance.toFixed(2)}${_lateNote}\n\nThis will create an active investment record and deduct from the investor's wallet.`,
+    confirmLabel: _closedPool ? 'Place late investment' : 'Create Investment',
   });
   if (!confirmed) return;
 
@@ -2699,7 +4130,7 @@ async function adminInvestOnBehalf(investorId, name, btn) {
         Toast.error(res.error || 'Investment failed');
       }
     } catch (e) {
-      if (resultEl) resultEl.innerHTML = `<span style="color:#f87171">${e.message}</span>`;
+      if (resultEl) resultEl.innerHTML = `<span style="color:#f87171">${_esc(e.message)}</span>`;
       Toast.error('Investment failed: ' + (e.message || 'unknown error'));
     }
   });
@@ -2931,7 +4362,7 @@ function renderWithdrawalsTable() {
     const amt = Math.abs(parseFloat(w.amount) || 0);
     if (fMin  && amt < fMin) return false;
     if (fMax !== Infinity && amt > fMax) return false;
-    const d = (w.created_at || w.transaction_date || '').slice(0, 10);
+    const d = String(Utils.txnDate(w) || '').slice(0, 10);
     if (fFrom && d < fFrom) return false;
     if (fTo   && d > fTo)   return false;
     return true;
@@ -2955,8 +4386,7 @@ function renderWithdrawalsTable() {
       ? (() => { const sa = (STATE.subAccounts || []).find(s => s.id === w.sub_account_id); return `<div style="margin-top:2px"><span style="background:rgba(237,165,255,.15);color:#eda5ff;border-radius:4px;padding:1px 6px;font-size:0.65rem;font-weight:700">SA: ${sa ? _esc(sa.name) : 'Sub-Account'}</span></div>`; })()
       : '';
 
-    let bankNotes = {};
-    try { if (inv?.notes?.startsWith('{')) bankNotes = JSON.parse(inv.notes); } catch(_) {}
+    const bankNotes = _safeParse(inv?.notes, {});
     const bankName   = inv?.bank_name           || bankNotes.bank_name    || '—';
     const bankAcct   = inv?.bank_account_number || bankNotes.account_number || '';
     const bankHolder = inv?.bank_account_holder || bankNotes.account_holder || (inv ? `${inv.first_name} ${inv.last_name}` : '—');
@@ -2979,17 +4409,17 @@ function renderWithdrawalsTable() {
         <div>${Utils.date(dateCreated)}</div>
         ${dateUpdated ? `<div style="font-size:0.68rem;color:var(--text-dim);margin-top:2px">Upd: ${Utils.date(dateUpdated)}</div>` : ''}
       </td>
-      <td><div class="td-strong clip">${name}</div><div class="td-muted clip" style="font-size:0.7rem">${w.investor_id||''}</div>${saBadge}</td>
+      <td><div class="td-strong clip">${_esc(name)}</div><div class="td-muted clip" style="font-size:0.7rem">${w.investor_id||''}</div>${saBadge}</td>
       <td class="td-gold fw-700 clip">${Utils.rand(Math.abs(w.amount))}</td>
       <td>${bankDisplay}</td>
-      <td class="td-muted clip" style="font-size:0.75rem">${w.reference || '—'}</td>
+      <td class="td-muted clip" style="font-size:0.75rem">${_esc(w.reference || '—')}</td>
       <td>
         ${showActions ? `
           <div class="flex-center gap-6">
-            <button class="btn btn--success btn--sm" onclick='approveWithdrawal(${JSON.stringify(w.id)}, this)'><i class="fa-solid fa-check"></i> Approve</button>
-            <button class="btn btn--danger btn--sm" onclick='rejectWithdrawalPrompt(${JSON.stringify(w.id)}, this)'><i class="fa-solid fa-xmark"></i> Reject</button>
+            <button class="btn btn--success btn--sm" onclick='approveWithdrawal(${_esc(JSON.stringify(w.id))}, this)'><i class="fa-solid fa-check"></i> Approve</button>
+            <button class="btn btn--danger btn--sm" onclick='rejectWithdrawalPrompt(${_esc(JSON.stringify(w.id))}, this)'><i class="fa-solid fa-xmark"></i> Reject</button>
           </div>
-        ` : Utils.statusBadge(w.status)}
+        ` : `<div>${Utils.statusBadge(w.status)}</div>${w.reviewed_by ? `<div style="font-size:0.68rem;color:var(--text-muted);margin-top:3px">by ${_esc(w.reviewed_by)}</div>` : ''}`}
       </td>
     </tr>`;
   };
@@ -3055,18 +4485,14 @@ async function _bulkApplyWithdrawalStatus() {
     danger: status === 'rejected',
   })) return;
 
-  let done = 0, failed = 0;
-  await Promise.all(ids.map(async (id) => {
-    try {
-      await API._fetch('PATCH', `tables/transactions/${id}`, { status });
-      done++;
-    } catch {
-      failed++;
-    }
-  }));
-
-  if (failed) Toast.error(`${done} updated, ${failed} failed`);
-  else Toast.success(`${done} withdrawal${done > 1 ? 's' : ''} marked as ${status}`);
+  /* Already ran per item; moved onto the shared runner so a failure is named
+     rather than only counted — "3 failed" cannot be acted on. */
+  const res = await _bulkRun(ids, id => API._fetch('PATCH', `tables/transactions/${id}`, { status }),
+    { label: id => {
+        const t = (STATE.transactions || []).find(x => x.id === id);
+        return t ? _actorLine(t) : id;
+      } });
+  _bulkReport('withdrawal', `marked as ${labelMap[status] || status}`, res);
 
   await loadWithdrawals();
 }
@@ -3077,16 +4503,16 @@ async function approveWithdrawal(txnId, btn) {
   await _withBtn(btn, async () => {
     try {
       await API._fetch('PATCH', `tables/transactions/${txnId}`, { status: 'completed' });
-      // Deduct from investor wallet if still showing balance
-      const txn = STATE.withdrawals.find(w => w.id === txnId);
-      if (txn && txn.investor_id) {
-        const inv = STATE.investors.find(i => i.id === txn.investor_id);
-        if (inv && inv.wallet_balance > 0) {
-          const deduct = Math.abs(parseFloat(txn.amount) || 0);
-          const newBal = Math.max(0, Math.round(((inv.wallet_balance || 0) - deduct) * 100) / 100);
-          await API._fetch('PATCH', `tables/investors/${txn.investor_id}`, { wallet_balance: newBal });
-        }
-      }
+
+      /* No deduction here. The wallet is debited when the withdrawal REQUEST is
+         created (withdrawals.js), which is why tables.js refunds it when one is
+         rejected. Deducting again on approval charged the investor twice for a
+         single withdrawal — probed against the real route: a R1,000 withdrawal
+         from a R5,000 wallet left R3,000 instead of R4,000.
+
+         It was also clamped with Math.max(0, …), so on a wallet too small to
+         absorb the second debit the overcharge silently became "balance zero"
+         rather than an error anyone would notice. */
       Toast.success('Withdrawal approved — funds released to investor bank account');
       await loadWithdrawals();
     } catch (e) {
@@ -3164,27 +4590,38 @@ async function _submitRejection() {
         }
         await _recomputeInvestorFicaStatus(doc?.investor_id).catch(() => {});
 
-        // Auto-email investor with rejection reason
+        // Auto-email investor with rejection reason  // (email below)
         if (shouldEmail && doc?.investor_id) {
           const inv = STATE.investors.find(i => i.id === doc.investor_id);
           if (inv?.email) {
             const DOC_LABELS = { id_document: 'Identity Document', proof_of_address: 'Proof of Address', proof_of_bank: 'Proof of Bank Account' };
             const docLabel = DOC_LABELS[doc.doc_type] || 'KYC document';
-            const firstName = inv.first_name || 'Investor';
             const rejectionReason = reason || 'Please re-upload a clearer, current document that meets our requirements.';
             await API._fetch('POST', 'admin/send-investor-email', {
               investor_id: inv.id,
               subject: `Action required: Your ${docLabel} — SV Capital`,
-              message: `Dear ${firstName},\n\nThank you for submitting your documents. Unfortunately, we were unable to accept your ${docLabel} at this time.\n\nReason: ${rejectionReason}\n\nTo resubmit, please log in to your SV Capital investor portal, navigate to your profile or KYC section, and upload a new copy of the document.\n\nIf you have any questions or need assistance, please contact us at support@svcapital.co.za.\n\nKind regards,\nSV Capital Compliance Team`,
+              /* No greeting: sendAlert adds one, and two of them is what the
+                 client saw — "Hi Karel," followed by "Dear Karel,". */
+              message: `Thank you for submitting your documents. Unfortunately, we were unable to accept your ${docLabel} at this time.\n\nReason: ${rejectionReason}\n\nTo resubmit, please log in to your SV Capital investor portal, navigate to your profile or KYC section, and upload a new copy of the document.\n\nIf you have any questions or need assistance, please contact us at support@svcapital.co.za.\n\nKind regards,\nSV Capital Compliance Team`,
             }).catch(e => console.warn('[kycReject] email notification failed:', e.message));
           }
         }
 
         Toast.success('Document rejected' + (shouldEmail ? ' — investor notified by email' : ''));
-        await loadKYC();
+        /* A rejection never verifies anybody, so the client goes back to
+           pending — which is exactly what _recomputeInvestorFicaStatus just
+           wrote. Patched here rather than re-read by reloading the page. */
+        _kycApplyLocal(kycId, {
+          status: 'rejected', notes: reason || 'Document rejected by admin.',
+          reviewed_by: reviewedBy, reviewed_at: new Date().toISOString(),
+          reviewed_date: new Date().toISOString(),
+        }, { kyc_status: 'pending', fica_status: 'submitted' });
       } catch (e) {
         Toast.error('Failed to reject document: ' + (e.message || 'unknown error'));
         console.error('[rejectKyc]', e);
+        /* A full reload here, and only here: the failure means the row's real
+           state is unknown, and guessing it locally is how a screen starts
+           disagreeing with the database. */
         await loadKYC().catch(() => {});
       }
     });
@@ -3264,7 +4701,7 @@ async function openMoveInvestment(investmentId, currentPoolId) {
       </select>
       <div style="display:flex;gap:10px;justify-content:flex-end">
         <button class="btn" onclick="Modal.closeAll()">Cancel</button>
-        <button class="btn btn--primary" id="movePoolConfirmBtn" onclick='_confirmMoveInvestment(${JSON.stringify(investmentId)})'>Move</button>
+        <button class="btn btn--primary" id="movePoolConfirmBtn" onclick='_confirmMoveInvestment(${_esc(JSON.stringify(investmentId))})'>Move</button>
       </div>
     </div>`;
 
@@ -3409,6 +4846,31 @@ async function loadKYC() {
   }
 }
 
+/* ─── After one document changes ──────────────────────────────────────
+   Every action used to end in loadKYC(): re-fetch all five thousand
+   documents and re-render all five thousand rows, to change one of them.
+   Measured at seven and a half seconds per approval on a fast machine, and
+   that is the whole of "each action takes more than a minute".
+
+   The action already knows what it changed, so it says so. The row is
+   patched where it sits, the client's status is patched beside it, and the
+   table redraws from memory — no request, and only the visible rows.
+
+   Deliberately NOT a silent local edit: the fields written here are exactly
+   the ones the server was told to write, and anything else — a trigger, a
+   recomputation elsewhere — is still picked up by the next real load. */
+function _kycApplyLocal(docId, patch, investorPatch) {
+  const doc = (STATE.kyc || []).find(k => k.id === docId);
+  if (doc) Object.assign(doc, patch);
+  if (doc && investorPatch) {
+    const inv = _investorById(doc.investor_id);
+    if (inv) Object.assign(inv, investorPatch);
+  }
+  renderKYCStats();
+  renderKYCTable();
+  return doc;
+}
+
 function renderKYCStats() {
   const d = STATE.kyc;
   const pending  = d.filter(k => k.status === 'pending').length;
@@ -3522,6 +4984,52 @@ function renderKYCStats() {
   }
 }
 
+/* The queue loads newest-submitted-first (loadKYC sorts it), which stays the
+   default until a column is clicked. */
+const KYC_SORT = {
+  _investor: k => {
+    const i = STATE.investors.find(x => x.id === k.investor_id);
+    return (k.investor_name || (i ? `${i.last_name || ''} ${i.first_name || ''}` : '')).trim().toLowerCase() || null;
+  },
+  document_type: k => (k.doc_type || '').toLowerCase() || null,
+  submitted_at:  k => { const d = new Date(k.submitted_at || k.created_at).getTime(); return isNaN(d) ? null : d; },
+};
+
+/* ─── Why this page was slow ──────────────────────────────────────────
+   Three things, measured with 5 000 documents and 4 600 clients:
+
+     · Every row looked its client up with STATE.investors.find(), inside the
+       row map AND inside the search filter. That is a scan of the whole book
+       per row — twenty-three million comparisons for one render.
+
+     · Every render wrote all 5 000 rows into the DOM. Nobody scrolls five
+       thousand rows, and the page ships heavy inline-styled markup per row.
+
+     · Every approval and rejection called loadKYC(), which re-fetched all
+       5 000 documents and re-rendered all 5 000 rows to change one of them.
+       An approval took seven and a half seconds on a fast machine.
+
+   The first two are fixed here, the third where the actions are.
+   ─────────────────────────────────────────────────────────────────── */
+
+/* Rebuilt only when the array it indexes has been replaced, which is what
+   the identity check is for — a Map rebuilt per render would just move the
+   scan rather than remove it. */
+let _invIndex = null, _invIndexSrc = null;
+function _investorById(id) {
+  if (_invIndexSrc !== STATE.investors) {
+    _invIndexSrc = STATE.investors;
+    _invIndex = new Map((STATE.investors || []).map(i => [i.id, i]));
+  }
+  return id ? _invIndex.get(id) : undefined;
+}
+
+/* More than anybody scrolls, and enough that a filter is rarely needed to
+   see what you came for. The filters and the search run over ALL of the
+   documents first — only the drawing is capped — so nothing becomes
+   unreachable, and the footer says so when it bites. */
+const KYC_RENDER_CAP = 300;
+
 function renderKYCTable() {
   const body       = document.getElementById('kycBody');
   const stFilter   = (document.getElementById('kycStatusFilter')?.value  || '').trim();
@@ -3529,20 +5037,22 @@ function renderKYCTable() {
   const search     = (document.getElementById('kycSearch')?.value        || '').trim().toLowerCase();
   const knownTypes = ['id_document', 'proof_of_address', 'proof_of_bank'];
 
-  const items = STATE.kyc.filter(k => {
+  let items = STATE.kyc.filter(k => {
     if (stFilter && k.status !== stFilter) return false;
     if (dtFilter) {
       const kt = knownTypes.includes(k.doc_type) ? k.doc_type : 'other';
       if (kt !== dtFilter) return false;
     }
     if (search) {
-      const inv  = STATE.investors.find(i => i.id === k.investor_id);
+      const inv  = _investorById(k.investor_id);
       const name = (k.investor_name || (inv ? `${inv.first_name} ${inv.last_name}` : '') || '').toLowerCase();
       const id   = (k.investor_id || '').toLowerCase();
       if (!name.includes(search) && !id.includes(search)) return false;
     }
     return true;
   });
+
+  items = _sortRows('kyc', items, KYC_SORT);
 
   if (!items.length) {
     body.innerHTML = stFilter === 'pending'
@@ -3554,8 +5064,12 @@ function renderKYCTable() {
   const allCb2 = document.getElementById('kycSelectAll');
   if (allCb2) allCb2.checked = false;
 
-  body.innerHTML = items.map(k => {
-    const kInv = STATE.investors.find(i => i.id === k.investor_id);
+  /* Filtered and sorted over everything; only the drawing is capped. */
+  const total = items.length;
+  const shown = items.slice(0, KYC_RENDER_CAP);
+
+  body.innerHTML = shown.map(k => {
+    const kInv = _investorById(k.investor_id);
     const kName = k.investor_name || (kInv ? `${kInv.first_name} ${kInv.last_name}`.trim() : k.investor_id || '—');
     const canSelect = ['pending', 'under_review'].includes(k.status);
     const isBankDoc = k.doc_type === 'proof_of_bank';
@@ -3619,7 +5133,7 @@ function renderKYCTable() {
     // Notes indicator
     const hasNotes = !!(k.notes && k.status !== 'rejected');
     const notesIndicator = hasNotes
-      ? `<span title="${_esc(k.notes)}" style="display:inline-flex;align-items:center;gap:3px;font-size:0.65rem;color:#eda5ff;background:rgba(237,165,255,0.1);border-radius:4px;padding:1px 5px;cursor:pointer" onclick='openKycReview(${JSON.stringify(k.id)})'><i class="fa-solid fa-note-sticky"></i></span>`
+      ? `<span title="${_esc(k.notes)}" style="display:inline-flex;align-items:center;gap:3px;font-size:0.65rem;color:#eda5ff;background:rgba(237,165,255,0.1);border-radius:4px;padding:1px 5px;cursor:pointer" onclick='openKycReview(${_esc(JSON.stringify(k.id))})'><i class="fa-solid fa-note-sticky"></i></span>`
       : '';
 
     return `
@@ -3631,10 +5145,13 @@ function renderKYCTable() {
       <td>${Utils.statusBadge(k.status)}</td>
       <td class="td-muted">${Utils.date(k.submitted_at || k.submitted_date || k.created_at)}${kExpLabel}</td>
       <td>
-        ${k.file_data || k.file_url || k.attachment_data
+        ${/* has_file_data is a server-side boolean: the list query deliberately
+              omits the blob, so reading k.file_data here was always undefined
+              and every stored document read as "no file". */''}
+        ${k.has_file_data || k.file_data || k.file_url || k.attachment_data
           ? `<div style="display:flex;gap:4px;flex-wrap:wrap">
-               <button class="btn btn--secondary btn--sm" title="Side-by-side review" onclick='openKycReview(${JSON.stringify(k.id)})'><i class="fa-solid fa-magnifying-glass"></i></button>
-               <button class="btn btn--secondary btn--sm" title="Open document in new tab" onclick='viewFicaDocument(${JSON.stringify(k.id)})'><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
+               <button class="btn btn--secondary btn--sm" title="Side-by-side review" onclick='openKycReview(${_esc(JSON.stringify(k.id))})'><i class="fa-solid fa-magnifying-glass"></i></button>
+               <button class="btn btn--secondary btn--sm" title="Open document in new tab" onclick='viewFicaDocument(${_esc(JSON.stringify(k.id))})'><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
              </div>`
           : k.file_name
             ? `<span class="td-muted" style="font-size:0.72rem;line-height:1.4">No file data<br><span style="font-size:0.65rem;color:var(--text-dim)">Investor must re-upload</span></span>`
@@ -3643,16 +5160,26 @@ function renderKYCTable() {
       <td>
         <div style="display:flex;gap:4px;flex-wrap:nowrap;align-items:center">
           ${k.status === 'under_review' || k.status === 'pending' ? `
-            <button class="btn btn--success btn--sm" title="Approve document" onclick='approveKyc(${JSON.stringify(k.id)}, this)'><i class="fa-solid fa-check"></i></button>
-            <button class="btn btn--danger btn--sm" title="Reject document" onclick='rejectKyc(${JSON.stringify(k.id)}, this)'><i class="fa-solid fa-xmark"></i></button>
-            <button class="btn btn--secondary btn--sm" title="Upload document for investor" onclick='openKycUploadModal(${JSON.stringify(k.investor_id)},${JSON.stringify(kName)})'><i class="fa-solid fa-upload"></i></button>
+            <button class="btn btn--success btn--sm" title="Approve document" onclick='approveKyc(${_esc(JSON.stringify(k.id))}, this)'><i class="fa-solid fa-check"></i></button>
+            <button class="btn btn--danger btn--sm" title="Reject document" onclick='rejectKyc(${_esc(JSON.stringify(k.id))}, this)'><i class="fa-solid fa-xmark"></i></button>
+            <button class="btn btn--secondary btn--sm" title="Upload document for investor" onclick='openKycUploadModal(${_esc(JSON.stringify(k.investor_id))},${_esc(JSON.stringify(kName))})'><i class="fa-solid fa-upload"></i></button>
           ` : `<span class="td-muted" style="font-size:0.75rem">${Utils.date(k.reviewed_date || k.reviewed_at)}</span>`}
-          <button class="btn btn--secondary btn--sm" title="Add/view reviewer notes" onclick='openKycReview(${JSON.stringify(k.id)})'><i class="fa-solid fa-note-sticky"></i></button>
-          <button class="btn btn--secondary btn--sm" title="View KYC timeline" onclick='openKycTimeline(${JSON.stringify(k.investor_id)})'><i class="fa-solid fa-timeline"></i></button>
+          <button class="btn btn--secondary btn--sm" title="Add/view reviewer notes" onclick='openKycReview(${_esc(JSON.stringify(k.id))})'><i class="fa-solid fa-note-sticky"></i></button>
+          <button class="btn btn--secondary btn--sm" title="View KYC timeline" onclick='openKycTimeline(${_esc(JSON.stringify(k.investor_id))})'><i class="fa-solid fa-timeline"></i></button>
         </div>
       </td>
     </tr>
   `}).join('');
+
+  /* A cap nobody is told about is a list that quietly lies about how much
+     there is. */
+  if (total > shown.length) {
+    body.insertAdjacentHTML('beforeend', `
+      <tr><td colspan="8" style="text-align:center;padding:14px;color:var(--text-muted);font-size:0.8rem">
+        Showing the first ${shown.length} of ${total.toLocaleString('en-ZA')} documents.
+        Use the filters or the search above to narrow it down — they search all ${total.toLocaleString('en-ZA')}.
+      </td></tr>`);
+  }
 }
 
 /** Show a full (unmasked) bank details modal for a KYC bank-doc row. */
@@ -3794,7 +5321,9 @@ async function viewFicaDocument(kycId) {
     try {
       const full = await API.kyc.get(kycId);
       fileData = full?.file_data || full?.attachment_data || full?.file_url || '';
-    } catch (_) {}
+    } catch (err) {
+      console.error('[kyc] document data failed to load — the viewer will be empty:', err?.message || err);
+    }
   }
   if (!fileData) {
     Toast.error('File data not stored — please ask the investor to re-upload their document.');
@@ -3871,6 +5400,106 @@ function _openDocumentData(rawData, fileName) {
   a.href = rawData;
   a.download = fileName;
   a.click();
+}
+
+/* Confirm — and if necessary correct — an EFT amount before crediting.
+ *
+ * The declared figure is what the investor typed into the portal. It is not
+ * necessarily what reached the bank: one client paid R505 and entered R500.
+ * The proof of payment is the evidence, so the person looking at it decides
+ * the number, and a change has to be explained.
+ *
+ * Resolves { amount, reason } or null if cancelled.
+ */
+function _eftConfirmAmount({ declared, name, ref, fileName }) {
+  return new Promise(resolve => {
+    const dec = Number(declared);
+    const fmt = n => 'R' + Number(n).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    const el = document.createElement('div');
+    /* `open` matters. admin.css styles `.modal-overlay` with `opacity: 0` and
+       `pointer-events: none`, and only `.modal-overlay.open` makes it visible
+       and clickable — every other modal in this console is opened by adding
+       that class. This one was built by hand and never got it, so the inline
+       cssText below set display:flex on an element that was still fully
+       transparent and click-through.
+
+       The effect: pressing "Approve & Credit Wallet" appended an invisible
+       dialog and nothing happened. The button worked; the thing it opened could
+       not be seen or clicked, and the promise it waits on never resolved. Same
+       shape as the portal toast hidden behind a `.show` class the JS never
+       added — a base rule that hides, and a class nobody adds.
+
+       opacity and pointer-events are also set inline, so this cannot break
+       again if the stylesheet's class name changes. */
+    el.className = 'modal-overlay open';
+    el.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:20px;opacity:1;pointer-events:auto';
+    el.innerHTML = `
+      <div class="modal" style="max-width:520px;width:100%;background:var(--bg-card,#1c1c1e);border-radius:16px;padding:22px;transform:none;opacity:1">
+        <div style="font-weight:800;font-size:1.05rem;margin-bottom:4px">Confirm EFT amount</div>
+        <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:16px">
+          Check the figure against the proof of payment${fileName ? ` — <strong>${_esc(fileName)}</strong>` : ''}.
+          The investor's wallet is credited with the amount you confirm here.
+        </div>
+
+        <div class="info-list" style="margin-bottom:14px">
+          <div class="info-row"><span class="info-row__label">Investor</span><span class="info-row__value td-strong">${_esc(name || '—')}</span></div>
+          <div class="info-row"><span class="info-row__label">Reference</span><span class="info-row__value" style="font-family:monospace;font-size:0.78rem">${_esc(ref || '—')}</span></div>
+          <div class="info-row"><span class="info-row__label">Investor declared</span><span class="info-row__value td-gold fw-700">${fmt(dec)}</span></div>
+        </div>
+
+        <label class="form-label" for="eftAmt">Amount to credit</label>
+        <input id="eftAmt" class="form-input" type="number" step="0.01" min="0.01" value="${dec.toFixed(2)}"
+               style="font-size:1.15rem;font-weight:800;letter-spacing:.01em">
+
+        <div id="eftDiff" style="display:none;margin-top:10px;padding:10px 12px;border-radius:9px;
+             background:rgba(254,194,79,.12);border:1px solid rgba(254,194,79,.3);font-size:0.8rem">
+          <div style="color:#fec24f;font-weight:700" id="eftDiffLine"></div>
+          <label class="form-label" style="margin-top:8px" for="eftReason">Reason for the change <span style="color:#ff5229">*</span></label>
+          <input id="eftReason" class="form-input" type="text" placeholder="e.g. proof of payment shows R505,00 — client entered R500,00">
+        </div>
+
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px">
+          <button class="btn btn--secondary btn--sm" id="eftCancel">Cancel</button>
+          <button class="btn btn--primary btn--sm" id="eftGo">Approve &amp; Credit</button>
+        </div>
+      </div>`;
+    document.body.appendChild(el);
+
+    const amtEl    = el.querySelector('#eftAmt');
+    const diffEl   = el.querySelector('#eftDiff');
+    const diffLine = el.querySelector('#eftDiffLine');
+    const reasonEl = el.querySelector('#eftReason');
+    const goEl     = el.querySelector('#eftGo');
+
+    const close = v => { el.remove(); resolve(v); };
+
+    const sync = () => {
+      const v = parseFloat(amtEl.value);
+      const changed = Number.isFinite(v) && Math.abs(v - dec) >= 0.005;
+      diffEl.style.display = changed ? 'block' : 'none';
+      if (changed) {
+        const d = v - dec;
+        diffLine.textContent = `${d > 0 ? 'Crediting' : 'Crediting'} ${fmt(v)} — ${d > 0 ? fmt(d) + ' more' : fmt(-d) + ' less'} than declared.`;
+      }
+      goEl.textContent = Number.isFinite(v) && v > 0 ? `Approve & Credit ${fmt(v)}` : 'Approve & Credit';
+    };
+    amtEl.addEventListener('input', sync);
+    sync();
+
+    goEl.addEventListener('click', () => {
+      const v = parseFloat(amtEl.value);
+      if (!Number.isFinite(v) || v <= 0) { Toast.error('Enter an amount greater than zero.'); amtEl.focus(); return; }
+      if (Math.round(v * 100) / 100 !== v) { Toast.error('Amounts are in rands and cents — two decimals at most.'); amtEl.focus(); return; }
+      const changed = Math.abs(v - dec) >= 0.005;
+      const reason  = changed ? (reasonEl.value || '').trim() : '';
+      if (changed && !reason) { Toast.error('Say why the amount is being changed — it goes on the audit trail.'); reasonEl.focus(); return; }
+      close({ amount: v, reason });
+    });
+    el.querySelector('#eftCancel').addEventListener('click', () => close(null));
+    el.addEventListener('click', e => { if (e.target === el) close(null); });
+    setTimeout(() => amtEl.select(), 50);
+  });
 }
 
 function _openTicketDoc(ticketId, fileName) {
@@ -3959,6 +5588,7 @@ async function _recomputeSubAccountFicaStatus(saId) {
 async function approveKyc(id, btn) {
   if (!await Confirm.ask('Approve KYC document?', { body: 'This will mark the document as verified.', confirmLabel: 'Approve' })) return;
   const reviewedBy = _getAdminName();
+  let _fica = null;
   await _withBtn(btn, async () => {
     try {
       await API.kyc.update(id, { status: 'approved', reviewed_by: reviewedBy, reviewed_at: new Date().toISOString() });
@@ -3984,8 +5614,15 @@ async function approveKyc(id, btn) {
         Toast.success(result.verified
           ? 'Document approved — investor is now FICA-verified'
           : `Document approved — still needed: ${result.missing.join(', ')}`);
+        _fica = result.verified
+          ? { kyc_status: 'approved', fica_status: 'approved', status: 'active' }
+          : { kyc_status: 'pending',  fica_status: 'submitted' };
       }
-      await loadKYC();
+      /* The same fields the server was just told to write. Reloading the
+         whole page to learn them back took seven seconds a document. */
+      _kycApplyLocal(id, { status: 'approved', reviewed_by: reviewedBy,
+                           reviewed_at: new Date().toISOString(),
+                           reviewed_date: new Date().toISOString() }, _fica);
     } catch (e) {
       Toast.error('Failed to approve document: ' + (e.message || 'unknown error'));
       console.error('[approveKyc]', e);
@@ -4037,7 +5674,9 @@ async function openKycReview(id) {
   try {
     const full = await API.kyc.get(id);
     if (full && full.id) doc = { ...cached, ...full };
-  } catch (_) {}
+  } catch (err) {
+    console.error('[kyc] full document failed to load, using the cached copy:', err?.message || err);
+  }
 
   const inv = STATE.investors.find(i => i.id === doc.investor_id);
   const invName = doc.investor_name || (inv ? `${inv.first_name} ${inv.last_name}`.trim() : doc.investor_id || '—');
@@ -4115,13 +5754,13 @@ async function openKycReview(id) {
             ${_zoomBar()}
             <div style="flex:1;overflow:auto">
               <div id="docZoomTarget" style="transition:transform 0.15s;transform-origin:top center">
-                <iframe src="${doc.file_url}" style="width:100%;height:800px;border:none;display:block"></iframe>
+                <iframe src="${_esc(Utils.documentUrl(doc.file_url) || '')}" style="width:100%;height:800px;border:none;display:block"></iframe>
               </div>
             </div>
             ${_dlBtn(doc.file_url, fname, true)}
           </div>`;
       } else {
-        docContent.innerHTML = `<div style="text-align:center;padding:40px"><a href="${doc.file_url}" target="_blank" rel="noopener" class="btn btn--primary"><i class="fa-solid fa-external-link"></i> Open Document</a></div>`;
+        docContent.innerHTML = `<div style="text-align:center;padding:40px"><button class="btn btn--primary" onclick='Utils.openDocument(${_esc(JSON.stringify(doc.file_url))}) || Toast.error("Could not open this document")'><i class="fa-solid fa-external-link"></i> Open Document</button></div>`;
       }
     } else {
       docContent.innerHTML = `<div style="text-align:center;padding:60px 0;color:var(--text-muted)"><i class="fa-solid fa-file-circle-question fa-3x" style="opacity:0.3;display:block;margin-bottom:12px"></i><div>No file attached</div><div style="font-size:0.78rem;margin-top:6px">The investor has not uploaded a file for this document.</div></div>`;
@@ -4227,17 +5866,43 @@ async function _kycReviewApprove() {
     const result = await _recomputeInvestorFicaStatus(doc?.investor_id);
     Toast.success(result.verified ? 'Approved — investor is now FICA-verified' : `Approved — still needed: ${result.missing.join(', ')}`);
     closeKycReview();
-    await loadKYC();
+    _kycApplyLocal(id, {
+      status: 'approved', reviewed_by: reviewedBy,
+      reviewed_at: new Date().toISOString(), reviewed_date: new Date().toISOString(),
+    }, result.verified
+        ? { kyc_status: 'approved', fica_status: 'approved', status: 'active' }
+        : { kyc_status: 'pending',  fica_status: 'submitted' });
   } catch (e) { Toast.error('Failed to approve: ' + e.message); }
 }
 
 async function _kycReviewReject() {
   const id = _reviewingKycId;
   if (!id) return;
-  // Save notes before closing review modal, then open reject modal
+  /* The note is the reason for the rejection — a compliance record, not a
+     convenience. This swallowed the failure and carried on closing the modal
+     and rejecting: the reviewer typed a reason, watched the rejection go
+     through, and the reason was never stored. Nothing said so, and by then the
+     modal holding the text was gone.
+
+     So a failure stops here. The rejection is not blocked outright — the
+     reviewer may still mean to proceed — but they are told, and asked, with
+     the text still on screen behind the dialog to copy out if needed. */
   const notes = document.getElementById('kycReviewNotes')?.value || '';
   if (notes) {
-    try { await API.kyc.update(id, { notes }); const doc = STATE.kyc.find(k => k.id === id); if (doc) doc.notes = notes; } catch (_) {}
+    try {
+      await API.kyc.update(id, { notes });
+      const doc = STATE.kyc.find(k => k.id === id);
+      if (doc) doc.notes = notes;
+    } catch (err) {
+      console.error('[kyc] review notes failed to save:', err?.message || err);
+      const proceed = await Confirm.ask('Your review notes could not be saved.', {
+        body: `${err?.message || 'The server did not accept them.'} The rejection itself has not ` +
+              'happened yet. Continue without the notes, or cancel and copy them somewhere first?',
+        confirmLabel: 'Reject without notes',
+        confirmClass: 'btn--danger',
+      });
+      if (!proceed) return;
+    }
   }
   closeKycReview();
   rejectKyc(id, null);
@@ -4368,12 +6033,19 @@ async function loadProducts() {
   try {
     // Pools power the auto-calculated average return
     if (!STATE.pools || !STATE.pools.length) {
-      try { const pr = await API.pools.list({ limit: 200 }); STATE.pools = pr.data || []; } catch (_) {}
+      try { const pr = await API.pools.list({ limit: 200 }); STATE.pools = pr.data || []; }
+      catch (err) { console.error('[products] pools failed to load — average returns will read as blank:', err?.message || err); }
     }
     const res = await API.products.list({ limit: 200 });
     STATE.products = (res.data || []).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
     renderProductsGrid();
-  } catch (e) { Toast.error('Failed to load products'); }
+  } catch (e) {
+    // Say what actually failed. This read 'Failed to load products' and
+    // discarded the reason, so a 403, a 500 and a render bug all looked
+    // identical and none could be diagnosed without devtools.
+    console.error('[load products]', e);
+    Toast.error(`Failed to load products` + (e && e.message ? ` — ${e.message}` : ''));
+  }
 }
 
 function renderProductsGrid() {
@@ -4414,10 +6086,10 @@ function renderProductsGrid() {
           ${p.display_on_homepage ? ' · <i class="fa-solid fa-house"></i> on home page' : ''}
         </div>
         <div class="pool-card__actions">
-          <button class="btn btn--secondary btn--sm flex-1" onclick='editProduct(${JSON.stringify(p.id)})'><i class="fa-solid fa-pen"></i> Edit</button>
-          ${p.factsheet_url ? `<button class="btn btn--secondary btn--sm" onclick='_viewProductFactsheet(${JSON.stringify(p.id)})' title="View factsheet"><i class="fa-solid fa-file-pdf" style="color:#ef4444"></i></button>` : ''}
-          ${p.factsheet_url ? `<button class="btn btn--secondary btn--sm" onclick='removeProductFactsheet(${JSON.stringify(p.id)})' title="Remove factsheet"><i class="fa-solid fa-file-circle-xmark" style="color:#ef4444"></i></button>` : ''}
-          <button class="btn btn--secondary btn--sm" onclick='deleteProduct(${JSON.stringify(p.id)})' title="Delete"><i class="fa-solid fa-trash" style="color:#ef4444"></i></button>
+          <button class="btn btn--secondary btn--sm flex-1" onclick='editProduct(${_esc(JSON.stringify(p.id))})'><i class="fa-solid fa-pen"></i> Edit</button>
+          ${p.factsheet_url ? `<button class="btn btn--secondary btn--sm" onclick='_viewProductFactsheet(${_esc(JSON.stringify(p.id))})' title="View factsheet"><i class="fa-solid fa-file-pdf" style="color:#ef4444"></i></button>` : ''}
+          ${p.factsheet_url ? `<button class="btn btn--secondary btn--sm" onclick='removeProductFactsheet(${_esc(JSON.stringify(p.id))})' title="Remove factsheet"><i class="fa-solid fa-file-circle-xmark" style="color:#ef4444"></i></button>` : ''}
+          <button class="btn btn--secondary btn--sm" onclick='deleteProduct(${_esc(JSON.stringify(p.id))})' title="Delete"><i class="fa-solid fa-trash" style="color:#ef4444"></i></button>
         </div>
       </div>`;
   }).join('');
@@ -4426,15 +6098,17 @@ function renderProductsGrid() {
 function _viewProductFactsheet(id) {
   const p = (STATE.products || []).find(x => x.id === id);
   if (!p || !p.factsheet_url) return;
-  const raw = p.factsheet_url;
-  if (raw.startsWith('http')) { window.open(raw, '_blank', 'noopener'); return; }
-  try {
-    const [header, b64] = raw.split(',');
-    const mime = header.match(/:(.*?);/)?.[1] || 'application/pdf';
-    const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-    const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
-    window.open(url, '_blank', 'noopener');
-  } catch (_) { Toast.error('Could not open factsheet'); }
+  if (!Utils.openDocument(p.factsheet_url)) Toast.error('Could not open factsheet');
+}
+
+/* The factsheet rows in the manager. Looked up by id rather than having the
+   URL written into the handler: these are base64 PDFs, and putting a couple
+   of megabytes of them into an onclick attribute is how the list stops
+   rendering. */
+let _adminFsCache = [];
+function _openStoredDoc(fsId) {
+  const s = (_adminFsCache || []).find(x => String(x.id) === String(fsId));
+  if (!s || !Utils.openDocument(s.file_url)) Toast.error('Could not open this factsheet');
 }
 
 async function removeProductFactsheet(productId) {
@@ -4454,10 +6128,16 @@ async function removeProductFactsheet(productId) {
 
 function openProductModal() {
   document.getElementById('productModalTitle').textContent = 'New Product';
-  ['productId','prodType','prodLabel','prodHeadline','prodDescription','prodKeyDetails','prodMin','prodTerm','prodSort','prodBenchmark','prodPerfFee','prodPartner','prodSector','prodRisk','prodIcon','prodColor','prodRiskColor'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  ['productId','prodType','prodLabel','prodHeadline','prodDescription','prodKeyDetails','prodMin','prodTerm','prodSort','prodBenchmark','prodPerfFee','prodPartner','prodSector','prodRisk','prodIcon','prodColor','prodRiskColor','prodCategory','prodExclusive'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   document.getElementById('prodActive').value = 'true';
   document.getElementById('prodHomepage').value = 'true';
   document.getElementById('prodRisk').value = 'Medium';   // default risk profile for new products
+  /* A new product is a standard one unless somebody says otherwise. Clearing
+     the select above leaves it on '' — an empty category would drop the product
+     out of both the standard grid and the EIF tab and it would look deleted. */
+  document.getElementById('prodCategory').value = 'standard';
+  document.getElementById('prodExclusive').value = 'false';
+  onProdCategoryChange();
   document.getElementById('prodType').removeAttribute('readonly');
   const ff = document.getElementById('prodFactsheetFile'); if (ff) ff.value = '';
   document.getElementById('prodFactsheetCurrent').textContent = '';
@@ -4485,6 +6165,13 @@ function editProduct(id) {
   document.getElementById('prodPerfFee').value     = p.performance_fee_pct || '';
   document.getElementById('prodPartner').value     = p.partner_name || '';
   document.getElementById('prodSector').value      = p.sector || '';
+  document.getElementById('prodCategory').value    = p.category || 'standard';
+  /* Postgres BOOLEAN comes back as true/false through the JSON API, but a
+     stored 't' from a direct edit is just as real — read both rather than
+     silently opening the form on the wrong answer and saving it back. */
+  document.getElementById('prodExclusive').value =
+    (p.category_exclusive === true || p.category_exclusive === 't' || p.category_exclusive === 'true') ? 'true' : 'false';
+  onProdCategoryChange();
   document.getElementById('prodRisk').value        = p.risk_profile || '';
   document.getElementById('prodIcon').value        = p.icon || '';
   document.getElementById('prodColor').value       = p.color || '';
@@ -4541,6 +6228,20 @@ function _onProdColorText(hex) {
   _renderProdColorSwatches();
 }
 
+/* The exclusivity control only means anything for a product with a tab of its
+   own, so it is shown only for one. Hiding it also stops a value being left
+   behind from a previous choice — though saveProduct forces it false anyway,
+   because a hidden control is still a control with a value in it. */
+function onProdCategoryChange() {
+  const cat = document.getElementById('prodCategory');
+  const grp = document.getElementById('prodExclusiveGroup');
+  const sel = document.getElementById('prodExclusive');
+  if (!cat || !grp) return;
+  const isEif = cat.value === 'eif';
+  grp.style.display = isEif ? '' : 'none';
+  if (!isEif && sel) sel.value = 'false';
+}
+
 async function saveProduct(btn) {
   const productType = document.getElementById('prodType').value.trim().toLowerCase().replace(/\s+/g, '_');
   const label = document.getElementById('prodLabel').value.trim();
@@ -4561,6 +6262,17 @@ async function saveProduct(btn) {
     performance_fee_pct: num('prodPerfFee'),
     partner_name:        document.getElementById('prodPartner').value.trim() || null,
     sector:              document.getElementById('prodSector').value || null,
+    /* Never null: a product with no category shows in neither the standard
+       grid nor the EIF tab, which on the portal looks exactly like a product
+       that has been deleted. */
+    category:            document.getElementById('prodCategory').value || 'standard',
+    /* Only meaningful on a product that HAS a tab of its own. 'standard' is
+       the general grid, so an exclusive standard product would be filtered
+       out of the only place it appears — active in this console and invisible
+       in the portal. Forced false rather than trusted, because the control is
+       hidden in that case and a hidden control still has a value. */
+    category_exclusive:  document.getElementById('prodCategory').value === 'eif' &&
+                         document.getElementById('prodExclusive').value === 'true',
     risk_profile:        document.getElementById('prodRisk').value.trim() || null,
     icon:                document.getElementById('prodIcon').value.trim() || null,
     color:               document.getElementById('prodColor').value.trim() || null,
@@ -4597,7 +6309,10 @@ async function saveProduct(btn) {
           try {
             const existing = (await API.products.list({ limit: 500 })).data || [];
             used = new Set(existing.map(p => String(p.color || '').toLowerCase()));
-          } catch (_) {}
+          } catch (_) {
+            /* Cosmetic only: without the existing colours a new product may
+               repeat one. Not worth interrupting anyone over. */
+          }
           payload.color = palette.find(c => !used.has(c.toLowerCase())) || palette[Math.floor(Math.random() * palette.length)];
         }
         payload.id = `PROD-${productType.toUpperCase()}-${Date.now()}`;
@@ -4662,7 +6377,13 @@ async function loadPools() {
         STATE.products = (r.data || []).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
       }).catch(() => {});
     }
-  } catch (e) { Toast.error('Failed to load pools'); }
+  } catch (e) {
+    // Say what actually failed. This read 'Failed to load pools' and
+    // discarded the reason, so a 403, a 500 and a render bug all looked
+    // identical and none could be diagnosed without devtools.
+    console.error('[load pools]', e);
+    Toast.error(`Failed to load pools` + (e && e.message ? ` — ${e.message}` : ''));
+  }
 }
 
 function filterPools(status, btn) {
@@ -4709,7 +6430,7 @@ function renderMaturingPoolsAlert() {
     const instrSubmitted = poolInvts.filter(i => i.maturity_instruction && i.maturity_instruction !== 'pending').length;
     const instrPct       = instrTotal ? Math.round((instrSubmitted / instrTotal) * 100) : 0;
     const instrColor     = instrPct >= 80 ? '#22c55e' : instrPct >= 50 ? '#fec24f' : '#ef4444';
-    return `<tr style="cursor:pointer" onclick='viewPoolInvestors(${JSON.stringify(p.id)})'>
+    return `<tr style="cursor:pointer" onclick='viewPoolInvestors(${_esc(JSON.stringify(p.id))})'>
       <td><span class="fw-700">${_esc(p.name)}</span>${p.partner_name ? `<br><span style="font-size:0.7rem;color:var(--text-muted)">${_esc(p.partner_name)}</span>` : ''}</td>
       <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
       <td>${Utils.statusBadge(p.status)}</td>
@@ -4813,7 +6534,7 @@ function renderPoolsGrid() {
       <div class="pool-card">
         <div class="pool-card__header">
           <div>
-            <div class="pool-card__name">${p.name}</div>
+            <div class="pool-card__name">${_esc(p.name)}</div>
             <div class="pool-card__partner">${p.partner_name}</div>
           </div>
           <div class="flex-center gap-8">
@@ -4823,8 +6544,13 @@ function renderPoolsGrid() {
         </div>
 
         <div class="pool-card__stats">
-          <div class="pool-stat"><span class="pool-stat__label">${p.actual_rate > 0 ? 'Achieved' : 'Rate'}</span><span class="pool-stat__value pool-stat__value--gold">${Utils.pct(p.actual_rate > 0 ? p.actual_rate : p.annual_rate)}</span></div>
-          <div class="pool-stat" style="cursor:pointer" onclick='viewPoolInvestors(${JSON.stringify(p.id)})' title="Click to view investors">
+          ${(() => {
+            // Through the same helper as the investments list, so the pool and
+            // the investments inside it cannot disagree about the same figure.
+            const _b = Utils.rateBasis({ pool_actual_rate: p.actual_rate, annual_rate: p.annual_rate });
+            return `<div class="pool-stat"><span class="pool-stat__label">${_b && _b.posted ? 'Achieved' : 'Rate'}</span><span class="pool-stat__value pool-stat__value--gold">${_b ? Utils.pct(_b.rate) : '—'}</span></div>`;
+          })()}
+          <div class="pool-stat" style="cursor:pointer" onclick='viewPoolInvestors(${_esc(JSON.stringify(p.id))})' title="Click to view investors">
             <span class="pool-stat__label">Investors</span>
             <span class="pool-stat__value" style="color:var(--gold);text-decoration:underline dotted">${p.live_investor_count ?? p.investor_count ?? 0}</span>
           </div>
@@ -4874,6 +6600,7 @@ function renderPoolsGrid() {
             payout_custom:  'Payout Custom',
             switch_product: 'Switch Product',
             custom_switch:  'Custom Switch',
+            switch_amount:  'Switch Amount + Reinvest',
           };
           const rows = Object.entries(sm).map(([k, v]) =>
             `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0">
@@ -4888,10 +6615,24 @@ function renderPoolsGrid() {
         })()}
 
         <div class="pool-card__actions">
-          <button class="btn btn--secondary btn--sm flex-1" onclick='editPool(${JSON.stringify(p.id)})'><i class="fa-solid fa-pen"></i> Edit</button>
-          <button class="btn btn--secondary btn--sm" onclick='openFactsheetManager(${JSON.stringify(p.id)},${JSON.stringify(p.name)})' title="Manage factsheets"><i class="fa-solid fa-file-pdf" style="color:#ef4444"></i></button>
-          <button class="btn btn--secondary btn--sm" onclick='openMergePoolModal(${JSON.stringify(p.id)})' title="Merge into another pool"><i class="fa-solid fa-code-merge"></i> Merge</button>
-          <button class="btn btn--danger btn--sm" onclick='deletePool(${JSON.stringify(p.id)})'><i class="fa-solid fa-trash"></i></button>
+          <button class="btn btn--secondary btn--sm flex-1" onclick='editPool(${_esc(JSON.stringify(p.id))})'><i class="fa-solid fa-pen"></i> Edit</button>
+          <button class="btn btn--secondary btn--sm" onclick='openFactsheetManager(${_esc(JSON.stringify(p.id))},${_esc(JSON.stringify(p.name))})' title="Manage factsheets"><i class="fa-solid fa-file-pdf" style="color:#ef4444"></i></button>
+          ${/* The maturity report is about money leaving a pool, so it only
+                means anything once the pool has matured. On an open pool it
+                would report an allocation nobody has been asked for yet.
+
+                The raise report is the mirror: it is about money that came IN,
+                and it is complete the moment the pool stops raising — which is
+                when the cycler moves it from 'open' to 'active'. Both are
+                offered from the point they become truthful, and not before. */
+            p.status === 'matured'
+            ? `<button class="btn btn--secondary btn--sm" onclick='openPoolMaturityReport(${_esc(JSON.stringify(p.id))})' title="Maturity instruction report"><i class="fa-solid fa-list-check" style="color:#22c55e"></i> Maturity</button>`
+            : ''}
+          ${!['open', 'waitlist', 'filling'].includes(p.status)
+            ? `<button class="btn btn--secondary btn--sm" onclick='openPoolRaiseReport(${_esc(JSON.stringify(p.id))})' title="Raise report — where the money came from"><i class="fa-solid fa-arrow-down-short-wide" style="color:#eda5ff"></i> Raise</button>`
+            : ''}
+          <button class="btn btn--secondary btn--sm" onclick='openMergePoolModal(${_esc(JSON.stringify(p.id))})' title="Merge into another pool"><i class="fa-solid fa-code-merge"></i> Merge</button>
+          <button class="btn btn--danger btn--sm" onclick='deletePool(${_esc(JSON.stringify(p.id))})'><i class="fa-solid fa-trash"></i></button>
           ${manageDropdown}
         </div>
       </div>
@@ -4929,7 +6670,7 @@ async function viewPoolInvestors(poolId) {
     });
     if (!res.ok) throw new Error('Failed to load');
     const { investors, summary } = await res.json();
-    _poolInvestorsSnapshot = { investors, summary, poolName: pool.name };
+    _poolInvestorsSnapshot = { investors, summary, poolName: pool.name, poolActualRate: pool.actual_rate };
 
     const statusColor = { active:'badge--green', matured:'badge--purple', paid_out:'badge--blue', cancelled:'badge--red' };
 
@@ -5007,7 +6748,20 @@ async function viewPoolInvestors(poolId) {
                 ? `<div style="font-size:0.72rem;font-weight:700;color:#eda5ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${r.sub_account_id}">${r.sub_account_name||'Sub Account'}</div><div style="font-size:0.62rem;color:var(--text-muted);font-family:monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.sub_account_type||''}</div>`
                 : `<span style="font-family:monospace;font-size:0.75rem;color:var(--gold)">${r.investor_id}</span>`;
               const isCancelled = r.investment_status === 'cancelled';
-              return `<tr style="cursor:pointer;${isCancelled ? 'opacity:0.5;' : ''}" onclick="viewInvestor('${r.investor_id}');Modal.close('poolInvestorsModal')">
+              // Returns are posted on the pool (actual_rate); they are not written back
+              // to each investment's annual_rate. Fall back to the pool's achieved rate
+              // so a posted return is visible here. parseFloat first — annual_rate comes
+              // back as the string "0.0000", which is truthy and rendered a misleading
+              // 0.00% instead of falling through.
+              // Same precedence as the investments list, from one definition.
+              const effRate = Utils.effectiveRate({ ...r, pool_actual_rate: r.pool_actual_rate ?? pool.actual_rate }) || 0;
+              /* The row is one INVESTMENT, so it opens that investment — not
+                 the investor, which is what it used to do and which lost the
+                 row you clicked. Back returns to this pool, not to the
+                 investor, because that is where you came from.
+                 Only ids go into the attribute; a pool name could contain a
+                 quote and would terminate it. */
+              return `<tr style="cursor:pointer;${isCancelled ? 'opacity:0.5;' : ''}" onclick="viewInvestmentDetail('${r.investment_id}','${_currentPoolId}','pool');Modal.close('poolInvestorsModal')">
                 <td><div class="td-strong clip">${name}</div><div class="td-muted clip" style="font-size:0.7rem">${r.email||''}</div></td>
                 <td class="clip">${acctCell}</td>
                 <td class="td-gold fw-700 clip">${Utils.rand(r.amount)}</td>
@@ -5015,7 +6769,7 @@ async function viewPoolInvestors(poolId) {
                 <td class="clip" style="font-size:0.78rem;color:#f97316">${Utils.rand(r.platform_fee)}</td>
                 <td class="clip" style="font-size:0.78rem;color:#eda5ff">${r.eva_contribution > 0 ? Utils.rand(r.eva_contribution) : '—'}</td>
                 <td class="clip" style="font-size:0.82rem;font-weight:700;color:#22c55e">${Utils.rand(r.net_amount)}</td>
-                <td class="td-green clip">${r.annual_rate ? Utils.pct(r.annual_rate) : '—'}</td>
+                <td class="td-green clip">${effRate > 0 ? Utils.pct(effRate) : '—'}</td>
                 <td><span class="badge ${statusColor[r.investment_status]||'badge--gray'}">${r.investment_status||'—'}</span></td>
                 <td class="td-muted clip">${Utils.date(r.start_date)}</td>
                 <td class="clip">
@@ -5049,7 +6803,7 @@ function downloadPoolCsv() {
     Toast.error('No data to export');
     return;
   }
-  const { investors, poolName } = _poolInvestorsSnapshot;
+  const { investors, poolName, poolActualRate } = _poolInvestorsSnapshot;
   const PLATFORM_FEE_PCT = 0.01;
 
   const headers = ['Investor','Email','Account ID','Sub Account','Gross Amount','Upfront Fee','Platform Fee','EVA','Net Amount','Annual Rate','Status','Start Date','Maturity Date','Maturity Instruction','Source'];
@@ -5070,7 +6824,10 @@ function downloadPoolCsv() {
       platformFee.toFixed(2),
       (r.eva_contribution || 0).toFixed(2),
       (r.net_amount || 0).toFixed(2),
-      r.annual_rate ? (parseFloat(r.annual_rate) * 100).toFixed(2) + '%' : '0.00%',
+      (() => {
+        const _r = Utils.effectiveRate({ ...r, pool_actual_rate: r.pool_actual_rate ?? poolActualRate });
+        return _r != null ? (_r * 100).toFixed(2) + '%' : '';
+      })(),
       r.investment_status || '',
       r.start_date ? r.start_date.slice(0, 10) : '',
       r.end_date   ? r.end_date.slice(0, 10)   : '',
@@ -5142,21 +6899,66 @@ async function setPoolWaitlist(id) {
 }
 
 /* ── Factsheet Manager ─────────────────────────────── */
+
+const _FS_MONTH_NAMES = ['January','February','March','April','May','June',
+                         'July','August','September','October','November','December'];
+
+/* The house convention, written once. The portal orders the archive on the
+   period, not on this text, but a list of consistently named sheets is the
+   point of having a convention at all — and an admin who sees the name filled
+   in is far less likely to invent a different one. */
+function _autoFsName() {
+  const per = document.getElementById('adminFsPeriod');
+  const nam = document.getElementById('adminFsFileName');
+  if (!per || !nam || !per.value) return;
+  const [y, m] = per.value.split('-').map(Number);
+  if (!y || !m) return;
+  const suggested = `${_FS_MONTH_NAMES[m - 1]} ${y} - Factsheet`;
+  /* Only fills a blank field or one this function last wrote. A name an admin
+     typed themselves is theirs — a deliberate "Herd health notes" must not be
+     wiped by touching the period afterwards. */
+  if (!nam.value.trim() || nam.dataset.auto === '1') {
+    nam.value = suggested;
+    nam.dataset.auto = '1';
+  }
+}
+
 async function openFactsheetManager(poolId, poolName) {
   const modal = document.getElementById('adminFactsheetModal');
   const title = document.getElementById('adminFsTitle');
   const list  = document.getElementById('adminFsList');
   if (!modal) return;
-  if (title) title.textContent = `${poolName} — Factsheets`;
+  /* The title says which POOL's factsheets these are, because that is still
+     what the upload attaches to — but the archive an investor sees is the
+     whole product's, so the coverage link is here where somebody is already
+     thinking about a gap. */
+  if (title) title.innerHTML = `${_esc(poolName)} — Factsheets
+    <button class="btn btn--ghost btn--sm" style="margin-left:10px;font-size:0.7rem"
+            onclick="openFactsheetCoverage()" title="Which months are missing, across every product">
+      <i class="fa-solid fa-list-check"></i> Coverage</button>`;
   modal.dataset.poolId   = poolId;
   modal.dataset.poolName = poolName;
   // Reset file input
   const inp = document.getElementById('adminFsFileInput');
   if (inp) inp.value = '';
   const namEl = document.getElementById('adminFsFileName');
-  if (namEl) namEl.value = '';
+  if (namEl) { namEl.value = ''; delete namEl.dataset.auto; namEl.oninput = () => { delete namEl.dataset.auto; }; }
   const verEl = document.getElementById('adminFsVersion');
   if (verEl) verEl.value = '';
+
+  /* Default the period to the pool's close month — the month the sheet
+     reports on. The admin can change it; most of the time they will not have
+     to, and that is what keeps the archive consistent. */
+  const perEl = document.getElementById('adminFsPeriod');
+  if (perEl) {
+    const p = (STATE.pools || []).find(x => x.id === poolId);
+    const end = p && p.end_date ? new Date(p.end_date) : null;
+    perEl.value = end && !isNaN(end)
+      ? `${end.getUTCFullYear()}-${String(end.getUTCMonth() + 1).padStart(2, '0')}`
+      : '';
+    _autoFsName();
+  }
+
   Modal.open('adminFactsheetModal');
   await _loadAdminFactsheets(poolId, list);
 }
@@ -5167,6 +6969,7 @@ async function _loadAdminFactsheets(poolId, listEl) {
   try {
     const res = await API._fetch('GET', `factsheets?pool_id=${poolId}`);
     const sheets = res.data || [];
+    _adminFsCache = sheets;
     if (!sheets.length) {
       listEl.innerHTML = '<div style="color:var(--text-dim);font-size:0.78rem;text-align:center;padding:16px">No factsheets yet — upload one above.</div>';
       return;
@@ -5179,13 +6982,18 @@ async function _loadAdminFactsheets(poolId, listEl) {
             ${_esc(s.file_name)}
             ${s.is_current ? '<span style="font-size:0.6rem;background:rgba(34,197,94,0.15);color:#22c55e;padding:1px 6px;border-radius:99px;font-weight:800">CURRENT</span>' : ''}
           </div>
-          <div style="font-size:0.68rem;color:var(--text-dim);margin-top:2px">${s.version ? `v${_esc(s.version)} · ` : ''}${Utils.date(s.created_at)}${s.uploaded_by ? ` · ${_esc(s.uploaded_by)}` : ''}</div>
+          <div style="font-size:0.68rem;color:var(--text-dim);margin-top:2px">${
+            /* The period leads: it is what orders the investor's archive, so a
+               sheet filed under the wrong month has to be visible here. */
+            s.period_label ? `<span style="color:var(--text-primary);font-weight:700">${_esc(s.period_label)}</span> · ` : '<span style="color:#f59e0b">No period · </span>'
+          }${s.version ? `v${_esc(s.version)} · ` : ''}uploaded ${Utils.date(s.created_at)}${s.uploaded_by ? ` · ${_esc(s.uploaded_by)}` : ''}</div>
         </div>
-        <a href="${s.file_url}" target="_blank" rel="noopener" class="btn btn--ghost btn--sm" title="Open"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
+        <button class="btn btn--ghost btn--sm" onclick='_openStoredDoc(${_esc(JSON.stringify(s.id))})' title="Open"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
+        <button class="btn btn--ghost btn--sm" onclick="editFactsheetMeta('${s.id}','${poolId}')" title="Change the period or name"><i class="fa-solid fa-pen"></i></button>
         <button class="btn btn--ghost btn--sm" style="color:#ef4444" onclick="deleteFactsheet('${s.id}','${poolId}')" title="Delete"><i class="fa-solid fa-trash"></i></button>
       </div>`).join('');
   } catch (e) {
-    listEl.innerHTML = `<div style="color:#ef4444;font-size:0.78rem;text-align:center;padding:12px">${e.message}</div>`;
+    listEl.innerHTML = `<div style="color:#ef4444;font-size:0.78rem;text-align:center;padding:12px">${_esc(e.message)}</div>`;
   }
 }
 
@@ -5202,6 +7010,11 @@ async function uploadFactsheet() {
   const fileName = nameEl?.value?.trim();
   const version  = verEl?.value?.trim();
   const file     = fileInput?.files?.[0];
+  /* A month input gives "2026-08"; the column is a DATE, so it is the first
+     of that month. The server derives the same thing from the pool when this
+     is blank, so an older console that does not send it still stores a period. */
+  const periodEl = document.getElementById('adminFsPeriod');
+  const period   = periodEl?.value ? `${periodEl.value}-01` : null;
 
   if (!fileName) { Toast.error('Enter a factsheet name'); return; }
   if (!file) { Toast.error('Select a PDF file to upload'); return; }
@@ -5219,11 +7032,12 @@ async function uploadFactsheet() {
         file_url:  e.target.result,  // base64 data URL stored in DB
         file_size: file.size,
         mime_type: file.type || 'application/pdf',
+        period_date: period,
         version,
       });
       if (res.error) throw new Error(res.error);
       Toast.success('Factsheet uploaded');
-      if (nameEl) nameEl.value = '';
+      if (nameEl) { nameEl.value = ''; delete nameEl.dataset.auto; }
       if (verEl)  verEl.value  = '';
       if (fileInput) fileInput.value = '';
       await _loadAdminFactsheets(poolId, document.getElementById('adminFsList'));
@@ -5234,6 +7048,106 @@ async function uploadFactsheet() {
     }
   };
   reader.readAsDataURL(file);
+}
+
+/* What survived, and which months are missing.
+ *
+ * product_factsheets.pool_id used to cascade on delete, and a factsheet is
+ * attached to a pool rather than to a product — so deleting a pool, or merging
+ * one (which deletes the source), destroyed that month's published document
+ * silently. Both are fixed, but what was already lost cannot be undone and the
+ * gaps are invisible because the rows are gone. This names them. */
+async function openFactsheetCoverage() {
+  const body = `<div id="fsCoverageBody" style="min-height:120px">
+      <div style="text-align:center;color:var(--text-dim);padding:24px">
+        <i class="fa-solid fa-spinner fa-spin"></i> Checking every product…</div></div>`;
+  Confirm.ask('Factsheet coverage', { bodyHtml: body, confirmLabel: 'Close' });
+
+  const el = document.getElementById('fsCoverageBody');
+  let r;
+  try { r = await API._fetch('GET', 'factsheets/coverage'); }
+  catch (e) { if (el) el.innerHTML = `<div style="color:#ef4444">${_esc(e.message)}</div>`; return; }
+  if (!el) return;
+  if (r.error) { el.innerHTML = `<div style="color:#ef4444">${_esc(r.error)}</div>`; return; }
+
+  const month = m => {
+    const [y, mo] = String(m).split('-');
+    return new Date(Date.UTC(+y, +mo - 1, 1)).toLocaleString('en-ZA', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+  };
+  el.innerHTML = (r.products || []).map(p => {
+    const lost = p.total > 0 && p.missingCount > 0;
+    return `<div style="border:1px solid var(--border);border-left:3px solid ${lost ? '#f59e0b' : p.total ? '#22c55e' : 'var(--border)'};
+                        border-radius:10px;padding:11px 13px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">
+        <strong style="font-size:0.86rem">${_esc(p.label)}</strong>
+        <span style="font-size:0.76rem;color:var(--text-dim)">
+          ${p.total} sheet${p.total === 1 ? '' : 's'}${p.orphaned ? ` · ${p.orphaned} kept after their pool was deleted` : ''}${p.undated ? ` · ${p.undated} with no period` : ''}</span>
+      </div>
+      ${p.missingCount ? `<div style="margin-top:6px;font-size:0.78rem;color:${lost ? '#f59e0b' : 'var(--text-dim)'}">
+          ${p.total ? 'No sheet for' : 'Never had a sheet for'} ${p.missingCount} month${p.missingCount === 1 ? '' : 's'}:
+          <span style="color:var(--text-dim)">${p.missing.map(month).join(', ')}</span></div>`
+        : `<div style="margin-top:6px;font-size:0.78rem;color:#22c55e">
+            <i class="fa-solid fa-circle-check"></i> Every month the product ran has a sheet.</div>`}
+    </div>`;
+  }).join('') || '<div style="color:var(--text-dim)">No products to report on.</div>';
+}
+
+/* Correct the period, name or version of a factsheet that is already up.
+ *
+ * The form above this list is an UPLOAD form: changing its period field and
+ * pressing the button either did nothing, because no file was attached, or
+ * made a second copy. There was no way at all to correct a sheet filed under
+ * the wrong month — this is it. The file itself is never touched; replacing
+ * the document is an upload. */
+async function editFactsheetMeta(fsId, poolId) {
+  const s = (_adminFsCache || []).find(x => x.id === fsId);
+  if (!s) return;
+  /* The month input wants YYYY-MM; the column is the first of the month. */
+  const asMonth = s.period_date ? String(s.period_date).slice(0, 7) : '';
+
+  const body = `
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div>
+        <label style="font-size:0.7rem;color:var(--text-dim);text-transform:uppercase;font-weight:700">Reporting period</label>
+        <input type="month" id="fsEditPeriod" value="${_esc(asMonth)}" class="input" style="width:100%">
+        <div style="font-size:0.7rem;color:var(--text-dim);margin-top:4px">
+          The month this sheet reports on — investors see the archive in this order. Leave it blank for a document that is not a monthly sheet.</div>
+      </div>
+      <div>
+        <label style="font-size:0.7rem;color:var(--text-dim);text-transform:uppercase;font-weight:700">Name</label>
+        <input id="fsEditName" value="${_esc(s.file_name || '')}" class="input" style="width:100%">
+        <div style="font-size:0.7rem;color:var(--text-dim);margin-top:4px">
+          Left on the house pattern, this follows the period. Renamed deliberately, it stays as typed.</div>
+      </div>
+      <div>
+        <label style="font-size:0.7rem;color:var(--text-dim);text-transform:uppercase;font-weight:700">Version (optional)</label>
+        <input id="fsEditVersion" value="${_esc(s.version || '')}" class="input" style="width:100%" placeholder="e.g. 1.2">
+      </div>
+      <div style="font-size:0.72rem;color:var(--text-dim);border-top:1px solid var(--border);padding-top:10px">
+        The PDF itself is not changed. To replace the document, upload a new one.</div>
+    </div>`;
+
+  const okd = await Confirm.ask('Edit factsheet', { bodyHtml: body, confirmLabel: 'Save' });
+  if (!okd) return;
+
+  const periodVal = document.getElementById('fsEditPeriod')?.value || '';
+  const nameVal   = document.getElementById('fsEditName')?.value?.trim() || '';
+  const verVal    = document.getElementById('fsEditVersion')?.value?.trim() || '';
+  if (!nameVal) { Toast.error('Give the factsheet a name'); return; }
+
+  /* The name is sent only when it was actually changed, so the server can
+     move a house-pattern name with the period on its own. */
+  const payload = { period_date: periodVal ? `${periodVal}-01` : null, version: verVal };
+  if (nameVal !== (s.file_name || '')) payload.file_name = nameVal;
+
+  try {
+    const res = await API._fetch('PATCH', `factsheets/${fsId}`, payload);
+    if (res.error) throw new Error(res.error);
+    Toast.success('Factsheet updated');
+    await _loadAdminFactsheets(poolId, document.getElementById('adminFsList'));
+  } catch (e) {
+    Toast.error('Could not update: ' + e.message);
+  }
 }
 
 async function deleteFactsheet(fsId, poolId) {
@@ -5308,7 +7222,13 @@ async function notifyWaitlist(poolId) {
 
 async function _ensureProductsForDropdowns() {
   if (!STATE.products || !STATE.products.length) {
-    try { const r = await API.products.list({ limit: 200 }); STATE.products = (r.data || []).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)); } catch (_) {}
+    try { const r = await API.products.list({ limit: 200 }); STATE.products = (r.data || []).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)); }
+    catch (err) {
+      /* An empty products list renders as an empty dropdown with no
+         explanation — the same shape as the switch-target bug that read
+         "No products available" on a platform full of them. */
+      console.error('[products] dropdown list failed to load — selects will be empty:', err?.message || err);
+    }
   }
   _populateProductTypeDropdowns();
 }
@@ -5378,11 +7298,30 @@ function _autoCalcInvStartDate(closeDateId, targetId) {
   targetEl.value = d.toISOString().split('T')[0];
 }
 
+/* A pool's start and end dates are its FUNDRAISING WINDOW — when it opens to
+   money and when it shuts. A close on or before the open is not a short pool,
+   it is a pool that shut before it opened: poolCyclerCron warns that such a
+   pool is "invisible to every query that looks for one still raising", and one
+   reached a client statement reading "Pool Start 01 Feb 2025 · Pool End 31 Jan
+   2025". The database now refuses it; catching it here means the operator is
+   told which field is wrong instead of being handed a constraint violation. */
+function _poolWindowError(startVal, endVal) {
+  if (!startVal || !endVal) return null;
+  if (endVal > startVal) return null;
+  return `The close date (${endVal}) must be after the open date (${startVal}). ` +
+    `These are the fundraising window — if you meant the date money is deployed, ` +
+    `that is the investment start date, and if you meant maturity, that is the maturity date.`;
+}
+
 async function saveNewPool(btn) {
   const name = document.getElementById('newPoolName').value.trim();
   const type = document.getElementById('newPoolType').value;
   const target = parseFloat(document.getElementById('newPoolTarget').value);
   if (!name) { Toast.error('Pool name is required'); return; }
+  const newWindowErr = _poolWindowError(
+    document.getElementById('newPoolOpenDate').value,
+    document.getElementById('newPoolCloseDate').value);
+  if (newWindowErr) { Toast.error(newWindowErr); return; }
   const maxCapVal = document.getElementById('newPoolMaxCapacity').value;
   const max_capacity = maxCapVal ? (parseFloat(maxCapVal) || null) : null;
   await _withBtn(btn, async () => {
@@ -5518,8 +7457,8 @@ async function loadUnmergeInvestments() {
   }
 
   itemsEl.innerHTML = invs.map(i => {
-    const name = i.investor_name || i.investor_id || '—';
-    const amt  = Utils.fmtCcy(i.amount);
+    const name = _actorLine(i);
+    const amt  = Utils.rand(i.amount);
     const date = i.start_date ? new Date(i.start_date).toLocaleDateString('en-ZA') : '—';
     return `<label style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-bottom:1px solid var(--border);cursor:pointer;font-size:0.83rem">
       <input type="checkbox" class="unmerge-inv-cb" value="${_esc(i.id)}" checked style="width:15px;height:15px;accent-color:#eda5ff">
@@ -5643,11 +7582,14 @@ async function loadMoveInvestmentsList() {
   }
 
   itemsEl.innerHTML = invs.map(i => {
-    const name  = i.investor_name || i.investor_id || '—';
+    const name  = _actorLine(i);
     const saId  = i.sub_account_id || '—';
-    const amt   = Utils.fmtCcy(i.amount);
+    const amt   = Utils.rand(i.amount);
     const edate = i.end_date ? new Date(i.end_date).toLocaleDateString('en-ZA') : '—';
-    const rate  = i.annual_rate ? `${Number(i.annual_rate).toFixed(2)}%` : '0%';
+    // Was Number(annual_rate).toFixed(2) + '%' — the rate is a fraction, so
+    // 0.0213 rendered as "0.02%" instead of 2.13%. Utils.pct does the ×100.
+    const _r    = Utils.effectiveRate(i);
+    const rate  = _r != null ? Utils.pct(_r) : '—';
     return `<label style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-bottom:1px solid var(--border);cursor:pointer;font-size:0.82rem">
       <input type="checkbox" class="move-inv-cb" value="${_esc(i.id)}" checked style="width:15px;height:15px;accent-color:#eda5ff;flex-shrink:0">
       <span style="min-width:120px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(name)}">${_esc(name)}</span>
@@ -5747,19 +7689,33 @@ function editPool(id) {
   _populateProductTypeDropdowns();
   const editTypeSel = document.getElementById('editPoolType');
   if (pool.product_type && editTypeSel && !Array.from(editTypeSel.options).some(o => o.value === pool.product_type)) {
-    editTypeSel.insertAdjacentHTML('beforeend', `<option value="${pool.product_type}">${pool.product_type}</option>`);
+    editTypeSel.insertAdjacentHTML('beforeend', `<option value="${_esc(pool.product_type)}">${_esc(pool.product_type)} (unmapped)</option>`);
   }
-  document.getElementById('editPoolType').value        = pool.product_type || 'cattle';
+  /* A pool with no product type must SAY it has none. This used to read
+     `pool.product_type || 'cattle'`, so a migrated pool with an empty
+     product_type displayed "Cattle Investment" — and because the save writes
+     whatever the field shows, opening the modal and pressing Save silently
+     retyped the pool as cattle. On a short-term pool that is simply wrong, and
+     product_type is what the maturity engine matches rollovers on. */
+  if (editTypeSel && !pool.product_type && !Array.from(editTypeSel.options).some(o => o.value === '')) {
+    editTypeSel.insertAdjacentHTML('afterbegin', '<option value="">— not set —</option>');
+  }
+  document.getElementById('editPoolType').value        = pool.product_type || '';
   document.getElementById('editPoolTargetType').value  = pool.target_type || 'amount';
   _syncPoolTargetType('edit');
   document.getElementById('editPoolTerm').value        = pool.term_months || 12;
   document.getElementById('editPoolTarget').value      = pool.target_amount || 0;
-  document.getElementById('editPoolRaised').value      = pool.raised_amount || 0;
+  // Show the live figures the server aggregates from actual investments, not the
+  // stored columns — those go stale as soon as anyone invests. This also stops the
+  // save handler below from writing the stale value straight back: it reads these
+  // inputs, so populating them with 0 permanently zeroed raised_amount and
+  // investor_count on every pool edit, which is self-perpetuating.
+  document.getElementById('editPoolRaised').value      = pool.live_raised ?? pool.raised_amount ?? 0;
   document.getElementById('editPoolMin').value         = pool.min_investment || 500;
   document.getElementById('editPoolRate').value        = pool.annual_rate || 0;
   document.getElementById('editPoolActualRate').value  = pool.actual_rate || 0;
   document.getElementById('editPoolPartner').value     = pool.partner_name || '';
-  document.getElementById('editPoolInvCount').value    = pool.investor_count || 0;
+  document.getElementById('editPoolInvCount').value    = pool.live_investor_count ?? pool.investor_count ?? 0;
   // Convert ISO dates to YYYY-MM-DD for date inputs
   const toDateVal = iso => { try { return iso ? new Date(iso).toISOString().split('T')[0] : ''; } catch { return ''; } };
   document.getElementById('editPoolOpenDate').value    = toDateVal(pool.start_date);
@@ -5786,6 +7742,15 @@ function editPool(id) {
 async function saveEditPool(btn) {
   const id = document.getElementById('editPoolId').value;
   if (!id) return;
+
+  /* Leaving this blank is legal but has a consequence worth stating once:
+     rollovers are matched on product_type and nothing else, so an unset pool
+     sends its matured investments to wallets rather than into a successor. */
+  if (!document.getElementById('editPoolType').value && !await Confirm.ask(
+    'Save without a product type?', {
+      body: 'This pool has no product type. The maturity engine matches rollovers on product type alone — ' +
+            'not on the pool name — so investments here pay out to wallets instead of rolling into the next pool. Save anyway?',
+      confirmLabel: 'Save anyway' })) return;
 
   const maxCapVal2 = document.getElementById('editPoolMaxCapacity').value;
   const updates = {
@@ -5814,6 +7779,8 @@ async function saveEditPool(btn) {
   };
 
   if (!updates.name) { Toast.error('Pool name is required'); return; }
+  const editWindowErr = _poolWindowError(updates.start_date, updates.end_date);
+  if (editWindowErr) { Toast.error(editWindowErr); return; }
 
   await _withBtn(btn, async () => {
     try {
@@ -5835,23 +7802,41 @@ let invPage = 1;
 const INV_PG_SIZE = 10;
 let filteredInvests = [];
 
+const INVESTMENT_SOURCES = [
+  { key: 'investments', label: 'Investments', load: () => API.investments.list({ limit: 5000 }) },
+];
+
 async function loadInvestments() {
   try {
-    const res = await API.investments.list({ limit: 5000 });
-    STATE.investments = res.data || [];
+    const { values, counts, failed } = await _loadSources(INVESTMENT_SOURCES);
+    STATE.investments = values.investments;
     filteredInvests = [...STATE.investments];
     _markRefreshed('investments');
     renderInvestmentStats();
     renderInvestmentsTable();
     setupInvestmentFilters();
-  } catch (e) { Toast.error('Failed to load investments'); }
+    _renderLoadErrors('investments-load-errors', failed, 'loadInvestments()');
+    _renderTruncationBanner('investments-truncation', counts, `
+      Active capital, the average rate and the counts above are summed in the browser from the rows
+      that were read. The average rate is the one to distrust most &mdash; it is a mean over
+      whichever rows arrived, so it moves with the cap rather than with the book.`);
+  } catch (e) {
+    // Say what actually failed. This read 'Failed to load investments' and
+    // discarded the reason, so a 403, a 500 and a render bug all looked
+    // identical and none could be diagnosed without devtools.
+    console.error('[load investments]', e);
+    Toast.error(`Failed to load investments` + (e && e.message ? ` — ${e.message}` : ''));
+  }
 }
 
 function renderInvestmentStats() {
   const d = STATE.investments;
   const active = d.filter(i => i.status === 'active');
-  const withRate = active.filter(i => i.annual_rate > 0);
-  const avgRate = withRate.length ? withRate.reduce((s,i) => s+(parseFloat(i.annual_rate)||0), 0) / withRate.length : 0;
+  // Rated on the effective rate, not annual_rate alone: an investment whose
+  // return is posted at pool level carries 0 of its own and was being dropped
+  // from the average entirely.
+  const withRate = active.map(i => Utils.effectiveRate(i)).filter(r => r != null && r > 0);
+  const avgRate = withRate.length ? withRate.reduce((s, r) => s + r, 0) / withRate.length : 0;
   const activeCapital = active.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
   document.getElementById('inv-total').textContent = d.length.toLocaleString();
   document.getElementById('inv-active').textContent = active.length.toLocaleString();
@@ -5860,10 +7845,18 @@ function renderInvestmentStats() {
   document.getElementById('inv-avgrate').textContent = avgRate ? Utils.pct(avgRate) : '—';
 }
 
+const INVESTMENT_SORT = {
+  _investor: v => {
+    const i = STATE.investors.find(x => x.id === v.investor_id);
+    return (v.investor_name || (i ? `${i.last_name || ''} ${i.first_name || ''}` : '')).trim().toLowerCase() || null;
+  },
+};
+
 function renderInvestmentsTable() {
   const body = document.getElementById('investmentsBody');
   const start = (invPage - 1) * INV_PG_SIZE;
-  const page = filteredInvests.slice(start, start + INV_PG_SIZE);
+  const ordered = _sortRows('investments', filteredInvests, INVESTMENT_SORT);
+  const page = ordered.slice(start, start + INV_PG_SIZE);
 
   document.getElementById('investmentsFooter').textContent = `${start + 1}–${Math.min(start + INV_PG_SIZE, filteredInvests.length)} of ${filteredInvests.length}`;
 
@@ -5879,24 +7872,28 @@ function renderInvestmentsTable() {
     const investor   = STATE.investors.find(inv => inv.id === i.investor_id);
     const invName    = i.investor_name || (investor ? `${investor.first_name} ${investor.last_name}` : '—');
     const investDate = i.start_date || i.created_at;
-    return `<tr tabindex="0">
-      <td style="width:36px;text-align:center"><input type="checkbox" class="inv-select-cb" value="${i.id}" onchange="_invUpdateBulkBar()" /></td>
+    /* tabindex without a key handler is a row that takes focus and then ignores
+       Enter — worse than not being focusable, because the focus ring promises
+       something. */
+    const _openRow = `viewInvestmentDetail(${JSON.stringify(i.id)})`;
+    return `<tr tabindex="0" style="cursor:pointer" onclick='${_openRow}' onkeydown='if(event.key==="Enter"||event.key===" "){event.preventDefault();${_openRow};}' title="Open investment detail">
+      <td style="width:36px;text-align:center" onclick="event.stopPropagation()"><input type="checkbox" class="inv-select-cb" value="${i.id}" onchange="_invUpdateBulkBar()" /></td>
       <td>
-        <div class="td-strong clip" style="cursor:pointer" onclick="viewInvestor('${i.investor_id}')">${invName}</div>
+        <div class="td-strong clip" style="cursor:pointer" onclick="event.stopPropagation();viewInvestor('${i.investor_id}')">${invName}</div>
         <div class="clip" style="font-size:0.7rem;font-family:monospace;color:var(--text-muted)">${i.investor_id||'—'}</div>
       </td>
       <td class="td-muted clip">${Utils.date(investDate)}</td>
       <td>${i.pool_id
-        ? `<div class="td-strong clip" style="cursor:pointer;color:var(--gold)" onclick="viewPoolInvestors('${i.pool_id}')" title="${_esc(i.pool_name||i.pool_id)}">${i.pool_name||i.pool_id}</div>`
+        ? `<div class="td-strong clip" style="cursor:pointer;color:var(--gold)" onclick="event.stopPropagation();viewPoolInvestors('${i.pool_id}')" title="${_esc(i.pool_name||i.pool_id)}">${_esc(i.pool_name||i.pool_id)}</div>`
         : `<div class="td-muted clip">—</div>`
       }</td>
       <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
       <td class="td-gold fw-700">${Utils.rand(i.amount)}</td>
-      <td class="td-green">${i.annual_rate?Utils.pct(i.annual_rate):'—'}</td>
+      <td>${Utils.rateCell(i)}</td>
       <td>${Utils.statusBadge(i.status)}</td>
       <td class="td-muted">${Utils.date(i.end_date)}</td>
       <td>
-        <button class="btn btn--secondary btn--sm" onclick='viewInvestmentDetail(${JSON.stringify(i.id)})'><i class="fa-solid fa-eye"></i></button>
+        <button class="btn btn--secondary btn--sm" onclick='event.stopPropagation();viewInvestmentDetail(${_esc(JSON.stringify(i.id))})'><i class="fa-solid fa-eye"></i></button>
       </td>
     </tr>`;
   }).join('');
@@ -5930,14 +7927,16 @@ async function bulkTriggerPayout() {
   const checked = [...document.querySelectorAll('.inv-select-cb:checked')].map(cb => cb.value);
   if (!checked.length) return Toast.error('Select at least one investment');
   if (!await Confirm.ask(`Mark ${checked.length} investment(s) matured?`, { body: 'These investments will be marked as matured.', confirmLabel: 'Mark Matured' })) return;
-  let done = 0;
-  for (const id of checked) {
-    try {
-      await API.investments.update(id, { status: 'matured', payout_date: new Date().toISOString() });
-      done++;
-    } catch(e) { console.error('payout error', id, e.message); }
-  }
-  Toast.success(`${done} investment(s) marked as matured`);
+  /* Failures used to go to the console only, under a toast that read like a
+     clean run. Marking an investment matured is the step that releases a
+     payout, so one that silently did not happen is not a detail. */
+  const res = await _bulkRun(checked,
+    id => API.investments.update(id, { status: 'matured', payout_date: new Date().toISOString() }),
+    { sequential: true, label: id => {
+        const iv = STATE.investments.find(x => x.id === id);
+        return iv ? (iv.investor_name || iv.pool_name || id) : id;
+      } });
+  _bulkReport('investment', 'marked matured', res);
   loadInvestments && loadInvestments();
 }
 
@@ -5992,55 +7991,272 @@ function setupInvestmentFilters() {
   if (sortSel) sortSel.addEventListener('change', filter);
 }
 
-function viewInvestmentDetail(id) {
-  const inv = STATE.investments.find(i => i.id === id);
-  if (!inv) return;
+/* Investments belonging to the investor whose detail modal is open. That list
+   comes from its own API call and is not necessarily a subset of
+   STATE.investments, which is paged — so a row clicked there can be absent
+   from STATE entirely. */
+let _investorInvestments = [];
+
+/* Open the investment detail.
+
+   backTo, when given an investor id, renders a way back. This modal reuses
+   investorDetailModal's own title and body elements, so opening it from inside
+   the investor view replaces that view — without a return path the close
+   button drops the user out of the investor entirely and they have to search
+   for them again. */
+/* backKind says what `backTo` refers to: 'investor' (the default, an investor
+   id) or 'pool' (a pool id). The pool investors list needed the second — its
+   rows are investments, and returning to the investor from there drops you
+   somewhere you were not. */
+async function viewInvestmentDetail(id, backTo, backKind) {
+  /* The switch-target list is derived from open pools, so they have to be
+     loaded before the form is built. This modal is reachable from the investor
+     detail without ever opening the Pools tab, which is how the old list —
+     read from STATE.products, filled only by the Products tab — came up empty
+     on a platform with plenty of products. */
+  if (!STATE.pools || !STATE.pools.length) {
+    try { const pr = await API.pools.list({ limit: 1000 }); STATE.pools = pr.data || []; }
+    catch (err) { console.error('[investment detail] pools failed to load:', err?.message || err); }
+  }
+
+  let inv = STATE.investments.find(i => i.id === id)
+         || _investorInvestments.find(i => i.id === id);
+
+  if (!inv) {
+    // Not in either cache — fetch the one record. The single-record endpoint
+    // joins the pool's posted rate on, so the rate resolves the same way here
+    // as it does in the list.
+    const titleEl = document.getElementById('invDetailTitle');
+    const bodyEl  = document.getElementById('invDetailBody');
+    if (titleEl) titleEl.textContent = 'Investment';
+    if (bodyEl)  bodyEl.innerHTML = '<div style="text-align:center;padding:48px"><i class="fa-solid fa-spinner fa-spin fa-2x" style="color:var(--text-muted)"></i></div>';
+    Modal.open('investorDetailModal');
+    try {
+      const res = await API._fetch('GET', `tables/investments/${encodeURIComponent(id)}`);
+      inv = res?.data || res;
+    } catch (_) { /* handled below */ }
+    if (!inv || !inv.id) {
+      if (bodyEl) bodyEl.innerHTML = `<div class="text-center text-muted" style="padding:40px">
+        <i class="fa-solid fa-triangle-exclamation" style="font-size:1.6rem;display:block;margin-bottom:10px;opacity:.4"></i>
+        Could not load this investment.
+        ${backTo ? `<div style="margin-top:14px">${_backControl(backTo, backKind)}</div>` : ''}
+      </div>`;
+      return;
+    }
+  }
+
+  _renderInvestmentDetail(inv, backTo, backKind);
+}
+
+/* Products a switch can actually be routed into, and the pool each would land
+   in — derived from open pools rather than from the products table.
+
+   Two reasons. STATE.products is only filled by the Products tab, so an
+   investment opened without visiting it offered "No products available" on a
+   platform with plenty of them. And a product whose pools are all closed is
+   not a switch target at all: reinvestAmount finds nothing, falls back to the
+   wallet, and the client gets cash they did not ask for. Offering it is
+   offering a wallet payout under another name.
+
+   The filter is reinvestAmount's own predicate — open, not past its close
+   date, not full — and the pool named is the one that query would pick, by
+   end_date ascending. So what the form promises is what the engine does. */
+function _switchableProducts() {
+  const today = new Date().toISOString().slice(0, 10);
+  const byType = new Map();
+  for (const p of (STATE.pools || [])) {
+    if ((p.status || '') !== 'open') continue;
+    if (p.end_date && String(p.end_date).slice(0, 10) < today) continue;
+    const max = p.max_investment != null ? Number(p.max_investment) : null;
+    if (max !== null && (Number(p.current_invested) || 0) >= max) continue;
+    const pt = p.product_type;
+    if (!pt) continue;
+    const prev = byType.get(pt);
+    const key  = String(p.end_date || '9999-12-31').slice(0, 10);
+    if (!prev || key < prev.key) byType.set(pt, { productType: pt, poolName: p.name, endDate: p.end_date, key });
+  }
+  return [...byType.values()].sort((a, b) => a.productType.localeCompare(b.productType));
+}
+
+/* The options, with the current choice preserved even when it has no open pool
+   — dropping it would silently rewrite the client's instruction the next time
+   anyone pressed Set Instruction. It is kept, marked, and the warning says so. */
+function _switchProductOptions(currentType) {
+  const opts   = _switchableProducts();
+  const chosen = currentType || '';
+  const label  = pt => (Utils.productInfo(pt)?.label || pt);
+  const rows   = opts.map(o =>
+    `<option value="${_esc(o.productType)}"${chosen === o.productType ? ' selected' : ''}>` +
+    `${_esc(label(o.productType))} — ${_esc(o.poolName)}</option>`);
+  if (chosen && !opts.some(o => o.productType === chosen)) {
+    rows.unshift(`<option value="${_esc(chosen)}" selected>${_esc(label(chosen))} — no open pool (would pay to wallet)</option>`);
+  }
+  return { html: rows.join(''), count: opts.length, chosenHasPool: opts.some(o => o.productType === chosen) };
+}
+
+/* One definition of the back button, so the failure path and the rendered
+   detail cannot offer different ways out. */
+function _backControl(backTo, backKind) {
+  if (!backTo) return '';
+  if (backKind === 'pool') {
+    const pool = (STATE.pools || []).find(p => p.id === backTo);
+    return `<button class="btn btn--secondary btn--sm" onclick="Modal.close('investorDetailModal');viewPoolInvestors('${backTo}')">
+      <i class="fa-solid fa-arrow-left" style="margin-right:6px"></i>Back to ${_esc(pool?.name || 'pool')}
+    </button>`;
+  }
+  /* Looked up here, from the id this button already carries.
+
+     This read `_investorName`, which is a const declared inside
+     _renderInvestmentDetail — a different function. Being top level, this one
+     could never see it, so every call threw ReferenceError and the caller's
+     innerHTML was never assigned: the modal simply did not change. Only this
+     branch was affected, which is why the All Investments list (no backTo, so
+     the early return fires) and the pool list (backKind 'pool', handled above)
+     both kept working while the investor's own Investments tab did nothing. */
+  const who  = (STATE.investors || []).find(i => i.id === backTo);
+  const name = who ? (`${who.first_name || ''} ${who.last_name || ''}`.trim() || backTo) : backTo;
+  return `<button class="btn btn--secondary btn--sm" onclick="viewInvestor('${backTo}')">
+    <i class="fa-solid fa-arrow-left" style="margin-right:6px"></i>Back to ${_esc(name || 'investor')}
+  </button>`;
+}
+
+function _renderInvestmentDetail(inv, backTo, backKind) {
+  const id = inv.id;
   const pi = Utils.productInfo(inv.product_type);
   const invRecord = STATE.investors.find(i => i.id === inv.investor_id);
   const email = inv.investor_email || invRecord?.email || '—';
 
   document.getElementById('invDetailTitle').textContent = `Investment — ${inv.pool_name}`;
+  /* Returns are posted on the pool, not written back to the investment, so the
+     rate and the value at maturity both have to be derived. */
+  const _invRate   = Utils.effectiveRate(inv);
+  const _invReturn = _invRate != null ? (parseFloat(inv.amount) || 0) * _invRate
+                                      : (inv.expected_return != null ? parseFloat(inv.expected_return) : null);
+  const _switchLbl = inv.switch_product_type
+    ? (Utils.productInfo(inv.switch_product_type)?.label || inv.switch_product_type)
+    : null;
+  const _matPlan   = Utils.maturityPlan(inv, _switchLbl);
+
+  /* Ethical & Interest-Free holdings settle in cash — each pool is its own
+     concluded contract, so there is nothing to reinvest or switch into. The
+     server refuses anything else on these, for staff as well as clients, so
+     offering the full list here would only produce an error nobody can act on. */
+  const _admPayoutOnly = Utils.isPayoutOnlyProduct(inv.product_type);
+
+  const _investorName = inv.investor_name || invRecord
+    ? _esc(inv.investor_name || `${invRecord?.first_name || ''} ${invRecord?.last_name || ''}`.trim())
+    : '';
+
   document.getElementById('invDetailBody').innerHTML = `
+    ${backTo ? `<div class="mb-12">${_backControl(backTo, backKind)}</div>` : ''}
     <div class="grid-2 mb-16" style="gap:12px">
       <div class="info-row"><span class="info-row__label">Investor</span><span class="info-row__value td-strong">${_esc(inv.investor_name)}</span></div>
       <div class="info-row"><span class="info-row__label">Email</span><span class="info-row__value td-muted">${_esc(email)}</span></div>
       <div class="info-row"><span class="info-row__label">Pool</span><span class="info-row__value">${_esc(inv.pool_name)}</span></div>
       <div class="info-row"><span class="info-row__label">Product</span><span class="info-row__value"><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></span></div>
       <div class="info-row"><span class="info-row__label">Invested Amount</span><span class="info-row__value td-gold fw-700">${Utils.rand(inv.amount)}</span></div>
-      <div class="info-row"><span class="info-row__label">Target Return</span><span class="info-row__value td-green">${Utils.rand(inv.expected_return)}</span></div>
-      <div class="info-row"><span class="info-row__label">Return Rate</span><span class="info-row__value">${Utils.pct(inv.annual_rate)} p.a.</span></div>
+      <div class="info-row"><span class="info-row__label">${_invRate != null && _invRate > 0 && !(parseFloat(inv.annual_rate) > 0) ? 'Return (posted)' : 'Target Return'}</span><span class="info-row__value td-green">${_invReturn != null ? Utils.rand(_invReturn) : '—'}</span></div>
+      <div class="info-row"><span class="info-row__label">Return Rate</span><span class="info-row__value">${Utils.rateLabel(inv)}</span></div>
       <div class="info-row"><span class="info-row__label">Status</span><span class="info-row__value">${Utils.statusBadge(inv.status)}</span></div>
-      <div class="info-row"><span class="info-row__label">Investment Date</span><span class="info-row__value td-muted">${Utils.date(inv.start_date)}</span></div>
+      <div class="info-row"><span class="info-row__label">Investment Date</span><span class="info-row__value td-muted">${Utils.date(Utils.invDate(inv))}</span></div>
       <div class="info-row"><span class="info-row__label">Maturity Date</span><span class="info-row__value td-muted">${Utils.date(inv.end_date)}</span></div>
       <div class="info-row"><span class="info-row__label">Payout Date</span><span class="info-row__value td-muted">${Utils.date(inv.payout_date) || 'Pending'}</span></div>
-      <div class="info-row"><span class="info-row__label">Maturity Instruction</span><span class="info-row__value">${Utils.statusBadge(inv.maturity_instruction || 'pending')}</span></div>
+      <div class="info-row"><span class="info-row__label">Maturity Instruction</span><span class="info-row__value">${_esc(_matPlan.label)}</span></div>
+    </div>
+
+    <!-- The enum alone does not say how much or into what. For a custom payout
+         or a switch that is the whole question. -->
+    <div class="panel" style="padding:12px;margin-bottom:14px;border-left:3px solid var(--gold)">
+      <div style="font-size:0.72rem;font-weight:700;color:var(--text-muted);letter-spacing:0.04em;margin-bottom:6px">AT MATURITY</div>
+      <div style="font-size:0.86rem;font-weight:600;margin-bottom:${_matPlan.payout != null || _matPlan.remainder != null ? '8px' : '0'}">${_esc(_matPlan.detail)}</div>
+      ${_matPlan.payout != null || _matPlan.remainder != null ? `
+      <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:0.78rem">
+        ${_matPlan.payout != null ? `<div><span style="color:var(--text-muted)">Paid to wallet</span> <strong style="color:#22c55e">${Utils.rand(_matPlan.payout)}</strong></div>` : ''}
+        ${_matPlan.remainder != null ? `<div><span style="color:var(--text-muted)">Carried forward</span> <strong style="color:var(--gold)">${Utils.rand(_matPlan.remainder)}</strong></div>` : ''}
+      </div>` : ''}
+      ${_invRate == null ? `<div style="font-size:0.68rem;color:var(--text-muted);margin-top:6px">No return posted on this pool yet — figures shown are capital only.</div>` : ''}
     </div>
 
     <div class="panel" style="padding:14px;margin-bottom:14px;background:var(--ci-bg-light,#F7F8FA)">
       <div style="font-size:0.8rem;font-weight:700;color:#1a1a1a;margin-bottom:8px"><i class="fa-solid fa-user-pen" style="color:var(--gold);margin-right:6px"></i>Set instruction on behalf of client</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <select id="admMatInstruction" class="form-select" style="flex:1;min-width:180px">
+        <select id="admMatInstruction" class="form-select" style="flex:1;min-width:180px" onchange="_admMatToggle()"${_admPayoutOnly ? ' disabled' : ''}>
+          ${_admPayoutOnly ? `
+          <option value="payout_all" selected>Pay out all (capital + returns)</option>
+          ` : `
           <option value="reinvest"${inv.maturity_instruction === 'reinvest' ? ' selected' : ''}>Reinvest into next pool</option>
           <option value="payout_all"${inv.maturity_instruction === 'payout_all' ? ' selected' : ''}>Pay out all (capital + returns)</option>
           <option value="payout_return"${inv.maturity_instruction === 'payout_return' ? ' selected' : ''}>Pay out returns only</option>
+          <option value="payout_custom"${inv.maturity_instruction === 'payout_custom' ? ' selected' : ''}>Custom payout (rest reinvested)</option>
           <option value="switch_product"${inv.maturity_instruction === 'switch_product' ? ' selected' : ''}>Switch product</option>
+          <option value="custom_switch"${inv.maturity_instruction === 'custom_switch' ? ' selected' : ''}>Custom payout &amp; switch the rest</option>
+          <option value="switch_amount"${inv.maturity_instruction === 'switch_amount' ? ' selected' : ''}>Switch an amount &amp; reinvest the rest</option>
+          `}
         </select>
-        <button class="btn btn--primary btn--sm" onclick='adminSetInstruction(${JSON.stringify(inv.id)})'>
+        <button class="btn btn--primary btn--sm" onclick='adminSetInstruction(${_esc(JSON.stringify(inv.id))})'>
           <i class="fa-solid fa-check"></i> Set Instruction
         </button>
+      </div>
+      ${_admPayoutOnly ? `
+      <div style="font-size:0.68rem;color:var(--text-muted);margin-top:6px;line-height:1.5">
+        <i class="fa-solid fa-scale-balanced" style="color:#078e07;margin-right:4px"></i>
+        Ethical &amp; Interest-Free: concluded at the end of the term and paid out in full.
+        This is what the maturity engine does whether or not an instruction is set.
+      </div>` : ''}
+
+      <!-- The custom instructions are meaningless without their companion
+           field, and the server refuses them without it. Shown only when the
+           chosen instruction actually needs them.
+
+           The amount label is not fixed text: on payout_custom and
+           custom_switch the amount is PAID OUT, on switch_amount it is MOVED
+           INTO another product. One label saying "pay out" for all three would
+           have someone type the switch figure into a payout field and get the
+           opposite of what they meant. -->
+      <div id="admMatAmountWrap" style="margin-top:8px;display:${(inv.maturity_instruction === 'payout_custom' || inv.maturity_instruction === 'custom_switch' || inv.maturity_instruction === 'switch_amount') ? '' : 'none'}">
+        <label class="form-label" style="font-size:0.72rem" id="admMatAmountLabel">${inv.maturity_instruction === 'switch_amount' ? 'Amount to switch (R)' : 'Amount to pay out (R)'}</label>
+        <input type="number" id="admMatAmount" class="form-input" step="0.01" min="0"
+               placeholder="Amount" value="${inv.custom_payout_amount || ''}">
+        <div style="font-size:0.68rem;color:var(--text-muted);margin-top:3px" id="admMatAmountHint">
+          ${inv.maturity_instruction === 'switch_amount' ? 'Moved into the product below; the balance reinvests where it is. Both legs are fee-free.' : 'Paid to the wallet; the balance is reinvested or switched.'}
+          Capped at capital plus any posted return${(() => { const _r = Utils.effectiveRate(inv); const _t = (parseFloat(inv.amount)||0) * (1 + (_r || 0)); return _r != null ? ` — about ${Utils.rand(_t)}` : ''; })()}.
+        </div>
+      </div>
+      <div id="admMatProductWrap" style="margin-top:8px;display:${(inv.maturity_instruction === 'switch_product' || inv.maturity_instruction === 'custom_switch' || inv.maturity_instruction === 'switch_amount') ? '' : 'none'}">
+        <label class="form-label" style="font-size:0.72rem">Switch into product</label>
+        ${(() => {
+          const o = _switchProductOptions(inv.switch_product_type);
+          if (!o.count && !o.html) {
+            /* Naming the cause matters: "no products" sends someone to check the
+               product catalogue, when what is missing is an OPEN POOL. */
+            return `<select id="admMatProduct" class="form-select" disabled>
+                      <option value="">No product currently has an open pool</option>
+                    </select>
+                    <div style="font-size:0.68rem;color:#f59e0b;margin-top:4px">
+                      Every product's pools are closed, past their close date, or full. A switch set
+                      now would find nothing at maturity and pay out to the wallet instead.
+                    </div>`;
+          }
+          return `<select id="admMatProduct" class="form-select">${o.html}</select>
+                  <div style="font-size:0.68rem;color:${o.chosenHasPool || !inv.switch_product_type ? 'var(--text-muted)' : '#f59e0b'};margin-top:4px">
+                    ${o.chosenHasPool || !inv.switch_product_type
+                      ? 'Only products with a pool that is open, still before its close date and not full. The pool named is the one the rollover would land in.'
+                      : 'The product currently set has no open pool — at maturity this would pay out to the wallet. Choose one of the others to switch instead.'}
+                  </div>`;
+        })()}
       </div>
       <div style="font-size:0.7rem;color:var(--text-muted);margin-top:6px">Admin submissions bypass the 17:00 client cut-off.</div>
     </div>
 
     ${inv.status === 'active' ? `
       <div class="flex-between" style="gap:10px;flex-wrap:wrap">
-        <button class="btn btn--success btn--sm" onclick='markInvestmentMatured(${JSON.stringify(inv.id)})'>
+        <button class="btn btn--success btn--sm" onclick='markInvestmentMatured(${_esc(JSON.stringify(inv.id))})'>
           <i class="fa-solid fa-hourglass-end"></i> Mark as Matured
         </button>
-        <button class="btn btn--primary btn--sm" onclick='payoutInvestment(${JSON.stringify(inv.id)})'>
+        <button class="btn btn--primary btn--sm" onclick='payoutInvestment(${_esc(JSON.stringify(inv.id))})'>
           <i class="fa-solid fa-money-bill-transfer"></i> Process Payout
         </button>
-        <button class="btn btn--danger btn--sm" onclick='cancelInvestment(${JSON.stringify(inv.id)})'>
+        <button class="btn btn--danger btn--sm" onclick='cancelInvestment(${_esc(JSON.stringify(inv.id))})'>
           <i class="fa-solid fa-ban"></i> Cancel &amp; Refund
         </button>
       </div>
@@ -6049,13 +8265,60 @@ function viewInvestmentDetail(id) {
   Modal.open('investorDetailModal');
 }
 
+/* Show only the companion fields the chosen instruction actually needs. */
+/* Kept in one place: which instructions carry which companion field, and what
+   the amount MEANS. The meaning is the part worth centralising — switch_amount
+   moves its amount into a product while the other two pay theirs out, and a
+   form that called both "pay out" would invite the exact mistake the split
+   instruction exists to avoid. */
+const ADM_NEEDS_AMOUNT  = ['payout_custom', 'custom_switch', 'switch_amount'];
+const ADM_NEEDS_PRODUCT = ['switch_product', 'custom_switch', 'switch_amount'];
+const ADM_AMOUNT_SWITCHES = ['switch_amount'];
+
+function _admMatToggle() {
+  const v = document.getElementById('admMatInstruction')?.value || '';
+  const amt  = document.getElementById('admMatAmountWrap');
+  const prod = document.getElementById('admMatProductWrap');
+  const lbl  = document.getElementById('admMatAmountLabel');
+  const hint = document.getElementById('admMatAmountHint');
+  if (amt)  amt.style.display  = ADM_NEEDS_AMOUNT.includes(v)  ? '' : 'none';
+  if (prod) prod.style.display = ADM_NEEDS_PRODUCT.includes(v) ? '' : 'none';
+
+  const switches = ADM_AMOUNT_SWITCHES.includes(v);
+  if (lbl) lbl.textContent = switches ? 'Amount to switch (R)' : 'Amount to pay out (R)';
+  if (hint) {
+    const cap = hint.textContent.replace(/^[\s\S]*?(Capped at)/, '$1');
+    hint.textContent = (switches
+      ? 'Moved into the product below; the balance reinvests where it is. Both legs are fee-free. '
+      : 'Paid to the wallet; the balance is reinvested or switched. ') + cap;
+  }
+}
+
 async function adminSetInstruction(id) {
   const sel = document.getElementById('admMatInstruction');
   const instruction = sel && sel.value;
   if (!instruction) return;
+
+  /* Some instructions carry an amount, some a target, switch_amount both. The
+     server rejects the combination without them, so send them with the
+     instruction rather than as a second write. */
+  const needsAmount  = ADM_NEEDS_AMOUNT.includes(instruction);
+  const needsProduct = ADM_NEEDS_PRODUCT.includes(instruction);
+  const amount  = needsAmount  ? parseFloat(document.getElementById('admMatAmount')?.value || '') : null;
+  const product = needsProduct ? (document.getElementById('admMatProduct')?.value || null) : null;
+
+  if (needsAmount && (!amount || amount <= 0)) {
+    Toast.error(`Enter a ${ADM_AMOUNT_SWITCHES.includes(instruction) ? 'switch' : 'payout'} amount greater than zero`); return;
+  }
+  if (needsProduct && !product)                { Toast.error('Choose a product to switch into');        return; }
+
   try {
     // Uses the dedicated endpoint; staff role bypasses the 17:00 client cut-off.
-    await API._fetch('POST', `investments/${id}/instruction`, { instruction });
+    await API._fetch('POST', `investments/${id}/instruction`, {
+      instruction,
+      custom_payout_amount: amount,
+      switch_product_type:  product,
+    });
     Toast.success('Maturity instruction set on behalf of the client');
     Modal.close('investorDetailModal');
     await loadInvestments();
@@ -6130,16 +8393,35 @@ let filteredMaturity = [];
 
 async function loadMaturity() {
   try {
-    const [matRes, invRes, investRes] = await Promise.all([
-      API.maturityInstructions.list({ limit: 1000 }),
-      STATE.investors.length  ? Promise.resolve({ data: STATE.investors  }) : API.investors.list({ limit: 5000 }),
-      API.investments.list({ limit: 5000 })  // always fresh — maturity_instruction may have changed
+    const hadInvestors = STATE.investors.length > 0;
+    const { values, counts, failed } = await _loadSources([
+      { key: 'maturity',    label: 'Maturity instructions', load: () => API.maturityInstructions.list({ limit: 1000 }) },
+      { key: 'investors',   label: 'Investors',
+        load: () => hadInvestors ? Promise.resolve({ data: STATE.investors }) : API.investors.list({ limit: 5000 }) },
+      // always fresh — maturity_instruction may have changed
+      { key: 'investments', label: 'Investments', load: () => API.investments.list({ limit: 5000 }) },
     ]);
 
-    if (!STATE.investors.length) STATE.investors = invRes.data || [];
-    STATE.investments = investRes.data || [];
+    if (!hadInvestors) STATE.investors = values.investors;
+    STATE.investments = values.investments;
 
-    const matRecords = matRes.data || [];
+    _renderLoadErrors('maturity-load-errors', failed, 'loadMaturity()');
+    /* The strongest of the four warnings, because here truncation removes ROWS
+       rather than skewing a tile. This list is half real maturity_instructions
+       records and half instructions derived from investments, so a capped
+       investments read silently drops people from the list — including from
+       "no instruction set", which is the one an operator works before a run.
+
+       The nightly engine reads the database directly and is unaffected. What is
+       affected is the person checking whether anyone still needs chasing. */
+    _renderTruncationBanner('maturity-truncation', counts, `
+      <strong>Rows are missing from this list, not just from a total.</strong>
+      Instructions are partly derived from the investments table, so anyone past that cap does not
+      appear here at all &mdash; including under &ldquo;no instruction set&rdquo;.
+      The maturity engine reads the database directly and is not affected by this; what is affected
+      is using this screen to decide who still needs chasing before a run.`);
+
+    const matRecords = values.maturity;
 
     /* Build a set of investor_ids already covered by a real maturity_instructions record */
     const covered = new Set(matRecords.map(m => m.investor_id + '|' + (m.pool_id || '')));
@@ -6168,13 +8450,28 @@ async function loadMaturity() {
 
     filteredMaturity = [...STATE.maturity];
     _applyMaturityFilters();
-  } catch (e) { Toast.error('Failed to load maturity instructions'); }
+  } catch (e) {
+    // Say what actually failed. This read 'Failed to load maturity instructions' and
+    // discarded the reason, so a 403, a 500 and a render bug all looked
+    // identical and none could be diagnosed without devtools.
+    console.error('[load maturity instructions]', e);
+    Toast.error(`Failed to load maturity instructions` + (e && e.message ? ` — ${e.message}` : ''));
+  }
 }
+
+const MATURITY_SORT = {
+  _investor: m => {
+    const i = STATE.investors.find(x => x.id === m.investor_id);
+    return (m.investor_name || (i ? `${i.last_name || ''} ${i.first_name || ''}` : '')).trim().toLowerCase() || null;
+  },
+  _payout: m => { const n = parseFloat(m.payout_amount ?? m.custom_amount); return isNaN(n) ? null : n; },
+  instruction: m => (m.instruction_type || '').toLowerCase() || null,
+};
 
 function renderMaturityTable() {
   const body = document.getElementById('maturityBody');
   const countEl = document.getElementById('maturityCount');
-  const rows = filteredMaturity;
+  const rows = _sortRows('maturity', filteredMaturity, MATURITY_SORT);
   if (countEl) countEl.textContent = `${rows.length.toLocaleString()} of ${(STATE.maturity || []).length.toLocaleString()} instructions`;
   if (!rows.length) {
     body.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding:32px"><i class="fa-solid fa-inbox" style="font-size:1.5rem;color:var(--text-dim);display:block;margin-bottom:8px"></i>No maturity instructions match the current filters</td></tr>';
@@ -6187,13 +8484,13 @@ function renderMaturityTable() {
     return `
     <tr>
       <td><div class="td-strong clip">${mName}</div><div class="td-muted clip" style="font-size:0.7rem">${m.investor_id||''}</div></td>
-      <td class="td-muted clip" title="${_esc(m.pool_name || '')}">${m.pool_name || '—'}</td>
+      <td class="td-muted clip" title="${_esc(m.pool_name || '')}">${_esc(m.pool_name || '—')}</td>
       <td><span class="badge badge--blue">${instrLabel}</span></td>
       <td class="td-gold fw-700">${m.total_payout ? Utils.rand(m.total_payout) : '—'}</td>
       <td>${Utils.statusBadge(m.status)}</td>
       <td class="td-muted">${Utils.date(m.submitted_date || m.created_at)}</td>
       <td>
-        ${m.status === 'submitted' && !m._from_investment ? `<button class="btn btn--success btn--sm" onclick='processMaturity(${JSON.stringify(m.id)})'><i class="fa-solid fa-play"></i> Process</button>` : '—'}
+        ${m.status === 'submitted' && !m._from_investment ? `<button class="btn btn--success btn--sm" onclick='processMaturity(${_esc(JSON.stringify(m.id))})'><i class="fa-solid fa-play"></i> Process</button>` : '—'}
       </td>
     </tr>`;
   }).join('');
@@ -6266,20 +8563,49 @@ let txnPage = 1;
 const TXN_PG_SIZE = 10;
 let filteredTxns = [];
 
+/* The console holds the newest 5 000 transactions and the search box filtered
+   that array. Anything older simply was not in the browser, so looking up a
+   reference off a statement — FEE-INVST-…, a fee raised months ago — returned
+   "No matching transactions" whether or not the row existed. The ledger is on
+   the server; when the loaded page has no answer, ask it.
+
+   Remote hits are kept SEPARATE from STATE.transactions on purpose: the
+   dashboard tiles, the queue counts and the analytics are all derived from
+   that array, and quietly folding a handful of old rows into it would move
+   numbers nobody asked to move. These rows exist to be found, not counted. */
+let txnRemoteHits  = [];   // rows fetched by reference lookup
+let _txnRemoteQ    = '';   // query the fetch above answered
+let _txnRemoteState = '';  // '' | 'searching' | 'done'
+
 async function loadTransactions() {
   try {
-    const [txnRes, invRes] = await Promise.all([
-      API.transactions.list({ limit: 5000 }),
-      STATE.investors.length ? Promise.resolve({ data: STATE.investors }) : API.investors.list({ limit: 5000 })
+    const hadInvestors = STATE.investors.length > 0;
+    const { values, counts, failed } = await _loadSources([
+      { key: 'transactions', label: 'Transactions', load: () => API.transactions.list({ limit: 5000 }) },
+      { key: 'investors',    label: 'Investors',
+        load: () => hadInvestors ? Promise.resolve({ data: STATE.investors }) : API.investors.list({ limit: 5000 }) },
     ]);
-    STATE.transactions = txnRes.data || [];
-    if (!STATE.investors.length) STATE.investors = invRes.data || [];
+    STATE.transactions = values.transactions;
+    if (!hadInvestors) STATE.investors = values.investors;
     filteredTxns = [...STATE.transactions];
     _markRefreshed('transactions');
     renderTxnStats();
     renderTxnTable();
     setupTxnFilters();
-  } catch (e) { Toast.error('Failed to load transactions'); }
+    _renderLoadErrors('transactions-load-errors', failed, 'loadTransactions()');
+    _renderTruncationBanner('transactions-truncation', counts, `
+      Deposits, capital invested and returns above are summed in the browser from the rows that were
+      read. <strong>This is the table that crosses its cap first</strong> &mdash; every investment
+      writes several rows (deposit, investment, fee, matured funds, reinvestment, payout), so the
+      ledger outgrows the others by a wide margin. The pending queue is filtered from the same rows,
+      so a pending deposit past the cap will not appear in it.`);
+  } catch (e) {
+    // Say what actually failed. This read 'Failed to load transactions' and
+    // discarded the reason, so a 403, a 500 and a render bug all looked
+    // identical and none could be diagnosed without devtools.
+    console.error('[load transactions]', e);
+    Toast.error(`Failed to load transactions` + (e && e.message ? ` — ${e.message}` : ''));
+  }
 }
 
 function renderTxnStats() {
@@ -6295,21 +8621,132 @@ function _txnInvName(t) {
   return inv ? `${inv.first_name} ${inv.last_name}` : (t.investor_id || '—');
 }
 
+/* ── Bulk deposit approval ────────────────────────────────────────────
+   The pending-deposit queue is money coming in, and it was the only queue in
+   the console with neither a status filter nor a bulk action: to find it you
+   paged through the whole ledger by eye, and then approved one row at a time.
+   KYC, withdrawals, investors and maturity all had both already.
+
+   Only a pending DEPOSIT is selectable. Approving is what the checkbox means,
+   and nothing else in this table can be approved. */
+const selectedTxns = new Set();
+const _isApprovableTxn = t => t && t.type === 'deposit' && t.status === 'pending';
+
+/* Columns whose value is not a plain field. Amount sorts on its MAGNITUDE —
+   the ledger renders direction from the type and shows every figure positive,
+   so ordering by the raw signed number would put the biggest withdrawal at the
+   bottom of a descending list, under everything else. */
+const TXN_SORT = {
+  _investor:  t => (_txnInvName(t) || '').toLowerCase() || null,
+  _absAmount: t => { const n = Math.abs(parseFloat(t.amount)); return isNaN(n) ? null : n; },
+  _date:      t => { const d = new Date(t.transaction_date || t.created_at).getTime(); return isNaN(d) ? null : d; },
+};
+
+function _txnBulkBar() {
+  const bar = document.getElementById('txnBulkBar');
+  if (!bar) return;
+  const picked = [...selectedTxns]
+    .map(id => STATE.transactions.find(t => t.id === id))
+    .filter(_isApprovableTxn);
+  if (!picked.length) { bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  const total = picked.reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
+  document.getElementById('txnBulkCount').textContent =
+    `${picked.length} deposit${picked.length === 1 ? '' : 's'} selected`;
+  /* The total matters: this is the figure about to hit client wallets, and
+     seeing it before clicking is the difference between a bulk action and a
+     bulk accident. */
+  document.getElementById('txnBulkSum').textContent = `· ${Utils.rand(total)} to be credited`;
+}
+
+function toggleTxn(id, on) {
+  if (on) selectedTxns.add(id); else selectedTxns.delete(id);
+  _txnBulkBar();
+  const all = document.getElementById('txnSelectAll');
+  if (all) {
+    const approvable = filteredTxns.filter(_isApprovableTxn);
+    all.checked = approvable.length > 0 && approvable.every(t => selectedTxns.has(t.id));
+  }
+}
+
+/* Selects everything the CURRENT FILTER matches, not just the page on screen —
+   the filter is what the operator reasoned about, and a select-all that quietly
+   means "these twenty five" is how a queue gets half-worked. */
+function toggleAllTxns(on) {
+  const approvable = filteredTxns.filter(_isApprovableTxn);
+  approvable.forEach(t => { if (on) selectedTxns.add(t.id); else selectedTxns.delete(t.id); });
+  renderTxnTable();
+}
+
+function clearTxnSelection() {
+  selectedTxns.clear();
+  renderTxnTable();
+}
+
+async function bulkApproveDeposits(btn) {
+  const picked = [...selectedTxns]
+    .map(id => STATE.transactions.find(t => t.id === id))
+    .filter(_isApprovableTxn);
+  if (!picked.length) { Toast.error('No pending deposits selected'); return; }
+
+  const total = picked.reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
+  const ok = await Confirm.ask(`Approve ${picked.length} deposit${picked.length === 1 ? '' : 's'}?`, {
+    body: `${Utils.rand(total)} will be credited to client wallets, and each investor is emailed a confirmation.\n\nThis cannot be undone from here.`,
+    confirmLabel: `Approve ${picked.length}`,
+  });
+  if (!ok) return;
+
+  await _withBtn(btn, async () => {
+    /* Sequential. Each approval credits a wallet inside its own server
+       transaction, and several deposits for the SAME investor running in
+       parallel is exactly the shape that makes concurrent balance writes
+       interesting. Slower, and boring, which is what money should be. */
+    const result = await _bulkRun(picked,
+      t => API.transactions.update(t.id, { status: 'completed' }),
+      { sequential: true, label: t => _investorLabel(t.investor_id) });
+    _bulkReport('deposit', 'approved', result);
+    selectedTxns.clear();
+    await loadTransactions();
+  });
+}
+
 function renderTxnTable() {
   const body = document.getElementById('txnBody');
   const start = (txnPage - 1) * TXN_PG_SIZE;
-  const page = filteredTxns.sort((a, b) => new Date(b.transaction_date || b.created_at) - new Date(a.transaction_date || a.created_at)).slice(start, start + TXN_PG_SIZE);
+  /* Newest first until a column is chosen, then the column wins. The old form
+     sorted filteredTxns IN PLACE on every render, so the array the pager reads
+     was reordered underneath it. */
+  const ordered = _sortState.transactions?.key
+    ? _sortRows('transactions', filteredTxns, TXN_SORT)
+    : [...filteredTxns].sort((a, b) =>
+        new Date(b.transaction_date || b.created_at) - new Date(a.transaction_date || a.created_at));
+  const page = ordered.slice(start, start + TXN_PG_SIZE);
 
-  document.getElementById('txnFooter').textContent = `${start + 1}–${Math.min(start + TXN_PG_SIZE, filteredTxns.length)} of ${filteredTxns.length}`;
+  /* Say when a row came from the ledger rather than the loaded page, so an
+     operator knows they are looking at history the console had not fetched. */
+  let footer = `${start + 1}–${Math.min(start + TXN_PG_SIZE, filteredTxns.length)} of ${filteredTxns.length}`;
+  if (txnRemoteHits.length) {
+    const loaded = new Set(STATE.transactions.map(t => t.id));
+    const fromLedger = filteredTxns.filter(t => !loaded.has(t.id)).length;
+    if (fromLedger) footer += ` · ${fromLedger} found in the full ledger, beyond the loaded page`;
+  }
+  document.getElementById('txnFooter').textContent = footer;
 
   if (!page.length) {
-    body.innerHTML = filteredTxns.length < STATE.transactions.length
-      ? _emptyRow('fa-filter-circle-xmark', 'No matching transactions', 'Try clearing the search or type filter.', 8)
-      : _emptyRow('fa-arrows-rotate', 'No transactions yet', 'Transactions will appear here once investors make deposits or withdrawals.', 8);
+    _txnBulkBar();
+    if (_txnRemoteState === 'searching') {
+      body.innerHTML = _emptyRow('fa-magnifying-glass', 'Searching the full ledger…', 'Nothing on the loaded page matched, so the whole transaction history is being searched by reference.', 9);
+    } else if (_txnRemoteState === 'done') {
+      body.innerHTML = _emptyRow('fa-magnifying-glass-minus', 'No such transaction', 'Searched every transaction on record — by reference, description, id and investor — and nothing matched.', 9);
+    } else {
+      body.innerHTML = filteredTxns.length < STATE.transactions.length
+        ? _emptyRow('fa-filter-circle-xmark', 'No matching transactions', 'Try clearing the search, type or status filter.', 9)
+        : _emptyRow('fa-arrows-rotate', 'No transactions yet', 'Transactions will appear here once investors make deposits or withdrawals.', 9);
+    }
     return;
   }
 
-  const typeColors = { deposit: 'green', withdrawal: 'red', investment: 'blue', reinvestment: 'purple', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple' };
+  const typeColors = { deposit: 'green', withdrawal: 'red', investment: 'blue', reinvestment: 'purple', return: 'gold', payout: 'green', matured_funds: 'green', fee: 'orange', referral_bonus: 'purple' };
 
   body.innerHTML = page.map(t => {
     const isPendingDeposit = t.type === 'deposit' && t.status === 'pending';
@@ -6329,18 +8766,36 @@ function renderTxnTable() {
     const invName = _txnInvName(t);
 
     return `<tr>
+      <td style="padding-left:14px">${isPendingDeposit
+        ? `<input type="checkbox" ${selectedTxns.has(t.id) ? 'checked' : ''}
+                 onchange='toggleTxn(${_esc(JSON.stringify(t.id))}, this.checked)'
+                 title="Select for bulk approval">`
+        : ''}</td>
       <td><div class="td-strong clip">${invName}</div></td>
       <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${t.type?.replace(/_/g, ' ') || '—'}</span></td>
-      <td class="${t.amount > 0 ? 'td-green' : 'td-red'} fw-700">${t.amount > 0 ? '+' : ''}${Utils.rand(t.amount)}</td>
+      <td class="${['investment','reinvestment','withdrawal','fee'].includes(t.type)?'td-red':'td-green'} fw-700">${['investment','reinvestment','withdrawal','fee'].includes(t.type)?'-':'+'}${Utils.rand(Math.abs(parseFloat(t.amount)||0))}</td>
       <td>${statusCell}</td>
-      <td class="td-muted clip" style="font-size:0.75rem">${t.reference || '—'}${t.reference ? `<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(t.reference)},this)' title="Copy reference"><i class="fa-regular fa-copy"></i></button>` : ''}</td>
-      <td class="td-muted" style="font-size:0.75rem"><div class="clip">${t.description || '—'}</div>${proofLink}</td>
+      <td class="td-muted clip" style="font-size:0.75rem">${_esc(t.reference || '—')}${t.reference ? `<button class="copy-btn" onclick='copyToClipboard(${_esc(JSON.stringify(t.reference))},this)' title="Copy reference"><i class="fa-regular fa-copy"></i></button>` : ''}</td>
+      <td class="td-muted" style="font-size:0.75rem"><div class="clip">${_esc(t.description || '—')}</div>${proofLink}</td>
       <td class="td-muted">${Utils.date(t.transaction_date || t.created_at)}</td>
       <td>
         ${isPendingDeposit ? `<button class="btn btn--success btn--sm" onclick="changeTxnStatus('${t.id}', 'completed', '${t.investor_id}', ${t.amount})" title="Approve deposit — credits wallet"><i class="fa-solid fa-check"></i> Approve</button>` : ''}
       </td>
     </tr>`;
   }).join('');
+
+  _txnBulkBar();
+  {
+    const all = document.getElementById('txnSelectAll');
+    const approvable = filteredTxns.filter(_isApprovableTxn);
+    if (all) {
+      all.checked  = approvable.length > 0 && approvable.every(t => selectedTxns.has(t.id));
+      all.disabled = approvable.length === 0;
+      all.title = approvable.length
+        ? `Select all ${approvable.length} approvable deposit${approvable.length === 1 ? '' : 's'} in this filter`
+        : 'No pending deposits in the current filter';
+    }
+  }
 
   const pages = Math.ceil(filteredTxns.length / TXN_PG_SIZE);
   const pagTxn = document.getElementById('txnPagination');
@@ -6352,34 +8807,120 @@ function renderTxnTable() {
   _setRefreshLabel('txnRefreshed', 'transactions');
 }
 
+/* Everything the search can see: the loaded page, plus whatever the reference
+   lookup pulled back that is not already in it. */
+function _txnSearchPool() {
+  if (!txnRemoteHits.length) return STATE.transactions;
+  const have = new Set(STATE.transactions.map(t => t.id));
+  return STATE.transactions.concat(txnRemoteHits.filter(t => !have.has(t.id)));
+}
+
+/* Reads the filter inputs and rebuilds filteredTxns. Split out of the debounced
+   handler so the reference lookup can re-run it once its rows land. */
+function applyTxnFilters(opts) {
+  const search   = document.getElementById('txnSearch');
+  const type     = document.getElementById('txnTypeFilter');
+  const status   = document.getElementById('txnStatusFilter');
+  const dateFrom = document.getElementById('txnDateFrom');
+  const dateTo   = document.getElementById('txnDateTo');
+  if (!search) return;
+
+  const q  = search.value.trim().toLowerCase();
+  const tp = type?.value || '';
+  const st = status?.value || '';
+  const from = dateFrom?.value ? new Date(dateFrom.value) : null;
+  const to   = dateTo?.value   ? new Date(dateTo.value + 'T23:59:59') : null;
+
+  filteredTxns = _txnSearchPool().filter(t => {
+    const invName = _txnInvName(t);
+    /* The id is searchable too. A fee raised at investment time carries
+       reference AND id of FEE-<investment id>, but other fee paths put an
+       unrelated id on the row — an operator holding one of the two strings
+       should not have to know which one they are holding. */
+    const mq = !q || `${invName} ${t.reference || ''} ${t.description || ''} ${t.id || ''}`.toLowerCase().includes(q);
+    const mt = !tp || t.type === tp;
+    /* A row with no status reads as pending everywhere else in the console,
+       so it has to filter as pending here too — otherwise the queue count on
+       the dashboard and the queue you can actually see disagree. */
+    const ms = !st || (t.status || 'pending') === st;
+    const txDate = t.created_at ? new Date(t.created_at) : null;
+    const mFrom = !from || (txDate && txDate >= from);
+    const mTo = !to || (txDate && txDate <= to);
+    return mq && mt && ms && mFrom && mTo;
+  });
+
+  /* Dropping a row out of the filter must drop it out of the selection too —
+     a hidden row still ticked is a row that gets approved without being seen. */
+  const visible = new Set(filteredTxns.map(t => t.id));
+  [...selectedTxns].forEach(id => { if (!visible.has(id)) selectedTxns.delete(id); });
+
+  if (!q) { txnRemoteHits = []; _txnRemoteQ = ''; _txnRemoteState = ''; }
+
+  if (!opts || !opts.noRemote) {
+    /* Only when the loaded page has nothing. A search that already matched is
+       answered; going to the server anyway would be a round trip per keystroke
+       for a row that is on screen. */
+    if (q.length >= 3 && !filteredTxns.length && _txnRemoteQ !== q) {
+      searchTxnLedger(q);
+    } else if (q.length < 3 || filteredTxns.length) {
+      if (_txnRemoteQ !== q) _txnRemoteState = '';
+    }
+  }
+
+  txnPage = 1;
+  renderTxnTable();
+}
+
+/* Ask the server for a reference anywhere in the ledger, not just the newest
+   5 000 rows. */
+async function searchTxnLedger(q) {
+  _txnRemoteQ = q;
+  _txnRemoteState = 'searching';
+  renderTxnTable();
+  try {
+    const res = await API._fetch('GET', 'tables/transactions', null, { search: q, limit: 200 });
+    /* A slower query for an earlier keystroke must not overwrite the answer to
+       what is in the box now. */
+    if (_txnRemoteQ !== q) return;
+    txnRemoteHits = (res && res.data) || [];
+    _txnRemoteState = 'done';
+    applyTxnFilters({ noRemote: true });
+  } catch (e) {
+    if (_txnRemoteQ !== q) return;
+    console.error('[txn ledger search]', e);
+    txnRemoteHits = [];
+    _txnRemoteState = 'done';
+    Toast.error('Could not search the full ledger' + (e && e.message ? ` — ${e.message}` : ''));
+    renderTxnTable();
+  }
+}
+
 function setupTxnFilters() {
   const search = document.getElementById('txnSearch');
   const type = document.getElementById('txnTypeFilter');
   const dateFrom = document.getElementById('txnDateFrom');
   const dateTo = document.getElementById('txnDateTo');
+  const status = document.getElementById('txnStatusFilter');
 
-  const filter = Utils.debounce(() => {
-    const q = search.value.toLowerCase();
-    const tp = type.value;
-    const from = dateFrom?.value ? new Date(dateFrom.value) : null;
-    const to = dateTo?.value ? new Date(dateTo.value + 'T23:59:59') : null;
-    filteredTxns = STATE.transactions.filter(t => {
-      const invName = _txnInvName(t);
-      const mq = !q || `${invName} ${t.reference} ${t.description}`.toLowerCase().includes(q);
-      const mt = !tp || t.type === tp;
-      const txDate = t.created_at ? new Date(t.created_at) : null;
-      const mFrom = !from || (txDate && txDate >= from);
-      const mTo = !to || (txDate && txDate <= to);
-      return mq && mt && mFrom && mTo;
-    });
-    txnPage = 1;
-    renderTxnTable();
-  }, 200);
+  const filter = Utils.debounce(() => applyTxnFilters(), 200);
 
   search.addEventListener('input', filter);
   type.addEventListener('change', filter);
+  if (status) status.addEventListener('change', filter);
   if (dateFrom) dateFrom.addEventListener('change', filter);
   if (dateTo) dateTo.addEventListener('change', filter);
+}
+
+/* Jump straight to the pending-deposit queue. The dashboard tile counts it, so
+   the tile should be able to open it rather than just report it. */
+function openPendingDeposits() {
+  navigate('transactions', document.querySelector('[data-view=transactions]'));
+  setTimeout(() => {
+    const st = document.getElementById('txnStatusFilter');
+    const tp = document.getElementById('txnTypeFilter');
+    if (tp) tp.value = 'deposit';
+    if (st) { st.value = 'pending'; st.dispatchEvent(new Event('change')); }
+  }, 300);
 }
 
 let _cancelTxnPending = null; // { txnId, investorId, amount }
@@ -6418,16 +8959,23 @@ async function changeTxnStatus(txnId, newStatus, investorId, amount, cancelNote)
     }
     await API.transactions.update(txnId, patch);
 
-    // If approving a pending deposit to completed, credit the investor's wallet
-    if (newStatus === 'completed' && txn.status !== 'completed' && txn.type === 'deposit' && investorId && amount > 0) {
+    /* The wallet is NOT credited here. The server credits it inside the same
+       transaction that flips the status, and it routes a sub-account deposit to
+       the sub-account rather than the parent.
+
+       This used to write investors.wallet_balance to a figure computed from the
+       console's own in-memory copy, on top of the credit the server had just
+       applied. Probed against the real route, that did two things: a R300
+       sub-account deposit credited the sub-account AND the parent, creating R300
+       out of nothing; and because the write was absolute rather than relative, a
+       R5,000 deposit that landed between the page loading and the approval was
+       wiped. Reading the balance back is the only safe move. */
+    if (newStatus === 'completed' && txn.status !== 'completed' && txn.type === 'deposit' && amount > 0) {
       const investor = STATE.investors.find(i => i.id === investorId);
-      if (investor) {
-        const newBalance = Math.round(((investor.wallet_balance || 0) + amount) * 100) / 100;
-        await API.investors.update(investorId, { wallet_balance: newBalance });
-        Toast.success(`Deposit approved — R${amount.toLocaleString('en-ZA', {minimumFractionDigits:2})} credited to ${investor.first_name} ${investor.last_name}'s wallet`);
-      } else {
-        Toast.success('Transaction status updated to completed');
-      }
+      const who = txn.sub_account_id
+        ? 'the sub-account wallet'
+        : investor ? `${investor.first_name} ${investor.last_name}'s wallet` : 'the investor wallet';
+      Toast.success(`Deposit approved — R${amount.toLocaleString('en-ZA', {minimumFractionDigits:2})} credited to ${who}`);
     } else if (newStatus === 'failed') {
       Toast.success('Transaction cancelled — note saved');
     } else {
@@ -6480,13 +9028,21 @@ function openAddTxnModal() {
         return name.includes(term) || id.includes(term) || email.includes(term);
       }).slice(0, 25);
       if (!matches.length) { txnDrop.style.display = 'none'; return; }
+      /* Escaped. This built innerHTML from first_name, last_name, email and id
+         with none of it escaped, and data-name="${name}" is an attribute a
+         quote walks straight out of. An investor could write their own name
+         through PATCH /api/tables/investors/:id — ownership was checked, the
+         column was not protected, and that endpoint sanitises nothing — so
+         markup stored there executed here, in a session that can move money.
+         The server side is closed too; this is the half that also covers rows
+         already in the table, which never passed through any sanitiser. */
       txnDrop.innerHTML = matches.map(inv => {
         const name = `${inv.first_name || ''} ${inv.last_name || ''}`.trim() || '—';
         const emailLine = inv.email
-          ? `<span style="color:var(--text-muted);font-size:0.77rem">${inv.email}</span>` : '';
-        return `<li data-id="${inv.id}" data-name="${name}" style="padding:9px 14px;cursor:pointer;display:flex;flex-direction:column;gap:2px">
-          <span style="font-weight:600;font-size:0.87rem">${name}
-            <span style="color:var(--text-muted);font-weight:400;font-size:0.8rem">(${inv.id})</span>
+          ? `<span style="color:var(--text-muted);font-size:0.77rem">${_esc(inv.email)}</span>` : '';
+        return `<li data-id="${_esc(inv.id)}" data-name="${_esc(name)}" style="padding:9px 14px;cursor:pointer;display:flex;flex-direction:column;gap:2px">
+          <span style="font-weight:600;font-size:0.87rem">${_esc(name)}
+            <span style="color:var(--text-muted);font-weight:400;font-size:0.8rem">(${_esc(inv.id)})</span>
           </span>
           ${emailLine}
         </li>`;
@@ -6533,16 +9089,27 @@ async function saveNewTxn(btn) {
         id:          Utils.genId('TXN'),
         investor_id: investorId,
         type,
-        amount:      type === 'investment' || type === 'reinvestment' || type === 'withdrawal' ? -Math.abs(amount) : Math.abs(amount),
+        /* A magnitude, with the direction carried by the type. Negating these
+           three made the server reject every one of them — "amount cannot be
+           negative" — so Record Transaction had never worked for an investment,
+           a reinvestment or a withdrawal.
+
+           Storing them negative would also have been wrong on its own: the
+           withdrawal refund adds `amount` back to the wallet, so a negative one
+           would debit the investor a second time on rejection. The ledger
+           already renders these with a minus sign from the type. */
+        amount:      Math.abs(amount),
         status,
         reference:   document.getElementById('txnRef').value.trim(),
         description: document.getElementById('txnDesc').value.trim(),
       });
 
-      // Credit wallet immediately for completed deposits
+      /* The server credits the wallet inside the insert transaction for every
+         money type, so the console must not credit it again. The old absolute
+         write happened to land on the right figure — and destroyed anything that
+         arrived in between: probed, a R9,000 deposit landing between the modal
+         opening and Save was wiped. */
       if (status === 'completed' && type === 'deposit' && investor) {
-        const newBal = Math.round(((investor.wallet_balance || 0) + Math.abs(amount)) * 100) / 100;
-        await API.investors.update(investorId, { wallet_balance: newBal });
         Toast.success(`Transaction recorded — R${amount.toLocaleString('en-ZA', {minimumFractionDigits:2})} added to ${investor.first_name} ${investor.last_name}'s wallet`);
       } else {
         Toast.success('Transaction recorded');
@@ -6610,10 +9177,17 @@ async function loadSupport() {
     STATE.tickets = tktRes.data || [];
     if (!STATE.investors.length) STATE.investors = invRes.data || [];
     renderTicketStats();
+    _syncTicketCategoryOptions();
     renderTicketsTable();
     setupTicketFilters();
     document.getElementById('ticketBadge').textContent = _supportTickets().filter(t => ['open', 'in_progress'].includes(t.status)).length;
-  } catch (e) { Toast.error('Failed to load support tickets'); }
+  } catch (e) {
+    // Say what actually failed. This read 'Failed to load support tickets' and
+    // discarded the reason, so a 403, a 500 and a render bug all looked
+    // identical and none could be diagnosed without devtools.
+    console.error('[load support tickets]', e);
+    Toast.error(`Failed to load support tickets` + (e && e.message ? ` — ${e.message}` : ''));
+  }
 }
 
 const _SUPPORT_EXCLUDED_CATS = new Set(['bank_verification', 'bank verification']);
@@ -6630,11 +9204,44 @@ function renderTicketStats() {
   document.getElementById('tkt-urgent').textContent      = d.filter(t => ['high', 'urgent'].includes(t.priority)).length;
 }
 
+/* Categories are not a fixed list — tickets raised by the system carry values
+   the New Ticket modal never offers (payment_proof, fica_kyc). Build the
+   options from the tickets actually loaded so the filter can never offer a
+   category with nothing behind it, or miss one that exists. */
+const _CAT_ACRONYMS = { kyc: 'KYC', fica: 'FICA', aml: 'AML', eft: 'EFT', pop: 'POP' };
+
+function _ticketCategoryLabel(cat) {
+  return String(cat).split(/[_\s]+/).filter(Boolean)
+    .map(w => _CAT_ACRONYMS[w.toLowerCase()] || w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+}
+
+function _syncTicketCategoryOptions() {
+  const sel = document.getElementById('ticketCategoryFilter');
+  if (!sel) return;
+  const cats = [...new Set(_supportTickets().map(t => (t.category || '').trim()).filter(Boolean))]
+    .sort((a, b) => _ticketCategoryLabel(a).localeCompare(_ticketCategoryLabel(b)));
+
+  const signature = cats.join('|');
+  if (sel._catSig === signature) return;      // nothing changed — keep the DOM as is
+  sel._catSig = signature;
+
+  const previous = sel.value;
+  sel.innerHTML = '<option value="">All Categories</option>' +
+    cats.map(c => `<option value="${_esc(c)}">${_esc(_ticketCategoryLabel(c))}</option>`).join('');
+  // A reload can retire the selected category; fall back to All rather than filtering to nothing.
+  sel.value = cats.includes(previous) ? previous : '';
+}
+
 function renderTicketsTable() {
   const body = document.getElementById('ticketsBody');
   const stFilter = document.getElementById('ticketStatusFilter').value;
   const prFilter = document.getElementById('ticketPriorityFilter').value;
-  const items = _supportTickets().filter(t => (!stFilter || t.status === stFilter) && (!prFilter || t.priority === prFilter));
+  const catFilter = document.getElementById('ticketCategoryFilter')?.value || '';
+  const items = _supportTickets().filter(t =>
+    (!stFilter  || t.status   === stFilter) &&
+    (!prFilter  || t.priority === prFilter) &&
+    (!catFilter || (t.category || '').trim() === catFilter));
 
   if (!items.length) { body.innerHTML = '<tr><td colspan="8" class="text-center text-muted" style="padding:32px">No tickets found</td></tr>'; return; }
 
@@ -6645,14 +9252,14 @@ function renderTicketsTable() {
     const needsReply = !t.admin_response && t.status === 'open';
     return `<tr ${needsReply ? 'style="background:rgba(254,194,79,0.05)"' : ''}>
       <td><div class="td-strong clip">${invName}</div><div class="td-muted clip">${invEmail}</div></td>
-      <td class="td-strong clip">${t.subject}</td>
+      <td class="td-strong clip">${_esc(t.subject)}</td>
       <td><span class="badge badge--gray">${t.category?.replace(/_/g, ' ') || '—'}</span></td>
       <td>${Utils.priorityBadge(t.priority)}</td>
       <td>${Utils.statusBadge(t.status)}</td>
       <td class="td-muted">${t.assigned_to || '—'}</td>
       <td class="td-muted">${Utils.date(t.created_at)}</td>
       <td>
-        <button class="btn btn--${needsReply ? 'primary' : 'secondary'} btn--sm" onclick='viewTicket(${JSON.stringify(t.id)})'><i class="fa-solid fa-${needsReply ? 'reply' : 'eye'}"></i> ${needsReply ? 'Reply' : 'View'}</button>
+        <button class="btn btn--${needsReply ? 'primary' : 'secondary'} btn--sm" onclick='viewTicket(${_esc(JSON.stringify(t.id))})'><i class="fa-solid fa-${needsReply ? 'reply' : 'eye'}"></i> ${needsReply ? 'Reply' : 'View'}</button>
       </td>
     </tr>`;
   }).join('');
@@ -6661,6 +9268,8 @@ function renderTicketsTable() {
 function setupTicketFilters() {
   const sf = document.getElementById('ticketStatusFilter');
   const pf = document.getElementById('ticketPriorityFilter');
+  const cf = document.getElementById('ticketCategoryFilter');
+  if (cf && !cf._wired) { cf._wired = true; cf.addEventListener('change', renderTicketsTable); }
   if (sf && sf._wired) return;
   if (sf) { sf._wired = true; sf.addEventListener('change', renderTicketsTable); }
   if (pf && !pf._wired) { pf._wired = true; pf.addEventListener('change', renderTicketsTable); }
@@ -6679,7 +9288,11 @@ async function viewTicket(id) {
       if (idx !== -1) STATE.tickets[idx] = { ...tkt, ...fresh };
       tkt = STATE.tickets[idx] || fresh;
     }
-  } catch (_) {}
+  } catch (err) {
+    /* Falls back to the cached ticket, which is the right behaviour — but
+       silently showing a stale one is worth a line in the console. */
+    console.error('[support] ticket refresh failed, showing the cached copy:', err?.message || err);
+  }
 
   const tktInv     = STATE.investors.find(i => i.id === tkt.investor_id);
   const tktInvName = tkt.investor_name || (tktInv ? `${tktInv.first_name} ${tktInv.last_name}` : tkt.investor_id || '—');
@@ -6690,7 +9303,9 @@ async function viewTicket(id) {
   try {
     const uRes = await API._fetch('GET', 'tables/employees', null, { limit: 200, sort: 'first_name', order: 'asc' });
     adminUsers = (uRes.data || uRes || []).filter(u => u.status === 'active' || !u.status);
-  } catch (_) {}
+  } catch (err) {
+    console.error('[support] staff list failed to load — the assignment dropdown will be empty:', err?.message || err);
+  }
 
   const assignedOpts = [
     `<option value="">— Unassigned —</option>`,
@@ -6698,7 +9313,7 @@ async function viewTicket(id) {
       const name  = `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email;
       const val   = u.email;
       const sel   = tkt.assigned_to === val ? 'selected' : '';
-      return `<option value="${val}" ${sel}>${name}</option>`;
+      return `<option value="${val}" ${sel}>${_esc(name)}</option>`;
     }),
   ].join('');
 
@@ -6749,12 +9364,12 @@ async function viewTicket(id) {
       <div class="panel__body" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
         ${tkt.proof_filename ? `<span style="font-size:0.85rem;font-weight:600"><i class="fa-solid fa-file" style="color:#fec24f;margin-right:6px"></i>${_esc(tkt.proof_filename)}</span>` : ''}
         ${attachDataUrl
-          ? `<button class="btn btn--secondary btn--sm" onclick='_openTicketDoc(${JSON.stringify(tkt.id)},${JSON.stringify(tkt.proof_filename||"attachment")})'><i class="fa-solid fa-eye"></i> View</button>
-             <button class="btn btn--ghost btn--sm" onclick='_downloadTicketDoc(${JSON.stringify(tkt.id)},${JSON.stringify(tkt.proof_filename||"attachment")})'><i class="fa-solid fa-download"></i> Download</button>`
+          ? `<button class="btn btn--secondary btn--sm" onclick='_openTicketDoc(${_esc(JSON.stringify(tkt.id))},${_esc(JSON.stringify(tkt.proof_filename||"attachment"))})'><i class="fa-solid fa-eye"></i> View</button>
+             <button class="btn btn--ghost btn--sm" onclick='_downloadTicketDoc(${_esc(JSON.stringify(tkt.id))},${_esc(JSON.stringify(tkt.proof_filename||"attachment"))})'><i class="fa-solid fa-download"></i> Download</button>`
           : `<span style="font-size:0.75rem;color:var(--text-muted);font-style:italic">File data unavailable — re-upload below</span>`}
         <label class="btn btn--ghost btn--sm" style="cursor:pointer;margin-left:auto" title="Replace document">
           <i class="fa-solid fa-upload"></i> Re-upload
-          <input type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange='_reuploadTicketFile(event,${JSON.stringify(tkt.id)})'>
+          <input type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange='_reuploadTicketFile(event,${_esc(JSON.stringify(tkt.id))})'>
         </label>
       </div>
     </div>` : ''}
@@ -6762,7 +9377,7 @@ async function viewTicket(id) {
       <div class="panel__header" style="background:rgba(237,165,255,0.07);display:flex;align-items:center;gap:10px">
         <span class="panel__title"><i class="fa-solid fa-building-columns" style="color:#eda5ff;margin-right:6px"></i>Proof of Bank Account</span>
         <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
-          <button class="btn btn--secondary btn--sm" id="bankAutoVerifyBtn" onclick='_runBankAutoVerify(${JSON.stringify(tkt.investor_id)})'><i class="fa-solid fa-robot"></i> Auto-Verify</button>
+          <button class="btn btn--secondary btn--sm" id="bankAutoVerifyBtn" onclick='_runBankAutoVerify(${_esc(JSON.stringify(tkt.investor_id))})'><i class="fa-solid fa-robot"></i> Auto-Verify</button>
         </div>
       </div>
       <div id="bankProofPreview" style="padding:12px 16px;font-size:0.82rem;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i> Loading document…</div>
@@ -6813,66 +9428,91 @@ async function viewTicket(id) {
       let confirmMsg, invUpdate = null;
 
       if (isPaymentProof) {
-        // Parse amount from subject: "EFT Proof of Payment — Name — R10 000 — EFT-..."
-        const amtMatch = (tkt.subject || '').match(/R([\d\s,]+)/);
-        const rawAmt   = amtMatch ? amtMatch[1].replace(/[\s,]/g, '') : null;
-        const amount   = rawAmt ? parseFloat(rawAmt) : null;
+        /* The declared amount comes from the pending deposit row — a NUMERIC
+           column — not from a regex over the ticket subject. That regex read
+           "R505,50" as 50550, because it stripped the comma South African
+           formatting uses as a decimal separator: a hundredfold over-credit.
+           It also broke on any investor name containing " R ". */
         const refMatch = (tkt.subject || '').match(/EFT-[\w]+/);
         const ref      = refMatch ? refMatch[0] : (tkt.id || '');
-
-        if (approve && (!amount || amount <= 0)) {
-          Toast.error('Could not parse EFT amount from ticket subject. Please verify manually.');
+        let declared = null;
+        try {
+          const res = await API._fetch('GET',
+            `tables/transactions?investor_id=${encodeURIComponent(tkt.investor_id)}&reference=${encodeURIComponent(ref)}`);
+          const p = (res?.data ?? []).find(t => t.reference === ref && t.type === 'deposit');
+          if (p) declared = parseFloat(p.amount);
+        } catch (e) {
+          Toast.error('Could not read the submitted amount — approval stopped. ' + (e.message || ''));
           return;
         }
-        confirmMsg = approve
-          ? `Credit R${amount?.toLocaleString('en-ZA', { minimumFractionDigits: 2 })} to ${tktInvName}'s wallet? This cannot be undone.`
-          : 'Decline this EFT deposit? The investor will be notified to resubmit proof.';
-        if (!await Confirm.ask(approve ? 'Approve EFT Deposit' : 'Decline EFT Deposit', { body: confirmMsg, confirmLabel: approve ? 'Approve & Credit' : 'Decline', danger: !approve })) return;
-        try {
-          if (approve) {
-            // The portal pre-creates a pending transaction when the investor submits EFT proof.
-            // Updating it (not inserting) avoids a UNIQUE constraint violation on `reference`.
-            let pendingTxn = null;
-            try {
-              const existing = await API._fetch('GET', `tables/transactions?investor_id=${encodeURIComponent(tkt.investor_id)}&reference=${encodeURIComponent(ref)}`);
-              pendingTxn = (existing?.data ?? []).find(t => t.reference === ref && t.type === 'deposit') || null;
-            } catch (_) {}
-
-            if (pendingTxn) {
-              await API._fetch('PATCH', `tables/transactions/${pendingTxn.id}`, {
-                status:      'completed',
-                amount:      amount,
-                description: `EFT wallet top-up approved by admin. Ref: ${ref}`,
-              });
+        const amount = declared;
+        if (!approve) {
+          if (!await Confirm.ask('Decline EFT Deposit', {
+            body: `Decline this EFT deposit? The investor is notified to resubmit, and the ` +
+                  `${declared != null ? Utils.rand(declared) + ' ' : ''}deposit stops showing as Pending in their transactions.`,
+            confirmLabel: 'Decline', danger: true })) return;
+          try {
+            /* One server call, for the same reason approval is one. This used
+               to update the TICKET and nothing else, so the pending deposit the
+               portal creates when proof is submitted stayed at 'pending'
+               forever: the client was told their proof was rejected and went on
+               seeing the deposit as Pending, indistinguishable from one still
+               being checked. Splitting it into a ticket update plus a
+               transaction PATCH from here would reintroduce exactly the
+               half-done state the approve path was rewritten to remove. */
+            const out = await API._fetch('POST', 'admin/eft-decline', {
+              ticket_id: id,
+              response: document.getElementById('ticketResponse').value || null,
+            });
+            /* Toast.success's second argument is a DURATION, not a type —
+               passing a type name there coerces to 0 and the toast vanishes
+               before it can be read. Pick the function, not an argument. */
+            if (out?.alreadyCompleted) {
+              Toast.warning('Ticket declined — but this deposit was already approved and credited, so it was left alone. Reverse it from Transactions if that is wrong.');
+            } else if (out?.closed) {
+              Toast.success('Declined — the deposit now shows as Rejected, and the investor is notified');
             } else {
-              await API.transactions.create({
-                id:          Utils.genId('TXN'),
-                investor_id: tkt.investor_id,
-                type:        'deposit',
-                amount:      amount,
-                status:      'completed',
-                description: `EFT wallet top-up approved by admin. Ref: ${ref}`,
-                reference:   ref,
-              });
+              Toast.warning('Ticket closed — but no pending deposit was found for this reference, so nothing changed in the ledger.');
             }
-            // Safeguard: reconcile the investor's wallet balance from completed
-            // transactions. The PATCH/POST hooks credit the wallet synchronously,
-            // but a transient DB error between the two queries can leave the
-            // transaction marked completed while the wallet_balance is unchanged.
-            // Reconcile is a no-op if the balance is already correct.
-            await API._fetch('POST', 'admin/reconcile-wallet', { investor_id: tkt.investor_id }).catch(() => {});
-          }
-          await API.tickets.update(id, {
-            status:         'resolved',
-            admin_response: document.getElementById('ticketResponse').value ||
-              (approve ? `Your EFT deposit of R${amount?.toLocaleString('en-ZA', { minimumFractionDigits: 2 })} has been approved and credited to your wallet.`
-                       : 'Your EFT proof of payment was declined. Please resubmit with a clear, complete proof of payment.'),
-            responded_at:   new Date().toISOString(),
+            Modal.close('ticketModal');
+            await loadSupport();
+            /* The ledger changed underneath whatever is on screen. */
+            if (STATE.transactions.length) await loadTransactions();
+          } catch (e) { Toast.error('Decline failed: ' + (e.message || 'Unknown error')); }
+          return;
+        }
+
+        /* Confirm the amount against the proof before crediting anything.
+
+           A client who paid R505 and typed R500 was credited R500, and the R5
+           went nowhere — the console asked "Credit R500?" and offered only yes
+           or no. The figure is now editable, a change has to be explained, and
+           both are recorded. */
+        const confirmed = await _eftConfirmAmount({
+          declared, name: tktInvName, ref,
+          fileName: tkt.attachment_filename || tkt.proof_filename || null,
+        });
+        if (!confirmed) return;
+
+        try {
+          /* One server call. This used to be a lookup, a PATCH and a ticket
+             update from the browser: a failure between the last two left the
+             wallet credited and the ticket open, with the investor told
+             nothing. The endpoint does all of it in one transaction. */
+          const out = await API._fetch('POST', 'admin/eft-approve', {
+            ticket_id: id,
+            amount:    confirmed.amount,
+            reason:    confirmed.reason || null,
           });
-          Toast.success(approve ? `R${amount?.toLocaleString('en-ZA', { minimumFractionDigits: 2 })} credited to wallet — ticket resolved` : 'Declined — investor will be notified');
+          Toast.success(
+            out.adjusted
+              ? `R${out.approved.toLocaleString('en-ZA', { minimumFractionDigits: 2 })} credited — corrected from R${Number(out.declared).toLocaleString('en-ZA', { minimumFractionDigits: 2 })}`
+              : `R${out.approved.toLocaleString('en-ZA', { minimumFractionDigits: 2 })} credited to wallet — ticket resolved`);
           Modal.close('ticketModal');
           await Promise.all([loadSupport(), loadInvestors()]);
-        } catch (e) { Toast.error('Action failed: ' + (e.message || 'Unknown error')); }
+        } catch (e) {
+          Toast.error('Approval failed — nothing was credited. ' + (e.message || 'Unknown error'));
+        }
         return;
       }
 
@@ -7013,19 +9653,311 @@ async function viewTicket(id) {
 /* ═══════════════════════════════════════════════
    ANALYTICS
    ═══════════════════════════════════════════════ */
-async function loadAnalytics() {
+const ANALYTICS_PAGE_LIMIT = 5000;
+
+/* When the three lists were last actually read, not when the page last drew.
+   The two are different whenever STATE is served from cache, and it was the
+   drawing time being shown — so hours-old figures reported themselves as just
+   refreshed, which is worse than showing nothing. */
+let _analyticsFetchedAt = 0;
+/* Whether the headline tiles came from SQL (all rows) or from the browser
+   sums (one page). It changes what the truncation banner can honestly say. */
+let _analyticsKpisFromServer = false;
+const ANALYTICS_STALE_MS = 2 * 60 * 1000;
+
+function _analyticsAgeLabel() {
+  if (!_analyticsFetchedAt) return '';
+  const at   = new Date(_analyticsFetchedAt);
+  const secs = Math.round((Date.now() - _analyticsFetchedAt) / 1000);
+  const age  = secs < 60 ? 'just now'
+             : secs < 3600 ? `${Math.round(secs / 60)} min ago`
+             : `${Math.round(secs / 3600)} h ago`;
+  return `Data as of ${at.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })} · ${age}`;
+}
+
+/* Render one panel without letting it take the others down.
+   These were 21 bare calls in a single try: a synchronous throw skipped every
+   call after it and an async rejection was never caught at all, so one broken
+   panel produced a silently half-drawn page. */
+async function _analyticsPanel(label, fn) {
+  try { await fn(); return null; }
+  catch (e) {
+    console.error(`[analytics] ${label} failed:`, e);
+    return { label, message: (e && e.message) || String(e) };
+  }
+}
+
+function _analyticsPanelErrors(failures) {
+  const el = document.getElementById('an-panel-errors');
+  if (!el) return;
+  if (!failures.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = '';
+  el.innerHTML = `
+    <div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.35);border-radius:8px;padding:12px 14px">
+      <div style="font-weight:700;color:#f59e0b">
+        <i class="fa-solid fa-triangle-exclamation" style="margin-right:6px"></i>
+        ${failures.length} panel${failures.length === 1 ? '' : 's'} did not load
+      </div>
+      <div style="margin-top:6px;font-size:0.82rem">
+        ${failures.map(f => `<div><strong>${_esc(f.label)}</strong> — ${_esc(f.message)}</div>`).join('')}
+      </div>
+      <div style="margin-top:6px;font-size:0.78rem;color:var(--text-muted)">
+        Everything else on this page loaded normally. Details are in the browser console.
+      </div>
+    </div>`;
+}
+
+/* Every figure on this page is computed in the browser from these three
+   lists. They are fetched one page deep, so past ANALYTICS_PAGE_LIMIT rows the
+   arithmetic silently runs on a subset: the charts still draw, the KPIs still
+   look plausible, and they are wrong. The API returns `total` alongside the
+   rows and nothing was comparing the two.
+
+   This does not fix the underlying problem — aggregates belong in SQL, the way
+   analytics-extra.js already does it — but it stops the page presenting a
+   partial answer as a complete one. */
+/* The banner itself, shared. Two pages read a capped page of the same tables
+   and total it in the browser, so both need this — and two copies of a warning
+   about wrong numbers is how one of them ends up saying something the other
+   stopped being true. `tail` is the only part that differs: what on THIS page
+   is affected and what is not. */
+function _renderTruncationBanner(elId, loadedVsTotal, tail) {
+  const el = document.getElementById(elId);
+  if (!el) return false;
+  const short = loadedVsTotal.filter(t => Number.isFinite(t.total) && t.loaded < t.total);
+  if (!short.length) { el.style.display = 'none'; el.innerHTML = ''; return false; }
+
+  el.style.display = '';
+  el.innerHTML = `
+    <div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.35);border-radius:8px;padding:12px 14px">
+      <div style="font-weight:700;color:#ef4444">
+        <i class="fa-solid fa-circle-exclamation" style="margin-right:6px"></i>
+        These figures are incomplete — do not report them
+      </div>
+      <div style="margin-top:6px;font-size:0.82rem">
+        This page reads one page of each table and computes everything in the browser.
+        ${short.map(t => `<div><strong>${_esc(t.label)}</strong>: using
+          ${t.loaded.toLocaleString('en-US')} of ${t.total.toLocaleString('en-US')} rows
+          — ${(t.total - t.loaded).toLocaleString('en-US')} excluded</div>`).join('')}
+      </div>
+      ${tail ? `<div style="margin-top:6px;font-size:0.78rem;color:var(--text-muted)">${tail}</div>` : ''}
+    </div>`;
+  return true;
+}
+
+function _analyticsTruncation(loadedVsTotal) {
+  return _renderTruncationBanner('an-truncation', loadedVsTotal, `
+    The charts and per-category breakdowns below are derived from the rows that were read.
+    ${_analyticsKpisFromServer
+      ? 'The six headline tiles are computed in SQL over every row and are correct.'
+      : '<strong>The headline tiles fell back to browser sums and are affected too.</strong>'}
+    The panels fed by server-side queries (revenue, maturity, IFA, sub-accounts,
+    interest history, withdrawals) are unaffected.`);
+}
+
+/* The dashboard totals Active Invested off investments and Returns off
+   transactions, both from a capped page. Transactions is the one that bites
+   first — every investment writes several rows (deposit, investment, fee,
+   matured_funds, reinvestment, payout), so that table crosses its cap long
+   before the others do, and the Returns tile simply stops growing with no
+   symptom. The API has returned the true count all along; nothing looked. */
+/* A source that failed to load is not a source that returned nothing, and the
+   tiles cannot tell you which. Named here so R0.00 is never read as a fact
+   when it is really a missing answer. */
+function _dashboardLoadErrors(failedSources) {
+  return _renderLoadErrors('ds-load-errors', failedSources, 'loadDashboard()');
+}
+
+/* Named sources that failed, and a retry. Takes plain labels or {label,message}
+   so the tab loaders can pass the reason straight through. */
+function _renderLoadErrors(elId, failedSources, retryCall) {
+  const el = document.getElementById(elId);
+  if (!el) return false;
+  const list = (failedSources || []).map(f => (typeof f === 'string' ? { label: f } : f));
+  if (!list.length) { el.style.display = 'none'; el.innerHTML = ''; return false; }
+
+  el.style.display = '';
+  el.innerHTML = `
+    <div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.35);border-radius:8px;padding:12px 14px">
+      <div style="font-weight:700;color:#ef4444">
+        <i class="fa-solid fa-triangle-exclamation" style="margin-right:6px"></i>
+        ${list.map(f => _esc(f.label)).join(' and ')} could not be loaded
+      </div>
+      <div style="margin-top:6px;font-size:0.82rem">
+        Figures fed by ${list.length === 1 ? 'it' : 'them'} are showing zero because the
+        data is missing, not because the figure is zero. Everything else on this page loaded
+        normally.
+        ${list.some(f => f.message)
+          ? `<div style="margin-top:5px;font-size:0.76rem;color:var(--text-muted)">${
+              list.filter(f => f.message).map(f => `${_esc(f.label)}: ${_esc(f.message)}`).join('<br>')}</div>`
+          : ''}
+        ${retryCall ? `<button class="btn btn--secondary btn--sm" style="margin-left:8px" onclick="${_esc(retryCall)}">
+          <i class="fa-solid fa-rotate"></i> Retry
+        </button>` : ''}
+      </div>
+    </div>`;
+  return true;
+}
+
+/* ── One read of a tab's sources ──────────────────────────────────────
+   Investors, Investments, Transactions and Maturity each loaded with a bare
+   Promise.all and no idea how much of the table they had. Two independent
+   faults:
+
+     · Promise.all rejects as a whole, so one failing query blanked the tab
+       even when the others had returned. The catch then showed a toast and
+       left the previous render on screen — stale figures with no indication
+       they were stale.
+     · Every one of them reads a capped page and computes its tiles in the
+       browser. The API has returned the true row count all along and nothing
+       looked, so a tab past its cap simply showed a smaller number. There is
+       no symptom to notice: a total that stops growing looks like a total.
+
+   allSettled and the row counts fix both. Same shape as the dashboard, which
+   got this treatment first. */
+async function _loadSources(sources) {
+  const settled = await Promise.allSettled(sources.map(s => s.load()));
+  const values = {}, counts = [], failed = [];
+  settled.forEach((r, i) => {
+    const s = sources[i];
+    if (r.status === 'fulfilled') {
+      values[s.key] = r.value?.data || [];
+      /* total is absent on the resolved-from-cache paths, and Number(undefined)
+         is NaN — which _renderTruncationBanner already treats as "unknown" and
+         skips rather than reporting a false shortfall. */
+      counts.push({ label: s.label, loaded: values[s.key].length, total: Number(r.value?.total) });
+    } else {
+      values[s.key] = [];
+      failed.push({ label: s.label, message: r.reason?.message || String(r.reason) });
+      console.error(`[load] ${s.label} failed:`, r.reason?.message || r.reason);
+    }
+  });
+  return { values, counts, failed };
+}
+
+/* Whether the headline tiles came from SQL. The banner has to say which,
+   because a short read means something different in each case. */
+let _dashboardKpisFromServer = false;
+
+function _dashboardTruncation(loadedVsTotal) {
+  return _renderTruncationBanner('ds-truncation', loadedVsTotal, `
+    ${_dashboardKpisFromServer
+      ? 'The four headline tiles are counted in SQL over every row and are correct. ' +
+        'The lists, charts and pending-action widgets below are built from the rows that ' +
+        'were read, so those are the ones to treat as partial.'
+      : '<strong>The server figures were unavailable, so the headline tiles fell back to ' +
+        'browser sums and are affected too.</strong> Everything on this page is derived ' +
+        'from the rows that were read.'}`);
+}
+
+/* ═══════════════════════════════════════════════
+   PERIOD PERFORMANCE
+   Flows only — money and records that MOVED inside the window — against the
+   window immediately before it. The cumulative tiles above are stocks and are
+   deliberately not scoped by this selector; conflating the two is how a
+   dashboard ends up reporting "Active Capital, last 30 days, up 12%", which
+   is not a fact about anything.
+   ═══════════════════════════════════════════════ */
+const AN_PERIOD_METRICS = [
+  { key: 'net_deposits',     label: 'Net Deposits',     money: true,  good: 'up',
+    hint: 'Deposits less withdrawals, completed only' },
+  { key: 'platform_revenue', label: 'Platform Revenue', money: true,  good: 'up',
+    hint: 'Completed fees' },
+  { key: 'returns_paid',     label: 'Returns Paid',     money: true,  good: null,
+    hint: 'Returns and payouts to investors' },
+  { key: 'new_investors',    label: 'New Investors',    money: false, good: 'up',
+    hint: 'By join date' },
+  { key: 'new_investments',  label: 'New Investments',  money: false, good: 'up',
+    hint: 'By creation date' },
+];
+
+async function loadPeriodKpis() {
+  const wrap = document.getElementById('an-period-metrics');
+  const win  = document.getElementById('an-period-window');
+  if (!wrap) return;
+  const days = document.getElementById('an-period-days')?.value || 30;
+  wrap.innerHTML = '<div class="text-center text-muted" style="padding:18px;width:100%">Loading…</div>';
   try {
-    if (!STATE.investors.length || !STATE.investments.length) {
+    const r = await API._fetch('GET', `analytics/kpis/period?days=${encodeURIComponent(days)}`);
+    const d = s => Utils.date(s);
+    if (win) {
+      win.innerHTML = `${d(r.range.from)} – ${d(r.range.to)} ` +
+        `<span style="opacity:.7">vs ${d(r.range.prior_from)} – ${d(r.range.prior_to)}</span>`;
+    }
+
+    wrap.innerHTML = AN_PERIOD_METRICS.map(m => {
+      const v = r.flows[m.key] || {};
+      const fmt = x => m.money ? Utils.rand(x, 0) : Number(x || 0).toLocaleString();
+      /* A percentage needs a base. Against a zero prior there is no rate of
+         change to state, so the prior is shown and the arrow withheld. */
+      const pct = v.change_pct;
+      let delta;
+      if (pct === null || pct === undefined) {
+        delta = `<span style="color:var(--text-muted)">no prior activity</span>`;
+      } else {
+        const up = v.change > 0, flat = v.change === 0;
+        /* Returns Paid has no good direction — more paid out is not a win or a
+           loss on its own — so it is shown without a verdict colour. */
+        const colour = flat || !m.good ? 'var(--text-muted)'
+                     : (up === (m.good === 'up')) ? '#22c55e' : '#ef4444';
+        const icon = flat ? 'fa-minus' : up ? 'fa-arrow-up' : 'fa-arrow-down';
+        delta = `<span style="color:${colour}"><i class="fa-solid ${icon}" style="margin-right:4px"></i>` +
+                `${Math.abs(pct).toFixed(1)}%</span>` +
+                `<span style="color:var(--text-muted)"> vs ${fmt(v.prior)}</span>`;
+      }
+      return `<div class="stat-card" title="${_esc(m.hint)}">
+        <div class="stat-card__value">${fmt(v.current)}</div>
+        <div class="stat-card__label">${_esc(m.label)}</div>
+        <div style="font-size:0.72rem;margin-top:6px">${delta}</div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    if (win) win.textContent = '';
+    wrap.innerHTML = `<div style="padding:14px;width:100%;color:#ef4444;font-size:0.82rem">
+      <i class="fa-solid fa-circle-exclamation" style="margin-right:6px"></i>
+      Could not load period performance: ${_esc(e.message || 'Unknown error')}</div>`;
+    throw e;   // so the panel wrapper names it in the failure list
+  }
+}
+
+async function loadAnalytics(force) {
+  try {
+    let counts = null;
+    /* Previously this fetched only when STATE was empty, so the page loaded
+       once per session and then showed whatever was true at login — for as
+       long as the tab stayed open. Now it refetches when the data is older
+       than ANALYTICS_STALE_MS, and Refresh All forces it regardless. */
+    const stale = !_analyticsFetchedAt || (Date.now() - _analyticsFetchedAt) > ANALYTICS_STALE_MS;
+    if (force || stale || !STATE.investors.length || !STATE.investments.length) {
       const [invRes, invstRes, txnRes] = await Promise.all([
-        API.investors.list({ limit: 5000 }),
-        API.investments.list({ limit: 5000 }),
-        API.transactions.list({ limit: 5000 })
+        API.investors.list({ limit: ANALYTICS_PAGE_LIMIT }),
+        API.investments.list({ limit: ANALYTICS_PAGE_LIMIT }),
+        API.transactions.list({ limit: ANALYTICS_PAGE_LIMIT })
       ]);
       STATE.investors = invRes.data || [];
       STATE.investments = invstRes.data || [];
       STATE.transactions = txnRes.data || [];
+      _analyticsFetchedAt = Date.now();
+      counts = [
+        { label: 'Investors',    loaded: STATE.investors.length,    total: Number(invRes.total) },
+        { label: 'Investments',  loaded: STATE.investments.length,  total: Number(invstRes.total) },
+        { label: 'Transactions', loaded: STATE.transactions.length, total: Number(txnRes.total) },
+      ];
+    } else {
+      /* Served from cache, so the totals are unknown — and cache filled by
+         another view may be smaller still. A limit=1 read returns the count
+         without the rows, which is the same count the list call already runs. */
+      const [i, v, t] = await Promise.all([
+        API.investors.list({ limit: 1 }),
+        API.investments.list({ limit: 1 }),
+        API.transactions.list({ limit: 1 }),
+      ]);
+      counts = [
+        { label: 'Investors',    loaded: STATE.investors.length,    total: Number(i.total) },
+        { label: 'Investments',  loaded: STATE.investments.length,  total: Number(v.total) },
+        { label: 'Transactions', loaded: STATE.transactions.length, total: Number(t.total) },
+      ];
     }
-
     const now = Date.now();
     const thirtyDays = 30 * 86400000;
     const newInvestors = STATE.investors.filter(i => now - new Date(i.date_joined) < thirtyDays).length;
@@ -7033,31 +9965,64 @@ async function loadAnalytics() {
     document.getElementById('an-monthlynew').textContent = newInvestors;
     document.getElementById('an-referrals').textContent = referred;
 
-    // Live analytics stat cards
-    const cattlePools = STATE.pools.filter(p => (p.product_type || '').toLowerCase().includes('cattle') && p.annual_rate > 0);
+    /* Achieved, not contracted. This averaged annual_rate — the benchmark —
+       and presented it as the cattle return, which is the projected figure the
+       rest of the platform stopped showing. actual_rate is what the pool
+       really did; a pool with none posted has no achieved rate to average, so
+       it is excluded rather than counted as zero. */
+    const cattlePools = STATE.pools.filter(p =>
+      (p.product_type || '').toLowerCase().includes('cattle') && parseFloat(p.actual_rate) > 0);
     const avgCattleRate = cattlePools.length
-      ? (cattlePools.reduce((s, p) => s + (parseFloat(p.annual_rate) || 0), 0) / cattlePools.length * 100).toFixed(2) + '%'
+      ? (cattlePools.reduce((s, p) => s + (parseFloat(p.actual_rate) || 0), 0) / cattlePools.length * 100).toFixed(2) + '%'
       : '—';
     const lowestMin = STATE.pools.filter(p => p.status === 'open' && p.min_investment > 0)
       .reduce((min, p) => Math.min(min, parseFloat(p.min_investment) || Infinity), Infinity);
 
     const cattleEl = document.getElementById('an-cattle-return');
     if (cattleEl) cattleEl.textContent = avgCattleRate;
-    const minEl = document.querySelectorAll('#view-analytics .stat-card__value')[1];
-    if (minEl && minEl.textContent === 'R500') minEl.textContent = lowestMin < Infinity ? Utils.rand(lowestMin, 0) : 'R500';
+    /* By id. This used to take the second .stat-card__value in the view and
+       only overwrite it if it still read the literal "R500" — so any layout
+       change silently moved the target, and any real value of R500 froze it. */
+    const minEl = document.getElementById('an-min-investment');
+    if (minEl) minEl.textContent = lowestMin < Infinity ? Utils.rand(lowestMin, 0) : '—';
 
-    renderProductVolChart();
-    renderProvinceChart();
-    renderRiskChart();
-    renderTxnFlowChart();
-    renderConversionFunnel();
-    _renderAnalyticsCharts();
-    loadSignupFriction();
-    renderMaturityForecastChart();
-    renderCohortChart();
-    renderMobileActivity();
-    loadPersonas();
+    /* Each panel renders on its own. One that throws is one empty card and a
+       named line at the top, not twenty panels that never ran. */
+    const panels = [
+      ['Headline KPIs',        _renderAnalyticsKPIs],
+      ['Period performance',   loadPeriodKpis],
+      ['Product volume',       renderProductVolChart],
+      ['Province',             renderProvinceChart],
+      ['Gender',               renderGenderChart],
+      ['How they heard',       renderHeardAboutChart],
+      ['Risk profile',         renderRiskChart],
+      ['Transaction flow',     renderTxnFlowChart],
+      ['Conversion funnel',    renderConversionFunnel],
+      ['Charts',               _renderAnalyticsCharts],
+      ['Invest funnel',        loadInvestFunnel],
+      ['Signup friction',      loadSignupFriction],
+      ['Maturity forecast',    renderMaturityForecastChart],
+      ['Cohorts',              renderCohortChart],
+      ['Mobile activity',      renderMobileActivity],
+      ['Personas',             loadPersonas],
+      ['Revenue',              loadRevenueAnalytics],
+      ['Maturity & reinvestment', loadMaturityReinvestment],
+      ['IFA performance',      loadIfaPerformance],
+      ['Sub-accounts',         loadSubAccountAnalytics],
+      ['Interest history',     loadInterestHistoryAnalytics],
+      ['Withdrawal trends',    loadWithdrawalTrends],
+    ];
+    const failures = (await Promise.all(
+      panels.map(([label, fn]) => _analyticsPanel(label, fn))
+    )).filter(Boolean);
+    /* After the panels, not before: the KPI panel decides whether the headline
+       tiles came from SQL or fell back to browser sums, and the banner's
+       wording depends on which. Rendering it first would describe the previous
+       run. */
+    _analyticsTruncation(counts);
+    _analyticsPanelErrors(failures);
   } catch (e) {
+    /* Only the data read reaches here now — a panel failure cannot. */
     Toast.error('Failed to load analytics data');
     console.error('[loadAnalytics]', e);
   }
@@ -7069,17 +10034,178 @@ async function loadPersonas() {
   if (!panel) return;
   panel.innerHTML = '<div class="text-center text-muted" style="padding:20px">Loading…</div>';
   try {
-    const res = await fetch('/api/analytics/personas', { headers: { Authorization: `Bearer ${AUTH.token}` } });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
+    const res = await fetch('/api/analytics/personas', { headers: { Authorization: `Bearer ${_getToken()}` } });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+    /* Empty and broken are different things. This panel used to draw "No
+       persona data yet" from a catch that also caught 500s, 403s, network
+       drops and exceptions thrown by the renderer itself — so a dead endpoint
+       read as a quiet one. Decide emptiness from the payload; let failures
+       fall through to the catch and say what happened. */
+    if (!Number(data.total)) {
+      panel.innerHTML = `<div class="text-center text-muted" style="padding:20px">No persona data yet — investors complete profile quests to appear here.</div>`;
+      return;
+    }
     _renderPersonas(data);
   } catch (e) {
-    panel.innerHTML = `<div class="text-center text-muted" style="padding:20px">No persona data yet — investors complete profile quests to appear here.</div>`;
-    console.warn('[personas]', e.message);
+    panel.innerHTML = `<div class="text-center" style="padding:20px;color:#ef4444">
+      Could not load investor personas: ${_esc(e.message || 'error')}<br>
+      <button class="btn btn--secondary btn--sm" style="margin-top:10px" onclick="loadPersonas()">Retry</button>
+    </div>`;
+    console.error('[personas]', e);
   }
 }
 
 function _renderPersonas(data) {
+
+/* A character and a campaign brief for each persona.
+   The panel counted people and described them in one line, which tells a
+   marketer the size of a segment and nothing they can write to. These are
+   built from what the survey actually returned — the goal, employment,
+   income and horizon distributions rendered below — and pinned to real
+   products: the minimum, term and benchmark are the ones seeded in
+   server/db/setup.js, not invented.
+   Each campaign carries a compliance note. SV Capital markets under FAIS
+   through FSP 52449, so "guaranteed" is not a word that may appear next to
+   any of these products, and the note is kept beside the copy rather than in
+   a policy document nobody opens while writing an email. */
+const PERSONA_PLAYBOOK = {
+  "Explorer": {
+    who: "Lerato Mokoena, 29 \u00b7 Tembisa, works in Sandton",
+    life: "Operations admin on about R22 000 a month. Has a savings pocket she tops up when she remembers and a TFSA she opened once. Nobody in her family invests.",
+    quote: "Everyone says I should be investing. Everything I look at wants R10 000 and a financial adviser.",
+    wants: "To start with an amount she will not miss, in something she can explain to her mother.",
+    blocks: "Jargon. Big minimums. Being asked for a 13-digit ID number before she has seen what is actually on offer.",
+    fit: "Cattle (R500, 12 months) \u00b7 Short Term (R500, 6 months) \u00b7 Refer a Friend",
+    campaigns: [
+      { ch: "WhatsApp / SMS \u2192 landing page", hl: "R500. One animal. Twelve months.",
+        body: "Lead with the real minimum, because she assumes it is ten thousand. One line on what happens to the money: it buys cattle that are backgrounded at Beefcor and sold at the end of the cycle. No percentages in the hook \u2014 the number she needs first is the entry price, not the return.",
+        cta: "See what R500 buys \u2192", comp: "State the 12-month term and that the return depends on the market price at sale. Never \"guaranteed\"." },
+      { ch: "Instagram / TikTok, 30 seconds", hl: "Where your R500 actually goes",
+        body: "Follow one animal: intake weight, 60 days backgrounding, feedlot, sale. She has never seen inside an investment before. This answers \"can I explain this to my mother\" in half a minute.",
+        cta: "Start with R500", comp: "Show the risk profile on screen (Medium-High). Do not imply the herd cannot lose value." },
+      { ch: "Referral, in-app + email", hl: "Someone you know already invests here",
+        body: "Explorers came in through a colleague, not an advert. Put the referrer front and centre and let the code carry the introduction \u2014 the trust is borrowed, which is exactly what a first-time investor is short of.",
+        cta: "Use their code", comp: "Disclose what the referrer receives." },
+    ],
+  },
+  "Growth Seeker": {
+    who: "Sipho Ndlovu, 34 \u00b7 Centurion, self-employed",
+    life: "IT contractor billing around R750 000 a year. Already holds ETFs and some crypto. Seven-year-plus horizon, comfortable watching a number fall.",
+    quote: "Do not sell me safety. Show me the mechanics and tell me what happens when it goes wrong.",
+    wants: "Rate, term, structure, and an honest account of the downside.",
+    blocks: "Anything that reads like a pitch. Vague numbers. Being talked to as though he is new.",
+    fit: "Solar 7-year \u00b7 Cattle (13% benchmark, 20% performance fee above it) \u00b7 GridFarmer",
+    campaigns: [
+      { ch: "Email + LinkedIn long-form", hl: "The full mechanics of a 7-year solar project",
+        body: "Not a brochure. The PPA, who the offtaker is, what their credit looks like, what happens to the rand if they default, and where the 20% performance fee sits. He will read 1 200 words if every one of them is load-bearing.",
+        cta: "Read the structure", comp: "Target return, never a promise. Name offtaker default as a real risk, not a footnote." },
+      { ch: "Product comparison page", hl: "Cattle at 12 months against solar at 7 years",
+        body: "Put them side by side: minimum, term, benchmark, fee, what backs the asset, and what stops paying if it goes wrong. He is comparing you against his ETFs anyway \u2014 do it for him and you own the frame.",
+        cta: "Compare the two", comp: "Equal prominence to both risk profiles. No selective date ranges on any track record shown." },
+    ],
+  },
+  "Income Investor": {
+    who: "Naledi Khumalo, 52 \u00b7 Bloemfontein, employed",
+    life: "Earns between R500 000 and R1 million. Supports a parent and a daughter at university. Has capital but needs it to do something on a schedule.",
+    quote: "It does not need to double. It needs to pay, on a date I can plan around.",
+    wants: "Predictable, dated income she can build a month around.",
+    blocks: "Lock-ups that pay nothing until maturity. Returns quoted annually when she thinks monthly.",
+    fit: "Delivery Bikes (R3 100, 18 months, lease income) \u00b7 Solar 5-year \u00b7 Short Term (6 months)",
+    campaigns: [
+      { ch: "Email, segmented on goal = regular income", hl: "Rent, not interest",
+        body: "The bike fleet leases motorcycles to riders working Mr D, Takealot and Uber Eats. The income is rent on an asset the pool owns. Say that plainly \u2014 it is the clearest story in the catalogue and it is currently buried under a product tile nobody opens.",
+        cta: "See the fleet", comp: "The pool owns the asset and carries its risks: if the bikes cannot be used, the rent stops. That sentence belongs in the email, not only in the agreement." },
+      { ch: "Retargeting + statement insert", hl: "Six months, then you decide again",
+        body: "Short Term at a 6-month term suits someone who does not want to commit for years. Frame the maturity as a decision point she controls rather than an end date.",
+        cta: "See the current pool", comp: "Do not describe a 6-month term as \"short-term savings\" \u2014 it is an investment and must be labelled as one." },
+    ],
+  },
+  "Long-Term Planner": {
+    who: "Johan & Marika Botha, 44 \u00b7 Stellenbosch",
+    life: "Two children, nine and thirteen. Thinking about school fees, then university, then themselves. Already have an RA and feel it is not enough.",
+    quote: "We are not trying to get rich. We are trying to not be caught short in 2038.",
+    wants: "Something that fits a decade-long plan and a tax position.",
+    blocks: "Products that mature before the goal does.",
+    fit: "12J Cattle (R5 000, 5-year hold, SARS s12J deduction) \u00b7 Solar 7-year",
+    campaigns: [
+      { ch: "Email, February and again in late July", hl: "The deduction you have until the end of February to use",
+        body: "12J is the only product in the catalogue with a tax story, and tax stories are seasonal. Two sends: one at the start of the year, one three weeks before the tax year ends on the last day of February.",
+        cta: "See the 12J pool", comp: "A s12J deduction is subject to SARS rules and the 5-year minimum hold. State both, and that tax treatment depends on the investor\u2019s own circumstances." },
+    ],
+  },
+  "Conservative Saver": {
+    who: "Mr Devan Pillay, 67 \u00b7 Chatsworth, retired",
+    life: "Lives on a pension and the interest from a fixed deposit that renewed at a rate he was not happy with. Will not risk capital he cannot replace.",
+    quote: "I am not chasing anything. I just do not want to go backwards.",
+    wants: "Capital preservation first, a modest return second.",
+    blocks: "Volatility. Anything he cannot exit. Being sold to.",
+    fit: "Short Term (6 months, 11.5% benchmark) \u00b7 Solar 5-year",
+    campaigns: [
+      { ch: "Print / direct mail + a phone number", hl: "Six months. Then your money and your decision.",
+        body: "This persona does not convert in an app funnel. A letter, a real number to call, and a named person at the other end. The message is term length and control, not upside.",
+        cta: "Call and ask", comp: "Never use the words guaranteed, safe or capital-protected. Every SV Capital product can lose value, and this is the persona most likely to be misled by a softened phrase." },
+    ],
+  }
+};
+
+/* The character and campaign briefs, folded away under each persona card.
+   <details> rather than a JS toggle: five of these open at once would bury the
+   distribution charts below, and the browser already knows how to do this
+   accessibly and how to keep it open across a re-render of the rest. */
+function _personaPlaybookHtml(pb, count, color) {
+  if (!pb) return '';
+
+  /* A persona standing on two people is a description of two people. Saying so
+     next to the brief is the difference between a segment and an anecdote —
+     and this panel is read by someone deciding where to spend. */
+  const thin = count < 5
+    ? `<div style="margin:0 0 10px;padding:8px 10px;border-radius:6px;background:rgba(239,68,68,0.10);
+                  border:1px solid rgba(239,68,68,0.25);font-size:0.72rem;color:#fca5a5">
+         Only ${count} investor${count !== 1 ? 's' : ''} in this persona — too few to budget against.
+         Treat the brief below as a hypothesis to test, not a segment to buy media for.
+       </div>` : '';
+
+  const campaigns = (pb.campaigns || []).map(c => `
+    <div style="border-left:2px solid ${color};padding:0 0 0 10px;margin-bottom:12px">
+      <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted)">${_esc(c.ch)}</div>
+      <div style="font-weight:600;font-size:0.84rem;margin:3px 0 4px">${_esc(c.hl)}</div>
+      <div style="font-size:0.76rem;color:var(--text-muted);line-height:1.55">${_esc(c.body)}</div>
+      <div style="font-size:0.74rem;margin-top:5px"><span style="color:${color};font-weight:600">${_esc(c.cta)}</span></div>
+      <div style="font-size:0.71rem;color:#fbbf24;margin-top:5px;display:flex;gap:6px;align-items:flex-start">
+        <i class="fa-solid fa-scale-balanced" style="margin-top:2px;flex-shrink:0"></i>
+        <span>${_esc(c.comp)}</span>
+      </div>
+    </div>`).join('');
+
+  const row = (label, value) => `
+    <div style="display:flex;gap:8px;margin-bottom:4px">
+      <div style="min-width:62px;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);flex-shrink:0">${label}</div>
+      <div style="font-size:0.76rem;color:var(--text);line-height:1.5">${_esc(value)}</div>
+    </div>`;
+
+  return `
+    <details style="margin-top:4px">
+      <summary style="cursor:pointer;font-size:0.74rem;color:${color};font-weight:600;list-style:none">
+        Character &amp; campaign brief
+      </summary>
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+        ${thin}
+        <div style="font-weight:600;font-size:0.86rem;margin-bottom:2px">${_esc(pb.who)}</div>
+        <div style="font-size:0.76rem;color:var(--text-muted);line-height:1.55;margin-bottom:8px">${_esc(pb.life)}</div>
+        <div style="font-size:0.8rem;font-style:italic;color:${color};border-left:2px solid ${color};
+                    padding-left:9px;margin:0 0 10px;line-height:1.5">&ldquo;${_esc(pb.quote)}&rdquo;</div>
+        ${row('Wants', pb.wants)}
+        ${row('Blocks', pb.blocks)}
+        ${row('Fit', pb.fit)}
+        <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin:12px 0 8px">
+          Campaigns that would land
+        </div>
+        ${campaigns}
+      </div>
+    </details>`;
+}
+
   const panel = document.getElementById('personasPanel');
   if (!panel) return;
 
@@ -7092,6 +10218,8 @@ function _renderPersonas(data) {
     'Explorer':           { icon: 'fa-compass',        color: '#fec24f', desc: 'Just getting started. Goals and risk profile still taking shape.' },
   };
 
+
+
   const total = data.total || 1;
 
   // Archetype cards
@@ -7100,6 +10228,13 @@ function _renderPersonas(data) {
     .map(([name, count]) => {
       const m = PERSONA_META[name] || PERSONA_META['Explorer'];
       const pct = Math.round(count / total * 100);
+      /* Resolved here rather than inside the helper so the persona name never
+         appears inside a template literal. check-markup-interpolation treats a
+         bare `name` in a substitution as a field somebody can type — it cannot
+         see that this one indexes a constant and is never printed — and the
+         answer to that is to keep it out of the markup, not to escape a helper
+         whose own HTML would come back as entities. */
+      const pb = PERSONA_PLAYBOOK[name] || null;
       return `
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:8px">
           <div style="display:flex;align-items:center;gap:10px">
@@ -7107,7 +10242,7 @@ function _renderPersonas(data) {
               <i class="fa-solid ${m.icon}" style="color:${m.color};font-size:15px"></i>
             </div>
             <div>
-              <div style="font-weight:600;font-size:0.9rem">${name}</div>
+              <div style="font-weight:600;font-size:0.9rem">${_esc(name)}</div>
               <div style="font-size:0.75rem;color:var(--text-muted)">${count} investor${count !== 1 ? 's' : ''} · ${pct}%</div>
             </div>
           </div>
@@ -7115,6 +10250,7 @@ function _renderPersonas(data) {
             <div style="height:4px;width:${pct}%;background:${m.color};border-radius:2px"></div>
           </div>
           <div style="font-size:0.75rem;color:var(--text-muted)">${m.desc}</div>
+          ${_personaPlaybookHtml(pb, count, m.color)}
         </div>`;
     }).join('');
 
@@ -7125,7 +10261,7 @@ function _renderPersonas(data) {
     const max = entries[0][1];
     return `
       <div style="margin-bottom:16px">
-        <div style="font-weight:600;font-size:0.82rem;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em">${title}</div>
+        <div style="font-weight:600;font-size:0.82rem;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em">${_esc(title)}</div>
         ${entries.map(([label, count]) => `
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
             <div style="flex:0 0 160px;font-size:0.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${label}</div>
@@ -7144,8 +10280,8 @@ function _renderPersonas(data) {
     const m = PERSONA_META[inv.persona] || PERSONA_META['Explorer'];
     return `
       <tr>
-        <td style="font-weight:500">${inv.name || '—'}</td>
-        <td style="color:var(--text-muted);font-size:0.8rem">${inv.email || '—'}</td>
+        <td style="font-weight:500">${_esc(inv.name || '—')}</td>
+        <td style="color:var(--text-muted);font-size:0.8rem">${_esc(inv.email || '—')}</td>
         <td>
           <span style="display:inline-flex;align-items:center;gap:5px;background:${m.color}22;color:${m.color};padding:2px 8px;border-radius:20px;font-size:0.75rem;font-weight:600">
             <i class="fa-solid ${m.icon}" style="font-size:10px"></i>${inv.persona}
@@ -7461,6 +10597,88 @@ function renderProvinceChart() {
   });
 }
 
+// Normalise free-text "how heard" values into clean category labels
+function _normalizeHeardSource(raw) {
+  const s = (raw || '').toLowerCase().trim();
+  if (!s || s === 'null' || s === 'undefined') return null;
+  if (s.includes('friend') || s.includes('family') || s.includes('word of mouth') || s.includes('colleague') || s.includes('referral')) return 'Friend / Family / Referral';
+  if (s.includes('social') || s.includes('instagram') || s.includes('facebook') || s.includes('twitter') || s.includes('tiktok') || s.includes('linkedin')) return 'Social Media';
+  if (s.includes('financial advisor') || s.includes('ifa') || s.includes('advisor') || s.includes('broker')) return 'Financial Advisor (IFA)';
+  if (s.includes('online') || s.includes('search') || s.includes('google') || s.includes('advertising') || s.includes('advert') || s.includes('internet')) return 'Online / Search / Ads';
+  if (s.includes('email') || s.includes('newsletter') || s.includes('mailer')) return 'Email / Newsletter';
+  if (s.includes('event') || s.includes('conference') || s.includes('expo') || s.includes('seminar') || s.includes('webinar')) return 'Event / Conference';
+  if (s.includes('radio') || s.includes('podcast') || s.includes('tv ') || s.includes('television') || s.includes('kaya') || s.includes('media')) return 'Radio / TV / Podcast';
+  if (s.includes('other')) return 'Other';
+  const clean = raw.trim();
+  return clean.length > 35 ? clean.substring(0, 32) + '…' : clean;
+}
+
+function renderGenderChart() {
+  const ctx = document.getElementById('genderChart');
+  if (!ctx) return;
+  const counts = { Male: 0, Female: 0, Unknown: 0 };
+  STATE.investors.forEach(i => {
+    const g = (i.gender || '').trim();
+    if (g === 'Male') counts.Male++;
+    else if (g === 'Female') counts.Female++;
+    else counts.Unknown++;
+  });
+  const total = STATE.investors.length || 1;
+  if (STATE.charts.gender) STATE.charts.gender.destroy();
+  STATE.charts.gender = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Male', 'Female', 'Unknown'],
+      datasets: [{
+        data: [counts.Male, counts.Female, counts.Unknown],
+        backgroundColor: ['#3b82f6', '#eda5ff', '#4b5563'],
+        borderColor: 'var(--dark-2)', borderWidth: 3, hoverOffset: 4
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { color: '#7a92a8', font: { size: 10 }, boxWidth: 10, padding: 10 } },
+        tooltip: { backgroundColor: 'rgba(13,17,23,0.95)', titleColor: '#e8edf2', bodyColor: '#7a92a8',
+          callbacks: { label: c => ` ${c.label}: ${c.parsed} (${Math.round(c.parsed / total * 100)}%)` } }
+      }
+    }
+  });
+}
+
+function renderHeardAboutChart() {
+  const ctx = document.getElementById('heardAboutChart');
+  if (!ctx) return;
+  const counts = {};
+  STATE.investors.forEach(i => {
+    // Prefer top-level column; fall back to JSONB quest answer
+    const raw = (i.heard_about_us || (i.investor_profile && i.investor_profile.heard_via) || '').trim();
+    const label = _normalizeHeardSource(raw);
+    if (!label) return;
+    counts[label] = (counts[label] || 0) + 1;
+  });
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  if (!sorted.length) return;
+  const palette = ['#eda5ff', '#22c55e', '#fec24f', '#3b82f6', '#f97316', '#ef4444', '#65cc88', '#7a92a8', '#a78bfa', '#fb923c'];
+  if (STATE.charts.heardAbout) STATE.charts.heardAbout.destroy();
+  const opts = _chartDefaults();
+  opts.indexAxis = 'y';
+  opts.plugins.tooltip.callbacks = { label: c => ` ${c.parsed.x} investor${c.parsed.x !== 1 ? 's' : ''}` };
+  STATE.charts.heardAbout = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: sorted.map(([k]) => k),
+      datasets: [{
+        label: 'Investors',
+        data: sorted.map(([, v]) => v),
+        backgroundColor: sorted.map((_, i) => palette[i % palette.length]),
+        borderRadius: 4
+      }]
+    },
+    options: opts
+  });
+}
+
 function renderRiskChart() {
   const ctx = document.getElementById('riskChart');
   if (!ctx) return;
@@ -7499,11 +10717,12 @@ function renderTxnFlowChart() {
     return d >= start && d <= end;
   };
   const deposits = monthStarts.map(m =>
-    STATE.transactions.filter(t => t.type === 'deposit' && t.status === 'completed' && _inMonth(t.created_at || t.transaction_date, m))
+    STATE.transactions.filter(t => t.type === 'deposit' && t.status === 'completed' && _inMonth(Utils.txnDate(t), m))
       .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0)
   );
   const payouts = monthStarts.map(m =>
-    STATE.transactions.filter(t => (t.type === 'return' || t.type === 'payout') && t.status === 'completed' && _inMonth(t.created_at || t.transaction_date, m))
+    /* payout-is-cash: the chart series is labelled "Payouts" — money out, not income */
+    STATE.transactions.filter(t => (t.type === 'return' || t.type === 'payout') && t.status === 'completed' && _inMonth(Utils.txnDate(t), m))
       .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0)
   );
 
@@ -7555,9 +10774,25 @@ function renderConversionFunnel() {
   );
   const deposited = investors.filter(i => i.id != null && depositedIds.has(i.id)).length;
 
-  // Investors grouped by investment count
+  /* ── Two definitions this whole panel turns on ──────────────────────
+     A ROLLOVER IS NOT A DECISION. maturityCron writes a fresh investments row
+     every time a holding matures and reinvests, so counting rows counts the
+     engine's actions as if they were the client's. An investor who invested
+     once and auto-reinvested four times appeared here as a repeat investor,
+     and the retention figure was mostly the maturity engine looking at itself.
+
+     THE DATE AN INVESTMENT STARTED IS NOT THE DATE ITS ROW WAS WRITTEN. For
+     anything migrated they are months apart, and for a ledger imported in one
+     batch every created_at is the import timestamp — which is why "avg days to
+     invest" read 0d: it was measuring the gap between two copies of the same
+     import date. start_date is when the money went in. */
+  const _newMoney = inv => !inv.is_reinvestment;
+  const _invDate  = inv => new Date(inv.start_date || inv.created_at);
+  const _signupDate = i => new Date(i.date_joined || i.created_at);
+
+  // Investors grouped by how many investments they CHOSE to make
   const invCountById = {};
-  investments.filter(inv => inv.investor_id != null).forEach(inv => {
+  investments.filter(inv => inv.investor_id != null && _newMoney(inv)).forEach(inv => {
     invCountById[inv.investor_id] = (invCountById[inv.investor_id] || 0) + 1;
   });
   const investedIds  = new Set(Object.keys(invCountById));
@@ -7583,6 +10818,8 @@ function renderConversionFunnel() {
     { label: 'FICA Approved',       count: ficaApproved,   color: '#fec24f', icon: '✅' },
     { label: 'First Deposit',       count: deposited,      color: '#22c55e', icon: '💳' },
     { label: 'First Investment',    count: invested,       color: '#fec24f', icon: '📈' },
+    /* Repeat means a second DECISION. Rollovers are excluded upstream, so this
+       no longer counts the maturity engine's own writes as client behaviour. */
     { label: 'Repeat Investor',     count: multiInvested,  color: '#f97316', icon: '🔄' },
     { label: 'Recurring Set',       count: recurring,      color: '#eda5ff', icon: '⚡' },
     { label: 'Referred Someone',    count: referred,       color: '#ec4899', icon: '🎁' },
@@ -7592,44 +10829,42 @@ function renderConversionFunnel() {
   const totalAUM  = investments.filter(i => i.status === 'active').reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
   const activeAUM = investments.filter(i => i.status === 'active' && i.investor_id != null && investedIds.has(i.investor_id)).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
 
-  // Average first investment amount
-  const firstInvByInvestor = {};
+  /* Each investor's FIRST investment: new money only, earliest by the date the
+     money went in. Ordering by created_at put a rollover first whenever the
+     rows were written together, which is every migrated account. */
+  const firstInvestment = {};
   investments
-    .filter(inv => inv.investor_id != null && inv.created_at)
-    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    .filter(inv => inv.investor_id != null && _newMoney(inv) && (inv.start_date || inv.created_at))
+    .sort((a, b) => _invDate(a) - _invDate(b))
     .forEach(inv => {
-      if (!firstInvByInvestor[inv.investor_id]) {
-        firstInvByInvestor[inv.investor_id] = parseFloat(inv.amount) || 0;
-      }
+      if (!firstInvestment[inv.investor_id]) firstInvestment[inv.investor_id] = inv;
     });
-  const firstInvAmts = Object.values(firstInvByInvestor);
+  const firstInvAmts = Object.values(firstInvestment).map(inv => parseFloat(inv.amount) || 0);
   const avgFirstInv  = firstInvAmts.length
     ? firstInvAmts.reduce((s, v) => s + v, 0) / firstInvAmts.length
     : 0;
 
-  // Avg days signup → first investment
+  /* Avg days signup → first investment, measured on the dates the two things
+     happened rather than on when their rows were written. */
   const daysToInvest = [];
   investors.forEach(inv => {
-    if (!inv.id || !inv.created_at || !invCountById[inv.id]) return;
-    const firstInvDate = investments
-      .filter(i => i.investor_id === inv.id && i.created_at)
-      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))[0]?.created_at;
-    if (firstInvDate) {
-      const days = (new Date(firstInvDate) - new Date(inv.created_at)) / 86400000;
-      if (days >= 0 && days < 3650) daysToInvest.push(days);
-    }
+    if (!inv.id) return;
+    const first = firstInvestment[inv.id];
+    if (!first) return;
+    const signup = _signupDate(inv);
+    if (isNaN(signup)) return;
+    const days = (_invDate(first) - signup) / 86400000;
+    if (days >= 0 && days < 3650) daysToInvest.push(days);
   });
   const avgDays = daysToInvest.length
     ? Math.round(daysToInvest.reduce((s, v) => s + v, 0) / daysToInvest.length)
     : null;
+  const daysSample = daysToInvest.length;
 
-  // Most popular product type for first investment
+  // Most popular product type for a first investment
   const firstInvProducts = {};
-  Object.keys(firstInvByInvestor).forEach(invId => {
-    const inv = investments
-      .filter(i => i.investor_id === invId && i.created_at)
-      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))[0];
-    if (inv?.product_type) {
+  Object.values(firstInvestment).forEach(inv => {
+    if (inv && inv.product_type) {
       firstInvProducts[inv.product_type] = (firstInvProducts[inv.product_type] || 0) + 1;
     }
   });
@@ -7674,17 +10909,20 @@ function renderConversionFunnel() {
       <div style="background:rgba(34,197,94,0.08);border-radius:8px;padding:10px 12px">
         <div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px">Total AUM</div>
         <div style="font-size:1.05rem;font-weight:700;color:#22c55e">${fmt(totalAUM)}</div>
-        <div style="font-size:0.68rem;color:var(--text-muted)">all investors</div>
+        <div style="font-size:0.68rem;color:var(--text-muted)">active investments</div>
       </div>
       <div style="background:rgba(237,165,255,0.08);border-radius:8px;padding:10px 12px">
         <div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px">Avg 1st Invest</div>
         <div style="font-size:1.05rem;font-weight:700;color:#656565">${avgFirstInv > 0 ? fmt(avgFirstInv) : '—'}</div>
-        <div style="font-size:0.68rem;color:var(--text-muted)">per investor</div>
+        <div style="font-size:0.68rem;color:var(--text-muted)">new money, per investor</div>
       </div>
       <div style="background:rgba(59,130,246,0.08);border-radius:8px;padding:10px 12px">
         <div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px">Avg days to invest</div>
         <div style="font-size:1.05rem;font-weight:700;color:#656565">${avgDays !== null ? avgDays + 'd' : '—'}</div>
-        <div style="font-size:0.68rem;color:var(--text-muted)">signup → 1st investment</div>
+        <div style="font-size:0.68rem;color:var(--text-muted)">signup → 1st investment${
+          /* The sample size, because a mean over three people reads exactly
+             like a mean over three hundred and is worth a great deal less. */
+          daysSample ? ` · ${daysSample} investor${daysSample === 1 ? '' : 's'}` : ''}</div>
       </div>
       <div style="background:rgba(249,115,22,0.08);border-radius:8px;padding:10px 12px">
         <div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px">Top pool</div>
@@ -7694,7 +10932,7 @@ function renderConversionFunnel() {
       <div style="background:rgba(237,165,255,0.08);border-radius:8px;padding:10px 12px">
         <div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px">Retention</div>
         <div style="font-size:1.05rem;font-weight:700;color:#eda5ff">${invested > 0 ? Math.round(multiInvested/invested*100) : 0}%</div>
-        <div style="font-size:0.68rem;color:var(--text-muted)">made 2+ investments</div>
+        <div style="font-size:0.68rem;color:var(--text-muted)">chose to invest 2+ times</div>
       </div>
     </div>
   `;
@@ -7703,6 +10941,271 @@ function renderConversionFunnel() {
 /* ═══════════════════════════════════════════════
    SIGNUP FRICTION ANALYSIS
    ═══════════════════════════════════════════════ */
+async function loadInvestFunnel() {
+  const panel = document.getElementById('investFunnelPanel');
+  if (!panel) return;
+  panel.innerHTML = '<div class="text-center text-muted" style="padding:20px"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div>';
+  try {
+    const days = document.getElementById('investFunnelDaysFilter')?.value || 30;
+    const token = (typeof Auth !== 'undefined') ? Auth.getToken() : '';
+    const res = await fetch(`/api/analytics/invest-funnel/summary?days=${days}`, {
+      credentials: 'include',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    /* Empty and broken are different things, and this panel used to report them
+       identically: any failure — a 500, a 403, a network drop — landed in the
+       catch and drew "No funnel data yet". Someone reading that concluded the
+       marketplace was quiet when the endpoint was down. */
+    const opened = Number(data?.funnel?.opened) || 0;
+    const total  = opened + (Number(data?.funnel?.confirmed) || 0) + (Number(data?.funnel?.abandoned) || 0);
+    if (!total) {
+      const days = document.getElementById('investFunnelDaysFilter')?.value || 30;
+      panel.innerHTML = `<div class="text-center text-muted" style="padding:20px">
+        No marketplace activity in the last ${_esc(String(days))} days.<br>
+        <span style="font-size:0.78rem">Events are recorded when an investor opens the invest modal in the portal.
+        A longer window may show more.</span></div>`;
+      return;
+    }
+    renderInvestFunnel(data, panel);
+  } catch (err) {
+    /* Say what actually went wrong, and offer the way back. */
+    panel.innerHTML = `<div class="text-center" style="padding:20px;color:#ef4444">
+      Could not load the investment funnel: ${_esc(err.message || 'error')}<br>
+      <button class="btn btn--secondary btn--sm" style="margin-top:10px" onclick="loadInvestFunnel()">Retry</button>
+    </div>`;
+    console.error('[invest-funnel]', err);
+  }
+}
+
+function renderInvestFunnel(data, panel) {
+  const { funnel = {}, conversion_rate = 0, fee_aversion_rate = 0,
+          abandoned_breakdown = {}, insufficient_funds = [],
+          topup_cancelled = 0, by_product = [], daily_trend = [], by_pool = [], by_investor = [] } = data;
+
+  const { opened = 0, fee_shown = 0, confirmed = 0, abandoned = 0 } = funnel;
+
+  /* One bad field should cost one cell, not the whole panel. A count that
+     arrives null or non-numeric renders as a dash — still visible as wrong,
+     but the surrounding rows keep working. */
+  /* Number(null) and Number('') are both 0, so a missing count would coerce to
+     a confident zero — which is the one answer worse than a dash. */
+  function _n(v) {
+    if (v === null || v === undefined || v === '') return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+  function _num(v) { const n = _n(v); return n === null ? '—' : n.toLocaleString(); }
+  function _rate(a, b) { const x = _n(a), y = _n(b); return y > 0 ? Math.round(x / y * 100) : 0; }
+
+  function pct(n, d) { return d > 0 ? Math.round(n / d * 100) : 0; }
+  function dropBadge(drop) {
+    if (!drop) return '';
+    const col = drop >= 40 ? '#ef4444' : drop >= 20 ? '#f97316' : '#fec24f';
+    return `<span style="font-size:0.68rem;color:${col};background:${col}18;padding:2px 6px;border-radius:4px;margin-left:8px">−${drop}% drop</span>`;
+  }
+
+  const steps = [
+    { label: 'Modal opened',  val: opened,    prev: null,    color: '#eda5ff' },
+    { label: 'Fee breakdown seen', val: fee_shown, prev: opened,  color: '#fec24f' },
+    { label: 'Confirmed',     val: confirmed, prev: fee_shown, color: '#22c55e' },
+    { label: 'Abandoned',     val: abandoned, prev: opened,  color: '#ef4444' },
+  ];
+  const maxVal = Math.max(...steps.map(s => s.val), 1);
+
+  const funnelHtml = steps.map(s => {
+    const barPct = Math.round(s.val / maxVal * 100);
+    const drop   = s.prev != null && s.prev > 0 ? Math.round((1 - s.val / s.prev) * 100) : 0;
+    return `
+      <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
+        <div style="width:130px;font-size:0.78rem;font-weight:600;color:var(--text);flex-shrink:0">${s.label}</div>
+        <div style="flex:1;height:8px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden">
+          <div style="height:100%;width:${barPct}%;background:${s.color};border-radius:4px;transition:width 0.6s ease"></div>
+        </div>
+        <div style="width:44px;text-align:right;font-size:0.82rem;font-weight:700;color:var(--text)">${s.val.toLocaleString()}</div>
+        <div style="width:80px">${s.prev != null && drop > 0 ? dropBadge(drop) : ''}</div>
+      </div>`;
+  }).join('');
+
+  const abFeeAversion = fee_aversion_rate > 0 ? `${Math.round(fee_aversion_rate * 100)}%` : '—';
+  const insufAtOpen   = (insufficient_funds.find(r => r.stage === 'modal_open')?.count   || 0).toLocaleString();
+  const insufAtAmount = (insufficient_funds.find(r => r.stage === 'amount_entry')?.count || 0).toLocaleString();
+
+  const productHtml = by_product.length
+    ? by_product.map(r => {
+        const conv = r.opened > 0 ? Math.round(r.confirmed / r.opened * 100) : 0;
+        const col  = conv >= 60 ? '#22c55e' : conv >= 30 ? '#fec24f' : '#ef4444';
+        return `<tr>
+          <td style="padding:6px 8px;font-size:0.78rem;color:var(--text)">${r.product_type || '—'}</td>
+          <td style="padding:6px 8px;font-size:0.78rem;text-align:right">${r.opened.toLocaleString()}</td>
+          <td style="padding:6px 8px;font-size:0.78rem;text-align:right">${r.confirmed.toLocaleString()}</td>
+          <td style="padding:6px 8px;font-size:0.78rem;font-weight:700;color:${col};text-align:right">${conv}%</td>
+        </tr>`;
+      }).join('')
+    : '<tr><td colspan="4" style="padding:12px;font-size:0.78rem;color:var(--text-muted);text-align:center">No data yet</td></tr>';
+
+  panel.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:18px">
+      <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;text-align:center">
+        <div style="font-size:1.5rem;font-weight:800;color:#eda5ff">${opened.toLocaleString()}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px">Modals opened</div>
+      </div>
+      <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;text-align:center">
+        <div style="font-size:1.5rem;font-weight:800;color:#22c55e">${Math.round(conversion_rate * 100)}%</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px">Open → Confirmed</div>
+      </div>
+      <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;text-align:center">
+        <div style="font-size:1.5rem;font-weight:800;color:#ef4444">${abFeeAversion}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px">Fee-aversion rate</div>
+      </div>
+      <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;text-align:center">
+        <div style="font-size:1.5rem;font-weight:800;color:#f97316">${topup_cancelled.toLocaleString()}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px">Top-up cancelled</div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:18px">
+      <div style="font-size:0.8rem;font-weight:700;color:var(--text);margin-bottom:8px">Invest modal funnel</div>
+      ${funnelHtml}
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px">
+      <div>
+        <div style="font-size:0.8rem;font-weight:700;color:var(--text);margin-bottom:8px">Abandoned: why they left</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.78rem;padding:7px 10px;background:rgba(239,68,68,0.07);border-radius:8px">
+            <span style="color:var(--text)">Saw fee, still left</span>
+            <strong style="color:#ef4444">${(abandoned_breakdown.fee_seen || 0).toLocaleString()}</strong>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.78rem;padding:7px 10px;background:var(--card-bg);border:1px solid var(--border);border-radius:8px">
+            <span style="color:var(--text)">Left before entering amount</span>
+            <strong style="color:#6b7280">${(abandoned_breakdown.no_fee_seen || 0).toLocaleString()}</strong>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:0.8rem;font-weight:700;color:var(--text);margin-bottom:8px">Insufficient funds wall</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.78rem;padding:7px 10px;background:rgba(249,115,22,0.07);border-radius:8px">
+            <span style="color:var(--text)">Wallet too low at modal open</span>
+            <strong style="color:#f97316">${insufAtOpen}</strong>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.78rem;padding:7px 10px;background:var(--card-bg);border:1px solid var(--border);border-radius:8px">
+            <span style="color:var(--text)">Typed more than wallet holds</span>
+            <strong style="color:#f97316">${insufAtAmount}</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div style="font-size:0.8rem;font-weight:700;color:var(--text);margin-bottom:8px">Conversion by product</div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="border-bottom:2px solid var(--border)">
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:left;color:var(--text-muted)">Product</th>
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:right;color:var(--text-muted)">Opened</th>
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:right;color:var(--text-muted)">Confirmed</th>
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:right;color:var(--text-muted)">Conv %</th>
+            </tr>
+          </thead>
+          <tbody>${productHtml}</tbody>
+        </table>
+      </div>
+    </div>
+
+    ${by_pool.length ? `
+    <div style="margin-top:18px">
+      <div style="font-size:0.8rem;font-weight:700;color:var(--text);margin-bottom:8px">Drop-off by pool</div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="border-bottom:2px solid var(--border)">
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:left;color:var(--text-muted)">Pool</th>
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:right;color:var(--text-muted)">Opened</th>
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:right;color:var(--text-muted)">Fee seen</th>
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:right;color:var(--text-muted)">Confirmed</th>
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:right;color:var(--text-muted)">Abandoned</th>
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:right;color:var(--text-muted)">Conv %</th>
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:right;color:var(--text-muted)">Drop %</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${by_pool.map(r => {
+              const conv     = _rate(r.confirmed, r.opened);
+              const dropRate = _rate(r.abandoned, r.opened);
+              const convCol  = conv >= 60 ? '#22c55e' : conv >= 30 ? '#fec24f' : '#ef4444';
+              const dropCol  = dropRate >= 60 ? '#ef4444' : dropRate >= 30 ? '#f97316' : '#fec24f';
+              const poolName = r.pool_name || r.pool_id || '—';
+              return `<tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:6px 8px;font-size:0.78rem;color:var(--text);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(poolName)}">${_esc(poolName)}</td>
+                <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">${_num(r.opened)}</td>
+                <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">${_num(r.fee_shown)}</td>
+                <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">${_num(r.confirmed)}</td>
+                <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">${_num(r.abandoned)}</td>
+                <td style="padding:6px 8px;font-size:0.78rem;font-weight:700;color:${convCol};text-align:right">${conv}%</td>
+                <td style="padding:6px 8px;font-size:0.78rem;font-weight:700;color:${dropCol};text-align:right">${dropRate}%</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>` : ''}
+
+    ${by_investor.length ? `
+    <div style="margin-top:18px">
+      <div style="font-size:0.8rem;font-weight:700;color:var(--text);margin-bottom:8px">Drop-off by investor <span style="font-weight:400;color:var(--text-muted)">(top 25 by abandons)</span></div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="border-bottom:2px solid var(--border)">
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:left;color:var(--text-muted)">Investor</th>
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:left;color:var(--text-muted)">Account No.</th>
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:left;color:var(--text-muted)">KYC</th>
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:right;color:var(--text-muted)">Total invested</th>
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:right;color:var(--text-muted)">Opened</th>
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:right;color:var(--text-muted)">Abandoned</th>
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:right;color:var(--text-muted)">Confirmed</th>
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:right;color:var(--text-muted)">After fee?</th>
+              <th style="padding:6px 8px;font-size:0.72rem;text-align:right;color:var(--text-muted)">Drop %</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${by_investor.map(r => {
+              const dropRate  = _rate(r.abandoned, r.opened);
+              const dropCol   = dropRate >= 70 ? '#ef4444' : dropRate >= 40 ? '#f97316' : '#fec24f';
+              const kycColor  = r.kyc_status === 'verified' ? '#22c55e' : r.kyc_status === 'pending' ? '#fec24f' : 'var(--text-muted)';
+              const invested  = r.total_invested ? 'R ' + Number(r.total_invested).toLocaleString('en-ZA', {minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
+              /* investors.id is the account number — "INV-…", the same string
+                 the statement prints. An id that did not resolve to an
+                 investor is shown as-is rather than dressed up as one. */
+              const acctNo    = r.investor_id || '—';
+              const resolved  = !!(r.investor_name || r.email);
+              const name      = r.investor_name || r.email || 'Unknown investor';
+              /* abandoned_after_fee is a BOOL_OR — a flag, not a count. It used
+                 to be interpolated as a number, so it read "true ⚠". */
+              const afterFee  = r.abandoned_after_fee === true || r.abandoned_after_fee === 'true';
+              return `<tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:6px 8px;font-size:0.78rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${resolved ? 'var(--text)' : 'var(--text-muted)'};font-style:${resolved ? 'normal' : 'italic'}" title="${_esc(r.email || '')}">${_esc(name)}</td>
+                <td style="padding:6px 8px;font-size:0.72rem;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--text-muted);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(acctNo)}">${_esc(acctNo)}</td>
+                <td style="padding:6px 8px;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;color:${kycColor}">${_esc(r.kyc_status || '—')}</td>
+                <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">${invested}</td>
+                <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">${_num(r.opened)}</td>
+                <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:#ef4444;font-weight:700">${_num(r.abandoned)}</td>
+                <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:#22c55e">${_num(r.confirmed)}</td>
+                <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:${afterFee ? '#f97316' : 'var(--text-muted)'}">${afterFee ? 'Yes ⚠' : 'No'}</td>
+                <td style="padding:6px 8px;font-size:0.78rem;font-weight:700;color:${dropCol};text-align:right">${dropRate}%</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>` : ''}
+`;
+}
+
 async function loadSignupFriction() {
   const panel = document.getElementById('frictionPanel');
   if (!panel) return;
@@ -7717,9 +11220,18 @@ async function loadSignupFriction() {
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
+    /* Empty and broken are different things — see loadInvestFunnel. */
+    if (!Number(data.total_sessions)) {
+      panel.innerHTML = `<div class="text-center text-muted" style="padding:20px">No friction data yet — it will appear once users visit the signup page.</div>`;
+      return;
+    }
     renderSignupFriction(data, panel);
   } catch (err) {
-    panel.innerHTML = `<div class="text-center text-muted" style="padding:20px">No friction data yet — it will appear once users visit the signup page.</div>`;
+    panel.innerHTML = `<div class="text-center" style="padding:20px;color:#ef4444">
+      Could not load the signup friction analysis: ${_esc(err.message || 'error')}<br>
+      <button class="btn btn--secondary btn--sm" style="margin-top:10px" onclick="loadSignupFriction()">Retry</button>
+    </div>`;
+    console.error('[signup-friction]', err);
   }
 }
 
@@ -7732,7 +11244,11 @@ function renderSignupFriction(data, panel) {
   step_funnel.forEach(s => { stepByNum[s.step] = s.sessions; });
   const maxSessions = Math.max(...step_funnel.map(s => s.sessions), 1);
 
-  const stepNames = { 1: 'Personal Info', 2: 'Security', 3: 'Profile', 4: 'FICA Docs' };
+  /* Must match what each step actually asks for. Identity moved from step 1 to
+     step 2, so a panel still labelled "Personal Info" and "Security" would
+     describe the form as it was before the change and quietly misread the
+     first week of data comparing the two. */
+  const stepNames = { 1: 'Contact', 2: 'Identity & Security', 3: 'Address & Profile', 4: 'FICA Docs' };
   const stepColors = { 1: '#656565', 2: '#656565', 3: '#fec24f', 4: '#22c55e' };
 
   function fmtMs(ms) {
@@ -8031,7 +11547,13 @@ async function loadSettings() {
     STATE.settings = res.data || [];
     renderSettings();
     await tfa_loadStatus(); // load 2FA status alongside platform settings
-  } catch (e) { Toast.error('Failed to load settings'); }
+  } catch (e) {
+    // Say what actually failed. This read 'Failed to load settings' and
+    // discarded the reason, so a 403, a 500 and a render bug all looked
+    // identical and none could be diagnosed without devtools.
+    console.error('[load settings]', e);
+    Toast.error(`Failed to load settings` + (e && e.message ? ` — ${e.message}` : ''));
+  }
 }
 
 async function tfa_loadStatus() {
@@ -8260,8 +11782,8 @@ function renderIFATable(filterStatus = '', searchQ = '') {
         <div class="flex-center gap-10">
           <div class="avatar avatar--sm avatar--gold">${initials.toUpperCase()}</div>
           <div>
-            <div class="td-strong clip">${ifa.first_name} ${ifa.last_name}</div>
-            <div class="td-muted clip" style="font-size:0.72rem">${ifa.email}</div>
+            <div class="td-strong clip">${_esc(ifa.first_name)} ${_esc(ifa.last_name)}</div>
+            <div class="td-muted clip" style="font-size:0.72rem">${_esc(ifa.email)}</div>
           </div>
         </div>
       </td>
@@ -8352,7 +11874,7 @@ function viewIFA(ifaId) {
         ${ifa.notes ? `
         <div class="panel mt-12">
           <div class="panel__header"><span class="panel__title">Admin Notes</span></div>
-          <div class="panel__body" style="font-size:0.82rem">${ifa.notes}</div>
+          <div class="panel__body" style="font-size:0.82rem">${_esc(ifa.notes)}</div>
         </div>` : ''}
       </div>
     </div>
@@ -8503,7 +12025,7 @@ function openLinkClientModal(ifaId) {
   const unlinked = STATE.investors.filter(inv => !linked.includes(inv.id));
   const sel = document.getElementById('linkClientInvestorSelect');
   sel.innerHTML = '<option value="">— Choose investor —</option>' +
-    unlinked.map(inv => `<option value="${inv.id}">${inv.first_name} ${inv.last_name} (${inv.email})</option>`).join('');
+    unlinked.map(inv => `<option value="${inv.id}">${_esc(inv.first_name)} ${_esc(inv.last_name)} (${_esc(inv.email)})</option>`).join('');
 
   Modal.open('linkClientModal');
 }
@@ -8625,9 +12147,9 @@ function openKycUploadModal(investorId, investorName) {
       kycDropdown.innerHTML = matches.map(inv => {
         const name = `${inv.first_name || ''} ${inv.last_name || ''}`.trim() || '—';
         const emailLine = inv.email
-          ? `<span style="color:var(--text-muted);font-size:0.77rem">${inv.email}</span>` : '';
-        return `<li data-id="${inv.id}" data-name="${name}" style="padding:9px 14px;cursor:pointer;display:flex;flex-direction:column;gap:2px">
-          <span style="font-weight:600;font-size:0.87rem">${name}
+          ? `<span style="color:var(--text-muted);font-size:0.77rem">${_esc(inv.email)}</span>` : '';
+        return `<li data-id="${inv.id}" data-name="${_esc(name)}" style="padding:9px 14px;cursor:pointer;display:flex;flex-direction:column;gap:2px">
+          <span style="font-weight:600;font-size:0.87rem">${_esc(name)}
             <span style="color:var(--text-muted);font-weight:400;font-size:0.8rem">(${inv.id})</span>
           </span>
           ${emailLine}
@@ -8692,7 +12214,7 @@ function _kycPreviewFile(file) {
     preview.innerHTML = isPdf
       ? `<div style="background:#1a1d23;border-radius:8px;padding:16px;text-align:center;margin-top:12px">
            <i class="fa-solid fa-file-pdf" style="font-size:2.5rem;color:#ef4444;margin-bottom:8px;display:block"></i>
-           <div style="font-size:0.8rem;color:var(--text-muted)">${file.name}</div>
+           <div style="font-size:0.8rem;color:var(--text-muted)">${_esc(file.name)}</div>
          </div>`
       : `<img src="${dataUrl}" alt="Preview" style="max-width:100%;max-height:200px;border-radius:8px;margin-top:12px;display:block" />`;
     /* Store on the form element for retrieval on save */
@@ -8823,13 +12345,34 @@ function setupGlobalSearch() {
     }));
     if (pools.length) groups.push({ label: 'Pools', items: pools });
 
-    const transactions = STATE.transactions.filter(t => (t.reference||'').toLowerCase().includes(q) || (t.investor_id||'').toLowerCase().includes(q)).slice(0, 4).map(t => ({
+    const transactions = STATE.transactions.filter(t => (t.reference||'').toLowerCase().includes(q) || (t.id||'').toLowerCase().includes(q) || (t.investor_id||'').toLowerCase().includes(q)).slice(0, 4).map(t => ({
       icon: 'fa-arrows-rotate', color: '#22c55e',
       title: `${t.type} — ${Utils.rand(t.amount)}`,
       sub: `Ref: ${t.reference||'—'} · ${Utils.date(t.transaction_date||t.created_at)}`,
       action: () => { input.value = ''; close(); navigate('transactions', document.querySelector('[data-view=transactions]')); setTimeout(() => { const el = document.getElementById('txnSearch'); if (el) { el.value = t.reference||''; el.dispatchEvent(new Event('input')); } }, 200); }
     }));
     if (transactions.length) groups.push({ label: 'Transactions', items: transactions });
+
+    /* The palette only sees the transactions the console has loaded. A
+       reference off a statement is often older than that, so always offer the
+       ledger lookup — it opens the transactions view with the reference in the
+       search box, and that search now goes to the server. */
+    if (q.length >= 3) {
+      groups.push({ label: 'Ledger', items: [{
+        icon: 'fa-magnifying-glass-dollar', color: '#eda5ff',
+        title: `Search the full ledger for “${q}”`,
+        sub: 'Every transaction on record — by reference, description or id',
+        action: () => {
+          const term = input.value.trim();
+          input.value = ''; close();
+          navigate('transactions', document.querySelector('[data-view=transactions]'));
+          setTimeout(() => {
+            const el = document.getElementById('txnSearch');
+            if (el) { el.value = term; el.dispatchEvent(new Event('input')); }
+          }, 200);
+        }
+      }] });
+    }
 
     flatResults = groups.flatMap(group => group.items);
     if (!flatResults.length) {
@@ -8852,7 +12395,7 @@ function setupGlobalSearch() {
                 <i class="fa-solid ${item.icon}" style="color:${item.color};font-size:0.8rem"></i>
               </div>
               <div style="min-width:0">
-                <div style="font-size:0.82rem;font-weight:700;color:var(--text)">${item.title}</div>
+                <div style="font-size:0.82rem;font-weight:700;color:var(--text)">${_esc(item.title)}</div>
                 <div style="font-size:0.72rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.sub}</div>
               </div>
             </div>`;
@@ -8898,6 +12441,916 @@ function setupGlobalSearch() {
 }
 
 /* ═══════════════════════════════════════════════
+   POOL RAISE REPORT
+   Where a closed pool's money came from, and what the raise cost.
+   ═══════════════════════════════════════════════ */
+let _POOL_RAISE_REPORT = null;
+
+async function openPoolRaiseReport(poolId) {
+  Toast.info('Building raise report…');
+  try {
+    const data = await API._fetch('GET', 'admin/pool-raise-report', null, { pool_id: poolId });
+    if (data.error) throw new Error(data.error);
+    if (!data.rows.length) { Toast.error('This pool has no investments to report on'); return; }
+    _POOL_RAISE_REPORT = data;
+    _openPoolRaiseReportWindow(data);
+  } catch (e) {
+    Toast.error('Raise report failed: ' + (e.message || 'error'));
+  }
+}
+
+const _poolRaiseFileBase = d =>
+  `SV_Capital_Raise_${String(d.pool.name || d.pool.id).replace(/[^A-Za-z0-9]+/g, '_')}`;
+
+function _poolRaiseCSVRows(d) {
+  const rows = [[
+    'Investment ID', 'Holder', 'Holder ID', 'Sub-account', 'Amount', 'Source',
+    'Source pool', 'Source product', 'Platform fee paid', 'Platform fee expected',
+    'Upfront fee', 'EVA', 'Net of upfront fee', 'Status', 'Started',
+  ]];
+  for (const r of d.rows) {
+    rows.push([
+      r.investmentId, r.holderName || '', r.holderId || '', r.isSubAccount ? 'yes' : 'no',
+      r.amount, r.kindLabel, r.sourcePoolName || '', r.sourceProductType || '',
+      r.platformFeePaid, r.platformFeeExpected, r.upfrontFee, r.eva, r.netAmount,
+      r.status || '', r.startDate ? String(r.startDate).slice(0, 10) : '',
+    ]);
+  }
+  rows.push([]);
+  rows.push(['TOTAL RAISED', '', '', '', d.totals.raised]);
+  rows.push(['New money', '', '', '', d.totals.newMoney]);
+  rows.push(['Reinvested', '', '', '', d.totals.reinvested]);
+  rows.push(['Switched in', '', '', '', d.totals.switchedIn]);
+  if (d.totals.sourceUnknown > 0) rows.push(['Reinvested, source not recorded', '', '', '', d.totals.sourceUnknown]);
+  rows.push(['Platform fees paid', '', '', '', d.totals.platformFeesPaid]);
+  rows.push(['Upfront fees', '', '', '', d.totals.upfrontFees]);
+  rows.push(['Investors', '', '', '', d.totals.investors]);
+  rows.push(['Investments', '', '', '', d.totals.investments]);
+  return rows;
+}
+
+function _poolRaiseCSVText(d) {
+  return '﻿' + _poolRaiseCSVRows(d).map(r => r.map(cell => {
+    const c = String(cell == null ? '' : cell).replace(/"/g, '""');
+    return /[,"\n\r]/.test(c) ? `"${c}"` : c;
+  }).join(',')).join('\r\n');
+}
+
+function downloadPoolRaiseCSV() {
+  const d = _POOL_RAISE_REPORT;
+  if (!d) { Toast.error('Open the report first'); return; }
+  _downloadCSV(_poolRaiseCSVRows(d), `${_poolRaiseFileBase(d)}.csv`);
+}
+
+function _buildPoolRaisePDF(d) {
+  if (!d || !window.jspdf || !window.jspdf.jsPDF) return null;
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+  if (typeof doc.autoTable !== 'function') return null;
+
+  const money = n => 'R ' + parseFloat(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const day = v => { const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? `${+m[3]} ${MONTHS[+m[2] - 1]} ${m[1]}` : '—'; };
+  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+  const PURPLE = [237,165,255], INK = [31,41,55], MUTED = [107,114,128], AMBER = [180,83,9];
+
+  doc.setFillColor(PURPLE[0], PURPLE[1], PURPLE[2]); doc.rect(0, 0, W, 5, 'F');
+  doc.setTextColor(INK[0], INK[1], INK[2]); doc.setFont('helvetica','bold'); doc.setFontSize(16);
+  doc.text('Pool Raise Report', 40, 44);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9);
+  doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+  doc.text(String(d.pool.name || ''), 40, 60);
+  doc.text(`Raised ${day(d.pool.openedOn)} to ${day(d.pool.closedOn)}  ·  ${d.pool.productType || ''}`, 40, 73);
+  doc.text('SV Capital (Pty) Ltd — FSCA Regulated Financial Services Provider', W - 40, 44, { align: 'right' });
+  doc.text(`Issued ${new Date().toLocaleString('en-ZA', { dateStyle: 'long', timeStyle: 'short' })}`, W - 40, 60, { align: 'right' });
+
+  doc.setTextColor(INK[0], INK[1], INK[2]); doc.setFont('helvetica','bold'); doc.setFontSize(10);
+  doc.text(`Total raised ${money(d.totals.raised)}     ${d.totals.investments} investments · ${d.totals.investors} investors`, 40, 94);
+
+  const table = (head, body, startY) => {
+    doc.autoTable({ head: [head], body, startY,
+      styles: { fontSize: 7.5, cellPadding: 3, overflow: 'linebreak', textColor: [17,17,17] },
+      headStyles: { fillColor: [243,244,246], textColor: [55,65,81], fontStyle: 'bold' },
+      margin: { left: 40, right: 40 }, theme: 'grid' });
+    return doc.lastAutoTable.finalY + 20;
+  };
+  const heading = (t, atY) => {
+    doc.setTextColor(INK[0], INK[1], INK[2]); doc.setFont('helvetica','bold'); doc.setFontSize(9);
+    doc.text(t, 40, atY); return atY + 8;
+  };
+
+  let y = heading('Where the money came from', 116);
+  const composition = [
+    ['New money', String(d.totals.newMoneyCount), money(d.totals.newMoney)],
+    ['Reinvested from the same product', String(d.totals.reinvestedCount), money(d.totals.reinvested)],
+    ['Switched in from another product', String(d.totals.switchedInCount), money(d.totals.switchedIn)],
+  ];
+  if (d.totals.sourceUnknown > 0) {
+    composition.push(['Reinvested — source pool not recorded', String(d.totals.sourceUnknownCount), money(d.totals.sourceUnknown)]);
+  }
+  composition.push(['TOTAL RAISED', String(d.totals.investments), money(d.totals.raised)]);
+  y = table(['Source', 'Investments', 'Amount'], composition, y);
+
+  if (d.sources.length) {
+    y = heading('Rolled in, by the pool it came from', y);
+    y = table(['Source pool', 'Product', 'Switched', 'Investments', 'Investors', 'Amount'],
+      d.sources.map(sc => [
+        sc.poolName || 'Not recorded', sc.productType || '—', sc.isSwitch ? 'yes' : 'no',
+        String(sc.count), String(sc.investors), money(sc.amount),
+      ]), y);
+  }
+
+  y = heading('Fees', y);
+  const feeRows = [
+    ['Platform fees paid (1% on new money)', money(d.totals.platformFeesPaid)],
+    ['Upfront fees (' + ((d.pool.managementFeePct || 0) * 100).toFixed(2) + '% management, taken once)', money(d.totals.upfrontFees)],
+    ['of which EVA', money(d.totals.eva)],
+    ['Net of upfront fee', money(d.totals.netRaised)],
+  ];
+  if (d.totals.platformFeeShortfall > 0.005) {
+    feeRows.splice(1, 0, ['Platform fees expected but not recorded', money(d.totals.platformFeeShortfall)]);
+  }
+  y = table(['', 'Amount'], feeRows, y);
+
+  y = heading('By investment', y);
+  table(['Holder', 'Amount', 'Source', 'Source pool', 'Platform fee', 'Upfront fee', 'Net'],
+    d.rows.map(r => [
+      (r.holderName || '—') + (r.isSubAccount ? ' (sub)' : ''),
+      money(r.amount), r.kindLabel, r.sourcePoolName || '—',
+      money(r.platformFeePaid), money(r.upfrontFee), money(r.netAmount),
+    ]), y);
+
+  const pages = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= pages; i++) {
+    doc.setPage(i);
+    doc.setFont('helvetica','normal'); doc.setFontSize(7);
+    doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+    doc.text('Reinvested and switched money is fee-free: it moves from a matured holding straight into this pool without passing through a wallet. ' +
+             'Platform fees shown are the fee transactions actually recorded. The upfront fee is a deduction, not a transaction, and is computed from the pool’s management fee.',
+             40, H - 26);
+    doc.text('SV Capital (Pty) Ltd — www.svcapital.co.za', 40, H - 15);
+    doc.text(`Page ${i} of ${pages}`, W - 40, H - 15, { align: 'right' });
+  }
+  return doc;
+}
+
+function downloadPoolRaisePDF() {
+  const d = _POOL_RAISE_REPORT;
+  if (!d) { Toast.error('Open the report first'); return; }
+  const doc = _buildPoolRaisePDF(d);
+  if (!doc) { Toast.error('PDF library unavailable — use Print instead'); return; }
+  doc.save(`${_poolRaiseFileBase(d)}.pdf`);
+  Toast.success('PDF downloaded');
+}
+
+function _openPoolRaiseReportWindow(d) {
+  /* Same embedding as the maturity report, for the same reason: a data: anchor
+     in a document.write window downloads, a callback into this one is fragile
+     and reports its failures where nobody is looking. */
+  const fileBase = _poolRaiseFileBase(d);
+  const b64 = str => btoa(unescape(encodeURIComponent(str)));
+  const csvHref = 'data:text/csv;charset=utf-8;base64,' + b64(_poolRaiseCSVText(d));
+  let pdfHref = null;
+  try { const doc = _buildPoolRaisePDF(d); if (doc) pdfHref = doc.output('datauristring'); }
+  catch (e) { console.error('[raise report] PDF build failed:', e); }
+
+  const fmt = n => 'R ' + parseFloat(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const fmtDate = v => { const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? `${+m[3]} ${MONTHS_SHORT[+m[2] - 1]} ${m[1]}` : '—'; };
+  const pct = r => r == null ? '—' : (r * 100).toFixed(2) + '%';
+  const issuedAt = new Date().toLocaleString('en-ZA', { dateStyle: 'long', timeStyle: 'short' });
+  const _logoUrl = window.location.origin + '/assets/sv-capital-logo-horizontal-white-text.png';
+  const ref = `SVCRR-${String(d.pool.id).replace(/[^A-Za-z0-9]/g, '').slice(-10)}`;
+  const t = d.totals;
+
+  const sourceRows = d.sources.map(sc => `
+    <tr>
+      <td>${sc.poolName ? _esc(sc.poolName) : '<span style="color:#b45309">Not recorded</span>'}</td>
+      <td>${_esc(sc.productType || '—')}</td>
+      <td>${sc.isSwitch ? '<span class="tag-switch">switched</span>' : '<span style="color:#6b7280">same product</span>'}</td>
+      <td class="num">${sc.count}</td>
+      <td class="num">${sc.investors}</td>
+      <td class="amt">${fmt(sc.amount)}</td>
+    </tr>`).join('');
+
+  const invRows = d.rows.map(r => `
+    <tr>
+      <td>${_esc(r.holderName || '—')}${r.isSubAccount ? ' <span class="tag-sub">sub</span>' : ''}</td>
+      <td class="amt">${fmt(r.amount)}</td>
+      <td>${_esc(r.kindLabel)}${r.kind === 'switch' ? ' <span class="tag-switch">switched</span>' : ''}</td>
+      <td>${r.sourcePoolName ? _esc(r.sourcePoolName) : '<span style="color:#d1d5db">—</span>'}</td>
+      <td class="amt">${r.platformFeePaid > 0 ? fmt(r.platformFeePaid)
+        : (r.kind === 'new' && r.platformFeeExpected > 0
+            ? `<span style="color:#b45309">none recorded</span>`
+            : '<span style="color:#d1d5db">fee-free</span>')}</td>
+      <td class="amt">${fmt(r.upfrontFee)}</td>
+      <td class="amt">${fmt(r.netAmount)}</td>
+    </tr>`).join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<title>SV Capital — Raise Report — ${_esc(d.pool.name)}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,Helvetica,sans-serif;background:#fff;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:12px}
+@page{size:A4 landscape;margin:12mm 14mm}
+@media print{.no-print{display:none!important}.wrap{margin-top:0!important}}
+.no-print{position:fixed;top:0;left:0;right:0;background:#1f2937;padding:9px 20px;display:flex;justify-content:space-between;align-items:center;z-index:99;gap:10px;flex-wrap:wrap}
+.no-print span{color:#fff;font-size:12px;font-weight:600;flex:1}
+.no-print .btn-row{display:flex;gap:8px}
+.no-print button,.no-print a{border:none;padding:7px 16px;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-block;line-height:1.2}
+.btn-print{background:#e5e7eb;color:#111}.btn-csv{background:#22c55e;color:#fff}.btn-pdf{background:#eda5ff;color:#111}
+.btn-note{background:#4b5563;color:#fff;padding:7px 16px;border-radius:5px;font-size:12px;font-weight:700}
+.wrap{max-width:1100px;margin:52px auto 32px;padding:24px 30px;border-top:5px solid #eda5ff}
+.hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:14px;border-bottom:3px solid #1f2937;margin-bottom:18px}
+.hdr-brand p{font-size:10px;color:#6b7280;margin-top:7px}
+.hdr-right{text-align:right}
+.stmt-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#9ca3af;margin-bottom:3px}
+.stmt-title{font-size:20px;font-weight:800;color:#1f2937;margin-bottom:4px}
+.stmt-meta{font-size:10px;color:#6b7280;line-height:1.6}
+.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+.sum-box{border:1.5px solid #e5e7eb;border-radius:7px;padding:11px 13px}
+.sum-box.green{border-color:#bbf7d0;background:#f0fdf4}
+.sum-box.blue{border-color:#bfdbfe;background:#eff6ff}
+.sum-box.purple{border-color:#e9d5ff;background:#faf5ff}
+.sum-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;margin-bottom:4px}
+.sum-amt{font-size:17px;font-weight:800;color:#1f2937}
+.sum-sub{font-size:9px;color:#6b7280;margin-top:3px}
+.sec-hdr{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;padding:6px 10px;border-radius:5px;margin:18px 0 8px;background:#f3f4f6;color:#374151}
+table{width:100%;border-collapse:collapse;font-size:10.5px}
+th{background:#f9fafb;text-align:left;padding:6px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;border-bottom:1.5px solid #e5e7eb}
+td{padding:6px 8px;border-bottom:1px solid #f3f4f6;vertical-align:top}
+.amt,.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tr.total-row td{font-weight:800;background:#f9fafb;border-top:1.5px solid #d1d5db}
+.tag-switch{display:inline-block;background:#ede9fe;color:#5b21b6;font-size:8px;font-weight:800;padding:1px 5px;border-radius:99px;text-transform:uppercase;letter-spacing:.05em}
+.tag-sub{display:inline-block;background:#e5e7eb;color:#374151;font-size:8px;font-weight:700;padding:1px 5px;border-radius:99px}
+.warning{background:#fffbeb;border:1.5px solid #f59e0b;border-radius:6px;padding:10px 13px;margin-bottom:16px;font-size:10.5px;color:#78350f;line-height:1.6}
+.footer{border-top:1px solid #e5e7eb;padding-top:11px;font-size:9px;color:#6b7280;line-height:1.7;margin-top:14px}
+.footer strong{color:#374151}
+.stamp{display:inline-block;border:2px solid #eda5ff;color:#eda5ff;padding:4px 11px;border-radius:3px;font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-top:10px}
+</style></head><body>
+<div class="no-print">
+  <span>SV Capital &mdash; Raise Report &nbsp;&middot;&nbsp; ${_esc(d.pool.name)}</span>
+  <div class="btn-row">
+    ${pdfHref
+      ? `<a class="btn-pdf" href="${pdfHref}" download="${fileBase}.pdf">Download PDF</a>`
+      : `<span class="btn-note" title="jsPDF did not load in the admin console">PDF unavailable &mdash; use Print</span>`}
+    <a class="btn-csv" href="${csvHref}" download="${fileBase}.csv">Download CSV</a>
+    <button class="btn-print" onclick="window.print()">Print</button>
+  </div>
+</div>
+<div class="wrap">
+  <div class="hdr">
+    <div class="hdr-brand">
+      <div style="background:#1f2937;padding:10px 18px;border-radius:8px;display:inline-block"><img src="${_logoUrl}" style="height:46px;width:auto;display:block" alt="SV Capital"></div>
+      <p>FSCA Regulated Financial Services Provider &middot; <span style="color:#eda5ff;font-weight:600">www.svcapital.co.za</span></p>
+    </div>
+    <div class="hdr-right">
+      <div class="stmt-lbl">Document Type</div>
+      <div class="stmt-title">Pool Raise Report</div>
+      <div class="stmt-meta">Ref: <strong>${ref}</strong><br>Pool: ${_esc(d.pool.name)}<br>
+        Raised ${fmtDate(d.pool.openedOn)} &ndash; ${fmtDate(d.pool.closedOn)} &middot; Rate ${pct(d.pool.annualRate)}<br>
+        Issued: ${issuedAt}</div>
+    </div>
+  </div>
+
+  ${t.sourceUnknown > 0 ? `<div class="warning">
+    <strong>${fmt(t.sourceUnknown)} across ${t.sourceUnknownCount} investment(s) is recorded as reinvested but carries no source pool.</strong>
+    It is counted in the total raised and shown separately below. The source is recovered from the rollover's
+    transaction reference, so a holding written before that record existed cannot be traced back.
+  </div>` : ''}
+
+  ${t.platformFeeShortfall > 0.005 ? `<div class="warning">
+    <strong>${fmt(t.platformFeeShortfall)} of platform fee is expected on the new money but has no fee transaction recorded.</strong>
+    "Fees paid" below counts the transactions that exist, not the rule applied to the balances.
+  </div>` : ''}
+
+  <div class="summary">
+    <div class="sum-box">
+      <div class="sum-lbl">Total raised</div>
+      <div class="sum-amt">${fmt(t.raised)}</div>
+      <div class="sum-sub">${t.investments} investment${t.investments === 1 ? '' : 's'} &middot; ${t.investors} investor${t.investors === 1 ? '' : 's'}</div>
+    </div>
+    <div class="sum-box blue">
+      <div class="sum-lbl">New money</div>
+      <div class="sum-amt">${fmt(t.newMoney)}</div>
+      <div class="sum-sub">${t.newMoneyCount} investment${t.newMoneyCount === 1 ? '' : 's'} &middot; carries the platform fee</div>
+    </div>
+    <div class="sum-box green">
+      <div class="sum-lbl">Reinvested</div>
+      <div class="sum-amt">${fmt(t.reinvested)}</div>
+      <div class="sum-sub">${t.reinvestedCount} rolled over from the same product</div>
+    </div>
+    <div class="sum-box purple">
+      <div class="sum-lbl">Switched in</div>
+      <div class="sum-amt">${fmt(t.switchedIn)}</div>
+      <div class="sum-sub">${t.switchedInCount} moved from another product</div>
+    </div>
+  </div>
+
+  <div class="summary">
+    <div class="sum-box">
+      <div class="sum-lbl">Platform fees paid</div>
+      <div class="sum-amt">${fmt(t.platformFeesPaid)}</div>
+      <div class="sum-sub">1% on new money; rollovers are fee-free</div>
+    </div>
+    <div class="sum-box">
+      <div class="sum-lbl">Upfront fees</div>
+      <div class="sum-amt">${fmt(t.upfrontFees)}</div>
+      <div class="sum-sub">${pct(d.pool.managementFeePct)} management, taken once</div>
+    </div>
+    <div class="sum-box">
+      <div class="sum-lbl">Net of upfront fee</div>
+      <div class="sum-amt">${fmt(t.netRaised)}</div>
+      <div class="sum-sub">what the pool works with</div>
+    </div>
+    <div class="sum-box">
+      <div class="sum-lbl">Investors &middot; Investments</div>
+      <div class="sum-amt">${t.investors} &middot; ${t.investments}</div>
+      <div class="sum-sub">a holder counted once, sub-accounts separately</div>
+    </div>
+  </div>
+
+  <div class="sec-hdr">Where the money came from</div>
+  <table>
+    <thead><tr><th>Source</th><th class="num">Investments</th><th class="amt">Amount</th><th class="amt">Share</th></tr></thead>
+    <tbody>
+      <tr><td>New money</td><td class="num">${t.newMoneyCount}</td><td class="amt">${fmt(t.newMoney)}</td><td class="amt">${t.raised ? ((t.newMoney / t.raised) * 100).toFixed(1) + '%' : '—'}</td></tr>
+      <tr><td>Reinvested from the same product</td><td class="num">${t.reinvestedCount}</td><td class="amt">${fmt(t.reinvested)}</td><td class="amt">${t.raised ? ((t.reinvested / t.raised) * 100).toFixed(1) + '%' : '—'}</td></tr>
+      <tr><td>Switched in from another product</td><td class="num">${t.switchedInCount}</td><td class="amt">${fmt(t.switchedIn)}</td><td class="amt">${t.raised ? ((t.switchedIn / t.raised) * 100).toFixed(1) + '%' : '—'}</td></tr>
+      ${t.sourceUnknown > 0 ? `<tr><td>Reinvested &mdash; source pool not recorded</td><td class="num">${t.sourceUnknownCount}</td><td class="amt">${fmt(t.sourceUnknown)}</td><td class="amt">${((t.sourceUnknown / t.raised) * 100).toFixed(1)}%</td></tr>` : ''}
+      <tr class="total-row"><td>TOTAL RAISED</td><td class="num">${t.investments}</td><td class="amt">${fmt(t.raised)}</td><td class="amt">100%</td></tr>
+    </tbody>
+  </table>
+
+  ${d.sources.length ? `
+  <div class="sec-hdr">Rolled in, by the pool it came from</div>
+  <table>
+    <thead><tr><th>Source pool</th><th>Product</th><th>Kind</th><th class="num">Investments</th><th class="num">Investors</th><th class="amt">Amount</th></tr></thead>
+    <tbody>${sourceRows}</tbody>
+  </table>` : ''}
+
+  <div class="sec-hdr">By investment</div>
+  <table>
+    <thead><tr><th>Holder</th><th class="amt">Amount</th><th>Source</th><th>Source pool</th><th class="amt">Platform fee</th><th class="amt">Upfront fee</th><th class="amt">Net</th></tr></thead>
+    <tbody>
+      ${invRows}
+      <tr class="total-row"><td>TOTAL</td><td class="amt">${fmt(t.raised)}</td><td></td><td></td><td class="amt">${fmt(t.platformFeesPaid)}</td><td class="amt">${fmt(t.upfrontFees)}</td><td class="amt">${fmt(t.netRaised)}</td></tr>
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <strong>SV Capital (Pty) Ltd</strong> &mdash; FSCA Regulated Financial Services Provider.<br>
+    This report covers <strong>${_esc(d.pool.name)}</strong> and the money raised into it between
+    ${fmtDate(d.pool.openedOn)} and ${fmtDate(d.pool.closedOn)}.
+    Reinvested and switched money is fee-free: it moves from a matured holding straight into this pool
+    without passing through a wallet. Platform fees shown are the fee transactions actually recorded.
+    The upfront fee is a deduction rather than a transaction and is computed from the pool's management
+    fee of ${pct(d.pool.managementFeePct)}. All amounts are in South African Rand (ZAR).<br>
+    <strong>Ref:</strong> ${ref} &middot; <strong>Issued:</strong> ${issuedAt} &middot; <strong>Generated by:</strong> SV Capital Admin Console<br>
+    <div class="stamp">SV Capital (Pty) Ltd &mdash; www.svcapital.co.za</div>
+  </div>
+</div>
+</body></html>`;
+
+  const win = window.open('', '_blank', 'width=1200,height=900');
+  if (!win) { Toast.error('Allow pop-ups to open the report'); return; }
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+}
+
+/* ═══════════════════════════════════════════════
+   POOL MATURITY INSTRUCTION REPORT
+   ═══════════════════════════════════════════════ */
+async function openPoolMaturityReport(poolId) {
+  Toast.info('Building maturity report…');
+  try {
+    const data = await API._fetch('GET', 'admin/pool-maturity-report', null, { pool_id: poolId });
+    if (data.error) throw new Error(data.error);
+    if (!data.rows.length && !data.heldBack.length) {
+      Toast.error('No investments in this pool to report on');
+      return;
+    }
+    _POOL_MATURITY_REPORT = data;
+    _openPoolMaturityReportWindow(data);
+  } catch (e) {
+    Toast.error('Maturity report failed: ' + (e.message || 'error'));
+  }
+}
+
+let _POOL_MATURITY_REPORT = null;
+
+/* The CSV is the row-level report, one line per investment, because that is
+   the form someone reconciles against a bank file. The printed page carries
+   the summary; a spreadsheet of summaries reconciles nothing. */
+/* The rows, separated from the download, because the report window embeds
+   them rather than calling back here. */
+/* CSV-ONLY instruction labels. The report on screen and the PDF keep the full
+   sentences — "Pay out a set amount, switch the rest" tells a client what will
+   happen to their money, and that is the right thing to read there. A
+   spreadsheet column is not read as a sentence: it is sorted, filtered and
+   pivoted, and a phrase with a comma in it sorts badly and pivots worse.
+
+   One or two words each, so every instruction is a value rather than a
+   description. The keys are the report's own tags, so a tag added there
+   without a label here falls back to the long form rather than going blank. */
+const MATURITY_CSV_LABELS = {
+  auto_reinvest:  'Auto-reinvest',
+  reinvest:       'Reinvest',
+  payout_all:     'Payout all',
+  payout_return:  'Payout return',
+  payout_custom:  'Custom payout',
+  custom_switch:  'Custom switch',
+  switch_amount:  'Custom reinvest',
+  switch_product: 'Product switch',
+};
+const _matCsvLabel = r =>
+  MATURITY_CSV_LABELS[r && r.instruction] || (r && r.instructionLabel) || '';
+
+/* Totals per instruction, appended under the detail.
+
+   Counted per INVESTMENT, not per row. The detail writes one line per
+   destination so a two-legged instruction shows both, and counting rows there
+   would report a custom switch twice and double its capital. */
+function _poolMaturitySummaryRows(d) {
+  const order = Object.keys(MATURITY_CSV_LABELS);
+  const acc = new Map();
+  const bump = (tag, n, capital, ret, gross) => {
+    const k = tag || 'unknown';
+    const cur = acc.get(k) || { n: 0, capital: 0, ret: 0, gross: 0 };
+    cur.n += n; cur.capital += capital; cur.ret += ret; cur.gross += gross;
+    acc.set(k, cur);
+  };
+  const r2 = v => Math.round((Number(v) || 0) * 100) / 100;
+
+  for (const r of d.rows) bump(r.instruction, 1, Number(r.principal) || 0,
+                               Number(r.actualReturn) || 0, Number(r.gross) || 0);
+
+  const out = [[], ['Summary — totals by instruction'],
+               ['Instruction', 'Investments', 'Capital', 'Return', 'Gross']];
+  let tn = 0, tc = 0, tr = 0, tg = 0;
+  for (const tag of order) {
+    const v = acc.get(tag);
+    if (!v) continue;
+    out.push([MATURITY_CSV_LABELS[tag], v.n, r2(v.capital), r2(v.ret), r2(v.gross)]);
+    tn += v.n; tc += v.capital; tr += v.ret; tg += v.gross;
+    acc.delete(tag);
+  }
+  /* Any tag the report grew that this file has not been told about. Listed
+     rather than dropped, so the summary always adds up to the detail. */
+  for (const [tag, v] of acc) {
+    out.push([tag, v.n, r2(v.capital), r2(v.ret), r2(v.gross)]);
+    tn += v.n; tc += v.capital; tr += v.ret; tg += v.gross;
+  }
+  out.push(['Total', tn, r2(tc), r2(tr), r2(tg)]);
+
+  /* Held back separately, and never inside the instruction totals: these have
+     no posted return, so they are not part of tonight's allocation. Folding
+     them in would report money as destined somewhere it is not going. */
+  if (d.heldBack.length) {
+    const hc = d.heldBack.reduce((a, h) => a + (Number(h.principal) || 0), 0);
+    out.push([], ['Held back — no posted return', d.heldBack.length, r2(hc), '', '']);
+  }
+  return out;
+}
+
+function _poolMaturityCSVRows(d) {
+  const rows = [[
+    'Investment ID', 'Holder', 'Holder ID', 'Sub-account', 'Capital', 'Return', 'Gross',
+    'Instruction', 'Instruction (as executed)', 'To wallet', 'Reinvested',
+    'Destination pool', 'Destination closes', 'Switched', 'Processed',
+  ]];
+  for (const r of d.rows) {
+    /* One line per destination, so a switch_amount — the instruction with two
+       destinations — is not flattened into a single row that hides one of them. */
+    const legs = r.legs.length ? r.legs : [null];
+    legs.forEach((leg, idx) => rows.push([
+      r.investmentId, r.holderName || '', r.holderId || '', r.isSubAccount ? 'yes' : 'no',
+      idx === 0 ? r.principal : '', idx === 0 ? r.actualReturn : '', idx === 0 ? r.gross : '',
+      _matCsvLabel(r), r.effectiveInstruction || '',
+      idx === 0 ? r.toWallet : '',
+      leg ? leg.amount : '',
+      leg ? (leg.fallsBackToWallet ? `No open ${leg.productType} pool — paid to wallet` : (leg.destinationPoolName || '')) : '',
+      leg && leg.destinationEndDate ? String(leg.destinationEndDate).slice(0, 10) : '',
+      leg && leg.isSwitch ? 'yes' : 'no',
+      r.processed ? 'yes' : 'no',
+    ]));
+  }
+  for (const h of d.heldBack) {
+    rows.push([h.investmentId, h.holderName || '', h.holderId || '', h.isSubAccount ? 'yes' : 'no',
+               h.principal, '', '', _matCsvLabel(h), 'HELD BACK — no posted return', '', '',
+               '', '', 'no', 'no']);
+  }
+  return rows.concat(_poolMaturitySummaryRows(d));
+}
+
+const _poolMaturityFileBase = d =>
+  `SV_Capital_Maturity_Instructions_${String(d.pool.name || d.pool.id).replace(/[^A-Za-z0-9]+/g, '_')}`;
+
+/* CSV text, with the BOM the rest of the console writes so Excel reads UTF-8. */
+function _poolMaturityCSVText(d) {
+  return '\ufeff' + _poolMaturityCSVRows(d).map(r => r.map(cell => {
+    const c = String(cell == null ? '' : cell).replace(/"/g, '""');
+    return /[,"\n\r]/.test(c) ? `"${c}"` : c;
+  }).join(',')).join('\r\n');
+}
+
+/* Still here for use from the console itself. The report window does NOT call
+   it — see _openPoolMaturityReportWindow. */
+function downloadPoolMaturityCSV() {
+  const d = _POOL_MATURITY_REPORT;
+  if (!d) { Toast.error('Open the report first'); return; }
+  _downloadCSV(_poolMaturityCSVRows(d), `${_poolMaturityFileBase(d)}.csv`);
+}
+
+/* A real PDF file, not a print dialog.
+ *
+ * The statement and the certificate are print-to-PDF because each is a single
+ * page a person reads. This one is a working document: it goes into a payout
+ * meeting, gets filed against a bank run, and is sent on. jsPDF and autoTable
+ * are already loaded in this console, so it can produce an actual file instead
+ * of depending on whichever print stack the reader happens to have.
+ *
+ * Landscape: the by-client table carries seven columns and two of them hold
+ * pool names. */
+function _buildPoolMaturityPDF(d) {
+  if (!d) return null;
+  if (!window.jspdf || !window.jspdf.jsPDF) return null;
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+  if (typeof doc.autoTable !== 'function') return null;
+  const money = n => 'R ' + parseFloat(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const day = v => {
+    const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? `${+m[3]} ${MONTHS[+m[2] - 1]} ${m[1]}` : '—';
+  };
+  const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
+  const PURPLE = [237, 165, 255], INK = [31, 41, 55], MUTED = [107, 114, 128], AMBER = [180, 83, 9];
+
+  doc.setFillColor(PURPLE[0], PURPLE[1], PURPLE[2]); doc.rect(0, 0, W, 5, 'F');
+  doc.setTextColor(INK[0], INK[1], INK[2]);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
+  doc.text('Maturity Instructions', 40, 44);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+  doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+  doc.text(String(d.pool.name || ''), 40, 60);
+  doc.text(`Matures ${day(d.pool.maturityDate || d.pool.endDate)}  ·  Rate ${
+    d.pool.actualRate == null ? '—' : (d.pool.actualRate * 100).toFixed(2) + '%'}`, 40, 73);
+  doc.text('SV Capital (Pty) Ltd — FSCA Regulated Financial Services Provider', W - 40, 44, { align: 'right' });
+  doc.text(`Issued ${new Date().toLocaleString('en-ZA', { dateStyle: 'long', timeStyle: 'short' })}`, W - 40, 60, { align: 'right' });
+
+  doc.setTextColor(INK[0], INK[1], INK[2]); doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+  doc.text(`Maturing ${money(d.totals.gross)}     Paid to wallets ${money(d.totals.toWallet)}     ` +
+           `Reinvested ${money(d.totals.reinvested)}     ${d.totals.investments} investments · ${d.totals.investors} holders`,
+           40, 94);
+
+  let y = 110;
+  if (d.heldBack.length) {
+    doc.setTextColor(AMBER[0], AMBER[1], AMBER[2]); doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+    doc.text(`${d.heldBack.length} investment(s) totalling ${money(d.heldBackPrincipal)} have no posted return, ` +
+             'are held back by the maturity engine, and are in no total above.', 40, y);
+    y += 16;
+  }
+
+  const table = (head, body, startY) => {
+    doc.autoTable({
+      head: [head], body, startY,
+      styles: { fontSize: 7.5, cellPadding: 3, overflow: 'linebreak', textColor: [17, 17, 17] },
+      headStyles: { fillColor: [243, 244, 246], textColor: [55, 65, 81], fontStyle: 'bold' },
+      margin: { left: 40, right: 40 }, theme: 'grid',
+    });
+    return doc.lastAutoTable.finalY + 20;
+  };
+  const heading = (t, atY) => {
+    doc.setTextColor(INK[0], INK[1], INK[2]); doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
+    doc.text(t, 40, atY);
+    return atY + 8;
+  };
+
+  y = heading('Allocation by instruction', y);
+  y = table(['Instruction', 'Count', 'Maturing', 'To wallet', 'Reinvested', 'Destination'],
+    d.byInstruction.map(g => [
+      g.label, String(g.count), money(g.gross), money(g.toWallet), money(g.reinvested),
+      g.destinations.map(x => x.fallsBackToWallet
+        ? `No open ${x.productType} pool — ${money(x.amount)} paid to wallet`
+        : `${x.poolName || '—'} — ${money(x.amount)}${x.isSwitch ? ' (switched)' : ''}`).join('\n') || '—',
+    ]).concat([['TOTAL', String(d.totals.investments), money(d.totals.gross),
+                money(d.totals.toWallet), money(d.totals.reinvested), '']]), y);
+
+  if (d.destinations.length) {
+    y = heading('Where the money goes', y);
+    y = table(['Destination pool', 'Product', 'Closes', 'Investments', 'Of which switched', 'Total'],
+      d.destinations.map(x => [
+        x.fallsBackToWallet ? `Wallet (no open ${x.productType} pool)` : (x.poolName || '—'),
+        x.productType || '—', day(x.endDate), String(x.count), money(x.switchedIn), money(x.amount),
+      ]), y);
+  }
+
+  y = heading('By client', y);
+  y = table(['Holder', 'Capital', 'Return', 'Maturing', 'Instruction', 'To wallet', 'Reinvested into'],
+    d.rows.map(r => [
+      (r.holderName || '—') + (r.isSubAccount ? ' (sub)' : ''),
+      money(r.principal), money(r.actualReturn), money(r.gross),
+      r.instructionLabel + (r.effectiveInstruction ? `\nexecuted as ${r.effectiveInstruction}` : ''),
+      r.toWallet > 0 ? money(r.toWallet) : '—',
+      r.legs.length
+        ? r.legs.map(l => `${money(l.amount)} -> ${l.fallsBackToWallet
+            ? `no open ${l.productType} pool, paid to wallet`
+            : (l.destinationPoolName || '—') + (l.isSwitch ? ' (switched)' : '')}`).join('\n')
+        : '—',
+    ]), y);
+
+  if (d.heldBack.length) {
+    y = heading('Held back — no posted return', y);
+    table(['Holder', 'Capital', 'Instruction'],
+      d.heldBack.map(h => [(h.holderName || '—') + (h.isSubAccount ? ' (sub)' : ''),
+                           money(h.principal), h.instructionLabel]), y);
+  }
+
+  /* On every page, because this document leaves the building a page at a time. */
+  const pages = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= pages; i++) {
+    doc.setPage(i);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
+    doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+    doc.text('An investment with no instruction is tagged auto-reinvest, which is what the maturity engine applies to it. ' +
+             'Destination pools are resolved as the engine resolves them at 23:00 and can change if a pool opens or fills before then.',
+             40, H - 26);
+    doc.text('SV Capital (Pty) Ltd — www.svcapital.co.za', 40, H - 15);
+    doc.text(`Page ${i} of ${pages}`, W - 40, H - 15, { align: 'right' });
+  }
+
+  return doc;
+}
+
+/* Still here for use from the console itself. The report window embeds the
+   file instead of calling this — see _openPoolMaturityReportWindow. */
+function downloadPoolMaturityPDF() {
+  const d = _POOL_MATURITY_REPORT;
+  if (!d) { Toast.error('Open the report first'); return; }
+  const doc = _buildPoolMaturityPDF(d);
+  if (!doc) { Toast.error('PDF library unavailable — use Print instead'); return; }
+  doc.save(`${_poolMaturityFileBase(d)}.pdf`);
+  Toast.success('PDF downloaded');
+}
+
+function _openPoolMaturityReportWindow(d) {
+  /* Both files are built HERE and embedded in the page as data: URLs, rather
+     than the report's buttons calling back into this window.
+
+     The callback version did not work. The report window is a document.write
+     into about:blank, and what a download needs there is specific: a data:
+     anchor in that window downloads, a blob: anchor in it does not, and a
+     cross-window call depends on window.opener still being there and on the
+     console never having been navigated away from. Worse, anything that went
+     wrong reported through Toast — in the console, behind the report — so a
+     failure looked exactly like a button that did nothing.
+
+     Embedding removes all of it: one anchor, one user gesture, in the window
+     the person is looking at, with no dependency on this one surviving. It is
+     the pattern the account statement already uses for its CSV.
+
+     The cost is that both files sit base64 in the markup, so a very large pool
+     makes a large document.write. Acceptable at the size these reports run to,
+     and worth knowing before someone reports a slow open on a huge pool. */
+  const fileBase = _poolMaturityFileBase(d);
+  const b64 = str => btoa(unescape(encodeURIComponent(str)));
+  const csvHref = 'data:text/csv;charset=utf-8;base64,' + b64(_poolMaturityCSVText(d));
+  let pdfHref = null;
+  try {
+    const pdfDoc = _buildPoolMaturityPDF(d);
+    /* datauristring, not save(): the file has to become a link in the other
+       window, not a download started in this one. */
+    if (pdfDoc) pdfHref = pdfDoc.output('datauristring');
+  } catch (e) {
+    console.error('[maturity report] PDF build failed:', e);
+  }
+
+  const fmt = n => 'R ' + parseFloat(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  /* _esc, not a local copy: it is the platform's escaper, it also handles
+     quotes, and check-markup-interpolation looks for it by name. */
+  const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  /* Rendered from the date's own text, never through a Date — the same reason
+     as on the certificate: a day has no timezone, and passing one through a
+     Date moves it for readers east of UTC. */
+  const fmtDate = v => {
+    const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? `${+m[3]} ${MONTHS_SHORT[+m[2] - 1]} ${m[1]}` : '—';
+  };
+  const pct = r => r == null ? '—' : (r * 100).toFixed(2) + '%';
+  const issuedAt = new Date().toLocaleString('en-ZA', { dateStyle: 'long', timeStyle: 'short' });
+  const _logoUrl = window.location.origin + '/assets/sv-capital-logo-horizontal-white-text.png';
+  const ref = `SVCMR-${String(d.pool.id).replace(/[^A-Za-z0-9]/g, '').slice(-10)}`;
+
+  const destCell = leg => leg.fallsBackToWallet
+    ? `<span style="color:#b45309;font-weight:600">No open ${_esc(leg.productType)} pool &mdash; paid to wallet</span>`
+    : `${_esc(leg.destinationPoolName || '—')}${leg.isSwitch ? ' <span class="tag-switch">switched</span>' : ''}`;
+
+  const instrRows = d.byInstruction.map(g => `
+    <tr>
+      <td>${_esc(g.label)}</td>
+      <td class="num">${g.count}</td>
+      <td class="amt">${fmt(g.gross)}</td>
+      <td class="amt">${fmt(g.toWallet)}${g.fallbackToWallet > 0
+        ? `<div style="color:#b45309;font-size:9px;font-weight:600">incl. ${fmt(g.fallbackToWallet)} with nowhere to go</div>` : ''}</td>
+      <td class="amt">${fmt(g.reinvested)}</td>
+      <td>${g.destinations.length
+        ? g.destinations.map(x => x.fallsBackToWallet
+            ? `<div style="color:#b45309">No open ${_esc(x.productType)} pool &mdash; ${fmt(x.amount)} paid to wallet</div>`
+            : `<div>${_esc(x.poolName || '—')} &mdash; ${fmt(x.amount)}${x.isSwitch ? ' <span class="tag-switch">switched</span>' : ''}</div>`).join('')
+        : '<span style="color:#9ca3af">—</span>'}</td>
+    </tr>`).join('');
+
+  const destRows = d.destinations.map(x => `
+    <tr>
+      <td>${x.fallsBackToWallet
+            ? `<span style="color:#b45309;font-weight:600">Wallet (no open ${_esc(x.productType)} pool)</span>`
+            : _esc(x.poolName || '—')}</td>
+      <td>${_esc(x.productType || '—')}</td>
+      <td>${fmtDate(x.endDate)}</td>
+      <td class="num">${x.count}</td>
+      <td class="amt">${fmt(x.switchedIn)}</td>
+      <td class="amt">${fmt(x.amount)}</td>
+    </tr>`).join('');
+
+  const clientRows = d.rows.map(r => `
+    <tr>
+      <td>${_esc(r.holderName || '—')}${r.isSubAccount ? ' <span class="tag-sub">sub</span>' : ''}</td>
+      <td class="amt">${fmt(r.principal)}</td>
+      <td class="amt">${fmt(r.actualReturn)}</td>
+      <td class="amt">${fmt(r.gross)}</td>
+      <td>${_esc(r.instructionLabel)}${r.effectiveInstruction
+            ? `<div style="color:#b45309;font-size:9px">executed as ${_esc(r.effectiveInstruction)}</div>` : ''}</td>
+      <td class="amt">${r.toWallet > 0 ? fmt(r.toWallet) : '<span style="color:#d1d5db">—</span>'}${
+        r.fallbackToWallet > 0 ? '<div style="color:#b45309;font-size:9px">no open pool</div>' : ''}</td>
+      <td>${r.legs.length
+            ? r.legs.map(leg => `<div>${fmt(leg.amount)} &rarr; ${destCell(leg)}</div>`).join('')
+            : '<span style="color:#d1d5db">—</span>'}</td>
+    </tr>`).join('');
+
+  const heldRows = d.heldBack.map(h => `
+    <tr>
+      <td>${_esc(h.holderName || '—')}${h.isSubAccount ? ' <span class="tag-sub">sub</span>' : ''}</td>
+      <td class="amt">${fmt(h.principal)}</td>
+      <td>${_esc(h.instructionLabel)}</td>
+    </tr>`).join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<title>SV Capital — Maturity Instructions — ${_esc(d.pool.name)}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,Helvetica,sans-serif;background:#fff;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:12px}
+@page{size:A4 landscape;margin:12mm 14mm}
+@media print{.no-print{display:none!important}.wrap{margin-top:0!important}}
+.no-print{position:fixed;top:0;left:0;right:0;background:#1f2937;padding:9px 20px;display:flex;justify-content:space-between;align-items:center;z-index:99;gap:10px;flex-wrap:wrap}
+.no-print span{color:#fff;font-size:12px;font-weight:600;flex:1}
+.no-print .btn-row{display:flex;gap:8px}
+.no-print button,.no-print a{border:none;padding:7px 16px;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-block;line-height:1.2}
+.btn-note{background:#4b5563;color:#fff;padding:7px 16px;border-radius:5px;font-size:12px;font-weight:700}
+.btn-print{background:#e5e7eb;color:#111}.btn-csv{background:#22c55e;color:#fff}.btn-pdf{background:#eda5ff;color:#111}
+.wrap{max-width:1100px;margin:52px auto 32px;padding:24px 30px;border-top:5px solid #eda5ff}
+.hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:14px;border-bottom:3px solid #1f2937;margin-bottom:18px}
+.hdr-brand p{font-size:10px;color:#6b7280;margin-top:7px}
+.hdr-right{text-align:right}
+.stmt-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#9ca3af;margin-bottom:3px}
+.stmt-title{font-size:20px;font-weight:800;color:#1f2937;margin-bottom:4px}
+.stmt-meta{font-size:10px;color:#6b7280;line-height:1.6}
+.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px}
+.sum-box{border:1.5px solid #e5e7eb;border-radius:7px;padding:11px 13px}
+.sum-box.green{border-color:#bbf7d0;background:#f0fdf4}
+.sum-box.blue{border-color:#bfdbfe;background:#eff6ff}
+.sum-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;margin-bottom:4px}
+.sum-amt{font-size:17px;font-weight:800;color:#1f2937}
+.sum-sub{font-size:9px;color:#6b7280;margin-top:3px}
+.sec-hdr{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;padding:6px 10px;border-radius:5px;margin:18px 0 8px;background:#f3f4f6;color:#374151}
+table{width:100%;border-collapse:collapse;font-size:10.5px}
+th{background:#f9fafb;text-align:left;padding:6px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;border-bottom:1.5px solid #e5e7eb}
+td{padding:6px 8px;border-bottom:1px solid #f3f4f6;vertical-align:top}
+.amt,.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tr.total-row td{font-weight:800;background:#f9fafb;border-top:1.5px solid #d1d5db}
+.tag-switch{display:inline-block;background:#ede9fe;color:#5b21b6;font-size:8px;font-weight:800;padding:1px 5px;border-radius:99px;text-transform:uppercase;letter-spacing:.05em}
+.tag-sub{display:inline-block;background:#e5e7eb;color:#374151;font-size:8px;font-weight:700;padding:1px 5px;border-radius:99px}
+.warning{background:#fffbeb;border:1.5px solid #f59e0b;border-radius:6px;padding:10px 13px;margin-bottom:16px;font-size:10.5px;color:#78350f;line-height:1.6}
+.footer{border-top:1px solid #e5e7eb;padding-top:11px;font-size:9px;color:#6b7280;line-height:1.7;margin-top:14px}
+.footer strong{color:#374151}
+.stamp{display:inline-block;border:2px solid #eda5ff;color:#eda5ff;padding:4px 11px;border-radius:3px;font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-top:10px}
+</style></head><body>
+<div class="no-print">
+  <span>SV Capital &mdash; Maturity Instructions &nbsp;&middot;&nbsp; ${_esc(d.pool.name)}</span>
+  <div class="btn-row">
+    ${pdfHref
+      ? `<a class="btn-pdf" href="${pdfHref}" download="${fileBase}.pdf">Download PDF</a>`
+      : `<span class="btn-note" title="jsPDF did not load in the admin console">PDF unavailable &mdash; use Print</span>`}
+    <a class="btn-csv" href="${csvHref}" download="${fileBase}.csv">Download CSV</a>
+    <button class="btn-print" onclick="window.print()">Print</button>
+  </div>
+</div>
+<div class="wrap">
+  <div class="hdr">
+    <div class="hdr-brand">
+      <div style="background:#1f2937;padding:10px 18px;border-radius:8px;display:inline-block"><img src="${_logoUrl}" style="height:46px;width:auto;display:block" alt="SV Capital"></div>
+      <p>FSCA Regulated Financial Services Provider &middot; <span style="color:#eda5ff;font-weight:600">www.svcapital.co.za</span></p>
+    </div>
+    <div class="hdr-right">
+      <div class="stmt-lbl">Document Type</div>
+      <div class="stmt-title">Maturity Instructions</div>
+      <div class="stmt-meta">Ref: <strong>${ref}</strong><br>Pool: ${_esc(d.pool.name)}<br>Matures: ${fmtDate(d.pool.maturityDate || d.pool.endDate)} &middot; Rate: ${pct(d.pool.actualRate)}<br>Issued: ${issuedAt}</div>
+    </div>
+  </div>
+
+  ${!d.pool.ratePosted ? `<div class="warning">
+    <strong>This pool has no posted return rate.</strong>
+    Every figure below rests on the return each investment has earned, and without a rate on the pool
+    there is nothing to compute it from. The maturity engine holds these investments back and retries
+    each night, so posting the rate is all that is needed to release them.
+  </div>` : ''}
+
+  ${d.heldBack.length ? `<div class="warning">
+    <strong>${d.heldBack.length} investment${d.heldBack.length === 1 ? '' : 's'} totalling ${fmt(d.heldBackPrincipal)} in capital ${d.heldBack.length === 1 ? 'is' : 'are'} held back and not included in any total below.</strong>
+    Their return has not been posted, so the engine skips them and retries the next night.
+  </div>` : ''}
+
+  <div class="summary">
+    <div class="sum-box">
+      <div class="sum-lbl">Maturing</div>
+      <div class="sum-amt">${fmt(d.totals.gross)}</div>
+      <div class="sum-sub">${d.totals.investments} investment${d.totals.investments === 1 ? '' : 's'} &middot; ${d.totals.investors} holder${d.totals.investors === 1 ? '' : 's'}</div>
+    </div>
+    <div class="sum-box blue">
+      <div class="sum-lbl">Paid to wallets</div>
+      <div class="sum-amt">${fmt(d.totals.toWallet)}</div>
+      <div class="sum-sub">${d.totals.fallbackToWallet > 0
+        ? `includes ${fmt(d.totals.fallbackToWallet)} with no open pool to go to`
+        : 'cash leaving the fund'}</div>
+    </div>
+    <div class="sum-box green">
+      <div class="sum-lbl">Reinvested</div>
+      <div class="sum-amt">${fmt(d.totals.reinvested)}</div>
+      <div class="sum-sub">into ${d.destinations.filter(x => !x.fallsBackToWallet).length} pool(s)</div>
+    </div>
+    <div class="sum-box">
+      <div class="sum-lbl">Capital &middot; Return</div>
+      <div class="sum-amt" style="font-size:14px">${fmt(d.totals.principal)}<br>${fmt(d.totals.actualReturn)}</div>
+    </div>
+  </div>
+
+  <div class="sec-hdr">Allocation by instruction</div>
+  <table>
+    <thead><tr><th>Instruction</th><th class="num">Count</th><th class="amt">Maturing</th><th class="amt">To wallet</th><th class="amt">Reinvested</th><th>Destination</th></tr></thead>
+    <tbody>
+      ${instrRows}
+      <tr class="total-row"><td>TOTAL</td><td class="num">${d.totals.investments}</td><td class="amt">${fmt(d.totals.gross)}</td><td class="amt">${fmt(d.totals.toWallet)}</td><td class="amt">${fmt(d.totals.reinvested)}</td><td></td></tr>
+    </tbody>
+  </table>
+
+  ${d.destinations.length ? `
+  <div class="sec-hdr">Where the money goes</div>
+  <table>
+    <thead><tr><th>Destination pool</th><th>Product</th><th>Closes</th><th class="num">Investments</th><th class="amt">Of which switched</th><th class="amt">Total</th></tr></thead>
+    <tbody>${destRows}</tbody>
+  </table>` : ''}
+
+  <div class="sec-hdr">By client</div>
+  <table>
+    <thead><tr><th>Holder</th><th class="amt">Capital</th><th class="amt">Return</th><th class="amt">Maturing</th><th>Instruction</th><th class="amt">To wallet</th><th>Reinvested into</th></tr></thead>
+    <tbody>${clientRows}</tbody>
+  </table>
+
+  ${d.heldBack.length ? `
+  <div class="sec-hdr">Held back &mdash; no posted return</div>
+  <table>
+    <thead><tr><th>Holder</th><th class="amt">Capital</th><th>Instruction</th></tr></thead>
+    <tbody>${heldRows}</tbody>
+  </table>` : ''}
+
+  <div class="footer">
+    <strong>SV Capital (Pty) Ltd</strong> &mdash; FSCA Regulated Financial Services Provider.<br>
+    This report shows the maturity instruction held for each investment in <strong>${_esc(d.pool.name)}</strong>
+    and the allocation that instruction produces. An investment with no instruction is tagged
+    <strong>auto-reinvest</strong>, which is what the maturity engine applies to it.
+    Destination pools are resolved the way the engine resolves them at 23:00 &mdash; the open pool of that
+    product closing soonest with room left &mdash; so a pool that opens or fills before then can change them.
+    All amounts are in South African Rand (ZAR).<br>
+    <strong>Ref:</strong> ${ref} &middot; <strong>Issued:</strong> ${issuedAt} &middot; <strong>Generated by:</strong> SV Capital Admin Console<br>
+    <div class="stamp">SV Capital (Pty) Ltd &mdash; www.svcapital.co.za</div>
+  </div>
+</div>
+</body></html>`;
+
+  const win = window.open('', '_blank', 'width=1200,height=900');
+  if (!win) { Toast.error('Allow pop-ups to open the report'); return; }
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+}
+
+/* ═══════════════════════════════════════════════
    CSV EXPORT
    ═══════════════════════════════════════════════ */
 function _downloadCSV(rows, filename) {
@@ -8916,9 +13369,10 @@ function exportInvestorsCSV() {
   if (!STATE.investors.length) { Toast.error('Load investors first'); return; }
   const data = (filteredInvestors && filteredInvestors.length && filteredInvestors.length < STATE.investors.length)
     ? filteredInvestors : STATE.investors;
-  const headers = ['ID','First Name','Last Name','Email','Phone','FICA Status','Wallet Balance','Total Invested','Total Returns','Date Joined'];
+  const headers = ['ID','First Name','Last Name','Email','Phone','Gender','Heard About Us','FICA Status','Wallet Balance','Total Invested','Total Returns','Date Joined'];
   const rows = [headers, ...data.map(i => [
     i.id, i.first_name, i.last_name, i.email, i.phone || '',
+    i.gender || '', i.heard_about_us || '',
     i.fica_status, i.wallet_balance || 0, i.total_invested || 0, i.total_returns || 0,
     i.date_joined ? new Date(i.date_joined).toLocaleDateString('en-ZA') : '',
   ])];
@@ -8928,11 +13382,14 @@ function exportInvestorsCSV() {
 
 function exportTransactionsCSV() {
   if (!STATE.transactions.length) { Toast.error('Load transactions first'); return; }
-  const headers = ['ID','Investor','Type','Amount','Status','Reference','Description','Date'];
+  const headers = ['ID','Investor','Type','Amount','Status','Reference','Description','Date','Time'];
   const rows = [headers, ...STATE.transactions.map(t => [
     t.id, _txnInvName(t), t.type, t.amount, t.status,
     t.reference || '', t.description || '',
-    t.created_at ? new Date(t.created_at).toLocaleDateString('en-ZA') : '',
+    /* When the money moved, not when the row was written — and with the time,
+       because a day's worth of movements in an unordered block cannot be
+       reconciled against a bank statement. */
+    Utils.csvDate(Utils.txnDate(t)), Utils.csvTime(Utils.txnDate(t)),
   ])];
   _downloadCSV(rows, `transactions-${new Date().toISOString().slice(0,10)}.csv`);
   Toast.success(`Exported ${STATE.transactions.length} transactions`);
@@ -8942,7 +13399,7 @@ function exportKYCCSV() {
   if (!STATE.kyc.length) { Toast.error('Load KYC data first'); return; }
   const headers = ['ID','Investor','Investor ID','Document Type','File','Status','Submitted','Reviewed'];
   const rows = [headers, ...STATE.kyc.map(k => {
-    const inv = STATE.investors.find(i => i.id === k.investor_id);
+    const inv = _investorById(k.investor_id);
     const name = k.investor_name || (inv ? `${inv.first_name} ${inv.last_name}` : k.investor_id);
     return [k.id, name, k.investor_id, k.doc_type || k.document_type || '', k.file_name || '',
       k.status, Utils.date(k.submitted_at || k.submitted_date || k.created_at), Utils.date(k.reviewed_at)];
@@ -8978,7 +13435,7 @@ function exportInvestmentsCSV() {
   const headers = ['ID','Investor ID','Pool','Product','Amount','Rate','Status','Start Date','End Date','Maturity Instruction'];
   const rows = [headers, ...STATE.investments.map(i => [
     i.id, i.investor_id, i.pool_name||'', i.product_type, i.amount,
-    i.annual_rate||'', i.status, Utils.date(i.start_date), Utils.date(i.end_date), i.maturity_instruction||''
+    Utils.effectiveRate(i) ?? '', i.status, Utils.csvDate(Utils.invDate(i)), Utils.csvDate(i.end_date), i.maturity_instruction||''
   ])];
   _downloadCSV(rows, `investments-${new Date().toISOString().slice(0,10)}.csv`);
   Toast.success(`Exported ${STATE.investments.length} investments`);
@@ -9011,14 +13468,14 @@ function exportMaturityCSV() {
 function exportWithdrawalsCSV() {
   const all = STATE.withdrawals || [];
   if (!all.length) { Toast.error('Load withdrawals first'); return; }
-  const headers = ['ID','Investor Name','Investor ID','Amount','Bank','Account Number','Reference','Status','Date'];
+  const headers = ['ID','Investor Name','Investor ID','Amount','Bank','Account Number','Reference','Status','Date','Time'];
   const rows = [headers, ...all.map(w => {
     const inv = STATE.investors.find(i => i.id === w.investor_id);
     const name = inv ? `${inv.first_name} ${inv.last_name}` : w.investor_id;
-    let bankNotes = {}; try { if (inv?.notes?.startsWith('{')) bankNotes = JSON.parse(inv.notes); } catch(_) {}
+    const bankNotes = _safeParse(inv?.notes, {});
     const bank    = inv?.bank_name           || bankNotes.bank_name      || '—';
     const acctNo  = inv?.bank_account_number || bankNotes.account_number || '—';
-    return [w.id, name, w.investor_id, Math.abs(w.amount||0), bank, acctNo, w.reference||'', w.status, Utils.date(w.created_at||w.transaction_date)];
+    return [w.id, name, w.investor_id, Math.abs(w.amount||0), bank, acctNo, w.reference||'', w.status, Utils.csvDate(Utils.txnDate(w)), Utils.csvTime(Utils.txnDate(w))];
   })];
   _downloadCSV(rows, `withdrawals-${new Date().toISOString().slice(0,10)}.csv`);
   Toast.success(`Exported ${all.length} withdrawals`);
@@ -9079,19 +13536,37 @@ async function bulkApproveKyc() {
   try {
     const reviewedBy = _getAdminName();
     const reviewedDate = new Date().toISOString();
-    for (let i = 0; i < ids.length; i++) {
-      await API.kyc.update(ids[i], { status: 'approved', reviewed_by: reviewedBy, reviewed_at: reviewedDate });
-      // Sync investor record so status/badges reflect approval
-      const doc = STATE.kyc.find(k => k.id === ids[i]);
+    let seen = 0;
+
+    /* Per document, not per batch. This loop had no per-item catch: document
+       seven failing threw out of the whole run, so one to six were approved on
+       the server, eight onward were never attempted, and the operator was told
+       "Bulk approve failed" — for a run that had approved six people's KYC.
+
+       The two calls stay in this order deliberately. If the investor PATCH
+       fails after the document is approved, the failure is reported against
+       that document rather than swallowed, because a document marked approved
+       while the investor record still reads pending is a split state someone
+       has to go and look at. */
+    const res = await _bulkRun(ids, async id => {
+      await API.kyc.update(id, { status: 'approved', reviewed_by: reviewedBy, reviewed_at: reviewedDate });
+      const doc = STATE.kyc.find(k => k.id === id);
       if (doc?.investor_id) {
-        await API._fetch('PATCH', `tables/investors/${doc.investor_id}`, { kyc_status: 'approved', fica_status: 'approved', status: 'active' });
+        await API._fetch('PATCH', `tables/investors/${doc.investor_id}`,
+          { kyc_status: 'approved', fica_status: 'approved', status: 'active' });
       }
-      if ((i + 1) % 5 === 0) Toast.info(`Processing ${i + 1}/${total}...`);
-    }
+      if (++seen % 5 === 0) Toast.info(`Processing ${seen}/${total}...`);
+    }, { sequential: true, label: id => {
+      const doc = STATE.kyc.find(k => k.id === id);
+      return doc ? (_investorLabel(doc.investor_id) || id) : id;
+    } });
+
+    /* Failures stay selected so a retry does not need them re-found by hand. */
     _kycSelected.clear();
-    Toast.success(`${ids.length} document(s) approved — investor records updated`);
+    res.failed.forEach(f => _kycSelected.add(f.item));
+    _bulkReport('document', 'approved', res);
     await loadKYC();
-  } catch (e) { Toast.error('Bulk approve failed'); }
+  } catch (e) { Toast.error('Bulk approve failed: ' + (e.message || 'unknown error')); }
   finally {
     if (approveBtn) approveBtn.disabled = false;
     if (rejectBtn)  rejectBtn.disabled  = false;
@@ -9131,10 +13606,18 @@ async function _executeBulkKycReject(reason, shouldEmail) {
   try {
     const reviewedBy  = _getAdminName();
     const reviewedAt  = new Date().toISOString();
-    for (let i = 0; i < ids.length; i++) {
-      await API.kyc.update(ids[i], { status: 'rejected', notes: reason || 'Rejected by admin.', reviewed_by: reviewedBy, reviewed_at: reviewedAt });
+    let seen = 0;
+    /* Per document, same as approve. This loop had no per-item catch either:
+       one failure part-way through left the documents before it rejected and
+       their investors emailed, the ones after it untouched, and the operator
+       told the whole run had failed.
+
+       The email keeps its own .catch — a notification that does not send is
+       not a reason to call the rejection itself unsuccessful. */
+    const res = await _bulkRun(ids, async id => {
+      await API.kyc.update(id, { status: 'rejected', notes: reason || 'Rejected by admin.', reviewed_by: reviewedBy, reviewed_at: reviewedAt });
       if (shouldEmail) {
-        const doc = STATE.kyc.find(k => k.id === ids[i]);
+        const doc = STATE.kyc.find(k => k.id === id);
         const inv = doc?.investor_id ? STATE.investors.find(i2 => i2.id === doc.investor_id) : null;
         if (inv?.email) {
           const DOC_LABELS = { id_document: 'Identity Document', proof_of_address: 'Proof of Address', proof_of_bank: 'Proof of Bank Account' };
@@ -9142,16 +13625,22 @@ async function _executeBulkKycReject(reason, shouldEmail) {
           await API._fetch('POST', 'admin/send-investor-email', {
             investor_id: inv.id,
             subject: `Action required: Your ${docLabel} — SV Capital`,
-            message: `Dear ${inv.first_name || 'Investor'},\n\nYour ${docLabel} requires attention.\n\nReason: ${reason || 'Please re-upload a valid document.'}\n\nLog in to your investor portal to resubmit.\n\nKind regards,\nSV Capital Compliance Team`,
+            /* No greeting here either — sendAlert writes it. */
+            message: `Your ${docLabel} requires attention.\n\nReason: ${reason || 'Please re-upload a valid document.'}\n\nLog in to your investor portal to resubmit.\n\nKind regards,\nSV Capital Compliance Team`,
           }).catch(() => {});
         }
       }
-      if ((i + 1) % 5 === 0) Toast.info(`Processing ${i + 1}/${total}...`);
-    }
+      if (++seen % 5 === 0) Toast.info(`Processing ${seen}/${total}...`);
+    }, { sequential: true, label: id => {
+      const doc = STATE.kyc.find(k => k.id === id);
+      return doc ? (_investorLabel(doc.investor_id) || id) : id;
+    } });
+
     _kycSelected.clear();
-    Toast.success(`${total} document(s) rejected${shouldEmail ? ' — investors notified' : ''}`);
+    res.failed.forEach(f => _kycSelected.add(f.item));
+    _bulkReport('document', `rejected${shouldEmail ? ' and notified' : ''}`, res);
     await loadKYC();
-  } catch (e) { Toast.error('Bulk reject failed'); }
+  } catch (e) { Toast.error('Bulk reject failed: ' + (e.message || 'unknown error')); }
   finally {
     if (approveBtn) approveBtn.disabled = false;
     if (rejectBtn)  rejectBtn.disabled  = false;
@@ -9168,16 +13657,23 @@ const AUDIT_PG   = 50;
 async function loadAuditLog() {
   try {
     // Build server-side query params
-    const typeFilter  = document.getElementById('auditTypeFilter')?.value  || '';
-    const searchQ     = document.getElementById('auditSearchInput')?.value || '';
-    const dateFromVal = document.getElementById('auditDateFrom')?.value    || '';
-    const dateToVal   = document.getElementById('auditDateTo')?.value      || '';
+    const typeFilter   = document.getElementById('auditTypeFilter')?.value   || '';
+    const entityFilter = document.getElementById('auditEntityFilter')?.value || '';
+    const searchQ      = document.getElementById('auditSearchInput')?.value  || '';
+    const dateFromVal  = document.getElementById('auditDateFrom')?.value     || '';
+    const dateToVal    = document.getElementById('auditDateTo')?.value       || '';
 
     const params = { limit: AUDIT_PG, page: _auditPage, sort: 'created_at', order: 'desc' };
-    if (typeFilter)  params.event_type = typeFilter;
-    if (searchQ)     params.search     = searchQ;
-    if (dateFromVal) params.date_from  = dateFromVal;
-    if (dateToVal)   params.date_to    = dateToVal;
+    // Type filter: exact match for full action names, ILIKE search for suffix patterns (.updated etc)
+    if (typeFilter) {
+      if (typeFilter.startsWith('.')) params.search = typeFilter.slice(1);
+      else params.event_type = typeFilter;
+    }
+    if (entityFilter) params.entity_type = entityFilter;
+    // Text search overrides type-based search only if both are set and we need to combine
+    if (searchQ && !params.search) params.search = searchQ;
+    if (dateFromVal) params.date_from = dateFromVal;
+    if (dateToVal)   params.date_to   = dateToVal;
 
     const res = await API._fetch('GET', 'tables/audit_events', null, params);
     _auditEvents = res.data || [];
@@ -9185,16 +13681,24 @@ async function loadAuditLog() {
 
     // Wire filters once (guard against double-wiring)
     const typeF    = document.getElementById('auditTypeFilter');
+    const entityF  = document.getElementById('auditEntityFilter');
     const searchF  = document.getElementById('auditSearchInput');
     const dateFrom = document.getElementById('auditDateFrom');
     const dateTo   = document.getElementById('auditDateTo');
 
     const resetAndRender = () => { _auditPage = 1; loadAuditLog(); };
-    if (typeF   && !typeF._auditWired)   { typeF.addEventListener('change', resetAndRender);   typeF._auditWired = true; }
+    if (typeF   && !typeF._auditWired)   { typeF.addEventListener('change', resetAndRender);   typeF._auditWired   = true; }
+    if (entityF && !entityF._auditWired) { entityF.addEventListener('change', resetAndRender); entityF._auditWired = true; }
     if (searchF && !searchF._auditWired) { searchF.addEventListener('input', Utils.debounce(resetAndRender, 250)); searchF._auditWired = true; }
     if (dateFrom && !dateFrom._auditWired) { dateFrom.addEventListener('change', resetAndRender); dateFrom._auditWired = true; }
     if (dateTo   && !dateTo._auditWired)   { dateTo.addEventListener('change', resetAndRender);   dateTo._auditWired   = true; }
-  } catch (e) { Toast.error('Failed to load audit log'); }
+  } catch (e) {
+    // Say what actually failed. This read 'Failed to load audit log' and
+    // discarded the reason, so a 403, a 500 and a render bug all looked
+    // identical and none could be diagnosed without devtools.
+    console.error('[load audit log]', e);
+    Toast.error(`Failed to load audit log` + (e && e.message ? ` — ${e.message}` : ''));
+  }
 }
 
 function _auditPrevPage() {
@@ -9237,6 +13741,13 @@ function renderAuditTable(res) {
     'withdrawal.approved': 'green', 'withdrawal.rejected': 'red',
     'withdrawal.submitted': 'blue',
   };
+  const _auditActionColor = (action) => {
+    if (actionColor[action]) return actionColor[action];
+    if (action.endsWith('.updated'))  return 'blue';
+    if (action.endsWith('.created'))  return 'green';
+    if (action.endsWith('.deleted'))  return 'red';
+    return 'grey';
+  };
 
   body.innerHTML = items.map(e => {
     const action      = e.event_type || '—';
@@ -9247,7 +13758,7 @@ function renderAuditTable(res) {
       : '—';
     const ip          = e.ip_address || '—';
     const desc        = e.description || '';
-    const badgeClass  = actionColor[action] || 'gray';
+    const badgeClass  = _auditActionColor(action);
 
     return `<tr>
       <td class="td-muted clip" style="font-size:0.75rem">${Utils.date(e.created_at)}</td>
@@ -9390,10 +13901,10 @@ function _opsRenderHealth(health) {
     const icon   = ok ? 'fa-circle-check' : conf ? 'fa-circle-xmark' : 'fa-circle-minus';
     const status = ok ? 'Online' : conf ? 'Error' : 'Not configured';
     const latency = (svc.ms && svc.ms > 0) ? `${svc.ms}ms` : '';
-    const extra  = key === 'push' ? `<div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px">${(svc.subscribers||0).toLocaleString()} subscribers</div>` : svc.note ? `<div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px">${svc.note}</div>` : latency ? `<div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px">${latency}</div>` : '';
+    const extra  = key === 'push' ? `<div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px">${(svc.subscribers||0).toLocaleString()} subscribers</div>` : svc.note ? `<div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px">${_esc(svc.note)}</div>` : latency ? `<div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px">${latency}</div>` : '';
     return `<div style="padding:14px 12px;border:1.5px solid ${color}22;border-radius:12px;background:${color}08;text-align:center">
       <i class="fa-solid ${icon}" style="font-size:1.4rem;color:${color};margin-bottom:6px"></i>
-      <div style="font-size:0.78rem;font-weight:800;color:#e8edf2;line-height:1.2;margin-bottom:2px">${svc.name}</div>
+      <div style="font-size:0.78rem;font-weight:800;color:#e8edf2;line-height:1.2;margin-bottom:2px">${_esc(svc.name)}</div>
       <div style="font-size:0.72rem;font-weight:700;color:${color}">${status}</div>
       ${extra}
     </div>`;
@@ -9420,7 +13931,7 @@ function _opsRenderMoney(s) {
       </div>
       <div style="flex:1;min-width:0">
         <div style="font-size:0.78rem;color:var(--text-muted);font-weight:600">${label}</div>
-        ${note ? `<div style="font-size:0.68rem;color:var(--text-muted)">${note}</div>` : ''}
+        ${note ? `<div style="font-size:0.68rem;color:var(--text-muted)">${_esc(note)}</div>` : ''}
       </div>
       <div style="font-size:0.92rem;font-weight:900;color:#e8edf2;white-space:nowrap">${val}</div>
     </div>`;
@@ -9525,7 +14036,7 @@ function _opsRenderTopPools(s) {
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
         <div style="display:flex;align-items:center;gap:6px">
           <span style="width:18px;height:18px;border-radius:50%;background:${color};display:inline-flex;align-items:center;justify-content:center;font-size:0.6rem;font-weight:900;color:#fff;flex-shrink:0">${i+1}</span>
-          <span style="font-size:0.8rem;font-weight:700;color:#e8edf2">${p.name}</span>
+          <span style="font-size:0.8rem;font-weight:700;color:#e8edf2">${_esc(p.name)}</span>
         </div>
         <div style="text-align:right">
           <div style="font-size:0.82rem;font-weight:900;color:#e8edf2">${_opsR(p.volume)}</div>
@@ -9606,8 +14117,8 @@ function _opsRenderComms(comms) {
           <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px">
             <i class="fa-solid fa-bell" style="color:#656565;font-size:0.8rem;flex-shrink:0"></i>
             <div style="flex:1;min-width:0">
-              <div style="font-size:0.78rem;font-weight:700;color:#e8edf2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${n.title || '(no title)'}</div>
-              <div style="font-size:0.7rem;color:var(--text-muted)">${n.body ? n.body.slice(0,60)+'…' : ''}</div>
+              <div style="font-size:0.78rem;font-weight:700;color:#e8edf2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(n.title || '(no title)')}</div>
+              <div style="font-size:0.7rem;color:var(--text-muted)">${_esc(n.body ? n.body.slice(0,60)+'…' : '')}</div>
             </div>
             <div style="text-align:right;flex-shrink:0">
               <div style="font-size:0.75rem;font-weight:700;color:#e8edf2">${(n.recipient_count||0).toLocaleString()} recv</div>
@@ -9638,7 +14149,7 @@ function _opsRenderAuditStream(activity) {
       <div style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0;margin-top:5px"></div>
       <div style="flex:1;min-width:0">
         <div style="font-size:0.76rem;font-weight:700;color:#e8edf2">${ev.action || ev.entity_type || 'event'}</div>
-        <div style="font-size:0.7rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ev.description || '—'}</div>
+        <div style="font-size:0.7rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(ev.description || '—')}</div>
         <div style="font-size:0.65rem;color:#7a92a8;margin-top:1px">${ev.actor_email || 'system'} · ${ago}</div>
       </div>
     </div>`;
@@ -9738,7 +14249,7 @@ function _renderSegmentList(q) {
     html += `<div style="padding:7px 14px 3px;font-size:0.67rem;font-weight:700;letter-spacing:0.07em;color:var(--text-dim);text-transform:uppercase">${_esc(g.label)}</div>`;
     for (const item of items) {
       const sel = currentVal === item.value;
-      html += `<div onclick='selectSegment(${JSON.stringify(item.value)},${JSON.stringify(item.label)},${JSON.stringify(item.icon)})'
+      html += `<div onclick='selectSegment(${_esc(JSON.stringify(item.value))},${_esc(JSON.stringify(item.label))},${_esc(JSON.stringify(item.icon))})'
         style="display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;border-radius:6px;margin:1px 4px;background:${sel ? 'rgba(237,165,255,0.12)' : ''}"
         onmouseenter="this.style.background='${sel ? 'rgba(237,165,255,0.15)' : 'rgba(255,255,255,0.04)'}'"
         onmouseleave="this.style.background='${sel ? 'rgba(237,165,255,0.12)' : ''}'">
@@ -9957,10 +14468,10 @@ function _renderBroadcastHistory() {
   body.innerHTML = _broadcastHistory.map(h => `
     <div style="padding:12px 0;border-bottom:1px solid var(--border)">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-        <span style="font-size:0.82rem;font-weight:700;color:var(--text)">${h.subject || '(SMS)'}</span>
+        <span style="font-size:0.82rem;font-weight:700;color:var(--text)">${_esc(h.subject || '(SMS)')}</span>
         <span style="font-size:0.7rem;color:var(--text-dim)">${Utils.date(h.date)}</span>
       </div>
-      <div style="font-size:0.76rem;color:var(--text-muted);margin-bottom:6px">${h.message}</div>
+      <div style="font-size:0.76rem;color:var(--text-muted);margin-bottom:6px">${_esc(h.message)}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <span class="badge badge--blue"><i class="fa-solid ${chIcon[h.channel] || 'fa-paper-plane'}"></i> ${h.channel}</span>
         <span class="badge badge--gray">${h.segment}</span>
@@ -10241,13 +14752,13 @@ function renderAMLTable() {
         <div class="td-muted clip" style="font-size:0.72rem">${f.investor_id || ''}</div>
       </td>
       <td class="td-gold fw-700 clip">${amount ? Utils.rand(amount) : '—'}</td>
-      <td class="clip" style="font-size:0.8rem">${f.subject || f.reason || f.message || '—'}</td>
+      <td class="clip" style="font-size:0.8rem">${_esc(f.subject || f.reason || f.message || '—')}</td>
       <td>${Utils.priorityBadge ? Utils.priorityBadge(f.priority) : `<span class="badge">${f.priority || '—'}</span>`}</td>
       <td>${statusBadge(f.status)}</td>
       <td>
         <div class="flex-center gap-6">
-          <button class="btn btn--secondary btn--sm" onclick='navigate("investors", document.querySelector("[data-view=investors]"));setTimeout(()=>{document.getElementById("investorSearch").value=${JSON.stringify(invName)};document.getElementById("investorSearch").dispatchEvent(new Event("input"))},350)'><i class="fa-solid fa-eye"></i> Investor</button>
-          ${canResolve ? `<button class="btn btn--success btn--sm" onclick='resolveAMLFlag(${JSON.stringify(f.id)})'><i class="fa-solid fa-check"></i> Resolve</button>` : ''}
+          <button class="btn btn--secondary btn--sm" onclick='navigate("investors", document.querySelector("[data-view=investors]"));setTimeout(()=>{document.getElementById("investorSearch").value=${_esc(JSON.stringify(invName))};document.getElementById("investorSearch").dispatchEvent(new Event("input"))},350)'><i class="fa-solid fa-eye"></i> Investor</button>
+          ${canResolve ? `<button class="btn btn--success btn--sm" onclick='resolveAMLFlag(${_esc(JSON.stringify(f.id))})'><i class="fa-solid fa-check"></i> Resolve</button>` : ''}
         </div>
       </td>
     </tr>`;
@@ -10310,30 +14821,37 @@ async function loadInvestorNotes(investorId) {
           <span style="font-size:0.75rem;font-weight:700;color:var(--orange)">${authorShort}</span>
           <span style="font-size:0.7rem;color:var(--text-dim)">${Utils.date(n.created_at || n.date)}</span>
         </div>
-        <div style="font-size:0.82rem;color:var(--text);white-space:pre-wrap">${n.note || n.text || '—'}</div>
+        <div style="font-size:0.82rem;color:var(--text);white-space:pre-wrap">${_esc(n.note || n.text || '—')}</div>
       </div>`;
     }).join('');
+  };
+
+  /* Whatever is left in investors.notes.
+     Notes written while investor_notes was 404ing went into that column, and
+     the migration in server/db/setup.js moves the JSON-array ones out. It
+     deliberately does not touch anything else — an object is banking JSON, and
+     plain text may be a note somebody typed straight into the field — so this
+     stays as the way to see what remains rather than having it silently
+     disappear the day the table started working. */
+  const legacyNotes = () => {
+    const inv = STATE.investors.find(i => i.id === investorId);
+    const raw = (inv?.notes || '').trim();
+    if (!raw || raw.startsWith('{')) return [];   // empty, or banking JSON
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    } catch (_) {}
+    return [{ note: raw, admin_email: 'system', created_at: inv?.created_at }];
   };
 
   try {
     const res = await API._fetch('GET', 'tables/investor_notes', null, { investor_id: investorId, limit: 50 });
     const notes = (res.data || []).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    renderNotes(notes);
+    /* The table is the record. The column is only consulted when the table has
+       nothing for this investor, so a migrated note is never shown twice. */
+    renderNotes(notes.length ? notes : legacyNotes());
   } catch (_) {
-    // investor_notes table not available — read from investor.notes field
-    const inv = STATE.investors.find(i => i.id === investorId);
-    const raw = inv?.notes || '';
-    if (!raw || raw.startsWith('{')) {
-      // Either empty or contains bank JSON — show empty state
-      renderNotes([]);
-      return;
-    }
-    try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) { renderNotes(parsed); return; }
-    } catch (_2) {}
-    // Plain text stored in notes field — show as single entry
-    renderNotes([{ note: raw, admin_email: 'system', created_at: inv?.created_at }]);
+    renderNotes(legacyNotes());
   }
 }
 
@@ -10347,8 +14865,10 @@ async function addInvestorNote(investorId) {
   const saveBtn = document.querySelector(`button[onclick*="addInvestorNote"]`);
   if (saveBtn) saveBtn.disabled = true;
   try {
+    /* No id. investor_notes.id is a uuid with a gen_random_uuid() default;
+       the `NOTE-<timestamp>` this used to send is not a uuid and would have
+       been refused on the type even once the route worked. */
     await API._fetch('POST', 'tables/investor_notes', {
-      id:          `NOTE-${Date.now()}`,
       investor_id: investorId,
       admin_email: adminEmail,
       note:        noteText,
@@ -10357,28 +14877,245 @@ async function addInvestorNote(investorId) {
     ta.value = '';
     Toast.success('Note added');
     await loadInvestorNotes(investorId);
-  } catch (_) {
-    // Fallback: store as JSON array in investor.notes field
-    try {
-      const inv = STATE.investors.find(i => i.id === investorId);
-      const raw = inv?.notes || '';
-      let existing = [];
-      // Only try to parse if it's NOT bank JSON (bank JSON starts with '{')
-      if (raw && !raw.startsWith('{')) {
-        try { const p = JSON.parse(raw); if (Array.isArray(p)) existing = p; } catch (_2) {}
-      }
-      existing.unshift({ note: noteText, admin_email: adminEmail, created_at: new Date().toISOString() });
-      const newVal = JSON.stringify(existing);
-      await API._fetch('PATCH', `tables/investors/${investorId}`, { notes: newVal });
-      if (inv) inv.notes = newVal;
-      ta.value = '';
-      Toast.success('Note saved');
-      await loadInvestorNotes(investorId);
-    } catch (e2) {
-      Toast.error('Failed to save note: ' + (e2.message || 'unknown error'));
-    }
+  } catch (err) {
+    /* This used to fall back to writing the note into investors.notes as a
+       JSON array. That column also holds banking JSON, so the two formats
+       fought over one field and a note saved behind bank details was never
+       shown again — and because the fallback reported "Note saved", nobody
+       could tell the difference. The failure is now simply reported. */
+    Toast.error('Failed to save note: ' + (err.message || 'unknown error'));
   } finally {
     if (saveBtn) saveBtn.disabled = false;
+  }
+}
+
+
+/* ═══════════════════════════════════════════════
+   INSIGHT ARTICLES
+
+   The public pages at /insights are server-rendered so WhatsApp can read the
+   Open Graph tags off each article; this is where the rows behind them are
+   written. Everything goes through the generic table API, which is why
+   `insights` is in ALLOWED_TABLES and admin-write only — a client publishing
+   to the public site would be quite the bug.
+   ═══════════════════════════════════════════════ */
+
+
+/* Header image. Read to a data: URI and carried in the row — the public route
+   at /insights/:slug/hero turns it back into real bytes so a share crawler has
+   a normal URL to fetch. */
+const _INS_HERO_MAX = 2 * 1024 * 1024;
+
+function _insPickHero(input) {
+  const f = input.files && input.files[0];
+  if (!f) return;
+  if (!/^image\/(png|jpe?g|webp)$/i.test(f.type)) {
+    Toast.error('Use a PNG, JPEG or WebP.'); input.value = ''; return;
+  }
+  if (f.size > _INS_HERO_MAX) {
+    /* Refused here rather than at the server, so the author finds out before
+       they have written the article and pressed save. */
+    Toast.error(`That image is ${(f.size / 1048576).toFixed(1)} MB. Keep it under 2 MB.`);
+    input.value = ''; return;
+  }
+  const r = new FileReader();
+  r.onload = e => { _insShowHero(String(e.target.result)); };
+  r.onerror = () => Toast.error('Could not read that file.');
+  r.readAsDataURL(f);
+}
+
+function _insShowHero(dataUri) {
+  const hid = document.getElementById('insHero');
+  const img = document.getElementById('insHeroPreview');
+  const clr = document.getElementById('insHeroClear');
+  if (hid) hid.value = dataUri || '';
+  if (img) { img.src = dataUri || ''; img.style.display = dataUri ? 'block' : 'none'; }
+  if (clr) clr.style.display = dataUri ? 'inline-flex' : 'none';
+}
+
+function _insClearHero() {
+  _insShowHero('');
+  const f = document.getElementById('insHeroFile');
+  if (f) f.value = '';
+}
+
+function _insSlugify(t) {
+  return String(t || '').toLowerCase().trim()
+    .replace(/['’]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 100);
+}
+
+/* Only ever fills an EMPTY slug. A published article's slug is in links people
+   have already sent, and silently rewriting it as somebody edits the headline
+   would break every one of them. */
+function _insSuggestSlug() {
+  const slug = document.getElementById('insSlug');
+  const title = document.getElementById('insTitle');
+  if (slug && title && !slug.value.trim()) slug.value = _insSlugify(title.value);
+  _insEchoSlug();
+}
+function _insEchoSlug() {
+  const echo = document.getElementById('insSlugEcho');
+  const slug = document.getElementById('insSlug');
+  if (echo && slug) echo.textContent = slug.value.trim() || 'slug';
+}
+
+async function loadInsights() {
+  const list = document.getElementById('insightsList');
+  if (!list) return;
+  list.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:40px 0">Loading…</p>';
+  try {
+    const res  = await API._fetch('GET', 'tables/insights', null, { limit: 200, sort: 'created_at', order: 'desc' });
+    const rows = res.data || [];
+    STATE.insights = rows;
+
+    if (!rows.length) {
+      list.innerHTML = `<div class="empty-state" style="padding:40px 0"><i class="fa-solid fa-newspaper"></i>
+        <div class="empty-state__title">No articles yet</div>
+        <div class="empty-state__sub">Write the first one — it appears at /insights as soon as you publish it.</div></div>`;
+      return;
+    }
+
+    list.innerHTML = rows.map(a => {
+      const live = !!a.published;
+      const thumb = a.hero_image
+        ? `<img src="${_esc(a.hero_image)}" alt="" style="width:74px;height:48px;object-fit:cover;
+             border-radius:6px;border:1px solid var(--border);flex-shrink:0">`
+        : '';
+      return `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+        <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
+          ${thumb}
+          <span style="font-size:0.66rem;font-weight:800;letter-spacing:0.07em;text-transform:uppercase;
+                       padding:4px 9px;border-radius:999px;background:${_esc(a.hero_colour || '#eda5ff')};color:#15121b">${_esc(a.industry || '—')}</span>
+          <span style="font-size:0.68rem;font-weight:700;padding:4px 9px;border-radius:999px;
+                       background:${live ? 'rgba(34,197,94,0.14)' : 'rgba(148,163,184,0.16)'};
+                       color:${live ? '#22c55e' : '#94a3b8'}">${live ? 'Published' : 'Draft'}</span>
+          <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
+            ${live ? `<a class="btn btn--ghost btn--sm" href="/insights/${encodeURIComponent(a.slug)}" target="_blank" rel="noopener"><i class="fa-solid fa-arrow-up-right-from-square"></i> View</a>` : ''}
+            <button class="btn btn--ghost btn--sm" onclick="openInsightEditor('${_esc(a.id)}')"><i class="fa-solid fa-pen"></i> Edit</button>
+            <button class="btn btn--ghost btn--sm" onclick="toggleInsightPublished('${_esc(a.id)}')">${live ? 'Unpublish' : 'Publish'}</button>
+            <button class="btn btn--ghost btn--sm" style="color:#ef4444" onclick="deleteInsight('${_esc(a.id)}')"><i class="fa-solid fa-trash"></i></button>
+          </div>
+        </div>
+        <div style="font-weight:700;font-size:0.96rem;margin-top:9px">${_esc(a.title)}</div>
+        <div style="font-size:0.82rem;color:var(--text-muted);margin-top:4px">${_esc(a.excerpt)}</div>
+        <div style="font-size:0.72rem;color:var(--text-dim);margin-top:7px">
+          /insights/${_esc(a.slug)} &middot; ${Number(a.read_minutes) || 4} min read
+          ${a.published_at ? ' &middot; published ' + Utils.date(a.published_at) : ''}
+        </div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    /* Named, because "no articles yet" and "the request failed" look identical
+       to an operator and lead to very different next actions. */
+    list.innerHTML = `<div class="text-center" style="padding:30px;color:#ef4444">
+      Could not load the articles: ${_esc(e.message || 'error')}<br>
+      <button class="btn btn--secondary btn--sm" style="margin-top:10px" onclick="loadInsights()">Retry</button></div>`;
+    console.error('[insights]', e);
+  }
+}
+
+function openInsightEditor(id) {
+  const a = id ? (STATE.insights || []).find(x => x.id === id) : null;
+  const set = (el, v) => { const n = document.getElementById(el); if (n) n.value = v; };
+  document.getElementById('insightModalTitle').textContent = a ? 'Edit article' : 'New article';
+  set('insId', a ? a.id : '');
+  set('insTitle', a ? a.title : '');
+  set('insIndustry', a ? a.industry : '');
+  set('insSlug', a ? a.slug : '');
+  set('insExcerpt', a ? a.excerpt : '');
+  set('insBody', a ? a.body : '');
+  set('insMins', a ? (a.read_minutes || 4) : 4);
+  set('insColour', a ? (a.hero_colour || '#eda5ff') : '#eda5ff');
+  set('insHeroAlt', a ? (a.hero_alt || '') : '');
+  _insShowHero(a ? (a.hero_image || '') : '');
+  const hf = document.getElementById('insHeroFile'); if (hf) hf.value = '';
+  const pub = document.getElementById('insPublished');
+  if (pub) pub.checked = !!(a && a.published);
+  _insEchoSlug();
+  Modal.open('insightModal');
+}
+
+async function saveInsight() {
+  const v = id => (document.getElementById(id)?.value || '').trim();
+  const id       = v('insId');
+  const title    = v('insTitle');
+  const industry = v('insIndustry');
+  const excerpt  = v('insExcerpt');
+  const body     = v('insBody');
+  let   slug     = _insSlugify(v('insSlug') || title);
+
+  if (!title)    { Toast.error('The article needs a headline.'); return; }
+  if (!industry) { Toast.error('Give it an industry — it is the tag on the card.'); return; }
+  if (!excerpt)  { Toast.error('The excerpt is what WhatsApp shows under the headline.'); return; }
+  if (!body)     { Toast.error('The article has no body text.'); return; }
+  if (!slug)     { Toast.error('That headline produced an empty URL slug — set one by hand.'); return; }
+
+  const published = !!document.getElementById('insPublished')?.checked;
+  const payload = {
+    slug, title, industry, excerpt, body,
+    author: 'SV Capital',
+    read_minutes: parseInt(v('insMins'), 10) || 4,
+    hero_colour: v('insColour') || '#eda5ff',
+    /* null, not '', so clearing the image actually removes it — an empty string
+       is a value the hero parser would go on trying to read. */
+    hero_image: v('insHero') || null,
+    hero_alt:   v('insHeroAlt') || null,
+    published,
+  };
+  /* Stamped the first time it goes live and left alone afterwards, so the
+     public date does not jump every time somebody fixes a typo. */
+  const existing = id ? (STATE.insights || []).find(x => x.id === id) : null;
+  if (published && !(existing && existing.published_at)) payload.published_at = new Date().toISOString();
+
+  const btn = document.getElementById('insSaveBtn');
+  if (btn) btn.disabled = true;
+  try {
+    if (id) await API._fetch('PATCH', `tables/insights/${id}`, payload);
+    else    await API._fetch('POST', 'tables/insights', { id: `INS-${Date.now()}`, ...payload });
+    Toast.success(published ? 'Article published.' : 'Draft saved.');
+    Modal.close('insightModal');
+    await loadInsights();
+  } catch (e) {
+    /* A duplicate slug is the one failure an author can actually fix, so it is
+       named rather than folded into a generic message. */
+    const dup = /duplicate|unique/i.test(e.message || '');
+    Toast.error(dup ? 'That URL slug is already used by another article.'
+                    : `Could not save: ${e.message || 'unknown error'}`);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function toggleInsightPublished(id) {
+  const a = (STATE.insights || []).find(x => x.id === id);
+  if (!a) return;
+  const next = !a.published;
+  try {
+    const patch = { published: next };
+    if (next && !a.published_at) patch.published_at = new Date().toISOString();
+    await API._fetch('PATCH', `tables/insights/${id}`, patch);
+    Toast.success(next ? 'Published — it is live at /insights now.' : 'Unpublished. The link now returns 404.');
+    await loadInsights();
+  } catch (e) {
+    Toast.error(`Could not change it: ${e.message || 'unknown error'}`);
+  }
+}
+
+async function deleteInsight(id) {
+  const a = (STATE.insights || []).find(x => x.id === id);
+  if (!a) return;
+  if (!confirm(`Delete "${a.title}"?\n\nAnyone holding a link to it will get a 404. ` +
+               `If you only want it off the site, unpublish it instead.`)) return;
+  try {
+    await API._fetch('DELETE', `tables/insights/${id}`);
+    Toast.success('Article deleted.');
+    await loadInsights();
+  } catch (e) {
+    Toast.error(`Could not delete it: ${e.message || 'unknown error'}`);
   }
 }
 
@@ -10415,7 +15152,7 @@ function _buildTimelineEvents(inv, invsts, txns) {
   // 2. Transactions
   txns.forEach(t => {
     const amt = Utils.rand(Math.abs(t.amount || 0));
-    const d = t.created_at || t.transaction_date;
+    const d = Utils.txnDate(t);
     if (!d) return;
     const typeMap = {
       deposit:    { icon: 'fa-arrow-down',           color: '#22c55e', text: `Deposited ${amt}` },
@@ -10433,7 +15170,8 @@ function _buildTimelineEvents(inv, invsts, txns) {
   invsts.forEach(i => {
     const poolLabel = i.pool_name || i.pool_id || 'Pool';
     const amt = Utils.rand(i.amount || 0);
-    const rate = i.annual_rate ? ` at ${Utils.pct(i.annual_rate)}` : '';
+    const _r   = Utils.effectiveRate(i);
+    const rate = _r != null ? ` at ${Utils.pct(_r)}` : '';
     if (i.start_date || i.investment_date) {
       events.push({ date: i.start_date || i.investment_date, icon: 'fa-seedling', color: '#fec24f', text: `Investment started — ${poolLabel} ${amt}${rate}` });
     }
@@ -10515,7 +15253,7 @@ function loadInvestorTimeline(inv, invsts, txns) {
         <i class="fa-solid ${e.icon}" style="color:${e.color};font-size:0.7rem"></i>
       </div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:0.8rem;font-weight:700;color:var(--text)">${e.title}</div>
+        <div style="font-size:0.8rem;font-weight:700;color:var(--text)">${_esc(e.title)}</div>
         <div style="font-size:0.72rem;color:var(--text-muted)">${e.sub}</div>
         <div style="font-size:0.68rem;color:var(--text-dim);margin-top:2px">${Utils.date(e.date)}</div>
       </div>
@@ -10672,42 +15410,67 @@ function renderAnAumChart() {
   if (!ctx) return;
 
   const buckets = _lastNMonths(12);
-  // Running cumulative sum of deposit transactions
-  const monthTotals = buckets.map(b => {
-    return STATE.transactions
-      .filter(t => {
-        if (t.type !== 'deposit' || t.status !== 'completed') return false;
-        const d = new Date(t.created_at || t.transaction_date || 0);
-        return d.getFullYear() === b.year && d.getMonth() === b.month;
-      })
-      .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
-  });
 
-  // Running cumulative AUM
+  const monthDeposits = buckets.map(b =>
+    STATE.transactions
+      .filter(t => t.type === 'deposit' && t.status === 'completed' &&
+        new Date(Utils.txnDate(t) || 0).getFullYear() === b.year &&
+        new Date(Utils.txnDate(t) || 0).getMonth() === b.month)
+      .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0)
+  );
+
+  const monthWithdrawals = buckets.map(b =>
+    STATE.transactions
+      .filter(t => t.type === 'withdrawal' && t.status === 'completed' &&
+        new Date(Utils.txnDate(t) || 0).getFullYear() === b.year &&
+        new Date(Utils.txnDate(t) || 0).getMonth() === b.month)
+      .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0)
+  );
+
+  // Running net cumulative AUM
   let running = 0;
-  const aumData = monthTotals.map(v => { running += v; return running; });
+  const aumData = monthDeposits.map((d, i) => { running += d - monthWithdrawals[i]; return Math.max(0, running); });
 
   if (STATE.charts.anAum) STATE.charts.anAum.destroy();
   const opts = _chartDefaults();
-  opts.plugins.tooltip.callbacks = { label: c => ` ${Utils.rand(c.parsed.y)}` };
-  opts.scales.y.ticks.callback = v => 'R' + (v / 1000).toFixed(0) + 'k';
+  opts.plugins.tooltip.callbacks = { label: c => ` ${c.dataset.label}: ${Utils.rand(c.parsed.y)}` };
+  opts.scales.y.ticks.callback = v => 'R' + (v >= 1000000 ? (v/1000000).toFixed(1)+'M' : (v/1000).toFixed(0)+'k');
+  opts.scales.y1 = { position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#3d5268', font: { size: 10 }, callback: v => 'R' + (v/1000).toFixed(0)+'k' } };
 
   STATE.charts.anAum = new Chart(ctx, {
-    type: 'line',
+    type: 'bar',
     data: {
       labels: buckets.map(b => b.label),
-      datasets: [{
-        label: 'Cumulative AUM (deposits)',
-        data: aumData,
-        borderColor: '#fec24f',
-        backgroundColor: (c) => {
-          const g = c.chart.ctx.createLinearGradient(0, 0, 0, 220);
-          g.addColorStop(0, 'rgba(254,194,79,0.2)');
-          g.addColorStop(1, 'rgba(254,194,79,0)');
-          return g;
+      datasets: [
+        {
+          label: 'Net Cumulative AUM',
+          data: aumData,
+          type: 'line',
+          borderColor: '#fec24f',
+          backgroundColor: (c) => {
+            const g = c.chart.ctx.createLinearGradient(0, 0, 0, 220);
+            g.addColorStop(0, 'rgba(254,194,79,0.15)');
+            g.addColorStop(1, 'rgba(254,194,79,0)');
+            return g;
+          },
+          fill: true, tension: 0.4, borderWidth: 2.5, pointRadius: 3, pointBackgroundColor: '#fec24f',
+          yAxisID: 'y', order: 1
         },
-        fill: true, tension: 0.4, borderWidth: 2.5, pointRadius: 3, pointBackgroundColor: '#fec24f'
-      }]
+        {
+          label: 'Deposits',
+          data: monthDeposits,
+          backgroundColor: 'rgba(34,197,94,0.55)',
+          borderRadius: 4,
+          yAxisID: 'y1', order: 2
+        },
+        {
+          label: 'Withdrawals',
+          data: monthWithdrawals,
+          backgroundColor: 'rgba(239,68,68,0.55)',
+          borderRadius: 4,
+          yAxisID: 'y1', order: 3
+        }
+      ]
     },
     options: opts
   });
@@ -10736,7 +15499,9 @@ function renderAnNewInvChart() {
       datasets: [{
         label: 'New Investors',
         data: counts,
-        backgroundColor: 'rgba(101,101,101,0.7)',
+        backgroundColor: 'rgba(237,165,255,0.75)',
+        borderColor: '#eda5ff',
+        borderWidth: 1,
         borderRadius: 5
       }]
     },
@@ -10753,7 +15518,7 @@ function renderAnReturnsChart() {
     STATE.transactions
       .filter(t => {
         if (t.type !== 'return') return false;
-        const d = new Date(t.created_at || t.transaction_date || 0);
+        const d = new Date(Utils.txnDate(t) || 0);
         return d.getFullYear() === b.year && d.getMonth() === b.month;
       })
       .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0)
@@ -10806,6 +15571,83 @@ function renderAnStatusChart() {
   });
 }
 
+// KPI headline tiles at the top of the analytics view
+/* The six headline tiles, from SQL over every row.
+   They used to be summed in the browser from three lists fetched one page
+   deep, so past 5,000 rows they were quietly wrong — Total Investors most
+   plainly, since it read the length of the fetched array and would sit at
+   exactly 5,000 forever.
+
+   Falls back to the old client-side sums if the endpoint is unreachable, and
+   says so, because a stale-but-labelled number beats a blank tile. */
+async function _renderAnalyticsKPIs() {
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  try {
+    const k = await API._fetch('GET', 'analytics/kpis');
+    set('an-total-aum',        Utils.rand(k.total_aum, 0));
+    set('an-active-capital',   Utils.rand(k.active_capital, 0));
+    set('an-total-investors',  Number(k.total_investors).toLocaleString());
+    set('an-returns-ytd',      Utils.rand(k.returns_ytd, 0));
+    set('an-platform-revenue', Utils.rand(k.platform_revenue, 0));
+    set('an-active-inv-count', Number(k.active_investments).toLocaleString());
+    _analyticsKpisFromServer = true;
+    const tsEl = document.getElementById('an-last-refreshed');
+    if (tsEl) tsEl.textContent = _analyticsAgeLabel();
+    return;
+  } catch (e) {
+    console.warn('[analytics] KPI endpoint unavailable, falling back to browser sums:', e.message);
+    _analyticsKpisFromServer = false;
+  }
+  return _renderAnalyticsKPIsFromState();
+}
+
+function _renderAnalyticsKPIsFromState() {
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+
+  // Net AUM = deposits - withdrawals
+  const totalAUM = STATE.transactions
+    .filter(t => t.status === 'completed' && (t.type === 'deposit' || t.type === 'withdrawal'))
+    .reduce((s, t) => s + (t.type === 'deposit' ? 1 : -1) * Math.abs(parseFloat(t.amount) || 0), 0);
+
+  // Active Capital = sum of amounts of active investments
+  const activeCapital = STATE.investments
+    .filter(i => i.status === 'active')
+    .reduce((s, i) => s + Math.abs(parseFloat(i.amount) || 0), 0);
+
+  /* Returns YTD = INCOME since 1 January — `return` and `interest`.
+   *
+   * This counted `payout`, whose amount is the client's capital coming back
+   * plus the return on it, so the figure jumped by the size of every holding
+   * that matured. It is also the browser-side fallback for the KPI the server
+   * computes in analytics-extra, which now sums income — so leaving this alone
+   * would have shown two different numbers for one tile depending on which
+   * path rendered it. */
+  const ytdStart = new Date(new Date().getFullYear(), 0, 1).getTime();
+  const returnsYTD = STATE.transactions
+    .filter(t => t.status === 'completed' && ['return', 'interest'].includes(t.type) &&
+      new Date(t.transaction_date || t.created_at || 0).getTime() >= ytdStart)
+    .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
+
+  // Platform Revenue = all completed fee transactions
+  const platformRevenue = STATE.transactions
+    .filter(t => t.status === 'completed' && t.type === 'fee')
+    .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
+
+  const activeInvCount = STATE.investments.filter(i => i.status === 'active').length;
+
+  set('an-total-aum',       Utils.rand(Math.max(0, totalAUM), 0));
+  set('an-active-capital',  Utils.rand(activeCapital, 0));
+  set('an-total-investors', STATE.investors.length.toLocaleString());
+  set('an-returns-ytd',     Utils.rand(returnsYTD, 0));
+  set('an-platform-revenue',Utils.rand(platformRevenue, 0));
+  set('an-active-inv-count',activeInvCount.toLocaleString());
+
+  /* The age of the DATA, not of this render. new Date() here reported cached
+     figures as freshly refreshed. */
+  const tsEl = document.getElementById('an-last-refreshed');
+  if (tsEl) tsEl.textContent = _analyticsAgeLabel();
+}
+
 // Chart rendering triggered from loadAnalytics after data loads
 function _renderAnalyticsCharts() {
   renderAnAumChart();
@@ -10823,7 +15665,7 @@ function openManualAdjModal() {
     sel.innerHTML = '<option value="">Select investor…</option>' +
       [...STATE.investors]
         .sort((a, b) => `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`))
-        .map(i => `<option value="${i.id}">${i.first_name} ${i.last_name} (${i.id})</option>`)
+        .map(i => `<option value="${i.id}">${_esc(i.first_name)} ${_esc(i.last_name)} (${i.id})</option>`)
         .join('');
   }
   const refEl = document.getElementById('adjReference');
@@ -10872,11 +15714,17 @@ async function saveManualAdj(btn) {
         description:      description,
         transaction_date: new Date().toISOString()
       });
-      await API.investors.update(investorId, { wallet_balance: newBalance });
-      investor.wallet_balance = newBalance;
+      /* The server applies the adjustment to the wallet as a RELATIVE move,
+         inside the same transaction as the row. The console used to PATCH an
+         absolute wallet_balance it had computed from its own copy of the
+         investor, which overwrote anything that landed in between — probed
+         against the real route, a R9,000 deposit arriving while this modal was
+         open was destroyed by the save. */
       Toast.success(`Adjustment applied: ${adjType === 'credit' ? '+' : '−'}${Utils.rand(rawAmount)} for ${investor.first_name} ${investor.last_name}`);
       Modal.close('manualAdjModal');
-      if (STATE.currentView === 'investors') await loadInvestors();
+      /* Always reload. The balance on screen is now the server's, not the one
+         computed here, and this modal opens from more than the investors view. */
+      await loadInvestors();
     } catch (e) {
       Toast.error('Failed to apply adjustment: ' + (e.message || 'unknown error'));
       console.error('[saveManualAdj]', e);
@@ -11017,8 +15865,8 @@ function renderInvestorEmailList() {
     <label style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.15s" onmouseover="this.style.background='var(--bg-secondary)'" onmouseout="this.style.background=''">
       <input type="checkbox" class="email-investor-cb" data-id="${u.id}" checked style="accent-color:#eda5ff;width:14px;height:14px;flex-shrink:0" onchange="updateEmailStats()">
       <div style="flex:1;min-width:0">
-        <div style="font-size:0.82rem;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.first_name || ''} ${u.last_name || ''}</div>
-        <div style="font-size:0.74rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.email}</div>
+        <div style="font-size:0.82rem;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(u.first_name || '')} ${_esc(u.last_name || '')}</div>
+        <div style="font-size:0.74rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(u.email)}</div>
       </div>
       ${u.has_logged_in ? '<span style="font-size:0.68rem;padding:2px 6px;background:rgba(34,197,94,0.12);color:#22c55e;border-radius:4px;flex-shrink:0">logged in</span>' : ''}
     </label>
@@ -11090,7 +15938,7 @@ async function recalculatePoolStats(btn) {
     resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> Updated ${data.poolsUpdated} pool${data.poolsUpdated !== 1 ? 's' : ''} successfully.</span>`;
     Toast.success(`Pool stats recalculated (${data.poolsUpdated} pools updated)`);
   } catch (e) {
-    resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Failed'}</span>`;
+    resultEl.innerHTML = `<span style="color:#ef4444">${_esc(e.message || 'Failed')}</span>`;
     Toast.error(e.message || 'Recalculation failed');
   } finally {
     btn.disabled = false;
@@ -11113,7 +15961,7 @@ async function fixSmmeProductType(btn) {
     Toast.success(`SMME → Short Term: ${data.total} record(s) updated`);
     await loadPools();
   } catch (e) {
-    if (resultEl) resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Failed'}</span>`;
+    if (resultEl) resultEl.innerHTML = `<span style="color:#ef4444">${_esc(e.message || 'Failed')}</span>`;
     Toast.error(e.message || 'Fix failed');
   } finally {
     btn.disabled = false;
@@ -11135,11 +15983,1150 @@ async function backfillFicaFromKyc(btn) {
     resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> Updated <strong>${data.updated}</strong> investor${data.updated !== 1 ? 's' : ''} (${data.fromKyc} from KYC→FICA, ${data.fromFica} from FICA→KYC sync).</span>`;
     Toast.success(`FICA backfill complete — ${data.updated} investors updated`);
   } catch (e) {
-    resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Failed'}</span>`;
+    resultEl.innerHTML = `<span style="color:#ef4444">${_esc(e.message || 'Failed')}</span>`;
     Toast.error(e.message || 'Backfill failed');
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<i class="fa-solid fa-shield-check"></i> Approve FICA for all KYC-approved clients';
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   MATURITY PRE-FLIGHT
+   Reports what the maturity engine will do on its next run. Read-only —
+   the endpoint writes nothing, so there is no confirm step and nothing to
+   undo. The checks live server-side in services/maturityPreflight.js, shared
+   with the CLI, so this only renders.
+   ═══════════════════════════════════════════════ */
+let _preflightAffected = null;
+
+/* The list is a worklist — someone has to phone these people or edit their
+   instruction, and that happens outside the console. */
+function _preflightExportCsv() {
+  if (!_preflightAffected) { Toast.error('Run the pre-flight first'); return; }
+  const rows = [
+    ...(_preflightAffected.affected || []),
+    ...(_preflightAffected.noInstruction || []).map(p => ({
+      ...p, issue: 'no_instruction', severity: 'ATTENTION',
+      detail: 'No maturity instruction chosen — will be auto-reinvested.' })),
+  ];
+  if (!rows.length) { Toast.error('Nothing to export'); return; }
+  const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const csv = [
+    'severity,issue,investor,account,email,phone,pool,investment_id,amount,posted_return,instruction,detail',
+    ...rows.map(a => [a.severity, a.issue, a.name, a.investorId, a.email, a.phone, a.poolName,
+      a.investmentId, a.amount, a.postedReturn, a.instruction || '', a.detail].map(esc).join(',')),
+  ].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `maturity-preflight-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+  Toast.success(`${rows.length} row(s) exported`);
+}
+
+/* Deposits left Pending by a decline that only closed the ticket.
+
+   Every value rendered is client data — names, emails, references, and the
+   admin_response the reviewer typed — so all of it goes through _esc.
+
+   The three groups are shown apart and only one of them has a button, because
+   the difference between them is the difference between owing a client an
+   explanation and owing them money. */
+let _seLast = null;
+
+async function runStrandedEftReport(btn) {
+  const el = document.getElementById('seResult');
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Looking…';
+  el.innerHTML = '';
+  document.getElementById('seExportBtn').style.display = 'none';
+  try {
+    const r = await API._fetch('GET', 'admin/stranded-eft-deposits');
+    _seLast = r;
+
+    if (r.verdict === 'clean') {
+      el.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-circle-check"></i>
+        Nothing stranded. No resolved payment-proof ticket has a deposit still sitting at Pending.</span>`;
+      return;
+    }
+
+    const money = n => Utils.rand(n || 0);
+    const t = r.totals;
+    const rows = list => list.slice(0, 20).map(x => `
+      <div style="display:flex;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);font-size:0.78rem">
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(x.name || x.investorId)}</span>
+        <span class="td-muted" style="font-size:0.72rem;white-space:nowrap">${_esc(x.reference)}</span>
+        <span class="fw-700" style="white-space:nowrap">${_esc(money(x.amount))}</span>
+        <span class="td-muted" style="font-size:0.72rem;white-space:nowrap">${_esc(String(x.respondedAt || '').slice(0, 10))}</span>
+      </div>`).join('') + (list.length > 20
+        ? `<div style="font-size:0.74rem;color:var(--text-muted);padding-top:6px">…and ${_esc(list.length - 20)} more — use Export CSV for the full list</div>`
+        : '');
+
+    const parts = [];
+
+    parts.push(`<div style="display:flex;gap:22px;margin-bottom:14px;flex-wrap:wrap">
+      <div><span style="font-size:1.3rem;font-weight:800;color:#fec24f">${_esc(t.declined.n)}</span>
+        <span style="font-size:0.74rem;color:var(--text-muted);margin-left:5px">declined · ${_esc(money(t.declined.value))}</span></div>
+      <div><span style="font-size:1.3rem;font-weight:800;color:${t.approved.n ? '#ef4444' : 'var(--text-muted)'}">${_esc(t.approved.n)}</span>
+        <span style="font-size:0.74rem;color:var(--text-muted);margin-left:5px">approved but never credited · ${_esc(money(t.approved.value))}</span></div>
+      <div><span style="font-size:1.3rem;font-weight:800;color:var(--text-muted)">${_esc(t.unclear.n)}</span>
+        <span style="font-size:0.74rem;color:var(--text-muted);margin-left:5px">unclear · ${_esc(money(t.unclear.value))}</span></div>
+    </div>`);
+
+    /* Already credited by hand: the money went in under another reference and
+       this row is a duplicate nobody closed. Shown first because it is the only
+       group where the right answer is neither approve nor decline, and because
+       the obvious instinct — mark it Completed, the money did arrive — would
+       credit the wallet a SECOND time. */
+    if (r.creditedTotals?.n) {
+      const ct = r.creditedTotals;
+      parts.push(`<div style="border-left:3px solid #22c55e;background:rgba(34,197,94,0.07);border-radius:0 8px 8px 0;padding:11px 13px;margin-bottom:14px">
+        <div style="font-weight:700;color:#22c55e"><i class="fa-solid fa-link"></i>
+          ${_esc(ct.n)} already credited by hand — ${_esc(money(ct.value))}</div>
+        <div style="font-size:0.78rem;color:var(--text-muted);margin-top:5px">
+          A completed credit for the same investor and the same amount exists alongside each of
+          these, so the money is already in the wallet and this EFT row is a duplicate left behind.
+          Cancelling them says exactly that. <strong>Do not approve them</strong> — completing a
+          deposit credits the wallet again.
+          <br><br>The amounts match to the cent, which is strong evidence but not proof: a client
+          can pay the same figure twice. Check the matched reference on each line before cancelling.</div>
+        <div style="margin-top:8px">${r.alreadyCredited.slice(0, 20).map(x => `
+          <div style="padding:7px 0;border-bottom:1px solid var(--border);font-size:0.78rem">
+            <div style="display:flex;gap:10px">
+              <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(x.name || x.investorId)}</span>
+              <span class="td-muted" style="font-size:0.72rem;white-space:nowrap">${_esc(x.reference)}</span>
+              <span class="fw-700" style="white-space:nowrap">${_esc(money(x.amount))}</span>
+            </div>
+            <div class="td-muted" style="font-size:0.72rem;margin-top:2px">
+              credited by ${_esc(x.creditedBy.type)} ${_esc(x.creditedBy.reference || x.creditedBy.id)}
+              on ${_esc(String(x.creditedBy.when).slice(0, 10))}${x.creditedBy.description ? ` · ${_esc(String(x.creditedBy.description).slice(0, 70))}` : ''}
+            </div>
+          </div>`).join('')}
+          ${r.alreadyCredited.length > 20
+            ? `<div style="font-size:0.74rem;color:var(--text-muted);padding-top:6px">…and ${_esc(r.alreadyCredited.length - 20)} more — use Export CSV</div>` : ''}
+        </div>
+        <button class="btn btn--primary btn--sm" style="margin-top:12px" onclick="cancelSupersededEft(this)">
+          <i class="fa-solid fa-link-slash"></i> Cancel these ${_esc(ct.n)} as duplicates
+        </button>
+      </div>`);
+    }
+
+    /* An approval that never completed means the client may actually have paid —
+       that is money owed, and nobody should scroll past it. */
+    if (t.approved.n) {
+      parts.push(`<div style="border-left:3px solid #ef4444;background:rgba(239,68,68,0.08);border-radius:0 8px 8px 0;padding:11px 13px;margin-bottom:14px">
+        <div style="font-weight:700;color:#ef4444"><i class="fa-solid fa-circle-exclamation"></i>
+          ${_esc(t.approved.n)} approved but never credited — ${_esc(money(t.approved.value))}</div>
+        <div style="font-size:0.78rem;color:var(--text-muted);margin-top:5px">
+          The client was told the deposit was approved and it never completed, so the money may
+          genuinely have arrived. Marking these Rejected would be the opposite of the truth, so
+          nothing here will touch them. Work each one by hand: approve it properly, or find out
+          what happened to the payment.</div>
+        <div style="margin-top:8px">${rows(r.groups.APPROVED)}</div>
+      </div>`);
+    }
+
+    if (t.declined.n) {
+      parts.push(`<div style="font-weight:700;color:#fec24f;margin:10px 0 4px">
+        <i class="fa-solid fa-hourglass-half"></i> ${_esc(t.declined.n)} declined, still showing as Pending</div>
+        <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:6px">
+          These clients were told the payment was refused. Closing them makes the ledger agree
+          with what they were already told. No wallet is touched — a rejected deposit moves no money.</div>
+        ${rows(r.groups.DECLINED)}
+        <button class="btn btn--primary btn--sm" style="margin-top:12px" onclick="closeStrandedEftDeposits(this)">
+          <i class="fa-solid fa-check-double"></i> Close these ${_esc(t.declined.n)} as Rejected
+        </button>`);
+    }
+
+    if (t.unclear.n) {
+      parts.push(`<div style="font-weight:700;color:var(--text-muted);margin:16px 0 4px">
+        <i class="fa-solid fa-circle-question"></i> ${_esc(t.unclear.n)} unclear</div>
+        <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:6px">
+          No response was recorded on the ticket, or it says neither. Someone has to read it
+          before deciding. Not closed from here.</div>
+        ${rows(r.groups.UNCLEAR)}`);
+    }
+
+    el.innerHTML = parts.join('');
+    document.getElementById('seExportBtn').style.display = '';
+  } catch (e) {
+    el.innerHTML = `<span style="color:#ef4444"><i class="fa-solid fa-circle-exclamation"></i>
+      Report failed: ${_esc(e.message || 'unknown error')}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }
+}
+
+async function closeStrandedEftDeposits(btn) {
+  const n = _seLast?.totals?.declined?.n || 0;
+  if (!n) { Toast.error('Run the report first'); return; }
+  const ok = await Confirm.ask(`Close ${n} deposit${n === 1 ? '' : 's'} as Rejected?`, {
+    body: `These clients were already told their proof of payment was declined. Their deposits stop `
+        + `showing as Pending and read Rejected instead.\n\nNo wallet is touched. The `
+        + `${_seLast.totals.approved.n} approved-but-uncredited and ${_seLast.totals.unclear.n} unclear `
+        + `deposits are not affected.`,
+    confirmLabel: `Close ${n}`,
+  });
+  if (!ok) return;
+
+  await _withBtn(btn, async () => {
+    try {
+      /* No ids are sent. The server re-derives the DECLINED group from the same
+         query, so a stale page cannot talk it into closing an approved one. */
+      const out = await API._fetch('POST', 'admin/stranded-eft-deposits/close', {});
+      Toast.success(`${out.closed} deposit${out.closed === 1 ? '' : 's'} closed — they now read Rejected`);
+      await runStrandedEftReport(document.querySelector('[onclick="runStrandedEftReport(this)"]'));
+      if (STATE.transactions.length) await loadTransactions();
+    } catch (e) {
+      Toast.error('Could not close them: ' + (e.message || 'unknown error'));
+    }
+  });
+}
+
+async function cancelSupersededEft(btn) {
+  const n = _seLast?.creditedTotals?.n || 0;
+  if (!n) { Toast.error('Run the report first'); return; }
+  const ok = await Confirm.ask(`Cancel ${n} duplicate deposit${n === 1 ? '' : 's'}?`, {
+    body: `Each of these has a matching completed credit for the same investor and amount, so the `
+        + `money is already in the wallet. They will read Cancelled, with a note naming the credit `
+        + `that superseded them.\n\nNo wallet is touched. Nothing is approved — approving would `
+        + `credit these clients a second time.`,
+    confirmLabel: `Cancel ${n}`,
+  });
+  if (!ok) return;
+
+  await _withBtn(btn, async () => {
+    try {
+      const out = await API._fetch('POST', 'admin/stranded-eft-deposits/cancel-superseded', {});
+      Toast.success(`${out.cancelled} duplicate deposit${out.cancelled === 1 ? '' : 's'} cancelled — no wallet was credited`);
+      await runStrandedEftReport(document.querySelector('[onclick="runStrandedEftReport(this)"]'));
+      if (STATE.transactions.length) await loadTransactions();
+    } catch (e) {
+      Toast.error('Could not cancel them: ' + (e.message || 'unknown error'));
+    }
+  });
+}
+
+function exportStrandedEftCSV() {
+  if (!_seLast) { Toast.error('Run the report first'); return; }
+  const rows = [['group', 'already_credited', 'credited_by_ref', 'credited_by_type', 'credited_on',
+                 'investor_id', 'name', 'email', 'reference', 'amount',
+                 'deposit_id', 'ticket_id', 'responded_at', 'admin_response']];
+  for (const [group, list] of Object.entries(_seLast.groups)) {
+    for (const r of list) {
+      rows.push([group,
+        r.creditedBy ? 'yes' : 'no',
+        r.creditedBy ? (r.creditedBy.reference || r.creditedBy.id) : '',
+        r.creditedBy ? r.creditedBy.type : '',
+        r.creditedBy ? String(r.creditedBy.when).slice(0, 19) : '',
+        r.investorId, r.name, r.email, r.reference,
+        /* toFixed, not Utils.rand: the panel shows R1 250,00 and a spreadsheet
+           reads that as 125000. */
+        r.amount.toFixed(2), r.depositId, r.ticketId,
+        String(r.respondedAt || '').slice(0, 19), r.adminResponse]);
+    }
+  }
+  _downloadCSV(rows, `stranded-eft-deposits-${new Date().toISOString().slice(0, 10)}.csv`);
+}
+
+/* Withdrawal double-debit reconciliation, rendered into the ops console.
+
+   Every value here is client data — names, emails, references — so all of it
+   goes through _esc. The figures are money owed to real people, so the two
+   totals are shown apart and labelled: "owed" is exact, "needs review" is an
+   upper bound the old Math.max(0, …) clamp may have eaten into. Summing them
+   would produce a number nobody can pay out against. */
+let _ddLast = null;
+
+async function runWithdrawalReconciliation(btn) {
+  const resultEl = document.getElementById('ddResult');
+  const origLabel = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Reconciling…';
+  resultEl.innerHTML = '';
+  document.getElementById('ddExportBtn').style.display = 'none';
+  try {
+    const qs = new URLSearchParams();
+    const since  = document.getElementById('ddSince')?.value;
+    const until  = document.getElementById('ddUntil')?.value;
+    const window_ = document.getElementById('ddWindow')?.value;
+    if (since)  qs.set('since', since);
+    if (until)  qs.set('until', until);
+    if (window_) qs.set('window', window_);
+    const r = await API._fetch('GET', 'admin/withdrawal-double-debits' + (qs.toString() ? `?${qs}` : ''));
+    _ddLast = r;
+
+    if (r.verdict === 'no-evidence') {
+      resultEl.innerHTML = `<span style="color:var(--text-muted)"><i class="fa-solid fa-circle-info"></i>
+        The audit log is empty, so there is nothing to reconcile against. That is not the same as
+        finding nothing.</span>`;
+      return;
+    }
+
+    const money = n => Utils.rand(n || 0);
+    const t = r.totals;
+    const parts = [];
+
+    /* Coverage first, deliberately. A clean result over a window that starts
+       after the fix shipped is not evidence that nobody was charged twice. */
+    parts.push(`<div style="font-size:0.74rem;color:var(--text-muted);margin-bottom:12px;
+        border-left:2px solid var(--border);padding-left:10px">
+      Audit log covers ${_esc(String(r.coverage.first).slice(0, 10))} to
+      ${_esc(String(r.coverage.last).slice(0, 10))} · ${_esc(r.coverage.events.toLocaleString())} events ·
+      pairing window ${_esc(r.window)}s
+      ${r.scope.since || r.scope.until
+        ? `<br>Scoped to ${_esc(r.scope.since || 'the beginning')} … ${_esc(r.scope.until || 'now')}`
+        : ''}
+    </div>`);
+
+    if (r.verdict === 'clean') {
+      parts.push(`<div style="color:#22c55e;margin-bottom:10px"><i class="fa-solid fa-circle-check"></i>
+        No double-debited withdrawals in this window.</div>`);
+    } else {
+      parts.push(`<div style="display:flex;gap:22px;margin-bottom:12px;flex-wrap:wrap">
+        <div><span style="font-size:1.3rem;font-weight:800;color:#f87171">${_esc(money(t.owed))}</span>
+          <span style="font-size:0.74rem;color:var(--text-muted);margin-left:5px">owed, exactly (${_esc(t.exactCount)})</span></div>
+        ${t.cappedCount ? `<div><span style="font-size:1.3rem;font-weight:800;color:#f59e0b">≤ ${_esc(money(t.needsReview))}</span>
+          <span style="font-size:0.74rem;color:var(--text-muted);margin-left:5px">needs review (${_esc(t.cappedCount)})</span></div>` : ''}
+      </div>`);
+
+      parts.push(`<div style="overflow-x:auto"><table class="data-table" style="font-size:0.78rem">
+        <thead><tr><th>Investor</th><th>ID</th><th style="text-align:right">Owed</th>
+          <th style="text-align:right">Needs review</th><th style="text-align:right">n</th></tr></thead>
+        <tbody>${r.byInvestor.map(e => `<tr>
+          <td>${_esc(e.name || '(deleted investor)')}</td>
+          <td class="td-muted" style="font-size:0.72rem">${_esc(e.investorId)}</td>
+          <td style="text-align:right" class="${e.owed ? 'td-red fw-700' : 'td-muted'}">${e.owed ? _esc(money(e.owed)) : '—'}</td>
+          <td style="text-align:right;color:${e.needsReview ? '#f59e0b' : 'var(--text-muted)'}">${e.needsReview ? '≤ ' + _esc(money(e.needsReview)) : '—'}</td>
+          <td style="text-align:right">${_esc(e.n)}</td></tr>`).join('')}</tbody>
+      </table></div>`);
+
+      if (t.cappedCount) {
+        parts.push(`<div style="font-size:0.76rem;color:#f59e0b;margin-top:10px">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          ${_esc(t.cappedCount)} write(s) landed on a zero balance. The old <code>Math.max(0, …)</code>
+          clamp may have absorbed part of the second debit, so each is <strong>at most</strong> the
+          amount shown and needs a person to settle. They are not in the refundable total.</div>`);
+      }
+    }
+
+    if (t.subAccountCount) {
+      parts.push(`<div style="margin-top:16px;padding:10px;border-left:3px solid #f59e0b;background:var(--dark-3);border-radius:0 6px 6px 0">
+        <div style="font-weight:700;color:#f59e0b;margin-bottom:4px">
+          <i class="fa-solid fa-arrow-right-arrow-left"></i> ${_esc(t.subAccountCount)} sub-account deposit(s) — the same defect, running the other way</div>
+        <div style="font-size:0.78rem;color:var(--text-muted)">
+          The server credited the sub-account and this console credited the parent as well, so
+          ${_esc(money(t.subAccountTotal))} was created rather than taken. Money owed and money created
+          are different conversations, so this is never netted against the refunds above.</div>
+      </div>`);
+    }
+
+    /* Never let a clean result read as a guarantee. */
+    if (r.approvedWithoutWrite || r.unpaired) {
+      parts.push(`<div style="margin-top:16px;font-size:0.76rem;color:var(--text-muted);
+          border-top:1px solid var(--border);padding-top:10px">
+        <strong style="color:var(--text)">Coverage.</strong>
+        ${r.approvedWithoutWrite ? `${_esc(r.approvedWithoutWrite)} approved withdrawal(s) here have no paired wallet write —
+          approvals made after the fix, made outside this console, or whose audit row never landed.
+          The audit write is fire-and-forget, so where it is the last of those these totals are a
+          <strong>floor, not a total</strong>.` : ''}
+        ${r.unpaired ? `<br>${_esc(r.unpaired)} wallet write(s) paired with no transaction inside ${_esc(r.window)}s.
+          Raise the window and see whether they pair up before treating them as a separate problem.` : ''}
+      </div>`);
+    }
+
+    resultEl.innerHTML = parts.join('');
+    if (r.rowCount) document.getElementById('ddExportBtn').style.display = '';
+  } catch (e) {
+    resultEl.innerHTML = `<span style="color:#ef4444"><i class="fa-solid fa-circle-exclamation"></i>
+      Reconciliation failed: ${_esc(e.message || 'unknown error')}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = origLabel;
+  }
+}
+
+/* Unformatted numbers, and an upper bound marked with <=, so whoever works the
+   refunds cannot read a bound as an amount. */
+function exportDoubleDebitCSV() {
+  if (!_ddLast) { Toast.error('Run the reconciliation first'); return; }
+  const rows = [[
+    'when','investor_id','name','email','kind','txn_id','reference','sub_account_id',
+    'amount','balance_written','clamped_at_zero','extra_debit','wallet_now','actor',
+  ]];
+  const push = (r, kind) => rows.push([
+    String(r.when).slice(0, 19), r.investorId, r.name, r.email, kind, r.txnId, r.reference,
+    r.subAccountId,
+    r.amount == null ? '' : r.amount.toFixed(2),
+    r.written == null ? '' : r.written.toFixed(2),
+    kind === 'withdrawal' ? (r.clamped ? 'yes' : 'no') : '',
+    /* toFixed, not Utils.rand: the on-screen figures are South African format
+       (R1 250,00) and a refund run parsing that would read it as 125000. */
+    kind === 'withdrawal' ? (r.clamped ? `<=${(r.amount || 0).toFixed(2)}` : (r.amount || 0).toFixed(2)) : '',
+    r.walletNow == null ? '' : r.walletNow.toFixed(2),
+    r.actor,
+  ]);
+  _ddLast.doubleDebits.forEach(r => push(r, 'withdrawal'));
+  _ddLast.deposits.forEach(r => push(r, 'deposit'));
+  (_ddLast.other || []).forEach(r => push(r, 'other'));
+  _downloadCSV(rows, `withdrawal-double-debits-${new Date().toISOString().slice(0, 10)}.csv`);
+}
+
+/* The stored-markup audit, rendered into the console.
+
+   Everything a finding contains is the very text that was suspect, so every
+   value goes through _esc. A panel that reported unescaped markup by writing
+   it into the page would be the vulnerability it is looking for. */
+async function runStoredMarkupAudit(btn) {
+  const resultEl = document.getElementById('markupAuditResult');
+  const origLabel = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Scanning…';
+  resultEl.innerHTML = '';
+  try {
+    const r = await API._fetch('GET', 'admin/stored-markup-audit');
+
+    if (r.verdict === 'clean') {
+      resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-circle-check"></i>
+        Nothing found across ${_esc(r.scanned.length)} column(s). No stored text contains markup,
+        an event handler, or a character that would break out of an attribute.</span>`;
+      return;
+    }
+
+    const rows = (list, colour) => list.map(x => `
+      <div style="border-left:3px solid ${colour};padding:6px 10px;margin-bottom:6px;background:var(--bg-secondary);border-radius:0 6px 6px 0">
+        <div style="font-size:0.74rem;color:var(--text-muted);font-family:monospace">
+          ${_esc(x.table)}.${_esc(x.column)} &middot; row ${_esc(x.rowId)}
+        </div>
+        <div style="font-family:monospace;font-size:0.78rem;word-break:break-all">${_esc(x.value)}</div>
+      </div>`).join('');
+
+    const parts = [];
+    parts.push(`<div style="display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap">
+      <div><span style="font-size:1.3rem;font-weight:800;color:${r.totals.executable ? '#ef4444' : 'var(--text-muted)'}">${_esc(r.totals.executable)}</span>
+        <span style="font-size:0.74rem;color:var(--text-muted);margin-left:5px">executable</span></div>
+      <div><span style="font-size:1.3rem;font-weight:800;color:${r.totals.breaking ? '#f59e0b' : 'var(--text-muted)'}">${_esc(r.totals.breaking)}</span>
+        <span style="font-size:0.74rem;color:var(--text-muted);margin-left:5px">quoted in an attribute</span></div>
+    </div>`);
+
+    if (r.executable.length) {
+      parts.push(`<div style="font-weight:700;color:#ef4444;margin:10px 0 6px">
+        <i class="fa-solid fa-circle-exclamation"></i> Executable — treat as an incident</div>
+        <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:8px">
+          These would run in this session, which can reach manual credit, bulk KYC approval
+          and the pool remap. Clear them before opening the screens that show them.</div>
+        ${rows(r.executable, '#ef4444')}`);
+    }
+    if (r.breaking.length) {
+      const shown = r.breaking.slice(0, 25);
+      parts.push(`<div style="font-weight:700;color:#f59e0b;margin:14px 0 6px">
+        <i class="fa-solid fa-triangle-exclamation"></i> Quotes in values that reach an HTML attribute</div>
+        <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:8px">
+          A quote can end an attribute early. The inline handlers are escaped, so these are not
+          breaking anything there — they are listed because the wider escaping sweep across the
+          console is not finished. An apostrophe in a surname is ordinary; these are real people,
+          not attacks.</div>
+        ${rows(shown, '#f59e0b')}
+        ${r.breaking.length > shown.length
+          ? `<div style="font-size:0.76rem;color:var(--text-muted)">…and ${_esc(r.breaking.length - shown.length)} more</div>`
+          : ''}`);
+    }
+    parts.push(`<div style="font-size:0.72rem;color:var(--text-muted);margin-top:12px">
+      Scanned ${_esc(r.scanned.length)} column(s). Nothing was changed by running this.</div>`);
+    resultEl.innerHTML = parts.join('');
+  } catch (e) {
+    resultEl.innerHTML = `<span style="color:#ef4444"><i class="fa-solid fa-circle-exclamation"></i>
+      Audit failed: ${_esc(e.message || 'unknown error')}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = origLabel;
+  }
+}
+
+/* ─── Matured into wallets ────────────────────────────────────────────
+   The engine matches the rollover target on product_type alone. An
+   investment carrying a type no pool uses matches nothing, and the money is
+   paid to the wallet instead of reinvested.
+
+   The figure that cannot be read off a maturity report is whether the wallet
+   STILL holds it — a client who has spent or withdrawn since cannot be rolled
+   over without going negative — so that is what this leads with.
+
+   Read-only. The endpoint issues SELECTs and nothing else. */
+let _wfaReport = null;
+
+function _wfaExportCsv() {
+  if (!_wfaReport) { Toast.error('Run the audit first'); return; }
+  const head = ['paid_at', 'investor', 'email', 'investor_id', 'investment_id', 'sub_account',
+                'from_pool', 'from_pool_id', 'investment_product_type', 'instruction',
+                'same_product', 'amount', 'wallet_balance_now', 'wallet_holds_it',
+                'already_corrected'];
+  const esc = v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+  const body = _wfaReport.items.map(i => [
+    (i.paid_at || '').slice(0, 10), i.name, i.email, i.investor_id, i.investment_id,
+    i.sub_name || '', i.pool_name, i.pool_id, i.investment_product_type, i.instruction || '(none set)',
+    i.same_product ? 'yes' : 'no', i.amount, i.wallet_balance, i.wallet_holds_it ? 'yes' : 'no',
+    i.already_corrected ? 'yes' : 'no',
+  ].map(esc).join(','));
+  const blob = new Blob([[head.join(',')].concat(body).join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `matured-into-wallets-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+async function runWalletFallbackAudit(btn) {
+  const el = document.getElementById('wfaResult');
+  const since = document.getElementById('wfaSince')?.value || '';
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Checking…';
+  el.innerHTML = '';
+  document.getElementById('wfaCsvBtn').style.display = 'none';
+  const fixWrap = document.getElementById('wfaFixWrap');
+  if (fixWrap) { fixWrap.style.display = 'none'; fixWrap.innerHTML = ''; }
+  _wfaPlan = null;
+  try {
+    const r = await API._fetch('GET',
+      'admin/maturity-wallet-fallbacks' + (since ? `?since=${encodeURIComponent(since)}` : ''));
+    _wfaReport = r;
+
+    if (!r.summary.credits) {
+      el.innerHTML = `<span style="color:var(--text-muted)"><i class="fa-solid fa-circle-check"></i> ` +
+        `No maturity has been paid to a wallet for want of a matching pool${since ? ' since ' + _esc(since) : ''}.</span>`;
+      return;
+    }
+
+    const s = r.summary;
+    const tile = (label, n, amt, colour, note) => `
+      <div style="flex:1;min-width:150px;background:rgba(255,255,255,0.03);border:1px solid var(--border);
+                  border-left:3px solid ${colour};border-radius:8px;padding:10px 12px">
+        <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em">${label}</div>
+        <div style="font-size:1.15rem;font-weight:800;color:${colour};font-variant-numeric:tabular-nums">${n}</div>
+        <div style="font-size:0.78rem;color:var(--text-muted);font-variant-numeric:tabular-nums">${Utils.rand(amt)}</div>
+        ${note ? `<div style="font-size:0.7rem;color:var(--text-muted);margin-top:3px">${_esc(note)}</div>` : ''}
+      </div>`;
+
+    const targets = (r.rolloverTargets || [])
+      .map(t => `<li><strong>${_esc(t.product_type)}</strong> → ${_esc(t.name)} <span style="color:var(--text-muted)">(${_esc(t.id)})</span></li>`)
+      .join('') || '<li style="color:var(--text-muted)">No pool is open and still raising for any product type.</li>';
+
+    const blocked = (r.blockedAccounts || []).length
+      ? `<div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);border-radius:8px;padding:12px;margin-top:14px">
+           <strong style="color:#ef4444">${r.blockedAccounts.length} account(s) no longer hold the money.</strong>
+           <div style="color:var(--text-muted);margin:4px 0 8px">Putting these back would take the wallet negative — each needs its own decision.</div>
+           <table style="width:100%;font-size:0.78rem;border-collapse:collapse">
+             <tr style="color:var(--text-muted);text-align:left">
+               <th style="padding:3px 6px">Client</th><th style="padding:3px 6px;text-align:right">Owed</th>
+               <th style="padding:3px 6px;text-align:right">In wallet</th><th style="padding:3px 6px;text-align:right">Short by</th></tr>
+             ${r.blockedAccounts.map(a => `<tr>
+               <td style="padding:3px 6px">${_esc(a.name)}${a.sub_name ? ` <span style="color:var(--text-muted)">· ${_esc(a.sub_name)}</span>` : ''}</td>
+               <td style="padding:3px 6px;text-align:right;font-variant-numeric:tabular-nums">${Utils.rand(a.owed)}</td>
+               <td style="padding:3px 6px;text-align:right;font-variant-numeric:tabular-nums">${Utils.rand(a.balance)}</td>
+               <td style="padding:3px 6px;text-align:right;color:#ef4444;font-variant-numeric:tabular-nums">${Utils.rand(a.shortfall)}</td></tr>`).join('')}
+           </table>
+         </div>`
+      : '';
+
+    const other = s.otherProduct
+      ? `<div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:8px;padding:12px;margin-top:14px">
+           <strong style="color:#f59e0b">${s.otherProduct} asked to switch into a different product.</strong>
+           <div style="color:var(--text-muted);margin-top:4px">
+             ${Utils.rand(s.otherProductTotal)}. This money belongs in that product's pool, not this one,
+             so it is kept apart rather than counted as something to put back here.
+           </div>
+         </div>`
+      : '';
+
+    el.innerHTML = `
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+        ${tile('Paid to wallets', s.outstanding, s.outstandingTotal, '#f59e0b', 'still uncorrected')}
+        ${tile('Can be put back', s.movable, s.movableTotal, '#22c55e', 'same product, wallet holds it')}
+        ${tile('Wallet spent', s.blocked, s.blockedTotal, '#ef4444', 'needs a decision')}
+        ${tile('Other product', s.otherProduct, s.otherProductTotal, '#9ca3af', 'asked to switch')}
+      </div>
+      ${other}
+      ${blocked}
+      <div style="margin-top:14px">
+        <div style="font-weight:700;margin-bottom:6px">Product type on the investment</div>
+        <table style="width:100%;font-size:0.78rem;border-collapse:collapse">
+          ${Object.entries(r.byProductType).sort((a, b) => b[1].total - a[1].total).map(([k, v]) => `
+            <tr><td style="padding:3px 6px">${_esc(k)}</td>
+                <td style="padding:3px 6px;text-align:right;font-variant-numeric:tabular-nums">${v.count}</td>
+                <td style="padding:3px 6px;text-align:right;font-variant-numeric:tabular-nums">${Utils.rand(v.total)}</td>
+                <td style="padding:3px 6px;color:var(--text-muted)">${['cattle','short_term'].includes(k) ? '' : 'no pool uses this type'}</td></tr>`).join('')}
+        </table>
+      </div>
+      <div style="margin-top:14px">
+        <div style="font-weight:700;margin-bottom:6px">Where each type would roll into today</div>
+        <ul style="margin:0;padding-left:18px;color:var(--text)">${targets}</ul>
+      </div>`;
+    document.getElementById('wfaCsvBtn').style.display = '';
+    const fix = document.getElementById('wfaFixWrap');
+    if (fix) { fix.innerHTML = _wfaFixPanel(); fix.style.display = s.outstanding ? '' : 'none'; }
+  } catch (e) {
+    el.innerHTML = `<span style="color:#ef4444"><i class="fa-solid fa-circle-exclamation"></i> ${_esc(e.message || 'Audit failed')}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }
+}
+
+/* ─── Putting the money back ──────────────────────────────────────────
+   A button that moves money, so it is built like one.
+
+   · It does not appear until the audit has been run. Nobody moves this
+     money without having first looked at it.
+   · Preview and Reinvest are two steps. The preview comes from the server,
+     not from the audit already on screen, because the plan is what the write
+     will actually do.
+   · The confirmation phrase names the COUNT and the TARGET. A mis-click
+     cannot produce it, and a stale tab cannot either: if the plan moved, the
+     phrase the operator was given no longer matches the one the server wants.
+   · The request carries arguments, never a list of investments and amounts.
+     The server re-derives what to move. A page that could post its own list
+     would be telling the server which money to take. */
+let _wfaPlan = null;
+
+function _wfaFixPanel() {
+  if (!_wfaReport || !_wfaReport.summary.outstanding) return '';
+  const pools = _wfaReport.byPool || [];
+  const targets = _wfaReport.rolloverTargets || [];
+  return `
+    <div style="font-weight:800;margin-bottom:8px">
+      <i class="fa-solid fa-rotate-left" style="color:#f59e0b;margin-right:6px"></i>Put this money back
+    </div>
+    <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px">
+      Debits each wallet and creates the investment it should have had. Fee-free, one client at a
+      time, and it will not take a wallet negative. Running it twice does not reinvest twice.
+      ${targets.length
+        ? `Open pools today: ${targets.map(t => `<strong>${_esc(t.product_type)}</strong> ${_esc(t.id)}`).join(' · ')}`
+        : '<strong>No pool is open and still raising</strong> — whatever you target has stopped taking subscriptions.'}
+    </p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-bottom:10px">
+      <label style="font-size:0.78rem;color:var(--text-muted)">From pool
+        <select id="wfaSrc" class="form-input" style="width:100%;margin-top:4px">
+          ${pools.map(p => `<option value="${_esc(p.pool_id)}">${_esc(p.pool_name)} — ${p.count} · ${Utils.rand(p.total)}</option>`).join('')}
+        </select>
+      </label>
+      <label style="font-size:0.78rem;color:var(--text-muted)">Into pool (id)
+        <input id="wfaTgt" class="form-input" style="width:100%;margin-top:4px" placeholder="POOL-…">
+      </label>
+      <label style="font-size:0.78rem;color:var(--text-muted)">Only these investments (optional, comma separated)
+        <input id="wfaOnly" class="form-input" style="width:100%;margin-top:4px" placeholder="INV-…">
+      </label>
+    </div>
+    <label style="font-size:0.78rem;color:var(--text-muted);display:flex;gap:6px;align-items:center;margin-bottom:10px">
+      <input type="checkbox" id="wfaSwitches">
+      Include the ones that asked to switch product — only when this target IS the product they chose
+    </label>
+    <button class="btn btn--secondary" onclick="wfaPreview(this)">
+      <i class="fa-solid fa-list-check"></i> Preview
+    </button>
+    <div id="wfaPlanOut" style="margin-top:14px"></div>`;
+}
+
+async function wfaPreview(btn) {
+  const out = document.getElementById('wfaPlanOut');
+  const body = {
+    source_pool_id: document.getElementById('wfaSrc')?.value,
+    target_pool_id: (document.getElementById('wfaTgt')?.value || '').trim(),
+    include_switches: !!document.getElementById('wfaSwitches')?.checked,
+    only: (document.getElementById('wfaOnly')?.value || '').split(',').map(x => x.trim()).filter(Boolean),
+  };
+  if (!body.target_pool_id) { Toast.error('Which pool should it go into?'); return; }
+  const orig = btn.innerHTML; btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Checking…';
+  out.innerHTML = '';
+  try {
+    const plan = await API._fetch('POST', 'admin/maturity-wallet-fallbacks/plan', body);
+    _wfaPlan = { plan, body };
+    if (!plan.count) {
+      out.innerHTML = `<span style="color:var(--text-muted)">Nothing to move with those settings.</span>`;
+      return;
+    }
+    const phrase = `REINVEST ${plan.count} INTO ${plan.target.id}`;
+    out.innerHTML = `
+      ${plan.warnings.map(w => `<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:10px 12px;margin-bottom:8px;color:#f59e0b"><i class="fa-solid fa-triangle-exclamation"></i> ${_esc(w)}</div>`).join('')}
+      <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:12px">
+        <div style="font-weight:800;margin-bottom:8px">
+          ${plan.count} client(s) · ${Utils.rand(plan.total)} → ${_esc(plan.target.name)}
+        </div>
+        <div style="max-height:260px;overflow:auto">
+          <table style="width:100%;font-size:0.76rem;border-collapse:collapse">
+            <tr style="color:var(--text-muted);text-align:left">
+              <th style="padding:3px 6px">Client</th><th style="padding:3px 6px">Instruction</th>
+              <th style="padding:3px 6px;text-align:right">Amount</th><th style="padding:3px 6px;text-align:right">Wallet after</th></tr>
+            ${plan.chosen.map(c => `<tr>
+              <td style="padding:3px 6px">${_esc(c.who)}</td>
+              <td style="padding:3px 6px;color:var(--text-muted)">${_esc(c.instruction || '(none set)')}</td>
+              <td style="padding:3px 6px;text-align:right;font-variant-numeric:tabular-nums">${Utils.rand(c.amount)}</td>
+              <td style="padding:3px 6px;text-align:right;font-variant-numeric:tabular-nums">${Utils.rand(c.balance_after)}</td></tr>`).join('')}
+          </table>
+        </div>
+        ${plan.skipped.length ? `<div style="margin-top:8px;font-size:0.76rem;color:var(--text-muted)">
+           Left out: ${plan.skipped.length} — ${_esc([...new Set(plan.skipped.map(s => s.why))].join(', '))}</div>` : ''}
+      </div>
+      <div style="margin-top:12px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.25);border-radius:8px;padding:12px">
+        <div style="font-size:0.8rem;margin-bottom:6px">This moves real money. To go ahead, type
+          <code style="background:rgba(255,255,255,.08);padding:2px 6px;border-radius:4px">${_esc(phrase)}</code></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input id="wfaConfirm" class="form-input" style="flex:1;min-width:260px" placeholder="type the phrase above" autocomplete="off">
+          <button class="btn btn--primary" onclick="wfaApply(this)"><i class="fa-solid fa-rotate-left"></i> Reinvest</button>
+        </div>
+      </div>`;
+  } catch (e) {
+    out.innerHTML = `<span style="color:#ef4444"><i class="fa-solid fa-circle-exclamation"></i> ${_esc(e.message || 'Preview failed')}</span>`;
+  } finally { btn.disabled = false; btn.innerHTML = orig; }
+}
+
+async function wfaApply(btn) {
+  if (!_wfaPlan) { Toast.error('Preview it first'); return; }
+  const confirm = (document.getElementById('wfaConfirm')?.value || '').trim();
+  const out = document.getElementById('wfaPlanOut');
+  const orig = btn.innerHTML; btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Reinvesting…';
+  try {
+    const r = await API._fetch('POST', 'admin/maturity-wallet-fallbacks/apply',
+      { ..._wfaPlan.body, confirm });
+    out.innerHTML = `
+      <div style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.3);border-radius:8px;padding:12px">
+        <strong style="color:#22c55e">Reinvested ${r.appliedCount} · ${Utils.rand(r.appliedTotal)} into ${_esc(r.target.name)}</strong>
+        ${r.failedCount ? `<div style="color:#ef4444;margin-top:6px">${r.failedCount} failed: ${
+          _esc(r.failed.map(f => `${f.who} (${f.error})`).join('; '))}</div>` : ''}
+        <div style="color:var(--text-muted);margin-top:6px;font-size:0.78rem">
+          Run the audit again to see what is left. The product type on these investments is still
+          wrong — until that is corrected, the next maturity does the same thing.</div>
+      </div>`;
+    Toast.success(`Reinvested ${r.appliedCount}`);
+    _wfaPlan = null;
+  } catch (e) {
+    out.insertAdjacentHTML('afterbegin',
+      `<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:10px 12px;margin-bottom:8px;color:#ef4444">${_esc(e.message || 'Failed')}</div>`);
+  } finally { btn.disabled = false; btn.innerHTML = orig; }
+}
+
+async function runMaturityPreflight(btn) {
+  const resultEl = document.getElementById('preflightResult');
+  const days = document.getElementById('preflightDays')?.value || 14;
+  const origLabel = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Checking…';
+  resultEl.innerHTML = '';
+  try {
+    const r = await API._fetch('GET', `admin/maturity-preflight?days=${encodeURIComponent(days)}`);
+
+    /* "Nothing matures" is not the same as "nothing to look at". The handover
+       check reports a pool whose dates would send its rollovers into the wrong
+       round, and that is worth saying on a quiet night above all — it is when
+       there is still time to change the date. */
+    if (r.nothingDue && !(r.findings || []).length) {
+      resultEl.innerHTML = `<span style="color:var(--text-muted)"><i class="fa-solid fa-circle-check"></i> Nothing matures in the next ${_esc(r.horizonDays)} days.</span>`;
+      return;
+    }
+    if (r.nothingDue) {
+      resultEl.innerHTML =
+        `<div style="color:var(--text-muted);margin-bottom:10px"><i class="fa-solid fa-circle-check"></i> ` +
+        `Nothing matures in the next ${_esc(r.horizonDays)} days — but there is something to fix before it does.</div>` +
+        (r.findings || []).map(f => `
+          <div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:10px 12px;margin-bottom:8px">
+            <strong style="color:#f59e0b">${_esc(f.section)}</strong>
+            <div style="color:var(--text-muted);margin-top:4px">${_esc(f.message)}</div>
+          </div>`).join('');
+      return;
+    }
+
+    const LEVEL = {
+      STOP:      { colour: '#ef4444', icon: 'fa-circle-exclamation', label: 'STOP' },
+      ATTENTION: { colour: '#f59e0b', icon: 'fa-triangle-exclamation', label: 'ATTENTION' },
+      OK:        { colour: '#22c55e', icon: 'fa-circle-check', label: 'OK' },
+    };
+    const order = { STOP: 0, ATTENTION: 1, OK: 2 };
+
+    const verdict = r.summary.verdict === 'blocked'
+      ? `<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:12px;margin-bottom:14px">
+           <strong style="color:#ef4444">${r.summary.stops} thing(s) will not happen as intended.</strong>
+           <div style="color:var(--text-muted);margin-top:4px">Plus ${r.summary.attentions} worth a look.</div>
+         </div>`
+      : r.summary.verdict === 'review'
+      ? `<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:12px;margin-bottom:14px">
+           <strong style="color:#f59e0b">No blockers.</strong>
+           <span style="color:var(--text-muted)">${r.summary.attentions} thing(s) worth a look before the run.</span>
+         </div>`
+      : `<div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:8px;padding:12px;margin-bottom:14px">
+           <strong style="color:#22c55e">Everything this can check is in place.</strong>
+         </div>`;
+
+    const poolRows = r.pools.map(p => `
+      <tr>
+        <td><div class="td-strong clip">${_esc(p.poolName || p.poolId)}</div>
+            <div class="td-muted clip" style="font-size:0.7rem;font-family:monospace">${_esc(p.poolId)}</div></td>
+        <td style="text-align:right">${p.count}</td>
+        <td style="text-align:right">${Utils.rand(p.capital)}</td>
+        <td>${Utils.date(p.maturesOn)}</td>
+        <td>${p.ratePosted
+              ? `<span style="color:#eda5ff;font-weight:700">${(p.actualRate * 100).toFixed(2)}%</span>`
+              : '<span style="color:#ef4444;font-weight:700">not posted</span>'}</td>
+        <td style="text-align:right">${p.ratePosted
+              ? `<strong>${Utils.rand(p.postedTotal)}</strong>
+                 <div class="td-muted" style="font-size:0.68rem">projection was ${Utils.rand(p.projected)}</div>`
+              : '<span style="color:var(--text-muted)">held back</span>'}</td>
+        <td>${(p.rollsInto || []).length
+              ? (p.rollsInto || []).map(x => x.toWallet
+                  ? `<div style="color:#f59e0b">→ wallet payouts<div style="font-size:0.68rem">no open "${_esc(x.productType)}" pool · ${x.count} rollover(s)</div></div>`
+                  : `<div>→ ${_esc(x.poolName)}<div class="td-muted" style="font-size:0.68rem">closes ${Utils.date(x.endDate)} · ${x.count} rollover(s)</div></div>`).join('')
+              : '<span class="td-muted">nothing rolls over</span>'}</td>
+      </tr>`).join('');
+
+    const findingRows = [...r.findings].sort((a, b) => order[a.level] - order[b.level]).map(f => {
+      const L = LEVEL[f.level] || LEVEL.OK;
+      return `<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--border)">
+        <i class="fa-solid ${L.icon}" style="color:${L.colour};margin-top:2px"></i>
+        <div><span style="color:${L.colour};font-weight:700;font-size:0.7rem;letter-spacing:.04em">${L.label}</span>
+             <div>${_esc(f.message)}</div></div>
+      </div>`;
+    }).join('');
+
+    const targets = r.reinvestTargets.map(t => t.poolId
+      ? `<li>${_esc(t.productType)} → <strong>${_esc(t.poolName)}</strong> <span class="td-muted">(${_esc(t.poolId)}, closes ${Utils.date(t.endDate)})</span></li>`
+      : `<li>${_esc(t.productType)} → <span style="color:#f59e0b">no open pool — about ${Utils.rand(t.incoming)} becomes wallet payouts</span></li>`
+    ).join('');
+
+    const stale = r.stalePools.length ? `
+      <p style="font-weight:600;margin:16px 0 6px">Pools left open past their close date</p>
+      <p style="color:var(--text-muted);font-size:0.78rem;margin-bottom:6px">They no longer capture rollovers, but they still show as open.</p>
+      <ul style="margin:0 0 0 18px">${r.stalePools.map(s =>
+        `<li>${_esc(s.name)} <span class="td-muted">(${_esc(s.productType || '—')}, closed ${Utils.date(s.endDate)}, ${s.daysClosed} days ago)</span>${
+          s.beyondCyclerWindow ? ' <span style="color:#f59e0b">— will never self-clear</span>' : ''}</li>`).join('')}</ul>` : '';
+
+    /* Counts do not tell you who to call. */
+    _preflightAffected = { affected: r.affected || [], noInstruction: r.noInstruction || [] };
+    const ISSUE_LABEL = {
+      custom_payout_no_amount: 'Custom payout has no amount',
+      switch_no_target:        'Switch names no target product',
+      rollover_to_wallet:      'Rollover has nowhere to go',
+    };
+    const affectedRows = (r.affected || []).map(a => `
+      <tr>
+        <td><div class="td-strong clip">${_esc(a.name)}</div>
+            <div class="td-muted clip" style="font-size:0.7rem">${_esc(a.email)}</div></td>
+        <td class="clip" style="font-family:monospace;font-size:0.7rem">${_esc(a.investorId)}</td>
+        <td class="clip">${_esc(a.poolName)}</td>
+        <td style="text-align:right">${Utils.rand(a.amount)}
+            <div class="td-muted" style="font-size:0.68rem">+${Utils.rand(a.postedReturn)} return</div></td>
+        <td>${_esc(a.instruction || '(none)')}</td>
+        <td><span class="badge ${a.severity === 'STOP' ? 'badge--red' : 'badge--orange'}"
+             style="font-size:0.65rem">${_esc(ISSUE_LABEL[a.issue] || a.issue)}</span>
+            <div class="td-muted" style="font-size:0.68rem;margin-top:3px">${_esc(a.detail)}</div></td>
+      </tr>`).join('');
+
+    /* One person can have two distinct problems — a custom payout with no
+       amount whose product also has no open pool, say. Both rows are real and
+       both need action, so they are not merged; but the heading must not read
+       as a headcount when it is a count of issues. */
+    const _people = new Set((r.affected || []).map(a => a.investorId)).size;
+    const affectedBlock = (r.affected || []).length ? `
+      <p style="font-weight:600;margin:16px 0 6px">Clients needing attention
+        <span class="td-muted" style="font-weight:400">(${r.affected.length} issue${r.affected.length === 1 ? '' : 's'}${
+          _people !== r.affected.length ? ` across ${_people} client${_people === 1 ? '' : 's'}` : ''})</span>
+        <button class="btn btn--ghost btn--sm" style="margin-left:8px" onclick="_preflightExportCsv()">
+          <i class="fa-solid fa-file-csv"></i> CSV</button></p>
+      <div style="overflow-x:auto"><table class="table" style="font-size:0.78rem">
+        <thead><tr><th>Investor</th><th>Account</th><th>Pool</th>
+          <th style="text-align:right">Amount</th><th>Instruction</th><th>Issue</th></tr></thead>
+        <tbody>${affectedRows}</tbody></table></div>` : '';
+
+    const noInstrBlock = (r.noInstruction || []).length ? `
+      <p style="margin:14px 0 0;color:var(--text-muted)">
+        ${r.noInstruction.length} investor(s) chose no instruction and will be auto-reinvested —
+        included in the CSV.</p>` : '';
+
+    resultEl.innerHTML = `
+      ${verdict}
+      <p style="font-weight:600;margin-bottom:6px">Maturing in the next ${_esc(r.horizonDays)} days —
+        ${r.totals.investments} investment(s), ${Utils.rand(r.totals.capital)} of capital</p>
+      <div style="overflow-x:auto">
+        <table class="table" style="font-size:0.78rem">
+          <thead><tr>
+            <th>Pool</th><th style="text-align:right">Investments</th><th style="text-align:right">Capital</th>
+            <th>Matures</th><th>Actual rate</th><th style="text-align:right">Returns to pay</th><th>Rolls into</th>
+          </tr></thead>
+          <tbody>${poolRows}</tbody>
+        </table>
+      </div>
+      <p style="font-weight:600;margin:16px 0 6px">Where rollovers go
+        <span class="td-muted" style="font-weight:400">(${r.totals.rollingOver} of ${r.totals.investments} roll over)</span></p>
+      <ul style="margin:0 0 0 18px">${targets}</ul>
+      ${stale}
+      ${affectedBlock}
+      ${noInstrBlock}
+      <p style="font-weight:600;margin:16px 0 6px">Findings</p>
+      ${findingRows}
+      <p class="td-muted" style="margin-top:12px;font-size:0.72rem">
+        Checked ${Utils.date(r.generatedAt)} · server time zone ${_esc(r.timeZone)} · nothing was changed.</p>`;
+  } catch (e) {
+    resultEl.innerHTML = `<span style="color:#ef4444"><i class="fa-solid fa-circle-exclamation"></i> Pre-flight failed: ${_esc(e.message || 'Unknown error')}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = origLabel;
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   REMAP POOL PRODUCT TYPE
+   The pool and its investments carry product_type separately, and the maturity
+   engine reads the investments'. This sets both together, or previews it.
+   ═══════════════════════════════════════════════ */
+async function remapPoolProductType(btn, dryRun) {
+  const resultEl = document.getElementById('remapResult');
+  const poolId = document.getElementById('remapPoolId').value.trim();
+  const productType = document.getElementById('remapProductType').value;
+  if (!poolId)      { Toast.error('Enter a pool ID'); return; }
+  if (!productType) { Toast.error('Choose a product type'); return; }
+
+  if (!dryRun && !await Confirm.ask('Apply this remap?', {
+    body: `This rewrites product_type on pool ${poolId} AND every investment in it. ` +
+          'Run the preview first and read what it says about where rollovers will land. Continue?',
+    confirmLabel: 'Apply Remap', danger: true })) return;
+
+  const origLabel = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${dryRun ? 'Previewing…' : 'Applying…'}`;
+  resultEl.innerHTML = '';
+  try {
+    const r = await API._fetch('POST', 'admin/pools/remap-product-type',
+      { pool_id: poolId, product_type: productType, dry_run: dryRun });
+
+    if (r.note && !r.applied && !r.investments_changing && !r.pool_changes) {
+      resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> ${_esc(r.note)}</span>`;
+      return;
+    }
+
+    const rows = (r.breakdown || []).map(b =>
+      `<tr><td><code>${_esc(b.current_type)}</code></td><td>${_esc(b.status)}</td>
+           <td style="text-align:right">${b.n}</td>
+           <td style="text-align:right">${Utils.rand(b.capital)}</td></tr>`).join('');
+
+    const after = r.rollover_after || {};
+    const afterLine = after.poolId
+      ? `<span style="color:#22c55e">rollovers would go to <strong>${_esc(after.poolName)}</strong> (${_esc(after.poolId)})</span>`
+      : `<span style="color:#f59e0b">${_esc(after.note || 'no open pool of that type')}</span>`;
+    const before = r.rollover_before || {};
+    const beforeLine = before.poolId
+      ? `${_esc(before.poolName)} (${_esc(before.poolId)})`
+      : `<span style="color:var(--text-muted)">${_esc(before.note || 'nothing')}</span>`;
+
+    resultEl.innerHTML = `
+      <div style="background:${r.applied ? 'rgba(34,197,94,.1)' : 'rgba(237,165,255,.08)'};
+                  border:1px solid ${r.applied ? 'rgba(34,197,94,.3)' : 'rgba(237,165,255,.3)'};
+                  border-radius:8px;padding:12px;margin-bottom:10px">
+        <strong>${r.applied ? 'Applied.' : 'Preview only — nothing changed.'}</strong>
+        <div style="margin-top:4px">${_esc(r.pool.name)} · <code>${_esc(r.pool.product_type_before || '(empty)')}</code>
+          → <code style="color:#eda5ff">${_esc(r.pool.product_type_after)}</code></div>
+        <div style="margin-top:4px;color:var(--text-muted)">
+          ${r.applied ? `${r.investments_updated} investment(s) updated` : `${r.investments_changing} investment(s) would change`}
+          of ${r.investments_total} in the pool.</div>
+      </div>
+      <div style="overflow-x:auto"><table class="table" style="font-size:0.78rem">
+        <thead><tr><th>Current product_type</th><th>Status</th><th style="text-align:right">Count</th><th style="text-align:right">Capital</th></tr></thead>
+        <tbody>${rows}</tbody></table></div>
+      <p style="margin-top:10px">Rollovers now: ${beforeLine}</p>
+      <p>Rollovers after: ${afterLine}</p>`;
+
+    if (r.applied) Toast.success(`Remapped — ${r.investments_updated} investment(s) updated`);
+  } catch (e) {
+    resultEl.innerHTML = `<span style="color:#ef4444"><i class="fa-solid fa-circle-exclamation"></i> ${_esc(e.message || 'Unknown error')}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = origLabel;
+  }
+}
+
+async function backfillMaturedFunds(btn, dryRun) {
+  const resultEl = document.getElementById('maturedFundsBackfillResult');
+  if (!dryRun && !await Confirm.ask(
+    'Backfill Matured Funds transactions?',
+    { body: 'This will insert missing "Matured Funds" credit entries for all historical reinvestments. Wallet balances are NOT changed — this only adds statement records. Continue?', confirmLabel: 'Apply Backfill' }
+  )) return;
+  btn.disabled = true;
+  const origLabel = btn.innerHTML;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> ' + (dryRun ? 'Scanning…' : 'Applying…');
+  resultEl.textContent = '';
+  try {
+    const data = await API._fetch('POST', 'admin/backfill-matured-funds', { dry_run: dryRun });
+    if (dryRun) {
+      if (!data.would_insert) {
+        resultEl.innerHTML = '<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> All reinvestments already have paired Matured Funds entries — nothing to backfill.</span>';
+      } else {
+        const preview = data.rows.map(r => `<li><strong>${r.investor_id}</strong> — ${_esc(r.pool_name)}, R${Number(r.amount).toFixed(2)} (${new Date(r.date).toLocaleDateString('en-ZA')})</li>`).join('');
+        resultEl.innerHTML = `<div style="color:#f59e0b;margin-bottom:6px"><i class="fa-solid fa-eye"></i> <strong>${data.would_insert}</strong> reinvestment${data.would_insert !== 1 ? 's' : ''} missing a Matured Funds entry:</div><ul style="margin:0 0 0 16px;font-size:0.78rem;max-height:180px;overflow-y:auto">${preview}</ul><div style="margin-top:6px;font-size:0.77rem;color:var(--text-muted)">Click <em>Apply Backfill</em> to create these records.</div>`;
+      }
+    } else {
+      resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> Inserted <strong>${data.inserted}</strong> Matured Funds record${data.inserted !== 1 ? 's' : ''} (${data.skipped} already existed).</span>`;
+      Toast.success(`Matured Funds backfill complete — ${data.inserted} record${data.inserted !== 1 ? 's' : ''} inserted`);
+    }
+  } catch (e) {
+    resultEl.innerHTML = `<span style="color:#ef4444">${_esc(e.message || 'Failed')}</span>`;
+    Toast.error(e.message || 'Backfill failed');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = origLabel;
+  }
+}
+
+async function importHeardAboutUs(btn) {
+  const fileInput = document.getElementById('heardImportFile');
+  const resultEl  = document.getElementById('heardImportResult');
+  if (!fileInput?.files?.length) {
+    Toast.error('Please choose a JSON export file first');
+    return;
+  }
+  const file = fileInput.files[0];
+  let parsed;
+  try {
+    parsed = JSON.parse(await file.text());
+  } catch (e) {
+    resultEl.innerHTML = `<span style="color:#ef4444">Invalid JSON: ${_esc(e.message)}</span>`;
+    return;
+  }
+  const users = parsed.users || (Array.isArray(parsed) ? parsed : null);
+  if (!users) {
+    resultEl.innerHTML = `<span style="color:#ef4444">File must contain a "users" array (same format as the original migration export).</span>`;
+    return;
+  }
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Importing…';
+  resultEl.textContent = '';
+  try {
+    const data = await API._fetch('POST', 'admin/import/heard-about-us', { users });
+    resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> ${_esc(data.message)}</span>`;
+    Toast.success(`Heard About Us imported for ${data.updated} investor(s)`);
+  } catch (e) {
+    resultEl.innerHTML = `<span style="color:#ef4444">${_esc(e.message || 'Failed')}</span>`;
+    Toast.error(e.message || 'Import failed');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-file-import" style="margin-right:6px"></i>Import';
+  }
+}
+
+async function reverseMigrationDemographics(btn) {
+  const resultEl = document.getElementById('reverseMigrationResult');
+  if (!await Confirm.ask(
+    'Clear Heard About Us for all investors?',
+    { body: 'This will set Heard About Us to blank for every investor. Use this to undo a migration re-import. Gender and all other fields are NOT affected. Continue?', confirmLabel: 'Clear Fields', danger: true }
+  )) return;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Clearing…';
+  resultEl.textContent = '';
+  try {
+    const data = await API._fetch('POST', 'admin/reverse/migration-demographics');
+    resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> ${_esc(data.message)}</span>`;
+    Toast.success('Demographics cleared');
+  } catch (e) {
+    resultEl.innerHTML = `<span style="color:#ef4444">${_esc(e.message || 'Failed')}</span>`;
+    Toast.error(e.message || 'Failed');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-rotate-left" style="margin-right:6px"></i>Clear Heard About Us';
+  }
+}
+
+async function backfillInvestorDemographics(btn) {
+  const resultEl = document.getElementById('demographicsBackfillResult');
+  if (!await Confirm.ask(
+    'Backfill investor demographics?',
+    { body: 'This will derive Gender from the stored SA ID number and parse Heard About Us from the registration notes, for any investor missing those values. Continue?', confirmLabel: 'Run Backfill' }
+  )) return;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Running…';
+  resultEl.textContent = '';
+  try {
+    const data = await API._fetch('POST', 'admin/backfill/investor-demographics');
+    if (data.gender_updated === 0 && data.heard_updated === 0) {
+      resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> ${_esc(data.message || 'Nothing to backfill — all investors already have these fields.')}</span>`;
+    } else {
+      resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> Checked <strong>${data.total_checked}</strong> investor(s) — Gender filled for <strong>${data.gender_updated}</strong>, Heard About Us filled for <strong>${data.heard_updated}</strong>.</span>`;
+    }
+    Toast.success(`Demographics backfill complete`);
+  } catch (e) {
+    resultEl.innerHTML = `<span style="color:#ef4444">${_esc(e.message || 'Failed')}</span>`;
+    Toast.error(e.message || 'Backfill failed');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-person-circle-plus"></i> Backfill Gender &amp; Heard About Us';
+  }
+}
+
+async function previewRestoreInvestorStatuses(btn) {
+  const resultEl = document.getElementById('restoreStatusResult');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Checking…';
+  resultEl.textContent = '';
+  try {
+    const data = await API._fetch('POST', 'admin/restore/investor-statuses', { dry_run: true });
+    resultEl.innerHTML = `<span style="color:#f59e0b"><i class="fa-solid fa-circle-info" style="margin-right:6px"></i>Preview: <strong>${data.kyc_fica_restored}</strong> investor(s) would have KYC/FICA restored from documents, <strong>${data.status_restored}</strong> would be set to active.</span>`;
+  } catch (e) {
+    resultEl.innerHTML = `<span style="color:#ef4444">${_esc(e.message || 'Preview failed')}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-eye" style="margin-right:6px"></i>Preview';
+  }
+}
+
+async function restoreInvestorStatuses(btn) {
+  const resultEl = document.getElementById('restoreStatusResult');
+  if (!await Confirm.ask(
+    'Restore investor KYC and status from documents?',
+    { body: 'This will:\n• Set kyc_status and fica_status to "approved" for any investor with an approved KYC document on file\n• Set status to "active" for any investor with a wallet balance, investments, or completed transactions\n\nThis only upgrades statuses — it never downgrades them. Continue?', confirmLabel: 'Restore Statuses' }
+  )) return;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Restoring…';
+  resultEl.textContent = '';
+  try {
+    const data = await API._fetch('POST', 'admin/restore/investor-statuses');
+    resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle" style="margin-right:6px"></i>Done: <strong>${data.kyc_fica_restored}</strong> investor(s) had KYC/FICA restored from documents, <strong>${data.status_restored}</strong> had status set to active.</span>`;
+    Toast.success('Investor statuses restored');
+  } catch (e) {
+    resultEl.innerHTML = `<span style="color:#ef4444">${_esc(e.message || 'Failed')}</span>`;
+    Toast.error(e.message || 'Restore failed');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-shield-check" style="margin-right:6px"></i>Restore Statuses';
+  }
+}
+
+async function backfillCourseQuizzes(btn) {
+  const resultEl = document.getElementById('quizBackfillResult');
+  if (!await Confirm.ask(
+    'Generate quizzes for all course modules missing them?',
+    { body: 'This will call Claude for each module that has no quiz questions and generate 3 questions per module. Only modules without quizzes are affected. Continue?', confirmLabel: 'Generate Quizzes' }
+  )) return;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generating — this may take a minute…';
+  resultEl.textContent = '';
+  try {
+    const data = await API._fetch('POST', 'ai/backfill-quizzes');
+    if (data.updated === 0 && !data.errors?.length) {
+      resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> ${_esc(data.message || 'All modules already have quizzes.')}</span>`;
+    } else {
+      const errHtml = data.errors?.length
+        ? `<br><span style="color:#f59e0b">${data.errors.length} error(s): ${data.errors.map(e => e.module).join(', ')}</span>`
+        : '';
+      resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> Generated quizzes for <strong>${data.updated}</strong> of <strong>${data.total}</strong> module(s).</span>${errHtml}`;
+    }
+    Toast.success(`Quiz backfill complete — ${data.updated} modules updated`);
+  } catch (e) {
+    resultEl.innerHTML = `<span style="color:#ef4444">${_esc(e.message || 'Failed')}</span>`;
+    Toast.error(e.message || 'Quiz backfill failed');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-robot"></i> Generate Missing Quizzes';
   }
 }
 
@@ -11178,7 +17165,7 @@ async function reimportBankAccounts(btn) {
     resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> Done — <strong>${data.updated}</strong> investors updated, ${data.skipped} skipped (no match), ${data.total} active accounts in file.</span>${errHtml}`;
     Toast.success(`Bank accounts re-imported: ${data.updated} updated`);
   } catch (e) {
-    resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Failed'}</span>`;
+    resultEl.innerHTML = `<span style="color:#ef4444">${_esc(e.message || 'Failed')}</span>`;
     Toast.error(e.message || 'Re-import failed');
   } finally {
     btn.disabled = false;
@@ -11202,7 +17189,7 @@ async function promoteBankFromNotes(btn) {
     resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> Done — <strong>${data.updated}</strong> investors updated from notes (${data.checked} checked, ${data.skipped} skipped).</span>`;
     Toast.success(`Bank data promoted: ${data.updated} investors updated`);
   } catch (e) {
-    resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Failed'}</span>`;
+    resultEl.innerHTML = `<span style="color:#ef4444">${_esc(e.message || 'Failed')}</span>`;
     Toast.error(e.message || 'Promotion failed');
   } finally {
     btn.disabled = false;
@@ -11232,6 +17219,7 @@ async function loadCompliance() {
 
   // Load custom calendar items from the database
   let customItems = [];
+  let calendarLoadFailed = null;
   try {
     const calRes = await API._fetch('GET', 'tables/compliance_calendar', null, { limit: 200 });
     customItems = (calRes.data || []).map(c => ({
@@ -11242,21 +17230,37 @@ async function loadCompliance() {
       priority: c.priority || 'medium',
       status:   c.status || 'pending',
     }));
-  } catch (_) {}
+  } catch (err) {
+    /* Swallowing this showed the statutory deadlines alone and silently
+       dropped everything the firm had added — a compliance calendar missing
+       its own entries, looking complete. */
+    console.error('[compliance] custom calendar items failed to load:', err?.message || err);
+    calendarLoadFailed = err?.message || 'unknown error';
+  }
 
   const allDeadlines = [...staticDeadlines, ...customItems].sort((a, b) => new Date(a.date) - new Date(b.date));
 
   const calBody = document.getElementById('complianceCalBody');
   if (calBody) {
-    calBody.innerHTML = allDeadlines.map(d => {
+    /* Said on the page, not only in the console. A compliance calendar that
+       quietly shows the statutory dates and none of the firm's own looks
+       complete, which is the worst way for it to be wrong. */
+    const banner = calendarLoadFailed
+      ? `<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.35);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:0.8rem">
+           <strong style="color:#ef4444"><i class="fa-solid fa-circle-exclamation"></i> This calendar is incomplete.</strong>
+           Your own compliance items could not be loaded (${_esc(calendarLoadFailed)}), so only the
+           statutory deadlines are shown below.
+         </div>`
+      : '';
+    calBody.innerHTML = banner + allDeadlines.map(d => {
       const daysLeft = Math.ceil((new Date(d.date) - now) / 86400000);
       const isPast = daysLeft < 0;
       const isUrgent = daysLeft >= 0 && daysLeft <= 30;
       const isDone   = d.status === 'completed';
       const color = isDone ? '#22c55e' : isPast ? '#ef4444' : isUrgent ? '#fec24f' : '#656565';
       const label = isDone ? 'Done' : isPast ? 'Overdue' : isUrgent ? `${daysLeft}d left` : `${daysLeft}d`;
-      const deleteBtn = !d._static ? `<button class="btn btn--danger btn--sm" style="margin-left:6px;padding:2px 8px;font-size:0.68rem" onclick='deleteComplianceItem(${JSON.stringify(d.id)})'><i class="fa-solid fa-trash"></i></button>` : '';
-      const doneBtn   = !d._static && d.status !== 'completed' ? `<button class="btn btn--success btn--sm" style="margin-left:4px;padding:2px 8px;font-size:0.68rem" onclick='markComplianceDone(${JSON.stringify(d.id)})'><i class="fa-solid fa-check"></i></button>` : '';
+      const deleteBtn = !d._static ? `<button class="btn btn--danger btn--sm" style="margin-left:6px;padding:2px 8px;font-size:0.68rem" onclick='deleteComplianceItem(${_esc(JSON.stringify(d.id))})'><i class="fa-solid fa-trash"></i></button>` : '';
+      const doneBtn   = !d._static && d.status !== 'completed' ? `<button class="btn btn--success btn--sm" style="margin-left:4px;padding:2px 8px;font-size:0.68rem" onclick='markComplianceDone(${_esc(JSON.stringify(d.id))})'><i class="fa-solid fa-check"></i></button>` : '';
       return `<div style="display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)${isDone ? ';opacity:0.55' : ''}">
         <div style="width:52px;min-width:52px;text-align:center;background:${color}22;border-radius:8px;padding:6px 4px">
           <div style="font-size:0.78rem;font-weight:800;color:${color}">${label}</div>
@@ -11282,7 +17286,7 @@ async function loadCompliance() {
     const stale = STATE.investors.filter(i => i.kyc_status === 'pending' && i.date_joined && (now - new Date(i.date_joined)) > 90 * 86400000).slice(0, 10);
     const alerts = [
       ...expiring.map(k => {
-        const inv = STATE.investors.find(i => i.id === k.investor_id);
+        const inv = _investorById(k.investor_id);
         const name = k.investor_name || (inv ? `${inv.first_name} ${inv.last_name}` : k.investor_id);
         const daysLeft = Math.ceil((new Date(k.expiry_date) - now) / 86400000);
         const isPast = daysLeft < 0;
@@ -11295,7 +17299,7 @@ async function loadCompliance() {
         </div>`;
       }),
       ...stale.map(i => `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
-          <div><div style="font-size:0.82rem;font-weight:700;color:var(--text)">${i.first_name} ${i.last_name}</div><div style="font-size:0.7rem;color:var(--text-muted)">${i.id} · pending &gt;90 days</div></div>
+          <div><div style="font-size:0.82rem;font-weight:700;color:var(--text)">${_esc(i.first_name)} ${_esc(i.last_name)}</div><div style="font-size:0.7rem;color:var(--text-muted)">${i.id} · pending &gt;90 days</div></div>
           <span class="badge badge--red" style="font-size:0.68rem">KYC Stale</span>
         </div>`),
     ];
@@ -11313,7 +17317,7 @@ async function loadCompliance() {
           const inv = STATE.investors.find(x => x.id === i.investor_id);
           const name = inv ? `${inv.first_name} ${inv.last_name}` : i.investor_id;
           return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
-            <div><div style="font-size:0.82rem;font-weight:700;color:var(--text)">${name}</div><div style="font-size:0.7rem;color:var(--text-muted)">${Utils.rand(i.amount)} · ${i.pool_name||'—'}</div></div>
+            <div><div style="font-size:0.82rem;font-weight:700;color:var(--text)">${_esc(name)}</div><div style="font-size:0.7rem;color:var(--text-muted)">${Utils.rand(i.amount)} · ${_esc(i.pool_name||'—')}</div></div>
             <span class="badge badge--yellow" style="font-size:0.68rem">No instruction</span>
           </div>`;
         }).join('')
@@ -11395,6 +17399,25 @@ async function loadReconciliation() {
   }
 }
 
+let _reconcPage = 1;
+const _RECONC_PER_PAGE = 10;
+
+function _reconcPage_go(n) { _reconcPage = n; renderReconcTable(true); }
+
+function _reconcPager(total, current, perPage) {
+  const pages = Math.ceil(total / perPage);
+  if (pages <= 1) return '';
+  const btn = (n, label, disabled, active) =>
+    `<button onclick="_reconcPage_go(${n})" style="min-width:32px;padding:4px 9px;border-radius:6px;border:1px solid var(--border);background:${active?'#eda5ff':'var(--card-bg)'};color:${active?'#000':'var(--text)'};font-size:0.78rem;font-weight:${active?700:400};cursor:${disabled?'default':'pointer'};opacity:${disabled?.4:1}" ${disabled?'disabled':''}>${label}</button>`;
+  const parts = [btn(current-1,'‹', current===1, false)];
+  for (let p = 1; p <= pages; p++) {
+    if (p===1 || p===pages || Math.abs(p-current)<=1) parts.push(btn(p,p,false,p===current));
+    else if (Math.abs(p-current)===2) parts.push(`<span style="padding:0 4px;color:var(--text-muted)">…</span>`);
+  }
+  parts.push(btn(current+1,'›', current===pages, false));
+  return `<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">${parts.join('')}</div>`;
+}
+
 function _reconcRows() {
   return STATE.investors.map(inv => {
     const txns = STATE.transactions.filter(t => t.investor_id === inv.id);
@@ -11408,7 +17431,8 @@ function _reconcRows() {
   });
 }
 
-function renderReconcTable() {
+function renderReconcTable(keepPage) {
+  if (!keepPage) _reconcPage = 1;
   const search    = (document.getElementById('reconcSearch')?.value || '').toLowerCase();
   const discOnly  = document.getElementById('reconcDiscrepOnly')?.checked || false;
   const fmt = v => 'R ' + Math.abs(v).toLocaleString('en-ZA', {minimumFractionDigits:2,maximumFractionDigits:2});
@@ -11453,9 +17477,18 @@ function renderReconcTable() {
   if (!tbody) return;
   if (!rows.length) {
     tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:40px;color:#7a92a8">No records found</td></tr>`;
+    document.getElementById('reconcFooter').innerHTML = '';
     return;
   }
-  tbody.innerHTML = rows.map(r => {
+
+  const totalRows  = rows.length;
+  const totalPages = Math.ceil(totalRows / _RECONC_PER_PAGE);
+  if (_reconcPage > totalPages) _reconcPage = totalPages;
+  const pageRows = rows.slice((_reconcPage - 1) * _RECONC_PER_PAGE, _reconcPage * _RECONC_PER_PAGE);
+  const start    = (_reconcPage - 1) * _RECONC_PER_PAGE + 1;
+  const end      = Math.min(_reconcPage * _RECONC_PER_PAGE, totalRows);
+
+  tbody.innerHTML = pageRows.map(r => {
     const varColor = r.isDiscrepancy ? (r.variance < 0 ? 'color:#ef4444' : 'color:#f97316') : 'color:#22c55e';
     const statusBadge = r.isDiscrepancy
       ? `<span style="background:rgba(249,115,22,.15);color:#f97316;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700">⚠ Discrepancy</span>`
@@ -11470,12 +17503,16 @@ function renderReconcTable() {
       <td style="color:#9ca3af;font-size:0.82rem">${fmt(r.expectedWallet)}</td>
       <td style="font-size:0.82rem;font-weight:700;${varColor}">${r.variance >= 0 ? '+' : '-'}${fmt(r.variance)}</td>
       <td>${statusBadge}</td>
-      <td><button class="btn btn--secondary btn--sm" onclick='openManualCreditModal(${JSON.stringify(r.inv.id)}, ${JSON.stringify(r.inv.first_name + ' ' + r.inv.last_name)})'><i class="fa-solid fa-plus"></i> Credit</button></td>
+      <td><button class="btn btn--secondary btn--sm" onclick='openManualCreditModal(${_esc(JSON.stringify(r.inv.id))}, ${_esc(JSON.stringify(r.inv.first_name + ' ' + r.inv.last_name))})'><i class="fa-solid fa-plus"></i> Credit</button></td>
     </tr>`;
   }).join('');
 
   const footer = document.getElementById('reconcFooter');
-  if (footer) footer.textContent = `${rows.length} investors shown · ${discCount} discrepancy${discCount!==1?'ies':''} · Variance tolerance R1.00`;
+  if (footer) footer.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <span style="color:var(--text-muted)">Showing ${start}–${end} of ${totalRows} investors · ${discCount} discrepanc${discCount!==1?'ies':'y'} · Variance tolerance R1.00</span>
+      ${_reconcPager(totalRows, _reconcPage, _RECONC_PER_PAGE)}
+    </div>`;
 }
 
 function openManualCreditModal(investorId, investorName) {
@@ -11530,6 +17567,193 @@ function exportReconciliationCSV() {
   const a = document.createElement('a'); a.href=url; a.download='reconciliation.csv'; a.click();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
   Toast.success('Reconciliation CSV exported');
+}
+
+/* ═══════════════════════════════════════════════
+   3PIM INTEREST DISTRIBUTION
+   ═══════════════════════════════════════════════ */
+let _interestPreviewData = null;
+
+function resetInterestForm() {
+  _interestPreviewData = null;
+  document.getElementById('interestUploadForm').style.display  = '';
+  document.getElementById('interestPreviewArea').style.display = 'none';
+  document.getElementById('interestHistoryArea').style.display = 'none';
+}
+
+async function previewInterestDistribution() {
+  const periodEl = document.getElementById('interestPeriod');
+  const fileEl   = document.getElementById('interestCsvFile');
+  const period   = periodEl?.value?.trim();
+  const file     = fileEl?.files?.[0];
+
+  if (!period)  { Toast.warning('Please select a period'); return; }
+  if (!file)    { Toast.warning('Please select a CSV file'); return; }
+
+  const csv_content = await file.text();
+  const btn = document.querySelector('#interestUploadForm .btn--primary');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Previewing…'; }
+
+  try {
+    const token = (typeof Auth !== 'undefined') ? Auth.getToken() : '';
+    const res   = await fetch('/api/admin/interest/preview', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ csv_content, period, csv_filename: file.name }),
+    });
+    const data = await res.json();
+    if (!res.ok) { Toast.error(data.error || 'Preview failed'); return; }
+
+    _interestPreviewData = { ...data, csv_filename: file.name };
+    renderInterestPreview(data);
+  } catch (e) {
+    Toast.error('Preview failed: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i> Preview'; }
+  }
+}
+
+function renderInterestPreview(data) {
+  const { summary, items, period } = data;
+  const fmt = n => 'R ' + Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  // Summary bar
+  const bar = document.getElementById('interestSummaryBar');
+  bar.innerHTML = `
+    <div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.25);border-radius:8px;padding:10px 16px;flex:1;min-width:130px">
+      <div style="font-size:1.3rem;font-weight:800;color:#22c55e">${summary.to_credit}</div>
+      <div style="font-size:0.72rem;color:var(--text-muted)">Accounts to credit</div>
+    </div>
+    <div style="background:rgba(237,165,255,.1);border:1px solid rgba(237,165,255,.25);border-radius:8px;padding:10px 16px;flex:1;min-width:130px">
+      <div style="font-size:1.3rem;font-weight:800;color:#eda5ff">${fmt(summary.total_interest)}</div>
+      <div style="font-size:0.72rem;color:var(--text-muted)">Total interest</div>
+    </div>
+    <div style="background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);border-radius:8px;padding:10px 16px;flex:1;min-width:130px">
+      <div style="font-size:1.3rem;font-weight:800;color:#f97316">${summary.unmatched}</div>
+      <div style="font-size:0.72rem;color:var(--text-muted)">Unmatched</div>
+    </div>
+    <div style="background:rgba(122,146,168,.1);border:1px solid rgba(122,146,168,.2);border-radius:8px;padding:10px 16px;flex:1;min-width:130px">
+      <div style="font-size:1.3rem;font-weight:800;color:var(--text-muted)">${summary.skipped}</div>
+      <div style="font-size:0.72rem;color:var(--text-muted)">Zero / negative (skipped)</div>
+    </div>
+    ${summary.declined ? `
+    <div style="background:rgba(101,237,0,.08);border:1px solid rgba(101,237,0,.28);border-radius:8px;padding:10px 16px;flex:1;min-width:130px">
+      <div style="font-size:1.3rem;font-weight:800;color:#65ed00">${summary.declined}</div>
+      <div style="font-size:0.72rem;color:var(--text-muted)">Interest-free (${fmt(summary.declined_total)} withheld)</div>
+    </div>` : ''}
+  `;
+
+  // Table rows
+  const statusChip = s => {
+    const cfg = {
+      matched:  ['#22c55e', 'To credit'],
+      unmatched:['#ef4444', 'Unmatched'],
+      negative: ['#f97316', 'Negative Δ'],
+      zero:     ['#7a92a8', 'No change'],
+      /* The client asked not to be paid interest. Deliberately its own chip
+         rather than folded into "No change": the amount is real and is being
+         withheld on instruction, which is a different fact from there being
+         nothing to pay. */
+      interest_free: ['#65ed00', 'Interest-free'],
+    };
+    const [col, label] = cfg[s] || ['#7a92a8', s];
+    return `<span style="background:${col}22;color:${col};border-radius:12px;padding:2px 8px;font-size:0.7rem;font-weight:700">${label}</span>`;
+  };
+
+  const matchBadge = t => t === 'investor'
+    ? `<span style="background:#eda5ff22;color:#eda5ff;border-radius:10px;padding:1px 6px;font-size:0.65rem;font-weight:700;margin-left:4px">wallet</span>`
+    : t === 'sub_account'
+    ? `<span style="background:#7a92a822;color:#7a92a8;border-radius:10px;padding:1px 6px;font-size:0.65rem;font-weight:700;margin-left:4px">sub</span>`
+    : '';
+
+  const tbody = document.getElementById('interestPreviewBody');
+  tbody.innerHTML = items.map(item => `
+    <tr style="border-bottom:1px solid var(--border)${item.status === 'unmatched' ? ';opacity:.6' : ''}">
+      <td style="padding:6px 8px;font-size:0.78rem;font-family:monospace;color:var(--text)">${item.account_reference}</td>
+      <td style="padding:6px 8px;font-size:0.78rem;color:var(--text)">${item.client_name_pim}</td>
+      <td style="padding:6px 8px;font-size:0.78rem;color:var(--text-muted)">${item.platform_name || '—'}${matchBadge(item.match_type)}</td>
+      <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text)">${item.pim_balance != null ? fmt(item.pim_balance) : '—'}</td>
+      <td style="padding:6px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">${item.platform_balance != null ? fmt(item.platform_balance) : '—'}</td>
+      <td style="padding:6px 8px;font-size:0.78rem;text-align:right;font-weight:700;color:${item.interest_amount > 0 ? '#22c55e' : item.interest_amount < 0 ? '#ef4444' : 'var(--text-muted)'}">${item.interest_amount != null ? fmt(item.interest_amount) : '—'}</td>
+      <td style="padding:6px 8px;text-align:center">${statusChip(item.status)}</td>
+    </tr>
+  `).join('');
+
+  const applyBtn = document.getElementById('interestApplyBtn');
+  if (applyBtn) applyBtn.textContent = `Apply ${fmt(summary.total_interest)} to ${summary.to_credit} accounts`;
+
+  document.getElementById('interestUploadForm').style.display  = 'none';
+  document.getElementById('interestPreviewArea').style.display = '';
+  document.getElementById('interestHistoryArea').style.display = 'none';
+}
+
+async function applyInterestDistribution() {
+  if (!_interestPreviewData) { Toast.warning('Run a preview first'); return; }
+  const { period, items, csv_filename } = _interestPreviewData;
+  const toCredit = items.filter(i => i.status === 'matched');
+
+  if (!toCredit.length) { Toast.warning('No accounts to credit'); return; }
+  if (!confirm(`Apply ${toCredit.length} interest credits for ${period}?\n\nThis cannot be undone.`)) return;
+
+  const btn = document.getElementById('interestApplyBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Applying…'; }
+
+  try {
+    const token = (typeof Auth !== 'undefined') ? Auth.getToken() : '';
+    const res   = await fetch('/api/admin/interest/apply', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ period, items, csv_filename }),
+    });
+    const data = await res.json();
+    if (!res.ok) { Toast.error(data.error || 'Apply failed'); return; }
+    Toast.success(`Done — ${data.accounts_credited} accounts credited with R ${Number(data.total_interest).toLocaleString('en-ZA', {minimumFractionDigits:2,maximumFractionDigits:2})} interest for ${period}`);
+    resetInterestForm();
+    loadInterestHistory();
+  } catch (e) {
+    Toast.error('Apply failed: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; }
+  }
+}
+
+async function loadInterestHistory() {
+  document.getElementById('interestUploadForm').style.display  = 'none';
+  document.getElementById('interestPreviewArea').style.display = 'none';
+  document.getElementById('interestHistoryArea').style.display = '';
+
+  const tbody = document.getElementById('interestHistoryBody');
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:#7a92a8"><i class="fa-solid fa-spinner fa-spin"></i></td></tr>';
+
+  try {
+    const token = (typeof Auth !== 'undefined') ? Auth.getToken() : '';
+    const res   = await fetch('/api/admin/interest', {
+      credentials: 'include',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    const rows = await res.json();
+    const fmt  = n => 'R ' + Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:#7a92a8">No distributions yet</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(r => `
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:7px 8px;font-weight:700;color:var(--text)">${r.period}</td>
+        <td style="padding:7px 8px;text-align:right;color:#22c55e;font-weight:700">${fmt(r.total_interest)}</td>
+        <td style="padding:7px 8px;text-align:right;color:var(--text)">${r.accounts_credited}</td>
+        <td style="padding:7px 8px;text-align:right;color:var(--text-muted)">${r.accounts_skipped}</td>
+        <td style="padding:7px 8px;text-align:right;color:${r.accounts_unmatched > 0 ? '#f97316' : 'var(--text-muted)'}">${r.accounts_unmatched}</td>
+        <td style="padding:7px 8px;color:var(--text-muted);font-size:0.78rem">${r.applied_by || '—'}</td>
+        <td style="padding:7px 8px;color:var(--text-muted);font-size:0.78rem">${r.applied_at ? new Date(r.applied_at).toLocaleDateString('en-ZA') : '—'}</td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:20px;color:#ef4444">${_esc(e.message)}</td></tr>`;
+  }
 }
 
 /* ═══════════════════════════════════════════════
@@ -11637,7 +17861,7 @@ function renderAcceptedDocsTable() {
     const ua = d.user_agent ? d.user_agent.replace(/\(.*?\)/g,'').replace(/\s{2,}/g,' ').trim().slice(0,40) : '—';
 
     return `<tr>
-      <td style="white-space:nowrap">${name}${email}</td>
+      <td style="white-space:nowrap">${_esc(name)}${_esc(email)}</td>
       <td><span style="background:${col}22;color:${col};padding:2px 8px;border-radius:20px;font-size:0.75rem;font-weight:700">${label}</span></td>
       <td style="color:#7a92a8;font-size:0.8rem">${_esc(d.document_version || '1.0')}</td>
       <td style="font-size:0.82rem;white-space:nowrap">${acceptedAt}</td>
@@ -11783,17 +18007,44 @@ function renderAdminCmdResults(q) {
   if (!el) return;
   _adminCmdActive = -1;
   const query = (q||'').toLowerCase().trim();
-  const filtered = query ? ADMIN_CMD_ITEMS.filter(c => c.label.toLowerCase().includes(query)) : ADMIN_CMD_ITEMS;
+  /* The box has always said "Search views, investors, actions…" and only ever
+     searched a static list of views. Looking a client up is the single most
+     common thing anyone does in here, and the palette advertised it — so it
+     does it now: name, email, ID number, phone, or investor id, straight to
+     that investor's detail. Views and actions still rank first, because typing
+     "kyc" means the view, not the four clients with kyc in an email address. */
+  const _q = s => String(s || '').toLowerCase();
+  const matches = query ? ADMIN_CMD_ITEMS.filter(c => c.label.toLowerCase().includes(query)) : ADMIN_CMD_ITEMS;
+  const people = query.length >= 2 ? (STATE.investors || []).filter(i =>
+    _q(`${i.first_name} ${i.last_name}`).includes(query) ||
+    _q(i.email).includes(query) || _q(i.id).includes(query) ||
+    _q(i.id_number).includes(query) || _q(i.phone).replace(/\s/g, '').includes(query.replace(/\s/g, ''))
+  ).slice(0, 8).map(i => ({
+    label: `${i.first_name || ''} ${i.last_name || ''}`.trim() || i.id,
+    sub:   [i.email, i.id].filter(Boolean).join(' · '),
+    icon:  'fa-user',
+    /* Straight into the investor, not just the investors view — otherwise the
+       operator searches twice for the same person. */
+    action: () => { navigate('investors', document.querySelector('[data-view=investors]')); viewInvestor(i.id); },
+  })) : [];
+  const filtered = [...matches, ...people];
   if (!filtered.length) {
     el.innerHTML = `<div style="padding:20px;text-align:center;color:#7a92a8;font-size:13px">No results for "${_esc(q)}"</div>`;
     el._filtered = []; return;
   }
+  /* Escaped. These labels used to be a hard-coded list, so raw interpolation was
+     safe; they now include investor names and emails, which are attacker-
+     controlled in the one way that matters — the account holder types them. */
   el.innerHTML = filtered.map((c,i) =>
     `<div class="adm-cmd-item" data-idx="${i}" onmouseenter="adminCmdHover(${i})" onclick="adminCmdSelect(${i})"
       style="display:flex;align-items:center;gap:12px;padding:10px 18px;cursor:pointer;transition:background .1s;color:#e8edf2;font-size:13px">
-      <i class="fa-solid ${c.icon}" style="width:16px;text-align:center;color:#7a92a8;font-size:13px"></i>
-      <span>${c.label}</span>
-      ${c.view?`<kbd style="margin-left:auto;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:4px;font-size:10px;padding:1px 6px;color:#7a92a8">${c.view}</kbd>`:''}
+      <i class="fa-solid ${_esc(c.icon)}" style="width:16px;text-align:center;color:#7a92a8;font-size:13px"></i>
+      <span style="min-width:0">
+        <span style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(c.label)}</span>
+        ${c.sub?`<span style="display:block;font-size:11px;color:#7a92a8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(c.sub)}</span>`:''}
+      </span>
+      ${c.view?`<kbd style="margin-left:auto;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:4px;font-size:10px;padding:1px 6px;color:#7a92a8">${_esc(c.view)}</kbd>`:''}
+      ${c.sub?`<kbd style="margin-left:auto;background:rgba(254,194,79,.1);border:1px solid rgba(254,194,79,.2);border-radius:4px;font-size:10px;padding:1px 6px;color:#fec24f">investor</kbd>`:''}
     </div>`
   ).join('');
   el._filtered = filtered;
@@ -11938,7 +18189,7 @@ function _renderFicaPipeline() {
       <td style="font-size:0.82rem;color:#7a92a8">${docCount ? `${approvedCount}/${docCount} approved` : '—'}</td>
       <td>
         <div style="display:flex;gap:4px;flex-wrap:wrap">
-          <button class="btn btn--secondary btn--sm" title="View KYC timeline" onclick='openKycTimeline(${JSON.stringify(inv.id)})'><i class="fa-solid fa-timeline"></i> Timeline</button>
+          <button class="btn btn--secondary btn--sm" title="View KYC timeline" onclick='openKycTimeline(${_esc(JSON.stringify(inv.id))})'><i class="fa-solid fa-timeline"></i> Timeline</button>
           <button class="btn btn--secondary btn--sm" onclick='navigate("kyc", document.querySelector("[data-view=kyc]"))'><i class="fa-solid fa-id-card"></i> Queue</button>
         </div>
       </td>
@@ -11971,7 +18222,7 @@ async function loadIntlInterest() {
   } catch (err) {
     console.error('[intl interest] load error:', err);
     const body = document.getElementById('intlInterestBody');
-    if (body) body.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#ef4444;padding:24px">Failed to load: ${err.message}</td></tr>`;
+    if (body) body.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#ef4444;padding:24px">Failed to load: ${_esc(err.message)}</td></tr>`;
   }
 }
 
@@ -12018,7 +18269,7 @@ function _renderIntlInterest(data) {
       <td style="color:#7a92a8">${r.created_at ? new Date(r.created_at).toLocaleDateString('en-ZA',{day:'2-digit',month:'short',year:'numeric'}) : '—'}</td>
       <td>
         <div style="display:flex;gap:6px">
-          ${!contacted ? `<button class="btn btn--sm btn--success" onclick='markIntlContacted(${JSON.stringify(r.id)})' title="Mark as contacted"><i class="fa-solid fa-check"></i></button>` : ''}
+          ${!contacted ? `<button class="btn btn--sm btn--success" onclick='markIntlContacted(${_esc(JSON.stringify(r.id))})' title="Mark as contacted"><i class="fa-solid fa-check"></i></button>` : ''}
           <a class="btn btn--sm btn--secondary" href="mailto:${_esc(r.email)}?subject=${encodeURIComponent('SVCapital International Investment Enquiry')}" title="Send email"><i class="fa-solid fa-envelope"></i></a>
         </div>
       </td>
@@ -12123,8 +18374,8 @@ async function loadFeedback(filter = 'all') {
           <div style="display:flex;align-items:center;gap:12px">
             <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#fec24f,#FF5229);display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:800;color:#1a1a1a;flex-shrink:0">${r.initials}</div>
             <div>
-              <div style="font-weight:700;font-size:0.9rem">${r.first_name} ${r.last_name}</div>
-              <div style="font-size:0.75rem;color:var(--text-muted)">${r.email}</div>
+              <div style="font-weight:700;font-size:0.9rem">${_esc(r.first_name)} ${_esc(r.last_name)}</div>
+              <div style="font-size:0.75rem;color:var(--text-muted)">${_esc(r.email)}</div>
               <div style="font-size:0.78rem;color:#fec24f;letter-spacing:1px;margin-top:2px">${stars(r.rating)}</div>
             </div>
           </div>
@@ -12133,7 +18384,7 @@ async function loadFeedback(filter = 'all') {
             <span style="font-size:0.72rem;color:var(--text-muted)">${new Date(r.created_at).toLocaleDateString('en-ZA',{day:'numeric',month:'short',year:'numeric'})}</span>
           </div>
         </div>
-        <p style="margin:14px 0 0;font-size:0.88rem;line-height:1.6;font-style:italic;color:var(--text-body)">"${r.body}"</p>
+        <p style="margin:14px 0 0;font-size:0.88rem;line-height:1.6;font-style:italic;color:var(--text-body)">"${_esc(r.body)}"</p>
         ${r.product_label ? `<div style="font-size:0.75rem;color:var(--text-muted);margin-top:6px">Product label: ${r.product_label}</div>` : ''}
         ${r.rejection_reason ? `<div style="font-size:0.75rem;color:#ef4444;margin-top:6px">Rejection reason: ${r.rejection_reason}</div>` : ''}
         ${r.status === 'pending' ? `
@@ -12151,7 +18402,7 @@ async function loadFeedback(filter = 'all') {
       </div>
     `).join('');
   } catch (err) {
-    list.innerHTML = `<p style="color:#ef4444;text-align:center;padding:40px 0">Failed to load feedback: ${err.message}</p>`;
+    list.innerHTML = `<p style="color:#ef4444;text-align:center;padding:40px 0">Failed to load feedback: ${_esc(err.message)}</p>`;
   }
 }
 
@@ -12257,7 +18508,7 @@ async function loadEmailLogs(resetPage = true) {
         : '';
       return `<tr style="border-bottom:1px solid var(--border)">
         <td style="padding:10px 12px">${l.to_email}</td>
-        <td style="padding:10px 12px;max-width:320px;word-break:break-word">${l.subject || ''}</td>
+        <td style="padding:10px 12px;max-width:320px;word-break:break-word">${_esc(l.subject || '')}</td>
         <td style="padding:10px 12px">${typePill}</td>
         <td style="padding:10px 12px">${statusPill}</td>
         <td style="padding:10px 12px;white-space:nowrap">${sent}</td>
@@ -12280,7 +18531,7 @@ async function loadEmailLogs(resetPage = true) {
         </div>`;
     }
   } catch (err) {
-    if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="padding:40px;text-align:center;color:#ef4444">${err.message}</td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="padding:40px;text-align:center;color:#ef4444">${_esc(err.message)}</td></tr>`;
   }
 }
 
@@ -12407,166 +18658,85 @@ async function _generateAdminTaxCert(investorId) {
   }
 }
 
-function _openAdminTaxCertWindow(data) {
-  const { investor: inv, taxYear, returns, deposits, totalReturns, totalDeposits, from, to } = data;
+/* The letterhead logo. This one is dark artwork on transparency, so it goes
+   straight onto the white letterhead — the old white-text logo needed a dark
+   chip behind it to be visible at all, and that chip would swallow this one. */
+/* Moved to js/investor-documents.js, which the investor portal loads too. */
+function _openAdminTaxCertWindow(data) { return SVCDocs.openIncomeReference(data); }
 
-  const fmt = n => 'R ' + parseFloat(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const fmtDate = s => s ? new Date(s).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
-  const esc = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const certNo = `SVCRC-${taxYear}-${String(inv.id).replace(/\D/g,'').slice(-6)}`;
-  const issuedAt = new Date().toLocaleString('en-ZA', { dateStyle: 'long', timeStyle: 'short' });
-  const fromLabel = new Date(from).toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' });
-  const toLabel   = new Date(to).toLocaleDateString('en-ZA',   { day: 'numeric', month: 'long', year: 'numeric' });
-  const fullAddr  = [inv.street_address, inv.suburb, inv.address, inv.postal_code, inv.province].filter(Boolean).join(', ');
+/* ── A client's signed agreements, under their profile ────────────────
+   The question this answers on a support call is "what did they actually
+   sign?", so it opens the STORED document rather than rebuilding one from
+   the current template. The two differ the moment the wording changes, and
+   the stored copy is the only one that was ever agreed to. */
+async function _loadInvestorAgreements(investorId) {
+  const el = document.getElementById('invAgreementsList');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin fa-2x"></i></div>';
 
-  const returnsRows = returns.map(t => `
-    <tr>
-      <td>${fmtDate(t.created_at)}</td>
-      <td>${esc(t.description || (t.type === 'return' ? 'Investment return' : 'Payout'))}</td>
-      <td class="amt">${fmt(Math.abs(parseFloat(t.amount||0)))}</td>
-    </tr>`).join('');
+  let list = [];
+  try {
+    const res = await API._fetch('GET', 'agreements', null, { investor_id: investorId });
+    list = res.agreements || [];
+  } catch (err) {
+    el.innerHTML = `<div style="padding:20px;color:var(--red);font-size:0.85rem">Could not load agreements: ${_esc(err.message || 'unknown error')}</div>`;
+    return;
+  }
+  if (!list.length) {
+    el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.85rem"><i class="fa-solid fa-file-circle-xmark" style="font-size:2rem;display:block;margin-bottom:10px;opacity:0.3"></i>No agreements signed yet</div>';
+    return;
+  }
 
-  const depositsRows = deposits.map(t => `
-    <tr>
-      <td>${fmtDate(t.created_at)}</td>
-      <td>${esc(t.description || 'Client deposit')}</td>
-      <td class="amt">${fmt(Math.abs(parseFloat(t.amount||0)))}</td>
-    </tr>`).join('');
+  const STATUS = {
+    signed: ['badge--yellow', 'Signed \u2014 awaiting funds'],
+    funded: ['badge--green',  'Active'],
+    lapsed: ['badge--gray',   'Lapsed'],
+    drawn:  ['badge--gray',   'Drawn, not signed'],
+  };
+  const money = c => Utils.rand((Number(c) || 0) / 100);
 
-  const html = `<!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8">
-<title>SV Capital Investment Income Reference ${taxYear-1}/${taxYear}</title>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:Arial,Helvetica,sans-serif;background:#fff;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:13px}
-@page{size:A4 portrait;margin:16mm 20mm}
-@media print{.no-print{display:none!important}.wrap{margin-top:0!important}}
-.no-print{position:fixed;top:0;left:0;right:0;background:#303030;padding:9px 20px;display:flex;justify-content:space-between;align-items:center;z-index:99;gap:10px}
-.no-print span{color:#fff;font-size:12px;font-weight:600}
-.no-print button{background:#eda5ff;color:#111;border:none;padding:7px 18px;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer}
-.wrap{max-width:740px;margin:56px auto 32px;padding:32px}
-/* Header */
-.hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:18px;border-bottom:3px solid #303030;margin-bottom:22px}
-.hdr-left h1{font-size:16px;font-weight:700;color:#303030;margin-bottom:2px}
-.hdr-left p{font-size:11px;color:#666;margin-top:3px}
-.cert-badge{text-align:right;font-size:10px;color:#555;line-height:1.6}
-.cert-badge strong{display:block;font-size:12px;color:#303030;font-weight:700}
-/* Warning */
-.warning{background:#fff8e1;border:1.5px solid #f59e0b;border-radius:6px;padding:10px 14px;margin-bottom:20px;font-size:11px;color:#78350f;display:flex;gap:8px;align-items:flex-start}
-.warning strong{display:block;margin-bottom:2px}
-/* Summary boxes */
-.summary{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:24px}
-.sum-box{border-radius:8px;padding:16px 18px;text-align:center}
-.sum-box.green{background:#f0fdf4;border:1.5px solid #22c55e}
-.sum-box.blue{background:#eff6ff;border:1.5px solid #3b82f6}
-.sum-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px}
-.sum-box.green .sum-lbl{color:#166534}
-.sum-box.blue  .sum-lbl{color:#1e40af}
-.sum-amt{font-size:22px;font-weight:800}
-.sum-box.green .sum-amt{color:#15803d}
-.sum-box.blue  .sum-amt{color:#1d4ed8}
-.sum-period{font-size:10px;margin-top:3px}
-.sum-box.green .sum-period{color:#166534}
-.sum-box.blue  .sum-period{color:#1e40af}
-/* Investor details */
-.section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#374151;margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid #e5e7eb}
-.details-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 20px;margin-bottom:22px;font-size:12px}
-.details-grid dt{color:#6b7280;font-weight:600}
-.details-grid dd{color:#111;font-weight:500}
-/* Tables */
-table{width:100%;border-collapse:collapse;margin-bottom:22px;font-size:12px}
-thead tr{background:#f1f5f9}
-th{padding:7px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#374151}
-td{padding:8px 10px;border-bottom:1px solid #f1f5f9;color:#374151}
-td.amt{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
-tr.total-row td{border-top:2px solid #e5e7eb;border-bottom:none;font-weight:700;background:#f8fafc}
-tr.total-row td.amt{color:#111}
-.empty{text-align:center;padding:16px;background:#f8fafc;border-radius:6px;color:#9ca3af;font-size:12px;margin-bottom:22px}
-/* Footer */
-.footer{border-top:1px solid #e5e7eb;padding-top:14px;font-size:10px;color:#6b7280;line-height:1.7;margin-top:8px}
-.footer strong{color:#374151}
-.stamp{display:inline-block;border:2px solid #303030;color:#303030;padding:5px 12px;border-radius:3px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-top:12px}
-</style></head><body>
-<div class="no-print">
-  <span>SV Capital — Investment Income Reference &nbsp;·&nbsp; ${taxYear-1} / ${taxYear} &nbsp;·&nbsp; ${esc(inv.first_name)} ${esc(inv.last_name)}</span>
-  <button onclick="window.print()">Print / Save PDF</button>
-</div>
-<div class="wrap">
-  <div class="hdr">
-    <div class="hdr-left">
-      <h1>SV Capital (Pty) Ltd</h1>
-      <p>FSCA Regulated Financial Services Provider</p>
-      <p style="font-size:10px;color:#9ca3af;margin-top:4px">Ref No: ${certNo}</p>
-    </div>
-    <div class="cert-badge">
-      <strong>Investment Income Reference</strong>
-      Tax Year: 1 March ${taxYear-1} – 28 February ${taxYear}<br>
-      Issued: ${issuedAt}
-    </div>
-  </div>
+  el.innerHTML = `<div style="overflow-x:auto">
+    <table class="data-table">
+      <thead><tr>
+        <th>Agreement</th><th>Pool</th><th>Structure</th><th>Signed</th>
+        <th>Invested</th><th>Fee</th><th>Total</th><th>Status</th><th>Checksum</th><th></th>
+      </tr></thead>
+      <tbody>${list.map(a => {
+        const [cls, label] = STATUS[a.status] || ['badge--gray', a.status || '\u2014'];
+        return `<tr>
+          <td style="font-family:monospace;font-size:0.75rem">${_esc(a.agreement_no)}</td>
+          <td>${_esc(a.pool_id || '\u2014')}</td>
+          <td style="font-size:0.78rem">${_esc(a.template_key || '\u2014')} <span style="color:var(--text-muted)">${_esc(a.template_version || '')}</span></td>
+          <td>${a.signed_at ? Utils.date(a.signed_at) : '\u2014'}</td>
+          <td>${money(a.pool_amount_cents)}</td>
+          <td>${money(a.fee_cents)}</td>
+          <td style="font-weight:700">${money(a.amount_cents)}</td>
+          <td><span class="badge ${cls}">${_esc(label)}</span></td>
+          <td style="font-family:monospace;font-size:0.68rem;color:var(--text-muted)" title="${_esc(a.document_sha256 || '')}">${_esc((a.document_sha256 || '\u2014').slice(0, 10))}</td>
+          <td><button class="btn btn--secondary btn--sm" onclick="_openAgreementDoc('${_esc(a.id)}')"><i class="fa-solid fa-file-lines"></i> Open</button></td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>
+  </div>`;
+}
 
-  <div class="warning">
-    <span style="font-size:16px">⚠</span>
-    <div><strong>For reference purposes only — not an official SARS tax certificate.</strong>
-    This document is provided to assist the client in preparing their tax return. It has not been submitted to SARS and does not replace an official IT3(b) certificate.</div>
-  </div>
-
-  <div class="summary">
-    <div class="sum-box green">
-      <div class="sum-lbl">Total Returns Earned</div>
-      <div class="sum-amt">${fmt(totalReturns)}</div>
-      <div class="sum-period">${fromLabel} – ${toLabel}</div>
-    </div>
-    <div class="sum-box blue">
-      <div class="sum-lbl">Total Deposits Made</div>
-      <div class="sum-amt">${fmt(totalDeposits)}</div>
-      <div class="sum-period">${fromLabel} – ${toLabel}</div>
-    </div>
-  </div>
-
-  <div class="section-title">Investor Details</div>
-  <dl class="details-grid">
-    <dt>Full Name</dt><dd>${esc(inv.first_name)} ${esc(inv.last_name)}</dd>
-    <dt>Investor Account</dt><dd>${esc(inv.id)}</dd>
-    <dt>Email Address</dt><dd>${esc(inv.email || '—')}</dd>
-    <dt>SA ID / Passport</dt><dd>${esc(inv.id_number || '—')}</dd>
-    ${fullAddr ? `<dt>Address</dt><dd>${esc(fullAddr)}</dd>` : ''}
-  </dl>
-
-  <div class="section-title" style="color:#166534">Returns Earned</div>
-  ${returns.length ? `<table>
-    <thead><tr><th>Date</th><th>Description</th><th style="text-align:right">Amount</th></tr></thead>
-    <tbody>
-      ${returnsRows}
-      <tr class="total-row"><td colspan="2">TOTAL RETURNS EARNED</td><td class="amt">${fmt(totalReturns)}</td></tr>
-    </tbody>
-  </table>` : `<div class="empty">No returns recorded for this tax year.</div>`}
-
-  <div class="section-title" style="color:#1e40af">Deposits Made</div>
-  ${deposits.length ? `<table>
-    <thead><tr><th>Date</th><th>Description</th><th style="text-align:right">Amount</th></tr></thead>
-    <tbody>
-      ${depositsRows}
-      <tr class="total-row"><td colspan="2">TOTAL DEPOSITS MADE</td><td class="amt">${fmt(totalDeposits)}</td></tr>
-    </tbody>
-  </table>` : `<div class="empty">No deposits recorded for this tax year.</div>`}
-
-  <div class="footer">
-    <strong>SV Capital (Pty) Ltd</strong> — FSCA Regulated Financial Services Provider.<br>
-    This document is generated for client reference only and does not constitute an official SARS IT3(b) interest income certificate.
-    Returns shown are investment returns and payouts credited to the investor account in the tax year ${taxYear-1}/${taxYear}
-    (1 March ${taxYear-1} to 28 February ${taxYear}).<br>
-    Deposits shown are funds deposited into the investor's SV Capital account during the same period.<br>
-    <strong>Ref:</strong> ${certNo} &nbsp;·&nbsp; <strong>Issued:</strong> ${issuedAt}<br>
-    <div class="stamp">SV Capital</div>
-  </div>
-</div>
-</body></html>`;
-
-  const win = window.open('', '_blank', 'width=860,height=960');
-  if (!win) { Toast.error('Pop-up blocked — allow pop-ups for this site and try again'); return; }
-  win.document.write(html);
-  win.document.close();
+/* Fetched with the console's credentials and written into a new window: the
+   endpoint requires authentication, and a plain link carries none. */
+async function _openAgreementDoc(id) {
+  try {
+    const token = Auth.getToken();
+    const res = await fetch(`/api/agreements/${encodeURIComponent(id)}/document`, {
+      credentials: 'include',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error('Agreement not found.');
+    const html = await res.text();
+    const w = window.open('', '_blank');
+    if (!w) { Toast.error('Pop-up blocked \u2014 allow pop-ups to open the agreement.'); return; }
+    w.document.open(); w.document.write(html); w.document.close();
+  } catch (err) {
+    Toast.error(err.message || 'Could not open that agreement.');
+  }
 }
 
 async function _loadInvestorStatements(investorId) {
@@ -12587,7 +18757,7 @@ async function _loadInvestorStatements(investorId) {
         <tbody>${stmts.map(s => `<tr>
           <td class="td-strong">${monthNames[s.period_month] || s.period_month} ${s.period_year}</td>
           <td class="td-muted">${Utils.date(s.created_at)}</td>
-          <td><button class="btn btn--secondary btn--sm" onclick='downloadInvestorStatement(${JSON.stringify(s.id)},${JSON.stringify(investorId)},${s.period_year},${s.period_month},this)'><i class="fa-solid fa-download"></i> PDF</button></td>
+          <td><button class="btn btn--secondary btn--sm" onclick='downloadInvestorStatement(${_esc(JSON.stringify(s.id))},${_esc(JSON.stringify(investorId))},${s.period_year},${s.period_month},this)'><i class="fa-solid fa-download"></i> PDF</button></td>
         </tr>`).join('')}</tbody>
       </table>
     </div>`;
@@ -12614,6 +18784,27 @@ async function downloadInvestorStatement(stmtId, investorId, year, month, btn) {
     } catch (e) { Toast.error('Failed to download: ' + e.message); }
   });
 }
+
+async function _generateAccountStatement(investorId) {
+  const from = document.getElementById('stmtFromDate')?.value;
+  const to   = document.getElementById('stmtToDate')?.value;
+  if (!from || !to) { Toast.error('Please select a date range'); return; }
+  const btn  = document.getElementById('stmtGenBtn');
+  const orig = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading…'; }
+  try {
+    const data = await API._fetch('GET', 'admin/account-statement', null, { investor_id: investorId, from, to });
+    _openAccountStatementWindow(data);
+  } catch (e) {
+    Toast.error('Failed to generate statement: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+  }
+}
+
+/* Moved to js/investor-documents.js, which the investor portal loads too. */
+function _openAccountStatementWindow(data) { return SVCDocs.openAccountStatement(data); }
+
 
 /* ═══════════════════════════════════════════════
    POOL CLOSE-OUT WIZARD
@@ -12655,7 +18846,13 @@ async function savePoolCloseout(btn) {
             subject: 'Your investment has matured',
             message: `Your investment has matured at an actual return rate of ${(rate * 100).toFixed(2)}%. Please log in to your portal to view your maturity instruction options.`,
           });
-        } catch (_) {}
+          } catch (notifyErr) {
+            /* The pool update above already succeeded, so this is not a total failure — but
+               swallowing it meant investors were never told their money had matured while
+               the admin saw success. Report precisely what did and did not happen. */
+            console.error('[maturity] investor notification failed:', notifyErr.message);
+            Toast.warning('Pool marked matured, but the investor notification did not send. Notify them from Comms.');
+          }
       }
       Toast.success('Pool finalised — status set to matured');
       Modal.close('poolCloseoutModal');
@@ -12711,7 +18908,7 @@ async function loadUpcomingMaturities() {
       </table>
     </div>
     <div style="margin-top:12px;font-size:0.75rem;color:var(--text-muted);text-align:right">${upcoming.length} pool${upcoming.length!==1?'s':''} maturing within 90 days</div>`;
-  } catch (e) { el.innerHTML = `<div style="color:#ef4444;padding:16px;font-size:0.82rem">Failed to load: ${e.message}</div>`; }
+  } catch (e) { el.innerHTML = `<div style="color:#ef4444;padding:16px;font-size:0.82rem">Failed to load: ${_esc(e.message)}</div>`; }
 }
 
 /* ═══════════════════════════════════════════════
@@ -12748,7 +18945,7 @@ async function loadFailedLogins() {
       </table>
     </div>
     <div style="margin-top:12px;font-size:0.75rem;color:var(--text-muted)">${events.length} event${events.length!==1?'s':''} · Showing most recent 200 audit records filtered for login failures</div>`;
-  } catch (e) { el.innerHTML = `<div style="color:#ef4444;padding:16px;font-size:0.82rem">Failed to load: ${e.message}</div>`; }
+  } catch (e) { el.innerHTML = `<div style="color:#ef4444;padding:16px;font-size:0.82rem">Failed to load: ${_esc(e.message)}</div>`; }
 }
 
 /* ═══════════════════════════════════════════════
@@ -12786,7 +18983,7 @@ async function loadStaffPermissions() {
       </table>
     </div>
     <div style="margin-top:12px;font-size:0.75rem;color:var(--text-muted)">${staff.length} staff account${staff.length!==1?'s':''}</div>`;
-  } catch (e) { el.innerHTML = `<div style="color:#ef4444;padding:16px;font-size:0.82rem">Failed to load staff: ${e.message}</div>`; }
+  } catch (e) { el.innerHTML = `<div style="color:#ef4444;padding:16px;font-size:0.82rem">Failed to load staff: ${_esc(e.message)}</div>`; }
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -12794,10 +18991,8 @@ async function loadStaffPermissions() {
 ══════════════════════════════════════════════════════════════ */
 function _initSSE() {
   if (!window.EventSource) return;
-  const raw = localStorage.getItem('staffSession');
-  let token = '';
-  try { const s = JSON.parse(raw || '{}'); if (s.token) token = s.token; } catch (_) {}
-  if (!token) { try { token = localStorage.getItem('svc_staff_token') || ''; } catch (_) {} }
+  const token = _safeParse(_safeStorage('staffSession'), {}).token
+             || _safeStorage('svc_staff_token') || '';
 
   const url = `/api/events/stream${token ? `?token=${encodeURIComponent(token)}` : ''}`;
   let delay = 3000;
@@ -12813,7 +19008,12 @@ function _initSSE() {
         });
         const badge = document.getElementById('kycBadge');
         if (badge) badge.textContent = (parseInt(badge.textContent, 10) || 0) + 1;
-      } catch (_) {}
+      } catch (err) {
+        /* One malformed event must not take the stream down, but it
+           should not vanish either — a notification type that stops
+           arriving is invisible by nature. */
+        console.error('[sse] kyc_submitted payload could not be handled:', err?.message || err);
+      }
     });
 
     src.addEventListener('withdrawal_requested', e => {
@@ -12823,14 +19023,24 @@ function _initSSE() {
         Toast.info(`Withdrawal request: ${d.investor_name || 'Investor'}${amt}`, 9000, {
           action: { label: 'Review', callback: () => { const btn = document.querySelector('[data-view=withdrawals]'); if (btn) navigate('withdrawals', btn); } }
         });
-      } catch (_) {}
+      } catch (err) {
+        /* One malformed event must not take the stream down, but it
+           should not vanish either — a notification type that stops
+           arriving is invisible by nature. */
+        console.error('[sse] withdrawal_requested payload could not be handled:', err?.message || err);
+      }
     });
 
     src.addEventListener('investor_registered', e => {
       try {
         const d = JSON.parse(e.data);
         Toast.info(`New investor: ${d.investor_name || 'Investor'} registered`, 6000);
-      } catch (_) {}
+      } catch (err) {
+        /* One malformed event must not take the stream down, but it
+           should not vanish either — a notification type that stops
+           arriving is invisible by nature. */
+        console.error('[sse] investor_registered payload could not be handled:', err?.message || err);
+      }
     });
 
     src.onerror = () => { src.close(); delay = Math.min(delay * 2, 30000); setTimeout(connect, delay); };
@@ -12838,4 +19048,693 @@ function _initSSE() {
   }
 
   connect();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ANALYTICS ENHANCEMENTS
+   Fee Revenue · Maturity/Reinvestment · IFA Performance ·
+   Sub-Account Analytics · Interest History · Withdrawal Trends ·
+   CSV Export
+   ═══════════════════════════════════════════════════════════════ */
+
+function _exportCSV(rows, filename) {
+  if (!rows || !rows.length) return Toast.warning('No data to export');
+  const headers = Object.keys(rows[0]);
+  const csv = [
+    headers.join(','),
+    ...rows.map(r => headers.map(h => {
+      const v = r[h] == null ? '' : String(r[h]);
+      return v.includes(',') || v.includes('"') || v.includes('\n') ? `"${v.replace(/"/g, '""')}"` : v;
+    }).join(','))
+  ].join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
+function _fmtProductType(t) {
+  const map = { cattle: 'Cattle', solar_5yr: 'Solar 5yr', solar_6yr: 'Solar 6yr', solar_7yr: 'Solar 7yr', short_term: 'Short Term', smme: 'SMME', delivery_bikes: 'Delivery Bikes', unknown: 'Unknown' };
+  return map[t] || (t ? t.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '—');
+}
+
+function _fmtMonthLabel(isoDate) {
+  const d = new Date(isoDate);
+  return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()] + ' ' + String(d.getFullYear()).slice(2);
+}
+
+/* ── 1. Fee Revenue Analytics ───────────────────────────── */
+async function loadRevenueAnalytics() {
+  const panel = document.getElementById('revenueProductPanel');
+  if (!panel) return;
+  panel.innerHTML = '<div class="text-center text-muted" style="padding:20px">Loading…</div>';
+
+  const months = parseInt(document.getElementById('revenueMonthsFilter')?.value || '12');
+  try {
+    const res  = await fetch(`/api/analytics/revenue?months=${months}`, { headers: { Authorization: `Bearer ${_getToken()}` } });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    const kpiHtml = `
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+        <div style="flex:1;min-width:110px;background:var(--card-bg);border-radius:8px;padding:12px;text-align:center;border:1px solid rgba(237,165,255,0.15)">
+          <div style="font-size:1.05rem;font-weight:700;color:#eda5ff">${Utils.rand(data.total_period)}</div>
+          <div style="font-size:0.68rem;color:var(--text-muted);margin-top:3px">Last ${months}mo Revenue</div>
+        </div>
+        <div style="flex:1;min-width:110px;background:var(--card-bg);border-radius:8px;padding:12px;text-align:center;border:1px solid rgba(254,194,79,0.15)">
+          <div style="font-size:1.05rem;font-weight:700;color:#fec24f">${Utils.rand(data.total_all_time)}</div>
+          <div style="font-size:0.68rem;color:var(--text-muted);margin-top:3px">All-Time Revenue</div>
+        </div>
+        <div style="flex:1;min-width:110px;background:var(--card-bg);border-radius:8px;padding:12px;text-align:center;border:1px solid rgba(101,204,136,0.15)">
+          <div style="font-size:1.05rem;font-weight:700;color:#65cc88">${data.count_period.toLocaleString()}</div>
+          <div style="font-size:0.68rem;color:var(--text-muted);margin-top:3px">Fee Transactions</div>
+        </div>
+      </div>`;
+
+    const prodRows = data.by_product.length
+      ? data.by_product.map(p => `<tr>
+          <td>${_fmtProductType(p.product_type)}</td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums">${p.count}</td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;color:#fec24f;font-weight:600">${Utils.rand(p.total)}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="3" class="text-muted" style="padding:12px">No fee data for period.</td></tr>';
+
+    panel.innerHTML = kpiHtml + `
+      <div style="overflow-x:auto">
+        <table class="data-table" style="font-size:0.8rem">
+          <thead><tr><th>Product</th><th style="text-align:right">Fees</th><th style="text-align:right">Revenue</th></tr></thead>
+          <tbody>${prodRows}</tbody>
+        </table>
+      </div>`;
+
+    const ctx = document.getElementById('revenueMonthlyChart');
+    if (ctx) {
+      if (STATE.charts.revenueMonthly) STATE.charts.revenueMonthly.destroy();
+      const opts = _chartDefaults();
+      opts.plugins.tooltip.callbacks = { label: c => ` ${Utils.rand(c.parsed.y)}` };
+      opts.scales.y.ticks.callback   = v => 'R' + (v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v);
+      STATE.charts.revenueMonthly = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels:   data.monthly.map(m => _fmtMonthLabel(m.month)),
+          datasets: [{ label: 'Monthly Fee Revenue', data: data.monthly.map(m => m.total), backgroundColor: 'rgba(237,165,255,0.7)', borderRadius: 5 }],
+        },
+        options: opts,
+      });
+    }
+  } catch (e) {
+    panel.innerHTML = `<p class="text-muted" style="padding:16px">Failed to load: ${_esc(e.message)}</p>`;
+    console.error('[loadRevenueAnalytics]', e);
+  }
+}
+
+/* ── 2. Maturity & Reinvestment Rate ────────────────────── */
+async function loadMaturityReinvestment() {
+  const panel = document.getElementById('maturityReinvestPanel');
+  if (!panel) return;
+  panel.innerHTML = '<div class="text-center text-muted" style="padding:20px">Loading…</div>';
+  try {
+    const res  = await fetch('/api/analytics/maturity-reinvestment', { headers: { Authorization: `Bearer ${_getToken()}` } });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    const rate      = (data.reinvestment_rate * 100).toFixed(1);
+    const rateColor = data.reinvestment_rate >= 0.5 ? '#65cc88' : data.reinvestment_rate >= 0.3 ? '#fec24f' : '#ff6b6b';
+
+    panel.innerHTML = `
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+        <div style="flex:1;min-width:120px;background:var(--card-bg);border-radius:8px;padding:14px;text-align:center;border:1px solid rgba(255,255,255,0.06)">
+          <div style="font-size:2rem;font-weight:700;color:${rateColor}">${rate}%</div>
+          <div style="font-size:0.68rem;color:var(--text-muted);margin-top:4px">Reinvestment Rate</div>
+        </div>
+        <div style="flex:1;min-width:120px;background:var(--card-bg);border-radius:8px;padding:14px;text-align:center;border:1px solid rgba(255,255,255,0.06)">
+          <div style="font-size:1.2rem;font-weight:700">${data.total_matured.toLocaleString()}</div>
+          <div style="font-size:0.68rem;color:var(--text-muted);margin-top:4px">Total Matured</div>
+        </div>
+        <div style="flex:1;min-width:120px;background:var(--card-bg);border-radius:8px;padding:14px;text-align:center;border:1px solid rgba(101,204,136,0.15)">
+          <div style="font-size:1.2rem;font-weight:700;color:#65cc88">${data.actual_reinvested.toLocaleString()}</div>
+          <div style="font-size:0.68rem;color:var(--text-muted);margin-top:4px">Actually Reinvested</div>
+        </div>
+        <div style="flex:1;min-width:120px;background:var(--card-bg);border-radius:8px;padding:14px;text-align:center;border:1px solid rgba(254,194,79,0.15)">
+          <div style="font-size:1.2rem;font-weight:700;color:#fec24f">${Utils.rand(data.reinvested_capital)}</div>
+          <div style="font-size:0.68rem;color:var(--text-muted);margin-top:4px">Reinvested Capital</div>
+        </div>
+        <div style="flex:1;min-width:120px;background:var(--card-bg);border-radius:8px;padding:14px;text-align:center;border:1px solid rgba(237,165,255,0.15)">
+          <div style="font-size:1.2rem;font-weight:700;color:#eda5ff">${data.elected_reinvest.toLocaleString()}</div>
+          <div style="font-size:0.68rem;color:var(--text-muted);margin-top:4px">Elected Reinvest</div>
+        </div>
+      </div>
+      <div class="chart-wrap chart-wrap--md"><canvas id="maturityReinvestChart"></canvas></div>`;
+
+    const ctx = document.getElementById('maturityReinvestChart');
+    if (ctx && data.monthly.length) {
+      if (STATE.charts.maturityReinvest) STATE.charts.maturityReinvest.destroy();
+      const opts = _chartDefaults();
+      opts.plugins.tooltip.callbacks = { label: c => ` ${c.dataset.label}: ${c.parsed.y}` };
+      STATE.charts.maturityReinvest = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels:   data.monthly.map(m => _fmtMonthLabel(m.month)),
+          datasets: [
+            { label: 'Matured',    data: data.monthly.map(m => m.matured),    backgroundColor: 'rgba(101,101,101,0.55)', borderRadius: 4 },
+            { label: 'Reinvested', data: data.monthly.map(m => m.reinvested), backgroundColor: 'rgba(101,204,136,0.7)',  borderRadius: 4 },
+          ],
+        },
+        options: opts,
+      });
+    }
+  } catch (e) {
+    if (document.getElementById('maturityReinvestPanel'))
+      document.getElementById('maturityReinvestPanel').innerHTML = `<p class="text-muted" style="padding:16px">Failed to load: ${_esc(e.message)}</p>`;
+  }
+}
+
+/* ── 3. IFA Performance ─────────────────────────────────── */
+let _ifaAnalyticsData = null;
+
+async function loadIfaPerformance() {
+  const panel = document.getElementById('ifaPerformancePanel');
+  if (!panel) return;
+  panel.innerHTML = '<div class="text-center text-muted" style="padding:20px">Loading…</div>';
+  try {
+    const res  = await fetch('/api/analytics/ifa-performance', { headers: { Authorization: `Bearer ${_getToken()}` } });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    _ifaAnalyticsData = data;
+
+    const summaryHtml = `
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+        <div style="background:var(--card-bg);border-radius:8px;padding:12px 18px;border:1px solid rgba(255,255,255,0.06)">
+          <div style="font-weight:600;font-size:1rem">${data.ifas.length}</div>
+          <div style="font-size:0.68rem;color:var(--text-muted)">IFAs on Platform</div>
+        </div>
+        <div style="background:var(--card-bg);border-radius:8px;padding:12px 18px;border:1px solid rgba(254,194,79,0.15)">
+          <div style="font-weight:600;font-size:1rem;color:#fec24f">${Utils.rand(data.total_aum_via_ifa)}</div>
+          <div style="font-size:0.68rem;color:var(--text-muted)">AUM via IFA</div>
+        </div>
+        <div style="background:var(--card-bg);border-radius:8px;padding:12px 18px;border:1px solid rgba(255,255,255,0.06)">
+          <div style="font-weight:600;font-size:1rem">${data.total_investors_via_ifa}</div>
+          <div style="font-size:0.68rem;color:var(--text-muted)">Investors via IFA</div>
+        </div>
+      </div>`;
+
+    if (!data.ifas.length) {
+      panel.innerHTML = summaryHtml + '<p class="text-muted" style="padding:8px">No IFAs found.</p>';
+      return;
+    }
+
+    const rows = data.ifas.map(ifa => `
+      <tr>
+        <td>
+          <div style="font-weight:500">${_esc(ifa.name || '—')}</div>
+          <div style="font-size:0.7rem;color:var(--text-muted)">${_esc(ifa.company || ifa.email || '')}</div>
+        </td>
+        <td style="text-align:center">${ifa.client_count}</td>
+        <td style="text-align:center">${ifa.active_investments}</td>
+        <td style="text-align:right;color:#fec24f;font-weight:600;font-variant-numeric:tabular-nums">${Utils.rand(ifa.total_aum)}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums">${Utils.rand(ifa.total_wallet)}</td>
+        <td style="text-align:center">${ifa.commission_rate}%</td>
+        <td><span class="status-badge status-badge--${ifa.status === 'active' ? 'success' : 'muted'}">${ifa.status}</span></td>
+      </tr>`).join('');
+
+    panel.innerHTML = summaryHtml + `
+      <div style="overflow-x:auto">
+        <table class="data-table" style="font-size:0.8rem">
+          <thead><tr>
+            <th>IFA</th>
+            <th style="text-align:center">Clients</th>
+            <th style="text-align:center">Active Investments</th>
+            <th style="text-align:right">Total AUM</th>
+            <th style="text-align:right">Wallet Pool</th>
+            <th style="text-align:center">Commission</th>
+            <th>Status</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  } catch (e) {
+    if (document.getElementById('ifaPerformancePanel'))
+      document.getElementById('ifaPerformancePanel').innerHTML = `<p class="text-muted" style="padding:16px">Failed to load: ${_esc(e.message)}</p>`;
+  }
+}
+
+function exportIfaCSV() {
+  if (!_ifaAnalyticsData?.ifas?.length) return Toast.warning('Load IFA data first');
+  _exportCSV(_ifaAnalyticsData.ifas.map(r => ({
+    Name: r.name, Company: r.company || '', Email: r.email || '',
+    Clients: r.client_count, 'Active Investments': r.active_investments,
+    'Total AUM (R)': r.total_aum, 'Commission Rate': r.commission_rate + '%', Status: r.status,
+  })), `ifa-performance-${new Date().toISOString().slice(0,10)}.csv`);
+}
+
+/* ── 4. Sub-Account Analytics ───────────────────────────── */
+async function loadSubAccountAnalytics() {
+  const panel = document.getElementById('subAccountAnalyticsPanel');
+  if (!panel) return;
+  panel.innerHTML = '<div class="text-center text-muted" style="padding:20px">Loading…</div>';
+  try {
+    const res  = await fetch('/api/analytics/sub-accounts', { headers: { Authorization: `Bearer ${_getToken()}` } });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    const kpis = [
+      { label: 'Total',          value: data.total,                  color: 'var(--text)' },
+      { label: 'Active',         value: data.active,                 color: '#65cc88' },
+      { label: 'Funded (>R0)',   value: data.funded,                 color: '#eda5ff' },
+      { label: 'Total Balance',  value: Utils.rand(data.total_balance),  color: '#fec24f' },
+      { label: 'Total Invested', value: Utils.rand(data.total_invested), color: '#7a92a8' },
+      { label: 'Avg Balance',    value: Utils.rand(data.avg_balance),    color: 'var(--text)' },
+    ];
+
+    const kpiHtml = `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+      ${kpis.map(k => `
+        <div style="flex:1;min-width:110px;background:var(--card-bg);border-radius:8px;padding:12px;text-align:center;border:1px solid rgba(255,255,255,0.05)">
+          <div style="font-size:1rem;font-weight:700;color:${k.color}">${k.value}</div>
+          <div style="font-size:0.67rem;color:var(--text-muted);margin-top:3px">${k.label}</div>
+        </div>`).join('')}
+    </div>`;
+
+    const typeRows = data.by_type.map(t => `
+      <tr>
+        <td>${_esc(t.type || '—')}</td>
+        <td style="text-align:center">${t.count}</td>
+        <td style="text-align:right;color:#fec24f;font-variant-numeric:tabular-nums">${Utils.rand(t.balance)}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums">${Utils.rand(t.invested)}</td>
+      </tr>`).join('');
+
+    panel.innerHTML = kpiHtml + `
+      <div style="overflow-x:auto">
+        <table class="data-table" style="font-size:0.8rem">
+          <thead><tr><th>Account Type</th><th style="text-align:center">Count</th><th style="text-align:right">Balance</th><th style="text-align:right">Invested</th></tr></thead>
+          <tbody>${typeRows || '<tr><td colspan="4" class="text-muted" style="padding:12px">No sub-accounts found.</td></tr>'}</tbody>
+        </table>
+      </div>
+      <div class="chart-wrap chart-wrap--md" style="margin-top:16px"><canvas id="subAccountMonthlyChart"></canvas></div>`;
+
+    const ctx = document.getElementById('subAccountMonthlyChart');
+    if (ctx && data.monthly_new.length) {
+      if (STATE.charts.subAccountMonthly) STATE.charts.subAccountMonthly.destroy();
+      const opts = _chartDefaults();
+      opts.plugins.tooltip.callbacks = { label: c => ` ${c.parsed.y} new sub-accounts` };
+      STATE.charts.subAccountMonthly = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels:   data.monthly_new.map(m => _fmtMonthLabel(m.month)),
+          datasets: [{ label: 'New Sub-Accounts', data: data.monthly_new.map(m => m.count), backgroundColor: 'rgba(237,165,255,0.6)', borderRadius: 4 }],
+        },
+        options: opts,
+      });
+    }
+  } catch (e) {
+    if (document.getElementById('subAccountAnalyticsPanel'))
+      document.getElementById('subAccountAnalyticsPanel').innerHTML = `<p class="text-muted" style="padding:16px">Failed to load: ${_esc(e.message)}</p>`;
+  }
+}
+
+/* ── 5. Interest Distribution History ──────────────────── */
+async function loadInterestHistoryAnalytics() {
+  const panel = document.getElementById('interestHistoryAnalyticsPanel');
+  if (!panel) return;
+  panel.innerHTML = '<div class="text-center text-muted" style="padding:20px">Loading…</div>';
+  try {
+    const res  = await fetch('/api/analytics/interest-history', { headers: { Authorization: `Bearer ${_getToken()}` } });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    const { summary, distributions } = data;
+    const summaryHtml = `
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+        <div style="flex:1;min-width:120px;background:var(--card-bg);border-radius:8px;padding:12px;text-align:center;border:1px solid rgba(237,165,255,0.15)">
+          <div style="font-size:1.1rem;font-weight:700;color:#eda5ff">${Utils.rand(summary.grand_total)}</div>
+          <div style="font-size:0.68rem;color:var(--text-muted);margin-top:3px">Total Interest Distributed</div>
+        </div>
+        <div style="flex:1;min-width:120px;background:var(--card-bg);border-radius:8px;padding:12px;text-align:center;border:1px solid rgba(255,255,255,0.06)">
+          <div style="font-size:1.1rem;font-weight:700">${summary.distribution_count}</div>
+          <div style="font-size:0.68rem;color:var(--text-muted);margin-top:3px">Distribution Runs</div>
+        </div>
+        <div style="flex:1;min-width:120px;background:var(--card-bg);border-radius:8px;padding:12px;text-align:center;border:1px solid rgba(101,204,136,0.15)">
+          <div style="font-size:1.1rem;font-weight:700;color:#65cc88">${summary.total_accounts_credited.toLocaleString()}</div>
+          <div style="font-size:0.68rem;color:var(--text-muted);margin-top:3px">Total Accounts Credited</div>
+        </div>
+      </div>`;
+
+    if (!distributions.length) {
+      panel.innerHTML = summaryHtml + '<p class="text-muted" style="padding:8px">No distributions yet.</p>';
+      return;
+    }
+
+    const rows = distributions.map(d => `
+      <tr>
+        <td style="font-family:monospace;font-weight:600">${_esc(d.period)}</td>
+        <td style="text-align:right;color:#eda5ff;font-weight:600;font-variant-numeric:tabular-nums">${Utils.rand(d.total_interest)}</td>
+        <td style="text-align:center">${d.accounts_credited}</td>
+        <td style="text-align:center;color:var(--text-muted)">${d.accounts_skipped}</td>
+        <td style="text-align:center;color:#ff6b6b">${d.accounts_unmatched}</td>
+        <td style="color:var(--text-muted);font-size:0.75rem">${d.applied_at ? new Date(d.applied_at).toLocaleDateString('en-ZA') : '—'}</td>
+      </tr>`).join('');
+
+    panel.innerHTML = summaryHtml + `
+      <div style="overflow-x:auto">
+        <table class="data-table" style="font-size:0.8rem">
+          <thead><tr>
+            <th>Period</th>
+            <th style="text-align:right">Interest</th>
+            <th style="text-align:center">Credited</th>
+            <th style="text-align:center">Skipped</th>
+            <th style="text-align:center">Unmatched</th>
+            <th>Applied</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  } catch (e) {
+    if (document.getElementById('interestHistoryAnalyticsPanel'))
+      document.getElementById('interestHistoryAnalyticsPanel').innerHTML = `<p class="text-muted" style="padding:16px">Failed to load: ${_esc(e.message)}</p>`;
+  }
+}
+
+/* ── 6. Withdrawal Trends ───────────────────────────────── */
+let _withdrawalAnalyticsData = null;
+
+async function loadWithdrawalTrends() {
+  const summaryPanel = document.getElementById('withdrawalSummaryPanel');
+  const recentPanel  = document.getElementById('withdrawalRecentPanel');
+  if (!summaryPanel) return;
+  summaryPanel.innerHTML = '<div class="text-center text-muted" style="padding:20px">Loading…</div>';
+
+  const days = parseInt(document.getElementById('withdrawalDaysFilter')?.value || '90');
+  try {
+    const res  = await fetch(`/api/analytics/withdrawals?days=${days}`, { headers: { Authorization: `Bearer ${_getToken()}` } });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    _withdrawalAnalyticsData = data;
+
+    const s              = data.summary;
+    const completionRate = s.total > 0 ? ((s.completed / s.total) * 100).toFixed(1) : '0.0';
+
+    const kpis = [
+      { label: 'Total Requests',   value: s.total,                         color: 'var(--text)' },
+      { label: 'Total Volume',     value: Utils.rand(s.total_volume),       color: '#fec24f' },
+      { label: 'Avg Amount',       value: Utils.rand(s.avg_amount),         color: '#7a92a8' },
+      { label: 'Completed',        value: s.completed,                      color: '#65cc88' },
+      { label: 'Pending',          value: s.pending,                        color: '#fec24f' },
+      { label: 'Rejected',         value: s.rejected,                       color: '#ff6b6b' },
+      { label: 'Completion Rate',  value: completionRate + '%',             color: '#65cc88' },
+    ];
+
+    summaryPanel.innerHTML = `<div style="display:flex;gap:10px;flex-wrap:wrap">
+      ${kpis.map(k => `
+        <div style="flex:1;min-width:100px;background:var(--card-bg);border-radius:8px;padding:12px;text-align:center;border:1px solid rgba(255,255,255,0.05)">
+          <div style="font-size:1rem;font-weight:700;color:${k.color}">${k.value}</div>
+          <div style="font-size:0.66rem;color:var(--text-muted);margin-top:3px">${k.label}</div>
+        </div>`).join('')}
+    </div>`;
+
+    const ctx = document.getElementById('withdrawalTrendsChart');
+    if (ctx) {
+      if (STATE.charts.withdrawalTrends) STATE.charts.withdrawalTrends.destroy();
+      const opts = _chartDefaults();
+      opts.plugins.tooltip.callbacks = { label: c => ` ${c.dataset.label}: ${c.dataset.label === 'Count' ? c.parsed.y : Utils.rand(c.parsed.y)}` };
+      opts.scales.y.ticks.callback   = v => 'R' + (v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v);
+
+      STATE.charts.withdrawalTrends = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels:   data.monthly.map(m => _fmtMonthLabel(m.month)),
+          datasets: [
+            { label: 'Volume', data: data.monthly.map(m => m.volume), backgroundColor: 'rgba(254,194,79,0.6)', borderRadius: 4 },
+            { label: 'Count',  data: data.monthly.map(m => m.count),  backgroundColor: 'rgba(122,146,168,0.5)', borderRadius: 4, yAxisID: 'y2' },
+          ],
+        },
+        options: {
+          ...opts,
+          scales: {
+            ...opts.scales,
+            y2: { position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#3d5268', font: { size: 10 } } },
+          },
+        },
+      });
+    }
+
+    if (recentPanel && data.recent.length) {
+      const rows = data.recent.map(w => `
+        <tr>
+          <td>${_esc(w.investor_name || '—')}</td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:600">${Utils.rand(Math.abs(w.amount))}</td>
+          <td><span class="status-badge status-badge--${w.status === 'completed' ? 'success' : w.status === 'pending' ? 'warning' : 'danger'}">${w.status}</span></td>
+          <td style="color:var(--text-muted);font-size:0.75rem">${new Date(w.created_at).toLocaleDateString('en-ZA')}</td>
+        </tr>`).join('');
+      recentPanel.innerHTML = `
+        <div style="overflow-x:auto">
+          <table class="data-table" style="font-size:0.8rem">
+            <thead><tr><th>Investor</th><th style="text-align:right">Amount</th><th>Status</th><th>Date</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+    } else if (recentPanel) {
+      recentPanel.innerHTML = '<p class="text-muted" style="padding:8px">No recent withdrawals.</p>';
+    }
+  } catch (e) {
+    if (summaryPanel) summaryPanel.innerHTML = `<p class="text-muted" style="padding:16px">Failed to load: ${_esc(e.message)}</p>`;
+    console.error('[loadWithdrawalTrends]', e);
+  }
+}
+
+function exportWithdrawalCSV() {
+  if (!_withdrawalAnalyticsData?.recent?.length) return Toast.warning('Load withdrawal data first');
+  _exportCSV(_withdrawalAnalyticsData.recent.map(r => ({
+    Investor: r.investor_name || '',
+    'Amount (R)': Math.abs(r.amount),
+    Status: r.status,
+    Date: Utils.csvDate(Utils.txnDate(r)),
+    Time: Utils.csvTime(Utils.txnDate(r)),
+  })), `withdrawals-${new Date().toISOString().slice(0,10)}.csv`);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PLATFORM FEES VIEW
+   ═══════════════════════════════════════════════════════════ */
+
+let _pfData = null;
+let _pfFiltered = [];
+let _pfPage = 1;
+const _PF_PG = 50;
+
+async function loadPlatformFees(period = 'month') {
+  // Highlight active tab
+  ['week','month','year','all'].forEach(p => {
+    const btn = document.getElementById(`pfTab-${p}`);
+    if (!btn) return;
+    btn.className = p === period
+      ? 'btn btn--sm btn--primary'
+      : 'btn btn--sm';
+  });
+  // Clear custom date inputs when using a preset tab
+  const pfFrom = document.getElementById('pfFrom');
+  const pfTo   = document.getElementById('pfTo');
+  if (pfFrom) pfFrom.value = '';
+  if (pfTo)   pfTo.value   = '';
+
+  _pfRenderLoading();
+  try {
+    const res  = await fetch(`/api/analytics/platform-fees?period=${period}`, {
+      headers: { Authorization: `Bearer ${_getToken()}` }
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `Server error ${res.status}`);
+    _pfData = data;
+    _pfFiltered = [...(_pfData.transactions || [])];
+    _pfPage = 1;
+    _pfRender(_pfData, period);
+  } catch (e) {
+    Toast.error(`Failed to load platform fees: ${e.message}`);
+    console.error('[loadPlatformFees]', e);
+  }
+}
+
+function loadPlatformFeesCustom() {
+  const from = document.getElementById('pfFrom')?.value;
+  const to   = document.getElementById('pfTo')?.value;
+  if (!from || !to) { Toast.warning('Select both a From and To date'); return; }
+  // Deactivate preset tabs
+  ['week','month','year','all'].forEach(p => {
+    const btn = document.getElementById(`pfTab-${p}`);
+    if (btn) btn.className = 'btn btn--sm';
+  });
+  _pfRenderLoading();
+  fetch(`/api/analytics/platform-fees?from=${from}&to=${to}`, {
+    headers: { Authorization: `Bearer ${_getToken()}` }
+  })
+    .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || `Server error ${r.status}`); return d; })
+    .then(data => {
+      _pfData = data;
+      _pfFiltered = [...(data.transactions || [])];
+      _pfPage = 1;
+      _pfRender(data, 'custom');
+    })
+    .catch(e => { Toast.error(`Failed to load platform fees: ${e.message}`); console.error(e); });
+}
+
+function _pfRenderLoading() {
+  const b = document.getElementById('pfBody');
+  if (b) b.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</td></tr>`;
+  ['pf-total','pf-count','pf-avg'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '…'; });
+}
+
+function _pfRender(data, period) {
+  const s = data.summary || {};
+
+  // KPIs
+  const el = id => document.getElementById(id);
+  if (el('pf-total')) el('pf-total').textContent = Utils.rand(s.total || 0);
+  if (el('pf-count')) el('pf-count').textContent = (s.count || 0).toLocaleString();
+  if (el('pf-avg'))   el('pf-avg').textContent   = Utils.rand(s.avg   || 0);
+
+  // Breakdown title
+  const titles = { week: 'Daily Breakdown — This Week', month: 'Daily Breakdown — This Month', year: 'Monthly Breakdown — This Year', all: 'Monthly Breakdown — All Time', custom: 'Breakdown for Selected Period' };
+  if (el('pfBreakdownTitle')) el('pfBreakdownTitle').textContent = titles[period] || 'Period Breakdown';
+
+  // Chart
+  _pfDrawChart(data.breakdown || [], period);
+
+  // Top investors
+  const topBody = el('pfTopBody');
+  if (topBody) {
+    if (!data.top_investors?.length) {
+      topBody.innerHTML = `<tr><td colspan="3" style="text-align:center;padding:24px;color:var(--text-muted)">No data</td></tr>`;
+    } else {
+      topBody.innerHTML = data.top_investors.map(r => `
+        <tr>
+          <td class="clip" style="font-size:0.82rem">${_esc(r.investor_name)}</td>
+          <td style="text-align:right;color:var(--text-muted);font-size:0.8rem">${r.count}</td>
+          <td style="text-align:right;font-weight:700;color:#eda5ff;font-size:0.82rem">${Utils.rand(r.total)}</td>
+        </tr>`).join('');
+    }
+  }
+
+  // Transaction table
+  _pfRenderTable();
+}
+
+function _pfFilter() {
+  if (!_pfData) return;
+  const q = (document.getElementById('pfSearch')?.value || '').toLowerCase();
+  _pfFiltered = (_pfData.transactions || []).filter(r =>
+    !q || `${r.investor_name} ${r.reference} ${r.pool_name}`.toLowerCase().includes(q)
+  );
+  _pfPage = 1;
+  _pfRenderTable();
+}
+
+function _pfRenderTable() {
+  const body = document.getElementById('pfBody');
+  const foot = document.getElementById('pfFooter');
+  const pag  = document.getElementById('pfPagination');
+  if (!body) return;
+
+  const total = _pfFiltered.length;
+  const start = (_pfPage - 1) * _PF_PG;
+  const page  = _pfFiltered.slice(start, start + _PF_PG);
+
+  if (!page.length) {
+    body.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-muted)">
+      <i class="fa-solid fa-percent" style="font-size:1.6rem;display:block;margin-bottom:8px;opacity:.35"></i>
+      No fee transactions found
+    </td></tr>`;
+    if (foot) foot.textContent = '0 transactions';
+    if (pag)  pag.innerHTML = '';
+    return;
+  }
+
+  body.innerHTML = page.map(r => `
+    <tr>
+      <td class="td-strong clip">${_esc(r.investor_name)}</td>
+      <td class="td-muted clip" style="font-size:0.8rem">${_esc(r.pool_name)}</td>
+      <td class="td-muted" style="font-size:0.75rem">${_esc(r.reference || '—')}</td>
+      <td class="td-red fw-700">${Utils.rand(Math.abs(r.amount))}</td>
+      <td class="td-muted">${Utils.date(r.created_at)}</td>
+    </tr>`).join('');
+
+  if (foot) foot.textContent = `${start + 1}–${Math.min(start + _PF_PG, total)} of ${total} transactions`;
+
+  // Pagination
+  if (pag) {
+    const pages = Math.ceil(total / _PF_PG);
+    if (pages <= 1) { pag.innerHTML = ''; return; }
+    const btn = (n, label, disabled, active) =>
+      `<button onclick="_pfPage=${n};_pfRenderTable()" class="page-btn${active?' active':''}" ${disabled?'disabled':''}>${label}</button>`;
+    const parts = [btn(_pfPage - 1, '‹ Prev', _pfPage === 1, false)];
+    parts.push(`<span class="page-btn active" style="cursor:default;min-width:60px;text-align:center">${_pfPage} / ${pages}</span>`);
+    parts.push(btn(_pfPage + 1, 'Next ›', _pfPage === pages, false));
+    pag.innerHTML = parts.join('');
+  }
+}
+
+function _pfDrawChart(breakdown, period) {
+  const canvas  = document.getElementById('pfChart');
+  const emptyEl = document.getElementById('pfChartEmpty');
+  if (!canvas) return;
+
+  if (!breakdown.length) {
+    canvas.style.display = 'none';
+    if (emptyEl) emptyEl.style.display = 'block';
+    return;
+  }
+  canvas.style.display = 'block';
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  const W = canvas.offsetWidth || 600;
+  const H = 160;
+  canvas.width  = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+
+  const vals   = breakdown.map(r => r.total);
+  const maxVal = Math.max(...vals, 1);
+  const pad    = { top: 10, bot: 32, left: 6, right: 6 };
+  const n      = breakdown.length;
+  const barW   = Math.max(4, Math.floor((W - pad.left - pad.right) / n) - 3);
+  const slotW  = (W - pad.left - pad.right) / n;
+  const chartH = H - pad.top - pad.bot;
+
+  breakdown.forEach((r, i) => {
+    const h   = Math.max(2, (r.total / maxVal) * chartH);
+    const x   = pad.left + i * slotW + (slotW - barW) / 2;
+    const y   = pad.top + chartH - h;
+
+    ctx.fillStyle = '#eda5ff';
+    ctx.globalAlpha = 0.85;
+    ctx.beginPath();
+    ctx.roundRect(x, y, barW, h, [3, 3, 0, 0]);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // Label every N bars to avoid crowding
+    const skip = n > 20 ? 7 : n > 10 ? 3 : n > 7 ? 2 : 1;
+    if (i % skip === 0) {
+      const d = new Date(r.period);
+      const label = (period === 'week' || period === 'month' || period === 'custom')
+        ? d.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })
+        : d.toLocaleDateString('en-ZA', { month: 'short', year: '2-digit' });
+      ctx.fillStyle = '#7a92a8';
+      ctx.font = '9px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(label, x + barW / 2, H - 6);
+    }
+  });
+}
+
+function exportPlatformFeesCSV() {
+  if (!_pfFiltered.length) { Toast.warning('Load platform fees data first'); return; }
+  _exportCSV(_pfFiltered.map(r => ({
+    Date:            Utils.csvDate(Utils.txnDate(r)),
+    Time:            Utils.csvTime(Utils.txnDate(r)),
+    Investor:        r.investor_name || '',
+    Pool:            r.pool_name || '',
+    Reference:       r.reference || '',
+    'Amount (R)':    Math.abs(r.amount),
+    Description:     r.description || '',
+  })), `platform-fees-${new Date().toISOString().slice(0,10)}.csv`);
 }

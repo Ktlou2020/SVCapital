@@ -7,8 +7,148 @@
   <link rel="apple-touch-icon" sizes="192x192" href="assets/logo-192.png" />
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <!-- No apple-itunes-app tag, deliberately. Safari's Smart App Banner is
+       prettier and free, but once a client taps its x Safari remembers that
+       for the site and there is no way to ask again — so it cannot satisfy
+       "keep asking until they have the app", which is the rule. js/app-banner.js
+       draws our own on iOS Safari too, and it snoozes rather than silences.
+       Whether the app is already installed is answered by the server from the
+       push token, which only the app can write; that is a better answer than
+       Apple's and does not depend on this tag. -->
   <title>SV Capital — South Africa's Premier Alternative Investment Platform</title>
-  <meta name="description" content="Invest in real assets — cattle, solar, delivery, and more. SV Capital gives every South African access to inflation-beating alternative investments from R500." />
+  <meta name="description" content="Invest in real assets — cattle, solar, and more. SV Capital gives every South African access to inflation-beating alternative investments from R500." />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://platform.svcapital.co.za/" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="SV Capital" />
+  <meta property="og:url" content="https://platform.svcapital.co.za/" />
+  <meta property="og:title" content="SV Capital — South Africa's Premier Alternative Investment Platform" />
+  <meta property="og:description" content="Invest in real assets — cattle, solar, and more. SV Capital gives every South African access to inflation-beating alternative investments from R500." />
+  <meta property="og:image" content="https://platform.svcapital.co.za/assets/svcapital-og.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:locale" content="en_ZA" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:site" content="@sv_capital" />
+  <meta name="twitter:title" content="SV Capital — South Africa's Premier Alternative Investment Platform" />
+  <meta name="twitter:description" content="Invest in real assets — cattle, solar, and more. SV Capital gives every South African access to inflation-beating alternative investments from R500." />
+  <meta name="twitter:image" content="https://platform.svcapital.co.za/assets/svcapital-og.png" />
+
+  <!-- JSON-LD Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://platform.svcapital.co.za/#website",
+        "url": "https://platform.svcapital.co.za/",
+        "name": "SV Capital",
+        "description": "South Africa's premier platform for alternative, asset-backed investments.",
+        "publisher": { "@id": "https://platform.svcapital.co.za/#organization" },
+        "potentialAction": {
+          "@type": "SearchAction",
+          "target": { "@type": "EntryPoint", "urlTemplate": "https://platform.svcapital.co.za/?s={search_term_string}" },
+          "query-input": "required name=search_term_string"
+        }
+      },
+      {
+        "@type": "Organization",
+        "@id": "https://platform.svcapital.co.za/#organization",
+        "name": "SV Capital",
+        "legalName": "SmartVest Financial Services",
+        "url": "https://platform.svcapital.co.za/",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://platform.svcapital.co.za/assets/logo.png",
+          "width": 512,
+          "height": 512
+        },
+        "description": "South Africa's premier platform for alternative, asset-backed investments. FSCA-regulated under FSP license 52449.",
+        "areaServed": "ZA",
+        "foundingDate": "2018",
+        "award": [
+          "Best Alternative Investment Solutions South Africa 2025 \u2014 Global Financial Market Review",
+          "Top 5 Most Exciting Startups in South Africa, 2024 \u2014 Heavy Chef Awards",
+          "Top 40 Start-Ups in South Africa, 2018",
+          "Runner-Up Best Tech Start-Up in Africa, 2018",
+          "1 of 80 Start-Ups, Global Accelerator, 2017"
+        ],
+        "sameAs": [
+          "https://www.instagram.com/sv_capital/",
+          "https://www.linkedin.com/company/smartvest-capital/",
+          "https://www.facebook.com/smartvestcap/",
+          "https://x.com/sv_capital"
+        ]
+      },
+      {
+        "@type": "FAQPage",
+        "@id": "https://platform.svcapital.co.za/#faq",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Who owns and runs SV Capital?",
+            "acceptedAnswer": { "@type": "Answer", "text": "SV Capital is a South African alternative investment platform founded by experienced finance professionals with deep expertise in chartered accounting and financial strategy. Our mission is simple: democratise access to real, asset-backed investments for every South African, from R500." }
+          },
+          {
+            "@type": "Question",
+            "name": "How do I get started?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Sign up on the SV Capital app (available on Apple App Store and Google Play), complete your FICA verification (takes under 5 minutes), fund your wallet via EFT or instant payment, and choose an open investment pool." }
+          },
+          {
+            "@type": "Question",
+            "name": "What fees does SV Capital charge?",
+            "acceptedAnswer": { "@type": "Answer", "text": "A platform fee of 1% of your investment amount is charged once, at the time you invest. The amount you enter when investing is the total that leaves your wallet: if you apply R1 010, then R1 000 goes into the pool and R10 is the platform fee. No platform fee is charged when a matured investment is reinvested. Each product also carries its own fees, set out in clause 9 of the Terms of Use." }
+          },
+          {
+            "@type": "Question",
+            "name": "Do you have a mobile app?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Yes! The SV Capital app is available on both the Apple App Store and Google Play Store. It gives you real-time visibility into your portfolio, pool progress, and payout tracking — all from your phone." }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I withdraw my funds early?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Early withdrawals are not permitted. Your funds are locked in until the end of the investment term. At maturity, you have multiple payout options including reinvest, partial payout, or full withdrawal." }
+          },
+          {
+            "@type": "Question",
+            "name": "What investment products are available?",
+            "acceptedAnswer": { "@type": "Answer", "text": "SV Capital currently offers three investment products: Cattle Investment (12 months, min R500), Solar Investment (5, 6, or 7-year terms, min R10,000), and Short-Term Investment (5 months, min R1,000)." }
+          },
+          {
+            "@type": "Question",
+            "name": "What happens when my investment matures?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Before 5:00 PM on the last day of your investment term, you must submit a maturity instruction via the SV Capital platform. Options are: Reinvest, Switch Products, Payout Custom, Payout Return, or Payout All. If no instruction is received, funds are automatically reinvested." }
+          },
+          {
+            "@type": "Question",
+            "name": "Is SV Capital regulated?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Yes. All fund collections and disbursements are handled by SmartVest Financial Services, a licensed Financial Services Provider authorised by the Financial Sector Conduct Authority (FSCA) under FSP license number 52449." }
+          },
+          {
+            "@type": "Question",
+            "name": "Is my money safe?",
+            "acceptedAnswer": { "@type": "Answer", "text": "SV Capital conducts rigorous due diligence on all investment partners before entering any agreements. That said, all investments carry risk and returns are not guaranteed." }
+          },
+          {
+            "@type": "Question",
+            "name": "Are returns guaranteed?",
+            "acceptedAnswer": { "@type": "Answer", "text": "No. As with all investments, returns are not guaranteed. Returns depend on the performance of the underlying assets and market conditions. SV Capital carefully selects and manages investment products to reduce risk, but we encourage all investors to understand the risks before committing capital." }
+          },
+          {
+            "@type": "Question",
+            "name": "How do I declare tax on my returns?",
+            "acceptedAnswer": { "@type": "Answer", "text": "SV Capital does not issue official tax certificates. We recommend consulting a qualified tax practitioner for guidance on the correct classification of these returns in your tax submission." }
+          }
+        ]
+      }
+    ]
+  }
+  </script>
 
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -25,9 +165,9 @@
   <!-- CountUp.js -->
   <script defer src="https://cdn.jsdelivr.net/npm/countup.js@2.8.0/dist/countUp.umd.js"></script>
 
-  <link rel="stylesheet" href="css/style.css?v=11" />
-  <link rel="stylesheet" href="css/home-ci.css" />
-  <link rel="stylesheet" href="css/premium.css" />
+  <link rel="stylesheet" href="css/style.css?v=12" />
+  <link rel="stylesheet" href="css/home-ci.css?v=7" />
+  <link rel="stylesheet" href="css/premium.css?v=6" />
   <!-- Google Analytics 4 -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-5LEPWC7EFP"></script>
   <script>
@@ -44,17 +184,18 @@
   <style>
     /* Hero social proof */
     .hero-social-proof { display:flex;align-items:center;gap:12px;margin-top:28px; }
+    @media (max-width:1024px) { .hero-social-proof { justify-content:center; } }
     .investor-avatars { display:flex; }
-    .inv-av { width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.68rem;font-weight:700;color:#fff;border:2px solid #0d1117;margin-left:-8px;letter-spacing:0; }
+    .inv-av { width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.68rem;font-weight:700;color:#fff;border:2px solid #1a1a1a;margin-left:-8px;letter-spacing:0; }
     .inv-av:first-child { margin-left:0; }
     .hero-social-text { font-size:0.82rem;color:rgba(255,255,255,0.75);line-height:1.4; }
     .hero-social-text strong { color:#fff;font-size:0.9rem; }
-    .live-dot-wrap { display:inline-flex;align-items:center;gap:5px;margin-top:3px;font-size:0.72rem;color:#22c55e; }
+    .live-dot-wrap { display:inline-flex;align-items:center;gap:5px;margin-top:3px;font-size:0.75rem;color:#22c55e; }
     .live-dot-pulse { width:7px;height:7px;background:#22c55e;border-radius:50%;animation:pulse-dot 2s infinite; }
     @keyframes pulse-dot { 0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,0.6)} 50%{box-shadow:0 0 0 6px rgba(34,197,94,0)} }
 
     /* Why section */
-    .why-section { padding: 80px 0; background: var(--bg, #0d1117); }
+    .why-section { padding: 80px 0; background: #1a1a1a; }
     .why-grid { display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:48px; }
     @media(max-width:900px){ .why-grid{grid-template-columns:repeat(2,1fr);} }
     @media(max-width:600px){ .why-grid{grid-template-columns:1fr;} }
@@ -72,7 +213,7 @@
     .partner-chip:hover { background:rgba(255,255,255,0.07);border-color:rgba(212,175,55,0.25); }
     .partner-chip i { font-size:1.4rem; }
     .partner-chip strong { display:block;font-size:0.88rem;font-weight:700;color:#e2e8f0;line-height:1.2; }
-    .partner-chip span { font-size:0.72rem;color:#656565; }
+    .partner-chip span { font-size:0.72rem;color:#e2e8f0; }
 
     /* Dark-background contrast overrides — home-ci.css forces #1a1a1a on .section-title; these dark sections need light text */
     .why-section .section-eyebrow { color: var(--ci-orange, #FF8215) !important; }
@@ -82,7 +223,31 @@
     .why-section .section-sub { color: rgba(255,255,255,0.62) !important; }
     .why-card p { color: #656565 !important; }
     .partners-label { color: #656565 !important; }
-    .partner-chip span { color: #656565 !important; }
+    .partner-chip span { color: #e2e8f0 !important; }
+    .partner-chip__info { background:none;border:none;cursor:pointer;padding:0;min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center;color:#e2e8f0;opacity:.55;font-size:.85rem;line-height:1;transition:color .15s,opacity .15s;flex-shrink:0; }
+    .partner-chip__info:hover { color:#eda5ff;opacity:1; }
+
+    /* Partner strip inside product cards */
+    .product-card__partner {
+      display: flex; align-items: center; gap: 8px;
+      width: 100%; background: rgba(0,0,0,0.04);
+      border: 1px solid rgba(0,0,0,0.1); border-radius: 10px;
+      padding: 10px 14px; margin-bottom: 14px;
+      cursor: pointer; text-align: left; transition: all 0.2s;
+      color: inherit; font-family: inherit; font-size: 0.82rem;
+    }
+    .product-card__partner:hover {
+      background: rgba(237,165,255,0.12);
+      border-color: rgba(237,165,255,0.4);
+    }
+    .product-card__partner .pcp-label {
+      font-size: 0.75rem; text-transform: uppercase;
+      letter-spacing: 0.08em; color: #666; flex-shrink: 0;
+    }
+    .product-card__partner .pcp-name {
+      font-weight: 700; color: #111; flex: 1;
+    }
+    .product-card__partner .fa-circle-info { color: #eda5ff; font-size: 0.85rem; flex-shrink: 0; }
 
   </style>
 </head>
@@ -102,11 +267,32 @@
       </button>
 
       <ul class="nav-links" id="navLinks">
-        <li><a href="#products" class="nav-link">Products</a></li>
+        <li class="nav-has-sub">
+          <!-- Products is the heading for the two below it, so it is a button
+               rather than a link: a heading that also navigates has nowhere to
+               put the open-and-close, and in the slide-in panel tapping it
+               closed the whole menu before the submenu could be seen (every
+               <a> in the panel closes it). "All products" is the link to the
+               section now, which is what it was always for. -->
+          <button type="button" class="nav-link nav-sub-toggle" id="navProductsToggle"
+                  aria-expanded="false" aria-controls="navProductsSub">
+            Products<span class="nav-sub-chev" aria-hidden="true"></span>
+          </button>
+          <!-- Interest-Free sits under Products because that is what it is: one
+               range within the product set, not a peer of the whole section.
+               The id stays on the LI so js/main.js can still hide the whole row
+               when no EIF product is visible — hiding only the anchor would
+               leave an empty item in the submenu. -->
+          <ul class="nav-sub" id="navProductsSub">
+            <li><a href="#products" class="nav-link">All products</a></li>
+            <li id="navEifLink" style="display:none"><a href="#eif" class="nav-link">Interest-Free</a></li>
+          </ul>
+        </li>
         <li><a href="#calculator" class="nav-link">Calculator</a></li>
         <li><a href="#how-it-works" class="nav-link">How It Works</a></li>
         <li><a href="#impact" class="nav-link">Impact</a></li>
         <li><a href="#faq" class="nav-link">FAQ</a></li>
+        <li><a href="/insights" class="nav-link">Insights</a></li>
         <li><a href="login.html" class="nav-btn nav-btn--ghost">Sign In</a></li>
         <li><a href="signup.html" class="nav-btn nav-btn--primary">Get Started</a></li>
       </ul>
@@ -207,12 +393,7 @@
             <div class="alloc-item">
               <span class="alloc-dot" style="background:#656565"></span>
               <span class="alloc-name">Short-Term</span>
-              <span class="alloc-pct">15%</span>
-            </div>
-            <div class="alloc-item">
-              <span class="alloc-dot" style="background:#FF9800"></span>
-              <span class="alloc-name">Delivery</span>
-              <span class="alloc-pct">10%</span>
+              <span class="alloc-pct">25%</span>
             </div>
           </div>
         </div>
@@ -251,11 +432,11 @@
     <div class="container">
       <p class="featured-label">As seen in</p>
       <div class="featured-logos">
-        <span class="featured-logo-item">Moneyweb</span>
-        <span class="featured-logo-item">702</span>
-        <span class="featured-logo-item">City Press</span>
-        <span class="featured-logo-item">Business Day</span>
-        <span class="featured-logo-item">Daily Maverick</span>
+        <a class="featured-logo-item" href="https://www.moneyweb.co.za/moneyweb-podcasts/moneyweb-now/central-banks-set-for-a-busy-week/" target="_blank" rel="noopener">Moneyweb</a>
+        <a class="featured-logo-item" href="https://www.primediaplus.com/financial-matters-tis-the-season-for-financialfitnessgoals/" target="_blank" rel="noopener">702</a>
+        <a class="featured-logo-item" href="https://www.news24.com/citypress/diversify-your-investments-through-cattle-20200522" target="_blank" rel="noopener">City Press</a>
+        <a class="featured-logo-item" href="https://www.youtube.com/watch?v=JYHx5OxK9xw&t=45s" target="_blank" rel="noopener">Business Day</a>
+        <a class="featured-logo-item" href="https://www.youtube.com/watch?v=zlC9j76PPTk" target="_blank" rel="noopener">eNCA</a>
       </div>
     </div>
   </section>
@@ -352,15 +533,25 @@
       </div>
 
       <div class="product-risk-filter" data-reveal="up">
-        <span class="prf-label">Filter by risk</span>
-        <div class="prf-pills">
-          <button class="prf-pill active" data-risk="all" onclick="filterProductsByRisk('all', this)">All</button>
-          <button class="prf-pill" data-risk="conservative" onclick="filterProductsByRisk('conservative', this)">Conservative</button>
-          <button class="prf-pill" data-risk="moderate" onclick="filterProductsByRisk('moderate', this)">Moderate</button>
-          <button class="prf-pill" data-risk="aggressive" onclick="filterProductsByRisk('aggressive', this)">Aggressive</button>
+        <div class="prf-left">
+          <span class="prf-label">Risk</span>
+          <div class="prf-pills">
+            <button class="prf-pill active" data-risk="all" onclick="filterProductsByRisk('all', this)">All</button>
+            <button class="prf-pill" data-risk="conservative" onclick="filterProductsByRisk('conservative', this)">Low</button>
+            <button class="prf-pill" data-risk="moderate" onclick="filterProductsByRisk('moderate', this)">Medium</button>
+            <button class="prf-pill" data-risk="aggressive" onclick="filterProductsByRisk('aggressive', this)">High</button>
+          </div>
         </div>
-        <div class="prf-empty" id="prfEmpty" style="display:none">No products in this risk band right now.</div>
+        <div class="prf-actions">
+          <a href="#calculator" class="btn btn--sm btn--outline-dark">
+            <i class="fa-solid fa-calculator"></i> Calculate Returns
+          </a>
+          <a href="signup.html" class="btn btn--sm btn--gold">
+            <i class="fa-solid fa-bolt"></i> Invest Now
+          </a>
+        </div>
       </div>
+      <div class="prf-empty" id="prfEmpty" style="display:none">No products in this risk band right now.</div>
 
       <div class="products-grid">
 
@@ -401,6 +592,11 @@
               <span>Grow with the herd — one investment, one herd</span>
             </div>
           </div>
+          <button type="button" class="product-card__partner" onclick="_showPartnerModal('Beefcor')">
+            <span class="pcp-label">Partner</span>
+            <span class="pcp-name">Beefcor</span>
+            <i class="fa-solid fa-circle-info"></i>
+          </button>
           <div class="product-card__actions">
             <a href="signup.html" class="btn btn--gold btn--full">Invest Now</a>
             <button class="btn btn--ghost btn--full" onclick="openModal('cattle')">View Details</button>
@@ -421,7 +617,7 @@
           <p class="product-card__desc">Power South Africa's energy future. Your capital funds solar panel installations — generating clean electricity, long-term contracts, and growing returns.</p>
           <div class="product-card__stats">
             <div class="stat">
-              <span class="stat__label">Best Return</span>
+              <span class="stat__label">Avg. Return</span>
               <span class="stat__value stat__value--gold">21.40%</span>
               <span class="stat__unit">p.a. (7yr)</span>
             </div>
@@ -448,6 +644,11 @@
               <span class="tier__return">21.40% p.a.</span>
             </div>
           </div>
+          <button type="button" class="product-card__partner" onclick="_showPartnerModal('The Solar Experts')">
+            <span class="pcp-label">Partner</span>
+            <span class="pcp-name">The Solar Experts</span>
+            <i class="fa-solid fa-circle-info"></i>
+          </button>
           <div class="product-card__actions">
             <a href="signup.html" class="btn btn--gold btn--full">Invest Now</a>
             <button class="btn btn--ghost btn--full" onclick="openModal('solar')">View Details</button>
@@ -491,6 +692,11 @@
               <span>Supports SA SMMEs</span>
             </div>
           </div>
+          <button type="button" class="product-card__partner" onclick="_showPartnerModal('MoolaLend')">
+            <span class="pcp-label">Partner</span>
+            <span class="pcp-name">MoolaLend</span>
+            <i class="fa-solid fa-circle-info"></i>
+          </button>
           <div class="product-card__actions">
             <a href="signup.html" class="btn btn--gold btn--full">Invest Now</a>
             <button class="btn btn--ghost btn--full" onclick="openModal('short')">View Details</button>
@@ -597,6 +803,208 @@
 
   <hr class="section-rule" />
 
+  <!-- ═══════════════════════════════════════════════
+       ETHICAL & INTEREST-FREE (EIF)
+
+       The whole section is hidden by main.js unless at least one EIF product
+       is active and set to show on the homepage, so it is governed by the same
+       admin switches as every other product rather than by editing this file.
+  ═══════════════════════════════════════════════ -->
+  <section class="eif-section" id="eif" style="display:none">
+    <div class="container">
+      <div class="section-header" data-reveal="up">
+        <div class="section-eyebrow eif-eyebrow"><i class="fa-solid fa-mosque"></i> Ethical &amp; Interest-Free</div>
+        <h2 class="section-title">Earned by trade. Not by interest.</h2>
+        <p class="section-sub">Investments structured so the return comes from goods actually bought and sold, an asset actually owned and leased, or a business that actually made a profit — never from charging for the use of money.</p>
+      </div>
+
+      <div class="eif-principles-row" data-reveal="up">
+        <div class="eif-principle-card">
+          <i class="fa-solid fa-ban"></i>
+          <h4>No riba</h4>
+          <p>Return comes from trade, rent or enterprise — never from lending money.</p>
+        </div>
+        <div class="eif-principle-card">
+          <i class="fa-solid fa-cubes"></i>
+          <h4>Backed by assets</h4>
+          <p>Every structure sits on goods, an asset or a business that actually exists.</p>
+        </div>
+        <div class="eif-principle-card">
+          <i class="fa-solid fa-scale-balanced"></i>
+          <h4>Shared risk</h4>
+          <p>If the underlying venture does not perform, neither does the return.</p>
+        </div>
+        <div class="eif-principle-card">
+          <i class="fa-solid fa-filter-circle-xmark"></i>
+          <h4>Screened sectors</h4>
+          <p>No conventional lending, alcohol, tobacco, pork, gambling or weapons.</p>
+        </div>
+      </div>
+
+      <!-- The three cards carry data-product = product_type, so the same code
+           that colours, prices and hides every other card on this page governs
+           these. Nothing here is EIF-specific machinery. -->
+      <div class="products-grid eif-grid">
+
+        <article class="product-card product-card--eif" data-product="eif_murabaha" data-risk="conservative" data-reveal="up" data-reveal-delay="100">
+          <div class="product-card__bg"></div>
+          <div class="product-card__badge-row">
+            <span class="risk-badge risk-badge--conservative">Low-Medium Risk</span>
+            <span class="eif-badge"><i class="fa-solid fa-mosque"></i> Interest-free</span>
+          </div>
+          <div class="product-card__icon">
+            <i class="fa-solid fa-handshake"></i>
+          </div>
+          <h3 class="product-card__title">Murabaha Trade Finance</h3>
+          <p class="product-card__desc">SV Capital buys the goods a business needs and sells them on at a mark-up agreed and disclosed in full before the sale. Your return is your share of that mark-up — a trading profit, not a charge for money.</p>
+          <div class="product-card__stats">
+            <div class="stat">
+              <span class="stat__label">Target Share</span>
+              <span class="stat__value stat__value--gold">11.50%</span>
+              <span class="stat__unit">p.a.</span>
+            </div>
+            <div class="stat">
+              <span class="stat__label">Min. Invest</span>
+              <span class="stat__value">R500</span>
+            </div>
+            <div class="stat">
+              <span class="stat__label">Term</span>
+              <span class="stat__value">6 mo</span>
+            </div>
+          </div>
+          <div class="product-card__detail">
+            <div class="detail-row">
+              <i class="fa-solid fa-box"></i>
+              <span>SV Capital owns the goods before selling them on</span>
+            </div>
+            <div class="detail-row">
+              <i class="fa-solid fa-lock"></i>
+              <span>The mark-up is fixed in the contract and never increases</span>
+            </div>
+            <div class="detail-row">
+              <i class="fa-solid fa-clock"></i>
+              <span>No penalty interest — a late payer owes the same amount</span>
+            </div>
+          </div>
+          <div class="product-card__actions">
+            <a href="signup.html" class="btn btn--gold btn--full">Start Investing</a>
+            <button class="btn btn--ghost btn--full" onclick="openModal('eif_murabaha')">View Details</button>
+          </div>
+        </article>
+
+        <article class="product-card product-card--eif" data-product="eif_ijara" data-risk="moderate" data-reveal="up" data-reveal-delay="200">
+          <div class="product-card__bg"></div>
+          <div class="product-card__badge-row">
+            <span class="risk-badge risk-badge--moderate">Moderate Risk</span>
+            <span class="eif-badge"><i class="fa-solid fa-mosque"></i> Interest-free</span>
+          </div>
+          <div class="product-card__icon">
+            <i class="fa-solid fa-file-contract"></i>
+          </div>
+          <h3 class="product-card__title">Ijara Asset Leasing</h3>
+          <p class="product-card__desc">The pool buys an income-producing asset — solar plant, vehicles, machinery — and leases it to an operator. Your return is rent. Because the pool owns the asset, it carries the ownership risk, and that is what makes the income rent rather than interest.</p>
+          <div class="product-card__stats">
+            <div class="stat">
+              <span class="stat__label">Target Share</span>
+              <span class="stat__value stat__value--gold">12.50%</span>
+              <span class="stat__unit">p.a.</span>
+            </div>
+            <div class="stat">
+              <span class="stat__label">Min. Invest</span>
+              <span class="stat__value">R1,000</span>
+            </div>
+            <div class="stat">
+              <span class="stat__label">Term</span>
+              <span class="stat__value">36 mo</span>
+            </div>
+          </div>
+          <div class="product-card__detail">
+            <div class="detail-row">
+              <i class="fa-solid fa-key"></i>
+              <span>The pool holds title for the life of the lease</span>
+            </div>
+            <div class="detail-row">
+              <i class="fa-solid fa-shield-halved"></i>
+              <span>Maintenance and insurance are the owner's cost</span>
+            </div>
+            <div class="detail-row">
+              <i class="fa-solid fa-arrow-right-arrow-left"></i>
+              <span>Option to transfer the asset at end of term</span>
+            </div>
+          </div>
+          <div class="product-card__actions">
+            <a href="signup.html" class="btn btn--gold btn--full">Start Investing</a>
+            <button class="btn btn--ghost btn--full" onclick="openModal('eif_ijara')">View Details</button>
+          </div>
+        </article>
+
+        <article class="product-card product-card--eif" data-product="eif_mudarabah" data-risk="aggressive" data-reveal="up" data-reveal-delay="300">
+          <div class="product-card__bg"></div>
+          <div class="product-card__badge-row">
+            <span class="risk-badge risk-badge--aggressive">Medium-High Risk</span>
+            <span class="eif-badge"><i class="fa-solid fa-mosque"></i> Interest-free</span>
+          </div>
+          <div class="product-card__icon">
+            <i class="fa-solid fa-scale-balanced"></i>
+          </div>
+          <h3 class="product-card__title">Mudarabah Enterprise</h3>
+          <p class="product-card__desc">You provide the capital; a vetted operating partner provides the work. Profit is divided on a ratio agreed before a rand is deployed. Nothing is promised in advance, because a promised return on a partnership is the thing this structure exists to avoid.</p>
+          <div class="product-card__stats">
+            <div class="stat">
+              <span class="stat__label">Target Share</span>
+              <span class="stat__value stat__value--gold">14.50%</span>
+              <span class="stat__unit">p.a.</span>
+            </div>
+            <div class="stat">
+              <span class="stat__label">Min. Invest</span>
+              <span class="stat__value">R2,500</span>
+            </div>
+            <div class="stat">
+              <span class="stat__label">Term</span>
+              <span class="stat__value">12 mo</span>
+            </div>
+          </div>
+          <div class="product-card__detail">
+            <div class="detail-row">
+              <i class="fa-solid fa-percent"></i>
+              <span>Profit split fixed in advance — 80% investors, 20% manager</span>
+            </div>
+            <div class="detail-row">
+              <i class="fa-solid fa-triangle-exclamation"></i>
+              <span>Losses fall on capital; the partner forfeits their profit share</span>
+            </div>
+            <div class="detail-row">
+              <i class="fa-solid fa-chart-line"></i>
+              <span>Quarterly reporting on the underlying venture</span>
+            </div>
+          </div>
+          <div class="product-card__actions">
+            <a href="signup.html" class="btn btn--gold btn--full">Start Investing</a>
+            <button class="btn btn--ghost btn--full" onclick="openModal('eif_mudarabah')">View Details</button>
+          </div>
+        </article>
+
+      </div>
+
+      <!-- Governance. Deliberately plain rather than accented: it says what the
+           platform does NOT yet hold, and dressing that in the section colour
+           would read as a badge of approval. -->
+      <div class="eif-governance-note" data-reveal="up">
+        <i class="fa-solid fa-circle-info"></i>
+        <p><strong>Sharia advisory review is under way.</strong> These products are structured on established Islamic finance principles. We do not yet hold a Sharia certificate and do not claim one — the advisor, certificate and date will be published here as soon as it is issued. Please take your own advice in the meantime.</p>
+      </div>
+
+      <!-- Rendered by main.js from /api/products/faqs?category=eif — the same
+           rows the portal shows, so the answers are corrected in one place. -->
+      <div class="eif-faq" id="eifFaqWrap" style="display:none" data-reveal="up">
+        <h3 class="eif-faq__title">Questions about this offering</h3>
+        <div class="eif-faq__list" id="eifFaqList"></div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="section-rule" />
+
   <!-- WHY SV CAPITAL -->
   <section class="why-section">
     <div class="container">
@@ -651,7 +1059,7 @@
     <div class="container">
       <div class="section-header section-header--light" data-reveal="up">
         <div class="section-eyebrow section-eyebrow--light">Investment Calculator</div>
-        <h2 class="section-title section-title--light">See your money grow</h2>
+        <h2 class="section-title section-title--light">See your money grow.</h2>
         <p class="section-sub section-sub--light">Adjust the sliders and watch your wealth build in real time. No sign-up required.</p>
       </div>
 
@@ -666,9 +1074,6 @@
             </button>
             <button class="calc-tab" data-calc="short">
               <i class="fa-solid fa-bolt"></i> Short-Term
-            </button>
-            <button class="calc-tab" data-calc="delivery">
-              <i class="fa-solid fa-motorcycle"></i> Delivery
             </button>
           </div>
 
@@ -795,7 +1200,7 @@
             <div class="step__number">02</div>
             <div class="step__content">
               <h3>Choose Your Investment</h3>
-              <p>Browse live investment pools. Each listing shows real-time pool progress, target returns, term length, and full product details. Select the product that fits your goals.</p>
+              <p>Browse live investment pools. Each listing shows real-time pool progress, target returns, investment term, and full product details. Select the product that fits your goals.</p>
               <div class="step__time">📊 Real-time pool tracking</div>
             </div>
           </div>
@@ -805,7 +1210,7 @@
             <div class="step__number">03</div>
             <div class="step__content">
               <h3>We Manage Everything</h3>
-              <p>Once invested, our partners (Beefcor, The Solar Experts, MoolaLend, OnFleet) professionally manage the underlying assets. You track progress on your dashboard.</p>
+              <p>Once invested, our partners professionally manage the underlying assets. You track progress on your dashboard.</p>
               <div class="step__time">🛡 Professionally managed assets</div>
             </div>
           </div>
@@ -828,11 +1233,11 @@
           <h3>Manage your investments on the go</h3>
           <p>The SV Capital app gives you real-time visibility into your portfolio, pool progress, and returns — right from your phone.</p>
           <div class="app-btns">
-            <a href="#" class="app-store-btn">
+            <a href="https://apps.apple.com/za/app/id6670504520" target="_blank" rel="noopener" class="app-store-btn">
               <i class="fa-brands fa-apple"></i>
               <div><span>Download on the</span><strong>App Store</strong></div>
             </a>
-            <a href="#" class="app-store-btn">
+            <a href="https://play.google.com/store/apps/details?id=co.za.svcapital.app&goal=0_e3a27915f2-3f4e0a623d-291092733" target="_blank" rel="noopener" class="app-store-btn">
               <i class="fa-brands fa-google-play"></i>
               <div><span>Get it on</span><strong>Google Play</strong></div>
             </a>
@@ -851,29 +1256,33 @@
           <i class="fa-solid fa-cow" style="color:#D4AF37"></i>
           <div>
             <strong>Beefcor</strong>
-            <span>Cattle Feedlot</span>
+            <span>Agriculture</span>
           </div>
+          <button type="button" class="partner-chip__info" onclick="_showPartnerModal('Beefcor')" aria-label="About Beefcor"><i class="fa-solid fa-circle-info"></i></button>
         </div>
         <div class="partner-chip">
           <i class="fa-solid fa-solar-panel" style="color:#4CAF50"></i>
           <div>
             <strong>The Solar Experts</strong>
-            <span>Clean Energy</span>
+            <span>Energy</span>
           </div>
+          <button type="button" class="partner-chip__info" onclick="_showPartnerModal('The Solar Experts')" aria-label="About The Solar Experts"><i class="fa-solid fa-circle-info"></i></button>
         </div>
         <div class="partner-chip">
           <i class="fa-solid fa-building-columns" style="color:#656565"></i>
           <div>
             <strong>MoolaLend</strong>
-            <span>SMME Finance</span>
+            <span>Credit</span>
           </div>
+          <button type="button" class="partner-chip__info" onclick="_showPartnerModal('MoolaLend')" aria-label="About MoolaLend"><i class="fa-solid fa-circle-info"></i></button>
         </div>
         <div class="partner-chip">
           <i class="fa-solid fa-motorcycle" style="color:#fb923c"></i>
           <div>
             <strong>OnFleet</strong>
-            <span>Last-Mile Delivery</span>
+            <span>Logistics</span>
           </div>
+          <button type="button" class="partner-chip__info" onclick="_showPartnerModal('OnFleet')" aria-label="About OnFleet"><i class="fa-solid fa-circle-info"></i></button>
         </div>
       </div>
     </div>
@@ -965,7 +1374,7 @@
       <div class="trust-grid">
         <div class="trust-main">
           <div class="section-eyebrow">Regulatory Compliance</div>
-          <h2 class="section-title" style="font-size:2rem;">Your money is in safe hands.</h2>
+          <h2 class="section-title">Your money is in safe hands.</h2>
           <p style="color:var(--text-muted); margin-bottom:1.5rem; line-height:1.7;">All fund collections and disbursements are managed by <strong style="color:#fff">SmartVest Financial Services</strong>, a licensed Financial Services Provider authorised by the <strong>Financial Sector Conduct Authority (FSCA)</strong>.</p>
           <div class="compliance-items">
             <div class="compliance-item">
@@ -993,6 +1402,20 @@
         </div>
         <div class="trust-awards">
           <h3 style="color:var(--gold); margin-bottom:1.5rem; font-size:1rem; letter-spacing:0.1em; text-transform:uppercase;">Awards & Recognition</h3>
+          <div class="award-card">
+            <div class="award-card__year">2025</div>
+            <div class="award-card__content">
+              <strong>Best Alternative Investment Solutions &mdash; South Africa</strong>
+              <p>Awarded by Global Financial Market Review</p>
+            </div>
+          </div>
+          <div class="award-card">
+            <div class="award-card__year">2024</div>
+            <div class="award-card__content">
+              <strong>Top 5 Most Exciting Startups in South Africa</strong>
+              <p>Awarded at the 2024 Heavy Chef Awards</p>
+            </div>
+          </div>
           <div class="award-card">
             <div class="award-card__year">2018</div>
             <div class="award-card__content">
@@ -1124,6 +1547,7 @@
           <ul>
             <li><a href="#about">About Us</a></li>
             <li><a href="#faq">FAQs</a></li>
+            <li><a href="/insights">Insights</a></li>
             <li><a href="#calculator">Calculator</a></li>
             <li style="display:none"><a href="#">Blog</a></li>
           </ul>
@@ -1143,7 +1567,7 @@
           <h4>Get in Touch</h4>
           <ul>
             <li><a href="mailto:enquiry@svcapital.co.za"><i class="fa-solid fa-envelope"></i> enquiry@svcapital.co.za</a></li>
-            <li><a href="https://api.whatsapp.com/send?phone=27760842102" target="_blank"><i class="fa-brands fa-whatsapp"></i> WhatsApp Support</a></li>
+            <li><a href="https://api.whatsapp.com/send?phone=27722269415" target="_blank"><i class="fa-brands fa-whatsapp"></i> WhatsApp Support</a></li>
             <li><a href="login.html"><i class="fa-solid fa-arrow-right-to-bracket"></i> Investor Login</a></li>
           </ul>
         </div>
@@ -1172,12 +1596,13 @@
   </div>
 
   <!-- WhatsApp Float -->
-  <a href="https://api.whatsapp.com/send?phone=27760842102" class="whatsapp-float" target="_blank" aria-label="Chat on WhatsApp">
+  <a href="https://api.whatsapp.com/send?phone=27722269415" class="whatsapp-float" target="_blank" aria-label="Chat on WhatsApp">
     <i class="fa-brands fa-whatsapp"></i>
     <span class="whatsapp-label">Need help?</span>
   </a>
 
-  <script src="js/main.js?v=5"></script>
+  <script src="js/main.js?v=10"></script>
   <script>document.querySelectorAll('.yr').forEach(function(el){el.textContent=new Date().getFullYear();});</script>
+<script src="js/app-banner.js?v=4"></script>
 </body>
 </html>

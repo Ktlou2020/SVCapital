@@ -210,10 +210,13 @@ body {
 /* ─── 8. Team Cards ─────────────────────────────────────────── */
 .team-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: 1fr;
   gap: 28px;
   max-width: 760px;
   margin: 0 auto;
+}
+@media (min-width: 769px) {
+  .team-grid { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
 }
 .team-card {
   position: relative;
@@ -280,7 +283,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.07em;
@@ -331,8 +334,11 @@ body {
 /* ─── 9. Testimonials ───────────────────────────────────────── */
 .testimonials-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: 1fr;
   gap: 24px;
+}
+@media (min-width: 769px) {
+  .testimonials-grid { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
 }
 .testimonial-card {
   position: relative;
@@ -394,7 +400,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: #16a34a;
   margin-top: 2px;
@@ -407,8 +413,10 @@ body {
 /* ─── 10. Stats Cards ───────────────────────────────────────── */
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
   gap: 20px;
+}
+@media (min-width: 769px) {
+  .stats-grid { grid-template-columns: repeat(3, 1fr); }
 }
 .stat-card {
   text-align: center;
@@ -526,7 +534,7 @@ body {
   color: #fff;
 }
 .app-store-btn i { font-size: 1.65rem; }
-.app-store-btn div span { font-size: 0.68rem; opacity: 0.65; display: block; line-height: 1.2; }
+.app-store-btn div span { font-size: 0.75rem; opacity: 0.65; display: block; line-height: 1.2; }
 .app-store-btn div strong { font-size: 0.95rem; }
 
 /* ─── 13. Compare Table ─────────────────────────────────────── */
@@ -656,9 +664,9 @@ body {
 
 /* ─── 18. Footer social icons ───────────────────────────────── */
 .footer-social a {
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -764,11 +772,28 @@ body {
 /* ─── Public products page: risk filter ──────────────────────────────── */
 .product-risk-filter {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 14px;
-  margin: 0 auto 40px;
-  text-align: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 40px;
+}
+.prf-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+.product-risk-filter .prf-pills {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.prf-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
 }
 .product-risk-filter .prf-label {
   font-size: 0.72rem;
@@ -776,20 +801,17 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.14em;
   color: var(--gold, #fec24f);
-}
-.product-risk-filter .prf-pills {
-  display: inline-flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .product-risk-filter .prf-pill {
   border: 1.5px solid rgba(255,255,255,0.18);
   background: rgba(255,255,255,0.04);
   color: rgba(255,255,255,0.75);
   border-radius: 100px;
-  padding: 10px 22px;
-  font-size: 0.9rem;
+  padding: 8px 18px;
+  min-height: 44px;
+  font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
   font-family: inherit;
@@ -861,6 +883,7 @@ body.light .product-risk-filter .prf-pill,
   color: rgba(255,255,255,0.8);
   border-radius: 100px;
   padding: 8px 18px;
+  min-height: 44px;
   font-size: 0.85rem;
   font-weight: 700;
   cursor: pointer;
@@ -899,4 +922,21 @@ body.light .product-risk-filter .prf-pill,
   /* Comfortable tap targets & no accidental horizontal scroll */
   .btn, .nav-btn { min-height: 44px; }
   .trust-main .section-title { font-size: 1.7rem !important; line-height: 1.15; }
+
+  /* Product risk filter: stack vertically on narrow screens */
+  .product-risk-filter {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .prf-actions {
+    width: 100%;
+  }
+  .prf-actions .btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  /* FAQ category tabs */
+  .faq-cat { min-height: 44px; }
 }

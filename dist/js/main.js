@@ -18,6 +18,7 @@ const PRODUCTS = {
     partner: 'Beefcor',
     infoItems: [
       { label: 'Partner', value: 'Beefcor Feedlot' },
+      { label: 'Sector', value: 'Agriculture' },
       { label: 'Benchmark', value: '13.00% p.a.' },
       { label: 'Perf. Fee', value: '20% above benchmark' },
       { label: 'Pool Type', value: 'Time-based pool' },
@@ -35,6 +36,7 @@ const PRODUCTS = {
     partner: 'The Solar Experts',
     infoItems: [
       { label: 'Partner', value: 'The Solar Experts' },
+      { label: 'Sector', value: 'Energy' },
       { label: 'Location', value: 'Cape Town, SA' },
       { label: 'Returns', value: 'Annual payouts' },
       { label: 'Capital', value: 'End of term' },
@@ -52,6 +54,7 @@ const PRODUCTS = {
     partner: 'The Solar Experts',
     infoItems: [
       { label: 'Partner', value: 'The Solar Experts' },
+      { label: 'Sector', value: 'Energy' },
       { label: 'Location', value: 'Cape Town, SA' },
       { label: 'Returns', value: 'Annual payouts' },
       { label: 'Capital', value: 'End of term' },
@@ -69,6 +72,7 @@ const PRODUCTS = {
     partner: 'The Solar Experts',
     infoItems: [
       { label: 'Partner', value: 'The Solar Experts' },
+      { label: 'Sector', value: 'Energy' },
       { label: 'Location', value: 'Cape Town, SA' },
       { label: 'Returns', value: 'Annual payouts' },
       { label: 'Capital', value: 'End of term' },
@@ -86,6 +90,7 @@ const PRODUCTS = {
     partner: 'MoolaLend',
     infoItems: [
       { label: 'Partner', value: 'MoolaLend Pty Ltd' },
+      { label: 'Sector', value: 'Credit' },
       { label: 'Focus', value: 'SMME Finance' },
       { label: 'Benchmark', value: '12.00% p.a.' },
       { label: 'Pool Type', value: 'Time-based pool' },
@@ -104,8 +109,8 @@ const PARTNER_PROFILES = {
     youtubeId: 'mTIcSDeggtQ',
   },
   'MoolaLend': {
-    tagline: 'Your chomie in funding — SA\'s PO finance specialist',
-    profile: 'MoolaLend is a Bryanston-based boutique lender that specialises in Purchase Order (PO) finance for South African SMEs. They fund government tenders and private-sector purchase orders from R50,000, enabling businesses to fulfil contracts without upfront capital. Incorporated in 2021 and listed in FundingHub\'s Top 10 PO Funding Lenders in SA, MoolaLend takes a partner-first approach to SME lending.',
+    tagline: "SA's receivables finance platform for registered businesses",
+    profile: 'MoolaLend is a South African receivables finance platform for registered businesses. Apply online and our automated risk engine vets your invoice instantly — strong applications are pre-approved on the spot, our team confirms funding shortly after, and the balance is released once your customer settles the invoice.',
     website: 'https://portal.moolalend.co.za/',
   },
   'The Solar Experts': {
@@ -158,6 +163,10 @@ const FAQ_DATA = {
     {
       q: 'Do you have a mobile app?',
       a: 'Yes! The SV Capital app is available on both the Apple App Store and Google Play Store. It gives you real-time visibility into your portfolio, pool progress, and payout tracking — all from your phone.'
+    },
+    {
+      q: 'What fees does SV Capital charge?',
+      a: 'A platform fee of 1% of your investment amount is charged once, at the time you invest. It covers running the platform — account administration, payment processing, reporting and support. The amount you enter when investing is the total that leaves your wallet: if you apply R1 010, then R1 000 goes into the pool and R10 is the platform fee. It shows as a separate fee line on your transaction history. No platform fee is charged when a matured investment is reinvested — the full matured amount rolls over. Each product also carries its own fees, set out in clause 9 of the Terms of Use.'
     },
     {
       q: 'Can I withdraw my funds early?',
@@ -245,7 +254,7 @@ const MODAL_DATA = {
     title: 'Power the future. Earn from it.',
     desc: 'Your capital funds solar panel installations across Cape Town, generating clean electricity sold through long-term contracts. Annual returns are distributed throughout the term, with your full capital returned at the end.',
     stats: [
-      { label: 'Best Return', val: '21.40% p.a.' },
+      { label: 'Avg. Return', val: '21.40% p.a.' },
       { label: 'Minimum', val: 'R10,000' },
       { label: 'Terms', val: '5 / 6 / 7 yrs' }
     ],
@@ -276,7 +285,69 @@ const MODAL_DATA = {
       'Auto-reinvest option available at maturity'
     ]
   },
+
+  /* Ethical and Interest-Free. Keyed by product_type rather than by a home key,
+     because each is a single product rather than a family the way solar is —
+     which also means _applyLiveProductAverages() finds them by direct lookup
+     and overwrites this copy with whatever the admin console holds. What is
+     written here is the fallback for a first paint or a failed fetch. */
+  eif_murabaha: {
+    eyebrow: 'Murabaha Trade Finance',
+    title: 'A known mark-up on real goods.',
+    desc: 'SV Capital buys goods a business needs — stock, equipment, raw materials — and sells them on at a mark-up agreed and disclosed in full before the sale. The business pays in instalments. Your return is your share of that mark-up: a trading profit on an asset that was actually bought and actually sold, not a charge for the use of money.',
+    stats: [
+      { label: 'Target Profit Share', val: '11.50% p.a.' },
+      { label: 'Minimum', val: 'R500' },
+      { label: 'Term', val: '6 Months' }
+    ],
+    points: [
+      'SV Capital takes ownership of the goods before selling them on',
+      'The mark-up is fixed and disclosed in the contract — it never increases',
+      'No penalty interest: a late payer owes the same amount they always owed',
+      'Backed by the goods and by the buyer\'s trade receivables',
+      'Shorter term than most products on the platform'
+    ]
+  },
+  eif_ijara: {
+    eyebrow: 'Ijara Asset Leasing',
+    title: 'Rent from something you own.',
+    desc: 'The pool buys an income-producing asset — solar plant, delivery vehicles, plant and machinery — and leases it to an operator. Your return is rent. Because the pool owns the asset, it carries the ownership risks: if the asset cannot be used, the rent stops. That is what makes the income rent rather than interest.',
+    stats: [
+      { label: 'Target Profit Share', val: '12.50% p.a.' },
+      { label: 'Minimum', val: 'R1,000' },
+      { label: 'Term', val: '36 Months' }
+    ],
+    points: [
+      'The pool holds title to the asset for the life of the lease',
+      'Return is contracted rental income, paid over the lease term',
+      'Ownership risk sits with the pool — rent stops if the asset cannot be used',
+      'Major maintenance and insurance are the owner\'s cost, not the lessee\'s',
+      'Option to transfer the asset to the lessee at the end of the term'
+    ]
+  },
+  eif_mudarabah: {
+    eyebrow: 'Mudarabah Enterprise',
+    title: 'A share of the profit, and of the risk.',
+    desc: 'You provide the capital; a vetted operating partner provides the work. Profit is divided on a ratio agreed before a rand is deployed. If the venture loses money, the loss falls on the capital rather than on the partner — they lose their effort instead. Nothing is promised in advance, because a promised return on a partnership would be the thing this structure exists to avoid.',
+    stats: [
+      { label: 'Target Profit Share', val: '14.50% p.a.' },
+      { label: 'Minimum', val: 'R2,500' },
+      { label: 'Term', val: '12 Months' }
+    ],
+    points: [
+      'Profit split on a ratio fixed in advance — 80% investors, 20% manager',
+      'The figure shown is a target drawn from the venture\'s own projections, not a promise',
+      'Losses are borne by the capital; the operating partner forfeits their share of profit',
+      'Quarterly reporting on the underlying venture',
+      'Highest risk of the three EIF structures, and the highest potential share'
+    ]
+  },
 };
+
+/* The product_types that make up the Ethical and Interest-Free offering.
+   Named once: the section's visibility, its nav link and its cards all key
+   off this list. */
+const EIF_TYPES = ['eif_murabaha', 'eif_ijara', 'eif_mudarabah'];
 
 /* ═══════════════════════════════════════════════
    INITIALISATION
@@ -543,7 +614,7 @@ function updateCalculator() {
     infoGrid.innerHTML = product.infoItems.map(item => `
       <div class="calc-info-item">
         <span class="calc-info-item__label">${item.label}</span>
-        <span class="calc-info-item__val">${item.value}</span>
+        <span class="calc-info-item__val">${item.value}${item.label === 'Partner' ? _partnerInfoBtn(product.partner) : ''}</span>
       </div>
     `).join('');
   }
@@ -876,6 +947,59 @@ document.querySelectorAll('.tier').forEach(tier => {
   });
 });
 
+/* ═══════════════════════════════════════════════
+   PRODUCTS SUBMENU
+
+   Products is the heading for the two items under it, not a third link beside
+   them. CSS opens the submenu on hover and on keyboard focus; neither of those
+   exists on a phone, where the nav is a slide-in panel, so the click is what
+   makes it reachable at all — and it is what a heading with a chevron looks
+   like it should do anyway.
+
+   The toggle is a <button>, which is also what keeps the panel open long
+   enough to use: every <a> inside the panel closes it, so while Products was a
+   link, tapping it shut the menu and jumped to the section before either
+   sub-item could be seen.
+   ═══════════════════════════════════════════════ */
+function initProductsSubmenu() {
+  const li     = document.querySelector('.nav-has-sub');
+  const toggle = document.getElementById('navProductsToggle');
+  const sub    = document.getElementById('navProductsSub');
+  if (!li || !toggle || !sub) return;
+
+  const setOpen = (open) => {
+    li.classList.toggle('open', open);
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
+
+  toggle.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setOpen(!li.classList.contains('open'));
+  });
+
+  /* Choosing something closes it, so coming back to the panel does not find it
+     already open on a heading nobody pressed. */
+  sub.querySelectorAll('a').forEach(a => a.addEventListener('click', () => setOpen(false)));
+
+  document.addEventListener('click', (e) => {
+    if (!li.contains(e.target)) setOpen(false);
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || !li.classList.contains('open')) return;
+    setOpen(false);
+    toggle.focus();
+  });
+
+  /* Crossing the breakpoint swaps a floating card for an inline list. Leaving
+     it open across that means arriving at the other layout with a menu open
+     that nothing on screen explains. */
+  window.addEventListener('resize', () => setOpen(false));
+}
+
+document.addEventListener('DOMContentLoaded', initProductsSubmenu);
+
 /* ─── Active Nav Link Highlighting ─── */
 function initActiveNav() {
   const sections = document.querySelectorAll('section[id]');
@@ -954,6 +1078,14 @@ async function _applyLiveProductAverages() {
     cattle:   { types: ['cattle'], primary: 'cattle' },
     solar:    { types: ['solar_7yr', 'solar_6yr', 'solar_5yr'], primary: 'solar_7yr' },
     short:    { types: ['short_term', 'smme'], primary: 'short_term' },
+    /* Each EIF product is one product rather than a family the way solar is,
+       so its home key and its product_type are the same string. Being in here
+       is what gives these cards the same treatment as every other one: the
+       achieved average once pools mature, the admin's colour, and the admin's
+       copy in the View Details modal. */
+    eif_murabaha:  { types: ['eif_murabaha'],  primary: 'eif_murabaha' },
+    eif_ijara:     { types: ['eif_ijara'],     primary: 'eif_ijara' },
+    eif_mudarabah: { types: ['eif_mudarabah'], primary: 'eif_mudarabah' },
   };
 
   const fmtR = n => 'R' + Number(n || 0).toLocaleString('en-ZA');
@@ -1054,6 +1186,17 @@ async function _applyLiveProductAverages() {
     card.style.display    = '';
     card.classList.toggle('product-card--hp-hidden', !visible);
   });
+
+  /* The EIF section as a whole. Its cards are governed above like any other,
+     but a section left standing with three hidden cards inside it is a header,
+     four principles and a governance note about an offering that is not there.
+     So the section, and its nav link, follow the cards. */
+  const eifVisible = EIF_TYPES.some(resolveVisible);
+  const eifSection = document.getElementById('eif');
+  if (eifSection) eifSection.style.display = eifVisible ? '' : 'none';
+  const eifNav = document.getElementById('navEifLink');
+  if (eifNav) eifNav.style.display = eifVisible ? '' : 'none';
+  if (eifVisible) _loadEifFaqs();
 
   // Hide/show footer product links
   document.querySelectorAll('[data-footer-product]').forEach(li => {
@@ -1193,37 +1336,25 @@ async function _applyCattleHerdStatus() {
 
   // Rich "Live Herd Status" block injected into the cattle "View Details" modal
   if (typeof MODAL_DATA !== 'undefined' && MODAL_DATA.cattle) {
-    const genders = (s.by_gender || []).filter(g => g.count > 0);
-    const breeds  = (s.by_breed  || []).filter(b => b.count > 0);
+    const genders = (s.by_gender || []).filter(g => g.count > 0 && (g.label || '').toLowerCase() !== 'unspecified');
+    const breeds  = (s.by_breed  || []).filter(b => b.count > 0 && (b.label || '').toLowerCase() !== 'unspecified');
     const totalG  = genders.reduce((a, g) => a + g.count, 0) || 1;
     const chip = txt => `<span style="font-size:0.78rem;background:rgba(255,255,255,0.08);color:#fff;border-radius:20px;padding:3px 11px">${txt}</span>`;
 
-    // Weight journey + survival
-    const entry = s.avg_entry_weight, current = s.avg_current_weight, target = s.target_weight || 475;
-    let weightBar = '';
-    if (entry && current && target && target > entry) {
-      const wp = Math.min(100, Math.max(0, Math.round((current - entry) / (target - entry) * 100)));
-      weightBar = `<div style="margin-bottom:14px">
-        <div style="display:flex;justify-content:space-between;font-size:0.72rem;color:var(--text-dim);margin-bottom:5px"><span>Entry ${entry}kg</span><span style="color:#fec24f;font-weight:700">Now ~${current}kg</span><span>Target ${target}kg</span></div>
-        <div style="height:9px;border-radius:5px;background:rgba(255,255,255,0.08);overflow:hidden"><div style="height:100%;width:${wp}%;background:linear-gradient(90deg,#fec24f,#fec24f)"></div></div>
-        <div style="font-size:0.7rem;color:var(--text-dim);margin-top:4px">${wp}% of the way to market weight</div></div>`;
-    }
     const mortRate = s.total_purchased ? (s.mortality_count || 0) / s.total_purchased * 100 : 0;
-    const mortLine = `<div style="font-size:0.76rem;color:var(--text-dim);margin-top:10px"><i class="fa-solid fa-heart-pulse" style="color:#22c55e"></i> Survival rate <strong style="color:#fff">${(100 - mortRate).toFixed(1)}%</strong>${s.mortality_count ? ` · ${s.mortality_count} of ${num(s.total_purchased)}` : ''}</div>`;
+    const mortLine = `<div style="font-size:0.76rem;color:var(--text-dim);margin-top:10px"><i class="fa-solid fa-heart-pulse" style="color:#22c55e"></i> Survival rate <strong style="color:#fff">${(100 - mortRate).toFixed(1)}%</strong></div>`;
 
     MODAL_DATA.cattle.herdHtml = `
       <div style="background:rgba(254,194,79,0.08);border:1px solid rgba(254,194,79,0.28);border-radius:14px;padding:16px 18px;margin:6px 0 18px">
         <div style="font-size:0.78rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#fec24f;margin-bottom:12px"><i class="fa-solid fa-cow"></i> Live Herd Status</div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px">
+        <div style="display:flex;flex-wrap:wrap;gap:24px;margin-bottom:14px">
           <div><div style="font-size:1.3rem;font-weight:800;color:#fff">${num(s.total_purchased)}</div><div style="font-size:0.72rem;color:var(--text-dim)">purchased to date</div></div>
-          <div><div style="font-size:1.3rem;font-weight:800;color:#fff">${num(s.live_count)}</div><div style="font-size:0.72rem;color:var(--text-dim)">currently live</div></div>
           ${weight ? `<div><div style="font-size:1.3rem;font-weight:800;color:#fff">${weight}<span style="font-size:0.85rem"> kg</span></div><div style="font-size:0.72rem;color:var(--text-dim)">average weight</div></div>` : ''}
         </div>
-        ${weightBar}
         ${genders.length ? `<div style="margin-bottom:${breeds.length ? '12px' : '0'}"><div style="font-size:0.72rem;color:var(--text-dim);margin-bottom:6px">Gender</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">${genders.map(g => chip(`${esc(g.label)}: <strong>${g.count}</strong> (${Math.round(g.count / totalG * 100)}%)`)).join('')}</div></div>` : ''}
         ${breeds.length ? `<div><div style="font-size:0.72rem;color:var(--text-dim);margin-bottom:6px">Breeds</div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap">${breeds.slice(0, 8).map(b => chip(`${esc(b.label)}: <strong>${b.count}</strong>`)).join('')}</div></div>` : ''}
+          <div style="display:flex;gap:6px;flex-wrap:wrap">${breeds.slice(0, 3).map(b => chip(`${esc(b.label)}: <strong>${Math.round(b.count / (breeds.reduce((a,x)=>a+x.count,0)||1) * 100)}%</strong>`)).join('')}</div></div>` : ''}
         ${mortLine}
       </div>`;
   }
@@ -1315,7 +1446,6 @@ async function _applySolarTelemetry() {
           ${s.co2_avoided_kg ? stat(`${(s.co2_avoided_kg / 1000).toFixed(1)}<span style="font-size:0.85rem"> t</span>`, 'CO₂ avoided') : ''}
           ${s.device_count ? stat(s.device_count, `inverter${s.device_count === 1 ? '' : 's'}`) : ''}
         </div>
-        <div style="font-size:0.7rem;color:var(--text-dim);margin-top:10px">Live data from FoxCloud${s.station_name ? ` · ${String(s.station_name).replace(/[<>&]/g, '')}` : ''}</div>
       </div>`;
   }
 
@@ -1334,11 +1464,57 @@ async function _applySolarTelemetry() {
 document.addEventListener('DOMContentLoaded', _applySolarTelemetry);
 
 /* ─── Public product page: filter by risk band ───────────────────────── */
+/* The offering's FAQs, from the same product_faqs rows the portal reads.
+ *
+ * Not written into index.html. These answers describe how a structure avoids
+ * riba, and a second copy in static markup is a second thing to correct when
+ * the wording changes — which it will, at least once, when the Sharia review
+ * concludes. One source, corrected in the admin console.
+ *
+ * A failure leaves the section without its FAQ rather than without its
+ * products: the wrap starts hidden and is only revealed once rows arrive. */
+async function _loadEifFaqs() {
+  const wrap = document.getElementById('eifFaqWrap');
+  const list = document.getElementById('eifFaqList');
+  if (!wrap || !list || wrap.dataset.loaded) return;
+  wrap.dataset.loaded = '1';
+  let faqs = [];
+  try {
+    const r = await fetch('/api/products/faqs?category=eif');
+    if (r.ok) { const d = await r.json(); faqs = d.data || []; }
+  } catch (_) { /* section renders without it */ }
+  if (!faqs.length) return;
+  const esc = t => String(t == null ? '' : t)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  list.innerHTML = faqs.map(f => `
+    <div class="eif-faq-item">
+      <button class="eif-faq-q" type="button" onclick="toggleEifFaqItem(this)">
+        <span>${esc(f.question)}</span><i class="fa-solid fa-chevron-down"></i>
+      </button>
+      <div class="eif-faq-a">${esc(f.answer)}</div>
+    </div>`).join('');
+  wrap.style.display = '';
+}
+
+function toggleEifFaqItem(btn) {
+  const item = btn.closest('.eif-faq-item');
+  if (!item) return;
+  const wasOpen = item.classList.contains('open');
+  item.parentElement.querySelectorAll('.eif-faq-item.open').forEach(i => i.classList.remove('open'));
+  if (!wasOpen) item.classList.add('open');
+}
+window.toggleEifFaqItem = toggleEifFaqItem;
+
 function filterProductsByRisk(risk, btn) {
   document.querySelectorAll('.product-risk-filter .prf-pill').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
   let shown = 0;
-  document.querySelectorAll('.products-grid .product-card').forEach(card => {
+  /* Scoped to #products. The EIF cards sit in their own .products-grid inside
+     their own section, and an unscoped selector let the main section's risk
+     pills empty a section they do not belong to — choosing "Low" hid two of
+     the three EIF products with nothing on screen explaining why. */
+  document.querySelectorAll('#products .products-grid .product-card').forEach(card => {
     if (card.classList.contains('product-card--hp-hidden')) return; // never reveal homepage-hidden products
     const match = risk === 'all' || card.getAttribute('data-risk') === risk;
     card.style.display = match ? '' : 'none';

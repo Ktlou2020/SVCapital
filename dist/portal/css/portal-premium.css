@@ -622,7 +622,7 @@
   letter-spacing: 0.1em; color: #3d8a00; white-space: nowrap;
 }
 
-@media (max-width: 500px) {
+@media (max-width: 640px) {
   .mc2__stats { grid-template-columns: repeat(2,1fr); gap: 8px; }
   .mc2__stat:not(:last-child) { border-right: none; }
   .mc2__stat { padding: 0; }
@@ -773,12 +773,12 @@
 }
 .faq-quick-q:hover { color: var(--ci-orange, #fec24f); }
 .faq-quick-q i { transition: transform 0.25s ease; color: #9ca3af; font-size: 0.72rem; }
-.faq-quick-q.open i { transform: rotate(180deg); color: var(--ci-orange, #fec24f); }
+.faq-quick-item.open .faq-quick-q i { transform: rotate(180deg); color: var(--ci-orange, #fec24f); }
 .faq-quick-a {
   font-size: 0.79rem; color: #6b7280; line-height: 1.65;
   padding: 0 0 12px; display: none;
 }
-.faq-quick-a.open { display: block; animation: viewFadeIn 0.2s ease; }
+.faq-quick-item.open .faq-quick-a { display: block; animation: viewFadeIn 0.2s ease; }
 
 /* ─── 35. Pool closed / full badge ─────────────────────────── */
 .market-pool-card.pool-full {
@@ -868,8 +868,9 @@
 .xp-hero {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 24px;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  background: linear-gradient(135deg, #111317 0%, #1a1d23 100%);
   border-radius: 18px;
   padding: 24px 28px;
   margin-bottom: 20px;
@@ -953,10 +954,16 @@
 .level-step.current .level-step__icon { transform: scale(1.12); }
 .level-step__name { font-size: 0.65rem; font-weight: 700; color: #6b7280; text-align: center; }
 .level-step.done .level-step__name, .level-step.current .level-step__name { color: #1a1a1a; }
-.level-step__reward { font-size: 0.6rem; font-weight: 800; }
+.level-step__reward { font-size: 0.72rem; font-weight: 800; }
 
 /* ── Quest Categories ───────────────────────────────────────── */
-.quest-category { }
+/* Separate the first quest category from the pending-quest groups above it.
+   .pending-group:last-child zeroes its own margin-bottom, so without this the
+   "Profile & Compliance" header sits flush against the card above it.
+   Categories already carry mb-24 between themselves, so only the top gap is
+   added here and it is cancelled between adjacent categories. */
+.quest-category { margin-top: 32px; }
+.quest-category + .quest-category { margin-top: 0; }
 .quest-category__header {
   display: flex;
   align-items: center;
@@ -1214,7 +1221,7 @@
 .learn-tab-sub  { font-size: 0.7rem; color: #9ca3af; margin-top: 2px; }
 .learn-tab-recommended {
   display: inline-block;
-  font-size: 0.6rem; font-weight: 800;
+  font-size: 0.72rem; font-weight: 800;
   text-transform: uppercase; letter-spacing: 0.06em;
   background: var(--ci-orange, #fec24f); color: #fff;
   padding: 2px 7px; border-radius: 100px;
@@ -1315,157 +1322,6 @@
   padding-top: 16px;
   border-top: 1px solid rgba(0,0,0,0.06);
 }
-
-/* ═══════════════════════════════════════════════════════════════
-   38. DARK MODE
-   ═══════════════════════════════════════════════════════════════ */
-
-/* ── Base ────────────────────────────────────────────────────── */
-body.dark-mode { background: #0d1117 !important; color: #e2e8f0; }
-body.dark-mode .main-content { background: #0d1117 !important; }
-body.dark-mode .page-content  { background: #0d1117 !important; }
-
-/* ── Topbar ──────────────────────────────────────────────────── */
-body.dark-mode .topbar {
-  background: #161b27 !important;
-  border-bottom: 1px solid rgba(255,255,255,0.06) !important;
-}
-body.dark-mode .topbar__title    { color: #e2e8f0 !important; }
-body.dark-mode .topbar__breadcrumb { color: #6b7280 !important; }
-body.dark-mode .topbar-btn       { color: #9ca3af !important; border-color: rgba(255,255,255,0.08) !important; }
-body.dark-mode .topbar-btn:hover { color: #fff !important; border-color: var(--ci-orange, #fec24f) !important; }
-body.dark-mode .btn--secondary   { background: rgba(255,255,255,0.06) !important; color: #9ca3af !important; border-color: rgba(255,255,255,0.1) !important; }
-
-/* ── Cards & Panels ──────────────────────────────────────────── */
-body.dark-mode .panel,
-body.dark-mode .table-card,
-body.dark-mode .perf-panel,
-body.dark-mode .welcome-banner,
-body.dark-mode .xp-progress-bar-wrap,
-body.dark-mode .level-track,
-body.dark-mode .learn-track-tab,
-body.dark-mode .quest-card,
-body.dark-mode .learn-module-card {
-  background: #161b27 !important;
-  border-color: rgba(255,255,255,0.07) !important;
-}
-body.dark-mode .panel__header,
-body.dark-mode .table-card__header { border-color: rgba(255,255,255,0.06) !important; }
-body.dark-mode .panel__title,
-body.dark-mode .table-card__title  { color: #e2e8f0 !important; }
-
-/* ── Portfolio hero ──────────────────────────────────────────── */
-body.dark-mode .portfolio-hero__stats,
-body.dark-mode .ph-stat { background: rgba(255,255,255,0.04) !important; border-color: rgba(255,255,255,0.06) !important; }
-body.dark-mode .ph-stat__label { color: #6b7280 !important; }
-body.dark-mode .ph-stat__value { color: #e2e8f0 !important; }
-body.dark-mode .portfolio-hero__label { color: rgba(255,255,255,0.5) !important; }
-body.dark-mode .portfolio-hero__value { color: #fff !important; }
-
-/* ── Performance panel ───────────────────────────────────────── */
-body.dark-mode .perf-row { border-color: rgba(255,255,255,0.05) !important; }
-body.dark-mode .perf-row__label { color: #9ca3af !important; }
-body.dark-mode .perf-row__value { color: #e2e8f0 !important; }
-
-/* ── Tables ──────────────────────────────────────────────────── */
-body.dark-mode .data-table th {
-  background: rgba(255,255,255,0.04) !important;
-  color: #6b7280 !important;
-  border-color: rgba(255,255,255,0.06) !important;
-}
-body.dark-mode .data-table td { border-color: rgba(255,255,255,0.05) !important; color: #c8d0dc !important; }
-body.dark-mode .data-table tbody tr:hover { background: rgba(255,255,255,0.04) !important; }
-body.dark-mode .text-muted { color: #6b7280 !important; }
-
-/* ── Quick-action / welcome chip buttons ─────────────────────── */
-body.dark-mode .welcome-greeting { color: var(--ci-orange, #fec24f) !important; }
-body.dark-mode .welcome-name     { color: #e2e8f0 !important; }
-body.dark-mode .welcome-chip     { border-color: rgba(255,255,255,0.12) !important; }
-body.dark-mode .welcome-chip--teal  { background: rgba(47,140,155,0.15) !important; color: #5BBFCE !important; }
-body.dark-mode .welcome-chip--orange { background: rgba(254,194,79,0.12) !important; color: #FF9B3A !important; }
-body.dark-mode .welcome-chip--gray  { background: rgba(255,255,255,0.06) !important; color: #9ca3af !important; }
-
-/* ── Forms & Inputs ──────────────────────────────────────────── */
-body.dark-mode input,
-body.dark-mode select,
-body.dark-mode textarea,
-body.dark-mode .form-input {
-  background: rgba(255,255,255,0.06) !important;
-  border-color: rgba(255,255,255,0.12) !important;
-  color: #e2e8f0 !important;
-}
-body.dark-mode input::placeholder,
-body.dark-mode .form-input::placeholder { color: #4b5563 !important; }
-body.dark-mode label { color: #9ca3af !important; }
-body.dark-mode .form-group label { color: #9ca3af !important; }
-
-/* ── Modals ──────────────────────────────────────────────────── */
-body.dark-mode .modal-box,
-body.dark-mode .survey-modal-box,
-body.dark-mode .levelup-modal-box {
-  background: #161b27 !important;
-  border-color: rgba(255,255,255,0.08) !important;
-}
-body.dark-mode .modal-box h3,
-body.dark-mode .modal-box h2 { color: #e2e8f0 !important; }
-body.dark-mode .survey-modal-title { color: #e2e8f0 !important; }
-body.dark-mode .survey-modal-sub   { color: #6b7280 !important; }
-body.dark-mode .survey-q__label    { color: #e2e8f0 !important; }
-body.dark-mode .survey-opt {
-  border-color: rgba(255,255,255,0.1) !important;
-  color: #c8d0dc !important;
-}
-body.dark-mode .survey-opt:hover { border-color: var(--ci-orange, #fec24f) !important; background: rgba(254,194,79,0.08) !important; }
-body.dark-mode .levelup-level  { color: #e2e8f0 !important; }
-body.dark-mode .levelup-xp     { color: #6b7280 !important; }
-
-/* ── Quest + Learn UI ────────────────────────────────────────── */
-body.dark-mode .quest-category__title { color: #e2e8f0 !important; }
-body.dark-mode .quest-category__sub   { color: #6b7280 !important; }
-body.dark-mode .quest-category__count { color: #e2e8f0 !important; }
-body.dark-mode .quest-card__title     { color: #e2e8f0 !important; }
-body.dark-mode .quest-card__desc      { color: #6b7280 !important; }
-body.dark-mode .level-step__name      { color: #6b7280 !important; }
-body.dark-mode .level-step.done .level-step__name,
-body.dark-mode .level-step.current .level-step__name { color: #e2e8f0 !important; }
-
-body.dark-mode .learn-track-tab       { background: #161b27 !important; border-color: rgba(255,255,255,0.08) !important; }
-body.dark-mode .learn-track-tab.active { box-shadow: 0 4px 16px rgba(0,0,0,0.4) !important; }
-body.dark-mode .learn-tab-name        { color: #e2e8f0 !important; }
-body.dark-mode .learn-tab-sub         { color: #6b7280 !important; }
-body.dark-mode .learn-module-card__title { color: #e2e8f0 !important; }
-body.dark-mode .learn-module-body     { background: rgba(255,255,255,0.02) !important; border-color: rgba(255,255,255,0.06) !important; }
-body.dark-mode .learn-key-points      { background: rgba(47,140,155,0.08) !important; border-color: rgba(47,140,155,0.2) !important; }
-body.dark-mode .learn-key-points li   { color: #c8d0dc !important; }
-body.dark-mode .learn-content-text p  { color: #9ca3af !important; }
-body.dark-mode .learn-expand-btn      { background: rgba(255,255,255,0.06) !important; color: #9ca3af !important; }
-
-/* ── Misc ─────────────────────────────────────────────────────── */
-body.dark-mode .notif-item { border-color: rgba(255,255,255,0.06) !important; color: #c8d0dc !important; }
-body.dark-mode .notif-title { color: #e2e8f0 !important; }
-body.dark-mode .notif-sub   { color: #6b7280 !important; }
-body.dark-mode #notifPanel {
-  background: rgba(16,21,31,0.98) !important;
-  border-color: rgba(255,255,255,0.08) !important;
-  box-shadow: 0 24px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(254,194,79,0.06) !important;
-  backdrop-filter: blur(20px) !important;
-}
-body.dark-mode #notifPanelHeader {
-  border-bottom-color: rgba(255,255,255,0.07) !important;
-}
-body.dark-mode #notifPanelTitle { color: #e2e8f0 !important; }
-body.dark-mode #notifPanelFooter {
-  border-top-color: rgba(255,255,255,0.07) !important;
-}
-body.dark-mode #notifEmpty { color: #6b7280 !important; }
-body.dark-mode .notif-item:hover { background: rgba(254,194,79,0.05) !important; }
-body.dark-mode .notif-item.unread { border-left: 2px solid #fec24f; }
-body.dark-mode .notif-dot { border-color: rgba(16,21,31,0.8) !important; }
-body.dark-mode .xp-progress-next { color: #6b7280 !important; }
-body.dark-mode .xp-progress-right { color: #e2e8f0 !important; }
-body.dark-mode .learn-header__title { color: #e2e8f0 !important; }
-body.dark-mode .learn-header__sub   { color: #6b7280 !important; }
-body.dark-mode .market-pool-card    { background: #161b27 !important; border-color: rgba(255,255,255,0.07) !important; }
 
 /* ═══════════════════════════════════════════════════════════════
    39. GUIDED TOUR
@@ -1588,7 +1444,7 @@ body.dark-mode .tour-body { color: #9ca3af !important; }
 }
 .tour-skip-btn:hover { color: #6b7280; }
 .tour-prev-btn {
-  width: 34px; height: 34px;
+  width: 44px; height: 44px;
   border-radius: 10px;
   background: rgba(0,0,0,0.06);
   border: none;
@@ -1885,6 +1741,17 @@ body.dark-mode .deposit-prompt-products span {
 }
 .invest-qp-btn:hover { background: #656565; border-color: #656565; color: #fff; }
 
+/* The whole-balance pick. Marked because it is the one people reach for and
+   the one that used to be impossible to express: under an additive fee there
+   was no amount you could type that spent the balance exactly. */
+.invest-qp-btn--all {
+  border-color: #eda5ff;
+  color: #7b2d9e;
+  background: rgba(237, 165, 255, 0.10);
+}
+.invest-qp-btn--all:hover { background: #eda5ff; border-color: #eda5ff; color: #1a1a1a; }
+body.dark-mode .invest-qp-btn--all { color: #eda5ff !important; border-color: rgba(237,165,255,0.45) !important; background: rgba(237,165,255,0.12) !important; }
+
 .invest-calc-box {
   background: var(--dark-3, #f9fafb);
   border: 1px solid var(--border-color, #e5e7eb);
@@ -1900,7 +1767,7 @@ body.dark-mode .deposit-prompt-products span {
   display: flex; align-items: center; gap: 8px; justify-content: center; text-align: center;
   flex-wrap: wrap;
 }
-.invest-calc-caption { font-size: 0.6rem; color: #9ca3af; }
+.invest-calc-caption { font-size: 0.72rem; color: #9ca3af; }
 .invest-calc-val { font-size: 1rem; font-weight: 800; color: #1a1a1a; }
 .invest-calc-total { color: var(--gold, #fec24f) !important; font-size: 1.15rem !important; }
 .invest-calc-plus, .invest-calc-equals { font-size: 1rem; font-weight: 700; color: #9ca3af; }
@@ -2104,7 +1971,7 @@ body {
   border: 1px solid rgba(0,0,0,0.08) !important;
   color: #6b7280 !important;
   border-radius: 9px !important;
-  width: 36px !important; height: 36px !important;
+  width: 44px !important; height: 44px !important;
   font-size: 0.82rem !important;
   transition: all 0.18s ease !important;
 }
@@ -2383,7 +2250,7 @@ body {
   letter-spacing: 0.02em !important;
 }
 .mps { background: #F7F8FA !important; border-radius: 10px !important; padding: 10px !important; }
-.mps__label { font-size: 0.6rem !important; letter-spacing: 0.08em !important; color: #9ca3af !important; font-weight: 700 !important; }
+.mps__label { font-size: 0.72rem !important; letter-spacing: 0.08em !important; color: #9ca3af !important; font-weight: 700 !important; }
 .mps__value { font-size: 0.88rem !important; font-weight: 800 !important; color: #111827 !important; }
 
 /* ─── MY INVESTMENT CARDS ─── */
@@ -2447,7 +2314,7 @@ body {
 }
 .modal__close {
   color: #9ca3af !important;
-  width: 30px !important; height: 30px !important;
+  width: 44px !important; height: 44px !important;
   border-radius: 8px !important;
   display: flex !important; align-items: center !important; justify-content: center !important;
   transition: all 0.15s !important;
@@ -2552,11 +2419,94 @@ body {
 .badge-paid-out { background: rgba(47,140,155,0.1) !important; color: #656565 !important; border-radius: 20px !important; padding: 3px 10px !important; font-size: 0.68rem !important; font-weight: 700 !important; }
 .badge-pending  { background: rgba(254,194,79,0.1) !important; color: #b45309 !important; border-radius: 20px !important; padding: 3px 10px !important; font-size: 0.68rem !important; font-weight: 700 !important; }
 
-/* ─── REFERRAL / HERO SECTIONS ─── */
+/* ─── REFERRAL ────────────────────────────────────────────────────────
+   Every colour here comes from the CI tokens: --ci-orange (#fec24f) through
+   --ci-orange-dark (#ff5229) is the same gradient the award year pill and
+   the primary button already use.
+
+   Scoped through .page-content where it has to beat .page-content h2 / p in
+   ci-theme.css — one class loses to a class plus an element, which is how
+   the hero came to render near-black text on a dark navy band. */
 .referral-hero {
   background: linear-gradient(140deg, #0d1724 0%, #122438 100%) !important;
   border-radius: 22px !important;
   border: 1px solid rgba(255,255,255,0.07) !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 20px !important;
+  padding: 26px 30px !important;
+}
+.referral-hero__icon {
+  flex-shrink: 0;
+  width: 54px; height: 54px; border-radius: 16px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.45rem; color: #1a1a1a;
+  background: linear-gradient(135deg, var(--ci-orange, #fec24f), var(--ci-orange-dark, #ff5229));
+  box-shadow: 0 6px 18px rgba(255,82,41,0.28);
+}
+.page-content .referral-hero__title {
+  font-size: 1.3rem !important; font-weight: 800 !important;
+  line-height: 1.25 !important; margin: 0 0 6px !important;
+}
+.page-content .referral-hero__sub {
+  font-size: 0.86rem !important; line-height: 1.6 !important;
+  margin: 0 !important; max-width: 62ch;
+}
+
+/* The code is the thing on this page people came for, so it is the largest
+   thing on it. tabular-nums because a code is read one character at a time. */
+.referral-code {
+  font-size: 2.6rem !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.16em !important;
+  font-variant-numeric: tabular-nums;
+  background: linear-gradient(135deg, var(--ci-orange-dark, #ff5229), var(--ci-orange, #fec24f)) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+  line-height: 1.1 !important;
+}
+/* The gradient-clipped text above has no fallback of its own — a browser that
+   does not support background-clip:text would paint nothing at all. */
+@supports not ((-webkit-background-clip: text) or (background-clip: text)) {
+  .referral-code { -webkit-text-fill-color: #ff5229 !important; color: #ff5229 !important; }
+}
+
+.referral-link-box {
+  display: flex !important; align-items: center !important; gap: 8px !important;
+  justify-content: space-between !important;
+  padding: 8px 8px 8px 14px !important;
+  border-radius: 12px !important;
+  border: 1.5px solid var(--ci-orange-border, rgba(254,194,79,0.25)) !important;
+  background: var(--ci-orange-pale, rgba(254,194,79,0.08)) !important;
+}
+.referral-link-box > span {
+  font-size: 0.82rem; color: #4b5563; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; direction: ltr;
+}
+.referral-link-box:hover { border-color: rgba(254,194,79,0.55) !important; }
+
+/* The step numbers were bare text — "1 2 3 4" running down the panel with no
+   shape to them. A numbered list needs its numbers to look like markers. */
+.ref-step { display: flex; align-items: flex-start; gap: 14px; }
+.ref-step__num {
+  flex-shrink: 0;
+  width: 30px; height: 30px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.9rem; font-weight: 800;
+  color: var(--ci-orange-dark, #ff5229);
+  background: var(--ci-orange-pale, rgba(254,194,79,0.12));
+  border: 1.5px solid var(--ci-orange-border, rgba(254,194,79,0.3));
+}
+.ref-step strong { display: block; font-size: 0.9rem; font-weight: 700; margin-bottom: 3px; }
+.page-content .ref-step p { font-size: 0.86rem !important; line-height: 1.6 !important; margin: 0 !important; }
+
+@media (max-width: 640px) {
+  .referral-hero { flex-direction: column !important; align-items: flex-start !important; padding: 22px !important; }
+  .referral-code { font-size: 2rem !important; letter-spacing: 0.12em !important; }
+  /* Not shrunk below the portal's own legibility floor — see
+     check-portal-mobile-layout.cjs. The link ellipsises instead. */
+  .referral-link-box > span { font-size: 0.86rem; }
 }
 
 /* ─── INFO ROWS ─── */
@@ -2913,6 +2863,10 @@ body.dark-mode .tab-btn.active { color: #fec24f !important; }
   display:grid;grid-template-columns:repeat(3,1fr);gap:0;
   border-bottom:1px solid rgba(255,255,255,0.07);
 }
+@media (max-width: 480px) {
+  .minor-stats { grid-template-columns: 1fr 1fr; }
+  .minor-stat:nth-child(2) { border-right: none; }
+}
 .minor-stat {
   text-align:center;padding:16px 8px;
   border-right:1px solid rgba(255,255,255,0.07);
@@ -3066,7 +3020,7 @@ body.dark-mode .tab-btn.active { color: #fec24f !important; }
   border: none;
   cursor: pointer;
   color: #9ca3af;
-  font-size: 0.6rem;
+  font-size: 0.72rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;
@@ -3243,7 +3197,7 @@ body.dark-mode input::placeholder { color: #4b5563 !important; }
   font-size:1.35rem;flex-shrink:0;
 }
 .mpc2-badge {
-  font-size:0.62rem;font-weight:800;padding:3px 9px;border-radius:999px;
+  font-size:0.72rem;font-weight:800;padding:3px 9px;border-radius:999px;
   border:1px solid transparent;letter-spacing:0.03em;white-space:nowrap;
 }
 .mpc2-badge--featured { background:rgba(254,194,79,0.12);color:#d97706;border-color:rgba(254,194,79,0.28); }
@@ -3256,13 +3210,36 @@ body.dark-mode input::placeholder { color: #4b5563 !important; }
   display:flex;align-items:stretch;margin:16px 20px 0;
   background:#f8f9fb;border-radius:14px;overflow:hidden;
 }
-.mpc2-metric    { flex:1;text-align:center;padding:14px 8px; }
+.mpc2-metric    { flex:1;min-width:0;text-align:center;padding:14px 8px; }
 .mpc2-metric-sep{ width:1px;background:rgba(0,0,0,0.06);flex-shrink:0;margin:12px 0; }
+
 .mpc2-metric__val {
   font-family:'Poppins','Poppins',Georgia,serif;
   font-size:1.55rem;font-weight:800;line-height:1;letter-spacing:-0.03em;color:#111827;
 }
-.mpc2-metric__lbl { font-size:0.62rem;color:#9ca3af;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;margin-top:4px; }
+
+/* The figure comes first. A long label in this three-across row was allowed to
+   take width off the number beside it, so "11.5%" rendered as "11." — the one
+   thing on the card a reader is looking for, clipped by its own caption. */
+.mpc2-metric__val { white-space: nowrap; }
+.mpc2-metric__lbl { overflow-wrap: anywhere; }
+.mpc2-metric__lbl { font-size:0.72rem;color:#9ca3af;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;margin-top:4px; }
+
+/* Four metrics do not fit one row on a phone. flex:1 lets them shrink but not
+   below their min-content width, so the values crowd and the labels wrap —
+   "AVG RETURN P.A." over two lines beside a value that has run out of room.
+   Two columns instead, with the separators dropped: a 1px vertical rule is a
+   single-row device and lands mid-grid once the row wraps.
+
+   Placed AFTER every base .mpc2-* rule on purpose. A media query adds no
+   specificity, so sitting it in the middle of the block left the later
+   .mpc2-metric__val declaration overriding the size inside it. */
+@media (max-width: 430px) {
+  .mpc2-metrics    { display:grid;grid-template-columns:1fr 1fr;row-gap:2px; }
+  .mpc2-metric-sep { display:none; }
+  .mpc2-metric     { padding:12px 6px; }
+  .mpc2-metric__val{ font-size:1.35rem; }
+}
 
 .mpc2-pills { display:flex;flex-wrap:wrap;gap:6px;padding:12px 20px 0; }
 .mpc2-pill {
@@ -3276,13 +3253,13 @@ body.dark-mode input::placeholder { color: #4b5563 !important; }
 .mpc2-pill--urgent i { color:#dc2626; }
 
 .mpc2-progress { padding:12px 20px 0; }
-.mpc2-progress__labels { display:flex;justify-content:space-between;font-size:0.68rem;color:#9ca3af;margin-bottom:6px; }
+.mpc2-progress__labels { display:flex;justify-content:space-between;font-size:0.75rem;color:#9ca3af;margin-bottom:6px; }
 .mpc2-progress__track  { height:6px;border-radius:3px;background:rgba(0,0,0,0.07);overflow:hidden; }
 .mpc2-progress__fill   { height:100%;border-radius:3px;transition:width 0.5s cubic-bezier(0.22,1,0.36,1); }
 
 .mpc2-footer { display:flex;align-items:center;gap:8px;padding:14px 20px 20px; }
 .mpc2-fs-btn {
-  flex-shrink:0;width:40px;height:40px;border-radius:10px;border:1px solid rgba(0,0,0,0.08);
+  flex-shrink:0;width:44px;height:44px;border-radius:10px;border:1px solid rgba(0,0,0,0.08);
   background:#f8f9fb;color:#6b7280;cursor:pointer;display:flex;align-items:center;justify-content:center;
   font-size:1rem;transition:all 0.2s;
 }
@@ -3301,7 +3278,7 @@ body.dark-mode input::placeholder { color: #4b5563 !important; }
 .fs-row__name { font-size:0.83rem;font-weight:700;color:#111827;display:flex;align-items:center;gap:6px;flex-wrap:wrap; }
 .fs-row__meta { font-size:0.68rem;color:#9ca3af;margin-top:2px; }
 .fs-row__arrow { font-size:0.8rem;color:#d1d5db;flex-shrink:0; }
-.fs-current-tag { font-size:0.6rem;font-weight:800;background:rgba(34,197,94,0.15);color:#16a34a;padding:1px 6px;border-radius:99px;border:1px solid rgba(34,197,94,0.25); }
+.fs-current-tag { font-size:0.72rem;font-weight:800;background:rgba(34,197,94,0.15);color:#16a34a;padding:1px 6px;border-radius:99px;border:1px solid rgba(34,197,94,0.25); }
 
 /* ─── Dark mode overrides for v2 cards ── */
 body.dark-mode .mpc-v2 { background:#303030 !important;border-color:rgba(255,255,255,0.07) !important; }
@@ -3427,7 +3404,7 @@ body.dark-mode #feedbackCard .card__header { border-color: rgba(255,255,255,0.06
   margin-top: 8px;
 }
 .rewards-stat__label {
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   font-weight: 700;
   color: #9ca3af;
   text-transform: uppercase;
@@ -3458,7 +3435,7 @@ body.dark-mode .rewards-stat__label { color: #6b7280 !important; }
   gap: 16px;
   margin-bottom: 24px;
   padding: 22px 22px;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  background: linear-gradient(135deg, #111317 0%, #1a1d23 100%);
   border-radius: 20px;
   color: #fff;
   position: relative;
@@ -3596,7 +3573,7 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
    ═══════════════════════════════════════════════════════════════ */
 #myInvestmentsGrid {
   display: grid !important;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)) !important;
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)) !important;
   gap: 16px !important;
 }
 
@@ -3663,6 +3640,9 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
   position: relative;
   z-index: 1;
 }
+@media (max-width: 480px) {
+  .atl-card__figures { grid-template-columns: 1fr 1fr; }
+}
 .atl-card__figures > div {
   display: flex;
   flex-direction: column;
@@ -3675,7 +3655,7 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
 }
 .atl-card__k {
   display: block;
-  font-size: 0.58rem;
+  font-size: 0.68rem;
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: rgba(255,255,255,0.38);
@@ -3757,8 +3737,18 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
   /* ── Bottom nav: push content up so last card isn't clipped ── */
   .main-content { padding-bottom: 72px !important; }
 
-  /* ── Toast: clear the bottom nav ── */
-  .toast-container { bottom: 80px !important; }
+  /* ── Toast: clear the bottom nav, and stay inside the screen ──
+     top:auto matters. admin.css pins the container to top:80px, and setting
+     only `bottom` here left both edges anchored, so the container spanned the
+     whole screen and the toast inside it landed wherever its own positioning
+     put it — measured at phone width, 310px off the right edge. */
+  .toast-container {
+    top: auto !important;
+    left: 12px !important;
+    right: 12px !important;
+    bottom: calc(84px + env(safe-area-inset-bottom, 0px)) !important;
+    align-items: center !important;
+  }
 
   /* ── iOS input-zoom prevention (iOS zooms when font-size < 16px) ── */
   .form-input, .form-select, .form-textarea,
@@ -3790,20 +3780,47 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
   /* ── Statement view: stack on mobile ── */
   .statement-layout { grid-template-columns: 1fr !important; }
 
-  /* ── Modals: slide up from bottom on small screens ── */
+  /* ── Modals: a proper bottom sheet ──────────────────────────────────
+     admin.css puts overflow-y:auto on the modal itself, so the FOOTER scrolled
+     with the body: on any form longer than the screen — instruction, product,
+     amount — the Submit button was somewhere below the fold and the client had
+     to scroll inside the sheet to find it. On a maturity instruction that is
+     the difference between submitting and giving up.
+
+     Header and footer are now fixed to the sheet, and only the body scrolls.
+     The footer clears the home indicator. */
   .modal-overlay { padding: 0 !important; align-items: flex-end !important; }
   .modal-overlay .modal {
     max-width: 100% !important;
     max-height: 92dvh !important;
     border-radius: 20px 20px 0 0 !important;
     margin: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;      /* the body scrolls, not the sheet */
   }
+  .modal-overlay .modal > .modal__header { flex: 0 0 auto; }
+  .modal-overlay .modal > .modal__body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;     /* scrolling the form must not scroll the page behind it */
+  }
+  .modal-overlay .modal > .modal__footer {
+    flex: 0 0 auto;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)) !important;
+    gap: 10px;
+  }
+  /* Two thumb-sized targets rather than two small ones bunched at the right.
+     The primary action takes the larger share and sits where the thumb is. */
+  .modal-overlay .modal > .modal__footer .btn { flex: 1 1 0; min-height: 48px; justify-content: center; }
+  .modal-overlay .modal > .modal__footer .btn--primary { flex: 1.6 1 0; }
 
   /* ── Tap targets: larger hits for thumbs ── */
   .btn { min-height: 42px; }
   .btn--sm { min-height: 36px; padding: 7px 12px; }
-  .topbar-btn { width: 40px !important; height: 40px !important; }
-  .modal__close { width: 36px !important; height: 36px !important; }
+  .topbar-btn { width: 44px !important; height: 44px !important; }
+  .modal__close { width: 44px !important; height: 44px !important; }
   .tab-btn { min-height: 40px; padding: 9px 14px; }
   .nav-item { padding: 11px 20px !important; min-height: 44px; }
 
@@ -3821,8 +3838,12 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
   /* ── Topbar: hide topbar search (keyboard takes space) ── */
   .topbar__search { display: none !important; }
 
-  /* ── Topbar actions: keep only essential buttons ── */
-  .topbar-btn:not(#sidebarToggleBtn):not(.notif-btn):not(.dark-mode-btn) {
+  /* ── Topbar actions: keep only essential buttons ──
+     #notifBtn, not .notif-btn: the notification button has never carried that
+     class in either markup, so the exclusion matched nothing and this rule hid
+     the bell it was written to keep. It went unnoticed because the app was
+     loading its own copy of this file, from before the rule existed. */
+  .topbar-btn:not(#sidebarToggleBtn):not(#notifBtn):not(.dark-mode-btn) {
     display: none !important;
   }
 
@@ -3840,6 +3861,37 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
 
   /* ── Sub-account card stacking ── */
   .sa-showcase-grid { grid-template-columns: 1fr !important; }
+
+  /* ── Topbar: reduce padding on mobile (overrides the 26px !important base rule) ── */
+  .topbar { padding: 0 12px !important; }
+
+  /* ── Marketplace risk filter: scroll horizontally instead of overflowing ──
+     6 nowrap buttons sum to ~394px min-width; viewport inner is ~315px at 375px.
+     Allow the bar to scroll so no button is clipped. ── */
+  #marketRiskTabBar {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    max-width: 100%;
+  }
+  #marketRiskTabBar::-webkit-scrollbar { display: none; }
+
+  /* ── XP progress bar: prevent horizontal page overflow ──
+     The bar has 4 white-space:nowrap children whose combined
+     min-content width (~430px) exceeds the mobile viewport.
+     Hide the non-essential "next level" label and shrink the
+     track floor so the bar fits within the viewport. ── */
+  .xp-progress-next { display: none !important; }
+  .xp-progress-track { min-width: 40px !important; }
+  .xp-progress-bar-wrap { max-width: 100%; overflow: hidden; }
+
+  /* ── Portfolio hero: single-column, no chart on mobile ── */
+  .portfolio-hero {
+    grid-template-columns: 1fr !important;
+  }
+  .portfolio-hero__right { display: none !important; }
+  .portfolio-hero__left  { grid-column: 1 !important; }
+  .portfolio-hero__stats { grid-column: 1 !important; }
 }
 
 /* ── Very small screens (< 390px / iPhone SE) ─────────────────── */
@@ -3859,6 +3911,766 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
   }
   @media (max-width: 768px) {
     .main-content { padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important; }
-    .toast-container { bottom: calc(80px + env(safe-area-inset-bottom, 0px)) !important; }
+    .toast-container { bottom: calc(84px + env(safe-area-inset-bottom, 0px)) !important; }
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Mobile-web polish — world-class at every phone width
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Hide desktop-only topbar buttons on mobile */
+@media (max-width: 768px) {
+  /* Website link + Sign Out — shown on desktop, redundant on mobile (bottom nav handles nav) */
+  .topbar__actions .btn--secondary.btn--sm,
+  .topbar__actions a.btn--secondary.btn--sm {
+    display: none !important;
+  }
+
+  /* Account switcher: let it shrink to content, don't overflow */
+  .account-switcher {
+    width: auto !important;
+    max-width: 140px !important;
+    font-size: 0.75rem !important;
+  }
+
+  /* Payment modal: amount input fills width instead of fixed 180px */
+  #pmAmount {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  /* Payment quick-amount chips: 2×4 grid instead of 4×2 */
+  .pm-chip-grid,
+  div:has(> .pm-chip) {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Minimum touch-target & readable font floors */
+  .pm-chip { min-height: 44px !important; font-size: 0.85rem !important; }
+
+  /* Stat labels — bump sub-11px labels up to readable floor */
+  .mic-stat__label,
+  .stat-label,
+  .metric-label { font-size: max(0.65rem, 10px) !important; }
+
+  /* Modal content doesn't overflow viewport on narrow screens */
+  .modal-content,
+  .modal-body {
+    width: 100% !important;
+    max-width: 100vw !important;
+    margin: 0 !important;
+    border-radius: 20px 20px 0 0 !important;
+  }
+}
+
+/* FAB sits between 769px and 900px where the hamburger topbar is also shown — hide it */
+@media (min-width: 769px) and (max-width: 900px) {
+  .fab,
+  #mobileFab,
+  [id*="Fab"],
+  [class*="fab"] { display: none !important; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE WEB — measured fixes
+   Every rule here comes from rendering the real portal markup at narrow
+   width and measuring it, not from eye. Appended last, and !important
+   where the value it corrects is itself !important — the earlier
+   attempts in this file lost to exactly that and changed nothing.
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+
+  /* ── 1. Sideways scroll ───────────────────────────────────────
+     The page scrolled 27px sideways on every view. A grid item's implicit
+     `min-width: auto` stops a `1fr` track shrinking below its content's
+     min-content width: measured, the container was 472px while its single 1fr
+     track computed to 514.7px, because a data table would not fit. */
+  .grid-layout, .grid-2, .grid-3, .stats-row, .form-row--2, .form-row--3 { min-width: 0; }
+  .grid-layout > *, .grid-2 > *, .grid-3 > *, .stats-row > *,
+  .form-row--2 > *, .form-row--3 > * { min-width: 0; }
+  .grid-layout--sidebar { grid-template-columns: minmax(0, 1fr) !important; }
+
+  /* The tables already sit in `<div style="overflow-x:auto">`. That div is not
+     a direct child of the card, so a `>` selector missed it — descendant. */
+  .table-card [style*="overflow-x"] { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
+  .table-card .data-table { min-width: 480px; }
+
+  /* Nothing may take the document sideways. A horizontal scrollbar on the body
+     hides content with nothing on screen saying it is there. */
+  html, body { overflow-x: hidden; }
+
+  /* ── 2. Tap targets ───────────────────────────────────────────
+     44px is the floor in both Apple's and Google's guidance. Measured before
+     this: primary buttons 36px, tabs 40px, filter selects 33px, checkboxes
+     13px. */
+  .btn, .btn--primary, .btn--secondary, .btn--ghost, .btn--danger { min-height: 44px !important; }
+  .btn--sm { min-height: 44px !important; }
+  .tab-btn { min-height: 44px !important; }
+  .tbl-filter, .form-select, .form-input, select, input[type="text"],
+  input[type="email"], input[type="tel"], input[type="number"], input[type="date"] { min-height: 44px !important; }
+  .faq-quick-q, .gift-preset, .gift-tab { min-height: 44px !important; }
+
+  /* The bottom bar is the portal's primary navigation on a phone and measured
+     32px tall — the smallest target on the screen was the one every journey
+     starts from. */
+  .mbn-item { min-height: 52px !important; }
+
+  /* A star rating 20px wide is a miss waiting to happen; the glyph keeps its
+     size, the target grows around it. */
+  .fb-star { min-width: 44px !important; min-height: 44px !important;
+             display: inline-flex !important; align-items: center; justify-content: center; }
+
+  /* A checkbox's hit area is its label. These sit as `<label><input> text`,
+     so the label carries the height and the box stays 20px. */
+  label:has(> input[type="checkbox"]), label:has(> input[type="radio"]),
+  .form-check, .checkbox-row { min-height: 44px; display: flex; align-items: center; gap: 10px; }
+
+  /* A 13px checkbox is not a target. The box grows to 20px and the label
+     around it carries the 44px. */
+  input[type="checkbox"], input[type="radio"] { width: 20px !important; height: 20px !important; min-height: 0 !important; }
+  .form-check, .checkbox-row { min-height: 44px; display: flex; align-items: center; gap: 10px; }
+
+  /* ── 3. Legibility ────────────────────────────────────────────
+     43 elements rendered under 11.5px, the smallest at 9.5px — the greeting,
+     the account chip, table headers, stat captions. Below about 11px on a
+     phone that is decoration, not information.
+
+     In PIXELS, deliberately. admin.css sets `html { font-size: 14px }`, so
+     every rem in this portal is 12.5% smaller than it reads: the first version
+     of these floors used 0.8rem expecting 12.8px and got 11.2px, which is why
+     they changed almost nothing. A minimum legible size is a physical
+     threshold, not a scale-relative one, so it belongs in px. */
+  .topbar__breadcrumb, .welcome-greeting { font-size: 13px !important; }
+  .portfolio-hero__label, .ph-stat__label, .stat-card__label,
+  .info-row__label, .wchip-text, .badge, .xp-chip,
+  #wchipIdText, #wchipSinceText,
+  .table-card__sub, .wallet-card__label, .section-banner__sub,
+  .xp-hero__track-label, .xp-hero__earned-label, .learn-header__sub { font-size: 12px !important; }
+  .form-label, .gift-label { font-size: 12.5px !important; }
+  /* The long tail: secondary flows (gifts, sub-accounts, policies, quests)
+     carry their own caption classes and were all sitting at 9.8–11.5px. */
+  .sa-view-sub, .sa-type-tile__desc, .policies-header__sub,
+  .gift-form-sub, .gift-card-label, .gift-card__label-row, .gift-card__from,
+  .gift-preset, .table-card__sub, .risk-warning strong,
+  #riskProfileDesc, .learn-header__sub { font-size: 12px !important; }
+  th { font-size: 12px !important; }
+  .data-table td { font-size: 13px !important; }
+  .btn, .btn--secondary, .btn--ghost, .tab-btn { font-size: 13px !important; }
+  .text-muted, .td-muted { font-size: 12.5px; }
+  /* Nothing on a phone below 11px, whatever set it. */
+  .view [style*="font-size:0.6"], .view [style*="font-size: 0.6"],
+  .view [style*="font-size:0.7"], .view [style*="font-size: 0.7"],
+  .view [style*="font-size:0.72"], .view [style*="font-size: 0.72"],
+  .view [style*="font-size:0.75"], .view [style*="font-size: 0.75"] { font-size: 12px !important; }
+}
+
+/* The get-the-app banner ships its own styles inside js/app-banner.js, so
+   it renders identically on pages that never load this stylesheet — the
+   sign-in page among them. */
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Ethical and Interest-Free (EIF)
+   ═══════════════════════════════════════════════════════════════════════
+
+   A distinct section inside the same marketplace. The brief was "a slightly
+   different look and feel, staying true to our CI", so this borrows nothing
+   from outside the CI palette: the accent is #078e07, a dark green chosen
+   over the blue it replaced because green is the colour the Islamic tradition
+   this offering serves reads as its own. Everything else — radii, spacing, type
+   scale, card shape — is the platform's, so the section reads as a room in the
+   same building rather than a different one.
+
+   The one deliberate departure is the corner treatment. EIF panels carry a
+   flat top-left rule and a slightly squarer radius than the gold cards, which
+   is enough for a client to know at a glance which part of the platform they
+   are in without a second design language to maintain.
+
+   Loaded on both surfaces: the app reads this same file since the CSS fork
+   was removed, so there is one place to change any of it. */
+
+/* One accent, two roles. --eif is the CI lime, used for rules, borders, tints
+   and fills. --eif-ink is the same hue taken dark enough to read as text: this
+   section renders on the light CI ground, where #078e07 measures about 4.3:1
+   and is unreadable at any size. Anything a person reads uses the ink. */
+.eif-banner, .eif-election, .eif-structure, .eif-compare, .eif-faq, .eif-tag,
+.mkt-cat-tab--eif, .mpc-v2--eif {
+  --eif-ink: #056b05;
+}
+
+.mkt-cat-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.mkt-cat-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 0.83rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color .15s, border-color .15s, background .15s;
+}
+.mkt-cat-tab i { font-size: 0.9rem; }
+.mkt-cat-tab:hover { color: var(--gold); border-color: var(--gold); }
+.mkt-cat-tab.active {
+  color: #1a1a1a;
+  background: var(--gold);
+  border-color: var(--gold);
+}
+/* The EIF tab takes the section's accent in both states, so the colour is
+   attached to the offering rather than to selection. */
+.mkt-cat-tab--eif:hover { color: var(--cat-accent); border-color: var(--cat-accent); }
+.mkt-cat-tab--eif.active {
+  color: #0d1a00;
+  background: var(--cat-accent);
+  border-color: var(--cat-accent);
+}
+
+/* ── Section banner ─────────────────────────────────────────────────────── */
+.eif-banner {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--eif) 32%, transparent);
+  border-top-left-radius: 4px;
+  border-radius: 4px 16px 16px 16px;
+  background:
+    radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--eif) 10%, transparent) 0%, transparent 58%),
+    var(--card-bg, rgba(255,255,255,0.02));
+  padding: 20px;
+  margin-bottom: 18px;
+}
+/* ── The mosaic ────────────────────────────────────────────────────────
+   Square-Kufic strapwork: interlocking brackets and a square turned on its
+   point, set out on an orthogonal grid and then turned 45°, which is how
+   these patterns are actually constructed. It dissolves outward from the
+   corner so it is texture near the edge and nothing at all by the time it
+   reaches the words.
+
+   Anchored at the TOP-LEFT on purpose. That corner is already the section's
+   one deliberate departure — it is squared off while the others are
+   rounded, so the section reads as its own room. The mosaic is where the
+   tiling of that room starts, which gives the flat corner a reason rather
+   than leaving it as an unexplained quirk.
+
+   Drawn rather than photographed. The reference came as two JPEGs, which is
+   the wrong container for hard-edged flat colour — the edges ring, and with
+   no alpha the artwork cannot sit over a tinted panel. As SVG it is 1.1 KB
+   against 71 KB, crisp at any size, and painted through a MASK so the
+   colour comes from var(--eif): if the accent moves again, the mosaic moves
+   with it and nobody has to re-export anything.
+
+   The reference also used the bright CI lime for its second tone. That is
+   the platform's green — solar, GridFarmer, the quest badges — and this
+   section deliberately stopped using it. The two tones here are one hue:
+   var(--eif) at full strength and at half, carried in the mask's alpha. */
+.eif-banner > * { position: relative; z-index: 1; }
+.eif-banner::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 176px;
+  aspect-ratio: 1 / 1;
+  background-color: var(--eif);
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20360%20360'%3E%3Cdefs%3E%3Cpattern%20id='g'%20width='64'%20height='64'%20patternUnits='userSpaceOnUse'%20patternTransform='rotate(45)%20translate(5%205)'%3E%3Cg%20fill='%23fff'%3E%3Crect%20x='0'%20y='0'%20width='50'%20height='12'/%3E%3Crect%20x='38'%20y='12'%20width='12'%20height='38'/%3E%3Crect%20x='0'%20y='25'%20width='12'%20height='39'%20opacity='.5'/%3E%3Crect%20x='12'%20y='52'%20width='39'%20height='12'%20opacity='.5'/%3E%3Crect%20x='20'%20y='20'%20width='14'%20height='14'%20transform='rotate(45%2027%2027)'/%3E%3C/g%3E%3C/pattern%3E%3CradialGradient%20id='f'%20cx='0'%20cy='0'%20r='1'%3E%3Cstop%20offset='0'%20stop-color='%23fff'%20stop-opacity='1'/%3E%3Cstop%20offset='.5'%20stop-color='%23fff'%20stop-opacity='.6'/%3E%3Cstop%20offset='1'%20stop-color='%23fff'%20stop-opacity='0'/%3E%3C/radialGradient%3E%3Cmask%20id='m'%3E%3Crect%20width='360'%20height='360'%20fill='url(%23f)'/%3E%3C/mask%3E%3C/defs%3E%3Crect%20width='360'%20height='360'%20fill='url(%23g)'%20mask='url(%23m)'/%3E%3C/svg%3E");
+          mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20360%20360'%3E%3Cdefs%3E%3Cpattern%20id='g'%20width='64'%20height='64'%20patternUnits='userSpaceOnUse'%20patternTransform='rotate(45)%20translate(5%205)'%3E%3Cg%20fill='%23fff'%3E%3Crect%20x='0'%20y='0'%20width='50'%20height='12'/%3E%3Crect%20x='38'%20y='12'%20width='12'%20height='38'/%3E%3Crect%20x='0'%20y='25'%20width='12'%20height='39'%20opacity='.5'/%3E%3Crect%20x='12'%20y='52'%20width='39'%20height='12'%20opacity='.5'/%3E%3Crect%20x='20'%20y='20'%20width='14'%20height='14'%20transform='rotate(45%2027%2027)'/%3E%3C/g%3E%3C/pattern%3E%3CradialGradient%20id='f'%20cx='0'%20cy='0'%20r='1'%3E%3Cstop%20offset='0'%20stop-color='%23fff'%20stop-opacity='1'/%3E%3Cstop%20offset='.5'%20stop-color='%23fff'%20stop-opacity='.6'/%3E%3Cstop%20offset='1'%20stop-color='%23fff'%20stop-opacity='0'/%3E%3C/radialGradient%3E%3Cmask%20id='m'%3E%3Crect%20width='360'%20height='360'%20fill='url(%23f)'/%3E%3C/mask%3E%3C/defs%3E%3Crect%20width='360'%20height='360'%20fill='url(%23g)'%20mask='url(%23m)'/%3E%3C/svg%3E");
+  -webkit-mask-size: 100% 100%;   mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  opacity: 0.14;
+  pointer-events: none;
+}
+
+.eif-banner__head { display: flex; gap: 14px; align-items: flex-start; }
+.eif-banner__mark {
+  flex-shrink: 0;
+  width: 46px; height: 46px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 4px 14px 14px 14px;
+  background: color-mix(in srgb, var(--eif) 16%, transparent);
+  color: var(--eif-ink);
+  font-size: 1.15rem;
+}
+.eif-banner__title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--text, #fff);
+}
+.eif-banner__sub {
+  margin-top: 4px;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+  max-width: 62ch;
+}
+
+.eif-principles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+.eif-principle {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border-radius: 4px 12px 12px 12px;
+  border: 1px solid color-mix(in srgb, var(--eif) 18%, transparent);
+  background: color-mix(in srgb, var(--eif) 6%, transparent);
+  min-width: 0;
+}
+.eif-principle > i { color: var(--eif-ink); font-size: 0.95rem; margin-top: 2px; flex-shrink: 0; }
+.eif-principle strong {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text, #fff);
+}
+.eif-principle span {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.76rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+/* The governance line. Neutral rather than accented on purpose — it says what
+   the platform does NOT yet have, and dressing that in the section's colour
+   would read as a badge of approval. */
+.eif-governance {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.03);
+  font-size: 0.78rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+.eif-governance > i { color: var(--gold); margin-top: 2px; flex-shrink: 0; }
+.eif-governance strong { color: var(--text, #fff); }
+
+/* ── The interest election ──────────────────────────────────────────────── */
+.eif-election {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 18px;
+  margin-bottom: 18px;
+  border-radius: 4px 14px 14px 14px;
+  border: 1px solid color-mix(in srgb, var(--eif) 24%, transparent);
+  background: color-mix(in srgb, var(--eif) 5%, transparent);
+}
+.eif-election__text { flex: 1; min-width: 0; }
+.eif-election__text strong {
+  display: block;
+  font-size: 0.87rem;
+  font-weight: 700;
+  color: var(--text, #fff);
+}
+.eif-election__text span {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.78rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+  max-width: 68ch;
+}
+.eif-election__err { font-size: 0.78rem; color: var(--gold); }
+
+.eif-switch {
+  flex-shrink: 0;
+  width: 52px;
+  height: 30px;
+  padding: 3px;
+  border-radius: 30px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.06);
+  cursor: pointer;
+  transition: background .18s, border-color .18s;
+}
+.eif-switch > span {
+  display: block;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition: transform .18s, background .18s;
+}
+.eif-switch.on { background: color-mix(in srgb, var(--eif) 26%, transparent); border-color: var(--eif); }
+.eif-switch.on > span { transform: translateX(22px); background: var(--eif); }
+.eif-switch:focus-visible { outline: 2px solid var(--eif); outline-offset: 2px; }
+
+/* ── Product cards inside the section ───────────────────────────────────── */
+.mpc-v2--eif { border-top-left-radius: 4px; }
+
+/* The badge an EIF product carries when it appears in the All-products grid,
+   where it needs to say what it is without the section around it. */
+.eif-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 3px 9px;
+  border-radius: 4px 10px 10px 10px;
+  border: 1px solid color-mix(in srgb, #078e07 30%, transparent);
+  background: color-mix(in srgb, #078e07 10%, transparent);
+  color: var(--eif-ink, #056b05);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* ── The section's FAQ ──────────────────────────────────────────────────── */
+.eif-faq .faq-quick-q:hover { color: var(--eif-ink); }
+.eif-faq .faq-quick-q.open i { color: var(--eif-ink); }
+.eif-faq .panel__title::before {
+  content: '';
+  display: inline-block;
+  width: 3px; height: 14px;
+  margin-right: 9px;
+  border-radius: 2px;
+  background: var(--eif);
+  vertical-align: -2px;
+}
+
+@media (max-width: 560px) {
+  .eif-banner { padding: 16px; }
+  .eif-principles { grid-template-columns: 1fr; }
+  /* The switch drops below the copy rather than squeezing it to two words. */
+  .eif-election { flex-direction: column; align-items: flex-start; gap: 12px; }
+}
+
+/* ── EIF: the structure, drawn ─────────────────────────────────────────────
+   The offering's substance. A client who will not take riba wants to see
+   where the money comes from — who buys what, who holds title, when it passes
+   — so the flow is a numbered sequence rather than a paragraph, because the
+   ORDER is the argument: the goods are owned before they are sold, the asset
+   is owned before it is leased.
+
+   Numbered here for that reason and no other. A step list that is not
+   genuinely sequential should not be numbered. */
+.eif-structure {
+  margin: 4px 0 18px;
+  padding: 18px;
+  border: 1px solid color-mix(in srgb, var(--eif) 26%, transparent);
+  border-radius: 4px 16px 16px 16px;
+  background:
+    radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--eif) 8%, transparent) 0%, transparent 60%),
+    rgba(255,255,255,0.02);
+}
+.eif-structure__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-bottom: 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--eif) 16%, transparent);
+}
+.eif-structure__term {
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--text, #fff);
+}
+.eif-structure__gloss {
+  margin-top: 2px;
+  font-size: 0.78rem;
+  font-style: italic;
+  color: var(--text-muted);
+}
+.eif-structure__earns { text-align: right; }
+.eif-structure__earns > span {
+  display: block;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.eif-structure__earns > strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--eif-ink);
+}
+
+/* The flow. A rule runs down the left through the markers, so the steps read
+   as one sequence rather than four cards that happen to be stacked. */
+.eif-flow {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  position: relative;
+}
+.eif-flow::before {
+  content: '';
+  position: absolute;
+  left: 15px;
+  top: 14px;
+  bottom: 14px;
+  width: 2px;
+  border-radius: 2px;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--eif) 55%, transparent),
+    color-mix(in srgb, var(--eif) 12%, transparent));
+}
+.eif-flow__step {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 9px 0;
+  position: relative;
+}
+.eif-flow__mark {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 4px 11px 11px 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Tinted, not filled with a hardcoded dark. The first version mixed the
+     accent into #0d0d0d, which is right on a dark ground and a black square
+     on this one — and this section renders on the light CI ground. */
+  background: color-mix(in srgb, var(--eif) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--eif) 40%, transparent);
+  color: var(--eif-ink);
+  font-size: 0.8rem;
+}
+/* The number rides on the marker rather than taking a column of its own. */
+.eif-flow__mark > span {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: 8px;
+  background: var(--eif);
+  color: #0d1a00;
+  font-size: 0.58rem;
+  font-weight: 900;
+  line-height: 15px;
+  text-align: center;
+}
+.eif-flow__body { min-width: 0; padding-top: 2px; }
+.eif-flow__body > strong {
+  display: block;
+  font-size: 0.87rem;
+  font-weight: 700;
+  color: var(--text, #fff);
+}
+.eif-flow__body > span {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.79rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+/* The sentence that says why this is not interest. Given its own weight,
+   because it is the one a client came to read. */
+.eif-structure__why {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--eif) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--eif) 20%, transparent);
+  font-size: 0.82rem;
+  line-height: 1.65;
+  color: var(--text, #fff);
+}
+.eif-structure__why > i { color: var(--eif-ink); margin-top: 3px; flex-shrink: 0; }
+
+/* ── EIF: the three compared ───────────────────────────────────────────── */
+.eif-compare {
+  margin-top: 22px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 4px 16px 16px 16px;
+  background: var(--card-bg, rgba(255,255,255,0.02));
+}
+.eif-compare__title {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--text, #fff);
+  margin-bottom: 14px;
+}
+.eif-compare__title::before {
+  content: '';
+  display: inline-block;
+  width: 3px; height: 14px;
+  margin-right: 9px;
+  border-radius: 2px;
+  background: var(--eif);
+  vertical-align: -2px;
+}
+/* Its own scroller: a four-column table has a floor below which it cannot
+   shrink, and the page body must never scroll sideways. */
+.eif-compare__scroll { overflow-x: auto; }
+.eif-compare__table {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+.eif-compare__table th,
+.eif-compare__table td {
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border);
+}
+.eif-compare__table thead th { border-bottom: 1px solid color-mix(in srgb, var(--eif) 30%, transparent); }
+.eif-compare__table tbody th {
+  width: 30%;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.eif-compare__table td { color: var(--text, #fff); }
+.eif-compare__term {
+  display: block;
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: var(--eif-ink);
+}
+.eif-compare__gloss {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.7rem;
+  font-style: italic;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+.eif-compare__nums td { font-variant-numeric: tabular-nums; }
+.eif-compare__table tbody tr:last-child th,
+.eif-compare__table tbody tr:last-child td { border-bottom: none; }
+.eif-compare__foot {
+  margin: 12px 0 0;
+  font-size: 0.76rem;
+  line-height: 1.65;
+  color: var(--text-muted);
+}
+
+@media (max-width: 560px) {
+  .eif-structure { padding: 14px; }
+  .eif-structure__head { flex-direction: column; gap: 10px; }
+  .eif-structure__earns { text-align: left; }
+  .eif-compare { padding: 14px; }
+}
+/* ═══════════════════════════════════════════════════════════════════
+   Switch
+   ───────────────────────────────────────────────────────────────────
+   The auto top-up control was a 48x26 capsule that changed colour and
+   nothing else: no knob, nothing that moved, and no word for the state it
+   was in. A client looking at it could not tell whether their card was
+   about to be charged every month or not, which was the report.
+
+   Two states, said three ways — the knob's position, the colour, and the
+   word — because colour alone fails for anyone who cannot separate the
+   two hues, and a capsule with no knob does not read as a switch at all.
+
+   State comes from :checked, never from JavaScript writing inline styles.
+   The old one was painted from three different places and two of them
+   disagreed about which orange meant on.
+   ═══════════════════════════════════════════════════════════════════ */
+.svc-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* Kept in the layout and focusable rather than display:none, so it still
+   takes keyboard focus and still announces itself. */
+.svc-switch__input {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0; border: 0;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.svc-switch__track {
+  position: relative;
+  display: block;
+  width: 52px; height: 30px;
+  flex-shrink: 0;
+  border-radius: 30px;
+  background: #cfd4dc;
+  border: 1px solid rgba(0,0,0,0.08);
+  transition: background .2s ease, border-color .2s ease;
+}
+
+.svc-switch__knob {
+  position: absolute;
+  top: 3px; left: 3px;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  transition: transform .2s ease;
+}
+
+.svc-switch__state {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: .02em;
+  color: #6b7280;
+  min-width: 22px;              /* "Off" and "On" must not shift the layout */
+  transition: color .2s ease;
+}
+.svc-switch__state .on  { display: none; }
+.svc-switch__state .off { display: inline; }
+
+/* ── On ─────────────────────────────────────────────────────────────── */
+.svc-switch__input:checked ~ .svc-switch__track {
+  background: #ff9b0c;
+  border-color: #ff9b0c;
+}
+.svc-switch__input:checked ~ .svc-switch__track .svc-switch__knob {
+  transform: translateX(22px);
+}
+.svc-switch__input:checked ~ .svc-switch__state { color: #b45309; }
+.svc-switch__input:checked ~ .svc-switch__state .on  { display: inline; }
+.svc-switch__input:checked ~ .svc-switch__state .off { display: none; }
+
+/* Keyboard users get the same ring the rest of the portal uses. */
+.svc-switch__input:focus-visible ~ .svc-switch__track {
+  outline: 2px solid #ff9b0c;
+  outline-offset: 2px;
+}
+
+.svc-switch:hover .svc-switch__track { border-color: rgba(0,0,0,0.2); }
+
+@media (prefers-reduced-motion: reduce) {
+  .svc-switch__track,
+  .svc-switch__knob,
+  .svc-switch__state { transition: none; }
 }

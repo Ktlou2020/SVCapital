@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="icon" type="image/x-icon" href="../assets/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png" />
+  <link rel="apple-touch-icon" sizes="192x192" href="../assets/logo-192.png" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SV Capital — Change Requests</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
+  <script src="../js/staff-auth.js?v=5"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:      #0b0c10; --surface: #111318; --surface2: #1a1c24; --surface3: #22252f;
+      --border:  rgba(255,255,255,0.07); --border2: rgba(255,255,255,0.13);
+      --purple:  #eda5ff; --text: #e8eaf6; --muted: #6b7280; --muted2: #9ca3af;
+      --green:   #10b981; --yellow: #f59e0b; --red: #ef4444; --blue: #3b82f6;
+    }
+    html,body { min-height:100vh; background:var(--bg); font-family:'Inter',sans-serif; color:var(--text); overflow-x:hidden; }
+    body::before {
+      content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
+      background-image: linear-gradient(rgba(237,165,255,.025) 1px,transparent 1px), linear-gradient(90deg,rgba(237,165,255,.025) 1px,transparent 1px);
+      background-size:52px 52px;
+    }
+    .orb { position:fixed; border-radius:50%; filter:blur(120px); opacity:.08; z-index:0; pointer-events:none; }
+    .orb--1 { width:500px; height:500px; background:#eda5ff; top:-200px; left:-100px; }
+    .orb--2 { width:300px; height:300px; background:#00d4aa; bottom:-80px; right:-60px; }
+
+    #globalLoader { position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center; flex-direction:column; gap:14px; z-index:9999; }
+    #globalLoader .spin { width:40px; height:40px; border:3px solid rgba(237,165,255,.15); border-top-color:var(--purple); border-radius:50%; animation:spin .65s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    #mainContent { display:none; }
+
+    .page { position:relative; z-index:1; max-width:980px; margin:0 auto; padding:0 20px 80px; }
+
+    /* Top bar */
+    .topbar { display:flex; align-items:center; justify-content:space-between; padding:20px 0 24px; gap:12px; flex-wrap:wrap; }
+    .topbar-left { display:flex; align-items:center; gap:12px; }
+    .back-btn { display:flex; align-items:center; gap:7px; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:8px 14px; color:var(--muted2); font-size:.82rem; font-weight:600; text-decoration:none; transition:border-color .15s,color .15s; }
+    .back-btn:hover { border-color:var(--purple); color:var(--purple); }
+    .page-title { font-family:'Poppins',sans-serif; font-size:1.35rem; font-weight:800; letter-spacing:-.02em; }
+    .page-title span { color:var(--purple); }
+    .topbar-right { display:flex; align-items:center; gap:10px; }
+    .new-btn { display:flex; align-items:center; gap:8px; background:var(--purple); color:#0b0c10; border:none; border-radius:10px; padding:10px 18px; font-size:.85rem; font-weight:700; cursor:pointer; transition:opacity .15s,transform .15s; font-family:'Inter',sans-serif; }
+    .new-btn:hover { opacity:.88; transform:translateY(-1px); }
+
+    /* Notification bell */
+    .notif-wrap { position:relative; }
+    .notif-btn { position:relative; width:40px; height:40px; background:var(--surface); border:1px solid var(--border); border-radius:10px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--muted2); font-size:.95rem; transition:border-color .15s,color .15s; }
+    .notif-btn:hover { border-color:var(--purple); color:var(--purple); }
+    .notif-badge { position:absolute; top:-5px; right:-5px; background:#ef4444; color:#fff; font-size:.6rem; font-weight:800; width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; border:2px solid var(--bg); }
+    .notif-dropdown { position:absolute; top:calc(100% + 8px); right:0; width:340px; background:var(--surface); border:1px solid var(--border2); border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.5); z-index:5000; display:none; overflow:hidden; }
+    .notif-dropdown.open { display:block; }
+    .notif-hdr { display:flex; align-items:center; justify-content:space-between; padding:14px 16px 10px; border-bottom:1px solid var(--border); }
+    .notif-hdr-title { font-size:.8rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); }
+    .notif-clear-btn { font-size:.74rem; font-weight:700; color:var(--purple); background:none; border:none; cursor:pointer; padding:3px 8px; border-radius:6px; transition:background .15s; }
+    .notif-clear-btn:hover { background:rgba(237,165,255,.1); }
+    .notif-list { max-height:320px; overflow-y:auto; }
+    .notif-item { display:flex; gap:10px; padding:11px 16px; border-bottom:1px solid var(--border); transition:background .15s; }
+    .notif-item:last-child { border-bottom:none; }
+    .notif-item:hover { background:var(--surface2); }
+    .notif-icon { width:30px; height:30px; border-radius:8px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:.75rem; }
+    .notif-icon--new   { background:rgba(237,165,255,.12); color:var(--purple); }
+    .notif-icon--comment { background:rgba(59,130,246,.12); color:#60a5fa; }
+    .notif-icon--status { background:rgba(16,185,129,.12); color:#34d399; }
+    .notif-text { flex:1; min-width:0; }
+    .notif-msg { font-size:.78rem; color:var(--text); line-height:1.45; }
+    .notif-time { font-size:.7rem; color:var(--muted); margin-top:2px; }
+    .notif-empty { text-align:center; padding:32px 16px; color:var(--muted); font-size:.82rem; }
+
+    /* Stats */
+    .stats-row { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px; margin-bottom:24px; }
+    .stat-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px; }
+    .stat-card__label { font-size:.7rem; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:4px; }
+    .stat-card__value { font-size:1.6rem; font-weight:800; font-family:'Poppins',sans-serif; }
+    .stat-card--pending .stat-card__value  { color:var(--yellow); }
+    .stat-card--review  .stat-card__value  { color:var(--blue); }
+    .stat-card--done    .stat-card__value  { color:var(--green); }
+    .stat-card--total   .stat-card__value  { color:var(--purple); }
+
+    /* Filter row */
+    .filter-row { display:flex; align-items:center; gap:8px; margin-bottom:18px; flex-wrap:wrap; }
+    .filter-btn { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:6px 14px; font-size:.78rem; font-weight:600; color:var(--muted2); cursor:pointer; transition:all .15s; font-family:'Inter',sans-serif; }
+    .filter-btn.active { background:rgba(237,165,255,.12); border-color:var(--purple); color:var(--purple); }
+    .filter-btn:hover:not(.active) { border-color:var(--border2); color:var(--text); }
+
+    /* Request list */
+    .requests-list { display:flex; flex-direction:column; gap:10px; }
+    .request-card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:16px 18px; transition:border-color .15s; cursor:pointer; }
+    .request-card:hover { border-color:var(--border2); }
+    .card-header { display:flex; align-items:flex-start; gap:12px; margin-bottom:8px; }
+    .card-icon { width:36px; height:36px; border-radius:10px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:.85rem; }
+    .card-meta { flex:1; min-width:0; }
+    .card-title { font-size:.9rem; font-weight:700; margin-bottom:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .card-sub { font-size:.74rem; color:var(--muted); display:flex; gap:10px; flex-wrap:wrap; }
+    .card-badges { display:flex; gap:6px; align-items:center; flex-shrink:0; }
+    .badge { font-size:.67rem; font-weight:700; padding:3px 9px; border-radius:20px; letter-spacing:.03em; text-transform:uppercase; }
+    .badge--pending      { background:rgba(245,158,11,.15); color:#f59e0b; border:1px solid rgba(245,158,11,.3); }
+    .badge--reviewing    { background:rgba(59,130,246,.15); color:#60a5fa; border:1px solid rgba(59,130,246,.3); }
+    .badge--approved     { background:rgba(16,185,129,.15); color:#34d399; border:1px solid rgba(16,185,129,.3); }
+    .badge--rejected     { background:rgba(239,68,68,.12);  color:#f87171; border:1px solid rgba(239,68,68,.25); }
+    .badge--implemented  { background:rgba(237,165,255,.12); color:#eda5ff; border:1px solid rgba(237,165,255,.3); }
+    .prio-dot { width:7px; height:7px; border-radius:50%; display:inline-block; margin-right:4px; }
+    .prio--low { background:#6b7280; } .prio--medium { background:#f59e0b; }
+    .prio--high { background:#f97316; } .prio--urgent { background:#ef4444; }
+    .card-desc { font-size:.79rem; color:var(--muted2); line-height:1.55; margin-top:6px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+    .card-footer { display:flex; align-items:center; justify-content:space-between; margin-top:10px; padding-top:10px; border-top:1px solid var(--border); font-size:.72rem; color:var(--muted); }
+    .card-footer-left { display:flex; gap:14px; align-items:center; }
+    .card-meta-pill { display:inline-flex; align-items:center; gap:5px; }
+
+    .empty-state { text-align:center; padding:48px 24px; color:var(--muted); }
+    .empty-state i { font-size:2.2rem; margin-bottom:12px; display:block; opacity:.4; }
+    .empty-state p { font-size:.86rem; }
+
+    /* ── Detail modal ── */
+    .modal-overlay { position:fixed; inset:0; z-index:8000; background:rgba(0,0,0,.65); backdrop-filter:blur(4px); display:none; align-items:flex-start; justify-content:center; padding:20px; overflow-y:auto; }
+    .modal-overlay.open { display:flex; }
+    .modal { background:var(--surface); border:1px solid var(--border2); border-radius:20px; width:100%; max-width:680px; margin:auto; position:relative; }
+    .modal-close { position:absolute; top:14px; right:16px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:5px 10px; color:var(--muted2); cursor:pointer; font-size:.8rem; font-weight:600; transition:border-color .15s,color .15s; font-family:'Inter',sans-serif; }
+    .modal-close:hover { border-color:var(--red); color:var(--red); }
+    .modal-header { padding:22px 22px 16px; border-bottom:1px solid var(--border); }
+    .modal-title { font-size:1rem; font-weight:800; margin-bottom:8px; padding-right:60px; }
+    .modal-meta { display:flex; gap:8px; flex-wrap:wrap; align-items:center; font-size:.74rem; color:var(--muted); }
+    .modal-body { padding:20px 22px; }
+
+    /* Detail sections */
+    .detail-section { margin-bottom:20px; }
+    .detail-label { font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--muted); margin-bottom:6px; }
+    .detail-text { font-size:.84rem; color:var(--muted2); line-height:1.6; background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:12px 14px; }
+    .detail-text.empty-text { font-style:italic; color:var(--muted); }
+
+    /* Admin notes / status update panel */
+    .admin-panel { background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:14px 16px; margin-bottom:20px; }
+    .admin-panel-title { font-size:.74rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--purple); margin-bottom:10px; display:flex; align-items:center; gap:6px; }
+    .admin-row { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px; }
+    .status-select { background:var(--surface3); border:1px solid var(--border2); border-radius:8px; padding:7px 10px; color:var(--text); font-size:.82rem; font-family:'Inter',sans-serif; flex:1; min-width:140px; }
+    .status-select:focus { outline:none; border-color:var(--purple); }
+    .notes-textarea { width:100%; background:var(--surface3); border:1px solid var(--border); border-radius:8px; padding:9px 12px; color:var(--text); font-size:.82rem; font-family:'Inter',sans-serif; resize:vertical; min-height:70px; }
+    .notes-textarea:focus { outline:none; border-color:var(--purple); }
+    .save-btn { background:var(--purple); color:#0b0c10; border:none; border-radius:8px; padding:8px 18px; font-size:.82rem; font-weight:700; cursor:pointer; font-family:'Inter',sans-serif; transition:opacity .15s; }
+    .save-btn:hover { opacity:.85; }
+    .save-btn:disabled { opacity:.5; cursor:not-allowed; }
+
+    /* Attachments */
+    .attachments-grid { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+    .attachment-chip { display:inline-flex; align-items:center; gap:7px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:6px 12px; font-size:.76rem; color:var(--muted2); cursor:pointer; transition:border-color .15s,color .15s; text-decoration:none; }
+    .attachment-chip:hover { border-color:var(--purple); color:var(--purple); }
+    .attachment-chip i { font-size:.8rem; }
+    .attach-upload-row { display:flex; gap:8px; align-items:center; margin-top:10px; }
+    .file-input-label { display:inline-flex; align-items:center; gap:7px; background:var(--surface2); border:1px solid dashed; border-color:var(--border2); border-radius:8px; padding:7px 14px; font-size:.78rem; color:var(--muted2); cursor:pointer; transition:border-color .15s,color .15s; }
+    .file-input-label:hover { border-color:var(--purple); color:var(--purple); }
+    #attachFileInput { display:none; }
+    .upload-btn { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:7px 14px; font-size:.78rem; font-weight:600; color:var(--muted2); cursor:pointer; font-family:'Inter',sans-serif; transition:border-color .15s,color .15s; }
+    .upload-btn:hover { border-color:var(--purple); color:var(--purple); }
+    .upload-btn:disabled { opacity:.5; cursor:not-allowed; }
+    #attachFileName { font-size:.75rem; color:var(--muted); }
+
+    /* Comments */
+    .comments-section { border-top:1px solid var(--border); padding-top:18px; }
+    .comments-title { font-size:.74rem; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--muted); margin-bottom:14px; }
+    .comment-list { display:flex; flex-direction:column; gap:12px; margin-bottom:16px; }
+    .comment-item { display:flex; gap:10px; }
+    .comment-avatar { width:30px; height:30px; border-radius:50%; background:var(--surface3); flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:.7rem; font-weight:700; color:var(--purple); border:1px solid var(--border); }
+    .comment-bubble { flex:1; background:var(--surface2); border:1px solid var(--border); border-radius:12px; border-top-left-radius:4px; padding:10px 13px; }
+    .comment-bubble.mine { background:rgba(237,165,255,.07); border-color:rgba(237,165,255,.2); border-top-right-radius:4px; border-top-left-radius:12px; }
+    .comment-author { font-size:.74rem; font-weight:700; color:var(--text); margin-bottom:4px; }
+    .comment-author.kagiso { color:var(--purple); }
+    .comment-body { font-size:.82rem; color:var(--muted2); line-height:1.55; white-space:pre-wrap; }
+    .comment-time { font-size:.68rem; color:var(--muted); margin-top:5px; }
+    .comment-form { display:flex; gap:8px; align-items:flex-end; }
+    .comment-input { flex:1; background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:9px 13px; color:var(--text); font-size:.82rem; font-family:'Inter',sans-serif; resize:none; min-height:60px; transition:border-color .15s; }
+    .comment-input:focus { outline:none; border-color:var(--purple); }
+    .comment-submit { background:var(--purple); color:#0b0c10; border:none; border-radius:10px; padding:9px 16px; font-size:.82rem; font-weight:700; cursor:pointer; font-family:'Inter',sans-serif; transition:opacity .15s; align-self:flex-end; }
+    .comment-submit:hover { opacity:.85; }
+    .comment-submit:disabled { opacity:.5; cursor:not-allowed; }
+
+    /* ── Media on a comment ── a screenshot is the point of the comment, so it
+       shows at a size you can read rather than as a filename to click. */
+    .comment-media { display:flex; flex-wrap:wrap; gap:8px; margin-top:9px; }
+    .comment-media img, .comment-media video {
+      max-width:min(340px,100%); max-height:260px; border-radius:9px;
+      border:1px solid var(--border); background:#000; display:block;
+    }
+    /* A minimum tile, so a small image is something you can see and click
+       rather than a four-pixel speck against a dark bubble. object-fit keeps
+       it from being stretched to fill the tile. */
+    .comment-media img {
+      cursor:zoom-in; object-fit:contain;
+      min-width:64px; min-height:48px; background:var(--surface3);
+    }
+    .comment-media video { width:340px; }
+    .comment-file {
+      display:inline-flex; align-items:center; gap:7px; background:var(--surface3);
+      border:1px solid var(--border); border-radius:8px; padding:6px 11px;
+      font-size:.74rem; color:var(--muted2); text-decoration:none;
+    }
+    .comment-file:hover { border-color:var(--purple); color:var(--purple); }
+
+    /* Files chosen but not yet sent. Shown before posting so a wrong file can
+       be taken off rather than discovered in the thread afterwards. */
+    .pending-strip { display:flex; flex-wrap:wrap; gap:7px; margin-bottom:8px; }
+    .pending-strip:empty { display:none; }
+    .pending-chip {
+      display:inline-flex; align-items:center; gap:7px; background:var(--surface2);
+      border:1px solid var(--border); border-radius:8px; padding:5px 9px;
+      font-size:.72rem; color:var(--muted2); max-width:230px;
+    }
+    .pending-chip img { width:26px; height:26px; object-fit:cover; border-radius:5px; }
+    .pending-chip span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .pending-chip button {
+      background:none; border:none; color:var(--muted); cursor:pointer; padding:0 2px;
+      font-size:.8rem; line-height:1;
+    }
+    .pending-chip button:hover { color:var(--danger,#f87171); }
+    .comment-compose { flex:1; display:flex; flex-direction:column; }
+    .comment-tools { display:flex; align-items:center; gap:10px; margin-top:6px; }
+    .comment-attach-btn {
+      display:inline-flex; align-items:center; gap:6px; background:none; border:none;
+      color:var(--muted); cursor:pointer; font-size:.75rem; font-family:'Inter',sans-serif; padding:0;
+    }
+    .comment-attach-btn:hover { color:var(--purple); }
+    .comment-hint { font-size:.68rem; color:var(--muted); }
+
+    /* Full-size view for a screenshot. */
+    .lightbox {
+      position:fixed; inset:0; background:rgba(0,0,0,.88); z-index:9999;
+      display:none; align-items:center; justify-content:center; padding:28px; cursor:zoom-out;
+    }
+    .lightbox.open { display:flex; }
+    .lightbox img { max-width:100%; max-height:100%; border-radius:10px; }
+    .lightbox-close {
+      position:absolute; top:18px; right:22px; background:none; border:none;
+      color:#fff; font-size:1.6rem; cursor:pointer; line-height:1;
+    }
+
+    /* New request modal */
+    .form-group { margin-bottom:16px; }
+    .form-label { display:block; font-size:.78rem; font-weight:600; color:var(--muted2); margin-bottom:6px; }
+    .form-input,.form-select,.form-textarea { width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:10px 13px; color:var(--text); font-size:.85rem; font-family:'Inter',sans-serif; transition:border-color .15s; }
+    .form-textarea { resize:vertical; min-height:90px; }
+    .form-input:focus,.form-select:focus,.form-textarea:focus { outline:none; border-color:var(--purple); }
+    .form-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .form-section-title { font-size:.74rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-bottom:12px; margin-top:4px; }
+    .drop-zone { border:2px dashed var(--border2); border-radius:10px; padding:20px; text-align:center; cursor:pointer; transition:border-color .15s,background .15s; margin-bottom:8px; }
+    .drop-zone:hover,.drop-zone.drag-over { border-color:var(--purple); background:rgba(237,165,255,.04); }
+    .drop-zone i { font-size:1.4rem; color:var(--muted); margin-bottom:8px; display:block; }
+    .drop-zone p { font-size:.78rem; color:var(--muted); }
+    .drop-zone span { color:var(--purple); font-weight:600; }
+    #newFileInput { display:none; }
+    .file-preview-list { display:flex; flex-direction:column; gap:6px; }
+    .file-preview-item { display:flex; align-items:center; justify-content:space-between; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:6px 12px; font-size:.76rem; color:var(--muted2); }
+    .file-remove-btn { background:none; border:none; color:var(--red); cursor:pointer; padding:0 4px; font-size:.8rem; }
+    .modal-footer { padding:14px 22px; border-top:1px solid var(--border); display:flex; gap:10px; justify-content:flex-end; }
+    .btn-cancel { background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:9px 18px; font-size:.84rem; font-weight:600; color:var(--muted2); cursor:pointer; font-family:'Inter',sans-serif; }
+    .btn-cancel:hover { border-color:var(--border2); color:var(--text); }
+    .btn-submit { background:var(--purple); color:#0b0c10; border:none; border-radius:10px; padding:9px 22px; font-size:.84rem; font-weight:700; cursor:pointer; font-family:'Inter',sans-serif; transition:opacity .15s; }
+    .btn-submit:hover { opacity:.85; }
+    .btn-submit:disabled { opacity:.5; cursor:not-allowed; }
+
+    /* Toast */
+    #toastEl { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--surface3); border:1px solid var(--border2); border-radius:10px; padding:10px 20px; font-size:.82rem; font-weight:600; color:var(--text); z-index:99999; opacity:0; transition:opacity .25s; pointer-events:none; box-shadow:0 8px 24px rgba(0,0,0,.4); }
+    #toastEl.show { opacity:1; }
+    #toastEl.err  { border-color:rgba(239,68,68,.5); color:#f87171; }
+  </style>
+</head>
+<body>
+  <div class="orb orb--1"></div>
+  <div class="orb orb--2"></div>
+  <div id="globalLoader"><div class="spin"></div></div>
+  <div id="toastEl"></div>
+
+  <div id="mainContent">
+    <div class="page">
+      <div class="topbar">
+        <div class="topbar-left">
+          <a href="hub.html" class="back-btn"><i class="fa-solid fa-arrow-left"></i> Hub</a>
+          <h1 class="page-title">Change <span>Requests</span></h1>
+        </div>
+        <div class="topbar-right">
+          <div class="notif-wrap">
+            <button class="notif-btn" id="notifBtn" onclick="toggleNotifDropdown()">
+              <i class="fa-solid fa-bell"></i>
+              <span class="notif-badge" id="notifBadge" style="display:none">0</span>
+            </button>
+            <div class="notif-dropdown" id="notifDropdown">
+              <div class="notif-hdr">
+                <span class="notif-hdr-title">Notifications</span>
+                <button class="notif-clear-btn" onclick="clearNotifications()">Clear all</button>
+              </div>
+              <div class="notif-list" id="notifList"></div>
+            </div>
+          </div>
+          <button class="new-btn" onclick="openNewModal()"><i class="fa-solid fa-plus"></i> New Request</button>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-row">
+        <div class="stat-card stat-card--total"><div class="stat-card__label">Total</div><div class="stat-card__value" id="statTotal">—</div></div>
+        <div class="stat-card stat-card--pending"><div class="stat-card__label">Pending</div><div class="stat-card__value" id="statPending">—</div></div>
+        <div class="stat-card stat-card--review"><div class="stat-card__label">In Review</div><div class="stat-card__value" id="statReview">—</div></div>
+        <div class="stat-card stat-card--done"><div class="stat-card__label">Implemented</div><div class="stat-card__value" id="statDone">—</div></div>
+      </div>
+
+      <!-- Filters -->
+      <div class="filter-row">
+        <button class="filter-btn active" data-filter="all"         onclick="setFilter('all')">All</button>
+        <button class="filter-btn"        data-filter="pending"     onclick="setFilter('pending')">Pending</button>
+        <button class="filter-btn"        data-filter="reviewing"   onclick="setFilter('reviewing')">In Review</button>
+        <button class="filter-btn"        data-filter="approved"    onclick="setFilter('approved')">Approved</button>
+        <button class="filter-btn"        data-filter="implemented" onclick="setFilter('implemented')">Implemented</button>
+        <button class="filter-btn"        data-filter="rejected"    onclick="setFilter('rejected')">Rejected</button>
+      </div>
+
+      <!-- Request list -->
+      <div class="requests-list" id="requestsList"></div>
+    </div>
+  </div>
+
+  <!-- ── Detail modal ── -->
+  <div class="modal-overlay" id="detailOverlay" onclick="closeDetailIfBg(event)">
+    <div class="modal" id="detailModal">
+      <button class="modal-close" onclick="closeDetail()">Close &times;</button>
+      <div class="modal-header">
+        <div class="modal-title" id="detailTitle"></div>
+        <div class="modal-meta" id="detailMeta"></div>
+      </div>
+      <div class="modal-body" id="detailBody"></div>
+    </div>
+  </div>
+
+  <!-- ── New request modal ── -->
+  <div class="modal-overlay" id="newOverlay" onclick="closeNewIfBg(event)">
+    <div class="modal">
+      <button class="modal-close" onclick="closeNew()">Close &times;</button>
+      <div class="modal-header"><div class="modal-title">Submit a Change Request</div></div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Category</label>
+            <select class="form-select" id="newCategory">
+              <option value="feature">Feature Request</option>
+              <option value="bug">Bug / Issue</option>
+              <option value="process">Process Change</option>
+              <option value="data">Data / Reporting</option>
+              <option value="ui_ux">UI / UX</option>
+              <option value="security">Security</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Priority</label>
+            <select class="form-select" id="newPriority">
+              <option value="low">Low</option>
+              <option value="medium" selected>Medium</option>
+              <option value="high">High</option>
+              <option value="urgent">Urgent</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Title *</label>
+          <input class="form-input" id="newTitle" placeholder="Short descriptive title" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Description *</label>
+          <textarea class="form-textarea" id="newDesc" placeholder="Describe the change or issue in detail…"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Expected Impact</label>
+          <textarea class="form-textarea" id="newImpact" style="min-height:60px" placeholder="How will this improve things?"></textarea>
+        </div>
+        <div class="form-group">
+          <div class="form-section-title"><i class="fa-solid fa-paperclip" style="margin-right:5px"></i>Attachments (optional)</div>
+          <div class="drop-zone" id="newDropZone" onclick="document.getElementById('newFileInput').click()">
+            <i class="fa-solid fa-cloud-arrow-up"></i>
+            <p>Drag &amp; drop files here, or <span>browse</span></p>
+            <p style="margin-top:4px;font-size:.7rem">Images, PDFs, screenshots — up to 10 MB each</p>
+          </div>
+          <input type="file" id="newFileInput" multiple accept="image/*,.pdf,.doc,.docx,.txt,.xlsx,.csv" />
+          <div class="file-preview-list" id="newFileList"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-cancel" onclick="closeNew()">Cancel</button>
+        <button class="btn-submit" id="newSubmitBtn" onclick="submitNewRequest()"><i class="fa-solid fa-paper-plane" style="margin-right:6px"></i>Submit Request</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ── Globals ── */
+let SESSION = null, IS_REVIEWER = false;
+let ALL_REQUESTS = [], CURRENT_FILTER = 'all';
+let NEW_FILES = [];
+let CURRENT_REQUEST_ID = null;
+
+const CAT_META = {
+  feature:  { label:'Feature Request', icon:'fa-solid fa-wand-magic-sparkles', color:'#eda5ff' },
+  bug:      { label:'Bug / Issue',      icon:'fa-solid fa-bug',                 color:'#ef4444' },
+  process:  { label:'Process Change',   icon:'fa-solid fa-gear',                color:'#f59e0b' },
+  data:     { label:'Data / Reporting', icon:'fa-solid fa-chart-bar',           color:'#3b82f6' },
+  security: { label:'Security',         icon:'fa-solid fa-shield-halved',       color:'#10b981' },
+  ui_ux:    { label:'UI / UX',          icon:'fa-solid fa-paintbrush',          color:'#00d4aa' },
+  other:    { label:'Other',            icon:'fa-solid fa-circle-dot',          color:'#6b7280' },
+};
+const STATUS_LABEL = { pending:'Pending', reviewing:'In Review', approved:'Approved', rejected:'Rejected', implemented:'Implemented' };
+const PRIO_LABEL   = { low:'Low', medium:'Medium', high:'High', urgent:'Urgent' };
+
+/* ── Init ── */
+document.addEventListener('DOMContentLoaded', async () => {
+  SESSION = StaffAuth.getSession();
+  if (!SESSION) { window.location.replace('login.html'); return; }
+  IS_REVIEWER = ['admin','director','fund_manager'].includes(SESSION.role) || SESSION.level === 'executive' || SESSION.level === 'lead';
+
+  setupDragDrop();
+  document.getElementById('newFileInput').addEventListener('change', e => addFiles(Array.from(e.target.files)));
+  document.addEventListener('click', e => {
+    if (!document.getElementById('notifBtn').contains(e.target) &&
+        !document.getElementById('notifDropdown').contains(e.target))
+      document.getElementById('notifDropdown').classList.remove('open');
+  });
+
+  await Promise.all([loadRequests(), loadNotifications()]);
+  document.getElementById('globalLoader').style.display = 'none';
+  document.getElementById('mainContent').style.display  = 'block';
+});
+
+/* ── Auth headers ── */
+/* Authorization: Bearer, which is what requireAuth actually reads.
+
+   This page sent the staff token as X-Staff-Token — a header the server has
+   never looked at. Every call from here therefore worked only while the
+   svc_token COOKIE was still valid, and that cookie lasts eight hours. Once
+   it lapsed, or in any context where it was not sent, the page still looked
+   signed in because the session was in localStorage, and every write came
+   back 401 — including attaching a screenshot to a comment, which is the one
+   people noticed because it is what they were trying to do.
+
+   The header is kept alongside it: harmless, and something may yet read it. */
+function apiHeaders(isJson = true) {
+  const s = localStorage.getItem('staffSession');
+  const h = {};
+  if (isJson) h['Content-Type'] = 'application/json';
+  if (s) {
+    try {
+      const token = JSON.parse(s).token;
+      if (token) { h['Authorization'] = 'Bearer ' + token; h['X-Staff-Token'] = token; }
+    } catch(_){}
+  }
+  return h;
+}
+async function apiFetch(url, opts = {}) {
+  const isJson = !(opts.body instanceof FormData);
+  const res = await fetch(url, { ...opts, headers: { ...apiHeaders(isJson), ...(opts.headers||{}) }, credentials:'include' });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || 'Request failed');
+  return json;
+}
+
+/* ── Load all requests ── */
+async function loadRequests() {
+  try {
+    const data = await apiFetch('/api/change-requests');
+    ALL_REQUESTS = data.data || [];
+    renderRequests();
+    updateStats();
+  } catch(err) { toast('Failed to load requests: ' + err.message, true); }
+}
+
+/* ── Load notifications ── */
+async function loadNotifications() {
+  try {
+    const { data } = await apiFetch('/api/change-requests/notifications');
+    const items = data || [];
+    const badge = document.getElementById('notifBadge');
+    badge.textContent = items.length > 99 ? '99+' : items.length;
+    badge.style.display = items.length ? 'flex' : 'none';
+
+    const list = document.getElementById('notifList');
+    if (!items.length) {
+      list.innerHTML = '<div class="notif-empty"><i class="fa-regular fa-bell-slash"></i><br>No new notifications</div>';
+      return;
+    }
+    const iconMap = { new_request:'fa-solid fa-plus notif-icon--new', new_comment:'fa-solid fa-comment notif-icon--comment', status_change:'fa-solid fa-rotate notif-icon--status' };
+    list.innerHTML = items.map(n => `
+      <div class="notif-item" onclick="closeNotifAndOpenDetail('${n.request_id}')">
+        <div class="notif-icon ${iconMap[n.event_type]||'notif-icon--new'}"><i class="fa-solid fa-circle-dot"></i></div>
+        <div class="notif-text">
+          <div class="notif-msg">${esc(n.message)}</div>
+          <div class="notif-time">${timeAgo(n.created_at)}</div>
+        </div>
+      </div>`).join('');
+  } catch(_) {}
+}
+
+async function clearNotifications() {
+  try {
+    await apiFetch('/api/change-requests/notifications/clear', { method:'POST', body:'{}' });
+    document.getElementById('notifBadge').style.display = 'none';
+    document.getElementById('notifList').innerHTML = '<div class="notif-empty">All cleared</div>';
+  } catch(err) { toast(err.message, true); }
+}
+
+function toggleNotifDropdown() {
+  document.getElementById('notifDropdown').classList.toggle('open');
+}
+function closeNotifAndOpenDetail(reqId) {
+  document.getElementById('notifDropdown').classList.remove('open');
+  openDetail(reqId);
+}
+
+/* ── Stats ── */
+function updateStats() {
+  document.getElementById('statTotal').textContent   = ALL_REQUESTS.length;
+  document.getElementById('statPending').textContent = ALL_REQUESTS.filter(r=>r.status==='pending').length;
+  document.getElementById('statReview').textContent  = ALL_REQUESTS.filter(r=>r.status==='reviewing').length;
+  document.getElementById('statDone').textContent    = ALL_REQUESTS.filter(r=>r.status==='implemented').length;
+}
+
+/* ── Filter ── */
+function setFilter(f) {
+  CURRENT_FILTER = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b.dataset.filter === f));
+  renderRequests();
+}
+
+/* ── Render list ── */
+function renderRequests() {
+  const items = CURRENT_FILTER === 'all' ? ALL_REQUESTS : ALL_REQUESTS.filter(r => r.status === CURRENT_FILTER);
+  const list  = document.getElementById('requestsList');
+  if (!items.length) {
+    list.innerHTML = `<div class="empty-state"><i class="fa-solid fa-inbox"></i><p>${CURRENT_FILTER==='all'?'No requests yet. Be the first to submit one!':'No requests match this filter.'}</p></div>`;
+    return;
+  }
+  list.innerHTML = items.map(r => buildCard(r)).join('');
+}
+
+function buildCard(r) {
+  const cat  = CAT_META[r.category] || CAT_META.other;
+  const date = new Date(r.created_at).toLocaleDateString('en-ZA', { day:'numeric', month:'short', year:'numeric' });
+  const isMine = r.employee_id === SESSION.empId;
+  return `
+    <div class="request-card" onclick="openDetail('${r.id}')">
+      <div class="card-header">
+        <div class="card-icon" style="background:${cat.color}18;color:${cat.color}"><i class="${cat.icon}"></i></div>
+        <div class="card-meta">
+          <div class="card-title">${esc(r.title)}${isMine?'<span style="font-size:.65rem;margin-left:6px;color:var(--purple);font-weight:600">MINE</span>':''}</div>
+          <div class="card-sub"><span>${cat.label}</span><span><i class="fa-regular fa-user" style="margin-right:3px"></i>${esc(r.submitted_by)}</span></div>
+        </div>
+        <div class="card-badges">
+          <span class="badge badge--${r.status}">${STATUS_LABEL[r.status]||r.status}</span>
+        </div>
+      </div>
+      <div class="card-desc">${esc(r.description)}</div>
+      <div class="card-footer">
+        <div class="card-footer-left">
+          <span class="card-meta-pill"><span class="prio-dot prio--${r.priority}"></span>${PRIO_LABEL[r.priority]||r.priority}</span>
+          <span><i class="fa-regular fa-comment" style="margin-right:3px"></i>${r.comment_count||0}</span>
+          <span><i class="fa-solid fa-paperclip" style="margin-right:3px"></i>${r.attachment_count||0}</span>
+        </div>
+        <span>${date}</span>
+      </div>
+    </div>`;
+}
+
+/* ── Detail modal ── */
+async function openDetail(id) {
+  CURRENT_REQUEST_ID = id;
+  document.getElementById('detailBody').innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)"><div class="spin" style="margin:0 auto"></div></div>';
+  document.getElementById('detailTitle').textContent = 'Loading…';
+  document.getElementById('detailMeta').innerHTML = '';
+  document.getElementById('detailOverlay').classList.add('open');
+  try {
+    const { data: r, comments, attachments } = await apiFetch(`/api/change-requests/${id}`);
+    renderDetail(r, comments, attachments);
+  } catch(err) {
+    document.getElementById('detailBody').innerHTML = `<p style="color:var(--red);padding:20px">${esc(err.message)}</p>`;
+  }
+}
+
+function renderDetail(r, comments, attachments) {
+  const cat  = CAT_META[r.category] || CAT_META.other;
+  const date = new Date(r.created_at).toLocaleDateString('en-ZA', { day:'numeric', month:'long', year:'numeric' });
+
+  document.getElementById('detailTitle').textContent = r.title;
+  document.getElementById('detailMeta').innerHTML = `
+    <span class="badge badge--${r.status}">${STATUS_LABEL[r.status]||r.status}</span>
+    <span style="display:inline-flex;align-items:center;gap:4px"><span class="prio-dot prio--${r.priority}"></span>${PRIO_LABEL[r.priority]||r.priority}</span>
+    <span style="color:var(--muted)"><i class="${cat.icon}" style="margin-right:3px;color:${cat.color}"></i>${cat.label}</span>
+    <span><i class="fa-regular fa-user" style="margin-right:3px"></i>${esc(r.submitted_by)}</span>
+    <span>${date}</span>`;
+
+  // Admin panel (reviewer only)
+  const adminHtml = IS_REVIEWER ? `
+    <div class="admin-panel">
+      <div class="admin-panel-title"><i class="fa-solid fa-shield-halved"></i> Review &amp; Respond</div>
+      <div class="admin-row">
+        <select class="status-select" id="detailStatus">
+          ${['pending','reviewing','approved','rejected','implemented'].map(s=>`<option value="${s}"${r.status===s?' selected':''}>${STATUS_LABEL[s]}</option>`).join('')}
+        </select>
+        <button class="save-btn" id="statusSaveBtn" onclick="saveStatus()">Save Status</button>
+      </div>
+      <textarea class="notes-textarea" id="detailNotes" placeholder="Add admin notes visible to the team…">${esc(r.admin_notes||'')}</textarea>
+      <div style="margin-top:8px"><button class="save-btn" id="notesSaveBtn" onclick="saveNotes()">Save Notes</button></div>
+    </div>` : (r.admin_notes ? `<div class="detail-section"><div class="detail-label">Admin Response</div><div class="detail-text">${esc(r.admin_notes)}</div></div>` : '');
+
+  /* Attachments filed against a COMMENT belong under that comment, not in the
+     request's own list — otherwise a screenshot posted as feedback shows up
+     detached from the sentence explaining it. */
+  COMMENT_MEDIA = {};
+  const requestAttach = [];
+  attachments.forEach(a => {
+    if (a.comment_id) (COMMENT_MEDIA[a.comment_id] = COMMENT_MEDIA[a.comment_id] || []).push(a);
+    else requestAttach.push(a);
+  });
+
+  // Attachments
+  const existingAttach = requestAttach.length ? `
+    <div class="attachments-grid">
+      ${requestAttach.map(a => `
+        <a class="attachment-chip" href="/api/change-requests/attachments/${a.id}" target="_blank">
+          <i class="${attachIcon(a.filename)}"></i>${esc(a.filename)}
+          <span style="font-size:.65rem;color:var(--muted)">· ${esc(a.author_name)}</span>
+        </a>`).join('')}
+    </div>` : '<p style="font-size:.78rem;color:var(--muted);margin-top:4px">No attachments</p>';
+  PENDING_FILES = [];
+
+  document.getElementById('detailBody').innerHTML = `
+    ${adminHtml}
+    <div class="detail-section">
+      <div class="detail-label">Description</div>
+      <div class="detail-text">${esc(r.description)}</div>
+    </div>
+    ${r.expected_impact ? `<div class="detail-section"><div class="detail-label">Expected Impact</div><div class="detail-text">${esc(r.expected_impact)}</div></div>` : ''}
+    <div class="detail-section">
+      <div class="detail-label">Attachments</div>
+      ${existingAttach}
+      <div class="attach-upload-row">
+        <label class="file-input-label" for="attachFileInput"><i class="fa-solid fa-paperclip"></i> Attach file</label>
+        <input type="file" id="attachFileInput" multiple accept="image/png,image/jpeg,image/gif,image/webp,image/avif,video/mp4,video/webm,video/quicktime,.pdf,.doc,.docx,.txt,.xlsx,.csv" onchange="uploadAttachments()" />
+        <span id="attachFileName"></span>
+      </div>
+    </div>
+    <div class="comments-section">
+      <div class="comments-title" id="commentsTitle"><i class="fa-solid fa-comments" style="margin-right:5px"></i>Discussion (${comments.length})</div>
+      <div class="comment-list" id="commentList">
+        ${comments.length ? comments.map(c => buildComment(c)).join('') : '<p style="font-size:.78rem;color:var(--muted);margin-bottom:12px">No comments yet — be the first.</p>'}
+      </div>
+      <div class="pending-strip" id="pendingStrip"></div>
+      <div class="comment-form">
+        <div class="comment-compose">
+          <textarea class="comment-input" id="commentInput" placeholder="Write a comment… (Shift+Enter for new line)" onkeydown="commentKeydown(event)"></textarea>
+          <div class="comment-tools">
+            <button type="button" class="comment-attach-btn" onclick="document.getElementById('commentFileInput').click()">
+              <i class="fa-solid fa-paperclip"></i> Attach image or video
+            </button>
+            <input type="file" id="commentFileInput" multiple style="display:none"
+                   accept="image/png,image/jpeg,image/gif,image/webp,image/avif,video/mp4,video/webm,video/quicktime,.pdf,.doc,.docx,.xlsx,.csv,.txt"
+                   onchange="queueCommentFiles(this.files)" />
+            <span class="comment-hint">Up to 8 files, 25 MB each</span>
+          </div>
+        </div>
+        <button class="comment-submit" id="commentSubmitBtn" onclick="submitComment()"><i class="fa-solid fa-paper-plane"></i></button>
+      </div>
+    </div>`;
+}
+
+/* Attachments on the open request, grouped by the comment they belong to, and
+   the files chosen for the comment being written. */
+let COMMENT_MEDIA = {};
+let PENDING_FILES = [];
+
+/* Only the types the server will serve inline. Anything else is a link — and
+   the two lists have to agree, because a video rendered in a <video> that the
+   server hands back as a download plays nothing at all. */
+const INLINE_IMAGE = ['image/png','image/jpeg','image/gif','image/webp','image/avif'];
+const INLINE_VIDEO = ['video/mp4','video/webm','video/quicktime'];
+
+function commentMediaHtml(commentId) {
+  const list = COMMENT_MEDIA[commentId] || [];
+  if (!list.length) return '';
+  return `<div class="comment-media">${list.map(a => {
+    const url = `/api/change-requests/attachments/${a.id}`;
+    if (INLINE_IMAGE.includes(a.mime_type)) {
+      return `<img src="${url}" alt="${esc(a.filename)}" loading="lazy" onclick="openLightbox('${url}')">`;
+    }
+    if (INLINE_VIDEO.includes(a.mime_type)) {
+      /* preload="metadata" so the thread does not pull every video the moment
+         it opens; the range support on the server is what makes that work. */
+      return `<video src="${url}" controls preload="metadata"></video>`;
+    }
+    return `<a class="comment-file" href="${url}" target="_blank" rel="noopener">
+              <i class="${attachIcon(a.filename)}"></i>${esc(a.filename)}</a>`;
+  }).join('')}</div>`;
+}
+
+function buildComment(c) {
+  const initials = (c.author_name||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+  const isKagiso = c.author_name?.toLowerCase().includes('kagiso');
+  const isMine   = c.employee_id === SESSION.empId;
+  return `
+    <div class="comment-item">
+      <div class="comment-avatar">${initials}</div>
+      <div class="comment-bubble${isMine?' mine':''}">
+        <div class="comment-author${isKagiso?' kagiso':''}">${esc(c.author_name)}${isKagiso?' <i class="fa-solid fa-shield-halved" style="font-size:.65rem"></i>':''}</div>
+        ${c.body ? `<div class="comment-body">${esc(c.body)}</div>` : ''}
+        ${commentMediaHtml(c.id)}
+        <div class="comment-time">${timeAgo(c.created_at)}</div>
+      </div>
+    </div>`;
+}
+
+/* ── Files on the comment being written ───────────────────────────────────
+   Held on the client until the comment is posted, so text and media go to
+   the server together and either both land or neither does. */
+const CR_MAX_FILES = 8;
+const CR_MAX_BYTES = 25 * 1024 * 1024;
+
+function queueCommentFiles(fileList) {
+  const input = document.getElementById('commentFileInput');
+  for (const f of Array.from(fileList)) {
+    if (PENDING_FILES.length >= CR_MAX_FILES) { toast(`Up to ${CR_MAX_FILES} files per comment`, true); break; }
+    /* Rejected here as well as on the server, because finding out a 60 MB
+       screen recording is too big AFTER waiting for it to upload is the
+       annoying way to find out. */
+    if (f.size > CR_MAX_BYTES) { toast(`${f.name} is over 25 MB`, true); continue; }
+    PENDING_FILES.push(f);
+  }
+  if (input) input.value = '';
+  renderPending();
+}
+
+function removePendingFile(i) { PENDING_FILES.splice(i, 1); renderPending(); }
+
+function renderPending() {
+  const strip = document.getElementById('pendingStrip');
+  if (!strip) return;
+  strip.innerHTML = PENDING_FILES.map((f, i) => {
+    const thumb = f.type.startsWith('image/')
+      ? `<img src="${URL.createObjectURL(f)}" alt="">`
+      : `<i class="${f.type.startsWith('video/') ? 'fa-solid fa-film' : attachIcon(f.name)}"></i>`;
+    return `<span class="pending-chip">${thumb}<span title="${esc(f.name)}">${esc(f.name)}</span>
+              <button type="button" onclick="removePendingFile(${i})" title="Remove">&times;</button></span>`;
+  }).join('');
+}
+
+function openLightbox(url) {
+  const lb = document.getElementById('lightbox');
+  document.getElementById('lightboxImg').src = url;
+  lb.classList.add('open');
+}
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('open');
+  document.getElementById('lightboxImg').src = '';
+}
+
+function commentKeydown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitComment(); }
+}
+
+async function submitComment() {
+  const input = document.getElementById('commentInput');
+  const body  = input.value.trim();
+  /* A comment that is only a screenshot is a real comment — the server takes
+     it, so the button has to as well. */
+  if (!body && !PENDING_FILES.length) return;
+  const btn = document.getElementById('commentSubmitBtn');
+  btn.disabled = true;
+  const hadFiles = PENDING_FILES.length;
+  if (hadFiles) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+  try {
+    /* Multipart when there are files, JSON when there are not — the endpoint
+       takes both, and the whole comment commits in one transaction so text
+       and media cannot come apart. */
+    let opts;
+    if (hadFiles) {
+      const fd = new FormData();
+      fd.append('body', body);
+      PENDING_FILES.forEach(f => fd.append('files', f));
+      opts = { method:'POST', body: fd };
+    } else {
+      opts = { method:'POST', body: JSON.stringify({ body }) };
+    }
+    const { data: c, attachments: added } = await apiFetch(
+      `/api/change-requests/${CURRENT_REQUEST_ID}/comments`, opts);
+
+    /* Register the new comment's media before it is drawn, or it renders with
+       no images and only appears on the next load. */
+    if (added && added.length) COMMENT_MEDIA[c.id] = added;
+
+    const list = document.getElementById('commentList');
+    // Remove "no comments" placeholder if present
+    if (list.querySelector('p')) list.innerHTML = '';
+    list.insertAdjacentHTML('beforeend', buildComment(c));
+    /* The heading was rendered once with the count it had on open, so posting
+       left "Discussion (3)" above four comments. */
+    const title = document.getElementById('commentsTitle');
+    if (title) title.innerHTML =
+      `<i class="fa-solid fa-comments" style="margin-right:5px"></i>Discussion (${list.querySelectorAll('.comment-item').length})`;
+    input.value = '';
+    PENDING_FILES = [];
+    renderPending();
+    list.scrollTop = list.scrollHeight;
+    toast(hadFiles ? `Comment posted with ${hadFiles} attachment${hadFiles === 1 ? '' : 's'}` : 'Comment posted');
+    // update count in list
+    const card = ALL_REQUESTS.find(r => r.id === CURRENT_REQUEST_ID);
+    if (card) { card.comment_count = (card.comment_count || 0) + 1; renderRequests(); }
+    loadNotifications();
+  } catch(err) { toast(err.message, true); }
+  finally { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i>'; }
+}
+
+async function uploadAttachments() {
+  const input = document.getElementById('attachFileInput');
+  const files = Array.from(input.files);
+  if (!files.length) return;
+  document.getElementById('attachFileName').textContent = 'Uploading…';
+  /* A refused upload used to report success: this only caught network errors,
+     so a 400 — wrong type, over the size limit — resolved, fell through, and
+     the toast said the file had been attached. Now that the server actually
+     turns files away, that would be a lie on every rejection. */
+  let ok = 0; const failed = [];
+  for (const file of files) {
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      /* apiHeaders(false) — the token, without forcing a JSON content type,
+         which would strip the multipart boundary. This call sent no
+         credentials at all and leaned entirely on the cookie. */
+      const res = await fetch(`/api/change-requests/${CURRENT_REQUEST_ID}/attachments`,
+        { method:'POST', body:fd, credentials:'include', headers: apiHeaders(false) });
+      if (res.ok) { ok++; continue; }
+      const j = await res.json().catch(() => ({}));
+      failed.push(`${file.name}: ${res.status === 401
+        ? 'your session has expired — sign in again'
+        : (j.error || 'HTTP ' + res.status)}`);
+    } catch(e) { failed.push(`${file.name}: ${e.message}`); }
+  }
+  if (ok) toast(`${ok} attachment${ok === 1 ? '' : 's'} uploaded`);
+  failed.forEach(m => toast(m, true));
+  document.getElementById('attachFileName').textContent = '';
+  input.value = '';
+  // Reload detail
+  try {
+    const { data: r, comments, attachments } = await apiFetch(`/api/change-requests/${CURRENT_REQUEST_ID}`);
+    renderDetail(r, comments, attachments);
+  } catch(_) {}
+}
+
+async function saveStatus() {
+  const status = document.getElementById('detailStatus').value;
+  const btn = document.getElementById('statusSaveBtn');
+  btn.disabled = true;
+  try {
+    await apiFetch(`/api/change-requests/${CURRENT_REQUEST_ID}`, { method:'PATCH', body: JSON.stringify({ status }) });
+    toast('Status updated');
+    // Refresh list
+    const idx = ALL_REQUESTS.findIndex(r => r.id === CURRENT_REQUEST_ID);
+    if (idx !== -1) { ALL_REQUESTS[idx].status = status; renderRequests(); updateStats(); }
+    loadNotifications();
+  } catch(err) { toast(err.message, true); }
+  finally { btn.disabled = false; }
+}
+
+async function saveNotes() {
+  const admin_notes = document.getElementById('detailNotes').value;
+  const btn = document.getElementById('notesSaveBtn');
+  btn.disabled = true;
+  try {
+    await apiFetch(`/api/change-requests/${CURRENT_REQUEST_ID}`, { method:'PATCH', body: JSON.stringify({ admin_notes }) });
+    toast('Notes saved');
+  } catch(err) { toast(err.message, true); }
+  finally { btn.disabled = false; }
+}
+
+function closeDetail() { document.getElementById('detailOverlay').classList.remove('open'); CURRENT_REQUEST_ID = null; }
+function closeDetailIfBg(e) { if (e.target === document.getElementById('detailOverlay')) closeDetail(); }
+
+/* ── New request modal ── */
+function openNewModal() { document.getElementById('newOverlay').classList.add('open'); }
+function closeNew() { document.getElementById('newOverlay').classList.remove('open'); NEW_FILES = []; renderNewFiles(); }
+function closeNewIfBg(e) { if (e.target === document.getElementById('newOverlay')) closeNew(); }
+
+function setupDragDrop() {
+  const zone = document.getElementById('newDropZone');
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('drag-over');
+    addFiles(Array.from(e.dataTransfer.files));
+  });
+}
+function addFiles(files) {
+  files.forEach(f => { if (!NEW_FILES.find(x => x.name === f.name && x.size === f.size)) NEW_FILES.push(f); });
+  renderNewFiles();
+}
+function removeFile(idx) { NEW_FILES.splice(idx, 1); renderNewFiles(); }
+function renderNewFiles() {
+  document.getElementById('newFileList').innerHTML = NEW_FILES.map((f,i) => `
+    <div class="file-preview-item">
+      <span><i class="${attachIcon(f.name)}" style="margin-right:5px;color:var(--muted)"></i>${esc(f.name)} <span style="color:var(--muted)">(${(f.size/1024).toFixed(1)} KB)</span></span>
+      <button class="file-remove-btn" onclick="removeFile(${i})"><i class="fa-solid fa-xmark"></i></button>
+    </div>`).join('');
+}
+
+async function submitNewRequest() {
+  const title = document.getElementById('newTitle').value.trim();
+  const desc  = document.getElementById('newDesc').value.trim();
+  if (!title || !desc) { toast('Title and description are required', true); return; }
+  const btn = document.getElementById('newSubmitBtn');
+  btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="margin-right:6px"></i>Submitting…';
+  try {
+    const body = {
+      category:        document.getElementById('newCategory').value,
+      priority:        document.getElementById('newPriority').value,
+      title,
+      description:     desc,
+      expected_impact: document.getElementById('newImpact').value.trim() || undefined,
+    };
+    const { data: created } = await apiFetch('/api/change-requests', { method:'POST', body: JSON.stringify(body) });
+    // Upload attachments
+    for (const file of NEW_FILES) {
+      const fd = new FormData(); fd.append('file', file);
+      try { await fetch(`/api/change-requests/${created.id}/attachments`, { method:'POST', body:fd, credentials:'include' }); } catch(_) {}
+    }
+    toast('Request submitted — team has been notified');
+    closeNew();
+    // Reset form
+    ['newTitle','newDesc','newImpact'].forEach(id => document.getElementById(id).value = '');
+    NEW_FILES = []; renderNewFiles();
+    await Promise.all([loadRequests(), loadNotifications()]);
+  } catch(err) { toast(err.message, true); }
+  finally { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane" style="margin-right:6px"></i>Submit Request'; }
+}
+
+/* ── Helpers ── */
+function attachIcon(filename) {
+  const ext = (filename||'').split('.').pop().toLowerCase();
+  if (['jpg','jpeg','png','gif','webp','avif','svg'].includes(ext)) return 'fa-solid fa-image';
+  if (['mp4','webm','mov','m4v'].includes(ext)) return 'fa-solid fa-film';
+  if (ext === 'pdf') return 'fa-solid fa-file-pdf';
+  if (['doc','docx'].includes(ext)) return 'fa-solid fa-file-word';
+  if (['xls','xlsx','csv'].includes(ext)) return 'fa-solid fa-file-excel';
+  return 'fa-solid fa-file';
+}
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function timeAgo(ts) {
+  const diff = Date.now() - new Date(ts).getTime();
+  const m = Math.floor(diff/60000), h = Math.floor(diff/3600000), d = Math.floor(diff/86400000);
+  if (d >= 1) return d + 'd ago';
+  if (h >= 1) return h + 'h ago';
+  if (m >= 1) return m + 'm ago';
+  return 'Just now';
+}
+let _toastTimer;
+function toast(msg, isErr = false) {
+  const el = document.getElementById('toastEl');
+  el.textContent = msg;
+  el.className = 'show' + (isErr ? ' err' : '');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
+}
+</script>
+<!-- Full-size view for a screenshot posted in a comment. -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <button class="lightbox-close" onclick="closeLightbox()" aria-label="Close">&times;</button>
+  <img id="lightboxImg" alt="" onclick="event.stopPropagation()">
+</div>
+<script>
+  /* Escape closes it, because a full-screen overlay with only a small × is a
+     trap on a keyboard. */
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && document.getElementById('lightbox').classList.contains('open')) closeLightbox();
+  });
+</script>
+</body>
+</html>

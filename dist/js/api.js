@@ -17,6 +17,32 @@ function _svcPlatform() {
   return 'web';
 }
 
+/* ─── Session-expired overlay (native app only) ───
+   The web portal answers an expired session by navigating to the login page.
+   A native app cannot: the redirect lands mid-load and the user is left
+   looking at a white screen with no explanation. Show a modal instead.
+   Defined unconditionally but only ever called under __SVC_NATIVE__, so it
+   costs the web bundle a few lines and nothing at runtime. */
+function _showSessionExpiredOverlay() {
+  // Hide the loading cover first, or it sits on top of this.
+  if (window.__SVC_HIDE_COVER) window.__SVC_HIDE_COVER();
+  if (document.getElementById('_svcSessionExpired')) return;
+  const el = document.createElement('div');
+  el.id = '_svcSessionExpired';
+  el.style.cssText = 'position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,0.88);display:flex;align-items:center;justify-content:center;padding:32px;box-sizing:border-box';
+  el.innerHTML = `
+    <div style="background:#303030;border-radius:20px;padding:32px 24px;text-align:center;max-width:320px;width:100%">
+      <div style="font-size:2.5rem;margin-bottom:16px">🔒</div>
+      <div style="color:#fff;font-weight:800;font-size:1.1rem;margin-bottom:8px">Session Expired</div>
+      <div style="color:#9ca3af;font-size:0.85rem;line-height:1.6;margin-bottom:24px">Your session has expired. Please log in again to continue.</div>
+      <button id="_svcSessionExpiredBtn" style="background:linear-gradient(135deg,#fec24f,#ff5229);color:#fff;border:none;border-radius:12px;padding:14px 32px;font-weight:800;font-size:0.95rem;cursor:pointer;width:100%;box-shadow:0 6px 18px rgba(255,82,41,0.28)">Log In Again</button>
+    </div>`;
+  document.body.appendChild(el);
+  document.getElementById('_svcSessionExpiredBtn').addEventListener('click', function () {
+    try { Auth.logout('/login.html'); } catch (_) { window.location.href = '/login.html'; }
+  });
+}
+
 /* ─── API Base URL ─── */
 // In Capacitor native context, window.__SVC_API_BASE__ is injected by mobile/scripts/build.js
 // Otherwise fall back to the relative /api/ path (web / PWA)
@@ -191,6 +217,8 @@ const Auth = {
       await fetch(`${_API_BASE}auth/logout`, { method: 'POST', credentials: 'include' });
     } catch (_) {}
     Auth.clear(); // clears svc_token, svc_user, staffSession
+    // Native app polls in the background; stop it so no request fires post-logout.
+    if (typeof window !== 'undefined' && window._stopPolling) window._stopPolling();
     // Also call StaffAuth.clearSession() if the library is loaded on this page
     if (typeof StaffAuth !== 'undefined' && typeof StaffAuth.clearSession === 'function') {
       StaffAuth.clearSession();
@@ -261,7 +289,12 @@ const API = {
         }
       } catch (_) {}
       Auth.clear();
-      if (!window.location.pathname.includes('login')) window.location.href = '/login.html';
+      if (window.__SVC_NATIVE__) {
+        // Native: a redirect here lands mid-load and shows a white screen.
+        _showSessionExpiredOverlay();
+      } else if (!window.location.pathname.includes('login')) {
+        window.location.href = '/login.html';
+      }
       throw new Error('Session expired — please log in again.');
     }
 
@@ -421,6 +454,575 @@ const Utils = {
     });
   },
 
+  /* Abbreviated Rand for compact tiles — R61.1M, R1.2B, R950K */
+  randShort(amount) {
+    const n = Number(amount) || 0;
+    if (n >= 1e9)  return 'R' + (n / 1e9).toFixed(1) + 'B';
+    if (n >= 1e6)  return 'R' + (n / 1e6).toFixed(1) + 'M';
+    if (n >= 1e3)  return 'R' + (n / 1e3).toFixed(1) + 'K';
+    return 'R' + n.toFixed(0);
+  },
+
+
+  /* ─────────────────────────────────────────────────────────────────────
+     RETURNS EARNED — the single definition.
+
+     This figure was previously derived independently on every surface, so
+     the app, the statement and the admin console each showed a different
+     number for the same money. They disagreed on both the formula and the
+     field names, and drifted further apart with every edit.
+
+     Precedence, most authoritative first:
+       1. cancelled            → 0, nothing was earned
+       2. recorded actual      → actual_return, the realised figure written
+                                 back when the investment closed
+       3. posted pool rate     → amount × pool_actual_rate. Returns are posted
+                                 by setting the pool's actual_rate, which the
+                                 server joins onto each investment; the
+                                 per-investment annual_rate is commonly 0.
+       4. recorded expectation → expected_return
+       5. per-investment rate  → amount × annual_rate
+
+     Accepts both the raw DB names (actual_return, expected_return) and the
+     portal's normalised aliases (…_amount), because admin reads the former
+     and the portal rewrites to the latter in loadPortalData.
+     ───────────────────────────────────────────────────────────────────── */
+  investmentReturn(inv) {
+    if (!inv || inv.status === 'cancelled') return 0;
+    const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
+    const pick = (a, b) => (inv[a] != null ? inv[a] : inv[b]);
+
+    const amount = num(inv.amount);
+    const actual = num(pick('actual_return', 'actual_return_amount'));
+    if (actual > 0) return actual;
+
+    const rate = num(inv.pool_actual_rate);
+    if (rate > 0) return amount * rate;
+
+    const expected = num(pick('expected_return', 'expected_return_amount'));
+    if (expected > 0) return expected;
+
+    return amount * num(pick('annual_rate', 'expected_return_rate'));
+  },
+
+  /* The declared return, or null when nothing has been declared yet.
+
+     investmentReturn above always answers with a number, falling back to the
+     target rate quoted when the investment was taken out. That is right for
+     totals, but wrong for telling a client what they have actually earned: a
+     projection shown as an earned figure is a promise nobody made.
+
+     Only the first two steps of that precedence count as posted — an explicit
+     actual_return, or the pool's actual_rate joined on as pool_actual_rate.
+     Returns are posted while the pool is still active, not at maturity, so
+     this is what makes them visible on an investment that has not closed.
+
+     Returning null rather than zero lets callers tell "nothing posted yet"
+     from "posted, and it was zero". */
+  postedReturn(inv) {
+    if (!inv || inv.status === 'cancelled') return null;
+    const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
+
+    const amount = num(inv.amount);
+    const actual = num(inv.actual_return != null ? inv.actual_return : inv.actual_return_amount);
+    if (actual > 0) return { amount: actual, rate: amount > 0 ? actual / amount : 0 };
+
+    const rate = num(inv.pool_actual_rate);
+    if (rate > 0) return { amount: amount * rate, rate };
+
+    return null;
+  },
+
+  /* The rate to show for an investment, and whether it is a real return or
+     still a target.
+
+     Three fields, three different meanings, and it matters which wins:
+
+       investments.annual_rate      the CONTRACTED rate — a target
+       investments.actual_return    the realised rand amount, written at payout
+       investment_pools.actual_rate the posted achieved rate, set at pool level
+
+     payoutInvestment writes actual_return and never touches annual_rate, so
+     annual_rate is a target for the whole life of the investment. A posted
+     return therefore has to outrank it: a pool that has declared 2.13% is
+     showing what was earned, while the investment's 13.00% is still only what
+     was promised. The pool card has always said "Achieved" in that case; this
+     list said 13.00%, and the two disagreed about the same investment.
+
+     Returns are posted while a pool is still running, not at maturity, so this
+     applies to active investments too.
+
+     Postgres returns NUMERIC as a string, so a zero rate arrives as "0.0000",
+     which is truthy — `rate ? pct(rate) : '—'` renders a confident 0.00%.
+     Every comparison here is numeric for that reason.
+
+     Returns null when there is no figure at all, so a caller can show a dash
+     and mean it. */
+  rateBasis(inv) {
+    if (!inv) return null;
+    const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
+
+    // 1. What this investment actually earned, if it has been paid out.
+    const amount = num(inv.amount);
+    const actual = num(inv.actual_return != null ? inv.actual_return : inv.actual_return_amount);
+    if (actual > 0 && amount > 0) return { rate: actual / amount, posted: true };
+
+    // 2. What the pool posted. Supersedes the contracted target.
+    const poolActual = num(inv.pool_actual_rate);
+    if (poolActual > 0) return { rate: poolActual, posted: true };
+
+    // 3. What was promised.
+    const target = num(inv.annual_rate != null ? inv.annual_rate : inv.expected_return_rate);
+    if (target > 0) return { rate: target, posted: false };
+
+    return null;
+  },
+
+  /* The rate alone, for callers that only render a number. */
+  effectiveRate(inv) {
+    const b = Utils.rateBasis(inv);
+    return b ? b.rate : null;
+  },
+
+  /* One cell, rendered the same way everywhere: the figure, tinted purple and
+     labelled when it is a posted return rather than a target. */
+  /* How a rate should be suffixed.
+
+     investment_pools.actual_rate is the return achieved FOR THE POOL'S PERIOD
+     — for every product, not per annum and not prorated over term_months. The
+     contracted annual_rate is the opposite: an annual figure. Appending
+     "p.a." to both was telling an investor that a 2.13% five-month return was
+     an annual one, which understates it by well over half.
+
+     Returns '' for a posted rate rather than inventing an annualised number:
+     annualising needs an exact day count and a convention nobody has chosen,
+     and a wrong precise figure is worse than an honest unqualified one. */
+  rateSuffix(inv) {
+    const b = Utils.rateBasis(inv);
+    if (!b) return '';
+    return b.posted ? '' : ' p.a.';
+  },
+
+  /* The rate with the right qualifier attached. One definition, so the tile,
+     the modal and the statement cannot label the same number differently. */
+  rateLabel(inv) {
+    const b = Utils.rateBasis(inv);
+    if (!b) return '—';
+    return Utils.pct(b.rate) + Utils.rateSuffix(inv) + (b.posted ? ' for the period' : '');
+  },
+
+  rateCell(inv) {
+    const b = Utils.rateBasis(inv);
+    if (!b) return '<span title="No rate on the investment and none posted on the pool">—</span>';
+    const title = b.posted
+      ? 'Return achieved — posted on the pool, supersedes the contracted rate'
+      : 'Target return — contracted rate, nothing posted yet';
+    return `<span style="color:${b.posted ? '#eda5ff' : '#22c55e'}" title="${title}">${Utils.pct(b.rate)}</span>`;
+  },
+
+  /* What a maturity instruction actually means, in words and figures.
+
+     The admin detail view rendered the raw enum — "PAYOUT_CUSTOM" — which says
+     the client wants a custom amount but not what the amount is, nor what
+     happens to the rest. For a switch it named no product. Those are the two
+     instructions where the enum alone is useless.
+
+     Returns { label, detail, payout, remainder } where payout/remainder are
+     numbers or null when not yet knowable (no posted return means the total is
+     still an estimate). */
+  maturityPlan(inv, productLabel) {
+    if (!inv) return null;
+    const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
+    /* What the engine will DO, not what the column says. On a payout-only
+       product they can differ — an Ethical & Interest-Free holding carrying
+       'reinvest' from before the rule still settles in cash — and this panel
+       is the one staff read to know what is about to happen to the money. */
+    const instr = Utils.isPayoutOnlyProduct(inv.product_type)
+      ? 'payout_all'
+      : (inv.maturity_instruction || 'pending');
+
+    const capital = num(inv.amount);
+    const rate    = Utils.effectiveRate(inv);
+    // Only a posted rate gives a real total; otherwise the value at maturity
+    // is a target, and saying "remainder R X" against a target would be a
+    // figure nobody has committed to.
+    const total   = rate != null ? capital * (1 + rate) : null;
+    const custom  = num(inv.custom_payout_amount);
+    const target  = productLabel || inv.switch_product_type || null;
+
+    const LABELS = {
+      pending:        'Awaiting instruction',
+      reinvest:       'Reinvest',
+      payout_all:     'Pay out all',
+      payout_return:  'Pay out returns only',
+      payout_custom:  'Custom payout',
+      switch_product: 'Switch product',
+      custom_switch:  'Custom payout & switch',
+      switch_amount:  'Switch an amount, reinvest the rest',
+    };
+    const label = LABELS[instr] || String(instr).replace(/_/g, ' ');
+
+    const plan = { label, detail: '', payout: null, remainder: null };
+
+    switch (instr) {
+      case 'payout_all':
+        plan.payout = total;
+        plan.detail = total != null ? `Capital and returns paid out — ${Utils.rand(total)}` : 'Capital and returns paid out';
+        break;
+      case 'payout_return':
+        plan.payout    = total != null ? total - capital : null;
+        plan.remainder = capital;
+        plan.detail    = total != null
+          ? `${Utils.rand(total - capital)} paid out, ${Utils.rand(capital)} capital reinvested`
+          : 'Returns paid out, capital reinvested';
+        break;
+      case 'reinvest':
+        plan.remainder = total;
+        plan.detail    = total != null ? `${Utils.rand(total)} rolled into the next pool` : 'Rolled into the next pool';
+        break;
+      case 'switch_product':
+        plan.remainder = total;
+        plan.detail    = target
+          ? `${total != null ? Utils.rand(total) + ' ' : ''}switched into ${target}`
+          : 'Switched into another product — none chosen yet';
+        break;
+      case 'payout_custom':
+        plan.payout    = custom || null;
+        plan.remainder = total != null && custom ? Math.max(0, total - custom) : null;
+        plan.detail    = custom
+          ? `${Utils.rand(custom)} paid out` + (plan.remainder != null ? `, ${Utils.rand(plan.remainder)} reinvested` : ', remainder reinvested')
+          : 'Custom payout — no amount set yet';
+        break;
+      case 'custom_switch':
+        plan.payout    = custom || null;
+        plan.remainder = total != null && custom ? Math.max(0, total - custom) : null;
+        plan.detail    = custom
+          ? `${Utils.rand(custom)} paid out` +
+            (plan.remainder != null ? `, ${Utils.rand(plan.remainder)}` : ', remainder') +
+            (target ? ` switched into ${target}` : ' switched — no product chosen yet')
+          : 'Custom payout & switch — no amount set yet';
+        break;
+      case 'switch_amount':
+        /* The one instruction whose named amount goes into a PRODUCT rather
+           than the wallet, so neither half is a payout — both stay invested.
+           Describing it with plan.payout would put it in the "Paid to wallet"
+           row and tell the client money is coming that is not. */
+        plan.remainder = total;
+        plan.detail    = custom
+          ? (target ? `${Utils.rand(custom)} switched into ${target}` : `${Utils.rand(custom)} switched — no product chosen yet`) +
+            (total != null ? `, ${Utils.rand(Math.max(0, total - custom))} reinvested where it is` : ', remainder reinvested where it is')
+          : 'Switch an amount, reinvest the rest — no amount set yet';
+        break;
+      default:
+        plan.detail = 'The client has not chosen what happens at maturity.';
+    }
+    return plan;
+  },
+
+  /* Same, aggregated over a set of investments — a client can hold several in
+     one pool. The rate is the total posted return over the capital that
+     actually earned it, so an investment still awaiting its posting does not
+     drag the percentage down. */
+  postedReturnTotal(list) {
+    const posted = (list || []).map(i => ({ inv: i, p: Utils.postedReturn(i) })).filter(x => x.p);
+    if (!posted.length) return null;
+    const amount  = posted.reduce((s, x) => s + x.p.amount, 0);
+    const capital = posted.reduce((s, x) => s + (parseFloat(x.inv.amount) || 0), 0);
+    return { amount, rate: capital > 0 ? amount / capital : 0, count: posted.length };
+  },
+
+  /* Returns earned across a set of investments. Use this rather than a local
+     reduce so every surface reports the same total.
+
+     NOTE: this falls back to the contracted rate, so on an investment with
+     nothing posted it answers with a PROJECTION. That is right for "what is
+     this worth at maturity" and wrong for anything labelled earned or for
+     portfolio value — use earnedReturns for those. */
+  totalReturns(list) {
+    return (Array.isArray(list) ? list : []).reduce((s, i) => s + Utils.investmentReturn(i), 0);
+  },
+
+  /* ─────────────────────────────────────────────────────────────────────
+     EARNED vs TARGET — the two are not interchangeable.
+
+     A target return is the benchmark the pool is aiming at. It belongs on the
+     POOL, where a client sees it before investing. It is never shown against
+     money already held — there is deliberately no helper here that sums
+     targets across investments, because every caller of one would be wrong.
+
+     An earned return is money actually declared: an investment's realised
+     actual_return, or the rate posted on its pool. Only this moves portfolio
+     value.
+
+     Before these existed, one helper served both and the fallback chain
+     reached the contracted rate, so a client who invested yesterday was told
+     he had earned a full year's return and his portfolio value included it.
+     ───────────────────────────────────────────────────────────────────── */
+
+  /* Money actually declared. Always a number — 0 means nothing posted yet,
+     which is a true statement about earnings. */
+  earnedReturns(list) {
+    return (Array.isArray(list) ? list : []).reduce((s, i) => {
+      const p = Utils.postedReturn(i);
+      return s + (p ? p.amount : 0);
+    }, 0);
+  },
+
+  /* Every maturity instruction the server accepts, in words. The portal had
+     its own map covering four of the six, so a client who chose a custom
+     payout was shown the raw enum with the underscores swapped for spaces. */
+  INSTRUCTION_LABELS: {
+    reinvest:       'Reinvest',
+    payout_all:     'Pay out all',
+    payout_return:  'Pay out returns only',
+    payout_custom:  'Custom payout',
+    switch_product: 'Switch product',
+    custom_switch:  'Custom payout & switch',
+  },
+
+  /* ─── Opening a stored document ───────────────────────────────────────
+     Factsheets, KYC documents and agreements are stored as base64 `data:`
+     URLs. A browser will not open one of those the obvious ways, and both
+     failures are silent:
+
+       <a href="data:…">        Chrome has refused top-level navigation to
+                                data: URLs since v60. The click does nothing
+                                at all — no error, no tab.
+       <iframe src="data:…">    refused by this platform's CSP, whose
+                                frame-src is 'self' and Paystack. The frame
+                                renders blank.
+
+     Both were in the console at once, which is why factsheets were reported
+     as "not opening OR opening blank" depending on which screen you were on.
+
+     A blob: URL fixes the first — it is same-origin and navigable — and the
+     CSP now admits blob: in frame-src for the second. data: is deliberately
+     NOT admitted there: a data: frame can carry arbitrary HTML, which is a
+     cross-site-scripting vector, while a blob this code created is not.
+
+     Returns null for anything that is not http(s), data: or blob:, so a
+     javascript: URL that reached the database cannot be turned into a link. */
+  documentUrl(stored) {
+    const raw = String(stored == null ? '' : stored).trim();
+    if (!raw) return null;
+    if (/^https?:\/\//i.test(raw) || /^blob:/i.test(raw)) return raw;
+    if (!/^data:/i.test(raw)) return null;
+    try {
+      const comma = raw.indexOf(',');
+      if (comma < 0) return null;
+      const header = raw.slice(0, comma);
+      if (!/;base64$/i.test(header)) return null;
+      /* The blob is built with a SAFE type, not the type the data URL claims.
+
+         A blob URL inherits the origin that created it, so opening a blob of
+         type text/html runs its script as this site. data:text/html;base64
+         reaches here as readily as a PDF does, and the upload route only
+         validates the mime when one is present — a row with no mime_type and
+         a non-data file_url skips the check entirely, and nothing validates
+         the KYC documents or anything already in the table.
+
+         image/svg+xml is excluded for the same reason: an SVG is a document
+         and can carry script. Anything not on the list still opens, as an
+         octet-stream, which browsers download rather than render. */
+      const claimed = ((header.match(/^data:([^;,]*)/i) || [])[1] || '').toLowerCase();
+      const RENDERABLE = ['application/pdf', 'application/x-pdf', 'text/plain',
+                          'image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+      const mime  = RENDERABLE.includes(claimed) ? claimed : 'application/octet-stream';
+      const b64   = raw.slice(comma + 1);
+      const bin   = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return URL.createObjectURL(new Blob([bytes], { type: mime }));
+    } catch (_) { return null; }
+  },
+
+  /* Opens it in a new tab and returns whether it could. Revoked on a timer
+     rather than immediately: the new tab has not finished reading the blob
+     when this returns, and revoking early gives it an empty document — the
+     same blank screen by another route. */
+  openDocument(stored) {
+    const url = Utils.documentUrl(stored);
+    if (!url) return false;
+    const w = window.open(url, '_blank', 'noopener');
+    if (url.startsWith('blob:')) setTimeout(() => { try { URL.revokeObjectURL(url); } catch (_) {} }, 60000);
+    return !!w || url.startsWith('blob:');
+  },
+
+  instructionLabel(key) {
+    if (!key || key === 'pending') return null;
+    return Utils.INSTRUCTION_LABELS[key] || String(key).replace(/_/g, ' ');
+  },
+
+  /* Products that can only be settled in cash at maturity.
+
+     Ethical & Interest-Free pools (product_type `eif_*`) are each a discrete
+     contract — a murabaha sale, an ijara lease, a mudarabah venture — and are
+     concluded when the underlying transaction concludes. There is nothing to
+     roll into. Offering "reinvest" would enter a client into a NEW contract
+     they never agreed, which is precisely what someone who will not take riba
+     came here to avoid. So the only instruction is Payout All, and that is
+     also what happens when they set none.
+
+     Matched on the prefix, not on the three products that exist today, so a
+     fourth EIF structure inherits the rule rather than quietly defaulting to
+     reinvest.
+
+     Mirrors server/services/maturityPolicy.js. A check asserts the two agree:
+     a form offering an option the server refuses is a dead end. */
+  isPayoutOnlyProduct(productType) {
+    return /^eif(_|$)/i.test(String(productType == null ? '' : productType).trim());
+  },
+
+  /* Whether a maturity instruction is set, across the investments a client
+     holds in one pool.
+
+     'pending' counts as unset — it is the column's default, not a choice.
+
+     The portal decided this with `new Set(...).size === 1`, which reports a
+     pool as fully set when only one of three investments has an instruction:
+     the other two contribute nothing to the set, so it still has one member.
+     A client would be told their instruction was in place when most of the
+     money had none. setCount vs total is what distinguishes those. */
+  maturityInstructionState(group) {
+    const list = (Array.isArray(group) ? group : [group]).filter(Boolean);
+    const total = list.length;
+    const set = list.filter(i => Utils.instructionLabel(i.maturity_instruction));
+    const unique = [...new Set(set.map(i => i.maturity_instruction))];
+
+    if (!total || !set.length)
+      return { state: 'none', total, setCount: 0, instruction: null, label: 'No instruction set' };
+
+    if (unique.length > 1)
+      return { state: 'mixed', total, setCount: set.length, instruction: null,
+               label: `Mixed — ${set.length} of ${total} set` };
+
+    const instruction = unique[0];
+    if (set.length < total)
+      return { state: 'partial', total, setCount: set.length, instruction,
+               label: `${Utils.instructionLabel(instruction)} — ${set.length} of ${total} set` };
+
+    return { state: 'all', total, setCount: total, instruction,
+             label: Utils.instructionLabel(instruction) };
+  },
+
+  /* ─────────────────────────────────────────────────────────────────────
+     ORDERING HOLDINGS — soonest maturity first.
+
+     The cards came out in whatever order the API returned, which is neither
+     chronological nor stable, so the thing a client most needs to act on
+     could sit anywhere on the page.
+
+     Three buckets, because a plain ascending sort puts everything already
+     matured at the top, ahead of what is actually coming up:
+
+       0  still to mature  → ascending, soonest first
+       1  already matured  → descending, most recent first
+       2  no usable date   → last
+
+     A missing or unparseable date yields NaN from Date, and NaN comparisons
+     are all false, which makes a sort order arbitrary and unstable rather
+     than merely wrong. Bucket 2 keeps those rows in one predictable place.
+     ───────────────────────────────────────────────────────────────────── */
+  maturitySortKey(inv, now) {
+    const raw = inv && (inv.maturity_date || inv.end_date);
+    const t = raw ? new Date(raw).getTime() : NaN;
+    if (!Number.isFinite(t)) return { bucket: 2, time: 0 };
+
+    // Maturity dates are date-only, so compare against the start of today —
+    // something maturing today is still upcoming, not already past.
+    const ref = Number.isFinite(now) ? now : Date.now();
+    const startOfToday = Math.floor(ref / 86400000) * 86400000;
+
+    return t >= startOfToday ? { bucket: 0, time: t } : { bucket: 1, time: -t };
+  },
+
+  /* Comparator for investments. Stable within a bucket. */
+  byMaturity(a, b, now) {
+    const ka = Utils.maturitySortKey(a, now);
+    const kb = Utils.maturitySortKey(b, now);
+    return ka.bucket !== kb.bucket ? ka.bucket - kb.bucket : ka.time - kb.time;
+  },
+
+  /* The same ordering over groups of investments — a client can hold several
+     in one pool, and the group is placed by whichever matures first. */
+  byGroupMaturity(ga, gb, now) {
+    const earliest = g => (Array.isArray(g) ? g : [g])
+      .map(i => Utils.maturitySortKey(i, now))
+      .sort((x, y) => (x.bucket !== y.bucket ? x.bucket - y.bucket : x.time - y.time))[0]
+      || { bucket: 2, time: 0 };
+    const ka = earliest(ga), kb = earliest(gb);
+    return ka.bucket !== kb.bucket ? ka.bucket - kb.bucket : ka.time - kb.time;
+  },
+
+  /* Portfolio value: capital at work, plus the wallet, plus what has actually
+     been earned. One definition — it was computed five different ways across
+     the portal, and two of them wrote the same element with different
+     formulas, so the hero figure depended on which rendered last. */
+  portfolioValue(investments, walletBalance) {
+    const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
+    const list = Array.isArray(investments) ? investments : [];
+
+    /* Active only.
+
+       Capital leaves an investment on maturity by one of two routes: paid out
+       to the wallet, or rolled into a new pool as a reinvestment. Either way it
+       is already counted somewhere else — in wallet_balance, or as the active
+       investment it became. The matured row is a record of what happened, not a
+       second pile of money.
+
+       This counted matured rows as held too, on the reasoning that a matured
+       investment awaiting payout is still owed. That is true in isolation and
+       wrong in aggregate: rollover is the normal path here, so every rolled-over
+       investment was counted twice. One real portfolio showed R392,320.45
+       against R35,593.23 of active capital, R9.46 in the wallet and R17,475.49
+       earned — R339,242.27 of double-counted capital. */
+    const held = list.filter(i => i && i.status === 'active');
+
+    const capital = held.reduce((s, i) => s + num(i.amount), 0);
+    return capital + num(walletBalance) + Utils.earnedReturns(held);
+  },
+
+
+  /* ─────────────────────────────────────────────────────────────────────
+     MATURITY OUTCOME — what happens to this investment on its maturity date.
+
+     Missing or 'pending' means no instruction was given, and the default is
+     automatic reinvestment for another full term. That is the highest-stakes
+     default in the product, so it is stated explicitly rather than left blank.
+     Instructions close at 5pm on the maturity date.
+     ───────────────────────────────────────────────────────────────────── */
+  maturityOutcome(inv) {
+    const raw = (inv && inv.maturity_instruction) || 'pending';
+    const map = {
+      payout_all:    { label: 'Pays out in full',       decided: true  },
+      payout_return: { label: 'Returns paid out',       decided: true  },
+      payout_custom: { label: 'Custom payout',          decided: true  },
+      reinvest:      { label: 'Reinvests',              decided: true  },
+      switch_product:{ label: 'Switches product',       decided: true  },
+      custom_switch: { label: 'Custom switch',          decided: true  },
+      pending:       { label: 'Will auto-reinvest',     decided: false },
+    };
+    return map[raw] || map.pending;
+  },
+
+  /* Urgency of a maturity date, for colour and emphasis.
+     'due' 0 days · 'urgent' 1-2 · 'soon' 3-7 · 'later' beyond · null undated */
+  maturityUrgency(days) {
+    if (days == null) return null;
+    if (days <= 0) return 'due';
+    if (days <= 2) return 'urgent';
+    if (days <= 7) return 'soon';
+    return 'later';
+  },
+
+  /* True when the viewer has asked for reduced motion. Consulted before any
+     animated count-up or chart transition; also stops a screen reader being fed
+     every intermediate frame of an animating balance. */
+  reducedMotion() {
+    try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; }
+    catch (_) { return false; }
+  },
+
   /* Format percentage */
   pct(rate, decimals = 2) {
     return (Number(rate) * 100).toFixed(decimals) + '%';
@@ -440,6 +1042,61 @@ const Utils = {
     return d.toLocaleDateString('en-ZA', {
       day: '2-digit', month: 'short', year: 'numeric'
     });
+  },
+
+  /* ── When a transaction happened, and when an investment started ──────────
+   *
+   * `created_at` is when the ROW was written. `transaction_date` is when the
+   * money moved. They are usually within a second of each other and are wildly
+   * different on a migrated ledger: a batch import stamps every row it writes
+   * with the same created_at, so a deposit made in 2023 reads as having
+   * happened on the day of the migration.
+   *
+   * Both orderings were in use across the platform — `transaction_date ||
+   * created_at` in some places, `created_at || transaction_date` in others —
+   * so one ledger row showed two different dates depending on the screen, and
+   * the CSV export showed a third. This is the answer, in one place, and the
+   * server's statement queries already agree with it:
+   *   COALESCE(transaction_date, created_at) AS txn_date
+   */
+  txnDate(t) {
+    if (!t) return null;
+    return t.txn_date || t.transaction_date || t.created_at || null;
+  },
+
+  /* The same question for an investment. start_date is the day the money went
+     to work; investment_date is what some imports carry instead. */
+  invDate(i) {
+    if (!i) return null;
+    return i.start_date || i.investment_date || i.created_at || null;
+  },
+
+  /* ── Dates for a CSV ──────────────────────────────────────────────────────
+   *
+   * ISO, and empty when there is nothing — not the em-dash Utils.date() draws
+   * for a screen, which a spreadsheet reads as text and a filter as a value.
+   *
+   * ISO also because a CSV date is parsed by whatever opens it. 04/09/2026 is
+   * the 4th of September here and the 9th of April in a US locale, and Excel
+   * decides which without asking: a ledger exported for a reconciliation can
+   * come back with a third of its rows silently moved. 2026-09-04 cannot be
+   * read two ways, and it sorts correctly as text.
+   *
+   * en-CA is the shortest route to YYYY-MM-DD that still formats in the
+   * viewer's own timezone — toISOString() would render a 01:30 SAST
+   * transaction as the previous day. */
+  csvDate(v) {
+    if (!v) return '';
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-CA');
+  },
+
+  /* The time beside it. A day's movements exported as an unordered block
+     cannot be reconciled against a bank statement line by line. */
+  csvTime(v) {
+    if (!v) return '';
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? '' : d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
   },
 
   /* Format datetime */
@@ -496,8 +1153,16 @@ const Utils = {
       other:          { label: 'Other',                   icon: 'fa-circle',      color: '#656565', badgeClass: 'badge--gray' },
     };
     const KNOWN_CI = new Set(['cattle','solar','solar_5yr','solar_6yr','solar_7yr','short_term','smme','delivery_bike','delivery_bikes','cattle_12j','ilobola','gridfarmer']);
-    const base = map[type] || { label: type || 'Other', icon: 'fa-circle', color: '#656565', badgeClass: 'badge--gray' };
-    const cached = this._productCache[type];
+    /* `delivery_bikes` has no entry in the map above, so a pool carrying the
+       plural fell to the Other fallback and was labelled with its own raw
+       product_type and a grey circle. Resolved to the singular before lookup;
+       the KNOWN_CI set still lists both because it is asked about the stored
+       value, not this one. */
+    const _t = (typeof svcCanonProductType === 'function') ? svcCanonProductType(type) : type;
+    const base = map[_t] || { label: type || 'Other', icon: 'fa-circle', color: '#656565', badgeClass: 'badge--gray' };
+    /* The cache is keyed by whatever the products table calls it — the
+       singular — so it is looked up by the canonical name too. */
+    const cached = this._productCache[_t] || this._productCache[type];
     if (!cached) return base;
     return {
       ...base,
@@ -662,10 +1327,16 @@ const Toast = {
   init() {
     this.container = document.createElement('div');
     this.container.className = 'toast-container';
+    /* Toasts are the primary feedback channel — every confirmation and every
+       failure arrives here — and until now they announced nothing to a screen
+       reader. polite so routine confirmations wait for a pause; individual
+       error toasts carry role="alert" below, which interrupts. */
+    this.container.setAttribute('aria-live', 'polite');
+    this.container.setAttribute('aria-atomic', 'false');
     document.body.appendChild(this.container);
   },
   show(message, type = 'info', duration, opts = {}) {
-    const defaults = { success: 6500, error: 6000, warning: 6000, info: 4000 };
+    const defaults = { success: 6500, error: 12000, warning: 8000, info: 4000 };
     const ms = duration ?? defaults[type] ?? 4000;
     if (!this.container) this.init();
     const existing = this.container.querySelectorAll('.toast');
@@ -673,6 +1344,8 @@ const Toast = {
     const icons = { success: 'fa-check-circle', error: 'fa-circle-xmark', info: 'fa-circle-info', warning: 'fa-triangle-exclamation' };
     const toast = document.createElement('div');
     toast.className = `toast toast--${type}`;
+    // Failures should not wait for a pause in speech.
+    if (type === 'error' || type === 'warning') toast.setAttribute('role', 'alert');
     const icon = document.createElement('i');
     icon.className = `fa-solid ${icons[type] || icons.info}`;
     const msg = document.createElement('span');
