@@ -4255,6 +4255,11 @@ async function autoSetup() {
           body: 'The note about the banner that keeps asking said Apple\u2019s own Smart App Banner might still appear at the top of a client\u2019s first page while ours sat at the bottom. It will not: the apple-itunes-app tag has been taken off the landing page, the sign-in and sign-up pages, the portal and the app shell, so Safari no longer draws its banner at all. Ours is the only one, on every phone. Apple\u2019s was kept because it is the affordance iPhone users know and because it could say OPEN rather than VIEW when the app was already installed \u2014 something no JavaScript can work out. Neither reason held: it cannot be shown again once a client taps its x, so it could never keep asking, and we answer the installed question from the server using the push token only the app can write, which is a better answer than the browser\u2019s and does not depend on the tag.',
           where: 'Nothing to click. On an iPhone in Safari, the client portal, sign-in and landing pages now show only the SV Capital banner at the bottom of the screen.' },
 
+        { id: 'ANN-2026-SUPPORT-NUMBER-0722269415', area: 'both', icon: 'fa-phone',
+          title: 'Support WhatsApp number changed to 072 226 9415',
+          body: 'The support number is now 072 226 9415. Every WhatsApp link on the landing page, the client portal and the app points at it \u2014 the footer link, the floating button, both places in the app shell and the portal\u2019s support panel. The previous number, 079 111 5476, is no longer monitored, so anything still pointing at it reaches nobody. The number is written once in server/scripts/check-support-number.cjs and that check rewrites every link from it, which is why there is no sixth place to forget.',
+          where: 'Landing page footer and the floating WhatsApp button; client portal \u2192 Support; and the app\u2019s support panel. The previous notice about 079 111 5476 is left as it was \u2014 it is a record of what the number was then.' },
+
         { id: 'ANN-2026-SUPPORT-NUMBER', area: 'both', icon: 'fa-phone',
           title: 'Support WhatsApp number changed',
           body: 'The support number is now 079 111 5476. Every WhatsApp link on the site, the portal and the app points at it.',
