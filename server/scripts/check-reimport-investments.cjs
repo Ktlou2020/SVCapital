@@ -307,6 +307,35 @@ const state = async () => {
       return execFileSync('node', [RUNNER, '--file', EXPORT, '--product', 'sollar'],
         { env: { ...process.env }, encoding: 'utf8' });
     } catch (e) { return (e.stdout || '') + (e.stderr || ''); } })();
+    /* The export's word for a product and the database's are not always the
+       same — the export says smme where this platform says short_term — and
+       writing the export's word invents a type nothing else uses, which is a
+       rollover that quietly becomes a wallet payout. */
+    const unknownType = (() => { try {
+      return execFileSync('node', [RUNNER, '--file', EXPORT, '--product', 'solar', '--as', 'solar_99yr'],
+        { env: { ...process.env }, encoding: 'utf8' });
+    } catch (e) { return (e.stdout || '') + (e.stderr || ''); } })();
+    const s5 = await state();
+    ok('a product type the database does not use is refused',
+       /is not a product type this database uses/.test(unknownType)
+       && /Nothing was read further and nothing was written/.test(unknownType));
+    ok('and the refusal lists the types that ARE in use',
+       /In use: .*solar/.test(unknownType), unknownType.split('\n').find(l => /In use:/.test(l)));
+    ok('and it points at --as, which is the usual answer',
+       /--product smme --as short_term/.test(unknownType));
+    ok('nothing was written by the refused run', s5.rows === s4.rows && s5.solar === s4.solar);
+    const forced = (() => { try {
+      return execFileSync('node', [RUNNER, '--file', EXPORT, '--product', 'solar', '--as', 'solar_99yr',
+        '--force-new-type'], { env: { ...process.env }, encoding: 'utf8' });
+    } catch (e) { return (e.stdout || '') + (e.stderr || ''); } })();
+    ok('--force-new-type gets past it, and says it is doing so',
+       /carrying on with a type nothing else uses/.test(forced));
+    ok('with --as, the file is still filtered by the name the EXPORT uses',
+       /29|8 record\(s\) map to "solar"/.test(forced) || /map to "solar"/.test(forced),
+       'filtering by the live name would find nothing in the file and report success');
+    ok('and the survey says which name it would write',
+       /to be written as "solar_99yr"/.test(forced));
+
     ok('a product the file holds nothing for is reported, not treated as finished',
        /Nothing in this file maps to product_type "sollar"/.test(wrongProduct));
     ok('and the file’s real products are listed beside it', /solar/.test(wrongProduct));
