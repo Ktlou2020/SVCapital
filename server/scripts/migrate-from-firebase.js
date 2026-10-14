@@ -90,6 +90,28 @@ const KYC_STATUS_MAP = {
   Declined:    'rejected',
 };
 
+/* An investment's `product` is a PATH STRING in every audit export —
+   "investmentProducts/<id>" — with no `name` on it, so PRODUCT_TYPE_MAP
+   [inv.product?.name] was undefined for every record and the whole import
+   landed as product_type 'other'. Nothing was lost; it was filed under the
+   wrong product, which on any screen that asks for one product is
+   indistinguishable from a missing investment. The id in the path is what the
+   export actually gives us, and the pool path carries the same id, which
+   covers a record with no product field at all. */
+function resolveInvestmentProductType(inv) {
+  const productId = v => {
+    if (!v) return null;
+    const s = (typeof v === 'object') ? (v.path || v.id || '') : String(v);
+    const parts = s.split('/').filter(Boolean);
+    return parts[0] === 'investmentProducts' ? (parts[1] || null) : null;
+  };
+  return PRODUCT_ID_MAP[productId(inv.product)]
+      || PRODUCT_ID_MAP[productId(inv.pool)]
+      || PRODUCT_TYPE_MAP[inv.product && inv.product.name]
+      || PRODUCT_TYPE_MAP[inv.productName]
+      || 'other';
+}
+
 function extractPoolId(p) {
   if (!p) return null;
   // p may be a plain path string "investmentPools/ID" or an object { path: "investmentPools/ID" }
@@ -317,7 +339,7 @@ async function migrate() {
     const poolId      = origPoolId ? (sourceIdToPoolId[origPoolId] || `POOL-MIGR-${origPoolId}`) : null;
     const srcPool     = origPoolId ? poolById[origPoolId] : null;
     const poolName    = (typeof inv.pool === 'object' ? inv.pool?.name : null) || srcPool?.name || '';
-    const productType = PRODUCT_TYPE_MAP[inv.product?.name] || 'other';
+    const productType = resolveInvestmentProductType(inv);
     const status      = INVESTMENT_STATUS_MAP[inv.status] || 'active';
     const amount      = parseFloat(inv.investedAmount) || 0;
     const rate        = parseFloat(srcPool?.returnPercentage) || 0;
