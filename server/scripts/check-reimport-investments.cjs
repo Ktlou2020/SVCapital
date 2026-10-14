@@ -101,7 +101,8 @@ async function ensureSchema() {
 
 /* The three solar product ids the exports use, and one cattle id, so the
    product filter is exercised with the real keys rather than invented ones. */
-const SOLAR = 'xKQkwQMa0Hnj0dAmGsWH';
+const SOLAR  = 'xKQkwQMa0Hnj0dAmGsWH';   /* the 7-year product in the legacy catalogue */
+const SOLAR6 = 'SfpCxgJjP6i5GUz1JWYp';   /* and the 6-year one */
 const CATTLE = 'gSjiuqRg3E8IEO2hwfmu';
 const P1 = 'RIPOOL1', P2 = 'RIPOOL2', PGHOST = 'RIGHOST';
 const EXPORT = path.join(os.tmpdir(), `svc-check-reimport-${process.pid}.json`);
@@ -116,7 +117,7 @@ const RECORDS = [
         txRef: 'RI-A/NEW001', dateInvested: '2025-10-16T15:47:51.781Z',
         fees: { financialServicesFee: 105, managementFee: 367.5, submitedAmount: 10500 } }),
   rec({ _id: 'RI-NEW2', userAccountNumber: 'RI-B', investedAmount: 19100,
-        product: `investmentProducts/${SOLAR}`, pool: `investmentProducts/${SOLAR}/investmentPools/${P2}`,
+        product: `investmentProducts/${SOLAR6}`, pool: `investmentProducts/${SOLAR6}/investmentPools/${P2}`,
         txRef: 'RI-B/NEW002', dateInvested: '2025-10-30T18:49:25.396Z',
         maturityInstruction: { instruction: 'REINVEST', reinvestAmount: 19100 } }),
   /* already there, correctly labelled */
@@ -339,6 +340,50 @@ const state = async () => {
     ok('a product the file holds nothing for is reported, not treated as finished',
        /Nothing in this file maps to product_type "sollar"/.test(wrongProduct));
     ok('and the file’s real products are listed beside it', /solar/.test(wrongProduct));
+
+    /* ── One export product, several products here ─────────────────── */
+    console.log('\n--map splits one export product into the products this platform keeps apart');
+    await seed();
+    const beforeSplit = await state();
+    const suggest = run([]);
+    ok('the survey says the export product is more than one product here',
+       /"solar" is 2 products in the export, not one/.test(suggest), suggest.slice(0, 300));
+    ok('it reads the term off each pool\u2019s name',
+       /looks like "solar_7yr"/.test(suggest) && /looks like "solar_6yr"/.test(suggest),
+       'the term is nowhere in the export — the pool name is the only evidence there is');
+    ok('and prints a --map to be repeated back',
+       new RegExp(`--map .*${SOLAR}=solar_7yr`).test(suggest)
+       && new RegExp(`${SOLAR6}=solar_6yr`).test(suggest));
+    ok('but it is a suggestion, not an action',
+       /Nothing\s+below is applied unless you repeat it back/.test(suggest)
+       && /Without --map every one of them is written as "solar"/.test(suggest)
+       && (await state()).rows === beforeSplit.rows,
+       'a product label derived from a name, applied on its own, is a guess wearing a fact');
+    ok('and the classification does not quietly use it either',
+       !/INV-MIGR-RI-EXISTS currently/.test(suggest),
+       'a row that is correct for "solar" must still read as correct until --map says otherwise — '
+       + 'classifying against the guess is the same guess, one step further in');
+
+    const mapped = run(['--map', `${SOLAR}=solar_7yr,${SOLAR6}=solar_6yr`, '--apply', '--fix-product-type']);
+    const { rows: split } = await pool.query(
+      `SELECT id, product_type FROM investments WHERE investor_id LIKE 'RI-%' ORDER BY id`);
+    const typeOf = id => (split.find(r => r.id === id) || {}).product_type;
+    ok('each legacy product id is written with its own type',
+       typeOf('INV-MIGR-RI-NEW1') === 'solar_7yr' && typeOf('INV-MIGR-RI-NEW2') === 'solar_6yr',
+       JSON.stringify(split));
+    ok('and a row already carrying the single type is moved to the split one',
+       typeOf('INV-MIGR-RI-EXISTS') === 'solar_7yr' && typeOf('INV-MIGR-RI-MISLABEL') === 'solar_7yr',
+       'with --map, "solar" is the wrong label too');
+    ok('the run says how much went to each', /of solar_7yr principal added/.test(mapped));
+
+    const badMap = (() => { try {
+      return execFileSync('node', [RUNNER, '--file', EXPORT, '--product', 'solar',
+        '--map', `${SOLAR}=solar_99yr`], { env: { ...process.env }, encoding: 'utf8' });
+    } catch (e) { return (e.stdout || '') + (e.stderr || ''); } })();
+    ok('a type in the map that the database does not know is refused too',
+       /"solar_99yr" is not a product type this database uses/.test(badMap)
+       && /nothing was written/i.test(badMap),
+       'the guard has to cover every type the run would write, not just the default one');
 
     await wipe();
   } catch (err) {
