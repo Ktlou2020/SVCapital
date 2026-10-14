@@ -56,6 +56,28 @@ const KYC_DOC_TYPE_MAP = {
   'Proof of Address':  'proof_of_address',
 };
 
+/* An investment's `product` is a PATH STRING in every audit export —
+   "investmentProducts/<id>" — with no `name` on it, so PRODUCT_TYPE_MAP
+   [inv.product?.name] was undefined for every record and the whole import
+   landed as product_type 'other'. Nothing was lost; it was filed under the
+   wrong product, which on any screen that asks for one product is
+   indistinguishable from a missing investment. The id in the path is what the
+   export actually gives us, and the pool path carries the same id, which
+   covers a record with no product field at all. */
+function resolveInvestmentProductType(inv) {
+  const productId = v => {
+    if (!v) return null;
+    const s = (typeof v === 'object') ? (v.path || v.id || '') : String(v);
+    const parts = s.split('/').filter(Boolean);
+    return parts[0] === 'investmentProducts' ? (parts[1] || null) : null;
+  };
+  return PRODUCT_ID_MAP[productId(inv.product)]
+      || PRODUCT_ID_MAP[productId(inv.pool)]
+      || PRODUCT_TYPE_MAP[inv.product && inv.product.name]
+      || PRODUCT_TYPE_MAP[inv.productName]
+      || 'other';
+}
+
 function extractPoolId(p) {
   if (!p) return null;
   // p may be a plain path string "investmentPools/ID" or an object { path: "investmentPools/ID" }
@@ -306,11 +328,19 @@ router.post('/run',
              expected_return, maturity_instruction, updated_at)
           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW())
           ON CONFLICT (id) DO UPDATE SET
-            status=EXCLUDED.status, maturity_instruction=EXCLUDED.maturity_instruction, updated_at=NOW()
+            status=EXCLUDED.status, maturity_instruction=EXCLUDED.maturity_instruction,
+            /* So re-uploading the export repairs a label it got wrong before.
+               Never the other way: an unresolved 'other' leaves a real product
+               alone, and pool_name, annual_rate and end_date are not touched at
+               all — without the pools file they would arrive empty. */
+            product_type = CASE WHEN EXCLUDED.product_type = 'other'
+                                THEN investments.product_type
+                                ELSE EXCLUDED.product_type END,
+            updated_at=NOW()
         `, [
           `INV-MIGR-${inv._id}`, inv.userAccountNumber,
           dbPoolId,
-          poolName, PRODUCT_TYPE_MAP[inv.product?.name]||'other', amount,
+          poolName, resolveInvestmentProductType(inv), amount,
           INVESTMENT_STATUS_MAP[inv.status]||'active',
           inv.dateInvested  ? new Date(inv.dateInvested)         : new Date(),
           srcPool?.maturityDate ? new Date(srcPool.maturityDate) : null,
