@@ -59,11 +59,84 @@ console.log('\nboth importers resolve the product from the path, not a name that
      /THEN investments\.product_type/.test(route));
   const runner = fs.readFileSync(path.join(ROOT, 'server', 'scripts', 'reimport-product-investments.cjs'), 'utf8');
   ok('the runner closes the pool the audit service writes through',
-     /if \(auditUsed\) await require\(path\.join\(__dirname, '\.\.', 'db', 'pool'\)\)\.end/.test(runner),
+     /await require\(path\.join\(__dirname, '\.\.', 'db', 'pool'\)\)\.end/.test(runner),
      'its idle connections hold the event loop open for 30s, so the script looks hung after it has finished');
+  /* One classification, one insert, one set of audit rows. A second copy in
+     the console would drift from the one the command line runs. */
+  ok('the runner has no classification of its own — it calls the service',
+     /services', 'productReimport'/.test(runner)
+     && !/verdict = 'missing'/.test(runner) && !/INSERT INTO investments/.test(runner),
+     'the console calls the same service, and two copies drift');
   ok('and the fields that arrive empty without the pools file are not overwritten',
      !/pool_name=EXCLUDED\.pool_name/.test(route) && !/annual_rate=EXCLUDED\.annual_rate/.test(route),
      'an investments-only upload would blank the rate and the pool name');
+}
+
+console.log('\nthe console runs the same thing, and previews by default');
+{
+  const route = fs.readFileSync(path.join(ROOT, 'server', 'routes', 'migrate.js'), 'utf8');
+  const i = route.indexOf("router.post('/reimport-product'");
+  ok('the route exists', i > -1);
+  const body = route.slice(i, route.indexOf('\n);', i));
+  ok('only an admin or a director can call it',
+     /requireAuth,\s*\n\s*requireRole\('admin', 'director'\)/.test(body));
+  ok('dry run is the default — writing needs dry_run:false explicitly',
+     /const dryRun\s+= String\(body\.dry_run\) !== 'false';/.test(body),
+     'defaulting the other way makes a mis-click insert money-bearing rows');
+  ok('it returns before writing when previewing',
+     /if \(dryRun\) return res\.json/.test(body));
+  ok('it calls the service rather than carrying its own copy',
+     /require\('\.\.\/services\/productReimport'\)/.test(body)
+     && !/INSERT INTO investments/.test(body) && !/verdict = /.test(body),
+     'a second classification in the console drifts from the one the CLI runs');
+  ok('an unknown product type is refused with the list, as the remap panel does',
+     /is not a product type[\s\S]{0,200}allowed: s\.known/.test(body));
+  ok('relabelling is its own flag here too',
+     /fix_product_type/.test(body),
+     'an insert over an existing id is a no-op that reports success');
+  ok('the response caps the per-record listing but not the counts',
+     /const CAP = 200/.test(body) && /v\.rows\.length < CAP/.test(body),
+     'a product with thousands of records would otherwise return thousands of rows');
+
+  const admin = fs.readFileSync(path.join(ROOT, 'admin', 'js', 'admin.js'), 'utf8');
+  const html  = fs.readFileSync(path.join(ROOT, 'admin', 'index.html'), 'utf8');
+  ok('the panel has a preview button and an apply button',
+     /reimportProductInvestments\(this, true\)/.test(html)
+     && /reimportProductInvestments\(this, false\)/.test(html));
+  ok('applying asks first', /Confirm\.ask\('Write these investments\?'/.test(admin));
+  ok('preview and apply are one request with dry_run flipped',
+     /fd\.append\('dry_run', dryRun \? 'true' : 'false'\)/.test(admin),
+     'two code paths would let the preview and the write disagree');
+  ok('the report separates what is absent from what is merely mislabelled',
+     /'missing':\s*'absent from the database/.test(admin)
+     && /'mislabelled':\s*'here as another product/.test(admin));
+  ok('the suggested map is shown to be pasted, not applied',
+     /is not applied on its own/.test(admin));
+  /* Inverted on purpose: every interpolation has to START with something
+     known safe, rather than the check hunting for things that look unsafe.
+     A mutation that interpolates `${t.investor}` survives a hunt and fails
+     this. Server-computed counts are listed by name, so a new field is a
+     failure until somebody says which it is. */
+  {
+    const blk = admin.slice(admin.indexOf('function _reimportReport'),
+                            admin.indexOf('async function importHeardAboutUs'));
+    const SAFE = [
+      /* counts and booleans computed on the server, never free text */
+      'r.file.total', 'r.dropped', 'r.inserted', 'r.relabelled', 'r.applied',
+      'r.suggestion.length', 'r.wrongPools.length', 'r.totals.length',
+      'g.records', 'g.guessKnown', 'v',
+      /* already-built fragments, and the iterators whose bodies are scanned
+         by this same regex */
+      'rows', 'head', 'sugg', 'pools', 'totals',
+      'r.suggestion.map', 'r.suggestion.some', 'r.suggestion.filter',
+      'r.wrongPools.map', 'r.totals.map', 'r.wanted',
+    ];
+    const unsafe = [...blk.matchAll(/\$\{\s*([A-Za-z_$][\w.$]*)/g)].map(m => m[1])
+      .filter(id => id !== '_esc' && id !== 'Utils.rand' && !SAFE.includes(id));
+    ok('every value interpolated into the report is escaped or a counted number',
+       unsafe.length === 0, unsafe.join(', ') +
+       ' — investor names and pool names come out of the database and are rendered as markup');
+  }
 }
 
 if (!process.env.DATABASE_URL) {
@@ -147,7 +220,7 @@ const RECORDS = [
 ];
 
 const wipe = async () => {
-  await pool.query(`DELETE FROM audit_events WHERE user_email = 'check-reimport'`);
+  await pool.query(`DELETE FROM audit_events WHERE user_email IN ('check-reimport', 'panel@check.test')`);
   await pool.query(`DELETE FROM investments WHERE investor_id LIKE 'RI-%' OR id LIKE 'INV-MIGR-RI-%' OR id LIKE 'RI-%'`);
   await pool.query(`DELETE FROM investment_pools WHERE id LIKE 'POOL-MIGR-RI%'`);
   await pool.query(`DELETE FROM investors WHERE id LIKE 'RI-%'`);
@@ -340,6 +413,91 @@ const state = async () => {
     ok('a product the file holds nothing for is reported, not treated as finished',
        /Nothing in this file maps to product_type "sollar"/.test(wrongProduct));
     ok('and the file’s real products are listed beside it', /solar/.test(wrongProduct));
+
+    /* ── The console path, driven for real ─────────────────────────── */
+    console.log('\nand the route behind the panel previews unless told otherwise');
+    await seed();
+    const express = require('express');
+    const http    = require('http');
+    const ROLE    = { id: null, email: 'panel@check.test', role: 'admin' };
+    /* Auth is stubbed so the route is exercised, not the login. The role is
+       mutable so the guard itself can be tested. */
+    const authMod = require.resolve(path.join(ROOT, 'server', 'middleware', 'auth'));
+    require.cache[authMod] = { id: authMod, filename: authMod, loaded: true, exports: {
+      requireAuth: (req, _r, next) => { req.user = ROLE; next(); },
+      requireRole: (...roles) => (req, res, next) =>
+        roles.includes(req.user.role) ? next() : res.status(403).json({ error: 'Forbidden.' }),
+    } };
+    const app = express();
+    app.use('/api/migrate', require(path.join(ROOT, 'server', 'routes', 'migrate')));
+    const srv = await new Promise(r => { const x = app.listen(0, () => r(x)); });
+
+    const post = (fields) => new Promise(resolve => {
+      const B = '----svccheck' + Date.now();
+      const parts = [];
+      for (const [k, v] of Object.entries(fields)) {
+        if (v === undefined) continue;
+        parts.push(Buffer.from(`--${B}\r\nContent-Disposition: form-data; name="${k}"\r\n\r\n${v}\r\n`));
+      }
+      parts.push(Buffer.from(`--${B}\r\nContent-Disposition: form-data; name="investments"; ` +
+        `filename="export.json"\r\nContent-Type: application/json\r\n\r\n`));
+      parts.push(Buffer.from(JSON.stringify(RECORDS)));
+      parts.push(Buffer.from(`\r\n--${B}--\r\n`));
+      const body = Buffer.concat(parts);
+      const req = http.request({ port: srv.address().port, path: '/api/migrate/reimport-product',
+        method: 'POST', headers: { 'Content-Type': `multipart/form-data; boundary=${B}`,
+                                   'Content-Length': body.length } }, res => {
+        let out = ''; res.on('data', c => out += c);
+        res.on('end', () => { let j = {}; try { j = JSON.parse(out); } catch (_) {} resolve({ status: res.statusCode, body: j }); });
+      });
+      req.on('error', e => resolve({ status: 0, body: { error: e.message } }));
+      req.end(body);
+    });
+
+    const beforeRoute = await state();
+    const preview = await post({ product: 'solar' });
+    ok('a request with no dry_run field previews rather than writes',
+       preview.status === 200 && preview.body.applied === false
+       && (await state()).rows === beforeRoute.rows,
+       JSON.stringify(preview.body).slice(0, 200));
+    ok('the preview counts the same classes the CLI prints',
+       !!preview.body.byVerdict && preview.body.byVerdict.missing.n === 2
+       && preview.body.byVerdict.mislabelled.n === 1,
+       JSON.stringify(preview.body.byVerdict || {}));
+    ok('and carries the suggestion for a product that is several here',
+       (preview.body.suggestion || []).length === 2
+       && preview.body.suggestion.some(g => g.guess === 'solar_7yr'));
+
+    const refused = await post({ product: 'solar', as: 'solar_99yr' });
+    ok('an unknown product type is refused by the route too',
+       refused.status === 400 && /not a product type/.test(refused.body.error || '')
+       && Array.isArray(refused.body.allowed),
+       JSON.stringify(refused.body).slice(0, 160));
+
+    ROLE.role = 'employee';
+    const forbidden = await post({ product: 'solar' });
+    ok('and somebody who is not an admin or a director cannot call it at all',
+       forbidden.status === 403, String(forbidden.status));
+    ROLE.role = 'admin';
+
+    const written = await post({ product: 'solar', dry_run: 'false', fix_product_type: 'true',
+      map: `${SOLAR}=solar_7yr,${SOLAR6}=solar_6yr` });
+    const afterRoute = await state();
+    ok('dry_run=false writes, and the map splits the products as the CLI does',
+       written.status === 200 && written.body.applied === true
+       && written.body.inserted === 2 && written.body.relabelled >= 1
+       && afterRoute.rows === beforeRoute.rows + 2,
+       JSON.stringify(written.body).slice(0, 200));
+    const { rows: viaRoute } = await pool.query(
+      `SELECT id, product_type FROM investments WHERE id IN ('INV-MIGR-RI-NEW1','INV-MIGR-RI-NEW2')`);
+    ok('with the types the map named',
+       viaRoute.find(r => r.id === 'INV-MIGR-RI-NEW1').product_type === 'solar_7yr'
+       && viaRoute.find(r => r.id === 'INV-MIGR-RI-NEW2').product_type === 'solar_6yr',
+       JSON.stringify(viaRoute));
+    ok('and the writes are audited under the person who clicked, not "cli"',
+       (await pool.query(`SELECT COUNT(*)::int n FROM audit_events
+          WHERE user_email = $1 AND event_type = 'investment_reimported'`, [ROLE.email])).rows[0].n === 2);
+    await new Promise(r => srv.close(r));
 
     /* ── One export product, several products here ─────────────────── */
     console.log('\n--map splits one export product into the products this platform keeps apart');
