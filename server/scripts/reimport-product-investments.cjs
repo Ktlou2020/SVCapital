@@ -75,6 +75,11 @@
  */
 'use strict';
 
+/* The classification, the insert and the audit rows live in
+   server/services/productReimport.js, which the admin console's Data Fixes
+   panel calls too. This file is the command line over it: arguments in,
+   printing out, and nothing of its own to drift. */
+
 const path = require('path');
 const fs   = require('fs');
 
@@ -86,18 +91,11 @@ const FILE        = val('--file');
 const EXPORT_KEY  = val('--product');
 /* What the export calls the product and what this platform calls it are not
    always the same word — the export says smme where the database says
-   short_term. The file is filtered by the first and the rows are written with
-   the second. */
-const PRODUCT     = val('--as') || EXPORT_KEY;
-/* One export product can be several products here. The legacy catalogue had
-   three solar products — five, six and seven years — which this platform keeps
-   apart as solar_5yr, solar_6yr and solar_7yr, and a five-year and a seven-year
-   holding do not mature or roll alike. --map names the type per LEGACY PRODUCT
-   ID; anything it does not name falls back to --as. */
-const MAP = Object.fromEntries(val('--map').split(',').filter(Boolean).map(pair => {
-  const [id, type] = pair.split('=');
-  return [String(id || '').trim(), String(type || '').trim()];
-}).filter(([id, type]) => id && type));
+   short_term. The file is filtered by the first and the rows written with the
+   second. --map names a type per legacy product id where one export product
+   is several here. */
+const AS          = val('--as');
+const MAP_SPEC    = val('--map');
 const FORCE_TYPE  = flag('--force-new-type');
 const APPLY       = flag('--apply');
 const FIX_LABEL   = flag('--fix-product-type');
@@ -113,40 +111,9 @@ if (!FILE || !EXPORT_KEY) {
   process.exit(2);
 }
 
-/* The same table both importers use, kept here rather than imported: a script
-   that reads a historical export must keep reading it the way it was written,
-   even if the live map is edited later. */
-const PRODUCT_ID_MAP = {
-  '0J1g67Ln99nMOct6vnqS': 'delivery_bikes',
-  '8r3TlnGkizidu1JCgbDp': 'smme',
-  'BjrELvLGvQzTSDt9ztGK': 'solar',
-  'Q3R5RN21GWJ4lGCtI72R': 'cattle_12j',
-  'SfpCxgJjP6i5GUz1JWYp': 'solar',
-  'gSjiuqRg3E8IEO2hwfmu': 'cattle',
-  'lwKM2GFyCXNd88l1nCAK': 'ilobola',
-  'xKQkwQMa0Hnj0dAmGsWH': 'solar',
-};
-const STATUS_MAP = {
-  MATURED: 'matured', ACTIVE: 'active', PAID_OUT: 'matured',
-  COMPLETE: 'matured', CANCELLED: 'cancelled',
-};
-
-const lastSeg = v => {
-  if (!v) return null;
-  const s = (typeof v === 'object') ? (v.path || v.id || '') : String(v);
-  const parts = s.split('/');
-  return parts[parts.length - 1] || null;
-};
-/* The type a given record is written with: its legacy product id if --map
-   names one, otherwise the single --as/--product type. */
-const typeOf = r => MAP[lastSeg(r.product)] || PRODUCT;
-
-const money = n => 'R' + Number(n || 0).toLocaleString('en-US',
-  { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const round2 = n => Math.round((Number(n) || 0) * 100) / 100;
+const svc = require(path.join(__dirname, '..', 'services', 'productReimport'));
+const { money } = svc;
 const H = s => console.log(`\n${s}\n${'─'.repeat(s.length)}`);
-
-let auditUsed = false;
 
 const { Pool } = require('pg');
 const db = new Pool({
@@ -155,63 +122,46 @@ const db = new Pool({
   statement_timeout: 120000,
 });
 
-function normaliseInstruction(mi) {
-  if (!mi || !mi.instruction) return null;
-  return String(mi.instruction).toLowerCase().replace(/\s+/g, '_')
-    .replace('payout_returns', 'payout_return')
-    .replace('payout_all_funds', 'payout_all');
-}
+const LABELS = {
+  'missing':              'absent from the database — to be inserted',
+  'mislabelled':          'in the database as another product — to be relabelled',
+  'mislabelled-other-id': 'the same investment under a different id, and another product',
+  'present':              'already there with the right product — skipped',
+  'present-other-id':     'already there under a different id, with the right product — skipped',
+  'no-pool':              'blocked: its pool is not in the database',
+  'no-investor':          'blocked: its investor is not in the database',
+  'no-date':              'blocked: no investment date in the export',
+};
 
 async function main() {
   const raw = JSON.parse(fs.readFileSync(FILE, 'utf8'));
-  const all = Array.isArray(raw) ? raw : (raw.investments || raw.data || []);
-  if (!all.length) { console.error(`${FILE} holds no investment records.`); process.exit(2); }
+  const s = await svc.survey(db, {
+    records: raw, exportKey: EXPORT_KEY, as: AS, map: MAP_SPEC,
+  });
 
-  /* What the file actually contains, by product. A --product the file has
-     nothing for is a typo, and is worth saying so rather than reporting
-     "0 to import" as though the work were done. */
-  const byProduct = {};
-  for (const r of all) {
-    const t = PRODUCT_ID_MAP[lastSeg(r.product)] || `other (${lastSeg(r.product) || 'no product'})`;
-    byProduct[t] = (byProduct[t] || 0) + 1;
-  }
-  H(`${path.basename(FILE)} — ${all.length} investment record(s)`);
-  Object.entries(byProduct).sort((a, b) => b[1] - a[1])
+  H(`${path.basename(FILE)} — ${s.file.total} investment record(s)`);
+  Object.entries(s.file.byProduct).sort((a, b) => b[1] - a[1])
     .forEach(([t, n]) => console.log(`  ${String(n).padStart(6)}  ${t}`));
 
-  const mine = all.filter(r => PRODUCT_ID_MAP[lastSeg(r.product)] === EXPORT_KEY
-                            && r._id && r.userAccountNumber);
-  const dropped = all.filter(r => PRODUCT_ID_MAP[lastSeg(r.product)] === EXPORT_KEY
-                               && (!r._id || !r.userAccountNumber));
-  if (!mine.length) {
+  if (s.empty) {
     console.log(`\nNothing in this file maps to product_type "${EXPORT_KEY}". Nothing to do.`);
     return;
   }
-  const wanted = [...new Set(mine.map(typeOf))].sort();
-  console.log(`\n${mine.length} record(s) map to "${EXPORT_KEY}"` +
-    (wanted.join() !== EXPORT_KEY ? `, to be written as ${wanted.map(t => `"${t}"`).join(' / ')}` : '') +
-    (dropped.length ? ` · ${dropped.length} unusable (no _id or no account number)` : ''));
-  if (Object.keys(MAP).length) {
-    for (const t of wanted) {
-      const n = mine.filter(r => typeOf(r) === t).length;
-      const ids = [...new Set(mine.filter(r => typeOf(r) === t).map(r => lastSeg(r.product)))];
-      console.log(`  ${String(n).padStart(6)}  ${t}  \u2190 ${ids.join(', ')}`);
+
+  console.log(`\n${s.plan.length} record(s) map to "${EXPORT_KEY}"` +
+    (s.wanted.join() !== EXPORT_KEY ? `, to be written as ${s.wanted.map(t => `"${t}"`).join(' / ')}` : '') +
+    (s.dropped ? ` · ${s.dropped} unusable (no _id or no account number)` : ''));
+  if (Object.keys(s.map).length) {
+    for (const t of s.wanted) {
+      const xs = s.plan.filter(x => x.type === t);
+      console.log(`  ${String(xs.length).padStart(6)}  ${t}  ← ` +
+        [...new Set(xs.map(x => x.legacyId))].join(', '));
     }
   }
 
-  /* A product_type nothing else uses is how a rollover silently becomes a
-     wallet payout — the maturity engine matches on that column and nothing
-     else — and how a product page stays empty after an import that reported
-     success. Same refusal the remap panel gives, for the same reason. */
-  const { rows: liveTypes } = await db.query(
-    `SELECT DISTINCT product_type FROM investment_pools WHERE COALESCE(product_type,'') <> ''
-      UNION SELECT DISTINCT product_type FROM investments WHERE COALESCE(product_type,'') <> ''
-      UNION SELECT DISTINCT product_type FROM products WHERE COALESCE(product_type,'') <> ''`);
-  const known = liveTypes.map(r => r.product_type).sort();
-  const unknown = wanted.filter(t => !known.includes(t));
-  if (unknown.length) {
-    H(`${unknown.map(t => `"${t}"`).join(', ')} ${unknown.length > 1 ? 'are' : 'is'} not a product type this database uses`);
-    console.log(`  In use: ${known.join(', ') || '(none)'}`);
+  if (s.unknown.length) {
+    H(`${s.unknown.map(t => `"${t}"`).join(', ')} ${s.unknown.length > 1 ? 'are' : 'is'} not a product type this database uses`);
+    console.log(`  In use: ${s.known.join(', ') || '(none)'}`);
     console.log(`\n  The export calls it "${EXPORT_KEY}". If this platform calls it something`);
     console.log('  else, name the live one with --as, e.g. --product smme --as short_term.');
     if (!FORCE_TYPE) {
@@ -223,126 +173,27 @@ async function main() {
     console.log('\n  --force-new-type given — carrying on with a type nothing else uses.');
   }
 
-  /* ── What the database already holds ─────────────────────────────── */
-  const invIds   = mine.map(r => `INV-MIGR-${r._id}`);
-  const poolIds  = [...new Set(mine.map(r => `POOL-MIGR-${lastSeg(r.pool)}`))];
-  const investorIds = [...new Set(mine.map(r => r.userAccountNumber))];
-
-  const { rows: existingById } = await db.query(
-    `SELECT id, investor_id, pool_id, amount, product_type, status, start_date
-       FROM investments WHERE id = ANY($1::text[])`, [invIds]);
-  const byId = new Map(existingById.map(r => [r.id, r]));
-
-  /* Every investment sitting in those pools, whatever its id — so a row that
-     was entered by hand, or imported under a different id, is recognised as
-     the same investment instead of being inserted a second time. */
-  const { rows: inPools } = await db.query(
-    `SELECT id, investor_id, pool_id, amount, product_type, start_date
-       FROM investments WHERE pool_id = ANY($1::text[])`, [poolIds]);
-  const fingerprint = r => [r.investor_id, r.pool_id, round2(r.amount),
-    r.start_date ? new Date(r.start_date).toISOString().slice(0, 10) : ''].join('|');
-  const byFingerprint = new Map();
-  for (const r of inPools) {
-    if (!byFingerprint.has(fingerprint(r))) byFingerprint.set(fingerprint(r), r);
+  if (s.suggestion.length) {
+    H(`"${EXPORT_KEY}" is ${s.suggestion.length} products in the export, not one`);
+    const line = [];
+    for (const g of s.suggestion) {
+      console.log(`  ${g.legacyId}  ${String(g.records).padStart(3)} record(s)`);
+      console.log(`      pools: ${g.poolNames.join(' · ') || '(none of its pools are in the database)'}`);
+      if (g.guessKnown) { console.log(`      → looks like "${g.guess}"`); line.push(`${g.legacyId}=${g.guess}`); }
+      else console.log(`      → nothing suggests itself${g.guess ? ` ("${g.guess}" is not a product type here)` : ''}`);
+    }
+    if (line.length) {
+      console.log('\n  Read off the pool NAMES, which is what the engine cannot see. Nothing');
+      console.log('  below is applied unless you repeat it back:');
+      console.log(`\n    --map ${line.join(',')}\n`);
+    }
+    console.log(`  Without --map every one of them is written as "${s.product}".`);
   }
 
-  const { rows: pools } = await db.query(
-    `SELECT id, name, product_type, status, term_months,
-            COALESCE(actual_rate, annual_rate, 0) AS rate,
-            COALESCE(maturity_date::date, end_date) AS maturity
-       FROM investment_pools WHERE id = ANY($1::text[])`, [poolIds]);
-  const poolById = new Map(pools.map(p => [p.id, p]));
-
-  const { rows: investors } = await db.query(
-    `SELECT id, first_name, last_name, COALESCE(total_invested, 0) AS total_invested
-       FROM investors WHERE id = ANY($1::text[])`, [investorIds]);
-  const investorById = new Map(investors.map(i => [i.id, i]));
-
-  /* ── Classify ────────────────────────────────────────────────────── */
-  const plan = mine.map(r => {
-    const id       = `INV-MIGR-${r._id}`;
-    const poolId   = `POOL-MIGR-${lastSeg(r.pool)}`;
-    const investor = r.userAccountNumber;
-    const amount   = round2(r.investedAmount);
-    const start    = r.dateInvested ? new Date(r.dateInvested) : null;
-    const p        = poolById.get(poolId);
-    const row      = byId.get(id);
-    const twin     = row ? null : byFingerprint.get([investor, poolId, amount,
-      start ? start.toISOString().slice(0, 10) : ''].join('|'));
-
-    const type     = typeOf(r);
-
-    let verdict;
-    if (row && row.product_type === type)         verdict = 'present';
-    else if (row)                                 verdict = 'mislabelled';
-    else if (twin && twin.product_type === type)  verdict = 'present-other-id';
-    else if (twin)                                verdict = 'mislabelled-other-id';
-    else if (!investorById.has(investor))         verdict = 'no-investor';
-    else if (!p)                                  verdict = 'no-pool';
-    else if (!start)                              verdict = 'no-date';
-    else                                          verdict = 'missing';
-
-    return { src: r, id, poolId, investor, amount, start, pool: p, row, twin, verdict, type,
-             status: STATUS_MAP[r.status] || 'active',
-             instruction: normaliseInstruction(r.maturityInstruction) };
-  });
-
-  const of = v => plan.filter(x => x.verdict === v);
+  const of  = v => s.plan.filter(x => x.verdict === v);
   const sum = xs => xs.reduce((a, x) => a + x.amount, 0);
 
-  /* One export product can be several here, and which legacy id is which term
-     is not in the export: the id is opaque and the records carry no term. The
-     POOL NAMES do say — "Solar Investment - 7 Years - October 2025" — but a
-     name is exactly what the maturity engine cannot see, and acting on one by
-     itself is how a guess becomes a product label. So a suggestion is printed
-     to be repeated back through --map by somebody who agrees with it, and
-     never applied on its own. */
-  if (!Object.keys(MAP).length) {
-    const byLegacy = new Map();
-    for (const x of plan) {
-      const lid = lastSeg(x.src.product);
-      if (!byLegacy.has(lid)) byLegacy.set(lid, new Set());
-      if (x.pool) byLegacy.get(lid).add(x.pool.name);
-    }
-    if (byLegacy.size > 1) {
-      H(`"${EXPORT_KEY}" is ${byLegacy.size} products in the export, not one`);
-      const WORDS = { five: '5', six: '6', seven: '7', eight: '8', ten: '10', twelve: '12' };
-      const suggestion = [];
-      for (const [lid, names] of byLegacy) {
-        const joined = [...names].join(' ');
-        const term = (joined.match(/(\d+)\s*-?\s*(?:year|yr)/i) || [])[1]
-                  || WORDS[(joined.toLowerCase().match(/\b(five|six|seven|eight|ten|twelve)\b/) || [])[1]];
-        const guess = term ? `${EXPORT_KEY}_${term}yr` : null;
-        const n = plan.filter(x => lastSeg(x.src.product) === lid).length;
-        console.log(`  ${lid}  ${String(n).padStart(3)} record(s)`);
-        console.log(`      pools: ${[...names].join(' · ') || '(none of its pools are in the database)'}`);
-        if (guess && known.includes(guess)) {
-          console.log(`      → looks like "${guess}"`);
-          suggestion.push(`${lid}=${guess}`);
-        } else {
-          console.log(`      → nothing suggests itself${guess ? ` ("${guess}" is not a product type here)` : ''}`);
-        }
-      }
-      if (suggestion.length) {
-        console.log('\n  Read off the pool NAMES, which is what the engine cannot see. Nothing');
-        console.log('  below is applied unless you repeat it back:');
-        console.log(`\n    --map ${suggestion.join(',')}\n`);
-      }
-      console.log(`  Without --map every one of them is written as "${PRODUCT}".`);
-    }
-  }
-
   H('Where each record stands');
-  const LABELS = {
-    'missing':              'absent from the database — to be inserted',
-    'mislabelled':          'in the database as another product — to be relabelled',
-    'mislabelled-other-id': 'the same investment under a different id, and another product',
-    'present':              'already there with the right product — skipped',
-    'present-other-id':     'already there under a different id, with the right product — skipped',
-    'no-pool':              'blocked: its pool is not in the database',
-    'no-investor':          'blocked: its investor is not in the database',
-    'no-date':              'blocked: no investment date in the export',
-  };
   for (const [v, label] of Object.entries(LABELS)) {
     const xs = of(v);
     if (xs.length) console.log(`  ${String(xs.length).padStart(4)}  ${money(sum(xs)).padStart(16)}  ${label}`);
@@ -353,68 +204,35 @@ async function main() {
     if (!xs.length) continue;
     H(LABELS[v]);
     for (const x of xs) {
-      const who = investorById.get(x.investor);
-      const name = who ? `${who.first_name || ''} ${who.last_name || ''}`.trim() : '(not in the database)';
       console.log(`  ${x.investor.padEnd(16)} ${money(x.amount).padStart(14)}  ` +
-        `${x.start ? x.start.toISOString().slice(0, 10) : '(no date)'}  ` +
-        `${x.src.txRef || '-'}  ${name}`);
+        `${x.start ? new Date(x.start).toISOString().slice(0, 10) : '(no date)'}  ` +
+        `${x.txRef || '-'}  ${x.investorName || '(not in the database)'}`);
       if (v === 'missing') {
         console.log(`      → ${x.id} as "${x.type}"  pool ${x.poolId} "${x.pool.name}" ` +
-          `· rate ${Number(x.pool.rate)} · matures ${x.pool.maturity ? new Date(x.pool.maturity).toISOString().slice(0, 10) : 'unknown'}` +
+          `· rate ${x.pool.rate} · matures ${x.pool.maturity ? new Date(x.pool.maturity).toISOString().slice(0, 10) : 'unknown'}` +
           (x.pool.product_type !== x.type ? `  ⚠ the pool itself is "${x.pool.product_type || '(empty)'}"` : ''));
       }
       if (v === 'mislabelled' || v === 'mislabelled-other-id') {
-        const row = x.row || x.twin;
-        console.log(`      → ${row.id} currently "${row.product_type || '(empty)'}" → "${x.type}"`);
+        console.log(`      → ${x.existing.id} currently "${x.existing.product_type || '(empty)'}" → "${x.type}"`);
       }
     }
   }
 
-  /* A pool carrying the wrong product_type is a separate fault with its own
-     consequence — the maturity engine matches rollovers on product_type and
-     nothing else — and its own script. Named, not fixed here. */
-  /* The type a pool OUGHT to carry is the type its own investments are being
-     written with — which is per record once --map splits one export product
-     into several. A pool holding records of two different types is itself
-     worth seeing, so it is listed with both. */
-  const wantByPool = new Map();
-  for (const x of plan) {
-    if (!x.pool) continue;
-    if (!wantByPool.has(x.poolId)) wantByPool.set(x.poolId, new Set());
-    wantByPool.get(x.poolId).add(x.type);
-  }
-  const wrongPools = pools.filter(p => {
-    const want = wantByPool.get(p.id);
-    return want && !(want.size === 1 && want.has(p.product_type));
-  });
-  if (wrongPools.length) {
+  if (s.wrongPools.length) {
     H('Pools holding these investments that are not labelled as their investments will be');
-    wrongPools.forEach(p => console.log(`  ${p.id}  "${p.name}"  currently "${p.product_type || '(empty)'}"` +
-      `  → ${[...wantByPool.get(p.id)].sort().join(' / ')}`));
+    s.wrongPools.forEach(p => console.log(`  ${p.id}  "${p.name}"  currently "${p.product_type || '(empty)'}"` +
+      `  → ${p.want.join(' / ')}`));
     console.log('\n  Rollovers match on product_type alone, so these pools will not roll into');
     console.log('  an open pool of that type. Fix with remap-pool-product-type.cjs, or the');
-    console.log('  Remap Pool Product Type panel in the admin console \u2014 not here.');
+    console.log('  Remap Pool Product Type panel in the admin console — not here.');
   }
 
-  /* ── total_invested, so nobody has to guess whether to adjust it ── */
-  const touched = [...new Set([...of('missing'), ...of('mislabelled'), ...of('mislabelled-other-id')]
-    .map(x => x.investor))];
-  if (touched.length) {
-    const { rows: sums } = await db.query(
-      `SELECT investor_id, COALESCE(SUM(amount), 0) AS live
-         FROM investments
-        WHERE investor_id = ANY($1::text[])
-          AND COALESCE(status, '') IN ('active', 'matured', 'paid_out')
-        GROUP BY investor_id`, [touched]);
-    const liveBy = new Map(sums.map(r => [r.investor_id, Number(r.live)]));
+  if (s.totals.length) {
     H('investors.total_invested, against the investment rows');
     console.log('  account           stored    rows now   rows after   difference');
-    for (const acc of touched.sort()) {
-      const stored = Number(investorById.get(acc)?.total_invested || 0);
-      const live   = liveBy.get(acc) || 0;
-      const after  = live + sum(of('missing').filter(x => x.investor === acc));
-      console.log(`  ${acc.padEnd(14)} ${money(stored).padStart(14)} ${money(live).padStart(12)} ` +
-        `${money(after).padStart(12)} ${money(stored - after).padStart(13)}`);
+    for (const t of s.totals) {
+      console.log(`  ${t.investor.padEnd(14)} ${money(t.stored).padStart(14)} ${money(t.live).padStart(12)} ` +
+        `${money(t.after).padStart(12)} ${money(t.difference).padStart(13)}`);
     }
     console.log('\n  Nothing here is written. A difference of zero after the import means the');
     console.log('  original migration already counted these amounts, which is the usual case:');
@@ -428,95 +246,19 @@ async function main() {
     return;
   }
 
-  /* ── Write ───────────────────────────────────────────────────────── */
-  const audit  = require(path.join(__dirname, '..', 'services', 'audit'));
-  auditUsed = true;
-  const client = await db.connect();
-  let inserted = 0, relabelled = 0;
-  const done = [];
-  try {
-    await client.query('BEGIN');
-
-    if (APPLY) {
-      for (const x of of('missing')) {
-        const rate = Number(x.pool.rate) || 0;
-        const notes = `Re-imported from ${path.basename(FILE)} on ${new Date().toISOString().slice(0, 10)}. ` +
-          `Legacy id ${x.src._id}; txRef ${x.src.txRef || '-'}. ` +
-          (x.src.fees ? `Client paid ${money(x.src.fees.submitedAmount || x.amount)}, ` +
-            `fees ${money(x.src.fees.financialServicesFee || 0)} + ${money(x.src.fees.managementFee || 0)}, ` +
-            `${money(x.amount)} into the pool.` : '');
-        const { rowCount } = await client.query(`
-          INSERT INTO investments
-            (id, investor_id, pool_id, pool_name, product_type, amount, status,
-             start_date, end_date, term_months, annual_rate, expected_return,
-             maturity_instruction, is_reinvestment, notes, created_at, updated_at)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NOW())
-          ON CONFLICT (id) DO NOTHING`,
-          [x.id, x.investor, x.poolId, x.pool.name, x.type, x.amount, x.status,
-           x.start, x.pool.maturity || null, x.pool.term_months || null, rate,
-           round2(x.amount * rate), x.instruction, !!x.src.reinvestment, notes, x.start]);
-        if (rowCount) { inserted++; done.push({ kind: 'inserted', x }); }
-      }
-    }
-
-    if (FIX_LABEL) {
-      for (const x of [...of('mislabelled'), ...of('mislabelled-other-id')]) {
-        const row = x.row || x.twin;
-        const { rowCount } = await client.query(
-          `UPDATE investments SET product_type = $2, updated_at = NOW()
-            WHERE id = $1 AND COALESCE(product_type, '') <> $2`, [row.id, x.type]);
-        if (rowCount) { relabelled++; done.push({ kind: 'relabelled', x, from: row.product_type }); }
-      }
-    }
-
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
-    console.error(`\n✗ nothing was written — ${err.message}`);
-    process.exitCode = 1;
-    client.release();
-    return;
-  }
-  client.release();
-
-  /* Audited after the commit: a failed audit row must not undo an import that
-     succeeded, and an audit row for an import that rolled back would be a lie. */
-  for (const d of done) {
-    await audit.log({
-      actorId: null, actorEmail: ACTOR, actorRole: 'admin',
-      action: d.kind === 'inserted' ? 'investment_reimported' : 'investment_product_type_corrected',
-      entityType: 'investment', entityId: d.x.row ? d.x.row.id : (d.x.twin ? d.x.twin.id : d.x.id),
-      description: d.kind === 'inserted'
-        ? `Re-imported ${d.x.type} investment of ${money(d.x.amount)} for ${d.x.investor} ` +
-          `into ${d.x.poolId} from ${path.basename(FILE)} (legacy id ${d.x.src._id}).`
-        : `Product type corrected from "${d.from || '(empty)'}" to "${d.x.type}" ` +
-          `on a ${money(d.x.amount)} investment for ${d.x.investor}.`,
-      before: d.kind === 'inserted' ? null : { product_type: d.from || '' },
-      after:  d.kind === 'inserted'
-        ? { amount: d.x.amount, pool_id: d.x.poolId, status: d.x.status,
-            product_type: d.x.type, source: path.basename(FILE) }
-        : { product_type: d.x.type },
-    }).catch(e => console.log(`  ⚠  written, but the audit row failed: ${e.message}`));
-  }
-  await audit.log({
-    actorId: null, actorEmail: ACTOR, actorRole: 'admin',
-    action: 'product_investments_reimported',
-    entityType: 'product', entityId: wanted.join(','),
-    description: `${inserted} ${wanted.join('/')} investment(s) inserted and ${relabelled} relabelled ` +
-      `from ${path.basename(FILE)}; ${of('present').length + of('present-other-id').length} already present were skipped.`,
-    after: { inserted, relabelled, file: path.basename(FILE), types: wanted,
-             blocked: of('no-pool').length + of('no-investor').length + of('no-date').length },
-  }).catch(() => {});
+  const res = await svc.execute(db, {
+    survey: s, apply: APPLY, fixLabel: FIX_LABEL,
+    source: path.basename(FILE), actor: { email: ACTOR, role: 'admin' },
+  });
+  res.warnings.forEach(w => console.log(`  ⚠  ${w}`));
 
   H('Written');
-  console.log(`  ${inserted} inserted · ${relabelled} relabelled · ` +
+  console.log(`  ${res.inserted} inserted · ${res.relabelled} relabelled · ` +
     `${of('present').length + of('present-other-id').length} already there · ` +
     `${of('no-pool').length + of('no-investor').length + of('no-date').length} blocked`);
-  if (inserted) {
-    for (const t of wanted) {
-      const xs = of('missing').filter(x => x.type === t);
-      if (xs.length) console.log(`  ${money(sum(xs))} of ${t} principal added (${xs.length}).`);
-    }
+  for (const t of s.wanted) {
+    const xs = of('missing').filter(x => x.type === t);
+    if (res.inserted && xs.length) console.log(`  ${money(sum(xs))} of ${t} principal added (${xs.length}).`);
   }
   console.log('\n  investors.total_invested was not touched — see the table above.');
   console.log('  No transaction rows were written; this export holds investments only.');
@@ -526,9 +268,8 @@ main()
   .catch(err => { console.error(`\n✗ ${err.message}`); process.exitCode = 1; })
   .finally(async () => {
     await db.end().catch(() => {});
-    /* services/audit writes through the shared pool, whose idle connections
+    /* The audit service writes through the shared pool, whose idle connections
        hold the event loop open for another 30 seconds after the last row — so
-       the script sits there looking hung long after it has finished. Closed
-       only if it was used, since asking for it creates it. */
-    if (auditUsed) await require(path.join(__dirname, '..', 'db', 'pool')).end().catch(() => {});
+       the script sits there looking hung long after it has finished. */
+    await require(path.join(__dirname, '..', 'db', 'pool')).end().catch(() => {});
   });

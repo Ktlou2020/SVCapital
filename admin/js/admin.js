@@ -16982,6 +16982,150 @@ async function backfillMaturedFunds(btn, dryRun) {
   }
 }
 
+/* Re-import one product's investments out of an audit export.
+
+   Preview and Apply are the same request with dry_run flipped, and dry_run is
+   only false when Apply says so — the server defaults it to true as well, so a
+   missing field previews rather than writes. The two things the preview is for
+   are kept apart in the output: what is ABSENT (an insert) and what is here
+   under another product (a relabel). Inserting the second does nothing while
+   reporting success. */
+async function reimportProductInvestments(btn, dryRun) {
+  const file    = document.getElementById('reimportFile')?.files?.[0];
+  const product = (document.getElementById('reimportProduct')?.value || '').trim();
+  const asType  = (document.getElementById('reimportAs')?.value || '').trim();
+  const map     = (document.getElementById('reimportMap')?.value || '').trim();
+  const fixLbl  = !!document.getElementById('reimportFixLabels')?.checked;
+  const out     = document.getElementById('reimportResult');
+  if (!file)    return Toast.error('Choose the investments export file first');
+  if (!product) return Toast.error('Name the product as the EXPORT calls it, e.g. solar');
+
+  if (!dryRun) {
+    const ok = await Confirm.ask('Write these investments?', {
+      bodyHtml: 'This inserts the investments that are absent from the database' +
+        (fixLbl ? ' and relabels the ones already here under another product' : '') +
+        `, as <code>${_esc(map ? 'the product types in the map' : (asType || product))}</code>. ` +
+        'Preview first if you have not. Every write is audited.',
+      confirmLabel: 'Write them',
+    });
+    if (!ok) return;
+  }
+
+  const fd = new FormData();
+  fd.append('investments', file);
+  fd.append('product', product);
+  if (asType) fd.append('as', asType);
+  if (map)    fd.append('map', map);
+  fd.append('dry_run', dryRun ? 'true' : 'false');
+  fd.append('fix_product_type', fixLbl ? 'true' : 'false');
+
+  const label = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${dryRun ? 'Reading…' : 'Writing…'}`;
+  out.textContent = '';
+  try {
+    const token = localStorage.getItem('svc_token');
+    const res   = await fetch('/api/migrate/reimport-product', {
+      method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd,
+    });
+    const r = await res.json();
+    if (!res.ok) {
+      out.innerHTML = `<span style="color:#ef4444"><i class="fa-solid fa-circle-exclamation"></i> ${_esc(r.error || 'Failed')}</span>` +
+        (r.allowed ? `<div style="margin-top:6px;color:var(--text-muted)">Known types: ${_esc(r.allowed.join(', '))}</div>` : '');
+      return Toast.error(r.error || 'Failed');
+    }
+    out.innerHTML = _reimportReport(r);
+    Toast.success(r.applied
+      ? `${r.inserted} inserted, ${r.relabelled} relabelled`
+      : 'Preview only — nothing was written');
+  } catch (e) {
+    out.innerHTML = `<span style="color:#ef4444">${_esc(e.message || 'Failed')}</span>`;
+    Toast.error(e.message || 'Failed');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = label;
+  }
+}
+
+function _reimportReport(r) {
+  const LABELS = {
+    'missing':              'absent from the database — to be inserted',
+    'mislabelled':          'here as another product — to be relabelled',
+    'mislabelled-other-id': 'the same investment under a different id, and another product',
+    'present':              'already here with the right product — skipped',
+    'present-other-id':     'already here under a different id — skipped',
+    'no-pool':              'blocked: its pool is not in the database',
+    'no-investor':          'blocked: its investor is not in the database',
+    'no-date':              'blocked: no investment date in the export',
+  };
+  const v = r.byVerdict || {};
+  const rows = Object.keys(LABELS).filter(k => v[k]).map(k =>
+    `<tr><td style="text-align:right">${v[k].n}</td>
+         <td style="text-align:right">${Utils.rand(v[k].amount)}</td>
+         <td>${_esc(LABELS[k])}</td></tr>`).join('');
+
+  const head = `
+    <div style="background:${r.applied ? 'rgba(34,197,94,.1)' : 'rgba(237,165,255,.08)'};
+                border:1px solid ${r.applied ? 'rgba(34,197,94,.3)' : 'rgba(237,165,255,.3)'};
+                border-radius:8px;padding:12px;margin-bottom:10px">
+      <strong>${r.applied ? `Applied — ${r.inserted} inserted, ${r.relabelled} relabelled.`
+                          : 'Preview only — nothing was written.'}</strong>
+      <div style="margin-top:4px;color:var(--text-muted)">
+        ${r.file.total} record(s) in the file · ${_esc(r.exportKey)} →
+        ${(r.wanted || []).map(t => `<code>${_esc(t)}</code>`).join(' / ')}
+        ${r.dropped ? ` · ${r.dropped} unusable` : ''}</div>
+    </div>`;
+
+  /* The suggestion is printed, never acted on: the term is read off the pool
+     NAME, which is the one thing the maturity engine cannot see. */
+  const sugg = (r.suggestion || []).length ? `
+    <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);
+                border-radius:8px;padding:12px;margin-bottom:10px">
+      <strong>"${_esc(r.exportKey)}" is ${r.suggestion.length} products in the export, not one.</strong>
+      <div style="margin-top:6px">${r.suggestion.map(g => `
+        <div style="margin-bottom:6px"><code>${_esc(g.legacyId)}</code> · ${g.records} record(s)
+          <div style="color:var(--text-muted)">pools: ${_esc(g.poolNames.join(' · ') || 'none in the database')}</div>
+          <div>${g.guessKnown ? `→ looks like <code>${_esc(g.guess)}</code>`
+                              : '→ nothing suggests itself from the pool names'}</div>
+        </div>`).join('')}</div>
+      ${r.suggestion.some(g => g.guessKnown) ? `<div style="margin-top:6px">Paste into Map if you agree
+        — it is read off the pool names and is not applied on its own:
+        <div style="margin-top:4px"><code>${r.suggestion.filter(g => g.guessKnown)
+          .map(g => `${_esc(g.legacyId)}=${_esc(g.guess)}`).join(',')}</code></div></div>` : ''}
+    </div>` : '';
+
+  const pools = (r.wrongPools || []).length ? `
+    <p style="margin-top:10px;color:#f59e0b"><i class="fa-solid fa-triangle-exclamation"></i>
+      ${r.wrongPools.length} pool(s) are not labelled as their investments will be:
+      ${r.wrongPools.map(p => `<code>${_esc(p.id)}</code> "${_esc(p.name)}"
+        ${_esc(p.product_type || '(empty)')} → ${_esc(p.want.join(' / '))}`).join('; ')}.
+      Rollovers match on product type alone, so fix those in Remap Pool Product Type above.</p>` : '';
+
+  const totals = (r.totals || []).length ? `
+    <details style="margin-top:10px"><summary style="cursor:pointer">
+      total_invested for the ${r.totals.length} investor(s) affected — not written, shown to be judged</summary>
+      <div style="overflow-x:auto;margin-top:6px"><table class="table" style="font-size:0.78rem">
+        <thead><tr><th>Account</th><th style="text-align:right">Stored</th>
+          <th style="text-align:right">Rows now</th><th style="text-align:right">Rows after</th>
+          <th style="text-align:right">Difference</th></tr></thead>
+        <tbody>${r.totals.map(t => `<tr><td>${_esc(t.investor)}</td>
+          <td style="text-align:right">${Utils.rand(t.stored)}</td>
+          <td style="text-align:right">${Utils.rand(t.live)}</td>
+          <td style="text-align:right">${Utils.rand(t.after)}</td>
+          <td style="text-align:right">${Utils.rand(t.difference)}</td></tr>`).join('')}</tbody></table></div>
+      <p style="color:var(--text-muted);margin-top:6px">A difference of zero after the import means the
+        original migration already counted these amounts, which is the usual case — it summed the whole
+        export whether or not each insert then succeeded. Nothing here is written either way.</p>
+    </details>` : '';
+
+  return head + sugg + `
+    <div style="overflow-x:auto"><table class="table" style="font-size:0.78rem">
+      <thead><tr><th style="text-align:right">Count</th><th style="text-align:right">Capital</th><th>Where it stands</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>` + pools + totals +
+    `<p style="margin-top:8px;color:var(--text-muted)">investors.total_invested is never touched, and no
+      transaction rows are written — this export holds investments only.</p>`;
+}
+
 async function importHeardAboutUs(btn) {
   const fileInput = document.getElementById('heardImportFile');
   const resultEl  = document.getElementById('heardImportResult');

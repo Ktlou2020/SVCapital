@@ -548,4 +548,91 @@ router.post('/backfill-orphan-pools',
   }
 );
 
+/* ── POST /api/migrate/reimport-product ──────────────────────────────
+   Re-import ONE product's investments out of an audit export.
+
+   The bulk importer above repairs a label on a row it already wrote; this
+   is for the rows it never wrote, and for rows filed under another product.
+   It previews by default — dry_run has to be explicitly false to write,
+   because the apply inserts money-bearing rows.
+
+   The classification, the insert and the audit rows are all in
+   services/productReimport, which the command-line tool calls too. A second
+   copy here would drift from the one somebody runs with a database URL. */
+router.post('/reimport-product',
+  requireAuth,
+  requireRole('admin', 'director'),
+  upload.fields([{ name: 'investments', maxCount: 1 }]),
+  async (req, res) => {
+    const svc = require('../services/productReimport');
+    const f = (req.files && req.files.investments && req.files.investments[0]) || null;
+    if (!f) return res.status(400).json({ error: 'Choose the investments export file first.' });
+
+    const body    = req.body || {};
+    const product = String(body.product || '').trim();
+    const as      = String(body.as || '').trim();
+    const mapSpec = String(body.map || '').trim();
+    const dryRun  = String(body.dry_run) !== 'false';
+    const fixLabel = String(body.fix_product_type) === 'true';
+    const force    = String(body.force_new_type) === 'true';
+    if (!product) return res.status(400).json({ error: 'Which product? Name it as the EXPORT calls it, e.g. solar.' });
+
+    let records;
+    try { records = JSON.parse(f.buffer.toString('utf8')); }
+    catch (err) { return res.status(400).json({ error: `That file is not valid JSON: ${err.message}` }); }
+
+    try {
+      const s = await svc.survey(pool, { records, exportKey: product, as, map: mapSpec });
+      if (s.empty) {
+        return res.json({ ...s, applied: false,
+          note: `Nothing in this file maps to "${product}".` });
+      }
+      /* A product_type nothing on the platform uses is a rollover that
+         silently becomes a wallet payout. Refused with the list, like the
+         remap panel, rather than written and discovered later. */
+      if (s.unknown.length && !force) {
+        return res.status(400).json({
+          error: `${s.unknown.map(t => `"${t}"`).join(', ')} ` +
+                 `${s.unknown.length > 1 ? 'are not product types' : 'is not a product type'} ` +
+                 `this database uses. Known types: ${s.known.join(', ') || '(none)'}.`,
+          unknown: s.unknown, allowed: s.known,
+        });
+      }
+
+      /* The plan can be thousands of rows on a big product; the counts are
+         always exact and the listing is capped so the response stays sane. */
+      const CAP = 200;
+      const byVerdict = {};
+      for (const x of s.plan) {
+        const v = byVerdict[x.verdict] || (byVerdict[x.verdict] = { n: 0, amount: 0, rows: [] });
+        v.n++; v.amount = Math.round((v.amount + x.amount) * 100) / 100;
+        if (v.rows.length < CAP) v.rows.push({
+          investor: x.investor, investorName: x.investorName, amount: x.amount,
+          start: x.start, txRef: x.txRef, id: x.id, type: x.type, poolId: x.poolId,
+          poolName: x.pool ? x.pool.name : null,
+          poolType: x.pool ? x.pool.product_type : null,
+          existingId: x.existing ? x.existing.id : null,
+          existingType: x.existing ? x.existing.product_type : null,
+        });
+      }
+      const plan = { file: s.file, exportKey: s.exportKey, product: s.product,
+                     dropped: s.dropped, wanted: s.wanted, known: s.known, unknown: s.unknown,
+                     suggestion: s.suggestion, wrongPools: s.wrongPools, totals: s.totals,
+                     byVerdict, capped: CAP };
+
+      if (dryRun) return res.json({ ...plan, applied: false });
+
+      const result = await svc.execute(pool, {
+        survey: s, apply: true, fixLabel, source: f.originalname || 'upload',
+        actor: { id: req.user && req.user.id, email: (req.user && req.user.email) || 'admin', role: 'admin' },
+      });
+      res.json({ ...plan, applied: true, inserted: result.inserted,
+                 relabelled: result.relabelled, warnings: result.warnings });
+    } catch (err) {
+      console.error('[migrate/reimport-product]', err);
+      res.status(err.status || 500).json({ error: err.message });
+    }
+  }
+);
+
 module.exports = router;
