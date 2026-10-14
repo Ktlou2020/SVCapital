@@ -53,9 +53,16 @@ console.log('\nthe route previews by default and cannot invent a type');
      'defaulting the other way makes a mis-click rewrite every investment in the pool');
   ok('it returns before writing when previewing',
      /if \(dryRun\) return res\.json/.test(body));
-  ok('the target type must already be in use by another pool',
-     /No other pool uses product_type/.test(body),
+  ok('the target type must be one the platform knows',
+     /Nothing on this platform uses product_type/.test(body),
      'a typo would route every rollover to a product that does not exist');
+  ok('and the product catalogue counts, not only the other pools',
+     /FROM products\n\s*WHERE COALESCE\(product_type, ''\) <> ''/.test(body)
+     && /inProducts/.test(body),
+     'solar_7yr is a real product with no pool yet, and the first pool of a product is when this screen is used');
+  ok('a target no pool carries yet is flagged rather than refused',
+     /target_new_to_pools: newToPools/.test(body),
+     'allowed for labelling, but a rollover still needs an OPEN pool of that type');
   ok('and the refusal lists what IS valid',
      /allowed: \[\.\.\.allowed\]\.sort\(\)/.test(body),
      'refusing without saying what would work just costs another round trip');
@@ -111,6 +118,8 @@ console.log('\nthe admin control previews before it applies');
      /Apply this remap\?/.test(admin));
   ok('the confirmation says investments are rewritten too',
      /AND every investment in it/.test(admin));
+  ok('and the panel says so when the type has no pool yet',
+     /is in the product catalogue but no other pool/.test(admin));
   ok('the panel says the pool name is not what is matched',
      /never on the pool\s*\n?\s*name|matches rollovers on the investment's product type alone/.test(html));
 }

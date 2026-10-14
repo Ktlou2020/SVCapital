@@ -755,20 +755,36 @@ router.post('/pools/remap-product-type', async (req, res) => {
       return res.status(404).json({ error: 'Pool not found.' });
     }
 
-    /* Only a product type the platform already uses. A typo here would route
+    /* Only a product type the platform already knows. A typo here would route
        every rollover in the pool to a product that does not exist, which
-       silently means "to wallets" — the failure being fixed. */
+       silently means "to wallets" — the failure being fixed.
+
+       Knowing it means the PRODUCTS TABLE as well as the other pools. Asking
+       the pools alone refused solar_7yr, which is a real product in the
+       catalogue that simply had no pool yet — and the first pool of a product
+       is exactly when this screen gets used. The error also read "Existing
+       types: …" without the one being typed, which says the product does not
+       exist when it does. */
     const { rows: known } = await client.query(
-      `SELECT DISTINCT product_type FROM investment_pools
-        WHERE product_type IS NOT NULL AND product_type <> '' AND id <> $1`, [pool_id]);
-    const allowed = new Set(known.map(k => k.product_type));
+      `SELECT DISTINCT product_type, 'pool' AS src FROM investment_pools
+        WHERE COALESCE(product_type, '') <> '' AND id <> $1
+        UNION
+       SELECT DISTINCT product_type, 'product' AS src FROM products
+        WHERE COALESCE(product_type, '') <> ''`, [pool_id]);
+    const inPools    = new Set(known.filter(k => k.src === 'pool').map(k => k.product_type));
+    const inProducts = new Set(known.filter(k => k.src === 'product').map(k => k.product_type));
+    const allowed    = new Set([...inPools, ...inProducts]);
     if (!allowed.has(target)) {
       return res.status(400).json({
-        error: `No other pool uses product_type "${target}". Existing types: ` +
+        error: `Nothing on this platform uses product_type "${target}" — not another ` +
+               `pool, and not the product catalogue. Known types: ` +
                `${[...allowed].sort().join(', ') || '(none)'}.`,
         allowed: [...allowed].sort(),
       });
     }
+    /* Allowed, but worth saying: a product with no pool of its own yet cannot
+       receive a rollover, which is the thing this remap is usually for. */
+    const newToPools = !inPools.has(target);
 
     /* What is actually in there, by status — the apply rewrites all of it, so
        show all of it rather than only the rows that matter for routing. */
@@ -793,6 +809,10 @@ router.post('/pools/remap-product-type', async (req, res) => {
       pool: { id: target_pool.id, name: target_pool.name, status: target_pool.status,
               product_type_before: target_pool.product_type || '', product_type_after: target },
       pool_changes: (target_pool.product_type || '') !== target,
+      /* True when the target is a product the catalogue knows but no pool
+         carries yet — allowed, and worth saying out loud, because a product
+         with no pool cannot receive a rollover. */
+      target_new_to_pools: newToPools,
       investments_total: breakdown.reduce((s, b) => s + b.n, 0),
       investments_changing: wouldChange,
       breakdown,

@@ -16936,7 +16936,10 @@ async function remapPoolProductType(btn, dryRun) {
         <thead><tr><th>Current product_type</th><th>Status</th><th style="text-align:right">Count</th><th style="text-align:right">Capital</th></tr></thead>
         <tbody>${rows}</tbody></table></div>
       <p style="margin-top:10px">Rollovers now: ${beforeLine}</p>
-      <p>Rollovers after: ${afterLine}</p>`;
+      <p>Rollovers after: ${afterLine}</p>
+      ${r.target_new_to_pools ? `<p style="color:#f59e0b"><i class="fa-solid fa-circle-info"></i>
+        <code>${_esc(r.pool.product_type_after)}</code> is in the product catalogue but no other pool
+        carries it yet. That is fine for labelling; a rollover still needs an OPEN pool of that type.</p>` : ''}`;
 
     if (r.applied) Toast.success(`Remapped — ${r.investments_updated} investment(s) updated`);
   } catch (e) {

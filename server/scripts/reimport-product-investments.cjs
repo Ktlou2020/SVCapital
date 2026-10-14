@@ -50,6 +50,17 @@
  *     --file ~/AuditExport-investments.json --product solar
  *   … same, plus --apply
  *   … same, plus --apply --fix-product-type
+ *
+ * --product is the name the EXPORT uses. Where this platform calls that
+ * product something else, name the live one with --as:
+ *
+ *   --product smme --as short_term
+ *
+ * The product written is checked against the types already in the database
+ * and an unknown one is refused, the same way the remap panel refuses one:
+ * a product_type nothing else uses is a rollover that silently becomes a
+ * wallet payout, and a product page that stays empty. --force-new-type
+ * overrides it, and should be a deliberate answer to that refusal.
  */
 'use strict';
 
@@ -61,7 +72,13 @@ const flag = n => ARGV.includes(n);
 const val  = n => { const i = ARGV.indexOf(n); return i > -1 ? (ARGV[i + 1] || '') : ''; };
 
 const FILE        = val('--file');
-const PRODUCT     = val('--product');
+const EXPORT_KEY  = val('--product');
+/* What the export calls the product and what this platform calls it are not
+   always the same word — the export says smme where the database says
+   short_term. The file is filtered by the first and the rows are written with
+   the second. */
+const PRODUCT     = val('--as') || EXPORT_KEY;
+const FORCE_TYPE  = flag('--force-new-type');
 const APPLY       = flag('--apply');
 const FIX_LABEL   = flag('--fix-product-type');
 const ACTOR       = process.env.IMPORT_ACTOR || 'cli';
@@ -70,7 +87,7 @@ if (!process.env.DATABASE_URL) {
   console.error('DATABASE_URL is not set. See the header of this file.');
   process.exit(2);
 }
-if (!FILE || !PRODUCT) {
+if (!FILE || !EXPORT_KEY) {
   console.error('Both --file <export.json> and --product <product_type> are required.');
   console.error('See the header of this file.');
   process.exit(2);
@@ -138,16 +155,40 @@ async function main() {
   Object.entries(byProduct).sort((a, b) => b[1] - a[1])
     .forEach(([t, n]) => console.log(`  ${String(n).padStart(6)}  ${t}`));
 
-  const mine = all.filter(r => PRODUCT_ID_MAP[lastSeg(r.product)] === PRODUCT
+  const mine = all.filter(r => PRODUCT_ID_MAP[lastSeg(r.product)] === EXPORT_KEY
                             && r._id && r.userAccountNumber);
-  const dropped = all.filter(r => PRODUCT_ID_MAP[lastSeg(r.product)] === PRODUCT
+  const dropped = all.filter(r => PRODUCT_ID_MAP[lastSeg(r.product)] === EXPORT_KEY
                                && (!r._id || !r.userAccountNumber));
   if (!mine.length) {
-    console.log(`\nNothing in this file maps to product_type "${PRODUCT}". Nothing to do.`);
+    console.log(`\nNothing in this file maps to product_type "${EXPORT_KEY}". Nothing to do.`);
     return;
   }
-  console.log(`\n${mine.length} record(s) map to "${PRODUCT}"` +
+  console.log(`\n${mine.length} record(s) map to "${EXPORT_KEY}"` +
+    (PRODUCT !== EXPORT_KEY ? `, to be written as "${PRODUCT}"` : '') +
     (dropped.length ? ` · ${dropped.length} unusable (no _id or no account number)` : ''));
+
+  /* A product_type nothing else uses is how a rollover silently becomes a
+     wallet payout — the maturity engine matches on that column and nothing
+     else — and how a product page stays empty after an import that reported
+     success. Same refusal the remap panel gives, for the same reason. */
+  const { rows: liveTypes } = await db.query(
+    `SELECT DISTINCT product_type FROM investment_pools WHERE COALESCE(product_type,'') <> ''
+      UNION SELECT DISTINCT product_type FROM investments WHERE COALESCE(product_type,'') <> ''
+      UNION SELECT DISTINCT product_type FROM products WHERE COALESCE(product_type,'') <> ''`);
+  const known = liveTypes.map(r => r.product_type).sort();
+  if (!known.includes(PRODUCT)) {
+    H(`"${PRODUCT}" is not a product type this database uses`);
+    console.log(`  In use: ${known.join(', ') || '(none)'}`);
+    console.log(`\n  The export calls it "${EXPORT_KEY}". If this platform calls it something`);
+    console.log('  else, name the live one with --as, e.g. --product smme --as short_term.');
+    if (!FORCE_TYPE) {
+      console.log('\n  Nothing was read further and nothing was written.');
+      console.log('  --force-new-type proceeds anyway, if the type really is new.');
+      process.exitCode = 2;
+      return;
+    }
+    console.log('\n  --force-new-type given — carrying on with a type nothing else uses.');
+  }
 
   /* ── What the database already holds ─────────────────────────────── */
   const invIds   = mine.map(r => `INV-MIGR-${r._id}`);
