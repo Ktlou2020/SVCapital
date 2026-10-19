@@ -670,8 +670,12 @@
           <div class="product-card__stats">
             <div class="stat">
               <span class="stat__label">Avg. Return</span>
+              <!-- No "p.a." here. The figure this tile is filled with is the
+                   average return achieved over the pool's own five-month
+                   period, not an annual one (see /api/products: avg_actual_rate
+                   is deliberately per period). Calling a five-month return
+                   per annum understates it by well over half. -->
               <span class="stat__value stat__value--gold">13.92%</span>
-              <span class="stat__unit">p.a.</span>
             </div>
             <div class="stat">
               <span class="stat__label">Min. Invest</span>
@@ -1601,7 +1605,7 @@
     <span class="whatsapp-label">Need help?</span>
   </a>
 
-  <script src="js/main.js?v=10"></script>
+  <script src="js/main.js?v=11"></script>
   <script>document.querySelectorAll('.yr').forEach(function(el){el.textContent=new Date().getFullYear();});</script>
 <script src="js/app-banner.js?v=4"></script>
 </body>
