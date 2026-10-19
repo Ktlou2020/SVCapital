@@ -503,10 +503,19 @@ function updateCalculator() {
     product.term + ' ' + product.termUnit;
   document.getElementById('calcTotal').textContent = formatRand(Math.round(totalPayout));
   document.getElementById('calcReturns').textContent = '+' + formatRand(Math.round(returnsEarned));
-  /* Same reason as the card: for short-term this rate is a five-month
-     figure, so it is shown without a per-annum qualifier. */
-  document.getElementById('calcRate').textContent = (product.rate * 100).toFixed(2) + '%' +
-    (String(currentCalcProduct) === 'short' ? '' : ' p.a.');
+  /* "Effective Rate" sits beside the TERM, next to the rand figure above it,
+     so it is the return over that term — returns ÷ capital — and it
+     reconciles with what the calculator just said was earned. Showing the
+     per-annum rate here instead would print 13.80% beside R575 on R10,000
+     and leave a reader unable to square the two.
+
+     It therefore says "p.a." only on a twelve-month term, where the rate for
+     the period and the rate per annum are the same number. The input is per
+     annum for every product; this is the output. */
+  const effective = amount > 0 ? returnsEarned / amount : 0;
+  const perAnnum  = Math.abs(product.termYears - 1) < 0.001;
+  document.getElementById('calcRate').textContent =
+    (effective * 100).toFixed(2) + '%' + (perAnnum ? ' p.a.' : '');
 
   // Info grid
   const infoGrid = document.getElementById('calcInfoGrid');
@@ -907,12 +916,29 @@ async function _applyLiveProductAverages() {
   // Populate the shared Utils cache so productInfo() returns API colors everywhere
   if (typeof Utils !== 'undefined') Utils.setProductCache(products);
 
-  const avgByType = {}, prodByType = {};
+  /* TWO averages, for two different jobs, and mixing them up is the whole
+     reason this code has comments.
+
+       avg_actual_rate   what a pool returned over ITS OWN term. What the card
+                         shows, because it is what an investor was paid.
+       avg_annual_rate   the same figure × 12 / term_months. What the
+                         CALCULATOR needs, because it multiplies by the term
+                         in years: handing it a period rate prorates an
+                         already-prorated number.
+
+     On a twelve-month product they are the same number, which is why cattle
+     was right and hid this. A five-month short-term rate fed to the
+     calculator came out at 5/12 of what the product pays; a seven-year solar
+     rate came out at seven TIMES it. */
+  const avgByType = {}, annualByType = {}, prodByType = {};
   products.forEach(p => {
     prodByType[p.product_type] = p;
-    const a = p.avg_actual_rate != null ? parseFloat(p.avg_actual_rate) : null;
     const c = parseInt(p.matured_pool_count) || 0;
-    if (a != null && !isNaN(a) && c > 0) avgByType[p.product_type] = a;
+    if (!(c > 0)) return;
+    const a = p.avg_actual_rate != null ? parseFloat(p.avg_actual_rate) : null;
+    if (a != null && !isNaN(a)) avgByType[p.product_type] = a;
+    const y = p.avg_annual_rate != null ? parseFloat(p.avg_annual_rate) : null;
+    if (y != null && !isNaN(y)) annualByType[p.product_type] = y;
   });
 
   // Map each home-page product key → the product_type(s) it represents.
@@ -925,12 +951,17 @@ async function _applyLiveProductAverages() {
 
   const fmtR = n => 'R' + Number(n || 0).toLocaleString('en-ZA');
 
-  const avgForHome = key => {
-    const vals = (homeMap[key].types || []).map(t => avgByType[t]).filter(v => v != null);
+  /* One selection rule, applied to whichever of the two averages is being
+     asked for, so the figure the card shows and the figure the calculator
+     works from describe the same pools. */
+  const forHome = (key, src) => {
+    const vals = (homeMap[key].types || []).map(t => src[t]).filter(v => v != null);
     if (!vals.length) return null;
     if (key === 'solar') return Math.max(...vals);           // headline shows best
     return vals.reduce((s, v) => s + v, 0) / vals.length;
   };
+  const avgForHome    = key => forHome(key, avgByType);
+  const annualForHome = key => forHome(key, annualByType);
 
   Object.keys(homeMap).forEach(key => {
     const rate = avgForHome(key);
@@ -953,7 +984,16 @@ async function _applyLiveProductAverages() {
            term is on the card beside it. */
         if (st) st.val = pct + (key === 'short' ? '' : ' p.a.');
       }
-      if (typeof PRODUCTS !== 'undefined' && PRODUCTS[key]) PRODUCTS[key].rate = rate;
+      /* NOT `rate`. PRODUCTS[].rate is the calculator's input and it is
+         multiplied by termYears, so it has to be per annum. The static values
+         it starts from are annual; overwriting them with a period figure was
+         prorating a number that had already been prorated. Left at the static
+         annual value when the API has no annualised figure for the product,
+         rather than falling back to one that is not annual. */
+      const annual = annualForHome(key);
+      if (annual != null && typeof PRODUCTS !== 'undefined' && PRODUCTS[key]) {
+        PRODUCTS[key].rate = annual;
+      }
     }
 
     // 2) Apply API color to product card elements on the homepage

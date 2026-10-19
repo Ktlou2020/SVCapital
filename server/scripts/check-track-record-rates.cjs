@@ -204,9 +204,17 @@ const get = (port, url) => new Promise((resolve, reject) => {
       ok('and is computed by term', /ip\.actual_rate \* 12\.0 \/ ip\.term_months/.test(src));
       ok('a pool with no term is left alone rather than divided by zero',
          /COALESCE\(ip\.term_months, 0\) > 0/.test(src));
-      ok('nothing on the client reads the new field yet, so no display shifts',
-         !/avg_annual_rate/.test(fs.readFileSync(path.join(ROOT, 'js', 'portal-core.js'), 'utf8')) &&
-         !/avg_annual_rate/.test(fs.readFileSync(path.join(ROOT, 'js', 'main.js'), 'utf8')));
+      /* It was added additively, read by nothing, so that landing it shifted
+         no display. It has a reader now: the landing calculator, which
+         multiplies by the term in years and so has to be handed a per-annum
+         figure. The grid is still on the period one, which is the half of
+         this that must not change — see check-short-term-rate-label. */
+      ok('the calculator reads the annualised field',
+         /avg_annual_rate/.test(fs.readFileSync(path.join(ROOT, 'js', 'main.js'), 'utf8')),
+         'it multiplies by termYears, so a period rate is prorated twice');
+      ok('and the portal grid still does not, because its label says the period',
+         !/avg_annual_rate/.test(fs.readFileSync(path.join(ROOT, 'js', 'portal-core.js'), 'utf8')),
+         'that grid shows "AVG RETURN (5 MO)" and would be wrong with an annual number under it');
     }
 
     console.log('\nthe one-product special case is gone');
