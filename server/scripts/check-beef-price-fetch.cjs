@@ -43,9 +43,28 @@ const ok = (name, cond, detail) => {
   else { fail++; console.log(`  ✗ ${name}${detail ? `\n      ${detail}` : ''}`); }
 };
 
+/* The report's own date, in the shape and the language the real page uses.
+
+   It is computed, not written down. The fixture carried "26 September 2026",
+   which read as this week's report in the week it was saved and as an archived
+   one three weeks later — so every parsing assertion in this file started
+   failing on a Monday in October, on a fetcher nobody had touched. A check
+   that expires is worse than no check: it fails loudly for a reason that has
+   nothing to do with the code, and the next person learns to ignore it.
+
+   The staleness rule it was tripping over is a real one and is still tested,
+   a few lines down, with a date that is meant to be old. */
+const AFR_MONTHS = ['Januarie', 'Februarie', 'Maart', 'April', 'Mei', 'Junie',
+                    'Julie', 'Augustus', 'September', 'Oktober', 'November', 'Desember'];
+const thisWeek = () => {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 1) % 7));   // the Saturday just gone
+  return `${d.getUTCDate()} ${AFR_MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+};
+
 /* A page shaped like the real one: a title naming both animals, a beef table,
    then a sheep table whose Class A is higher. */
-const page = (body, week = '26 September 2026') =>
+const page = (body, week = thisWeek()) =>
   `<html><head><title>Weeklikse bees- en skaap-markverslag</title></head><body>
    <h1>Weeklikse bees- en skaap-markverslag</h1><p>Week eindigend ${week}</p>${body}</body></html>`;
 const BEEF = `<h2>Beesvleis</h2><table>
@@ -109,6 +128,15 @@ console.log('\nwhen it is not sure, it stores nothing');
   const old = fetcher.extract(page(BEEF, '12 Januarie 2024'));
   ok('an archived or cached week is refused',
      !old.ok && /not a recent week/.test(old.detail || ''));
+  /* The saved page in the repository is a real one from the week it was
+     saved, so it ages out of that window — which is correct behaviour and
+     the reason the pages above are dated at run time rather than copied
+     from it. Asserted so the two facts stay connected. */
+  ok('including the saved page itself, now that it is old',
+     !fetcher.extract(FIXTURE).ok,
+     'if this ever passes the fixture has been re-saved, and the dates above can come from it again');
+  ok('but a page from this week is not', fetcher.extract(page(BEEF)).ok,
+     'the window has to admit the report the fetch actually runs against');
 
   const undated = fetcher.extract(`<html><body><h2>Beesvleis</h2><p>Klas A R 72,50/kg</p></body></html>`);
   ok('prices with no week are refused rather than filed under today',

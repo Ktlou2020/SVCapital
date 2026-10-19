@@ -272,7 +272,9 @@ const MODAL_DATA = {
     title: 'Fast capital. Real returns.',
     desc: 'A 5-month investment vehicle that funds SMME purchase order finance through MoolaLend. Quick turnaround, strong annualised returns, and direct impact on South African small businesses.',
     stats: [
-      { label: 'Avg. Return', val: '13.92% p.a.' },
+      /* Not "p.a.": the live figure that replaces this is the return
+         achieved over the pool's own five-month period. */
+      { label: 'Avg. Return', val: '13.92%' },
       { label: 'Minimum', val: 'R1,000' },
       { label: 'Term', val: '5 Months' }
     ],
@@ -606,7 +608,10 @@ function updateCalculator() {
     product.term + ' ' + product.termUnit;
   document.getElementById('calcTotal').textContent = formatRand(Math.round(totalPayout));
   document.getElementById('calcReturns').textContent = '+' + formatRand(Math.round(returnsEarned));
-  document.getElementById('calcRate').textContent = (product.rate * 100).toFixed(2) + '% p.a.';
+  /* Same reason as the card: for short-term this rate is a five-month
+     figure, so it is shown without a per-annum qualifier. */
+  document.getElementById('calcRate').textContent = (product.rate * 100).toFixed(2) + '%' +
+    (String(currentCalcProduct) === 'short' ? '' : ' p.a.');
 
   // Info grid
   const infoGrid = document.getElementById('calcInfoGrid');
@@ -1109,7 +1114,14 @@ async function _applyLiveProductAverages() {
       if (goldEl) goldEl.textContent = pct;
       if (typeof MODAL_DATA !== 'undefined' && MODAL_DATA[key] && Array.isArray(MODAL_DATA[key].stats)) {
         const st = MODAL_DATA[key].stats.find(s => /return/i.test(s.label));
-        if (st) st.val = pct + ' p.a.';
+        /* avg_actual_rate is the return achieved over each pool's OWN period,
+           not per annum. On a twelve-month product the two coincide, which is
+           why this went unnoticed; short-term pools run five months, so this
+           was putting a five-month return under "p.a." and understating it by
+           more than half. The qualifier is dropped for short-term rather than
+           the number annualised: the figure shown is what was earned, and the
+           term is on the card beside it. */
+        if (st) st.val = pct + (key === 'short' ? '' : ' p.a.');
       }
       if (typeof PRODUCTS !== 'undefined' && PRODUCTS[key]) PRODUCTS[key].rate = rate;
     }
