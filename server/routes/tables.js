@@ -1986,7 +1986,11 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
       try {
         await dbClient.query('BEGIN');
         const { rows: updated } = await dbClient.query(
-          `UPDATE ${table} SET ${sets} WHERE ${key} = $${values.length} AND status <> 'completed' RETURNING *`,
+          /* COALESCE for the same reason as the EFT approval path: `status <>
+             'completed'` is NULL, not true, for a row whose status is NULL, so
+             the UPDATE matched nothing and the credit was skipped in silence —
+             leaving a deposit that reads completed with no money behind it. */
+          `UPDATE ${table} SET ${sets} WHERE ${key} = $${values.length} AND COALESCE(status, '') <> 'completed' RETURNING *`,
           values
         );
         if (!updated[0]) {
