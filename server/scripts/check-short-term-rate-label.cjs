@@ -60,13 +60,69 @@ for (const f of ['js/main.js', 'mobile/src/js/main.js']) {
   ok(`${f}: the live figure is written without a per-annum qualifier for short-term`,
      /st\.val = pct \+ \(key === 'short' \? '' : ' p\.a\.'\)/.test(src),
      'the card is overwritten from the API on load, so fixing only the markup fixes nothing');
-  ok(`${f}: the calculator says the same thing as the card`,
-     /calcRate'\)\.textContent = \(product\.rate \* 100\)\.toFixed\(2\) \+ '%' \+\s*\n?\s*\(String\(currentCalcProduct\) === 'short' \? '' : ' p\.a\.'\)/.test(src),
-     'it is fed the same period figure, so it carried the same wrong qualifier');
+  /* The calculator reaches the same answer by a different route: its rate
+     line is the return over the term, and it only says "p.a." on a
+     twelve-month term. Short-term runs five months, so it says nothing —
+     asserted off the product's own term rather than by naming the product,
+     so changing the term changes the answer. */
+  {
+    const m = src.slice(src.indexOf('\n  short: {')).match(/termYears:\s*([\d.]+)\s*(?:\/\s*([\d.]+))?/);
+    const years = m ? (m[2] ? Number(m[1]) / Number(m[2]) : Number(m[1])) : null;
+    ok(`${f}: short-term's term is still not a year, so its rate line says nothing`,
+       years != null && Math.abs(years - 1) >= 0.001, `termYears = ${years}`);
+  }
   const modal = src.slice(src.indexOf('\n  short: {', src.indexOf('MODAL_DATA')));
   ok(`${f}: and the static value it starts from has none either`,
      /\{ label: 'Avg\. Return', val: '[\d.]+%' \}/.test(modal.slice(0, 900)),
      'the static value shows until the API answers, and on a slow connection that is what is read');
+}
+
+console.log('\nthe calculator is fed the annual figure, because it multiplies by the term');
+for (const f of ['js/main.js', 'mobile/src/js/main.js']) {
+  const src = read(f);
+  ok(`${f}: both averages are read off the API, not just one`,
+     /avg_actual_rate != null \? parseFloat\(p\.avg_actual_rate\)/.test(src)
+     && /avg_annual_rate != null \? parseFloat\(p\.avg_annual_rate\)/.test(src));
+  ok(`${f}: PRODUCTS[].rate takes the ANNUAL one`,
+     /const annual = annualForHome\(key\);[\s\S]{0,160}PRODUCTS\[key\]\.rate = annual;/.test(src),
+     'it is multiplied by termYears, so a period rate is prorated twice');
+  ok(`${f}: and never the per-period one`,
+     !/PRODUCTS\[key\]\.rate = rate;/.test(src),
+     'that is the line that made a five-month return come out at 5/12 of itself');
+  ok(`${f}: a product the API has no annual figure for keeps its static rate`,
+     /if \(annual != null && typeof PRODUCTS/.test(src),
+     'falling back to the period figure would be the same bug with an extra step');
+  ok(`${f}: the rate shown is the one the rand figures reconcile to`,
+     /const effective = amount > 0 \? returnsEarned \/ amount : 0;/.test(src)
+     && /\(effective \* 100\)\.toFixed\(2\)/.test(src),
+     'printing the annual rate beside a five-month rand return cannot be squared by a reader');
+  ok(`${f}: and it says "p.a." only where the term is a year`,
+     /const perAnnum  = Math\.abs\(product\.termYears - 1\) < 0\.001;/.test(src)
+     && /\(perAnnum \? ' p\.a\.' : ''\)/.test(src));
+}
+
+/* The arithmetic itself, stated once so an inverted conversion is caught
+   rather than argued about. The annualised figure is the period one × 12 /
+   term, so multiplying it back by the term in years must return exactly the
+   period figure — which is what the card shows and what the client was paid. */
+{
+  const annualise = (period, months) => period * 12 / months;
+  const payout    = (amount, annual, years) => amount * annual * years;
+  const cases = [
+    { name: 'short-term, five months', period: 0.0574, months: 5  },
+    { name: 'cattle, twelve months',   period: 0.1483, months: 12 },
+    { name: 'solar, seven years',      period: 0.2140, months: 84 },
+  ];
+  for (const c of cases) {
+    const annual = annualise(c.period, c.months);
+    const earned = payout(10000, annual, c.months / 12);
+    ok(`${c.name}: R10,000 earns the period return, not a prorated one`,
+       Math.abs(earned - 10000 * c.period) < 0.000001,
+       `got ${earned.toFixed(2)}, expected ${(10000 * c.period).toFixed(2)}`);
+  }
+  ok('and on a twelve-month term the two averages are the same number',
+     Math.abs(annualise(0.1483, 12) - 0.1483) < 1e-12,
+     'which is why cattle looked right while short-term and solar did not');
 }
 
 console.log('\nand the two averages the API returns are still different things');
