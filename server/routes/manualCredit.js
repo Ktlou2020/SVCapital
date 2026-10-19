@@ -164,14 +164,46 @@ router.post('/eft-approve', async (req, res) => {
     if (pending) {
       /* `status <> 'completed'` is what stops a double credit: a retry, a
          double-click or a replayed request updates nothing and credits
-         nothing. */
+         nothing.
+
+         COALESCE, because `status <> 'completed'` is NULL — not true — for a
+         NULL status, so a row with no status at all matched nothing here and
+         was skipped in silence, which is one of the two ways a deposit came to
+         read COMPLETED with no money behind it. */
       const { rows: [done] } = await client.query(
         `UPDATE transactions
             SET status = 'completed', amount = $1, description = $2, updated_at = NOW()
-          WHERE id = $3 AND status <> 'completed'
+          WHERE id = $3 AND COALESCE(status, '') <> 'completed'
         RETURNING *`,
         [approved, note, pending.id]);
       credited = !!done;
+
+      /* The other way. The row was ALREADY completed, so the guard correctly
+         refused to move a balance — something else is assumed to have moved
+         it. This used to carry on regardless: it resolved the ticket, told the
+         investor "approved and credited to your wallet", and returned ok with
+         credited:false buried in the payload where no screen read it. If
+         nothing ever did credit it, the client has been told about money that
+         does not exist.
+
+         So it stops here instead. The ticket stays open, nothing is written,
+         and the message says what to check and what to do — a manual credit,
+         which is the only safe way to add money to a deposit that is already
+         marked completed, because approving it again will skip the credit
+         again for exactly this reason. */
+      if (!credited) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          /* Kept to one sentence and an instruction: it surfaces in a toast in
+             the console, under the heading "Approval failed — nothing was
+             credited", which is the part that matters. */
+          error: `Already completed — approving moves no money. If R${approved.toFixed(2)} ` +
+                 `never reached the wallet, add it with Manual Credit (ref ${reference}); ` +
+                 `if it did, resolve the ticket without approving.`,
+          code: 'ALREADY_COMPLETED',
+          reference, declared, transaction_id: pending.id,
+        });
+      }
     } else {
       await client.query(
         `INSERT INTO transactions

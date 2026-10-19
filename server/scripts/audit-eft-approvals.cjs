@@ -36,6 +36,15 @@
  * lookup, a PATCH and a ticket update as three separate calls with no
  * transaction and no double-credit guard. Any of them could fail alone.
  *
+ * WHAT B DOES NOT COVER. B asks whether a COMPLETED DEPOSIT ROW exists, and
+ * treats one as proof that money moved. It is not. A deposit that was already
+ * completed when the approval ran was skipped by the double-credit guard —
+ * correctly, since something else is assumed to have credited it — so the row
+ * reads completed and no wallet ever moved. That case has a completed row and
+ * is invisible here. audit-eft-credit-gap.cjs is the tool for it: it reads the
+ * credited flag the approval records and reconciles the wallet against the
+ * investor's own ledger.
+ *
  * READ-ONLY. Every statement is a SELECT. Safe against production.
  *
  * Run:
@@ -193,6 +202,8 @@ async function hasColumn(table, column) {
 
     console.log(`\nA  credited ≠ submitted, unexplained     ${findings.A.length}`);
     console.log(`B  resolved but never credited          ${findings.B.length}`);
+    console.log('   (B counts tickets with NO completed deposit row. A completed row that');
+    console.log('    never moved a wallet is invisible here — audit-eft-credit-gap.cjs)');
     console.log(`C  double credit on one reference       ${findings.C.length}`);
     console.log(`D  credited but ticket left open        ${findings.D.length}`);
     console.log(`E  approved with a proof to check       ${findings.E.length}`);
