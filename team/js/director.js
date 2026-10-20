@@ -266,6 +266,7 @@ const PAGE_META = {
   payslips:    { title:'Payslips',         sub:'Generate and manage employee payslips' },
   performance:    { title:'Performance',    sub:'KPI leaderboard, scores and team analytics' },
   'fee-settings': { title:'Fee Settings',  sub:'Configure platform-wide fee rates and EVA allocation' },
+  'annual-returns': { title:'Annual Returns', sub:'Close out a year of a solar pool \u2014 what is posted here is what is distributed' },
 };
 
 function navTo(view, btn) {
@@ -313,6 +314,7 @@ function navTo(view, btn) {
     payslips:      renderPayslips,
     performance:   renderPerformanceView,
     'fee-settings': loadFeeSettings,
+    'annual-returns': renderAnnualReturns,
   };
   if (renders[view]) renders[view]();
 }
@@ -3642,4 +3644,182 @@ async function saveEvaRate() {
     btn.disabled = false;
     btn.textContent = 'Save Rate';
   }
+}
+
+/* ═══ ANNUAL RETURNS — closing out a year of a solar pool ═══════════
+
+   Solar distributes on the anniversary of each investment, so a seven-year
+   pool is closed out seven times rather than once. Nothing is paid from a
+   figure nobody has stood behind: a year pays only once the rate it earned is
+   posted here, which makes this screen the act that releases money to
+   clients' wallets. It is written to read that way.
+
+   What it will pay is computed from the capital that has actually reached
+   that anniversary and shown before the button is pressed, because a rate on
+   its own is not a number anybody can sanity-check.                        */
+
+let _annual = null;
+
+async function renderAnnualReturns() {
+  const el = document.getElementById('annualReturnsContent');
+  el.innerHTML = '<div class="dir-card"><div class="muted">Loading…</div></div>';
+  const r = await get('admin/anniversary-returns');
+  if (!r || r.error || r._error) {
+    el.innerHTML = `<div class="dir-card"><div style="color:#ef4444">
+      ${escH((r && r.error) || 'Could not load the anniversary schedule.')}</div></div>`;
+    return;
+  }
+  _annual = r;
+
+  const badge = document.getElementById('annual-waiting-badge');
+  if (badge) {
+    badge.textContent = r.waiting || 0;
+    badge.style.display = r.waiting ? '' : 'none';
+  }
+
+  if (!r.pools.length) {
+    el.innerHTML = `<div class="dir-card">
+      <div style="font-weight:700;margin-bottom:6px">No solar pools</div>
+      <div class="muted">Only solar distributes before maturity. Nothing else on the
+      platform pays a return on an anniversary.</div></div>`;
+    return;
+  }
+
+  /* The two numbers worth knowing before reading any table: what is waiting
+     on somebody here, and what the daily job will pay tonight. */
+  const head = `
+    <div class="dir-stats" style="margin-bottom:18px">
+      <div class="dir-stat">
+        <div class="dir-stat__val" style="color:${r.waiting ? '#f59e0b' : 'var(--text)'}">${r.waiting || 0}</div>
+        <div class="dir-stat__label">anniversaries waiting on a rate</div></div>
+      <div class="dir-stat">
+        <div class="dir-stat__val" style="color:#22c55e">${rZAR(r.payable_amount || 0)}</div>
+        <div class="dir-stat__label">posted and not yet paid — the job pays this at 06:10</div></div>
+    </div>`;
+
+  const cards = r.pools.map(p => {
+    const rows = p.rows.map(y => {
+      const state = y.rate == null
+        ? (y.due ? `<span style="color:#f59e0b">${y.due} waiting on a rate</span>`
+                 : '<span class="muted">not reached yet</span>')
+        : (y.payable
+            ? `<span style="color:#22c55e">${y.payable} payable — ${rZAR(y.payable_amount)}</span>`
+            : (y.paid ? `<span class="muted">${y.paid} paid — ${rZAR(y.paid_amount)}</span>`
+                      : '<span class="muted">posted, nothing due yet</span>'));
+      return `<tr>
+        <td style="width:64px">Year ${y.year_index}</td>
+        <td style="width:110px">${y.rate == null ? '<span class="muted">—</span>'
+            : `<strong style="color:#eda5ff">${(y.rate * 100).toFixed(2)}%</strong>`}</td>
+        <td>${state}${y.note ? `<div class="muted" style="font-size:0.74rem">${escH(y.note)}</div>` : ''}</td>
+        <td style="text-align:right">
+          <button class="btn btn--ghost btn--sm"
+                  onclick="openAnnualRate('${escH(p.pool_id)}',${y.year_index})">
+            ${y.rate == null ? 'Post' : 'Correct'}</button></td>
+      </tr>`;
+    }).join('');
+
+    return `<div class="dir-card" style="margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">
+        <div><div style="font-weight:700">${escH(p.name)}</div>
+          <div class="muted" style="font-size:0.78rem">${escH(p.product_type)} ·
+            ${p.term_months} months · ${p.years} anniversar${p.years === 1 ? 'y' : 'ies'} ·
+            ${p.investments} investment${p.investments === 1 ? '' : 's'} · ${rZAR(p.capital)}</div></div>
+      </div>
+      <table class="dir-table" style="margin-top:10px;font-size:0.82rem"><tbody>${rows}</tbody></table>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = head + cards + `
+    <div class="dir-card">
+      <div style="font-weight:700;margin-bottom:6px">How a year gets paid</div>
+      <div class="muted" style="font-size:0.82rem;line-height:1.6">
+        Each client is paid on the anniversary of the day THEY invested, not a date shared
+        by the pool. A year pays nothing until its rate is posted here — the platform does
+        not pay a projection — and once posted, the daily job distributes it to every
+        anniversary of that year that has already fallen due, then to each one as it comes.
+        A distribution reaches the client’s wallet and counts toward their returns; the
+        capital stays invested until the end of the term. Posting is recorded against your
+        name, and correcting a rate keeps the previous one.</div>
+    </div>`;
+}
+
+function openAnnualRate(poolId, year) {
+  const p = (_annual && _annual.pools || []).find(x => x.pool_id === poolId);
+  const y = p && p.rows.find(r => r.year_index === year);
+  if (!p || !y) return;
+
+  const body = document.getElementById('annualRateBody');
+  body.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:15px">
+      <div>
+        <div style="font-weight:700">${escH(p.name)}</div>
+        <div class="muted" style="font-size:0.8rem">Year ${year} of ${p.years}</div>
+      </div>
+      <div class="form-group"><label>What this year earned</label>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input id="annualRatePct" type="number" step="0.01" min="0" max="100"
+                 value="${y.rate == null ? '' : (y.rate * 100).toFixed(2)}"
+                 placeholder="e.g. 8.50" oninput="_annualPreview()" style="flex:1">
+          <span class="muted">% for the year</span>
+        </div>
+        <div style="font-size:0.76rem;color:var(--muted);margin-top:4px">
+          A percentage, not a fraction — 8.5 means eight and a half percent.</div>
+      </div>
+      <div class="form-group"><label>Note</label>
+        <input id="annualRateNote" value="${escH(y.note || '')}" placeholder="optional — what this figure is from"></div>
+      <div id="annualRatePreview" style="font-size:0.84rem"></div>
+      ${y.rate != null ? `<div style="font-size:0.78rem;color:#f59e0b">
+        This year already carries ${(y.rate * 100).toFixed(2)}%${y.paid ? ` and ${y.paid} distribution(s) have been paid from it.
+        Correcting it does not change what was already paid — it changes what the rest are paid.` : '.'}</div>` : ''}
+      <div id="annualRateError" style="color:#ef4444;font-size:0.82rem;display:none"></div>
+    </div>`;
+  body.dataset.poolId = poolId;
+  body.dataset.year   = String(year);
+  _annualPreview();
+  openModal('annualRateModal');
+}
+
+/* What the figure being typed would actually pay, on the capital that has
+   reached this anniversary. A rate on its own is not checkable; a rand amount
+   beside it is. */
+function _annualPreview() {
+  const body = document.getElementById('annualRateBody');
+  const out  = document.getElementById('annualRatePreview');
+  if (!body || !out) return;
+  const p = (_annual && _annual.pools || []).find(x => x.pool_id === body.dataset.poolId);
+  const y = p && p.rows.find(r => r.year_index === Number(body.dataset.year));
+  const pct = parseFloat(document.getElementById('annualRatePct').value);
+  if (!y || !Number.isFinite(pct)) { out.innerHTML = ''; return; }
+  const capital = y.capital_due || 0;
+  if (!capital) {
+    out.innerHTML = `<span class="muted">No investment has reached this anniversary yet, so
+      posting the rate pays nothing today. It will pay as each one comes round.</span>`;
+    return;
+  }
+  out.innerHTML = `Pays <strong style="color:#22c55e">${rZAR(capital * pct / 100)}</strong>
+    across ${y.due} anniversar${y.due === 1 ? 'y' : 'ies'} already due,
+    on ${rZAR(capital)} of capital.`;
+}
+
+async function submitAnnualRate() {
+  const body = document.getElementById('annualRateBody');
+  const err  = document.getElementById('annualRateError');
+  const fail = m => { err.textContent = m; err.style.display = 'block'; };
+  const pct  = parseFloat(document.getElementById('annualRatePct').value);
+  if (!Number.isFinite(pct) || pct < 0) return fail('Enter the percentage this year earned.');
+  if (pct > 100) return fail('Over 100% for one year — check the figure before posting it.');
+
+  const r = await post('admin/pool-annual-return', {
+    pool_id:    body.dataset.poolId,
+    year_index: Number(body.dataset.year),
+    /* The API takes a fraction, as every rate on this platform does. The
+       panel asks for a percentage because that is how a close-out is written
+       down, and converts here so the two cannot be confused in the field. */
+    rate:       pct / 100,
+    note:       document.getElementById('annualRateNote').value.trim() || null,
+  });
+  if (r && r.error) return fail(r.error);
+  closeModal('annualRateModal');
+  showToast(r.corrected ? 'Rate corrected' : 'Rate posted — the job distributes it at 06:10');
+  renderAnnualReturns();
 }

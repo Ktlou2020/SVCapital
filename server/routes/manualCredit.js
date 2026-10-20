@@ -79,6 +79,82 @@ router.post('/manual-credit', async (req, res) => {
 });
 
 /* ─────────────────────────────────────────────────────────────
+   GET /api/admin/anniversary-returns
+
+   Every solar pool, every year of its term, and what that year is doing:
+   the rate posted against it, how many anniversaries have fallen due, and
+   what has been paid or is waiting.
+
+   One source — services/anniversaryReturns — so the panel a director reads
+   before posting a rate and the job that pays from it cannot disagree about
+   what is owed.
+   ───────────────────────────────────────────────────────────── */
+router.get('/anniversary-returns', requireRole('director'), async (req, res) => {
+  try {
+    const annual = require('../services/anniversaryReturns');
+    const asOf = req.query.as_of || new Date().toISOString().slice(0, 10);
+
+    const { rows: pools } = await pool.query(`
+      SELECT p.id, p.name, p.product_type, p.term_months, p.status,
+             COUNT(i.id)::int                       AS investments,
+             COALESCE(SUM(i.amount), 0)             AS capital
+        FROM investment_pools p
+        LEFT JOIN investments i
+               ON i.pool_id = p.id AND COALESCE(i.status, '') IN ('active', 'matured')
+       WHERE p.product_type ~* '^solar'
+       GROUP BY p.id, p.name, p.product_type, p.term_months, p.status
+       ORDER BY p.name`);
+
+    const { rows: posted } = await pool.query(
+      `SELECT pool_id, year_index, rate, note, posted_by, posted_at
+         FROM pool_annual_returns ORDER BY pool_id, year_index`);
+    const rateFor = (poolId, y) =>
+      posted.find(r => r.pool_id === poolId && r.year_index === y) || null;
+
+    /* The money, from the same query the job pays from. */
+    const items = await annual.due(pool, { asOf });
+
+    const out = pools.map(p => {
+      const years = Math.max(Math.floor((parseInt(p.term_months, 10) || 0) / 12), 0);
+      const rows = [];
+      for (let y = 1; y <= years; y++) {
+        const mine = items.filter(x => x.poolId === p.id && x.yearIndex === y);
+        const r = rateFor(p.id, y);
+        rows.push({
+          year_index: y,
+          rate: r ? Number(r.rate) : null,
+          note: r ? r.note : null,
+          posted_by: r ? r.posted_by : null,
+          posted_at: r ? r.posted_at : null,
+          due: mine.length,
+          paid:     mine.filter(x => x.state === 'paid').length,
+          payable:  mine.filter(x => x.state === 'payable').length,
+          awaiting: mine.filter(x => x.state === 'awaiting-rate').length,
+          paid_amount:    mine.filter(x => x.state === 'paid').reduce((a, x) => a + (x.paidAmount || 0), 0),
+          payable_amount: mine.filter(x => x.state === 'payable').reduce((a, x) => a + (x.wouldPay || 0), 0),
+          /* What a year WOULD pay on the capital that has reached it, at the
+             rate being considered — filled in by the panel as it is typed,
+             never stored. */
+          capital_due: mine.reduce((a, x) => a + x.amount, 0),
+        });
+      }
+      return { pool_id: p.id, name: p.name, product_type: p.product_type,
+               term_months: p.term_months, years, status: p.status,
+               investments: p.investments, capital: Number(p.capital), rows };
+    });
+
+    res.json({ as_of: asOf, pools: out,
+               waiting: items.filter(x => x.state === 'awaiting-rate').length,
+               payable: items.filter(x => x.state === 'payable').length,
+               payable_amount: items.filter(x => x.state === 'payable')
+                                    .reduce((a, x) => a + (x.wouldPay || 0), 0) });
+  } catch (err) {
+    console.error('[anniversary-returns]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ─────────────────────────────────────────────────────────────
    POST /api/admin/pool-annual-return
 
    Post the achieved return for ONE YEAR of a pool's life.
