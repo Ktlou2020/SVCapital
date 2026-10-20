@@ -4142,6 +4142,8 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
 
 /* ── Section banner ─────────────────────────────────────────────────────── */
 .eif-banner {
+  position: relative;
+  overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--eif) 32%, transparent);
   border-top-left-radius: 4px;
   border-radius: 4px 16px 16px 16px;
@@ -4151,6 +4153,46 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
   padding: 20px;
   margin-bottom: 18px;
 }
+/* ── The mosaic ────────────────────────────────────────────────────────
+   Square-Kufic strapwork: interlocking brackets and a square turned on its
+   point, set out on an orthogonal grid and then turned 45°, which is how
+   these patterns are actually constructed. It dissolves outward from the
+   corner so it is texture near the edge and nothing at all by the time it
+   reaches the words.
+
+   Anchored at the TOP-LEFT on purpose. That corner is already the section's
+   one deliberate departure — it is squared off while the others are
+   rounded, so the section reads as its own room. The mosaic is where the
+   tiling of that room starts, which gives the flat corner a reason rather
+   than leaving it as an unexplained quirk.
+
+   Drawn rather than photographed. The reference came as two JPEGs, which is
+   the wrong container for hard-edged flat colour — the edges ring, and with
+   no alpha the artwork cannot sit over a tinted panel. As SVG it is 1.1 KB
+   against 71 KB, crisp at any size, and painted through a MASK so the
+   colour comes from var(--eif): if the accent moves again, the mosaic moves
+   with it and nobody has to re-export anything.
+
+   The reference also used the bright CI lime for its second tone. That is
+   the platform's green — solar, GridFarmer, the quest badges — and this
+   section deliberately stopped using it. The two tones here are one hue:
+   var(--eif) at full strength and at half, carried in the mask's alpha. */
+.eif-banner > * { position: relative; z-index: 1; }
+.eif-banner::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 176px;
+  aspect-ratio: 1 / 1;
+  background-color: var(--eif);
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20360%20360'%3E%3Cdefs%3E%3Cpattern%20id='g'%20width='64'%20height='64'%20patternUnits='userSpaceOnUse'%20patternTransform='rotate(45)%20translate(5%205)'%3E%3Cg%20fill='%23fff'%3E%3Crect%20x='0'%20y='0'%20width='50'%20height='12'/%3E%3Crect%20x='38'%20y='12'%20width='12'%20height='38'/%3E%3Crect%20x='0'%20y='25'%20width='12'%20height='39'%20opacity='.5'/%3E%3Crect%20x='12'%20y='52'%20width='39'%20height='12'%20opacity='.5'/%3E%3Crect%20x='20'%20y='20'%20width='14'%20height='14'%20transform='rotate(45%2027%2027)'/%3E%3C/g%3E%3C/pattern%3E%3CradialGradient%20id='f'%20cx='0'%20cy='0'%20r='1'%3E%3Cstop%20offset='0'%20stop-color='%23fff'%20stop-opacity='1'/%3E%3Cstop%20offset='.5'%20stop-color='%23fff'%20stop-opacity='.6'/%3E%3Cstop%20offset='1'%20stop-color='%23fff'%20stop-opacity='0'/%3E%3C/radialGradient%3E%3Cmask%20id='m'%3E%3Crect%20width='360'%20height='360'%20fill='url(%23f)'/%3E%3C/mask%3E%3C/defs%3E%3Crect%20width='360'%20height='360'%20fill='url(%23g)'%20mask='url(%23m)'/%3E%3C/svg%3E");
+          mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20360%20360'%3E%3Cdefs%3E%3Cpattern%20id='g'%20width='64'%20height='64'%20patternUnits='userSpaceOnUse'%20patternTransform='rotate(45)%20translate(5%205)'%3E%3Cg%20fill='%23fff'%3E%3Crect%20x='0'%20y='0'%20width='50'%20height='12'/%3E%3Crect%20x='38'%20y='12'%20width='12'%20height='38'/%3E%3Crect%20x='0'%20y='25'%20width='12'%20height='39'%20opacity='.5'/%3E%3Crect%20x='12'%20y='52'%20width='39'%20height='12'%20opacity='.5'/%3E%3Crect%20x='20'%20y='20'%20width='14'%20height='14'%20transform='rotate(45%2027%2027)'/%3E%3C/g%3E%3C/pattern%3E%3CradialGradient%20id='f'%20cx='0'%20cy='0'%20r='1'%3E%3Cstop%20offset='0'%20stop-color='%23fff'%20stop-opacity='1'/%3E%3Cstop%20offset='.5'%20stop-color='%23fff'%20stop-opacity='.6'/%3E%3Cstop%20offset='1'%20stop-color='%23fff'%20stop-opacity='0'/%3E%3C/radialGradient%3E%3Cmask%20id='m'%3E%3Crect%20width='360'%20height='360'%20fill='url(%23f)'/%3E%3C/mask%3E%3C/defs%3E%3Crect%20width='360'%20height='360'%20fill='url(%23g)'%20mask='url(%23m)'/%3E%3C/svg%3E");
+  -webkit-mask-size: 100% 100%;   mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  opacity: 0.14;
+  pointer-events: none;
+}
+
 .eif-banner__head { display: flex; gap: 14px; align-items: flex-start; }
 .eif-banner__mark {
   flex-shrink: 0;

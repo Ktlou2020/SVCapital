@@ -6631,6 +6631,12 @@ function renderPoolsGrid() {
           ${!['open', 'waitlist', 'filling'].includes(p.status)
             ? `<button class="btn btn--secondary btn--sm" onclick='openPoolRaiseReport(${_esc(JSON.stringify(p.id))})' title="Raise report — where the money came from"><i class="fa-solid fa-arrow-down-short-wide" style="color:#eda5ff"></i> Raise</button>`
             : ''}
+          ${/* Only solar distributes before maturity, so only solar has years
+                to close out. On any other product this button would open a
+                screen with nothing in it. */
+            /^solar/i.test(p.product_type || '')
+            ? `<button class="btn btn--secondary btn--sm" onclick='openPoolAnnualReturns(${_esc(JSON.stringify(p.id))})' title="Post what a year earned and distribute it"><i class="fa-solid fa-calendar-check" style="color:#fec24f"></i> Returns</button>`
+            : ''}
           <button class="btn btn--secondary btn--sm" onclick='openMergePoolModal(${_esc(JSON.stringify(p.id))})' title="Merge into another pool"><i class="fa-solid fa-code-merge"></i> Merge</button>
           <button class="btn btn--danger btn--sm" onclick='deletePool(${_esc(JSON.stringify(p.id))})'><i class="fa-solid fa-trash"></i></button>
           ${manageDropdown}
@@ -19884,4 +19890,180 @@ function exportPlatformFeesCSV() {
     'Amount (R)':    Math.abs(r.amount),
     Description:     r.description || '',
   })), `platform-fees-${new Date().toISOString().slice(0,10)}.csv`);
+}
+
+/* ═══ ANNUAL RETURNS, FROM THE POOL CARD ═══════════════════════════════
+
+   Solar distributes on the anniversary of each investment, so a year of a
+   pool is closed out by saying what it earned and then paying that to the
+   people in that pool. Both halves live here, on the pool, because that is
+   where the question is asked: this pool, this year, what did it earn.
+
+   Posting a rate is director-only — it is the act that releases money — and
+   the SERVER decides that, not this file. The data behind this screen comes
+   from a director-only endpoint, so reaching it at all is the permission:
+   anyone who can see these numbers may post them. A second, client-side guess
+   at the viewer's role was worse than useless here — it read the session
+   differently from the server, hid the controls from an actual director, and
+   left them looking at a screen telling them to ask a director. The 403 is
+   handled where it happens instead.
+
+   Distribution previews before it applies, like every other money control in
+   this console, and the preview is the same server call with the paying left
+   out rather than a second sum that could disagree with it.             */
+
+let _poolReturns = null;
+let _poolReturnsId = null;
+
+async function openPoolAnnualReturns(poolId) {
+  _poolReturnsId = poolId;
+  const body = document.getElementById('poolReturnsBody');
+  body.innerHTML = '<div style="color:var(--text-muted)">Loading…</div>';
+  Modal.open('poolReturnsModal');
+  await _renderPoolReturns();
+}
+
+async function _renderPoolReturns() {
+  const body = document.getElementById('poolReturnsBody');
+  let data;
+  try {
+    data = await API._fetch('GET', 'admin/anniversary-returns');
+  } catch (e) {
+    /* The endpoint is the permission. A refusal here is the only thing that
+       means "not yours to post", and it is said once, in the place it is
+       known, rather than guessed at before the request. */
+    const msg = String(e.message || '');
+    body.innerHTML = /403|forbidden|requires role/i.test(msg)
+      ? `<div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);
+             border-radius:8px;padding:12px;font-size:0.86rem">
+           Closing out a year pays money into clients' wallets, so it is a director's to do.
+           Ask a director to post the rate for this pool.</div>`
+      : `<div style="color:#ef4444">${_esc(msg || 'Could not load the schedule.')}</div>`;
+    return;
+  }
+  _poolReturns = (data.pools || []).find(p => p.pool_id === _poolReturnsId);
+  if (!_poolReturns) {
+    body.innerHTML = '<div style="color:var(--text-muted)">This pool has no anniversary years — ' +
+      'check that its term is a whole number of years.</div>';
+    return;
+  }
+  const p = _poolReturns;
+
+  const rows = p.rows.map(y => {
+    const state = y.rate == null
+      ? (y.due ? `<span style="color:#f59e0b">${y.due} waiting on a rate</span>`
+               : '<span style="color:var(--text-muted)">not reached yet</span>')
+      : (y.payable
+          ? `<span style="color:#22c55e">${y.payable} to pay — ${Utils.rand(y.payable_amount)}</span>`
+          : (y.paid ? `<span style="color:var(--text-muted)">${y.paid} paid — ${Utils.rand(y.paid_amount)}</span>`
+                    : '<span style="color:var(--text-muted)">posted, nothing due yet</span>'));
+    const input = `<div style="display:flex;align-items:center;gap:6px">
+           <input type="number" step="0.01" min="0" max="100" id="pr-y${y.year_index}"
+                  value="${y.rate == null ? '' : (y.rate * 100).toFixed(2)}" placeholder="e.g. 8.50"
+                  oninput="_poolReturnPreview(${y.year_index})"
+                  style="width:92px;padding:5px 8px;border-radius:6px;border:1px solid var(--border);
+                         background:var(--bg-primary);color:var(--text-primary);font-size:0.82rem">
+           <span style="color:var(--text-muted);font-size:0.78rem">%</span></div>
+         <div id="pr-prev-${y.year_index}" style="font-size:0.74rem;color:var(--text-muted);margin-top:3px"></div>`;
+    return `<tr>
+      <td style="white-space:nowrap">Year ${y.year_index}</td>
+      <td>${input}</td>
+      <td>${state}${y.note ? `<div style="font-size:0.74rem;color:var(--text-muted)">${_esc(y.note)}</div>` : ''}</td>
+      <td style="text-align:right;white-space:nowrap">
+        <button class="btn btn--secondary btn--sm" onclick="_poolReturnPost(${y.year_index})">${y.rate == null ? 'Post' : 'Correct'}</button>
+        ${y.payable ? `<button class="btn btn--primary btn--sm" style="margin-left:6px" onclick="_poolReturnApply(${y.year_index})">Distribute</button>` : ''}
+      </td></tr>`;
+  }).join('');
+
+  body.innerHTML = `
+    <div style="margin-bottom:12px">
+      <div style="font-weight:700">${_esc(p.name)}</div>
+      <div style="font-size:0.8rem;color:var(--text-muted)">${_esc(p.product_type)} ·
+        ${p.term_months} months · ${p.years} anniversar${p.years === 1 ? 'y' : 'ies'} ·
+        ${p.investments} investment${p.investments === 1 ? '' : 's'} · ${Utils.rand(p.capital)}</div>
+    </div>
+    <div style="overflow-x:auto"><table class="table" style="font-size:0.82rem">
+      <thead><tr><th>Year</th><th>Rate</th><th>Where it stands</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
+    <div id="poolReturnsResult" style="margin-top:12px;font-size:0.82rem"></div>
+    <p style="margin-top:10px;font-size:0.8rem;color:var(--text-muted)">
+      Each client is paid on the anniversary of the day they invested, so one year of this pool
+      reaches different people on different dates. Distributing pays everyone whose anniversary
+      has already come round; the rest are paid by the daily job as theirs arrives. Capital stays
+      invested until the end of the term.</p>`;
+}
+
+/* What the figure being typed would pay, on the capital that has actually
+   reached that anniversary. A rate on its own is not checkable. */
+function _poolReturnPreview(year) {
+  const el = document.getElementById(`pr-prev-${year}`);
+  const y  = (_poolReturns && _poolReturns.rows || []).find(r => r.year_index === year);
+  const n  = parseFloat((document.getElementById(`pr-y${year}`) || {}).value);
+  if (!el || !y) return;
+  if (!Number.isFinite(n)) { el.textContent = ''; return; }
+  el.textContent = y.capital_due
+    ? `pays ${Utils.rand(y.capital_due * n / 100)} on ${Utils.rand(y.capital_due)}`
+    : 'nothing has reached this anniversary yet';
+}
+
+async function _poolReturnPost(year) {
+  const n = parseFloat((document.getElementById(`pr-y${year}`) || {}).value);
+  const out = document.getElementById('poolReturnsResult');
+  if (!Number.isFinite(n) || n < 0) {
+    out.innerHTML = '<span style="color:#ef4444">Enter the percentage this year earned.</span>';
+    return;
+  }
+  if (n > 100) {
+    out.innerHTML = '<span style="color:#ef4444">Over 100% for one year — check the figure before posting it.</span>';
+    return;
+  }
+  try {
+    /* The API takes a fraction, as every rate on this platform does. */
+    const r = await API._fetch('POST', 'admin/pool-annual-return',
+      { pool_id: _poolReturnsId, year_index: year, rate: n / 100 });
+    Toast.success(r.corrected ? 'Rate corrected' : 'Rate posted');
+    await _renderPoolReturns();
+  } catch (e) {
+    out.innerHTML = `<span style="color:#ef4444">${_esc(e.message || 'Failed')}</span>`;
+  }
+}
+
+async function _poolReturnApply(year) {
+  const out = document.getElementById('poolReturnsResult');
+  out.innerHTML = '<span style="color:var(--text-muted)">Checking…</span>';
+  let plan;
+  try {
+    plan = await API._fetch('POST', 'admin/anniversary-returns/run',
+      { pool_id: _poolReturnsId, year_index: year, dry_run: 'true' });
+  } catch (e) {
+    out.innerHTML = `<span style="color:#ef4444">${_esc(e.message || 'Failed')}</span>`;
+    return;
+  }
+  if (!plan.payable) {
+    out.innerHTML = '<span style="color:var(--text-muted)">Nothing to distribute for that year.</span>';
+    return;
+  }
+  const ok = await Confirm.ask(`Distribute year ${year}?`, {
+    bodyHtml: `This pays <strong>${Utils.rand(plan.payable_amount)}</strong> into
+      ${plan.payable} wallet${plan.payable === 1 ? '' : 's'} — every client in this pool whose
+      year ${year} anniversary has already come round. It cannot be undone from here, and each
+      distribution is audited.`,
+    confirmLabel: 'Distribute',
+  });
+  if (!ok) { out.innerHTML = ''; return; }
+
+  try {
+    const r = await API._fetch('POST', 'admin/anniversary-returns/run',
+      { pool_id: _poolReturnsId, year_index: year, dry_run: 'false' });
+    out.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i>
+      ${r.paid} distribution(s) paid — ${Utils.rand(r.total)}</span>` +
+      (r.failures && r.failures.length
+        ? `<div style="color:#ef4444;margin-top:6px">${r.failures.length} failed and were left for the daily job:
+           ${_esc(r.failures.map(f => f.investor).join(', '))}</div>` : '');
+    Toast.success(`${r.paid} distribution(s) paid`);
+    await _renderPoolReturns();
+    if (STATE.transactions && STATE.transactions.length) await loadTransactions();
+  } catch (e) {
+    out.innerHTML = `<span style="color:#ef4444">${_esc(e.message || 'Failed')}</span>`;
+  }
 }

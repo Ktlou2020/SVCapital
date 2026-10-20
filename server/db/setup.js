@@ -1897,7 +1897,7 @@ const EIF_FAQS = [
   { q: 'Is the 1% platform fee permissible?',
     a: 'The platform fee is a fee for the work of running the platform — administration, reporting, custody of the paperwork, and the operations behind each pool. It is a fixed percentage of the amount you invest, charged once, and it is the same whether the investment does well or badly. It is a fee for a service rendered, not a charge for the use of money.' },
   { q: 'What happens if a pool makes a loss?',
-    a: 'You would receive less than you invested. That is the honest answer, and it applies across the platform. In a Mudarabah the loss falls specifically on the capital, and the operating partner loses their share of the profit rather than sharing the loss — which is the structure working as intended, not a term against you. No product on this platform guarantees a return.' },
+    a: 'You would receive less than you invested, and that applies across the platform. In a Mudarabah the loss falls specifically on the capital, and the operating partner loses their share of the profit rather than sharing the loss — which is the structure working as intended, not a term against you. No product on this platform guarantees a return.' },
   { q: 'Are the returns shown a promise?',
     a: 'No. The figure on each product is a target, drawn from the underlying trade, lease or venture. Murabaha and Ijara returns come from contracted amounts and are the more predictable of the three; a Mudarabah target is a projection and nothing more. Actual returns are published on each pool once it matures.' },
   { q: 'Can I hold these alongside your other products?',
@@ -4112,6 +4112,30 @@ async function autoSetup() {
         console.log('ℹ️  Anyone who passed those quizzes before now answered the old minimum. ' +
                     'Their score stands; the figure they were taught does not.');
       }
+    });
+
+    await step("23. Take the aside out of the loss FAQ", async () => {
+      /* "That is the honest answer" reads as the platform reassuring itself.
+         The answer is stronger without it: a client asking what happens when a
+         pool loses money wants the fact, not the tone.
+
+         Step 13 seeds the FAQs with ON CONFLICT DO NOTHING, so editing
+         EIF_FAQS above reaches a brand-new database and nowhere else. These
+         rows exist on staging and production already.
+
+         Matched on the exact old sentence rather than on the id, because
+         these answers are editable in the admin console — whoever has since
+         reworded this row keeps their wording, and a second run finds
+         nothing to do. */
+      const { rowCount } = await pool.query(
+        `UPDATE product_faqs
+            SET answer = replace(answer,
+                  'You would receive less than you invested. That is the honest answer, and it applies across the platform.',
+                  'You would receive less than you invested, and that applies across the platform.'),
+                updated_at = NOW()
+          WHERE category = 'eif'
+            AND POSITION('That is the honest answer' IN COALESCE(answer, '')) > 0`);
+      if (rowCount) console.log(`\u2705 Reworded ${rowCount} EIF FAQ answer(s).`);
     });
 
     await step("19. Announce the features nobody has been told about", async () => {
