@@ -123,8 +123,26 @@ const setup = () => require(path.join(ROOT, 'server', 'db', 'setup.js'))().catch
     {
       const codes = new Set();
       for (let i = 0; i < 5000; i++) codes.add(RC.newCode());
-      ok('5 000 codes collide none of the time', codes.size === 5000,
-         `${5000 - codes.size} collisions in 5 000`);
+      /* This used to require 5 000 draws to collide NONE of the time, which is
+         a coin toss dressed as an assertion: 31^6 is about 887 million codes,
+         so by the birthday bound 5 000 draws collide about 1.4% of the time
+         and the check failed for free roughly once in seventy runs. A check
+         that fails at random is one people learn to re-run rather than read.
+
+         What actually matters is asserted instead: the space is big enough
+         that a collision is rare, and a collision is survivable anyway —
+         the unique index refuses it (above) and assignCode retries. */
+      const space = Math.pow(RC.ALPHABET.length, 6);
+      ok(`the code space is large enough to make a collision rare (${(space / 1e6).toFixed(0)}M codes)`,
+         space > 100e6, `${space} codes`);
+      const expected = 1 - Math.exp(-(5000 * 4999) / (2 * space));
+      ok(`and 5 000 of them collide seldom enough to be handled, not avoided (${(expected * 100).toFixed(2)}%)`,
+         expected < 0.05 && 5000 - codes.size <= 2,
+         `${5000 - codes.size} collisions in this sample`);
+      ok('a collision is retried rather than thrown at the investor',
+         /for \(let i = 0; i < attempts; i\+\+\)/.test(
+           fs.readFileSync(path.join(ROOT, 'server', 'services', 'referralCode.js'), 'utf8')),
+         'the index refuses a duplicate, so the generator has to try again');
       ok('every code is prefixed so it is recognisable',
          [...codes].every(c => /^SVC[A-Z2-9]{6}$/.test(c)), [...codes][0]);
       ok('and leaves out the characters people mistype',

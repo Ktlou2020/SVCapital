@@ -69,6 +69,47 @@ console.log('\nthe rule is written once, and the money is cash not accrual');
   ok('posting a rate is audited, with the previous one kept',
      /pool_annual_return_corrected/.test(route) && /before: before \?/.test(route));
 
+  ok('there is a read endpoint for the panel, built from the same service',
+     /router\.get\('\/anniversary-returns', requireRole\('director'\)/.test(route)
+     && /require\('\.\.\/services\/anniversaryReturns'\)[\s\S]{0,1200}annual\.due\(pool/.test(route),
+     'a panel that computes what is owed differently from the job that pays it is not a panel of the job');
+
+  const dirJs   = fs.readFileSync(path.join(ROOT, 'team', 'js', 'director.js'), 'utf8');
+  const dirHtml = fs.readFileSync(path.join(ROOT, 'team', 'director.html'), 'utf8');
+  ok('the panel is in the DIRECTOR panel, where the only people who may post a rate work',
+     /data-view="annual-returns"/.test(dirHtml) && /renderAnnualReturns/.test(dirJs),
+     'the admin console would show a screen that 403s for every admin who is not a director');
+  ok('it asks for a percentage and sends a fraction',
+     /rate:\s+pct \/ 100/.test(dirJs),
+     'every rate on this platform is a fraction; a close-out is written down as a percentage');
+  ok('and refuses an impossible year before it reaches the API',
+     /pct > 100/.test(dirJs));
+  ok('what the rate would pay is shown before it is posted',
+     /function _annualPreview\(\)/.test(dirJs) && /capital \* pct \/ 100/.test(dirJs),
+     'a rate on its own is not a figure anybody can sanity-check');
+  ok('correcting a rate says what it does and does not change',
+     /does not change what was already paid/.test(dirJs));
+  ok('everything the panel renders out of the database is escaped',
+     (() => {
+       const blk = dirJs.slice(dirJs.indexOf('async function renderAnnualReturns'));
+       /* Counts, rands and the year index — numbers the server computed, not
+          text anybody typed. Everything else must go through escH. */
+       const SAFE = ['escH', 'rZAR', 'r.waiting', 'y.year_index', 'year', 'p.term_months', 'p.years',
+                     'p.investments', 'y.due', 'y.paid', 'y.payable', 'y.rate', 'state',
+                     /* y.note is NOT here: it is typed by a director and is the one
+                        free-text field on this screen. */
+                     'rows', 'cards', 'head', 'pct', 'capital', 'y.payable_amount',
+                     'y.paid_amount', 'p.capital'];
+       /* `${x ? …}` is a guard, not a render — what it renders is inside the
+          branches and is matched on its own. `${x}` is a render and has to be
+          escaped or be one of the numbers above. */
+       return [...blk.matchAll(/\$\{\s*([A-Za-z_$][\w.$]*)\s*(\S?)/g)]
+         .filter(m => m[2] !== '?')
+         .map(m => m[1])
+         .every(id => SAFE.includes(id));
+     })(),
+     'pool names and notes are typed by people and rendered as markup');
+
   const index = fs.readFileSync(path.join(ROOT, 'server', 'index.js'), 'utf8');
   ok('the job runs daily, because an anniversary is a per-investment date',
      /startAnniversaryCron\(\)/.test(index));
