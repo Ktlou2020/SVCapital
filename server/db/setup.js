@@ -135,6 +135,33 @@ CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status);
 CREATE INDEX IF NOT EXISTS idx_transactions_investor_id ON transactions(investor_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_reference ON transactions(reference);
 
+/* The achieved return for ONE YEAR of a pool's life, posted by a director.
+
+   Solar distributes on each anniversary of an investment, so a seven-year
+   pool closes out seven times, not once. investment_pools.actual_rate is a
+   single figure for the whole term and cannot say what year three earned;
+   this can. A year with no row here pays nothing and is reported as waiting —
+   the same refusal the maturity engine makes when no rate has been posted,
+   rather than paying a projection nobody has stood behind. */
+CREATE TABLE IF NOT EXISTS pool_annual_returns (
+  /* No foreign key, deliberately. CASCADE is how a factsheet died with the
+     pool it was uploaded against, and this is the same shape of record: it is
+     what a year was closed out at, and money was paid from it. A pool merge
+     deletes the source pool, so CASCADE would destroy the evidence and
+     RESTRICT would block the merge. The row outlives the pool instead, as the
+     factsheets now do. */
+  pool_id    TEXT NOT NULL,
+  year_index INT  NOT NULL CHECK (year_index >= 1),
+  rate       NUMERIC(8,4) NOT NULL CHECK (rate >= 0),
+  note       TEXT,
+  posted_by  TEXT,
+  posted_at  TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (pool_id, year_index)
+);
+CREATE INDEX IF NOT EXISTS par_pool_idx ON pool_annual_returns(pool_id);
+
+
 CREATE TABLE IF NOT EXISTS kyc_documents (
   id TEXT PRIMARY KEY,
   investor_id TEXT REFERENCES investors(id) ON DELETE CASCADE,
@@ -4320,6 +4347,11 @@ async function autoSetup() {
           title: 'On iPhones there is now one app banner, not two',
           body: 'The note about the banner that keeps asking said Apple\u2019s own Smart App Banner might still appear at the top of a client\u2019s first page while ours sat at the bottom. It will not: the apple-itunes-app tag has been taken off the landing page, the sign-in and sign-up pages, the portal and the app shell, so Safari no longer draws its banner at all. Ours is the only one, on every phone. Apple\u2019s was kept because it is the affordance iPhone users know and because it could say OPEN rather than VIEW when the app was already installed \u2014 something no JavaScript can work out. Neither reason held: it cannot be shown again once a client taps its x, so it could never keep asking, and we answer the installed question from the server using the push token only the app can write, which is a better answer than the browser\u2019s and does not depend on the tag.',
           where: 'Nothing to click. On an iPhone in Safari, the client portal, sign-in and landing pages now show only the SV Capital banner at the bottom of the screen.' },
+
+        { id: 'ANN-2026-SOLAR-ANNIVERSARY-RETURNS', area: 'both', icon: 'fa-calendar-check',
+          title: 'Solar now distributes on each client\u2019s own anniversary, as the site has always said it would',
+          body: 'A five-year solar holding earns five returns, one on the anniversary of the day THAT client invested, each paid to their wallet, with the capital returned at the end. The public site has promised exactly that for as long as the product has existed \u2014 \u201cAnnual returns distributed every 12 months\u201d \u2014 and nothing on the platform did it: every investment sat until its end date and settled once. A daily job now pays each anniversary as it falls due, keyed on the investment\u2019s own start date rather than the pool\u2019s, so two clients in the same pool are paid on their own dates. Nothing is paid from a figure nobody has stood behind: a year pays only once a director posts what that year actually earned, the same refusal the maturity engine makes when no rate has been posted at all, and until then the year is listed as waiting. A seven-year pool is therefore closed out seven times rather than once. Maturity now subtracts whatever the anniversaries have already distributed, so the term\u2019s posted return is not paid again on top of them \u2014 and if more has been distributed than the term later turns out to have earned, nothing is clawed back out of a client\u2019s wallet; that is a rate to correct. A distribution is a payout to the wallet and counts toward total returns, and a sub-account\u2019s distribution goes to the sub-account, not the parent. The anniversaries that have already passed are NOT paid automatically: there is a report naming every one of them, what each would pay, and which are waiting on a rate, so the backlog is settled deliberately rather than discovered.',
+          where: 'Nothing to click for the distributions \u2014 the job runs daily at 06:10. Posting a year\u2019s rate: POST /api/admin/pool-annual-return with the pool, the year and the rate, director only. The backlog report is server/scripts/anniversary-returns.cjs; ask whoever has the database URL to run it before anything is paid.' },
 
         { id: 'ANN-2026-EFT-ALREADY-COMPLETED', area: 'admin', icon: 'fa-triangle-exclamation',
           title: 'Approving an EFT that is already completed is refused, not reported as paid',

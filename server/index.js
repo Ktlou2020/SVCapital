@@ -485,6 +485,14 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
   const { startDirectorReportCron } = require('./jobs/directorReportCron');
   startDirectorReportCron();
 
+  /* Solar distributions on each investment's own anniversary (daily 06:10
+     SAST). Daily because an anniversary is a per-investment date; before the
+     business day and well clear of the 23:00 maturity run, so a final
+     anniversary that falls on the maturity date is distributed first and
+     maturity then settles only what is left. */
+  const { startAnniversaryCron } = require('./jobs/anniversaryCron');
+  startAnniversaryCron();
+
   // Start the weekly beef price fetch (Thursdays 07:17 SAST)
   const { startBeefPriceCron } = require('./jobs/beefPriceCron');
   startBeefPriceCron();

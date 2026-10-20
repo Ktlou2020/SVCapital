@@ -30,6 +30,7 @@ const smsService   = require('../services/sms');
 const pushService  = require('../services/pushService');
 const { cycleExpiredPools } = require('./poolCyclerCron');
 const { effectiveInstruction } = require('../services/maturityPolicy');
+const annualReturns = require('../services/anniversaryReturns');
 
 // Reinvestments are NOT charged a platform fee — the full matured amount rolls over.
 const round2 = n => Math.round((Number(n) || 0) * 100) / 100;
@@ -130,7 +131,23 @@ async function runMaturityProcessing() {
       }
 
       const principal    = parseFloat(inv.amount) || 0;
-      const actualReturn = postedReturn;   // posted, never projected — see postedReturnFor
+      /* Anything already distributed on an anniversary comes off what is paid
+         here. A solar pool's actual_rate is the return for the WHOLE term, so
+         paying it in full at the end on top of the years already paid out
+         would pay those years twice. Zero for every product that distributes
+         nothing before maturity, which is every product but solar, so this
+         changes nothing for them.
+
+         Clamped at zero rather than allowed to go negative: if more has been
+         distributed than the term's posted rate now says was earned, that is a
+         rate that needs correcting, not a maturity that claws money back out
+         of a client's wallet. */
+      const alreadyDistributed = await annualReturns.paidSoFar(client, inv.id);
+      const actualReturn = Math.max(0, round2(postedReturn - alreadyDistributed));
+      if (alreadyDistributed > 0) {
+        console.log(`[maturity] ${inv.id}: ${alreadyDistributed} already distributed on ` +
+                    `anniversaries — paying ${actualReturn} of the ${postedReturn} posted.`);
+      }
       const gross        = round2(principal + actualReturn);
       /* What this product is allowed to do at maturity, not merely what the
          column says. Delivery bikes pay out rather than reinvest by default;
