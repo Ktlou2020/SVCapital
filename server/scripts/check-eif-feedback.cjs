@@ -209,6 +209,49 @@ console.log('\nthe recolour reaches databases that already exist');
      /badge_class = 'badge--green'/.test(green));
 }
 
+console.log('\nthe mosaic is drawn, not photographed');
+{
+  /* Square-Kufic strapwork at the top-left of both EIF surfaces. The client
+     supplied it as two JPEGs; it ships as an SVG mask instead, so the colour
+     comes from var(--eif) and follows the accent wherever it goes next. */
+  for (const [f, sel] of [['css/home-ci.css', '.eif-section'],
+                          ['portal/css/portal-premium.css', '.eif-banner']]) {
+    const css  = read(f);
+    const rule = (css.match(new RegExp(`\\${sel}::before\\s*\\{[^}]*\\}`)) || [''])[0];
+    ok(`${f}: ${sel} carries the mosaic`, rule.length > 0);
+    ok(`${f}: it is painted through a mask`, /mask-image:\s*url\("data:image\/svg/.test(rule),
+       'a background-image could not take its colour from a variable');
+    ok(`${f}: the colour comes from var(--eif)`,
+       /background-color:\s*var\(--eif\)/.test(rule),
+       'hard-coding the green means the next accent change misses it');
+    ok(`${f}: no colour is baked into the artwork`,
+       !/%23(?!fff)[0-9a-f]{3,6}/i.test(rule),
+       'a mask carries alpha only — any hex in it is a second source of truth');
+    ok(`${f}: the lime is nowhere in it`, !/65ed00|101,\s*237,\s*0/.test(rule),
+       'the reference used the platform lime as its second tone; this section left that colour behind');
+    ok(`${f}: it cannot swallow a click`, /pointer-events:\s*none/.test(rule),
+       'it covers the corner of a panel that has buttons in it');
+
+    /* The ornament is absolutely positioned, so its parent has to establish
+       the containing block. Without this it anchors to the viewport and the
+       mosaic appears in the corner of the PAGE. */
+    const parent = (css.match(new RegExp(`\\${sel}\\s*\\{[^}]*\\}`)) || [''])[0];
+    ok(`${f}: ${sel} is a positioned ancestor`, /position:\s*relative/.test(parent),
+       'otherwise the mosaic anchors to the viewport, not the section');
+    ok(`${f}: the content sits above it`,
+       new RegExp(`\\${sel}\\s*>\\s*[^{]*\\{[^}]*z-index:\\s*1`).test(css),
+       'text under a decorative layer is text nobody asked to be decorated');
+  }
+
+  /* It must stay cheap. The whole point of redrawing it was that 71 KB of
+     JPEG, in a stylesheet, on every page load, is not a corner ornament. */
+  const inline = (read('css/home-ci.css').match(/data:image\/svg\+xml,[^"]*/) || [''])[0];
+  ok('the whole mosaic is about a kilobyte', inline.length > 0 && inline.length < 4096,
+     `${inline.length} chars`);
+  ok('and no raster of it was committed',
+     !/\.jpe?g|\.png/i.test(inline), 'it is vector, start to finish');
+}
+
 console.log('\nand the platform blue is untouched');
 {
   /* Everything the blue meant before EIF borrowed it. A search-and-replace

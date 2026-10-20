@@ -63,7 +63,7 @@ ${articleMeta || ''}
 <link rel="icon" href="/assets/favicon-32.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap">
 <style>
   :root{
     --ink:#15121b; --soft:#4e4759; --faint:#877e93;
@@ -74,8 +74,14 @@ ${articleMeta || ''}
     --ground:#121019; --panel:#1b1724; --rule:#302940; --brand:#eda5ff;
   }}
   *{box-sizing:border-box}
+  /* Poppins, and only Poppins. This page used to load two faces that were
+     neither — Manrope for the interface and Source Serif 4 for the headlines
+     and the article body — so Insights read as a different product from
+     everything around it. Declared once here; nothing below overrides it,
+     which is what keeps it that way. */
   body{margin:0;background:var(--ground);color:var(--ink);
-       font-family:Manrope,system-ui,sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased}
+       font-family:'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+       line-height:1.6;-webkit-font-smoothing:antialiased}
   a{color:var(--brand)}
   .wrap{max-width:860px;margin:0 auto;padding:0 20px 80px}
   /* The same horizontal lockup the landing page uses, which is a white-text
@@ -88,12 +94,20 @@ ${articleMeta || ''}
   header.top nav{margin-left:auto;display:flex;gap:18px;font-size:.88rem;font-weight:700}
   header.top nav a{text-decoration:none;color:#eda5ff}
   @media (max-width:520px){header.top img{height:32px}header.top nav{gap:13px;font-size:.82rem}}
-  h1{font-family:'Source Serif 4',Georgia,serif;font-size:clamp(1.9rem,5vw,2.7rem);line-height:1.15;margin:26px 0 10px;text-wrap:balance}
+  /* Swapping a serif text face for a geometric sans is not only a change of
+     name: Poppins carries a much larger x-height, so the same rem reads
+     bigger and tighter. The headline comes down a little and takes the
+     negative tracking a geometric face wants at display sizes. */
+  h1{font-size:clamp(1.8rem,4.8vw,2.5rem);font-weight:700;letter-spacing:-.022em;
+     line-height:1.18;margin:26px 0 10px;text-wrap:balance}
   .lede{font-size:1.1rem;color:var(--soft);margin:0 0 18px;max-width:62ch}
   .tag{display:inline-block;font-size:.7rem;font-weight:800;letter-spacing:.09em;text-transform:uppercase;
        padding:5px 10px;border-radius:999px;background:var(--mark);color:#15121b}
   .meta{font-size:.82rem;color:var(--faint);margin-bottom:26px}
-  article p{font-family:'Source Serif 4',Georgia,serif;font-size:1.12rem;color:var(--ink);margin:0 0 20px;max-width:66ch}
+  /* And the reading column gets the leading a sans-serif needs over a long
+     article, and a slightly narrower measure, since the wider glyphs push
+     more characters past a comfortable line. */
+  article p{font-size:1.04rem;line-height:1.75;color:var(--ink);margin:0 0 20px;max-width:62ch}
   /* A hero is decorative chrome around the words, so it is capped rather than
      allowed to push the headline off a short screen. */
   img.hero{display:block;width:100%;max-height:420px;object-fit:cover;border-radius:12px;
@@ -109,7 +123,7 @@ ${articleMeta || ''}
   .card .tag,article + .share .tag{align-self:flex-start}
   .tag{align-self:flex-start}
   .card:hover{border-color:var(--brand)}
-  .card h2{font-family:'Source Serif 4',Georgia,serif;font-size:1.16rem;margin:0;line-height:1.3;text-wrap:balance}
+  .card h2{font-size:1.1rem;font-weight:700;letter-spacing:-.015em;margin:0;line-height:1.35;text-wrap:balance}
   .card p{margin:0;font-size:.92rem;color:var(--soft)}
   .card .meta{margin:0;font-size:.76rem}
   .share{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:32px 0 0;padding-top:22px;border-top:1px solid var(--rule)}

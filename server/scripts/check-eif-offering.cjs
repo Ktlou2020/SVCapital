@@ -315,6 +315,28 @@ console.log('\nthe FAQs are rows, and the claim is the one we can make');
   ok('and neither does the FAQ',
      /Not yet, and we will not say otherwise/.test(seeded) &&
      !/is Sharia certified\.|fully Sharia compliant/i.test(seeded));
+
+  /* "That is the honest answer" was the platform reassuring itself in the
+     middle of the answer a client reads when they ask what happens if the
+     money is lost. Removed from the wording. */
+  ok('the loss answer states the fact without commenting on its own honesty',
+     !/honest answer/i.test(seeded),
+     'the answer is stronger without the aside');
+  ok('and still says plainly that you get back less',
+     /You would receive less than you invested/.test(seeded));
+
+  /* Step 13 seeds with ON CONFLICT DO NOTHING, so a wording fix that lives
+     only in EIF_FAQS never reaches an environment that already has the rows.
+     The corrective UPDATE is what makes the change real on staging and
+     production — and it is scoped to the old sentence so an answer someone
+     has since reworded in the console is left alone. */
+  const fix = (SETUP.match(/await step\("23\.[\s\S]*?\n    \}\);/) || [''])[0];
+  ok('a setup step takes it out of the rows that already exist',
+     /UPDATE product_faqs/.test(fix) && /That is the honest answer/.test(fix),
+     'editing EIF_FAQS alone only reaches a brand-new database');
+  ok('and it cannot overwrite an answer somebody has edited',
+     /POSITION\('That is the honest answer' IN COALESCE\(answer, ''\)\) > 0/.test(fix) &&
+     /category = 'eif'/.test(fix));
 }
 
 console.log('\nthe look and feel stays inside the CI');
