@@ -134,10 +134,15 @@ console.log('\nthe rule is written once, and the money is cash not accrual');
      'writing needs dry_run:false explicitly, and the preview is the same call with the paying left out');
   ok('the confirmation says the rand amount and how many wallets',
      /This pays <strong>\$\{Utils\.rand\(plan\.payable_amount\)\}<\/strong> into/.test(admin));
-  ok('an admin who is not a director sees the state and no buttons',
-     /function _amIDirector\(\)/.test(admin) && /const director = _amIDirector\(\)/.test(admin)
-     && /\$\{director \? `<button/.test(admin),
-     'a screen that refuses you after you have typed a figure is worse than one that says so first');
+  /* The endpoint IS the permission. A client-side guess at the viewer's role
+     read the session differently from the server, hid the controls from an
+     actual director, and told them to ask a director. */
+  ok('the console does not guess at the viewer\u2019s role',
+     !/_amIDirector/.test(admin),
+     'a second opinion about who you are can only ever disagree with the server');
+  ok('and says so where the refusal actually happens',
+     /403\|forbidden\|requires role/i.test(admin) && /it is a director's to do/.test(admin),
+     'the data comes from a director-only endpoint, so reaching it is the permission');
   ok('the run endpoint is still director-only on the server',
      /router\.post\('\/anniversary-returns\/run', requireRole\('director'\)/.test(route),
      'hiding a button is not a permission');
