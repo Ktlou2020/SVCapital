@@ -110,6 +110,42 @@ console.log('\nthe rule is written once, and the money is cash not accrual');
      })(),
      'pool names and notes are typed by people and rendered as markup');
 
+  /* The same close-out, from the pool it belongs to. */
+  const admin     = fs.readFileSync(path.join(ROOT, 'admin', 'js', 'admin.js'), 'utf8');
+  const adminHtml = fs.readFileSync(path.join(ROOT, 'admin', 'index.html'), 'utf8');
+  ok('the pool card offers it, and only on solar',
+     /\/\^solar\/i\.test\(p\.product_type \|\| ''\)[\s\S]{0,260}openPoolAnnualReturns/.test(admin),
+     'nothing else distributes before maturity, so the screen would be empty');
+  ok('distributing is scoped to that pool — both the preview and the apply',
+     (admin.match(/anniversary-returns\/run',\s*\n?\s*\{ pool_id: _poolReturnsId/g) || []).length === 2,
+     'matching only the first call lets a mutation on the second one through, which is the one that pays');
+  /* Sliced to THIS route. manualCredit.js has several endpoints that preview
+     before they write, so asserting against the whole file passes on somebody
+     else's guard — which is exactly what it did until a mutation showed it. */
+  const runRoute = (() => {
+    const i = route.indexOf("router.post('/anniversary-returns/run'");
+    return i === -1 ? '' : route.slice(i, route.indexOf('\n});', i));
+  })();
+  ok('and previews before it pays, from the same call',
+     /dry_run: 'true'[\s\S]{0,1200}dry_run: 'false'/.test(admin)
+     && runRoute.length > 0
+     && /const dryRun = String\(dry_run\) !== 'false';/.test(runRoute)
+     && /if \(dryRun\) return res\.json/.test(runRoute),
+     'writing needs dry_run:false explicitly, and the preview is the same call with the paying left out');
+  ok('the confirmation says the rand amount and how many wallets',
+     /This pays <strong>\$\{Utils\.rand\(plan\.payable_amount\)\}<\/strong> into/.test(admin));
+  ok('an admin who is not a director sees the state and no buttons',
+     /function _amIDirector\(\)/.test(admin) && /const director = _amIDirector\(\)/.test(admin)
+     && /\$\{director \? `<button/.test(admin),
+     'a screen that refuses you after you have typed a figure is worse than one that says so first');
+  ok('the run endpoint is still director-only on the server',
+     /router\.post\('\/anniversary-returns\/run', requireRole\('director'\)/.test(route),
+     'hiding a button is not a permission');
+  ok('one client failing leaves the rest of the pool paid',
+     /failures\.push\(\{ investor: item\.investorId/.test(route));
+  ok('the modal exists in the console',
+     /id="poolReturnsModal"/.test(adminHtml));
+
   const index = fs.readFileSync(path.join(ROOT, 'server', 'index.js'), 'utf8');
   ok('the job runs daily, because an anniversary is a per-investment date',
      /startAnniversaryCron\(\)/.test(index));
