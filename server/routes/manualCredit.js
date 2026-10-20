@@ -79,6 +79,86 @@ router.post('/manual-credit', async (req, res) => {
 });
 
 /* ─────────────────────────────────────────────────────────────
+   POST /api/admin/pool-annual-return
+
+   Post the achieved return for ONE YEAR of a pool's life.
+
+   Solar distributes on each anniversary of an investment, so a seven-year
+   pool is closed out seven times. investment_pools.actual_rate is one figure
+   for the whole term and cannot say what year three earned.
+
+   Nothing is paid from a rate that has not been posted — the daily
+   distribution job refuses a year with no row here, the same way the maturity
+   engine refuses to pay when no rate has been posted at all. So this is the
+   act that releases money, and it is director-only and audited, with the
+   previous value kept when a rate is corrected.
+   ───────────────────────────────────────────────────────────── */
+router.post('/pool-annual-return', requireRole('director'), async (req, res) => {
+  const { pool_id, year_index, rate, note } = req.body || {};
+  const year = parseInt(year_index, 10);
+  const r    = parseFloat(rate);
+
+  if (!pool_id) return res.status(400).json({ error: 'pool_id is required.' });
+  if (!Number.isInteger(year) || year < 1) {
+    return res.status(400).json({ error: 'year_index must be 1 or more — year 1 is the first anniversary.' });
+  }
+  if (!Number.isFinite(r) || r < 0) {
+    return res.status(400).json({ error: 'A rate of 0 or more is required, as a fraction: 0.085 for 8.5%.' });
+  }
+  /* A rate is a fraction here, as everywhere else on the platform. 8.5 would
+     pay eight and a half TIMES the capital, which is worth refusing rather
+     than auditing after the fact. */
+  if (r > 1) {
+    return res.status(400).json({
+      error: `A rate of ${r} would pay ${r} times the capital. Rates are fractions — 0.085 for 8.5%.`,
+    });
+  }
+
+  try {
+    const { rows: [pl] } = await pool.query(
+      'SELECT id, name, product_type, term_months FROM investment_pools WHERE id = $1', [pool_id]);
+    if (!pl) return res.status(404).json({ error: 'Pool not found.' });
+
+    const years = Math.floor((parseInt(pl.term_months, 10) || 0) / 12);
+    if (years > 0 && year > years) {
+      return res.status(400).json({
+        error: `This pool runs ${pl.term_months} months, so it has ${years} anniversary year(s). ` +
+               `Year ${year} is past the end of its term.`,
+      });
+    }
+
+    const { rows: [before] } = await pool.query(
+      'SELECT rate, note FROM pool_annual_returns WHERE pool_id = $1 AND year_index = $2',
+      [pool_id, year]);
+
+    await pool.query(
+      `INSERT INTO pool_annual_returns (pool_id, year_index, rate, note, posted_by, posted_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,NOW(),NOW())
+       ON CONFLICT (pool_id, year_index)
+       DO UPDATE SET rate = EXCLUDED.rate, note = EXCLUDED.note,
+                     posted_by = EXCLUDED.posted_by, updated_at = NOW()`,
+      [pool_id, year, r, note || null, req.user?.email || null]);
+
+    await audit.log({
+      actorId: req.user?.id || null, actorEmail: req.user?.email || null, actorRole: req.user?.role || null,
+      action: before ? 'pool_annual_return_corrected' : 'pool_annual_return_posted',
+      entityType: 'investment_pool', entityId: pool_id,
+      description: `Year ${year} return for "${pl.name}" posted at ${(r * 100).toFixed(2)}%` +
+        (before ? ` — corrected from ${(Number(before.rate) * 100).toFixed(2)}%` : '') +
+        (note ? `. ${note}` : ''),
+      before: before ? { rate: Number(before.rate), note: before.note } : null,
+      after:  { rate: r, note: note || null, year_index: year },
+      ip: req.ip || null, platform: 'admin',
+    });
+
+    res.json({ ok: true, pool_id, year_index: year, rate: r, corrected: !!before });
+  } catch (err) {
+    console.error('[pool-annual-return]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ─────────────────────────────────────────────────────────────
    POST /api/admin/eft-approve
 
    Approve an EFT proof-of-payment ticket and credit the wallet.
