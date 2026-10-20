@@ -19899,10 +19899,14 @@ function exportPlatformFeesCSV() {
    people in that pool. Both halves live here, on the pool, because that is
    where the question is asked: this pool, this year, what did it earn.
 
-   Posting a rate is director-only — it is the act that releases money — so an
-   admin sees the state and the numbers and cannot press the buttons. A screen
-   that refuses you after you have typed a figure is worse than one that tells
-   you first.
+   Posting a rate is director-only — it is the act that releases money — and
+   the SERVER decides that, not this file. The data behind this screen comes
+   from a director-only endpoint, so reaching it at all is the permission:
+   anyone who can see these numbers may post them. A second, client-side guess
+   at the viewer's role was worse than useless here — it read the session
+   differently from the server, hid the controls from an actual director, and
+   left them looking at a screen telling them to ask a director. The 403 is
+   handled where it happens instead.
 
    Distribution previews before it applies, like every other money control in
    this console, and the preview is the same server call with the paying left
@@ -19910,18 +19914,6 @@ function exportPlatformFeesCSV() {
 
 let _poolReturns = null;
 let _poolReturnsId = null;
-
-function _amIDirector() {
-  try {
-    const s = _staffSession();
-    if (s && s.role) return s.role === 'director';
-  } catch (_) {}
-  try {
-    const u = (typeof Auth !== 'undefined') ? Auth.getUser() : null;
-    return !!u && u.role === 'director';
-  } catch (_) {}
-  return false;
-}
 
 async function openPoolAnnualReturns(poolId) {
   _poolReturnsId = poolId;
@@ -19937,7 +19929,16 @@ async function _renderPoolReturns() {
   try {
     data = await API._fetch('GET', 'admin/anniversary-returns');
   } catch (e) {
-    body.innerHTML = `<div style="color:#ef4444">${_esc(e.message || 'Could not load the schedule.')}</div>`;
+    /* The endpoint is the permission. A refusal here is the only thing that
+       means "not yours to post", and it is said once, in the place it is
+       known, rather than guessed at before the request. */
+    const msg = String(e.message || '');
+    body.innerHTML = /403|forbidden|requires role/i.test(msg)
+      ? `<div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);
+             border-radius:8px;padding:12px;font-size:0.86rem">
+           Closing out a year pays money into clients' wallets, so it is a director's to do.
+           Ask a director to post the rate for this pool.</div>`
+      : `<div style="color:#ef4444">${_esc(msg || 'Could not load the schedule.')}</div>`;
     return;
   }
   _poolReturns = (data.pools || []).find(p => p.pool_id === _poolReturnsId);
@@ -19947,7 +19948,6 @@ async function _renderPoolReturns() {
     return;
   }
   const p = _poolReturns;
-  const director = _amIDirector();
 
   const rows = p.rows.map(y => {
     const state = y.rate == null
@@ -19957,24 +19957,21 @@ async function _renderPoolReturns() {
           ? `<span style="color:#22c55e">${y.payable} to pay — ${Utils.rand(y.payable_amount)}</span>`
           : (y.paid ? `<span style="color:var(--text-muted)">${y.paid} paid — ${Utils.rand(y.paid_amount)}</span>`
                     : '<span style="color:var(--text-muted)">posted, nothing due yet</span>'));
-    const input = director
-      ? `<div style="display:flex;align-items:center;gap:6px">
+    const input = `<div style="display:flex;align-items:center;gap:6px">
            <input type="number" step="0.01" min="0" max="100" id="pr-y${y.year_index}"
                   value="${y.rate == null ? '' : (y.rate * 100).toFixed(2)}" placeholder="e.g. 8.50"
                   oninput="_poolReturnPreview(${y.year_index})"
                   style="width:92px;padding:5px 8px;border-radius:6px;border:1px solid var(--border);
                          background:var(--bg-primary);color:var(--text-primary);font-size:0.82rem">
            <span style="color:var(--text-muted);font-size:0.78rem">%</span></div>
-         <div id="pr-prev-${y.year_index}" style="font-size:0.74rem;color:var(--text-muted);margin-top:3px"></div>`
-      : (y.rate == null ? '<span style="color:var(--text-muted)">—</span>'
-                        : `<strong style="color:#eda5ff">${(y.rate * 100).toFixed(2)}%</strong>`);
+         <div id="pr-prev-${y.year_index}" style="font-size:0.74rem;color:var(--text-muted);margin-top:3px"></div>`;
     return `<tr>
       <td style="white-space:nowrap">Year ${y.year_index}</td>
       <td>${input}</td>
       <td>${state}${y.note ? `<div style="font-size:0.74rem;color:var(--text-muted)">${_esc(y.note)}</div>` : ''}</td>
       <td style="text-align:right;white-space:nowrap">
-        ${director ? `<button class="btn btn--secondary btn--sm" onclick="_poolReturnPost(${y.year_index})">${y.rate == null ? 'Post' : 'Correct'}</button>` : ''}
-        ${director && y.payable ? `<button class="btn btn--primary btn--sm" style="margin-left:6px" onclick="_poolReturnApply(${y.year_index})">Distribute</button>` : ''}
+        <button class="btn btn--secondary btn--sm" onclick="_poolReturnPost(${y.year_index})">${y.rate == null ? 'Post' : 'Correct'}</button>
+        ${y.payable ? `<button class="btn btn--primary btn--sm" style="margin-left:6px" onclick="_poolReturnApply(${y.year_index})">Distribute</button>` : ''}
       </td></tr>`;
   }).join('');
 
@@ -19985,10 +19982,6 @@ async function _renderPoolReturns() {
         ${p.term_months} months · ${p.years} anniversar${p.years === 1 ? 'y' : 'ies'} ·
         ${p.investments} investment${p.investments === 1 ? '' : 's'} · ${Utils.rand(p.capital)}</div>
     </div>
-    ${director ? '' : `<div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);
-        border-radius:8px;padding:10px;margin-bottom:12px;font-size:0.82rem">
-        Posting a year's rate pays money into clients' wallets, so it is a director's to do.
-        You can see where every year stands here.</div>`}
     <div style="overflow-x:auto"><table class="table" style="font-size:0.82rem">
       <thead><tr><th>Year</th><th>Rate</th><th>Where it stands</th><th></th></tr></thead>
       <tbody>${rows}</tbody></table></div>
