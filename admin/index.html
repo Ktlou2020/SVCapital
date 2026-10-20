@@ -3886,6 +3886,17 @@
 
 <!-- Manage Broadcast Lists Modal -->
 <!-- Merge Pool Modal -->
+<!-- Annual returns for a solar pool: post what a year earned, then distribute it -->
+<div class="modal-overlay" id="poolReturnsModal" onclick="if(event.target===this)Modal.close('poolReturnsModal')">
+  <div class="modal" style="max-width:720px">
+    <div class="modal__header">
+      <h3 class="modal__title"><i class="fa-solid fa-calendar-check" style="color:#fec24f;margin-right:8px"></i>Annual Returns</h3>
+      <button class="modal__close" onclick="Modal.close('poolReturnsModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body" id="poolReturnsBody"></div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="mergePoolModal" onclick="if(event.target===this)Modal.close('mergePoolModal')">
   <div class="modal" style="max-width:480px">
     <div class="modal__header">
@@ -5177,7 +5188,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=21"></script>
 <script src="../js/investor-documents.js?v=5"></script>
-<script src="js/admin.js?v=192"></script>
+<script src="js/admin.js?v=193"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>

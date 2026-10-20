@@ -79,6 +79,87 @@ router.post('/manual-credit', async (req, res) => {
 });
 
 /* ─────────────────────────────────────────────────────────────
+   POST /api/admin/anniversary-returns/run
+
+   Distribute a pool's posted years now, rather than waiting for the daily
+   job to come round at 06:10.
+
+   Previews unless dry_run is explicitly false, like every other money control
+   on this platform: the apply writes payouts into clients' wallets. The
+   preview is not a second implementation of the sum — it is the same service
+   call the apply makes, with the paying left out — so what it shows is what
+   will happen.
+
+   Scoped to one pool, because that is how a close-out is done: a year of a
+   pool is declared and then distributed to the people in that pool. Leaving
+   it unscoped would make "apply" a platform-wide money button.
+   ───────────────────────────────────────────────────────────── */
+router.post('/anniversary-returns/run', requireRole('director'), async (req, res) => {
+  const { pool_id, year_index, dry_run } = req.body || {};
+  const dryRun = String(dry_run) !== 'false';
+  const year   = year_index == null || year_index === '' ? null : parseInt(year_index, 10);
+
+  if (!pool_id) return res.status(400).json({ error: 'pool_id is required.' });
+  if (year != null && (!Number.isInteger(year) || year < 1)) {
+    return res.status(400).json({ error: 'year_index must be 1 or more, or left out for every year.' });
+  }
+
+  const annual = require('../services/anniversaryReturns');
+  try {
+    const all = await annual.due(pool, {});
+    const mine = all.filter(x => x.poolId === pool_id && (year == null || x.yearIndex === year));
+    const payable = mine.filter(x => x.state === 'payable');
+    const plan = {
+      pool_id, year_index: year,
+      payable: payable.length,
+      payable_amount: annual.round2(payable.reduce((a, x) => a + (x.wouldPay || 0), 0)),
+      awaiting: mine.filter(x => x.state === 'awaiting-rate').length,
+      already_paid: mine.filter(x => x.state === 'paid').length,
+      rows: payable.slice(0, 200).map(x => ({
+        investor_id: x.investorId, sub_account_id: x.subAccountId,
+        year_index: x.yearIndex, due_on: x.dueOn,
+        capital: x.amount, rate: x.rate, pays: x.wouldPay,
+      })),
+    };
+
+    if (dryRun) return res.json({ ...plan, applied: false });
+
+    let paid = 0, total = 0;
+    const failures = [];
+    for (const item of payable) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const r = await annual.payOne(client, item);
+        await client.query('COMMIT');
+        if (r.paid) { paid++; total = annual.round2(total + r.amount); }
+      } catch (err) {
+        /* One client's distribution failing must not take the rest of the
+           pool with it — the next row is somebody else's money. */
+        await client.query('ROLLBACK').catch(() => {});
+        failures.push({ investor: item.investorId, year: item.yearIndex, error: err.message });
+      } finally { client.release(); }
+    }
+
+    await audit.log({
+      actorId: req.user?.id || null, actorEmail: req.user?.email || null, actorRole: req.user?.role || null,
+      action: 'anniversary_returns_distributed',
+      entityType: 'investment_pool', entityId: pool_id,
+      description: `${paid} anniversary distribution(s) paid from "${pool_id}"` +
+        (year ? ` for year ${year}` : '') + `, R${total.toFixed(2)} in all` +
+        (failures.length ? `; ${failures.length} failed` : '') + '.',
+      after: { paid, total, year_index: year, failures },
+      ip: req.ip || null, platform: 'admin',
+    });
+
+    res.json({ ...plan, applied: true, paid, total, failures });
+  } catch (err) {
+    console.error('[anniversary-returns/run]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ─────────────────────────────────────────────────────────────
    GET /api/admin/anniversary-returns
 
    Every solar pool, every year of its term, and what that year is doing:
