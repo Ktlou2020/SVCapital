@@ -1166,6 +1166,51 @@ async function _applyLiveProductAverages() {
       }
     }
 
+    /* 1b) The CARD itself, from the product record.
+
+       The modal below has read label, description, minimum and term off the
+       product for a long time; the card in front of it never did. Every
+       figure on it was written into index.html by hand, so a product edited
+       in the admin console changed its own detail view and left the card
+       beside it saying something else — the EIF cards still offered a
+       R500 minimum months after all three moved to R100 000, and nothing on
+       the page was wrong enough to notice.
+
+       Only ever overwrites what the API actually carries. A product that is
+       inactive, hidden or simply absent leaves the markup exactly as it was,
+       which is what keeps the page readable when the API is unreachable. */
+    if (prod) {
+      const card = document.querySelector(`.product-card[data-product="${key}"]`);
+      if (card) {
+        const titleEl = card.querySelector('.product-card__title');
+        if (titleEl && prod.label) titleEl.textContent = prod.label.replace(/\s*\(\d+yr\)/gi, '').trim();
+        const descEl = card.querySelector('.product-card__desc');
+        if (descEl && prod.description) descEl.textContent = prod.description;
+
+        const statVal = re => {
+          const st = [...card.querySelectorAll('.stat')]
+            .find(s => re.test((s.querySelector('.stat__label') || {}).textContent || ''));
+          return st ? st.querySelector('.stat__value') : null;
+        };
+        const minEl = statVal(/min/i);
+        if (minEl && prod.min_investment != null) minEl.textContent = fmtR(prod.min_investment);
+        /* Solar is three products behind one card, so its term is a range the
+           card states for itself — the same exception the modal makes. */
+        const termEl = statVal(/term/i);
+        if (termEl && prod.term_months != null && key !== 'solar') {
+          termEl.textContent = `${prod.term_months} mo`;
+        }
+        /* The rate only when there is no achieved average to prefer: a
+           product with no matured pool has nothing to average, and its
+           target — the figure the admin console holds — is what the label
+           beside it ("Target Share") is already promising. */
+        const rateEl = card.querySelector('.stat__value--gold');
+        if (rateEl && rate == null && prod.benchmark_rate != null) {
+          rateEl.textContent = (parseFloat(prod.benchmark_rate) * 100).toFixed(2) + '%';
+        }
+      }
+    }
+
     // 2) Apply API color to product card elements on the homepage
     const primaryType = homeMap[key].primary;
     const apiColor = prodByType[primaryType]?.color;
