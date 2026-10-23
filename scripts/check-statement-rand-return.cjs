@@ -100,8 +100,16 @@ try {
   /* randReturn now closes over the document's start/maturity definitions, so
      they come with it. Lifting the function alone gave a ReferenceError on the
      first call, which reads as though the shipped code were broken. */
+  /* _dateOf is a function DECLARATION, not a const arrow: randReturn is
+     called above its line in the statement builder, and a const would be in
+     the temporal dead zone there — which is exactly how statements started
+     failing with "Cannot access '_dateOf' before initialization". Lifted the
+     same way as the two functions below it, and the lift fails loudly rather
+     than silently producing an empty dependency. */
+  const dateOf = sliceFn(DOCS, '_dateOf');
+  if (!dateOf) throw new Error('could not lift _dateOf — has its shape changed?');
   const deps = [
-    (DOCS.match(/const _dateOf = [^\n]*/) || [''])[0],
+    dateOf,
     sliceFn(DOCS, 'investmentStart'),
     sliceFn(DOCS, 'investmentMaturity'),
   ].join('\n');

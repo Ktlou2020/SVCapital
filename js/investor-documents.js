@@ -623,7 +623,19 @@ function _openAccountStatementWindow(data) {
      pool's own maturity_date is: everyone in a pool matures when the pool
      does. Failing that the term is derivable from the start date and
      term_months. Failing that it is unknown, and says so. */
-  const _dateOf = v => { if (!v) return null; const d = new Date(v); return isNaN(d.getTime()) ? null : d; };
+  /* A declaration, not a const arrow. randReturn is called ABOVE this line —
+     the header total goes through it deliberately, so the total and the rows
+     cannot disagree — and randReturn's last branch asks investmentStart for
+     the dates, which asks this. A const is in the temporal dead zone until
+     its line runs, so that call threw "Cannot access '_dateOf' before
+     initialization" and the whole statement failed.
+
+     It only ever bit some clients: the first three branches of randReturn
+     return before reaching the dates, so a statement broke only once it
+     contained an investment with no settled return, no posted pool rate and
+     no recorded expected return. Hoisted, the order stops mattering, which is
+     what the two functions below it already rely on. */
+  function _dateOf(v) { if (!v) return null; const d = new Date(v); return isNaN(d.getTime()) ? null : d; }
 
   function investmentStart(i) {
     return _dateOf(i.start_date) || _dateOf(i.created_at);
