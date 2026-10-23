@@ -995,13 +995,31 @@ section { position: relative; padding: 100px 0; }
   color: var(--gold);
 }
 
+/* Two buttons when two fit, one above the other when they do not.
+
+   `1fr 1fr` cannot do that. A 1fr track will not shrink below its content,
+   and the buttons are white-space: nowrap, so the row kept its full width and
+   the card's overflow: hidden cut the second button off at the edge. The
+   media query below only stacks them under 768px, which is the wrong
+   question: the products grid puts three cards in a row on a desktop, so a
+   card is at its NARROWEST while the viewport is at its widest. Measured in
+   Chromium, the two buttons want 328px and the card gave them 302px at
+   1280px wide, 243px at 1024px and 308px at 820px — clipped by 25px, 84px
+   and 19px.
+
+   160px is the widest the two buttons' labels measure on their own, so
+   auto-fit takes a second column only once there is room for both. */
 .product-card__actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 10px;
   position: relative;
   z-index: 1;
 }
+
+/* A last resort, so a longer label or a different font can never put a
+   button outside the card again: it wraps inside its own button instead. */
+.product-card__actions .btn { white-space: normal; }
 
 /* Comparison Table */
 .compare-callout {
