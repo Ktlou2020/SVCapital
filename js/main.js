@@ -1184,8 +1184,12 @@ async function _applyLiveProductAverages() {
       if (card) {
         const titleEl = card.querySelector('.product-card__title');
         if (titleEl && prod.label) titleEl.textContent = prod.label.replace(/\s*\(\d+yr\)/gi, '').trim();
-        const descEl = card.querySelector('.product-card__desc');
-        if (descEl && prod.description) descEl.textContent = prod.description;
+        /* The description is NOT written to the card. It belongs to the
+           product record, which is long-form copy for a detail view: putting
+           it on the card ran the cattle one to several hundred words, pushed
+           the figures below the fold and left the card beside it empty. It is
+           the first thing View Details shows instead — same text, same source,
+           somewhere it can be read. */
 
         const statVal = re => {
           const st = [...card.querySelectorAll('.stat')]
