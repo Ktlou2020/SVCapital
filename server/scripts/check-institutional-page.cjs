@@ -36,7 +36,8 @@ const ok = (name, cond, detail) => {
 const read = p => fs.readFileSync(path.join(ROOT, p), 'utf8');
 
 const HTML = read('institutional.html');
-const JS   = read('js/institutional.js');
+const JS   = read('js/institutional.js');   /* this page's renderer */
+const SHARED = read('js/enquiry.js');       /* the fetch and the form, shared */
 const CSS  = read('css/institutional.css');
 
 console.log('\nwhat the page says');
@@ -66,26 +67,35 @@ console.log('\nwhat the page says');
      !/minimum|from as little|starting from/i.test(HTML),
      'mandate size is set in conversation; the page says so and names no number');
 
-  /* The retail funnel's vocabulary, which this page exists to avoid. */
-  const RETAIL = ['Get Started', 'Sign Up', 'Start investing', 'quest', 'XP',
-                  'leaderboard', 'reward', 'referral', 'wallet', 'top up', 'badge'];
-  const found = RETAIL.filter(w => new RegExp(w.replace(/ /g, '\\s'), 'i').test(HTML));
+  /* The retail funnel's vocabulary, which this page exists to avoid.
+     Matched on whole words. As loose substrings these bite honest prose and
+     would have to be worked around rather than obeyed: "quest" is inside
+     "request", and "XP" is inside "experience" and "expect". A check that
+     forbids a word nobody meant to forbid gets disabled, not satisfied. */
+  const RETAIL = ['Get Started', 'Sign Up', 'Start investing', 'quests?', 'XP',
+                  'leaderboard', 'rewards?', 'referrals?', 'wallet', 'top up', 'badges?'];
+  const found = RETAIL.filter(w =>
+    new RegExp(`\\b${w.replace(/ /g, '\\s')}\\b`, 'i').test(HTML));
   ok('none of the retail funnel’s language appears', found.length === 0, found.join(', '));
 }
 
 console.log('\nwhat the page does');
 {
   ok('the enquiry posts to the public endpoint',
-     /fetch\('\/api\/enquiries\/institutional'/.test(JS));
+     /fetch\('\/api\/enquiries\/institutional'/.test(SHARED));
   ok('there is a honeypot, and it is off-screen rather than display:none',
      /name="company_website"/.test(HTML) && /\.in-hp \{[^}]*left: -9999px/.test(CSS),
      'display:none is both skipped by some autofill and looked for by scripts');
   ok('every value from the API goes in as text, never as markup',
-     !/innerHTML/.test(JS),
+     !/innerHTML/.test(JS) && !/innerHTML/.test(SHARED),
      'a pool name is typed by a person and this page renders pool names');
   ok('a section with nothing behind it removes itself',
-     /id="record"[^>]*style="display:none"/.test(HTML) && /section\.style\.display = ''/.test(JS),
+     /id="record"[^>]*style="display:none"/.test(HTML) && /section\.style\.display = ''/.test(JS)
+     && /if \(concluded <= 0\) return;/.test(SHARED),
      'R0 returned reads as a result rather than as an absence');
+  ok('the renderer is loaded before the script that dispatches to it',
+     HTML.indexOf('js/institutional.js') < HTML.indexOf('js/enquiry.js'),
+     'the listener has to be registered before enquiry.js fires on DOMContentLoaded');
   ok('the page is indexable and declares itself',
      /name="robots" content="index, follow"/.test(HTML)
      && /rel="canonical"/.test(HTML) && /property="og:title"/.test(HTML));
@@ -112,6 +122,17 @@ console.log('\nand it actually reaches the published site');
   ok('and the main site links to it',
      /href="institutional\.html"/.test(linked),
      'a page nothing links to is a page nobody finds');
+
+  /* The split. This page is now addressed to institutions, family offices
+     and advisers; somebody placing their own money has a page of their own
+     and must not have to read about investment committees to discover that
+     this is not it. */
+  ok('it does not present itself as the private-client page as well',
+     !/Institutional &(amp;)? [Pp]rivate [Cc]lients/.test(HTML),
+     'two audiences, two pages — the title said it served both');
+  ok('and it sends a private reader across, above the fold',
+     /private-clients\.html/.test(HTML.slice(0, HTML.indexOf('id="record"'))),
+     'the footer is not where somebody decides a page is not for them');
 }
 
 console.log('\nthe endpoint');

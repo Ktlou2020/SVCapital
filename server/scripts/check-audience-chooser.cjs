@@ -48,8 +48,9 @@ const read = p => fs.readFileSync(path.join(ROOT, p), 'utf8');
 const JS    = read('js/audience.js');
 const HOME  = read('index.html');
 const CSS   = read('css/style.css');
-const INST  = read('institutional.html');
-const INSTJ = read('js/institutional.js');
+const INST   = read('institutional.html');
+const PRIV   = read('private-clients.html');
+const SHARED = read('js/enquiry.js');
 
 /* ── It is not a gate ───────────────────────────────────────────── */
 console.log('\nit is not a gate');
@@ -147,23 +148,31 @@ console.log('\nchanging your mind does not need site data cleared');
 console.log('\nthe destinations exist and arrive set up');
 {
   const hrefs = [...JS.matchAll(/href: '([^']+)'/g)].map(m => m[1]);
-  ok('both routes out point at the institutional page', hrefs.length === 2
-     && hrefs.every(h => h.startsWith('institutional.html?as=')), hrefs.join(', '));
-  ok('that page is on disk and published', fs.existsSync(path.join(ROOT, 'institutional.html'))
-     && /institutional\.html/.test(read('package.json')));
+  ok('there are two routes out, and they are different pages',
+     hrefs.length === 2 && new Set(hrefs.map(h => h.split('?')[0])).size === 2,
+     hrefs.join(', '));
+  ok('a private allocation goes to the private-client page',
+     hrefs.some(h => h.startsWith('private-clients.html?as=')), hrefs.join(', '));
+  ok('and an institution goes to the institutional one',
+     hrefs.some(h => h.startsWith('institutional.html?as=')), hrefs.join(', '));
 
-  /* A cross-file contract: the chooser's ?as= values are only useful if the
-     form's select actually has options with those values. */
-  const opts = [...INST.matchAll(/<option value="([^"]+)">/g)].map(m => m[1]);
+  /* A cross-file contract, and the reason this is worth asserting: the
+     chooser's ?as= is only useful if the page it lands on has an option
+     with that value, and the two pages order their options differently. */
+  const PAGES = { 'institutional.html': INST, 'private-clients.html': PRIV };
   for (const h of hrefs) {
-    const want = h.split('as=')[1];
-    ok(`the form has a capacity option for "${want}"`, opts.includes(want), opts.join(', '));
+    const [page, want] = [h.split('?')[0], h.split('as=')[1]];
+    const html = PAGES[page];
+    ok(`${page} exists and is published`, !!html && /private-clients\.html/.test(read('package.json'))
+       && /institutional\.html/.test(read('package.json')), page);
+    const opts = [...(html || '').matchAll(/<option value="([^"]+)">/g)].map(m => m[1]);
+    ok(`its form has a capacity option for "${want}"`, opts.includes(want), opts.join(', '));
   }
-  ok('the page reads ?as= and preselects it',
-     /searchParams\.get\('as'\)/.test(INSTJ) && /sel\.value = match\.value/.test(INSTJ));
-  ok('and ignores a value it does not recognise rather than guessing',
-     /\[\.\.\.sel\.options\]\.find\(o => o\.value === want\)/.test(INSTJ)
-     && /if \(match\)/.test(INSTJ));
+  ok('the capacity is preselected from ?as=, by the script both pages load',
+     /searchParams\.get\('as'\)/.test(SHARED) && /sel\.value = match\.value/.test(SHARED));
+  ok('and a value nobody offered is ignored rather than guessed at',
+     /\[\.\.\.sel\.options\]\.find\(o => o\.value === want\)/.test(SHARED)
+     && /if \(match\)/.test(SHARED));
 }
 
 /* ── Housekeeping ───────────────────────────────────────────────── */
@@ -349,14 +358,34 @@ const devtools = (port, p) => new Promise((res, rej) =>
     s = await evaluate(STATE);
     ok('a declared capacity is not re-asked', s.shown === false, JSON.stringify(s));
 
-    console.log('\nthe other page takes the reader at their word');
-    await goto(BASE + '/institutional.html?as=individual');
-    ok('a private individual arrives as one',
+    console.log('\nthe private answer goes to the other page entirely');
+    await evaluate(`localStorage.clear()`);
+    await goto(BASE + '/index.html');
+    await evaluate(`[...document.querySelectorAll('.aud-choice')][1].click()`);
+    for (let i = 0; i < 30; i++) {
+      await new Promise(r => setTimeout(r, 150));
+      if ((await evaluate(`location.pathname`)).includes('private-clients')) break;
+    }
+    await new Promise(r => setTimeout(r, 500));
+    s = await evaluate(STATE);
+    ok('a private allocation lands on the private-client page',
+       /^private-clients\.html/.test(s.page), s.page);
+    ok('not on the institutional one', !/institutional/.test(s.page), s.page);
+    ok('and the answer is remembered', s.stored === 'private', String(s.stored));
+    ok('with the capacity already set to a private individual',
        await evaluate(`document.getElementById('enqCapacity').value`) === 'individual');
-    await goto(BASE + '/institutional.html?as=nonsense');
+
+    console.log('\neach page takes the reader at their word');
+    await goto(BASE + '/private-clients.html?as=family_office');
+    ok('a family office arrives as one',
+       await evaluate(`document.getElementById('enqCapacity').value`) === 'family_office');
+    await goto(BASE + '/private-clients.html?as=nonsense');
     ok('and a value nobody offered is ignored, not guessed at',
-       await evaluate(`document.getElementById('enqCapacity').value`) === 'institution',
+       await evaluate(`document.getElementById('enqCapacity').value`) === 'individual',
        'the select should be left on its own first option');
+    await goto(BASE + '/institutional.html?as=adviser');
+    ok('the institutional page honours its own ?as= too',
+       await evaluate(`document.getElementById('enqCapacity').value`) === 'adviser');
 
     ws.close();
   } catch (err) {

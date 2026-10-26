@@ -6,18 +6,18 @@
   <link rel="apple-touch-icon" sizes="192x192" href="assets/logo-192.png" />
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Institutional & Private Clients — SV Capital</title>
-  <meta name="description" content="SV Capital manages asset-backed investment pools in South African agriculture, energy and enterprise finance for institutions, family offices and private clients. Mandates are structured per engagement." />
+  <title>Institutional & Advisers — SV Capital</title>
+  <meta name="description" content="SV Capital manages asset-backed investment pools in South African agriculture, energy and enterprise finance for institutions, family offices and advisers. Mandates are structured per engagement." />
   <link rel="canonical" href="https://platform.svcapital.co.za/institutional.html" />
   <meta name="robots" content="index, follow" />
-  <meta property="og:title" content="Institutional & Private Clients — SV Capital" />
-  <meta property="og:description" content="Asset-backed pools in South African agriculture, energy and enterprise finance. Mandates structured per engagement." />
+  <meta property="og:title" content="Institutional & Advisers — SV Capital" />
+  <meta property="og:description" content="Asset-backed pools in South African agriculture, energy and enterprise finance. Mandates structured per engagement, for institutions, family offices and advisers." />
   <meta property="og:url" content="https://platform.svcapital.co.za/institutional.html" />
   <meta property="og:type" content="website" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/institutional.css?v=1" />
+  <link rel="stylesheet" href="css/institutional.css?v=2" />
 </head>
 <body class="in-page">
 
@@ -27,19 +27,26 @@
     <a href="index.html" style="display:inline-block;margin-bottom:40px">
       <img src="assets/sv-capital-logo-horizontal-white-text.png" alt="SV Capital" style="height:34px" />
     </a>
-    <div class="in-hero__eyebrow">Institutional &amp; private clients</div>
+    <div class="in-hero__eyebrow">Institutions, family offices and advisers</div>
     <h1>Asset-backed credit, underwritten where the asset is.</h1>
     <p>
       SV Capital structures and manages pooled investments in South African agriculture,
       energy and enterprise finance. Each pool funds a defined asset or transaction, runs
       to a stated term, and is reported on individually. We work with institutions, family
-      offices, advisers and private clients whose mandates are set in conversation rather
-      than off a price list.
+      offices and advisers whose mandates are set in conversation rather than off a price
+      list.
     </p>
     <div class="in-hero__actions">
       <a href="#enquiry" class="in-btn in-btn--solid">Arrange a conversation</a>
       <a href="#strategies" class="in-btn in-btn--ghost">See the strategies</a>
     </div>
+    <!-- Said here rather than only in the footer: somebody placing their own
+         money should not have to read a page about investment committees to
+         find out it is not the page for them. -->
+    <p class="in-hero__aside">
+      Placing a personal or family allocation rather than allocating for an institution?
+      <a href="private-clients.html">There is a page for that</a>.
+    </p>
   </div>
 </header>
 
@@ -127,8 +134,8 @@
     <h2>How an allocation is structured</h2>
     <p class="in-section__lead">
       The mechanics are the same whether an allocation comes from an institution, a family
-      office or an individual. What changes is size, reporting cadence and the conversation
-      that sets them.
+      office or an adviser’s client. What changes is size, reporting cadence and the
+      conversation that sets them.
     </p>
     <div class="in-points">
       <div class="in-point">
@@ -251,6 +258,7 @@
       pool concludes is a target, not a promise. Past performance is not a guide to future returns.
     </p>
     <p style="margin-top:14px">
+      <a href="private-clients.html">Private clients</a> ·
       <a href="index.html">Main site</a> ·
       <a href="terms.html">Terms</a> ·
       <a href="popia.html">Privacy</a> ·
@@ -261,6 +269,8 @@
   </div>
 </footer>
 
-<script src="js/institutional.js?v=2"></script>
+<!-- The renderer registers its listener first; enquiry.js fetches and dispatches. -->
+<script src="js/institutional.js?v=3"></script>
+<script src="js/enquiry.js?v=1"></script>
 </body>
 </html>

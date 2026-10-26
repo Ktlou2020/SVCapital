@@ -49,14 +49,14 @@
     {
       id: 'private',
       title: 'I’m placing a larger personal or family allocation',
-      body: 'Mandate size, reporting and terms are set in conversation rather than off a price list.',
+      body: 'What the capital finances, in what order things happen, and terms set in conversation rather than off a price list.',
       action: 'Private clients',
-      href: 'institutional.html?as=individual',
+      href: 'private-clients.html?as=individual',
     },
     {
       id: 'institution',
       title: 'I allocate for an institution, or advise clients',
-      body: 'How each pool is structured, who holds the licence, and what has actually been returned.',
+      body: 'How each pool is structured and reported, who holds the licence, and what has actually been returned.',
       action: 'Institutional',
       href: 'institutional.html?as=institution',
     },

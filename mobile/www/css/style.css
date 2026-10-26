@@ -2342,9 +2342,22 @@ section { position: relative; padding: 100px 0; }
   .footer-brand { grid-column: 1 / -1; }
 }
 
-@media (max-width: 768px) {
-  section { padding: 72px 0; }
+/* ── The menu becomes a drawer well before a phone ─────────────────
+   The bar is nine links and two buttons laid out nowrap, and the drawer
+   used to take over only at 768px. Measured in Chromium, the row wants
+   892px and had 766px at 1024, running 31px past the container's inner
+   edge by 1050 — so every laptop between 769px and about 1050px got a
+   menu clipped at the right, losing "Sign In" and "Get Started" off the
+   edge with no scrollbar to say so. It was doing that before the audience
+   pages added a link; that made it start 50px sooner.
 
+   1180 rather than a rounder number because the bar is measured, not
+   guessed: 1149 was the widest viewport that still overflowed, 1160 the
+   narrowest that fitted with nothing to spare, and a breakpoint sitting
+   on zero slack clips again the moment a label gets a word longer. The
+   drawer takes any number of items, so it has the band below.
+   check-nav-fits.cjs measures this rather than trusting the number. */
+@media (max-width: 1180px) {
   .nav-overlay {
     display: block;
     position: fixed;
@@ -2389,6 +2402,11 @@ section { position: relative; padding: 100px 0; }
   .nav-links > li:nth-last-child(2) { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
 
   .nav-btn { display: block; font-size: 1rem; padding: 13px 20px; width: 100%; text-align: center; margin-top: 4px; }
+
+}
+
+@media (max-width: 768px) {
+  section { padding: 72px 0; }
 
   .hero-headline { font-size: 2.5rem; }
 

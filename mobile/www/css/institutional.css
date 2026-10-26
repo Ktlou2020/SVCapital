@@ -21,7 +21,18 @@
   --in-measure:    68ch;
 }
 
-.in-page { background: var(--in-paper); color: var(--in-ink);
+/* margin:0 is not housekeeping. This class sits on <body>, and the user
+   agent's default 8px body margin was leaving a white frame down both sides
+   of the navy hero and the legal strip — visible on the published page. The
+   main site resets it in its own reset; this page does not load that
+   stylesheet. */
+/* Same reason as the page beside this one: the enquiry fields are
+   width:100% inside grid tracks and carry their own padding and border, so
+   the content-box default makes each one 30px wider than its column and the
+   columns overlap. This page does not load the main site's reset. */
+.in-page, .in-page *, .in-page *::before, .in-page *::after { box-sizing: border-box; }
+
+.in-page { margin: 0; background: var(--in-paper); color: var(--in-ink);
            font-family: 'Poppins', system-ui, -apple-system, sans-serif; }
 .in-wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
 
@@ -137,3 +148,11 @@
   .in-hero { padding: 100px 0 64px; }
   .in-section { padding: 60px 0; }
 }
+
+/* The line that sends a private reader to their own page. Quiet: it is a
+   signpost, not a second call to action competing with the first. */
+.in-hero__aside { margin: 26px 0 0; font-size: 0.9rem; line-height: 1.6;
+                  color: rgba(255,255,255,0.62); max-width: 52ch; }
+.in-hero__aside a { color: var(--in-accent); text-decoration: none;
+                    border-bottom: 1px solid rgba(254,194,79,0.4); }
+.in-hero__aside a:hover { border-bottom-color: var(--in-accent); }
