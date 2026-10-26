@@ -2457,3 +2457,51 @@ section { position: relative; padding: 100px 0; }
 ::-webkit-scrollbar-track { background: var(--dark-1); }
 ::-webkit-scrollbar-thumb { background: var(--dark-5); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--gold-dark); }
+
+/* ══ Audience chooser ══════════════════════════════════════════════════
+   One question on arrival, so somebody placing a family allocation is not
+   reading a page about topping up a wallet. Built in script, so this styles
+   nothing that exists until it is asked — and nothing a crawler sees. */
+.aud-overlay {
+  position: fixed; inset: 0; z-index: 3000;
+  background: rgba(8,10,14,0.82); backdrop-filter: blur(10px);
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+  opacity: 0; transition: opacity .2s ease;
+}
+.aud-overlay.aud-open { opacity: 1; }
+.aud-box {
+  background: var(--dark-2, #15181f);
+  border: 1px solid var(--border-gold, rgba(254,194,79,0.3));
+  border-radius: 18px; padding: 34px; width: 100%; max-width: 560px;
+  max-height: 86vh; overflow-y: auto;
+  transform: translateY(14px) scale(0.98); transition: transform .22s ease;
+}
+.aud-open .aud-box { transform: none; }
+.aud-title { font-size: clamp(1.25rem, 3vw, 1.6rem); margin: 0 0 8px; color: #fff;
+             line-height: 1.25; text-wrap: balance; }
+.aud-sub   { font-size: 0.9rem; color: rgba(255,255,255,0.62); margin: 0 0 24px; line-height: 1.6; }
+
+.aud-choice {
+  display: grid; gap: 4px; width: 100%; text-align: left; cursor: pointer;
+  background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px; padding: 16px 18px; margin-bottom: 10px;
+  font: inherit; color: #fff; transition: border-color .15s ease, background .15s ease;
+}
+.aud-choice:hover, .aud-choice:focus-visible {
+  border-color: var(--gold, #fec24f); background: rgba(254,194,79,0.07); outline: none;
+}
+.aud-choice__title  { font-weight: 650; font-size: 0.99rem; line-height: 1.35; }
+.aud-choice__body   { font-size: 0.85rem; color: rgba(255,255,255,0.6); line-height: 1.55; }
+.aud-choice__action { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.05em;
+                      text-transform: uppercase; color: var(--gold, #fec24f); margin-top: 6px; }
+
+.aud-skip {
+  display: block; width: 100%; margin-top: 6px; padding: 10px;
+  background: none; border: 0; cursor: pointer; font: inherit;
+  font-size: 0.85rem; color: rgba(255,255,255,0.5); text-decoration: underline;
+}
+.aud-skip:hover { color: rgba(255,255,255,0.8); }
+
+@media (prefers-reduced-motion: reduce) {
+  .aud-overlay, .aud-box { transition: none; }
+}

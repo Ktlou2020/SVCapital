@@ -88,6 +88,19 @@
     }
   }
 
+  /* The homepage asks who somebody is and sends them here with the answer.
+     Honouring it saves them saying it twice — and an enquiry that arrives
+     already labelled is one the team can read faster. Anything unrecognised
+     is ignored rather than guessed at. */
+  function preselectCapacity() {
+    const want = new URL(window.location.href).searchParams.get('as');
+    if (!want) return;
+    const sel = document.getElementById('enqCapacity');
+    if (!sel) return;
+    const match = [...sel.options].find(o => o.value === want);
+    if (match) sel.value = match.value;
+  }
+
   function wireForm() {
     const form   = document.getElementById('enquiryForm');
     const result = document.getElementById('enqResult');
@@ -144,5 +157,7 @@
     });
   }
 
-  document.addEventListener('DOMContentLoaded', () => { loadRecord(); wireForm(); });
+  document.addEventListener('DOMContentLoaded', () => {
+    loadRecord(); wireForm(); preselectCapacity();
+  });
 })();
