@@ -49,7 +49,7 @@
     {
       id: 'private',
       title: 'I’m placing a larger personal or family allocation',
-      body: 'What the capital finances, in what order things happen, and terms set in conversation rather than off a price list.',
+      body: 'What the capital finances, in what order things happen, and terms set in conversation. Allocations start at R1 million.',
       action: 'Private clients',
       href: 'private-clients.html?as=individual',
     },

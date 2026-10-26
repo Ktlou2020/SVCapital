@@ -70,15 +70,42 @@ console.log('\nwhat the page says');
      /no certificate is yet held/i.test(HTML),
      'every other surface says review under way and no certificate — this one may not be softer');
 
-  /* Same rule as the institutional page: no figure. */
-  const MONEY = /R\s?\d[\d  ,]*(?:\.\d\d)?/g;
-  const figures = (HTML.match(MONEY) || []).filter(m => !/R\s?52449/.test(m));
-  ok('no rand figure is published on the page', figures.length === 0,
-     `found ${figures.join(', ')} — a figure here is an offer at a price`);
-  ok('and the page says so rather than going quiet about it',
-     /no figure on this page/i.test(HTML),
-     'a reader who cannot find the number assumes it is being hidden');
-  ok('no minimum is named', !/minimum|from as little|starting from/i.test(HTML));
+  /* The institutional page carries no figure at all; this one carries
+     exactly one. The entry point for a private-client relationship is
+     published because withholding it wastes the time of everybody it does
+     not suit — but it is the only number on the page, and a second one
+     appearing is how a threshold turns into a price list.
+
+       is in the class, and in the amount, because that is the separator
+     toLocaleString('en-ZA') produces everywhere else on the platform — and
+     because an ordinary space lets "R1 000" sit on one line and "000" on
+     the next. A guard that only knew the ordinary space would also have let
+     a figure pasted from anywhere else on the platform straight through. */
+  const MONEY = /R\s?\d[\d  ,]*(?:\.\d\d)?(?:\s?million)?/gi;
+  const figures = (HTML.match(MONEY) || [])
+    .map(m => m.trim()).filter(m => !/R\s?52449/.test(m));
+  const ENTRY = 'R1 000 000';
+  /* The meta descriptions say it in words, because that is what reads well
+     in a search result. Both spellings are the same amount and both pass;
+     anything else is a second number. */
+  const SAME = [ENTRY, 'R1 million'];
+  ok('the entry point is published', figures.includes(ENTRY),
+     `found ${JSON.stringify(figures)} — expected ${JSON.stringify(ENTRY)}`);
+  ok('and it is the only amount on the page',
+     figures.length > 0 && figures.every(f => SAME.includes(f)), JSON.stringify(figures),
+     'one threshold is a threshold; two numbers is a price list');
+  ok('it is written so it cannot wrap across a line',
+     !/R1 000 000/.test(HTML) && HTML.includes(ENTRY),
+     'an ordinary space breaks "R1 000" onto one line and "000" onto the next');
+  ok('the question a reader actually has is answered with it',
+     new RegExp(`How much do I need to place\\?[\\s\\S]{0,120}${ENTRY}`).test(HTML),
+     'a figure in the hero and a dodge in the FAQ is worse than neither');
+  ok('and it is framed as a threshold, not as what the platform will take',
+     /open on the[\s\S]{0,80}main site[\s\S]{0,80}at its own minimum/.test(HTML),
+     'the products behind this page start at R500; a page implying otherwise is false');
+  ok('nothing on the page is presented as an offer',
+     /Nothing here is an offer or a solicitation/.test(HTML),
+     'a published figure makes that sentence load-bearing rather than boilerplate');
 
   /* Whole words. As substrings these catch honest prose — "quest" inside
      "request", "XP" inside "experience" — and a check that forbids a word

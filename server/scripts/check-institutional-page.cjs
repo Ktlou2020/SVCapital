@@ -59,7 +59,11 @@ console.log('\nwhat the page says');
 
   /* The decision was: no figure. A minimum on a public page is an offer at a
      price, and this audience is quoted in conversation. */
-  const MONEY = /R\s?\d[\d  ,]*(?:\.\d\d)?/g;
+  /* \u00a0 is in the class because that is the separator
+     toLocaleString('en-ZA') produces — R100\u00a0000, not R100 000 — so a
+     figure pasted from anywhere else on the platform would have slipped
+     straight past a guard that only knew the ordinary space. */
+  const MONEY = /R\s?\d[\d \u00a0,]*(?:\.\d\d)?/g;
   const figures = (HTML.match(MONEY) || []).filter(m => !/R\s?52449/.test(m));
   ok('no rand figure is published on the page', figures.length === 0,
      `found ${figures.join(', ')} — a minimum here is an offer at a price`);
