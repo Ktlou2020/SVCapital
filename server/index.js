@@ -231,6 +231,9 @@ app.use('/api/agreements', require('./routes/agreements'));
 app.use('/api/gifts',        require('./routes/gifts'));
 app.use('/api/factsheets',   require('./routes/factsheets'));
 app.use('/api/products',     require('./routes/products'));
+/* Public, and the only write on the platform that is not a signup — it
+   carries its own rate limiter, see the file. */
+app.use('/api/enquiries',    require('./routes/enquiries'));
 app.use('/api/opsconsole',  require('./routes/opsconsole'));
 app.use('/api/cattle',      require('./routes/cattle'));
 app.use('/api/client-documents', require('./routes/clientDocuments'));

@@ -1,0 +1,139 @@
+/* ══ Institutional & private clients ═══════════════════════════════════
+   A quieter register than the main site. The homepage sells: gradients, a
+   calculator, counters, a reward ladder. This page is read by somebody who
+   allocates for a living, and the things that persuade them are structure,
+   who holds the licence, what the terms are, and what has actually been
+   paid back. So: one accent used sparingly, generous measure, figures set
+   large and unornamented, and no language borrowed from the retail funnel.
+
+   It takes the site's typeface and CI palette rather than inventing a second
+   identity — it is the same firm, addressed differently. */
+
+:root {
+  --in-ink:        #10131a;
+  --in-ink-soft:   #333a46;
+  --in-muted:      #6b7380;
+  --in-line:       #e4e7ec;
+  --in-paper:      #ffffff;
+  --in-paper-alt:  #f7f8fa;
+  --in-accent:     #fec24f;   /* the CI amber, used for emphasis only */
+  --in-deep:       #0d1b2a;   /* the ink the hero is set on */
+  --in-measure:    68ch;
+}
+
+.in-page { background: var(--in-paper); color: var(--in-ink);
+           font-family: 'Poppins', system-ui, -apple-system, sans-serif; }
+.in-wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+
+/* ── Hero ─────────────────────────────────────────────────────────── */
+.in-hero { background: var(--in-deep); color: #fff; padding: 128px 0 88px; }
+.in-hero__eyebrow { font-size: 0.78rem; letter-spacing: 0.18em; text-transform: uppercase;
+                    color: var(--in-accent); font-weight: 600; margin-bottom: 18px; }
+.in-hero h1 { font-family: 'DM Serif Display', Georgia, serif; font-weight: 400;
+              font-size: clamp(2.1rem, 4.6vw, 3.4rem); line-height: 1.12;
+              letter-spacing: -0.01em; margin: 0 0 20px; text-wrap: balance; max-width: 18ch; }
+.in-hero p { font-size: clamp(1rem, 1.6vw, 1.12rem); line-height: 1.7;
+             color: rgba(255,255,255,0.82); max-width: var(--in-measure); margin: 0 0 32px; }
+.in-hero__actions { display: flex; gap: 12px; flex-wrap: wrap; }
+
+.in-btn { display: inline-flex; align-items: center; gap: 9px; border-radius: 10px;
+          padding: 14px 24px; font-weight: 600; font-size: 0.95rem; cursor: pointer;
+          border: 1px solid transparent; text-decoration: none; transition: all .18s ease; }
+.in-btn--solid { background: var(--in-accent); color: #1a1a1a; }
+.in-btn--solid:hover { filter: brightness(1.06); }
+.in-btn--ghost { border-color: rgba(255,255,255,0.3); color: #fff; }
+.in-btn--ghost:hover { border-color: rgba(255,255,255,0.65); }
+.in-btn--ink { background: var(--in-deep); color: #fff; }
+.in-btn--ink:hover { filter: brightness(1.15); }
+
+/* ── Sections ─────────────────────────────────────────────────────── */
+.in-section { padding: 84px 0; border-top: 1px solid var(--in-line); }
+.in-section--alt { background: var(--in-paper-alt); }
+.in-section h2 { font-family: 'DM Serif Display', Georgia, serif; font-weight: 400;
+                 font-size: clamp(1.6rem, 3vw, 2.2rem); margin: 0 0 14px;
+                 letter-spacing: -0.01em; text-wrap: balance; }
+.in-section__lead { color: var(--in-ink-soft); line-height: 1.75;
+                    max-width: var(--in-measure); margin: 0 0 40px; }
+
+/* ── The figures ──────────────────────────────────────────────────── */
+.in-figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+              gap: 28px; }
+.in-figure__val { font-size: clamp(1.8rem, 3.6vw, 2.6rem); font-weight: 700;
+                  letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.in-figure__label { font-size: 0.82rem; color: var(--in-muted); margin-top: 6px; line-height: 1.5; }
+
+/* ── Strategy table ───────────────────────────────────────────────── */
+.in-table-wrap { overflow-x: auto; }
+.in-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.in-table th { text-align: left; font-size: 0.74rem; letter-spacing: 0.1em;
+               text-transform: uppercase; color: var(--in-muted); font-weight: 600;
+               padding: 0 16px 12px 0; border-bottom: 1px solid var(--in-line); }
+.in-table td { padding: 16px 16px 16px 0; border-bottom: 1px solid var(--in-line);
+               vertical-align: top; color: var(--in-ink-soft); }
+.in-table td:first-child { color: var(--in-ink); font-weight: 600; }
+.in-table .in-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ── Structure points ─────────────────────────────────────────────── */
+.in-points { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+             gap: 32px; }
+.in-point h3 { font-size: 1.02rem; margin: 0 0 8px; font-weight: 650; }
+.in-point p { color: var(--in-ink-soft); line-height: 1.7; margin: 0; font-size: 0.95rem; }
+.in-point__mark { width: 34px; height: 3px; background: var(--in-accent);
+                  border-radius: 2px; margin-bottom: 16px; }
+
+/* ── Enquiry ──────────────────────────────────────────────────────── */
+.in-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+           gap: 18px; max-width: 760px; }
+.in-field--wide { grid-column: 1 / -1; }
+.in-field label { display: block; font-size: 0.8rem; font-weight: 600;
+                  color: var(--in-ink-soft); margin-bottom: 7px; }
+.in-field input, .in-field select, .in-field textarea {
+  width: 100%; padding: 12px 14px; border: 1px solid var(--in-line); border-radius: 9px;
+  font: inherit; font-size: 0.95rem; color: var(--in-ink); background: #fff;
+}
+.in-field input:focus, .in-field select:focus, .in-field textarea:focus {
+  outline: 2px solid var(--in-accent); outline-offset: 1px; border-color: transparent; }
+.in-field textarea { min-height: 128px; resize: vertical; }
+/* The honeypot. Off-screen rather than display:none, which some autofill
+   implementations skip and some scripts specifically look for. */
+.in-hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+.in-form__note { font-size: 0.82rem; color: var(--in-muted); line-height: 1.6; }
+.in-result { margin-top: 18px; font-size: 0.92rem; line-height: 1.6; }
+.in-result--ok  { color: #15803d; }
+.in-result--bad { color: #b91c1c; }
+
+/* ── Footer strip ─────────────────────────────────────────────────── */
+.in-legal { background: var(--in-deep); color: rgba(255,255,255,0.72);
+            padding: 40px 0; font-size: 0.84rem; line-height: 1.7; }
+.in-legal a { color: var(--in-accent); }
+.in-legal strong { color: #fff; }
+
+/* ── The strategy table on a narrow screen ────────────────────────
+   Five columns in 390px gives one word a line and pushes the two figures —
+   the reason an allocator is reading the table at all — off the side into a
+   scroller nobody discovers. Below 720px each row becomes a block: the
+   strategy as a heading, what the capital does beneath it, and the three
+   facts as labelled pairs. The labels come from the header cells through
+   data-label so the markup stays one table and the heading row is not
+   written twice. */
+@media (max-width: 720px) {
+  .in-table, .in-table tbody, .in-table tr, .in-table td { display: block; width: 100%; }
+  .in-table thead { position: absolute; left: -9999px; }
+  .in-table tr { border-bottom: 1px solid var(--in-line); padding: 22px 0; }
+  .in-table tr:last-child { border-bottom: 0; }
+  .in-table td { border: 0; padding: 0; }
+  .in-table td:first-child { font-size: 1.05rem; margin-bottom: 8px; }
+  .in-table td:nth-child(2) { margin-bottom: 14px; line-height: 1.65; }
+  .in-table td[data-label] { display: flex; justify-content: space-between; gap: 16px;
+                             padding: 7px 0; border-top: 1px dashed var(--in-line); }
+  .in-table td[data-label]::before {
+    content: attr(data-label); color: var(--in-muted); font-size: 0.78rem;
+    letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600;
+  }
+  .in-table .in-num { text-align: right; }
+}
+
+@media (max-width: 640px) {
+  .in-hero { padding: 100px 0 64px; }
+  .in-section { padding: 60px 0; }
+}

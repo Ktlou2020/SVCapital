@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="icon" type="image/x-icon" href="assets/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
+  <link rel="apple-touch-icon" sizes="192x192" href="assets/logo-192.png" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Institutional & Private Clients — SV Capital</title>
+  <meta name="description" content="SV Capital manages asset-backed investment pools in South African agriculture, energy and enterprise finance for institutions, family offices and private clients. Mandates are structured per engagement." />
+  <link rel="canonical" href="https://platform.svcapital.co.za/institutional.html" />
+  <meta name="robots" content="index, follow" />
+  <meta property="og:title" content="Institutional & Private Clients — SV Capital" />
+  <meta property="og:description" content="Asset-backed pools in South African agriculture, energy and enterprise finance. Mandates structured per engagement." />
+  <meta property="og:url" content="https://platform.svcapital.co.za/institutional.html" />
+  <meta property="og:type" content="website" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/institutional.css?v=1" />
+</head>
+<body class="in-page">
+
+<!-- ══ Hero ══════════════════════════════════════════════════════════ -->
+<header class="in-hero">
+  <div class="in-wrap">
+    <a href="index.html" style="display:inline-block;margin-bottom:40px">
+      <img src="assets/sv-capital-logo-horizontal-white-text.png" alt="SV Capital" style="height:34px" />
+    </a>
+    <div class="in-hero__eyebrow">Institutional &amp; private clients</div>
+    <h1>Asset-backed credit, underwritten where the asset is.</h1>
+    <p>
+      SV Capital structures and manages pooled investments in South African agriculture,
+      energy and enterprise finance. Each pool funds a defined asset or transaction, runs
+      to a stated term, and is reported on individually. We work with institutions, family
+      offices, advisers and private clients whose mandates are set in conversation rather
+      than off a price list.
+    </p>
+    <div class="in-hero__actions">
+      <a href="#enquiry" class="in-btn in-btn--solid">Arrange a conversation</a>
+      <a href="#strategies" class="in-btn in-btn--ghost">See the strategies</a>
+    </div>
+  </div>
+</header>
+
+<!-- ══ What has actually been paid ═══════════════════════════════════
+     Live from the platform. The section removes itself when the figures
+     are not available rather than showing a zero that reads as a result. -->
+<section class="in-section" id="record" style="display:none">
+  <div class="in-wrap">
+    <h2>What has been returned</h2>
+    <p class="in-section__lead">
+      Figures below are drawn from concluded pools on the platform — capital and return
+      already paid back to investors, not projections. Past performance is not a guide to
+      future returns, and no pool on this platform guarantees one.
+    </p>
+    <div class="in-figures" id="recordFigures"></div>
+  </div>
+</section>
+
+<!-- ══ Strategies ════════════════════════════════════════════════════ -->
+<section class="in-section in-section--alt" id="strategies">
+  <div class="in-wrap">
+    <h2>Strategies</h2>
+    <p class="in-section__lead">
+      Four lines, each with its own operating partner and its own security. A pool is
+      opened for a defined transaction, filled, closed, and settled at the end of its term.
+    </p>
+    <div class="in-table-wrap">
+      <table class="in-table">
+        <thead>
+          <tr>
+            <th>Strategy</th>
+            <th>What the capital does</th>
+            <th>Term</th>
+            <th class="in-num">Pools concluded</th>
+            <th class="in-num">Average achieved</th>
+          </tr>
+        </thead>
+        <tbody id="strategyRows">
+          <tr data-type="cattle">
+            <td>Cattle finance</td>
+            <td>Weaners bought into a commercial feedlot and sold at slaughter weight. The herd
+                is the security; the partner is Beefcor, one of South Africa's largest feedlots.</td>
+            <td data-label="Term">~120 days per cycle</td>
+            <td class="in-num" data-cell="pools" data-label="Pools concluded">—</td>
+            <td class="in-num" data-cell="rate" data-label="Average achieved">—</td>
+          </tr>
+          <tr data-type="solar">
+            <td>Solar infrastructure</td>
+            <td>Rooftop and commercial installations under contracted offtake agreements.
+                Returns are distributed annually across the term, with capital returned at the end.</td>
+            <td data-label="Term">5 to 7 years</td>
+            <td class="in-num" data-cell="pools" data-label="Pools concluded">—</td>
+            <td class="in-num" data-cell="rate" data-label="Average achieved">—</td>
+          </tr>
+          <tr data-type="short_term">
+            <td>Enterprise finance</td>
+            <td>Purchase-order and asset finance for vetted South African SMMEs, originated and
+                administered with MoolaLend.</td>
+            <td data-label="Term">About 5 months</td>
+            <td class="in-num" data-cell="pools" data-label="Pools concluded">—</td>
+            <td class="in-num" data-cell="rate" data-label="Average achieved">—</td>
+          </tr>
+          <tr data-type="eif">
+            <td>Ethical &amp; interest-free</td>
+            <td>Murabaha, Ijara and Mudarabah structures — trade finance, asset leasing and
+                enterprise partnership. Structured on Islamic finance principles; independent
+                Sharia advisory review is under way and no certificate is yet held.</td>
+            <td data-label="Term">6 to 36 months</td>
+            <td class="in-num" data-cell="pools" data-label="Pools concluded">—</td>
+            <td class="in-num" data-cell="rate" data-label="Average achieved">—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="in-section__lead" style="margin-top:28px;margin-bottom:0;font-size:0.88rem">
+      Averages are per annum across concluded pools of that strategy and are shown only where
+      a pool has closed out. A dash means nothing has concluded yet, not that nothing was earned.
+    </p>
+  </div>
+</section>
+
+<!-- ══ How a mandate works ═══════════════════════════════════════════ -->
+<section class="in-section" id="structure">
+  <div class="in-wrap">
+    <h2>How an allocation is structured</h2>
+    <p class="in-section__lead">
+      The mechanics are the same whether an allocation comes from an institution, a family
+      office or an individual. What changes is size, reporting cadence and the conversation
+      that sets them.
+    </p>
+    <div class="in-points">
+      <div class="in-point">
+        <div class="in-point__mark"></div>
+        <h3>One pool, one transaction</h3>
+        <p>Capital is allocated to a named pool with a defined underlying asset, a stated term
+           and its own rate. Pools are not commingled across strategies, and a pool's own
+           performance is what settles it.</p>
+      </div>
+      <div class="in-point">
+        <div class="in-point__mark"></div>
+        <h3>Licensed and documented</h3>
+        <p>The provider is SmartVest Financial Services (Pty) Ltd, an authorised financial
+           services provider, FSP 52449. SV Capital is the fund manager and administers each
+           pool under that licence. Every allocation is governed by a written agreement naming
+           both parties.</p>
+      </div>
+      <div class="in-point">
+        <div class="in-point__mark"></div>
+        <h3>Reported per pool</h3>
+        <p>Each pool carries a factsheet per reporting period and settles into a statement
+           showing capital, return and the basis each figure was arrived at. Figures are
+           posted against the pool, not projected from a rate.</p>
+      </div>
+      <div class="in-point">
+        <div class="in-point__mark"></div>
+        <h3>Terms set in conversation</h3>
+        <p>Mandate size, reporting cadence, co-investment and any structure specific to your
+           committee are agreed before anything is deployed. We would rather decline an
+           allocation than fit it to a product that does not suit it.</p>
+      </div>
+      <div class="in-point">
+        <div class="in-point__mark"></div>
+        <h3>Capital is at risk</h3>
+        <p>No pool guarantees a return. A rate shown before a pool concludes is a target drawn
+           from the underlying trade, lease or venture, and is presented as one.</p>
+      </div>
+      <div class="in-point">
+        <div class="in-point__mark"></div>
+        <h3>Advisers and intermediaries</h3>
+        <p>We work with advisers on behalf of their clients, including reporting addressed to
+           the adviser. Tell us how your practice is structured and we will tell you plainly
+           whether we can accommodate it.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ Enquiry ═══════════════════════════════════════════════════════ -->
+<section class="in-section in-section--alt" id="enquiry">
+  <div class="in-wrap">
+    <h2>Arrange a conversation</h2>
+    <p class="in-section__lead">
+      Tell us who you are and what you are considering. An enquiry reaches the team directly
+      and is answered by a person, not a funnel. If you would rather write, the address is
+      <a href="mailto:enquiry@svcapital.co.za" style="color:inherit">enquiry@svcapital.co.za</a>.
+    </p>
+
+    <form class="in-form" id="enquiryForm" novalidate>
+      <div class="in-field">
+        <label for="enqName">Name</label>
+        <input id="enqName" name="name" type="text" autocomplete="name" required />
+      </div>
+      <div class="in-field">
+        <label for="enqCapacity">Enquiring as</label>
+        <select id="enqCapacity" name="capacity">
+          <option value="institution">An institution</option>
+          <option value="family_office">A family office</option>
+          <option value="individual">A private individual</option>
+          <option value="adviser">An adviser or intermediary</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="in-field">
+        <label for="enqOrg">Organisation <span style="font-weight:400;color:var(--in-muted)">(optional)</span></label>
+        <input id="enqOrg" name="organisation" type="text" autocomplete="organization" />
+      </div>
+      <div class="in-field">
+        <label for="enqRole">Role <span style="font-weight:400;color:var(--in-muted)">(optional)</span></label>
+        <input id="enqRole" name="role" type="text" autocomplete="organization-title" />
+      </div>
+      <div class="in-field">
+        <label for="enqEmail">Email</label>
+        <input id="enqEmail" name="email" type="email" autocomplete="email" required />
+      </div>
+      <div class="in-field">
+        <label for="enqPhone">Phone <span style="font-weight:400;color:var(--in-muted)">(optional)</span></label>
+        <input id="enqPhone" name="phone" type="tel" autocomplete="tel" />
+      </div>
+      <div class="in-field in-field--wide">
+        <label for="enqMessage">What would you like to discuss?</label>
+        <textarea id="enqMessage" name="message" required
+          placeholder="The strategies you are interested in, the size and horizon you have in mind, and anything your mandate requires of us."></textarea>
+      </div>
+      <!-- Not a real field. Hidden from people, filled in by scripts. -->
+      <div class="in-hp" aria-hidden="true">
+        <label for="enqSite">Company website</label>
+        <input id="enqSite" name="company_website" type="text" tabindex="-1" autocomplete="off" />
+      </div>
+      <div class="in-field in-field--wide">
+        <button type="submit" class="in-btn in-btn--ink" id="enqSubmit">Send enquiry</button>
+        <div class="in-result" id="enqResult" role="status" aria-live="polite"></div>
+        <p class="in-form__note" style="margin-top:14px">
+          What you send is used to answer your enquiry and is held under our
+          <a href="popia.html" style="color:inherit">privacy notice</a>. Nothing here is an offer
+          or a solicitation, and nothing on this page constitutes financial advice.
+        </p>
+      </div>
+    </form>
+  </div>
+</section>
+
+<!-- ══ Legal ═════════════════════════════════════════════════════════ -->
+<footer class="in-legal">
+  <div class="in-wrap">
+    <p>
+      <strong>SmartVest Financial Services (Pty) Ltd</strong> is an authorised financial services
+      provider, FSP 52449. <strong>SV Capital</strong> is the fund manager and administers each pool
+      under that licence. Capital is at risk and no pool guarantees a return; a rate shown before a
+      pool concludes is a target, not a promise. Past performance is not a guide to future returns.
+    </p>
+    <p style="margin-top:14px">
+      <a href="index.html">Main site</a> ·
+      <a href="terms.html">Terms</a> ·
+      <a href="popia.html">Privacy</a> ·
+      <a href="paia.html">PAIA</a> ·
+      <a href="complaints.html">Complaints</a> ·
+      <a href="mailto:enquiry@svcapital.co.za">enquiry@svcapital.co.za</a>
+    </p>
+  </div>
+</footer>
+
+<script src="js/institutional.js?v=1"></script>
+</body>
+</html>

@@ -52,12 +52,34 @@ console.log('\nthe row stacks on the space it has, not on the viewport');
 }
 
 /* ── Measured ───────────────────────────────────────────────────── */
-const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+/* Found, not hardcoded. The bundled build is versioned — chromium-1194 one
+   week, chromium-1243 the next — so naming one pins the check to a container
+   that will not exist for long, and it would skip ever after without anybody
+   noticing it had stopped measuring. */
+const CHROME = (() => {
+  const base = '/opt/pw-browsers';
+  /* The stable symlink first: it is maintained across builds and is what
+     survives an image update. */
+  const link = path.join(base, 'chromium');
+  if (fs.existsSync(link)) return link;
+  if (!fs.existsSync(base)) return null;
+  /* Failing that, the newest versioned build. The inner directory has been
+     chrome-linux and chrome-linux64 in different images, so both are tried. */
+  for (const dir of fs.readdirSync(base)
+        .filter(d => /^chromium-\d+$/.test(d))
+        .sort((a, b) => Number(b.split('-')[1]) - Number(a.split('-')[1]))) {
+    for (const inner of ['chrome-linux64', 'chrome-linux']) {
+      const bin = path.join(base, dir, inner, 'chrome');
+      if (fs.existsSync(bin)) return bin;
+    }
+  }
+  return null;
+})();
 const PORT   = 9444;
 const WIDTHS = [1600, 1440, 1280, 1150, 1024, 960, 900, 860, 820, 768, 600, 414, 390, 360];
 
-if (!fs.existsSync(CHROME)) {
-  console.log(`\n  SKIP  no browser at ${CHROME} — the measured half did not run`);
+if (!CHROME) {
+  console.log('\n  SKIP  no chromium under /opt/pw-browsers — the measured half did not run');
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 }
