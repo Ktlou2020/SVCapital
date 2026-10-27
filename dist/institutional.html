@@ -7,17 +7,17 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Institutional & Advisers — SV Capital</title>
-  <meta name="description" content="SV Capital manages asset-backed investment pools in South African agriculture, energy and enterprise finance for institutions, family offices and advisers. Mandates are structured per engagement." />
+  <meta name="description" content="SV Capital runs an asset-backed private lending fund in South African agriculture. Short-tenor facilities secured on commercial livestock, with a nine-year track record in cattle. Mandates are structured per engagement." />
   <link rel="canonical" href="https://platform.svcapital.co.za/institutional.html" />
   <meta name="robots" content="index, follow" />
   <meta property="og:title" content="Institutional & Advisers — SV Capital" />
-  <meta property="og:description" content="Asset-backed pools in South African agriculture, energy and enterprise finance. Mandates structured per engagement, for institutions, family offices and advisers." />
+  <meta property="og:description" content="Asset-backed private lending in South African agriculture. Short-tenor facilities secured on livestock, nine years in cattle. Mandates structured per engagement." />
   <meta property="og:url" content="https://platform.svcapital.co.za/institutional.html" />
   <meta property="og:type" content="website" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/institutional.css?v=3" />
+  <link rel="stylesheet" href="css/institutional.css?v=4" />
 </head>
 <body class="in-page">
 
@@ -28,23 +28,26 @@
       <img src="assets/sv-capital-logo-horizontal-white-text.png" alt="SV Capital" style="height:34px" />
     </a>
     <div class="in-hero__eyebrow">Institutions, family offices and advisers</div>
-    <h1>Asset-backed credit, underwritten where the asset is.</h1>
+    <h1>Asset-backed private lending, secured on the herd.</h1>
     <p>
-      SV Capital structures and manages pooled investments in South African agriculture,
-      energy and enterprise finance. Each pool funds a defined asset or transaction, runs
-      to a stated term, and is reported on individually. We work with institutions, family
-      offices and advisers whose mandates are set in conversation rather than off a price
-      list.
+      SV Capital is a private lending fund with a single focus: commercial agriculture in
+      South Africa. Capital is lent against livestock, over short tenors, with the herd as
+      the collateral and the offtake contracted before a facility opens. Nine years of it,
+      since our first cattle pool.
+    </p>
+    <p>
+      We work with institutions, family offices and advisers whose mandates are set in
+      conversation rather than off a price list.
     </p>
     <div class="in-hero__actions">
       <a href="#enquiry" class="in-btn in-btn--solid">Contact us</a>
-      <a href="#strategies" class="in-btn in-btn--ghost">See the strategies</a>
+      <a href="#lending" class="in-btn in-btn--ghost">How the lending works</a>
     </div>
     <!-- Said here rather than only in the footer: somebody placing their own
          money should not have to read a page about investment committees to
          find out it is not the page for them. -->
     <p class="in-hero__aside">
-      Should you wish to invest, <a href="#enquiry">contact us</a> — allocations are not
+      Should you wish to invest, <a href="#enquiry">contact us</a> &mdash; facilities are not
       opened from this page. Placing a personal or family allocation rather than allocating
       for an institution? <a href="private-clients.html">There is a page for that</a>.
     </p>
@@ -52,143 +55,75 @@
 </header>
 
 <!-- ══ What has actually been paid ═══════════════════════════════════
-     Live from the platform. The section removes itself when the figures
-     are not available rather than showing a zero that reads as a result. -->
+     Live from the platform, the cattle book only. The section removes
+     itself when the figures are not available rather than showing a zero
+     that reads as a result. -->
 <section class="in-section" id="record" style="display:none">
   <div class="in-wrap">
     <h2>What has been returned</h2>
     <p class="in-section__lead">
-      Figures below are drawn from concluded pools on the platform — capital and return
-      already paid back to investors, not projections. Past performance is not a guide to
-      future returns, and no pool on this platform guarantees one.
+      Drawn from cattle pools that have closed out on the platform — capital and return
+      already repaid to lenders, not projections. Past performance is not a guide to future
+      returns, and no pool guarantees one.
     </p>
     <div class="in-figures" id="recordFigures"></div>
   </div>
 </section>
 
-<!-- ══ Strategies ════════════════════════════════════════════════════ -->
-<section class="in-section in-section--alt" id="strategies">
+<!-- ══ How the lending works ═════════════════════════════════════════ -->
+<section class="in-section in-section--alt" id="lending">
   <div class="in-wrap">
-    <h2>Strategies</h2>
+    <h2>How the lending works</h2>
     <p class="in-section__lead">
-      Four lines, each with its own operating partner and its own security. A pool is
-      opened for a defined transaction, filled, closed, and settled at the end of its term.
-    </p>
-    <div class="in-table-wrap">
-      <table class="in-table">
-        <thead>
-          <tr>
-            <th>Strategy</th>
-            <th>What the capital does</th>
-            <th>Term</th>
-            <th class="in-num">Pools concluded</th>
-            <th class="in-num">Average achieved</th>
-          </tr>
-        </thead>
-        <tbody id="strategyRows">
-          <tr data-type="cattle">
-            <td>Cattle finance</td>
-            <td>Weaners bought into a commercial feedlot and sold at slaughter weight. The herd
-                is the security; the partner is Beefcor, one of South Africa's largest feedlots.</td>
-            <td data-label="Term">~120 days per cycle</td>
-            <td class="in-num" data-cell="pools" data-label="Pools concluded">—</td>
-            <td class="in-num" data-cell="rate" data-label="Average achieved">—</td>
-          </tr>
-          <tr data-type="solar">
-            <td>Solar infrastructure</td>
-            <td>Rooftop and commercial installations under contracted offtake agreements.
-                Returns are distributed annually across the term, with capital returned at the end.</td>
-            <td data-label="Term">5 to 7 years</td>
-            <td class="in-num" data-cell="pools" data-label="Pools concluded">—</td>
-            <td class="in-num" data-cell="rate" data-label="Average achieved">—</td>
-          </tr>
-          <tr data-type="short_term">
-            <td>Enterprise finance</td>
-            <td>Purchase-order and asset finance for vetted South African SMMEs, originated and
-                administered with MoolaLend.</td>
-            <td data-label="Term">About 5 months</td>
-            <td class="in-num" data-cell="pools" data-label="Pools concluded">—</td>
-            <td class="in-num" data-cell="rate" data-label="Average achieved">—</td>
-          </tr>
-          <tr data-type="eif">
-            <td>Ethical &amp; interest-free</td>
-            <td>Murabaha, Ijara and Mudarabah structures — trade finance, asset leasing and
-                enterprise partnership. Structured on Islamic finance principles; independent
-                Sharia advisory review is under way and no certificate is yet held.</td>
-            <td data-label="Term">6 to 36 months</td>
-            <td class="in-num" data-cell="pools" data-label="Pools concluded">—</td>
-            <td class="in-num" data-cell="rate" data-label="Average achieved">—</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-    <p class="in-section__lead" style="margin-top:28px;margin-bottom:0;font-size:0.88rem">
-      Averages are per annum across concluded pools of that strategy and are shown only where
-      a pool has closed out. A dash means nothing has concluded yet, not that nothing was earned.
-    </p>
-  </div>
-</section>
-
-<!-- ══ The cattle strategy in detail ═══════════════════════ -->
-<section class="in-section" id="cattle">
-  <div class="in-wrap">
-    <h2>The Cattle Investment, in detail</h2>
-    <p class="in-section__lead">
-      The oldest line we run, and the one diligence spends the most time on. Set out in
-      full here because the mechanics answer most of the questions that follow: what the
-      capital buys, who holds it, what secures it, and what has to happen before a return
-      is earned.
+      One asset class, one operating partner, one structure. A facility is opened for a
+      defined transaction, drawn, run to term and settled.
     </p>
     <div class="in-points">
       <div class="in-point">
         <div class="in-point__mark"></div>
-        <h3>The capital buys a herd</h3>
-        <p>Pooled capital is deployed into weaners bought into a commercial feedlot. These
-           are real, identifiable animals under a named operator, not an exposure to a
-           cattle price index.</p>
+        <h3>The asset</h3>
+        <p>Weaners bought into a commercial feedlot and fed to slaughter weight. Real,
+           counted animals under a named operator, not an exposure to a cattle price index.</p>
       </div>
       <div class="in-point">
         <div class="in-point__mark"></div>
-        <h3>Backgrounding at Beefcor</h3>
-        <p>Around sixty days of conditioning — feeding, health management and preparation
-           for the feedlot — at Beefcor, one of the largest feedlot operators in the
-           country, under veterinary oversight and commercial biosecurity standards.</p>
+        <h3>The collateral</h3>
+        <p>The herd itself, insured against disease, theft and natural hazards. The
+           veterinary and biosecurity obligations sit with the operator while the animals
+           are in its care.</p>
       </div>
       <div class="in-point">
         <div class="in-point__mark"></div>
-        <h3>Sold on under an offtake agreement</h3>
-        <p>After backgrounding the cattle are sold to Beefcor for finishing under a
-           pre-negotiated offtake agreement. That contract is the structural feature worth
-           understanding: it settles the price at which the herd leaves the pool, instead
-           of leaving the pool exposed to the market on the day it has to sell.</p>
+        <h3>The counterparty</h3>
+        <p>Beefcor, one of the largest feedlot businesses in South Africa, which both feeds
+           the herd and contracts to buy it. No facility is opened against a counterparty
+           that has not been through our diligence.</p>
       </div>
       <div class="in-point">
         <div class="in-point__mark"></div>
-        <h3>What secures it</h3>
-        <p>The herd itself. The cattle are insured against disease, theft and natural
-           hazards, and the operator carries the veterinary and biosecurity obligations
-           while they are in its care.</p>
+        <h3>The exit</h3>
+        <p>Contracted in advance. The cattle are sold on to Beefcor for finishing under an
+           offtake agreement negotiated before the facility opens, so the price the herd
+           leaves at is settled rather than taken from the market on the day.</p>
       </div>
       <div class="in-point">
         <div class="in-point__mark"></div>
-        <h3>Where the capital sits meanwhile</h3>
-        <p>In the pool opened for that transaction, administered under the SmartVest
-           licence and reported on each period. Pools are not commingled across strategies,
-           and a pool settles on its own performance.</p>
+        <h3>The tenor</h3>
+        <p>Short. A cycle runs about 120 days, after which capital and return are repaid
+           together and the facility closes.</p>
       </div>
       <div class="in-point">
         <div class="in-point__mark"></div>
-        <h3>What has to happen for the return</h3>
-        <p>The cattle have to reach weight and the offtake has to be honoured. Capital is
-           at risk. A rate shown before the pool concludes is a target drawn from the
-           underlying trade, not a promise, and what settles the pool is what it actually
-           achieved.</p>
+        <h3>What has to happen to be repaid</h3>
+        <p>The cattle have to reach weight and the offtake has to be honoured. Capital is at
+           risk. A rate shown before a facility concludes is a target drawn from the
+           underlying trade, not a promise, and a facility settles on what it achieved.</p>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ══ How a mandate works ═══════════════════════════════════════════ -->
+<!-- ══ How an allocation works ═══════════════════════════════════════ -->
 <section class="in-section" id="structure">
   <div class="in-wrap">
     <h2>How an allocation is structured</h2>
@@ -201,17 +136,17 @@
       <div class="in-point">
         <div class="in-point__mark"></div>
         <h3>One pool, one transaction</h3>
-        <p>Capital is allocated to a named pool with a defined underlying asset, a stated term
-           and its own rate. Pools are not commingled across strategies, and a pool's own
-           performance is what settles it.</p>
+        <p>Capital is allocated to a named pool against a defined herd, with a stated term
+           and its own rate. Each pool stands alone, and a pool’s own performance is what
+           settles it.</p>
       </div>
       <div class="in-point">
         <div class="in-point__mark"></div>
         <h3>Licensed and documented</h3>
         <p>The provider is SmartVest Financial Services (Pty) Ltd, an authorised financial
            services provider, FSP 52449. SV Capital is the fund manager and administers each
-           pool under that licence. Every allocation is governed by a written agreement naming
-           both parties.</p>
+           pool under that licence. Every allocation is governed by a written agreement
+           naming both parties.</p>
       </div>
       <div class="in-point">
         <div class="in-point__mark"></div>
@@ -225,13 +160,13 @@
         <h3>Terms set in conversation</h3>
         <p>Mandate size, reporting cadence, co-investment and any structure specific to your
            committee are agreed before anything is deployed. We would rather decline an
-           allocation than fit it to a product that does not suit it.</p>
+           allocation than fit it to something that does not suit it.</p>
       </div>
       <div class="in-point">
         <div class="in-point__mark"></div>
         <h3>Capital is at risk</h3>
-        <p>No pool guarantees a return. A rate shown before a pool concludes is a target drawn
-           from the underlying trade, lease or venture, and is presented as one.</p>
+        <p>No pool guarantees a return. A rate shown before a pool concludes is a target
+           drawn from the underlying trade, and is presented as one.</p>
       </div>
       <div class="in-point">
         <div class="in-point__mark"></div>
@@ -244,14 +179,13 @@
   </div>
 </section>
 
-<!-- ══ About ═════════════════════════════════════════════ -->
+<!-- ══ About ═════════════════════════════════════════════════════════ -->
 <section class="in-section in-section--alt" id="about">
   <div class="in-wrap">
     <h2>About SV Capital</h2>
     <p class="in-section__lead">
-      An alternative investment manager in South Africa, running pooled asset-backed
-      transactions in agriculture, energy and enterprise finance — nine years of it, since
-      the first cattle pool.
+      A South African asset-backed lender, financing commercial cattle for nine years,
+      since the first pool.
     </p>
     <div class="in-about">
       <div class="in-points">
@@ -271,9 +205,8 @@
         </div>
         <div class="in-point">
           <div class="in-point__mark"></div>
-          <h3>Partners are diligenced before a pool opens</h3>
-          <p>Each strategy runs with a named operating partner — Beefcor in cattle,
-             MoolaLend in enterprise finance — and a pool is not opened against a
+          <h3>Diligence before a facility opens</h3>
+          <p>Beefcor is the operating partner in cattle, and no pool is opened against a
              counterparty that has not been through that work.</p>
         </div>
       </div>
@@ -281,10 +214,10 @@
         <h3>Recognition</h3>
         <ul>
           <li><span class="in-awards__year">2025</span>
-              Best Alternative Investment Solutions, South Africa — Global Financial
+              Best Alternative Investment Solutions, South Africa &mdash; Global Financial
               Market Review</li>
           <li><span class="in-awards__year">2024</span>
-              Top 5 Most Exciting Startups in South Africa — Heavy Chef Awards</li>
+              Top 5 Most Exciting Startups in South Africa &mdash; Heavy Chef Awards</li>
           <li><span class="in-awards__year">2018</span>
               Top 40 Start-Ups in South Africa</li>
           <li><span class="in-awards__year">2018</span>
@@ -297,63 +230,54 @@
   </div>
 </section>
 
-<!-- ══ Impact ════════════════════════════════════════════ -->
+<!-- ══ Impact ════════════════════════════════════════════════════════ -->
 <section class="in-section" id="impact">
   <div class="in-wrap">
     <h2>What the capital does besides return</h2>
     <p class="in-section__lead">
-      Every pool finances something real, and the second-order effects are part of what is
-      being bought. These are platform-wide cumulative figures across all strategies and
-      all investor types — not the record of any one pool, and not a projection. Past
-      performance is not a guide to future returns.
+      Lending against livestock finances animals that get fed, farms that keep running and
+      people who keep working. The figures below are SV Capital’s own, cumulative across
+      everything the business has managed since it started — not the record of any one
+      pool, and not a projection. Past performance is not a guide to future returns.
     </p>
     <div class="in-figures">
       <div class="in-figure">
-        <div class="in-figure__val">3&nbsp;000+</div>
-        <div class="in-figure__label">investors across the platform</div>
+        <div class="in-figure__val">9 years</div>
+        <div class="in-figure__label">lending in the cattle market, since the first pool</div>
       </div>
       <div class="in-figure">
         <div class="in-figure__val">R200M+</div>
-        <div class="in-figure__label">capital deployed into productive South African assets</div>
-      </div>
-      <div class="in-figure">
-        <div class="in-figure__val">700+</div>
-        <div class="in-figure__label">jobs created across the investment ecosystem</div>
+        <div class="in-figure__label">capital deployed since the business started</div>
       </div>
       <div class="in-figure">
         <div class="in-figure__val">R30M+</div>
-        <div class="in-figure__label">returns paid back out to investors</div>
+        <div class="in-figure__label">returns repaid to lenders</div>
       </div>
       <div class="in-figure">
-        <div class="in-figure__val">9 years</div>
-        <div class="in-figure__label">since the first cattle pool</div>
-      </div>
-      <div class="in-figure">
-        <div class="in-figure__val">GW+</div>
-        <div class="in-figure__label">clean generation funded through the solar strategy</div>
+        <div class="in-figure__val">700+</div>
+        <div class="in-figure__label">jobs supported across the businesses we finance</div>
       </div>
     </div>
     <div class="in-sdg">
       <p class="in-sdg__label">Contributing to UN Sustainable Development Goals</p>
       <ul>
+        <li><strong>SDG 2</strong> Zero hunger</li>
         <li><strong>SDG 8</strong> Decent work &amp; economic growth</li>
-        <li><strong>SDG 9</strong> Industry, innovation &amp; infrastructure</li>
-        <li><strong>SDG 7</strong> Affordable &amp; clean energy</li>
         <li><strong>SDG 10</strong> Reduced inequalities</li>
       </ul>
     </div>
   </div>
 </section>
 
-<!-- ══ Enquiry ═══════════════════════════════════════════════════════ -->
+<!-- ══ Contact ═══════════════════════════════════════════════════════ -->
 <section class="in-section in-section--alt" id="enquiry">
   <div class="in-wrap">
     <h2>Contact us</h2>
     <p class="in-section__lead">
       There is no way to invest from this page, and that is deliberate: an allocation at
-      this level starts with a conversation, not a sign-up form. Tell us who you are and
-      what you are considering, and somebody will come back to you directly. If you would
-      rather write, the address is
+      this level starts with a conversation, not a sign-up form. Tell us who you are and what
+      you are considering, and somebody will come back to you directly. If you would rather
+      write, the address is
       <a href="mailto:enquiry@svcapital.co.za" style="color:inherit">enquiry@svcapital.co.za</a>.
     </p>
 
@@ -391,7 +315,7 @@
       <div class="in-field in-field--wide">
         <label for="enqMessage">What would you like to discuss?</label>
         <textarea id="enqMessage" name="message" required
-          placeholder="The strategies you are interested in, the size and horizon you have in mind, and anything your mandate requires of us."></textarea>
+          placeholder="The size and horizon you have in mind, and anything your mandate requires of us."></textarea>
       </div>
       <!-- Not a real field. Hidden from people, filled in by scripts. -->
       <div class="in-hp" aria-hidden="true">
@@ -433,7 +357,7 @@
 </footer>
 
 <!-- The renderer registers its listener first; enquiry.js fetches and dispatches. -->
-<script src="js/institutional.js?v=3"></script>
-<script src="js/enquiry.js?v=1"></script>
+<script src="js/institutional.js?v=4"></script>
+<script src="js/enquiry.js?v=2"></script>
 </body>
 </html>

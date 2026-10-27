@@ -5,15 +5,16 @@
  * exactly two mechanisms: the concluded-pool figures they both quote, and the
  * enquiry form they both end with. Both were written once for the
  * institutional page and both are the kind of thing that drifts the moment
- * there is a second copy — the product families below have already been
- * rewritten once, when solar became three products and EIF three more. A copy
- * of this map on another page would have quietly stopped counting solar.
+ * there is a second copy — and the map below says WHICH of the platform's
+ * product types belong to the book these pages describe. A second copy of
+ * that on another page is how one of them quietly starts reporting a
+ * different number from the other.
  *
  * So the data and the form live here, and each page keeps only its own way of
- * SHOWING the figures: the institutional page sets them as tiles and fills a
- * strategy table, the private-client page says them in a sentence. The totals
- * arrive on a `svc:track-record` event, which a page listens for if it has
- * something to do with them and ignores if it does not.
+ * SHOWING the figures: the institutional page sets them as tiles, the
+ * private-client page says them in a sentence. The totals arrive on a
+ * `svc:track-record` event, which a page listens for if it has something to
+ * do with them and ignores if it does not.
  *
  * Two rules carried over unchanged. Nothing goes into a page as markup — a
  * pool name is typed by a person. And a figure that is not available is not
@@ -22,14 +23,18 @@
  */
 
 (function () {
-  /* The strategies as the pages list them, mapped to the product types the
-     platform actually stores. Solar is four and EIF is three; each family
-     sums its own. */
+  /* CATTLE ONLY, and that is the point rather than an oversight.
+     These two pages present one business — asset-backed lending against
+     commercial livestock — and the platform runs other product types that
+     have nothing to do with it. Summing the lot and calling the total a
+     track record would attribute somebody else's book to this one, which
+     on a page quoting a nine-year record in cattle is the misstatement
+     that matters most.
+
+     Two stored types, because a cattle pool can be written under the
+     Section 12J wrapper and both are the same lending. */
   const FAMILIES = {
-    cattle:     ['cattle', 'cattle_12j'],
-    solar:      ['solar', 'solar_5yr', 'solar_6yr', 'solar_7yr'],
-    short_term: ['short_term', 'smme'],
-    eif:        ['eif_murabaha', 'eif_ijara', 'eif_mudarabah'],
+    cattle: ['cattle', 'cattle_12j'],
   };
 
   async function loadRecord() {
@@ -66,8 +71,7 @@
     if (concluded <= 0) return;
 
     document.dispatchEvent(new CustomEvent('svc:track-record', {
-      detail: { paid, concluded, perFamily,
-                strategies: Object.values(perFamily).filter(f => f.pools > 0).length },
+      detail: { paid, concluded, perFamily },
     }));
   }
 

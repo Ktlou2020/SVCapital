@@ -53,9 +53,6 @@ console.log('\nwhat the page says');
      /target[^.]{0,80}(not a promise|drawn from the underlying)/i.test(HTML));
   ok('past performance carries its warning',
      /[Pp]ast performance is not a guide/.test(HTML));
-  ok('the Sharia position is the platform’s, unchanged',
-     /no certificate is yet held/i.test(HTML),
-     'every other surface says review under way and no certificate — this one may not be softer');
 
   /* The decision was: no figure for the mandate. A minimum on a public page
      is an offer at a price, and this audience is quoted in conversation.
@@ -117,10 +114,6 @@ console.log('\nwhat the page does');
   ok('the page is indexable and declares itself',
      /name="robots" content="index, follow"/.test(HTML)
      && /rel="canonical"/.test(HTML) && /property="og:title"/.test(HTML));
-  ok('the strategy table stacks rather than scrolls on a phone',
-     /@media \(max-width: 720px\)[\s\S]{0,400}\.in-table thead \{ position: absolute/.test(CSS)
-     && /data-label="Pools concluded"/.test(HTML),
-     'five columns in 390px pushes the figures off the side into a scroller nobody finds');
 }
 
 /* Prose on these pages is hand-wrapped, so a sentence that reads as one
@@ -129,6 +122,56 @@ console.log('\nwhat the page does');
    whitespace-flattened copy; a regex written against the raw source passes
    or fails on where somebody happened to break the line. */
 const FLAT = HTML.replace(/\s+/g, ' ');
+
+console.log('\none business, and only one');
+{
+  /* The positioning: an asset-backed private lending fund in agriculture,
+     with a nine-year record in cattle. Said in those words, because a
+     reader who allocates to private credit is looking for that shape and
+     will not go hunting for it in a description of pooled investments. */
+  ok('it says what kind of fund this is',
+     /asset-backed/i.test(FLAT) && /\blend(?:ing|s|er|ers)?\b/i.test(FLAT),
+     'private credit is the category; the page has to name it');
+  ok('and what it lends against',
+     /(cattle|livestock|herd)/i.test(FLAT) && /agricultur/i.test(FLAT));
+  ok('and how long it has been doing it',
+     /(nine years|9 years)/i.test(FLAT) && /cattle/i.test(FLAT),
+     'the track record is in cattle and is the strongest thing the page has');
+  ok('the collateral is named as collateral, not implied',
+     /(the herd is the (security|collateral)|herd as the collateral|herd itself)/i.test(FLAT));
+
+  /* THE RULE: nothing but agriculture. The platform runs other product
+     types and this page is not for them. Every term below belonged to one
+     of the asset classes that used to be on this page, and each one is a
+     way the old positioning creeps back — usually in a sentence somebody
+     adds for completeness. */
+  const ELSEWHERE = {
+    'solar':            /\bsolar\b/i,
+    'photovoltaic':     /photovoltaic/i,
+    'panels':           /\bpanels?\b/i,
+    'a power offtake':  /(power purchase|\bPPA\b|selling power|clean energy|renewable)/i,
+    'enterprise finance': /enterprise finance/i,
+    'purchase-order finance': /purchase[- ]order/i,
+    'SMMEs':            /\bSMME/i,
+    'the other partner': /MoolaLend/i,
+    'the ethical range': /(Murabaha|Ijara|Mudarabah|Sharia|interest-free|Islamic finance)/i,
+    'short-term investment': /short[- ]term investment/i,
+  };
+  const strayed = Object.entries(ELSEWHERE)
+    .filter(([, re]) => re.test(FLAT)).map(([name]) => name);
+  ok('no other asset class appears anywhere on the page',
+     strayed.length === 0, strayed.join(', ') + ' — this page is agriculture only');
+
+  /* And the same rule where the figures come from. A page that says nine
+     years in cattle while quoting the whole platform's repayments is
+     attributing somebody else's book to this one, which is the
+     misstatement on this page that would matter most. */
+  ok('and the live figures are the cattle book, not the platform',
+     /const FAMILIES = \{\s*cattle: \[[^\]]*\],?\s*\}/.test(SHARED)
+     && !/solar|eif_|short_term|smme/i.test(SHARED.slice(SHARED.indexOf('const FAMILIES'),
+                                                         SHARED.indexOf('async function'))),
+     'the aggregation decides what the track record on this page means');
+}
 
 console.log('\nthe only way in is to ask');
 {
@@ -159,15 +202,16 @@ console.log('\nwhat it now tells somebody about us');
      /SmartVest Financial Services \(Pty\) Ltd.{0,200}FSP 52449/.test(FLAT)
      && /Financial Sector Conduct Authority/.test(FLAT));
   ok('and how a client is onboarded', /FICA and AML/.test(FLAT));
-  ok('and that a partner is diligenced before a pool opens',
-     /diligence|diligenced/i.test(HTML) && /MoolaLend/.test(HTML));
+  ok('and that the operating partner is diligenced first',
+     /diligence|diligenced/i.test(FLAT) && /Beefcor/.test(FLAT));
   ok('the recognition is dated rather than floated',
      (HTML.match(/20(?:25|24|18|17)/g) || []).length >= 5,
      'an award with no year is a claim with no date');
 
-  ok('the cattle strategy is set out in full', /id="cattle"/.test(HTML));
+  ok('how the lending works is set out, step by step',
+     /How the lending works/.test(FLAT));
   ok('naming the operator and the contract that fixes the price',
-     /Beefcor/.test(HTML) && /offtake agreement/.test(HTML));
+     /Beefcor/.test(FLAT) && /offtake agreement/.test(FLAT));
   ok('what secures it, and what it is insured against',
      /insured against disease, theft and natural hazards/.test(FLAT));
   ok('and what has to happen before anybody is paid',

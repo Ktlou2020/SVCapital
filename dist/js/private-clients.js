@@ -21,7 +21,7 @@
   const rand = n => 'R' + Math.round(Number(n) || 0).toLocaleString('en-ZA');
 
   document.addEventListener('svc:track-record', e => {
-    const { paid, concluded, strategies } = e.detail;
+    const { paid, concluded } = e.detail;
     const line    = document.getElementById('recordLine');
     const section = document.getElementById('returned');
     if (!line || !section) return;
@@ -39,11 +39,10 @@
     const parts = [
       text('Across '),
       fig(String(concluded)),
-      text(concluded === 1 ? ' pool that has run its full term, ' : ' pools that have run their full term, '),
+      text(concluded === 1 ? ' cattle pool that has run its full term, '
+                           : ' cattle pools that have run their full term, '),
       fig(rand(paid)),
-      text(' has gone back to investors as capital and return, across '),
-      fig(String(strategies)),
-      text(' of the four strategies.'),
+      text(' has gone back to lenders as capital and return.'),
     ];
     for (const p of parts) line.appendChild(p);
     section.style.display = '';

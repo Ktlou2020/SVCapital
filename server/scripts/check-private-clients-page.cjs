@@ -66,9 +66,6 @@ console.log('\nwhat the page says');
      /target[^.]{0,120}(not a promise|drawn from the underlying)/i.test(HTML));
   ok('past performance carries its warning',
      /[Pp]ast performance is not a guide/.test(HTML));
-  ok('the Sharia position is the platform’s, unchanged',
-     /no certificate is yet held/i.test(HTML),
-     'every other surface says review under way and no certificate — this one may not be softer');
 
   /* The institutional page carries no figure at all; this one carries
      exactly one. The entry point for a private-client relationship is
@@ -135,6 +132,56 @@ console.log('\nwhat the page says');
    or fails on where somebody happened to break the line. */
 const FLAT = HTML.replace(/\s+/g, ' ');
 
+console.log('\none business, and only one');
+{
+  /* The positioning: an asset-backed private lending fund in agriculture,
+     with a nine-year record in cattle. Said in those words, because a
+     reader who allocates to private credit is looking for that shape and
+     will not go hunting for it in a description of pooled investments. */
+  ok('it says what kind of fund this is',
+     /asset-backed/i.test(FLAT) && /\blend(?:ing|s|er|ers)?\b/i.test(FLAT),
+     'private credit is the category; the page has to name it');
+  ok('and what it lends against',
+     /(cattle|livestock|herd)/i.test(FLAT) && /agricultur/i.test(FLAT));
+  ok('and how long it has been doing it',
+     /(nine years|9 years)/i.test(FLAT) && /cattle/i.test(FLAT),
+     'the track record is in cattle and is the strongest thing the page has');
+  ok('the collateral is named as collateral, not implied',
+     /(the herd is the (security|collateral)|herd as the collateral|herd itself)/i.test(FLAT));
+
+  /* THE RULE: nothing but agriculture. The platform runs other product
+     types and this page is not for them. Every term below belonged to one
+     of the asset classes that used to be on this page, and each one is a
+     way the old positioning creeps back — usually in a sentence somebody
+     adds for completeness. */
+  const ELSEWHERE = {
+    'solar':            /\bsolar\b/i,
+    'photovoltaic':     /photovoltaic/i,
+    'panels':           /\bpanels?\b/i,
+    'a power offtake':  /(power purchase|\bPPA\b|selling power|clean energy|renewable)/i,
+    'enterprise finance': /enterprise finance/i,
+    'purchase-order finance': /purchase[- ]order/i,
+    'SMMEs':            /\bSMME/i,
+    'the other partner': /MoolaLend/i,
+    'the ethical range': /(Murabaha|Ijara|Mudarabah|Sharia|interest-free|Islamic finance)/i,
+    'short-term investment': /short[- ]term investment/i,
+  };
+  const strayed = Object.entries(ELSEWHERE)
+    .filter(([, re]) => re.test(FLAT)).map(([name]) => name);
+  ok('no other asset class appears anywhere on the page',
+     strayed.length === 0, strayed.join(', ') + ' — this page is agriculture only');
+
+  /* And the same rule where the figures come from. A page that says nine
+     years in cattle while quoting the whole platform's repayments is
+     attributing somebody else's book to this one, which is the
+     misstatement on this page that would matter most. */
+  ok('and the live figures are the cattle book, not the platform',
+     /const FAMILIES = \{\s*cattle: \[[^\]]*\],?\s*\}/.test(SHARED)
+     && !/solar|eif_|short_term|smme/i.test(SHARED.slice(SHARED.indexOf('const FAMILIES'),
+                                                         SHARED.indexOf('async function'))),
+     'the aggregation decides what the track record on this page means');
+}
+
 console.log('\nthe only way in is to ask');
 {
   /* The page used to end a reader's journey by pointing them at the retail
@@ -164,15 +211,16 @@ console.log('\nwhat it now tells somebody about us');
      /SmartVest Financial Services \(Pty\) Ltd.{0,200}FSP 52449/.test(FLAT)
      && /Financial Sector Conduct Authority/.test(FLAT));
   ok('and how a client is onboarded', /FICA and AML/.test(FLAT));
-  ok('and that a partner is diligenced before a pool opens',
-     /diligence|diligenced/i.test(HTML) && /MoolaLend/.test(HTML));
+  ok('and that the operating partner is diligenced first',
+     /diligence|diligenced/i.test(FLAT) && /Beefcor/.test(FLAT));
   ok('the recognition is dated rather than floated',
      (HTML.match(/20(?:25|24|18|17)/g) || []).length >= 5,
      'an award with no year is a claim with no date');
 
-  ok('the cattle strategy is set out in full', /id="cattle"/.test(HTML));
+  ok('how the lending works is set out, step by step',
+     /How the lending works/.test(FLAT));
   ok('naming the operator and the contract that fixes the price',
-     /Beefcor/.test(HTML) && /offtake agreement/.test(HTML));
+     /Beefcor/.test(FLAT) && /offtake agreement/.test(FLAT));
   ok('what secures it, and what it is insured against',
      /insured against disease, theft and natural hazards/.test(FLAT));
   ok('and what has to happen before anybody is paid',
@@ -233,10 +281,13 @@ console.log('\nit is a different page, not the same page twice');
 
 console.log('\nwhat the two pages share, they share once');
 {
-  ok('the product families are defined in exactly one file',
-     [...['js/enquiry.js', 'js/institutional.js', 'js/private-clients.js']]
-       .filter(f => /eif_murabaha/.test(read(f))).length === 1,
-     'a second copy stops counting a product the day one of them is updated');
+  ok('the product types these pages report are named in exactly one file',
+     ['js/enquiry.js', 'js/institutional.js', 'js/private-clients.js']
+       .filter(f => /cattle_12j/.test(read(f))).length === 1,
+     'a second copy is how one page starts reporting a different number from the other');
+  ok('and it is the cattle book, not the whole platform',
+     /const FAMILIES = \{\s*cattle: \[[^\]]*\],?\s*\};/.test(SHARED),
+     'summing the other product types would attribute another book to this one');
   ok('both pages load the shared script',
      /js\/enquiry\.js\?v=\d+/.test(HTML) && /js\/enquiry\.js\?v=\d+/.test(INST));
   ok('each loads its own renderer first',
@@ -464,7 +515,7 @@ const parse = s => (s.match(/\d+(\.\d+)?/g) || []).slice(0, 3).map(Number);
     }))()`);
     ok('and shown once something has concluded', after.display !== 'none', after.display);
     ok('with the grammar following the number',
-       /\b1 pool that has run its full term\b/.test(after.text), after.text);
+       /\b1 cattle pool that has run its full term\b/.test(after.text), after.text);
     ok('and the amount formatted as rands', /R1\s?234\s?567/.test(after.text.replace(/ /g, ' ')),
        after.text);
 

@@ -73,17 +73,6 @@
                   letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .in-figure__label { font-size: 0.82rem; color: var(--in-muted); margin-top: 6px; line-height: 1.5; }
 
-/* ── Strategy table ───────────────────────────────────────────────── */
-.in-table-wrap { overflow-x: auto; }
-.in-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
-.in-table th { text-align: left; font-size: 0.74rem; letter-spacing: 0.1em;
-               text-transform: uppercase; color: var(--in-muted); font-weight: 600;
-               padding: 0 16px 12px 0; border-bottom: 1px solid var(--in-line); }
-.in-table td { padding: 16px 16px 16px 0; border-bottom: 1px solid var(--in-line);
-               vertical-align: top; color: var(--in-ink-soft); }
-.in-table td:first-child { color: var(--in-ink); font-weight: 600; }
-.in-table .in-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-
 /* ── Structure points ─────────────────────────────────────────────── */
 .in-points { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
              gap: 32px; }
@@ -118,31 +107,6 @@
             padding: 40px 0; font-size: 0.84rem; line-height: 1.7; }
 .in-legal a { color: var(--in-accent); }
 .in-legal strong { color: #fff; }
-
-/* ── The strategy table on a narrow screen ────────────────────────
-   Five columns in 390px gives one word a line and pushes the two figures —
-   the reason an allocator is reading the table at all — off the side into a
-   scroller nobody discovers. Below 720px each row becomes a block: the
-   strategy as a heading, what the capital does beneath it, and the three
-   facts as labelled pairs. The labels come from the header cells through
-   data-label so the markup stays one table and the heading row is not
-   written twice. */
-@media (max-width: 720px) {
-  .in-table, .in-table tbody, .in-table tr, .in-table td { display: block; width: 100%; }
-  .in-table thead { position: absolute; left: -9999px; }
-  .in-table tr { border-bottom: 1px solid var(--in-line); padding: 22px 0; }
-  .in-table tr:last-child { border-bottom: 0; }
-  .in-table td { border: 0; padding: 0; }
-  .in-table td:first-child { font-size: 1.05rem; margin-bottom: 8px; }
-  .in-table td:nth-child(2) { margin-bottom: 14px; line-height: 1.65; }
-  .in-table td[data-label] { display: flex; justify-content: space-between; gap: 16px;
-                             padding: 7px 0; border-top: 1px dashed var(--in-line); }
-  .in-table td[data-label]::before {
-    content: attr(data-label); color: var(--in-muted); font-size: 0.78rem;
-    letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600;
-  }
-  .in-table .in-num { text-align: right; }
-}
 
 @media (max-width: 640px) {
   .in-hero { padding: 100px 0 64px; }
