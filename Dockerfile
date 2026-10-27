@@ -26,9 +26,18 @@ COPY ifa/       ./ifa/
 COPY fund/      ./fund/
 COPY team/      ./team/
 COPY _data/     ./_data/
-COPY index.html      ./
-COPY login.html      ./
-COPY signup.html     ./
+# Every page here must also be in package.json's pages:build list, and the
+# other way round: the two are the Railway image and the Cloudflare build,
+# and a page in one and not the other is live on one host and a 404 on the
+# other. institutional.html and private-clients.html were written, linked
+# from the menu, reviewed and published to Cloudflare while this list went
+# unchanged — so on Railway the links were in the navigation and both pages
+# answered "Not found". check-deployed-pages.cjs compares the two lists.
+COPY index.html           ./
+COPY login.html           ./
+COPY signup.html          ./
+COPY institutional.html   ./
+COPY private-clients.html ./
 COPY terms.html      ./
 COPY popia.html      ./
 COPY paia.html       ./

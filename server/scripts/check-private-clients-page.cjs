@@ -321,12 +321,28 @@ const parse = s => (s.match(/\d+(\.\d+)?/g) || []).slice(0, 3).map(Number);
   const stop = () => { try { proc.kill(); } catch (_) {} site.close(); };
 
   try {
+    /* Thirty seconds, not ten. Four checks in this suite each start their
+       own Chromium, and under that the browser has taken more than ten
+       seconds to answer devtools — which failed the check with "the browser
+       never answered" on a run where nothing was wrong with the page. A
+       check that fails on a slow afternoon is a check people learn to
+       re-run rather than read. If the process has actually died, say so:
+       that is a different problem from a slow start and wants a different
+       answer. */
     let tabs;
-    for (let i = 0; i < 25 && !tabs; i++) {
-      await new Promise(r => setTimeout(r, 400));
+    const startedAt = Date.now();
+    for (let i = 0; i < 60 && !tabs; i++) {
+      await new Promise(r => setTimeout(r, 500));
       try { tabs = await devtools(port, '/json/list'); } catch (_) {}
+      if (proc.exitCode !== null) break;
     }
-    if (!tabs) { ok('the browser started', false, 'devtools never answered'); stop(); return; }
+    if (!tabs) {
+      ok('the browser started', false,
+         proc.exitCode !== null
+           ? `chromium exited with code ${proc.exitCode} after ${Date.now() - startedAt}ms`
+           : `devtools never answered in ${Date.now() - startedAt}ms`);
+      stop(); return;
+    }
 
     const ws = new WebSocket(tabs.find(t => t.type === 'page').webSocketDebuggerUrl);
     await new Promise(r => { ws.onopen = r; });
