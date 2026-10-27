@@ -225,14 +225,20 @@ section { position: relative; padding: 100px 0; }
   display: none;
 }
 
+/* Wider than the page container on purpose. Measured with the real font,
+   the logo and ten items need 1196px side to side; the site's 1200px
+   container gave the bar 1152px to put them in, at EVERY desktop width,
+   and the 44px shortfall was being absorbed by squashing the labels onto
+   two lines rather than by overflowing. A bar that spans the window has
+   no reason to be held to the body's measure. */
 .nav-container {
-  max-width: 1200px;
+  max-width: 1320px;
   margin: 0 auto;
   padding: 0 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
+  gap: 20px;
 }
 
 .nav-logo {
@@ -267,17 +273,35 @@ section { position: relative; padding: 100px 0; }
   font-weight: 600;
 }
 
+/* ── The bar never squashes its own labels ────────────────────────
+   The items are flex children with the default flex-shrink: 1, so when
+   the row ran short of space they shrank BELOW their content and the
+   labels wrapped inside them: "How It / Works", "Sign In" over two lines,
+   "Get Started" riding over the item beside it. The row itself never
+   overflowed, which is why a check that measured overflow saw nothing
+   wrong — the bar was absorbing the shortfall by mangling the text.
+
+   Not shrinking turns a silent squash into a plain overflow, which is
+   visible, measurable, and handed to the drawer by the breakpoint below.
+
+   The slack is smaller than it looks: .nav-container is max-width 1200
+   with 24px of padding, so the row has 1152px to work in at EVERY desktop
+   width, 1600 or 1280. Widening the breakpoint buys nothing. The only
+   levers are how many items there are and how much room each takes. */
 .nav-links {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
+
+.nav-links > li { flex: 0 0 auto; }
+.nav-link, .nav-btn { white-space: nowrap; }
 
 .nav-link {
   font-size: 0.875rem;
   font-weight: 500;
   color: var(--text-muted);
-  padding: 6px 12px;
+  padding: 6px 10px;
   border-radius: var(--radius-sm);
   transition: var(--transition);
 }
@@ -2343,21 +2367,24 @@ section { position: relative; padding: 100px 0; }
 }
 
 /* ── The menu becomes a drawer well before a phone ─────────────────
-   The bar is nine links and two buttons laid out nowrap, and the drawer
-   used to take over only at 768px. Measured in Chromium, the row wants
-   892px and had 766px at 1024, running 31px past the container's inner
-   edge by 1050 — so every laptop between 769px and about 1050px got a
-   menu clipped at the right, losing "Sign In" and "Get Started" off the
-   edge with no scrollbar to say so. It was doing that before the audience
-   pages added a link; that made it start 50px sooner.
+   The bar is a nowrap row of ten items and it does not shrink, so below
+   the width where it fits it would run off the right edge. The drawer
+   takes that band and handles any number of items.
 
-   1180 rather than a rounder number because the bar is measured, not
-   guessed: 1149 was the widest viewport that still overflowed, 1160 the
-   narrowest that fitted with nothing to spare, and a breakpoint sitting
-   on zero slack clips again the moment a label gets a word longer. The
-   drawer takes any number of items, so it has the band below.
-   check-nav-fits.cjs measures this rather than trusting the number. */
-@media (max-width: 1180px) {
+   1280 is measured, not chosen. With the real font the logo and the items
+   need 1178px side to side; the bar's container gives it the viewport
+   less 48px of padding, capped at 1320. So the narrowest viewport the bar
+   actually fits in is about 1226, and handing the drawer everything up to
+   1280 leaves the narrowest shown bar 55px of slack — enough that a
+   longer label or one more item does not instantly break it, and little
+   enough that a 1366 laptop still gets the bar.
+
+   This number has been wrong twice. 768 left every laptop with a clipped
+   menu; 1180 looked right because the items were silently squashing to
+   fit and the check only measured overflow. check-nav-fits now asserts
+   that no label ever takes a second line, which is the symptom both
+   times, and that the bar keeps real slack where it is shown. */
+@media (max-width: 1280px) {
   .nav-overlay {
     display: block;
     position: fixed;

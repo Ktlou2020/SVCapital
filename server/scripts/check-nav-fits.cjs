@@ -165,6 +165,19 @@ const WIDTHS = (() => {
     await goto(BASE + '/index.html');
     await evaluate(`try { localStorage.setItem('svc_audience', 'retail'); } catch (_) {}`);
 
+    /* The baseline: every item's height with room to spare. A label that
+       takes a second line is taller than this, whatever the font, whatever
+       the label and whatever the padding on that particular item — which is
+       why the comparison is each item against ITSELF rather than against a
+       line-height anybody has to keep in step. */
+    await send('Emulation.setDeviceMetricsOverride',
+      { width: 1800, height: 900, deviceScaleFactor: 1, mobile: false });
+    await new Promise(r => setTimeout(r, 400));
+    const BASELINE = await evaluate(`(() => {
+      const ul = document.querySelector('.nav-links');
+      return [...ul.children].map(li => Math.round(li.getBoundingClientRect().height));
+    })()`);
+
     const MEASURE = `(() => {
       const ul = document.querySelector('.nav-links');
       const cont = document.querySelector('.nav-container');
@@ -183,14 +196,28 @@ const WIDTHS = (() => {
       const right = Math.max(...items.map(li => li.getBoundingClientRect().right));
       const brand = cont.firstElementChild.getBoundingClientRect();
       const left = Math.min(...items.map(li => li.getBoundingClientRect().left));
+      /* Taller than it was with room to spare means the label inside it has
+         wrapped. This is the fault a row-overflow measurement cannot see:
+         the items are flex children, so when the row runs short they shrink
+         below their content and mangle the text instead of overflowing. The
+         row stays inside its container the whole time and reads as fine. */
+      const base = ${JSON.stringify(BASELINE)};
+      const squashed = items.map((li, n) =>
+          Math.round(li.getBoundingClientRect().height) > (base[n] || 0) + 2
+            ? li.textContent.trim().replace(/\\s+/g, ' ') : null)
+        .filter(Boolean);
       return { mode: 'bar', items: items.length, past: Math.round(right - inner),
                clearOfBrand: Math.round(left - brand.right),
-               wrapped: new Set(items.map(li => Math.round(li.getBoundingClientRect().bottom))).size > 1 };
+               /* The row is right-aligned against the container, so the gap
+                  at its right edge is always zero. The room the bar has
+                  left is the space between the logo and the first item. */
+               slack: Math.round(left - brand.right),
+               squashed };
     })()`;
 
     console.log('\nat every width, the menu is readable');
-    const clipped = [], noToggle = [], collided = [];
-    let barAt = 0, drawerAt = 0;
+    const clipped = [], noToggle = [], collided = [], squashedAt = [];
+    let barAt = 0, drawerAt = 0, tightest = Infinity, tightestAt = 0;
     for (const w of WIDTHS) {
       await send('Emulation.setDeviceMetricsOverride',
         { width: w, height: 900, deviceScaleFactor: 1, mobile: w < 768 });
@@ -200,12 +227,21 @@ const WIDTHS = (() => {
         barAt++;
         if (r.past > 0) clipped.push(`${w}px: ${r.past}px past the edge`);
         if (r.clearOfBrand < 0) collided.push(`${w}px: overlaps the logo by ${-r.clearOfBrand}px`);
+        if (r.squashed.length) squashedAt.push(`${w}px: ${r.squashed.join(' / ')}`);
+        if (r.slack < tightest) { tightest = r.slack; tightestAt = w; }  // narrowest bar wins
       } else {
         drawerAt++;
         if (r.toggle === 'none' || r.togW < 36) noToggle.push(`${w}px: ${r.toggle} / ${r.togW}px`);
       }
     }
     ok('no menu item is ever clipped at the right', clipped.length === 0, clipped.join('; '));
+    ok('and no label is ever squashed onto a second line',
+       squashedAt.length === 0, squashedAt.slice(0, 3).join('; '),
+       'the items are flex children: short of room they shrink below their content and '
+       + 'wrap the text, and the row never overflows, so overflow alone sees nothing wrong');
+    ok('the bar keeps real slack where it is shown',
+       tightest >= 40, `${tightest}px at ${tightestAt}px wide`,
+       'a bar that only just fits is a bar that the next label breaks');
     ok('and the menu never runs back over the logo', collided.length === 0, collided.join('; '));
     ok('wherever the drawer has the band, the hamburger is on screen and tappable',
        noToggle.length === 0, noToggle.join('; '));
