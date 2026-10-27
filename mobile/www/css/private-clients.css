@@ -212,3 +212,42 @@
    carrying them without becoming a tile. */
 .pc-record__fig { font-weight: 500; color: var(--pc-ink);
                   border-bottom: 2px solid var(--pc-accent); }
+
+/* ── Recognition ──────────────────────────────────────────────────── */
+.pc-awards { margin-top: 56px; padding-top: 32px; border-top: 1px solid var(--pc-line); }
+.pc-awards h3 { font-size: 0.74rem; letter-spacing: 0.14em; text-transform: uppercase;
+                color: var(--pc-muted); font-weight: 600; margin: 0 0 20px; }
+.pc-awards ul { list-style: none; margin: 0; padding: 0;
+                display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+                gap: 22px 40px; }
+.pc-awards li { font-size: 0.9rem; line-height: 1.6; color: var(--pc-ink-soft); }
+.pc-awards__year { display: block; font-family: 'Fraunces', Georgia, serif;
+                   font-weight: 300; font-size: 1.3rem; color: var(--pc-ink);
+                   line-height: 1; margin-bottom: 7px;
+                   font-variant-numeric: tabular-nums; }
+
+/* ── Impact ───────────────────────────────────────────────────────── */
+.pc-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 38px 44px; }
+.pc-stat__val { font-family: 'Fraunces', Georgia, serif; font-weight: 300;
+                font-size: clamp(1.9rem, 3.6vw, 2.7rem); line-height: 1;
+                letter-spacing: -0.01em; font-variant-numeric: tabular-nums;
+                padding-bottom: 12px; border-bottom: 2px solid var(--pc-accent); }
+.pc-stat__label { font-size: 0.86rem; color: var(--pc-muted); line-height: 1.55;
+                  margin-top: 12px; }
+
+.pc-sdg { margin-top: 52px; padding-top: 30px; border-top: 1px solid var(--pc-line); }
+.pc-sdg__label { font-size: 0.74rem; letter-spacing: 0.14em; text-transform: uppercase;
+                 color: var(--pc-muted); font-weight: 600; margin: 0 0 16px; }
+.pc-sdg ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px; }
+.pc-sdg li { font-size: 0.85rem; color: var(--pc-ink-soft); line-height: 1.4;
+             border: 1px solid var(--pc-line); border-radius: 2px; padding: 10px 14px;
+             background: var(--pc-paper); }
+.pc-sdg li strong { color: var(--pc-ink); margin-right: 7px; }
+
+/* The hero's entry line now carries the one instruction the page gives,
+   so the link in it has to read on the dark ground. */
+.pc-hero__entry a { color: var(--pc-accent); text-decoration: underline;
+                    text-decoration-color: rgba(237,165,255,0.45);
+                    text-underline-offset: 3px; }
+.pc-hero__entry a:hover { text-decoration-color: var(--pc-accent); }

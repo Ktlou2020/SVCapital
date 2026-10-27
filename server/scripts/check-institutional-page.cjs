@@ -57,19 +57,33 @@ console.log('\nwhat the page says');
      /no certificate is yet held/i.test(HTML),
      'every other surface says review under way and no certificate — this one may not be softer');
 
-  /* The decision was: no figure. A minimum on a public page is an offer at a
-     price, and this audience is quoted in conversation. */
-  /* \u00a0 is in the class because that is the separator
-     toLocaleString('en-ZA') produces — R100\u00a0000, not R100 000 — so a
-     figure pasted from anywhere else on the platform would have slipped
-     straight past a guard that only knew the ordinary space. */
-  const MONEY = /R\s?\d[\d \u00a0,]*(?:\.\d\d)?/g;
-  const figures = (HTML.match(MONEY) || []).filter(m => !/R\s?52449/.test(m));
-  ok('no rand figure is published on the page', figures.length === 0,
-     `found ${figures.join(', ')} — a minimum here is an offer at a price`);
+  /* The decision was: no figure for the mandate. A minimum on a public page
+     is an offer at a price, and this audience is quoted in conversation.
+
+     The page now quotes platform figures in the impact section — what has
+     been deployed, what has been paid back — and that is track record, not
+     a price. So the rule is the narrower one it always meant: NOTHING on
+     this page may be presented as a threshold, a minimum or an entry level.
+
+       is in the money class because that is the separator
+     toLocaleString('en-ZA') produces — R100 000, not R100 000 — so a figure
+     pasted from anywhere else on the platform would have slipped straight
+     past a guard that only knew the ordinary space. */
+  const MONEY = /R\s?\d[\d  ,]*(?:\.\d\d)?(?:\s?million|M\+?)?/gi;
+  const THRESHOLD = /(minimum|min\.|as little as|starts? (?:at|from)|starting (?:at|from)|from just|entry point|invest from|ticket size)/i;
+  const priced = [];
+  for (const m of HTML.matchAll(MONEY)) {
+    if (/R\s?52449/.test(m[0])) continue;
+    const ctx = HTML.slice(Math.max(0, m.index - 110), m.index + m[0].length + 70);
+    if (THRESHOLD.test(ctx)) priced.push(m[0].trim());
+  }
+  ok('no figure on the page is quoted as a threshold', priced.length === 0,
+     `found ${priced.join(', ')} — a minimum here is an offer at a price`);
   ok('and no minimum is mentioned at all',
      !/minimum|from as little|starting from/i.test(HTML),
      'mandate size is set in conversation; the page says so and names no number');
+  ok('the retail minimums in particular are nowhere near it',
+     !/R\s?500\b/.test(HTML) && !/R\s?10[  ]?000\b/.test(HTML) && !/R\s?100[  ]?000\b/.test(HTML));
 
   /* The retail funnel's vocabulary, which this page exists to avoid.
      Matched on whole words. As loose substrings these bite honest prose and
@@ -107,6 +121,77 @@ console.log('\nwhat the page does');
      /@media \(max-width: 720px\)[\s\S]{0,400}\.in-table thead \{ position: absolute/.test(CSS)
      && /data-label="Pools concluded"/.test(HTML),
      'five columns in 390px pushes the figures off the side into a scroller nobody finds');
+}
+
+/* Prose on these pages is hand-wrapped, so a sentence that reads as one
+   line in the browser is three in the source with newlines and indentation
+   inside it. Every assertion below about what the page SAYS runs against a
+   whitespace-flattened copy; a regex written against the raw source passes
+   or fails on where somebody happened to break the line. */
+const FLAT = HTML.replace(/\s+/g, ' ');
+
+console.log('\nthe only way in is to ask');
+{
+  /* The page used to end a reader's journey by pointing them at the retail
+     funnel to open an account themselves. It no longer does, on purpose: at
+     this level an allocation begins with a conversation, and a self-serve
+     route is both the wrong first impression and a way for somebody to
+     arrive on the platform without anyone having spoken to them. */
+  ok('nothing on the page opens an account',
+     !/signup\.html/.test(HTML) && !/login\.html/.test(HTML),
+     'a sign-up link is the self-serve route this page exists not to offer');
+  ok('and no button invites them to invest directly',
+     !/Invest Now|Start investing|Open an account|Invest online/i.test(HTML));
+  ok('the page says what to do instead, where it is read first',
+     /[Ss]hould you wish to invest.{0,160}(contact us|#talk|#enquiry)/i.test(FLAT),
+     'removing the route without naming the alternative is a dead end');
+  ok('and the form is plainly a contact form',
+     /<h2>Contact us<\/h2>/.test(HTML));
+  ok('it says why there is nothing to click, rather than leaving a gap',
+     /no way to invest from this page/i.test(FLAT),
+     'an absence somebody notices and cannot explain reads as a broken page');
+}
+
+console.log('\nwhat it now tells somebody about us');
+{
+  ok('there is a section about SV Capital', /id="about"/.test(HTML));
+  ok('naming who carries the licence, again, in full',
+     /SmartVest Financial Services \(Pty\) Ltd.{0,200}FSP 52449/.test(FLAT)
+     && /Financial Sector Conduct Authority/.test(FLAT));
+  ok('and how a client is onboarded', /FICA and AML/.test(FLAT));
+  ok('and that a partner is diligenced before a pool opens',
+     /diligence|diligenced/i.test(HTML) && /MoolaLend/.test(HTML));
+  ok('the recognition is dated rather than floated',
+     (HTML.match(/20(?:25|24|18|17)/g) || []).length >= 5,
+     'an award with no year is a claim with no date');
+
+  ok('the cattle strategy is set out in full', /id="cattle"/.test(HTML));
+  ok('naming the operator and the contract that fixes the price',
+     /Beefcor/.test(HTML) && /offtake agreement/.test(HTML));
+  ok('what secures it, and what it is insured against',
+     /insured against disease, theft and natural hazards/.test(FLAT));
+  ok('and what has to happen before anybody is paid',
+     /reach weight/.test(FLAT) && /offtake has to be honoured/.test(FLAT),
+     'the mechanics without the condition is a brochure');
+
+  ok('the impact figures are there', /id="impact"/.test(HTML));
+  ok('and they say what they are figures FOR',
+     /(platform-wide|the whole platform|across (?:all|every))/i.test(FLAT)
+     && /not the record of (?:any )?one pool/i.test(FLAT),
+     'a cumulative platform number read as a pool\u2019s record is the oldest trick in the brochure');
+  ok('with past performance still carrying its warning beside them',
+     /not the record of (?:any )?one pool.{0,200}[Pp]ast performance is not a guide/i.test(FLAT));
+}
+
+console.log('\nand what it does not carry');
+{
+  /* Named because they were named: the retail page's social proof and its
+     entry price are the two things that make this page read as the funnel
+     it is meant to sit apart from. */
+  ok('no investor stories',
+     !/testimonial/i.test(HTML) && !/investor stories/i.test(HTML)
+     && !/\u201c[^\u201d]{40,}\u201d\s*<\/?(?:p|blockquote|span)/.test(HTML),
+     'a quoted individual is retail social proof, whatever the page around it says');
 }
 
 console.log('\nand it actually reaches the published site');
