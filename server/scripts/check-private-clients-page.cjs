@@ -132,6 +132,39 @@ console.log('\nwhat the page says');
    or fails on where somebody happened to break the line. */
 const FLAT = HTML.replace(/\s+/g, ' ');
 
+console.log('\nhow long the money is committed for');
+{
+  /* 18 months is a minimum this audience has to be told before they spend
+     any more time on the page — it disqualifies people, which is the point
+     of saying it early. */
+  ok('the minimum term is named',
+     /minimum (?:term is|of) 18 months/i.test(FLAT), 'not found');
+  /* From <body>, not from character zero: the meta description in <head>
+     also says 18 months, and slicing from the top let it stand in for the
+     hero — the assertion passed with the hero stripped of every mention.
+     What a search engine is told is not what the reader sees. */
+  const HERO = FLAT.slice(FLAT.indexOf('<body'), FLAT.indexOf('</header>'));
+  ok('and it is in the hero, not buried further down',
+     HERO.length > 200 && /18 months/.test(HERO),
+     'a term minimum found after four screens has already wasted somebody’s afternoon');
+
+  /* The trap this page walked into once. The cattle cycle underneath is
+     about 120 days, and the page used to say capital came back at the end
+     of it — which is the asset's rhythm, not the client's commitment, and
+     reads as a four-month investment to somebody signing up for eighteen.
+     The cycle may be described; repayment may not be pinned to it. */
+  const SHORT_REPAY = [
+    /\b\d{1,3}\s*days\b[^.]{0,40}(?:capital|your money)[^.]{0,25}(?:back|repaid|returned)/i,
+    /repaid when the cycle closes/i,
+    /\bshort tenors?\b/i,
+  ];
+  const promises = SHORT_REPAY.filter(re => re.test(FLAT));
+  ok('and the cattle cycle is never offered as the term',
+     promises.length === 0,
+     promises.map(String).join(' | ') +
+     ' — the cycle is how the asset works; the term is what the client agreed to');
+}
+
 console.log('\none business, and only one');
 {
   /* The positioning: an asset-backed private lending fund in agriculture,
