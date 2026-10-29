@@ -129,6 +129,12 @@ console.log('\nwhat the page does');
    or fails on where somebody happened to break the line. */
 const FLAT = HTML.replace(/\s+/g, ' ');
 
+/* The hero on its own. Several rules are about what a reader is told
+   BEFORE they have scrolled, and the whole-page text cannot tell the
+   difference between that and a line beside the form. Sliced from <body>
+   so the meta description in <head> cannot stand in for it. */
+const HERO = FLAT.slice(FLAT.indexOf('<body'), FLAT.indexOf('</header>'));
+
 console.log('\nhow long the money is committed for');
 {
   /* 18 months is a minimum this audience has to be told before they spend
@@ -140,7 +146,6 @@ console.log('\nhow long the money is committed for');
      also says 18 months, and slicing from the top let it stand in for the
      hero — the assertion passed with the hero stripped of every mention.
      What a search engine is told is not what the reader sees. */
-  const HERO = FLAT.slice(FLAT.indexOf('<body'), FLAT.indexOf('</header>'));
   ok('and it is in the hero, not buried further down',
      HERO.length > 200 && /18 months/.test(HERO),
      'a term minimum found after four screens has already wasted somebody’s afternoon');
@@ -224,14 +229,22 @@ console.log('\nthe only way in is to ask');
      'a sign-up link is the self-serve route this page exists not to offer');
   ok('and no button invites them to invest directly',
      !/Invest Now|Start investing|Open an account|Invest online/i.test(HTML));
+  /* The wording moved from "should you wish to invest, contact us" to
+     "for institutional investment enquiries, contact our team". What has to
+     stay true is the property, not the sentence: the hero names contact as
+     the way in. Asserted against the hero alone, because an instruction
+     that only appears beside the form is not an alternative — it is the
+     thing somebody already found. */
   ok('the page says what to do instead, where it is read first',
-     /[Ss]hould you wish to invest.{0,160}(contact us|#talk|#enquiry)/i.test(FLAT),
+     /(should you wish to invest|investment enquiries)[^.]{0,120}contact/i.test(HERO)
+     && /#enquiry/.test(HERO),
      'removing the route without naming the alternative is a dead end');
   ok('and the form is plainly a contact form',
      /<h2>Contact us<\/h2>/.test(HTML));
-  ok('it says why there is nothing to click, rather than leaving a gap',
-     /no way to invest from this page/i.test(FLAT),
-     'an absence somebody notices and cannot explain reads as a broken page');
+  /* "There is no way to invest from this page, and that is deliberate" is
+     gone at the business's request — too blunt for this reader. The
+     property it protected is still held by the two assertions above: no
+     account can be opened here, and nothing invites them to try. */
 }
 
 console.log('\nwhat it now tells somebody about us');
@@ -242,28 +255,39 @@ console.log('\nwhat it now tells somebody about us');
      && /Financial Sector Conduct Authority/.test(FLAT));
   ok('and how a client is onboarded', /FICA and AML/.test(FLAT));
   ok('and that the operating partner is diligenced first',
-     /diligence|diligenced/i.test(FLAT) && /Beefcor/.test(FLAT));
+     /diligence|diligenced/i.test(FLAT) && /operating partner/i.test(FLAT),
+     'the partner is described rather than named on this page now — but it still has to '
+     + 'say somebody is assessed before capital goes anywhere');
   ok('the recognition is dated rather than floated',
      (HTML.match(/20(?:25|24|18|17)/g) || []).length >= 5,
      'an award with no year is a claim with no date');
 
   ok('how the lending works is set out, step by step',
      /How the lending works/.test(FLAT));
-  ok('naming the operator and the contract that fixes the price',
-     /Beefcor/.test(FLAT) && /offtake agreement/.test(FLAT));
+  ok('describing the operator and the contract that settles the price',
+     /operating (?:and offtake )?partner/i.test(FLAT)
+     && /offtake (?:agreement|arrangement)/i.test(FLAT));
   ok('what secures it, and what it is insured against',
-     /insured against disease, theft and natural hazards/.test(FLAT));
+     /collateral/i.test(FLAT)
+     && /disease, theft and natural\s*hazards/i.test(FLAT));
+  /* The concrete condition — the cattle reach weight, the offtake is
+     honoured — has been replaced with the contractual form of the same
+     thing. Less vivid, and the risk disclosure around it is stronger. What
+     may not go is the conditionality: repayment depends on something
+     happening, and the something has to be named. */
   ok('and what has to happen before anybody is paid',
-     /reach weight/.test(FLAT) && /offtake has to be honoured/.test(FLAT),
+     /(outcomes depend on|depends on)[^.]{0,140}(performance of the underlying|contractual obligations)/i.test(FLAT)
+     && /not a guarantee|are not guaranteed/i.test(FLAT)
+     && /[Cc]apital is at risk/.test(FLAT),
      'the mechanics without the condition is a brochure');
 
   ok('the impact figures are there', /id="impact"/.test(HTML));
   ok('and they say what they are figures FOR',
-     /(platform-wide|the whole platform|across (?:all|every))/i.test(FLAT)
-     && /not the record of (?:any )?one pool/i.test(FLAT),
+     /cumulative/i.test(FLAT)
+     && /(not the record of (?:any )?one pool|rather than the performance of any individual investment pool)/i.test(FLAT),
      'a cumulative platform number read as a pool\u2019s record is the oldest trick in the brochure');
   ok('with past performance still carrying its warning beside them',
-     /not the record of (?:any )?one pool.{0,200}[Pp]ast performance is not a guide/i.test(FLAT));
+     /(not the record of (?:any )?one pool|individual investment pool).{0,220}(past performance is not a guide|historical results are not indicative)/i.test(FLAT));
 }
 
 console.log('\nand what it does not carry');
@@ -323,6 +347,22 @@ console.log('\nthe endpoint');
   ok('investor_id is left NULL deliberately',
      /VALUES \(\$1, NULL,/.test(SRC),
      'it is a foreign key — borrowing an id puts a stranger’s enquiry on somebody’s record');
+  /* Every capacity either page offers has to be one the endpoint knows.
+     An unknown value is not refused — it is coerced to 'other' and filed,
+     so the failure is silent: the enquiry still arrives, the ticket just
+     says Other, and a whole category of enquiry can read as unclassified
+     for months before anybody wonders why. Both pages are checked here
+     because they post to the same endpoint. */
+  {
+    const known = new Set([...(SRC.match(/'([a-z_]+)'/g) || [])].map(x => x.slice(1, -1)));
+    const offered = [...read('institutional.html').matchAll(/<option value="([^"]+)">/g),
+                     ...read('private-clients.html').matchAll(/<option value="([^"]+)">/g)]
+      .map(m => m[1]);
+    const unknown = [...new Set(offered)].filter(v => !known.has(v));
+    ok('every capacity either page offers is one the endpoint knows',
+       unknown.length === 0, unknown.join(', ') + ' — these file silently as Other');
+  }
+
   ok('the honeypot is accepted and dropped, not refused',
      /company_website[\s\S]{0,200}return res\.json\(\{ ok: true/.test(SRC),
      'an error tells a script what to change');

@@ -334,9 +334,11 @@ const devtools = (port, p) => new Promise((res, rej) =>
     await new Promise(r => setTimeout(r, 500));
     s = await evaluate(STATE);
     ok('the institutional reader lands on their page', /^institutional\.html/.test(s.page), s.page);
-    ok('carrying what they said, so the form arrives set up', s.page.includes('as=institution'), s.page);
+    ok('carrying what they said, so the form arrives set up',
+       s.page.includes('as=institutional_investor'), s.page);
     ok('and the answer is remembered', s.stored === 'institution', String(s.stored));
-    ok('the capacity is preselected', await evaluate(`document.getElementById('enqCapacity').value`) === 'institution');
+    ok('the capacity is preselected',
+       await evaluate(`document.getElementById('enqCapacity').value`) === 'institutional_investor');
 
     console.log('\ncoming back to the homepage');
     await goto(BASE + '/index.html');
@@ -399,9 +401,13 @@ const devtools = (port, p) => new Promise((res, rej) =>
     ok('and a value nobody offered is ignored, not guessed at',
        await evaluate(`document.getElementById('enqCapacity').value`) === 'individual',
        'the select should be left on its own first option');
-    await goto(BASE + '/institutional.html?as=adviser');
+    /* The two pages no longer share a capacity vocabulary: the institutional
+       one was re-cut to the business's own categories, the private-client
+       one still offers the original five. So each page is driven with a
+       value from its OWN list. */
+    await goto(BASE + '/institutional.html?as=strategic_partner');
     ok('the institutional page honours its own ?as= too',
-       await evaluate(`document.getElementById('enqCapacity').value`) === 'adviser');
+       await evaluate(`document.getElementById('enqCapacity').value`) === 'strategic_partner');
 
     ws.close();
   } catch (err) {

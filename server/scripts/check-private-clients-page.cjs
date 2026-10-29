@@ -132,6 +132,12 @@ console.log('\nwhat the page says');
    or fails on where somebody happened to break the line. */
 const FLAT = HTML.replace(/\s+/g, ' ');
 
+/* The hero on its own. Several rules are about what a reader is told
+   BEFORE they have scrolled, and the whole-page text cannot tell the
+   difference between that and a line beside the form. Sliced from <body>
+   so the meta description in <head> cannot stand in for it. */
+const HERO = FLAT.slice(FLAT.indexOf('<body'), FLAT.indexOf('</header>'));
+
 console.log('\nhow long the money is committed for');
 {
   /* 18 months is a minimum this audience has to be told before they spend
@@ -143,7 +149,6 @@ console.log('\nhow long the money is committed for');
      also says 18 months, and slicing from the top let it stand in for the
      hero — the assertion passed with the hero stripped of every mention.
      What a search engine is told is not what the reader sees. */
-  const HERO = FLAT.slice(FLAT.indexOf('<body'), FLAT.indexOf('</header>'));
   ok('and it is in the hero, not buried further down',
      HERO.length > 200 && /18 months/.test(HERO),
      'a term minimum found after four screens has already wasted somebody’s afternoon');

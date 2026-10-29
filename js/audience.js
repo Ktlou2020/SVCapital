@@ -58,7 +58,7 @@
       title: 'I allocate for an institution, or advise clients',
       body: 'How each pool is structured and reported, who holds the licence, and what has actually been returned.',
       action: 'Institutional',
-      href: 'institutional.html?as=institution',
+      href: 'institutional.html?as=institutional_investor',
     },
   ];
 

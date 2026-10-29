@@ -47,13 +47,30 @@ const clean = (v, cap) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim()
    away real ones; this only rejects what cannot be delivered to at all. */
 const looksLikeEmail = e => /^[^@\s]+@[^@\s.]+\.[^@\s]{2,}$/.test(e);
 
-const CAPACITIES = new Set(['individual', 'institution', 'adviser', 'family_office', 'other']);
+/* Two pages post here and they offer different lists, so this is the union
+   of both rather than either. The institutional page was re-cut to the
+   business's own categories; the private-client page still offers the
+   original five. An unknown value is coerced to 'other' below, which is
+   silent — so a value dropped from this set does not fail, it just files
+   every enquiry of that kind under Other and nobody notices. */
+const CAPACITIES = new Set([
+  /* private-client page */
+  'individual', 'institution', 'adviser', 'family_office', 'other',
+  /* institutional page */
+  'institutional_investor', 'investment_adviser', 'capital_raising_partner',
+  'strategic_partner', 'private_investor',
+]);
 const CAPACITY_LABEL = {
-  individual:    'Private individual',
-  institution:   'Institution',
-  adviser:       'Adviser or intermediary',
-  family_office: 'Family office',
-  other:         'Other',
+  individual:              'Private individual',
+  institution:             'Institution',
+  adviser:                 'Adviser or intermediary',
+  family_office:           'Family office',
+  other:                   'Other',
+  institutional_investor:  'Institutional investor',
+  investment_adviser:      'Investment adviser',
+  capital_raising_partner: 'Capital-raising partner',
+  strategic_partner:       'Strategic partner',
+  private_investor:        'Private investor',
 };
 
 router.post('/institutional', limiter, async (req, res) => {
