@@ -390,8 +390,8 @@ const devtools = (port, p) => new Promise((res, rej) =>
        /^private-clients\.html/.test(s.page), s.page);
     ok('not on the institutional one', !/institutional/.test(s.page), s.page);
     ok('and the answer is remembered', s.stored === 'private', String(s.stored));
-    ok('with the capacity already set to a private individual',
-       await evaluate(`document.getElementById('enqCapacity').value`) === 'individual');
+    ok('with the capacity already set to a private investor',
+       await evaluate(`document.getElementById('enqCapacity').value`) === 'private_investor');
 
     console.log('\neach page takes the reader at their word');
     await goto(BASE + '/private-clients.html?as=family_office');
@@ -399,7 +399,7 @@ const devtools = (port, p) => new Promise((res, rej) =>
        await evaluate(`document.getElementById('enqCapacity').value`) === 'family_office');
     await goto(BASE + '/private-clients.html?as=nonsense');
     ok('and a value nobody offered is ignored, not guessed at',
-       await evaluate(`document.getElementById('enqCapacity').value`) === 'individual',
+       await evaluate(`document.getElementById('enqCapacity').value`) === 'private_investor',
        'the select should be left on its own first option');
     /* The two pages no longer share a capacity vocabulary: the institutional
        one was re-cut to the business's own categories, the private-client

@@ -55,10 +55,12 @@ const looksLikeEmail = e => /^[^@\s]+@[^@\s.]+\.[^@\s]{2,}$/.test(e);
    every enquiry of that kind under Other and nobody notices. */
 const CAPACITIES = new Set([
   /* private-client page */
-  'individual', 'institution', 'adviser', 'family_office', 'other',
+  'private_investor', 'family_office', 'financial_adviser', 'other',
   /* institutional page */
   'institutional_investor', 'investment_adviser', 'capital_raising_partner',
-  'strategic_partner', 'private_investor',
+  'strategic_partner',
+  /* retired, kept so enquiries already in flight still land correctly */
+  'individual', 'institution', 'adviser',
 ]);
 const CAPACITY_LABEL = {
   individual:              'Private individual',
@@ -71,6 +73,7 @@ const CAPACITY_LABEL = {
   capital_raising_partner: 'Capital-raising partner',
   strategic_partner:       'Strategic partner',
   private_investor:        'Private investor',
+  financial_adviser:       'Financial adviser',
 };
 
 router.post('/institutional', limiter, async (req, res) => {

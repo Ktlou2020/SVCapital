@@ -51,12 +51,41 @@ const CSS    = read('css/private-clients.css');
 const SHARED = read('js/enquiry.js');
 const INST   = read('institutional.html');
 
+/* Prose on these pages is hand-wrapped, so a sentence that reads as one
+   line in the browser is three in the source with newlines and indentation
+   inside it. Every assertion below about what the page SAYS runs against a
+   whitespace-flattened copy; a regex written against the raw source passes
+   or fails on where somebody happened to break the line. */
+const FLAT = HTML.replace(/\s+/g, ' ');
+
+/* The hero on its own. Several rules are about what a reader is told
+   BEFORE they have scrolled, and the whole-page text cannot tell the
+   difference between that and a line beside the form. Sliced from <body>
+   so the meta description in <head> cannot stand in for it. */
+const HERO = FLAT.slice(FLAT.indexOf('<body'), FLAT.indexOf('</header>'));
+
 console.log('\nwhat the page says');
 {
   ok('the provider and the fund manager are named exactly',
      /SmartVest Financial Services \(Pty\) Ltd/.test(HTML)
      && /FSP 52449/.test(HTML)
-     && /<strong>SV Capital<\/strong> is the fund manager/.test(HTML));
+     && /<strong>SV Capital<\/strong> is\s+appointed as the alternative fund manager/.test(FLAT));
+  /* One page, one account of who does what under the licence. The About
+     section was rewritten to say SmartVest administers and SV Capital is
+     the appointed alternative fund manager, while the legal footer still
+     said SV Capital administers each pool \u2014 the same page describing its
+     own regulatory arrangement two ways, in the two places a reader is
+     most likely to check it against each other. */
+  {
+     const smartvestAdmins = /administered by SmartVest|SmartVest[^.]{0,60}administers the funds/i.test(FLAT);
+     const svcAdmins = /SV Capital[^.]{0,60}administers each pool/i.test(FLAT);
+     ok('the page gives one account of who administers the funds',
+        !(smartvestAdmins && svcAdmins),
+        'the About section and the legal footer disagree about who administers');
+     ok('and it names the appointed manager alongside the provider',
+        /FSP 52449/.test(FLAT) && /SV Capital/.test(FLAT));
+  }
+
   ok('capital at risk is stated, not implied',
      /[Cc]apital is at risk/.test(HTML) && /no pool guarantees/i.test(HTML));
   ok('and it is answered head on, not buried in the footer',
@@ -109,8 +138,12 @@ console.log('\nwhat the page says');
   ok('it is written so it cannot wrap across a line',
      !/R1 000 000/.test(HTML) && HTML.includes(ENTRY),
      'an ordinary space breaks "R1 000" onto one line and "000" onto the next');
+  /* The heading moved from "How much do I need to place?" to "What is the
+     minimum investment?" \u2014 either is fine, but whichever one the page
+     asks, the number has to be in the answer rather than a referral to a
+     conversation. */
   ok('the question a reader actually has is answered with it',
-     new RegExp(`How much do I need to place\\?[\\s\\S]{0,120}${ENTRY}`).test(HTML),
+     new RegExp(`(How much do I need to place\\?|What is the minimum investment\\?)[\\s\\S]{0,160}${ENTRY}`).test(HTML),
      'a figure in the hero and a dodge in the FAQ is worse than neither');
   ok('nothing on the page is presented as an offer',
      /Nothing here is an offer or a solicitation/.test(HTML),
@@ -125,18 +158,6 @@ console.log('\nwhat the page says');
   ok('none of the retail funnel’s language appears', found.length === 0, found.join(', '));
 }
 
-/* Prose on these pages is hand-wrapped, so a sentence that reads as one
-   line in the browser is three in the source with newlines and indentation
-   inside it. Every assertion below about what the page SAYS runs against a
-   whitespace-flattened copy; a regex written against the raw source passes
-   or fails on where somebody happened to break the line. */
-const FLAT = HTML.replace(/\s+/g, ' ');
-
-/* The hero on its own. Several rules are about what a reader is told
-   BEFORE they have scrolled, and the whole-page text cannot tell the
-   difference between that and a line beside the form. Sliced from <body>
-   so the meta description in <head> cannot stand in for it. */
-const HERO = FLAT.slice(FLAT.indexOf('<body'), FLAT.indexOf('</header>'));
 
 console.log('\nhow long the money is committed for');
 {
@@ -185,7 +206,7 @@ console.log('\none business, and only one');
      /(nine years|9 years)/i.test(FLAT) && /cattle/i.test(FLAT),
      'the track record is in cattle and is the strongest thing the page has');
   ok('the collateral is named as collateral, not implied',
-     /(the herd is the (security|collateral)|herd as the collateral|herd itself)/i.test(FLAT));
+     /herd (?:is the|serves as|serving as)[^.]{0,20}(security|collateral)/i.test(FLAT));
 
   /* THE RULE: nothing but agriculture. The platform runs other product
      types and this page is not for them. Every term below belonged to one
@@ -232,14 +253,21 @@ console.log('\nthe only way in is to ask');
      'a sign-up link is the self-serve route this page exists not to offer');
   ok('and no button invites them to invest directly',
      !/Invest Now|Start investing|Open an account|Invest online/i.test(HTML));
+  /* The wording moved from "should you wish to invest, contact us" to an
+     invitation to talk. What has to stay true is the property rather than
+     the sentence: the hero offers contact as the way in. Asserted against
+     the hero alone, because a route that only appears beside the form is
+     not an alternative \u2014 it is the thing somebody already found. */
   ok('the page says what to do instead, where it is read first',
-     /[Ss]hould you wish to invest.{0,160}(contact us|#talk|#enquiry)/i.test(FLAT),
+     /(should you wish to invest|engage directly with prospective investors|request an investment discussion)/i.test(HERO)
+     && /#talk/.test(HERO),
      'removing the route without naming the alternative is a dead end');
   ok('and the form is plainly a contact form',
      /<h2>Contact us<\/h2>/.test(HTML));
-  ok('it says why there is nothing to click, rather than leaving a gap',
-     /no way to invest from this page/i.test(FLAT),
-     'an absence somebody notices and cannot explain reads as a broken page');
+  /* "There is no way to invest from this page, and that is on purpose" is
+     gone at the business's request \u2014 too blunt for this reader. The
+     property it protected is still held by the two assertions above: no
+     account can be opened here, and nothing invites them to try. */
 }
 
 console.log('\nwhat it now tells somebody about us');
@@ -248,7 +276,8 @@ console.log('\nwhat it now tells somebody about us');
   ok('naming who carries the licence, again, in full',
      /SmartVest Financial Services \(Pty\) Ltd.{0,200}FSP 52449/.test(FLAT)
      && /Financial Sector Conduct Authority/.test(FLAT));
-  ok('and how a client is onboarded', /FICA and AML/.test(FLAT));
+  ok('and how a client is onboarded',
+     /FICA(?:,| and)[^.]{0,60}(AML|anti-money laundering)/i.test(FLAT));
   ok('and that the operating partner is diligenced first',
      /diligence|diligenced/i.test(FLAT) && /Beefcor/.test(FLAT));
   ok('the recognition is dated rather than floated',
@@ -256,22 +285,35 @@ console.log('\nwhat it now tells somebody about us');
      'an award with no year is a claim with no date');
 
   ok('how the lending works is set out, step by step',
-     /How the lending works/.test(FLAT));
+     /How (?:the lending works|Our Investment Structure Works)/i.test(FLAT));
   ok('naming the operator and the contract that fixes the price',
      /Beefcor/.test(FLAT) && /offtake agreement/.test(FLAT));
   ok('what secures it, and what it is insured against',
-     /insured against disease, theft and natural hazards/.test(FLAT));
+     /collateral/i.test(FLAT)
+     && /disease, theft and natural\s*hazards/i.test(FLAT));
+  /* The concrete condition \u2014 the cattle reach weight, the offtake is
+     honoured \u2014 is now the contractual form of the same thing. What may
+     not go is the conditionality: repayment depends on something, and the
+     something has to be named. */
+  /* Scoped to the step that makes the promise. Matched against the whole
+     page this passed while the repayment step itself said nothing but
+     "repayment is made" \u2014 nine other sentences mention performance, and
+     any one of them satisfied it. The condition has to be attached to the
+     sentence a reader takes the promise from. */
+  const REPAY = FLAT.slice(FLAT.search(/Repayment follows the investment term/i));
   ok('and what has to happen before anybody is paid',
-     /reach weight/.test(FLAT) && /offtake has to be honoured/.test(FLAT),
+     REPAY.length > 0
+     && /(determined by|depends? on)[^.]{0,140}(performance|underlying)/i.test(REPAY.slice(0, 700))
+     && /(not guaranteed|is at risk)/i.test(REPAY.slice(0, 700)),
      'the mechanics without the condition is a brochure');
 
   ok('the impact figures are there', /id="impact"/.test(HTML));
   ok('and they say what they are figures FOR',
-     /(platform-wide|the whole platform|across (?:all|every))/i.test(FLAT)
-     && /not the record of (?:any )?one pool/i.test(FLAT),
+     /cumulative/i.test(FLAT)
+     && /(not the record of (?:any )?one pool|rather than the performance of any individual investment pool)/i.test(FLAT),
      'a cumulative platform number read as a pool\u2019s record is the oldest trick in the brochure');
   ok('with past performance still carrying its warning beside them',
-     /not the record of (?:any )?one pool.{0,200}[Pp]ast performance is not a guide/i.test(FLAT));
+     /(not the record of (?:any )?one pool|individual investment pool).{0,220}(past performance is not a guide|historical results are not indicative)/i.test(FLAT));
 }
 
 console.log('\nand what it does not carry');

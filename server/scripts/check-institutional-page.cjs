@@ -40,6 +40,19 @@ const JS   = read('js/institutional.js');   /* this page's renderer */
 const SHARED = read('js/enquiry.js');       /* the fetch and the form, shared */
 const CSS  = read('css/institutional.css');
 
+/* Prose on these pages is hand-wrapped, so a sentence that reads as one
+   line in the browser is three in the source with newlines and indentation
+   inside it. Every assertion below about what the page SAYS runs against a
+   whitespace-flattened copy; a regex written against the raw source passes
+   or fails on where somebody happened to break the line. */
+const FLAT = HTML.replace(/\s+/g, ' ');
+
+/* The hero on its own. Several rules are about what a reader is told
+   BEFORE they have scrolled, and the whole-page text cannot tell the
+   difference between that and a line beside the form. Sliced from <body>
+   so the meta description in <head> cannot stand in for it. */
+const HERO = FLAT.slice(FLAT.indexOf('<body'), FLAT.indexOf('</header>'));
+
 console.log('\nwhat the page says');
 {
   ok('the provider and the fund manager are named exactly',
@@ -122,18 +135,6 @@ console.log('\nwhat the page does');
      && /rel="canonical"/.test(HTML) && /property="og:title"/.test(HTML));
 }
 
-/* Prose on these pages is hand-wrapped, so a sentence that reads as one
-   line in the browser is three in the source with newlines and indentation
-   inside it. Every assertion below about what the page SAYS runs against a
-   whitespace-flattened copy; a regex written against the raw source passes
-   or fails on where somebody happened to break the line. */
-const FLAT = HTML.replace(/\s+/g, ' ');
-
-/* The hero on its own. Several rules are about what a reader is told
-   BEFORE they have scrolled, and the whole-page text cannot tell the
-   difference between that and a line beside the form. Sliced from <body>
-   so the meta description in <head> cannot stand in for it. */
-const HERO = FLAT.slice(FLAT.indexOf('<body'), FLAT.indexOf('</header>'));
 
 console.log('\nhow long the money is committed for');
 {

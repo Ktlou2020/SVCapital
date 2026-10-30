@@ -51,7 +51,7 @@
       title: 'I’m placing a larger personal or family allocation',
       body: 'What the capital finances, in what order things happen, and terms set in conversation. From R1 million, for a minimum of 18 months.',
       action: 'Private clients',
-      href: 'private-clients.html?as=individual',
+      href: 'private-clients.html?as=private_investor',
     },
     {
       id: 'institution',
