@@ -378,6 +378,9 @@
       flex-shrink: 0; margin-top: 1px; cursor: pointer;
     }
     .checkbox-label { font-size: 0.79rem; color: var(--text-body); line-height: 1.5; }
+    .consent-list { margin: 6px 0 0; padding-left: 18px; }
+    .consent-list li { font-size: 0.79rem; color: var(--text-body); line-height: 1.5;
+                       margin-bottom: 2px; }
     .checkbox-label a { color: var(--orange); font-weight: 600; text-decoration: none; }
 
     /* Risk profile cards */
@@ -1395,7 +1398,13 @@
       <label class="checkbox-group">
         <input type="checkbox" id="ficaConsentCheck" />
         <div class="checkbox-label">
-          <span id="ficaConsentText">I confirm that I am a South African citizen or permanent resident, and I consent to FICA / FAIS identity verification as required by the Financial Intelligence Centre Act.</span>
+          <span id="ficaConsentText">I confirm that I am a South African citizen or permanent resident, and I consent to SV Capital and its verification partners carrying out the FICA checks required before my account can be used:</span>
+          <ul class="consent-list">
+            <li>identity and photo verification</li>
+            <li>bank account verification</li>
+            <li>address verification</li>
+            <li>sanctions, crime and politically exposed person (PEP) screening</li>
+          </ul>
         </div>
       </label>
 
@@ -1405,6 +1414,13 @@
           I consent to my personal information being processed as described in SV Capital's <a href="popia.html" target="_blank">POPIA Privacy Notice</a>.
         </div>
       </label>
+
+  <script>
+  /* Captured before anything can rewrite it, so the restore below has one
+     literal to go back to — the one in the markup above. */
+  const _FICA_CONSENT_DEFAULT =
+    document.getElementById('ficaConsentText')?.textContent ?? null;
+  </script>
 
       <div class="btn-row">
         <button type="button" class="btn-secondary" id="btnStep2Back" style="max-width:110px">
@@ -2107,8 +2123,13 @@ function toggleCitizenship(type) {
   const hint = document.getElementById('phoneHint');
   if (hint) hint.textContent = 'Enter your number without the leading 0 — e.g. 71 234 5678';
 
+  /* Restores the wording this page loaded with, rather than a second copy
+     of it written out here. The copy was the whole problem: it is a legal
+     consent, it is the version recorded against the client, and an edit to
+     the markup that missed this line would have quietly put the old
+     narrower sentence back the moment anybody toggled citizenship. */
   const ct = document.getElementById('ficaConsentText');
-  if (ct) ct.textContent = 'I confirm that I am a South African citizen or permanent resident, and I consent to FICA / FAIS identity verification as required by the Financial Intelligence Centre Act.';
+  if (ct && _FICA_CONSENT_DEFAULT !== null) ct.textContent = _FICA_CONSENT_DEFAULT;
 
   const idVal = document.getElementById('idValidation');
   if (idVal) { idVal.style.display = 'none'; idVal.innerHTML = ''; }
