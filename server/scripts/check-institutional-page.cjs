@@ -58,8 +58,30 @@ console.log('\nwhat the page says');
   ok('the provider and the fund manager are named exactly',
      /SmartVest Financial Services \(Pty\) Ltd/.test(HTML)
      && /FSP 52449/.test(HTML)
-     && /SV Capital<\/strong> is the fund manager/.test(HTML),
+     && /SV Capital<\/strong> is\s+appointed as the alternative fund manager/.test(FLAT),
      'the agreement names both; a marketing page that names one is the drift this platform already corrected once');
+  /* One page, one account of who does what under the licence — and the
+     same account as the page next door. This page said SV Capital
+     administers each pool in three places while the private-client page
+     said SmartVest administers and SV Capital is the appointed manager.
+     Two public pages describing the same regulatory arrangement two ways
+     is worse than either wording on its own, and a reader comparing them
+     is exactly the reader who would notice. */
+  {
+    const PRIV = read('private-clients.html').replace(/\s+/g, ' ');
+    const admins = h => ({
+      smartvest: /(administered by SmartVest|SmartVest[^.]{0,80}administers the funds)/i.test(h),
+      svCapital: /SV Capital[^.]{0,60}administers each pool/i.test(h),
+    });
+    const here = admins(FLAT), there = admins(PRIV);
+    ok('the page gives one account of who administers the funds',
+       !(here.smartvest && here.svCapital),
+       'the About section, the allocation section and the legal footer must agree');
+    ok('and it is the same account the private-client page gives',
+       here.smartvest === there.smartvest && here.svCapital === there.svCapital,
+       `institutional ${JSON.stringify(here)} vs private ${JSON.stringify(there)}`);
+  }
+
   ok('capital at risk is stated, not implied',
      /[Cc]apital is at risk/.test(HTML) && /no pool guarantees/i.test(HTML));
   ok('a rate shown before a pool concludes is called a target',
