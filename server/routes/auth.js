@@ -17,6 +17,7 @@ const { v4: uuidv4 } = require('uuid');
 const rateLimit  = require('express-rate-limit');
 const pool       = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
+const FICA_CONSENT = require('../services/ficaConsent');
 const emailService = require('../services/email');
 const audit        = require('../services/audit');
 
@@ -292,7 +293,13 @@ router.post('/register', registerLimiter, async (req, res) => {
       email, password, phone,
       idNumber, province, occupation, role = 'investor', nationality,
       riskProfile = 'moderate', referredBy = '', notes = '',
-      termsAccepted = true, ficaConsent = true, popiaAccepted = true,
+      /* Not defaulted to true any more. These three are the record that
+         somebody agreed to something, and a default of true wrote that
+         record for every caller that simply did not mention them — an
+         older cached signup page, a direct post, anything. The browser has
+         required the ticks for a long time; the server was taking its word
+         for it by assuming the answer. */
+      termsAccepted = false, ficaConsent = false, popiaAccepted = false,
       streetAddress, suburb, city, postalCode,
     } = req.body;
     const firstName = stripHtml(req.body.firstName);
@@ -306,6 +313,14 @@ router.post('/register', registerLimiter, async (req, res) => {
     }
     if (!email || !password || !firstName || !lastName)
       return res.status(400).json({ error: 'Email, password, first name and last name are required.' });
+
+    /* Refused here, not only in the browser. A registration without this is
+       a client the platform may not run FICA checks on, so it is not a
+       client it can take money from. */
+    if (!ficaConsent) {
+      return res.status(400).json({
+        error: 'FICA consent is required before an account can be opened.' });
+    }
 
     if (password.length < 10)
       return res.status(400).json({ error: 'Password must be at least 10 characters.' });
@@ -397,19 +412,23 @@ router.post('/register', registerLimiter, async (req, res) => {
       const _acceptedAt = new Date().toISOString();
       const _ip  = (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim() || null;
       const _ua  = req.headers['user-agent'] || null;
+      /* Each acceptance carries its OWN version. The FICA consent is on 2.0
+         because its wording widened to name all four checks; the others
+         have not changed. A single hardcoded version for the lot is how a
+         widened consent gets filed as though it were the old narrow one. */
       const _acceptances = [
-        { type: 'terms_of_service', flag: termsAccepted },
-        { type: 'privacy_policy',   flag: termsAccepted },  // bundled in same checkbox
-        { type: 'popia_notice',     flag: popiaAccepted },
-        { type: 'fica_consent',     flag: ficaConsent },
-        { type: 'risk_disclaimer',  flag: true },            // implied at registration
+        { type: 'terms_of_service', flag: termsAccepted, version: '1.0' },
+        { type: 'privacy_policy',   flag: termsAccepted, version: '1.0' },  // bundled in same checkbox
+        { type: 'popia_notice',     flag: popiaAccepted, version: '1.0' },
+        { type: 'fica_consent',     flag: ficaConsent,   version: FICA_CONSENT.VERSION },
+        { type: 'risk_disclaimer',  flag: true,          version: '1.0' },  // implied at registration
       ];
       for (const acc of _acceptances) {
         if (!acc.flag) continue;
         pool.query(
           `INSERT INTO accepted_client_documents (investor_id, document_type, document_version, accepted_at, ip_address, user_agent)
-           VALUES ($1, $2, '1.0', $3, $4, $5)`,
-          [invId, acc.type, _acceptedAt, _ip, _ua]
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [invId, acc.type, acc.version, _acceptedAt, _ip, _ua]
         ).catch(() => {});
       }
 

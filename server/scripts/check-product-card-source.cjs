@@ -118,7 +118,11 @@ for (const file of ['js/main.js', 'mobile/src/js/main.js']) {
   {
     const out = render(block, { prod: PROD, card: makeCard(STALE) });
     ok('the minimum comes from the product record', out.min === 'R100 000', out.min);
-    ok('and the description with it', /sells them on at a mark-up/.test(out.desc), out.desc);
+    /* NOT the description. It is long-form copy for a detail view — the
+       cattle one runs to several hundred words — and on a card it pushed the
+       figures below the fold and left the card beside it empty. */
+    ok('but NOT the description, which belongs in View Details',
+       out.desc === 'hand-written copy', out.desc);
     ok('and the title', out.title === 'Murabaha Trade Finance', out.title);
     ok('the target rate is the product’s when nothing has been achieved yet',
        out.rate === '9.25%', out.rate);
@@ -134,15 +138,13 @@ for (const file of ['js/main.js', 'mobile/src/js/main.js']) {
   {
     const out = render(block, { prod: null, card: makeCard(STALE) });
     ok('a product the API does not carry leaves the card untouched',
-       out.min === 'R500' && out.rate === '11.50%' && out.desc === 'hand-written copy',
-       JSON.stringify(out));
+       out.min === 'R500' && out.rate === '11.50%', JSON.stringify(out));
   }
 
   {
     const out = render(block, { prod: { label: 'Murabaha Trade Finance' }, card: makeCard(STALE) });
     ok('and a field it does not carry is not blanked',
-       out.min === 'R500' && out.term === '6 mo' && out.desc === 'hand-written copy',
-       JSON.stringify(out));
+       out.min === 'R500' && out.term === '6 mo', JSON.stringify(out));
   }
 
   {
@@ -151,6 +153,22 @@ for (const file of ['js/main.js', 'mobile/src/js/main.js']) {
     const out = render(block, { key: 'solar', prod: { ...PROD, term_months: 84 },
                                 card: makeCard({ ...STALE, term: '5 / 6 / 7 yrs' }) });
     ok('solar keeps the term range its own card states', out.term === '5 / 6 / 7 yrs', out.term);
+  }
+}
+
+console.log('\nthe description is in View Details, and nowhere on the card');
+{
+  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  ok('no card carries a description any more',
+     !/class="product-card__desc"/.test(html),
+     'a card with the product description on it is the layout this was changed to fix');
+  for (const file of ['js/main.js', 'mobile/src/js/main.js']) {
+    const src = fs.readFileSync(path.join(ROOT, file), 'utf8');
+    ok(`${file}: the detail view takes it from the product record`,
+       /if \(prod\.description\) m\.desc\s*=\s*prod\.description;/.test(src),
+       'removing it from the card only works if the text still has somewhere to be read');
+    ok(`${file}: and the modal actually renders that field`,
+       /<p>\$\{data\.desc\}<\/p>/.test(src));
   }
 }
 

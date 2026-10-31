@@ -1,0 +1,304 @@
+/* ══ Private clients & families ════════════════════════════════════════
+   A third register. The main site sells to somebody starting out: gradients,
+   a calculator, counters, a ladder to climb. The institutional page is set
+   for a committee — navy, amber, a five-column table of what concluded. This
+   one is for a person placing their own money, or their family's, and what
+   they want is to be told plainly what it is in, in what order things happen,
+   and who carries the licence.
+
+   So it is quieter than the homepage and warmer than the institutional page:
+   the ground is a deep aubergine rather than navy, the accent is the house
+   purple used sparingly, the display face is Fraunces rather than DM Serif
+   Display, and the layout is asymmetric — the proposition on the left, what
+   the money actually finances alongside it, before anybody has scrolled.
+
+   Same firm, same typeface for running text, three different rooms. */
+
+:root {
+  --pc-ink:        #171320;   /* a near-black biased toward the brand, not a stock grey */
+  --pc-ink-soft:   #3b3447;
+  --pc-muted:      #726b80;
+  --pc-line:       #e7e3ec;
+  --pc-paper:      #fcfbfd;
+  --pc-paper-alt:  #f4f1f7;
+  --pc-deep:       #1d1526;   /* the ground the hero is set on */
+  --pc-accent:     #eda5ff;   /* the canonical house purple — the only one */
+  --pc-measure:    64ch;
+}
+
+/* margin:0 is not housekeeping here. These classes sit on <body>, and the
+   user agent's default 8px body margin leaves a white frame down both sides
+   of every full-bleed band — the hero and the legal strip end 8px short of
+   the screen on all four edges. The main site resets it in its own reset;
+   this page does not load that stylesheet. */
+/* Every field on this page is width:100% inside a grid track, with its own
+   padding and border. Under the user agent's content-box default each input
+   comes out 30px WIDER than the column it sits in, so the three columns of
+   the enquiry form overlap one another and the right-hand one runs past the
+   form. The main site resets this globally; this page does not load that
+   stylesheet, so it resets its own. */
+.pc-page, .pc-page *, .pc-page *::before, .pc-page *::after { box-sizing: border-box; }
+
+.pc-page { margin: 0; background: var(--pc-paper); color: var(--pc-ink);
+           font-family: 'Poppins', system-ui, -apple-system, sans-serif;
+           -webkit-font-smoothing: antialiased; }
+.pc-wrap { max-width: 1140px; margin: 0 auto; padding: 0 24px; }
+
+/* ── Display type ─────────────────────────────────────────────────── */
+.pc-page h1, .pc-page h2, .pc-record {
+  font-family: 'Fraunces', 'DM Serif Display', Georgia, serif;
+  font-weight: 300; letter-spacing: -0.015em; text-wrap: balance;
+}
+
+/* ── Hero ─────────────────────────────────────────────────────────── */
+.pc-hero { background: var(--pc-deep); color: #fff; padding: 72px 0 92px; }
+.pc-hero__grid { display: grid; grid-template-columns: 1.2fr 0.8fr;
+                 gap: 72px; align-items: start; }
+.pc-mark { display: inline-block; margin-bottom: 52px; }
+.pc-mark img { height: 32px; display: block; }
+.pc-eyebrow { font-size: 0.74rem; letter-spacing: 0.2em; text-transform: uppercase;
+              color: var(--pc-accent); font-weight: 600; margin-bottom: 20px; }
+.pc-hero h1 { font-size: clamp(2.2rem, 4.8vw, 3.5rem); line-height: 1.1;
+              margin: 0 0 24px; max-width: 20ch; }
+.pc-hero p { font-size: clamp(0.98rem, 1.5vw, 1.08rem); line-height: 1.75;
+             color: rgba(255,255,255,0.78); max-width: var(--pc-measure); margin: 0 0 18px; }
+/* The entry point, said where somebody decides whether this page is for
+   them at all. Set apart from the prose above it without becoming a price
+   tag: this is a threshold, not an offer. */
+.pc-hero__entry { margin: 26px 0 0; font-size: 0.95rem; font-weight: 500;
+                  color: #fff; padding-left: 16px;
+                  border-left: 2px solid var(--pc-accent); }
+.pc-hero__actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 30px; }
+
+/* ── Buttons ──────────────────────────────────────────────────────── */
+.pc-btn { display: inline-flex; align-items: center; gap: 9px; border-radius: 2px;
+          padding: 15px 26px; font-weight: 600; font-size: 0.93rem; cursor: pointer;
+          border: 1px solid transparent; text-decoration: none; transition: all .18s ease; }
+.pc-btn--solid { background: var(--pc-accent); color: #1a1020; }
+.pc-btn--solid:hover { filter: brightness(1.07); }
+.pc-btn--ghost { border-color: rgba(255,255,255,0.28); color: #fff; }
+.pc-btn--ghost:hover { border-color: rgba(255,255,255,0.6); }
+/* On paper the house purple is too light to carry white text, so the solid
+   button inverts to the hero's ground instead of tinting the brand. */
+.pc-page .pc-section .pc-btn--solid { background: var(--pc-deep); color: #fff; }
+.pc-page .pc-section .pc-btn--solid:hover { filter: brightness(1.5); }
+
+/* ── The hero ledger ──────────────────────────────────────────────── */
+.pc-ledger { border-top: 1px solid rgba(237,165,255,0.3); margin-top: 96px; }
+.pc-ledger__row { display: grid; gap: 4px; padding: 18px 0;
+                  border-bottom: 1px solid rgba(255,255,255,0.1); }
+.pc-ledger__what { font-size: 0.72rem; letter-spacing: 0.16em; text-transform: uppercase;
+                   color: var(--pc-accent); font-weight: 600; }
+.pc-ledger__how { font-size: 0.92rem; line-height: 1.55; color: rgba(255,255,255,0.75); }
+
+/* ── Sections ─────────────────────────────────────────────────────── */
+.pc-section { padding: 92px 0; }
+.pc-section--alt { background: var(--pc-paper-alt); }
+.pc-section h2 { font-size: clamp(1.7rem, 3.1vw, 2.35rem); margin: 0 0 16px; }
+.pc-lead { color: var(--pc-ink-soft); line-height: 1.8; max-width: var(--pc-measure);
+           margin: 0 0 48px; }
+.pc-note { font-size: 0.85rem; color: var(--pc-muted); line-height: 1.7;
+           max-width: var(--pc-measure); margin: 18px 0 0; }
+.pc-page a { color: var(--pc-ink); text-decoration: underline;
+             text-decoration-color: var(--pc-accent); text-decoration-thickness: 2px;
+             text-underline-offset: 3px; }
+.pc-page a:hover { text-decoration-thickness: 3px; }
+.pc-hero a, .pc-legal a, .pc-btn, .pc-mark { text-decoration: none; }
+/* A button that is an <a> is still an <a>: the rule above is (0,1,1) and
+   beat the (0,1,0) button rules, which painted the hero's ghost button in
+   the page's near-black ink — on the near-black hero. Restated here at
+   (0,2,0) so the button's own colour wins, and kept below the generic rule
+   so source order is not the thing holding it up. */
+.pc-page .pc-btn--solid { color: #1a1020; }
+.pc-page .pc-btn--ghost { color: #fff; }
+.pc-page .pc-legal a    { color: var(--pc-accent); }
+
+/* ── What it finances ─────────────────────────────────────────────── */
+.pc-lines { display: grid; gap: 0; }
+.pc-line { padding: 30px 0; border-top: 1px solid var(--pc-line);
+           display: grid; grid-template-columns: 1fr 1.6fr; gap: 40px; align-items: start; }
+.pc-line:last-child { border-bottom: 1px solid var(--pc-line); }
+.pc-line header { display: grid; gap: 7px; }
+.pc-line h3 { font-size: 1.12rem; font-weight: 600; margin: 0; line-height: 1.3; }
+.pc-line__term { font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase;
+                 color: var(--pc-muted); font-weight: 600; }
+.pc-line p { margin: 0; color: var(--pc-ink-soft); line-height: 1.8; font-size: 0.96rem; }
+
+/* ── What has been returned ───────────────────────────────────────── */
+.pc-record { font-size: clamp(1.25rem, 2.6vw, 1.85rem); line-height: 1.55;
+             max-width: 44ch; margin: 0; color: var(--pc-ink);
+             font-variant-numeric: tabular-nums; }
+
+/* ── The sequence ─────────────────────────────────────────────────── */
+.pc-steps { list-style: none; counter-reset: step; margin: 0; padding: 0;
+            display: grid; gap: 38px; }
+.pc-steps li { counter-increment: step; display: grid;
+               grid-template-columns: 62px 1fr; gap: 24px; align-items: start; }
+.pc-steps li::before {
+  content: counter(step); font-family: 'Fraunces', Georgia, serif; font-weight: 300;
+  font-size: 2.1rem; line-height: 1; color: var(--pc-muted);
+  border-bottom: 2px solid var(--pc-accent); padding-bottom: 10px;
+}
+/* Both of these belong in the second column. Without saying so, grid
+   auto-placement puts the heading beside the number and then wraps the
+   paragraph back under it into the 62px counter track — which renders as a
+   column one word wide and a section ten screens tall. */
+.pc-steps h3 { grid-column: 2; font-size: 1.05rem; font-weight: 600; margin: 0 0 7px; }
+.pc-steps p  { grid-column: 2; margin: 0; color: var(--pc-ink-soft); line-height: 1.8;
+               font-size: 0.95rem; max-width: var(--pc-measure); }
+
+/* ── Questions ────────────────────────────────────────────────────── */
+.pc-qa { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+         gap: 40px 56px; }
+.pc-q h3 { font-size: 1.02rem; font-weight: 600; margin: 0 0 9px; line-height: 1.4; }
+.pc-q p { margin: 0; color: var(--pc-ink-soft); line-height: 1.8; font-size: 0.95rem; }
+
+/* ── Enquiry ──────────────────────────────────────────────────────── */
+.pc-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+           gap: 20px; max-width: 760px; }
+.pc-field--wide { grid-column: 1 / -1; }
+.pc-field label { display: block; font-size: 0.79rem; font-weight: 600;
+                  color: var(--pc-ink-soft); margin-bottom: 7px; }
+.pc-opt { font-weight: 400; color: var(--pc-muted); }
+.pc-field input, .pc-field select, .pc-field textarea {
+  width: 100%; padding: 13px 14px; border: 1px solid var(--pc-line); border-radius: 2px;
+  font: inherit; font-size: 0.95rem; color: var(--pc-ink); background: #fff;
+}
+.pc-field input:focus, .pc-field select:focus, .pc-field textarea:focus {
+  outline: 2px solid var(--pc-accent); outline-offset: 1px; border-color: transparent; }
+.pc-field textarea { min-height: 132px; resize: vertical; }
+.pc-page :focus-visible { outline: 2px solid var(--pc-accent); outline-offset: 3px; }
+/* The honeypot. Off-screen rather than display:none, which some autofill
+   implementations skip and some scripts specifically look for. */
+.pc-hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+.pc-result { margin-top: 18px; font-size: 0.92rem; line-height: 1.6; }
+.pc-result--ok  { color: #15803d; }
+.pc-result--bad { color: #b91c1c; }
+
+/* ── Legal strip ──────────────────────────────────────────────────── */
+.pc-legal { background: var(--pc-deep); color: rgba(255,255,255,0.7);
+            padding: 44px 0; font-size: 0.84rem; line-height: 1.75; }
+.pc-legal p { max-width: 86ch; margin: 0; }
+.pc-legal a { color: var(--pc-accent); }
+.pc-legal strong { color: #fff; }
+.pc-legal__links { margin-top: 16px; }
+
+/* ── Narrow screens ───────────────────────────────────────────────
+   The hero's two columns become one, and the ledger loses the top margin
+   that held it level with the headline. The strategy lines stack their
+   header above the prose rather than keeping a 1fr column that a term like
+   "Six to thirty-six months" cannot fit into. */
+@media (max-width: 900px) {
+  .pc-hero__grid { grid-template-columns: 1fr; gap: 48px; }
+  .pc-ledger { margin-top: 0; }
+  .pc-line { grid-template-columns: 1fr; gap: 14px; }
+  .pc-line header { grid-template-columns: 1fr auto; align-items: baseline; gap: 16px; }
+}
+
+@media (max-width: 640px) {
+  .pc-hero { padding: 56px 0 68px; }
+  .pc-mark { margin-bottom: 36px; }
+  .pc-section { padding: 64px 0; }
+  .pc-steps li { grid-template-columns: 46px 1fr; gap: 18px; }
+  .pc-steps li::before { font-size: 1.7rem; }
+  .pc-qa { gap: 34px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pc-btn { transition: none; }
+}
+
+/* The figures inside the returned-capital sentence, set apart from the prose
+   carrying them without becoming a tile. */
+.pc-record__fig { font-weight: 500; color: var(--pc-ink);
+                  border-bottom: 2px solid var(--pc-accent); }
+
+/* ── Recognition ──────────────────────────────────────────────────── */
+.pc-awards { margin-top: 56px; padding-top: 32px; border-top: 1px solid var(--pc-line); }
+.pc-awards h3 { font-size: 0.74rem; letter-spacing: 0.14em; text-transform: uppercase;
+                color: var(--pc-muted); font-weight: 600; margin: 0 0 20px; }
+.pc-awards ul { list-style: none; margin: 0; padding: 0;
+                display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+                gap: 22px 40px; }
+.pc-awards li { font-size: 0.9rem; line-height: 1.6; color: var(--pc-ink-soft); }
+.pc-awards__year { display: block; font-family: 'Fraunces', Georgia, serif;
+                   font-weight: 300; font-size: 1.3rem; color: var(--pc-ink);
+                   line-height: 1; margin-bottom: 7px;
+                   font-variant-numeric: tabular-nums; }
+
+/* ── Impact ───────────────────────────────────────────────────────── */
+.pc-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 38px 44px; }
+.pc-stat__val { font-family: 'Fraunces', Georgia, serif; font-weight: 300;
+                font-size: clamp(1.9rem, 3.6vw, 2.7rem); line-height: 1;
+                letter-spacing: -0.01em; font-variant-numeric: tabular-nums;
+                padding-bottom: 12px; border-bottom: 2px solid var(--pc-accent); }
+.pc-stat__label { font-size: 0.86rem; color: var(--pc-muted); line-height: 1.55;
+                  margin-top: 12px; }
+
+.pc-sdg { margin-top: 52px; padding-top: 30px; border-top: 1px solid var(--pc-line); }
+.pc-sdg__label { font-size: 0.74rem; letter-spacing: 0.14em; text-transform: uppercase;
+                 color: var(--pc-muted); font-weight: 600; margin: 0 0 16px; }
+.pc-sdg ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px; }
+.pc-sdg li { font-size: 0.85rem; color: var(--pc-ink-soft); line-height: 1.4;
+             border: 1px solid var(--pc-line); border-radius: 2px; padding: 10px 14px;
+             background: var(--pc-paper); }
+.pc-sdg li strong { color: var(--pc-ink); margin-right: 7px; }
+
+/* The hero's entry line now carries the one instruction the page gives,
+   so the link in it has to read on the dark ground. */
+.pc-hero__entry a { color: var(--pc-accent); text-decoration: underline;
+                    text-decoration-color: rgba(237,165,255,0.45);
+                    text-underline-offset: 3px; }
+.pc-hero__entry a:hover { text-decoration-color: var(--pc-accent); }
+
+/* ── A rule between sections ──────────────────────────────────────
+   Asked for in review. The hero sits on its own dark ground so it needs
+   no help; everything below it is paper on paper, and an alternating
+   tint alone was not reading as a separation. */
+.pc-section--ruled { border-top: 1px solid var(--pc-line); }
+
+/* ── The hero ledger's third line ─────────────────────────────────── */
+.pc-ledger__note { display: block; font-size: 0.82rem; line-height: 1.6;
+                   color: rgba(255,255,255,0.52); margin-top: 8px; }
+
+/* ── The structure section: steps beside the flow of funds ────────── */
+.pc-does { display: grid; grid-template-columns: 1.45fr 0.85fr; gap: 64px;
+           align-items: start; }
+
+/* ── Flow of funds ────────────────────────────────────────────────
+   A list, not a drawing. The words have to reflow at phone width, scale
+   with the reader's type size and be read out in order — none of which
+   text baked into an SVG does. The rule down the left and the markers on
+   it are the only drawn parts, and they are decoration. */
+.pc-flow { border: 1px solid var(--pc-line); background: var(--pc-paper);
+           padding: 28px 26px 24px; position: sticky; top: 24px; }
+.pc-flow__title { font-size: 0.72rem; letter-spacing: 0.16em; text-transform: uppercase;
+                  color: var(--pc-muted); font-weight: 600; margin: 0 0 22px; }
+.pc-flow__list { list-style: none; margin: 0; padding: 0 0 0 24px; position: relative; }
+/* The spine. Stops short at both ends so it does not overshoot the first
+   and last markers. */
+.pc-flow__list::before {
+  content: ''; position: absolute; left: 4px; top: 7px; bottom: 7px;
+  width: 1px; background: var(--pc-line);
+}
+.pc-flow__list li { position: relative; padding-bottom: 20px; }
+.pc-flow__list li:last-child { padding-bottom: 0; }
+.pc-flow__list li::before {
+  content: ''; position: absolute; left: -24px; top: 6px; width: 9px; height: 9px;
+  border-radius: 50%; background: var(--pc-paper);
+  border: 2px solid var(--pc-accent);
+}
+/* The last node is where the money comes back, so it is the filled one. */
+.pc-flow__list li:last-child::before { background: var(--pc-accent); }
+.pc-flow__step { display: block; font-size: 0.92rem; font-weight: 600;
+                 line-height: 1.4; color: var(--pc-ink); }
+.pc-flow__note { display: block; font-size: 0.8rem; line-height: 1.5;
+                 color: var(--pc-muted); margin-top: 3px; }
+.pc-flow__foot { font-size: 0.76rem; line-height: 1.55; color: var(--pc-muted);
+                 margin: 22px 0 0; padding-top: 16px; border-top: 1px solid var(--pc-line); }
+
+@media (max-width: 900px) {
+  .pc-does { grid-template-columns: 1fr; gap: 44px; }
+  .pc-flow { position: static; }
+}

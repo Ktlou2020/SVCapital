@@ -52,12 +52,34 @@ console.log('\nthe row stacks on the space it has, not on the viewport');
 }
 
 /* ── Measured ───────────────────────────────────────────────────── */
-const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+/* Found, not hardcoded. The bundled build is versioned — chromium-1194 one
+   week, chromium-1243 the next — so naming one pins the check to a container
+   that will not exist for long, and it would skip ever after without anybody
+   noticing it had stopped measuring. */
+const CHROME = (() => {
+  const base = '/opt/pw-browsers';
+  /* The stable symlink first: it is maintained across builds and is what
+     survives an image update. */
+  const link = path.join(base, 'chromium');
+  if (fs.existsSync(link)) return link;
+  if (!fs.existsSync(base)) return null;
+  /* Failing that, the newest versioned build. The inner directory has been
+     chrome-linux and chrome-linux64 in different images, so both are tried. */
+  for (const dir of fs.readdirSync(base)
+        .filter(d => /^chromium-\d+$/.test(d))
+        .sort((a, b) => Number(b.split('-')[1]) - Number(a.split('-')[1]))) {
+    for (const inner of ['chrome-linux64', 'chrome-linux']) {
+      const bin = path.join(base, dir, inner, 'chrome');
+      if (fs.existsSync(bin)) return bin;
+    }
+  }
+  return null;
+})();
 const PORT   = 9444;
 const WIDTHS = [1600, 1440, 1280, 1150, 1024, 960, 900, 860, 820, 768, 600, 414, 390, 360];
 
-if (!fs.existsSync(CHROME)) {
-  console.log(`\n  SKIP  no browser at ${CHROME} — the measured half did not run`);
+if (!CHROME) {
+  console.log('\n  SKIP  no chromium under /opt/pw-browsers — the measured half did not run');
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 }
@@ -72,12 +94,28 @@ const get = p => new Promise((res, rej) =>
     '--no-sandbox', '--disable-gpu', '--hide-scrollbars', 'about:blank'], { stdio: 'ignore' });
   const stop = () => { try { proc.kill(); } catch (_) {} };
   try {
+    /* Thirty seconds, not ten. Four checks in this suite each start their
+       own Chromium, and under that the browser has taken more than ten
+       seconds to answer devtools — which failed the check with "the browser
+       never answered" on a run where nothing was wrong with the page. A
+       check that fails on a slow afternoon is a check people learn to
+       re-run rather than read. If the process has actually died, say so:
+       that is a different problem from a slow start and wants a different
+       answer. */
     let tabs;
-    for (let i = 0; i < 25 && !tabs; i++) {
-      await new Promise(r => setTimeout(r, 400));
+    const startedAt = Date.now();
+    for (let i = 0; i < 60 && !tabs; i++) {
+      await new Promise(r => setTimeout(r, 500));
       try { tabs = await get('/json/list'); } catch (_) {}
+      if (proc.exitCode !== null) break;
     }
-    if (!tabs) { ok('the browser started', false, 'devtools never answered'); stop(); return; }
+    if (!tabs) {
+      ok('the browser started', false,
+         proc.exitCode !== null
+           ? `chromium exited with code ${proc.exitCode} after ${Date.now() - startedAt}ms`
+           : `devtools never answered in ${Date.now() - startedAt}ms`);
+      stop(); return;
+    }
 
     const ws = new WebSocket(tabs.find(t => t.type === 'page').webSocketDebuggerUrl);
     await new Promise(r => { ws.onopen = r; });

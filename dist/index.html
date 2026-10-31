@@ -165,7 +165,7 @@
   <!-- CountUp.js -->
   <script defer src="https://cdn.jsdelivr.net/npm/countup.js@2.8.0/dist/countUp.umd.js"></script>
 
-  <link rel="stylesheet" href="css/style.css?v=13" />
+  <link rel="stylesheet" href="css/style.css?v=16" />
   <link rel="stylesheet" href="css/home-ci.css?v=7" />
   <link rel="stylesheet" href="css/premium.css?v=6" />
   <!-- Google Analytics 4 -->
@@ -293,6 +293,8 @@
         <li><a href="#impact" class="nav-link">Impact</a></li>
         <li><a href="#faq" class="nav-link">FAQ</a></li>
         <li><a href="/insights" class="nav-link">Insights</a></li>
+        <li><a href="private-clients.html" class="nav-link">Private Clients</a></li>
+        <li><a href="institutional.html" class="nav-link">Institutional</a></li>
         <li><a href="login.html" class="nav-btn nav-btn--ghost">Sign In</a></li>
         <li><a href="signup.html" class="nav-btn nav-btn--primary">Get Started</a></li>
       </ul>
@@ -566,7 +568,6 @@
             <i class="fa-solid fa-cow"></i>
           </div>
           <h3 class="product-card__title">Cattle Investment</h3>
-          <p class="product-card__desc">Partner with Beefcor — South Africa's premier feedlot — and earn returns as your herd grows from 200kg to 500kg. Ancient asset, modern returns.</p>
           <div class="product-card__stats">
             <div class="stat">
               <span class="stat__label">Avg. Return</span>
@@ -614,7 +615,6 @@
             <i class="fa-solid fa-solar-panel"></i>
           </div>
           <h3 class="product-card__title">Solar Investment</h3>
-          <p class="product-card__desc">Power South Africa's energy future. Your capital funds solar panel installations — generating clean electricity, long-term contracts, and growing returns.</p>
           <div class="product-card__stats">
             <div class="stat">
               <span class="stat__label">Avg. Return</span>
@@ -666,7 +666,6 @@
             <i class="fa-solid fa-bolt"></i>
           </div>
           <h3 class="product-card__title">Short-Term Investment</h3>
-          <p class="product-card__desc">Fund South African SMMEs through asset finance. Capital deployed into vetted businesses generating strong short-cycle returns.</p>
           <div class="product-card__stats">
             <div class="stat">
               <span class="stat__label">Avg. Return</span>
@@ -718,7 +717,6 @@
             <i class="fa-solid fa-seedling"></i>
           </div>
           <h3 class="product-card__title">GridFarmer</h3>
-          <p class="product-card__desc">Own a uniquely identified 1-hectare white maize GPS grid. Your return is your plot's actual yield × SAFEX price — satellite-monitored, GPS-verified. Not a pool, not a fund.</p>
           <div class="product-card__stats">
             <div class="stat">
               <span class="stat__label">Return</span>
@@ -860,7 +858,6 @@
             <i class="fa-solid fa-handshake"></i>
           </div>
           <h3 class="product-card__title">Murabaha Trade Finance</h3>
-          <p class="product-card__desc">SV Capital buys the goods a business needs and sells them on at a mark-up agreed and disclosed in full before the sale. Your return is your share of that mark-up — a trading profit, not a charge for money.</p>
           <div class="product-card__stats">
             <div class="stat">
               <span class="stat__label">Target Share</span>
@@ -906,7 +903,6 @@
             <i class="fa-solid fa-file-contract"></i>
           </div>
           <h3 class="product-card__title">Ijara Asset Leasing</h3>
-          <p class="product-card__desc">The pool buys an income-producing asset — solar plant, vehicles, machinery — and leases it to an operator. Your return is rent. Because the pool owns the asset, it carries the ownership risk, and that is what makes the income rent rather than interest.</p>
           <div class="product-card__stats">
             <div class="stat">
               <span class="stat__label">Target Share</span>
@@ -952,7 +948,6 @@
             <i class="fa-solid fa-scale-balanced"></i>
           </div>
           <h3 class="product-card__title">Mudarabah Enterprise</h3>
-          <p class="product-card__desc">You provide the capital; a vetted operating partner provides the work. Profit is divided on a ratio agreed before a rand is deployed. Nothing is promised in advance, because a promised return on a partnership is the thing this structure exists to avoid.</p>
           <div class="product-card__stats">
             <div class="stat">
               <span class="stat__label">Target Share</span>
@@ -1570,6 +1565,9 @@
         <div class="footer-links-col">
           <h4>Get in Touch</h4>
           <ul>
+            <li><a href="private-clients.html"><i class="fa-solid fa-user-tie"></i> Private clients &amp; families</a></li>
+            <li><a href="#" onclick="event.preventDefault();window.svcAskAudience&&window.svcAskAudience()"><i class="fa-solid fa-circle-question"></i> Not sure which is for you?</a></li>
+            <li><a href="institutional.html"><i class="fa-solid fa-landmark"></i> Institutions &amp; advisers</a></li>
             <li><a href="mailto:enquiry@svcapital.co.za"><i class="fa-solid fa-envelope"></i> enquiry@svcapital.co.za</a></li>
             <li><a href="https://api.whatsapp.com/send?phone=27722269415" target="_blank"><i class="fa-brands fa-whatsapp"></i> WhatsApp Support</a></li>
             <li><a href="login.html"><i class="fa-solid fa-arrow-right-to-bracket"></i> Investor Login</a></li>
@@ -1605,7 +1603,8 @@
     <span class="whatsapp-label">Need help?</span>
   </a>
 
-  <script src="js/main.js?v=13"></script>
+  <script src="js/main.js?v=14"></script>
+  <script src="js/audience.js?v=6"></script>
   <script>document.querySelectorAll('.yr').forEach(function(el){el.textContent=new Date().getFullYear();});</script>
 <script src="js/app-banner.js?v=4"></script>
 </body>

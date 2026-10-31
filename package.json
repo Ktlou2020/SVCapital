@@ -11,7 +11,7 @@
     "migrate": "cd server && node db/migrate.js",
     "seed": "cd server && node db/seed.js",
     "setup": "cd server && npm install && node db/migrate.js && node db/seed.js",
-    "pages:build": "rm -rf dist && mkdir -p dist && printf '# Proxy all API calls to the Railway backend\\n/api/*  https://svcapital-production.up.railway.app/api/:splat  200\\n' > dist/_redirects && cp -r assets css js admin ifa fund portal team _data index.html login.html signup.html dist/",
+    "pages:build": "rm -rf dist && mkdir -p dist && printf '# Proxy all API calls to the Railway backend\\n/api/*  https://svcapital-production.up.railway.app/api/:splat  200\\n' > dist/_redirects && cp -r assets css js admin ifa fund portal team _data index.html login.html signup.html institutional.html private-clients.html terms.html popia.html paia.html complaints.html dist/",
     "check:utils": "node scripts/check-utils-calls.cjs",
     "check:portal": "node scripts/check-portal-split.cjs",
     "cap:sync": "cd mobile && npx cap sync",
