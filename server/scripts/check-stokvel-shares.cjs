@@ -129,7 +129,7 @@ for (const [f, r] of [['email.js', sent.email], ['pushService.js', sent.push], [
     await clean();
 
     const MEMBERS = ['INV-SH-A', 'INV-SH-B', 'INV-SH-C'];
-    for (const id of MEMBERS)
+    for (const id of MEMBERS.concat(['INV-SH-OUTSIDER']))
       await db.query(
         `INSERT INTO investors (id, first_name, last_name, email, phone, status, wallet_balance)
          VALUES ($1,$2,'Member',$3,$4,'active',10000)`,
@@ -278,6 +278,69 @@ for (const [f, r] of [['email.js', sent.email], ['pushService.js', sent.push], [
        `${vals.reduce((a, b) => a + b, 0)} vs ${eq.net_assets}`);
     await db.query(`UPDATE sub_accounts SET share_basis = 'contribution' WHERE id = 'SA-SH-1'`);
 
+    /* ── Money a member puts in is THEIRS ──────────────────────────
+       The hole beside the contribution flow. Topping a group wallet up
+       through the ordinary deposit path credits it with nothing recording
+       whose money it was, so reconcile does what it is built to do and
+       shares the increase across every member pro-rata — right for
+       interest, badly wrong for a treasurer banking R5 000 of their own,
+       who would get back their share and no more. */
+    console.log('\nmoney a member pays in stays theirs');
+    {
+      const before = (await shareOf('INV-SH-A')).shares
+        .find(x => x.investor_id === 'INV-SH-A').share;
+      const othersBefore = (await shareOf('INV-SH-A')).shares
+        .filter(x => x.investor_id !== 'INV-SH-A').map(x => x.share);
+
+      const paid = await call('POST', '/api/stokvels/SA-SH-1/pay-in', tok('INV-SH-A'),
+                              { amount: 600 });
+      ok('a member can pay extra into the pot', paid.status === 200,
+         `${paid.status} ${JSON.stringify(paid.body)}`);
+
+      const after = await shareOf('INV-SH-A');
+      const mine = after.shares.find(x => x.investor_id === 'INV-SH-A').share;
+      ok('ALL OF IT IS THEIRS', Math.abs((mine - before) - 600) < 0.02,
+         `${before} \u2192 ${mine}, paid in 600`);
+      ok('and nobody else\u2019s share moved',
+         after.shares.filter(x => x.investor_id !== 'INV-SH-A')
+           .every((x, i) => Math.abs(x.share - othersBefore[i]) < 0.02),
+         JSON.stringify(after.shares.map(x => [x.investor_id, x.share])));
+      await invariant('after a member paid in');
+
+      ok('it came out of their own wallet, not from nowhere',
+         Math.abs(Number((await db.query(
+           'SELECT wallet_balance FROM investors WHERE id = $1', ['INV-SH-A'])).rows[0].wallet_balance)
+           - (10000 - 1000 - 600)) < 0.02,
+         'contributed 1000 earlier, now 600 more');
+
+      /* Paying in settles what is owed, oldest first, rather than sitting
+         beside the arrears as an unrelated credit. */
+      await db.query(
+        `INSERT INTO stokvel_contributions
+           (id, sub_account_id, investor_id, period_label, amount_due, amount_paid, due_date, status)
+         VALUES ('SC-SH-A-OWE','SA-SH-1','INV-SH-A','2026-03',400,0,CURRENT_DATE,'due')`);
+      const settling = await call('POST', '/api/stokvels/SA-SH-1/pay-in', tok('INV-SH-A'),
+                                  { amount: 400 });
+      ok('paying in settles arrears oldest first',
+         settling.status === 200 && Math.abs(Number(settling.body.data.settled) - 400) < 0.02,
+         JSON.stringify(settling.body));
+      ok('and the obligation is marked paid',
+         (await db.query(`SELECT status FROM stokvel_contributions WHERE id='SC-SH-A-OWE'`))
+           .rows[0].status === 'paid');
+
+      const broke = await call('POST', '/api/stokvels/SA-SH-1/pay-in', tok('INV-SH-A'),
+                               { amount: 999999 });
+      ok('more than their wallet holds is refused', broke.status === 400,
+         `${broke.status} ${JSON.stringify(broke.body)}`);
+      ok('and they are told what they have',
+         /Not enough in your wallet/.test((broke.body && broke.body.error) || ''),
+         JSON.stringify(broke.body));
+      ok('somebody outside the stokvel cannot pay into it',
+         (await call('POST', '/api/stokvels/SA-SH-1/pay-in', tok('INV-SH-OUTSIDER'),
+                     { amount: 10 })).status === 404);
+      await invariant('after settling arrears by paying in');
+    }
+
     /* ── Arrears come off the share, not out of the pot ────────────── */
     console.log('\nan exit needs the signatories, and arrears stay behind');
     await db.query(
@@ -334,6 +397,24 @@ for (const [f, r] of [['email.js', sent.email], ['pushService.js', sent.push], [
 
     /* ── An exit that outruns the cash ─────────────────────────────── */
     console.log('\nand an exit the cash cannot cover pays what is there and owes the rest');
+    /* ARRANGED, not inherited. The first version of this relied on whatever
+       the wallet happened to hold after the sections above, so a member
+       paying in earlier quietly dissolved the scenario and the test started
+       asserting nothing. The shortfall is now created on purpose: most of
+       the pot goes into the pool, leaving the wallet thin. */
+    const spare = Number((await db.query(
+      `SELECT wallet_balance FROM sub_accounts WHERE id='SA-SH-1'`)).rows[0].wallet_balance);
+    const commit = Math.floor((spare - 50) * 100) / 100;
+    if (commit > 0) {
+      const a2 = await raise({ amount: commit, kind: 'investment', pool_id: 'POOL-SH-1' });
+      await vote(a2.id, 'INV-SH-A'); await vote(a2.id, 'INV-SH-B');
+      await call('POST', '/api/tables/investments', tok('INV-SH-A'), {
+        id: 'INVST-SH-2', investor_id: 'INV-SH-A', sub_account_id: 'SA-SH-1',
+        pool_id: 'POOL-SH-1', pool_name: 'Cattle March', amount: commit,
+        annual_rate: 0.14, term_months: 18, status: 'active',
+        start_date: '2026-03-01', end_date: '2027-09-01', authority_id: a2.id,
+      });
+    }
     const cash = Number((await db.query(
       `SELECT wallet_balance FROM sub_accounts WHERE id='SA-SH-1'`)).rows[0].wallet_balance);
     const bShare = (await shareOf('INV-SH-B')).shares.find(x => x.investor_id === 'INV-SH-B').share;

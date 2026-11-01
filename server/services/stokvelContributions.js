@@ -168,4 +168,86 @@ async function pay(client, { contribution, investorId, subAccount, amount }) {
   return { paid: want, outstanding: round2(dueAmt - nowPaid), reference: ref };
 }
 
-module.exports = { periodFor, openPeriod, pay };
+/* ─── Money into the pot that is not a scheduled contribution ──────
+   A member putting extra in: settling arrears in one go, a late joiner
+   catching up, cash they have decided to add.
+
+   IT MOVES FROM THEIR OWN WALLET, exactly as a contribution does, and for
+   the same reason. The alternative — topping the group wallet up directly
+   through the ordinary deposit flow — credits sub_accounts.wallet_balance
+   with nothing recording whose money it was, and stokvelShares.reconcile
+   then does what it is built to do and shares the increase across every
+   member pro-rata. So a treasurer who banked R5 000 of their own would get
+   back their share of it and no more. The contribution path already solves
+   this; this is the same path without a schedule.
+
+   Written as a contribution allocation, in the same transaction as the
+   money, so there is never a moment when the wallet has moved and the
+   ledger has not. */
+async function payIn(client, { subAccount, investorId, amount, note }) {
+  const want = round2(amount);
+  if (!(want > 0)) throw new Error('An amount is required.');
+
+  const { rows: [me] } = await client.query(
+    'SELECT wallet_balance FROM investors WHERE id = $1 FOR UPDATE', [investorId]);
+  if (!me) throw new Error('No such member.');
+  const walletHas = round2(Number(me.wallet_balance));
+  if (walletHas < want) {
+    throw new Error(`Not enough in your wallet. Available: R${walletHas.toFixed(2)}.`);
+  }
+
+  const ref = 'SPI-' + crypto.randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase();
+
+  await client.query(
+    'UPDATE investors SET wallet_balance = wallet_balance - $1, updated_at = NOW() WHERE id = $2',
+    [want, investorId]);
+  await client.query(
+    'UPDATE sub_accounts SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
+    [want, subAccount.id]);
+
+  /* Both sides of the pair, as services/ledger.js requires: listing one
+     without the other reports money entering or leaving the platform, which
+     this never does. */
+  await client.query(
+    `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, created_at, updated_at)
+     VALUES (gen_random_uuid(), $1, 'stokvel_contribution', $2, 'completed', $3, $4, NOW(), NOW())`,
+    [investorId, want, ref, `Paid into ${subAccount.name}${note ? ' \u2014 ' + String(note).slice(0, 80) : ''}`]);
+  await client.query(
+    `INSERT INTO transactions (id, investor_id, sub_account_id, type, amount, status, reference, description, created_at, updated_at)
+     VALUES (gen_random_uuid(), $1, $2, 'stokvel_contribution_received', $3, 'completed', $4, $5, NOW(), NOW())`,
+    [subAccount.parent_investor_id, subAccount.id, want, ref + '-R',
+     'Paid in by a member' + (note ? ' \u2014 ' + String(note).slice(0, 80) : '')]);
+
+  const shares = require('./stokvelShares');
+  await shares.allocateContribution(client, {
+    subAccountId: subAccount.id, investorId, amount: want,
+    reference: ref, periodLabel: null,
+  });
+
+  /* Oldest first, so paying in clears what is actually outstanding rather
+     than leaving arrears beside a credit. */
+  let left = want;
+  const { rows: due } = await client.query(
+    `SELECT id, amount_due, amount_paid FROM stokvel_contributions
+      WHERE sub_account_id = $1 AND investor_id = $2 AND status = 'due'
+        AND (amount_due - amount_paid) > 0
+      ORDER BY due_date ASC FOR UPDATE`, [subAccount.id, investorId]);
+  for (const c of due) {
+    if (round2(left) <= 0) break;
+    const outstanding = round2(Number(c.amount_due) - Number(c.amount_paid));
+    const put = round2(Math.min(outstanding, left));
+    const nowPaid = round2(Number(c.amount_paid) + put);
+    await client.query(
+      `UPDATE stokvel_contributions
+          SET amount_paid = $2, status = $3,
+              paid_at = CASE WHEN $3 = 'paid' THEN NOW() ELSE paid_at END,
+              updated_at = NOW()
+        WHERE id = $1`,
+      [c.id, nowPaid, nowPaid >= round2(Number(c.amount_due)) ? 'paid' : 'due']);
+    left = round2(left - put);
+  }
+
+  return { paid: want, settled: round2(want - left), reference: ref };
+}
+
+module.exports = { periodFor, openPeriod, pay, payIn };

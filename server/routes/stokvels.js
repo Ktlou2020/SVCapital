@@ -645,6 +645,51 @@ router.post('/:id/withdrawal-requests/:rid/vote', async (req, res) => {
 });
 
 
+/* ─── POST /api/stokvels/:id/pay-in ──────────────────────────────────
+   Extra money into the pot, from the member's own wallet.
+
+   This exists so that there is no OTHER way for a member to put money in.
+   The ordinary deposit flow credits a sub-account wallet with nothing
+   recording whose money it was, and stokvelShares.reconcile then shares the
+   increase across every member pro-rata — correct for interest and for a
+   maturity, badly wrong for a treasurer banking R5 000 of their own, who
+   would get back their share of it and no more. Routing a member's money
+   through their own wallet keeps the attribution, and keeps it in the same
+   transaction as the money.
+
+   Any active member may pay in; nobody needs approval to make the group
+   better off. Taking money OUT is what the mandate guards. */
+router.post('/:id/pay-in', async (req, res) => {
+  const me = callerInvestorId(req);
+  const client = await pool.connect();
+  try {
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) return res.status(404).json({ error: 'No such stokvel.' });
+
+    const amount = Math.round((parseFloat(req.body && req.body.amount) || 0) * 100) / 100;
+    if (!(amount > 0)) return res.status(400).json({ error: 'An amount is required.' });
+
+    await client.query('BEGIN');
+    const out = await contributions.payIn(client, {
+      subAccount: group, investorId: me, amount,
+      note: (req.body && req.body.note) || '',
+    });
+    await client.query('COMMIT');
+    return res.json({ data: out });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    /* The service throws sentences a member can act on — not enough in your
+       wallet, an amount is required — so they are passed through rather
+       than flattened into a 500. */
+    const known = /Not enough in your wallet|An amount is required|No such member/.test(err.message || '');
+    if (!known) console.error('[stokvels] pay-in failed:', err.message);
+    return res.status(known ? 400 : 500)
+      .json({ error: known ? err.message : 'Could not pay that in.' });
+  } finally {
+    client.release();
+  }
+});
+
 /* ─── GET /api/stokvels/:id/shares ───────────────────────────────────
    What everybody's share is, visible to everybody — the same rule as the
    contribution list. A share each member can see only their own of is a

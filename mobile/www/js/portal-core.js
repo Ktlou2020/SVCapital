@@ -5444,8 +5444,48 @@ function getProductInfo(type) {
 
 /* ── Sub-account deposit ─────────────────────── */
 function openSaDeposit(saId) {
+  /* NOT FOR A STOKVEL. Topping a group wallet up directly credits it with
+     nothing recording whose money it was, and stokvelShares.reconcile then
+     shares the increase across every member pro-rata — right for interest
+     and for a maturity, wrong for a member's own money, which would mostly
+     end up belonging to everybody else. A member pays in from their own
+     wallet instead, which keeps the attribution.
+
+     Guarded here as well as on the buttons, because the buttons are not the
+     only way somebody arrives at this function. */
+  const sa = (PORTAL.subAccounts || []).find(a => a.id === saId);
+  if (sa && sa.account_type === 'stokvel') return payIntoStokvel(saId);
   Modal.close('saDetailModal');
   openTopUpModal(null, saId);
+}
+
+/* Money into the pot, from the member's own wallet. Deliberately not a
+   deposit screen: the money has to come through a wallet that already knows
+   whose it is. */
+async function payIntoStokvel(groupId) {
+  const raw = prompt(
+    'How much are you paying into the stokvel?\n\n'
+    + 'It comes out of your own SV Capital wallet, and it is recorded as yours — '
+    + 'anything you owe is settled oldest first.');
+  if (!raw) return;
+  const amount = parseFloat(raw);
+  if (!(amount > 0)) { Utils.toast('Enter an amount.', 'error'); return; }
+  try {
+    const res = await API._fetch('POST', `stokvels/${groupId}/pay-in`, { amount });
+    const d = (res && res.data) || {};
+    Utils.toast(Number(d.settled) > 0
+      ? `Paid in ${Utils.rand(d.paid)} — ${Utils.rand(d.settled)} of it went to what you owed.`
+      : `Paid in ${Utils.rand(d.paid)}.`, 'success');
+  } catch (err) {
+    Utils.toast(err.message || 'Could not pay that in.', 'error');
+  }
+  await Promise.all([loadSubAccounts(), loadStokvels()]);
+  renderSubAccountsView();
+  /* And the hub, if that is where they paid in from. Modal.open adds the
+     class 'open' — the first draft of this looked for 'active', which is
+     simply never set, so the hub would have sat showing the old balance. */
+  const modal = document.getElementById('saDetailModal');
+  if (modal && modal.classList.contains('open')) await _svRenderHub(groupId);
 }
 
 /* ─── Referral ─── */
@@ -6982,7 +7022,7 @@ function _saCard(sa) {
       ${isMinor && sa.savings_goal > 0 ? _saGoalBar(balance + invested, sa.savings_goal, sa.savings_goal_label) : ''}
     </div>
     <div class="sa-card__actions">
-      <button class="btn btn--sm btn--primary" onclick="openSaDeposit('${sa.id}')"><i class="fa-solid fa-wallet"></i> Deposit</button>
+      <button class="btn btn--sm btn--primary" onclick="${sa.account_type === 'stokvel' ? `payIntoStokvel('${sa.id}')` : `openSaDeposit('${sa.id}')`}"><i class="fa-solid fa-wallet"></i> ${sa.account_type === 'stokvel' ? 'Pay in' : 'Deposit'}</button>
       <button class="btn btn--sm btn--secondary" onclick="openSaInvest('${sa.id}')"><i class="fa-solid fa-chart-line"></i> Invest</button>
       ${sa.kyc_status === 'approved' ? `<button class="btn btn--sm btn--ghost" onclick="openSaWithdrawal('${sa.id}')"><i class="fa-solid fa-arrow-up-from-bracket"></i> Withdraw</button>` : ''}
       <button class="btn btn--sm btn--secondary" onclick="openSaDetail('${sa.id}')"><i class="fa-solid fa-${isMinor ? 'star' : 'eye'}"></i> ${isMinor ? 'Hub' : 'Details'}</button>
@@ -7266,7 +7306,7 @@ function _saNormalDetail(sa, meta) {
     </div>
 
     <div style="display:flex;gap:8px;margin:16px 0;flex-wrap:wrap">
-      <button class="btn btn--primary btn--sm" onclick="Modal.close('saDetailModal');openSaDeposit('${sa.id}')"><i class="fa-solid fa-wallet"></i> Deposit</button>
+      <button class="btn btn--primary btn--sm" onclick="${sa.account_type === 'stokvel' ? `payIntoStokvel('${sa.id}')` : `Modal.close('saDetailModal');openSaDeposit('${sa.id}')`}"><i class="fa-solid fa-wallet"></i> ${sa.account_type === 'stokvel' ? 'Pay in' : 'Deposit'}</button>
       <button class="btn btn--secondary btn--sm" onclick="Modal.close('saDetailModal');openSaInvest('${sa.id}')"><i class="fa-solid fa-chart-line"></i> Invest</button>
       ${sa.kyc_status === 'approved' ? `<button class="btn btn--secondary btn--sm" onclick="openSaWithdrawal('${sa.id}')"><i class="fa-solid fa-arrow-up-from-bracket"></i> Withdraw</button>` : ''}
       <button class="btn btn--ghost btn--sm" onclick="Modal.close('saDetailModal');downloadSaStatement('${sa.id}','${sa.name}')"><i class="fa-solid fa-file-pdf"></i> Statement</button>
@@ -12506,9 +12546,14 @@ function _svShares(res, gid) {
       ${(d.exit_debts || []).map(x => `${_esc(x.first_name)} ${Utils.rand(x.owed)}`).join(', ')}.
       Paid automatically as the group&rsquo;s investments mature.
     </div>` : ''}
-    <button class="btn btn--ghost btn--sm" style="margin-top:10px" onclick="requestStokvelExit('${_esc(gid)}')">
-      <i class="fa-solid fa-door-open"></i> Ask to leave this stokvel
-    </button>`;
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+      <button class="btn btn--secondary btn--sm" onclick="payIntoStokvel('${_esc(gid)}')">
+        <i class="fa-solid fa-wallet"></i> Pay into the pot
+      </button>
+      <button class="btn btn--ghost btn--sm" onclick="requestStokvelExit('${_esc(gid)}')">
+        <i class="fa-solid fa-door-open"></i> Ask to leave this stokvel
+      </button>
+    </div>`;
 }
 
 /* Leaving. Raised against the mandate like anything else that takes money

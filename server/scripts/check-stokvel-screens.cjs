@@ -133,6 +133,33 @@ console.log('\nand the marketplace carries the approval');
      'the marketplace exists twice; a copy in each is a copy that drifts');
 }
 
+console.log('\nand a group wallet is never topped up with unattributed money');
+{
+  /* The hole beside the contribution flow. Topping a stokvel wallet up
+     through the ordinary deposit screen credits it with nothing recording
+     whose money it was, and stokvelShares.reconcile then shares the increase
+     across every member pro-rata \u2014 right for interest, wrong for a
+     treasurer banking R5 000 of their own, who would get back their share
+     and no more. */
+  /* Sliced on function boundaries rather than by counting characters: the
+     first version of these used proximity windows, which the explanatory
+     comments then pushed the code out of \u2014 so they failed on correct
+     code and would have passed on plenty of wrong code. */
+  const depositFn = CORE.slice(CORE.indexOf('function openSaDeposit'),
+                               CORE.indexOf('async function payIntoStokvel'));
+  const payInFn   = CORE.slice(CORE.indexOf('async function payIntoStokvel'),
+                               CORE.indexOf('function _getLevelForXP'));
+  ok('the deposit entry point refuses a stokvel',
+     /account_type === 'stokvel'/.test(depositFn) && /payIntoStokvel\(saId\)/.test(depositFn),
+     'guarded at the function, not only on the buttons that call it');
+  ok('and the card offers paying in instead',
+     /account_type === 'stokvel' \? `payIntoStokvel/.test(CORE));
+  ok('paying in goes through the member\u2019s own wallet',
+     /pay-in/.test(payInFn) && !/openTopUpModal/.test(payInFn),
+     'a wallet that already knows whose money it is');
+  ok('and the hub offers it too', /Pay into the pot/.test(CORE));
+}
+
 console.log('\nand voting is offered only to signatories');
 {
   ok('the buttons are behind the signatory flag',
