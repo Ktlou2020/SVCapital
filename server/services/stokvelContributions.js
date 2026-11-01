@@ -145,6 +145,17 @@ async function pay(client, { contribution, investorId, subAccount, amount }) {
     [subAccount.parent_investor_id, subAccount.id, want, ref + '-R',
      `Contribution received — ${contribution.period_label}`]);
 
+  /* The share ledger's one hooked event. A contribution is the only movement
+     on a stokvel wallet that names a member, so it is the only one written
+     where it happens; everything else is placed by stokvelShares.reconcile.
+     Inside this transaction, because money that moved and a share that did
+     not are the same bug seen from either side. */
+  const shares = require('./stokvelShares');
+  await shares.allocateContribution(client, {
+    subAccountId: subAccount.id, investorId, amount: want,
+    reference: ref, periodLabel: contribution.period_label,
+  });
+
   const nowPaid = round2(paidAmt + want);
   const settled = nowPaid >= dueAmt;
   await client.query(

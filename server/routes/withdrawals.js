@@ -49,6 +49,7 @@ router.post('/request', requireAuth, async (req, res) => {
       /* Declared out here so it survives the transaction block: the people
          who approved this are told after the commit, not inside it. */
       let _spentAuthority = null;
+      let _reconcileStokvel = null;
       try {
         await client.query('BEGIN');
 
@@ -109,6 +110,7 @@ router.post('/request', requireAuth, async (req, res) => {
              the only chance anyone has to notice an authority used in a way
              they did not expect while it is still recent. */
           _spentAuthority = authority.id;
+          _reconcileStokvel = sub_account_id;
         }
 
         const description = `Sub-account withdrawal (${saRow.name})${bank_name ? ` to ${bank_name}` : ''}${bank_account_number ? ` (${bank_account_number})` : ''}`;
@@ -126,6 +128,17 @@ router.post('/request', requireAuth, async (req, res) => {
           'UPDATE sub_accounts SET wallet_balance = wallet_balance - $1, updated_at = NOW() WHERE id = $2',
           [numAmount, sub_account_id]
         );
+        if (_reconcileStokvel) {
+          /* The money has left the group wallet; the share ledger has to
+             hear about it in the same transaction. A withdrawal approved by
+             the signatories is spent on the group's behalf, so it is a cost
+             shared pro-rata — unless it was an exit settlement, which
+             writes its own payout allocation and never reaches here. */
+          try {
+            await require('../services/stokvelShares')
+              .reconcile(client, _reconcileStokvel, { reason: 'Group withdrawal', reference });
+          } catch (e) { console.warn('[withdrawals] stokvel reconcile failed:', e.message); }
+        }
         await client.query('COMMIT');
 
         if (_spentAuthority) {

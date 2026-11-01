@@ -213,6 +213,11 @@ const ADMIN_ONLY_TABLES = new Set([
      read their own group's invitations through /api/stokvels, which masks
      the contact. */
   'stokvel_invites',
+  /* What each member's share is, and what the group owes somebody who has
+     left. Money, per person, for everybody in the group — unlisted here the
+     generic reader would hand every signed-in investor every stokvel's
+     internal split. Members read their own group's through /api/stokvels. */
+  'stokvel_allocations', 'stokvel_exit_debts',
   /* Who owes what. An arrears list is the most sensitive thing a stokvel
      holds about its members; it is theirs to see, not every investor's. */
   'stokvel_contributions', 'stokvel_contribution_schedules',
@@ -1244,6 +1249,7 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
       /* Carried out of the transaction block: the signatories who approved
          this are told after the commit, never inside it. */
       let _spentAuthority = null;
+      let _reconcileStokvel = null;
       try {
         await _invClient.query('BEGIN');
         let walletBal = 0;
@@ -1300,6 +1306,11 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
             }
             await mandate.consume(_invClient, authority, body.id || null);
             _spentAuthority = authority.id;
+            /* Reconciled after the wallet moves, below: investing does not
+               change anybody's share — the money goes from cash to an
+               investment, both of which net assets counts — but the 1% fee
+               is a real cost and belongs to the members pro-rata. */
+            _reconcileStokvel = body.sub_account_id;
           }
         } else {
           const { rows: iv } = await _invClient.query(
@@ -1377,6 +1388,15 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
              ON CONFLICT (id) DO NOTHING`,
             [feeId, body.investor_id, body.sub_account_id || null, platformFee, feeId]
           );
+        }
+        if (_reconcileStokvel) {
+          /* Inside the transaction, before the commit: a fee charged and a
+             share ledger that has not heard about it are the same bug seen
+             from either side. */
+          try {
+            await require('../services/stokvelShares')
+              .reconcile(_invClient, _reconcileStokvel, { reason: 'Platform fee on an investment', reference: body.id || null });
+          } catch (e) { console.warn('[tables] stokvel reconcile failed:', e.message); }
         }
         await _invClient.query('COMMIT');
         _investmentWalletDeducted = true;

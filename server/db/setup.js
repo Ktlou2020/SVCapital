@@ -1287,6 +1287,85 @@ CREATE INDEX IF NOT EXISTS stokvel_invites_cell_idx  ON stokvel_invites(cell)   
 CREATE INDEX IF NOT EXISTS stokvel_invites_group_idx ON stokvel_invites(sub_account_id);
 
 
+/* WHAT EACH MEMBER'S SHARE OF THE POT IS.
+   
+   Contributions were tracked per member; everything else the group earned or
+   spent landed on one undifferentiated wallet — interest from the 3PIM
+   import, returns at maturity, the 1% fee on an investment. So the pot had a
+   total and no owners, and the question every stokvel member actually asks
+   had no answer. Worse, a member set to 'exited' was simply stopped from
+   seeing the group while their money stayed pooled, with nothing calculating
+   what they were owed.
+   
+   A share is the SUM OF THESE ROWS, not a figure derived by summing
+   transactions. services/ledger.js already states the house rule for that:
+   "the column is authoritative, and this definition exists for reporting and
+   reconciliation, not for repair." Shares follow it — a written balance,
+   with a reconciliation that proves it.
+   
+   Only 'contribution' is written at the point of the event, because it is
+   the only event that names a member. Everything else is placed by
+   services/stokvelShares.js reconcile(), which compares the group's net
+   assets against the sum of these rows and allocates the difference
+   pro-rata. NINE code paths credit a stokvel wallet across six files, and
+   hooking each one is the mistake this codebase has already paid for once —
+   see the comment in jobs/maturityCron.js about maturity being the only
+   money path that did not split to sub-accounts, which left them
+   "permanently short by everything it had invested". Deriving instead means
+   a tenth path nobody hooked is still allocated correctly. */
+CREATE TABLE IF NOT EXISTS stokvel_allocations (
+  id              TEXT PRIMARY KEY,
+  sub_account_id  TEXT NOT NULL REFERENCES sub_accounts(id) ON DELETE CASCADE,
+  investor_id     TEXT NOT NULL REFERENCES investors(id)    ON DELETE CASCADE,
+  kind            TEXT NOT NULL
+                    CHECK (kind IN ('contribution','income','cost','payout','adjustment')),
+  /* SIGNED. A cost and a payout are stored negative, so a share is a plain
+     SUM over this column and no reader has to remember which kinds subtract.
+     The CHECK below is what keeps the sign and the kind agreeing. */
+  amount          NUMERIC(18,2) NOT NULL,
+  reason          TEXT,
+  reference       TEXT,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT stokvel_allocations_sign_chk CHECK (
+    (kind IN ('contribution','income') AND amount > 0) OR
+    (kind IN ('cost','payout')         AND amount < 0) OR
+    (kind = 'adjustment')
+  )
+);
+CREATE INDEX IF NOT EXISTS stokvel_alloc_member_idx ON stokvel_allocations(sub_account_id, investor_id);
+CREATE INDEX IF NOT EXISTS stokvel_alloc_when_idx   ON stokvel_allocations(sub_account_id, created_at DESC);
+
+/* What a stokvel still owes somebody who has left.
+   
+   A member's share can outrun the group's CASH: the pot may be R20 000 in an
+   eighteen-month cattle pool and R600 in the wallet. Forcing an early
+   redemption would push everybody else's savings out of a pool to pay one
+   person, so the exit pays what is there and the remainder is recorded here,
+   settled as investments mature.
+   
+   The debt is SENIOR to current members' income — reconcile() pays these
+   before allocating anything — and it EARNS NOTHING, because the leaver's
+   share was crystallised on the day they left. Both halves of that are
+   deliberate: the principal is owed, the growth after they left is not
+   theirs. */
+CREATE TABLE IF NOT EXISTS stokvel_exit_debts (
+  id              TEXT PRIMARY KEY,
+  sub_account_id  TEXT NOT NULL REFERENCES sub_accounts(id) ON DELETE CASCADE,
+  investor_id     TEXT NOT NULL REFERENCES investors(id)    ON DELETE CASCADE,
+  amount_owed     NUMERIC(18,2) NOT NULL CHECK (amount_owed > 0),
+  amount_paid     NUMERIC(18,2) NOT NULL DEFAULT 0 CHECK (amount_paid >= 0),
+  status          TEXT NOT NULL DEFAULT 'owing' CHECK (status IN ('owing','settled')),
+  /* The authority the signatories granted for this exit. An exit is group
+     money leaving, so it clears the mandate like a withdrawal does. */
+  approved_via    TEXT,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  settled_at      TIMESTAMPTZ,
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS stokvel_exit_debt_open_idx
+  ON stokvel_exit_debts(sub_account_id) WHERE status = 'owing';
+
+
 CREATE TABLE IF NOT EXISTS sessions (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id       UUID NOT NULL,
@@ -2530,11 +2609,27 @@ async function autoSetup() {
              which; pool_id is where an investment is approved to go. */
           BEGIN ALTER TABLE stokvel_withdrawal_requests ADD COLUMN kind TEXT NOT NULL DEFAULT 'withdrawal'; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE stokvel_withdrawal_requests ADD COLUMN pool_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-          BEGIN ALTER TABLE stokvel_withdrawal_requests ADD CONSTRAINT swr_kind_chk CHECK (kind IN ('withdrawal','investment')); EXCEPTION WHEN duplicate_object THEN NULL; END;
+          BEGIN ALTER TABLE stokvel_withdrawal_requests ADD COLUMN exit_investor_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          /* Three kinds now, not two: an exit is group money leaving, so it
+             clears the same mandate. The constraint is DROPPED and re-added
+             rather than added with EXCEPTION duplicate_object, which on a
+             database that already has the two-value version would keep the
+             old one and refuse every exit while reporting success. */
+          BEGIN ALTER TABLE stokvel_withdrawal_requests DROP CONSTRAINT swr_kind_chk; EXCEPTION WHEN undefined_object THEN NULL; END;
+          BEGIN ALTER TABLE stokvel_withdrawal_requests ADD CONSTRAINT swr_kind_chk CHECK (kind IN ('withdrawal','investment','exit')); EXCEPTION WHEN duplicate_object THEN NULL; END;
           BEGIN ALTER TABLE sub_accounts ADD COLUMN withdrawal_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE investors    ADD COLUMN withdrawal_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE transactions ADD COLUMN available_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE sub_accounts ADD COLUMN stokvel_quorum INT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          /* How this stokvel's constitution says the pot divides. 'contribution'
+             tracks what each member actually put in and when, which is correct
+             whenever amounts or joining dates differ; 'equal' is the classic
+             stokvel split, where arrears come off your own share. The group's
+             choice, not the platform's, and a mandate-level property — changing
+             how the pot divides is not something one member may do. */
+          BEGIN ALTER TABLE sub_accounts ADD COLUMN share_basis TEXT NOT NULL DEFAULT 'contribution'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE sub_accounts ADD CONSTRAINT sub_accounts_share_basis_chk
+            CHECK (share_basis IN ('contribution','equal')); EXCEPTION WHEN duplicate_object THEN NULL; END;
           BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_holder TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_number TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
@@ -4408,6 +4503,11 @@ async function autoSetup() {
          that comes back after somebody dismissed the idea of it is worse than
          no notice at all. */
       const NOTICES = [
+        { id: 'ANN-2026-STOKVEL-SHARES-AND-EXITS', area: 'both', icon: 'fa-chart-pie',
+          title: 'A stokvel member can see their share \u2014 and leaving now settles it',
+          body: 'TWO THINGS, and the second was a live bug. Contributions were tracked per member while everything else the group earned or spent landed on one undifferentiated wallet \u2014 interest from the 3PIM import, returns at maturity, the 1% fee on an investment \u2014 so the pot had a total and no owners, and the question every stokvel member actually asks had no answer. Worse: a member set to \u201cexited\u201d was simply stopped from seeing the group WHILE THEIR MONEY STAYED POOLED. Nothing calculated what they were owed and nothing paid it. Both are fixed. EVERY MEMBER NOW HAS A SHARE, visible to the whole group on the stokvel screen, next to a breakdown of the pot \u2014 what is in the wallet, what is invested, what is owed to members who have left \u2014 so a member can do the arithmetic and find that it comes out. It always comes out: the platform refuses to let the sum of the shares drift from the money it is splitting, and the split is to the cent, with the rounding remainder going somewhere rather than being lost. HOW THE POT DIVIDES IS THE GROUP\u2019S CHOICE, not ours: \u201cby what each member put in\u201d (the default, and right whenever amounts or joining dates differ) or \u201cequally, by head\u201d, which is the classic stokvel split with arrears coming off your own share. It is on the mandate card in the console, and it should only ever be set to what the group\u2019s constitution actually says. LEAVING. A member asks to leave from the app; THE SIGNATORIES APPROVE IT, because an exit takes money out of the pot and no one person may end a membership and draw the share. What they still owe comes off and STAYS IN THE POT for the members who chased it, and their outstanding contributions are closed rather than left due against somebody who is no longer a member. AND THE PART TO EXPLAIN TO CLIENTS: a share can outrun the group\u2019s CASH \u2014 the pot may be R20 000 in an eighteen-month cattle pool and R600 in the wallet. Nothing is redeemed early, because that would push everybody else\u2019s savings out of a pool to pay one person. The leaver is paid what the group holds now, leaves immediately, and the rest is recorded as owed to them and paid AUTOMATICALLY as investments mature \u2014 ahead of any further earnings reaching current members. It does not need chasing and it does not grow while it waits, because their share was fixed on the day they left. A SHARE IS NOT A FIELD: it is the sum of a ledger, so there is deliberately nothing in the console to edit. If one looks wrong the cause is in the contributions or in what the group was credited. Existing stokvels need server/scripts/backfill-stokvel-shares.cjs run once \u2014 it previews before it writes and NAMES any group whose books will not balance rather than forcing them.',
+          where: 'Client app \u2192 Sub-accounts \u2192 open the stokvel \u2192 Shares, with your own share on the header beside the group wallet. \u201cAsk to leave this stokvel\u201d is at the bottom of that section; the request then appears under Signatory approvals labelled Exit, and any member can settle it once it carries. Staff view: Admin console \u2192 Stokvels \u2192 open one \u2192 Shares (read-only, with anything still owed to former members), and the mandate card above it for how the pot divides.' },
+
         { id: 'ANN-2026-STOKVEL-SELF-INVITES', area: 'both', icon: 'fa-user-plus',
           title: 'A stokvel builds its own roster \u2014 stop typing members into the console',
           body: 'Onboarding was a staff typing job, and it was the reason this product could not be sold. A member was added by somebody in the console pasting an INVESTOR ID into a prompt, and the only thing that ever moved them from \u201cinvited\u201d to \u201cactive\u201d was a staff dropdown \u2014 so a fifteen-member stokvel needed fifteen people already registered and fifteen manual rows, and the chairperson could add nobody. Now the COMMITTEE invites, by name and email or cell number: the chairperson, the secretary or the treasurer, from the stokvel screen in the app. Not an ordinary member \u2014 a stokvel wallet holds everybody\u2019s savings and \u201cany member can add anyone\u201d is not a door a savings club wants open. THE ONE RULE TO KNOW, AND TO REPEAT TO CLIENTS: AN INVITATION CAN NEVER MAKE A SIGNATORY. It always creates an ordinary member, with no office. If it could do otherwise the mandate would be theatre \u2014 invite two friends, sign them up, approve your own withdrawal \u2014 and somebody who was a signatory, left, and is invited back does NOT get their signing power returned. Signing power is a change to the mandate, made by us against the group\u2019s constitution. THERE IS DELIBERATELY NO JOIN LINK IN THE INVITATION. A link is a capability: forwarded once, it would let a stranger see a group\u2019s balances and roster. The invitation is ADDRESSED to the email or cell number instead, and the invitee claims it by signing in \u2014 or signing up \u2014 with that same contact, at which point it is waiting on their Sub-accounts screen. That works identically for somebody who already banks with us and somebody who has never heard of us, and it is also the one thing to know when a client says they never got it: AN INVITATION SENT TO AN ADDRESS THEY DID NOT SIGN UP WITH IS INVISIBLE TO THEM. The committee can see every pending invitation and send another to the right contact, and the console shows the same list with \u201chas an account\u201d beside each one, which is the diagnosis. Invitations go out by email, by SMS and, where the contact already belongs to an account, by push. They expire after 21 days, can be withdrawn, can only be accepted once, and accepting is the invitee\u2019s own act \u2014 staff cannot accept for somebody, because joining a group that can then see your contributions is not something to have done to you. Caps: 50 members and 25 invitations outstanding, which are bounds on abuse rather than product rules \u2014 talk to us about a bigger group.',

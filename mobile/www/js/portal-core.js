@@ -12354,14 +12354,15 @@ async function openStokvelHub(id) {
 }
 
 async function _svRenderHub(id) {
-  let group, members, contributions, requests, invitations;
+  let group, members, contributions, requests, invitations, shareData;
   try {
-    [group, members, contributions, requests, invitations] = await Promise.all([
+    [group, members, contributions, requests, invitations, shareData] = await Promise.all([
       API._fetch('GET', `stokvels/${id}`),
       API._fetch('GET', `stokvels/${id}/members`),
       API._fetch('GET', `stokvels/${id}/contributions`),
       API._fetch('GET', `stokvels/${id}/withdrawal-requests`),
       API._fetch('GET', `stokvels/${id}/invites`),
+      API._fetch('GET', `stokvels/${id}/shares`),
     ]);
   } catch (err) {
     document.getElementById('saDetailBody').innerHTML =
@@ -12376,7 +12377,8 @@ async function _svRenderHub(id) {
 
   document.getElementById('saDetailTitle').textContent = g.name || 'Stokvel';
   document.getElementById('saDetailBody').innerHTML = `
-    ${_svHeader(g)}
+    ${_svHeader(g, shareData)}
+    ${_svShares(shareData, id)}
     ${_svContributions(contributions, mine, id)}
     ${_svWithdrawals(requests, meIsSignatory, id)}
     ${_svMembers(members)}
@@ -12384,7 +12386,7 @@ async function _svRenderHub(id) {
   `;
 }
 
-function _svHeader(g) {
+function _svHeader(g, shareRes) {
   const meta = (typeof SA_TYPE_META !== 'undefined' && SA_TYPE_META.stokvel) || { bg: '#064e1e', icon: 'fa-people-group' };
   return `<div class="sa-detail-banner" style="background:${meta.bg}">
     <div style="display:flex;align-items:center;gap:12px">
@@ -12400,6 +12402,7 @@ function _svHeader(g) {
     <div style="display:flex;gap:24px;margin-top:16px">
       <div><div style="font-size:0.7rem;color:rgba(255,255,255,0.7);text-transform:uppercase;letter-spacing:.5px">Group wallet</div><div style="font-size:1.3rem;font-weight:800;color:#fff">${Utils.rand(g.wallet_balance)}</div></div>
       <div><div style="font-size:0.7rem;color:rgba(255,255,255,0.7);text-transform:uppercase;letter-spacing:.5px">Invested</div><div style="font-size:1.3rem;font-weight:800;color:#fff">${Utils.rand(g.total_invested)}</div></div>
+      ${shareRes && shareRes.data ? `<div><div style="font-size:0.7rem;color:rgba(255,255,255,0.7);text-transform:uppercase;letter-spacing:.5px">Your share</div><div style="font-size:1.3rem;font-weight:800;color:#eda5ff">${Utils.rand(shareRes.data.my_share)}</div></div>` : ''}
     </div>
   </div>`;
 }
@@ -12455,6 +12458,102 @@ function _svContributions(res, mine, gid) {
     ${rows.length ? '' : `<div style="font-size:0.82rem;color:var(--text-muted);margin-top:8px">No contributions have been scheduled yet.</div>`}`;
 }
 
+/* ─── Shares ───────────────────────────────────────────────────────
+   What each member's share of the pot is, for everybody to read.
+
+   The same rule as the contribution list, for the same reason: a share each
+   member can see only their own of is a treasurer's spreadsheet with extra
+   steps, and the argument this feature exists to end is settled by one set
+   of numbers everybody reads from.
+
+   The sum is shown against the group's net assets on purpose. A member doing
+   the arithmetic and finding it comes out is the point — and if it ever does
+   not, they should be the first to know rather than the last. */
+function _svShares(res, gid) {
+  const d = (res && res.data) || null;
+  if (!d) return '';
+  const rows = d.shares || [];
+  const basisNote = d.basis === 'equal'
+    ? 'This stokvel splits its pot equally, as its constitution says. What you still owe comes off your own share.'
+    : 'Your share follows what you have put in and your part of everything the group has earned since.';
+
+  return `<div class="sa-section-title mt-16"><i class="fa-solid fa-chart-pie"></i> Shares</div>
+    <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px">${basisNote}</div>
+    <div style="border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:4px">
+        <span style="color:var(--text-muted)">In the wallet</span><strong>${Utils.rand(d.wallet)}</strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:4px">
+        <span style="color:var(--text-muted)">Invested</span><strong>${Utils.rand(d.invested)}</strong>
+      </div>
+      ${Number(d.owed_to_former_members) > 0 ? `<div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:4px">
+        <span style="color:var(--text-muted)">Owed to members who have left</span>
+        <strong style="color:#f59e0b">−${Utils.rand(d.owed_to_former_members)}</strong>
+      </div>` : ''}
+      <div style="display:flex;justify-content:space-between;font-size:0.9rem;border-top:1px solid var(--border);padding-top:6px;margin-top:6px">
+        <span style="font-weight:700">The pot</span><strong>${Utils.rand(d.net_assets)}</strong>
+      </div>
+    </div>
+    <table class="data-table" style="font-size:0.8rem"><tbody>
+    ${rows.map(r => `<tr${r.is_me ? ' style="background:rgba(237,165,255,0.08)"' : ''}>
+      <td>${_esc(r.first_name)} ${_esc(r.last_name || '')}${r.is_me ? ' <span style="color:var(--text-muted)">(you)</span>' : ''}</td>
+      <td class="text-right"><strong>${Utils.rand(r.share)}</strong></td>
+      <td class="text-right" style="color:var(--text-muted);font-size:0.74rem">${r.arrears > 0 ? 'owes ' + Utils.rand(r.arrears) : ''}</td>
+    </tr>`).join('')}
+    </tbody></table>
+    ${(d.exit_debts || []).length ? `<div style="font-size:0.74rem;color:var(--text-muted);margin-top:8px">
+      Still owed to members who have left:
+      ${(d.exit_debts || []).map(x => `${_esc(x.first_name)} ${Utils.rand(x.owed)}`).join(', ')}.
+      Paid automatically as the group&rsquo;s investments mature.
+    </div>` : ''}
+    <button class="btn btn--ghost btn--sm" style="margin-top:10px" onclick="requestStokvelExit('${_esc(gid)}')">
+      <i class="fa-solid fa-door-open"></i> Ask to leave this stokvel
+    </button>`;
+}
+
+/* Leaving. Raised against the mandate like anything else that takes money
+   out of the pot — a member asks, the signatories approve, and only then is
+   anything paid. Deliberately not a one-tap action: it ends a membership and
+   draws a share. */
+async function requestStokvelExit(groupId) {
+  let share = 0;
+  try {
+    const res = await API._fetch('GET', `stokvels/${groupId}/shares`);
+    share = (res && res.data && res.data.my_share) || 0;
+  } catch (_) { /* the figure is for the confirmation; the server decides */ }
+  if (!confirm(
+      `Ask to leave this stokvel?\n\nYour share is about ${Utils.rand(share)}. `
+    + `The signatories have to approve it, anything you still owe comes off, and if the `
+    + `group's money is tied up in investments you are paid what it holds now and the rest `
+    + `as those mature.`)) return;
+  try {
+    await API._fetch('POST', `stokvels/${groupId}/withdrawal-requests`, {
+      kind: 'exit', amount: share > 0 ? share : 0.01,
+      reason: 'Member asked to leave',
+    });
+    Utils.toast('Asked. The signatories have to approve it.', 'success');
+  } catch (err) {
+    Utils.toast(err.message || 'Could not raise that request.', 'error');
+  }
+  await _svRenderHub(groupId);
+}
+
+/* Carrying out an approved exit. Any member may press it, exactly as with an
+   approved investment: the approval is the control, not who taps. */
+async function settleStokvelExit(groupId, requestId) {
+  if (!confirm('Settle this exit now? The member is paid what the group holds and leaves.')) return;
+  try {
+    const res = await API._fetch('POST', `stokvels/${groupId}/exits`, { authority_id: requestId });
+    const d = (res && res.data) || {};
+    Utils.toast(Number(d.queued) > 0
+      ? `Settled. ${Utils.rand(d.paid)} paid, ${Utils.rand(d.queued)} owed as investments mature.`
+      : `Settled. ${Utils.rand(d.paid)} paid.`, 'success');
+  } catch (err) {
+    Utils.toast(err.message || 'Could not settle that exit.', 'error');
+  }
+  await _svRenderHub(groupId);
+}
+
 /* ─── Signatory approvals ──────────────────────────────────────────────────
    The mandate, made visible. A member who is not a signatory sees exactly
    the same list — knowing what is being asked for is the point — and simply
@@ -12476,14 +12575,18 @@ function _svWithdrawals(res, meIsSignatory, gid) {
             ${Utils.rand(r.amount)}
             <span style="font-size:0.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
                          border:1px solid var(--border);border-radius:999px;padding:1px 7px;margin-left:6px;
-                         color:${r.kind === 'investment' ? '#eda5ff' : 'var(--text-muted)'}">
-              ${r.kind === 'investment' ? 'Invest' : 'Withdraw'}
+                         color:${r.kind === 'investment' ? '#eda5ff' : (r.kind === 'exit' ? '#f59e0b' : 'var(--text-muted)')}">
+              ${r.kind === 'investment' ? 'Invest' : (r.kind === 'exit' ? 'Exit' : 'Withdraw')}
             </span>
           </div>
           <div style="font-size:0.74rem;color:var(--text-muted)">
             ${_esc(r.requested_by_name || 'A member')}${r.kind === 'investment'
               ? (r.pool_name ? ' · ' + _esc(r.pool_name) : (r.pool_id ? ' · ' + _esc(r.pool_id) : ''))
-              : (r.bank_name ? ' · ' + _esc(r.bank_name) : '')}
+              : r.kind === 'exit'
+                /* The member leaving, not a bank account — it is whose
+                   membership ends that a signatory is being asked about. */
+                ? (r.exit_name ? ' · ' + _esc(r.exit_name) + ' is leaving' : ' · a member is leaving')
+                : (r.bank_name ? ' · ' + _esc(r.bank_name) : '')}
           </div>
           ${r.reason ? `<div style="font-size:0.78rem;margin-top:4px">${_esc(r.reason)}</div>` : ''}
         </div>
@@ -12498,6 +12601,12 @@ function _svWithdrawals(res, meIsSignatory, gid) {
         <div style="display:flex;gap:8px;margin-top:10px">
           <button class="btn btn--primary btn--sm" onclick="voteStokvelRequest('${_esc(gid)}','${_esc(r.id)}','approve')">Approve</button>
           <button class="btn btn--ghost btn--sm" onclick="voteStokvelRequest('${_esc(gid)}','${_esc(r.id)}','reject')">Reject</button>
+        </div>` : ''}
+      ${r.kind === 'exit' && r.satisfied && r.status === 'pending' ? `
+        <div style="margin-top:10px">
+          <button class="btn btn--primary btn--sm" onclick="settleStokvelExit('${_esc(gid)}','${_esc(r.id)}')">
+            <i class="fa-solid fa-door-open"></i> Settle this exit
+          </button>
         </div>` : ''}
       ${r.blocked_because && r.status === 'pending' ? `
         <div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px">${_esc(r.blocked_because)}</div>` : ''}

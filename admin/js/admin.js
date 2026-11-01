@@ -20143,14 +20143,16 @@ function renderStokvelList() {
 async function openStokvelAdmin(id) {
   const host = document.getElementById('stokvelDetail');
   host.innerHTML = '<div class="card"><div class="text-center text-muted" style="padding:20px"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div></div>';
-  let members, schedules, requests, contributions, invites;
+  let members, schedules, requests, contributions, invites, allocations, exitDebts;
   try {
-    [members, schedules, requests, contributions, invites] = await Promise.all([
+    [members, schedules, requests, contributions, invites, allocations, exitDebts] = await Promise.all([
       API._fetch('GET', 'tables/stokvel_members', null, { sub_account_id: id, limit: 500 }),
       API._fetch('GET', 'tables/stokvel_contribution_schedules', null, { sub_account_id: id, limit: 50 }),
       API._fetch('GET', 'tables/stokvel_withdrawal_requests', null, { sub_account_id: id, limit: 100 }),
       API._fetch('GET', 'tables/stokvel_contributions', null, { sub_account_id: id, limit: 500 }),
       API._fetch('GET', 'tables/stokvel_invites', null, { sub_account_id: id, limit: 200 }),
+      API._fetch('GET', 'tables/stokvel_allocations', null, { sub_account_id: id, limit: 2000 }),
+      API._fetch('GET', 'tables/stokvel_exit_debts', null, { sub_account_id: id, limit: 100 }),
     ]);
   } catch (err) {
     host.innerHTML = `<div class="card" style="color:#ef4444;padding:20px">Could not load: ${_esc(err.message || '')}</div>`;
@@ -20164,10 +20166,12 @@ async function openStokvelAdmin(id) {
     requests: (requests && requests.data) || [],
     contributions: (contributions && contributions.data) || [],
     invites: (invites && invites.data) || [],
+    allocations: (allocations && allocations.data) || [],
+    exitDebts: (exitDebts && exitDebts.data) || [],
   };
   host.innerHTML = _stokvelAdminMandate(s) + _stokvelAdminMembers(s)
-                 + _stokvelAdminInvites(s) + _stokvelAdminSchedule(s)
-                 + _stokvelAdminActivity(s);
+                 + _stokvelAdminShares(s) + _stokvelAdminInvites(s)
+                 + _stokvelAdminSchedule(s) + _stokvelAdminActivity(s);
   host.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -20197,7 +20201,20 @@ function _stokvelAdminMandate(s) {
         <input type="number" min="${STOKVEL_MIN_QUORUM}" step="1" id="svQuorum" class="input input--sm"
                value="${quorum || ''}" style="width:90px">
         <span class="text-muted" style="font-size:0.78rem">of ${signatories} signator${signatories === 1 ? 'y' : 'ies'}</span>
-        <span class="text-muted" style="font-size:0.78rem;flex-basis:100%">Applies to withdrawals to a bank account and to investments into a pool alike.</span>
+        <span class="text-muted" style="font-size:0.78rem;flex-basis:100%">Applies to withdrawals to a bank account, investments into a pool, and settling a member&rsquo;s exit alike.</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+        <label style="font-size:0.84rem">How the pot divides</label>
+        <select id="svShareBasis" class="input input--sm" style="width:auto">
+          ${['contribution', 'equal'].map(b => `<option value="${b}"${(s.share_basis || 'contribution') === b ? ' selected' : ''}>${b === 'equal' ? 'Equally, by head' : 'By what each member put in'}</option>`).join('')}
+        </select>
+        <button class="btn btn--secondary btn--sm" onclick="saveStokvelShareBasis('${_esc(s.id)}')">Save</button>
+        <span class="text-muted" style="font-size:0.78rem;flex-basis:100%">
+          The group&rsquo;s own constitution decides this, not us. Most stokvels contribute equally,
+          in which case both give the same answer; a group with unequal contributions or members
+          who joined at different times needs &ldquo;by what each member put in&rdquo;.
+          Changing it re-states every member&rsquo;s share at once — ask before you touch it.
+        </span>
         <button class="btn btn--primary btn--sm" onclick="saveStokvelQuorum('${_esc(s.id)}')">Save mandate</button>
       </div>
     </div>
@@ -20287,6 +20304,79 @@ async function addStokvelMember(stokvelId) {
   } catch (err) {
     Toast.show('Could not add: ' + (err.message || ''), 'error');
   }
+}
+
+async function saveStokvelShareBasis(id) {
+  const basis = document.getElementById('svShareBasis').value;
+  if (!confirm(
+      'Change how this stokvel\'s pot divides?\n\nEvery member\'s share is re-stated '
+    + 'immediately. Only do this against what the group\'s constitution actually says.')) return;
+  try {
+    await API._fetch('PATCH', `tables/sub_accounts/${id}`, { share_basis: basis });
+    Toast.show('Saved.', 'success');
+    await openStokvelAdmin(id);
+  } catch (err) {
+    Toast.show('Could not save: ' + (err.message || ''), 'error');
+  }
+}
+
+/* ─── Shares, and what is owed to members who have left ────────────
+   Staff cannot change a share. It is the sum of a ledger — contributions in,
+   each member's part of what the group earned, what has been paid out — and
+   a staff field that overrode it would be a second answer to the question
+   the ledger exists to answer. What is here is the reading, plus the one
+   thing that needs watching: an exit the group has not finished paying. */
+function _stokvelAdminShares(s) {
+  const o = STATE.stokvelOpen;
+  const alloc = o.allocations || [];
+  const debts = (o.exitDebts || []).filter(d => d.status === 'owing');
+  if (!alloc.length && !debts.length) return '';
+
+  const byMember = new Map();
+  for (const a of alloc) {
+    byMember.set(a.investor_id,
+      Math.round(((byMember.get(a.investor_id) || 0) + Number(a.amount)) * 100) / 100);
+  }
+  const active = new Set(o.members.filter(m => m.status === 'active').map(m => m.investor_id));
+  const name = id => {
+    const m = o.members.find(x => x.investor_id === id);
+    return (m && (m.first_name || m.investor_id)) || id;
+  };
+  const total = [...byMember.entries()]
+    .filter(([id]) => active.has(id))
+    .reduce((n, [, v]) => n + v, 0);
+
+  return `<div class="card">
+    <div class="card__header"><h3 class="card__title"><i class="fa-solid fa-chart-pie"></i> Shares</h3>
+      <span class="text-muted" style="font-size:0.78rem">${Utils.rand(total)} across the members</span>
+    </div>
+    <table class="data-table"><thead><tr>
+      <th>Member</th><th class="text-right">Share</th><th>Status</th>
+    </tr></thead><tbody>
+    ${[...byMember.entries()].map(([id, v]) => `<tr>
+      <td>${_esc(name(id))}</td>
+      <td class="text-right"><strong>${Utils.rand(v)}</strong></td>
+      <td style="font-size:0.8rem">${active.has(id) ? 'Active' : 'Left'}</td>
+    </tr>`).join('')}
+    </tbody></table>
+    ${debts.length ? `<div style="padding:10px 14px">
+      <div style="font-size:0.8rem;font-weight:700;color:#f59e0b;margin-bottom:6px">
+        Still owed to members who have left</div>
+      ${debts.map(d => `<div style="font-size:0.82rem">${_esc(name(d.investor_id))} —
+        ${Utils.rand(Number(d.amount_owed) - Number(d.amount_paid))} outstanding of
+        ${Utils.rand(d.amount_owed)}</div>`).join('')}
+      <div class="text-muted" style="font-size:0.75rem;margin-top:6px">
+        Paid automatically as the group&rsquo;s investments mature, ahead of any further
+        earnings reaching current members. Nothing to do here.
+      </div>
+    </div>` : ''}
+    <div class="text-muted" style="font-size:0.75rem;padding:8px 14px">
+      A share is the sum of a ledger, not a field — there is deliberately nothing to edit.
+      If one looks wrong the cause is in the contributions or in what the group has been
+      credited, and server/scripts/backfill-stokvel-shares.cjs reports any group whose
+      books do not balance.
+    </div>
+  </div>`;
 }
 
 /* ─── Invitations ──────────────────────────────────────────────────

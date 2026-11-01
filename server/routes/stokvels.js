@@ -30,6 +30,7 @@ const mandate = require('../services/stokvelMandate');
 const crypto  = require('crypto');
 const contributions = require('../services/stokvelContributions');
 const invites       = require('../services/stokvelInvites');
+const shares        = require('../services/stokvelShares');
 /* Lazily required, and never awaited in a way that can fail a request: a
    mandate that cannot send an email must still record the vote. */
 let _notify = null;
@@ -432,11 +433,11 @@ router.post('/:id/withdrawal-requests', async (req, res) => {
        signatories authorise a sum and whoever carries it out chooses where
        it lands, which is a mandate in name only. */
     const kind = String((req.body && req.body.kind) || 'withdrawal');
-    if (kind !== 'withdrawal' && kind !== 'investment') {
-      return res.status(400).json({ error: 'kind must be withdrawal or investment.' });
+    if (kind !== 'withdrawal' && kind !== 'investment' && kind !== 'exit') {
+      return res.status(400).json({ error: 'kind must be withdrawal, investment or exit.' });
     }
 
-    let bankName = '', bankAcct = '', poolId = null;
+    let bankName = '', bankAcct = '', poolId = null, exitInvestorId = null;
     if (kind === 'investment') {
       poolId = String((req.body && req.body.pool_id) || '').trim();
       if (!poolId) {
@@ -446,6 +447,22 @@ router.post('/:id/withdrawal-requests', async (req, res) => {
       const { rows: pool_ } = await pool.query(
         `SELECT id, name FROM investment_pools WHERE id = $1`, [poolId]);
       if (!pool_.length) return res.status(400).json({ error: 'No such pool.' });
+    } else if (kind === 'exit') {
+      /* The member being settled is the destination of an exit, the way a
+         bank account is the destination of a withdrawal — so it is part of
+         what the signatories approve. A member may ask to leave themselves;
+         the committee may also raise it for somebody. Either way the
+         signatories decide, because an exit takes money out of the pot. */
+      exitInvestorId = String((req.body && req.body.exit_investor_id) || me);
+      const { rows: m } = await pool.query(
+        `SELECT 1 FROM stokvel_members
+          WHERE sub_account_id = $1 AND investor_id = $2 AND status = 'active'`,
+        [group.id, exitInvestorId]);
+      if (!m.length) return res.status(400).json({ error: 'That person is not an active member of this stokvel.' });
+      if (exitInvestorId !== me && !invites.mayInvite(group)) {
+        return res.status(403).json({
+          error: 'Only the chairperson, secretary or treasurer can raise an exit for somebody else.' });
+      }
     } else {
       bankName = String((req.body && req.body.bank_name) || '').trim();
       bankAcct = String((req.body && req.body.bank_account_number) || '').trim();
@@ -465,9 +482,10 @@ router.post('/:id/withdrawal-requests', async (req, res) => {
     await pool.query(
       `INSERT INTO stokvel_withdrawal_requests
          (id, sub_account_id, requested_by, amount, kind, bank_name, bank_account_number,
-          pool_id, reason, quorum_required, status, expires_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending', NOW() + INTERVAL '7 days')`,
+          pool_id, exit_investor_id, reason, quorum_required, status, expires_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'pending', NOW() + INTERVAL '7 days')`,
       [id, group.id, me, amount, kind, bankName || null, bankAcct || null, poolId,
+       exitInvestorId,
        String((req.body && req.body.reason) || '').slice(0, 500) || null, quorum]
     );
     /* The signatories are told now. Until this existed the mandate was a
@@ -499,10 +517,12 @@ router.get('/:id/withdrawal-requests', async (req, res) => {
        "R10 000 · POOL-7Q2F" asks a signatory to approve a primary key;
        the name is what they actually recognise. */
     const { rows } = await pool.query(
-      `SELECT r.*, i.first_name AS requested_by_name, p.name AS pool_name
+      `SELECT r.*, i.first_name AS requested_by_name, p.name AS pool_name,
+              x.first_name AS exit_name
          FROM stokvel_withdrawal_requests r
          JOIN investors i ON i.id = r.requested_by
          LEFT JOIN investment_pools p ON p.id = r.pool_id
+         LEFT JOIN investors x ON x.id = r.exit_investor_id
         WHERE r.sub_account_id = $1
         ORDER BY r.created_at DESC
         LIMIT 100`,
@@ -514,6 +534,7 @@ router.get('/:id/withdrawal-requests', async (req, res) => {
       out.push({
         id: r.id, amount: r.amount, kind: r.kind || 'withdrawal',
         bank_name: r.bank_name, pool_id: r.pool_id, pool_name: r.pool_name,
+        exit_investor_id: r.exit_investor_id, exit_name: r.exit_name,
         reason: r.reason,
         status: r.status, expires_at: r.expires_at,
         requested_by_name: r.requested_by_name,
@@ -609,6 +630,119 @@ router.post('/:id/withdrawal-requests/:rid/vote', async (req, res) => {
   }
 });
 
+
+/* ─── GET /api/stokvels/:id/shares ───────────────────────────────────
+   What everybody's share is, visible to everybody — the same rule as the
+   contribution list. A share each member can see only their own of is a
+   treasurer's spreadsheet with extra steps; the point of putting it here is
+   that the whole group reads the same numbers.
+
+   Reconciled on read, so opening the screen cannot show a share that has
+   fallen behind the wallet. It is idempotent — a reconcile with nothing to
+   place writes nothing. */
+router.get('/:id/shares', async (req, res) => {
+  const me = callerInvestorId(req);
+  const client = await pool.connect();
+  try {
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) return res.status(404).json({ error: 'No such stokvel.' });
+
+    await client.query('BEGIN');
+    await shares.reconcile(client, group.id, { reason: 'Shared out on read' });
+    const out = await shares.sharesOf(client, group.id);
+    const { rows: names } = await client.query(
+      `SELECT m.investor_id, i.first_name, i.last_name
+         FROM stokvel_members m JOIN investors i ON i.id = m.investor_id
+        WHERE m.sub_account_id = $1 AND m.status = 'active'`, [group.id]);
+    const { rows: debts } = await client.query(
+      `SELECT d.investor_id, i.first_name,
+              (d.amount_owed - d.amount_paid) AS owed
+         FROM stokvel_exit_debts d JOIN investors i ON i.id = d.investor_id
+        WHERE d.sub_account_id = $1 AND d.status = 'owing'`, [group.id]);
+    await client.query('COMMIT');
+
+    const byId = new Map(names.map(n => [n.investor_id, n]));
+    return res.json({
+      data: {
+        basis: out.basis,
+        net_assets: out.assets.total,
+        wallet: out.assets.wallet,
+        invested: out.assets.invested,
+        owed_to_former_members: out.assets.owed,
+        my_share: (out.shares.find(x => x.investor_id === me) || {}).share || 0,
+        shares: out.shares.map(x => ({
+          investor_id: x.investor_id,
+          first_name: (byId.get(x.investor_id) || {}).first_name || '',
+          last_name:  (byId.get(x.investor_id) || {}).last_name  || '',
+          is_me: x.investor_id === me,
+          share: x.share, gross: x.gross, arrears: x.arrears,
+        })),
+        exit_debts: debts.map(d => ({ first_name: d.first_name, owed: d.owed })),
+      },
+    });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[stokvels] shares failed:', err.message);
+    return res.status(500).json({ error: 'Could not work out the shares.' });
+  } finally {
+    client.release();
+  }
+});
+
+/* ─── POST /api/stokvels/:id/exits ───────────────────────────────────
+   Settle an approved exit. The authority does the deciding; this carries it
+   out, and will not do so without one — an exit takes money out of the pot,
+   so no single person ends a membership and draws the share.
+
+   Any member may execute an approved authority, exactly as with an approved
+   investment. The approval is the control, not who taps the button. */
+router.post('/:id/exits', async (req, res) => {
+  const me = callerInvestorId(req);
+  const client = await pool.connect();
+  try {
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) return res.status(404).json({ error: 'No such stokvel.' });
+
+    await client.query('BEGIN');
+    /* Reconciled first: a share settled against a stale ledger pays out the
+       wrong number, and this is the one place that number becomes cash. */
+    await shares.reconcile(client, group.id, { reason: 'Shared out before an exit' });
+
+    const authorityId = req.body && req.body.authority_id;
+    const { rows: [auth] } = await client.query(
+      `SELECT exit_investor_id FROM stokvel_withdrawal_requests WHERE id = $1`,
+      [authorityId || null]);
+    const leaving = auth ? auth.exit_investor_id : null;
+
+    const settleAmount = await shares.shareFor(client, group.id, leaving || '');
+    const { authority, error } = await mandate.authorityFor(
+      client, group, authorityId,
+      { kind: 'exit', amount: settleAmount, investorId: leaving });
+    if (error) {
+      await client.query('ROLLBACK');
+      return res.status(/No such authority/.test(error) ? 404 : 403).json({ error });
+    }
+
+    const out = await shares.settleExit(client, {
+      subAccountId: group.id, investorId: leaving,
+      authorityId: authority.id,
+    });
+    await mandate.consume(client, authority, out.reference);
+    await client.query('COMMIT');
+
+    const n = notify();
+    if (n) n.exitSettled({ groupId: group.id, investorId: leaving, settlement: out })
+            .catch(e => console.warn('[stokvels] notify failed:', e.message));
+
+    return res.json({ data: out });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[stokvels] exit failed:', err.message);
+    return res.status(500).json({ error: 'Could not settle that exit.' });
+  } finally {
+    client.release();
+  }
+});
 
 /* ─── GET /api/stokvels/:id/contributions ────────────────────────────
    Who owes what, for everybody, visible to everybody.

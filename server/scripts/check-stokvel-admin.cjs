@@ -139,5 +139,24 @@ console.log('\nand what it renders is escaped');
   ok('every value rendered as markup goes through _esc', interps.length === 0, interps.join(' | '));
 }
 
+
+console.log('\nand the shares panel reads rather than edits');
+{
+  ok('the share basis is settable, because it is the group\u2019s own constitution',
+     /svShareBasis/.test(JS) && /saveStokvelShareBasis/.test(JS));
+  ok('and changing it asks first',
+     /saveStokvelShareBasis[\s\S]{0,400}confirm\(/.test(JS),
+     'it re-states every member\u2019s share at once');
+  const panel = JS.slice(JS.indexOf('function _stokvelAdminShares'),
+                         JS.indexOf('function _stokvelAdminInvites'));
+  ok('a share itself has nothing to edit',
+     panel.length > 100 && !/onchange=/.test(panel) && !/tables\/stokvel_allocations/.test(panel),
+     'a staff field overriding a share would be a second answer to the question the '
+     + 'ledger exists to answer');
+  ok('and an unpaid exit is surfaced rather than actioned',
+     /Still owed to members who have left/.test(panel) && /Nothing to do here/.test(panel),
+     'it is paid automatically as investments mature');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

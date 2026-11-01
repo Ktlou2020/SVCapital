@@ -97,6 +97,9 @@ async function evaluate(client, request, subAccount) {
  */
 async function authorityFor(client, subAccount, authorityId, want) {
   if (!authorityId) {
+    if (want.kind === 'exit') {
+      return { error: 'Settling a member\u2019s exit needs an approved authority. Raise the request and have the signatories approve it first.' };
+    }
     return { error: want.kind === 'investment'
       ? 'A stokvel investment needs an approved authority. Raise a request and have the signatories approve it first.'
       : 'A stokvel withdrawal needs an approved authority. Raise a withdrawal request and have the signatories approve it first.' };
@@ -111,19 +114,37 @@ async function authorityFor(client, subAccount, authorityId, want) {
      other. Signatories who agreed to put money into a pool have not agreed
      to it leaving for somebody's bank account. */
   if (String(authority.kind || 'withdrawal') !== want.kind) {
-    return { error: `That authority was approved for a ${authority.kind || 'withdrawal'}, not ${want.kind === 'investment' ? 'an investment' : 'a withdrawal'}.` };
+    const WANTED = { investment: 'an investment', exit: 'an exit settlement', withdrawal: 'a withdrawal' };
+    return { error: `That authority was approved for a ${authority.kind || 'withdrawal'}, not ${WANTED[want.kind] || 'a withdrawal'}.` };
   }
 
   const state = await evaluate(client, authority, subAccount);
   if (!state.satisfied) return { error: 'That authority does not release this money: ' + state.reason };
 
-  if (Math.round(parseFloat(authority.amount) * 100) !== Math.round(Number(want.amount) * 100)) {
+  /* A withdrawal and an investment are approved AS A SUM, so the sum is
+     matched exactly. An exit is not: "settle Nomsa's share" is inherently
+     whatever her share comes to on the day, and interest arriving between
+     the approval and the settlement would otherwise invalidate the authority
+     and send her round the signatories again for a figure she cannot
+     control. The figure on an exit request is what her share stood at when
+     it was raised, shown to the signatories so they know the order of it;
+     what pins an exit is WHOSE membership ends, checked below. */
+  if (want.kind !== 'exit' &&
+      Math.round(parseFloat(authority.amount) * 100) !== Math.round(Number(want.amount) * 100)) {
     return { error: `That authority is for R${parseFloat(authority.amount).toFixed(2)}, not R${Number(want.amount).toFixed(2)}.` };
   }
 
   if (want.kind === 'investment') {
     if (String(authority.pool_id || '') !== String(want.poolId || '')) {
       return { error: 'That authority was approved for a different pool.' };
+    }
+  } else if (want.kind === 'exit') {
+    /* The MEMBER is the destination of an exit, in the same way a bank
+       account is the destination of a withdrawal. An authority approved to
+       settle one person must not settle another, or the signatories have
+       authorised a sum and let the carrier choose whose membership ends. */
+    if (String(authority.exit_investor_id || '') !== String(want.investorId || '')) {
+      return { error: 'That authority was approved to settle a different member.' };
     }
   } else if (String(authority.bank_account_number || '').trim() !== String(want.bankAccount || '').trim()) {
     return { error: 'That authority was approved for a different bank account.' };

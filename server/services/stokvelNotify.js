@@ -66,11 +66,13 @@ async function _load(db, groupId, authorityId) {
             a.name            AS stokvel_name,
             a.stokvel_quorum  AS stokvel_quorum,
             p.name            AS pool_name,
-            i.first_name      AS raised_by_name
+            i.first_name      AS raised_by_name,
+            x.first_name      AS exit_name
        FROM stokvel_withdrawal_requests r
        JOIN sub_accounts a ON a.id = r.sub_account_id
        LEFT JOIN investment_pools p ON p.id = r.pool_id
        LEFT JOIN investors i ON i.id = r.requested_by
+       LEFT JOIN investors x ON x.id = r.exit_investor_id
       WHERE r.id = $1 AND r.sub_account_id = $2`,
     [authorityId, groupId]);
   return rows[0] || null;
@@ -100,9 +102,13 @@ async function _person(db, investorId) {
    exists to pin down. */
 function describe(authority) {
   const amount = fmtR(authority.amount);
-  return String(authority.kind || 'withdrawal') === 'investment'
-    ? `${amount} into ${authority.pool_name || 'a pool'}`
-    : `${amount} to ${authority.bank_name || 'a bank account'}`;
+  const kind = String(authority.kind || 'withdrawal');
+  if (kind === 'investment') return `${amount} into ${authority.pool_name || 'a pool'}`;
+  /* An exit names the PERSON, not an account. "R4 200 to a bank account"
+     would be the one description a signatory could not act on, because what
+     they are being asked to authorise is somebody's membership ending. */
+  if (kind === 'exit') return `${amount} to settle ${authority.exit_name || 'a member'}\u2019s exit`;
+  return `${amount} to ${authority.bank_name || 'a bank account'}`;
 }
 
 /* One recipient, both channels. Push and email fail in different ways and
@@ -420,13 +426,78 @@ async function inviteAccepted({ groupId, investorId, invitedBy, db } = {}) {
   }
 }
 
+/* ─── EXIT SETTLED ─────────────────────────────────────────────────
+   Somebody has left and been paid. Told to them, because it is their money,
+   and to the signatories, because they authorised it.
+
+   The message says what was PAID and what is still OWED, separately. An exit
+   can outrun the group's cash — the pot may be in an eighteen-month cattle
+   pool — and "R600 paid, R3 600 to follow as investments mature" is the one
+   thing the person leaving needs to know. A message that reported only the
+   R600 would read as the whole settlement and start the argument this
+   feature exists to end. */
+async function exitSettled({ groupId, investorId, settlement, db } = {}) {
+  const pool = db || defaultPool;
+  try {
+    const s = settlement || {};
+    const { rows: [row] } = await pool.query(
+      `SELECT a.name AS stokvel_name FROM sub_accounts a WHERE a.id = $1`, [groupId]);
+    if (!row) return { notified: [] };
+    const leaver = await _person(pool, investorId);
+    const owed = Number(s.queued) || 0;
+    const tail = owed > 0
+      ? ` ${fmtR(owed)} is still owed to you and will be paid as the group's investments mature.`
+      : '';
+
+    const rows = [
+      ['Stokvel', row.stokvel_name],
+      ['Your share', fmtR(s.gross)],
+    ];
+    if (Number(s.arrears) > 0) rows.push(['Less contributions owed', fmtR(s.arrears)]);
+    rows.push(['Settled', fmtR(s.net)]);
+    rows.push(['Paid to your wallet', fmtR(s.paid)]);
+    if (owed > 0) rows.push(['Still owed to you', fmtR(owed)]);
+
+    const told = [await _tell(leaver, {
+      title: row.stokvel_name,
+      body:  `Your membership has ended. ${fmtR(s.paid)} is in your wallet.${tail}`,
+      email: {
+        subject: `${row.stokvel_name}: your exit has been settled`,
+        heading: 'Your membership has ended',
+        lead: `The signatories approved your exit from <strong>${row.stokvel_name}</strong> and it has been settled.`,
+        rows,
+        note: owed > 0
+          ? 'The group holds part of its money in investments that have not matured. The balance '
+            + 'owed to you is recorded against the stokvel and paid automatically as cash becomes '
+            + 'available — it is not forgotten, and it does not need chasing.'
+          : 'Contributions you still owed were kept by the group, as its constitution provides.',
+      },
+    })];
+
+    for (const sig of await _signatories(pool, groupId)) {
+      if (sig.id === investorId) continue;
+      told.push(await _tell(sig, {
+        title: row.stokvel_name,
+        body:  `${(leaver && leaver.first_name) || 'A member'} has left. ${fmtR(s.paid)} paid out`
+             + (owed > 0 ? `, ${fmtR(owed)} still owed to them.` : '.'),
+      }));
+    }
+    return { notified: told.filter(Boolean) };
+  } catch (err) {
+    console.error('[stokvelNotify] exitSettled failed:', err.message);
+    return { notified: [], error: err.message };
+  }
+}
+
 /* The facts of the request, as label/value pairs. Every message carries the
    same ones, so a reader comparing two emails is comparing like with like. */
 function _rows(a, required, reference) {
   const isInv = String(a.kind || 'withdrawal') === 'investment';
   const out = [
     ['Stokvel', a.stokvel_name],
-    [isInv ? 'Into' : 'To', isInv ? (a.pool_name || a.pool_id || '—') : (a.bank_name || '—')],
+    [isInv ? 'Into' : 'To',
+     isInv ? (a.pool_name || a.pool_id || '—')
+           : (String(a.kind) === 'exit' ? (a.exit_name || 'a member') : (a.bank_name || '—'))],
     ['Amount', fmtR(a.amount)],
     ['Requested by', a.raised_by_name || '—'],
   ];
@@ -441,4 +512,4 @@ function _rows(a, required, reference) {
   return out;
 }
 
-module.exports = { approvalNeeded, decided, spent, invited, inviteAccepted, describe };
+module.exports = { approvalNeeded, decided, spent, invited, inviteAccepted, exitSettled, describe };

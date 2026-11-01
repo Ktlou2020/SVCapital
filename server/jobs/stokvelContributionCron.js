@@ -92,6 +92,40 @@ async function chaseArrears() {
   return { sent };
 }
 
+/* The safety net under the share ledger.
+   
+   Nine code paths credit a stokvel wallet and only one of them — the
+   contribution — names a member, so the rest are placed by reconcile.
+   Rather than hook each writer, which is the mistake this codebase already
+   paid for when maturity turned out to be the only money path that did not
+   split to sub-accounts, this sweeps every stokvel daily. A credit path
+   nobody hooked is allocated correctly by the next morning, and anything it
+   cannot reconcile is named rather than left to be discovered. */
+async function reconcileShares() {
+  const shares = require('../services/stokvelShares');
+  const { rows: groups } = await pool.query(
+    `SELECT id FROM sub_accounts WHERE account_type = 'stokvel' AND status = 'active'`);
+  let moved = 0, failed = 0;
+  for (const g of groups) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const out = await shares.reconcile(client, g.id, { reason: 'Daily share-out' });
+      await client.query('COMMIT');
+      if (out.allocated || out.debtsPaid) moved++;
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      failed++;
+      /* One stokvel's bad state must not stop the others. */
+      console.error(`[stokvel] reconciling ${g.id} failed:`, err.message);
+    } finally {
+      client.release();
+    }
+  }
+  if (moved || failed) console.log(`[stokvel] shares: ${moved} reconciled, ${failed} failed`);
+  return { moved, failed };
+}
+
 function startStokvelContributionCron() {
   // 00:20 SAST — open the period before anybody looks at it.
   cron.schedule('20 0 * * *', async () => {
@@ -105,7 +139,13 @@ function startStokvelContributionCron() {
     catch (err) { console.error('[stokvel] chase cron error:', err.message); }
   }, { timezone: 'Africa/Johannesburg' });
 
-  console.log('[stokvel] scheduled: 00:20 open contributions, 09:00 chase arrears (SAST)');
+  // 01:10 SAST — after the night's maturity and interest work has landed.
+  cron.schedule('10 1 * * *', async () => {
+    try { await reconcileShares(); }
+    catch (err) { console.error('[stokvel] reconcile cron error:', err.message); }
+  }, { timezone: 'Africa/Johannesburg' });
+
+  console.log('[stokvel] scheduled: 00:20 open contributions, 01:10 reconcile shares, 09:00 chase arrears (SAST)');
 }
 
-module.exports = { startStokvelContributionCron, openPeriods, chaseArrears };
+module.exports = { startStokvelContributionCron, openPeriods, chaseArrears, reconcileShares };

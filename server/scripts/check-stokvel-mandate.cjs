@@ -55,6 +55,24 @@ const read = p => fs.readFileSync(path.join(ROOT, p), 'utf8');
 const WD  = read('server/routes/withdrawals.js');
 const SVC = read('server/services/stokvelMandate.js');
 
+console.log('\nand an exit is matched on the member, not the amount');
+{
+  const code = SVC.replace(/\/\*[\s\S]*?\*\//g, '');
+  ok('an exit authority pins WHOSE membership ends',
+     /exit_investor_id/.test(code) && /approved to settle a different member/.test(SVC),
+     'otherwise the signatories authorise a sum and the carrier picks whose exit it pays');
+  ok('and deliberately does not pin the amount',
+     /want\.kind !== 'exit' &&/.test(code),
+     '"settle her share" is whatever it comes to on the day \u2014 interest arriving between '
+     + 'the approval and the settlement must not send her round the signatories again');
+  ok('the three kinds are all constrained in the schema',
+     /kind IN \('withdrawal','investment','exit'\)/.test(read('server/db/setup.js')));
+  ok('and the old two-value constraint is dropped first, not skipped',
+     /DROP CONSTRAINT swr_kind_chk/.test(read('server/db/setup.js')),
+     'ADD CONSTRAINT with EXCEPTION duplicate_object keeps the old one on a database that '
+     + 'already has it, refusing every exit while reporting success');
+}
+
 console.log('\nthe rule is written once');
 {
   ok('the mandate is a service, not a copy in each caller',

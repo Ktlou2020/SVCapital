@@ -191,7 +191,21 @@ const STUB = {
     { id: 'r2', kind: 'investment', amount: 5000, pool_id: 'POOL-CATTLE-11',
       pool_name: 'Cattle November', reason: 'Group savings',
       status: 'pending', requested_by_name: 'Ann', approvals: 1, required: 2,
-      satisfied: false, blocked_because: '1 of 2 signatory approvals.' } ] },
+      satisfied: false, blocked_because: '1 of 2 signatory approvals.' },
+    /* An exit that the signatories have already carried: it names the person
+       leaving, not an account, and somebody has to be able to act on it. */
+    { id: 'r3', kind: 'exit', amount: 4100, exit_investor_id: 'I9', exit_name: 'Sipho',
+      status: 'pending', requested_by_name: 'Sipho', approvals: 2, required: 2,
+      satisfied: true } ] },
+  'stokvels/SA-1/shares': { data: {
+    basis: 'contribution', net_assets: 12500, wallet: 10500, invested: 2000,
+    owed_to_former_members: 400, my_share: 4100,
+    shares: [
+      { investor_id: 'I1', first_name: 'Ann', last_name: 'M', is_me: false, share: 8000, gross: 8000, arrears: 0 },
+      { investor_id: 'I2', first_name: 'Zo', last_name: '', is_me: true, share: 4100, gross: 4600, arrears: 500 },
+    ],
+    exit_debts: [{ first_name: 'Sipho', owed: 400 }],
+  } },
   'stokvels/SA-1/invites': { can_invite: true, data: [
     { id: 'SVI-9', invitee_name: 'Thabo', contact: 't***@example.test',
       status: 'pending', already_on_the_platform: false,
@@ -321,6 +335,25 @@ const STUB = {
     ok('nothing a member typed executed', fired === false,
        'a value from the roster ran as script');
 
+    console.log('\nand a member can see what their share is');
+    ok('their own share is on the header',
+       /Your share/.test(rendered.text) && /R4100\.00/.test(rendered.text),
+       rendered.text.slice(0, 200));
+    ok('and everybody else’s is listed',
+       /R8000\.00/.test(rendered.text) && /Ann/.test(rendered.text),
+       'a share only its owner can see is a treasurer’s spreadsheet with extra steps');
+    ok('the pot is broken down so the arithmetic can be checked',
+       /In the wallet/.test(rendered.text) && /R10500\.00/.test(rendered.text)
+       && /R2000\.00/.test(rendered.text),
+       'a member doing the sum and finding it comes out is the point');
+    ok('what is owed to a member who left is shown as coming off it',
+       /Owed to members who have left/.test(rendered.text) && /Sipho/.test(rendered.text),
+       rendered.text.slice(0, 300));
+    ok('arrears are shown against the member who owes them',
+       /owes R500\.00/.test(rendered.text));
+    ok('and there is a way to ask to leave',
+       /Ask to leave/.test(rendered.text));
+
     console.log('\nand both kinds of request read as what they are');
     ok('the withdrawal says so, with where it is going',
        /Withdraw/.test(rendered.text) && /FNB/.test(rendered.text));
@@ -328,6 +361,12 @@ const STUB = {
        /Invest/.test(rendered.text) && /Cattle November/.test(rendered.text),
        'a row showing only an amount asks a signatory to approve a sum with '
        + 'no idea where it goes');
+    ok('an exit says whose membership ends, not a bank account',
+       /Exit/.test(rendered.text) && /Sipho is leaving/.test(rendered.text),
+       'a signatory being asked to approve "R4 100 to a bank account" cannot act on it');
+    ok('and an approved exit can be carried out',
+       /Settle this exit/.test(rendered.text),
+       'the approval is the control; somebody still has to press it');
     ok('and the panel is no longer called Withdrawals',
        /Signatory approvals/.test(rendered.text) && !/>Withdrawals</.test(rendered.html),
        'the mandate now governs investments too');
