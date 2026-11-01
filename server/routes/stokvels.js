@@ -29,6 +29,7 @@ const { requireAuth } = require('../middleware/auth');
 const mandate = require('../services/stokvelMandate');
 const crypto  = require('crypto');
 const contributions = require('../services/stokvelContributions');
+const invites       = require('../services/stokvelInvites');
 /* Lazily required, and never awaited in a way that can fail a request: a
    mandate that cannot send an email must still record the vote. */
 let _notify = null;
@@ -140,6 +141,204 @@ router.get('/', async (req, res) => {
   } catch (err) {
     console.error('[stokvels] list failed:', err.message);
     return res.status(500).json({ error: 'Could not load your stokvels.' });
+  }
+});
+
+/* ═══ Invitations ═══════════════════════════════════════════════════
+   Declared BEFORE the /:id routes below. Express matches in order, and
+   '/invites/mine' would otherwise be a candidate for anything shaped like
+   '/:id/...' as those patterns grow — a bug that would present as "my
+   invitations endpoint returns a stokvel".
+
+   The flow has no link in it. An invitation is ADDRESSED to an email or a
+   cell number, and the invitee finds it by signing in as the person who
+   holds that contact; see services/stokvelInvites.js for why a forwardable
+   link was the wrong shape for money.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* The signed-in investor, with the contacts an invitation is matched on. */
+async function callerContacts(req) {
+  const me = callerInvestorId(req);
+  if (!me) return null;
+  const { rows } = await pool.query(
+    'SELECT id, first_name, email, phone FROM investors WHERE id = $1', [me]);
+  return rows[0] || null;
+}
+
+/* ─── GET /api/stokvels/invites/mine ─────────────────────────────────
+   What has been asked of me. The only way an invitation is discovered, so
+   it has to be on a screen the invitee already opens. */
+router.get('/invites/mine', async (req, res) => {
+  try {
+    const investor = await callerContacts(req);
+    if (!investor) return res.json({ data: [] });
+    const rows = await invites.forInvestor(pool, investor);
+    return res.json({ data: rows.map(v => ({
+      id: v.id, stokvel_name: v.stokvel_name, stokvel_reg_number: v.stokvel_reg_number,
+      invited_by_name: v.invited_by_name, active_members: v.active_members,
+      invitee_name: v.invitee_name, expires_at: v.expires_at, created_at: v.created_at,
+    })) });
+  } catch (err) {
+    console.error('[stokvels] invites/mine failed:', err.message);
+    return res.status(500).json({ error: 'Could not load your invitations.' });
+  }
+});
+
+/* ─── POST /api/stokvels/invites/:vid/accept ──────────────────────────
+   Accepting is the invitee's own act. Being added to a savings club by
+   somebody else, silently, is not joining one.
+
+   What comes out of this is always an ordinary member: never a signatory,
+   never an office. The rule lives in the service, where there is no
+   parameter that could change it. */
+router.post('/invites/:vid/accept', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const investor = await callerContacts(req);
+    /* No release here: the finally below owns it. Releasing twice is an
+       error pg throws on the SECOND release, which surfaces as a failure in
+       whatever ran next rather than here. */
+    if (!investor) return res.status(403).json({ error: 'Investor accounts only.' });
+    await client.query('BEGIN');
+    const { rows: [invite] } = await client.query(
+      'SELECT * FROM stokvel_invites WHERE id = $1 FOR UPDATE', [req.params.vid]);
+    if (!invite) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'No such invitation.' });
+    }
+    const out = await invites.accept(client, invite, investor);
+    if (out.error) {
+      await client.query('ROLLBACK');
+      return res.status(out.status || 400).json({ error: out.error });
+    }
+    await client.query('COMMIT');
+
+    const n = notify();
+    if (n) n.inviteAccepted({ groupId: invite.sub_account_id, investorId: investor.id,
+                              invitedBy: invite.invited_by })
+            .catch(e => console.warn('[stokvels] notify failed:', e.message));
+
+    return res.json({ data: { id: invite.sub_account_id, joined: true } });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[stokvels] accept failed:', err.message);
+    return res.status(500).json({ error: 'Could not accept that invitation.' });
+  } finally {
+    client.release();
+  }
+});
+
+/* ─── POST /api/stokvels/invites/:vid/decline ─────────────────────── */
+router.post('/invites/:vid/decline', async (req, res) => {
+  try {
+    const investor = await callerContacts(req);
+    if (!investor) return res.status(403).json({ error: 'Investor accounts only.' });
+    const { rows: [invite] } = await pool.query(
+      'SELECT * FROM stokvel_invites WHERE id = $1', [req.params.vid]);
+    if (!invite) return res.status(404).json({ error: 'No such invitation.' });
+    const out = await invites.decline(pool, invite, investor);
+    if (out.error) return res.status(out.status || 400).json({ error: out.error });
+    return res.json({ data: { declined: true } });
+  } catch (err) {
+    console.error('[stokvels] decline failed:', err.message);
+    return res.status(500).json({ error: 'Could not decline that invitation.' });
+  }
+});
+
+/* ─── POST /api/stokvels/:id/invites ─────────────────────────────────
+   The committee asks somebody to join, by name and contact rather than by
+   investor id. The staff console path still exists and still works; this is
+   what stops onboarding being a staff typing job. */
+router.post('/:id/invites', async (req, res) => {
+  const me = callerInvestorId(req);
+  const client = await pool.connect();
+  try {
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) return res.status(404).json({ error: 'No such stokvel.' });
+    await client.query('BEGIN');
+    const out = await invites.create(client, group, me, {
+      name:  (req.body && req.body.name)  || '',
+      email: (req.body && req.body.email) || '',
+      cell:  (req.body && req.body.cell)  || '',
+    });
+    if (out.error) {
+      await client.query('ROLLBACK');
+      return res.status(out.status || 400).json({ error: out.error });
+    }
+    await client.query('COMMIT');
+
+    /* Sent after the commit, so an invitation that is recorded is never one
+       nobody was told about and an invitation somebody was told about is
+       never one that rolled back. */
+    const n = notify();
+    if (n) n.invited({ inviteId: out.invite.id })
+            .catch(e => console.warn('[stokvels] notify failed:', e.message));
+
+    return res.status(201).json({ data: {
+      id: out.invite.id,
+      invitee_name: out.invite.invitee_name,
+      contact: invites.maskContact(out.invite),
+      already_on_the_platform: !!out.matched,
+      expires_at: out.invite.expires_at,
+    } });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[stokvels] invite failed:', err.message);
+    return res.status(500).json({ error: 'Could not send that invitation.' });
+  } finally {
+    client.release();
+  }
+});
+
+/* ─── GET /api/stokvels/:id/invites ──────────────────────────────────
+   Who has been asked, visible to every member. The same reason the
+   contribution list is: a group that cannot see who was invited cannot see
+   who is about to have a say in its money.
+
+   Contacts are MASKED for everyone — the roster being public is not a
+   reason to publish an address. The committee sees whether an invitation
+   can still be acted on, which is what lets them notice that somebody was
+   invited at an address they do not use. */
+router.get('/:id/invites', async (req, res) => {
+  const me = callerInvestorId(req);
+  try {
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) return res.status(404).json({ error: 'No such stokvel.' });
+    const { rows } = await pool.query(
+      `SELECT v.id, v.invitee_name, v.email, v.cell, v.status, v.expires_at, v.created_at,
+              v.matched_investor_id IS NOT NULL AS already_on_the_platform,
+              i.first_name AS invited_by_name
+         FROM stokvel_invites v
+         LEFT JOIN investors i ON i.id = v.invited_by
+        WHERE v.sub_account_id = $1
+        ORDER BY (v.status = 'pending') DESC, v.created_at DESC
+        LIMIT 100`, [group.id]);
+    return res.json({ data: rows.map(v => ({
+      id: v.id, invitee_name: v.invitee_name,
+      contact: invites.maskContact(v),
+      status: new Date(v.expires_at) <= new Date() && v.status === 'pending' ? 'expired' : v.status,
+      already_on_the_platform: v.already_on_the_platform,
+      invited_by_name: v.invited_by_name,
+      expires_at: v.expires_at, created_at: v.created_at,
+    })), can_invite: invites.mayInvite(group) });
+  } catch (err) {
+    console.error('[stokvels] invites failed:', err.message);
+    return res.status(500).json({ error: 'Could not load the invitations.' });
+  }
+});
+
+/* ─── DELETE /api/stokvels/:id/invites/:vid ──────────────────────── */
+router.delete('/:id/invites/:vid', async (req, res) => {
+  const me = callerInvestorId(req);
+  try {
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) return res.status(404).json({ error: 'No such stokvel.' });
+    const out = await invites.revoke(pool, group, req.params.vid);
+    if (out.error) return res.status(out.status || 400).json({ error: out.error });
+    return res.json({ data: { revoked: true } });
+  } catch (err) {
+    console.error('[stokvels] revoke failed:', err.message);
+    return res.status(500).json({ error: 'Could not withdraw that invitation.' });
   }
 });
 

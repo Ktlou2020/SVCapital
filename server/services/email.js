@@ -1263,6 +1263,49 @@ function sendStokvelArrears(investor, { stokvelName, periodLabel, owed, dueDate 
   });
 }
 
+/* An invitation to join a stokvel.
+   
+   Deliberately has NO LINK in it. A link in an invitation is a capability
+   that can be forwarded, and what is behind this one is a group's balances
+   and roster, so the invitation is addressed instead: it is found by signing
+   in as the person who holds the contact it was sent to. Which means the one
+   job this email absolutely must do is say HOW to find it, and say it in a
+   way that survives being read on a phone by somebody who has never heard
+   of us. */
+function sendStokvelInvite(to, { inviteeName, inviterName, stokvelName, expiresAt, alreadyAUser }) {
+  const when = expiresAt ? new Date(expiresAt).toISOString().slice(0, 10) : null;
+  return _send({
+    to,
+    type: 'stokvel_invite',
+    subject: `${inviterName} invited you to join ${stokvelName}`,
+    text: `${inviterName} has invited you to join ${stokvelName} on SV Capital. `
+        + `Sign in with this email address and the invitation is waiting on your Sub-accounts screen. `
+        + `${BASE_URL}/portal/`,
+    html: _wrap(`
+      <h2>You have been invited to join ${escHtml(stokvelName)}</h2>
+      <p>Hi${inviteeName ? ` ${escHtml(inviteeName)}` : ''}, <strong>${escHtml(inviterName)}</strong>
+         has invited you to join <strong>${escHtml(stokvelName)}</strong> on SV Capital \u2014 where the
+         group saves together, sees what everybody has paid, and needs several
+         signatories to agree before any money leaves.</p>
+      <div class="box">
+        <p style="margin:0"><strong>How to accept.</strong>
+          ${alreadyAUser
+            ? 'Sign in to SV Capital with this email address. The invitation is waiting on your Sub-accounts screen.'
+            : 'Create a free SV Capital account using THIS email address, and the invitation will be waiting on your Sub-accounts screen.'}</p>
+      </div>
+      <p style="text-align:center"><a class="btn" href="${BASE_URL}/portal/">Open SV Capital</a></p>
+      <p style="font-size:0.84rem;color:#777">We deliberately do not put a join link in this email \u2014
+         anyone who was forwarded it could then see the group&rsquo;s money. Signing in as the
+         person this was sent to is what proves the invitation is yours.
+         ${when ? `It is valid until ${escHtml(when)}.` : ''}</p>
+      <p style="font-size:0.84rem;color:#777">If you already have an SV Capital account under a
+         different email address, ask ${escHtml(inviterName)} to send the invitation to that one
+         instead. Joining a stokvel means the group can see your contributions and what you owe \u2014
+         if you did not expect this, simply ignore it.</p>
+    `),
+  });
+}
+
 /* Every message the stokvel mandate sends, from one template.
    
    One template rather than five, on purpose. These five emails differ in two
@@ -1338,6 +1381,7 @@ function sendIdleWalletNudge(investor, { balance, poolName, minNeeded, poolCount
 module.exports = {
   sendStokvelArrears,
   sendStokvelMandate,
+  sendStokvelInvite,
   sendIdleWalletNudge,
   sendWelcome,
   sendLeaveRequestSubmitted,

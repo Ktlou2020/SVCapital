@@ -20143,13 +20143,14 @@ function renderStokvelList() {
 async function openStokvelAdmin(id) {
   const host = document.getElementById('stokvelDetail');
   host.innerHTML = '<div class="card"><div class="text-center text-muted" style="padding:20px"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div></div>';
-  let members, schedules, requests, contributions;
+  let members, schedules, requests, contributions, invites;
   try {
-    [members, schedules, requests, contributions] = await Promise.all([
+    [members, schedules, requests, contributions, invites] = await Promise.all([
       API._fetch('GET', 'tables/stokvel_members', null, { sub_account_id: id, limit: 500 }),
       API._fetch('GET', 'tables/stokvel_contribution_schedules', null, { sub_account_id: id, limit: 50 }),
       API._fetch('GET', 'tables/stokvel_withdrawal_requests', null, { sub_account_id: id, limit: 100 }),
       API._fetch('GET', 'tables/stokvel_contributions', null, { sub_account_id: id, limit: 500 }),
+      API._fetch('GET', 'tables/stokvel_invites', null, { sub_account_id: id, limit: 200 }),
     ]);
   } catch (err) {
     host.innerHTML = `<div class="card" style="color:#ef4444;padding:20px">Could not load: ${_esc(err.message || '')}</div>`;
@@ -20162,9 +20163,11 @@ async function openStokvelAdmin(id) {
     schedule: ((schedules && schedules.data) || []).find(x => x.active) || null,
     requests: (requests && requests.data) || [],
     contributions: (contributions && contributions.data) || [],
+    invites: (invites && invites.data) || [],
   };
   host.innerHTML = _stokvelAdminMandate(s) + _stokvelAdminMembers(s)
-                 + _stokvelAdminSchedule(s) + _stokvelAdminActivity(s);
+                 + _stokvelAdminInvites(s) + _stokvelAdminSchedule(s)
+                 + _stokvelAdminActivity(s);
   host.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -20284,6 +20287,53 @@ async function addStokvelMember(stokvelId) {
   } catch (err) {
     Toast.show('Could not add: ' + (err.message || ''), 'error');
   }
+}
+
+/* ─── Invitations ──────────────────────────────────────────────────
+   The committee now invites its own members, so this screen's job changed:
+   it is no longer where a roster is typed in, it is where staff can see why
+   somebody has not joined.
+
+   The failure mode worth seeing is specific. A stokvel invitation is
+   ADDRESSED to an email or a cell number rather than carried by a link —
+   see services/stokvelInvites.js — so one sent to an address the person did
+   not sign up with is invisible to them, and from the committee's side it
+   just looks ignored. "Pending, not on SV Capital" beside a contact the
+   client says they use is the diagnosis, and the answer is to invite the
+   address they do use. Staff cannot accept on anybody's behalf: joining a
+   group that can see your money is the invitee's own act. */
+function _stokvelAdminInvites(s) {
+  const rows = STATE.stokvelOpen.invites || [];
+  const live = rows.filter(v => v.status === 'pending' && new Date(v.expires_at) > new Date());
+  const mask = v => v.email
+    ? `${String(v.email).slice(0, 1)}***@${String(v.email).split('@')[1] || ''}`
+    : (v.cell ? `*** *** ${String(v.cell).slice(-4)}` : '—');
+
+  return `<div class="card">
+    <div class="card__header"><h3 class="card__title">
+      <i class="fa-solid fa-user-plus"></i> Invitations</h3>
+      <span class="text-muted" style="font-size:0.78rem">${live.length} waiting</span>
+    </div>
+    ${rows.length ? `<table class="data-table"><thead><tr>
+        <th>Name</th><th>Sent to</th><th>Has an account</th><th>Status</th><th>Expires</th>
+      </tr></thead><tbody>
+      ${rows.slice(0, 50).map(v => {
+        const expired = v.status === 'pending' && new Date(v.expires_at) <= new Date();
+        return `<tr>
+          <td>${_esc(v.invitee_name || '—')}</td>
+          <td style="font-size:0.8rem">${_esc(mask(v))}</td>
+          <td style="font-size:0.8rem">${v.matched_investor_id ? 'Yes' : 'Not when invited'}</td>
+          <td style="font-size:0.8rem">${_esc(expired ? 'expired' : v.status)}</td>
+          <td style="font-size:0.8rem">${_esc(String(v.expires_at || '').slice(0, 10))}</td>
+        </tr>`; }).join('')}
+      </tbody></table>` : '<div class="text-muted" style="padding:14px">Nobody has been invited yet.</div>'}
+    <div class="text-muted" style="font-size:0.75rem;padding:8px 14px">
+      An invitation always creates an ordinary member — never a signatory, never an office.
+      Signing power is a change to the mandate above, made against the group&rsquo;s constitution.
+      A pending invitation for somebody who says they never got it is usually one sent to an
+      address they do not use: have the committee invite the one they do.
+    </div>
+  </div>`;
 }
 
 /* ─── Contribution schedule ────────────────────────────────────────── */

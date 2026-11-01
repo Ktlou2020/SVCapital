@@ -1450,7 +1450,14 @@ function navigate(view, btnEl) {
     learn: renderLearnView,
     /* Both, because the grid is the union of the two: sub-accounts the
        caller opened, and stokvels they are merely a member of. */
-    subaccounts: async () => { await Promise.all([loadSubAccounts(), loadStokvels()]); renderSubAccountsView(); },
+    subaccounts: async () => {
+      /* Invitations too, and NOT only when there is something else here: a
+         person invited to a stokvel before they have opened anything of
+         their own has an empty screen, and the invitation is the one thing
+         on it. */
+      await Promise.all([loadSubAccounts(), loadStokvels(), loadStokvelInvites()]);
+      renderSubAccountsView();
+    },
     referral: loadReferralDashboard,
     documents: loadDocuments,
     policies: renderPoliciesView,
@@ -6921,12 +6928,16 @@ function renderSubAccountsView() {
   /* Stokvels a member belongs to but did not open. loadSubAccounts() asks
      for sub_accounts where the caller is parent_investor_id, so everyone in
      a stokvel except the chairperson had nothing here to see. */
-  const joined = _stokvelsNotMine();
+  const joined  = _stokvelsNotMine();
+  const pending = PORTAL.stokvelInvites || [];
 
   const badge = document.getElementById('subacctsBadge');
-  if (badge) badge.textContent = (PORTAL.subAccounts.length + joined.length) || '';
+  if (badge) badge.textContent = (PORTAL.subAccounts.length + joined.length + pending.length) || '';
 
-  if (!PORTAL.subAccounts.length && !joined.length) {
+  /* An invitation counts as something to see. Treating it otherwise sends
+     somebody who was invited to the empty state — which invites them to
+     open an account they have already been asked to join. */
+  if (!PORTAL.subAccounts.length && !joined.length && !pending.length) {
     grid.style.display  = 'none';
     if (empty) empty.style.display = '';
     return;
@@ -6934,7 +6945,8 @@ function renderSubAccountsView() {
   if (empty) empty.style.display = 'none';
   grid.style.display = '';
 
-  grid.innerHTML = PORTAL.subAccounts.map(sa => _saCard(sa)).join('')
+  grid.innerHTML = pending.map(v => _svInviteCard(v)).join('')
+                 + PORTAL.subAccounts.map(sa => _saCard(sa)).join('')
                  + joined.map(sv => _stokvelCard(sv)).join('');
 }
 
@@ -12127,6 +12139,171 @@ function _stokvelsNotMine() {
 
    Only ever shows what the viewer can act on: a vote of theirs that is
    outstanding, and money they themselves owe. */
+/* ─── Invitations ──────────────────────────────────────────────────
+   There is no link in a stokvel invitation, on purpose: a link is a
+   capability, and forwarded once it would let a stranger see a group's
+   balances and roster. The invitation is addressed to an email or a cell
+   number instead, and THIS CARD is the entire discovery mechanism — it
+   appears for whoever signs in holding that contact. Which makes it the one
+   piece of UI in the feature that cannot be allowed to be subtle. */
+async function loadStokvelInvites() {
+  try {
+    const res = await API._fetch('GET', 'stokvels/invites/mine');
+    PORTAL.stokvelInvites = (res && res.data) || [];
+  } catch (_) {
+    PORTAL.stokvelInvites = [];
+  }
+  return PORTAL.stokvelInvites;
+}
+
+function _svInviteCard(v) {
+  return `<div class="sa-card" style="--sa-color:#eda5ff;border:2px solid #eda5ff">
+    <div class="sa-card__header" style="background:linear-gradient(135deg,#2d1d6e 0%,#eda5ff 100%)">
+      <div class="sa-card__type"><i class="fa-solid fa-envelope-open-text"></i> Invitation</div>
+      <div class="sa-card__name">${_esc(v.stokvel_name)}</div>
+      <div style="font-size:0.72rem;color:rgba(255,255,255,0.85);margin-top:2px">
+        ${_esc(v.invited_by_name || 'A member')} invited you · ${v.active_members || 0} member${v.active_members === 1 ? '' : 's'}
+      </div>
+    </div>
+    <div class="sa-card__body">
+      <div style="font-size:0.8rem;color:var(--text-muted);line-height:1.5">
+        Joining means the group can see what you contribute and what you owe, and that
+        several signatories must agree before any of its money moves. You join as an
+        ordinary member.
+      </div>
+    </div>
+    <div class="sa-card__actions">
+      <button class="btn btn--sm btn--primary" onclick="acceptStokvelInvite('${_esc(v.id)}')">
+        <i class="fa-solid fa-check"></i> Accept
+      </button>
+      <button class="btn btn--sm btn--ghost" onclick="declineStokvelInvite('${_esc(v.id)}')">
+        Decline
+      </button>
+    </div>
+  </div>`;
+}
+
+async function acceptStokvelInvite(inviteId) {
+  try {
+    await API._fetch('POST', `stokvels/invites/${inviteId}/accept`, {});
+    Utils.toast('You have joined. Welcome in.', 'success');
+  } catch (err) {
+    Utils.toast(err.message || 'Could not accept that invitation.', 'error');
+  }
+  await Promise.all([loadSubAccounts(), loadStokvels(), loadStokvelInvites()]);
+  renderSubAccountsView();
+}
+
+async function declineStokvelInvite(inviteId) {
+  if (!confirm('Decline this invitation? Whoever invited you would have to send another.')) return;
+  try {
+    await API._fetch('POST', `stokvels/invites/${inviteId}/decline`, {});
+    Utils.toast('Declined.', 'success');
+  } catch (err) {
+    Utils.toast(err.message || 'Could not decline that invitation.', 'error');
+  }
+  await loadStokvelInvites();
+  renderSubAccountsView();
+}
+
+/* The committee's side, inside the hub. Every member sees who has been
+   asked — a group that cannot see who was invited cannot see who is about
+   to have a say in its money — and only the committee gets the buttons. */
+function _svInvitations(res, gid) {
+  const rows = (res && res.data) || [];
+  const can  = !!(res && res.can_invite);
+  const live = rows.filter(v => v.status === 'pending');
+  const past = rows.filter(v => v.status !== 'pending').slice(0, 5);
+
+  const row = v => `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;
+       border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:6px">
+      <div>
+        <div style="font-weight:700;font-size:0.86rem">${_esc(v.invitee_name || 'Invited')}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted)">
+          ${_esc(v.contact)}${v.already_on_the_platform ? ' · already on SV Capital' : ''}
+        </div>
+      </div>
+      <div style="text-align:right;white-space:nowrap">
+        <div style="font-size:0.72rem;color:var(--text-muted)">${_esc(v.status)}</div>
+        ${v.status === 'pending' && can ? `<button class="btn btn--ghost btn--sm" style="margin-top:4px"
+          onclick="revokeStokvelInvite('${_esc(gid)}','${_esc(v.id)}')">Withdraw</button>` : ''}
+      </div>
+    </div>`;
+
+  return `<div class="sa-section-title mt-16"><i class="fa-solid fa-user-plus"></i> Invitations</div>
+    ${live.length ? live.map(row).join('')
+      : `<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:8px">Nobody is waiting to answer.</div>`}
+    ${can ? `<button class="btn btn--secondary btn--sm" onclick="inviteToStokvel('${_esc(gid)}')">
+        <i class="fa-solid fa-plus"></i> Invite someone
+      </button>
+      <div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px">
+        They join as an ordinary member. Signing power is a change to the mandate —
+        an invitation cannot grant it, and no one person can arrange it.
+      </div>` : ''}
+    ${past.length ? `<div style="font-size:0.74rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px">Answered</div>${past.map(row).join('')}` : ''}`;
+}
+
+function inviteToStokvel(groupId) {
+  const body = document.getElementById('saDetailBody');
+  if (!body) return;
+  body.innerHTML = `
+    <div style="padding:4px 2px 8px">
+      <div class="sa-section-title"><i class="fa-solid fa-user-plus"></i> Invite someone to join</div>
+      <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:14px">
+        We send the invitation to this person. They accept it themselves, by signing in
+        to SV Capital with the same email address or cell number — there is no link to
+        forward, because a forwarded link would let anybody see the group&rsquo;s money.
+      </div>
+      <label style="display:block;font-size:0.74rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">Their name</label>
+      <input id="svInvName" class="form-input" type="text" maxlength="80" style="width:100%;margin-bottom:12px">
+      <label style="display:block;font-size:0.74rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">Email address</label>
+      <input id="svInvEmail" class="form-input" type="email" inputmode="email" autocapitalize="off" style="width:100%;margin-bottom:12px">
+      <label style="display:block;font-size:0.74rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">Cell number</label>
+      <input id="svInvCell" class="form-input" type="tel" inputmode="tel" style="width:100%;margin-bottom:6px">
+      <div style="font-size:0.74rem;color:var(--text-muted);margin-bottom:16px">
+        Either one is enough; both means we can reach them either way. Use the address they
+        already have an SV Capital account under, if they have one — an invitation sent
+        anywhere else is invisible to them.
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn--primary btn--sm" onclick="submitStokvelInvite('${_esc(groupId)}')">
+          <i class="fa-solid fa-paper-plane"></i> Send the invitation
+        </button>
+        <button class="btn btn--ghost btn--sm" onclick="_svRenderHub('${_esc(groupId)}')">Cancel</button>
+      </div>
+    </div>`;
+}
+
+async function submitStokvelInvite(groupId) {
+  const name  = (document.getElementById('svInvName')  || {}).value || '';
+  const email = (document.getElementById('svInvEmail') || {}).value || '';
+  const cell  = (document.getElementById('svInvCell')  || {}).value || '';
+  if (!email.trim() && !cell.trim()) {
+    Utils.toast('An email address or a cell number is needed — that is how it reaches them.', 'error');
+    return;
+  }
+  try {
+    const res = await API._fetch('POST', `stokvels/${groupId}/invites`, { name, email, cell });
+    Utils.toast(res.data && res.data.already_on_the_platform
+      ? 'Sent. They already have an SV Capital account, so it is waiting in their app.'
+      : 'Sent. They accept it by signing up with the same details.', 'success');
+  } catch (err) {
+    Utils.toast(err.message || 'Could not send that invitation.', 'error');
+  }
+  await _svRenderHub(groupId);
+}
+
+async function revokeStokvelInvite(groupId, inviteId) {
+  if (!confirm('Withdraw this invitation?')) return;
+  try {
+    await API._fetch('DELETE', `stokvels/${groupId}/invites/${inviteId}`);
+    Utils.toast('Withdrawn.', 'success');
+  } catch (err) {
+    Utils.toast(err.message || 'Could not withdraw it.', 'error');
+  }
+  await _svRenderHub(groupId);
+}
+
 function _svBadge(id) {
   const sv = (PORTAL.stokvels || []).find(x => x.id === id);
   if (!sv) return '';
@@ -12177,13 +12354,14 @@ async function openStokvelHub(id) {
 }
 
 async function _svRenderHub(id) {
-  let group, members, contributions, requests;
+  let group, members, contributions, requests, invitations;
   try {
-    [group, members, contributions, requests] = await Promise.all([
+    [group, members, contributions, requests, invitations] = await Promise.all([
       API._fetch('GET', `stokvels/${id}`),
       API._fetch('GET', `stokvels/${id}/members`),
       API._fetch('GET', `stokvels/${id}/contributions`),
       API._fetch('GET', `stokvels/${id}/withdrawal-requests`),
+      API._fetch('GET', `stokvels/${id}/invites`),
     ]);
   } catch (err) {
     document.getElementById('saDetailBody').innerHTML =
@@ -12202,6 +12380,7 @@ async function _svRenderHub(id) {
     ${_svContributions(contributions, mine, id)}
     ${_svWithdrawals(requests, meIsSignatory, id)}
     ${_svMembers(members)}
+    ${_svInvitations(invitations, id)}
   `;
 }
 

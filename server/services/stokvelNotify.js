@@ -314,6 +314,112 @@ async function spent({ groupId, authorityId, reference, db } = {}) {
   }
 }
 
+/* ─── INVITED ──────────────────────────────────────────────────────
+   Somebody has been asked to join. There is no link in the message, so this
+   has to do two jobs: tell them it happened, and tell them how to find it —
+   sign in as the person who holds the contact it was sent to, and the
+   invitation is on the Sub-accounts screen.
+
+   THREE CHANNELS, because this is the one message sent to somebody who may
+   not be a user at all. Email where there is an address, SMS where there is
+   a number, push where the contact already belongs to an account. A stokvel
+   treasurer typing in a cousin's cell number has given us the only way to
+   reach them. */
+async function invited({ inviteId, db } = {}) {
+  const pool = db || defaultPool;
+  try {
+    const { rows: [v] } = await pool.query(
+      `SELECT v.*, a.name AS stokvel_name, i.first_name AS invited_by_name
+         FROM stokvel_invites v
+         JOIN sub_accounts a ON a.id = v.sub_account_id
+         LEFT JOIN investors i ON i.id = v.invited_by
+        WHERE v.id = $1`, [inviteId]);
+    if (!v) return { reached: [], reason: 'no such invitation' };
+
+    const who   = v.invited_by_name || 'A member';
+    const group = v.stokvel_name || 'a stokvel';
+    const line  = `${who} has invited you to join ${group} on SV Capital.`;
+    const find  = 'Sign in to the app with this email address or cell number and the '
+                + 'invitation is waiting on your Sub-accounts screen.';
+    const reached = [];
+
+    const { email, push } = services();
+    if (email && v.email) {
+      await Promise.resolve(email.sendStokvelInvite(v.email, {
+        inviteeName: v.invitee_name, inviterName: who, stokvelName: group,
+        expiresAt: v.expires_at, alreadyAUser: !!v.matched_investor_id,
+      })).then(() => reached.push('email'))
+        .catch(e => console.warn('[stokvelNotify] invite email failed:', e.message));
+    }
+    if (v.cell) {
+      let sms = null;
+      try { sms = require('./sms'); } catch (_) {}
+      if (sms && sms.sendStokvelInvite) {
+        /* Invitations store a cell as its LAST NINE DIGITS, the only form
+           every South African way of writing a number agrees on. The SMS
+           transport is generic and knows nothing about that convention —
+           it turns a leading 0 into +27 and gives up on anything else — so
+           nine bare digits would be dropped in silence, leaving the
+           invitation recorded and the SMS never sent. Restored here, where
+           the storage convention is known. */
+        const dialable = /^\d{9}$/.test(String(v.cell)) ? '0' + v.cell : v.cell;
+        await Promise.resolve(sms.sendStokvelInvite(dialable, { inviterName: who, stokvelName: group }))
+          .then(() => reached.push('sms'))
+          .catch(e => console.warn('[stokvelNotify] invite sms failed:', e.message));
+      }
+    }
+    if (push && v.matched_investor_id) {
+      await push.sendPushToInvestor(v.matched_investor_id, {
+        title: group, body: `${line} Open Sub-accounts to accept it.`,
+        url: '/portal/', tag: 'sv-stokvel-invite',
+        icon: '/assets/logo.png', badge: '/assets/logo.png',
+      }).then(() => reached.push('push'))
+        .catch(e => console.warn('[stokvelNotify] invite push failed:', e.message));
+    }
+    return { reached, find };
+  } catch (err) {
+    console.error('[stokvelNotify] invited failed:', err.message);
+    return { reached: [], error: err.message };
+  }
+}
+
+/* ─── JOINED ───────────────────────────────────────────────────────
+   They accepted. The person who invited them is told, because an invitation
+   sent into silence is indistinguishable from one that went to the wrong
+   address — and that distinction is the whole weakness of an addressed
+   invitation. Nobody else is told: a roster that grows is on the roster. */
+async function inviteAccepted({ groupId, investorId, invitedBy, db } = {}) {
+  const pool = db || defaultPool;
+  try {
+    if (!invitedBy || invitedBy === investorId) return { notified: [] };
+    const { rows: [row] } = await pool.query(
+      `SELECT a.name AS stokvel_name, j.first_name AS joiner_name, j.last_name AS joiner_surname
+         FROM sub_accounts a, investors j
+        WHERE a.id = $1 AND j.id = $2`, [groupId, investorId]);
+    if (!row) return { notified: [] };
+    const inviter = await _person(pool, invitedBy);
+    const name = [row.joiner_name, row.joiner_surname].filter(Boolean).join(' ') || 'Somebody you invited';
+    const told = await _tell(inviter, {
+      title: row.stokvel_name,
+      body:  `${name} accepted your invitation and is now a member.`,
+      email: {
+        subject: `${row.stokvel_name}: ${name} has joined`,
+        heading: 'Your invitation was accepted',
+        lead: `<strong>${name}</strong> accepted your invitation to <strong>${row.stokvel_name}</strong> `
+            + 'and is now an active member.',
+        rows: [['Stokvel', row.stokvel_name], ['Joined', name]],
+        note: 'They join as an ordinary member. Signing power is a change to the mandate \u2014 '
+            + 'it is not something an invitation can grant, and it is not something one person '
+            + 'can arrange alone. Talk to us if the group has elected a new signatory.',
+      },
+    });
+    return { notified: [told].filter(Boolean) };
+  } catch (err) {
+    console.error('[stokvelNotify] inviteAccepted failed:', err.message);
+    return { notified: [], error: err.message };
+  }
+}
+
 /* The facts of the request, as label/value pairs. Every message carries the
    same ones, so a reader comparing two emails is comparing like with like. */
 function _rows(a, required, reference) {
@@ -335,4 +441,4 @@ function _rows(a, required, reference) {
   return out;
 }
 
-module.exports = { approvalNeeded, decided, spent, describe };
+module.exports = { approvalNeeded, decided, spent, invited, inviteAccepted, describe };

@@ -64,8 +64,11 @@ console.log('\nthe member is let in');
      'a badge of zero beside a grid with your stokvel in it');
   ok('a stokvel opens its own hub',
      /account_type === 'stokvel'\) return openStokvelHub/.test(CORE));
-  ok('and the view loader fetches both before rendering',
-     /Promise\.all\(\[loadSubAccounts\(\), loadStokvels\(\)\]\)/.test(CORE));
+  ok('and the view loader fetches all three before rendering',
+     /loadSubAccounts\(\)/.test(CORE) && /loadStokvels\(\)/.test(CORE)
+     && /Promise\.all\(\[[^\]]*loadStokvelInvites\(\)/.test(CORE),
+     'sub-accounts, stokvels AND invitations — somebody invited before they have '
+     + 'opened anything of their own has only the invitation on the screen');
 }
 
 console.log('\nand what it renders is escaped');
@@ -189,6 +192,10 @@ const STUB = {
       pool_name: 'Cattle November', reason: 'Group savings',
       status: 'pending', requested_by_name: 'Ann', approvals: 1, required: 2,
       satisfied: false, blocked_because: '1 of 2 signatory approvals.' } ] },
+  'stokvels/SA-1/invites': { can_invite: true, data: [
+    { id: 'SVI-9', invitee_name: 'Thabo', contact: 't***@example.test',
+      status: 'pending', already_on_the_platform: false,
+      invited_by_name: 'Ann', expires_at: '2030-01-01T00:00:00.000Z' } ] },
 };
 
 (async () => {
@@ -351,6 +358,50 @@ const STUB = {
     ok('and refuses below the pool’s own minimum',
        /R1000\.00 or more/.test(form.belowMinimum) && !/R404/.test(form.belowMinimum),
        form.belowMinimum);
+
+    /* ── The invitation card ───────────────────────────────────────
+       The one piece of UI in the whole invitation feature that cannot be
+       allowed to be subtle: there is no link in a stokvel invitation, so
+       this card IS the discovery mechanism. And it has to survive the empty
+       state, because somebody invited before they have opened anything of
+       their own has nothing else on the screen — the first draft of
+       renderSubAccountsView would have sent them to "open your first
+       sub-account" while an invitation sat unshown.
+
+       A second slice of portal-core, which is safe to evaluate piecemeal
+       because the file may declare no top-level state (check-portal-split
+       enforces it), so a slice is only function declarations. */
+    const gridSlice = core.slice(core.indexOf('function renderSubAccountsView'),
+                                 core.indexOf('function openCreateSubAccountModal'));
+    await send('Runtime.evaluate', { expression: gridSlice });
+    const invited = await evaluate(`(() => {
+      document.body.insertAdjacentHTML('beforeend',
+        '<div id="subacctsGrid"></div><div id="subacctsEmpty" style="display:none"></div>' +
+        '<span id="subacctsBadge"></span>');
+      PORTAL.subAccounts = []; PORTAL.stokvels = [];
+      PORTAL.stokvelInvites = [{ id: 'SVI-1', stokvel_name: 'Sizanani <b>Stokvel</b>',
+        invited_by_name: 'Nomsa', active_members: 6 }];
+      renderSubAccountsView();
+      const g = document.getElementById('subacctsGrid');
+      return { html: g.innerHTML, text: g.textContent,
+               gridShown: g.style.display !== 'none',
+               emptyShown: document.getElementById('subacctsEmpty').style.display !== 'none',
+               badge: document.getElementById('subacctsBadge').textContent };
+    })()`);
+    ok('an invitation shows even with nothing else on the screen',
+       invited.gridShown && !invited.emptyShown,
+       `grid ${invited.gridShown}, empty ${invited.emptyShown} — being invited is not an empty state`);
+    ok('it names the stokvel and who asked',
+       /Sizanani/.test(invited.text) && /Nomsa/.test(invited.text), invited.text.slice(0, 160));
+    ok('and offers both answers',
+       />Accept</.test(invited.html.replace(/\s+/g, '')) || /Accept/.test(invited.text),
+       'accepting is the invitee’s own act, and so is declining');
+    ok('it says what joining means before they tap it',
+       /ordinary member/.test(invited.text) && /signator/i.test(invited.text),
+       'a group that can see your contributions is not a thing to join by accident');
+    ok('the stokvel name is escaped here too',
+       !/<b>Stokvel<\/b>/.test(invited.html), invited.html.slice(0, 200));
+    ok('and it is counted in the badge', invited.badge === '1', invited.badge);
 
     /* Back to the hub, so the assertions below read the hub again. */
     await evaluate(`_svRenderHub('SA-1')`);

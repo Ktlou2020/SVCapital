@@ -1231,6 +1231,62 @@ CREATE INDEX IF NOT EXISTS stokvel_members_investor_idx ON stokvel_members(inves
 CREATE INDEX IF NOT EXISTS stokvel_members_group_idx    ON stokvel_members(sub_account_id);
 
 
+/* An invitation, ADDRESSED to a contact rather than carried by a link.
+   
+   Onboarding was a staff typing job: somebody in the console pasted an
+   investor id into a prompt, and the only thing that ever moved a member
+   from 'invited' to 'active' was a staff dropdown. A fifteen-member stokvel
+   needed fifteen people already registered and fifteen manual rows, and the
+   chairperson could add nobody. That alone stopped the product being sold.
+   
+   WHY THERE IS NO TOKEN IN A LINK. A link is a capability: forwarded once,
+   it lets a stranger into a group's balances and roster. This is addressed
+   to an email or a cell number instead, and the invitee finds it by SIGNING
+   IN as the person who controls that contact — the match IS the
+   authorisation. It also means the flow is identical for somebody who
+   already has an account and somebody who signs up after being asked, with
+   no public page to deploy and no secret to leak.
+   
+   The cost is real and worth naming: an invite sent to an address the person
+   did not sign up with is invisible to them. That is why the committee can
+   see every pending invite and re-send to a different contact.
+   
+   Contacts are stored NORMALISED — email lower-cased, a cell as its last
+   nine digits — because "the same person" has to be decidable, and
+   072 226 9415 and +27 72 226 9415 are the same person. */
+CREATE TABLE IF NOT EXISTS stokvel_invites (
+  id              TEXT PRIMARY KEY,
+  sub_account_id  TEXT NOT NULL REFERENCES sub_accounts(id) ON DELETE CASCADE,
+  invited_by      TEXT NOT NULL REFERENCES investors(id)    ON DELETE CASCADE,
+  invitee_name    TEXT,
+  email           TEXT,
+  cell            TEXT,
+  /* Resolved at invite time when the contact already belongs to an account,
+     so they can be pushed as well as emailed. Not an authorisation: accept
+     re-checks the contact against whoever is signed in. */
+  matched_investor_id TEXT REFERENCES investors(id) ON DELETE SET NULL,
+  status          TEXT NOT NULL DEFAULT 'pending'
+                    CHECK (status IN ('pending','accepted','declined','revoked')),
+  accepted_by     TEXT REFERENCES investors(id) ON DELETE SET NULL,
+  expires_at      TIMESTAMPTZ NOT NULL,
+  responded_at    TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW(),
+  /* An invitation with no way to reach anybody is a row, not an invitation. */
+  CONSTRAINT stokvel_invites_contact_chk CHECK (email IS NOT NULL OR cell IS NOT NULL)
+);
+/* One live invitation per contact per stokvel. Without this, tapping invite
+   twice asks the same person twice and leaves two rows that can each be
+   accepted — and accepting both is two memberships for one person, which the
+   roster unique index would then refuse halfway through. */
+CREATE UNIQUE INDEX IF NOT EXISTS stokvel_invites_live
+  ON stokvel_invites(sub_account_id, COALESCE(email, ''), COALESCE(cell, ''))
+  WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS stokvel_invites_email_idx ON stokvel_invites(email)  WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS stokvel_invites_cell_idx  ON stokvel_invites(cell)   WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS stokvel_invites_group_idx ON stokvel_invites(sub_account_id);
+
+
 CREATE TABLE IF NOT EXISTS sessions (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id       UUID NOT NULL,
@@ -4352,6 +4408,11 @@ async function autoSetup() {
          that comes back after somebody dismissed the idea of it is worse than
          no notice at all. */
       const NOTICES = [
+        { id: 'ANN-2026-STOKVEL-SELF-INVITES', area: 'both', icon: 'fa-user-plus',
+          title: 'A stokvel builds its own roster \u2014 stop typing members into the console',
+          body: 'Onboarding was a staff typing job, and it was the reason this product could not be sold. A member was added by somebody in the console pasting an INVESTOR ID into a prompt, and the only thing that ever moved them from \u201cinvited\u201d to \u201cactive\u201d was a staff dropdown \u2014 so a fifteen-member stokvel needed fifteen people already registered and fifteen manual rows, and the chairperson could add nobody. Now the COMMITTEE invites, by name and email or cell number: the chairperson, the secretary or the treasurer, from the stokvel screen in the app. Not an ordinary member \u2014 a stokvel wallet holds everybody\u2019s savings and \u201cany member can add anyone\u201d is not a door a savings club wants open. THE ONE RULE TO KNOW, AND TO REPEAT TO CLIENTS: AN INVITATION CAN NEVER MAKE A SIGNATORY. It always creates an ordinary member, with no office. If it could do otherwise the mandate would be theatre \u2014 invite two friends, sign them up, approve your own withdrawal \u2014 and somebody who was a signatory, left, and is invited back does NOT get their signing power returned. Signing power is a change to the mandate, made by us against the group\u2019s constitution. THERE IS DELIBERATELY NO JOIN LINK IN THE INVITATION. A link is a capability: forwarded once, it would let a stranger see a group\u2019s balances and roster. The invitation is ADDRESSED to the email or cell number instead, and the invitee claims it by signing in \u2014 or signing up \u2014 with that same contact, at which point it is waiting on their Sub-accounts screen. That works identically for somebody who already banks with us and somebody who has never heard of us, and it is also the one thing to know when a client says they never got it: AN INVITATION SENT TO AN ADDRESS THEY DID NOT SIGN UP WITH IS INVISIBLE TO THEM. The committee can see every pending invitation and send another to the right contact, and the console shows the same list with \u201chas an account\u201d beside each one, which is the diagnosis. Invitations go out by email, by SMS and, where the contact already belongs to an account, by push. They expire after 21 days, can be withdrawn, can only be accepted once, and accepting is the invitee\u2019s own act \u2014 staff cannot accept for somebody, because joining a group that can then see your contributions is not something to have done to you. Caps: 50 members and 25 invitations outstanding, which are bounds on abuse rather than product rules \u2014 talk to us about a bigger group.',
+          where: 'Client app \u2192 Sub-accounts \u2192 open the stokvel \u2192 Invitations \u2192 \u201cInvite someone\u201d (committee only). The invitee sees a purple Invitation card at the top of their own Sub-accounts screen with Accept and Decline. Staff view: Admin console \u2192 Stokvels \u2192 open one \u2192 Invitations, which shows who was asked, whether they had an account when invited, and whether it is still waiting.' },
+
         { id: 'ANN-2026-STOKVEL-NOTIFICATIONS', area: 'both', icon: 'fa-bell',
           title: 'Stokvel signatories are now TOLD when money is waiting on them',
           body: 'The mandate was built over four releases and then sat idle, because nothing told anybody it was waiting. A signatory found out that R10\u00a0000 needed their approval by happening to open the app, so a treasurer raised a request and then phoned three people to ask them to go and tap approve \u2014 a worse system than the bank form it replaced. Five moments now reach people, by push AND email, and no others. ASKED: a request is raised, and every OTHER signatory is told who asked, for how much, and where it is going. PROGRESS: somebody approved but it has not carried, and only the person waiting on it hears the tally \u2014 telling three signatories that a signatory voted is telling them what they are in the middle of doing. CARRIED and REFUSED: the answer is final, so the whole mandate hears, because a dead or carried request that still reads as pending leaves people waiting to vote on nothing. And SPENT: the authority was used, and everybody who granted it is told WHERE THE MONEY WENT \u2014 the message that is easiest to leave out and the one that matters most, because an approval is a promise about money and this is the only chance anybody has to notice an authority used in a way they did not expect while it is still recent. THE DESTINATION IS IN EVERY MESSAGE, including the one line that shows on a lock screen: \u201cR10\u00a0000 needs your approval\u201d tells a signatory nothing they can check, and the destination is the half of a request the mandate exists to pin down. For an investment the message also states what leaves the wallet once the 1% is added, which is the one figure that differs from the one being approved. ALSO, AND SEPARATELY: push needs a permission the member may never have granted and email needs an address that can bounce, so the count of what is waiting is on the stokvel CARD in the app, which cannot fail silently \u2014 including on the chairperson\u2019s card, which is drawn differently from everybody else\u2019s and would otherwise have been the one person not told. Nothing here can break the money: every send happens after the money has committed, none is waited on, and with the mail provider and the push service both failing a withdrawal still goes through and a vote is still recorded.',

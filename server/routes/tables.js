@@ -206,6 +206,13 @@ const ADMIN_ONLY_TABLES = new Set([
      record is the audit trail for money. Members read their own group's
      requests through /api/stokvels. */
   'stokvel_withdrawal_requests', 'stokvel_request_approvals',
+  /* Invitations carry a contact for somebody who may not even be a user
+     yet — an email address and a cell number, with a name beside them.
+     Unlisted here, the generic reader would hand every signed-in investor a
+     contact list of everybody any stokvel has ever asked to join. Members
+     read their own group's invitations through /api/stokvels, which masks
+     the contact. */
+  'stokvel_invites',
   /* Who owes what. An arrears list is the most sensitive thing a stokvel
      holds about its members; it is theirs to see, not every investor's. */
   'stokvel_contributions', 'stokvel_contribution_schedules',
