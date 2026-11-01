@@ -471,6 +471,7 @@ function navigate(view, btnEl) {
     'fica-pipeline': 'FICA Pipeline',
     insights: 'Insight Articles',
     handbook: 'Platform Handbook', rewards: 'Rewards',
+    stokvels: 'Stokvels',
   };
   document.getElementById('topbarTitle').textContent = titles[view] || view;
   STATE.currentView = view;
@@ -499,6 +500,7 @@ function navigate(view, btnEl) {
     opsconsole: loadOpsConsole,
     feedback: () => loadFeedback('pending'),
     rewards: loadRewards,
+    stokvels: loadStokvels,
   };
   if (loaders[view]) loaders[view]();
   // Close mobile sidebar after navigation
@@ -20066,4 +20068,302 @@ async function _poolReturnApply(year) {
   } catch (e) {
     out.innerHTML = `<span style="color:#ef4444">${_esc(e.message || 'Failed')}</span>`;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Stokvels — the staff side.
+
+   Three releases built the group, the mandate and the contribution ledger,
+   and staff have been operating all of it through the raw table editor:
+   typing a quorum into a column with nothing to say it must be at least
+   two, setting is_signatory on rows identified by id, and having no way to
+   see whether a stokvel could actually withdraw.
+
+   This is the screen that makes those answerable. It writes through the
+   same generic table API the rest of the console uses — there is no new
+   endpoint here, and deliberately so: the rules that matter are enforced
+   server-side at the gate, not in this file. What this adds is sight of
+   them, and refusing the two inputs that are silently useless.
+   ═══════════════════════════════════════════════════════════ */
+
+const STOKVEL_ROLES = ['chairperson', 'treasurer', 'secretary', 'member'];
+const STOKVEL_MIN_QUORUM = 2;
+
+async function loadStokvels() {
+  const host = document.getElementById('stokvelList');
+  if (!host) return;
+  host.innerHTML = '<div class="text-center text-muted" style="padding:20px"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div>';
+  try {
+    const res = await API._fetch('GET', 'tables/sub_accounts', null,
+                                 { account_type: 'stokvel', limit: 1000 });
+    STATE.stokvels = (res && res.data) || [];
+  } catch (err) {
+    host.innerHTML = `<div class="text-center" style="padding:20px;color:#ef4444">
+      Could not load stokvels: ${_esc(err.message || 'error')}<br>
+      <button class="btn btn--secondary btn--sm" style="margin-top:10px" onclick="loadStokvels()">Retry</button></div>`;
+    return;
+  }
+  renderStokvelList();
+}
+
+function renderStokvelList() {
+  const host = document.getElementById('stokvelList');
+  if (!host) return;
+  const q = (document.getElementById('stokvelSearch')?.value || '').toLowerCase().trim();
+  const rows = (STATE.stokvels || [])
+    .filter(s => !q || String(s.name || '').toLowerCase().includes(q));
+
+  if (!rows.length) {
+    host.innerHTML = `<div class="text-center text-muted" style="padding:20px">No stokvels${q ? ' match that' : ' yet'}.</div>`;
+    return;
+  }
+
+  host.innerHTML = `<table class="data-table"><thead><tr>
+      <th>Stokvel</th><th>Mandate</th><th class="text-right">Wallet</th><th></th>
+    </tr></thead><tbody>
+    ${rows.map(s => {
+      const quorum = parseInt(s.stokvel_quorum, 10) || 0;
+      /* The thing staff cannot see in the table editor: a stokvel with no
+         mandate on file cannot withdraw at all. The gate refuses rather
+         than guessing a default, so this has to be obvious from the list
+         and not something discovered when a withdrawal is refused. */
+      const mandate = quorum >= STOKVEL_MIN_QUORUM
+        ? `<span style="color:#22c55e"><i class="fa-solid fa-circle-check"></i> ${quorum} of its signatories</span>`
+        : `<span style="color:#ef4444"><i class="fa-solid fa-triangle-exclamation"></i> none on file — cannot withdraw</span>`;
+      return `<tr>
+        <td><strong>${_esc(s.name)}</strong>${s.stokvel_reg_number ? `<div class="text-muted" style="font-size:0.75rem">${_esc(s.stokvel_reg_number)}</div>` : ''}</td>
+        <td style="font-size:0.82rem">${mandate}</td>
+        <td class="text-right">${Utils.rand(s.wallet_balance)}</td>
+        <td class="text-right"><button class="btn btn--secondary btn--sm" onclick="openStokvelAdmin('${_esc(s.id)}')">Open</button></td>
+      </tr>`;
+    }).join('')}
+    </tbody></table>`;
+}
+
+async function openStokvelAdmin(id) {
+  const host = document.getElementById('stokvelDetail');
+  host.innerHTML = '<div class="card"><div class="text-center text-muted" style="padding:20px"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div></div>';
+  let members, schedules, requests, contributions;
+  try {
+    [members, schedules, requests, contributions] = await Promise.all([
+      API._fetch('GET', 'tables/stokvel_members', null, { sub_account_id: id, limit: 500 }),
+      API._fetch('GET', 'tables/stokvel_contribution_schedules', null, { sub_account_id: id, limit: 50 }),
+      API._fetch('GET', 'tables/stokvel_withdrawal_requests', null, { sub_account_id: id, limit: 100 }),
+      API._fetch('GET', 'tables/stokvel_contributions', null, { sub_account_id: id, limit: 500 }),
+    ]);
+  } catch (err) {
+    host.innerHTML = `<div class="card" style="color:#ef4444;padding:20px">Could not load: ${_esc(err.message || '')}</div>`;
+    return;
+  }
+
+  const s = (STATE.stokvels || []).find(x => x.id === id) || { id };
+  STATE.stokvelOpen = {
+    id, members: (members && members.data) || [],
+    schedule: ((schedules && schedules.data) || []).find(x => x.active) || null,
+    requests: (requests && requests.data) || [],
+    contributions: (contributions && contributions.data) || [],
+  };
+  host.innerHTML = _stokvelAdminMandate(s) + _stokvelAdminMembers(s)
+                 + _stokvelAdminSchedule(s) + _stokvelAdminActivity(s);
+  host.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/* ─── The mandate ──────────────────────────────────────────────────── */
+function _stokvelAdminMandate(s) {
+  const o = STATE.stokvelOpen;
+  const signatories = o.members.filter(m => m.is_signatory && m.status === 'active').length;
+  const quorum = parseInt(s.stokvel_quorum, 10) || 0;
+
+  /* Both halves have to hold: a quorum of three with two signatories is a
+     stokvel that can never withdraw, and the table editor would take it
+     without comment. */
+  const warn = quorum < STOKVEL_MIN_QUORUM
+    ? 'No mandate on file — this stokvel cannot withdraw. A mandate of one is not a mandate, so the minimum is two.'
+    : signatories < quorum
+      ? `Only ${signatories} active signator${signatories === 1 ? 'y' : 'ies'} for a quorum of ${quorum} — this stokvel cannot reach its own mandate.`
+      : null;
+
+  return `<div class="card">
+    <div class="card__header"><h3 class="card__title">
+      <i class="fa-solid fa-user-shield"></i> ${_esc(s.name || 'Stokvel')} — mandate</h3></div>
+    <div style="padding:14px">
+      ${warn ? `<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px;margin-bottom:12px;font-size:0.84rem;color:#ef4444">
+        <i class="fa-solid fa-triangle-exclamation"></i> ${_esc(warn)}</div>` : ''}
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <label style="font-size:0.84rem">Approvals required to withdraw</label>
+        <input type="number" min="${STOKVEL_MIN_QUORUM}" step="1" id="svQuorum" class="input input--sm"
+               value="${quorum || ''}" style="width:90px">
+        <span class="text-muted" style="font-size:0.78rem">of ${signatories} signator${signatories === 1 ? 'y' : 'ies'}</span>
+        <button class="btn btn--primary btn--sm" onclick="saveStokvelQuorum('${_esc(s.id)}')">Save mandate</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function saveStokvelQuorum(id) {
+  const n = parseInt(document.getElementById('svQuorum').value, 10);
+  if (!(n >= STOKVEL_MIN_QUORUM)) {
+    Toast.show(`A mandate of one is not a mandate — the minimum is ${STOKVEL_MIN_QUORUM}.`, 'error');
+    return;
+  }
+  const active = (STATE.stokvelOpen.members || []).filter(m => m.is_signatory && m.status === 'active').length;
+  if (n > active && !confirm(
+      `This stokvel has ${active} active signator${active === 1 ? 'y' : 'ies'} and you are asking for ${n} approvals. ` +
+      `It will not be able to withdraw until more are named. Save anyway?`)) return;
+  try {
+    await API._fetch('PATCH', `tables/sub_accounts/${id}`, { stokvel_quorum: n });
+    Toast.show('Mandate saved.', 'success');
+    await loadStokvels();
+    await openStokvelAdmin(id);
+  } catch (err) {
+    Toast.show('Could not save: ' + (err.message || ''), 'error');
+  }
+}
+
+/* ─── Members ──────────────────────────────────────────────────────── */
+function _stokvelAdminMembers(s) {
+  const rows = STATE.stokvelOpen.members;
+  return `<div class="card">
+    <div class="card__header"><h3 class="card__title"><i class="fa-solid fa-users"></i> Members</h3>
+      <button class="btn btn--secondary btn--sm" onclick="addStokvelMember('${_esc(s.id)}')">
+        <i class="fa-solid fa-plus"></i> Add member</button></div>
+    <table class="data-table"><thead><tr>
+      <th>Investor</th><th>Role</th><th>Signatory</th><th>Status</th><th></th>
+    </tr></thead><tbody>
+    ${rows.length ? rows.map(m => `<tr>
+      <td><code style="font-size:0.75rem">${_esc(m.investor_id)}</code></td>
+      <td>
+        <select class="input input--sm" onchange="updateStokvelMember('${_esc(m.id)}',{role:this.value})">
+          ${STOKVEL_ROLES.map(r => `<option value="${r}"${m.role === r ? ' selected' : ''}>${r.replace(/^\w/, c => c.toUpperCase())}</option>`).join('')}
+        </select>
+      </td>
+      <td><input type="checkbox"${m.is_signatory ? ' checked' : ''}
+            onchange="updateStokvelMember('${_esc(m.id)}',{is_signatory:this.checked})"></td>
+      <td>
+        <select class="input input--sm" onchange="updateStokvelMember('${_esc(m.id)}',{status:this.value})">
+          ${['invited', 'active', 'exited'].map(st => `<option value="${st}"${m.status === st ? ' selected' : ''}>${st.replace(/^\w/, c => c.toUpperCase())}</option>`).join('')}
+        </select>
+      </td>
+      <td class="text-right text-muted" style="font-size:0.74rem">${m.joined_at ? String(m.joined_at).slice(0, 10) : ''}</td>
+    </tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:16px">No members yet.</td></tr>'}
+    </tbody></table>
+    <div class="text-muted" style="font-size:0.75rem;padding:8px 14px">
+      Only <strong>active</strong> members are given contributions, and only active signatories count towards a mandate.
+      An approval from somebody later removed as a signatory stops counting immediately.
+    </div>
+  </div>`;
+}
+
+async function updateStokvelMember(memberId, patch) {
+  try {
+    await API._fetch('PATCH', `tables/stokvel_members/${memberId}`, patch);
+    Toast.show('Member updated.', 'success');
+    await openStokvelAdmin(STATE.stokvelOpen.id);
+  } catch (err) {
+    Toast.show('Could not update: ' + (err.message || ''), 'error');
+    await openStokvelAdmin(STATE.stokvelOpen.id);
+  }
+}
+
+async function addStokvelMember(stokvelId) {
+  const investorId = prompt('Investor ID of the member to add (e.g. INV-1234):');
+  if (!investorId) return;
+  const role = prompt(`Role — one of: ${STOKVEL_ROLES.join(', ')}`, 'member');
+  if (!role || !STOKVEL_ROLES.includes(role)) {
+    Toast.show('That is not a role this platform knows.', 'error');
+    return;
+  }
+  try {
+    await API._fetch('POST', 'tables/stokvel_members', {
+      sub_account_id: stokvelId, investor_id: investorId.trim(),
+      role, status: 'invited', is_signatory: false,
+    });
+    Toast.show('Member added as invited. They see nothing until the status is active.', 'success');
+    await openStokvelAdmin(stokvelId);
+  } catch (err) {
+    Toast.show('Could not add: ' + (err.message || ''), 'error');
+  }
+}
+
+/* ─── Contribution schedule ────────────────────────────────────────── */
+function _stokvelAdminSchedule(s) {
+  const sch = STATE.stokvelOpen.schedule;
+  return `<div class="card">
+    <div class="card__header"><h3 class="card__title"><i class="fa-solid fa-calendar-check"></i> Contribution schedule</h3></div>
+    <div style="padding:14px;display:flex;gap:10px;align-items:end;flex-wrap:wrap">
+      <div><label style="font-size:0.78rem;display:block" class="text-muted">Amount each</label>
+        <input type="number" min="1" step="0.01" id="svAmount" class="input input--sm" style="width:120px"
+               value="${sch ? _esc(sch.amount) : ''}"></div>
+      <div><label style="font-size:0.78rem;display:block" class="text-muted">Day of the month</label>
+        <input type="number" min="1" max="31" id="svDueDay" class="input input--sm" style="width:90px"
+               value="${sch ? _esc(sch.due_day) : '1'}"></div>
+      <button class="btn btn--primary btn--sm" onclick="saveStokvelSchedule('${_esc(s.id)}')">
+        ${sch ? 'Replace schedule' : 'Start schedule'}</button>
+    </div>
+    <div class="text-muted" style="font-size:0.75rem;padding:0 14px 12px">
+      Monthly only. A day past the end of a short month settles on its last day.
+      ${sch ? 'Replacing ends the current schedule and starts a new one — obligations already raised keep the amount they were raised at.'
+            : 'Nothing is owed until a schedule exists.'}
+    </div>
+  </div>`;
+}
+
+async function saveStokvelSchedule(stokvelId) {
+  const amount = parseFloat(document.getElementById('svAmount').value);
+  const dueDay = parseInt(document.getElementById('svDueDay').value, 10);
+  if (!(amount > 0))               { Toast.show('An amount above zero is required.', 'error'); return; }
+  if (!(dueDay >= 1 && dueDay <= 31)) { Toast.show('The day must be between 1 and 31.', 'error'); return; }
+  const existing = STATE.stokvelOpen.schedule;
+  if (existing && !confirm(
+      `This ends the current schedule of ${Utils.rand(existing.amount)} and starts a new one at ${Utils.rand(amount)}. ` +
+      `Obligations already raised keep the amount they were raised at. Continue?`)) return;
+  try {
+    /* Ended first: one live schedule per stokvel is a partial unique index,
+       so inserting a second active one is refused by the database rather
+       than quietly becoming the one that wins. */
+    if (existing) {
+      await API._fetch('PATCH', `tables/stokvel_contribution_schedules/${existing.id}`, { active: false });
+    }
+    await API._fetch('POST', 'tables/stokvel_contribution_schedules', {
+      sub_account_id: stokvelId, amount, cadence: 'monthly',
+      due_day: dueDay, active: true,
+    });
+    Toast.show('Schedule saved. The next nightly run opens the period.', 'success');
+    await openStokvelAdmin(stokvelId);
+  } catch (err) {
+    Toast.show('Could not save: ' + (err.message || ''), 'error');
+  }
+}
+
+/* ─── What is happening ────────────────────────────────────────────── */
+function _stokvelAdminActivity(s) {
+  const o = STATE.stokvelOpen;
+  const pending = o.requests.filter(r => r.status === 'pending');
+  const arrears = o.contributions
+    .filter(c => c.status === 'due' && (parseFloat(c.amount_due) - parseFloat(c.amount_paid)) > 0);
+  const owed = arrears.reduce((n, c) => n + (parseFloat(c.amount_due) - parseFloat(c.amount_paid)), 0);
+
+  return `<div class="card">
+    <div class="card__header"><h3 class="card__title"><i class="fa-solid fa-list-check"></i> Activity</h3></div>
+    <div style="padding:14px;display:flex;gap:28px;flex-wrap:wrap">
+      <div><div class="text-muted" style="font-size:0.74rem;text-transform:uppercase">Awaiting approval</div>
+        <div style="font-size:1.2rem;font-weight:800">${pending.length}</div></div>
+      <div><div class="text-muted" style="font-size:0.74rem;text-transform:uppercase">Outstanding contributions</div>
+        <div style="font-size:1.2rem;font-weight:800">${Utils.rand(owed)}</div>
+        <div class="text-muted" style="font-size:0.74rem">${arrears.length} obligation${arrears.length === 1 ? '' : 's'}</div></div>
+    </div>
+    ${pending.length ? `<table class="data-table"><thead><tr>
+        <th>Requested</th><th class="text-right">Amount</th><th>To</th><th class="text-right">Approvals</th>
+      </tr></thead><tbody>
+      ${pending.map(r => `<tr>
+        <td style="font-size:0.78rem">${_esc(String(r.created_at || '').slice(0, 10))}</td>
+        <td class="text-right"><strong>${Utils.rand(r.amount)}</strong></td>
+        <td style="font-size:0.78rem">${_esc(r.bank_name || '')}</td>
+        <td class="text-right">of ${_esc(r.quorum_required)}</td>
+      </tr>`).join('')}
+      </tbody></table>
+      <div class="text-muted" style="font-size:0.75rem;padding:8px 14px">
+        Staff cannot approve on a stokvel's behalf. Approvals come from its own signatories, in the app.
+      </div>` : ''}
+  </div>`;
 }
