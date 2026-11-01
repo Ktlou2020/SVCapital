@@ -1166,6 +1166,11 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
          somewhere sensible. Nothing in this repository sends it any more. */
       const feeInclusive = !!body.fee_inclusive;
       delete body.fee_inclusive; // not a DB column
+      /* The stokvel authority this investment is made under. Read by the
+         mandate gate below and never written: it is a permission slip, not
+         a column on the investment. */
+      const _authorityId = body.authority_id;
+      delete body.authority_id;
 
       const isReinvestment = !!body.is_reinvestment;
       let poolAmount, platformFee, required;
@@ -1239,10 +1244,10 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
           const _asInvestor = req.user.role === 'investor';
           const { rows: sa } = _asInvestor
             ? await _invClient.query(
-                'SELECT wallet_balance FROM sub_accounts WHERE id=$1 AND parent_investor_id=$2 FOR UPDATE',
+                'SELECT wallet_balance, account_type, stokvel_quorum FROM sub_accounts WHERE id=$1 AND parent_investor_id=$2 FOR UPDATE',
                 [body.sub_account_id, req.user.investorId])
             : await _invClient.query(
-                'SELECT wallet_balance FROM sub_accounts WHERE id=$1 FOR UPDATE',
+                'SELECT wallet_balance, account_type, stokvel_quorum FROM sub_accounts WHERE id=$1 FOR UPDATE',
                 [body.sub_account_id]);
           if (!sa[0]) {
             await _invClient.query('ROLLBACK');
@@ -1250,6 +1255,41 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
               error: _asInvestor ? 'Forbidden.' : 'Sub-account not found.' });
           }
           walletBal = parseFloat(sa[0].wallet_balance) || 0;
+
+          /* ── The mandate, for investments ────────────────────────────
+             Money going into a pool leaves the group wallet exactly as a
+             withdrawal does, and until now only withdrawals were gated —
+             so a chairperson who could not take R50 000 out could still
+             put it into a seven-year pool on their own.
+
+             Approved against a POOL rather than a bank account, and the
+             matching is the shared one: approving an amount and letting
+             whoever carries it out choose the product is the same hole as
+             letting them choose the account.
+
+             Staff are not exempt. A late investment placed as a correction
+             still moves a group's money, and "the console did it" is not a
+             mandate. If a correction genuinely needs to bypass this, it
+             needs an authority raised for it like anybody else.
+             ──────────────────────────────────────────────────────────── */
+          if (sa[0].account_type === 'stokvel' && !isReinvestment) {
+            const mandate = require('../services/stokvelMandate');
+            const { authority, error } = await mandate.authorityFor(
+              _invClient, { id: body.sub_account_id, stokvel_quorum: sa[0].stokvel_quorum },
+              _authorityId,
+              /* poolAmount, not what leaves the wallet. A signatory who
+                 approves "R1 000 into the cattle pool" means R1 000 reaches
+                 the pool; the 1% fee on top is documented platform
+                 behaviour and the same on every investment. Matching on the
+                 wallet spend would refuse the figure they actually agreed
+                 to. */
+              { kind: 'investment', amount: poolAmount, poolId: body.pool_id });
+            if (error) {
+              await _invClient.query('ROLLBACK');
+              return res.status(/No such authority/.test(error) ? 404 : 403).json({ error });
+            }
+            await mandate.consume(_invClient, authority, body.id || null);
+          }
         } else {
           const { rows: iv } = await _invClient.query(
             'SELECT wallet_balance FROM investors WHERE id = $1 FOR UPDATE', [body.investor_id]

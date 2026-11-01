@@ -1704,6 +1704,19 @@ async function confirmInvestment(pool) {
 
      A cancelled signature is a decision, not a failure: leave the invest
      modal exactly as it was so the amount does not have to be typed again. */
+  /* A stokvel's money does not move on one member's tap. The signatories
+     approve an amount into a named pool, and the server refuses the
+     investment without the id of that approval — see the gate in
+     routes/tables.js. Resolved before the agreement is signed, so a member
+     who has no approval yet is not asked to sign for an investment that
+     cannot be placed. */
+  let _stokvelAuthorityId = null;
+  if (_confSa && _confSa.account_type === 'stokvel') {
+    const _auth = await stokvelInvestAuthority(_confSa.id, pool.id, poolAmount);
+    if (_auth.error) { Toast.error(_auth.error); _investConfirmed = false; return; }
+    _stokvelAuthorityId = _auth.authority_id;
+  }
+
   const _signed = await signAgreementFor(pool, poolAmount, _pmSaId);
   if (!_signed) { _investConfirmed = false; return; }
 
@@ -1731,6 +1744,9 @@ async function confirmInvestment(pool) {
       payout_option: pool.product_type?.includes('delivery_bike') ? 'payout_all' : 'reinvest',
       maturity_instruction: pool.product_type?.includes('delivery_bike') ? 'payout_all' : 'reinvest',
       sub_account_id: _pmSaId || undefined,
+      /* Only a stokvel carries one. Absent on every other account, and the
+         route strips it before the insert either way. */
+      authority_id: _stokvelAuthorityId || undefined,
       is_reinvestment: false,
     });
 

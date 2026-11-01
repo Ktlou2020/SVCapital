@@ -151,8 +151,12 @@ const db = new Pool({
     app.use('/api/withdrawals', require(path.join(ROOT, 'server', 'routes', 'withdrawals.js')));
     srv = await new Promise(r => { const s = app.listen(0, () => r(s)); });
 
+    /* investorId, camelCase — the shape server/routes/auth.js signToken
+       actually issues. Signing investor_id instead tested a token the
+       platform never mints, and hid a route that read the wrong field and
+       answered "no stokvels" to every real client. */
     const tok = (id, role) => jwt.sign(
-      { id: 'u-' + id, role: role || 'investor', investor_id: id },
+      { id: 'u-' + id, role: role || 'investor', investorId: id },
       process.env.JWT_SECRET, { expiresIn: '1h' });
     const call = (method, p, token, body) => new Promise(res => {
       const payload = body ? Buffer.from(JSON.stringify(body)) : null;

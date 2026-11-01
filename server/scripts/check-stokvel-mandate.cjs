@@ -10,6 +10,13 @@
  * route asks one question: is the caller sub_accounts.parent_investor_id?
  * The chairperson, alone, could empty it.
  *
+ * And INVESTING was not gated at all, which left the smaller half of the
+ * same hole: a chairperson who could not take R50 000 out of the group
+ * wallet could still put it into a seven-year pool on their own. Money in a
+ * pool is money out of the wallet. Both now clear the same mandate, matched
+ * by the same code — a withdrawal against a bank account, an investment
+ * against a pool.
+ *
  * Now a stokvel withdrawal must quote an authority the signatories granted.
  * Everything below is a way somebody would try to get round that, and most
  * of this file is the refusals rather than the happy path:
@@ -135,9 +142,14 @@ const db = new Pool({
     app.use(express.json());
     app.use('/api/stokvels',    require(path.join(ROOT, 'server', 'routes', 'stokvels.js')));
     app.use('/api/withdrawals', require(path.join(ROOT, 'server', 'routes', 'withdrawals.js')));
+    app.use('/api/tables',      require(path.join(ROOT, 'server', 'routes', 'tables.js')));
     srv = await new Promise(r => { const s = app.listen(0, () => r(s)); });
 
-    const tok = id => jwt.sign({ id: 'u-' + id, role: 'investor', investor_id: id },
+    /* investorId, camelCase — the shape server/routes/auth.js signToken
+       actually issues. Signing investor_id instead tested a token the
+       platform never mints, and hid a route that read the wrong field and
+       answered "no stokvels" to every real client. */
+    const tok = id => jwt.sign({ id: 'u-' + id, role: 'investor', investorId: id },
                                process.env.JWT_SECRET, { expiresIn: '1h' });
     const call = (method, p, token, body) => new Promise(res => {
       const payload = body ? Buffer.from(JSON.stringify(body)) : null;
@@ -154,6 +166,10 @@ const db = new Pool({
     const raise = async (amount, by = 'INV-MD2-PLAIN', dest = DEST) =>
       (await call('POST', '/api/stokvels/SA-MD-1/withdrawal-requests', tok(by),
                   Object.assign({ amount, reason: 'December payout' }, dest))).body.data;
+    /* Same endpoint, different kind — one mandate, two sorts of movement. */
+    const raiseInvest = async (amount, poolId = 'POOL-MD-OPEN') =>
+      (await call('POST', '/api/stokvels/SA-MD-1/withdrawal-requests', tok('INV-MD2-PLAIN'),
+                  { amount, kind: 'investment', pool_id: poolId, reason: 'Into the November pool' })).body.data;
     const vote = (rid, who, decision = 'approve') =>
       call('POST', `/api/stokvels/SA-MD-1/withdrawal-requests/${rid}/vote`, tok(who), { decision });
     const withdraw = (amount, authority_id, dest = DEST) =>
@@ -232,6 +248,64 @@ const db = new Pool({
        trust.status === 200 || trust.status === 201,
        `${trust.status} ${JSON.stringify(trust.body).slice(0,120)}`);
 
+    console.log('\nand investing is money leaving too');
+    /* An open pool to invest into, and a stokvel wallet with enough in it. */
+    await db.query(
+      `INSERT INTO investment_pools (id, name, product_type, status, annual_rate, term_months,
+                                     start_date, end_date, maturity_date, min_investment)
+       VALUES ('POOL-MD-OPEN','Cattle - open','cattle','open',0.13,12,
+               CURRENT_DATE - 1, CURRENT_DATE + 20, CURRENT_DATE + 380, 100)`);
+    /* A second OPEN pool, so "a different pool" is refused by the mandate
+       rather than by the route's own open-pool rule — otherwise the
+       assertion passes for the wrong reason. */
+    await db.query(
+      `INSERT INTO investment_pools (id, name, product_type, status, annual_rate, term_months,
+                                     start_date, end_date, maturity_date, min_investment)
+       VALUES ('POOL-MD-OTHER','Cattle - another open','cattle','open',0.13,12,
+               CURRENT_DATE - 1, CURRENT_DATE + 20, CURRENT_DATE + 380, 100)`);
+    await db.query(`UPDATE sub_accounts SET wallet_balance = 50000 WHERE id = 'SA-MD-1'`);
+
+    const invest = (amount, authority_id, poolId = 'POOL-MD-OPEN') =>
+      call('POST', '/api/tables/investments', tok('INV-MD2-CHAIR'), {
+        investor_id: 'INV-MD2-CHAIR', sub_account_id: 'SA-MD-1', pool_id: poolId,
+        amount, product_type: 'cattle', annual_rate: 0.13, term_months: 12,
+        authority_id,
+      });
+
+    const alone2 = await invest(1000, '');
+    ok('the chairperson cannot invest the group\u2019s money alone',
+       alone2.status === 403, `${alone2.status} ${JSON.stringify(alone2.body).slice(0, 140)}`);
+    ok('and is told to get an authority first',
+       /needs an approved authority/i.test(alone2.body.error || ''), alone2.body.error);
+
+    const ri = await raiseInvest(1000);
+    ok('an investment request can be raised', !!ri && ri.kind === 'investment', JSON.stringify(ri));
+    await vote(ri.id, 'INV-MD2-SIG1');
+    const shortI = await invest(1000, ri.id);
+    ok('one approval does not release it', shortI.status === 403, String(shortI.status));
+    await vote(ri.id, 'INV-MD2-SIG2');
+
+    const wrongPool = await invest(1000, ri.id, 'POOL-MD-OTHER');
+    ok('and a different pool is refused', wrongPool.status === 403
+       && /different pool/i.test(wrongPool.body.error || ''), wrongPool.body.error);
+
+    const okInvest = await invest(1000, ri.id);
+    ok('the approved investment goes through',
+       okInvest.status === 200 || okInvest.status === 201,
+       `${okInvest.status} ${JSON.stringify(okInvest.body).slice(0, 140)}`);
+    ok('and the money left the group wallet', await balance() === 49000 - 10, String(await balance()),
+       'R1 000 into the pool plus the 1% platform fee');
+
+    console.log('\nand the two kinds do not substitute for each other');
+    const rw = await raise(2500);
+    await vote(rw.id, 'INV-MD2-SIG1'); await vote(rw.id, 'INV-MD2-SIG2');
+    const crossed = await invest(2500, rw.id);
+    ok('a withdrawal authority cannot fund an investment',
+       crossed.status === 403 && /approved for a withdrawal/i.test(crossed.body.error || ''),
+       crossed.body.error);
+
+    await db.query(`DELETE FROM investments WHERE sub_account_id = 'SA-MD-1'`);
+    await db.query(`DELETE FROM investment_pools WHERE id IN ('POOL-MD-OPEN','POOL-MD-OTHER')`);
     await clean();
   } catch (err) {
     console.error('\n  ✗ threw:', err.message);

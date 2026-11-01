@@ -22,6 +22,15 @@
  *    be used.
  *  · A NON-SIGNATORY SEES THE REQUESTS AND GETS NO BUTTONS. Seeing what is
  *    being asked for is the point; voting is not theirs.
+ *  · AN INVESTMENT IS RAISED THE SAME WAY, AND READS AS ONE. Both kinds sit
+ *    in one list, so a row that does not say which it is asks a signatory to
+ *    approve a sum with no idea where it goes. The pool is chosen from the
+ *    open pools, the pool's own minimum is tested against the POOL amount,
+ *    and the form says what the wallet actually pays once the 1% is on top.
+ *  · AND THE MARKETPLACE CARRIES THE APPROVAL. The route refuses a stokvel
+ *    investment with no authority id, so a confirm path that does not send
+ *    one makes every approved request unspendable. It is checked in BOTH
+ *    copies of the marketplace — web and mobile — because there are two.
  *
  * The measured half runs the real portal code against a stub API, because
  * what matters is what renders, and only a browser knows that.
@@ -83,6 +92,44 @@ console.log('\nthe request collects what the gate will check');
      + 'so collecting the amount alone builds a request that can never be used');
 }
 
+console.log('\nan investment is raised the same way');
+{
+  const fn = CORE.slice(CORE.indexOf('function raiseStokvelInvestment'),
+                        CORE.indexOf('async function voteStokvelRequest'));
+  ok('the request names the pool, not only the amount',
+     /kind: 'investment'/.test(fn) && /pool_id: sel\.value/.test(fn),
+     'the gate refuses an authority approved for a different pool, so a request '
+     + 'without one can never be used');
+  ok('the pools offered are the open ones',
+     /status === 'open'/.test(fn) && /_poolPastClose\(p\)/.test(fn));
+  ok('the pool minimum is tested against the pool amount',
+     /amt < min - 0\.005/.test(fn) && !/svcWalletSpend\([^)]*\) < min/.test(fn),
+     'the minimum is a rule about the pool, never about the wallet spend');
+  ok('and the fee is stated rather than discovered',
+     /svcWalletSpend/.test(fn) && /leaves the group wallet/.test(fn),
+     'the signatories approve what reaches the pool; the wallet pays 1% more');
+}
+
+console.log('\nand the marketplace carries the approval');
+{
+  for (const rel of ['portal/js/portal.js', 'mobile/src/js/portal.js']) {
+    const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+    const fn  = src.slice(src.indexOf('async function confirmInvestment'));
+    ok(`${rel} resolves the authority for a stokvel`,
+       /account_type === 'stokvel'/.test(fn) && /stokvelInvestAuthority\(/.test(fn),
+       'the route refuses a stokvel investment that carries no authority');
+    ok(`${rel} sends it with the investment`,
+       /authority_id: _stokvelAuthorityId/.test(fn));
+    ok(`${rel} stops before asking for a signature`,
+       fn.indexOf('stokvelInvestAuthority(') < fn.indexOf('signAgreementFor('),
+       'a member with no approval should not be asked to sign for an '
+       + 'investment that cannot be placed');
+  }
+  ok('and the matcher itself lives once, in the shared core',
+     /async function stokvelInvestAuthority\(/.test(CORE),
+     'the marketplace exists twice; a copy in each is a copy that drifts');
+}
+
 console.log('\nand voting is offered only to signatories');
 {
   ok('the buttons are behind the signatory flag',
@@ -132,7 +179,14 @@ const STUB = {
              amount_paid: '0.00', due_date: '2026-11-25', status: 'due', is_me: true, overdue: true }],
     arrears: [{ investor_id: 'I2', name: 'Ben', owed: 500, periods: 1 }] },
   'stokvels/SA-1/withdrawal-requests': { data: [
-    { id: 'r1', amount: 2000, bank_name: 'FNB', reason: 'Funeral <img src=y onerror=\"window.__xssFired=1\">',
+    { id: 'r1', kind: 'withdrawal', amount: 2000, bank_name: 'FNB',
+      reason: 'Funeral <img src=y onerror=\"window.__xssFired=1\">',
+      status: 'pending', requested_by_name: 'Ann', approvals: 1, required: 2,
+      satisfied: false, blocked_because: '1 of 2 signatory approvals.' },
+    /* The second kind, in the same list. A row that reads only "R5000.00 ·
+       Ann" asks a signatory to approve a sum with no idea where it goes. */
+    { id: 'r2', kind: 'investment', amount: 5000, pool_id: 'POOL-CATTLE-11',
+      pool_name: 'Cattle November', reason: 'Group savings',
       status: 'pending', requested_by_name: 'Ann', approvals: 1, required: 2,
       satisfied: false, blocked_because: '1 of 2 signatory approvals.' } ] },
 };
@@ -195,7 +249,15 @@ const STUB = {
     /* The page: the hub's own functions, the few helpers they lean on, and
        the two elements the modal writes into. */
     const harness = `
-      window.PORTAL = { subAccounts: [], stokvels: [] };
+      window.PORTAL = { subAccounts: [], stokvels: [], pools: [
+        { id: 'POOL-CATTLE-11', name: 'Cattle November', status: 'open',
+          annual_rate: 0.14, term_months: 18, min_investment: 1000 },
+        { id: 'POOL-SHUT', name: 'Closed pool', status: 'closed',
+          annual_rate: 0.14, term_months: 18, min_investment: 1000 },
+      ] };
+      /* Both live elsewhere in portal-core, outside the slice loaded below. */
+      window._poolPastClose = () => false;
+      window.svcWalletSpend = a => Math.round(Number(a) * 101) / 100;
       window.SA_TYPE_META = { stokvel: { icon:'fa-people-group', label:'Stokvel', color:'#22c55e', bg:'#064e1e' } };
       window._esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;')
                       .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -251,6 +313,51 @@ const STUB = {
     const fired = await evaluate(`!!window.__xssFired`);
     ok('nothing a member typed executed', fired === false,
        'a value from the roster ran as script');
+
+    console.log('\nand both kinds of request read as what they are');
+    ok('the withdrawal says so, with where it is going',
+       /Withdraw/.test(rendered.text) && /FNB/.test(rendered.text));
+    ok('the investment says so, and names the pool',
+       /Invest/.test(rendered.text) && /Cattle November/.test(rendered.text),
+       'a row showing only an amount asks a signatory to approve a sum with '
+       + 'no idea where it goes');
+    ok('and the panel is no longer called Withdrawals',
+       /Signatory approvals/.test(rendered.text) && !/>Withdrawals</.test(rendered.html),
+       'the mandate now governs investments too');
+
+    console.log('\nand the investment request form');
+    const form = await evaluate(`(() => {
+      raiseStokvelInvestment('SA-1');
+      const b = document.getElementById('saDetailBody');
+      const sel = document.getElementById('svInvPool');
+      const out = { html: b.innerHTML, text: b.textContent,
+                    options: [...(sel ? sel.options : [])].map(o => o.value) };
+      document.getElementById('svInvAmount').value = '1000';
+      _svInvRecalc();
+      out.atMinimum = document.getElementById('svInvNote').textContent;
+      document.getElementById('svInvAmount').value = '400';
+      _svInvRecalc();
+      out.belowMinimum = document.getElementById('svInvNote').textContent;
+      return out;
+    })()`);
+    ok('offers the open pools and only those',
+       form.options.join(',') === 'POOL-CATTLE-11',
+       form.options.join(','));
+    ok('shows the rate, the term and the minimum on each',
+       /14\.0%/.test(form.text) && /18 months/.test(form.text) && /R1000\.00/.test(form.text),
+       'a member choosing where the group’s savings go needs to see them side by side');
+    ok('says what the wallet actually pays once the 1% is on top',
+       /R1010\.00/.test(form.atMinimum), form.atMinimum);
+    ok('and refuses below the pool’s own minimum',
+       /R1000\.00 or more/.test(form.belowMinimum) && !/R404/.test(form.belowMinimum),
+       form.belowMinimum);
+
+    /* Back to the hub, so the assertions below read the hub again. */
+    await evaluate(`_svRenderHub('SA-1')`);
+    await new Promise(r => setTimeout(r, 300));
+    const back = await evaluate(`document.getElementById('saDetailBody').innerHTML`);
+    ok('cancelling the form puts the hub back',
+       /Signatory approvals/.test(back) && !/svInvPool/.test(back));
 
     console.log('\nand a non-signatory is shown the request without a vote');
     ok('no approve button for them',

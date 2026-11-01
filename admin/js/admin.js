@@ -20178,7 +20178,7 @@ function _stokvelAdminMandate(s) {
      stokvel that can never withdraw, and the table editor would take it
      without comment. */
   const warn = quorum < STOKVEL_MIN_QUORUM
-    ? 'No mandate on file — this stokvel cannot withdraw. A mandate of one is not a mandate, so the minimum is two.'
+    ? 'No mandate on file — this stokvel cannot withdraw or invest. A mandate of one is not a mandate, so the minimum is two.'
     : signatories < quorum
       ? `Only ${signatories} active signator${signatories === 1 ? 'y' : 'ies'} for a quorum of ${quorum} — this stokvel cannot reach its own mandate.`
       : null;
@@ -20190,10 +20190,11 @@ function _stokvelAdminMandate(s) {
       ${warn ? `<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px;margin-bottom:12px;font-size:0.84rem;color:#ef4444">
         <i class="fa-solid fa-triangle-exclamation"></i> ${_esc(warn)}</div>` : ''}
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <label style="font-size:0.84rem">Approvals required to withdraw</label>
+        <label style="font-size:0.84rem">Approvals required to move money</label>
         <input type="number" min="${STOKVEL_MIN_QUORUM}" step="1" id="svQuorum" class="input input--sm"
                value="${quorum || ''}" style="width:90px">
         <span class="text-muted" style="font-size:0.78rem">of ${signatories} signator${signatories === 1 ? 'y' : 'ies'}</span>
+        <span class="text-muted" style="font-size:0.78rem;flex-basis:100%">Applies to withdrawals to a bank account and to investments into a pool alike.</span>
         <button class="btn btn--primary btn--sm" onclick="saveStokvelQuorum('${_esc(s.id)}')">Save mandate</button>
       </div>
     </div>
@@ -20353,14 +20354,22 @@ function _stokvelAdminActivity(s) {
         <div class="text-muted" style="font-size:0.74rem">${arrears.length} obligation${arrears.length === 1 ? '' : 's'}</div></div>
     </div>
     ${pending.length ? `<table class="data-table"><thead><tr>
-        <th>Requested</th><th class="text-right">Amount</th><th>To</th><th class="text-right">Approvals</th>
+        <th>Requested</th><th>Kind</th><th class="text-right">Amount</th><th>To</th><th class="text-right">Approvals</th>
       </tr></thead><tbody>
-      ${pending.map(r => `<tr>
+      ${pending.map(r => {
+        /* An investment authority names a pool, not a bank account, so the
+           destination column was blank on every one of them. Staff reading
+           this need to see what the signatories are being asked to approve. */
+        const isInv = r.kind === 'investment';
+        const pool  = isInv && r.pool_id ? (STATE.pools || []).find(p => p.id === r.pool_id) : null;
+        const to    = isInv ? (pool ? pool.name : (r.pool_id || '')) : (r.bank_name || '');
+        return `<tr>
         <td style="font-size:0.78rem">${_esc(String(r.created_at || '').slice(0, 10))}</td>
+        <td style="font-size:0.78rem">${isInv ? 'Investment' : 'Withdrawal'}</td>
         <td class="text-right"><strong>${Utils.rand(r.amount)}</strong></td>
-        <td style="font-size:0.78rem">${_esc(r.bank_name || '')}</td>
+        <td style="font-size:0.78rem">${_esc(to)}</td>
         <td class="text-right">of ${_esc(r.quorum_required)}</td>
-      </tr>`).join('')}
+      </tr>`; }).join('')}
       </tbody></table>
       <div class="text-muted" style="font-size:0.75rem;padding:8px 14px">
         Staff cannot approve on a stokvel's behalf. Approvals come from its own signatories, in the app.

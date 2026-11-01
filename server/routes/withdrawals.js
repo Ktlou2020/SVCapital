@@ -82,48 +82,23 @@ router.post('/request', requireAuth, async (req, res) => {
            FOR UPDATE below is what makes that true rather than likely.
            ────────────────────────────────────────────────────────────── */
         if (saRow.account_type === 'stokvel') {
+          /* The mandate. Everything above asked whether the caller owns the
+             sub-account; for a stokvel that is the wrong question, because
+             the chairperson owns it and "the chairperson can empty it
+             alone" is the fear the product exists to answer.
+
+             The matching lives in services/stokvelMandate so the investment
+             gate in routes/tables.js cannot drift from this one — two
+             answers to "is this authorised" is one answer too many. */
           const mandate = require('../services/stokvelMandate');
-          const authorityId = String(req.body.authority_id || '').trim();
-          if (!authorityId) {
+          const { authority, error } = await mandate.authorityFor(
+            client, saRow, req.body.authority_id,
+            { kind: 'withdrawal', amount: numAmount, bankAccount: bank_account_number });
+          if (error) {
             await client.query('ROLLBACK');
-            return res.status(403).json({
-              error: 'A stokvel withdrawal needs an approved authority. Raise a withdrawal request and have the signatories approve it first.' });
+            return res.status(/No such authority/.test(error) ? 404 : 403).json({ error });
           }
-          const { rows: [authority] } = await client.query(
-            `SELECT * FROM stokvel_withdrawal_requests
-              WHERE id = $1 AND sub_account_id = $2 FOR UPDATE`,
-            [authorityId, sub_account_id]
-          );
-          if (!authority) {
-            await client.query('ROLLBACK');
-            return res.status(404).json({ error: 'No such authority for this stokvel.' });
-          }
-          const state = await mandate.evaluate(client, authority, saRow);
-          if (!state.satisfied) {
-            await client.query('ROLLBACK');
-            return res.status(403).json({ error: 'That authority does not release this money: ' + state.reason });
-          }
-          /* Matched to the paisa and to the account. A smaller approval must
-             not authorise a larger payment, and an approved destination must
-             not be swapped after the fact. */
-          if (Math.round(parseFloat(authority.amount) * 100) !== Math.round(numAmount * 100)) {
-            await client.query('ROLLBACK');
-            return res.status(403).json({
-              error: `That authority is for R${parseFloat(authority.amount).toFixed(2)}, not R${numAmount.toFixed(2)}.` });
-          }
-          const sameAccount = String(authority.bank_account_number || '').trim() ===
-                              String(bank_account_number || '').trim();
-          if (!sameAccount) {
-            await client.query('ROLLBACK');
-            return res.status(403).json({
-              error: 'That authority was approved for a different bank account.' });
-          }
-          await client.query(
-            `UPDATE stokvel_withdrawal_requests
-                SET status = 'used', used_at = NOW(), used_by_reference = $2, updated_at = NOW()
-              WHERE id = $1`,
-            [authority.id, reference]
-          );
+          await mandate.consume(client, authority, reference);
         }
 
         const description = `Sub-account withdrawal (${saRow.name})${bank_name ? ` to ${bank_name}` : ''}${bank_account_number ? ` (${bank_account_number})` : ''}`;

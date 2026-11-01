@@ -12249,10 +12249,15 @@ function _svContributions(res, mine, gid) {
     ${rows.length ? '' : `<div style="font-size:0.82rem;color:var(--text-muted);margin-top:8px">No contributions have been scheduled yet.</div>`}`;
 }
 
-/* ─── Withdrawals ──────────────────────────────────────────────────
+/* ─── Signatory approvals ──────────────────────────────────────────────────
    The mandate, made visible. A member who is not a signatory sees exactly
    the same list — knowing what is being asked for is the point — and simply
-   has no buttons on it. */
+   has no buttons on it.
+
+   Two kinds sit in this list: money going OUT to a bank account, and money
+   going INTO one of our pools. Both move the group's money, so both need the
+   signatories; the row has to say which, or a signatory approving "R10 000"
+   cannot tell a withdrawal from an investment. */
 function _svWithdrawals(res, meIsSignatory, gid) {
   const rows = (res && res.data) || [];
   const open = rows.filter(r => r.status === 'pending');
@@ -12261,9 +12266,18 @@ function _svWithdrawals(res, meIsSignatory, gid) {
   const row = r => `<div style="border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:start;gap:10px">
         <div>
-          <div style="font-weight:800">${Utils.rand(r.amount)}</div>
+          <div style="font-weight:800">
+            ${Utils.rand(r.amount)}
+            <span style="font-size:0.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
+                         border:1px solid var(--border);border-radius:999px;padding:1px 7px;margin-left:6px;
+                         color:${r.kind === 'investment' ? '#eda5ff' : 'var(--text-muted)'}">
+              ${r.kind === 'investment' ? 'Invest' : 'Withdraw'}
+            </span>
+          </div>
           <div style="font-size:0.74rem;color:var(--text-muted)">
-            ${_esc(r.requested_by_name || 'A member')}${r.bank_name ? ' · ' + _esc(r.bank_name) : ''}
+            ${_esc(r.requested_by_name || 'A member')}${r.kind === 'investment'
+              ? (r.pool_name ? ' · ' + _esc(r.pool_name) : (r.pool_id ? ' · ' + _esc(r.pool_id) : ''))
+              : (r.bank_name ? ' · ' + _esc(r.bank_name) : '')}
           </div>
           ${r.reason ? `<div style="font-size:0.78rem;margin-top:4px">${_esc(r.reason)}</div>` : ''}
         </div>
@@ -12283,14 +12297,20 @@ function _svWithdrawals(res, meIsSignatory, gid) {
         <div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px">${_esc(r.blocked_because)}</div>` : ''}
     </div>`;
 
-  return `<div class="sa-section-title mt-16"><i class="fa-solid fa-user-shield"></i> Withdrawals</div>
+  return `<div class="sa-section-title mt-16"><i class="fa-solid fa-user-shield"></i> Signatory approvals</div>
     <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px">
-      Money only leaves this stokvel when enough signatories approve it. No one member can do it alone.
+      The group's money only moves — out to a bank account or into one of our pools —
+      when enough signatories approve it. No one member can do it alone.
     </div>
     ${open.length ? open.map(row).join('') : `<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:8px">Nothing awaiting approval.</div>`}
-    <button class="btn btn--secondary btn--sm" onclick="raiseStokvelWithdrawal('${_esc(gid)}')">
-      <i class="fa-solid fa-plus"></i> Request a withdrawal
-    </button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn--secondary btn--sm" onclick="raiseStokvelWithdrawal('${_esc(gid)}')">
+        <i class="fa-solid fa-plus"></i> Request a withdrawal
+      </button>
+      <button class="btn btn--secondary btn--sm" onclick="raiseStokvelInvestment('${_esc(gid)}')">
+        <i class="fa-solid fa-seedling"></i> Request an investment
+      </button>
+    </div>
     ${past.length ? `<div style="font-size:0.74rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px">Recent</div>${past.map(row).join('')}` : ''}`;
 }
 
@@ -12342,6 +12362,145 @@ async function raiseStokvelWithdrawal(groupId) {
   } catch (err) {
     Utils.toast(err.message || 'Could not raise that request.', 'error');
   }
+}
+
+/* ─── Asking for an investment ─────────────────────────────
+   A withdrawal can be asked for with three prompts because a bank account is
+   three short answers. A pool is not: a member choosing where the group's
+   savings go needs to see the rate, the term and the minimum side by side.
+   So this renders a form into the hub body rather than firing prompt()
+   boxes, and Cancel puts the hub straight back.
+
+   The amount asked for here is the POOL amount — what reaches the pool. The
+   1% platform fee is charged on top, so the group wallet pays more than the
+   figure the signatories approve; the form says so, because a signatory who
+   thinks R10 000 leaves the wallet when R10 100 does has approved the wrong
+   number. */
+function raiseStokvelInvestment(groupId) {
+  const pools = (PORTAL.pools || []).filter(p => p.status === 'open' && !_poolPastClose(p));
+  if (!pools.length) {
+    Utils.toast('There are no open pools to invest in right now.', 'error');
+    return;
+  }
+  const body = document.getElementById('saDetailBody');
+  if (!body) return;
+  body.innerHTML = `
+    <div style="padding:4px 2px 8px">
+      <div class="sa-section-title"><i class="fa-solid fa-seedling"></i> Request an investment</div>
+      <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:14px">
+        This does not invest anything yet. It asks the signatories to approve
+        this amount into this pool; once enough of them have, any member can place it.
+      </div>
+      <label style="display:block;font-size:0.74rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">Which pool</label>
+      <select id="svInvPool" class="form-input" style="width:100%;margin-bottom:12px"
+              onchange="_svInvRecalc()">
+        ${pools.map(p => `<option value="${_esc(p.id)}" data-min="${parseFloat(p.min_investment) || 0}">
+          ${_esc(p.name)} — ${(parseFloat(p.annual_rate) * 100).toFixed(1)}% over ${_esc(String(p.term_months))} months · from ${Utils.rand(p.min_investment)}
+        </option>`).join('')}
+      </select>
+      <label style="display:block;font-size:0.74rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">How much should reach the pool</label>
+      <input id="svInvAmount" class="form-input" type="number" min="0" step="0.01" inputmode="decimal"
+             style="width:100%;margin-bottom:6px" oninput="_svInvRecalc()">
+      <div id="svInvNote" style="font-size:0.76rem;color:var(--text-muted);margin-bottom:12px"></div>
+      <label style="display:block;font-size:0.74rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">What is it for? (optional)</label>
+      <input id="svInvReason" class="form-input" type="text" maxlength="200" style="width:100%;margin-bottom:16px">
+      <div style="display:flex;gap:8px">
+        <button class="btn btn--primary btn--sm" onclick="submitStokvelInvestment('${_esc(groupId)}')">
+          <i class="fa-solid fa-paper-plane"></i> Ask the signatories
+        </button>
+        <button class="btn btn--ghost btn--sm" onclick="_svRenderHub('${_esc(groupId)}')">Cancel</button>
+      </div>
+    </div>`;
+  _svInvRecalc();
+}
+
+/* What the wallet actually pays, said out loud, and the pool's own minimum
+   tested against the POOL amount — never against the wallet spend. */
+function _svInvRecalc() {
+  const sel  = document.getElementById('svInvPool');
+  const note = document.getElementById('svInvNote');
+  if (!sel || !note) return;
+  const min = parseFloat(sel.selectedOptions[0] && sel.selectedOptions[0].dataset.min) || 0;
+  const amt = parseFloat((document.getElementById('svInvAmount') || {}).value) || 0;
+  if (!amt) {
+    note.textContent = min > 0 ? `This pool takes ${Utils.rand(min)} or more.` : '';
+    note.style.color = 'var(--text-muted)';
+    return;
+  }
+  if (min > 0 && amt < min - 0.005) {
+    note.textContent = `This pool takes ${Utils.rand(min)} or more, and ${Utils.rand(amt)} is under that.`;
+    note.style.color = '#ef4444';
+    return;
+  }
+  const spend = typeof svcWalletSpend === 'function' ? svcWalletSpend(amt) : amt;
+  note.innerHTML = `${Utils.rand(amt)} reaches the pool. With the 1% platform fee on top,
+    <strong>${Utils.rand(spend)}</strong> leaves the group wallet.`;
+  note.style.color = 'var(--text-muted)';
+}
+
+async function submitStokvelInvestment(groupId) {
+  const sel = document.getElementById('svInvPool');
+  const amt = parseFloat((document.getElementById('svInvAmount') || {}).value);
+  if (!sel || !sel.value) { Utils.toast('Choose a pool.', 'error'); return; }
+  if (!(amt > 0))         { Utils.toast('Enter how much should reach the pool.', 'error'); return; }
+  const min = parseFloat(sel.selectedOptions[0] && sel.selectedOptions[0].dataset.min) || 0;
+  if (min > 0 && amt < min - 0.005) {
+    Utils.toast(`This pool takes ${Utils.rand(min)} or more.`, 'error');
+    return;
+  }
+  try {
+    await API._fetch('POST', `stokvels/${groupId}/withdrawal-requests`, {
+      kind: 'investment',
+      amount: amt,
+      pool_id: sel.value,
+      reason: (document.getElementById('svInvReason') || {}).value || '',
+    });
+    Utils.toast('Request raised. The signatories have been asked to approve it.', 'success');
+  } catch (err) {
+    Utils.toast(err.message || 'Could not raise that request.', 'error');
+  }
+  await _svRenderHub(groupId);
+}
+
+/* ─── Placing an approved investment ────────────────────────
+   The marketplace is the same marketplace for a stokvel as for anybody else,
+   so confirmInvestment() has to find the authority the signatories approved
+   and send its id with the investment. The server will not take the
+   investment without one — see the gate in routes/tables.js — and matches
+   the amount and the pool itself, so this only has to pick the right row and
+   say plainly what is missing when there is no right row.
+
+   Lives here, in the shared core, because the marketplace exists twice: once
+   in portal/js/portal.js and once in mobile/src/js/portal.js. A copy in each
+   is a copy that drifts. */
+async function stokvelInvestAuthority(subAccountId, poolId, poolAmount) {
+  const cents = v => Math.round((parseFloat(v) || 0) * 100);
+  const want  = cents(poolAmount);
+  let res;
+  try {
+    res = await API._fetch('GET', `stokvels/${subAccountId}/withdrawal-requests`);
+  } catch (err) {
+    return { error: 'Could not check this stokvel\u2019s approvals. ' + (err.message || '') };
+  }
+  const forPool = ((res && res.data) || []).filter(r =>
+    r.kind === 'investment' && r.status === 'pending' &&
+    String(r.pool_id || '') === String(poolId));
+
+  const exact = forPool.find(r => r.satisfied && cents(r.amount) === want);
+  if (exact) return { authority_id: exact.id };
+
+  const ready = forPool.filter(r => r.satisfied);
+  if (ready.length) {
+    return { error: `The signatories approved ${Utils.rand(ready[0].amount)} into this pool, not `
+      + `${Utils.rand(poolAmount)}. Invest the approved amount, or ask them to approve this one.` };
+  }
+  const waiting = forPool.find(r => cents(r.amount) === want) || forPool[0];
+  if (waiting) {
+    return { error: `This is still waiting on the signatories — ${waiting.approvals} of `
+      + `${waiting.required} have approved it.` };
+  }
+  return { error: 'A stokvel investment needs the signatories to approve it first. '
+    + 'Open the stokvel, request an investment into this pool, and place it once they have.' };
 }
 
 async function voteStokvelRequest(groupId, requestId, decision) {

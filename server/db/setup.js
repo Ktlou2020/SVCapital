@@ -1159,6 +1159,16 @@ CREATE INDEX IF NOT EXISTS sc_due_idx   ON stokvel_contributions(due_date) WHERE
    The chairperson still presses the button. They can no longer press it
    alone.
    ──────────────────────────────────────────────────────────────────── */
+/* The table is named for withdrawals and now also carries investments. It
+   was not renamed because a rename costs six files and a guarded migration
+   and buys a noun; the kind column says which it is, and the service that
+   reads it is called stokvelMandate, which is the vocabulary that matters.
+
+   An investment is money leaving the group wallet exactly as a withdrawal
+   is. It does not leave for a bank account, so it is approved against a
+   POOL instead — and the gate matches on the pool, because approving an
+   amount and letting whoever carries it out choose the product is the same
+   hole as letting them choose the bank account. */
 CREATE TABLE IF NOT EXISTS stokvel_withdrawal_requests (
   id                  TEXT PRIMARY KEY,
   sub_account_id      TEXT NOT NULL REFERENCES sub_accounts(id) ON DELETE CASCADE,
@@ -2459,6 +2469,12 @@ async function autoSetup() {
              checked again at approval — stamping it once means a later
              change to the setting cannot move money that a client has
              already been promised on a date. */
+          /* A stokvel authority covers money LEAVING the group wallet, and
+             an investment does that as surely as a withdrawal. kind says
+             which; pool_id is where an investment is approved to go. */
+          BEGIN ALTER TABLE stokvel_withdrawal_requests ADD COLUMN kind TEXT NOT NULL DEFAULT 'withdrawal'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE stokvel_withdrawal_requests ADD COLUMN pool_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE stokvel_withdrawal_requests ADD CONSTRAINT swr_kind_chk CHECK (kind IN ('withdrawal','investment')); EXCEPTION WHEN duplicate_object THEN NULL; END;
           BEGIN ALTER TABLE sub_accounts ADD COLUMN withdrawal_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE investors    ADD COLUMN withdrawal_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE transactions ADD COLUMN available_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
@@ -4336,6 +4352,11 @@ async function autoSetup() {
          that comes back after somebody dismissed the idea of it is worse than
          no notice at all. */
       const NOTICES = [
+        { id: 'ANN-2026-STOKVEL-INVEST-MANDATE', area: 'both', icon: 'fa-seedling',
+          title: 'A stokvel investment now needs the signatories too — not just a withdrawal',
+          body: 'The mandate guarded the wrong half of the door. A stokvel withdrawal to a bank account needed the signatories; INVESTING the same money into a pool needed nobody — one member could put the whole group wallet into an eighteen-month cattle pool on their own, and the money is just as gone, only now it is locked in for the term. Both are the group’s money leaving the group wallet, so both now clear the same mandate. A member raises a request saying HOW MUCH and INTO WHICH POOL, the signatories approve it to the stokvel’s own quorum, and only then can anybody place it. The pool is part of what is approved, not a detail chosen afterwards: an authority approved for one pool is refused for another, an authority for R10 000 will not fund R12 000, and a withdrawal authority cannot be spent on an investment or the reverse. Each authority is good for ONE investment and is marked used, so an approval is not a standing instruction. STAFF ARE NOT EXEMPT — the gate sits in the route every console and every screen writes through, so there is no admin button that bypasses it, deliberately: a staff override would hand back the single point of failure the mandate removes. The amount the signatories approve is what REACHES THE POOL; the 1% platform fee is charged on top, so a little more than the approved figure leaves the wallet, and the request form says so. Two things found while building this: the member-facing stokvel API read the wrong field out of the sign-in token, so EVERY endpoint answered “no stokvels” to every real client — the screens from the last release were unusable in production and are now working; and the withdrawal and investment gates were rewritten onto one shared matcher, so there is one definition of “is this authorised” rather than two that drift. REINVESTMENT AT MATURITY IS NOT GATED — that money never returns to the wallet and the instruction was set when the original investment was approved.',
+          where: 'Client app → Sub-accounts → open the stokvel → Signatory approvals → “Request an investment”. Signatories approve it on the same panel. Once approved, any member places it the normal way: Marketplace → the pool → Invest, from the stokvel. Staff view: Admin console → Stokvels → open one → Activity, where pending requests now show whether each is a withdrawal or an investment and which pool.' },
+
         { id: 'ANN-2026-CLIENT-DOCS', area: 'admin', icon: 'fa-folder-open',
           title: 'Every document a client uploaded, in one place',
           body: 'FICA documents and files attached to support tickets now appear together on the client record, newest first, with the status of each and who reviewed it. Before this, a deposit slip could only be found by remembering which ticket it was attached to.',

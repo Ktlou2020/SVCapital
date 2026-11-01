@@ -79,4 +79,68 @@ async function evaluate(client, request, subAccount) {
   return { approvals, rejections, required, satisfied: reason === null, reason };
 }
 
-module.exports = { MIN_QUORUM, currentSignatories, evaluate };
+/**
+ * The authority that releases a specific movement, or a sentence saying why
+ * none does. One function for both kinds, because "is this authorised" must
+ * not have two answers.
+ *
+ * `want` is { kind, amount, bankAccount } for a withdrawal or
+ * { kind, amount, poolId } for an investment. The MATCH is the point: an
+ * authority for R5 000 to one bank account must not release R5 000 to
+ * another, and an authority to put R5 000 into one pool must not release it
+ * into a different product. Approving a sum and letting whoever carries it
+ * out choose the destination authorises nothing worth having.
+ *
+ * Returns { authority } or { error }. Does not consume it — the caller does
+ * that inside the transaction that moves the money, so one authority cannot
+ * fund two movements.
+ */
+async function authorityFor(client, subAccount, authorityId, want) {
+  if (!authorityId) {
+    return { error: want.kind === 'investment'
+      ? 'A stokvel investment needs an approved authority. Raise a request and have the signatories approve it first.'
+      : 'A stokvel withdrawal needs an approved authority. Raise a withdrawal request and have the signatories approve it first.' };
+  }
+  const { rows: [authority] } = await client.query(
+    `SELECT * FROM stokvel_withdrawal_requests
+      WHERE id = $1 AND sub_account_id = $2 FOR UPDATE`,
+    [authorityId, subAccount.id]);
+  if (!authority) return { error: 'No such authority for this stokvel.' };
+
+  /* An authority approved for one kind of movement does not release the
+     other. Signatories who agreed to put money into a pool have not agreed
+     to it leaving for somebody's bank account. */
+  if (String(authority.kind || 'withdrawal') !== want.kind) {
+    return { error: `That authority was approved for a ${authority.kind || 'withdrawal'}, not ${want.kind === 'investment' ? 'an investment' : 'a withdrawal'}.` };
+  }
+
+  const state = await evaluate(client, authority, subAccount);
+  if (!state.satisfied) return { error: 'That authority does not release this money: ' + state.reason };
+
+  if (Math.round(parseFloat(authority.amount) * 100) !== Math.round(Number(want.amount) * 100)) {
+    return { error: `That authority is for R${parseFloat(authority.amount).toFixed(2)}, not R${Number(want.amount).toFixed(2)}.` };
+  }
+
+  if (want.kind === 'investment') {
+    if (String(authority.pool_id || '') !== String(want.poolId || '')) {
+      return { error: 'That authority was approved for a different pool.' };
+    }
+  } else if (String(authority.bank_account_number || '').trim() !== String(want.bankAccount || '').trim()) {
+    return { error: 'That authority was approved for a different bank account.' };
+  }
+
+  return { authority };
+}
+
+/* Spend it. Separate from the check so the caller does this inside the
+   transaction that moves the money — an authority consumed outside it could
+   be spent by a movement that then rolled back. */
+async function consume(client, authority, reference) {
+  await client.query(
+    `UPDATE stokvel_withdrawal_requests
+        SET status = 'used', used_at = NOW(), used_by_reference = $2, updated_at = NOW()
+      WHERE id = $1`,
+    [authority.id, reference]);
+}
+
+module.exports = { MIN_QUORUM, currentSignatories, evaluate, authorityFor, consume };

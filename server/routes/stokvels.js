@@ -36,7 +36,15 @@ router.use(requireAuth);
    a client-facing view — staff read the same data through the admin console,
    which has its own routes and its own audit. */
 function callerInvestorId(req) {
-  return req.user && req.user.investor_id ? String(req.user.investor_id) : null;
+  /* investorId, camelCase, is what signToken actually puts in the JWT.
+     This read investor_id alone, which is undefined on every real token —
+     so every endpoint in this file answered "no stokvels" to everybody,
+     and the checks passed because they signed a token shape the platform
+     does not issue. Both spellings are accepted, as everywhere else in
+     server/routes, because a token minted before a rename is still a
+     token somebody is holding. */
+  const id = req.user && (req.user.investorId || req.user.investor_id);
+  return id ? String(id) : null;
 }
 
 /* ─── The membership guard ─────────────────────────────────────────────
@@ -186,32 +194,51 @@ router.post('/:id/withdrawal-requests', async (req, res) => {
     const amount = Math.round((parseFloat(req.body && req.body.amount) || 0) * 100) / 100;
     if (!(amount > 0)) return res.status(400).json({ error: 'An amount is required.' });
 
-    const bankName = String((req.body && req.body.bank_name) || '').trim();
-    const bankAcct = String((req.body && req.body.bank_account_number) || '').trim();
-    /* The destination is part of what is being approved. Without it the
+    /* Two kinds of money leaving the group wallet, one mandate. A
+       withdrawal names a bank account; an investment names a pool. Either
+       way the DESTINATION is part of what is approved — without it the
        signatories authorise a sum and whoever carries it out chooses where
        it lands, which is a mandate in name only. */
-    if (!bankName || !bankAcct) {
-      return res.status(400).json({
-        error: 'The bank name and account number must be part of the request — signatories approve a destination, not just an amount.' });
+    const kind = String((req.body && req.body.kind) || 'withdrawal');
+    if (kind !== 'withdrawal' && kind !== 'investment') {
+      return res.status(400).json({ error: 'kind must be withdrawal or investment.' });
+    }
+
+    let bankName = '', bankAcct = '', poolId = null;
+    if (kind === 'investment') {
+      poolId = String((req.body && req.body.pool_id) || '').trim();
+      if (!poolId) {
+        return res.status(400).json({
+          error: 'The pool must be part of the request — signatories approve a product, not just an amount.' });
+      }
+      const { rows: pool_ } = await pool.query(
+        `SELECT id, name FROM investment_pools WHERE id = $1`, [poolId]);
+      if (!pool_.length) return res.status(400).json({ error: 'No such pool.' });
+    } else {
+      bankName = String((req.body && req.body.bank_name) || '').trim();
+      bankAcct = String((req.body && req.body.bank_account_number) || '').trim();
+      if (!bankName || !bankAcct) {
+        return res.status(400).json({
+          error: 'The bank name and account number must be part of the request — signatories approve a destination, not just an amount.' });
+      }
     }
 
     const quorum = Number(group.stokvel_quorum) || 0;
     if (quorum < mandate.MIN_QUORUM) {
       return res.status(400).json({
-        error: 'This stokvel has no mandate on file. Capture the signatories and how many must approve before requesting a withdrawal.' });
+        error: 'This stokvel has no mandate on file. Capture the signatories and how many must approve before the group\u2019s money can move.' });
     }
 
     const id = 'SWR-' + crypto.randomUUID().replace(/-/g, '').slice(0, 14).toUpperCase();
     await pool.query(
       `INSERT INTO stokvel_withdrawal_requests
-         (id, sub_account_id, requested_by, amount, bank_name, bank_account_number,
-          reason, quorum_required, status, expires_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending', NOW() + INTERVAL '7 days')`,
-      [id, group.id, me, amount, bankName, bankAcct,
+         (id, sub_account_id, requested_by, amount, kind, bank_name, bank_account_number,
+          pool_id, reason, quorum_required, status, expires_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending', NOW() + INTERVAL '7 days')`,
+      [id, group.id, me, amount, kind, bankName || null, bankAcct || null, poolId,
        String((req.body && req.body.reason) || '').slice(0, 500) || null, quorum]
     );
-    return res.status(201).json({ data: { id, amount, quorum_required: quorum } });
+    return res.status(201).json({ data: { id, amount, kind, quorum_required: quorum } });
   } catch (err) {
     console.error('[stokvels] request failed:', err.message);
     return res.status(500).json({ error: 'Could not raise that request.' });
@@ -227,10 +254,14 @@ router.get('/:id/withdrawal-requests', async (req, res) => {
     const group = await groupForCaller(me, req.params.id);
     if (!group) return res.status(404).json({ error: 'No such stokvel.' });
 
+    /* The pool's NAME, not only its id. An authority that reads
+       "R10 000 · POOL-7Q2F" asks a signatory to approve a primary key;
+       the name is what they actually recognise. */
     const { rows } = await pool.query(
-      `SELECT r.*, i.first_name AS requested_by_name
+      `SELECT r.*, i.first_name AS requested_by_name, p.name AS pool_name
          FROM stokvel_withdrawal_requests r
          JOIN investors i ON i.id = r.requested_by
+         LEFT JOIN investment_pools p ON p.id = r.pool_id
         WHERE r.sub_account_id = $1
         ORDER BY r.created_at DESC
         LIMIT 100`,
@@ -240,7 +271,9 @@ router.get('/:id/withdrawal-requests', async (req, res) => {
     for (const r of rows) {
       const state = await mandate.evaluate(pool, r, group);
       out.push({
-        id: r.id, amount: r.amount, bank_name: r.bank_name, reason: r.reason,
+        id: r.id, amount: r.amount, kind: r.kind || 'withdrawal',
+        bank_name: r.bank_name, pool_id: r.pool_id, pool_name: r.pool_name,
+        reason: r.reason,
         status: r.status, expires_at: r.expires_at,
         requested_by_name: r.requested_by_name,
         approvals: state.approvals, required: state.required,
