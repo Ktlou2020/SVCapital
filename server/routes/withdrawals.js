@@ -9,6 +9,7 @@
 const router       = require('express').Router();
 const pool         = require('../db/pool');
 const { requireAuth, requireRole } = require('../middleware/auth');
+const access = require('../services/withdrawalAccess');
 const emailService = require('../services/email');
 const smsService   = require('../services/sms');
 const audit        = require('../services/audit');
@@ -126,10 +127,15 @@ router.post('/request', requireAuth, async (req, res) => {
         }
 
         const description = `Sub-account withdrawal (${saRow.name})${bank_name ? ` to ${bank_name}` : ''}${bank_account_number ? ` (${bank_account_number})` : ''}`;
+        /* Stamped now, honoured later. Wallets bear interest and notice is
+           what pays for it; a set withdrawal date raises the floor further.
+           Writing it on the row means a later change to the notice setting
+           cannot move a date this client has already been given. */
+        const saAvailableAt = await access.availableAt(client, saRow);
         await client.query(
-          `INSERT INTO transactions (id, investor_id, sub_account_id, type, amount, status, reference, description, notes, created_at, updated_at)
-           VALUES (gen_random_uuid(), $1, $2, 'withdrawal', $3, 'pending', $4, $5, $6, NOW(), NOW())`,
-          [investorId, sub_account_id, numAmount, reference, description, notes || null]
+          `INSERT INTO transactions (id, investor_id, sub_account_id, type, amount, status, reference, description, notes, available_at, created_at, updated_at)
+           VALUES (gen_random_uuid(), $1, $2, 'withdrawal', $3, 'pending', $4, $5, $6, $7, NOW(), NOW())`,
+          [investorId, sub_account_id, numAmount, reference, description, notes || null, saAvailableAt]
         );
         await client.query(
           'UPDATE sub_accounts SET wallet_balance = wallet_balance - $1, updated_at = NOW() WHERE id = $2',
@@ -162,7 +168,12 @@ router.post('/request', requireAuth, async (req, res) => {
       await client.query('BEGIN');
 
       const { rows: [row] } = await client.query(
-        'SELECT id, first_name, last_name, email, wallet_balance, fica_status, kyc_status, status FROM investors WHERE id = $1 FOR UPDATE',
+        /* withdrawal_date is in the list because the access terms are
+           decided from this row. It was not, and the effect was silent: a
+           client who had committed their money until a date got the
+           ordinary 48 hours instead, because an absent column reads as no
+           date rather than as a missing one. */
+        'SELECT id, first_name, last_name, email, wallet_balance, fica_status, kyc_status, status, withdrawal_date FROM investors WHERE id = $1 FOR UPDATE',
         [investorId]
       );
       if (!row) {
@@ -184,11 +195,12 @@ router.post('/request', requireAuth, async (req, res) => {
         });
       }
 
+      const availableAt = await access.availableAt(client, investor);
       await client.query(
         `INSERT INTO transactions
-           (id, investor_id, type, amount, status, reference, description, notes, created_at, updated_at)
-         VALUES (gen_random_uuid(), $1, 'withdrawal', $2, 'pending', $3, $4, $5, NOW(), NOW())`,
-        [investorId, numAmount, reference, description, notes || null]
+           (id, investor_id, type, amount, status, reference, description, notes, available_at, created_at, updated_at)
+         VALUES (gen_random_uuid(), $1, 'withdrawal', $2, 'pending', $3, $4, $5, $6, NOW(), NOW())`,
+        [investorId, numAmount, reference, description, notes || null, availableAt]
       );
 
       await client.query(
@@ -245,6 +257,17 @@ router.post('/:txId/approve', requireAuth, requireRole('admin', 'director'), asy
         return res.status(404).json({ error: 'Withdrawal not found or already processed' });
       }
       tx = rows[0];
+
+      /* Notice is only notice if it is checked when the money would move.
+         Refused rather than silently deferred: an admin pressing approve
+         should be told the date, not left wondering why nothing happened.
+         Reject is deliberately NOT gated — a client who changes their mind
+         should not have to wait out a notice period to do it. */
+      const tooEarly = access.blockedUntil(tx.available_at);
+      if (tooEarly) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: tooEarly });
+      }
 
       const { rows: [invRow] } = await client.query(
         `SELECT id, email, first_name, last_name, phone, bank_name FROM investors WHERE id = $1`,

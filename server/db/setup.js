@@ -196,6 +196,13 @@ CREATE TABLE IF NOT EXISTS platform_settings (
   key TEXT PRIMARY KEY, value TEXT, description TEXT,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+/* The notice on a withdrawal, in hours. 48 by default: wallets bear
+   interest and notice is what pays for it. Set it to 0 to go back to
+   same-day, without a deploy. */
+INSERT INTO platform_settings (key, value, description)
+VALUES ('withdrawal_notice_hours', '48',
+        'Hours between a withdrawal being requested and it becoming payable.')
+ON CONFLICT (key) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS ifas (
   id TEXT PRIMARY KEY, first_name TEXT, last_name TEXT,
@@ -2433,6 +2440,28 @@ async function autoSetup() {
           /* How many signatory approvals it takes to get money out. NULL
              until a mandate is captured; the gate refuses a stokvel
              withdrawal rather than guessing a default. */
+          /* ── Access terms ──────────────────────────────────────────
+             Wallets are interest bearing, and the price of the return is
+             notice: a withdrawal is payable 48 hours after it is asked for,
+             or on a date the account has set, whichever is later.
+
+             withdrawal_date is OPT-IN and is the shape a stokvel needs —
+             funds committed until, say, the first of December. It is a
+             floor, not a schedule: once the date has passed, ordinary
+             notice applies again and the group sets a new one. Modelling a
+             recurring December would be guessing at a rule nobody has
+             written down.
+
+             The notice itself lives in platform_settings
+             (withdrawal_notice_hours) so it can be changed, or set to zero,
+             without a deploy. transactions.available_at is when the money
+             may actually be paid, decided when the request is made and
+             checked again at approval — stamping it once means a later
+             change to the setting cannot move money that a client has
+             already been promised on a date. */
+          BEGIN ALTER TABLE sub_accounts ADD COLUMN withdrawal_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investors    ADD COLUMN withdrawal_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE transactions ADD COLUMN available_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE sub_accounts ADD COLUMN stokvel_quorum INT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_holder TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
@@ -4511,6 +4540,11 @@ async function autoSetup() {
           title: 'Institutional and private clients have a page of their own \u2014 and their enquiries land in Support',
           body: 'The main site is written for a retail investor: start small, top up a wallet, earn XP, climb a ladder. None of that is the right pitch for an institution, a family office or an adviser, and an allocator who reads it decides we are not for them. institutional.html addresses them instead: what each strategy actually finances and with which partner, how a pool is structured and reported, who holds the licence \u2014 SmartVest Financial Services (Pty) Ltd, FSP 52449, with SV Capital as fund manager \u2014 and that capital is at risk. It carries NO minimum and no rand figure at all: mandate size is set in conversation, and a number on a public page is an offer at a price. Where pools have concluded it shows what has actually been paid back, drawn live from the platform, and says plainly that past performance is not a guide. The enquiry form at the bottom writes a HIGH-PRIORITY TICKET into Support, categorised as an institutional enquiry and carrying a reference the sender is given, and emails enquiry@svcapital.co.za as well \u2014 so an enquiry is on the board whether or not the email arrives, rather than living in somebody\u2019s inbox. It is rate-limited and carries a honeypot, because it is the only public write on the platform that is not a signup. Answer it from Support as you would any ticket. Separately: the terms, privacy, PAIA and complaints pages were never in the published build \u2014 they existed in the repository and would have 404\u2019d on the live site \u2014 and are now published alongside it.',
           where: 'The page is linked from the main site\u2019s menu as \u201cInstitutional\u201d and from the footer. Enquiries: Admin console \u2192 Support, category \u201cinstitutional_enquiry\u201d, opened at high priority.' },
+
+        { id: 'ANN-2026-WITHDRAWAL-NOTICE-48H', area: 'both', icon: 'fa-hourglass-half',
+          title: 'Withdrawals now take 48 hours \u2014 or wait for a date the account has set',
+          body: 'A CHANGE EVERY CLIENT WILL NOTICE. Wallets on this platform bear interest, and notice is what pays for it: a withdrawal is now payable 48 HOURS after it is requested rather than the same day. The money still leaves the wallet the moment the request is made, so nobody can spend it twice; what changes is when it can be paid out, and the admin approve button REFUSES before then and tells you the date. Rejecting is NOT delayed \u2014 a client who changes their mind should not have to wait out a notice period to do it. Accounts can also commit their money to A SET DATE: a stokvel saving for December sets 1 December and nothing is paid before then. The two combine as the LATER of the pair, not as alternatives \u2014 a stokvel committed until the first of December that asks on the thirtieth of November gets its money after the 48 hours, not on the first. The notice period lives in platform settings (withdrawal_notice_hours) so it can be shortened, or set to zero, without a deploy. TWO THINGS TO KNOW: this applies to EVERY wallet, personal and sub-account, so expect questions from clients used to same-day payment; and the idle-wallet nudge email has been corrected \u2014 it used to tell clients money in the wallet \u201cis not working\u201d, which stopped being true when wallets became interest bearing. It now says the balance earns interest and is available on 48 hours\u2019 notice, but is not earning a pool\u2019s return.',
+          where: 'Admin console \u2192 Withdrawals \u2014 approving before the date is refused with the date in the message. The set date is a field on the investor or sub-account record (withdrawal_date). The notice period: Settings \u2192 withdrawal_notice_hours.' },
 
         { id: 'ANN-2026-STOKVEL-ADMIN-SCREENS', area: 'admin', icon: 'fa-people-group',
           title: 'Stokvels has its own section in the console \u2014 stop using the table editor',

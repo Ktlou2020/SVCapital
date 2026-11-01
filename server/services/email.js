@@ -1220,7 +1220,11 @@ function sendChangeRequestSummary(to, { date, stats, requests }) {
   });
 }
 
-/* An idle wallet — money already deposited, sitting where it earns nothing.
+/* An idle wallet — money already deposited, earning the wallet rate
+   rather than a pool's. It used to say the balance "is not working",
+   which stopped being true when wallets became interest bearing: the
+   nudge is now about the DIFFERENCE between the two returns, not about
+   money sitting dead.
 
    Deliberately plain. This is unsolicited mail about somebody's own money, so
    it states the balance, what it could buy, and how to stop receiving it, and
@@ -1265,7 +1269,8 @@ function sendIdleWalletNudge(investor, { balance, poolName, minNeeded, poolCount
     html: _wrap(`
       <h2>Your wallet balance is not invested</h2>
       <p>Hi ${escHtml(first_name || 'there')}, you have <strong>${fmtR(balance)}</strong> in your SV Capital
-         wallet. Money in the wallet is held for you &mdash; it is not in a pool, so it is not working.</p>
+         wallet. It earns interest where it is, and it is available on 48 hours&rsquo; notice &mdash;
+         but it is not in a pool, so it is not earning a pool&rsquo;s return.</p>
       <div class="box">
         <p style="margin:0">That balance covers the minimum for
            <strong>${escHtml(poolName)}</strong>${poolCount > 1 ? ` and ${poolCount - 1} other open pool${poolCount > 2 ? 's' : ''}` : ''},
@@ -1283,8 +1288,9 @@ function sendIdleWalletNudge(investor, { balance, poolName, minNeeded, poolCount
       </p>`),
     text:
       `Hi ${first_name || 'there'},\n\n` +
-      `You have ${fmtR(balance)} in your SV Capital wallet. Money in the wallet is held for you — ` +
-      `it is not in a pool, so it is not working.\n\n` +
+      `You have ${fmtR(balance)} in your SV Capital wallet. It earns interest where it is, and ` +
+      `it is available on 48 hours' notice — but it is not in a pool, so it is not earning a ` +
+      `pool's return.\n\n` +
       `That balance covers the minimum for ${poolName}, which needs ${fmtR(minNeeded)} including the ` +
       `1% platform fee.\n\n` +
       `If you would rather it stayed in the wallet, no action is needed.\n\n` +
