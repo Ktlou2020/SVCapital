@@ -18,6 +18,7 @@
 'use strict';
 
 const cron         = require('node-cron');
+const { investmentEndDate } = require('../services/investmentTerm');
 const pool         = require('../db/pool');
 const emailService = require('../services/email');
 const pushService  = require('../services/pushService');
@@ -121,8 +122,8 @@ async function runRecurringInvestments() {
       const annualRate     = parseFloat(pool_row.annual_rate) || 0;
       const termMonths     = parseInt(pool_row.term_months, 10) || 6;
       const startDate      = new Date();
-      const endDate        = new Date(startDate);
-      endDate.setMonth(endDate.getMonth() + termMonths);
+      /* The pool's own maturity date — see services/investmentTerm.js. */
+      const endDay         = investmentEndDate(pool_row, startDate, termMonths);
       const expectedReturn = Math.round(amount * annualRate * (termMonths / 12) * 100) / 100;
       // Bug #6 fix: append random suffix to prevent ID collision when two investors
       // resolve DB queries in the same millisecond tick
@@ -154,7 +155,7 @@ async function runRecurringInvestments() {
               investmentId, investor.id, pool_row.id, pool_row.name,
               amount,
               startDate.toISOString().slice(0, 10),
-              endDate.toISOString().slice(0, 10),
+              endDay,
               annualRate, termMonths, expectedReturn, pool_row.product_type,
             ]
           );
@@ -191,7 +192,7 @@ async function runRecurringInvestments() {
 
       setImmediate(() => emailService.sendInvestmentCreated(investor, {
         poolName: pool_row.name, amount, annualRate, termMonths, expectedReturn,
-        endDate:  endDate.toISOString(),
+        endDate:  endDay,
       }).catch(err => console.error('[email] sendInvestmentCreated (recurring) failed:', err.message)));
 
       pushService.sendPushToInvestor(investor.id, {
