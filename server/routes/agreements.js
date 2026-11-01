@@ -50,6 +50,59 @@ async function nextAgreementNo(client) {
 }
 
 /* ─── POST /draw ─────────────────────────────────────────────────────── */
+/* ─── Whose account an agreement is for ───────────────────────────────
+   Used at DRAW time and again when the signed copy is sealed. One helper
+   because the sealed document is rendered from a second query, and the
+   comment at that render already names the risk: "Building the two documents
+   from two different SELECTs is how the sealed copy comes to differ from the
+   one that was read — and the hash would then describe a document nobody
+   saw." A drawn copy naming the stokvel and a sealed copy naming the member
+   who tapped Invest would be exactly that, on the one field that says who
+   the contract is with.
+
+   Returns null when the caller may not act on the account, which the caller
+   turns into a 404.
+
+   An ordinary sub-account belongs to whoever opened it. A STOKVEL does not:
+   any active member may place an investment the signatories have approved,
+   so any active member may draw the agreement for it. The mandate decides
+   whether the money moves; this decides whose name is on the document. */
+async function accountFactsFor(client, { subAccountId, investorId, poolId, amountCents }) {
+  if (!subAccountId) return null;
+  const { rows: [sa] } = await client.query(
+    `SELECT a.id, a.name, a.account_type, a.stokvel_reg_number,
+            (a.parent_investor_id = $2) AS i_opened_it,
+            EXISTS (SELECT 1 FROM stokvel_members m
+                     WHERE m.sub_account_id = a.id
+                       AND m.investor_id = $2 AND m.status = 'active') AS i_am_a_member
+       FROM sub_accounts a WHERE a.id = $1`, [subAccountId, investorId]);
+  if (!sa) return null;
+  if (!(sa.i_opened_it || (sa.account_type === 'stokvel' && sa.i_am_a_member))) return null;
+
+  const account = {
+    id: sa.id, name: sa.name, type: sa.account_type,
+    reg_number: sa.stokvel_reg_number || null, authority: null,
+  };
+
+  /* For a stokvel the agreement states WHICH authority the signatories
+     granted, so the document and the mandate can be read against each other
+     years later. Matched on the pool and the amount, as routes/tables.js
+     matches when the money actually moves. */
+  if (sa.account_type === 'stokvel' && poolId && amountCents) {
+    const { rows: [auth] } = await client.query(
+      `SELECT id, quorum_required FROM stokvel_withdrawal_requests
+        WHERE sub_account_id = $1 AND kind = 'investment' AND pool_id = $2
+          AND ROUND(amount * 100) = $3
+          AND status IN ('pending', 'approved', 'used')
+        ORDER BY created_at DESC LIMIT 1`, [subAccountId, poolId, amountCents]);
+    account.authority = auth
+      ? `Mandate of the signatories \u2014 authority ${auth.id}, `
+        + `${auth.quorum_required} approval(s) required`
+      : 'Mandate of the signatories';
+  }
+  return account;
+}
+
 router.post('/draw', requireAuth, async (req, res) => {
   /* The one answer both halves of the feature take their cue from. 200 with
      required:false rather than a 404: the portal has to be able to tell "you
@@ -70,7 +123,7 @@ router.post('/draw', requireAuth, async (req, res) => {
     await client.query('BEGIN');
 
     const { rows: [inv] } = await client.query(
-      `SELECT id, first_name, last_name, fica_status, kyc_status
+      `SELECT id, first_name, last_name, email, fica_status, kyc_status
          FROM investors WHERE id = $1`, [investorId]
     );
     if (!inv) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Investor not found.' }); }
@@ -81,6 +134,16 @@ router.post('/draw', requireAuth, async (req, res) => {
     if (fica !== 'approved' && fica !== 'verified') {
       await client.query('ROLLBACK');
       return res.status(403).json({ error: 'Your FICA verification must be approved before you can sign an investment agreement.' });
+    }
+
+    const account = await accountFactsFor(client, {
+      subAccountId: sub_account_id, investorId, poolId: pool_id, amountCents,
+    });
+    if (sub_account_id && !account) {
+      await client.query('ROLLBACK');
+      /* 404 either way: a caller who is not on this account learns nothing
+         from the answer, not even that the id names a real one. */
+      return res.status(404).json({ error: 'No such account.' });
     }
 
     const { rows: [p] } = await client.query(
@@ -129,6 +192,7 @@ router.post('/draw', requireAuth, async (req, res) => {
       agreement_no: no, investor_id: investorId,
       investor_name: `${inv.first_name || ''} ${inv.last_name || ''}`.trim(),
       investor_email: inv.email,
+      account,
       amount_cents: totalCents, pool_amount_cents: poolCents, fee_cents: feeCents,
       drawn_at: drawnAt,
     });
@@ -253,6 +317,17 @@ router.post('/:id/sign', requireAuth, async (req, res) => {
       agreement_no: a.agreement_no, investor_id: investorId,
       investor_name: `${inv.first_name || ''} ${inv.last_name || ''}`.trim(),
       investor_email: inv.email,
+      /* The SAME account the agreement was drawn for, read off the stored
+         row rather than the request — the signed copy is the one that is
+         kept, hashed and produced years later. */
+      account: await accountFactsFor(client, {
+        subAccountId: a.sub_account_id, investorId,
+        /* pool_amount_cents, not amount_cents. The stokvel authority is for
+           what reaches the POOL; amount_cents is that plus the 1% fee, and
+           matching on it would find no authority and quietly drop the
+           mandate reference from the one copy that is kept. */
+        poolId: a.pool_id, amountCents: Number(a.pool_amount_cents),
+      }),
       amount_cents: Number(a.amount_cents),
       pool_amount_cents: Number(a.pool_amount_cents),
       fee_cents: Number(a.fee_cents),

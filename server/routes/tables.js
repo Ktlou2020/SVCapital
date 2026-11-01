@@ -1336,6 +1336,13 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
         if (req.user.role === 'investor' && !isReinvestment &&
             require('../services/agreements').agreementsEnabled()) {
           const _reqCents = Math.round(required * 100);
+          /* THE ACCOUNT IS PART OF THE MATCH. This matched investor, pool
+             and amount only, so a signature given for a personal R1 000
+             into a pool could fund a STOKVEL's R1 000 into the same pool,
+             and the other way round: the document would name one account
+             and the money would leave another. A NULL sub_account_id is
+             itself a value here — a personal agreement funds a personal
+             investment and nothing else. */
           const { rows: _agr } = await _invClient.query(
             `UPDATE investment_agreements
                 SET status = 'funded', funded_at = NOW(), investment_id = $4
@@ -1343,11 +1350,13 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
                 SELECT id FROM investment_agreements
                  WHERE investor_id = $1 AND pool_id = $2
                    AND amount_cents = $3 AND status = 'signed'
+                   AND COALESCE(sub_account_id, '') = COALESCE($5, '')
                  ORDER BY signed_at ASC
                  LIMIT 1
                  FOR UPDATE SKIP LOCKED)
             RETURNING id, agreement_no`,
-            [body.investor_id, body.pool_id || null, _reqCents, body.id || null]
+            [body.investor_id, body.pool_id || null, _reqCents, body.id || null,
+             body.sub_account_id || null]
           );
           if (!_agr.length) {
             await _invClient.query('ROLLBACK');
