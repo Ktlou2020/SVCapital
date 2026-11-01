@@ -28,6 +28,7 @@ const pool   = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
 const mandate = require('../services/stokvelMandate');
 const crypto  = require('crypto');
+const contributions = require('../services/stokvelContributions');
 
 router.use(requireAuth);
 
@@ -319,6 +320,104 @@ router.post('/:id/withdrawal-requests/:rid/vote', async (req, res) => {
     await client.query('ROLLBACK').catch(() => {});
     console.error('[stokvels] vote failed:', err.message);
     return res.status(500).json({ error: 'Could not record that vote.' });
+  } finally {
+    client.release();
+  }
+});
+
+
+/* ─── GET /api/stokvels/:id/contributions ────────────────────────────
+   Who owes what, for everybody, visible to everybody.
+
+   This is the dispute-killer and the reason the endpoint does not filter to
+   the caller. A stokvel argument is almost always some version of "I paid
+   and you did not", and it is settled by one list that every member reads
+   from rather than by the treasurer's memory. Keeping it private to each
+   member would reproduce the problem it exists to end.
+   ──────────────────────────────────────────────────────────────────── */
+router.get('/:id/contributions', async (req, res) => {
+  const me = callerInvestorId(req);
+  try {
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) return res.status(404).json({ error: 'No such stokvel.' });
+
+    const { rows } = await pool.query(
+      `SELECT c.id, c.investor_id, c.period_label, c.amount_due, c.amount_paid,
+              c.due_date, c.status, c.paid_at,
+              i.first_name, i.last_name,
+              (c.investor_id = $2) AS is_me,
+              (c.status = 'due' AND c.due_date < CURRENT_DATE) AS overdue
+         FROM stokvel_contributions c
+         JOIN investors i ON i.id = c.investor_id
+        WHERE c.sub_account_id = $1
+        ORDER BY c.period_label DESC, i.first_name ASC
+        LIMIT 500`,
+      [group.id, me]
+    );
+
+    /* Arrears per member, which is the number anybody actually wants. */
+    const arrears = {};
+    for (const r of rows) {
+      if (r.status !== 'due') continue;
+      const owed = Math.round((Number(r.amount_due) - Number(r.amount_paid)) * 100) / 100;
+      if (owed <= 0) continue;
+      const k = r.investor_id;
+      arrears[k] = arrears[k] || { investor_id: k, name: r.first_name, owed: 0, periods: 0 };
+      arrears[k].owed = Math.round((arrears[k].owed + owed) * 100) / 100;
+      arrears[k].periods += 1;
+    }
+    return res.json({ data: rows, arrears: Object.values(arrears) });
+  } catch (err) {
+    console.error('[stokvels] contributions failed:', err.message);
+    return res.status(500).json({ error: 'Could not load the contributions.' });
+  }
+});
+
+/* ─── POST /api/stokvels/:id/contributions/:cid/pay ──────────────────
+   Pay your own, from your own wallet.
+
+   Only your own: a member paying somebody else's contribution would move
+   money between two people's records on one person's say-so, and the row
+   would then say the other member had paid when they had not. If a stokvel
+   wants that, it is a gift between members followed by a payment, and both
+   halves should be visible.
+   ──────────────────────────────────────────────────────────────────── */
+router.post('/:id/contributions/:cid/pay', async (req, res) => {
+  const me = callerInvestorId(req);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'No such stokvel.' }); }
+
+    const { rows: [contribution] } = await client.query(
+      `SELECT * FROM stokvel_contributions
+        WHERE id = $1 AND sub_account_id = $2 FOR UPDATE`,
+      [req.params.cid, group.id]);
+    if (!contribution) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'No such contribution.' }); }
+    if (contribution.investor_id !== me) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'You can only pay your own contribution.' });
+    }
+
+    const amount = req.body && req.body.amount != null
+      ? parseFloat(req.body.amount)
+      : Number(contribution.amount_due) - Number(contribution.amount_paid);
+
+    let result;
+    try {
+      result = await contributions.pay(client, {
+        contribution, investorId: me, subAccount: group, amount });
+    } catch (e) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: e.message });
+    }
+    await client.query('COMMIT');
+    return res.json({ data: result });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[stokvels] pay failed:', err.message);
+    return res.status(500).json({ error: 'Could not record that payment.' });
   } finally {
     client.release();
   }

@@ -1228,6 +1228,32 @@ function sendChangeRequestSummary(to, { date, stats, requests }) {
    these products may be described as guaranteed, safe or capital-protected,
    and an email that nudges toward an investment is the last place to get
    loose with that. */
+/* One reminder that a stokvel contribution is outstanding. Deliberately
+   plain: this lands in the inbox of somebody who is behind on money owed to
+   people they know, and a cheerful marketing voice reads as a taunt. State
+   the amount, the period, the stokvel and where to pay it. */
+function sendStokvelArrears(investor, { stokvelName, periodLabel, owed, dueDate }) {
+  const { email, first_name } = investor;
+  const fmtR = v => `R${Number(v || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  return _send({
+    to: email,
+    type: 'stokvel_arrears',
+    subject: `${stokvelName}: your ${periodLabel} contribution`,
+    html: _wrap(`
+      <h2>A contribution is outstanding</h2>
+      <p>Hi ${escHtml(first_name || 'there')}, your <strong>${escHtml(periodLabel)}</strong> contribution to
+         <strong>${escHtml(stokvelName)}</strong> of <strong>${fmtR(owed)}</strong> was due on
+         ${escHtml(String(dueDate))}.</p>
+      <div class="box">
+        <p style="margin:0">You can pay it from your wallet in the app. The group&rsquo;s contribution
+           list shows every member&rsquo;s position, including yours.</p>
+      </div>
+      <p>If you have already arranged this with your treasurer, you can ignore this message.</p>
+    `),
+  });
+}
+
 function sendIdleWalletNudge(investor, { balance, poolName, minNeeded, poolCount }) {
   const { email, first_name } = investor;
   const fmtR = v => `R${Number(v || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -1269,6 +1295,7 @@ function sendIdleWalletNudge(investor, { balance, poolName, minNeeded, poolCount
 }
 
 module.exports = {
+  sendStokvelArrears,
   sendIdleWalletNudge,
   sendWelcome,
   sendLeaveRequestSubmitted,

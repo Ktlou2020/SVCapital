@@ -470,6 +470,10 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
   const { startMaturityCron } = require('./jobs/maturityCron');
   startMaturityCron();
 
+  // Stokvel contributions: open the period at 00:20, chase arrears at 09:00
+  const { startStokvelContributionCron } = require('./jobs/stokvelContributionCron');
+  startStokvelContributionCron();
+
   // Start PE review reminder cron (daily 08:00 SAST)
   const { startReviewReminderCron } = require('./jobs/reviewReminderCron');
   startReviewReminderCron();

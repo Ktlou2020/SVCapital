@@ -206,6 +206,9 @@ const ADMIN_ONLY_TABLES = new Set([
      record is the audit trail for money. Members read their own group's
      requests through /api/stokvels. */
   'stokvel_withdrawal_requests', 'stokvel_request_approvals',
+  /* Who owes what. An arrears list is the most sensitive thing a stokvel
+     holds about its members; it is theirs to see, not every investor's. */
+  'stokvel_contributions', 'stokvel_contribution_schedules',
   /* Reads are staff-only so an unpublished draft is not visible to any
      signed-in investor who asks for the table. The public site never touches
      this API — /insights is server-rendered and queries the database directly,

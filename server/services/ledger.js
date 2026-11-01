@@ -25,8 +25,16 @@
    definition exists for reporting and reconciliation, not for repair.
    ───────────────────────────────────────────────────────────────────────────── */
 
-const CASH_CREDIT_TYPES = ['deposit', 'payout', 'interest', 'gift_received', 'referral_bonus', 'matured_funds'];
-const CASH_DEBIT_TYPES  = ['withdrawal', 'investment', 'reinvestment', 'fee', 'platform_fee', 'gift_sent'];
+/* stokvel_contribution / stokvel_contribution_received are a matched pair,
+   like matured_funds and reinvestment above but with real movement on both
+   sides: a member's wallet is debited and their stokvel's is credited by the
+   same amount in the same transaction. Both are listed so the pair cancels
+   across the platform — listing either alone would report a contribution as
+   money entering or leaving SV Capital, which it never is. */
+const CASH_CREDIT_TYPES = ['deposit', 'payout', 'interest', 'gift_received', 'referral_bonus', 'matured_funds',
+                           'stokvel_contribution_received'];
+const CASH_DEBIT_TYPES  = ['withdrawal', 'investment', 'reinvestment', 'fee', 'platform_fee', 'gift_sent',
+                           'stokvel_contribution'];
 
 /* The transaction types that are INVESTMENT INCOME — what a client earned, as
    opposed to what moved.

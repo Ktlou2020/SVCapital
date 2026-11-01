@@ -1076,6 +1076,66 @@ CREATE INDEX IF NOT EXISTS sub_accounts_parent_idx ON sub_accounts(parent_invest
    anything, and check-stokvel-membership asserts that it does not. A flag
    that looks like permission and is not is worse than no flag.
    ──────────────────────────────────────────────────────────────────── */
+/* ─── Contributions ───────────────────────────────────────────────────
+   What each member agreed to pay in, and whether they have.
+
+   The schedule is the RULE; the obligations are the TRUTH. Every period the
+   rule produces one row per active member, carrying the amount as it stood
+   that month — so a stokvel that raises its contribution from R500 to R600
+   in March does not silently restate what February's defaulters owe. An
+   arrears figure derived from today's rule would do exactly that, and the
+   members in arrears are the ones most likely to check.
+
+   Attribution is by construction, not by reconciliation. A member pays from
+   their own wallet on the platform, so the row knows who paid without
+   anybody matching a reference on a bank statement. Cash and external EFT
+   into a stokvel's account are a harder problem and are not solved here.
+   ──────────────────────────────────────────────────────────────────── */
+CREATE TABLE IF NOT EXISTS stokvel_contribution_schedules (
+  id              TEXT PRIMARY KEY,
+  sub_account_id  TEXT NOT NULL REFERENCES sub_accounts(id) ON DELETE CASCADE,
+  amount          NUMERIC(18,2) NOT NULL CHECK (amount > 0),
+  cadence         TEXT NOT NULL DEFAULT 'monthly'
+                    CHECK (cadence IN ('monthly','fortnightly','weekly')),
+  /* Day of the month a monthly contribution falls due. A month shorter than
+     the chosen day settles on its last day rather than spilling into the
+     next one. */
+  due_day         INT NOT NULL DEFAULT 1 CHECK (due_day BETWEEN 1 AND 31),
+  starts_on       DATE NOT NULL DEFAULT CURRENT_DATE,
+  active          BOOLEAN NOT NULL DEFAULT true,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+/* One live rule per stokvel. Changing the contribution means ending the old
+   schedule and starting a new one, which keeps the obligations each produced
+   attributable to the rule in force at the time. */
+CREATE UNIQUE INDEX IF NOT EXISTS scs_one_active
+  ON stokvel_contribution_schedules(sub_account_id) WHERE active;
+
+CREATE TABLE IF NOT EXISTS stokvel_contributions (
+  id              TEXT PRIMARY KEY,
+  sub_account_id  TEXT NOT NULL REFERENCES sub_accounts(id) ON DELETE CASCADE,
+  investor_id     TEXT NOT NULL REFERENCES investors(id)    ON DELETE CASCADE,
+  schedule_id     TEXT REFERENCES stokvel_contribution_schedules(id) ON DELETE SET NULL,
+  period_label    TEXT NOT NULL,
+  amount_due      NUMERIC(18,2) NOT NULL CHECK (amount_due > 0),
+  amount_paid     NUMERIC(18,2) NOT NULL DEFAULT 0 CHECK (amount_paid >= 0),
+  due_date        DATE NOT NULL,
+  status          TEXT NOT NULL DEFAULT 'due'
+                    CHECK (status IN ('due','paid','waived')),
+  paid_at         TIMESTAMPTZ,
+  reminded_at     TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+/* One obligation per member per period. This is what makes generating the
+   period safe to run again: a second run inserts nothing rather than
+   doubling what everybody owes. */
+CREATE UNIQUE INDEX IF NOT EXISTS sc_one_per_period
+  ON stokvel_contributions(sub_account_id, investor_id, period_label);
+CREATE INDEX IF NOT EXISTS sc_group_idx ON stokvel_contributions(sub_account_id);
+CREATE INDEX IF NOT EXISTS sc_due_idx   ON stokvel_contributions(due_date) WHERE status = 'due';
+
 /* ─── The mandate ─────────────────────────────────────────────────────
    What the constitution says it takes to get money out, made enforceable.
 
@@ -4451,6 +4511,11 @@ async function autoSetup() {
           title: 'Institutional and private clients have a page of their own \u2014 and their enquiries land in Support',
           body: 'The main site is written for a retail investor: start small, top up a wallet, earn XP, climb a ladder. None of that is the right pitch for an institution, a family office or an adviser, and an allocator who reads it decides we are not for them. institutional.html addresses them instead: what each strategy actually finances and with which partner, how a pool is structured and reported, who holds the licence \u2014 SmartVest Financial Services (Pty) Ltd, FSP 52449, with SV Capital as fund manager \u2014 and that capital is at risk. It carries NO minimum and no rand figure at all: mandate size is set in conversation, and a number on a public page is an offer at a price. Where pools have concluded it shows what has actually been paid back, drawn live from the platform, and says plainly that past performance is not a guide. The enquiry form at the bottom writes a HIGH-PRIORITY TICKET into Support, categorised as an institutional enquiry and carrying a reference the sender is given, and emails enquiry@svcapital.co.za as well \u2014 so an enquiry is on the board whether or not the email arrives, rather than living in somebody\u2019s inbox. It is rate-limited and carries a honeypot, because it is the only public write on the platform that is not a signup. Answer it from Support as you would any ticket. Separately: the terms, privacy, PAIA and complaints pages were never in the published build \u2014 they existed in the repository and would have 404\u2019d on the live site \u2014 and are now published alongside it.',
           where: 'The page is linked from the main site\u2019s menu as \u201cInstitutional\u201d and from the footer. Enquiries: Admin console \u2192 Support, category \u201cinstitutional_enquiry\u201d, opened at high priority.' },
+
+        { id: 'ANN-2026-STOKVEL-CONTRIBUTIONS-PHASE-3', area: 'admin', icon: 'fa-calendar-check',
+          title: 'Stokvel contributions: who owes what, and automatic chasing',
+          body: 'Phase 3. A stokvel now has a CONTRIBUTION SCHEDULE \u2014 an amount, monthly, on a chosen day \u2014 and every month the platform opens that period and creates one obligation per active member. The obligation carries the amount AS IT STOOD when the period opened, which matters more than it sounds: a stokvel that raises its contribution from R500 to R600 in March must not silently restate what February\u2019s defaulters owe, and the members in arrears are exactly the ones who check. MEMBERS PAY FROM THEIR OWN WALLET, which makes attribution automatic \u2014 nobody has to match a reference on a bank statement to work out who paid. The money moves from the member\u2019s wallet into the stokvel\u2019s in one transaction, with both halves written to the ledger as a matched pair so a contribution never reads as money entering or leaving SV Capital. EVERY MEMBER SEES THE WHOLE LIST, not just their own row, and arrears are totalled per member. That is deliberate: the argument this ends is \u201cI paid and you did not\u201d, and a private view would reproduce it. CHASING IS ONCE PER OBLIGATION, ever \u2014 an email and a push the day after it falls overdue, then nothing. A platform that reminds somebody daily that they owe R500 is a platform they mute, and then the message that mattered is muted too; the treasurer chases the rest, which is a conversation. Refused: paying somebody else\u2019s contribution, paying one already settled, paying more than is outstanding, and paying with an empty wallet. Cash and external EFT into a stokvel are NOT handled \u2014 attribution there is a reconciliation problem and this does not pretend to solve it.',
+          where: 'Admin console \u2192 Tables \u2192 stokvel_contribution_schedules to set the amount and day; stokvel_contributions shows every obligation and what has been paid. Members see it in the app once the screens ship.' },
 
         { id: 'ANN-2026-STOKVEL-MANDATE-PHASE-2', area: 'admin', icon: 'fa-user-shield',
           title: 'No single person can get money out of a stokvel any more',
