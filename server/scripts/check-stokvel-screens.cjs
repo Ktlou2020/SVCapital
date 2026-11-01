@@ -1,0 +1,270 @@
+#!/usr/bin/env node
+/* A stokvel member can reach, and act on, what the first three phases built.
+ *
+ * Everything so far was server-side. A member could not see any of it,
+ * because the sub-accounts grid renders what loadSubAccounts() fetches and
+ * that asks for sub_accounts where the caller is parent_investor_id — the
+ * chairperson. Everybody else in the stokvel had no row to render and no way
+ * in.
+ *
+ * What this holds:
+ *
+ *  · A MEMBER WHO DID NOT OPEN IT STILL SEES IT. The grid is the union of
+ *    sub-accounts and stokvel memberships, and the badge counts both — a
+ *    badge of zero beside a grid with your stokvel in it is its own bug.
+ *  · THE STOKVEL OPENS ITS OWN HUB, not the generic sub-account view, which
+ *    knows nothing about members, mandates or contributions.
+ *  · NAMES ARE ESCAPED. The roster is other people's names, the requests
+ *    carry a reason somebody typed, and all of it goes into innerHTML.
+ *  · THE DESTINATION IS ASKED FOR WHEN THE REQUEST IS RAISED. The gate
+ *    refuses a withdrawal to an account the signatories did not approve, so
+ *    a screen that collects the amount alone builds a request that can never
+ *    be used.
+ *  · A NON-SIGNATORY SEES THE REQUESTS AND GETS NO BUTTONS. Seeing what is
+ *    being asked for is the point; voting is not theirs.
+ *
+ * The measured half runs the real portal code against a stub API, because
+ * what matters is what renders, and only a browser knows that.
+ *
+ * Run: node server/scripts/check-stokvel-screens.cjs
+ */
+'use strict';
+
+const fs   = require('fs');
+const path = require('path');
+const http = require('http');
+const { spawn } = require('child_process');
+
+const ROOT = path.join(__dirname, '..', '..');
+let pass = 0, fail = 0;
+const ok = (name, cond, detail) => {
+  if (cond) { pass++; console.log(`  ✓ ${name}`); }
+  else { fail++; console.log(`  ✗ ${name}${detail ? `\n      ${detail}` : ''}`); }
+};
+const CORE = fs.readFileSync(path.join(ROOT, 'js', 'portal-core.js'), 'utf8');
+
+console.log('\nthe member is let in');
+{
+  ok('stokvels are loaded from the membership endpoint',
+     /API\._fetch\('GET', 'stokvels'\)/.test(CORE),
+     'the sub-accounts table is scoped to whoever opened the account');
+  ok('and the grid is the union of both',
+     /_stokvelsNotMine\(\)/.test(CORE) && /joined\.map\(sv => _stokvelCard/.test(CORE));
+  ok('the badge counts both too',
+     /PORTAL\.subAccounts\.length \+ _stokvelsNotMine\(\)\.length/.test(CORE),
+     'a badge of zero beside a grid with your stokvel in it');
+  ok('a stokvel opens its own hub',
+     /account_type === 'stokvel'\) return openStokvelHub/.test(CORE));
+  ok('and the view loader fetches both before rendering',
+     /Promise\.all\(\[loadSubAccounts\(\), loadStokvels\(\)\]\)/.test(CORE));
+}
+
+console.log('\nand what it renders is escaped');
+{
+  /* Interpolations of values that came from a person. The roster is other
+     members' names; the requests carry a reason somebody typed. */
+  const hub = CORE.slice(CORE.indexOf('function _svHeader'), CORE.indexOf('async function payStokvelContribution'));
+  const raw = [...hub.matchAll(/\$\{([^}]+)\}/g)].map(m => m[1].trim())
+    .filter(x => /\b(name|reason|role|label|status|bank_name|requested_by_name|period_label)\b/.test(x))
+    .filter(x => !/_esc\(|Utils\.rand\(|\?|&&|\.length|===|!==/.test(x));
+  ok('every person-typed value goes through _esc', raw.length === 0, raw.join(' | '));
+  ok('and the hub never builds HTML from an unescaped id',
+     !/\$\{(?:r|m|c|s)\.id\}/.test(hub), 'ids are interpolated into onclick handlers');
+}
+
+console.log('\nthe request collects what the gate will check');
+{
+  const fn = CORE.slice(CORE.indexOf('async function raiseStokvelWithdrawal'),
+                        CORE.indexOf('async function voteStokvelRequest'));
+  ok('it asks for the amount', /amount/.test(fn));
+  ok('and the bank account it is going to',
+     /bank_account_number/.test(fn) && /bank_name/.test(fn),
+     'the gate refuses a withdrawal to an account the signatories did not approve, '
+     + 'so collecting the amount alone builds a request that can never be used');
+}
+
+console.log('\nand voting is offered only to signatories');
+{
+  ok('the buttons are behind the signatory flag',
+     /meIsSignatory \?/.test(CORE));
+  ok('but the list itself is not',
+     /_svWithdrawals\(requests, meIsSignatory/.test(CORE)
+     && !/meIsSignatory[\s\S]{0,80}return ''/.test(CORE),
+     'knowing what is being asked for is the point');
+}
+
+/* ── Measured ───────────────────────────────────────────────────── */
+const CHROME = (() => {
+  const base = '/opt/pw-browsers';
+  const link = path.join(base, 'chromium');
+  if (fs.existsSync(link)) return link;
+  if (!fs.existsSync(base)) return null;
+  for (const dir of fs.readdirSync(base).filter(d => /^chromium-\d+$/.test(d))
+        .sort((a, b) => Number(b.split('-')[1]) - Number(a.split('-')[1]))) {
+    for (const inner of ['chrome-linux64', 'chrome-linux']) {
+      const bin = path.join(base, dir, inner, 'chrome');
+      if (fs.existsSync(bin)) return bin;
+    }
+  }
+  return null;
+})();
+
+if (!CHROME) {
+  console.log('\n  SKIP  no chromium under /opt/pw-browsers — the measured half did not run');
+  console.log(`\n${pass} passed, ${fail} failed`);
+  process.exit(fail ? 1 : 0);
+}
+
+/* The hub's render path, exercised against stubbed answers. Loading the whole
+   portal would drag in a session, a service worker and thirty other fetches;
+   what is being checked is that these four payloads become that screen. */
+const STUB = {
+  'stokvels/SA-1': { data: { id: 'SA-1', name: 'Ubuntu <b>Club</b>', wallet_balance: 12500,
+                             total_invested: 0, my_role: 'treasurer' } },
+  'stokvels/SA-1/members': { data: [
+    { id: 'm1', investor_id: 'I1', first_name: 'Ann', last_name: 'M', role: 'chairperson',
+      is_signatory: true, status: 'active', is_me: false },
+    { id: 'm2', investor_id: 'I2', first_name: '<img src=x onerror=\"window.__xssFired=1\">', last_name: '',
+      role: 'member', is_signatory: false, status: 'active', is_me: true },
+  ] },
+  'stokvels/SA-1/contributions': {
+    data: [{ id: 'c1', investor_id: 'I2', period_label: '2026-11', amount_due: '500.00',
+             amount_paid: '0.00', due_date: '2026-11-25', status: 'due', is_me: true, overdue: true }],
+    arrears: [{ investor_id: 'I2', name: 'Ben', owed: 500, periods: 1 }] },
+  'stokvels/SA-1/withdrawal-requests': { data: [
+    { id: 'r1', amount: 2000, bank_name: 'FNB', reason: 'Funeral <img src=y onerror=\"window.__xssFired=1\">',
+      status: 'pending', requested_by_name: 'Ann', approvals: 1, required: 2,
+      satisfied: false, blocked_because: '1 of 2 signatory approvals.' } ] },
+};
+
+(async () => {
+  const port = 9470;
+  /* detached, so the kill below reaches the whole process group. Chromium
+     forks a zygote, a GPU process and a renderer; killing only the launcher
+     leaves those running, and a suite that starts five browsers leaves five
+     sets behind. Fourteen of them accumulated during one mutation run and
+     starved the box until the next browser could not start inside its
+     timeout — which presents as a check that has stopped measuring. */
+  const proc = spawn(CHROME, ['--headless=new', `--remote-debugging-port=${port}`,
+    '--no-sandbox', '--disable-gpu', '--hide-scrollbars', 'about:blank'], { stdio: 'ignore', detached: true });
+  /* Browser.close asks Chromium to shut itself down, which is the only
+     thing that reliably reaps it: --headless=new starts a browser process
+     that puts itself in its own session, so killing the launcher's process
+     group leaves the renderers running. Twelve survived every run until
+     this was added, and a suite that starts five browsers leaves sixty
+     behind — which eventually starves the box and presents as a check that
+     has stopped measuring rather than one that failed. The group kill stays
+     as the fallback for a browser too wedged to answer. */
+  const stop = async () => { /* Awaited. Sending it and exiting immediately kills the process
+       before the socket flushes, so the browser never hears it — which
+       is how twelve of them survived a run that looked clean. */
+    try { await Promise.race([send('Browser.close'),
+                              new Promise(r => setTimeout(r, 1500))]); } catch (_) {}
+    try { process.kill(-proc.pid, 'SIGKILL'); } catch (_) { try { proc.kill('SIGKILL'); } catch (_) {} } };
+  const devtools = p => new Promise((res, rej) =>
+    http.get({ host: '127.0.0.1', port, path: p }, r => {
+      let s = ''; r.on('data', c => s += c); r.on('end', () => res(JSON.parse(s)));
+    }).on('error', rej));
+
+  try {
+    let tabs;
+    const startedAt = Date.now();
+    for (let i = 0; i < 60 && !tabs; i++) {
+      await new Promise(r => setTimeout(r, 500));
+      try { tabs = await devtools('/json/list'); } catch (_) {}
+      if (proc.exitCode !== null) break;
+    }
+    if (!tabs) { ok('the browser started', false, `devtools never answered in ${Date.now() - startedAt}ms`); await stop(); return; }
+
+    const ws = new WebSocket(tabs.find(t => t.type === 'page').webSocketDebuggerUrl);
+    await new Promise(r => { ws.onopen = r; });
+    let id = 0; const pending = new Map();
+    ws.onmessage = ev => { const d = JSON.parse(ev.data);
+      if (pending.has(d.id)) { pending.get(d.id)(d); pending.delete(d.id); } };
+    const send = (method, params) => new Promise(r => {
+      const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
+    await send('Runtime.enable');
+    const evaluate = async expr => {
+      const r = await send('Runtime.evaluate', { returnByValue: true, awaitPromise: true, expression: expr });
+      if (r.result && r.result.exceptionDetails) {
+        throw new Error(JSON.stringify(r.result.exceptionDetails.exception || {}).slice(0, 300));
+      }
+      return r.result.result.value;
+    };
+
+    /* The page: the hub's own functions, the few helpers they lean on, and
+       the two elements the modal writes into. */
+    const harness = `
+      window.PORTAL = { subAccounts: [], stokvels: [] };
+      window.SA_TYPE_META = { stokvel: { icon:'fa-people-group', label:'Stokvel', color:'#22c55e', bg:'#064e1e' } };
+      window._esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;')
+                      .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+      window.Utils = { rand: v => 'R' + Number(v || 0).toFixed(2), toast: () => {} };
+      window.Modal = { open: () => {}, close: () => {} };
+      window.API = { _fetch: async (m, p) => {
+        const stub = ${JSON.stringify(STUB)};
+        if (stub[p]) return stub[p];
+        throw new Error('unexpected ' + p);
+      } };
+      document.body.innerHTML = '<div id="saDetailTitle"></div><div id="saDetailBody"></div>';
+    `;
+    const core = fs.readFileSync(path.join(ROOT, 'js', 'portal-core.js'), 'utf8');
+    /* Only the stokvel section; the rest of portal-core expects a session. */
+    const section = core.slice(core.indexOf('async function loadStokvels'));
+
+    await evaluate(`(() => { ${harness} })()`);
+    await send('Runtime.evaluate', { expression: section });
+    await evaluate(`openStokvelHub('SA-1')`);
+    await new Promise(r => setTimeout(r, 400));
+
+    const rendered = await evaluate(`(() => {
+      const b = document.getElementById('saDetailBody');
+      return { html: b.innerHTML, text: b.textContent,
+               title: document.getElementById('saDetailTitle').textContent };
+    })()`);
+
+    console.log('\nthe hub renders');
+    ok('the stokvel is named in the title', /Ubuntu/.test(rendered.title), rendered.title);
+    ok('the group wallet is shown', /R12500\.00/.test(rendered.text), rendered.text.slice(0, 120));
+    ok('the member’s own arrears come first', /You owe/.test(rendered.text));
+    ok('with a pay button for the outstanding amount', /Pay R500\.00/.test(rendered.text));
+    ok('everybody’s arrears are listed', /Who is behind/.test(rendered.text) && /Ben/.test(rendered.text),
+       'the argument this ends is "I paid and you did not"');
+    ok('the pending request is shown with its tally', /1 of 2/.test(rendered.text));
+    ok('and the roster', /Ann/.test(rendered.text) && /Chairperson/.test(rendered.text));
+
+    console.log('\nand nothing a member typed became markup');
+    ok('a stokvel name with tags is text, not HTML',
+       !/<b>Club<\/b>/.test(rendered.html) && /Ubuntu/.test(rendered.text),
+       rendered.title);
+    ok('an image-onerror name is inert',
+       !/<img src=x/.test(rendered.html) && /onerror/.test(rendered.text),
+       'the roster is other people’s names rendered into innerHTML');
+    ok('and the same in a request reason',
+       !/<img src=y/.test(rendered.html) && /Funeral/.test(rendered.text));
+
+    /* The assertion that does not depend on guessing the payload's shape:
+       did anything injected actually RUN. The fixtures set a flag rather
+       than calling alert(), which is what the first draft used — and an
+       alert() with nobody to dismiss it blocks the renderer, so the check
+       proving the escaping mattered hung on proving it. */
+    const fired = await evaluate(`!!window.__xssFired`);
+    ok('nothing a member typed executed', fired === false,
+       'a value from the roster ran as script');
+
+    console.log('\nand a non-signatory is shown the request without a vote');
+    ok('no approve button for them',
+       !/>Approve</.test(rendered.html),
+       'the stubbed member is_me and is_signatory false');
+    ok('but the request is on their screen', /Funeral/.test(rendered.text));
+
+    ws.close();
+  } catch (err) {
+    console.error('\n  ✗ threw:', err.message);
+    fail++;
+  } finally {
+    await stop();
+    console.log(`\n${pass} passed, ${fail} failed`);
+    process.exit(fail ? 1 : 0);
+  }
+})();

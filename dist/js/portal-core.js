@@ -1448,7 +1448,9 @@ function navigate(view, btnEl) {
     statement: initStatementView,
     quests: renderQuestView,
     learn: renderLearnView,
-    subaccounts: loadSubAccounts,
+    /* Both, because the grid is the union of the two: sub-accounts the
+       caller opened, and stokvels they are merely a member of. */
+    subaccounts: async () => { await Promise.all([loadSubAccounts(), loadStokvels()]); renderSubAccountsView(); },
     referral: loadReferralDashboard,
     documents: loadDocuments,
     policies: renderPoliciesView,
@@ -6900,10 +6902,14 @@ async function loadSubAccounts() {
     PORTAL.subAccounts = [];
   }
   renderSubAccountsView();
+  /* The union, not just what this function fetched. Counting only
+     sub_accounts would show a stokvel member a badge of zero beside a grid
+     with their stokvel in it. */
   const badge = document.getElementById('subacctsBadge');
   if (badge) {
-    badge.textContent = PORTAL.subAccounts.length || '';
-    badge.style.display = PORTAL.subAccounts.length ? '' : 'none';
+    const total = PORTAL.subAccounts.length + _stokvelsNotMine().length;
+    badge.textContent = total || '';
+    badge.style.display = total ? '' : 'none';
   }
 }
 
@@ -6912,10 +6918,15 @@ function renderSubAccountsView() {
   const empty = document.getElementById('subacctsEmpty');
   if (!grid) return;
 
-  const badge = document.getElementById('subacctsBadge');
-  if (badge) badge.textContent = PORTAL.subAccounts.length || '';
+  /* Stokvels a member belongs to but did not open. loadSubAccounts() asks
+     for sub_accounts where the caller is parent_investor_id, so everyone in
+     a stokvel except the chairperson had nothing here to see. */
+  const joined = _stokvelsNotMine();
 
-  if (!PORTAL.subAccounts.length) {
+  const badge = document.getElementById('subacctsBadge');
+  if (badge) badge.textContent = (PORTAL.subAccounts.length + joined.length) || '';
+
+  if (!PORTAL.subAccounts.length && !joined.length) {
     grid.style.display  = 'none';
     if (empty) empty.style.display = '';
     return;
@@ -6923,7 +6934,8 @@ function renderSubAccountsView() {
   if (empty) empty.style.display = 'none';
   grid.style.display = '';
 
-  grid.innerHTML = PORTAL.subAccounts.map(sa => _saCard(sa)).join('');
+  grid.innerHTML = PORTAL.subAccounts.map(sa => _saCard(sa)).join('')
+                 + joined.map(sv => _stokvelCard(sv)).join('');
 }
 
 function _saCard(sa) {
@@ -7192,6 +7204,11 @@ async function saConfirmCreate() {
 async function openSaDetail(saId) {
   const sa = PORTAL.subAccounts.find(a => a.id === saId);
   if (!sa) return;
+
+  /* A stokvel has members, a mandate and a contribution ledger, none of
+     which the generic sub-account view knows about. The chairperson reaches
+     it through this path because the group is also their sub-account. */
+  if (sa.account_type === 'stokvel') return openStokvelHub(sa.id);
 
   const isMinor = sa.account_type === 'minor';
   const meta    = SA_TYPE_META[sa.account_type] || SA_TYPE_META.business;
@@ -12058,4 +12075,285 @@ function svcInvestmentMaturity(inv, pool) {
     return d;
   }
   return null;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Stokvels — the member's view.
+
+   Everything the three phases built is server-side: membership, the mandate,
+   the contribution ledger. Until now a stokvel member could not reach any of
+   it, because the sub-accounts view lists what loadSubAccounts() fetches, and
+   that is scoped to sub_accounts.parent_investor_id — the chairperson. A
+   member who is not the chairperson had no row to render.
+
+   So this loads from /api/stokvels, which answers on MEMBERSHIP, and merges
+   what it finds with the sub-accounts already on the page. The chairperson
+   sees one card either way; everybody else sees one for the first time.
+
+   Every string that came from a person — a stokvel's name, a member's name,
+   the reason on a request — goes through _esc. The roster is other people's
+   names rendered into innerHTML, which is the shape of problem this escapes.
+   ═══════════════════════════════════════════════════════════ */
+
+async function loadStokvels() {
+  try {
+    const res = await API._fetch('GET', 'stokvels');
+    PORTAL.stokvels = (res && res.data) || [];
+  } catch (_) {
+    PORTAL.stokvels = [];
+  }
+  return PORTAL.stokvels;
+}
+
+/* The groups a member belongs to but did not open. The chairperson's own
+   stokvels are already rendered as sub-accounts; these are the ones that
+   would otherwise be invisible. */
+function _stokvelsNotMine() {
+  const mine = new Set((PORTAL.subAccounts || []).map(a => a.id));
+  return (PORTAL.stokvels || []).filter(s => !mine.has(s.id));
+}
+
+function _stokvelCard(s) {
+  const meta = (typeof SA_TYPE_META !== 'undefined' && SA_TYPE_META.stokvel) || { color: '#22c55e', bg: '#064e1e', icon: 'fa-people-group' };
+  const role = s.my_role ? String(s.my_role).replace(/^\w/, c => c.toUpperCase()) : 'Member';
+  return `<div class="sa-card" style="--sa-color:${meta.color}" onclick="openStokvelHub('${_esc(s.id)}')">
+    <div class="sa-card__header" style="background:${meta.bg}">
+      <div class="sa-card__type"><i class="fa-solid ${meta.icon}"></i> Stokvel</div>
+      <div class="sa-card__name">${_esc(s.name)}</div>
+      <div style="font-size:0.72rem;color:rgba(255,255,255,0.75);margin-top:2px">
+        ${_esc(role)} · ${s.active_members || 0} member${s.active_members === 1 ? '' : 's'}
+      </div>
+    </div>
+    <div class="sa-card__body">
+      <div style="display:flex;justify-content:space-between;font-size:0.8rem">
+        <span style="color:var(--text-muted)">Group wallet</span>
+        <strong>${Utils.rand(s.wallet_balance)}</strong>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ─── The hub ──────────────────────────────────────────────────────
+   The stokvel id is threaded through every function and every handler
+   rather than parked in a module variable. portal-core.js is shared by the
+   web portal and the app and may declare no top-level state — a `let` here
+   is a redeclaration waiting for the next script that loads beside it, and
+   check-portal-split refuses one. Threading it also means a handler cannot
+   act on a stokvel other than the one whose markup it came from. */
+async function openStokvelHub(id) {
+  document.getElementById('saDetailTitle').textContent = 'Stokvel';
+  document.getElementById('saDetailBody').innerHTML =
+    `<div style="padding:40px;text-align:center;color:var(--text-muted)">
+       <i class="fa-solid fa-circle-notch fa-spin"></i> Loading…</div>`;
+  Modal.open('saDetailModal');
+  await _svRenderHub(id);
+}
+
+async function _svRenderHub(id) {
+  let group, members, contributions, requests;
+  try {
+    [group, members, contributions, requests] = await Promise.all([
+      API._fetch('GET', `stokvels/${id}`),
+      API._fetch('GET', `stokvels/${id}/members`),
+      API._fetch('GET', `stokvels/${id}/contributions`),
+      API._fetch('GET', `stokvels/${id}/withdrawal-requests`),
+    ]);
+  } catch (err) {
+    document.getElementById('saDetailBody').innerHTML =
+      `<div class="empty-state"><p>Could not load this stokvel. ${_esc(err.message || '')}</p></div>`;
+    return;
+  }
+
+  const g    = (group && group.data) || {};
+  const mine = ((contributions && contributions.data) || []).filter(c => c.is_me && c.status === 'due');
+  const meIsSignatory = ((members && members.data) || [])
+    .some(m => m.is_me && m.is_signatory);
+
+  document.getElementById('saDetailTitle').textContent = g.name || 'Stokvel';
+  document.getElementById('saDetailBody').innerHTML = `
+    ${_svHeader(g)}
+    ${_svContributions(contributions, mine, id)}
+    ${_svWithdrawals(requests, meIsSignatory, id)}
+    ${_svMembers(members)}
+  `;
+}
+
+function _svHeader(g) {
+  const meta = (typeof SA_TYPE_META !== 'undefined' && SA_TYPE_META.stokvel) || { bg: '#064e1e', icon: 'fa-people-group' };
+  return `<div class="sa-detail-banner" style="background:${meta.bg}">
+    <div style="display:flex;align-items:center;gap:12px">
+      <div class="sa-detail-icon"><i class="fa-solid ${meta.icon}"></i></div>
+      <div>
+        <div style="font-size:1.1rem;font-weight:800;color:#fff">${_esc(g.name)}</div>
+        <div style="font-size:0.78rem;color:rgba(255,255,255,0.75)">
+          ${g.my_role ? _esc(String(g.my_role).replace(/^\w/, c => c.toUpperCase())) : 'Member'}
+          ${g.stokvel_reg_number ? ' · ' + _esc(g.stokvel_reg_number) : ''}
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;gap:24px;margin-top:16px">
+      <div><div style="font-size:0.7rem;color:rgba(255,255,255,0.7);text-transform:uppercase;letter-spacing:.5px">Group wallet</div><div style="font-size:1.3rem;font-weight:800;color:#fff">${Utils.rand(g.wallet_balance)}</div></div>
+      <div><div style="font-size:0.7rem;color:rgba(255,255,255,0.7);text-transform:uppercase;letter-spacing:.5px">Invested</div><div style="font-size:1.3rem;font-weight:800;color:#fff">${Utils.rand(g.total_invested)}</div></div>
+    </div>
+  </div>`;
+}
+
+/* ─── Contributions ────────────────────────────────────────────────
+   My own outstanding first, because that is the one thing a member can act
+   on. Everybody's arrears underneath, because the argument this ends is "I
+   paid and you did not" and a private view reproduces it. */
+function _svContributions(res, mine, gid) {
+  const arrears = (res && res.arrears) || [];
+  const rows    = (res && res.data) || [];
+
+  const owed = mine.reduce((n, c) =>
+    n + (parseFloat(c.amount_due) - parseFloat(c.amount_paid)), 0);
+
+  const mineBlock = mine.length
+    ? `<div style="background:rgba(237,165,255,0.08);border:1px solid rgba(237,165,255,0.25);border-radius:12px;padding:14px;margin-bottom:14px">
+         <div style="font-size:0.78rem;color:var(--text-muted)">You owe</div>
+         <div style="font-size:1.4rem;font-weight:800;margin:2px 0 10px">${Utils.rand(owed)}</div>
+         ${mine.map(c => `
+           <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;border-top:1px solid rgba(255,255,255,0.06)">
+             <div>
+               <div style="font-size:0.84rem;font-weight:600">${_esc(c.period_label)}</div>
+               <div style="font-size:0.72rem;color:${c.overdue ? '#ef4444' : 'var(--text-muted)'}">
+                 ${c.overdue ? 'Overdue' : 'Due'} ${_esc(String(c.due_date).slice(0, 10))}
+               </div>
+             </div>
+             <button class="btn btn--primary btn--sm" onclick="payStokvelContribution('${_esc(gid)}','${_esc(c.id)}')">
+               Pay ${Utils.rand(parseFloat(c.amount_due) - parseFloat(c.amount_paid))}
+             </button>
+           </div>`).join('')}
+       </div>`
+    : `<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.25);border-radius:12px;padding:12px;margin-bottom:14px;font-size:0.84rem">
+         <i class="fa-solid fa-circle-check" style="color:#22c55e"></i> You are up to date.
+       </div>`;
+
+  const arrearsBlock = arrears.length
+    ? `<table class="data-table" style="font-size:0.8rem"><thead><tr>
+         <th>Member</th><th class="text-right">Owing</th><th class="text-right">Periods</th>
+       </tr></thead><tbody>
+       ${arrears.map(a => `<tr>
+         <td>${_esc(a.name)}</td>
+         <td class="text-right" style="font-weight:700">${Utils.rand(a.owed)}</td>
+         <td class="text-right">${a.periods}</td>
+       </tr>`).join('')}
+       </tbody></table>`
+    : `<div style="font-size:0.82rem;color:var(--text-muted)">Nobody is behind.</div>`;
+
+  return `<div class="sa-section-title mt-16"><i class="fa-solid fa-calendar-check"></i> Contributions</div>
+    ${mineBlock}
+    <div style="font-size:0.74rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Who is behind</div>
+    ${arrearsBlock}
+    ${rows.length ? '' : `<div style="font-size:0.82rem;color:var(--text-muted);margin-top:8px">No contributions have been scheduled yet.</div>`}`;
+}
+
+/* ─── Withdrawals ──────────────────────────────────────────────────
+   The mandate, made visible. A member who is not a signatory sees exactly
+   the same list — knowing what is being asked for is the point — and simply
+   has no buttons on it. */
+function _svWithdrawals(res, meIsSignatory, gid) {
+  const rows = (res && res.data) || [];
+  const open = rows.filter(r => r.status === 'pending');
+  const past = rows.filter(r => r.status !== 'pending').slice(0, 5);
+
+  const row = r => `<div style="border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:start;gap:10px">
+        <div>
+          <div style="font-weight:800">${Utils.rand(r.amount)}</div>
+          <div style="font-size:0.74rem;color:var(--text-muted)">
+            ${_esc(r.requested_by_name || 'A member')}${r.bank_name ? ' · ' + _esc(r.bank_name) : ''}
+          </div>
+          ${r.reason ? `<div style="font-size:0.78rem;margin-top:4px">${_esc(r.reason)}</div>` : ''}
+        </div>
+        <div style="text-align:right;white-space:nowrap">
+          <div style="font-size:0.78rem;font-weight:700;color:${r.satisfied ? '#22c55e' : 'var(--text-muted)'}">
+            ${r.approvals} of ${r.required}
+          </div>
+          <div style="font-size:0.7rem;color:var(--text-muted)">${_esc(r.status)}</div>
+        </div>
+      </div>
+      ${r.status === 'pending' && meIsSignatory ? `
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button class="btn btn--primary btn--sm" onclick="voteStokvelRequest('${_esc(gid)}','${_esc(r.id)}','approve')">Approve</button>
+          <button class="btn btn--ghost btn--sm" onclick="voteStokvelRequest('${_esc(gid)}','${_esc(r.id)}','reject')">Reject</button>
+        </div>` : ''}
+      ${r.blocked_because && r.status === 'pending' ? `
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px">${_esc(r.blocked_because)}</div>` : ''}
+    </div>`;
+
+  return `<div class="sa-section-title mt-16"><i class="fa-solid fa-user-shield"></i> Withdrawals</div>
+    <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px">
+      Money only leaves this stokvel when enough signatories approve it. No one member can do it alone.
+    </div>
+    ${open.length ? open.map(row).join('') : `<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:8px">Nothing awaiting approval.</div>`}
+    <button class="btn btn--secondary btn--sm" onclick="raiseStokvelWithdrawal('${_esc(gid)}')">
+      <i class="fa-solid fa-plus"></i> Request a withdrawal
+    </button>
+    ${past.length ? `<div style="font-size:0.74rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px">Recent</div>${past.map(row).join('')}` : ''}`;
+}
+
+function _svMembers(res) {
+  const rows = (res && res.data) || [];
+  return `<div class="sa-section-title mt-16"><i class="fa-solid fa-users"></i> Members</div>
+    <table class="data-table" style="font-size:0.8rem"><tbody>
+    ${rows.map(m => `<tr>
+      <td>${_esc(m.first_name)} ${_esc(m.last_name || '')}${m.is_me ? ' <span style="color:var(--text-muted)">(you)</span>' : ''}</td>
+      <td>${_esc(String(m.role).replace(/^\w/, c => c.toUpperCase()))}</td>
+      <td class="text-right">${m.is_signatory ? '<i class="fa-solid fa-pen-nib" title="Signatory" style="color:#eda5ff"></i>' : ''}</td>
+      <td class="text-right" style="color:var(--text-muted)">${m.status === 'invited' ? 'Invited' : ''}</td>
+    </tr>`).join('')}
+    </tbody></table>`;
+}
+
+/* ─── Actions ──────────────────────────────────────────────────────── */
+
+async function payStokvelContribution(groupId, contributionId) {
+  if (!confirm('Pay this contribution from your wallet?')) return;
+  try {
+    const res = await API._fetch('POST', `stokvels/${groupId}/contributions/${contributionId}/pay`, {});
+    Utils.toast(`Paid ${Utils.rand(res.data.paid)}.`, 'success');
+    await _svRenderHub(groupId);
+    if (typeof loadPortalData === 'function') loadPortalData();
+  } catch (err) {
+    Utils.toast(err.message || 'That payment did not go through.', 'error');
+  }
+}
+
+async function raiseStokvelWithdrawal(groupId) {
+  const amount = prompt('How much should be withdrawn?');
+  if (!amount) return;
+  const bankName = prompt('Which bank is it going to?');
+  if (!bankName) return;
+  /* The destination is part of what the signatories approve — see the gate
+     in routes/withdrawals.js. Asking for it here rather than later is what
+     makes their approval mean something. */
+  const bankAcct = prompt('Which account number?');
+  if (!bankAcct) return;
+  const reason = prompt('What is it for? (optional)') || '';
+  try {
+    await API._fetch('POST', `stokvels/${groupId}/withdrawal-requests`, {
+      amount: parseFloat(amount), bank_name: bankName,
+      bank_account_number: bankAcct, reason,
+    });
+    Utils.toast('Request raised. The signatories have been asked to approve it.', 'success');
+    await _svRenderHub(groupId);
+  } catch (err) {
+    Utils.toast(err.message || 'Could not raise that request.', 'error');
+  }
+}
+
+async function voteStokvelRequest(groupId, requestId, decision) {
+  if (decision === 'reject' && !confirm('Reject this withdrawal? It cannot be out-voted afterwards.')) return;
+  try {
+    const res = await API._fetch('POST',
+      `stokvels/${groupId}/withdrawal-requests/${requestId}/vote`, { decision });
+    Utils.toast(res.data.satisfied
+      ? 'Approved — the mandate is satisfied.'
+      : `Recorded. ${res.data.approvals} of ${res.data.required}.`, 'success');
+    await _svRenderHub(groupId);
+  } catch (err) {
+    Utils.toast(err.message || 'Could not record that vote.', 'error');
+  }
 }
