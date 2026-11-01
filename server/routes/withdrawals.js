@@ -46,6 +46,9 @@ router.post('/request', requireAuth, async (req, res) => {
     if (sub_account_id) {
       const client = await pool.connect();
       let investor;
+      /* Declared out here so it survives the transaction block: the people
+         who approved this are told after the commit, not inside it. */
+      let _spentAuthority = null;
       try {
         await client.query('BEGIN');
 
@@ -99,6 +102,13 @@ router.post('/request', requireAuth, async (req, res) => {
             return res.status(/No such authority/.test(error) ? 404 : 403).json({ error });
           }
           await mandate.consume(client, authority, reference);
+          /* Remembered for after the commit. The signatories are told the
+             authority they granted has been spent, and on what — an
+             approval nobody hears the end of asks them to trust the
+             platform rather than to authorise something, and this is also
+             the only chance anyone has to notice an authority used in a way
+             they did not expect while it is still recent. */
+          _spentAuthority = authority.id;
         }
 
         const description = `Sub-account withdrawal (${saRow.name})${bank_name ? ` to ${bank_name}` : ''}${bank_account_number ? ` (${bank_account_number})` : ''}`;
@@ -117,6 +127,13 @@ router.post('/request', requireAuth, async (req, res) => {
           [numAmount, sub_account_id]
         );
         await client.query('COMMIT');
+
+        if (_spentAuthority) {
+          let n = null;
+          try { n = require('../services/stokvelNotify'); } catch (_) {}
+          if (n) n.spent({ groupId: sub_account_id, authorityId: _spentAuthority, reference })
+                  .catch(e => console.warn('[withdrawals] notify failed:', e.message));
+        }
 
         const { rows: [invRow] } = await pool.query('SELECT * FROM investors WHERE id=$1', [investorId]).catch(() => ({ rows: [] }));
         investor = invRow;

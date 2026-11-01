@@ -1234,6 +1234,9 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
         : (req.user.role === 'investor' ? 'your wallet' : "this investor's wallet");
 
       const _invClient = await pool.connect();
+      /* Carried out of the transaction block: the signatories who approved
+         this are told after the commit, never inside it. */
+      let _spentAuthority = null;
       try {
         await _invClient.query('BEGIN');
         let walletBal = 0;
@@ -1289,6 +1292,7 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
               return res.status(/No such authority/.test(error) ? 404 : 403).json({ error });
             }
             await mandate.consume(_invClient, authority, body.id || null);
+            _spentAuthority = authority.id;
           }
         } else {
           const { rows: iv } = await _invClient.query(
@@ -1369,6 +1373,19 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
         }
         await _invClient.query('COMMIT');
         _investmentWalletDeducted = true;
+
+        /* The authority they granted has been spent, and on what. An
+           approval nobody hears the end of asks the signatories to trust
+           the platform rather than to authorise something. Fired after the
+           commit and never awaited — a mail outage must not unwind an
+           investment that has already taken the money. */
+        if (_spentAuthority) {
+          let _n = null;
+          try { _n = require('../services/stokvelNotify'); } catch (_) {}
+          if (_n) _n.spent({ groupId: body.sub_account_id,
+                             authorityId: _spentAuthority, reference: body.id || null })
+                   .catch(e => console.warn('[tables] stokvel notify failed:', e.message));
+        }
       } catch (e) {
         await _invClient.query('ROLLBACK');
         throw e;

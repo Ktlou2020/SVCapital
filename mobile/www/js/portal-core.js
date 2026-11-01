@@ -6958,6 +6958,7 @@ function _saCard(sa) {
         <span class="sa-card__type-label">${meta.label}</span>
       </div>
       ${isMinor && age ? `<span class="sa-age-chip">${age.label} · Age ${age.age}</span>` : ''}
+      ${sa.account_type === 'stokvel' ? _svBadge(sa.id) : ''}
       ${kycBadge}
     </div>
     <div class="sa-card__body">
@@ -12113,6 +12114,31 @@ function _stokvelsNotMine() {
   return (PORTAL.stokvels || []).filter(s => !mine.has(s.id));
 }
 
+/* What this stokvel needs from the person looking at it, as a pill on the
+   card. Push and email are both silent failures waiting to happen — one
+   member never granted push, another's address bounces — and the app is the
+   one surface that cannot fail to be looked at. So anything waiting on them
+   is on the card before they open anything.
+
+   Reads from PORTAL.stokvels by id rather than taking the row, because the
+   chairperson's stokvel is rendered by _saCard off the sub-accounts list,
+   which has none of these counts on it. Without the lookup the one person
+   most likely to be holding up a request would be the one person not told.
+
+   Only ever shows what the viewer can act on: a vote of theirs that is
+   outstanding, and money they themselves owe. */
+function _svBadge(id) {
+  const sv = (PORTAL.stokvels || []).find(x => x.id === id);
+  if (!sv) return '';
+  const votes = parseInt(sv.awaiting_my_vote, 10) || 0;
+  const owed  = parseFloat(sv.my_outstanding)   || 0;
+  const pill = (text, colour) => `<span style="display:inline-block;font-size:0.66rem;font-weight:800;
+      text-transform:uppercase;letter-spacing:.4px;border-radius:999px;padding:2px 9px;margin-right:4px;
+      background:${colour};color:#1a1a1a">${text}</span>`;
+  return (votes ? pill(`${votes} waiting on you`, '#eda5ff') : '')
+       + (owed  ? pill(`${Utils.rand(owed)} due`, '#fec24f') : '');
+}
+
 function _stokvelCard(s) {
   const meta = (typeof SA_TYPE_META !== 'undefined' && SA_TYPE_META.stokvel) || { color: '#22c55e', bg: '#064e1e', icon: 'fa-people-group' };
   const role = s.my_role ? String(s.my_role).replace(/^\w/, c => c.toUpperCase()) : 'Member';
@@ -12123,6 +12149,7 @@ function _stokvelCard(s) {
       <div style="font-size:0.72rem;color:rgba(255,255,255,0.75);margin-top:2px">
         ${_esc(role)} · ${s.active_members || 0} member${s.active_members === 1 ? '' : 's'}
       </div>
+      ${_svBadge(s.id) ? `<div style="margin-top:6px">${_svBadge(s.id)}</div>` : ''}
     </div>
     <div class="sa-card__body">
       <div style="display:flex;justify-content:space-between;font-size:0.8rem">

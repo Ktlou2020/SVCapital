@@ -1263,6 +1263,36 @@ function sendStokvelArrears(investor, { stokvelName, periodLabel, owed, dueDate 
   });
 }
 
+/* Every message the stokvel mandate sends, from one template.
+   
+   One template rather than five, on purpose. These five emails differ in two
+   sentences and share the facts of the request — the stokvel, the
+   destination, the amount, who asked. Five templates would be five places
+   for the destination to go missing from, and the destination is the whole
+   point of a mandate. The caller supplies the words; the shape is fixed.
+   
+   Plain throughout. This is somebody's savings club asking them to authorise
+   money, and a marketing voice over that reads as a sales pitch about money
+   that is not ours. */
+function sendStokvelMandate(investor, { subject, heading, lead, rows, note, action }) {
+  const { email, first_name } = investor;
+  return _send({
+    to: email,
+    type: 'stokvel_mandate',
+    subject,
+    html: _wrap(`
+      <h2>${escHtml(heading)}</h2>
+      <p>Hi ${escHtml(first_name || 'there')}, ${lead}</p>
+      ${rows && rows.length ? `<div class="box">
+        ${rows.map(([k, v]) => `<div class="row"><span class="lbl">${escHtml(k)}</span><span class="val">${escHtml(v)}</span></div>`).join('')}
+      </div>` : ''}
+      ${action ? `<p>${escHtml(action)}</p>` : ''}
+      <p style="text-align:center"><a class="btn" href="${BASE_URL}/portal/">Open the app</a></p>
+      ${note ? `<p style="font-size:0.84rem;color:#777">${escHtml(note)}</p>` : ''}
+    `),
+  });
+}
+
 function sendIdleWalletNudge(investor, { balance, poolName, minNeeded, poolCount }) {
   const { email, first_name } = investor;
   const fmtR = v => `R${Number(v || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -1307,6 +1337,7 @@ function sendIdleWalletNudge(investor, { balance, poolName, minNeeded, poolCount
 
 module.exports = {
   sendStokvelArrears,
+  sendStokvelMandate,
   sendIdleWalletNudge,
   sendWelcome,
   sendLeaveRequestSubmitted,

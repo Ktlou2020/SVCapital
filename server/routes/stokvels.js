@@ -29,6 +29,13 @@ const { requireAuth } = require('../middleware/auth');
 const mandate = require('../services/stokvelMandate');
 const crypto  = require('crypto');
 const contributions = require('../services/stokvelContributions');
+/* Lazily required, and never awaited in a way that can fail a request: a
+   mandate that cannot send an email must still record the vote. */
+let _notify = null;
+function notify() {
+  if (!_notify) { try { _notify = require('../services/stokvelNotify'); } catch (_) {} }
+  return _notify;
+}
 
 router.use(requireAuth);
 
@@ -92,7 +99,33 @@ router.get('/', async (req, res) => {
               m.is_signatory AS my_is_signatory,
               (s.parent_investor_id = $1) AS i_opened_it,
               (SELECT COUNT(*)::int FROM stokvel_members x
-                WHERE x.sub_account_id = s.id AND x.status = 'active') AS active_members
+                WHERE x.sub_account_id = s.id AND x.status = 'active') AS active_members,
+              /* What this member has to DO, on the card, before they open
+                 anything. Push and email both fail silently and for
+                 different people — one never granted permission, the other's
+                 address bounces — and the app is the one surface that
+                 cannot. A request waiting on somebody who is holding the
+                 phone should be visible on it.
+
+                 Counted only where their vote would count (a signatory who
+                 has not yet voted on a live request), so the number is
+                 always something they can act on rather than news. */
+              (SELECT COUNT(*)::int
+                 FROM stokvel_withdrawal_requests r
+                WHERE r.sub_account_id = s.id
+                  AND r.status = 'pending'
+                  AND r.expires_at > NOW()
+                  AND m.is_signatory = true
+                  AND NOT EXISTS (SELECT 1 FROM stokvel_request_approvals v
+                                   WHERE v.request_id = r.id AND v.investor_id = $1)
+              ) AS awaiting_my_vote,
+              (SELECT COALESCE(SUM(c.amount_due - c.amount_paid), 0)
+                 FROM stokvel_contributions c
+                WHERE c.sub_account_id = s.id
+                  AND c.investor_id = $1
+                  AND c.status = 'due'
+                  AND (c.amount_due - c.amount_paid) > 0
+              ) AS my_outstanding
          FROM sub_accounts s
          LEFT JOIN stokvel_members m
                 ON m.sub_account_id = s.id
@@ -238,6 +271,15 @@ router.post('/:id/withdrawal-requests', async (req, res) => {
       [id, group.id, me, amount, kind, bankName || null, bankAcct || null, poolId,
        String((req.body && req.body.reason) || '').slice(0, 500) || null, quorum]
     );
+    /* The signatories are told now. Until this existed the mandate was a
+       queue nobody was watching: a treasurer raised a request and then had
+       to phone three people to ask them to go and tap approve. Fired after
+       the insert and never awaited, so a mail outage cannot lose the
+       request that is already recorded. */
+    const n = notify();
+    if (n) n.approvalNeeded({ groupId: group.id, authorityId: id })
+            .catch(e => console.warn('[stokvels] notify failed:', e.message));
+
     return res.status(201).json({ data: { id, amount, kind, quorum_required: quorum } });
   } catch (err) {
     console.error('[stokvels] request failed:', err.message);
@@ -346,6 +388,16 @@ router.post('/:id/withdrawal-requests/:rid/vote', async (req, res) => {
         [request.id, status]);
     }
     await client.query('COMMIT');
+
+    /* After the commit, on the plain pool. Whoever is waiting on this hears
+       what happened: the person who raised it either way, and the other
+       signatories when the answer is final — a dead or carried request that
+       still reads as pending to them is how three people go on waiting to
+       vote on nothing. */
+    const n = notify();
+    if (n) n.decided({ groupId: group.id, authorityId: request.id, voterId: me, decision })
+            .catch(e => console.warn('[stokvels] notify failed:', e.message));
+
     return res.json({ data: { id: request.id, status,
                               approvals: state.approvals, required: state.required,
                               satisfied: status === 'approved' } });
