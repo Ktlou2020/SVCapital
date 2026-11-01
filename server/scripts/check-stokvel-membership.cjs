@@ -68,19 +68,44 @@ console.log('\nthe route resolves membership before it answers');
   ok('it requires an ACTIVE membership or having opened it',
      /m\.status\s*=\s*'active'/.test(ROUTE)
      && /m\.id IS NOT NULL OR s\.parent_investor_id/.test(ROUTE));
-  ok('and every :id endpoint goes through it',
-     (ROUTE.match(/await groupForCaller\(/g) || []).length ===
-     (ROUTE.match(/router\.get\('\/:id/g) || []).length,
-     'an endpoint that takes an id and does not ask is the hole');
-  ok('a stranger is told nothing, not refused',
-     !/status\(403\)/.test(ROUTE) && /status\(404\)[\s\S]{0,60}No such stokvel/.test(ROUTE));
+  /* Every route that takes a stokvel id, not merely every GET — phase 2
+     added POSTs that take one, and an endpoint that accepts an id without
+     asking whether it is the caller's is the hole this whole file is about. */
+  const idRoutes = (ROUTE.match(/router\.(?:get|post|put|patch|delete)\('\/:id/g) || []).length;
+  const guarded  = (ROUTE.match(/await groupForCaller\(/g) || []).length;
+  ok('and every endpoint taking an id goes through it',
+     idRoutes > 0 && guarded === idRoutes, `${idRoutes} such routes, ${guarded} guarded`);
+  /* The distinction phase 2 made necessary: NOT BEING IN the stokvel is a
+     404, because a 403 confirms the id exists. Being in it and lacking
+     authority — not a signatory, no mandate on file — is a 403, which tells
+     a member something true about themselves and nothing about anybody
+     else. So the rule is not "never 403"; it is that the membership failure
+     is never one. */
+  const membershipRefusals = ROUTE.match(/No such stokvel/g) || [];
+  const refusedAs404 = ROUTE.match(/status\(404\)\.json\(\{ error: 'No such stokvel/g) || [];
+  ok('not being a member is a 404, never a 403',
+     membershipRefusals.length > 0 && refusedAs404.length === membershipRefusals.length,
+     `${membershipRefusals.length} refusals, ${refusedAs404.length} of them 404`);
   ok('the whole router needs a login', /router\.use\(requireAuth\)/.test(ROUTE));
 }
 
 console.log('\nand it grants nothing it has not earned');
 {
-  ok('nothing here writes', !/\b(INSERT|UPDATE|DELETE)\b/.test(ROUTE),
-     'seeing the group is this phase; moving its money needs the mandate');
+  /* Phase 1 said "nothing here writes". Phase 2 writes AUTHORITY — a request
+     and the votes against it — and that is the point of it. What has not
+     changed, and is the thing worth pinning, is that it never writes MONEY:
+     no balance, no transaction. The permission slip and the payment stay in
+     different files, so the gate can be reasoned about on its own and a bug
+     here withholds money rather than releasing it. */
+  /* READING the balance is the transparency this feature exists for — every
+     member can see what the group holds. The first draft of this forbade the
+     column outright and failed on exactly that. What may not happen is a
+     WRITE. */
+  ok('it writes authority, never money',
+     !/INSERT INTO transactions/i.test(ROUTE)
+     && !/UPDATE\s+(?:investors|sub_accounts)\b/i.test(ROUTE)
+     && !/SET[^;]{0,200}wallet_balance/i.test(ROUTE),
+     'the request is a permission slip; withdrawals.js is the only thing that moves a rand');
   ok('is_signatory is recorded but authorises nothing',
      /is_signatory/.test(ROUTE)
      && !/if\s*\([^)]*is_signatory/.test(ROUTE)

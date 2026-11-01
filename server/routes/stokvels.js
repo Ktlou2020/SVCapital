@@ -15,16 +15,19 @@
    stokvel id supplied by the caller reaches a query without having been
    checked against them.
 
-   READ ONLY, deliberately. Seeing the group is this phase. Moving its money
-   needs the mandate — N-of-M signatory approval — and until that exists no
-   endpoint here writes anything, and none reads is_signatory to decide
-   whether somebody may do something. The column records what the
-   constitution says; it does not yet grant.
+   Phase 1 was read-only. Phase 2 adds the mandate: a request to take money
+   out, and the signatory votes against it. These endpoints write, but they
+   write AUTHORITY, never money — the request is a permission slip and the
+   existing withdrawal route is still the only thing that moves a rand. That
+   separation is deliberate: the gate can be reasoned about on its own, and
+   a bug here withholds money rather than releasing it.
    ═══════════════════════════════════════════════════════════ */
 
 const router = require('express').Router();
 const pool   = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
+const mandate = require('../services/stokvelMandate');
+const crypto  = require('crypto');
 
 router.use(requireAuth);
 
@@ -160,6 +163,164 @@ router.get('/:id/members', async (req, res) => {
   } catch (err) {
     console.error('[stokvels] members failed:', err.message);
     return res.status(500).json({ error: 'Could not load the members.' });
+  }
+});
+
+
+/* ─── POST /api/stokvels/:id/withdrawal-requests ─────────────────────
+   Ask the signatories for authority to take an amount out, to a named
+   destination. Raising one moves nothing and reserves nothing.
+
+   Any active member may ask. Only signatories may answer — the two are
+   different on purpose: the person who needs the money is often not one of
+   the people who authorise it, and a stokvel where only signatories can
+   raise a request simply pushes the conversation off the platform.
+   ──────────────────────────────────────────────────────────────────── */
+router.post('/:id/withdrawal-requests', async (req, res) => {
+  const me = callerInvestorId(req);
+  try {
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) return res.status(404).json({ error: 'No such stokvel.' });
+
+    const amount = Math.round((parseFloat(req.body && req.body.amount) || 0) * 100) / 100;
+    if (!(amount > 0)) return res.status(400).json({ error: 'An amount is required.' });
+
+    const bankName = String((req.body && req.body.bank_name) || '').trim();
+    const bankAcct = String((req.body && req.body.bank_account_number) || '').trim();
+    /* The destination is part of what is being approved. Without it the
+       signatories authorise a sum and whoever carries it out chooses where
+       it lands, which is a mandate in name only. */
+    if (!bankName || !bankAcct) {
+      return res.status(400).json({
+        error: 'The bank name and account number must be part of the request — signatories approve a destination, not just an amount.' });
+    }
+
+    const quorum = Number(group.stokvel_quorum) || 0;
+    if (quorum < mandate.MIN_QUORUM) {
+      return res.status(400).json({
+        error: 'This stokvel has no mandate on file. Capture the signatories and how many must approve before requesting a withdrawal.' });
+    }
+
+    const id = 'SWR-' + crypto.randomUUID().replace(/-/g, '').slice(0, 14).toUpperCase();
+    await pool.query(
+      `INSERT INTO stokvel_withdrawal_requests
+         (id, sub_account_id, requested_by, amount, bank_name, bank_account_number,
+          reason, quorum_required, status, expires_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending', NOW() + INTERVAL '7 days')`,
+      [id, group.id, me, amount, bankName, bankAcct,
+       String((req.body && req.body.reason) || '').slice(0, 500) || null, quorum]
+    );
+    return res.status(201).json({ data: { id, amount, quorum_required: quorum } });
+  } catch (err) {
+    console.error('[stokvels] request failed:', err.message);
+    return res.status(500).json({ error: 'Could not raise that request.' });
+  }
+});
+
+/* ─── GET /api/stokvels/:id/withdrawal-requests ──────────────────────
+   Every member sees every request and where it stands. A mandate that only
+   the signatories can see is a committee, not a mandate. */
+router.get('/:id/withdrawal-requests', async (req, res) => {
+  const me = callerInvestorId(req);
+  try {
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) return res.status(404).json({ error: 'No such stokvel.' });
+
+    const { rows } = await pool.query(
+      `SELECT r.*, i.first_name AS requested_by_name
+         FROM stokvel_withdrawal_requests r
+         JOIN investors i ON i.id = r.requested_by
+        WHERE r.sub_account_id = $1
+        ORDER BY r.created_at DESC
+        LIMIT 100`,
+      [group.id]
+    );
+    const out = [];
+    for (const r of rows) {
+      const state = await mandate.evaluate(pool, r, group);
+      out.push({
+        id: r.id, amount: r.amount, bank_name: r.bank_name, reason: r.reason,
+        status: r.status, expires_at: r.expires_at,
+        requested_by_name: r.requested_by_name,
+        approvals: state.approvals, required: state.required,
+        satisfied: state.satisfied, blocked_because: state.reason,
+      });
+    }
+    return res.json({ data: out });
+  } catch (err) {
+    console.error('[stokvels] requests failed:', err.message);
+    return res.status(500).json({ error: 'Could not load the requests.' });
+  }
+});
+
+/* ─── POST /api/stokvels/:id/withdrawal-requests/:rid/vote ───────────
+   A signatory approves or rejects. One vote each, enforced by the unique
+   index rather than by a check-then-insert that two taps could race. */
+router.post('/:id/withdrawal-requests/:rid/vote', async (req, res) => {
+  const me = callerInvestorId(req);
+  const decision = String((req.body && req.body.decision) || '').toLowerCase();
+  if (decision !== 'approve' && decision !== 'reject') {
+    return res.status(400).json({ error: 'decision must be approve or reject.' });
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'No such stokvel.' }); }
+
+    /* Only a signatory votes. Membership got the caller this far; the mandate
+       decides whether their answer counts for anything. */
+    const signatories = await mandate.currentSignatories(client, group.id);
+    if (!signatories.has(me)) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'Only a signatory named in the mandate can approve a withdrawal.' });
+    }
+
+    const { rows: [request] } = await client.query(
+      `SELECT * FROM stokvel_withdrawal_requests
+        WHERE id = $1 AND sub_account_id = $2 FOR UPDATE`,
+      [req.params.rid, group.id]
+    );
+    if (!request) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'No such request.' }); }
+    if (request.status !== 'pending') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: `That request is already ${request.status}.` });
+    }
+
+    try {
+      await client.query(
+        `INSERT INTO stokvel_request_approvals (id, request_id, investor_id, decision)
+         VALUES ($1,$2,$3,$4)`,
+        ['SRA-' + crypto.randomUUID().replace(/-/g, '').slice(0, 14).toUpperCase(),
+         request.id, me, decision]);
+    } catch (e) {
+      await client.query('ROLLBACK');
+      if (e.code === '23505') return res.status(409).json({ error: 'You have already voted on this request.' });
+      throw e;
+    }
+
+    const state = await mandate.evaluate(client, request, group);
+    /* A rejection ends it outright. A mandate is not a majority: a signatory
+       who says no has said no, and the request is raised again rather than
+       out-voted. */
+    let status = request.status;
+    if (decision === 'reject')      status = 'rejected';
+    else if (state.satisfied)       status = 'approved';
+    if (status !== request.status) {
+      await client.query(
+        `UPDATE stokvel_withdrawal_requests SET status = $2, updated_at = NOW() WHERE id = $1`,
+        [request.id, status]);
+    }
+    await client.query('COMMIT');
+    return res.json({ data: { id: request.id, status,
+                              approvals: state.approvals, required: state.required,
+                              satisfied: status === 'approved' } });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[stokvels] vote failed:', err.message);
+    return res.status(500).json({ error: 'Could not record that vote.' });
+  } finally {
+    client.release();
   }
 });
 

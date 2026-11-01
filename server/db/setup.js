@@ -1076,6 +1076,59 @@ CREATE INDEX IF NOT EXISTS sub_accounts_parent_idx ON sub_accounts(parent_invest
    anything, and check-stokvel-membership asserts that it does not. A flag
    that looks like permission and is not is worse than no flag.
    ──────────────────────────────────────────────────────────────────── */
+/* ─── The mandate ─────────────────────────────────────────────────────
+   What the constitution says it takes to get money out, made enforceable.
+
+   Today a stokvel withdrawal is a sub-account withdrawal, and that route
+   requires sub_accounts.parent_investor_id to be the caller — so the
+   chairperson, alone, can empty the account. That is the exact fear a
+   stokvel banks around, and it is why they put up with an account paying
+   nothing in exchange for three signatures on a withdrawal slip.
+
+   A request names an AMOUNT AND A DESTINATION, and signatories approve that
+   pair. Approving a sum alone would be a mandate in name only: the money
+   could be approved for the group and sent to whoever carried it out.
+
+   The chairperson still presses the button. They can no longer press it
+   alone.
+   ──────────────────────────────────────────────────────────────────── */
+CREATE TABLE IF NOT EXISTS stokvel_withdrawal_requests (
+  id                  TEXT PRIMARY KEY,
+  sub_account_id      TEXT NOT NULL REFERENCES sub_accounts(id) ON DELETE CASCADE,
+  requested_by        TEXT NOT NULL REFERENCES investors(id),
+  amount              NUMERIC(18,2) NOT NULL CHECK (amount > 0),
+  bank_name           TEXT,
+  bank_account_number TEXT,
+  reason              TEXT,
+  /* The quorum as it stood when the request was raised, so a later change to
+     the mandate cannot retroactively lower the bar on a request already in
+     flight. Raising it is handled the other way: the gate re-reads the
+     stokvel's current quorum and takes whichever is higher. */
+  quorum_required     INT NOT NULL CHECK (quorum_required >= 2),
+  status              TEXT NOT NULL DEFAULT 'pending'
+                        CHECK (status IN ('pending','approved','rejected','used','expired')),
+  expires_at          TIMESTAMPTZ NOT NULL,
+  used_at             TIMESTAMPTZ,
+  used_by_reference   TEXT,
+  created_at          TIMESTAMPTZ DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS swr_group_idx  ON stokvel_withdrawal_requests(sub_account_id);
+CREATE INDEX IF NOT EXISTS swr_status_idx ON stokvel_withdrawal_requests(status);
+
+CREATE TABLE IF NOT EXISTS stokvel_request_approvals (
+  id           TEXT PRIMARY KEY,
+  request_id   TEXT NOT NULL REFERENCES stokvel_withdrawal_requests(id) ON DELETE CASCADE,
+  investor_id  TEXT NOT NULL REFERENCES investors(id) ON DELETE CASCADE,
+  decision     TEXT NOT NULL CHECK (decision IN ('approve','reject')),
+  decided_at   TIMESTAMPTZ DEFAULT NOW()
+);
+/* One signatory, one vote. Without this a single approver could reach any
+   quorum by approving repeatedly, which is the first thing anybody would
+   try. */
+CREATE UNIQUE INDEX IF NOT EXISTS sra_one_vote_each
+  ON stokvel_request_approvals(request_id, investor_id);
+
 CREATE TABLE IF NOT EXISTS stokvel_members (
   id              TEXT PRIMARY KEY,
   sub_account_id  TEXT NOT NULL REFERENCES sub_accounts(id) ON DELETE CASCADE,
@@ -2317,6 +2370,10 @@ async function autoSetup() {
           -- console has always tried to record both. Without this column the
           -- dismiss button failed silently and the notification came back.
           BEGIN ALTER TABLE fund_notifications ADD COLUMN is_dismissed BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          /* How many signatory approvals it takes to get money out. NULL
+             until a mandate is captured; the gate refuses a stokvel
+             withdrawal rather than guessing a default. */
+          BEGIN ALTER TABLE sub_accounts ADD COLUMN stokvel_quorum INT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_holder TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_number TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
@@ -4394,6 +4451,11 @@ async function autoSetup() {
           title: 'Institutional and private clients have a page of their own \u2014 and their enquiries land in Support',
           body: 'The main site is written for a retail investor: start small, top up a wallet, earn XP, climb a ladder. None of that is the right pitch for an institution, a family office or an adviser, and an allocator who reads it decides we are not for them. institutional.html addresses them instead: what each strategy actually finances and with which partner, how a pool is structured and reported, who holds the licence \u2014 SmartVest Financial Services (Pty) Ltd, FSP 52449, with SV Capital as fund manager \u2014 and that capital is at risk. It carries NO minimum and no rand figure at all: mandate size is set in conversation, and a number on a public page is an offer at a price. Where pools have concluded it shows what has actually been paid back, drawn live from the platform, and says plainly that past performance is not a guide. The enquiry form at the bottom writes a HIGH-PRIORITY TICKET into Support, categorised as an institutional enquiry and carrying a reference the sender is given, and emails enquiry@svcapital.co.za as well \u2014 so an enquiry is on the board whether or not the email arrives, rather than living in somebody\u2019s inbox. It is rate-limited and carries a honeypot, because it is the only public write on the platform that is not a signup. Answer it from Support as you would any ticket. Separately: the terms, privacy, PAIA and complaints pages were never in the published build \u2014 they existed in the repository and would have 404\u2019d on the live site \u2014 and are now published alongside it.',
           where: 'The page is linked from the main site\u2019s menu as \u201cInstitutional\u201d and from the footer. Enquiries: Admin console \u2192 Support, category \u201cinstitutional_enquiry\u201d, opened at high priority.' },
+
+        { id: 'ANN-2026-STOKVEL-MANDATE-PHASE-2', area: 'admin', icon: 'fa-user-shield',
+          title: 'No single person can get money out of a stokvel any more',
+          body: 'The mandate. Until now a stokvel withdrawal was an ordinary sub-account withdrawal, and that asks one question: is the caller the person who opened the account? So the chairperson, alone, could empty it \u2014 which is the exact fear a stokvel banks around, and why they accept an account paying nothing in exchange for three signatures on a slip. Now: a member raises a WITHDRAWAL REQUEST naming an amount AND the bank account it is going to. Signatories approve or reject it. Only when enough have approved can the withdrawal be made, and it must match what was approved \u2014 the same amount, to the same account. The destination matters as much as the sum: approving a figure while whoever carries it out picks where it lands would be a mandate in name only. HOW TO SET ONE UP: capture the signatories on stokvel_members (is_signatory) and how many must approve in sub_accounts.stokvel_quorum. Until that is on file the platform REFUSES stokvel withdrawals outright rather than guessing \u2014 so an existing stokvel will stop being able to withdraw until its mandate is captured, and that is deliberate. The minimum is two: a mandate of one is not a mandate. Things it will not allow, each of which is a thing somebody would try: one signatory voting twice; a member who is not a signatory voting; an authority used for a second withdrawal; an approval from somebody who was a signatory when they voted and has since been removed; a rejection being out-voted. The chairperson still presses the button \u2014 they just cannot press it alone. Ordinary sub-accounts (trusts, children\u2019s accounts) are unaffected and withdraw exactly as before. There is still no client-facing screen; the endpoints and the rules are what shipped.',
+          where: 'Admin console \u2192 Tables: set is_signatory on stokvel_members and stokvel_quorum on the sub_accounts row. Requests and votes are visible in stokvel_withdrawal_requests and stokvel_request_approvals.' },
 
         { id: 'ANN-2026-STOKVEL-MEMBERS-PHASE-1', area: 'admin', icon: 'fa-users',
           title: 'A stokvel can now have members \u2014 the first piece of the stokvel platform',

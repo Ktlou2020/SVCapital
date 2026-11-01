@@ -201,6 +201,11 @@ const ADMIN_ONLY_TABLES = new Set([
      signed-in investor — so every stokvel's membership on the platform would
      be one request away. */
   'stokvel_members',
+  /* The mandate and the votes cast against it. Same reason as the roster:
+     unlisted means readable by every signed-in investor, and an approval
+     record is the audit trail for money. Members read their own group's
+     requests through /api/stokvels. */
+  'stokvel_withdrawal_requests', 'stokvel_request_approvals',
   /* Reads are staff-only so an unpublished draft is not visible to any
      signed-in investor who asks for the table. The public site never touches
      this API — /insights is server-rendered and queries the database directly,
