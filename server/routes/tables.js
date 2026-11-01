@@ -1591,6 +1591,35 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
       );
       rows = r.rows;
     }
+    /* ── A new stokvel's chairperson is a MEMBER of it ──────────────
+       Nothing created a stokvel_members row for whoever opened the
+       account, so their access came from sub_accounts.parent_investor_id
+       alone. That is the fallback that let a chairperson who LEFT keep
+       seeing the group's money: their membership said exited and the
+       ownership column still said yes.
+
+       Making the owner a member closes it at the root, because membership
+       can then be the single answer to "is this person in this stokvel".
+
+       NOT a signatory. Signing power is the one thing this platform never
+       confers implicitly — an invitation cannot grant it either — and the
+       mandate is captured deliberately, with the quorum, by staff against
+       the group's constitution. */
+    if (table === 'sub_accounts' && rows[0] && rows[0].account_type === 'stokvel'
+        && rows[0].parent_investor_id) {
+      try {
+        await pool.query(
+          `INSERT INTO stokvel_members
+             (id, sub_account_id, investor_id, role, is_signatory, status, joined_at)
+           VALUES ($1,$2,$3,'chairperson',false,'active',NOW())
+           ON CONFLICT (sub_account_id, investor_id) DO NOTHING`,
+          ['SM-' + require('crypto').randomUUID().replace(/-/g, '').slice(0, 14).toUpperCase(),
+           rows[0].id, rows[0].parent_investor_id]);
+      } catch (e) {
+        console.error('[tables] stokvel chairperson row failed:', e.message);
+      }
+    }
+
     const [clean] = stripSensitive(table, rows, req.user?.empId, req.user?.role);
     res.status(201).json(clean);
 

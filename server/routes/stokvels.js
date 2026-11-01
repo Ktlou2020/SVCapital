@@ -80,9 +80,20 @@ async function groupForCaller(investorId, groupId) {
               ON m.sub_account_id = s.id
              AND m.investor_id    = $1
              AND m.status         = 'active'
+      /* AND HAS NOT LEFT. parent_investor_id grants access on its own,
+         which is right while the person who opened the account is still in
+         the group and wrong the moment they are not: a chairperson could
+         exit, be paid out, and keep seeing the wallet, the roster, every
+         member's share — and keep inviting people, because mayInvite reads
+         the same column. Ownership moves on exit (stokvelShares.settleExit),
+         so this is belt and braces; it is here because the cost of the
+         belt failing is somebody who left watching the group's money. */
       WHERE s.id = $2
         AND s.account_type = 'stokvel'
-        AND (m.id IS NOT NULL OR s.parent_investor_id = $1)`,
+        AND (m.id IS NOT NULL OR (s.parent_investor_id = $1 AND NOT EXISTS (
+              SELECT 1 FROM stokvel_members x
+               WHERE x.sub_account_id = s.id AND x.investor_id = $1
+                 AND x.status = 'exited')))`,
     [investorId, groupId]
   );
   return rows[0] || null;
@@ -134,7 +145,10 @@ router.get('/', async (req, res) => {
                AND m.investor_id    = $1
                AND m.status         = 'active'
         WHERE s.account_type = 'stokvel'
-          AND (m.id IS NOT NULL OR s.parent_investor_id = $1)
+          AND (m.id IS NOT NULL OR (s.parent_investor_id = $1 AND NOT EXISTS (
+                SELECT 1 FROM stokvel_members x
+                 WHERE x.sub_account_id = s.id AND x.investor_id = $1
+                   AND x.status = 'exited')))
         ORDER BY s.name ASC`,
       [me]
     );
@@ -727,6 +741,13 @@ router.post('/:id/exits', async (req, res) => {
       subAccountId: group.id, investorId: leaving,
       authorityId: authority.id,
     });
+    /* settleExit refuses when the person leaving opened the account and
+       there is nobody to hand it to. Nothing has been written at that
+       point, but the mandate authority must not be consumed either. */
+    if (out.error) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: out.error });
+    }
     await mandate.consume(client, authority, out.reference);
     await client.query('COMMIT');
 

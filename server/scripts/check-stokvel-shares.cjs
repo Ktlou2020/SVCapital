@@ -439,6 +439,80 @@ for (const [f, r] of [['email.js', sent.email], ['pushService.js', sent.push], [
        }),
        'a message reporting only the cash paid reads as the whole settlement');
 
+    /* ── The person who opened it, leaving ─────────────────────────
+       sub_accounts.parent_investor_id grants access on its own. A
+       chairperson who exits and keeps it is paid out AND still sees the
+       wallet, the roster and every member's share, and can still invite
+       people \u2014 for a product whose whole claim is "no one member", the
+       worst possible person to leave holding the door. The exit feature
+       created that path, so the exit has to close it. */
+    console.log('\nand the member who opened it hands it on when they go');
+    {
+      const owner = async () => (await db.query(
+        `SELECT parent_investor_id FROM sub_accounts WHERE id='SA-SH-1'`)).rows[0].parent_investor_id;
+      ok('A opened this stokvel', (await owner()) === 'INV-SH-A');
+
+      /* C and B have already left above, so bring a successor in. */
+      await db.query(
+        `INSERT INTO investors (id, first_name, email, phone, status, wallet_balance)
+         VALUES ('INV-SH-D','Dineo','d@example.test','0729990003','active',0)
+         ON CONFLICT (id) DO NOTHING`);
+      await db.query(
+        `INSERT INTO stokvel_members (id, sub_account_id, investor_id, role, is_signatory, status)
+         VALUES ('SM-SH-D','SA-SH-1','INV-SH-D','member',true,'active')
+         ON CONFLICT (sub_account_id, investor_id) DO UPDATE SET status='active', is_signatory=true`);
+
+      const aAuth = await raise({ amount: 1, kind: 'exit', exit_investor_id: 'INV-SH-A' });
+      await vote(aAuth.id, 'INV-SH-A'); await vote(aAuth.id, 'INV-SH-D');
+      const gone = await call('POST', '/api/stokvels/SA-SH-1/exits', tok('INV-SH-A'),
+                              { authority_id: aAuth.id });
+      ok('the chairperson can leave', gone.status === 200, JSON.stringify(gone.body).slice(0, 200));
+      ok('AND THE ACCOUNT IS HANDED TO SOMEBODY STILL IN THE GROUP',
+         (await owner()) === 'INV-SH-D', `owner is now ${await owner()}`);
+      ok('who becomes the chairperson',
+         (await db.query(`SELECT role FROM stokvel_members
+                           WHERE sub_account_id='SA-SH-1' AND investor_id='INV-SH-D'`))
+           .rows[0].role === 'chairperson');
+      ok('and the one who left can no longer see the stokvel at all',
+         !((await call('GET', '/api/stokvels', tok('INV-SH-A'))).body.data || [])
+            .some(x => x.id === 'SA-SH-1'),
+         'they were paid out \u2014 the group\u2019s money is no longer their business');
+      ok('nor open it directly',
+         (await call('GET', '/api/stokvels/SA-SH-1', tok('INV-SH-A'))).status === 404);
+      ok('nor read the shares',
+         (await call('GET', '/api/stokvels/SA-SH-1/shares', tok('INV-SH-A'))).status === 404);
+      ok('nor invite anybody into it',
+         (await call('POST', '/api/stokvels/SA-SH-1/invites', tok('INV-SH-A'),
+                     { name: 'Friend', email: 'friend@example.test' })).status === 404,
+         'mayInvite reads the same ownership column the guard does');
+      await invariant('after the chairperson left');
+
+      /* THE LAST MEMBER OUT cannot take the account with them.
+         Exercised against the service rather than the route, because the
+         route cannot reach it: the mandate needs two approvals and only
+         counts CURRENT signatories, so a sole remaining member is refused
+         by the quorum long before the owner rule is consulted. The guard is
+         still worth having \u2014 settleExit is a service, and the next caller
+         of it may not come through that route. */
+      const soleOut = await (async () => {
+        const c = await db.connect();
+        try {
+          await c.query('BEGIN');
+          const r = await shares.settleExit(c, {
+            subAccountId: 'SA-SH-1', investorId: 'INV-SH-D', authorityId: null });
+          await c.query('ROLLBACK');
+          return r;
+        } finally { c.release(); }
+      })();
+      ok('the last member cannot leave the account with no owner',
+         !!(soleOut && soleOut.error), JSON.stringify(soleOut).slice(0, 200));
+      ok('and is told to close the stokvel instead',
+         /closed with us/i.test((soleOut && soleOut.error) || ''),
+         JSON.stringify(soleOut));
+      ok('the account still has its owner', (await owner()) === 'INV-SH-D');
+      await db.query(`DELETE FROM investors WHERE id='INV-SH-D'`).catch(() => {});
+    }
+
     await clean();
   } catch (err) {
     console.error('\n  ✗ threw:', err.stack || err.message);

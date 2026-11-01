@@ -67,7 +67,17 @@ console.log('\nthe route resolves membership before it answers');
   ok('there is one guard', /async function groupForCaller/.test(ROUTE));
   ok('it requires an ACTIVE membership or having opened it',
      /m\.status\s*=\s*'active'/.test(ROUTE)
-     && /m\.id IS NOT NULL OR s\.parent_investor_id/.test(ROUTE));
+     && /m\.id IS NOT NULL OR \(?s\.parent_investor_id/.test(ROUTE));
+  /* And having opened it is not enough once you have gone.
+     parent_investor_id grants access on its own, which is right while the
+     person who opened the account is still in the group and wrong the
+     moment they are not — a chairperson could exit, take their share, and
+     keep seeing the wallet, the roster and every member's share, and keep
+     inviting people, because mayInvite reads the same column. */
+  ok('but somebody who has LEFT gets nothing, however they opened it',
+     /x\.status = 'exited'/.test(ROUTE)
+     && (ROUTE.match(/x\.status = 'exited'/g) || []).length >= 2,
+     'the guard and the list both read that column, so both have to say it');
   /* Every route that takes a stokvel id, not merely every GET — phase 2
      added POSTs that take one, and an endpoint that accepts an id without
      asking whether it is the caller's is the hole this whole file is about. */

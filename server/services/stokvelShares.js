@@ -311,6 +311,48 @@ async function shareFor(client, subAccountId, investorId) {
    than left due against somebody who is no longer a member. */
 async function settleExit(client, { subAccountId, investorId, authorityId, reference }) {
   const ref = reference || newId('SXT');
+
+  /* ── Hand the account on, if this is the person who opened it ──────
+     sub_accounts.parent_investor_id is the account's owner and it grants
+     access on its own. A chairperson who exits and keeps it would be paid
+     out and still see the wallet, the roster and every member's share — and
+     could still invite people, since mayInvite reads the same column. It is
+     also whose name the group's contribution receipts are filed under
+     (stokvelContributions.pay), so leaving it pointed at somebody who has
+     gone puts the group's money in a former member's records.
+
+     Handed to the committee first, longest-standing before newest, so the
+     successor is the most likely person to actually be running the group.
+     This is NOT a transfer of signing power: the mandate is a separate
+     thing and is untouched here. */
+  const { rows: [owner] } = await client.query(
+    'SELECT parent_investor_id FROM sub_accounts WHERE id = $1 FOR UPDATE', [subAccountId]);
+  const isOwner = owner && owner.parent_investor_id === investorId;
+  if (isOwner) {
+    const { rows: [heir] } = await client.query(
+      `SELECT investor_id FROM stokvel_members
+        WHERE sub_account_id = $1 AND status = 'active' AND investor_id <> $2
+        ORDER BY CASE role WHEN 'chairperson' THEN 0 WHEN 'treasurer' THEN 1
+                           WHEN 'secretary'   THEN 2 ELSE 3 END,
+                 joined_at ASC NULLS LAST, investor_id ASC
+        LIMIT 1`, [subAccountId, investorId]);
+    if (!heir) {
+      /* Refused rather than left ownerless. A stokvel whose last member is
+         leaving is a stokvel that is closing, and closing an account is a
+         different conversation from one member walking away from a group
+         that carries on. */
+      return { error: 'This member opened the stokvel and there is no other active member to hand it to. '
+                    + 'A group with nobody left in it should be closed with us rather than emptied one member at a time.' };
+    }
+    await client.query(
+      'UPDATE sub_accounts SET parent_investor_id = $2, updated_at = NOW() WHERE id = $1',
+      [subAccountId, heir.investor_id]);
+    await client.query(
+      `UPDATE stokvel_members SET role = 'chairperson', updated_at = NOW()
+        WHERE sub_account_id = $1 AND investor_id = $2`,
+      [subAccountId, heir.investor_id]);
+  }
+
   const gross = await shareFor(client, subAccountId, investorId);
   const arrears = (await arrearsOf(client, subAccountId)).get(investorId) || 0;
   const net = round2(Math.max(0, gross - arrears));

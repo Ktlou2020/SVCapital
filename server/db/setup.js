@@ -4503,6 +4503,11 @@ async function autoSetup() {
          that comes back after somebody dismissed the idea of it is worse than
          no notice at all. */
       const NOTICES = [
+        { id: 'ANN-2026-STOKVEL-SUCCESSION', area: 'both', icon: 'fa-key',
+          title: 'A chairperson who leaves hands the stokvel on \u2014 they no longer keep the keys',
+          body: 'A hole the exit feature itself opened, closed before anybody could walk through it. A stokvel account records WHO OPENED IT, and that column granted access on its own \u2014 so a chairperson could ask to leave, be approved by the signatories, take their share, and STILL see the group\u2019s wallet, its roster, every member\u2019s contributions and every member\u2019s share. They could also still invite new members, because the invitation rule reads the same column. For a product whose whole claim is that no one member controls the money, that was the wrong person to leave holding the door. THREE CHANGES. Settling an exit now HANDS THE ACCOUNT ON: ownership moves to another active member, preferring the committee and the longest-standing, and that person becomes chairperson. It is not a transfer of signing power \u2014 the mandate is separate and is untouched, so if the group has elected a new signatory that still comes to us. Second, somebody whose membership says they have left is refused access even if the ownership column still names them, so the door is shut from both sides. Third, and the root of it: WHOEVER OPENS A STOKVEL IS NOW A MEMBER OF IT. Nothing created that row before, which is why their place in the group rested on the ownership column in the first place \u2014 and it is why such a person could not be exited cleanly at all, since the exit flow works on membership and they had none. Existing stokvels get the same row added automatically, as chairperson and NOT as a signatory: adding signing power to a mandate that already exists is a change to who can move a group\u2019s money, and that is never done quietly. ONE THING STAFF WILL MEET: the last member of a stokvel cannot leave, because the account cannot be left with no owner. A group with nobody left in it should be CLOSED with us rather than emptied one member at a time \u2014 the message says so, and that is a conversation to have rather than a button to find.',
+          where: 'Nothing to click. Client app \u2192 Sub-accounts \u2192 the stokvel \u2192 Shares \u2192 \u201cAsk to leave this stokvel\u201d, then the signatories approve it under Signatory approvals. Staff view: Admin console \u2192 Stokvels \u2192 open one \u2192 Members shows who holds the chairperson role after a handover.' },
+
         { id: 'ANN-2026-STOKVEL-PUBLIC-PAGE', area: 'both', icon: 'fa-people-group',
           title: 'There is now a page to send a stokvel to \u2014 and a clause in the terms that covers them',
           body: 'The platform could run a stokvel before it could tell anybody about one. The word appeared NOWHERE on the public site and NOWHERE in the terms, so there was nothing to point a committee at and the T&Cs did not describe a group account, the mandate, or what happens when a member leaves. stokvels.html is the page. It leads on the thing a bank account cannot offer them \u2014 no one member, including the chairperson, can move the money, and every member sees who has paid \u2014 then walks through opening the account, inviting members, setting the mandate and the monthly amount, and deciding together what the pot does. WHAT IT DELIBERATELY DOES NOT SAY MATTERS AS MUCH: no interest rate is quoted, because the rate comes from a distribution we import and is not a web page\u2019s to promise (the page says to ask us and that we will answer in writing \u2014 so be ready to); no NASASA or self-regulatory membership is claimed, because we have not verified one and a committee would reasonably rely on it; and no minimum is invented. Capital at risk is stated where investing is offered rather than only in the footer, and the 1% platform fee is described as charged ON TOP, which is what it is. TERMS CLAUSE 26 is the contract side, and the sentence to know is the first one: THE CLIENT IS THE STOKVEL, not the member who acts, and a member acting for the group is not personally liable \u2014 the same correction just made to the investment agreement. It also writes down what the platform actually does: a mandate of fewer than two is not accepted, we will not act on one member alone and our staff cannot approve on a group\u2019s behalf, a member becomes a member only by accepting the invitation themselves, shares are defined on either basis, and on an exit the arrears stay in the pot while any shortfall becomes a debt that ranks ahead of remaining members, earns nothing, and will not be met by breaking an investment early. We also say plainly what we do NOT do: arbitrate between members, lend to stokvels, or act as a bank. The page is published through BOTH builds \u2014 the Dockerfile and pages:build \u2014 because a page in one and not the other is live on one host and a 404 on the other, which has happened here before.',
@@ -4890,6 +4895,40 @@ async function autoSetup() {
         added += rowCount;
       }
       if (added) console.log(`\u2705 Announced ${added} feature(s) to staff.`);
+    });
+
+    await step("28. Every stokvel's chairperson is a member of it", async () => {
+      /* Nothing created a stokvel_members row for whoever opened a stokvel
+         account, so their place in the group rested on
+         sub_accounts.parent_investor_id alone. That is the column that let a
+         chairperson who had LEFT keep seeing the money \u2014 their membership
+         said exited and the ownership column still said yes \u2014 and it is
+         also why such a person could not be exited cleanly at all: the exit
+         flow works on membership, and they had none.
+
+         NOT MADE A SIGNATORY. Adding signing power to an existing mandate is
+         a change to who can move a group's money, and this step must not
+         make one quietly. The row is created so membership is complete;
+         naming signatories stays a deliberate act, done against the group's
+         constitution.
+
+         ON CONFLICT DO NOTHING, so a stokvel whose chairperson is already on
+         the roster keeps the row they have, with whatever role and signing
+         power it carries. */
+      const { rowCount } = await pool.query(`
+        INSERT INTO stokvel_members
+          (id, sub_account_id, investor_id, role, is_signatory, status, joined_at)
+        SELECT 'SM-BF' || SUBSTR(MD5(a.id || a.parent_investor_id), 1, 12),
+               a.id, a.parent_investor_id, 'chairperson', false, 'active', NOW()
+          FROM sub_accounts a
+         WHERE a.account_type = 'stokvel'
+           AND a.parent_investor_id IS NOT NULL
+           AND EXISTS (SELECT 1 FROM investors i WHERE i.id = a.parent_investor_id)
+           AND NOT EXISTS (SELECT 1 FROM stokvel_members m
+                            WHERE m.sub_account_id = a.id
+                              AND m.investor_id = a.parent_investor_id)
+        ON CONFLICT (sub_account_id, investor_id) DO NOTHING`);
+      if (rowCount) console.log(`\u2705 Added ${rowCount} stokvel chairperson(s) to their own roster.`);
     });
 
     await step("27. Narrow the withdrawal-notice notice to stokvels", async () => {
