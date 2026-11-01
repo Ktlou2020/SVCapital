@@ -4542,8 +4542,8 @@ async function autoSetup() {
           where: 'The page is linked from the main site\u2019s menu as \u201cInstitutional\u201d and from the footer. Enquiries: Admin console \u2192 Support, category \u201cinstitutional_enquiry\u201d, opened at high priority.' },
 
         { id: 'ANN-2026-WITHDRAWAL-NOTICE-48H', area: 'both', icon: 'fa-hourglass-half',
-          title: 'Withdrawals now take 48 hours \u2014 or wait for a date the account has set',
-          body: 'A CHANGE EVERY CLIENT WILL NOTICE. Wallets on this platform bear interest, and notice is what pays for it: a withdrawal is now payable 48 HOURS after it is requested rather than the same day. The money still leaves the wallet the moment the request is made, so nobody can spend it twice; what changes is when it can be paid out, and the admin approve button REFUSES before then and tells you the date. Rejecting is NOT delayed \u2014 a client who changes their mind should not have to wait out a notice period to do it. Accounts can also commit their money to A SET DATE: a stokvel saving for December sets 1 December and nothing is paid before then. The two combine as the LATER of the pair, not as alternatives \u2014 a stokvel committed until the first of December that asks on the thirtieth of November gets its money after the 48 hours, not on the first. The notice period lives in platform settings (withdrawal_notice_hours) so it can be shortened, or set to zero, without a deploy. TWO THINGS TO KNOW: this applies to EVERY wallet, personal and sub-account, so expect questions from clients used to same-day payment; and the idle-wallet nudge email has been corrected \u2014 it used to tell clients money in the wallet \u201cis not working\u201d, which stopped being true when wallets became interest bearing. It now says the balance earns interest and is available on 48 hours\u2019 notice, but is not earning a pool\u2019s return.',
+          title: 'Stokvel withdrawals now take 48 hours \u2014 or wait for a date the group has set',
+          body: 'STOKVELS ONLY. Every wallet on the platform bears interest, but the notice applies to STOKVEL wallets and to nothing else \u2014 a personal wallet, a trust and a child\u2019s account all keep same-day access. A stokvel\u2019s money belongs to a group and leaves on a mandate, so a pause between asking and paying is part of what the group is buying; an individual\u2019s own money is their own. A stokvel withdrawal is now payable 48 HOURS after it is requested. The money still leaves the wallet the moment the request is made, so nobody can spend it twice; what changes is when it can be paid out, and the admin approve button REFUSES before then and tells you the date. Rejecting is NOT delayed \u2014 a client who changes their mind should not have to wait out a notice period to do it. Accounts can also commit their money to A SET DATE: a stokvel saving for December sets 1 December and nothing is paid before then. The two combine as the LATER of the pair, not as alternatives \u2014 a stokvel committed until the first of December that asks on the thirtieth of November gets its money after the 48 hours, not on the first. The notice period lives in platform settings (withdrawal_notice_hours) so it can be shortened, or set to zero, without a deploy. TWO THINGS TO KNOW: a stokvel withdrawal now clears TWO gates \u2014 the signatories approve it, and THEN the notice runs \u2014 so tell a treasurer to raise the request early rather than on the day they need the money; and the idle-wallet nudge email has been corrected \u2014 it used to tell clients money in the wallet \u201cis not working\u201d, which stopped being true when wallets became interest bearing. It now says the balance earns interest and can be drawn on whenever they like, but is not earning a pool\u2019s return.',
           where: 'Admin console \u2192 Withdrawals \u2014 approving before the date is refused with the date in the message. The set date is a field on the investor or sub-account record (withdrawal_date). The notice period: Settings \u2192 withdrawal_notice_hours.' },
 
         { id: 'ANN-2026-STOKVEL-ADMIN-SCREENS', area: 'admin', icon: 'fa-people-group',
@@ -4693,6 +4693,27 @@ async function autoSetup() {
         added += rowCount;
       }
       if (added) console.log(`\u2705 Announced ${added} feature(s) to staff.`);
+    });
+
+    await step("27. Narrow the withdrawal-notice notice to stokvels", async () => {
+      /* That row went out saying the 48 hours applies to every wallet on the
+         platform. It applies to stokvel wallets and to nothing else, and a
+         staff member reading the console would otherwise tell a client their
+         own money needs two days' notice when it does not.
+
+         Step 19 inserts ON CONFLICT DO NOTHING by design, so editing the text
+         above reaches a brand-new database and nowhere else. Matched on the
+         exact old opening so a notice somebody has reworded keeps their
+         wording and a second run finds nothing to do. */
+      const { rowCount } = await pool.query(`
+        UPDATE feature_announcements
+           SET title = 'Stokvel withdrawals now take 48 hours \u2014 or wait for a date the group has set',
+               body = replace(body,
+                 'A CHANGE EVERY CLIENT WILL NOTICE. Wallets on this platform bear interest, and notice is what pays for it: a withdrawal is now payable 48 HOURS after it is requested rather than the same day.',
+                 'STOKVELS ONLY. Every wallet bears interest, but the notice applies to STOKVEL wallets and to nothing else \u2014 personal wallets, trusts and children''s accounts all keep same-day access. A stokvel withdrawal is now payable 48 HOURS after it is requested.')
+         WHERE id = 'ANN-2026-WITHDRAWAL-NOTICE-48H'
+           AND POSITION('A CHANGE EVERY CLIENT WILL NOTICE' IN COALESCE(body, '')) > 0`);
+      if (rowCount) console.log('\u2705 Narrowed the withdrawal-notice announcement to stokvels.');
     });
 
     await step("26. Correct the no-figure claim in the private-client notice", async () => {

@@ -1226,6 +1226,11 @@ function sendChangeRequestSummary(to, { date, stats, requests }) {
    nudge is now about the DIFFERENCE between the two returns, not about
    money sitting dead.
 
+   It does NOT mention notice. This goes to an individual about their own
+   wallet, and the 48 hours applies to stokvels alone — a first draft said
+   "available on 48 hours' notice" to three thousand people whose money is
+   available the same day.
+
    Deliberately plain. This is unsolicited mail about somebody's own money, so
    it states the balance, what it could buy, and how to stop receiving it, and
    makes no claim about returns beyond naming the pool. Under FAIS none of
@@ -1269,7 +1274,7 @@ function sendIdleWalletNudge(investor, { balance, poolName, minNeeded, poolCount
     html: _wrap(`
       <h2>Your wallet balance is not invested</h2>
       <p>Hi ${escHtml(first_name || 'there')}, you have <strong>${fmtR(balance)}</strong> in your SV Capital
-         wallet. It earns interest where it is, and it is available on 48 hours&rsquo; notice &mdash;
+         wallet. It earns interest where it is and you can draw on it whenever you like &mdash;
          but it is not in a pool, so it is not earning a pool&rsquo;s return.</p>
       <div class="box">
         <p style="margin:0">That balance covers the minimum for
@@ -1288,8 +1293,8 @@ function sendIdleWalletNudge(investor, { balance, poolName, minNeeded, poolCount
       </p>`),
     text:
       `Hi ${first_name || 'there'},\n\n` +
-      `You have ${fmtR(balance)} in your SV Capital wallet. It earns interest where it is, and ` +
-      `it is available on 48 hours' notice — but it is not in a pool, so it is not earning a ` +
+      `You have ${fmtR(balance)} in your SV Capital wallet. It earns interest where it is and ` +
+      `you can draw on it whenever you like — but it is not in a pool, so it is not earning a ` +
       `pool's return.\n\n` +
       `That balance covers the minimum for ${poolName}, which needs ${fmtR(minNeeded)} including the ` +
       `1% platform fee.\n\n` +

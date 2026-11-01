@@ -2,15 +2,26 @@
 /* ═══════════════════════════════════════════════════════════
    When a withdrawal becomes payable.
  *
- * Wallets on this platform bear interest — credited from the 3PIM import,
- * not computed here — and notice is what pays for it. A withdrawal is
- * payable 48 hours after it is asked for, or on the date the account has
- * set, whichever is LATER.
+ * Every wallet on this platform bears interest — credited from the 3PIM
+ * import, not computed here. NOTICE IS NOT UNIVERSAL: the 48 hours applies
+ * to STOKVEL wallets and to nothing else. A personal wallet, a trust, a
+ * child's account all keep same-day access.
  *
- * Later, not whichever applies: an account that has committed its money
- * until the first of December and asks on the thirtieth of November does
- * not get it on the first. The date is a floor under the notice, not a
- * replacement for it.
+ * That narrowness is the rule, not an omission. A stokvel's money belongs
+ * to a group and leaves on a mandate, so a pause between asking and paying
+ * is part of what the group is buying. An individual's own money is their
+ * own, and making three thousand clients wait two days for it would be a
+ * change nobody asked for.
+ *
+ * A SET WITHDRAWAL DATE still binds whoever set one, stokvel or not,
+ * because it is opt-in: an account that has committed its money until the
+ * first of December has said so itself, and honouring that cannot surprise
+ * anybody.
+ *
+ * Where both apply, the LATER wins. A stokvel committed until the first of
+ * December that asks on the thirtieth of November waits out the notice; it
+ * does not get paid on the first. The date is a floor under the notice, not
+ * a replacement for it.
  *
  * One definition, two callers — the request, which stamps available_at on
  * the transaction, and the approval, which refuses to pay before it. The
@@ -20,6 +31,14 @@
    ═══════════════════════════════════════════════════════════ */
 
 const DEFAULT_NOTICE_HOURS = 48;
+
+/* Whether this wallet carries notice at all. Only a stokvel does.
+   Decided from the row rather than passed in by the caller, so a new
+   withdrawal path cannot forget to ask — the sub-account route and the
+   personal route both hand over the holder and get the right answer. */
+function noticeApplies(holder) {
+  return !!(holder && holder.account_type === 'stokvel');
+}
 
 /* The notice, in hours. A setting rather than a constant so it can be
    shortened, or zeroed, without a deploy — which is the lever you want when
@@ -45,7 +64,7 @@ async function noticeHours(client) {
  * is leaving. Returns a Date.
  */
 async function availableAt(client, holder, now = new Date()) {
-  const hours = await noticeHours(client);
+  const hours = noticeApplies(holder) ? await noticeHours(client) : 0;
   const afterNotice = new Date(now.getTime() + hours * 3600 * 1000);
 
   const set = holder && holder.withdrawal_date;
@@ -68,4 +87,4 @@ function blockedUntil(availableAtValue, now = new Date()) {
   return `This withdrawal is payable from ${when.toISOString().slice(0, 16).replace('T', ' ')}.`;
 }
 
-module.exports = { DEFAULT_NOTICE_HOURS, noticeHours, availableAt, blockedUntil };
+module.exports = { DEFAULT_NOTICE_HOURS, noticeApplies, noticeHours, availableAt, blockedUntil };
