@@ -45,6 +45,8 @@ const crypto = require('crypto');
 
 const round2 = v => Math.round(Number(v || 0) * 100) / 100;
 const cents  = v => Math.round(Number(v || 0) * 100);
+const fmtR   = v => 'R' + Number(v || 0).toLocaleString('en-ZA',
+  { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const newId  = p => p + '-' + crypto.randomUUID().replace(/-/g, '').slice(0, 14).toUpperCase();
 
 /* ── Net assets ────────────────────────────────────────────────────
@@ -436,6 +438,71 @@ async function settleExit(client, { subAccountId, investorId, authorityId, refer
   return { gross, arrears, net, paid: payNow, queued, reference: ref };
 }
 
+/* ─── Attributing an amount to one member ──────────────────────────
+   For money that reached the group wallet by a path with no owner on it: a
+   staff manual credit, an EFT approval, a refund. Those are shared pro-rata
+   by reconcile, which is right for interest and for a maturity and wrong
+   when the money was actually one member's.
+
+   THE ORDER MATTERS AND IS THE WHOLE TRICK. reconcile() runs FIRST, so
+   whatever was pending is shared out and we are always in the same case:
+   the amount has been divided between the members in proportion to their
+   holdings. Taking it back on those same proportions then reverses that
+   share-out EXACTLY — sharing pro-rata leaves the proportions unchanged, so
+   the weights used to give it out are the weights that take it back — and
+   the member is credited the whole amount.
+
+   Without the leading reconcile this would have to know whether the money
+   had already been shared, and would be wrong half the time.
+
+   Net effect on the sum of shares is ZERO, because no money moves: this
+   says whose the money was, not that there is more of it. The invariant is
+   therefore untouched, which is the test the check makes of it. */
+async function attribute(client, { subAccountId, investorId, amount, reason, actor }) {
+  const amt = round2(amount);
+  if (!(amt > 0)) return { error: 'An amount is required.' };
+
+  const { rows: [m] } = await client.query(
+    `SELECT 1 FROM stokvel_members
+      WHERE sub_account_id = $1 AND investor_id = $2 AND status = 'active'`,
+    [subAccountId, investorId]);
+  if (!m) return { error: 'That person is not an active member of this stokvel.' };
+
+  await reconcile(client, subAccountId, { reason: 'Shared out before attributing' });
+
+  const assets = await netAssets(client, subAccountId);
+  if (cents(amt) > cents(assets.total)) {
+    /* Attributing more than the group holds would hand one member a share
+       larger than the pot and push somebody else negative. Whatever has
+       gone wrong, it is not fixed from here. */
+    return { error: `This stokvel holds ${fmtR(assets.total)}. `
+                  + `You cannot attribute ${fmtR(amt)} of it to one member.` };
+  }
+
+  const members = await activeMembers(client, subAccountId);
+  const held = await allocatedTotals(client, subAccountId);
+  const weights = new Map(members.map(id => [id, held.get(id) || 0]));
+
+  const ref = newId('SAT');
+  const why = String(reason || '').slice(0, 200)
+    || 'Attributed to this member by staff';
+
+  /* Taken back from everybody on the proportions it was given out on... */
+  const back = splitPro(-amt, weights);
+  await write(client, subAccountId, back, {
+    kind: 'adjustment', reference: ref,
+    reason: `Reversing the share-out of ${fmtR(amt)}: ${why}`,
+  });
+  /* ...and given to the member it belonged to. */
+  await client.query(
+    `INSERT INTO stokvel_allocations (id, sub_account_id, investor_id, kind, amount, reason, reference)
+     VALUES ($1,$2,$3,'adjustment',$4,$5,$6)`,
+    [newId('SAL'), subAccountId, investorId, amt,
+     why + (actor ? ` (by ${String(actor).slice(0, 60)})` : ''), ref]);
+
+  return { attributed: amt, reference: ref };
+}
+
 /* ── The invariant, as a question ──────────────────────────────────
    Used by the check and by the audit script. Returns the two sides and the
    difference; a healthy stokvel has a difference of zero. */
@@ -449,6 +516,6 @@ async function audit(client, subAccountId) {
 }
 
 module.exports = {
-  netAssets, sharesOf, shareFor, allocateContribution, reconcile,
+  netAssets, sharesOf, shareFor, allocateContribution, reconcile, attribute,
   payExitDebts, settleExit, audit, splitPro, activeMembers, arrearsOf,
 };

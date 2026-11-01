@@ -20370,13 +20370,60 @@ function _stokvelAdminShares(s) {
         earnings reaching current members. Nothing to do here.
       </div>
     </div>` : ''}
+    <div style="padding:12px 14px;border-top:1px solid var(--border)">
+      <div style="font-size:0.84rem;font-weight:700;margin-bottom:6px">Attribute an amount to a member</div>
+      <div class="text-muted" style="font-size:0.78rem;margin-bottom:10px">
+        For money that reached the group wallet with no owner on it — a manual credit, an
+        EFT approval, a refund. Those are shared across the members pro-rata, which is right
+        for interest and for a maturity and wrong when the money was one member&rsquo;s.
+        <strong>This moves no money</strong>: the group holds exactly what it held, and what
+        changes is whose share of it is whose.
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <select id="svAttrMember" class="input input--sm">
+          ${(STATE.stokvelOpen.members || []).filter(m => m.status === 'active')
+            .map(m => `<option value="${_esc(m.investor_id)}">${_esc(name(m.investor_id))}</option>`).join('')}
+        </select>
+        <input id="svAttrAmount" class="input input--sm" type="number" min="0" step="0.01"
+               placeholder="Amount" style="width:120px">
+        <input id="svAttrReason" class="input input--sm" type="text" maxlength="200"
+               placeholder="Why — e.g. EFT of 12 March was Thandi&rsquo;s" style="flex:1;min-width:220px">
+        <button class="btn btn--secondary btn--sm" onclick="attributeStokvelShare('${_esc(s.id)}')">Attribute</button>
+      </div>
+    </div>
     <div class="text-muted" style="font-size:0.75rem;padding:8px 14px">
-      A share is the sum of a ledger, not a field — there is deliberately nothing to edit.
-      If one looks wrong the cause is in the contributions or in what the group has been
-      credited, and server/scripts/backfill-stokvel-shares.cjs reports any group whose
-      books do not balance.
+      A share is otherwise the sum of a ledger, not a field — there is deliberately nothing
+      to type over. If one looks wrong and this is not the cause, it is in the contributions
+      or in what the group has been credited, and server/scripts/backfill-stokvel-shares.cjs
+      reports any group whose books do not balance.
     </div>
   </div>`;
+}
+
+async function attributeStokvelShare(id) {
+  const investorId = document.getElementById('svAttrMember').value;
+  const amount = parseFloat(document.getElementById('svAttrAmount').value);
+  const reason = document.getElementById('svAttrReason').value || '';
+  if (!investorId) { Toast.show('Choose a member.', 'error'); return; }
+  if (!(amount > 0)) { Toast.show('Enter an amount.', 'error'); return; }
+  if (!reason.trim()) {
+    /* Required, not optional. This changes whose money is whose, and the
+       next person to ask why will be reading the ledger, not this screen. */
+    Toast.show('Say why \u2014 it is recorded against the adjustment.', 'error');
+    return;
+  }
+  if (!confirm(
+      `Attribute ${Utils.rand(amount)} of this stokvel to this member?\n\n`
+    + `No money moves. Every other member's share drops by their part of it, `
+    + `and this member's rises by the whole amount.`)) return;
+  try {
+    await API._fetch('POST', 'admin/stokvel-attribute',
+                     { sub_account_id: id, investor_id: investorId, amount, reason });
+    Toast.show('Attributed.', 'success');
+    await openStokvelAdmin(id);
+  } catch (err) {
+    Toast.show('Could not attribute: ' + (err.message || ''), 'error');
+  }
 }
 
 /* ─── Invitations ──────────────────────────────────────────────────

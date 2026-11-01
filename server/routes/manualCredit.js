@@ -94,6 +94,70 @@ router.post('/manual-credit', async (req, res) => {
    pool is declared and then distributed to the people in that pool. Leaving
    it unscoped would make "apply" a platform-wide money button.
    ───────────────────────────────────────────────────────────── */
+/* ─── POST /api/admin/stokvel-attribute ──────────────────────────────
+   Say whose money an amount in a stokvel actually was.
+
+   Money reaches a group wallet by several paths that carry no owner — a
+   manual credit, an EFT approval, a refund — and the share ledger shares
+   those out pro-rata, which is right for interest and for a maturity and
+   wrong when the money was one member's. This is how that is put right.
+
+   It MOVES NO MONEY. The group holds exactly what it held before; what
+   changes is whose share of it is whose, so the sum of the shares is
+   unchanged and the ledger's invariant is untouched. That is also why it is
+   safe to run twice by mistake in a way a credit would not be — the second
+   run attributes a second amount, which is visible and reversible, rather
+   than inventing cash.
+
+   Staff only, audited, and deliberately NOT able to approve anything: it
+   cannot move money out of the stokvel, so it is not a way round the
+   mandate. ──────────────────────────────────────────────────────────── */
+router.post('/stokvel-attribute', async (req, res) => {
+  const { sub_account_id, investor_id, amount, reason } = req.body || {};
+  if (!sub_account_id || !investor_id) {
+    return res.status(400).json({ error: 'sub_account_id and investor_id are required.' });
+  }
+  const client = await pool.connect();
+  try {
+    const { rows: [sa] } = await client.query(
+      `SELECT id, account_type FROM sub_accounts WHERE id = $1`, [sub_account_id]);
+    if (!sa) return res.status(404).json({ error: 'No such account.' });
+    if (sa.account_type !== 'stokvel') {
+      return res.status(400).json({ error: 'Only a stokvel has shares to attribute.' });
+    }
+
+    await client.query('BEGIN');
+    const shares = require('../services/stokvelShares');
+    const out = await shares.attribute(client, {
+      subAccountId: sub_account_id, investorId: investor_id,
+      amount, reason,
+      actor: [req.user?.firstName, req.user?.lastName].filter(Boolean).join(' ')
+             || req.user?.email || 'staff',
+    });
+    if (out.error) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: out.error });
+    }
+    await client.query('COMMIT');
+
+    await audit.log({
+      actorId: req.user?.id, actorEmail: req.user?.email, actorRole: req.user?.role,
+      action: 'stokvel.share_attributed',
+      entityType: 'sub_accounts', entityId: String(sub_account_id),
+      description: `Attributed R${Number(out.attributed).toFixed(2)} of ${sub_account_id} `
+                 + `to ${investor_id}${reason ? ' — ' + String(reason).slice(0, 120) : ''}`,
+    }).catch(() => {});
+
+    return res.json({ data: out });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[admin] stokvel attribute failed:', err.message);
+    return res.status(500).json({ error: 'Could not attribute that amount.' });
+  } finally {
+    client.release();
+  }
+});
+
 router.post('/anniversary-returns/run', requireRole('director'), async (req, res) => {
   const { pool_id, year_index, dry_run } = req.body || {};
   const dryRun = String(dry_run) !== 'false';

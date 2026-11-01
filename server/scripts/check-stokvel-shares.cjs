@@ -159,6 +159,7 @@ for (const [f, r] of [['email.js', sent.email], ['pushService.js', sent.push], [
     app.use(express.json());
     app.use('/api/stokvels', require(path.join(ROOT, 'server', 'routes', 'stokvels.js')));
     app.use('/api/tables',   require(path.join(ROOT, 'server', 'routes', 'tables.js')));
+    app.use('/api/admin',    require(path.join(ROOT, 'server', 'routes', 'manualCredit.js')));
     srv = await new Promise(r => { const s = app.listen(0, () => r(s)); });
 
     const tok = id => jwt.sign({ id: 'u-' + id, role: 'investor', investorId: id },
@@ -339,6 +340,98 @@ for (const [f, r] of [['email.js', sent.email], ['pushService.js', sent.push], [
          (await call('POST', '/api/stokvels/SA-SH-1/pay-in', tok('INV-SH-OUTSIDER'),
                      { amount: 10 })).status === 404);
       await invariant('after settling arrears by paying in');
+    }
+
+    /* ── Staff saying whose money an amount was ────────────────────
+       Money reaches a group wallet by paths that carry no owner — a manual
+       credit, an EFT approval, a refund — and reconcile shares those out
+       pro-rata. Right for interest and for a maturity; wrong when it was
+       one member's, which is what this puts right.
+
+       THE PROPERTY THAT MATTERS is that it works the same whether or not
+       the money has already been shared out. attribute() reconciles first
+       for exactly that reason, so both cases below have to land on the
+       same answer. */
+    console.log('\nstaff can say whose money an amount in the pot was');
+    {
+      const staff = jwt.sign({ id: 'u-admin', role: 'admin', email: 'ops@example.test',
+                               firstName: 'Ops', lastName: 'Desk' },
+                             process.env.JWT_SECRET, { expiresIn: '1h' });
+      const attribute = (body) => call('POST', '/api/admin/stokvel-attribute', staff, body);
+
+      /* CASE ONE: the money has already been shared out.
+
+         Measured from BEFORE the money landed, which is the only frame in
+         which the claim is meaningful: relative to after the share-out, the
+         member rises by 900 minus their own part of it, which is arithmetic
+         about the share-out rather than about the attribution. The first
+         draft of this asserted the wrong frame and failed on correct code. */
+      const g = (rows, id) => rows.find(x => x.investor_id === id).share;
+      const pre = (await shareOf('INV-SH-A'));
+      const preShares = pre.shares, preAssets = pre.net_assets;
+
+      await db.query(
+        `UPDATE sub_accounts SET wallet_balance = wallet_balance + 900 WHERE id = 'SA-SH-1'`);
+      await shareOf('INV-SH-A');                       // forces the share-out
+
+      const done = await attribute({ sub_account_id: 'SA-SH-1', investor_id: 'INV-SH-B',
+                                     amount: 900, reason: 'EFT of 12 March was B\u2019s' });
+      ok('an amount can be attributed to a member', done.status === 200,
+         `${done.status} ${JSON.stringify(done.body)}`);
+
+      const post = await shareOf('INV-SH-A');
+      ok('THE MEMBER ENDS UP WITH THE WHOLE AMOUNT',
+         Math.abs((g(post.shares, 'INV-SH-B') - g(preShares, 'INV-SH-B')) - 900) < 0.05,
+         `B ${g(preShares, 'INV-SH-B')} \u2192 ${g(post.shares, 'INV-SH-B')}, 900 arrived`);
+      ok('and nobody else is a rand better or worse off',
+         Math.abs(g(post.shares, 'INV-SH-A') - g(preShares, 'INV-SH-A')) < 0.05,
+         `A ${g(preShares, 'INV-SH-A')} \u2192 ${g(post.shares, 'INV-SH-A')}`);
+      ok('the group is up by what arrived, and only that',
+         Math.abs((post.net_assets - preAssets) - 900) < 0.02,
+         'attributing moves no money; the 900 is the credit, not the attribution');
+      await invariant('after attributing an amount already shared out');
+
+      /* CASE TWO: the money has NOT been shared out yet — attributed the
+         moment it lands. The answer has to be the same. */
+      const beforeB = (await shareOf('INV-SH-A')).shares;
+      await db.query(
+        `UPDATE sub_accounts SET wallet_balance = wallet_balance + 300 WHERE id = 'SA-SH-1'`);
+      const done2 = await attribute({ sub_account_id: 'SA-SH-1', investor_id: 'INV-SH-B',
+                                      amount: 300, reason: 'Credited today, B\u2019s money' });
+      ok('and the same for money attributed before it is shared out',
+         done2.status === 200, JSON.stringify(done2.body));
+      const afterB = (await shareOf('INV-SH-A')).shares;
+      ok('the member still gets all of it',
+         Math.abs((g(afterB, 'INV-SH-B') - g(beforeB, 'INV-SH-B')) - 300) < 0.05,
+         `B ${g(beforeB, 'INV-SH-B')} \u2192 ${g(afterB, 'INV-SH-B')} \u2014 reconcile runs first, `
+         + 'so both cases are the same case');
+      ok('and nobody else is better or worse off for it',
+         Math.abs(g(afterB, 'INV-SH-A') - g(beforeB, 'INV-SH-A')) < 0.05,
+         `A ${g(beforeB, 'INV-SH-A')} \u2192 ${g(afterB, 'INV-SH-A')}`);
+      await invariant('after attributing money not yet shared out');
+
+      /* Refusals. */
+      ok('more than the group holds is refused',
+         (await attribute({ sub_account_id: 'SA-SH-1', investor_id: 'INV-SH-B',
+                            amount: 99999999, reason: 'x' })).status === 400,
+         'it would hand one member more than the pot and push another negative');
+      ok('somebody who is not a member is refused',
+         (await attribute({ sub_account_id: 'SA-SH-1', investor_id: 'INV-SH-OUTSIDER',
+                            amount: 10, reason: 'x' })).status === 400);
+      ok('nothing or less is refused',
+         (await attribute({ sub_account_id: 'SA-SH-1', investor_id: 'INV-SH-B',
+                            amount: 0, reason: 'x' })).status === 400);
+      ok('and an ordinary member cannot do it at all',
+         (await call('POST', '/api/admin/stokvel-attribute', tok('INV-SH-A'),
+                     { sub_account_id: 'SA-SH-1', investor_id: 'INV-SH-A', amount: 10 }))
+           .status >= 400,
+         'staff only \u2014 though it moves no money, so it is not a way round the mandate');
+
+      ok('the ledger records why, against the adjustment',
+         /12 March/.test(JSON.stringify((await db.query(
+           `SELECT reason FROM stokvel_allocations
+             WHERE sub_account_id='SA-SH-1' AND kind='adjustment'`)).rows)),
+         'the next person to ask why reads the ledger, not the screen');
     }
 
     /* ── Arrears come off the share, not out of the pot ────────────── */
