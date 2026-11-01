@@ -234,6 +234,10 @@ app.use('/api/products',     require('./routes/products'));
 /* Public, and the only write on the platform that is not a signup — it
    carries its own rate limiter, see the file. */
 app.use('/api/enquiries',    require('./routes/enquiries'));
+/* A stokvel's members read their group here. The generic table reader
+   scopes an investor to one column and membership is a join, so these are
+   hand-written and guarded per request — see the file. */
+app.use('/api/stokvels',     require('./routes/stokvels'));
 app.use('/api/opsconsole',  require('./routes/opsconsole'));
 app.use('/api/cattle',      require('./routes/cattle'));
 app.use('/api/client-documents', require('./routes/clientDocuments'));

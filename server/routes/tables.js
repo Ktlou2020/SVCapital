@@ -193,6 +193,14 @@ const ADMIN_ONLY_TABLES = new Set([
   'fica_checks', 'accepted_client_documents',
   'compliance_calendar',
   'investor_notes',
+  /* A stokvel's roster: who is in it, their role, and whether the
+     constitution names them a signatory. An investor reads their own
+     memberships and their own group's roster through /api/stokvels, which
+     checks that they are IN the group. Through this generic reader there is
+     no such check — a table with no INVESTOR_COLS entry is readable by every
+     signed-in investor — so every stokvel's membership on the platform would
+     be one request away. */
+  'stokvel_members',
   /* Reads are staff-only so an unpublished draft is not visible to any
      signed-in investor who asks for the table. The public site never touches
      this API — /insights is server-rendered and queries the database directly,

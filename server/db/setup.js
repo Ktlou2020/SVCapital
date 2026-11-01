@@ -1059,6 +1059,48 @@ CREATE TABLE IF NOT EXISTS sub_accounts (
 );
 CREATE INDEX IF NOT EXISTS sub_accounts_parent_idx ON sub_accounts(parent_investor_id);
 
+/* ─── Stokvel membership ──────────────────────────────────────────────
+   A stokvel is a sub_accounts row with account_type 'stokvel'. Until now it
+   was one account owned by one person — the chairperson — with member_count
+   as a bare integer. Nobody else could log in and see it, which is the whole
+   reason a stokvel banks somewhere that lets three signatories hold it
+   together.
+
+   This is the join that makes the group the account holder: many investors,
+   each with their own login and their own FICA, attached to one stokvel.
+
+   is_signatory and role are RECORDED HERE AND ENFORCE NOTHING YET. They are
+   the mandate as written in the constitution, so staff can capture it when a
+   stokvel is onboarded. The N-of-M approval that makes them bite is the next
+   phase; until it ships, no code path reads is_signatory to authorise
+   anything, and check-stokvel-membership asserts that it does not. A flag
+   that looks like permission and is not is worse than no flag.
+   ──────────────────────────────────────────────────────────────────── */
+CREATE TABLE IF NOT EXISTS stokvel_members (
+  id              TEXT PRIMARY KEY,
+  sub_account_id  TEXT NOT NULL REFERENCES sub_accounts(id) ON DELETE CASCADE,
+  investor_id     TEXT NOT NULL REFERENCES investors(id)    ON DELETE CASCADE,
+  role            TEXT NOT NULL DEFAULT 'member'
+                    CHECK (role IN ('chairperson','treasurer','secretary','member')),
+  is_signatory    BOOLEAN NOT NULL DEFAULT false,
+  status          TEXT NOT NULL DEFAULT 'invited'
+                    CHECK (status IN ('invited','active','exited')),
+  invited_by      TEXT REFERENCES investors(id),
+  invited_at      TIMESTAMPTZ DEFAULT NOW(),
+  joined_at       TIMESTAMPTZ,
+  exited_at       TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+/* One person is in a stokvel once. Re-inviting somebody who left updates the
+   row they already have rather than giving them a second membership, so a
+   roster can never show the same person twice or count them twice. */
+CREATE UNIQUE INDEX IF NOT EXISTS stokvel_members_uniq
+  ON stokvel_members(sub_account_id, investor_id);
+CREATE INDEX IF NOT EXISTS stokvel_members_investor_idx ON stokvel_members(investor_id);
+CREATE INDEX IF NOT EXISTS stokvel_members_group_idx    ON stokvel_members(sub_account_id);
+
+
 CREATE TABLE IF NOT EXISTS sessions (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id       UUID NOT NULL,
@@ -4352,6 +4394,11 @@ async function autoSetup() {
           title: 'Institutional and private clients have a page of their own \u2014 and their enquiries land in Support',
           body: 'The main site is written for a retail investor: start small, top up a wallet, earn XP, climb a ladder. None of that is the right pitch for an institution, a family office or an adviser, and an allocator who reads it decides we are not for them. institutional.html addresses them instead: what each strategy actually finances and with which partner, how a pool is structured and reported, who holds the licence \u2014 SmartVest Financial Services (Pty) Ltd, FSP 52449, with SV Capital as fund manager \u2014 and that capital is at risk. It carries NO minimum and no rand figure at all: mandate size is set in conversation, and a number on a public page is an offer at a price. Where pools have concluded it shows what has actually been paid back, drawn live from the platform, and says plainly that past performance is not a guide. The enquiry form at the bottom writes a HIGH-PRIORITY TICKET into Support, categorised as an institutional enquiry and carrying a reference the sender is given, and emails enquiry@svcapital.co.za as well \u2014 so an enquiry is on the board whether or not the email arrives, rather than living in somebody\u2019s inbox. It is rate-limited and carries a honeypot, because it is the only public write on the platform that is not a signup. Answer it from Support as you would any ticket. Separately: the terms, privacy, PAIA and complaints pages were never in the published build \u2014 they existed in the repository and would have 404\u2019d on the live site \u2014 and are now published alongside it.',
           where: 'The page is linked from the main site\u2019s menu as \u201cInstitutional\u201d and from the footer. Enquiries: Admin console \u2192 Support, category \u201cinstitutional_enquiry\u201d, opened at high priority.' },
+
+        { id: 'ANN-2026-STOKVEL-MEMBERS-PHASE-1', area: 'admin', icon: 'fa-users',
+          title: 'A stokvel can now have members \u2014 the first piece of the stokvel platform',
+          body: 'Groundwork, and read-only on purpose. Until now a stokvel was a sub-account owned by ONE person \u2014 whoever opened it \u2014 with a member count that was just a number. Nobody else could log in and see it, which is the main reason a stokvel banks somewhere that lets three signatories hold the account together. There is now a real membership: each member is an investor with their own login and their own FICA, attached to the stokvel with a role (chairperson, treasurer, secretary or member) and a status (invited, active or exited). Members see the group through new endpoints under /api/stokvels, which check that the caller is actually IN the group on every single request \u2014 an invited member who has not accepted sees nothing, somebody who has exited stops seeing it, and a stranger is told the stokvel does not exist rather than that they are not allowed. They can see the group\u2019s balance and the roster: names and roles, and nothing else from anybody\u2019s investor record. TWO THINGS THIS DOES NOT DO YET. It does not move money \u2014 no endpoint here writes anything. And the SIGNATORY flag records what the constitution says and authorises NOTHING: the N-of-M approval that makes it bite is the next phase, and a check fails the build if any code starts treating that flag as permission before then. So capture the mandate when onboarding a stokvel, but do not rely on the platform to enforce it yet. There is no client-facing screen for this either \u2014 the data model and the access rules are what shipped.',
+          where: 'Admin console \u2192 Tables \u2192 stokvel_members to add or edit members (staff only; investors cannot read that table directly). The client-side screens come with the next phase.' },
 
         { id: 'ANN-2026-MATURITY-CATCHUP-AND-POOL-DATES', area: 'admin', icon: 'fa-rotate',
           title: 'A missed maturity run now recovers on boot, and investments mature with their pool',
