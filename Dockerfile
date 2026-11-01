@@ -38,6 +38,7 @@ COPY login.html           ./
 COPY signup.html          ./
 COPY institutional.html   ./
 COPY private-clients.html ./
+COPY stokvels.html        ./
 COPY terms.html      ./
 COPY popia.html      ./
 COPY paia.html       ./
