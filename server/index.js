@@ -480,6 +480,9 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
   const { startFicaCron } = require('./jobs/ficaCron');
   startFicaCron();
 
+  const { startStokvelAutopayCron } = require('./jobs/stokvelAutopayCron');
+  startStokvelAutopayCron();
+
   /* Last, and watching the rest: every job above writes a heartbeat, and
      this is what notices when one stops writing them. */
   const { startHeartbeatCron } = require('./jobs/heartbeatCron');

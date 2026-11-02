@@ -13072,6 +13072,21 @@ function _svHeader(g, shareRes) {
    arrears, the chase and oldest-first settlement all work on it unchanged —
    but a member looking at what they owe has to be able to tell "this month's
    R500" from "R50 for missing the meeting", and see what it was for. */
+/* Turning automatic collection on or off. Own membership only \u2014 the
+   endpoint takes no member id, because a treasurer who could switch this on
+   for other people would be arranging debits against other people's cards. */
+async function toggleStokvelAutopay(groupId, enabled) {
+  try {
+    await API._fetch('PUT', `stokvels/${groupId}/autopay`, { enabled });
+    Utils.toast(enabled
+      ? 'On. Your contribution will be taken on the day it is due.'
+      : 'Off. You will pay each contribution yourself.', 'success');
+  } catch (err) {
+    Utils.toast(err.message || 'Could not change that setting.', 'error');
+  }
+  await _svRenderHub(groupId, 'contributions');
+}
+
 function _svContributions(res, mine, gid) {
   const arrears = (res && res.arrears) || [];
   const rows    = (res && res.data) || [];
@@ -13118,8 +13133,41 @@ function _svContributions(res, mine, gid) {
        </tbody></table>`
     : `<div style="font-size:0.82rem;color:var(--text-muted)">Nobody is behind.</div>`;
 
+  /* HAVING IT TAKEN, so nobody has to remember.
+     Most of what the arrears table above shows is not somebody refusing to
+     pay; it is friction. Offered here, right under what this member owes,
+     because that is the moment the offer is worth anything. Hidden when
+     there is no card on the account: a toggle whose only outcome is an
+     error message is worse than no toggle. */
+  const ap = (res && res.autopay) || {};
+  const autopayBlock = ap.has_card
+    ? `<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;
+            flex-wrap:wrap;border:1px solid var(--border);border-radius:12px;
+            padding:12px 14px;margin-bottom:14px">
+         <div style="min-width:0">
+           <div style="font-size:0.86rem;font-weight:700">
+             <i class="fa-solid fa-bolt" style="color:#eda5ff;margin-right:6px"></i>Pay automatically
+           </div>
+           <div style="font-size:0.76rem;color:var(--text-muted);line-height:1.5;margin-top:3px">
+             ${ap.enabled
+               ? `On. Each contribution is taken on the day it is due \u2014 from your wallet
+                  if there is enough in it, otherwise the shortfall goes to your card
+                  ending ${_esc(ap.last4 || '\u2022\u2022\u2022\u2022')}.`
+               : `Your contribution is taken on the day it is due. We use your wallet
+                  first and only charge your card ending ${_esc(ap.last4 || '\u2022\u2022\u2022\u2022')}
+                  for what the wallet cannot cover.`}
+           </div>
+         </div>
+         <button class="btn ${ap.enabled ? 'btn--ghost' : 'btn--primary'} btn--sm"
+                 onclick="toggleStokvelAutopay('${_esc(gid)}', ${ap.enabled ? 'false' : 'true'})">
+           ${ap.enabled ? 'Turn off' : 'Turn on'}
+         </button>
+       </div>`
+    : '';
+
   return `<div class="sa-section-title mt-16"><i class="fa-solid fa-calendar-check"></i> Contributions</div>
     ${mineBlock}
+    ${autopayBlock}
     <div style="font-size:0.74rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Who is behind</div>
     ${arrearsBlock}
     ${rows.length ? '' : `<div style="font-size:0.82rem;color:var(--text-muted);margin-top:8px">No contributions have been scheduled yet.</div>`}`;

@@ -251,10 +251,11 @@ async function runAutoTopUps() {
 
   for (const inv of investors) {
     const amount   = parseFloat(inv.auto_topup_amount); // net wallet credit
-    // Gross up so SV Capital nets exactly `amount` after Paystack SA fees (1.5% + R2, cap R800)
-    const rawFee   = (amount + 2) / 0.985 - amount;
-    const fee      = Math.min(rawFee, 800);
-    const gross    = Math.round((amount + fee) * 100) / 100;
+    /* Grossed up so the wallet receives exactly `amount` after Paystack's
+       fee. The arithmetic lives in services/paystack now, because the
+       stokvel collection needs the same figure and two copies of a fee
+       calculation is two answers the day the rate changes. */
+    const { fee, gross } = require('../services/paystack').grossUp(amount);
     const amtKobo  = Math.round(gross * 100); // charge gross to Paystack
     // Deterministic reference: same investor+date always produces the same ref.
     // Paystack rejects a duplicate reference → idempotent if the cron fires twice.

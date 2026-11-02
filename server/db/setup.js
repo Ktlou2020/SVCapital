@@ -2564,6 +2564,25 @@ async function autoSetup() {
       // 1b. Add new columns to existing tables (safe — IF NOT EXISTS)
       await pool.query(`
         DO $$ BEGIN
+          /* COLLECTING A CONTRIBUTION WITHOUT ASKING EVERY MONTH.
+             A stokvel is a group of people paying a fixed amount on a fixed
+             day, and every one of them had to remember to do it by hand.
+             Most of what the arrears screen shows is not somebody refusing
+             to pay; it is friction. A member can now have their contribution
+             taken from the card already on their main account.
+
+             HERE rather than beside the other column additions earlier in
+             this file: those run interleaved with the CREATE TABLEs, and
+             stokvel_members is created LATER than that point. Altering a
+             table that does not exist yet aborts the whole batch, which took
+             every other table down with it. */
+          BEGIN ALTER TABLE stokvel_members ADD COLUMN autopay_enabled BOOLEAN NOT NULL DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE stokvel_members ADD COLUMN autopay_enabled_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          /* What happened last time this obligation was collected. A card
+             that keeps declining must not be retried for ever. */
+          BEGIN ALTER TABLE stokvel_contributions ADD COLUMN autopay_attempted_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE stokvel_contributions ADD COLUMN autopay_attempts INTEGER NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE stokvel_contributions ADD COLUMN autopay_last_error TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE investors ADD COLUMN last_auto_fica_check TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE investors ADD COLUMN fica_auto_status TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE investors ADD COLUMN xp_points INT DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
@@ -5072,6 +5091,10 @@ async function autoSetup() {
           title: 'The dashboard now tells you what is broken',
           body: 'Every error used to go to a server log nobody watches, which meant the first person to know a payout had failed was the client whose money had not arrived. Errors are now recorded, folded so one fault in a loop is one line with a count, and shown at the top of the dashboard. Separately, every unattended job writes a heartbeat: a job that simply STOPS running throws nothing and logs nothing, so the only sign is a heartbeat that stopped arriving, and that now raises an alert of its own. Mark something \u201cDealt with\u201d and it goes away \u2014 and comes straight back if the same fault happens again. Set OPS_ALERT_EMAIL on the server to be emailed the first time something breaks instead of waiting until somebody opens this page.',
           where: 'Dashboard \u2014 at the top, above the figures. Empty and invisible when nothing is wrong.' },
+        { id: 'stokvel-autopay-2026-11', area: 'both', icon: 'fa-bolt',
+          title: 'A stokvel contribution can now collect itself',
+          body: 'A stokvel is a group of people paying a fixed amount on a fixed day, and every one of them had to remember to do it by hand \u2014 so most of what the arrears screen shows is friction rather than anybody refusing to pay. A member can now switch on automatic payment and their contribution is taken on the day it falls due. It uses the wallet first and only charges the card already on their main account for what the wallet cannot cover, so nobody pays a gateway fee on money they already had. A declined card still pays whatever the wallet holds, as a part payment, rather than leaving them further behind. After three declines we stop trying and tell them. Nobody can switch it on for anybody else \u2014 it is each member\u2019s own card and their own decision.',
+          where: 'Portal \u2192 switch into the stokvel \u2192 Contributions, under what you owe. Only shown to members who have a card on file.' },
       ];
 
       let added = 0;

@@ -1240,10 +1240,77 @@ router.get('/:id/contributions', async (req, res) => {
       arrears[k].owed = Math.round((arrears[k].owed + owed) * 100) / 100;
       arrears[k].periods += 1;
     }
-    return res.json({ data: rows, arrears: Object.values(arrears) });
+    /* Whether this member has their contribution collected automatically,
+       and whether they even could — the toggle is meaningless without a
+       card already on the account, and offering it to somebody who has
+       never paid by card is offering them an error message. */
+    const { rows: [state] } = await pool.query(
+      `SELECT m.autopay_enabled,
+              EXISTS (SELECT 1 FROM paystack_authorizations p
+                       WHERE p.investor_id = $2) AS has_card,
+              (SELECT last4 FROM paystack_authorizations p
+                WHERE p.investor_id = $2
+                ORDER BY updated_at DESC NULLS LAST, created_at DESC LIMIT 1) AS last4
+         FROM stokvel_members m
+        WHERE m.sub_account_id = $1 AND m.investor_id = $2`,
+      [group.id, me]);
+
+    return res.json({
+      data: rows,
+      arrears: Object.values(arrears),
+      autopay: {
+        enabled:  !!(state && state.autopay_enabled),
+        has_card: !!(state && state.has_card),
+        last4:    (state && state.last4) || null,
+      },
+    });
   } catch (err) {
     console.error('[stokvels] contributions failed:', err.message);
     return res.status(500).json({ error: 'Could not load the contributions.' });
+  }
+});
+
+/* ─── PUT /api/stokvels/:id/autopay ──────────────────────────────────
+   Have your contribution taken from the card on your main account, on the
+   day it falls due.
+
+   YOUR OWN ONLY, and the route takes no investor id for that reason: a
+   treasurer who could switch this on for other members would be arranging
+   debits against other people's cards, which is not a thing a stokvel
+   mandate can authorise and not a thing this platform will offer.
+   ──────────────────────────────────────────────────────────────────── */
+router.put('/:id/autopay', async (req, res) => {
+  const me = callerInvestorId(req);
+  try {
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) return res.status(404).json({ error: 'No such stokvel.' });
+
+    const want = !!(req.body && req.body.enabled);
+
+    if (want) {
+      const { rows: [card] } = await pool.query(
+        'SELECT 1 FROM paystack_authorizations WHERE investor_id = $1 LIMIT 1', [me]);
+      if (!card) {
+        return res.status(400).json({
+          error: 'There is no card on your account yet. Top your wallet up by card once, '
+               + 'and we can use the same card for this.' });
+      }
+    }
+
+    const { rows } = await pool.query(
+      `UPDATE stokvel_members
+          SET autopay_enabled = $3,
+              autopay_enabled_at = CASE WHEN $3 THEN NOW() ELSE NULL END,
+              updated_at = NOW()
+        WHERE sub_account_id = $1 AND investor_id = $2 AND status = 'active'
+        RETURNING autopay_enabled`,
+      [group.id, me, want]);
+    if (!rows[0]) return res.status(404).json({ error: 'You are not a member of this stokvel.' });
+
+    return res.json({ data: { enabled: rows[0].autopay_enabled } });
+  } catch (err) {
+    console.error('[stokvels] autopay toggle failed:', err.message);
+    return res.status(500).json({ error: 'Could not change that setting.' });
   }
 });
 
