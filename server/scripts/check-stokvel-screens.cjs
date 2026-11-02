@@ -212,7 +212,11 @@ const STUB = {
     { id: 'r1', kind: 'withdrawal', amount: 2000, bank_name: 'FNB',
       reason: 'Funeral <img src=y onerror=\"window.__xssFired=1\">',
       status: 'pending', requested_by_name: 'Ann', approvals: 1, required: 2,
-      satisfied: false, blocked_because: '1 of 2 signatory approvals.' },
+      satisfied: false, blocked_because: '1 of 2 signatory approvals.',
+      votes: [
+        { investor_id: 'I1', name: 'Ann M', decision: 'approve', at: '2026-11-01', counts: true, is_me: false },
+        { investor_id: 'I7', name: 'Old <b>Member</b>', decision: 'approve', at: '2026-10-02', counts: false, is_me: false },
+      ] },
     /* The second kind, in the same list. A row that reads only "R5000.00 ·
        Ann" asks a signatory to approve a sum with no idea where it goes. */
     { id: 'r2', kind: 'investment', amount: 5000, pool_id: 'POOL-CATTLE-11',
@@ -372,6 +376,17 @@ const STUB = {
     const fired = await evaluate(`!!window.__xssFired`);
     ok('nothing a member typed executed', fired === false,
        'a value from the roster ran as script');
+
+    console.log('\nand the group can see who agreed to what');
+    ok('the register names who voted',
+       /Ann M/.test(rendered.text),
+       'members saw "2 of 3" and never which two \u2014 for a product whose claim is that '
+       + 'several NAMED people must agree, that is the wrong way round');
+    ok('a vote that no longer counts says so',
+       /no longer a signatory/.test(rendered.text),
+       'otherwise the tally looks wrong to anybody adding the names up');
+    ok('and a name in the register is escaped like any other',
+       !/<b>Member<\/b>/.test(rendered.html), rendered.html.slice(0, 200));
 
     console.log('\nand the payout the group has decided on');
     ok('the planned payout is named with its date',

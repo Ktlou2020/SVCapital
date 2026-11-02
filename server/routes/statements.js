@@ -56,7 +56,21 @@ router.get('/account-statement', requireAuth, async (req, res) => {
     if (!investorId) return res.status(403).json({ error: 'Forbidden.' });
     const { from, to } = req.query;
     if (!from || !to) return res.status(400).json({ error: 'from and to are required' });
-    const data = await buildAccountStatement(pool, { investorId, from, to });
+    /* A sub-account's statement, where one is asked for — and only if the
+       caller is entitled to it. An investor owns theirs; a stokvel's is any
+       active member's, the same rule as reading the group's shares. */
+    const subAccountId = String(req.query.sub_account_id || '').trim() || null;
+    if (subAccountId) {
+      const { rows: allowed } = await pool.query(
+        `SELECT 1 FROM sub_accounts a
+          WHERE a.id = $1
+            AND (a.parent_investor_id = $2
+                 OR EXISTS (SELECT 1 FROM stokvel_members m
+                             WHERE m.sub_account_id = a.id AND m.investor_id = $2
+                               AND m.status = 'active'))`, [subAccountId, investorId]);
+      if (!allowed.length) return res.status(404).json({ error: 'No such account.' });
+    }
+    const data = await buildAccountStatement(pool, { investorId, subAccountId, from, to });
     res.json(data);
   } catch (err) {
     if (err.code === 'BAD_REQUEST') return res.status(400).json({ error: err.message });

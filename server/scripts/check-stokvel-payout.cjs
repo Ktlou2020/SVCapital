@@ -214,6 +214,29 @@ const settle = async () => {
 
     await vote(auth.id, 'INV-PO-B');
 
+    /* ── The register, against a real database ────────────────────
+       check-stokvel-screens covers what the hub DRAWS, from a stub. That
+       cannot catch a column that does not exist, and did not: the first
+       version of this query asked stokvel_request_approvals for created_at,
+       which is called decided_at, so every request list would have failed
+       at runtime while the source assertions passed. Anything that reads
+       the register needs to read it from Postgres at least once. */
+    console.log('\nand the register says WHICH signatories agreed');
+    {
+      const list = await call('GET', '/api/stokvels/SA-PO-1/withdrawal-requests', tok('INV-PO-C'));
+      ok('the requests list still builds', list.status === 200,
+         `${list.status} ${JSON.stringify(list.body).slice(0, 160)}`);
+      const row = (list.body.data || []).find(r => r.id === auth.id) || {};
+      ok('it carries the votes', Array.isArray(row.votes) && row.votes.length === 2,
+         JSON.stringify(row.votes));
+      ok('each vote names the signatory and what they decided',
+         (row.votes || []).every(v => v.name && v.decision && v.at),
+         JSON.stringify(row.votes));
+      ok('and a member who is not a signatory still sees it',
+         list.status === 200,
+         'knowing who agreed is the point; voting is what is restricted');
+    }
+
     /* ── Running it ────────────────────────────────────────────────── */
     console.log('\nand then everybody is paid their share, less what they owe');
     /* C owes something, so the deduction is real. */

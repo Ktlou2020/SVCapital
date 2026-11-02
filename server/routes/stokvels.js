@@ -531,7 +531,14 @@ router.post('/:id/withdrawal-requests', async (req, res) => {
 
 /* ─── GET /api/stokvels/:id/withdrawal-requests ──────────────────────
    Every member sees every request and where it stands. A mandate that only
-   the signatories can see is a committee, not a mandate. */
+   the signatories can see is a committee, not a mandate.
+
+   AND WHO VOTED. The register was stored from the first release and never
+   shown: members saw "2 of 3" and never which two. For a product whose
+   whole claim is that several named people must agree, that is the wrong
+   way round — and an anonymous rejection is worse than a named one,
+   because a request dies and nobody can talk about why. Shown to every
+   member, rejections included. */
 router.get('/:id/withdrawal-requests', async (req, res) => {
   const me = callerInvestorId(req);
   try {
@@ -554,6 +561,32 @@ router.get('/:id/withdrawal-requests', async (req, res) => {
         LIMIT 100`,
       [group.id]
     );
+    /* One query for the whole register rather than one per request. */
+    const { rows: votes } = await pool.query(
+      `SELECT v.request_id, v.investor_id, v.decision, v.decided_at,
+              i.first_name, i.last_name,
+              EXISTS (SELECT 1 FROM stokvel_members m
+                       WHERE m.sub_account_id = $1 AND m.investor_id = v.investor_id
+                         AND m.status = 'active' AND m.is_signatory = true) AS still_counts
+         FROM stokvel_request_approvals v
+         JOIN investors i ON i.id = v.investor_id
+        WHERE v.request_id IN (SELECT id FROM stokvel_withdrawal_requests WHERE sub_account_id = $1)
+        ORDER BY v.decided_at ASC`, [group.id]);
+    const register = new Map();
+    for (const v of votes) {
+      if (!register.has(v.request_id)) register.set(v.request_id, []);
+      register.get(v.request_id).push({
+        investor_id: v.investor_id,
+        name: [v.first_name, v.last_name].filter(Boolean).join(' '),
+        decision: v.decision, at: v.decided_at,
+        /* A vote from somebody who is no longer a signatory is kept on the
+           record and stops counting. Showing it without saying so would
+           make the tally look wrong to anybody adding the names up. */
+        counts: v.still_counts,
+        is_me: v.investor_id === me,
+      });
+    }
+
     const out = [];
     for (const r of rows) {
       const state = await mandate.evaluate(pool, r, group);
@@ -567,6 +600,7 @@ router.get('/:id/withdrawal-requests', async (req, res) => {
         requested_by_name: r.requested_by_name,
         approvals: state.approvals, required: state.required,
         satisfied: state.satisfied, blocked_because: state.reason,
+        votes: register.get(r.id) || [],
       });
     }
     return res.json({ data: out });

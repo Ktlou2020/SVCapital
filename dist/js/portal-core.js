@@ -12781,6 +12781,17 @@ function _svWithdrawals(res, meIsSignatory, gid) {
             <i class="fa-solid fa-door-open"></i> Settle this exit
           </button>
         </div>` : ''}
+      ${(r.votes || []).length ? `
+        <div style="margin-top:9px;padding-top:8px;border-top:1px solid var(--border)">
+          ${r.votes.map(v => `<div style="font-size:0.74rem;display:flex;justify-content:space-between;gap:8px;padding:1px 0">
+            <span style="color:${v.decision === 'reject' ? '#ef4444' : 'var(--text-muted)'}">
+              <i class="fa-solid fa-${v.decision === 'reject' ? 'xmark' : 'check'}"></i>
+              ${_esc(v.name || 'A signatory')}${v.is_me ? ' (you)' : ''}
+              ${v.counts ? '' : '<span style="opacity:.7"> — no longer a signatory, not counted</span>'}
+            </span>
+            <span style="color:var(--text-muted);white-space:nowrap">${_esc(String(v.at || '').slice(0, 10))}</span>
+          </div>`).join('')}
+        </div>` : ''}
       ${r.blocked_because && r.status === 'pending' ? `
         <div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px">${_esc(r.blocked_because)}</div>` : ''}
     </div>`;
@@ -12788,7 +12799,8 @@ function _svWithdrawals(res, meIsSignatory, gid) {
   return `<div class="sa-section-title mt-16"><i class="fa-solid fa-user-shield"></i> Signatory approvals</div>
     <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px">
       The group's money only moves — out to a bank account or into one of our pools —
-      when enough signatories approve it. No one member can do it alone.
+      when enough signatories approve it. No one member can do it alone, and the whole
+      group can see who has agreed to what.
     </div>
     ${open.length ? open.map(row).join('') : `<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:8px">Nothing awaiting approval.</div>`}
     <div style="display:flex;gap:8px;flex-wrap:wrap">
