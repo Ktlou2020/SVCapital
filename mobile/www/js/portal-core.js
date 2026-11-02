@@ -10598,10 +10598,57 @@ function _renderRecurringStatusSummary() {
   }
 }
 
-function openDeleteAccountModal() {
+/* CLOSING AN ACCOUNT.
+
+   What was here POSTed to privacy/account, which only answers to DELETE, so
+   it 404'd every single time. The catch then swallowed the 404, quietly
+   filed a SUPPORT TICKET, and told the person "account deletion request
+   submitted". They believed they had been erased. They had not, and under
+   POPIA that is the worst of the three possible outcomes: worse than
+   failing, because failing would have told them.
+
+   Now it calls the right method, and shows what is in the way BEFORE the
+   confirmation box rather than after — somebody who still has money here
+   should be told that, not asked to type a phrase and then refused. */
+async function openDeleteAccountModal() {
   const input = document.getElementById('deleteAccountConfirmInput');
   if (input) input.value = '';
+  const host = document.getElementById('deleteAccountBlockers');
+  const go   = document.getElementById('deleteAccountGo');
+  if (host) host.innerHTML = '';
   Modal.open('deleteAccountModal');
+
+  if (!host) return;
+  let res;
+  try {
+    res = await API._fetch('GET', 'privacy/account/closure');
+  } catch (e) {
+    /* Not fatal: the DELETE refuses again with the same list, so the worst
+       case is the old behaviour of finding out one step later. */
+    return;
+  }
+  const blockers = (res && res.data && res.data.blockers) || [];
+  if (go) go.disabled = blockers.length > 0;
+  if (!blockers.length) return;
+
+  host.innerHTML = `
+    <div style="border:1px solid rgba(239,68,68,0.35);background:rgba(239,68,68,0.08);
+         border-radius:10px;padding:12px 14px;margin-bottom:12px">
+      <div style="font-weight:700;font-size:0.88rem;margin-bottom:6px">
+        There ${blockers.length === 1 ? 'is one thing' : `are ${blockers.length} things`}
+        to settle first
+      </div>
+      ${blockers.map(b => `
+        <div style="padding:7px 0;border-top:1px solid rgba(255,255,255,0.06)">
+          <div style="font-size:0.84rem;font-weight:600">${_esc(b.title)}</div>
+          <div style="font-size:0.76rem;color:var(--text-muted);line-height:1.5">${_esc(b.detail || '')}</div>
+          ${b.action ? `<div style="font-size:0.76rem;color:#eda5ff;margin-top:2px">${_esc(b.action)}</div>` : ''}
+        </div>`).join('')}
+      <div style="font-size:0.74rem;color:var(--text-muted);margin-top:8px">
+        Your money stays yours either way \u2014 closing the account is just the
+        last step, not a way to walk away from it.
+      </div>
+    </div>`;
 }
 
 async function confirmAccountDeletion() {
@@ -10614,35 +10661,17 @@ async function confirmAccountDeletion() {
   }
 
   try {
-    // POST to privacy endpoint
-    await API._fetch('POST', 'privacy/account', { confirm: 'DELETE MY ACCOUNT' });
+    await API._fetch('DELETE', 'privacy/account', { confirm: 'DELETE MY ACCOUNT' });
     Modal.close('deleteAccountModal');
-    Toast.info('Account deletion request submitted. You will be signed out.');
+    Toast.success('Account closed. You are being signed out.');
     setTimeout(() => { window.location.href = '/login.html'; }, 2500);
   } catch (e) {
-    // If endpoint doesn't exist, still handle gracefully
-    if (e.message && e.message.includes('404')) {
-      // Submit as a support ticket instead
-      try {
-        await API.tickets.create({
-          id:             Utils.genId('TKT'),
-          investor_id:    PORTAL.investor?.id || DEMO_INVESTOR_ID,
-          investor_name:  `${PORTAL.investor?.first_name || ''} ${PORTAL.investor?.last_name || ''}`.trim(),
-          investor_email: PORTAL.investor?.email || '',
-          subject:        'Account Deletion Request (POPIA)',
-          category:       'general',
-          priority:       'high',
-          message:        'The investor has formally requested account deletion in accordance with POPIA. Please process this request and confirm via email.',
-          status:         'open',
-        });
-        Modal.close('deleteAccountModal');
-        Toast.success('Account deletion request submitted to our team. We will contact you within 3 business days.');
-      } catch (e2) {
-        Toast.error('Could not submit deletion request. Please email admin@svcapital.co.za directly.');
-      }
-    } else {
-      Toast.error('Failed to submit deletion request. Please try again.');
-    }
+    /* Said, not swallowed. The old code turned a failure into a support
+       ticket and a success message, which left somebody believing they had
+       been erased when they had not. */
+    const msg = (e && e.message) || '';
+    Toast.error(msg || 'Could not close the account. Please try again.');
+    if (/settle/i.test(msg)) openDeleteAccountModal();
   }
 }
 
