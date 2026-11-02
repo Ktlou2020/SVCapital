@@ -16,6 +16,7 @@ router.use(requireAuth, requireRole('admin', 'director'));
 /* Cash-movement definition — single source in services/ledger.js */
 const { cashMovementSQL, cashMovement: CASH_MOVEMENT, movesCash,
         recordTransaction, actorFromRequest } = require('../services/ledger');
+const feeReversal = require('../services/feeReversal');
 
 router.post('/manual-credit', async (req, res) => {
   try {
@@ -1251,6 +1252,67 @@ router.post('/reset-2fa', async (req, res) => {
    investment whose pool_id is NULL but whose pool_name matches a known pool.
    Also updates investments that have a mismatched/stale pool_id.
    ─────────────────────────────────────────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════════════
+   GET  /api/admin/investments/:id/fee-reversal   — what can be done
+   POST /api/admin/investments/:id/fee-reversal   — do it
+
+   The 1% platform fee is charged when an investment is placed and there has
+   never been a way to undo it. A fee charged in error, a goodwill gesture,
+   a pool we said would be fee-free and was not: all of it was a manual
+   wallet credit with a note, which is a figure typed by hand into a balance
+   with nothing tying it to the fee it cancels.
+
+   The GET is what the screen asks before it offers anything, so staff are
+   told what is possible and why rather than finding out by being refused.
+   ════════════════════════════════════════════════════════════════════ */
+router.get('/investments/:id/fee-reversal', async (req, res) => {
+  try {
+    const state = await feeReversal.assess(pool, req.params.id);
+    res.json({ data: state });
+  } catch (err) {
+    console.error('[fee-reversal] assess failed:', err.message);
+    res.status(500).json({ error: 'Could not read that investment.' });
+  }
+});
+
+router.post('/investments/:id/fee-reversal', async (req, res) => {
+  const { destination, reason } = req.body || {};
+  try {
+    const out = await feeReversal.reverse({
+      investmentId: req.params.id,
+      destination,
+      reason,
+      actor: actorFromRequest(req),
+    });
+    if (!out.ok) return res.status(409).json({ error: out.reason, alreadyDone: !!out.alreadyDone });
+
+    setImmediate(() => audit.log({
+      actorId:     req.user.id,
+      actorEmail:  req.user.email,
+      actorRole:   req.user.role,
+      action:      'investment.platform_fee_reversed',
+      entityType:  'investments',
+      entityId:    req.params.id,
+      description: `Platform fee of R${out.amount} reversed to the `
+                 + `${out.destination === 'wallet' ? 'wallet' : 'investment'}. `
+                 + `Reason: ${String(reason).slice(0, 200)}`,
+      ip:          req.ip,
+      metadata:    { amount: out.amount, destination: out.destination,
+                     reference: out.reference, became: out.became },
+    }).catch(e => console.error('[audit] fee reversal:', e.message)));
+
+    res.json({ data: out });
+  } catch (err) {
+    /* A bad destination or a missing reason is the caller's mistake and is
+       worth saying precisely; anything else is ours. */
+    if (/destination must be|reason is required|needs an actor/.test(err.message)) {
+      return res.status(400).json({ error: err.message });
+    }
+    console.error('[fee-reversal] failed:', err.message);
+    res.status(500).json({ error: 'Could not reverse that fee.' });
+  }
+});
+
 router.post('/investments/allocate-pools', async (req, res) => {
   try {
     const { rows: pools } = await pool.query(

@@ -7956,6 +7956,128 @@ async function loadInvestments() {
   }
 }
 
+/* ═══════════════════════════════════════════════════════════
+   GIVING A PLATFORM FEE BACK.
+
+   The 1% is charged when an investment is placed and there was never a way
+   to undo it — a fee charged in error, or a goodwill gesture, meant a
+   manual wallet credit with a note, which is a figure typed into a balance
+   with nothing tying it to the fee it cancels.
+
+   Two destinations, and they answer different questions. BACK TO THE WALLET
+   is cash the client can withdraw today, and is right when the fee was
+   simply wrong. INTO THE INVESTMENT makes it principal: the client earns
+   the pool's rate on it for the rest of the term and it matures with the
+   rest, which is worth more to them and is usually the better gesture.
+
+   Everything shown here comes from the server. Whether a fee exists,
+   whether it has already been reversed, and whether the investment is
+   still running are facts it holds — a screen that works them out for
+   itself offers buttons that fail.
+   ═══════════════════════════════════════════════════════════ */
+async function _loadFeeReversal(investmentId) {
+  const host = document.getElementById('admFeePanel');
+  if (!host) return;
+  host.innerHTML = '';
+  let res;
+  try {
+    res = await API._fetch('GET', `admin/investments/${encodeURIComponent(investmentId)}/fee-reversal`);
+  } catch (e) {
+    /* Quiet: this panel is an extra, and an investment detail that will not
+       open because the fee lookup failed is a worse screen than one without
+       the panel. */
+    console.warn('[fee-reversal] could not load:', e.message);
+    return;
+  }
+  const d = (res && res.data) || {};
+  const inv = d.investment || {};
+
+  /* Nothing to offer, and the reason is worth showing: "no fee was charged"
+     and "already reversed" are different facts and staff ask about both. */
+  if (!d.ok) {
+    if (!d.reason) return;
+    host.innerHTML = `
+      <div class="panel" style="padding:12px 14px;margin-bottom:14px">
+        <div style="font-size:0.72rem;font-weight:700;color:var(--text-muted);
+             letter-spacing:0.04em;margin-bottom:4px">PLATFORM FEE</div>
+        <div style="font-size:0.84rem;color:var(--text-muted)">${_esc(d.reason)}</div>
+      </div>`;
+    return;
+  }
+
+  const canInvest = !!(d.destinations && d.destinations.investment);
+  host.innerHTML = `
+    <div class="panel" style="padding:14px;margin-bottom:14px;border-left:3px solid var(--gold)">
+      <div style="font-size:0.72rem;font-weight:700;color:var(--text-muted);
+           letter-spacing:0.04em;margin-bottom:6px">PLATFORM FEE</div>
+      <div style="font-size:0.9rem;font-weight:700;margin-bottom:10px">
+        ${Utils.rand(d.amount)} was charged on this investment
+      </div>
+
+      <label for="admFeeReason" style="display:block;font-size:0.72rem;
+             text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);
+             margin-bottom:4px">Why is it being given back?</label>
+      <input id="admFeeReason" class="form-input" type="text" maxlength="200"
+             placeholder="e.g. charged in error, or goodwill on a late pool"
+             style="width:100%;margin-bottom:4px">
+      <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:12px">
+        Recorded against the reversal. Money given back without a reason is
+        money nobody can account for later.
+      </div>
+      <div id="admFeeNote" style="font-size:0.78rem;color:#ef4444;min-height:18px;margin-bottom:6px"></div>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn--secondary btn--sm"
+                onclick="reverseFee('${_esc(inv.id)}','wallet')">
+          <i class="fa-solid fa-wallet"></i> Back to the wallet
+        </button>
+        <button class="btn btn--primary btn--sm" ${canInvest ? '' : 'disabled'}
+                title="${canInvest ? '' : _esc(d.investmentBlockedBecause || '')}"
+                onclick="reverseFee('${_esc(inv.id)}','investment')">
+          <i class="fa-solid fa-seedling"></i> Add it to the investment
+        </button>
+      </div>
+
+      ${canInvest && d.wouldBecome ? `
+        <div style="font-size:0.76rem;color:var(--text-muted);margin-top:8px">
+          Added to the investment it becomes
+          <strong>${Utils.rand(d.wouldBecome.amount)}</strong> with an expected
+          return of <strong>${Utils.rand(d.wouldBecome.expectedReturn)}</strong>,
+          maturing as normal.
+        </div>` : ''}
+      ${!canInvest && d.investmentBlockedBecause ? `
+        <div style="font-size:0.76rem;color:var(--text-muted);margin-top:8px">
+          ${_esc(d.investmentBlockedBecause)}
+        </div>` : ''}
+    </div>`;
+}
+
+async function reverseFee(investmentId, destination) {
+  const note   = document.getElementById('admFeeNote');
+  const reason = (document.getElementById('admFeeReason') || {}).value || '';
+  if (!reason.trim()) {
+    /* Said under the field rather than in a toast that disappears: the
+       person has to type something here and needs to see where. */
+    if (note) note.textContent = 'Please say why this fee is being given back.';
+    return;
+  }
+  if (note) note.textContent = '';
+  try {
+    const res = await API._fetch('POST',
+      `admin/investments/${encodeURIComponent(investmentId)}/fee-reversal`,
+      { destination, reason });
+    const d = (res && res.data) || {};
+    Toast.show(destination === 'wallet'
+      ? `${Utils.rand(d.amount)} returned to the wallet.`
+      : `${Utils.rand(d.amount)} added to the investment, now ${Utils.rand(d.became && d.became.amount)}.`,
+      'success');
+    await _loadFeeReversal(investmentId);
+    if (typeof loadInvestments === 'function') loadInvestments().catch(() => {});
+  } catch (e) {
+    if (note) note.textContent = e.message || 'Could not reverse that fee.';
+  }
+}
+
 function renderInvestmentStats() {
   const d = STATE.investments;
   const active = d.filter(i => i.status === 'active');
@@ -8304,6 +8426,13 @@ function _renderInvestmentDetail(inv, backTo, backKind) {
       ${_invRate == null ? `<div style="font-size:0.68rem;color:var(--text-muted);margin-top:6px">No return posted on this pool yet — figures shown are capital only.</div>` : ''}
     </div>
 
+    <!-- The platform fee, and what can be done about it. Filled by
+         _loadFeeReversal from the server rather than worked out here: whether
+         a fee exists, whether it has already been given back, and whether the
+         investment is still running are all facts the server holds, and a
+         screen that guesses at them offers buttons that fail. -->
+    <div id="admFeePanel" data-investment="${_esc(inv.id)}"></div>
+
     <div class="panel" style="padding:14px;margin-bottom:14px;background:var(--ci-bg-light,#F7F8FA)">
       <div style="font-size:0.8rem;font-weight:700;color:#1a1a1a;margin-bottom:8px"><i class="fa-solid fa-user-pen" style="color:var(--gold);margin-right:6px"></i>Set instruction on behalf of client</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
@@ -8390,6 +8519,14 @@ function _renderInvestmentDetail(inv, backTo, backKind) {
     ` : ''}
   `;
   Modal.open('investorDetailModal');
+  /* Not awaited: the detail is already drawn and useful, and the fee panel
+     is an extra. An investment that will not open because a fee lookup is
+     slow is a worse screen than one that fills in a moment later.
+
+     Guarded too, because this renderer is sliced out and evaluated on its
+     own in more than one place — an extra that stops the detail opening
+     where it is not present is not an extra. */
+  if (typeof _loadFeeReversal === 'function') _loadFeeReversal(inv.id);
 }
 
 /* Show only the companion fields the chosen instruction actually needs. */

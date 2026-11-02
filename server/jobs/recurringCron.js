@@ -23,6 +23,7 @@ const pool         = require('../db/pool');
 const emailService = require('../services/email');
 const pushService  = require('../services/pushService');
 const { recordTransaction, systemActor } = require('../services/ledger');
+const { expectedReturnFor } = require('../services/poolFees');
 
 async function runRecurringInvestments() {
   const todayDay = new Date().getDate(); // 1–31
@@ -125,7 +126,9 @@ async function runRecurringInvestments() {
       const startDate      = new Date();
       /* The pool's own maturity date — see services/investmentTerm.js. */
       const endDay         = investmentEndDate(pool_row, startDate, termMonths);
-      const expectedReturn = Math.round(amount * annualRate * (termMonths / 12) * 100) / 100;
+      /* One definition, in services/poolFees, so a fee reversal that raises
+         an investment's principal recomputes it exactly as it was set. */
+      const expectedReturn = expectedReturnFor({ amount, annualRate, termMonths });
       // Bug #6 fix: append random suffix to prevent ID collision when two investors
       // resolve DB queries in the same millisecond tick
       const rnd          = Math.random().toString(36).slice(2, 7).toUpperCase();

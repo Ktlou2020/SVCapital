@@ -31,8 +31,13 @@
    same amount in the same transaction. Both are listed so the pair cancels
    across the platform — listing either alone would report a contribution as
    money entering or leaving SV Capital, which it never is. */
+/* `fee_reversal` is a platform fee given back. It needs a type of its own
+   and cannot be a negative `fee`, because cashMovement signs a row by its
+   TYPE and reads the amount through Math.abs — a refund written as a
+   negative fee would be counted as a second charge, and the client would
+   be billed twice for the thing we were apologising for. */
 const CASH_CREDIT_TYPES = ['deposit', 'payout', 'interest', 'gift_received', 'referral_bonus', 'matured_funds',
-                           'stokvel_contribution_received'];
+                           'stokvel_contribution_received', 'fee_reversal'];
 /* `reversal` is money LEAVING because a card payment was taken back — a
    dispute the client won, or a refund. It is a debit like any other, and it
    has to be in this list: without it a reversed deposit stays counted as
