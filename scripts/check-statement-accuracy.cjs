@@ -310,8 +310,7 @@ console.log('\nthe statement is built from the whole history');
  * page: buildStatementHTML is a five-hundred-line template literal, and a
  * figure that is computed correctly and then interpolated under the wrong name
  * renders an empty cell with no error anywhere. */
-const CHROME = ['/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
-                '/opt/pw-browsers/chromium/chrome-linux/chrome'].find(p => fs.existsSync(p));
+const CHROME = require('./lib/chromium.cjs').findChromium();
 
 console.log('\nthe document, rendered');
 if (!CHROME) {

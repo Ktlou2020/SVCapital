@@ -51,8 +51,12 @@ const { execFileSync } = require('child_process');
 const ROOT = path.join(__dirname, '..');
 const DOCS = fs.readFileSync(path.join(ROOT, 'js', 'investor-documents.js'), 'utf8');
 const API  = fs.readFileSync(path.join(ROOT, 'js', 'api.js'), 'utf8');
-const CHROME = ['/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
-                '/opt/pw-browsers/chromium/chrome-linux/chrome'].find(p => fs.existsSync(p));
+const CHROME = require('./lib/chromium.cjs').findChromium();
+/* The probe's answer comes back out through innerHTML, where the
+   non-breaking spaces en-ZA puts between thousands are serialised as
+   &nbsp;. Normalised before parsing, so every assertion below is
+   written against "R 1 704,00" with ordinary spaces. */
+const { readProbe, randToNumber } = require('./lib/rendered.cjs');
 
 /* Comments blanked, newlines kept, so a negative assertion cannot be satisfied
    by the paragraph explaining the fix. */
@@ -343,8 +347,7 @@ document.getElementById('probe').textContent = JSON.stringify(out);
   const m = dom.match(/id="probe">([\s\S]*?)<\/div>/);
   let r = null;
   try {
-    r = JSON.parse((m ? m[1] : '').replace(/&quot;/g, '"').replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'"));
+    r = readProbe(m ? m[1] : '');
   } catch (_) { /* reported below */ }
 
   ok('the page reported', !!r, (m ? m[1] : dom).slice(0, 300));
@@ -352,7 +355,9 @@ document.getElementById('probe').textContent = JSON.stringify(out);
     ok('the statement renders', r.rendered === 'ok', r.rendered);
     ok('nothing threw', (r.errors || []).length === 0, JSON.stringify(r.errors));
 
-    const nums = (r.randCol || []).map(v => parseFloat(String(v).replace(/[^\d.]/g, '')) || 0);
+    /* Parsed by the shared reader, not by stripping everything but digits
+       and dots: that read "R 3 576,30" as 357 630. */
+    const nums = (r.randCol || []).map(v => randToNumber(v) || 0);
     ok('every reported row now prints its maturity value',
        REPORTED.every(x => nums.some(n => near(n, x.inv.actual_return))),
        JSON.stringify(r.randCol));
@@ -360,7 +365,7 @@ document.getElementById('probe').textContent = JSON.stringify(out);
        REPORTED.every(x => !nums.some(n => near(n, x.shown))),
        JSON.stringify(r.randCol));
     ok('the header total is the sum of the rows on the page',
-       near(parseFloat(String(r.summary).replace(/[^\d.]/g, '')), EXPECT_TOTAL),
+       near(randToNumber(r.summary), EXPECT_TOTAL),
        `${r.summary} — rows sum to ${nums.reduce((s, n) => s + n, 0).toFixed(2)}`);
     ok('the rate column states its basis on every row',
        (r.rateCol || []).every(v => /achieved|p\.a\. target/.test(v)),

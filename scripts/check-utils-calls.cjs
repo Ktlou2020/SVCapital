@@ -87,14 +87,18 @@ for (const rel of CONSUMERS) {
 console.log(`  resolved ${checked} Utils.* references across ${CONSUMERS.length} files against js/api.js`);
 console.log(`  Utils exposes ${known.size} members\n`);
 
-if (!problems.length) {
-  console.log('  PASS  every unguarded Utils call resolves');
-  process.exit(0);
-}
-
+if (!problems.length) console.log('  PASS  every unguarded Utils call resolves');
 for (const p of problems) {
   console.log(`  FAIL  ${p.rel}:${p.line}  Utils.${p.name} is not defined`);
   console.log(`          ${p.src}`);
 }
-console.log(`\n  ${problems.length} unresolved call(s) — each throws when that screen renders`);
-process.exit(1);
+if (problems.length) {
+  console.log(`\n  ${problems.length} unresolved call(s) — each throws when that screen renders`);
+}
+
+/* The tally the runner reads. This check's unit is the reference it
+   resolved, so the count IS what it looked at: if the consumer list ever
+   silently empties, `checked` goes to zero and the runner refuses it rather
+   than printing a tick for a check that examined nothing. */
+console.log(`\n${checked} passed, ${problems.length} failed`);
+process.exit(problems.length ? 1 : 0);

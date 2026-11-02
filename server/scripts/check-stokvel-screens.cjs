@@ -265,20 +265,7 @@ console.log('\nand voting is offered only to signatories');
 }
 
 /* ── Measured ───────────────────────────────────────────────────── */
-const CHROME = (() => {
-  const base = '/opt/pw-browsers';
-  const link = path.join(base, 'chromium');
-  if (fs.existsSync(link)) return link;
-  if (!fs.existsSync(base)) return null;
-  for (const dir of fs.readdirSync(base).filter(d => /^chromium-\d+$/.test(d))
-        .sort((a, b) => Number(b.split('-')[1]) - Number(a.split('-')[1]))) {
-    for (const inner of ['chrome-linux64', 'chrome-linux']) {
-      const bin = path.join(base, dir, inner, 'chrome');
-      if (fs.existsSync(bin)) return bin;
-    }
-  }
-  return null;
-})();
+const CHROME = require('../../scripts/lib/chromium.cjs').findChromium();
 
 if (!CHROME) {
   console.log('\n  SKIP  no chromium under /opt/pw-browsers — the measured half did not run');

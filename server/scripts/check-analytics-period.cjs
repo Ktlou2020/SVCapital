@@ -45,8 +45,7 @@ const ROOT = path.join(__dirname, '..', '..');
    asserting the old answer: it would have passed just as happily if the route
    had regressed. Reaching for the helper is what stops that happening twice. */
 const { incomeTypesSQL } = require(path.join(ROOT, 'server', 'services', 'ledger.js'));
-const CHROME = ['/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
-                '/opt/pw-browsers/chromium/chrome-linux/chrome'].find(p => fs.existsSync(p));
+const CHROME = require('../../scripts/lib/chromium.cjs').findChromium();
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },

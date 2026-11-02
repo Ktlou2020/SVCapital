@@ -344,8 +344,7 @@ console.log('\nnothing is escaped twice');
   const doubled = [...SRC.matchAll(/_esc\([^)]*_esc\(/g)].length;
   ok('no expression escapes inside another', doubled === 0, `${doubled} nested _esc calls`);
 
-  const CHROME = ['/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
-                  '/opt/pw-browsers/chromium/chrome-linux/chrome'].find(p => fs.existsSync(p));
+  const CHROME = require('./lib/chromium.cjs').findChromium();
   const escSrc = (SRC.match(/^const _esc = .*$/m) || [])[0];
   ok('the shipped _esc was found', !!escSrc);
 

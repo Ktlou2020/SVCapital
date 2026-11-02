@@ -21,9 +21,7 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
-const CHROME = ['/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
-                '/opt/pw-browsers/chromium/chrome-linux/chrome']
-  .find(p => fs.existsSync(p));
+const CHROME = require('./lib/chromium.cjs').findChromium();
 
 /* The real Utils, lifted out of js/api.js, with this check's deterministic
    overrides on top.

@@ -38,8 +38,7 @@ const { execFileSync } = require('child_process');
 const ROOT = path.join(__dirname, '..');
 const DOCS = fs.readFileSync(path.join(ROOT, 'js', 'investor-documents.js'), 'utf8');
 const SVC  = fs.readFileSync(path.join(ROOT, 'server', 'services', 'accountStatement.js'), 'utf8');
-const CHROME = ['/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
-                '/opt/pw-browsers/chromium/chrome-linux/chrome'].find(p => fs.existsSync(p));
+const CHROME = require('./lib/chromium.cjs').findChromium();
 
 /* Comments blanked, newlines kept, so a negative assertion cannot be satisfied
    by the paragraph explaining the fix. */

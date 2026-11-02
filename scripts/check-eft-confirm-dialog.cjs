@@ -32,8 +32,12 @@ const { execFileSync } = require('child_process');
 const ROOT = path.join(__dirname, '..');
 const SRC  = fs.readFileSync(path.join(ROOT, 'admin', 'js', 'admin.js'), 'utf8');
 const CSS  = fs.readFileSync(path.join(ROOT, 'css', 'admin.css'), 'utf8');
-const CHROME = ['/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
-                '/opt/pw-browsers/chromium/chrome-linux/chrome'].find(p => fs.existsSync(p));
+const CHROME = require('./lib/chromium.cjs').findChromium();
+/* The probe's answer comes back out through innerHTML, where the
+   non-breaking spaces en-ZA puts between thousands are serialised as
+   &nbsp;. Normalised before parsing, so every assertion below is
+   written against "R 1 704,00" with ordinary spaces. */
+const { readProbe } = require('./lib/rendered.cjs');
 
 let pass = 0, fail = 0;
 const ok = (name, cond, detail) => {
@@ -114,7 +118,11 @@ ${fn}
     const r = go.getBoundingClientRect();
     const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
     out.buttonHittable = !!(hit && (hit === go || go.contains(hit)));
-    out.declaredShown = el.textContent.includes('R2 500,00') || el.textContent.includes('R2,500.00');
+    /* The text, not a verdict. The dialog renders "R 2 500,00" with
+       NON-BREAKING spaces, so a comparison made in here against a typed
+       space answers no while the amount is plainly on the screen. Judged
+       outside, where the shared reader has normalised it. */
+    out.dialogText = el.textContent;
     out.nameEscaped = !el.querySelector('script') && el.textContent.includes("S'busiso");
     go.click();
   }
@@ -140,7 +148,7 @@ try {
 } catch (err) { dom = (err.stdout || '').toString(); }
 const m = dom.match(/id="out">([\s\S]*?)<\/div>/);
 let r = null;
-try { r = JSON.parse((m ? m[1] : '').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'")); }
+try { r = readProbe(m ? m[1] : ''); }
 catch (_) { /* reported below */ }
 
 console.log('\nthe dialog, rendered with the shipped stylesheet');
@@ -159,7 +167,9 @@ if (r) {
 
   ok('the Approve button can actually be hit', r.buttonHittable === true,
      'an overlay above it, or pointer-events:none, and the click lands elsewhere');
-  ok('the declared amount is shown to check against the proof', r.declaredShown === true);
+  ok('the declared amount is shown to check against the proof',
+   /R\s?2\s?500[.,]00/.test(r.dialogText || ''),
+   r.dialogText ? r.dialogText.replace(/\s+/g, ' ').slice(0, 180) : '(no dialog text)');
   ok('an apostrophe in a name renders as text', r.nameEscaped === true);
 
   ok('clicking Approve resolves the promise the handler awaits',

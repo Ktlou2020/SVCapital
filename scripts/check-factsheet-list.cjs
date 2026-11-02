@@ -26,8 +26,7 @@ const ROOT = path.join(__dirname, '..');
 const CORE = fs.readFileSync(path.join(ROOT, 'js', 'portal-core.js'), 'utf8');
 const WEB  = fs.readFileSync(path.join(ROOT, 'portal', 'js', 'portal.js'), 'utf8');
 const MOB  = fs.readFileSync(path.join(ROOT, 'mobile', 'src', 'js', 'portal.js'), 'utf8');
-const CHROME = ['/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
-                '/opt/pw-browsers/chromium/chrome-linux/chrome'].find(p => fs.existsSync(p));
+const CHROME = require('./lib/chromium.cjs').findChromium();
 
 let pass = 0, fail = 0;
 const ok = (name, cond, detail) => {
