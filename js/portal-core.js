@@ -5463,29 +5463,39 @@ function openSaDeposit(saId) {
    deposit screen: the money has to come through a wallet that already knows
    whose it is. */
 async function payIntoStokvel(groupId) {
-  const raw = prompt(
-    'How much are you paying into the stokvel?\n\n'
-    + 'It comes out of your own SV Capital wallet, and it is recorded as yours — '
-    + 'anything you owe is settled oldest first.');
-  if (!raw) return;
-  const amount = parseFloat(raw);
-  if (!(amount > 0)) { Utils.toast('Enter an amount.', 'error'); return; }
+  /* From inside the workspace this is a form; from a sub-account card
+     there is no workspace body to render into yet, so switching in first
+     is both simpler and where the member wants to end up anyway. */
+  if (!document.getElementById('svWsBody')) { await openStokvelHub(groupId); }
+  _svFormShell(groupId, {
+    icon: 'fa-wallet',
+    title: 'Pay into the pot',
+    intro: 'It comes out of your own SV Capital wallet and is recorded as yours. '
+         + 'Anything you owe the group is settled oldest first.',
+    fields: _svField('svPayAmount', 'How much', 'number',
+      'You need the money in your own wallet first \u2014 top it up the normal way if you do not.',
+      'min="0" step="0.01" inputmode="decimal"'),
+    submit: `submitStokvelPayIn('${_esc(groupId)}')`,
+    submitIcon: 'fa-wallet',
+    submitLabel: 'Pay it in',
+  });
+}
+
+async function submitStokvelPayIn(groupId) {
+  const amount = parseFloat(_svVal('svPayAmount'));
+  if (!(amount > 0)) return _svFormError('Enter an amount.');
   try {
     const res = await API._fetch('POST', `stokvels/${groupId}/pay-in`, { amount });
     const d = (res && res.data) || {};
     Utils.toast(Number(d.settled) > 0
-      ? `Paid in ${Utils.rand(d.paid)} — ${Utils.rand(d.settled)} of it went to what you owed.`
+      ? `Paid in ${Utils.rand(d.paid)} \u2014 ${Utils.rand(d.settled)} of it went to what you owed.`
       : `Paid in ${Utils.rand(d.paid)}.`, 'success');
   } catch (err) {
-    Utils.toast(err.message || 'Could not pay that in.', 'error');
+    return _svFormError(err.message || 'Could not pay that in.');
   }
   await Promise.all([loadSubAccounts(), loadStokvels()]);
   renderSubAccountsView();
-  /* And the hub, if that is where they paid in from. Modal.open adds the
-     class 'open' — the first draft of this looked for 'active', which is
-     simply never set, so the hub would have sat showing the old balance. */
-  const modal = document.getElementById('saDetailModal');
-  if (modal && modal.classList.contains('open')) await _svRenderHub(groupId);
+  await _svRenderHub(groupId, 'contributions');
 }
 
 /* ─── Referral ─── */
@@ -12352,53 +12362,44 @@ function _svInvitations(res, gid) {
 }
 
 function inviteToStokvel(groupId) {
-  const body = document.getElementById('saDetailBody');
-  if (!body) return;
-  body.innerHTML = `
-    <div style="padding:4px 2px 8px">
-      <div class="sa-section-title"><i class="fa-solid fa-user-plus"></i> Invite someone to join</div>
-      <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:14px">
-        We send the invitation to this person. They accept it themselves, by signing in
-        to SV Capital with the same email address or cell number — there is no link to
-        forward, because a forwarded link would let anybody see the group&rsquo;s money.
-      </div>
-      <label style="display:block;font-size:0.74rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">Their name</label>
-      <input id="svInvName" class="form-input" type="text" maxlength="80" style="width:100%;margin-bottom:12px">
-      <label style="display:block;font-size:0.74rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">Email address</label>
-      <input id="svInvEmail" class="form-input" type="email" inputmode="email" autocapitalize="off" style="width:100%;margin-bottom:12px">
-      <label style="display:block;font-size:0.74rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">Cell number</label>
-      <input id="svInvCell" class="form-input" type="tel" inputmode="tel" style="width:100%;margin-bottom:6px">
-      <div style="font-size:0.74rem;color:var(--text-muted);margin-bottom:16px">
-        Either one is enough; both means we can reach them either way. Use the address they
-        already have an SV Capital account under, if they have one — an invitation sent
-        anywhere else is invisible to them.
-      </div>
-      <div style="display:flex;gap:8px">
-        <button class="btn btn--primary btn--sm" onclick="submitStokvelInvite('${_esc(groupId)}')">
-          <i class="fa-solid fa-paper-plane"></i> Send the invitation
-        </button>
-        <button class="btn btn--ghost btn--sm" onclick="_svRenderHub('${_esc(groupId)}')">Cancel</button>
-      </div>
-    </div>`;
+  _svFormShell(groupId, {
+    icon: 'fa-user-plus',
+    title: 'Invite someone to join',
+    intro: `We send the invitation to this person. They accept it themselves, by signing in
+      to SV Capital with the same email address or cell number &mdash; there is no link to
+      forward, because a forwarded link would let anybody see the group&rsquo;s money.`,
+    fields: _svField('svInvName', 'Their name', 'text', '', 'maxlength="80"')
+      + _svField('svInvEmail', 'Email address', 'email', '',
+                 'inputmode="email" autocapitalize="off"')
+      + _svField('svInvCell', 'Cell number', 'tel',
+          `Either one is enough; both means we can reach them either way. Use the address
+           they already have an SV Capital account under, if they have one &mdash; an
+           invitation sent anywhere else is invisible to them.`, 'inputmode="tel"'),
+    submit: `submitStokvelInvite('${_esc(groupId)}')`,
+    submitIcon: 'fa-paper-plane',
+    submitLabel: 'Send the invitation',
+  });
 }
 
 async function submitStokvelInvite(groupId) {
-  const name  = (document.getElementById('svInvName')  || {}).value || '';
-  const email = (document.getElementById('svInvEmail') || {}).value || '';
-  const cell  = (document.getElementById('svInvCell')  || {}).value || '';
+  const name  = _svVal('svInvName');
+  const email = _svVal('svInvEmail');
+  const cell  = _svVal('svInvCell');
   if (!email.trim() && !cell.trim()) {
-    Utils.toast('An email address or a cell number is needed — that is how it reaches them.', 'error');
+    _svFormError('An email address or a cell number is needed \u2014 that is how it reaches them.');
     return;
   }
+  let res;
   try {
-    const res = await API._fetch('POST', `stokvels/${groupId}/invites`, { name, email, cell });
-    Utils.toast(res.data && res.data.already_on_the_platform
-      ? 'Sent. They already have an SV Capital account, so it is waiting in their app.'
-      : 'Sent. They accept it by signing up with the same details.', 'success');
+    res = await API._fetch('POST', `stokvels/${groupId}/invites`, { name, email, cell });
   } catch (err) {
-    Utils.toast(err.message || 'Could not send that invitation.', 'error');
+    _svFormError(err.message || 'Could not send that invitation.');
+    return;
   }
-  await _svRenderHub(groupId);
+  Utils.toast(res.data && res.data.already_on_the_platform
+    ? 'Sent. They already have an SV Capital account, so it is waiting in their app.'
+    : 'Sent. They accept it by signing up with the same details.', 'success');
+  await _svRenderHub(groupId, 'members');
 }
 
 async function revokeStokvelInvite(groupId, inviteId) {
@@ -12501,6 +12502,8 @@ function renderStokvelSwitcher() {
    the workspace, and there is no second place showing the same group. */
 async function openStokvelHub(id) {
   if (typeof Modal !== 'undefined') Modal.close('saDetailModal');
+  /* A fresh switch always reloads: the member may have been away for days. */
+  window.__SVWS = null;
   if (typeof navigate === 'function') {
     navigate('stokvel', document.querySelector('[data-view="stokvel"]'));
   }
@@ -12528,10 +12531,12 @@ function _svTabList() {
   ];
 }
 
+/* Moving between sections reuses what is loaded, so a tab is instant
+   instead of seven requests. */
 function svWorkspaceTab(id, tab) {
   const body = document.getElementById('svWsBody');
   if (body) body.setAttribute('data-tab', tab);
-  _svRenderHub(id, tab);
+  _svRenderHub(id, tab, { cached: true });
 }
 
 /* The workspace, rendered. One fetch of everything the group has, then the
@@ -12541,7 +12546,20 @@ function svWorkspaceTab(id, tab) {
    The two heavier sections (the ledger and the holdings) are fetched only
    when they are opened, because a group with three hundred transactions
    should not make the overview slow. */
-async function _svRenderHub(id, tab) {
+/* What the workspace last loaded, so moving between sections does not go
+   back to the network seven times for data that has not changed.
+
+   On window rather than a module const: portal-core may declare no
+   top-level state and no load-time statements, so the holder is made on
+   first use. Keyed by the stokvel's id, so switching groups cannot show
+   the previous group's figures for a frame. */
+function _svCache(id, data) {
+  if (!window.__SVWS || window.__SVWS.id !== id) window.__SVWS = { id, data: null };
+  if (data) window.__SVWS.data = data;
+  return window.__SVWS.data;
+}
+
+async function _svRenderHub(id, tab, opts) {
   const body = document.getElementById('svWsBody');
   const open = tab || (body && body.getAttribute('data-tab')) || 'overview';
   if (body && !body.innerHTML) {
@@ -12549,7 +12567,15 @@ async function _svRenderHub(id, tab) {
       <i class="fa-solid fa-circle-notch fa-spin"></i> Loading…</div>`;
   }
 
+  /* ANYTHING THAT CHANGED THE GROUP REFETCHES. Only moving between
+     sections reuses: every handler that pays, votes, invites or settles
+     calls back without `cached`, so a stale figure cannot survive an
+     action. */
+  let payload = (opts && opts.cached) ? _svCache(id) : null;
   let group, members, contributions, requests, invitations, shareData, payoutData;
+  if (payload) {
+    ({ group, members, contributions, requests, invitations, shareData, payoutData } = payload);
+  } else {
   try {
     [group, members, contributions, requests, invitations, shareData, payoutData] = await Promise.all([
       API._fetch('GET', `stokvels/${id}`),
@@ -12565,6 +12591,8 @@ async function _svRenderHub(id, tab) {
       `<div class="empty-state"><p>Could not load this stokvel. ${_esc(err.message || '')}</p></div>`;
     return;
   }
+  _svCache(id, { group, members, contributions, requests, invitations, shareData, payoutData });
+  }
 
   const g    = (group && group.data) || {};
   const mine = ((contributions && contributions.data) || []).filter(c => c.is_me && c.status === 'due');
@@ -12575,6 +12603,7 @@ async function _svRenderHub(id, tab) {
   if (head) head.innerHTML = _svWsHeader(g, shareData, id);
   const tabs = document.getElementById('svWsTabs');
   if (tabs) tabs.innerHTML = _svWsTabs(id, open, { requests, contributions });
+  _svScrollTabIntoView(open);
 
   let html = '';
   switch (open) {
@@ -12590,7 +12619,12 @@ async function _svRenderHub(id, tab) {
     default:              html = _svOverview(id, { g, shareData, payoutData, contributions,
                                                    requests, members, mine, meIsSignatory });
   }
-  if (body) { body.innerHTML = html; body.setAttribute('data-tab', open); }
+  if (body) {
+    body.innerHTML = html;
+    body.setAttribute('data-tab', open);
+    body.setAttribute('role', 'tabpanel');
+    body.setAttribute('aria-labelledby', 'svTab-' + open);
+  }
 }
 
 /* The strip above the tabs: whose space this is, what it holds, and the way
@@ -12631,21 +12665,73 @@ function _svWsHeader(g, shareRes, id) {
 }
 
 /* The sections, with a count on the two that can be waiting on somebody. */
+/* The sections, as REAL TABS.
+
+   They were nine buttons in a row: no roles, no keyboard, and on a phone a
+   horizontal scroll that could leave the open section off-screen. Most of
+   the people this is built for are on a phone, so that is not a detail.
+
+   Labels stay at every width. An earlier attempt hid them below 760px and
+   left a row of nine unnamed icons, which is a guessing game — and the
+   badges then floated against nothing. A scrolling row that says what each
+   section is beats an icon row that does not, and the open tab is scrolled
+   into view so the scroll never hides where you are. */
 function _svWsTabs(id, open, counts) {
   const waiting = ((counts.requests && counts.requests.data) || [])
     .filter(r => r.status === 'pending').length;
   const owed = ((counts.contributions && counts.contributions.data) || [])
     .filter(c => c.is_me && c.status === 'due').length;
-  const badge = n => n ? `<span style="background:#eda5ff;color:#1a1a1a;border-radius:999px;
-      font-size:0.64rem;font-weight:800;padding:1px 6px;margin-left:5px">${n}</span>` : '';
+  const badge = n => n ? `<span aria-label="${n} waiting" style="background:#eda5ff;color:#1a1a1a;
+      border-radius:999px;font-size:0.64rem;font-weight:800;padding:1px 6px;margin-left:5px">${n}</span>` : '';
 
-  return `<div style="display:flex;gap:4px;overflow-x:auto;padding:10px 0;border-bottom:1px solid var(--border);margin-bottom:14px">
+  return `<div role="tablist" aria-label="Stokvel sections" id="svWsTablist"
+       onkeydown="svTabKeys(event,'${_esc(id)}')"
+       style="display:flex;gap:4px;overflow-x:auto;scroll-snap-type:x proximity;
+              padding:10px 0;border-bottom:1px solid var(--border);margin-bottom:14px;
+              -webkit-overflow-scrolling:touch">
     ${_svTabList().map(([key, label, icon]) => `
-      <button class="btn btn--sm ${key === open ? 'btn--primary' : 'btn--ghost'}"
-              style="white-space:nowrap" onclick="svWorkspaceTab('${_esc(id)}','${key}')">
+      <button role="tab" id="svTab-${key}" data-tab="${key}"
+              aria-selected="${key === open}" tabindex="${key === open ? 0 : -1}"
+              class="btn btn--sm ${key === open ? 'btn--primary' : 'btn--ghost'}"
+              style="white-space:nowrap;scroll-snap-align:center"
+              onclick="svWorkspaceTab('${_esc(id)}','${key}')">
         <i class="fa-solid ${icon}"></i> ${label}${key === 'approvals' ? badge(waiting) : ''}${key === 'contributions' ? badge(owed) : ''}
       </button>`).join('')}
-  </div>`;
+  </div>
+  <style>
+    @media (max-width: 760px) {
+      #svWsTablist { gap: 6px; padding: 8px 0; }
+      #svWsTablist .btn { padding: 6px 10px; font-size: 0.8rem; }
+    }
+  </style>`;
+}
+
+/* Arrow keys move along the tablist, as a tablist is expected to. */
+function svTabKeys(ev, id) {
+  const keys = _svTabList().map(t => t[0]);
+  const here = keys.indexOf(ev.target && ev.target.getAttribute('data-tab'));
+  if (here < 0) return;
+  let next = null;
+  if (ev.key === 'ArrowRight') next = keys[(here + 1) % keys.length];
+  if (ev.key === 'ArrowLeft')  next = keys[(here - 1 + keys.length) % keys.length];
+  if (ev.key === 'Home')       next = keys[0];
+  if (ev.key === 'End')        next = keys[keys.length - 1];
+  if (!next) return;
+  ev.preventDefault();
+  svWorkspaceTab(id, next);
+  const el = document.getElementById('svTab-' + next);
+  if (el) el.focus();
+}
+
+/* Keep the open section on screen. A tab bar that scrolls and leaves the
+   section you are reading off the edge is worse than one that does not
+   scroll at all. */
+function _svScrollTabIntoView(open) {
+  const el = document.getElementById('svTab-' + open);
+  if (el && el.scrollIntoView) {
+    try { el.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' }); }
+    catch (_) { el.scrollIntoView(); }
+  }
 }
 
 function svLeaveWorkspace() {
@@ -12666,6 +12752,51 @@ function svLeaveWorkspace() {
 
    "Waiting on you" is first among the actionable ones on purpose: a mandate
    is only as fast as the person who has not voted yet. */
+/* ─── Forms, instead of prompt() ───────────────────────────────────
+   Four flows collected money, dates and reasons through browser prompt()
+   boxes: a withdrawal, a payment into the pot, planning a payout, and
+   levying a fine. In a modal that was forgivable. In a workspace a
+   committee runs its group from, it is the most visibly unfinished thing
+   on the screen — a prompt cannot be styled, cannot validate before it
+   closes, cannot say what a field is for, and on a phone it covers
+   everything the member was reading.
+
+   One shell, so the four read alike and the next one does too. */
+function _svFormShell(gid, opts) {
+  const body = document.getElementById('svWsBody');
+  if (!body) return;
+  body.innerHTML = `
+    <div style="max-width:520px">
+      <div class="sa-section-title"><i class="fa-solid ${opts.icon}"></i> ${_esc(opts.title)}</div>
+      ${opts.intro ? `<div style="font-size:0.82rem;color:var(--text-muted);line-height:1.6;margin-bottom:14px">${opts.intro}</div>` : ''}
+      ${opts.fields}
+      <div id="svFormNote" style="font-size:0.78rem;color:#ef4444;min-height:18px;margin-bottom:8px"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn--primary btn--sm" onclick="${opts.submit}">
+          <i class="fa-solid ${opts.submitIcon || 'fa-check'}"></i> ${_esc(opts.submitLabel)}
+        </button>
+        <button class="btn btn--ghost btn--sm" onclick="_svRenderHub('${_esc(gid)}',null,{cached:true})">Cancel</button>
+      </div>
+    </div>`;
+  const first = body.querySelector('input, select, textarea');
+  if (first) first.focus();
+}
+
+/* A labelled field. Validation lands in one place under the form rather
+   than in an alert that takes the page away. */
+function _svField(id, label, type, hint, attrs) {
+  return `<label for="${id}" style="display:block;font-size:0.74rem;text-transform:uppercase;
+      letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">${_esc(label)}</label>
+    <input id="${id}" class="form-input" type="${type}" style="width:100%;margin-bottom:${hint ? '4' : '12'}px" ${attrs || ''}>
+    ${hint ? `<div style="font-size:0.74rem;color:var(--text-muted);margin-bottom:12px">${hint}</div>` : ''}`;
+}
+
+function _svFormError(msg) {
+  const n = document.getElementById('svFormNote');
+  if (n) n.textContent = msg; else Utils.toast(msg, 'error');
+}
+function _svVal(id) { const el = document.getElementById(id); return el ? el.value : ''; }
+
 function _svOverview(id, ctx) {
   const d        = (ctx.shareData && ctx.shareData.data) || null;
   const payouts  = (ctx.payoutData && ctx.payoutData.data) || [];
@@ -12699,6 +12830,56 @@ function _svOverview(id, ctx) {
       <div style="font-size:1.4rem;font-weight:800;margin:6px 0 3px;color:${colour || 'inherit'}">${value}</div>
       <div style="font-size:0.77rem;color:var(--text-muted);line-height:1.45">${note}</div>
     </div>`;
+
+  /* A STOKVEL THAT HAS NOT STARTED YET. Without this the overview of a
+     brand-new group is two tiles and a lot of white: every tile that
+     matters is conditional on there being money, members or a mandate, and
+     a committee that has just opened an account has none of them. What
+     they need is the three things standing between them and a working
+     group, in order. */
+  const roster  = (ctx.members && ctx.members.data) || [];
+  const quorum  = parseInt(ctx.g.stokvel_quorum, 10) || 0;
+  const pot     = d ? Number(d.net_assets) : 0;
+  if (roster.length < 2 || !quorum || pot <= 0) {
+    const step = (done, title, note, action) => `
+      <div style="display:flex;gap:12px;align-items:flex-start;padding:14px 0;
+                  border-bottom:1px solid var(--border)">
+        <div style="width:26px;height:26px;border-radius:50%;flex-shrink:0;display:grid;place-items:center;
+                    background:${done ? '#22c55e' : 'var(--border)'};color:${done ? '#fff' : 'var(--text-muted)'};
+                    font-size:0.72rem">
+          <i class="fa-solid ${done ? 'fa-check' : 'fa-ellipsis'}"></i>
+        </div>
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:0.92rem;${done ? 'text-decoration:line-through;opacity:.6' : ''}">${title}</div>
+          <div style="font-size:0.8rem;color:var(--text-muted);line-height:1.5">${note}</div>
+          ${!done && action ? `<div style="margin-top:8px">${action}</div>` : ''}
+        </div>
+      </div>`;
+
+    return `<div style="max-width:640px">
+      <div class="sa-section-title"><i class="fa-solid fa-flag-checkered"></i> Getting ${_esc(ctx.g.name)} going</div>
+      <p style="font-size:0.86rem;color:var(--text-muted);line-height:1.6;margin-bottom:6px">
+        Three things stand between this account and a working stokvel.
+      </p>
+      ${step(roster.length >= 2, 'Get the members in',
+        roster.length >= 2
+          ? `${roster.length} members are in.`
+          : 'Invite them by email address or cell number. They accept it themselves \u2014 nobody is added to a group that can see their money without agreeing to it.',
+        `<button class="btn btn--secondary btn--sm" onclick="svWorkspaceTab('${_esc(id)}','members')">Invite members</button>`)}
+      ${step(!!quorum, 'Agree the mandate',
+        quorum ? `${quorum} signatories must approve before money moves.`
+               : 'Tell us who the signatories are and how many must approve before money leaves. It cannot be fewer than two \u2014 a mandate of one is not a mandate. Talk to us and we will capture it against your constitution.',
+        `<a class="btn btn--secondary btn--sm" href="https://api.whatsapp.com/send?phone=27722269415" target="_blank" rel="noopener">
+           <i class="fa-brands fa-whatsapp"></i> Set up the mandate</a>`)}
+      ${step(pot > 0, 'Start contributing',
+        pot > 0 ? `The pot holds ${Utils.rand(pot)}.`
+                : 'Once the schedule is set, each member pays their share from their own wallet and the whole group can see who has and who has not.',
+        `<button class="btn btn--secondary btn--sm" onclick="payIntoStokvel('${_esc(id)}')">Pay into the pot</button>`)}
+      <p style="font-size:0.78rem;color:var(--text-muted);margin-top:14px">
+        The other sections above are already here and will fill up as the group gets going.
+      </p>
+    </div>`;
+  }
 
   return `
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
@@ -12993,18 +13174,36 @@ function _svPayouts(res, gid) {
         </div>`).join('')}` : ''}`;
 }
 
-async function planStokvelPayout(groupId) {
-  const label = prompt('What is this payout called?\n\ne.g. "December 2026"');
-  if (!label) return;
-  const payOn = prompt('What date should it be paid on? (YYYY-MM-DD)');
-  if (!payOn) return;
+function planStokvelPayout(groupId) {
+  const yr = new Date().getFullYear();
+  _svFormShell(groupId, {
+    icon: 'fa-calendar-plus',
+    title: 'Plan a payout',
+    intro: 'The date the group pays itself out. Every member is paid their share, less anything '
+         + 'they owe, into their own wallet \u2014 and <strong>nobody leaves</strong>: the pot resets '
+         + 'and contributions carry on. The signatories still have to approve it.',
+    fields: _svField('svPoLabel', 'What is it called', 'text',
+              'Something the group will recognise on a statement.',
+              `maxlength="80" value="December ${yr}"`)
+          + _svField('svPoDate', 'Pay it on', 'date', '', `value="${yr}-12-01"`),
+    submit: `submitStokvelPayout('${_esc(groupId)}')`,
+    submitIcon: 'fa-calendar-plus',
+    submitLabel: 'Plan it',
+  });
+}
+
+async function submitStokvelPayout(groupId) {
+  const label = _svVal('svPoLabel').trim();
+  const payOn = _svVal('svPoDate');
+  if (!label) return _svFormError('Give the payout a name.');
+  if (!payOn) return _svFormError('Choose the date it is paid on.');
   try {
     await API._fetch('POST', `stokvels/${groupId}/payouts`, { label, pay_on: payOn });
     Utils.toast('Planned. Raise it for the signatories to approve.', 'success');
   } catch (err) {
-    Utils.toast(err.message || 'Could not plan that payout.', 'error');
+    return _svFormError(err.message || 'Could not plan that payout.');
   }
-  await _svRenderHub(groupId);
+  await _svRenderHub(groupId, 'payouts');
 }
 
 async function cancelStokvelPayout(groupId, payoutId) {
@@ -13283,33 +13482,57 @@ function _svMembers(res, gid, canLevy) {
 
 /* A fine, under the group's own rules. The committee records it; we do not
    set it, impose it or enforce it, and the message to the member says so. */
+/* A fine, under the group's own rules. The member is CHOSEN from the
+   roster rather than typed: the first version asked for a name and matched
+   it, so two members called Thandi could not be told apart and a typo was a
+   silent refusal. */
 async function levyStokvelFine(groupId) {
-  const who = prompt('Which member? Enter their name as it appears in the list.');
-  if (!who) return;
-  let members = [];
+  let roster = [];
   try {
     const res = await API._fetch('GET', `stokvels/${groupId}/members`);
-    members = (res && res.data) || [];
-  } catch (_) { /* the server decides; this is only to resolve the name */ }
-  const match = members.filter(m =>
-    `${m.first_name || ''} ${m.last_name || ''}`.trim().toLowerCase().includes(who.trim().toLowerCase()));
-  if (match.length !== 1) {
-    Utils.toast(match.length ? 'That matches more than one member.' : 'No member by that name.', 'error');
+    roster = ((res && res.data) || []).filter(m => m.status === 'active');
+  } catch (err) {
+    Utils.toast(err.message || 'Could not load the members.', 'error');
     return;
   }
-  const raw = prompt(`Fine ${match[0].first_name} how much?`);
-  const amount = parseFloat(raw);
-  if (!(amount > 0)) return;
-  const note = prompt('What is it for? They will see this.');
-  if (!note) { Utils.toast('A reason is needed \u2014 the member will see it.', 'error'); return; }
+  if (!roster.length) { Utils.toast('There is nobody to fine.', 'error'); return; }
+
+  _svFormShell(groupId, {
+    icon: 'fa-gavel',
+    title: 'Record a fine',
+    intro: 'Under your stokvel&rsquo;s own rules. It is added to what that member owes and settles '
+         + 'like a contribution \u2014 oldest first when they pay in, or off their share at a payout '
+         + 'or when they leave. <strong>SV Capital does not set or enforce a stokvel&rsquo;s '
+         + 'penalties.</strong>',
+    fields: `<label for="svFnWho" style="display:block;font-size:0.74rem;text-transform:uppercase;
+          letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">Which member</label>
+        <select id="svFnWho" class="form-input" style="width:100%;margin-bottom:12px">
+          ${roster.map(m => `<option value="${_esc(m.investor_id)}">${_esc(m.first_name)} ${_esc(m.last_name || '')}</option>`).join('')}
+        </select>`
+      + _svField('svFnAmount', 'How much', 'number', '', 'min="0" step="0.01" inputmode="decimal"')
+      + _svField('svFnNote', 'What is it for', 'text',
+          'Required, and the member sees it. A fine somebody cannot see the reason for is the thing that ends stokvels.',
+          'maxlength="200"'),
+    submit: `submitStokvelFine('${_esc(groupId)}')`,
+    submitIcon: 'fa-gavel',
+    submitLabel: 'Record it',
+  });
+}
+
+async function submitStokvelFine(groupId) {
+  const investorId = _svVal('svFnWho');
+  const amount = parseFloat(_svVal('svFnAmount'));
+  const note = _svVal('svFnNote').trim();
+  if (!investorId)   return _svFormError('Choose a member.');
+  if (!(amount > 0)) return _svFormError('Enter an amount.');
+  if (!note)         return _svFormError('Say what the fine is for \u2014 the member will see it.');
   try {
-    await API._fetch('POST', `stokvels/${groupId}/fines`,
-                     { investor_id: match[0].investor_id, amount, note });
+    await API._fetch('POST', `stokvels/${groupId}/fines`, { investor_id: investorId, amount, note });
     Utils.toast('Recorded. They have been told.', 'success');
   } catch (err) {
-    Utils.toast(err.message || 'Could not record that fine.', 'error');
+    return _svFormError(err.message || 'Could not record that fine.');
   }
-  await _svRenderHub(groupId);
+  await _svRenderHub(groupId, 'members');
 }
 
 async function payStokvelContribution(groupId, contributionId) {
@@ -13324,27 +13547,40 @@ async function payStokvelContribution(groupId, contributionId) {
   }
 }
 
-async function raiseStokvelWithdrawal(groupId) {
-  const amount = prompt('How much should be withdrawn?');
-  if (!amount) return;
-  const bankName = prompt('Which bank is it going to?');
-  if (!bankName) return;
-  /* The destination is part of what the signatories approve — see the gate
-     in routes/withdrawals.js. Asking for it here rather than later is what
-     makes their approval mean something. */
-  const bankAcct = prompt('Which account number?');
-  if (!bankAcct) return;
-  const reason = prompt('What is it for? (optional)') || '';
+function raiseStokvelWithdrawal(groupId) {
+  _svFormShell(groupId, {
+    icon: 'fa-arrow-up-from-bracket',
+    title: 'Request a withdrawal',
+    intro: 'This does not move anything yet. It asks the signatories to approve this amount '
+         + 'going to this account \u2014 the destination is part of what they agree to, which is '
+         + 'why it is asked for here rather than later.',
+    fields: _svField('svWdAmount', 'How much', 'number', '', 'min="0" step="0.01" inputmode="decimal"')
+          + _svField('svWdBank', 'Which bank', 'text', '', 'maxlength="60"')
+          + _svField('svWdAcct', 'Account number', 'text',
+              'The signatories approve this account, and nothing can be paid to another one.',
+              'inputmode="numeric" maxlength="30"')
+          + _svField('svWdReason', 'What is it for? (optional)', 'text', '', 'maxlength="200"'),
+    submit: `submitStokvelWithdrawal('${_esc(groupId)}')`,
+    submitIcon: 'fa-paper-plane',
+    submitLabel: 'Ask the signatories',
+  });
+}
+
+async function submitStokvelWithdrawal(groupId) {
+  const amount = parseFloat(_svVal('svWdAmount'));
+  const bank   = _svVal('svWdBank').trim();
+  const acct   = _svVal('svWdAcct').trim();
+  if (!(amount > 0))  return _svFormError('Enter how much should be withdrawn.');
+  if (!bank || !acct) return _svFormError('The bank and account number are part of what is approved.');
   try {
     await API._fetch('POST', `stokvels/${groupId}/withdrawal-requests`, {
-      amount: parseFloat(amount), bank_name: bankName,
-      bank_account_number: bankAcct, reason,
+      amount, bank_name: bank, bank_account_number: acct, reason: _svVal('svWdReason'),
     });
     Utils.toast('Request raised. The signatories have been asked to approve it.', 'success');
-    await _svRenderHub(groupId);
   } catch (err) {
-    Utils.toast(err.message || 'Could not raise that request.', 'error');
+    return _svFormError(err.message || 'Could not raise that request.');
   }
+  await _svRenderHub(groupId, 'approvals');
 }
 
 /* ─── Asking for an investment ─────────────────────────────
@@ -13365,35 +13601,27 @@ function raiseStokvelInvestment(groupId) {
     Utils.toast('There are no open pools to invest in right now.', 'error');
     return;
   }
-  const body = document.getElementById('saDetailBody');
-  if (!body) return;
-  body.innerHTML = `
-    <div style="padding:4px 2px 8px">
-      <div class="sa-section-title"><i class="fa-solid fa-seedling"></i> Request an investment</div>
-      <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:14px">
-        This does not invest anything yet. It asks the signatories to approve
-        this amount into this pool; once enough of them have, any member can place it.
-      </div>
-      <label style="display:block;font-size:0.74rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">Which pool</label>
+  _svFormShell(groupId, {
+    icon: 'fa-seedling',
+    title: 'Request an investment',
+    intro: `This does not invest anything yet. It asks the signatories to approve
+      this amount into this pool; once enough of them have, any member can place it.`,
+    fields: `<label for="svInvPool" style="display:block;font-size:0.74rem;text-transform:uppercase;
+          letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">Which pool</label>
       <select id="svInvPool" class="form-input" style="width:100%;margin-bottom:12px"
               onchange="_svInvRecalc()">
         ${pools.map(p => `<option value="${_esc(p.id)}" data-min="${parseFloat(p.min_investment) || 0}">
-          ${_esc(p.name)} — ${(parseFloat(p.annual_rate) * 100).toFixed(1)}% over ${_esc(String(p.term_months))} months · from ${Utils.rand(p.min_investment)}
+          ${_esc(p.name)} \u2014 ${(parseFloat(p.annual_rate) * 100).toFixed(1)}% over ${_esc(String(p.term_months))} months \u00b7 from ${Utils.rand(p.min_investment)}
         </option>`).join('')}
-      </select>
-      <label style="display:block;font-size:0.74rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">How much should reach the pool</label>
-      <input id="svInvAmount" class="form-input" type="number" min="0" step="0.01" inputmode="decimal"
-             style="width:100%;margin-bottom:6px" oninput="_svInvRecalc()">
-      <div id="svInvNote" style="font-size:0.76rem;color:var(--text-muted);margin-bottom:12px"></div>
-      <label style="display:block;font-size:0.74rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">What is it for? (optional)</label>
-      <input id="svInvReason" class="form-input" type="text" maxlength="200" style="width:100%;margin-bottom:16px">
-      <div style="display:flex;gap:8px">
-        <button class="btn btn--primary btn--sm" onclick="submitStokvelInvestment('${_esc(groupId)}')">
-          <i class="fa-solid fa-paper-plane"></i> Ask the signatories
-        </button>
-        <button class="btn btn--ghost btn--sm" onclick="_svRenderHub('${_esc(groupId)}')">Cancel</button>
-      </div>
-    </div>`;
+      </select>`
+      + _svField('svInvAmount', 'How much should reach the pool', 'number', '',
+                 'min="0" step="0.01" inputmode="decimal" oninput="_svInvRecalc()"')
+      + `<div id="svInvNote" style="font-size:0.76rem;color:var(--text-muted);margin-bottom:12px"></div>`
+      + _svField('svInvReason', 'What is it for? (optional)', 'text', '', 'maxlength="200"'),
+    submit: `submitStokvelInvestment('${_esc(groupId)}')`,
+    submitIcon: 'fa-paper-plane',
+    submitLabel: 'Ask the signatories',
+  });
   _svInvRecalc();
 }
 
@@ -13423,12 +13651,19 @@ function _svInvRecalc() {
 
 async function submitStokvelInvestment(groupId) {
   const sel = document.getElementById('svInvPool');
-  const amt = parseFloat((document.getElementById('svInvAmount') || {}).value);
-  if (!sel || !sel.value) { Utils.toast('Choose a pool.', 'error'); return; }
-  if (!(amt > 0))         { Utils.toast('Enter how much should reach the pool.', 'error'); return; }
+  const amt = parseFloat(_svVal('svInvAmount'));
+  if (!sel || !sel.value) { _svFormError('Choose a pool.'); return; }
+  if (!(amt > 0))         { _svFormError('Enter how much should reach the pool.'); return; }
   const min = parseFloat(sel.selectedOptions[0] && sel.selectedOptions[0].dataset.min) || 0;
   if (min > 0 && amt < min - 0.005) {
-    Utils.toast(`This pool takes ${Utils.rand(min)} or more.`, 'error');
+    /* The live note under the amount already says this as it is typed.
+       Repeating it under the form puts the same sentence on the screen
+       twice, which reads as two problems. Point at the field instead. */
+    const live = document.getElementById('svInvNote');
+    _svFormError(live && live.textContent.indexOf(Utils.rand(min)) >= 0
+      ? '' : `This pool takes ${Utils.rand(min)} or more.`);
+    const el = document.getElementById('svInvAmount');
+    if (el && el.focus) el.focus();
     return;
   }
   try {
@@ -13436,13 +13671,14 @@ async function submitStokvelInvestment(groupId) {
       kind: 'investment',
       amount: amt,
       pool_id: sel.value,
-      reason: (document.getElementById('svInvReason') || {}).value || '',
+      reason: _svVal('svInvReason'),
     });
-    Utils.toast('Request raised. The signatories have been asked to approve it.', 'success');
   } catch (err) {
-    Utils.toast(err.message || 'Could not raise that request.', 'error');
+    _svFormError(err.message || 'Could not raise that request.');
+    return;
   }
-  await _svRenderHub(groupId);
+  Utils.toast('Request raised. The signatories have been asked to approve it.', 'success');
+  await _svRenderHub(groupId, 'approvals');
 }
 
 /* ─── Placing an approved investment ────────────────────────

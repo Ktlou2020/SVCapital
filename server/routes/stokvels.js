@@ -377,6 +377,12 @@ router.get('/:id', async (req, res) => {
         total_returns: group.total_returns,
         savings_goal: group.savings_goal,
         savings_goal_label: group.savings_goal_label,
+        /* The mandate, so a screen can tell a group that has agreed one
+           from a group that has not. Without it the workspace's first-run
+           state — which asks whether there is a quorum — would treat every
+           stokvel as though it had never started. */
+        stokvel_quorum: group.stokvel_quorum,
+        share_basis: group.share_basis,
         my_role: group.my_role || (group.i_opened_it ? 'chairperson' : null),
         i_opened_it: group.i_opened_it,
       },

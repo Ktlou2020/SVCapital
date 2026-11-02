@@ -89,7 +89,11 @@ console.log('\nand what it renders is escaped');
 
 console.log('\nthe request collects what the gate will check');
 {
-  const fn = CORE.slice(CORE.indexOf('async function raiseStokvelWithdrawal'),
+  /* Sliced on the declaration as it actually reads. This looked for
+     'async function raiseStokvelWithdrawal'; the flow became a form and
+     stopped being async, indexOf returned -1, and slice(-1, n) handed the
+     assertions an empty string that then failed for the wrong reason. */
+  const fn = CORE.slice(CORE.indexOf('function raiseStokvelWithdrawal'),
                         CORE.indexOf('async function voteStokvelRequest'));
   ok('it asks for the amount', /amount/.test(fn));
   ok('and the bank account it is going to',
@@ -161,6 +165,58 @@ console.log('\nand a group wallet is never topped up with unattributed money');
      /pay-in/.test(payInFn) && !/openTopUpModal/.test(payInFn),
      'a wallet that already knows whose money it is');
   ok('and the hub offers it too', /Pay into the pot/.test(CORE));
+}
+
+console.log('\nand the workspace behaves like one');
+{
+  const ws = CORE.slice(CORE.indexOf('function _svCache'), CORE.indexOf('function _svOverview'));
+  ok('moving between sections reuses what is loaded',
+     /_svRenderHub\(id, tab, \{ cached: true \}\)/.test(CORE),
+     'a tab was seven requests; a dashboard that goes back to the network to '
+     + 'change tab does not feel like one');
+  const submits = [];
+  for (const m of CORE.matchAll(/async function (submitStokvel\w+)\s*\(/g)) {
+    const end = CORE.indexOf('\n}\n', m.index);
+    submits.push([m[1], CORE.slice(m.index, end === -1 ? CORE.length : end)]);
+  }
+  ok('every form that changed the group refetches',
+     submits.length >= 5 && submits.every(([, body]) =>
+       /_svRenderHub\(/.test(body) && !/cached/.test(body)),
+     'a stale figure must not survive an action; found ' + submits.length
+     + ' forms: ' + submits.filter(([, b]) => /cached/.test(b) || !/_svRenderHub\(/.test(b))
+         .map(([n]) => n).join(', '));
+  ok('and switching groups starts clean',
+     /window\.__SVWS = null/.test(CORE),
+     'the member may have been away for days');
+
+  ok('the sections are a real tablist',
+     /role="tablist"/.test(ws) && /role="tab"/.test(ws) && /aria-selected/.test(ws));
+  const keyFn = CORE.slice(CORE.indexOf('function svTabKeys'),
+                           CORE.indexOf('function _svScrollTabIntoView'));
+  ok('with arrow keys, and wired to the bar',
+     /onkeydown="svTabKeys\(/.test(ws)
+     && ['ArrowRight', 'ArrowLeft', 'Home', 'End'].every(k => keyFn.includes(k))
+     && /svWorkspaceTab\(/.test(keyFn),
+     'a tablist a keyboard cannot move along is a row of buttons wearing the role');
+  ok('and the open one scrolled into view',
+     /_svScrollTabIntoView/.test(CORE),
+     'a tab bar that scrolls and hides where you are is worse than one that does not');
+  const phone = ws.slice(ws.indexOf('@media (max-width: 760px)'));
+  ok('the labels stay at phone width',
+     /\$\{label\}/.test(ws) && !/display\s*:\s*none/.test(phone),
+     'nine unnamed icons is a guessing game; the bar scrolls instead');
+
+  ok('nothing is collected through a prompt box any more',
+     !/= prompt\(/.test(CORE) && !/await prompt\(/.test(CORE),
+     'a prompt cannot be styled, cannot validate before it closes, and on a '
+     + 'phone it covers what the member was reading');
+  ok('the forms say what is wrong without taking the page away',
+     /id="svFormNote"/.test(CORE)
+     && submits.every(([, body]) => /_svFormError\(/.test(body)),
+     'an alert box throws away what the member typed; these forms do not');
+  ok('and a fine picks the member off the roster',
+     /id="svFnWho"/.test(CORE) && /<select/.test(CORE.slice(CORE.indexOf('async function levyStokvelFine'))),
+     'typing a name could not tell two members called Thandi apart');
 }
 
 console.log('\nand a notification opens the thing it is about');
@@ -235,6 +291,7 @@ if (!CHROME) {
    what is being checked is that these four payloads become that screen. */
 const STUB = {
   'stokvels/SA-1': { data: { id: 'SA-1', name: 'Ubuntu <b>Club</b>', wallet_balance: 12500,
+                             stokvel_quorum: 2,
                              total_invested: 0, my_role: 'treasurer' } },
   'stokvels/SA-1/members': { data: [
     { id: 'm1', investor_id: 'I1', first_name: 'Ann', last_name: 'M', role: 'chairperson',
@@ -349,12 +406,32 @@ const STUB = {
     const send = (method, params) => new Promise(r => {
       const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
     await send('Runtime.enable');
+    await send('Page.enable');
     const evaluate = async expr => {
       const r = await send('Runtime.evaluate', { returnByValue: true, awaitPromise: true, expression: expr });
       if (r.result && r.result.exceptionDetails) {
         throw new Error(JSON.stringify(r.result.exceptionDetails.exception || {}).slice(0, 300));
       }
       return r.result.result.value;
+    };
+
+    /* A render is the only thing that catches a layout no assertion can see:
+       a grid class that does not exist draws as one unstyled column and
+       every text assertion still passes. Off unless asked for:
+         SVC_SHOT=/tmp/shots node server/scripts/check-stokvel-screens.cjs */
+    const SHOT = process.env.SVC_SHOT;
+    const shot = async (name, width, height) => {
+      if (!SHOT) return;
+      await send('Emulation.setDeviceMetricsOverride', {
+        width: width || 1100, height: height || 1500,
+        deviceScaleFactor: 1, mobile: (width || 1100) < 500 });
+      const r = await send('Page.captureScreenshot', { format: 'png' });
+      const data = r.result && r.result.data;
+      if (!data) return;
+      fs.mkdirSync(SHOT, { recursive: true });
+      const out = path.join(SHOT, name + '.png');
+      fs.writeFileSync(out, Buffer.from(data, 'base64'));
+      console.log(`  shot  ${out}`);
     };
 
     /* The page: the hub's own functions, the few helpers they lean on, and
@@ -382,8 +459,24 @@ const STUB = {
       /* The workspace, not a modal. A stokvel is now a view of its own
          with its own sections; the old saDetail* elements are kept so the
          few helpers that still close the sub-account modal find something. */
+      /* The portal's own stylesheets, inlined, so a screenshot taken with
+         SVC_SHOT shows what a member would see rather than unstyled text.
+         The assertions read textContent and innerHTML, so this changes
+         nothing they measure \u2014 it only makes a render worth looking at. */
+      document.head.innerHTML = '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        + '<style>' + ${JSON.stringify(
+        ['css/admin.css', 'portal/css/portal.css', 'css/ci-theme.css',
+         'portal/css/portal-premium.css']
+          .filter(f => fs.existsSync(path.join(ROOT, f)))
+          .map(f => fs.readFileSync(path.join(ROOT, f), 'utf8')).join('\n'))
+      } + '</style>';
       document.body.innerHTML = '<div id="saDetailTitle"></div><div id="saDetailBody"></div>'
+        /* Wrapped the way portal/index.html wraps it \u2014 page-content and an
+           active .view \u2014 so a screenshot has the gutters and the widths
+           the member's screen has, not the bare edges of about:blank. */
+        + '<main class="page-content"><div class="view active" id="view-stokvel">'
         + '<div id="svWsHeader"></div><div id="svWsTabs"></div><div id="svWsBody"></div>'
+        + '</div></main>'
         + '<div id="svSwitcher"></div>';
       window.navigate = () => {};
     `;
@@ -597,9 +690,10 @@ const STUB = {
     console.log('\nand the investment request form');
     const form = await evaluate(`(() => {
       raiseStokvelInvestment('SA-1');
-      const b = document.getElementById('saDetailBody');
+      const b = document.getElementById('svWsBody');
       const sel = document.getElementById('svInvPool');
       const out = { html: b.innerHTML, text: b.textContent,
+                    inTheModal: document.getElementById('saDetailBody').innerHTML.length,
                     options: [...(sel ? sel.options : [])].map(o => o.value) };
       document.getElementById('svInvAmount').value = '1000';
       _svInvRecalc();
@@ -609,6 +703,10 @@ const STUB = {
       out.belowMinimum = document.getElementById('svInvNote').textContent;
       return out;
     })()`);
+    ok('is rendered in the workspace, not the old modal',
+       form.text.includes('Request an investment') && form.inTheModal === 0,
+       'the stokvel modal is gone; a form drawn into it is a button that does '
+       + 'nothing');
     ok('offers the open pools and only those',
        form.options.join(',') === 'POOL-CATTLE-11',
        form.options.join(','));
@@ -620,6 +718,59 @@ const STUB = {
     ok('and refuses below the pool’s own minimum',
        /R1000\.00 or more/.test(form.belowMinimum) && !/R404/.test(form.belowMinimum),
        form.belowMinimum);
+
+    const invErr = await evaluate(`(async () => {
+      const note = () => (document.getElementById('svFormNote') || {}).textContent || '';
+      const amt  = () => document.getElementById('svInvAmount');
+      const sel  = () => document.getElementById('svInvPool');
+      const out  = {};
+      raiseStokvelInvestment('SA-1');
+      sel().value = ''; await submitStokvelInvestment('SA-1'); out.noPool = note();
+      raiseStokvelInvestment('SA-1');
+      amt().value = '';  await submitStokvelInvestment('SA-1'); out.noAmount = note();
+      amt().value = '400'; await submitStokvelInvestment('SA-1');
+      out.tooLittle = document.getElementById('svInvNote').textContent;
+      out.saidTwice = (document.getElementById('svWsBody').textContent
+        .match(/or more/g) || []).length;
+      out.typedKept = amt().value;
+      return out;
+    })()`);
+    await shot('invest-form');
+    await shot('invest-form-phone', 390, 844);
+    ok('an unanswered question is said under the form',
+       /Choose a pool/.test(invErr.noPool)
+       && /how much should reach the pool/.test(invErr.noAmount)
+       && /R1000\.00 or more/.test(invErr.tooLittle),
+       JSON.stringify(invErr));
+    ok('and said once, not twice',
+       invErr.saidTwice === 1,
+       'the live note and the submit error both saying the pool minimum '
+       + 'reads as two problems; it is one');
+    ok('and what was typed is still there to correct',
+       invErr.typedKept === '400',
+       'rerendering the form on a mistake throws away the rest of the answers');
+
+    console.log('\nand the invitation form');
+    const inv = await evaluate(`(() => {
+      inviteToStokvel('SA-1');
+      const b = document.getElementById('svWsBody');
+      submitStokvelInvite('SA-1');
+      return { text: b.textContent,
+               fields: ['svInvName', 'svInvEmail', 'svInvCell']
+                 .filter(i => document.getElementById(i)).length,
+               inTheModal: document.getElementById('saDetailBody').innerHTML.length,
+               note: (document.getElementById('svFormNote') || {}).textContent,
+               typedKept: (document.getElementById('svInvName') || {}).value };
+    })()`);
+    await shot('invite-form');
+    ok('is rendered in the workspace too',
+       inv.text.includes('Invite someone to join') && inv.inTheModal === 0,
+       'it was drawn into the modal the workspace replaced');
+    ok('with a name, an email address and a cell number',
+       inv.fields === 3, String(inv.fields));
+    ok('and saying neither is an inline answer, not an alert',
+       /email address or a cell number is needed/.test(inv.note || ''),
+       inv.note || '(nothing said)');
 
     /* ── The invitation card ───────────────────────────────────────
        The one piece of UI in the whole invitation feature that cannot be
