@@ -100,6 +100,9 @@ async function authorityFor(client, subAccount, authorityId, want) {
     if (want.kind === 'exit') {
       return { error: 'Settling a member\u2019s exit needs an approved authority. Raise the request and have the signatories approve it first.' };
     }
+    if (want.kind === 'payout') {
+      return { error: 'Paying the group out needs an approved authority. Plan the payout and have the signatories approve it first.' };
+    }
     return { error: want.kind === 'investment'
       ? 'A stokvel investment needs an approved authority. Raise a request and have the signatories approve it first.'
       : 'A stokvel withdrawal needs an approved authority. Raise a withdrawal request and have the signatories approve it first.' };
@@ -114,7 +117,8 @@ async function authorityFor(client, subAccount, authorityId, want) {
      other. Signatories who agreed to put money into a pool have not agreed
      to it leaving for somebody's bank account. */
   if (String(authority.kind || 'withdrawal') !== want.kind) {
-    const WANTED = { investment: 'an investment', exit: 'an exit settlement', withdrawal: 'a withdrawal' };
+    const WANTED = { investment: 'an investment', exit: 'an exit settlement',
+                     payout: 'a payout to the whole group', withdrawal: 'a withdrawal' };
     return { error: `That authority was approved for a ${authority.kind || 'withdrawal'}, not ${WANTED[want.kind] || 'a withdrawal'}.` };
   }
 
@@ -129,7 +133,7 @@ async function authorityFor(client, subAccount, authorityId, want) {
      control. The figure on an exit request is what her share stood at when
      it was raised, shown to the signatories so they know the order of it;
      what pins an exit is WHOSE membership ends, checked below. */
-  if (want.kind !== 'exit' &&
+  if (want.kind !== 'exit' && want.kind !== 'payout' &&
       Math.round(parseFloat(authority.amount) * 100) !== Math.round(Number(want.amount) * 100)) {
     return { error: `That authority is for R${parseFloat(authority.amount).toFixed(2)}, not R${Number(want.amount).toFixed(2)}.` };
   }
@@ -137,6 +141,16 @@ async function authorityFor(client, subAccount, authorityId, want) {
   if (want.kind === 'investment') {
     if (String(authority.pool_id || '') !== String(want.poolId || '')) {
       return { error: 'That authority was approved for a different pool.' };
+    }
+  } else if (want.kind === 'payout') {
+    /* The signatories approve THE DISTRIBUTION, once, rather than one
+       withdrawal per member. What pins it is which payout — not an amount,
+       for the same reason an exit is not pinned to one: the pot on the day
+       is whatever the pot is, and a figure agreed a fortnight earlier would
+       send the group back round the signatories for money it has earned in
+       the meantime. */
+    if (String(authority.payout_id || '') !== String(want.payoutId || '')) {
+      return { error: 'That authority was approved for a different payout.' };
     }
   } else if (want.kind === 'exit') {
     /* The MEMBER is the destination of an exit, in the same way a bank

@@ -67,12 +67,14 @@ async function _load(db, groupId, authorityId) {
             a.stokvel_quorum  AS stokvel_quorum,
             p.name            AS pool_name,
             i.first_name      AS raised_by_name,
-            x.first_name      AS exit_name
+            x.first_name      AS exit_name,
+            po.label          AS payout_label
        FROM stokvel_withdrawal_requests r
        JOIN sub_accounts a ON a.id = r.sub_account_id
        LEFT JOIN investment_pools p ON p.id = r.pool_id
        LEFT JOIN investors i ON i.id = r.requested_by
        LEFT JOIN investors x ON x.id = r.exit_investor_id
+       LEFT JOIN stokvel_payouts po ON po.id = r.payout_id
       WHERE r.id = $1 AND r.sub_account_id = $2`,
     [authorityId, groupId]);
   return rows[0] || null;
@@ -108,6 +110,10 @@ function describe(authority) {
      would be the one description a signatory could not act on, because what
      they are being asked to authorise is somebody's membership ending. */
   if (kind === 'exit') return `${amount} to settle ${authority.exit_name || 'a member'}\u2019s exit`;
+  /* A payout names the distribution, not a destination: what a signatory is
+     agreeing to is that the whole group is paid out, not that a sum goes
+     somewhere. */
+  if (kind === 'payout') return `a payout of the whole group \u2014 ${authority.payout_label || 'the planned distribution'}`;
   return `${amount} to ${authority.bank_name || 'a bank account'}`;
 }
 
@@ -489,6 +495,65 @@ async function exitSettled({ groupId, investorId, settlement, db } = {}) {
   }
 }
 
+/* ─── PAID OUT ─────────────────────────────────────────────────────
+   The group has paid itself out. Every member is told what THEY received,
+   not what the group distributed — a message saying "R84 000 was paid out"
+   leaves fifteen people working out their own share from it, which is the
+   arithmetic the platform exists to do for them.
+
+   What was still owed is said separately where there is any. A member who
+   reads "R2 400 paid" and later finds another R600 arriving has been told
+   half of something. */
+async function paidOut({ groupId, payout, db } = {}) {
+  const pool = db || defaultPool;
+  try {
+    const p = payout || {};
+    const { rows: [row] } = await pool.query(
+      `SELECT name FROM sub_accounts WHERE id = $1`, [groupId]);
+    if (!row) return { notified: [] };
+
+    const told = [];
+    for (const line of (p.lines || [])) {
+      const person = await _person(pool, line.investor_id);
+      if (!person) continue;
+      const queued = Number(line.queued) || 0;
+      const tail = queued > 0
+        ? ` ${fmtR(queued)} is still owed to you and follows as the group\u2019s investments mature.`
+        : '';
+      const rows = [
+        ['Stokvel', row.name],
+        ['Payout', p.label || '\u2014'],
+        ['Your share', fmtR(line.gross)],
+      ];
+      if (Number(line.arrears) > 0) rows.push(['Less contributions owed', fmtR(line.arrears)]);
+      rows.push(['Paid to your wallet', fmtR(line.paid)]);
+      if (queued > 0) rows.push(['Still owed to you', fmtR(queued)]);
+
+      told.push(await _tell(person, {
+        title: row.name,
+        body: `${p.label || 'The payout'}: ${fmtR(line.paid)} is in your wallet.${tail}`,
+        email: {
+          subject: `${row.name}: your ${p.label || ''} payout`.trim(),
+          heading: 'The group has paid out',
+          lead: `<strong>${row.name}</strong> has paid out, and your share has been credited `
+              + 'to your SV Capital wallet. You can withdraw it from there whenever you like, '
+              + 'subject to the usual notice.',
+          rows,
+          note: queued > 0
+            ? 'Part of the group\u2019s money is committed to an investment that has not matured. '
+              + 'The balance owed to you is recorded against the stokvel and paid automatically '
+              + 'as cash becomes available \u2014 it does not need chasing.'
+            : 'You are still a member and the stokvel carries on; contributions continue as scheduled.',
+        },
+      }));
+    }
+    return { notified: told.filter(Boolean) };
+  } catch (err) {
+    console.error('[stokvelNotify] paidOut failed:', err.message);
+    return { notified: [], error: err.message };
+  }
+}
+
 /* The facts of the request, as label/value pairs. Every message carries the
    same ones, so a reader comparing two emails is comparing like with like. */
 function _rows(a, required, reference) {
@@ -512,4 +577,4 @@ function _rows(a, required, reference) {
   return out;
 }
 
-module.exports = { approvalNeeded, decided, spent, invited, inviteAccepted, exitSettled, describe };
+module.exports = { approvalNeeded, decided, spent, invited, inviteAccepted, exitSettled, paidOut, describe };

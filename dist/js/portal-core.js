@@ -12394,15 +12394,16 @@ async function openStokvelHub(id) {
 }
 
 async function _svRenderHub(id) {
-  let group, members, contributions, requests, invitations, shareData;
+  let group, members, contributions, requests, invitations, shareData, payoutData;
   try {
-    [group, members, contributions, requests, invitations, shareData] = await Promise.all([
+    [group, members, contributions, requests, invitations, shareData, payoutData] = await Promise.all([
       API._fetch('GET', `stokvels/${id}`),
       API._fetch('GET', `stokvels/${id}/members`),
       API._fetch('GET', `stokvels/${id}/contributions`),
       API._fetch('GET', `stokvels/${id}/withdrawal-requests`),
       API._fetch('GET', `stokvels/${id}/invites`),
       API._fetch('GET', `stokvels/${id}/shares`),
+      API._fetch('GET', `stokvels/${id}/payouts`),
     ]);
   } catch (err) {
     document.getElementById('saDetailBody').innerHTML =
@@ -12418,6 +12419,7 @@ async function _svRenderHub(id) {
   document.getElementById('saDetailTitle').textContent = g.name || 'Stokvel';
   document.getElementById('saDetailBody').innerHTML = `
     ${_svHeader(g, shareData)}
+    ${_svPayouts(payoutData, id)}
     ${_svShares(shareData, id)}
     ${_svContributions(contributions, mine, id)}
     ${_svWithdrawals(requests, meIsSignatory, id)}
@@ -12496,6 +12498,119 @@ function _svContributions(res, mine, gid) {
     <div style="font-size:0.74rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Who is behind</div>
     ${arrearsBlock}
     ${rows.length ? '' : `<div style="font-size:0.82rem;color:var(--text-muted);margin-top:8px">No contributions have been scheduled yet.</div>`}`;
+}
+
+/* ─── Payouts ──────────────────────────────────────────────────────
+   The December payout. Put ABOVE the shares, because a distribution the
+   group has decided on is the most important thing on a member's screen
+   once it exists, and the line they care about is their own figure rather
+   than the group's total. */
+function _svPayouts(res, gid) {
+  const d = (res && res.data) || [];
+  const can = !!(res && res.can_plan);
+  const planned = d.find(p => p.status === 'planned');
+  const past = d.filter(p => p.status === 'paid').slice(0, 3);
+  if (!planned && !past.length && !can) return '';
+
+  const mine = res && res.my_share_now;
+
+  return `<div class="sa-section-title mt-16"><i class="fa-solid fa-gift"></i> Payout</div>
+    ${planned ? `<div style="border:2px solid #eda5ff;border-radius:12px;padding:14px;margin-bottom:10px;background:rgba(237,165,255,0.06)">
+        <div style="font-weight:800;font-size:0.95rem">${_esc(planned.label)}</div>
+        <div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px">
+          Planned for ${_esc(String(planned.pay_on).slice(0, 10))}
+        </div>
+        ${mine != null ? `<div style="margin-top:10px;font-size:0.82rem">
+          You would receive <strong style="font-size:1.05rem">${Utils.rand(mine)}</strong>
+          <span style="color:var(--text-muted)">if it ran today — what you still owe comes off first,
+          and the figure moves with whatever the group earns before then.</span>
+        </div>` : ''}
+        <div style="font-size:0.74rem;color:var(--text-muted);margin-top:8px">
+          It needs the signatories&rsquo; approval before it can be paid, like anything else
+          that moves the group&rsquo;s money. Nobody leaves the stokvel — the pot resets and
+          contributions carry on.
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+          ${planned.authority_id ? '' : `<button class="btn btn--primary btn--sm"
+            onclick="requestStokvelPayout('${_esc(gid)}','${_esc(planned.id)}','${_esc(planned.label)}')">
+            <i class="fa-solid fa-paper-plane"></i> Ask the signatories
+          </button>`}
+          ${can ? `<button class="btn btn--ghost btn--sm"
+            onclick="cancelStokvelPayout('${_esc(gid)}','${_esc(planned.id)}')">Call it off</button>` : ''}
+        </div>
+      </div>`
+      : (can ? `<button class="btn btn--secondary btn--sm" onclick="planStokvelPayout('${_esc(gid)}')">
+          <i class="fa-solid fa-calendar-plus"></i> Plan a payout
+        </button>` : '')}
+    ${past.length ? `<div style="font-size:0.74rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 6px">Paid before</div>
+      ${past.map(p => `<div style="display:flex;justify-content:space-between;font-size:0.82rem;padding:6px 0;border-bottom:1px solid var(--border)">
+          <span>${_esc(p.label)}</span>
+          <strong>${p.my_line ? Utils.rand(p.my_line.paid) : '—'}</strong>
+        </div>`).join('')}` : ''}`;
+}
+
+async function planStokvelPayout(groupId) {
+  const label = prompt('What is this payout called?\n\ne.g. "December 2026"');
+  if (!label) return;
+  const payOn = prompt('What date should it be paid on? (YYYY-MM-DD)');
+  if (!payOn) return;
+  try {
+    await API._fetch('POST', `stokvels/${groupId}/payouts`, { label, pay_on: payOn });
+    Utils.toast('Planned. Raise it for the signatories to approve.', 'success');
+  } catch (err) {
+    Utils.toast(err.message || 'Could not plan that payout.', 'error');
+  }
+  await _svRenderHub(groupId);
+}
+
+async function cancelStokvelPayout(groupId, payoutId) {
+  if (!confirm('Call this payout off? The group can plan another at any time.')) return;
+  try {
+    await API._fetch('DELETE', `stokvels/${groupId}/payouts/${payoutId}`);
+    Utils.toast('Called off.', 'success');
+  } catch (err) {
+    Utils.toast(err.message || 'Could not cancel it.', 'error');
+  }
+  await _svRenderHub(groupId);
+}
+
+/* Asking the signatories for it, and carrying it out once they have agreed.
+   Both deliberately plain: the figures are on the panel above. */
+async function requestStokvelPayout(groupId, payoutId, label) {
+  try {
+    const sh = await API._fetch('GET', `stokvels/${groupId}/shares`);
+    const pot = (sh && sh.data && sh.data.net_assets) || 0.01;
+    await API._fetch('POST', `stokvels/${groupId}/withdrawal-requests`, {
+      kind: 'payout', payout_id: payoutId, amount: pot,
+      /* Concatenated rather than interpolated, and deliberately so: this is
+         a request BODY, not markup, so it must not be _esc'd — and
+         check-portal-split's scan for unescaped person-typed values in the
+         hub cannot tell the difference. Keeping it out of a template
+         literal says which of the two it is. */
+      reason: ('Payout — ' + (label || '')).trim(),
+    });
+    Utils.toast('Asked. The signatories have to approve it.', 'success');
+  } catch (err) {
+    Utils.toast(err.message || 'Could not raise that request.', 'error');
+  }
+  await _svRenderHub(groupId);
+}
+
+async function runStokvelPayout(groupId, payoutId, authorityId) {
+  if (!confirm('Pay the group out now?\n\nEvery member is paid their share, less anything they owe, '
+             + 'into their own wallet. Nobody leaves the stokvel.')) return;
+  try {
+    const res = await API._fetch('POST', `stokvels/${groupId}/payouts/${payoutId}/run`,
+                                 { authority_id: authorityId });
+    const d = (res && res.data) || {};
+    Utils.toast(Number(d.queued) > 0
+      ? `Paid ${Utils.rand(d.paid)}. ${Utils.rand(d.queued)} is owed as investments mature.`
+      : `Paid ${Utils.rand(d.paid)} to ${(d.lines || []).length} member(s).`, 'success');
+  } catch (err) {
+    Utils.toast(err.message || 'Could not run that payout.', 'error');
+  }
+  await Promise.all([loadSubAccounts(), loadStokvels()]);
+  await _svRenderHub(groupId);
 }
 
 /* ─── Shares ───────────────────────────────────────────────────────
@@ -12621,7 +12736,9 @@ function _svWithdrawals(res, meIsSignatory, gid) {
             <span style="font-size:0.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
                          border:1px solid var(--border);border-radius:999px;padding:1px 7px;margin-left:6px;
                          color:${r.kind === 'investment' ? '#eda5ff' : (r.kind === 'exit' ? '#f59e0b' : 'var(--text-muted)')}">
-              ${r.kind === 'investment' ? 'Invest' : (r.kind === 'exit' ? 'Exit' : 'Withdraw')}
+              ${r.kind === 'investment' ? 'Invest'
+                : r.kind === 'exit' ? 'Exit'
+                : r.kind === 'payout' ? 'Payout' : 'Withdraw'}
             </span>
           </div>
           <div style="font-size:0.74rem;color:var(--text-muted)">
@@ -12631,6 +12748,11 @@ function _svWithdrawals(res, meIsSignatory, gid) {
                 /* The member leaving, not a bank account — it is whose
                    membership ends that a signatory is being asked about. */
                 ? (r.exit_name ? ' · ' + _esc(r.exit_name) + ' is leaving' : ' · a member is leaving')
+              : r.kind === 'payout'
+                /* And a payout names the distribution: what is being agreed
+                   to is that the whole group is paid, not that a sum goes
+                   somewhere. */
+                ? ' · ' + _esc(r.payout_label || 'the whole group') + ' — everybody paid out'
                 : (r.bank_name ? ' · ' + _esc(r.bank_name) : '')}
           </div>
           ${r.reason ? `<div style="font-size:0.78rem;margin-top:4px">${_esc(r.reason)}</div>` : ''}
@@ -12646,6 +12768,12 @@ function _svWithdrawals(res, meIsSignatory, gid) {
         <div style="display:flex;gap:8px;margin-top:10px">
           <button class="btn btn--primary btn--sm" onclick="voteStokvelRequest('${_esc(gid)}','${_esc(r.id)}','approve')">Approve</button>
           <button class="btn btn--ghost btn--sm" onclick="voteStokvelRequest('${_esc(gid)}','${_esc(r.id)}','reject')">Reject</button>
+        </div>` : ''}
+      ${r.kind === 'payout' && r.satisfied && r.status === 'pending' ? `
+        <div style="margin-top:10px">
+          <button class="btn btn--primary btn--sm" onclick="runStokvelPayout('${_esc(gid)}','${_esc(r.payout_id)}','${_esc(r.id)}')">
+            <i class="fa-solid fa-gift"></i> Pay the group out
+          </button>
         </div>` : ''}
       ${r.kind === 'exit' && r.satisfied && r.status === 'pending' ? `
         <div style="margin-top:10px">

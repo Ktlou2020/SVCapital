@@ -503,6 +503,137 @@ async function attribute(client, { subAccountId, investorId, amount, reason, act
   return { attributed: amt, reference: ref };
 }
 
+/* ─── Paying the whole group out on a date ─────────────────────────
+   The December payout. The exit settlement applied to everyone at once and
+   WITHOUT the membership change: nobody leaves, the pot resets, the
+   schedule keeps running.
+
+   Paid into each member's OWN SV WALLET rather than out to fifteen bank
+   accounts. One internal move each, and they then withdraw individually
+   under the ordinary notice — which is also what stops a distribution
+   becoming fifteen bank payments that each have to clear.
+
+   Arrears come off, exactly as on an exit, and what a member owed STAYS IN
+   THE POT for the others. The reconcile at the end is what gives it to
+   them; without it that money would sit in the group's assets owned by
+   nobody, which is the bug the exit settlement had and the check caught.
+
+   A pot that cannot cover everybody takes the same path an exit does: each
+   member is paid what is there, pro-rata, and the rest is recorded as owed.
+   Nothing is redeemed early to make a distribution happen. */
+async function payOut(client, { payoutId }) {
+  const { rows: [po] } = await client.query(
+    `SELECT * FROM stokvel_payouts WHERE id = $1 FOR UPDATE`, [payoutId]);
+  if (!po) return { error: 'No such payout.' };
+  if (po.status !== 'planned') return { error: `That payout is already ${po.status}.` };
+
+  const subAccountId = po.sub_account_id;
+  const ref = newId('SPO');
+
+  await reconcile(client, subAccountId, { reason: 'Shared out before the payout', reference: ref });
+
+  const members = await activeMembers(client, subAccountId);
+  if (!members.length) return { error: 'This stokvel has no active members to pay.' };
+
+  const basis   = await sharesOf(client, subAccountId);
+  const arrears = await arrearsOf(client, subAccountId);
+
+  /* What each member is owed, before the cash is considered. */
+  const want = new Map();
+  let total = 0;
+  for (const id of members) {
+    const row = basis.shares.find(x => x.investor_id === id) || { gross: 0 };
+    const owed = arrears.get(id) || 0;
+    const net  = round2(Math.max(0, round2(row.gross) - owed));
+    want.set(id, { gross: round2(row.gross), arrears: owed, net });
+    total = round2(total + net);
+  }
+
+  /* The cash, shared on what each is owed rather than first-come. A
+     distribution that paid the first few in full and the rest nothing would
+     be a worse answer than everybody waiting together. */
+  const { rows: [acc] } = await client.query(
+    'SELECT wallet_balance FROM sub_accounts WHERE id = $1 FOR UPDATE', [subAccountId]);
+  const cash = round2(acc && acc.wallet_balance);
+  const payable = round2(Math.min(total, Math.max(0, cash)));
+  const cut = payable < total
+    ? splitPro(payable, new Map([...want].map(([id, w]) => [id, w.net])))
+    : new Map([...want].map(([id, w]) => [id, cents(w.net)]));
+
+  const lines = [];
+  let n = 0;
+  for (const id of members) {
+    n += 1;
+    const w = want.get(id);
+    const paid   = round2((cut.get(id) || 0) / 100);
+    const queued = round2(w.net - paid);
+
+    if (cents(paid) > 0) {
+      await client.query(
+        'UPDATE sub_accounts SET wallet_balance = wallet_balance - $1, updated_at = NOW() WHERE id = $2',
+        [paid, subAccountId]);
+      await client.query(
+        'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
+        [paid, id]);
+      /* A reference PER MEMBER. transactions.reference is unique, so one
+         reference across fifteen payments is fourteen rows that never get
+         written \u2014 and the first attempt here failed on exactly that. The
+         payout's own reference stays the common prefix, so the set is still
+         findable as one distribution. */
+      await client.query(
+        `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, created_at, updated_at)
+         VALUES (gen_random_uuid(), $1, 'deposit', $2, 'completed', $3, $4, NOW(), NOW())`,
+        [id, paid, `${ref}-${String(n).padStart(3, '0')}`, `Stokvel payout \u2014 ${po.label}`]);
+    }
+    /* The allocation is the FULL net, not only what cash covered: their
+       claim on the pot is extinguished either way, and the unpaid part
+       becomes a debt of the group, which net assets then subtracts. */
+    if (cents(w.net) > 0) {
+      await client.query(
+        `INSERT INTO stokvel_allocations (id, sub_account_id, investor_id, kind, amount, reason, reference)
+         VALUES ($1,$2,$3,'payout',$4,$5,$6)`,
+        [newId('SAL'), subAccountId, id, -w.net, `Payout \u2014 ${po.label}`, ref]);
+    }
+    if (cents(w.arrears) > 0) {
+      await client.query(
+        `INSERT INTO stokvel_allocations (id, sub_account_id, investor_id, kind, amount, reason, reference)
+         VALUES ($1,$2,$3,'adjustment',$4,$5,$6)`,
+        [newId('SAL'), subAccountId, id, -w.arrears,
+         `Arrears withheld from the ${po.label} payout`, ref]);
+      await client.query(
+        `UPDATE stokvel_contributions SET status = 'waived', updated_at = NOW()
+          WHERE sub_account_id = $1 AND investor_id = $2 AND status = 'due'`,
+        [subAccountId, id]);
+    }
+    if (cents(queued) > 0) {
+      await client.query(
+        `INSERT INTO stokvel_exit_debts
+           (id, sub_account_id, investor_id, amount_owed, approved_via)
+         VALUES ($1,$2,$3,$4,$5)`,
+        [newId('SXD'), subAccountId, id, queued, po.authority_id || null]);
+    }
+
+    await client.query(
+      `INSERT INTO stokvel_payout_lines (id, payout_id, investor_id, share, arrears, net, paid, queued)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       ON CONFLICT (payout_id, investor_id) DO NOTHING`,
+      [newId('SPL'), po.id, id, w.gross, w.arrears, w.net, paid, queued]);
+    lines.push({ investor_id: id, ...w, paid, queued });
+  }
+
+  await client.query(
+    `UPDATE stokvel_payouts SET status = 'paid', paid_at = NOW(), updated_at = NOW()
+      WHERE id = $1`, [po.id]);
+
+  /* What the arrears released belongs to the members who remain, exactly as
+     on an exit. Nobody has left, so it goes back to the same people. */
+  await reconcile(client, subAccountId, {
+    reason: `Shared out after the ${po.label} payout`, reference: ref });
+
+  return { payout: po.id, label: po.label, reference: ref,
+           total, paid: payable, queued: round2(total - payable), lines };
+}
+
 /* ── The invariant, as a question ──────────────────────────────────
    Used by the check and by the audit script. Returns the two sides and the
    difference; a healthy stokvel has a difference of zero. */
@@ -517,5 +648,5 @@ async function audit(client, subAccountId) {
 
 module.exports = {
   netAssets, sharesOf, shareFor, allocateContribution, reconcile, attribute,
-  payExitDebts, settleExit, audit, splitPro, activeMembers, arrearsOf,
+  payExitDebts, settleExit, payOut, audit, splitPro, activeMembers, arrearsOf,
 };

@@ -223,7 +223,18 @@ const STUB = {
        leaving, not an account, and somebody has to be able to act on it. */
     { id: 'r3', kind: 'exit', amount: 4100, exit_investor_id: 'I9', exit_name: 'Sipho',
       status: 'pending', requested_by_name: 'Sipho', approvals: 2, required: 2,
-      satisfied: true } ] },
+      satisfied: true },
+    /* A payout the signatories have carried: it names the distribution, not
+       a destination, and somebody has to be able to run it. */
+    { id: 'r4', kind: 'payout', amount: 12500, payout_id: 'SPO-1',
+      payout_label: 'December 2026', status: 'pending', requested_by_name: 'Ann',
+      approvals: 2, required: 2, satisfied: true } ] },
+  'stokvels/SA-1/payouts': { can_plan: true, my_share_now: 4100, data: [
+    { id: 'SPO-1', label: 'December 2026', pay_on: '2026-12-01', status: 'planned',
+      authority_id: null, members: 0, my_line: null },
+    { id: 'SPO-0', label: 'December 2025', pay_on: '2025-12-01', status: 'paid',
+      authority_id: 'SWR-OLD', members: 2, my_line: { paid: 3200, net: 3200, arrears: 0, share: 3200 } },
+  ] },
   'stokvels/SA-1/shares': { data: {
     basis: 'contribution', net_assets: 12500, wallet: 10500, invested: 2000,
     owed_to_former_members: 400, my_share: 4100,
@@ -362,6 +373,24 @@ const STUB = {
     ok('nothing a member typed executed', fired === false,
        'a value from the roster ran as script');
 
+    console.log('\nand the payout the group has decided on');
+    ok('the planned payout is named with its date',
+       /December 2026/.test(rendered.text) && /2026-12-01/.test(rendered.text),
+       rendered.text.slice(0, 200));
+    ok('with the member\u2019s OWN figure, not the group total',
+       /R4100\.00/.test(rendered.text) && /would receive/i.test(rendered.text),
+       'a member reading what the group distributed has to do their own arithmetic');
+    ok('it says the figure moves and arrears come off',
+       /owe/i.test(rendered.text) && /moves with/i.test(rendered.text));
+    ok('and that nobody leaves',
+       /Nobody leaves/i.test(rendered.text),
+       'a distribution is not a closure, and that is the first thing a member will ask');
+    ok('it still needs the signatories',
+       /signatories/i.test(rendered.text));
+    ok('and what was paid last time is shown',
+       /December 2025/.test(rendered.text) && /R3200\.00/.test(rendered.text),
+       '"what did I get in December" has to keep answering the same thing');
+
     console.log('\nand a member can see what their share is');
     ok('their own share is on the header',
        /Your share/.test(rendered.text) && /R4100\.00/.test(rendered.text),
@@ -391,6 +420,11 @@ const STUB = {
     ok('an exit says whose membership ends, not a bank account',
        /Exit/.test(rendered.text) && /Sipho is leaving/.test(rendered.text),
        'a signatory being asked to approve "R4 100 to a bank account" cannot act on it');
+    ok('a payout names the distribution, not a destination',
+       /Payout/.test(rendered.text) && /everybody paid out/i.test(rendered.text),
+       'what a signatory agrees to is that the whole group is paid');
+    ok('and an approved one can be carried out',
+       /Pay the group out/.test(rendered.text));
     ok('and an approved exit can be carried out',
        /Settle this exit/.test(rendered.text),
        'the approval is the control; somebody still has to press it');

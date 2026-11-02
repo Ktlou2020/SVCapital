@@ -62,12 +62,16 @@ console.log('\nand an exit is matched on the member, not the amount');
      /exit_investor_id/.test(code) && /approved to settle a different member/.test(SVC),
      'otherwise the signatories authorise a sum and the carrier picks whose exit it pays');
   ok('and deliberately does not pin the amount',
-     /want\.kind !== 'exit' &&/.test(code),
+     /want\.kind !== 'exit' && want\.kind !== 'payout' &&/.test(code),
      '"settle her share" is whatever it comes to on the day \u2014 interest arriving between '
      + 'the approval and the settlement must not send her round the signatories again');
-  ok('the three kinds are all constrained in the schema',
-     /kind IN \('withdrawal','investment','exit'\)/.test(read('server/db/setup.js')));
-  ok('and the old two-value constraint is dropped first, not skipped',
+  ok('every kind is constrained in the schema',
+     /kind IN \('withdrawal','investment','exit','payout'\)/.test(read('server/db/setup.js')),
+     'a kind the database will not store is a feature that fails at the last step');
+  ok('a payout authority pins WHICH distribution',
+     /payout_id/.test(code) && /approved for a different payout/.test(SVC),
+     'the signatories approve the distribution, once \u2014 not one withdrawal per member');
+  ok('and the old constraint is dropped first, not skipped',
      /DROP CONSTRAINT swr_kind_chk/.test(read('server/db/setup.js')),
      'ADD CONSTRAINT with EXCEPTION duplicate_object keeps the old one on a database that '
      + 'already has it, refusing every exit while reporting success');

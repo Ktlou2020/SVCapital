@@ -447,11 +447,11 @@ router.post('/:id/withdrawal-requests', async (req, res) => {
        signatories authorise a sum and whoever carries it out chooses where
        it lands, which is a mandate in name only. */
     const kind = String((req.body && req.body.kind) || 'withdrawal');
-    if (kind !== 'withdrawal' && kind !== 'investment' && kind !== 'exit') {
-      return res.status(400).json({ error: 'kind must be withdrawal, investment or exit.' });
+    if (!['withdrawal', 'investment', 'exit', 'payout'].includes(kind)) {
+      return res.status(400).json({ error: 'kind must be withdrawal, investment, exit or payout.' });
     }
 
-    let bankName = '', bankAcct = '', poolId = null, exitInvestorId = null;
+    let bankName = '', bankAcct = '', poolId = null, exitInvestorId = null, payoutId = null;
     if (kind === 'investment') {
       poolId = String((req.body && req.body.pool_id) || '').trim();
       if (!poolId) {
@@ -461,6 +461,17 @@ router.post('/:id/withdrawal-requests', async (req, res) => {
       const { rows: pool_ } = await pool.query(
         `SELECT id, name FROM investment_pools WHERE id = $1`, [poolId]);
       if (!pool_.length) return res.status(400).json({ error: 'No such pool.' });
+    } else if (kind === 'payout') {
+      /* What is approved is the DISTRIBUTION, named by its id. The amount on
+         the request is the pot as it stood when it was raised, shown to the
+         signatories so they know the order of what they are agreeing to;
+         what is actually paid is worked out on the day. */
+      payoutId = String((req.body && req.body.payout_id) || '').trim();
+      const { rows: po } = await pool.query(
+        `SELECT 1 FROM stokvel_payouts
+          WHERE id = $1 AND sub_account_id = $2 AND status = 'planned'`,
+        [payoutId, group.id]);
+      if (!po.length) return res.status(400).json({ error: 'No such payout is planned for this stokvel.' });
     } else if (kind === 'exit') {
       /* The member being settled is the destination of an exit, the way a
          bank account is the destination of a withdrawal — so it is part of
@@ -496,10 +507,10 @@ router.post('/:id/withdrawal-requests', async (req, res) => {
     await pool.query(
       `INSERT INTO stokvel_withdrawal_requests
          (id, sub_account_id, requested_by, amount, kind, bank_name, bank_account_number,
-          pool_id, exit_investor_id, reason, quorum_required, status, expires_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'pending', NOW() + INTERVAL '7 days')`,
+          pool_id, exit_investor_id, payout_id, reason, quorum_required, status, expires_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'pending', NOW() + INTERVAL '7 days')`,
       [id, group.id, me, amount, kind, bankName || null, bankAcct || null, poolId,
-       exitInvestorId,
+       exitInvestorId, payoutId,
        String((req.body && req.body.reason) || '').slice(0, 500) || null, quorum]
     );
     /* The signatories are told now. Until this existed the mandate was a
@@ -532,11 +543,12 @@ router.get('/:id/withdrawal-requests', async (req, res) => {
        the name is what they actually recognise. */
     const { rows } = await pool.query(
       `SELECT r.*, i.first_name AS requested_by_name, p.name AS pool_name,
-              x.first_name AS exit_name
+              x.first_name AS exit_name, po.label AS payout_label
          FROM stokvel_withdrawal_requests r
          JOIN investors i ON i.id = r.requested_by
          LEFT JOIN investment_pools p ON p.id = r.pool_id
          LEFT JOIN investors x ON x.id = r.exit_investor_id
+         LEFT JOIN stokvel_payouts po ON po.id = r.payout_id
         WHERE r.sub_account_id = $1
         ORDER BY r.created_at DESC
         LIMIT 100`,
@@ -549,6 +561,7 @@ router.get('/:id/withdrawal-requests', async (req, res) => {
         id: r.id, amount: r.amount, kind: r.kind || 'withdrawal',
         bank_name: r.bank_name, pool_id: r.pool_id, pool_name: r.pool_name,
         exit_investor_id: r.exit_investor_id, exit_name: r.exit_name,
+        payout_id: r.payout_id, payout_label: r.payout_label,
         reason: r.reason,
         status: r.status, expires_at: r.expires_at,
         requested_by_name: r.requested_by_name,
@@ -743,6 +756,168 @@ router.get('/:id/shares', async (req, res) => {
     await client.query('ROLLBACK').catch(() => {});
     console.error('[stokvels] shares failed:', err.message);
     return res.status(500).json({ error: 'Could not work out the shares.' });
+  } finally {
+    client.release();
+  }
+});
+
+/* ─── Payouts ────────────────────────────────────────────────────────
+   The December payout: the group pays itself out on a date, everybody at
+   once, and carries on afterwards. Planned by the committee, approved by
+   the signatories as ONE distribution rather than one withdrawal per
+   member, and then run. ──────────────────────────────────────────────── */
+
+/* GET — what is planned, and what has been paid before. Every member sees
+   it: a distribution the group has decided on is the single most important
+   thing on a member's screen, and the line they care about is their own. */
+router.get('/:id/payouts', async (req, res) => {
+  const me = callerInvestorId(req);
+  const client = await pool.connect();
+  try {
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) return res.status(404).json({ error: 'No such stokvel.' });
+
+    const { rows } = await client.query(
+      `SELECT p.*, (SELECT COUNT(*)::int FROM stokvel_payout_lines l WHERE l.payout_id = p.id) AS members
+         FROM stokvel_payouts p
+        WHERE p.sub_account_id = $1
+        ORDER BY (p.status = 'planned') DESC, p.pay_on DESC
+        LIMIT 20`, [group.id]);
+
+    /* What this member would receive if the planned one ran now. Worked out
+       rather than stored, because it moves with every credit the group
+       takes until the day it runs. */
+    let mine = null;
+    const planned = rows.find(r => r.status === 'planned');
+    if (planned) {
+      await client.query('BEGIN');
+      await shares.reconcile(client, group.id, { reason: 'Shared out on read' });
+      const basis   = await shares.sharesOf(client, group.id);
+      const arrears = await shares.arrearsOf(client, group.id);
+      await client.query('COMMIT');
+      const row = basis.shares.find(x => x.investor_id === me);
+      if (row) {
+        mine = Math.round(Math.max(0, row.gross - (arrears.get(me) || 0)) * 100) / 100;
+      }
+    }
+
+    const { rows: lines } = await client.query(
+      `SELECT l.payout_id, l.share, l.arrears, l.net, l.paid, l.queued
+         FROM stokvel_payout_lines l
+         JOIN stokvel_payouts p ON p.id = l.payout_id
+        WHERE p.sub_account_id = $1 AND l.investor_id = $2`, [group.id, me]);
+    const byPayout = new Map(lines.map(l => [l.payout_id, l]));
+
+    return res.json({ data: rows.map(r => ({
+      id: r.id, label: r.label, pay_on: r.pay_on, status: r.status,
+      authority_id: r.authority_id, members: r.members, paid_at: r.paid_at,
+      my_line: byPayout.get(r.id) || null,
+    })), my_share_now: mine, can_plan: invites.mayInvite(group) });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[stokvels] payouts failed:', err.message);
+    return res.status(500).json({ error: 'Could not load the payouts.' });
+  } finally {
+    client.release();
+  }
+});
+
+/* POST — plan one. The committee decides there will be a distribution and
+   when; the signatories then approve it. */
+router.post('/:id/payouts', async (req, res) => {
+  const me = callerInvestorId(req);
+  try {
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) return res.status(404).json({ error: 'No such stokvel.' });
+    if (!invites.mayInvite(group)) {
+      return res.status(403).json({ error: 'Only the chairperson, secretary or treasurer can plan a payout.' });
+    }
+    const label = String((req.body && req.body.label) || '').trim().slice(0, 80);
+    const payOn = String((req.body && req.body.pay_on) || '').trim();
+    if (!label) return res.status(400).json({ error: 'Give the payout a name, such as \u201cDecember 2026\u201d.' });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(payOn)) return res.status(400).json({ error: 'A pay-on date is required (YYYY-MM-DD).' });
+
+    const id = 'SPO-' + crypto.randomUUID().replace(/-/g, '').slice(0, 14).toUpperCase();
+    try {
+      await pool.query(
+        `INSERT INTO stokvel_payouts (id, sub_account_id, label, pay_on, created_by)
+         VALUES ($1,$2,$3,$4,$5)`, [id, group.id, label, payOn, me]);
+    } catch (e) {
+      /* The partial unique index. A group with two open distributions has
+         not decided anything, and the second would be approved against a
+         pot the first is about to empty. */
+      if (e.code === '23505') {
+        return res.status(409).json({ error: 'This stokvel already has a payout planned. Run or cancel that one first.' });
+      }
+      throw e;
+    }
+    return res.status(201).json({ data: { id, label, pay_on: payOn } });
+  } catch (err) {
+    console.error('[stokvels] plan payout failed:', err.message);
+    return res.status(500).json({ error: 'Could not plan that payout.' });
+  }
+});
+
+/* DELETE — call it off. Only while it is still planned; a distribution that
+   has run is history, not a decision. */
+router.delete('/:id/payouts/:pid', async (req, res) => {
+  const me = callerInvestorId(req);
+  try {
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) return res.status(404).json({ error: 'No such stokvel.' });
+    if (!invites.mayInvite(group)) {
+      return res.status(403).json({ error: 'Only the chairperson, secretary or treasurer can cancel a payout.' });
+    }
+    const { rowCount } = await pool.query(
+      `UPDATE stokvel_payouts SET status = 'cancelled', updated_at = NOW()
+        WHERE id = $1 AND sub_account_id = $2 AND status = 'planned'`,
+      [req.params.pid, group.id]);
+    if (!rowCount) return res.status(404).json({ error: 'No payout is planned with that id.' });
+    return res.json({ data: { cancelled: true } });
+  } catch (err) {
+    console.error('[stokvels] cancel payout failed:', err.message);
+    return res.status(500).json({ error: 'Could not cancel that payout.' });
+  }
+});
+
+/* POST /run — carry out an approved distribution. The authority does the
+   deciding; any member may press it, as with an approved investment. */
+router.post('/:id/payouts/:pid/run', async (req, res) => {
+  const me = callerInvestorId(req);
+  const client = await pool.connect();
+  try {
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) return res.status(404).json({ error: 'No such stokvel.' });
+
+    await client.query('BEGIN');
+    const { authority, error } = await mandate.authorityFor(
+      client, group, req.body && req.body.authority_id,
+      { kind: 'payout', payoutId: req.params.pid });
+    if (error) {
+      await client.query('ROLLBACK');
+      return res.status(/No such authority/.test(error) ? 404 : 403).json({ error });
+    }
+    await client.query(
+      `UPDATE stokvel_payouts SET authority_id = $2, updated_at = NOW() WHERE id = $1`,
+      [req.params.pid, authority.id]);
+
+    const out = await shares.payOut(client, { payoutId: req.params.pid });
+    if (out.error) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: out.error });
+    }
+    await mandate.consume(client, authority, out.reference);
+    await client.query('COMMIT');
+
+    const n = notify();
+    if (n) n.paidOut({ groupId: group.id, payout: out })
+            .catch(e => console.warn('[stokvels] notify failed:', e.message));
+
+    return res.json({ data: out });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[stokvels] run payout failed:', err.message);
+    return res.status(500).json({ error: 'Could not run that payout.' });
   } finally {
     client.release();
   }

@@ -218,6 +218,10 @@ const ADMIN_ONLY_TABLES = new Set([
      generic reader would hand every signed-in investor every stokvel's
      internal split. Members read their own group's through /api/stokvels. */
   'stokvel_allocations', 'stokvel_exit_debts',
+  /* A group's distributions and what each member was paid in one. Members
+     read their own through /api/stokvels; unlisted here the generic reader
+     would hand every signed-in investor every stokvel's payout history. */
+  'stokvel_payouts', 'stokvel_payout_lines',
   /* Who owes what. An arrears list is the most sensitive thing a stokvel
      holds about its members; it is theirs to see, not every investor's. */
   'stokvel_contributions', 'stokvel_contribution_schedules',

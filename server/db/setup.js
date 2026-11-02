@@ -1366,6 +1366,63 @@ CREATE INDEX IF NOT EXISTS stokvel_exit_debt_open_idx
   ON stokvel_exit_debts(sub_account_id) WHERE status = 'owing';
 
 
+/* THE DAY THE GROUP PAYS ITSELF OUT.
+   
+   Shares answered "what is mine"; this answers "and when do we get it".
+   The December payout is what most savings stokvels exist for, and without
+   it a group of fifteen paying itself out meant fifteen separate withdrawal
+   requests, each approved separately, with nothing recording that the group
+   had decided on a distribution at all.
+   
+   It is the exit settlement applied to everyone at once and WITHOUT the
+   membership change: each member is paid their share less what they owe,
+   the pot resets, and the group carries on with its schedule running.
+   
+   Deliberately NOT a rotating stokvel. In a rotation the member who
+   collects first has received money they have not yet contributed, which
+   means negative shares and a member owing the group - a credit product
+   with its own risk and its own collection problem, not an extension of
+   this one. */
+CREATE TABLE IF NOT EXISTS stokvel_payouts (
+  id              TEXT PRIMARY KEY,
+  sub_account_id  TEXT NOT NULL REFERENCES sub_accounts(id) ON DELETE CASCADE,
+  label           TEXT NOT NULL,
+  pay_on          DATE NOT NULL,
+  status          TEXT NOT NULL DEFAULT 'planned'
+                    CHECK (status IN ('planned','paid','cancelled')),
+  /* The authority the signatories granted. They approve THE DISTRIBUTION,
+     once, rather than one withdrawal per member. */
+  authority_id    TEXT,
+  created_by      TEXT REFERENCES investors(id) ON DELETE SET NULL,
+  paid_at         TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+/* One payout being planned at a time. A group with two open distributions
+   has not decided anything yet, and the second would be approved against a
+   pot the first is about to empty. */
+CREATE UNIQUE INDEX IF NOT EXISTS stokvel_payouts_one_open
+  ON stokvel_payouts(sub_account_id) WHERE status = 'planned';
+CREATE INDEX IF NOT EXISTS stokvel_payouts_group_idx ON stokvel_payouts(sub_account_id);
+
+/* What each member was actually paid, written when it runs. The figures are
+   kept rather than recomputed because a share moves with every credit the
+   group receives afterwards, and "what did I get in December" has to keep
+   answering the same thing in March. */
+CREATE TABLE IF NOT EXISTS stokvel_payout_lines (
+  id              TEXT PRIMARY KEY,
+  payout_id       TEXT NOT NULL REFERENCES stokvel_payouts(id) ON DELETE CASCADE,
+  investor_id     TEXT NOT NULL REFERENCES investors(id) ON DELETE CASCADE,
+  share           NUMERIC(18,2) NOT NULL,
+  arrears         NUMERIC(18,2) NOT NULL DEFAULT 0,
+  net             NUMERIC(18,2) NOT NULL,
+  paid            NUMERIC(18,2) NOT NULL DEFAULT 0,
+  queued          NUMERIC(18,2) NOT NULL DEFAULT 0,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (payout_id, investor_id)
+);
+
+
 CREATE TABLE IF NOT EXISTS sessions (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id       UUID NOT NULL,
@@ -2616,7 +2673,13 @@ async function autoSetup() {
              database that already has the two-value version would keep the
              old one and refuse every exit while reporting success. */
           BEGIN ALTER TABLE stokvel_withdrawal_requests DROP CONSTRAINT swr_kind_chk; EXCEPTION WHEN undefined_object THEN NULL; END;
-          BEGIN ALTER TABLE stokvel_withdrawal_requests ADD CONSTRAINT swr_kind_chk CHECK (kind IN ('withdrawal','investment','exit')); EXCEPTION WHEN duplicate_object THEN NULL; END;
+          BEGIN ALTER TABLE stokvel_withdrawal_requests ADD COLUMN payout_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          /* A fourth kind: the group paying itself out. Dropped and re-added
+             again rather than added with EXCEPTION duplicate_object, which on
+             a database holding the three-value version would keep the old one
+             and refuse every payout while reporting success. */
+          BEGIN ALTER TABLE stokvel_withdrawal_requests DROP CONSTRAINT swr_kind_chk; EXCEPTION WHEN undefined_object THEN NULL; END;
+          BEGIN ALTER TABLE stokvel_withdrawal_requests ADD CONSTRAINT swr_kind_chk CHECK (kind IN ('withdrawal','investment','exit','payout')); EXCEPTION WHEN duplicate_object THEN NULL; END;
           BEGIN ALTER TABLE sub_accounts ADD COLUMN withdrawal_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE investors    ADD COLUMN withdrawal_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE transactions ADD COLUMN available_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
@@ -4503,6 +4566,11 @@ async function autoSetup() {
          that comes back after somebody dismissed the idea of it is worse than
          no notice at all. */
       const NOTICES = [
+        { id: 'ANN-2026-STOKVEL-PAYOUTS', area: 'both', icon: 'fa-gift',
+          title: 'The December payout \u2014 a stokvel can pay its whole group out on a date',
+          body: 'The thing most savings stokvels exist for, and the half the platform did not model. Shares answered \u201cwhat is mine\u201d; nothing answered \u201cand when do we get it\u201d, so a group of fifteen paying itself out meant FIFTEEN separate withdrawal requests, each approved separately, with nothing recording that the group had decided on a distribution at all. Now the committee plans one \u2014 a name and a date, \u201cDecember 2026\u201d \u2014 and the signatories approve THE DISTRIBUTION, once. When it runs, every member is paid their share LESS ANYTHING THEY OWE, into their own SV Capital wallet, from where they withdraw in the ordinary way. What a member owed STAYS IN THE POT and is shared among the members, which is the point of having chased it. NOBODY LEAVES: the group keeps its members, its mandate and its contribution schedule, the pot resets, and it starts again. That is the first question a committee asks and the answer is on the screen. A POT THAT CANNOT COVER EVERYBODY pays what it holds PRO-RATA and records the rest as owed \u2014 paying the first few in full and the rest nothing would be a worse answer than everybody waiting together \u2014 and nothing is redeemed early to make a distribution happen. Each member is told what THEY received rather than what the group distributed, because a message quoting the group total leaves fifteen people doing their own arithmetic. What each member got is kept against the payout, so \u201cwhat did I get in December\u201d still answers the same thing in March. ONE PLANNED AT A TIME: a group with two open distributions has not decided anything, and the second would be approved against a pot the first is about to empty. THE CONSOLE DELIBERATELY HAS NO BUTTON TO RUN ONE. A distribution empties the pot, and a staff override on that would hand back exactly the single point of failure the mandate removes. ROTATING STOKVELS ARE NOT THIS and are not built: in a rotation the member who collects first has received money they have not yet contributed, which means negative shares and a member owing the group \u2014 a credit product with its own risk, not an extension of this one.',
+          where: 'Client app \u2192 Sub-accounts \u2192 the stokvel \u2192 Payout, above Shares. The committee plans it there and raises it for the signatories; once it carries, any member can run it from Signatory approvals. Staff view: Admin console \u2192 Stokvels \u2192 open one \u2192 Payouts, read-only.' },
+
         { id: 'ANN-2026-STOKVEL-ATTRIBUTE', area: 'admin', icon: 'fa-user-check',
           title: 'Staff can say whose money an amount in a stokvel actually was',
           body: 'The other half of the pay-in fix. Money a MEMBER puts in is now attributed to them automatically, but money that reaches a group wallet through a staff path \u2014 a manual credit, an EFT approval, a refund \u2014 still carries no owner, and the share ledger shares it across every member pro-rata. That is right for interest and for a maturity. It is wrong when the money was one member\u2019s, and until now there was nothing to do about it. There is now a control on the stokvel\u2019s Shares panel: choose the member, the amount and a reason, and the ledger is corrected. IT MOVES NO MONEY \u2014 the group holds exactly what it held before, and what changes is whose share of it is whose. Every other member\u2019s share drops by their part of the amount and that member\u2019s rises by the whole of it. THE REASON IS REQUIRED, not optional, because the next person to ask why will be reading the ledger rather than this screen, and the adjustment carries both the reason and the name of whoever made it. IT WORKS WHETHER OR NOT THE MONEY HAS ALREADY BEEN SHARED OUT, which is the part worth trusting: the correction shares out anything pending first, so attributing an EFT the moment it lands and attributing one from three weeks ago reach the same answer. REFUSED: more than the stokvel actually holds (it would hand one member more than the pot and push another below zero), anybody who is not an active member of that group, and nothing or less. It cannot move money out of a stokvel, so it is NOT a way round the mandate \u2014 but it does change whose money is whose, so it is staff-only and audited.',

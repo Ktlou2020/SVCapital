@@ -20143,9 +20143,9 @@ function renderStokvelList() {
 async function openStokvelAdmin(id) {
   const host = document.getElementById('stokvelDetail');
   host.innerHTML = '<div class="card"><div class="text-center text-muted" style="padding:20px"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div></div>';
-  let members, schedules, requests, contributions, invites, allocations, exitDebts;
+  let members, schedules, requests, contributions, invites, allocations, exitDebts, payouts;
   try {
-    [members, schedules, requests, contributions, invites, allocations, exitDebts] = await Promise.all([
+    [members, schedules, requests, contributions, invites, allocations, exitDebts, payouts] = await Promise.all([
       API._fetch('GET', 'tables/stokvel_members', null, { sub_account_id: id, limit: 500 }),
       API._fetch('GET', 'tables/stokvel_contribution_schedules', null, { sub_account_id: id, limit: 50 }),
       API._fetch('GET', 'tables/stokvel_withdrawal_requests', null, { sub_account_id: id, limit: 100 }),
@@ -20153,6 +20153,7 @@ async function openStokvelAdmin(id) {
       API._fetch('GET', 'tables/stokvel_invites', null, { sub_account_id: id, limit: 200 }),
       API._fetch('GET', 'tables/stokvel_allocations', null, { sub_account_id: id, limit: 2000 }),
       API._fetch('GET', 'tables/stokvel_exit_debts', null, { sub_account_id: id, limit: 100 }),
+      API._fetch('GET', 'tables/stokvel_payouts', null, { sub_account_id: id, limit: 20 }),
     ]);
   } catch (err) {
     host.innerHTML = `<div class="card" style="color:#ef4444;padding:20px">Could not load: ${_esc(err.message || '')}</div>`;
@@ -20168,9 +20169,10 @@ async function openStokvelAdmin(id) {
     invites: (invites && invites.data) || [],
     allocations: (allocations && allocations.data) || [],
     exitDebts: (exitDebts && exitDebts.data) || [],
+    payouts: (payouts && payouts.data) || [],
   };
   host.innerHTML = _stokvelAdminMandate(s) + _stokvelAdminMembers(s)
-                 + _stokvelAdminShares(s) + _stokvelAdminInvites(s)
+                 + _stokvelAdminPayouts(s) + _stokvelAdminShares(s) + _stokvelAdminInvites(s)
                  + _stokvelAdminSchedule(s) + _stokvelAdminActivity(s);
   host.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
@@ -20318,6 +20320,43 @@ async function saveStokvelShareBasis(id) {
   } catch (err) {
     Toast.show('Could not save: ' + (err.message || ''), 'error');
   }
+}
+
+/* ─── Payouts ──────────────────────────────────────────────────────
+   Read-only here, deliberately. A distribution is planned by the group's
+   own committee in the app and approved by its signatories; a staff button
+   that could run one would be the single point of failure the mandate
+   exists to remove, in the one place where it empties the whole pot. What
+   this screen is for is answering "when is ours" and "what did we get". */
+function _stokvelAdminPayouts(s) {
+  const rows = STATE.stokvelOpen.payouts || [];
+  if (!rows.length) return '';
+  const planned = rows.filter(p => p.status === 'planned');
+
+  return `<div class="card">
+    <div class="card__header"><h3 class="card__title">
+      <i class="fa-solid fa-gift"></i> Payouts</h3>
+      <span class="text-muted" style="font-size:0.78rem">${planned.length ? 'one planned' : 'none planned'}</span>
+    </div>
+    <table class="data-table"><thead><tr>
+      <th>Payout</th><th>Pay on</th><th>Status</th><th>Approved</th><th class="text-right">Members paid</th>
+    </tr></thead><tbody>
+    ${rows.map(p => `<tr>
+      <td>${_esc(p.label)}</td>
+      <td style="font-size:0.8rem">${_esc(String(p.pay_on || '').slice(0, 10))}</td>
+      <td style="font-size:0.8rem">${_esc(p.status)}</td>
+      <td style="font-size:0.8rem">${p.authority_id ? _esc(p.authority_id) : '\u2014'}</td>
+      <td class="text-right" style="font-size:0.8rem">${_esc(String(p.paid_at || '').slice(0, 10)) || '\u2014'}</td>
+    </tr>`).join('')}
+    </tbody></table>
+    <div class="text-muted" style="font-size:0.75rem;padding:8px 14px">
+      Planned by the group&rsquo;s committee in the app and approved by its signatories.
+      There is deliberately no button here to run one: a distribution empties the pot, and
+      a staff override on that would hand back exactly the single point of failure the
+      mandate removes. Nobody leaves the stokvel when it runs \u2014 the pot resets and
+      contributions carry on.
+    </div>
+  </div>`;
 }
 
 /* ─── Shares, and what is owed to members who have left ────────────
