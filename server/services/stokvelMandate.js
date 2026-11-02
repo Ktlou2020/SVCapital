@@ -104,14 +104,14 @@ async function authorityFor(client, subAccount, authorityId, want) {
       return { error: 'Paying the group out needs an approved authority. Plan the payout and have the signatories approve it first.' };
     }
     return { error: want.kind === 'investment'
-      ? 'A stokvel investment needs an approved authority. Raise a request and have the signatories approve it first.'
-      : 'A stokvel withdrawal needs an approved authority. Raise a withdrawal request and have the signatories approve it first.' };
+      ? 'A group investment needs an approved authority. Raise a request and have the signatories approve it first.'
+      : 'A group withdrawal needs an approved authority. Raise a withdrawal request and have the signatories approve it first.' };
   }
   const { rows: [authority] } = await client.query(
     `SELECT * FROM stokvel_withdrawal_requests
       WHERE id = $1 AND sub_account_id = $2 FOR UPDATE`,
     [authorityId, subAccount.id]);
-  if (!authority) return { error: 'No such authority for this stokvel.' };
+  if (!authority) return { error: 'No such authority for this group.' };
 
   /* An authority approved for one kind of movement does not release the
      other. Signatories who agreed to put money into a pool have not agreed

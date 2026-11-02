@@ -471,7 +471,7 @@ function navigate(view, btnEl) {
     'fica-pipeline': 'FICA Pipeline',
     insights: 'Insight Articles',
     handbook: 'Platform Handbook', rewards: 'Rewards',
-    stokvels: 'Stokvels',
+    stokvels: 'Groups',
   };
   document.getElementById('topbarTitle').textContent = titles[view] || view;
   STATE.currentView = view;
@@ -20471,7 +20471,7 @@ async function loadStokvels() {
     STATE.stokvels = (res && res.data) || [];
   } catch (err) {
     host.innerHTML = `<div class="text-center" style="padding:20px;color:#ef4444">
-      Could not load stokvels: ${_esc(err.message || 'error')}<br>
+      Could not load groups: ${_esc(err.message || 'error')}<br>
       <button class="btn btn--secondary btn--sm" style="margin-top:10px" onclick="loadStokvels()">Retry</button></div>`;
     return;
   }
@@ -20486,12 +20486,12 @@ function renderStokvelList() {
     .filter(s => !q || String(s.name || '').toLowerCase().includes(q));
 
   if (!rows.length) {
-    host.innerHTML = `<div class="text-center text-muted" style="padding:20px">No stokvels${q ? ' match that' : ' yet'}.</div>`;
+    host.innerHTML = `<div class="text-center text-muted" style="padding:20px">No groups${q ? ' match that' : ' yet'}.</div>`;
     return;
   }
 
   host.innerHTML = `<table class="data-table"><thead><tr>
-      <th>Stokvel</th><th>Mandate</th><th class="text-right">Wallet</th><th></th>
+      <th>Group</th><th>Mandate</th><th class="text-right">Wallet</th><th></th>
     </tr></thead><tbody>
     ${rows.map(s => {
       const quorum = parseInt(s.stokvel_quorum, 10) || 0;
@@ -20559,14 +20559,14 @@ function _stokvelAdminMandate(s) {
      stokvel that can never withdraw, and the table editor would take it
      without comment. */
   const warn = quorum < STOKVEL_MIN_QUORUM
-    ? 'No mandate on file — this stokvel cannot withdraw or invest. A mandate of one is not a mandate, so the minimum is two.'
+    ? 'No mandate on file — this group cannot withdraw or invest. A mandate of one is not a mandate, so the minimum is two.'
     : signatories < quorum
-      ? `Only ${signatories} active signator${signatories === 1 ? 'y' : 'ies'} for a quorum of ${quorum} — this stokvel cannot reach its own mandate.`
+      ? `Only ${signatories} active signator${signatories === 1 ? 'y' : 'ies'} for a quorum of ${quorum} — this group cannot reach its own mandate.`
       : null;
 
   return `<div class="card">
     <div class="card__header"><h3 class="card__title">
-      <i class="fa-solid fa-user-shield"></i> ${_esc(s.name || 'Stokvel')} — mandate</h3></div>
+      <i class="fa-solid fa-user-shield"></i> ${_esc(s.name || 'Group')} — mandate</h3></div>
     <div style="padding:14px">
       ${warn ? `<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px;margin-bottom:12px;font-size:0.84rem;color:#ef4444">
         <i class="fa-solid fa-triangle-exclamation"></i> ${_esc(warn)}</div>` : ''}
@@ -20584,7 +20584,7 @@ function _stokvelAdminMandate(s) {
         </select>
         <button class="btn btn--secondary btn--sm" onclick="saveStokvelShareBasis('${_esc(s.id)}')">Save</button>
         <span class="text-muted" style="font-size:0.78rem;flex-basis:100%">
-          The group&rsquo;s own constitution decides this, not us. Most stokvels contribute equally,
+          The group&rsquo;s own constitution decides this, not us. Most groups contribute equally,
           in which case both give the same answer; a group with unequal contributions or members
           who joined at different times needs &ldquo;by what each member put in&rdquo;.
           Changing it re-states every member&rsquo;s share at once — ask before you touch it.
@@ -20603,7 +20603,7 @@ async function saveStokvelQuorum(id) {
   }
   const active = (STATE.stokvelOpen.members || []).filter(m => m.is_signatory && m.status === 'active').length;
   if (n > active && !confirm(
-      `This stokvel has ${active} active signator${active === 1 ? 'y' : 'ies'} and you are asking for ${n} approvals. ` +
+      `This group has ${active} active signator${active === 1 ? 'y' : 'ies'} and you are asking for ${n} approvals. ` +
       `It will not be able to withdraw until more are named. Save anyway?`)) return;
   try {
     await API._fetch('PATCH', `tables/sub_accounts/${id}`, { stokvel_quorum: n });
@@ -20694,7 +20694,7 @@ async function addStokvelMember(stokvelId) {
 async function saveStokvelShareBasis(id) {
   const basis = document.getElementById('svShareBasis').value;
   if (!confirm(
-      'Change how this stokvel\'s pot divides?\n\nEvery member\'s share is re-stated '
+      'Change how this group\'s pot divides?\n\nEvery member\'s share is re-stated '
     + 'immediately. Only do this against what the group\'s constitution actually says.')) return;
   try {
     await API._fetch('PATCH', `tables/sub_accounts/${id}`, { share_basis: basis });
@@ -20736,7 +20736,7 @@ function _stokvelAdminPayouts(s) {
       Planned by the group&rsquo;s committee in the app and approved by its signatories.
       There is deliberately no button here to run one: a distribution empties the pot, and
       a staff override on that would hand back exactly the single point of failure the
-      mandate removes. Nobody leaves the stokvel when it runs \u2014 the pot resets and
+      mandate removes. Nobody leaves the group when it runs \u2014 the pot resets and
       contributions carry on.
     </div>
   </div>`;
@@ -20835,7 +20835,7 @@ async function attributeStokvelShare(id) {
     return;
   }
   if (!confirm(
-      `Attribute ${Utils.rand(amount)} of this stokvel to this member?\n\n`
+      `Attribute ${Utils.rand(amount)} of this group to this member?\n\n`
     + `No money moves. Every other member's share drops by their part of it, `
     + `and this member's rises by the whole amount.`)) return;
   try {
@@ -20981,7 +20981,7 @@ function _stokvelAdminActivity(s) {
       </tr>`; }).join('')}
       </tbody></table>
       <div class="text-muted" style="font-size:0.75rem;padding:8px 14px">
-        Staff cannot approve on a stokvel's behalf. Approvals come from its own signatories, in the app.
+        Staff cannot approve on a group's behalf. Approvals come from its own signatories, in the app.
       </div>` : ''}
   </div>`;
 }

@@ -7136,7 +7136,7 @@ function _saFormFields(type) {
 
   if (type === 'stokvel') return common + `
     <div class="form-row form-row--2">
-      <div class="form-group"><label class="form-label">Stokvel Reg. Number (if any)</label><input type="text" class="form-input" id="saFieldReg" placeholder="Leave blank if unregistered" /></div>
+      <div class="form-group"><label class="form-label">Group registration number (if any)</label><input type="text" class="form-input" id="saFieldReg" placeholder="Leave blank if unregistered" /></div>
       <div class="form-group"><label class="form-label">Number of Members</label><input type="number" class="form-input" id="saFieldMembers" placeholder="e.g. 12" min="2" max="200" /></div>
     </div>
     <div class="form-row form-row--2">
@@ -12281,7 +12281,7 @@ async function svcOpenDeepLink(href) {
   if (!mine) {
     /* A link to a stokvel they are not in. Says so rather than opening an
        empty modal or a spinner that never resolves. */
-    Utils.toast('That stokvel is not one of yours.', 'error');
+    Utils.toast('That group is not one of yours.', 'error');
     return true;
   }
   openStokvelHub(stokvel);
@@ -12468,7 +12468,7 @@ function _stokvelCard(s) {
   const role = s.my_role ? String(s.my_role).replace(/^\w/, c => c.toUpperCase()) : 'Member';
   return `<div class="sa-card" style="--sa-color:${meta.color}" onclick="openStokvelHub('${_esc(s.id)}')">
     <div class="sa-card__header" style="background:${meta.bg}">
-      <div class="sa-card__type"><i class="fa-solid ${meta.icon}"></i> Stokvel</div>
+      <div class="sa-card__type"><i class="fa-solid ${meta.icon}"></i> Group</div>
       <div class="sa-card__name">${_esc(s.name)}</div>
       <div style="font-size:0.72rem;color:rgba(255,255,255,0.75);margin-top:2px">
         ${_esc(role)} · ${s.active_members || 0} member${s.active_members === 1 ? '' : 's'}
@@ -12515,7 +12515,7 @@ function renderStokvelSwitcher() {
 
   host.innerHTML = `
     <div style="font-size:0.66rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;
-                color:var(--text-muted);padding:10px 14px 4px">My stokvels</div>
+                color:var(--text-muted);padding:10px 14px 4px">My groups</div>
     ${groups.map(g => `
       <button class="nav-item" onclick="openStokvelHub('${_esc(g.id)}')" style="width:100%;text-align:left">
         <i class="fa-solid fa-people-group"></i>
@@ -12626,7 +12626,7 @@ async function _svRenderHub(id, tab, opts) {
     ]);
   } catch (err) {
     if (body) body.innerHTML =
-      `<div class="empty-state"><p>Could not load this stokvel. ${_esc(err.message || '')}</p></div>`;
+      `<div class="empty-state"><p>Could not load this group. ${_esc(err.message || '')}</p></div>`;
     return;
   }
   _svCache(id, { group, members, contributions, requests, invitations, shareData, payoutData });
@@ -12722,7 +12722,7 @@ function _svWsTabs(id, open, counts) {
   const badge = n => n ? `<span aria-label="${n} waiting" style="background:#eda5ff;color:#1a1a1a;
       border-radius:999px;font-size:0.64rem;font-weight:800;padding:1px 6px;margin-left:5px">${n}</span>` : '';
 
-  return `<div role="tablist" aria-label="Stokvel sections" id="svWsTablist"
+  return `<div role="tablist" aria-label="Group sections" id="svWsTablist"
        onkeydown="svTabKeys(event,'${_esc(id)}')"
        style="display:flex;gap:4px;overflow-x:auto;scroll-snap-type:x proximity;
               padding:10px 0;border-bottom:1px solid var(--border);margin-bottom:14px;
@@ -12897,7 +12897,7 @@ function _svOverview(id, ctx) {
     return `<div style="max-width:640px">
       <div class="sa-section-title"><i class="fa-solid fa-flag-checkered"></i> Getting ${_esc(ctx.g.name)} going</div>
       <p style="font-size:0.86rem;color:var(--text-muted);line-height:1.6;margin-bottom:6px">
-        Three things stand between this account and a working stokvel.
+        Three things stand between this account and a working group.
       </p>
       ${step(roster.length >= 2, 'Get the members in',
         roster.length >= 2
@@ -12972,7 +12972,7 @@ async function _svInvestments(id) {
   const rows = (res && res.data) || [];
   const t = (res && res.totals) || {};
   if (!rows.length) {
-    return `<div class="empty-state"><p>This stokvel has not invested anything yet.</p>
+    return `<div class="empty-state"><p>This group has not invested anything yet.</p>
       <p style="font-size:0.84rem;color:var(--text-muted)">Investing the pot is the group&rsquo;s own
       decision and needs the signatories&rsquo; approval. Capital is at risk.</p></div>`;
   }
@@ -13238,7 +13238,7 @@ function _svPayouts(res, gid) {
         </div>` : ''}
         <div style="font-size:0.74rem;color:var(--text-muted);margin-top:8px">
           It needs the signatories&rsquo; approval before it can be paid, like anything else
-          that moves the group&rsquo;s money. Nobody leaves the stokvel — the pot resets and
+          that moves the group&rsquo;s money. Nobody leaves the group — the pot resets and
           contributions carry on.
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
@@ -13327,7 +13327,7 @@ async function requestStokvelPayout(groupId, payoutId, label) {
 
 async function runStokvelPayout(groupId, payoutId, authorityId) {
   if (!confirm('Pay the group out now?\n\nEvery member is paid their share, less anything they owe, '
-             + 'into their own wallet. Nobody leaves the stokvel.')) return;
+             + 'into their own wallet. Nobody leaves the group.')) return;
   try {
     const res = await API._fetch('POST', `stokvels/${groupId}/payouts/${payoutId}/run`,
                                  { authority_id: authorityId });
@@ -13358,7 +13358,7 @@ function _svShares(res, gid) {
   if (!d) return '';
   const rows = d.shares || [];
   const basisNote = d.basis === 'equal'
-    ? 'This stokvel splits its pot equally, as its constitution says. What you still owe comes off your own share.'
+    ? 'This group splits its pot equally, as its constitution says. What you still owe comes off your own share.'
     : 'Your share follows what you have put in and your part of everything the group has earned since.';
 
   return `<div class="sa-section-title mt-16"><i class="fa-solid fa-chart-pie"></i> Shares</div>
@@ -13395,7 +13395,7 @@ function _svShares(res, gid) {
         <i class="fa-solid fa-wallet"></i> Pay into the pot
       </button>
       <button class="btn btn--ghost btn--sm" onclick="requestStokvelExit('${_esc(gid)}')">
-        <i class="fa-solid fa-door-open"></i> Ask to leave this stokvel
+        <i class="fa-solid fa-door-open"></i> Ask to leave this group
       </button>
     </div>`;
 }
@@ -13411,7 +13411,7 @@ async function requestStokvelExit(groupId) {
     share = (res && res.data && res.data.my_share) || 0;
   } catch (_) { /* the figure is for the confirmation; the server decides */ }
   if (!confirm(
-      `Ask to leave this stokvel?\n\nYour share is about ${Utils.rand(share)}. `
+      `Ask to leave this group?\n\nYour share is about ${Utils.rand(share)}. `
     + `The signatories have to approve it, anything you still owe comes off, and if the `
     + `group's money is tied up in investments you are paid what it holds now and the rest `
     + `as those mature.`)) return;
@@ -13586,9 +13586,9 @@ async function levyStokvelFine(groupId) {
   _svFormShell(groupId, {
     icon: 'fa-gavel',
     title: 'Record a fine',
-    intro: 'Under your stokvel&rsquo;s own rules. It is added to what that member owes and settles '
+    intro: 'Under your group&rsquo;s own rules. It is added to what that member owes and settles '
          + 'like a contribution \u2014 oldest first when they pay in, or off their share at a payout '
-         + 'or when they leave. <strong>SV Capital does not set or enforce a stokvel&rsquo;s '
+         + 'or when they leave. <strong>SV Capital does not set or enforce a group&rsquo;s '
          + 'penalties.</strong>',
     fields: `<label for="svFnWho" style="display:block;font-size:0.74rem;text-transform:uppercase;
           letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">Which member</label>
@@ -13597,7 +13597,7 @@ async function levyStokvelFine(groupId) {
         </select>`
       + _svField('svFnAmount', 'How much', 'number', '', 'min="0" step="0.01" inputmode="decimal"')
       + _svField('svFnNote', 'What is it for', 'text',
-          'Required, and the member sees it. A fine somebody cannot see the reason for is the thing that ends stokvels.',
+          'Required, and the member sees it. A fine somebody cannot see the reason for is the thing that ends groups.',
           'maxlength="200"'),
     submit: `submitStokvelFine('${_esc(groupId)}')`,
     submitIcon: 'fa-gavel',
@@ -13785,7 +13785,7 @@ async function stokvelInvestAuthority(subAccountId, poolId, poolAmount) {
   try {
     res = await API._fetch('GET', `stokvels/${subAccountId}/withdrawal-requests`);
   } catch (err) {
-    return { error: 'Could not check this stokvel\u2019s approvals. ' + (err.message || '') };
+    return { error: 'Could not check this group\u2019s approvals. ' + (err.message || '') };
   }
   const forPool = ((res && res.data) || []).filter(r =>
     r.kind === 'investment' && r.status === 'pending' &&
@@ -13804,8 +13804,8 @@ async function stokvelInvestAuthority(subAccountId, poolId, poolAmount) {
     return { error: `This is still waiting on the signatories — ${waiting.approvals} of `
       + `${waiting.required} have approved it.` };
   }
-  return { error: 'A stokvel investment needs the signatories to approve it first. '
-    + 'Open the stokvel, request an investment into this pool, and place it once they have.' };
+  return { error: 'A group investment needs the signatories to approve it first. '
+    + 'Open the group, request an investment into this pool, and place it once they have.' };
 }
 
 async function voteStokvelRequest(groupId, requestId, decision) {

@@ -102,10 +102,10 @@ async function create(client, group, invitedBy, { name, email, cell }) {
       `SELECT status FROM stokvel_members WHERE sub_account_id = $1 AND investor_id = $2`,
       [group.id, who.id]);
     if (already.length && already[0].status === 'active') {
-      return { status: 409, error: `${who.first_name || 'That person'} is already a member of this stokvel.` };
+      return { status: 409, error: `${who.first_name || 'That person'} is already a member of this group.` };
     }
     if (who.id === invitedBy) {
-      return { status: 400, error: 'You are already in this stokvel.' };
+      return { status: 400, error: 'You are already in this group.' };
     }
   }
 
@@ -116,7 +116,7 @@ async function create(client, group, invitedBy, { name, email, cell }) {
               WHERE sub_account_id = $1 AND status = 'pending'
                 AND expires_at > NOW()) AS pending`, [group.id]);
   if (counts.members >= MAX_MEMBERS) {
-    return { status: 409, error: `This stokvel is at the ${MAX_MEMBERS}-member limit. Talk to us if it needs to be larger.` };
+    return { status: 409, error: `This group is at the ${MAX_MEMBERS}-member limit. Talk to us if it needs to be larger.` };
   }
   if (counts.pending >= MAX_PENDING_INVITES) {
     return { status: 429, error: `There are already ${counts.pending} invitations waiting. Give those a chance to be accepted first.` };
@@ -206,7 +206,7 @@ async function accept(client, invite, investor) {
     `SELECT COUNT(*)::int AS members FROM stokvel_members
       WHERE sub_account_id = $1 AND status = 'active'`, [invite.sub_account_id]);
   if (counts.members >= MAX_MEMBERS) {
-    return { status: 409, error: `This stokvel has reached the ${MAX_MEMBERS}-member limit since you were invited.` };
+    return { status: 409, error: `This group has reached the ${MAX_MEMBERS}-member limit since you were invited.` };
   }
 
   /* An invitation makes a MEMBER, never a signatory, and the values are
@@ -255,7 +255,7 @@ async function revoke(client, group, inviteId) {
         SET status = 'revoked', responded_at = NOW(), updated_at = NOW()
       WHERE id = $1 AND sub_account_id = $2 AND status = 'pending'`,
     [inviteId, group.id]);
-  if (!rowCount) return { status: 404, error: 'No such invitation waiting on this stokvel.' };
+  if (!rowCount) return { status: 404, error: 'No such invitation waiting on this group.' };
   return { ok: true };
 }
 

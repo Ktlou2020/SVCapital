@@ -1328,7 +1328,7 @@ function sendStokvelInvite(to, { inviteeName, inviterName, stokvelName, expiresA
          ${when ? `It is valid until ${escHtml(when)}.` : ''}</p>
       <p style="font-size:0.84rem;color:#777">If you already have an SV Capital account under a
          different email address, ask ${escHtml(inviterName)} to send the invitation to that one
-         instead. Joining a stokvel means the group can see your contributions and what you owe \u2014
+         instead. Joining a savings group means the group can see your contributions and what you owe \u2014
          if you did not expect this, simply ignore it.</p>
     `),
   });

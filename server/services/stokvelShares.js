@@ -255,7 +255,7 @@ async function payExitDebts(client, subAccountId, reference, actor) {
     await recordTransaction(client, {
       investorId: d.investor_id, type: 'deposit', amount: pay,
       reference: reference || newId('SXD'),
-      description: 'Stokvel exit settlement' + (done ? '' : ' (part payment)'),
+      description: 'Group exit settlement' + (done ? '' : ' (part payment)'),
     }, actor || systemActor('stokvelShares:payExitDebts'));
 
     cash = round2(cash - pay);
@@ -349,7 +349,7 @@ async function settleExit(client, { subAccountId, investorId, authorityId, refer
          leaving is a stokvel that is closing, and closing an account is a
          different conversation from one member walking away from a group
          that carries on. */
-      return { error: 'This member opened the stokvel and there is no other active member to hand it to. '
+      return { error: 'This member opened the group and there is no other active member to hand it to. '
                     + 'A group with nobody left in it should be closed with us rather than emptied one member at a time.' };
     }
     await client.query(
@@ -380,7 +380,7 @@ async function settleExit(client, { subAccountId, investorId, authorityId, refer
       [payNow, investorId]);
     await recordTransaction(client, {
       investorId, type: 'deposit', amount: payNow, reference: ref,
-      description: 'Stokvel exit settlement',
+      description: 'Group exit settlement',
     }, actor || systemActor('stokvelShares:settleExit'));
   }
 
@@ -472,7 +472,7 @@ async function attribute(client, { subAccountId, investorId, amount, reason, act
     `SELECT 1 FROM stokvel_members
       WHERE sub_account_id = $1 AND investor_id = $2 AND status = 'active'`,
     [subAccountId, investorId]);
-  if (!m) return { error: 'That person is not an active member of this stokvel.' };
+  if (!m) return { error: 'That person is not an active member of this group.' };
 
   await reconcile(client, subAccountId, { reason: 'Shared out before attributing', actor });
 
@@ -481,7 +481,7 @@ async function attribute(client, { subAccountId, investorId, amount, reason, act
     /* Attributing more than the group holds would hand one member a share
        larger than the pot and push somebody else negative. Whatever has
        gone wrong, it is not fixed from here. */
-    return { error: `This stokvel holds ${fmtR(assets.total)}. `
+    return { error: `This group holds ${fmtR(assets.total)}. `
                   + `You cannot attribute ${fmtR(amt)} of it to one member.` };
   }
 
@@ -539,7 +539,7 @@ async function payOut(client, { payoutId, actor }) {
   await reconcile(client, subAccountId, { reason: 'Shared out before the payout', reference: ref, actor });
 
   const members = await activeMembers(client, subAccountId);
-  if (!members.length) return { error: 'This stokvel has no active members to pay.' };
+  if (!members.length) return { error: 'This group has no active members to pay.' };
 
   const basis   = await sharesOf(client, subAccountId);
   const arrears = await arrearsOf(client, subAccountId);
@@ -589,7 +589,7 @@ async function payOut(client, { payoutId, actor }) {
       await recordTransaction(client, {
         investorId: id, type: 'deposit', amount: paid,
         reference: `${ref}-${String(n).padStart(3, '0')}`,
-        description: `Stokvel payout \u2014 ${po.label}`,
+        description: `Group payout \u2014 ${po.label}`,
       }, actor || systemActor('stokvelShares:payOut'));
     }
     /* The allocation is the FULL net, not only what cash covered: their

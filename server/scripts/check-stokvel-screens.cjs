@@ -264,6 +264,60 @@ console.log('\nand voting is offered only to signatories');
      'knowing what is being asked for is the point');
 }
 
+/* The product is called a GROUP on screen, and the older word is kept in the
+   copy rather than deleted.
+
+   Both halves matter. "Stokvel" is one tradition among several — umgalelo,
+   gooi-gooi, motshelo, mohodisano, society — so a label that names only one
+   of them turns the others away; which is why nothing a member reads calls
+   the feature by that one name any more. But it is also the term 11.5m
+   people search for, so it stays in the descriptive copy and on the public
+   page. Deleting it everywhere would be the other mistake. */
+console.log('\nand it is called a group, without losing the word people search for');
+{
+  const PORTAL_HTML = read('portal/index.html');
+  const MOBILE_HTML = read('mobile/src/index.html');
+  const pages = [['web', PORTAL_HTML], ['mobile', MOBILE_HTML]];
+
+  for (const [which, PAGE] of pages) {
+    const tile = PAGE.slice(PAGE.indexOf('sa-type-showcase'),
+                            PAGE.indexOf('subacctsGrid'));
+    ok(`${which}: the type on offer is a group, in full`,
+       /Investment &amp; Savings Group/.test(PAGE),
+       'the full descriptor is what tells somebody this is for their committee');
+    ok(`${which}: and the picker still names the traditions it covers`,
+       /stokvel, umgalelo, motshelo, society/.test(PAGE),
+       'the one search term 11.5m people type cannot be dropped from the copy');
+    ok(`${which}: the showcase tile is not labelled with one tradition`,
+       !/sa-type-tile__label">Stokvel</.test(tile),
+       'a Xhosa umgalelo reading that tile is being told this is not for them');
+  }
+
+  ok('the switcher heading is the member’s groups',
+     /My groups/.test(CORE) && !/My stokvels/.test(CORE));
+  ok('a card says what kind of account it is, in the new word',
+     /sa-card__type[^`]{0,60}> Group</.test(CORE));
+  ok('and the workspace tabs are a group’s sections',
+     /aria-label="Group sections"/.test(CORE));
+
+  /* Messages, not just labels. A screen renamed while every error it raises
+     keeps the old word is a half-done rename the member sees. */
+  const MANDATE = read('server/services/stokvelMandate.js');
+  const INVITES = read('server/services/stokvelInvites.js');
+  ok('the mandate refuses in the same vocabulary the screen uses',
+     /A group investment needs an approved authority/.test(MANDATE)
+     && /A group withdrawal needs an approved authority/.test(MANDATE));
+  ok('and so does the invitation that is turned away',
+     /already a member of this group/.test(INVITES));
+
+  /* The public page is the search-term asset and is deliberately NOT
+     renamed. check-stokvel-public.cjs owns its content; this only holds the
+     decision in place, so a later sweep of the word does not take it. */
+  ok('the marketing page keeps the word people search for',
+     /stokvel/i.test(read('stokvels.html')),
+     'renaming this page is giving up the one term this market types');
+}
+
 /* ── Measured ───────────────────────────────────────────────────── */
 const CHROME = require('../../scripts/lib/chromium.cjs').findChromium();
 

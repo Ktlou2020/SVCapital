@@ -156,7 +156,7 @@ router.get('/', async (req, res) => {
     return res.json({ data: rows });
   } catch (err) {
     console.error('[stokvels] list failed:', err.message);
-    return res.status(500).json({ error: 'Could not load your stokvels.' });
+    return res.status(500).json({ error: 'Could not load your groups.' });
   }
 });
 
@@ -478,7 +478,7 @@ router.post('/:id/withdrawal-requests', async (req, res) => {
         `SELECT 1 FROM stokvel_payouts
           WHERE id = $1 AND sub_account_id = $2 AND status = 'planned'`,
         [payoutId, group.id]);
-      if (!po.length) return res.status(400).json({ error: 'No such payout is planned for this stokvel.' });
+      if (!po.length) return res.status(400).json({ error: 'No such payout is planned for this group.' });
     } else if (kind === 'exit') {
       /* The member being settled is the destination of an exit, the way a
          bank account is the destination of a withdrawal — so it is part of
@@ -490,7 +490,7 @@ router.post('/:id/withdrawal-requests', async (req, res) => {
         `SELECT 1 FROM stokvel_members
           WHERE sub_account_id = $1 AND investor_id = $2 AND status = 'active'`,
         [group.id, exitInvestorId]);
-      if (!m.length) return res.status(400).json({ error: 'That person is not an active member of this stokvel.' });
+      if (!m.length) return res.status(400).json({ error: 'That person is not an active member of this group.' });
       if (exitInvestorId !== me && !invites.mayInvite(group)) {
         return res.status(403).json({
           error: 'Only the chairperson, secretary or treasurer can raise an exit for somebody else.' });
@@ -507,7 +507,7 @@ router.post('/:id/withdrawal-requests', async (req, res) => {
     const quorum = Number(group.stokvel_quorum) || 0;
     if (quorum < mandate.MIN_QUORUM) {
       return res.status(400).json({
-        error: 'This stokvel has no mandate on file. Capture the signatories and how many must approve before the group\u2019s money can move.' });
+        error: 'This group has no mandate on file. Capture the signatories and how many must approve before the group\u2019s money can move.' });
     }
 
     const id = 'SWR-' + crypto.randomUUID().replace(/-/g, '').slice(0, 14).toUpperCase();
@@ -732,7 +732,7 @@ router.post('/:id/fines', async (req, res) => {
       `SELECT 1 FROM stokvel_members
         WHERE sub_account_id = $1 AND investor_id = $2 AND status = 'active'`,
       [group.id, investorId]);
-    if (!m.length) return res.status(400).json({ error: 'That person is not an active member of this stokvel.' });
+    if (!m.length) return res.status(400).json({ error: 'That person is not an active member of this group.' });
 
     const id = 'SCF-' + crypto.randomUUID().replace(/-/g, '').slice(0, 14).toUpperCase();
     await pool.query(
@@ -1059,7 +1059,7 @@ router.post('/:id/payouts', async (req, res) => {
          not decided anything, and the second would be approved against a
          pot the first is about to empty. */
       if (e.code === '23505') {
-        return res.status(409).json({ error: 'This stokvel already has a payout planned. Run or cancel that one first.' });
+        return res.status(409).json({ error: 'This group already has a payout planned. Run or cancel that one first.' });
       }
       throw e;
     }
@@ -1305,7 +1305,7 @@ router.put('/:id/autopay', async (req, res) => {
         WHERE sub_account_id = $1 AND investor_id = $2 AND status = 'active'
         RETURNING autopay_enabled`,
       [group.id, me, want]);
-    if (!rows[0]) return res.status(404).json({ error: 'You are not a member of this stokvel.' });
+    if (!rows[0]) return res.status(404).json({ error: 'You are not a member of this group.' });
 
     return res.json({ data: { enabled: rows[0].autopay_enabled } });
   } catch (err) {

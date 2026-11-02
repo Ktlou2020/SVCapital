@@ -167,7 +167,7 @@ async function approvalNeeded({ groupId, authorityId, db } = {}) {
       if (s.id === a.requested_by) continue;
       told.push(await _tell(s, {
         url: hubUrl(groupId),
-        title: a.stokvel_name || 'Your stokvel',
+        title: a.stokvel_name || 'Your group',
         body:  `${who} asked for ${what}. It needs ${required} signatory approvals — yours is one of them.`,
         email: {
           subject: `${a.stokvel_name}: ${what} needs your approval`,
@@ -176,7 +176,7 @@ async function approvalNeeded({ groupId, authorityId, db } = {}) {
               + `It cannot go ahead until ${required} signatories approve it, and you are one of them.`,
           rows: _rows(a, required),
           note: a.reason ? `Reason given: ${a.reason}` : null,
-          action: 'Open the stokvel in the app, read the request, and approve or reject it. '
+          action: 'Open the group in the app, read the request, and approve or reject it. '
                 + 'A rejection ends it outright — a mandate is not a majority, so it would have to be raised again.',
         },
       }));
@@ -370,7 +370,7 @@ async function invited({ inviteId, db } = {}) {
     if (!v) return { reached: [], reason: 'no such invitation' };
 
     const who   = v.invited_by_name || 'A member';
-    const group = v.stokvel_name || 'a stokvel';
+    const group = v.stokvel_name || 'a group';
     const line  = `${who} has invited you to join ${group} on SV Capital.`;
     const find  = 'Sign in to the app with this email address or cell number and the '
                 + 'invitation is waiting on your Sub-accounts screen.';
@@ -443,7 +443,7 @@ async function inviteAccepted({ groupId, investorId, invitedBy, db } = {}) {
         heading: 'Your invitation was accepted',
         lead: `<strong>${name}</strong> accepted your invitation to <strong>${row.stokvel_name}</strong> `
             + 'and is now an active member.',
-        rows: [['Stokvel', row.stokvel_name], ['Joined', name]],
+        rows: [['Group', row.stokvel_name], ['Joined', name]],
         note: 'They join as an ordinary member. Signing power is a change to the mandate \u2014 '
             + 'it is not something an invitation can grant, and it is not something one person '
             + 'can arrange alone. Talk to us if the group has elected a new signatory.',
@@ -480,7 +480,7 @@ async function exitSettled({ groupId, investorId, settlement, db } = {}) {
       : '';
 
     const rows = [
-      ['Stokvel', row.stokvel_name],
+      ['Group', row.stokvel_name],
       ['Your share', fmtR(s.gross)],
     ];
     if (Number(s.arrears) > 0) rows.push(['Less contributions owed', fmtR(s.arrears)]);
@@ -499,7 +499,7 @@ async function exitSettled({ groupId, investorId, settlement, db } = {}) {
         rows,
         note: owed > 0
           ? 'The group holds part of its money in investments that have not matured. The balance '
-            + 'owed to you is recorded against the stokvel and paid automatically as cash becomes '
+            + 'owed to you is recorded against the group and paid automatically as cash becomes '
             + 'available — it is not forgotten, and it does not need chasing.'
           : 'Contributions you still owed were kept by the group, as its constitution provides.',
       },
@@ -547,7 +547,7 @@ async function paidOut({ groupId, payout, db } = {}) {
         ? ` ${fmtR(queued)} is still owed to you and follows as the group\u2019s investments mature.`
         : '';
       const rows = [
-        ['Stokvel', row.name],
+        ['Group', row.name],
         ['Payout', p.label || '\u2014'],
         ['Your share', fmtR(line.gross)],
       ];
@@ -568,9 +568,9 @@ async function paidOut({ groupId, payout, db } = {}) {
           rows,
           note: queued > 0
             ? 'Part of the group\u2019s money is committed to an investment that has not matured. '
-              + 'The balance owed to you is recorded against the stokvel and paid automatically '
+              + 'The balance owed to you is recorded against the group and paid automatically '
               + 'as cash becomes available \u2014 it does not need chasing.'
-            : 'You are still a member and the stokvel carries on; contributions continue as scheduled.',
+            : 'You are still a member and the group carries on; contributions continue as scheduled.',
         },
       }));
     }
@@ -600,12 +600,12 @@ async function fined({ groupId, investorId, amount, note, db } = {}) {
       email: {
         subject: `${row.name}: a fine of ${fmtR(amount)}`,
         heading: 'A fine has been recorded',
-        lead: `Your stokvel\u2019s committee has recorded a fine of <strong>${fmtR(amount)}</strong> `
+        lead: `Your group\u2019s committee has recorded a fine of <strong>${fmtR(amount)}</strong> `
             + 'against you, under the group\u2019s own rules.',
-        rows: [['Stokvel', row.name], ['Amount', fmtR(amount)], ['What it is for', note || '\u2014']],
+        rows: [['Group', row.name], ['Amount', fmtR(amount)], ['What it is for', note || '\u2014']],
         note: 'It is added to what you owe the group and settles like a contribution \u2014 '
             + 'oldest first when you pay in, or off your share if the group pays out or you '
-            + 'leave. SV Capital does not set or enforce a stokvel\u2019s penalties; if you think '
+            + 'leave. SV Capital does not set or enforce a group\u2019s penalties; if you think '
             + 'this is wrong, it is your committee to take it up with.',
       },
     });

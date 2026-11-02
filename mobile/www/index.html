@@ -1575,7 +1575,7 @@
       <div class="view" id="view-subaccounts">
         <div class="sa-view-header">
           <div class="sa-view-title">My Accounts</div>
-          <div class="sa-view-sub">Business · Trust · Stokvel · Minor — each with their own wallet, investments and FICA</div>
+          <div class="sa-view-sub">Business · Trust · Group · Minor — each with their own wallet, investments and FICA</div>
           <button class="btn btn--primary sa-view-add-btn" onclick="openCreateSubAccountModal()">
             <i class="fa-solid fa-plus"></i> Add Account
           </button>
@@ -1597,8 +1597,8 @@
             </div>
             <div class="sa-type-tile" onclick="openCreateSubAccountModal('stokvel')" style="--tile-color:#65ed00;--tile-bg:linear-gradient(135deg,#303030,#65ed00)">
               <i class="fa-solid fa-people-group sa-type-tile__icon"></i>
-              <div class="sa-type-tile__label">Stokvel</div>
-              <div class="sa-type-tile__desc">Community savings club investing together</div>
+              <div class="sa-type-tile__label">Group</div>
+              <div class="sa-type-tile__desc">A stokvel, umgalelo or savings club investing together</div>
             </div>
             <div class="sa-type-tile sa-type-tile--minor" onclick="openCreateSubAccountModal('minor')" style="--tile-color:#ff9b0c;--tile-bg:linear-gradient(135deg,#ff5229,#fec24f)">
               <i class="fa-solid fa-child-reaching sa-type-tile__icon"></i>
@@ -2203,8 +2203,8 @@
         </button>
         <button class="sa-type-btn" data-type="stokvel" onclick="saSelectType('stokvel')">
           <i class="fa-solid fa-people-group" style="color:#22c55e"></i>
-          <strong>Stokvel</strong>
-          <span>Community savings club account</span>
+          <strong>Investment &amp; Savings Group</strong>
+          <span>A stokvel, umgalelo, motshelo, society or any group that saves together</span>
         </button>
         <button class="sa-type-btn sa-type-btn--minor" data-type="minor" onclick="saSelectType('minor')">
           <i class="fa-solid fa-child-reaching" style="color:#ff9b0c"></i>
@@ -2363,7 +2363,7 @@
           <option value="tax_clearance">Tax Clearance Certificate</option>
           <option value="trust_deed">Trust Deed</option>
           <option value="letters_of_authority">Letters of Authority</option>
-          <option value="stokvel_constitution">Stokvel Constitution</option>
+          <option value="stokvel_constitution">Group constitution</option>
           <option value="birth_certificate">Birth Certificate</option>
           <option value="id_document">ID Document</option>
           <option value="proof_of_guardianship">Proof of Guardianship</option>
@@ -3113,7 +3113,7 @@
 </nav>
 
 <script src="../js/api.js?v=29"></script>
-<script src="../js/portal-core.js?v=60"></script>
+<script src="../js/portal-core.js?v=61"></script>
 <script src="../js/investor-documents.js?v=8"></script>
 <script src="js/portal.js?v=62"></script>
 <!-- sv-intelligence.js hidden -->

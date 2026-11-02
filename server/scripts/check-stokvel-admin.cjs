@@ -60,7 +60,7 @@ console.log('\nthe screen exists and is reachable');
   ok('there is a nav entry', /data-view="stokvels"/.test(HTML));
   ok('and a view to land in', /id="view-stokvels"/.test(HTML));
   ok('the loader is registered', /stokvels: loadStokvels/.test(JS));
-  ok('and the title map knows it', /stokvels: 'Stokvels'/.test(JS));
+  ok('and the title map knows it', /stokvels: 'Groups'/.test(JS));
   ok('the console script was re-stamped',
      /js\/admin\.js\?v=(\d+)/.test(HTML) && Number(HTML.match(/js\/admin\.js\?v=(\d+)/)[1]) >= 195,
      'an unstamped change is served from cache to every staff member');
@@ -97,7 +97,7 @@ console.log('\nand staff cannot stand in for the signatories');
      'a console button that satisfied a mandate hands back the single point '
      + 'of failure the feature removes');
   ok('and the screen says so',
-     /cannot approve on a stokvel/i.test(codeOnly(SEC)));
+     /cannot approve on a group/i.test(codeOnly(SEC)));
   ok('pending requests are shown read-only',
      /Awaiting approval/.test(SEC));
 }
