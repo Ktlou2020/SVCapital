@@ -874,6 +874,97 @@ router.get('/:id/shares', async (req, res) => {
   }
 });
 
+/* ─── GET /api/stokvels/:id/transactions ─────────────────────────────
+   The group's own ledger, for the group's own screen.
+
+   NOT through the generic table reader: routes/tables.js scopes both
+   transactions and investments by investor_id, and a stokvel's rows carry
+   the CHAIRPERSON's id, so an ordinary member cannot read them there — and
+   should not be handed a way to. Members read their group through this
+   router, where groupForCaller decides.
+
+   The running balance is computed with the ledger's own definition of what
+   moves cash, so the group's ledger and its statement cannot disagree about
+   a platform fee the way two hand-written lists once did. */
+router.get('/:id/transactions', async (req, res) => {
+  const me = callerInvestorId(req);
+  try {
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) return res.status(404).json({ error: 'No such stokvel.' });
+
+    const { cashMovementSQL } = require('../services/ledger');
+    const { rows } = await pool.query(
+      `SELECT id, type, amount, status, reference, description,
+              COALESCE(transaction_date, created_at) AS at,
+              ${cashMovementSQL()} AS cash_effect
+         FROM transactions
+        WHERE sub_account_id = $1 AND status = 'completed'
+        ORDER BY COALESCE(transaction_date, created_at) DESC, created_at DESC
+        LIMIT 300`, [group.id]);
+
+    /* ANCHORED TO THE WALLET, not accumulated from zero.
+    
+       Not every movement on a group wallet writes a row against the group.
+       A payout debits sub_accounts.wallet_balance and writes the
+       transaction against each MEMBER; so do an exit settlement and the
+       paying down of an exit debt. Summing this table from zero therefore
+       does not reach the wallet, and a treasurer reading a closing balance
+       that disagrees with the balance above it would be right to stop
+       trusting the screen.
+    
+       So the newest row IS the wallet, and each older row is the wallet
+       with the movements since it unwound — the same anchoring
+       services/accountStatement.js does, and for the same reason. */
+    let running = Math.round(Number(group.wallet_balance || 0) * 100) / 100;
+    for (const r of rows) {
+      r.running_balance = running;
+      running = Math.round((running - Number(r.cash_effect)) * 100) / 100;
+    }
+
+    return res.json({ data: rows, wallet: group.wallet_balance });
+  } catch (err) {
+    console.error('[stokvels] transactions failed:', err.message);
+    return res.status(500).json({ error: 'Could not load the transactions.' });
+  }
+});
+
+/* ─── GET /api/stokvels/:id/investments ──────────────────────────────
+   What the group holds, and where. Same reasoning as above: scoped by
+   sub_account_id, behind the membership guard. */
+router.get('/:id/investments', async (req, res) => {
+  const me = callerInvestorId(req);
+  try {
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) return res.status(404).json({ error: 'No such stokvel.' });
+
+    const { rows } = await pool.query(
+      `SELECT i.id, i.amount, i.status, i.annual_rate, i.term_months,
+              i.expected_return, i.actual_return,
+              COALESCE(i.start_date, i.created_at::date) AS start_date,
+              i.end_date AS maturity_date,
+              COALESCE(i.pool_name, p.name) AS pool_name,
+              COALESCE(i.product_type, p.product_type) AS product_type
+         FROM investments i
+         LEFT JOIN investment_pools p ON p.id = i.pool_id
+        WHERE i.sub_account_id = $1
+        ORDER BY (i.status = 'active') DESC, i.created_at DESC
+        LIMIT 200`, [group.id]);
+
+    const sum = (f, only) => Math.round(rows
+      .filter(r => !only || r.status === only)
+      .reduce((n, r) => n + (Number(r[f]) || 0), 0) * 100) / 100;
+
+    return res.json({
+      data: rows,
+      totals: { active: sum('amount', 'active'), all: sum('amount'),
+                returns: sum('actual_return') },
+    });
+  } catch (err) {
+    console.error('[stokvels] investments failed:', err.message);
+    return res.status(500).json({ error: 'Could not load the investments.' });
+  }
+});
+
 /* ─── Payouts ────────────────────────────────────────────────────────
    The December payout: the group pays itself out on a date, everybody at
    once, and carries on afterwards. Planned by the committee, approved by

@@ -6961,6 +6961,10 @@ async function loadSubAccounts() {
 }
 
 function renderSubAccountsView() {
+  /* The sidebar switcher is built from the same two lists, so it is kept
+     current here rather than by every caller remembering to. */
+  try { renderStokvelSwitcher(); } catch (_) {}
+
   const grid  = document.getElementById('subacctsGrid');
   const empty = document.getElementById('subacctsEmpty');
   if (!grid) return;
@@ -12448,16 +12452,103 @@ function _stokvelCard(s) {
    is a redeclaration waiting for the next script that loads beside it, and
    check-portal-split refuses one. Threading it also means a handler cannot
    act on a stokvel other than the one whose markup it came from. */
+/* ─── The switcher ─────────────────────────────────────────────────
+   How a member gets into their group without going through Sub-accounts
+   first. Rendered into the sidebar after the stokvel list loads, and
+   HIDDEN ENTIRELY for somebody in no stokvel — most clients are not in one
+   and the shell should not grow an empty control for them.
+
+   One stokvel is a button; several is a list, because a person in three
+   groups should not have to guess which one a single button opens. */
+function renderStokvelSwitcher() {
+  const host = document.getElementById('svSwitcher');
+  if (!host) return;
+  const groups = (PORTAL.stokvels || []).slice();
+  for (const sa of (PORTAL.subAccounts || [])) {
+    if (sa.account_type === 'stokvel' && !groups.some(g => g.id === sa.id)) groups.push(sa);
+  }
+  if (!groups.length) { host.innerHTML = ''; host.style.display = 'none'; return; }
+  host.style.display = '';
+
+  const waiting = g => (parseInt(g.awaiting_my_vote, 10) || 0);
+  const pill = n => n ? `<span style="background:#eda5ff;color:#1a1a1a;border-radius:999px;
+      font-size:0.62rem;font-weight:800;padding:1px 6px;margin-left:6px">${n}</span>` : '';
+
+  host.innerHTML = `
+    <div style="font-size:0.66rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;
+                color:var(--text-muted);padding:10px 14px 4px">My stokvels</div>
+    ${groups.map(g => `
+      <button class="nav-item" onclick="openStokvelHub('${_esc(g.id)}')" style="width:100%;text-align:left">
+        <i class="fa-solid fa-people-group"></i>
+        <span>${_esc(g.name)}${pill(waiting(g))}</span>
+      </button>`).join('')}`;
+}
+
+/* ─── Switching into a stokvel ─────────────────────────────────────
+   This was a modal. Everything the group had — the pot, the mandate,
+   contributions, shares, payouts, invitations, the roster — stacked in one
+   scrolling dialog, which is how a stokvel came to read as an accessory to
+   a personal account rather than the thing a committee runs its group from.
+
+   It is now a WORKSPACE: a view of its own with its own sections. One view
+   rather than seventeen made context-aware — the personal screens are
+   untouched, so nothing here can render one account's money under another's
+   name, which is the risk that made a whole-portal context switch a bad
+   trade in a file this size.
+
+   openStokvelHub keeps its name because the sub-account cards, the deep
+   links and every notification already point at it. They all now land in
+   the workspace, and there is no second place showing the same group. */
 async function openStokvelHub(id) {
-  document.getElementById('saDetailTitle').textContent = 'Stokvel';
-  document.getElementById('saDetailBody').innerHTML =
-    `<div style="padding:40px;text-align:center;color:var(--text-muted)">
-       <i class="fa-solid fa-circle-notch fa-spin"></i> Loading…</div>`;
-  Modal.open('saDetailModal');
+  if (typeof Modal !== 'undefined') Modal.close('saDetailModal');
+  if (typeof navigate === 'function') {
+    navigate('stokvel', document.querySelector('[data-view="stokvel"]'));
+  }
   await _svRenderHub(id);
 }
 
-async function _svRenderHub(id) {
+/* Which section is open. Threaded through the handlers rather than parked
+   in a module variable: portal-core is shared by the web portal and the
+   app and may declare no top-level state — check-portal-split refuses one. */
+/* A function, not a const. portal-core.js is shared by the web portal and
+   the app and may declare NO TOP-LEVEL STATE — a const here is a
+   redeclaration waiting for the next script that loads beside it, and
+   check-portal-split refuses one. */
+function _svTabList() {
+  return [
+    ['overview',      'Overview',      'fa-gauge-high'],
+    ['contributions', 'Contributions', 'fa-calendar-check'],
+    ['approvals',     'Approvals',     'fa-user-shield'],
+    ['shares',        'Shares',        'fa-chart-pie'],
+    ['payouts',       'Payouts',       'fa-gift'],
+    ['members',       'Members',       'fa-users'],
+    ['investments',   'Investments',   'fa-seedling'],
+    ['transactions',  'Transactions',  'fa-receipt'],
+    ['statement',     'Statement',     'fa-file-lines'],
+  ];
+}
+
+function svWorkspaceTab(id, tab) {
+  const body = document.getElementById('svWsBody');
+  if (body) body.setAttribute('data-tab', tab);
+  _svRenderHub(id, tab);
+}
+
+/* The workspace, rendered. One fetch of everything the group has, then the
+   open section draws from it — a stokvel's payloads are small and a member
+   moving between tabs should not wait for the network each time.
+
+   The two heavier sections (the ledger and the holdings) are fetched only
+   when they are opened, because a group with three hundred transactions
+   should not make the overview slow. */
+async function _svRenderHub(id, tab) {
+  const body = document.getElementById('svWsBody');
+  const open = tab || (body && body.getAttribute('data-tab')) || 'overview';
+  if (body && !body.innerHTML) {
+    body.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-muted)">
+      <i class="fa-solid fa-circle-notch fa-spin"></i> Loading…</div>`;
+  }
+
   let group, members, contributions, requests, invitations, shareData, payoutData;
   try {
     [group, members, contributions, requests, invitations, shareData, payoutData] = await Promise.all([
@@ -12470,7 +12561,7 @@ async function _svRenderHub(id) {
       API._fetch('GET', `stokvels/${id}/payouts`),
     ]);
   } catch (err) {
-    document.getElementById('saDetailBody').innerHTML =
+    if (body) body.innerHTML =
       `<div class="empty-state"><p>Could not load this stokvel. ${_esc(err.message || '')}</p></div>`;
     return;
   }
@@ -12480,16 +12571,295 @@ async function _svRenderHub(id) {
   const meIsSignatory = ((members && members.data) || [])
     .some(m => m.is_me && m.is_signatory);
 
-  document.getElementById('saDetailTitle').textContent = g.name || 'Stokvel';
-  document.getElementById('saDetailBody').innerHTML = `
-    ${_svHeader(g, shareData)}
-    ${_svPayouts(payoutData, id)}
-    ${_svShares(shareData, id)}
-    ${_svContributions(contributions, mine, id)}
-    ${_svWithdrawals(requests, meIsSignatory, id)}
-    ${_svMembers(members, id, !!(invitations && invitations.can_invite))}
-    ${_svInvitations(invitations, id)}
-  `;
+  const head = document.getElementById('svWsHeader');
+  if (head) head.innerHTML = _svWsHeader(g, shareData, id);
+  const tabs = document.getElementById('svWsTabs');
+  if (tabs) tabs.innerHTML = _svWsTabs(id, open, { requests, contributions });
+
+  let html = '';
+  switch (open) {
+    case 'contributions': html = _svContributions(contributions, mine, id); break;
+    case 'approvals':     html = _svWithdrawals(requests, meIsSignatory, id); break;
+    case 'shares':        html = _svShares(shareData, id); break;
+    case 'payouts':       html = _svPayouts(payoutData, id); break;
+    case 'members':       html = _svMembers(members, id, !!(invitations && invitations.can_invite))
+                               + _svInvitations(invitations, id); break;
+    case 'investments':   html = await _svInvestments(id); break;
+    case 'transactions':  html = await _svTransactions(id); break;
+    case 'statement':     html = _svStatement(g, id); break;
+    default:              html = _svOverview(id, { g, shareData, payoutData, contributions,
+                                                   requests, members, mine, meIsSignatory });
+  }
+  if (body) { body.innerHTML = html; body.setAttribute('data-tab', open); }
+}
+
+/* The strip above the tabs: whose space this is, what it holds, and the way
+   back. The way back matters more than it looks — somebody who switched in
+   and cannot see how to leave will not switch in again. */
+function _svWsHeader(g, shareRes, id) {
+  const meta = (typeof SA_TYPE_META !== 'undefined' && SA_TYPE_META.stokvel) || { bg: '#064e1e', icon: 'fa-people-group' };
+  const d = (shareRes && shareRes.data) || null;
+  const stat = (label, value, colour) => `<div>
+      <div style="font-size:0.7rem;color:rgba(255,255,255,0.7);text-transform:uppercase;letter-spacing:.5px">${label}</div>
+      <div style="font-size:1.3rem;font-weight:800;color:${colour || '#fff'}">${value}</div>
+    </div>`;
+
+  return `<div class="sa-detail-banner" style="background:${meta.bg};margin-bottom:0">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="sa-detail-icon"><i class="fa-solid ${meta.icon}"></i></div>
+        <div>
+          <div style="font-size:1.15rem;font-weight:800;color:#fff">${_esc(g.name)}</div>
+          <div style="font-size:0.78rem;color:rgba(255,255,255,0.75)">
+            ${g.my_role ? _esc(String(g.my_role).replace(/^\w/, c => c.toUpperCase())) : 'Member'}
+            ${g.stokvel_reg_number ? ' · ' + _esc(g.stokvel_reg_number) : ''}
+          </div>
+        </div>
+      </div>
+      <button class="btn btn--ghost btn--sm" style="color:#fff;border-color:rgba(255,255,255,0.4)"
+              onclick="svLeaveWorkspace()">
+        <i class="fa-solid fa-arrow-left"></i> My account
+      </button>
+    </div>
+    <div style="display:flex;gap:24px;margin-top:16px;flex-wrap:wrap">
+      ${stat('The pot', Utils.rand(d ? d.net_assets : g.wallet_balance))}
+      ${stat('In the wallet', Utils.rand(d ? d.wallet : g.wallet_balance))}
+      ${stat('Invested', Utils.rand(d ? d.invested : g.total_invested))}
+      ${d ? stat('Your share', Utils.rand(d.my_share), '#eda5ff') : ''}
+    </div>
+  </div>`;
+}
+
+/* The sections, with a count on the two that can be waiting on somebody. */
+function _svWsTabs(id, open, counts) {
+  const waiting = ((counts.requests && counts.requests.data) || [])
+    .filter(r => r.status === 'pending').length;
+  const owed = ((counts.contributions && counts.contributions.data) || [])
+    .filter(c => c.is_me && c.status === 'due').length;
+  const badge = n => n ? `<span style="background:#eda5ff;color:#1a1a1a;border-radius:999px;
+      font-size:0.64rem;font-weight:800;padding:1px 6px;margin-left:5px">${n}</span>` : '';
+
+  return `<div style="display:flex;gap:4px;overflow-x:auto;padding:10px 0;border-bottom:1px solid var(--border);margin-bottom:14px">
+    ${_svTabList().map(([key, label, icon]) => `
+      <button class="btn btn--sm ${key === open ? 'btn--primary' : 'btn--ghost'}"
+              style="white-space:nowrap" onclick="svWorkspaceTab('${_esc(id)}','${key}')">
+        <i class="fa-solid ${icon}"></i> ${label}${key === 'approvals' ? badge(waiting) : ''}${key === 'contributions' ? badge(owed) : ''}
+      </button>`).join('')}
+  </div>`;
+}
+
+function svLeaveWorkspace() {
+  const body = document.getElementById('svWsBody');
+  if (body) { body.innerHTML = ''; body.removeAttribute('data-tab'); }
+  if (typeof navigate === 'function') {
+    navigate('subaccounts', document.querySelector('[data-view="subaccounts"]'));
+  }
+}
+
+/* ─── Overview ─────────────────────────────────────────────────────
+   The point of having a workspace at all. Everything the group needs a
+   person to know, each tile answering one question and taking you to the
+   section that answers it fully:
+
+     what the pot is · what my share of it is · what I owe · what is
+     waiting on MY approval · when we are paid out · who is behind
+
+   "Waiting on you" is first among the actionable ones on purpose: a mandate
+   is only as fast as the person who has not voted yet. */
+function _svOverview(id, ctx) {
+  const d        = (ctx.shareData && ctx.shareData.data) || null;
+  const payouts  = (ctx.payoutData && ctx.payoutData.data) || [];
+  const planned  = payouts.find(p => p.status === 'planned');
+  const reqs     = (ctx.requests && ctx.requests.data) || [];
+  const arrears  = (ctx.contributions && ctx.contributions.arrears) || [];
+  const owedByMe = ctx.mine.reduce((n, c) =>
+    n + (parseFloat(c.amount_due) - parseFloat(c.amount_paid)), 0);
+
+  /* Only what this member can act on. A count of requests they cannot vote
+     on is news, not a task. */
+  const myVotes = ctx.meIsSignatory
+    ? reqs.filter(r => r.status === 'pending'
+        && !(r.votes || []).some(v => v.is_me)).length
+    : 0;
+
+  /* The tiles carry their own frame. .sa-card is shaped for an account
+     card and .sa-grid does not exist at all — the first version of this
+     leaned on both and rendered as one unstyled column. */
+  const tile = (icon, label, value, note, tab, colour) => `
+    <div onclick="svWorkspaceTab('${_esc(id)}','${tab}')"
+         style="cursor:pointer;border:1px solid var(--border);border-left:3px solid ${colour || '#22c55e'};
+                border-radius:12px;padding:14px 16px;background:var(--card-bg,transparent);
+                transition:transform .12s ease"
+         onmouseover="this.style.transform='translateY(-1px)'"
+         onmouseout="this.style.transform='none'">
+      <div style="display:flex;align-items:center;gap:7px;font-size:0.7rem;
+                  text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">
+        <i class="fa-solid ${icon}"></i> ${label}
+      </div>
+      <div style="font-size:1.4rem;font-weight:800;margin:6px 0 3px;color:${colour || 'inherit'}">${value}</div>
+      <div style="font-size:0.77rem;color:var(--text-muted);line-height:1.45">${note}</div>
+    </div>`;
+
+  return `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+                gap:12px;margin-bottom:18px">
+      ${myVotes ? tile('fa-user-shield', 'Waiting on you', String(myVotes),
+          myVotes === 1 ? 'A request needs your approval.' : 'Requests need your approval.',
+          'approvals', '#eda5ff') : ''}
+      ${owedByMe > 0 ? tile('fa-calendar-check', 'You owe', Utils.rand(owedByMe),
+          'Pay it from your wallet.', 'contributions', '#f59e0b') : ''}
+      ${tile('fa-chart-pie', 'Your share', Utils.rand(d ? d.my_share : 0),
+          d && d.basis === 'equal' ? 'The pot divides equally, less what you owe.'
+                                   : 'What you have put in, and your part of what the group has earned.',
+          'shares')}
+      ${tile('fa-sack-dollar', 'The pot', Utils.rand(d ? d.net_assets : 0),
+          d ? `${Utils.rand(d.wallet)} in the wallet · ${Utils.rand(d.invested)} invested` : '',
+          'shares')}
+      ${planned ? tile('fa-gift', 'Next payout', _esc(String(planned.pay_on).slice(0, 10)),
+          _esc(planned.label) + (planned.authority_id ? ' — approved' : ' — not yet approved'),
+          'payouts', '#eda5ff') : ''}
+      ${tile('fa-users', 'Members', String((ctx.members && (ctx.members.data || []).length) || 0),
+          arrears.length ? `${arrears.length} behind on contributions` : 'Everybody is up to date.',
+          'members')}
+    </div>
+
+    ${arrears.length ? `<div class="sa-section-title"><i class="fa-solid fa-triangle-exclamation"></i> Who is behind</div>
+      <table class="data-table" style="font-size:0.82rem;margin-bottom:16px"><tbody>
+      ${arrears.slice(0, 6).map(a => `<tr>
+        <td>${_esc(a.name)}</td>
+        <td class="text-right" style="font-weight:700">${Utils.rand(a.owed)}</td>
+        <td class="text-right" style="color:var(--text-muted)">${a.periods} period${a.periods === 1 ? '' : 's'}</td>
+      </tr>`).join('')}
+      </tbody></table>` : ''}
+
+    ${reqs.filter(r => r.status === 'pending').length ? `
+      <div class="sa-section-title"><i class="fa-solid fa-user-shield"></i> Awaiting approval</div>
+      ${reqs.filter(r => r.status === 'pending').slice(0, 4).map(r => `
+        <div style="display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);font-size:0.85rem">
+          <span>${_esc(r.requested_by_name || 'A member')} · ${Utils.rand(r.amount)}</span>
+          <strong style="color:${r.satisfied ? '#22c55e' : 'var(--text-muted)'}">${r.approvals} of ${r.required}</strong>
+        </div>`).join('')}
+      <button class="btn btn--secondary btn--sm" style="margin-top:12px"
+              onclick="svWorkspaceTab('${_esc(id)}','approvals')">See all</button>` : ''}`;
+}
+
+/* ─── The group's holdings ─────────────────────────────────────────
+   Fetched when opened rather than with everything else: a group with
+   years of investments should not make the overview wait. */
+async function _svInvestments(id) {
+  let res;
+  try { res = await API._fetch('GET', `stokvels/${id}/investments`); }
+  catch (err) { return `<div class="empty-state"><p>Could not load the investments. ${_esc(err.message || '')}</p></div>`; }
+  const rows = (res && res.data) || [];
+  const t = (res && res.totals) || {};
+  if (!rows.length) {
+    return `<div class="empty-state"><p>This stokvel has not invested anything yet.</p>
+      <p style="font-size:0.84rem;color:var(--text-muted)">Investing the pot is the group&rsquo;s own
+      decision and needs the signatories&rsquo; approval. Capital is at risk.</p></div>`;
+  }
+  return `<div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:14px">
+      <div><div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase">Invested now</div>
+        <div style="font-size:1.3rem;font-weight:800">${Utils.rand(t.active)}</div></div>
+      <div><div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase">Returns realised</div>
+        <div style="font-size:1.3rem;font-weight:800">${Utils.rand(t.returns)}</div></div>
+    </div>
+    <table class="data-table" style="font-size:0.82rem"><thead><tr>
+      <th>Pool</th><th class="text-right">Amount</th><th>Status</th><th>Matures</th>
+    </tr></thead><tbody>
+    ${rows.map(r => `<tr>
+      <td>${_esc(r.pool_name || '—')}</td>
+      <td class="text-right"><strong>${Utils.rand(r.amount)}</strong></td>
+      <td>${_esc(r.status)}</td>
+      <td>${_esc(String(r.maturity_date || '').slice(0, 10) || '—')}</td>
+    </tr>`).join('')}
+    </tbody></table>`;
+}
+
+/* ─── The group's ledger ───────────────────────────────────────────
+   The running balance comes from the server, computed with the ledger's own
+   definition of what moves cash — so this screen and the statement cannot
+   disagree about a platform fee. */
+async function _svTransactions(id) {
+  let res;
+  try { res = await API._fetch('GET', `stokvels/${id}/transactions`); }
+  catch (err) { return `<div class="empty-state"><p>Could not load the transactions. ${_esc(err.message || '')}</p></div>`; }
+  const rows = (res && res.data) || [];
+  if (!rows.length) return `<div class="empty-state"><p>Nothing has moved on this wallet yet.</p></div>`;
+  return `<table class="data-table" style="font-size:0.82rem"><thead><tr>
+      <th>Date</th><th>What</th><th class="text-right">Amount</th><th class="text-right">Balance</th>
+    </tr></thead><tbody>
+    ${rows.map(r => `<tr>
+      <td style="white-space:nowrap">${_esc(String(r.at || '').slice(0, 10))}</td>
+      <td>${_esc(r.description || r.type)}</td>
+      <td class="text-right" style="color:${Number(r.cash_effect) < 0 ? '#ef4444' : '#22c55e'};font-weight:700">
+        ${Number(r.cash_effect) < 0 ? '−' : '+'}${Utils.rand(Math.abs(Number(r.cash_effect)))}
+      </td>
+      <td class="text-right">${Utils.rand(r.running_balance)}</td>
+    </tr>`).join('')}
+    </tbody></table>`;
+}
+
+/* ─── The statement ────────────────────────────────────────────────
+   The document an AGM is run from. Built by the same service every other
+   statement uses, scoped to this account. */
+function _svStatement(g, id) {
+  const year = new Date().getFullYear();
+  return `<div style="max-width:620px">
+    <div class="sa-section-title"><i class="fa-solid fa-file-lines"></i> Statement</div>
+    <p style="font-size:0.88rem;color:var(--text-muted);line-height:1.6">
+      The group&rsquo;s statement for a period: what came in and went out, every
+      member&rsquo;s contributions, each member&rsquo;s share at the closing date, and the
+      register of who approved the money that moved. This is the document to table at
+      an AGM.
+    </p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-top:12px">
+      <div>
+        <label style="display:block;font-size:0.74rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">From</label>
+        <input id="svStFrom" class="form-input" type="date" value="${year}-01-01">
+      </div>
+      <div>
+        <label style="display:block;font-size:0.74rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">To</label>
+        <input id="svStTo" class="form-input" type="date" value="${year}-12-31">
+      </div>
+      <button class="btn btn--primary btn--sm" onclick="svOpenStatement('${_esc(id)}')">
+        <i class="fa-solid fa-file-arrow-down"></i> Build it
+      </button>
+    </div>
+    <div id="svStOut" style="margin-top:16px"></div>
+  </div>`;
+}
+
+async function svOpenStatement(id) {
+  const from = (document.getElementById('svStFrom') || {}).value;
+  const to   = (document.getElementById('svStTo')   || {}).value;
+  const out  = document.getElementById('svStOut');
+  if (!from || !to) { Utils.toast('Choose both dates.', 'error'); return; }
+  if (out) out.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Building…`;
+  try {
+    const res = await API._fetch('GET', 'statements/account-statement', null,
+                                 { from, to, sub_account_id: id });
+    const d = (res && res.data) || res || {};
+    const sv = d.stokvel || {};
+    if (!out) return;
+    out.innerHTML = `
+      <div style="border:1px solid var(--border);border-radius:12px;padding:14px">
+        <div style="font-weight:800">${_esc(sv.name || 'Statement')}</div>
+        <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px">${_esc(from)} to ${_esc(to)}</div>
+        <div style="display:flex;justify-content:space-between;font-size:0.85rem;padding:4px 0">
+          <span style="color:var(--text-muted)">Opening</span><strong>${Utils.rand(d.opening_balance)}</strong></div>
+        <div style="display:flex;justify-content:space-between;font-size:0.85rem;padding:4px 0">
+          <span style="color:var(--text-muted)">Closing</span><strong>${Utils.rand(d.closing_balance)}</strong></div>
+        <div style="display:flex;justify-content:space-between;font-size:0.85rem;padding:4px 0">
+          <span style="color:var(--text-muted)">Movements</span><strong>${(d.transactions || []).length}</strong></div>
+        ${sv.approvals ? `<div style="display:flex;justify-content:space-between;font-size:0.85rem;padding:4px 0">
+          <span style="color:var(--text-muted)">Approvals in the period</span><strong>${sv.approvals.length}</strong></div>` : ''}
+        <div style="font-size:0.76rem;color:var(--text-muted);margin-top:10px">
+          Contributions, shares and the approvals register are included in the document itself.
+        </div>
+      </div>`;
+  } catch (err) {
+    if (out) out.innerHTML = `<div style="color:#ef4444;font-size:0.85rem">${_esc(err.message || 'Could not build it.')}</div>`;
+  }
 }
 
 function _svHeader(g, shareRes) {

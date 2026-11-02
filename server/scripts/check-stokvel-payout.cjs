@@ -358,6 +358,59 @@ const settle = async () => {
            WHERE sub_account_id='SA-PO-1' AND status='active'`)).rows[0].n === 3);
     await invariant('after a payout the cash could not cover');
 
+    /* ── What the workspace reads ──────────────────────────────────
+       The group's ledger and its holdings. NOT through the generic table
+       reader: that scopes transactions and investments by investor_id, and
+       a stokvel's rows carry the chairperson's id, so an ordinary member
+       could not read them there and must not be given a way to. */
+    console.log('\nand a member can read the group\u2019s ledger and holdings');
+    {
+      const ledger = await call('GET', '/api/stokvels/SA-PO-1/transactions', tok('INV-PO-C'));
+      ok('an ordinary member reads the ledger', ledger.status === 200,
+         `${ledger.status} ${JSON.stringify(ledger.body).slice(0, 140)}`);
+      const rows = ledger.body.data || [];
+      ok('it has the group\u2019s movements on it', rows.length > 0, String(rows.length));
+      ok('newest first', rows.length < 2
+         || new Date(rows[0].at) >= new Date(rows[rows.length - 1].at),
+         'a ledger is read from the top');
+      /* ANCHORED, NOT ACCUMULATED, and the case is constructed rather than
+         hoped for: a credit is put on the wallet with NO transaction row
+         against the group, which is exactly what a payout does \u2014 it debits
+         the group wallet and writes the rows against each member. Summing
+         this table from zero cannot reach the wallet after that, and a
+         treasurer reading a closing balance that disagrees with the balance
+         above it would be right to stop trusting the screen. */
+      await db.query(
+        `UPDATE sub_accounts SET wallet_balance = wallet_balance + 123.45 WHERE id = 'SA-PO-1'`);
+      const anchored = await call('GET', '/api/stokvels/SA-PO-1/transactions', tok('INV-PO-C'));
+      const top = (anchored.body.data || [])[0] || {};
+      const naive = (anchored.body.data || [])
+        .reduce((n, r) => n + Number(r.cash_effect), 0);
+      ok('with a running balance that ends at the wallet',
+         Math.abs(Number(top.running_balance) - Number(anchored.body.wallet)) < 0.05,
+         `top row ${top.running_balance}, wallet ${anchored.body.wallet}`);
+      ok('even where money moved without a row against the group',
+         Math.abs(naive - Number(anchored.body.wallet)) > 0.05,
+         `summing the table gives ${naive}, the wallet holds ${anchored.body.wallet} \u2014 `
+         + 'if these matched, the anchoring would not be under test');
+      await db.query(
+        `UPDATE sub_accounts SET wallet_balance = wallet_balance - 123.45 WHERE id = 'SA-PO-1'`);
+      ok('and a fee counted as money going out',
+         rows.every(r => r.type !== 'fee' || Number(r.cash_effect) < 0),
+         'the ledger service decides what moves cash, not this screen');
+
+      const held = await call('GET', '/api/stokvels/SA-PO-1/investments', tok('INV-PO-C'));
+      ok('and the holdings', held.status === 200 && Array.isArray(held.body.data),
+         `${held.status} ${JSON.stringify(held.body).slice(0, 140)}`);
+      ok('with what is invested now totalled',
+         held.body.totals && Number(held.body.totals.active) > 0,
+         JSON.stringify(held.body.totals));
+
+      ok('somebody outside the stokvel reads neither',
+         (await call('GET', '/api/stokvels/SA-PO-1/transactions', tok('INV-PO-OUT'))).status === 404
+         && (await call('GET', '/api/stokvels/SA-PO-1/investments', tok('INV-PO-OUT'))).status === 404);
+    }
+
     console.log('\nand an authority is good for one distribution only');
     {
       /* Two payouts can only exist once the first has run \u2014 the partial

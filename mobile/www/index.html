@@ -107,6 +107,10 @@
       </a>
     </div>
 
+    <!-- The stokvel switcher, filled by renderStokvelSwitcher() and hidden
+         for anybody who is not in a stokvel. -->
+    <div id="svSwitcher" style="display:none"></div>
+
     <nav class="sidebar__nav">
       <!-- Primary: 6 core items always visible -->
       <button class="nav-item active" data-view="overview" onclick="navigate('overview', this)">
@@ -1551,6 +1555,19 @@
           <!-- rendered by JS -->
         </div>
       </div><!-- end view-learn -->
+
+      <!-- ══════════════════════════════════
+           VIEW: STOKVEL WORKSPACE
+           The group's own space. One view rather than seventeen made
+           context-aware: a member switches into it and everything the
+           stokvel has is here, with room, instead of stacked in a modal.
+           The sections render from js/portal-core.js.
+      ══════════════════════════════════ -->
+      <div class="view" id="view-stokvel">
+        <div id="svWsHeader"></div>
+        <div id="svWsTabs"></div>
+        <div id="svWsBody"></div>
+      </div>
 
       <!-- ══════════════════════════════════
            VIEW: SUB ACCOUNTS
@@ -3082,7 +3099,7 @@
 </nav>
 
 <script src="../js/api.js?v=28"></script>
-<script src="../js/portal-core.js?v=55"></script>
+<script src="../js/portal-core.js?v=56"></script>
 <script src="../js/investor-documents.js?v=8"></script>
 <script src="js/portal.js?v=62"></script>
 <!-- sv-intelligence.js hidden -->

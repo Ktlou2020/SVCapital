@@ -52,6 +52,8 @@ const ok = (name, cond, detail) => {
 };
 const CORE = fs.readFileSync(path.join(ROOT, 'js', 'portal-core.js'), 'utf8');
 const read = rel => fs.readFileSync(path.join(ROOT, rel), 'utf8');
+const _svTabsExpected = ['Overview', 'Contributions', 'Approvals', 'Shares',
+                         'Payouts', 'Members', 'Investments', 'Transactions', 'Statement'];
 
 console.log('\nthe member is let in');
 {
@@ -284,6 +286,16 @@ const STUB = {
     ],
     exit_debts: [{ first_name: 'Sipho', owed: 400 }],
   } },
+  'stokvels/SA-1/investments': { totals: { active: 2000, all: 2000, returns: 140 }, data: [
+    { id: 'INVST-1', pool_name: 'Cattle November', amount: 2000, status: 'active',
+      annual_rate: 0.14, term_months: 18, maturity_date: '2027-09-01' },
+  ] },
+  'stokvels/SA-1/transactions': { wallet: 10500, data: [
+    { id: 't1', type: 'stokvel_contribution_received', amount: 500, description: 'Contribution received',
+      at: '2026-11-01', cash_effect: 500, running_balance: 10500 },
+    { id: 't2', type: 'fee', amount: 20, description: '1% platform fee', at: '2026-10-28',
+      cash_effect: -20, running_balance: 10000 },
+  ] },
   'stokvels/SA-1/invites': { can_invite: true, data: [
     { id: 'SVI-9', invitee_name: 'Thabo', contact: 't***@example.test',
       status: 'pending', already_on_the_platform: false,
@@ -367,7 +379,13 @@ const STUB = {
         if (stub[p]) return stub[p];
         throw new Error('unexpected ' + p);
       } };
-      document.body.innerHTML = '<div id="saDetailTitle"></div><div id="saDetailBody"></div>';
+      /* The workspace, not a modal. A stokvel is now a view of its own
+         with its own sections; the old saDetail* elements are kept so the
+         few helpers that still close the sub-account modal find something. */
+      document.body.innerHTML = '<div id="saDetailTitle"></div><div id="saDetailBody"></div>'
+        + '<div id="svWsHeader"></div><div id="svWsTabs"></div><div id="svWsBody"></div>'
+        + '<div id="svSwitcher"></div>';
+      window.navigate = () => {};
     `;
     const core = fs.readFileSync(path.join(ROOT, 'js', 'portal-core.js'), 'utf8');
     /* Only the stokvel section; the rest of portal-core expects a session. */
@@ -378,11 +396,68 @@ const STUB = {
     await evaluate(`openStokvelHub('SA-1')`);
     await new Promise(r => setTimeout(r, 400));
 
-    const rendered = await evaluate(`(() => {
-      const b = document.getElementById('saDetailBody');
+    /* The overview on its own — the section a member lands on. */
+    const overview = await evaluate(`(() => {
+      const b = document.getElementById('svWsBody');
       return { html: b.innerHTML, text: b.textContent,
-               title: document.getElementById('saDetailTitle').textContent };
+               header: document.getElementById('svWsHeader').textContent,
+               tabs: document.getElementById('svWsTabs').textContent };
     })()`);
+
+    /* And every section, concatenated. The assertions below are about what
+       a member CAN SEE, which has not changed — only which section it is
+       in — so they read the union, and the tab-specific claims are made
+       separately above and below. */
+    const rendered = await evaluate(`(async () => {
+      let html = '', text = '';
+      for (const [key] of _svTabList()) {
+        svWorkspaceTab('SA-1', key);
+        await new Promise(r => setTimeout(r, 60));
+        const b = document.getElementById('svWsBody');
+        html += b.innerHTML; text += ' ' + b.textContent;
+      }
+      return { html, text,
+               title: document.getElementById('svWsHeader').textContent };
+    })()`);
+
+    console.log('\nthe workspace opens on the group');
+    ok('the group is named in the header', /Ubuntu/.test(overview.header), overview.header);
+    ok('with the pot and the member\u2019s own share',
+       /The pot/.test(overview.header) && /Your share/.test(overview.header),
+       overview.header.slice(0, 160));
+    ok('and a way back to their own account',
+       /My account/.test(overview.header),
+       'somebody who switches in and cannot see how to leave will not switch in again');
+    ok('every section is offered',
+       _svTabsExpected.every(t => overview.tabs.includes(t)), overview.tabs);
+    ok('it lands on the overview, not a blank body', overview.text.trim().length > 40,
+       overview.text.slice(0, 120));
+    ok('and shows what this member owes', /You owe/.test(overview.text),
+       overview.text.slice(0, 220));
+    /* The stubbed member is NOT a signatory, so a count of votes is news
+       rather than a task and must not be there. Both directions are
+       checked, because an OR across the two tiles let either be deleted
+       and still pass. */
+    ok('and no vote count for a member who cannot vote',
+       !/Waiting on you/.test(overview.text),
+       'a request they have no say in is not something waiting on them');
+
+    const asSignatory = await evaluate(`(async () => {
+      const real = window.API._fetch;
+      window.API._fetch = async (m, p) => {
+        const r = await real(m, p);
+        if (p.endsWith('/members')) {
+          return { data: r.data.map(x => x.is_me ? { ...x, is_signatory: true } : x) };
+        }
+        return r;
+      };
+      await _svRenderHub('SA-1', 'overview');
+      const t = document.getElementById('svWsBody').textContent;
+      window.API._fetch = real;
+      return t;
+    })()`);
+    ok('but a signatory with an outstanding vote is led with it',
+       /Waiting on you/.test(asSignatory), asSignatory.slice(0, 220));
 
     console.log('\nthe hub renders');
     ok('the stokvel is named in the title', /Ubuntu/.test(rendered.title), rendered.title);
@@ -394,9 +469,45 @@ const STUB = {
     ok('the pending request is shown with its tally', /1 of 2/.test(rendered.text));
     ok('and the roster', /Ann/.test(rendered.text) && /Chairperson/.test(rendered.text));
 
+    console.log('\nand the sections that are new');
+    {
+      const sect = async key => {
+        await evaluate(`svWorkspaceTab('SA-1','${key}')`);
+        await new Promise(r => setTimeout(r, 80));
+        return evaluate(`(() => { const b = document.getElementById('svWsBody');
+          return { html: b.innerHTML, text: b.textContent }; })()`);
+      };
+
+      const inv = await sect('investments');
+      ok('the holdings name the pool and what matures when',
+         /Cattle November/.test(inv.text) && /2027-09-01/.test(inv.text), inv.text.slice(0, 160));
+      ok('with what is invested now', /R2000\.00/.test(inv.text), inv.text.slice(0, 160));
+
+      const txn = await sect('transactions');
+      ok('the ledger shows movements with a running balance',
+         /Contribution received/.test(txn.text) && /R10500\.00/.test(txn.text),
+         txn.text.slice(0, 200));
+      ok('and a fee reads as money going out',
+         /\u2212R20\.00|-R20\.00/.test(txn.text), txn.text.slice(0, 200));
+
+      const st = await sect('statement');
+      ok('the statement section asks for a period and builds one',
+         /svStFrom/.test(st.html) && /Build it/.test(st.text));
+      ok('and says what the document is for',
+         /AGM/.test(st.text), 'a committee needs to know why they would produce it');
+
+      /* Back to the overview, which is where the assertions below expect to
+         be able to start from. */
+      await evaluate(`svWorkspaceTab('SA-1','overview')`);
+      await new Promise(r => setTimeout(r, 80));
+    }
+
     console.log('\nand nothing a member typed became markup');
+    /* The group's name lives in the workspace HEADER now, not in a section
+       body, so the escaping claim is made where the name actually is. */
     ok('a stokvel name with tags is text, not HTML',
-       !/<b>Club<\/b>/.test(rendered.html) && /Ubuntu/.test(rendered.text),
+       !/<b>Club<\/b>/.test(overview.html) && !/<b>Club<\/b>/.test(rendered.html)
+       && /Ubuntu/.test(rendered.title),
        rendered.title);
     ok('an image-onerror name is inert',
        !/<img src=x/.test(rendered.html) && /onerror/.test(rendered.text),
@@ -603,11 +714,11 @@ const STUB = {
     ok('and an ordinary visit is left alone', deep.none === false,
        'somebody who just opened the portal is not routed anywhere');
 
-    /* Back to the hub, so the assertions below read the hub again. */
-    await evaluate(`_svRenderHub('SA-1')`);
+    /* Back to a section, so the assertions below read the workspace again. */
+    await evaluate(`svWorkspaceTab('SA-1','approvals')`);
     await new Promise(r => setTimeout(r, 300));
-    const back = await evaluate(`document.getElementById('saDetailBody').innerHTML`);
-    ok('cancelling the form puts the hub back',
+    const back = await evaluate(`document.getElementById('svWsBody').innerHTML`);
+    ok('cancelling the form puts the section back',
        /Signatory approvals/.test(back) && !/svInvPool/.test(back));
 
     console.log('\nand a non-signatory is shown the request without a vote');
