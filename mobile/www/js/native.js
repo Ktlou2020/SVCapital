@@ -165,6 +165,23 @@
 
       P.PushNotifications.addListener('pushNotificationActionPerformed', action => {
         const data = action.notification?.data || {};
+
+        /* THE URL IS THE CARRIER, on this channel as on the web. FCM puts
+           what the server sent in data.url, so the app parses the same
+           string the browser does rather than needing a field of its own —
+           one place decides where a notification points.
+
+           Given 500ms for the same reason the view branch below is: a tap
+           can arrive before the portal has finished booting. */
+        if (data.url && String(data.url).includes('?')) {
+          setTimeout(() => {
+            if (typeof window.svcOpenDeepLink === 'function') {
+              window.svcOpenDeepLink(data.url);
+            }
+          }, 500);
+          return;
+        }
+
         const view = data.view || data.section || data.tab;
         if (view && window.navigate) {
           setTimeout(() => { if (window.navigate) navigate(view); }, 500);

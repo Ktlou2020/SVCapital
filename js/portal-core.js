@@ -12186,6 +12186,70 @@ function _stokvelsNotMine() {
    number instead, and THIS CARD is the entire discovery mechanism — it
    appears for whoever signs in holding that contact. Which makes it the one
    piece of UI in the feature that cannot be allowed to be subtle. */
+/* ─── Where a notification sends you ───────────────────────────────
+   Every stokvel notification carries a url naming the group it is about.
+   Without this the url was decoration: the service worker focused whatever
+   portal tab was open and threw it away, and a cold start landed on the
+   dashboard. A signatory told that R10 000 needs their approval had to find
+   Sub-accounts, then the group, then the panel.
+
+   The query string is CLEARED once acted on, so a refresh does not reopen
+   the hub over whatever the member moved on to, and a shared link does not
+   keep reopening it. */
+async function svcOpenDeepLink(href) {
+  let params;
+  try {
+    const q = String(href || window.location.search || '');
+    params = new URLSearchParams(q.includes('?') ? q.slice(q.indexOf('?') + 1) : q);
+  } catch (_) { return false; }
+
+  const stokvel = params.get('stokvel');
+  const view    = params.get('view');
+  if (!stokvel && !view) return false;
+
+  try {
+    const clean = window.location.pathname + window.location.hash;
+    window.history.replaceState({}, '', clean);
+  } catch (_) { /* a browser that will not rewrite the bar is not a reason to stop */ }
+
+  /* Sub-accounts either way: it is where a stokvel lives, and where an
+     invitation card appears for somebody who is not in one yet. */
+  const target = view === 'subaccounts' || stokvel ? 'subaccounts' : view;
+  if (typeof navigate === 'function') {
+    navigate(target, document.querySelector(`[data-view="${target}"]`));
+  }
+  if (!stokvel) return true;
+
+  /* The groups have to be loaded before one can be opened — on a cold
+     start this runs before the member's own data has arrived. */
+  try { await Promise.all([loadSubAccounts(), loadStokvels(), loadStokvelInvites()]); } catch (_) {}
+  renderSubAccountsView();
+  const mine = (PORTAL.stokvels || []).some(x => x.id === stokvel)
+            || (PORTAL.subAccounts || []).some(x => x.id === stokvel);
+  if (!mine) {
+    /* A link to a stokvel they are not in. Says so rather than opening an
+       empty modal or a spinner that never resolves. */
+    Utils.toast('That stokvel is not one of yours.', 'error');
+    return true;
+  }
+  openStokvelHub(stokvel);
+  return true;
+}
+
+/* Called once at the end of boot. Handles the url this page was opened
+   with, and listens for the service worker telling an ALREADY OPEN page
+   where to go — the case the old notificationclick handler dropped. */
+function svcInitDeepLinks() {
+  if (navigator.serviceWorker) {
+    navigator.serviceWorker.addEventListener('message', ev => {
+      if (ev && ev.data && ev.data.type === 'svc-open') {
+        svcOpenDeepLink(ev.data.url).catch(() => {});
+      }
+    });
+  }
+  return svcOpenDeepLink();
+}
+
 async function loadStokvelInvites() {
   try {
     const res = await API._fetch('GET', 'stokvels/invites/mine');

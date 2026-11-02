@@ -117,16 +117,30 @@ function describe(authority) {
   return `${amount} to ${authority.bank_name || 'a bank account'}`;
 }
 
+/* WHERE A NOTIFICATION POINTS.
+   
+   Every message used to carry url: '/portal/' — the dashboard. A signatory
+   told that R10 000 needs their approval arrived at a summary screen and
+   had to find Sub-accounts, then the group, then the panel. The badge made
+   that tolerable; it never made it good.
+   
+   The url is the single carrier: pushService puts it in the web-push
+   payload AND in FCM's data, so one value serves both, and the app parses
+   the same string rather than needing a field of its own. */
+function hubUrl(groupId) {
+  return groupId ? `/portal/?stokvel=${encodeURIComponent(groupId)}` : '/portal/';
+}
+
 /* One recipient, both channels. Push and email fail in different ways and
    for different people — a member who never granted push and a member whose
    address bounces are not the same member — so neither is a fallback for the
    other and a failure of one never stops the other. */
-async function _tell(person, { title, body, email: mail }) {
+async function _tell(person, { title, body, email: mail, url }) {
   if (!person) return null;
   const { email, push } = services();
   if (push && person.id) {
     await push.sendPushToInvestor(person.id, {
-      title, body, url: '/portal/', tag: 'sv-stokvel',
+      title, body, url: url || '/portal/', tag: 'sv-stokvel',
       icon: '/assets/logo.png', badge: '/assets/logo.png',
     }).catch(e => console.warn('[stokvelNotify] push failed:', e.message));
   }
@@ -152,6 +166,7 @@ async function approvalNeeded({ groupId, authorityId, db } = {}) {
     for (const s of await _signatories(pool, groupId)) {
       if (s.id === a.requested_by) continue;
       told.push(await _tell(s, {
+        url: hubUrl(groupId),
         title: a.stokvel_name || 'Your stokvel',
         body:  `${who} asked for ${what}. It needs ${required} signatory approvals — yours is one of them.`,
         email: {
@@ -194,6 +209,7 @@ async function decided({ groupId, authorityId, voterId, decision, db } = {}) {
          people go on waiting to vote on nothing. */
       if (raiser && raiser.id !== voterId) {
         told.push(await _tell(raiser, {
+          url: hubUrl(groupId),
           title: a.stokvel_name,
           body:  `${byWhom} rejected your request for ${what}. It has been closed.`,
           email: {
@@ -209,6 +225,7 @@ async function decided({ groupId, authorityId, voterId, decision, db } = {}) {
       for (const s of sigs) {
         if (s.id === voterId || (raiser && s.id === raiser.id)) continue;
         told.push(await _tell(s, {
+          url: hubUrl(groupId),
           title: a.stokvel_name,
           body:  `${byWhom} rejected the request for ${what}. Nothing more is needed from you.`,
           /* A final answer goes by email too. Push needs a permission this
@@ -236,6 +253,7 @@ async function decided({ groupId, authorityId, voterId, decision, db } = {}) {
         : 'It will be paid out once the notice period has run.';
       if (raiser) {
         told.push(await _tell(raiser, {
+          url: hubUrl(groupId),
           title: a.stokvel_name,
           body:  `Your request for ${what} has been approved. ${next}`,
           email: {
@@ -250,6 +268,7 @@ async function decided({ groupId, authorityId, voterId, decision, db } = {}) {
       for (const s of sigs) {
         if (raiser && s.id === raiser.id) continue;
         told.push(await _tell(s, {
+          url: hubUrl(groupId),
           title: a.stokvel_name,
           body:  `${what} now has all ${state.required} approvals. ${next}`,
           email: {
@@ -270,6 +289,7 @@ async function decided({ groupId, authorityId, voterId, decision, db } = {}) {
        in the middle of doing. */
     if (raiser && raiser.id !== voterId) {
       told.push(await _tell(raiser, {
+        url: hubUrl(groupId),
         title: a.stokvel_name,
         body:  `${byWhom} approved ${what}. ${state.approvals} of ${state.required} so far.`,
       }));
@@ -307,6 +327,7 @@ async function spent({ groupId, authorityId, reference, db } = {}) {
       if (seen.has(person.id)) continue;
       seen.add(person.id);
       told.push(await _tell(person, {
+        url: hubUrl(groupId),
         title: a.stokvel_name,
         body:  line,
         email: {
@@ -383,7 +404,9 @@ async function invited({ inviteId, db } = {}) {
     if (push && v.matched_investor_id) {
       await push.sendPushToInvestor(v.matched_investor_id, {
         title: group, body: `${line} Open Sub-accounts to accept it.`,
-        url: '/portal/', tag: 'sv-stokvel-invite',
+        /* Not the group's hub: they are not a member yet and the hub would
+           refuse them. The invitation card is on Sub-accounts. */
+        url: '/portal/?view=subaccounts', tag: 'sv-stokvel-invite',
         icon: '/assets/logo.png', badge: '/assets/logo.png',
       }).then(() => reached.push('push'))
         .catch(e => console.warn('[stokvelNotify] invite push failed:', e.message));
@@ -412,6 +435,7 @@ async function inviteAccepted({ groupId, investorId, invitedBy, db } = {}) {
     const inviter = await _person(pool, invitedBy);
     const name = [row.joiner_name, row.joiner_surname].filter(Boolean).join(' ') || 'Somebody you invited';
     const told = await _tell(inviter, {
+      url: hubUrl(groupId),
       title: row.stokvel_name,
       body:  `${name} accepted your invitation and is now a member.`,
       email: {
@@ -465,6 +489,7 @@ async function exitSettled({ groupId, investorId, settlement, db } = {}) {
     if (owed > 0) rows.push(['Still owed to you', fmtR(owed)]);
 
     const told = [await _tell(leaver, {
+      url: hubUrl(groupId),
       title: row.stokvel_name,
       body:  `Your membership has ended. ${fmtR(s.paid)} is in your wallet.${tail}`,
       email: {
@@ -483,6 +508,7 @@ async function exitSettled({ groupId, investorId, settlement, db } = {}) {
     for (const sig of await _signatories(pool, groupId)) {
       if (sig.id === investorId) continue;
       told.push(await _tell(sig, {
+        url: hubUrl(groupId),
         title: row.stokvel_name,
         body:  `${(leaver && leaver.first_name) || 'A member'} has left. ${fmtR(s.paid)} paid out`
              + (owed > 0 ? `, ${fmtR(owed)} still owed to them.` : '.'),
@@ -530,6 +556,7 @@ async function paidOut({ groupId, payout, db } = {}) {
       if (queued > 0) rows.push(['Still owed to you', fmtR(queued)]);
 
       told.push(await _tell(person, {
+        url: hubUrl(groupId),
         title: row.name,
         body: `${p.label || 'The payout'}: ${fmtR(line.paid)} is in your wallet.${tail}`,
         email: {
@@ -567,6 +594,7 @@ async function fined({ groupId, investorId, amount, note, db } = {}) {
     if (!row) return { notified: [] };
     const person = await _person(pool, investorId);
     const told = await _tell(person, {
+      url: hubUrl(groupId),
       title: row.name,
       body: `A fine of ${fmtR(amount)} has been recorded against you: ${note || ''}`.trim(),
       email: {

@@ -51,6 +51,7 @@ const ok = (name, cond, detail) => {
   else { fail++; console.log(`  ✗ ${name}${detail ? `\n      ${detail}` : ''}`); }
 };
 const CORE = fs.readFileSync(path.join(ROOT, 'js', 'portal-core.js'), 'utf8');
+const read = rel => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 
 console.log('\nthe member is let in');
 {
@@ -158,6 +159,41 @@ console.log('\nand a group wallet is never topped up with unattributed money');
      /pay-in/.test(payInFn) && !/openTopUpModal/.test(payInFn),
      'a wallet that already knows whose money it is');
   ok('and the hub offers it too', /Pay into the pot/.test(CORE));
+}
+
+console.log('\nand a notification opens the thing it is about');
+{
+  const SW_WEB = read('portal/sw.js');
+  const SW_APP = read('mobile/src/sw.js');
+  for (const [name, sw] of [['the web', SW_WEB], ['the app', SW_APP]]) {
+    /* FOCUS ALONE THREW THE URL AWAY. An open portal tab was brought to the
+       front and the notification's destination discarded, so a deep link
+       did nothing for anybody who already had the portal open \u2014 which is
+       most people, most of the time. */
+    const handler = sw.slice(sw.indexOf("notificationclick"));
+    ok(`${name} service worker tells the page where to go`,
+       /postMessage\(\{\s*type: 'svc-open'/.test(handler),
+       'focusing an open tab and dropping the url is why deep links appeared not to work');
+    ok(`${name} still opens a window when none is there`,
+       /openWindow\(url\)/.test(handler));
+  }
+
+  const NATIVE = read('mobile/src/js/native.js');
+  ok('the app reads the same url the browser does',
+     /data\.url/.test(NATIVE) && /svcOpenDeepLink/.test(NATIVE),
+     'one value decides where a notification points, on both channels');
+
+  const router = CORE.slice(CORE.indexOf('async function svcOpenDeepLink'),
+                            CORE.indexOf('function svcInitDeepLinks'));
+  ok('the portal clears the link once it has acted on it',
+     /history\.replaceState/.test(router),
+     'otherwise a refresh reopens the hub over whatever the member moved on to');
+  ok('and refuses a stokvel that is not theirs',
+     /not one of yours/.test(router),
+     'rather than an empty modal or a spinner that never resolves');
+  ok('boot asks for it last', /svcInitDeepLinks\(\)/.test(read('portal/js/portal.js'))
+     && /svcInitDeepLinks\(\)/.test(read('mobile/src/js/portal.js')),
+     'the data it needs has to have loaded');
 }
 
 console.log('\nand voting is offered only to signatories');
@@ -517,6 +553,55 @@ const STUB = {
     ok('the stokvel name is escaped here too',
        !/<b>Stokvel<\/b>/.test(invited.html), invited.html.slice(0, 200));
     ok('and it is counted in the badge', invited.badge === '1', invited.badge);
+
+    /* ── The deep link, driven ────────────────────────────────────
+       The source says the router clears the query and refuses a stranger's
+       stokvel. This makes it do both. */
+    const deep = await evaluate(`(async () => {
+      const out = { navigated: [], replaced: 0, opened: null, toast: null };
+      window.navigate = v => out.navigated.push(v);
+      window.loadSubAccounts = async () => {};
+      window.loadStokvelInvites = async () => {};
+      /* Stubbed too: the real one refetches and would overwrite the roster
+         this test just set, so the membership check saw an empty list. */
+      window.loadStokvels = async () => PORTAL.stokvels;
+      window.renderSubAccountsView = () => {};
+      window.history.replaceState = () => { out.replaced++; };
+      const realOpen = window.openStokvelHub;
+      window.openStokvelHub = id => { out.opened = id; };
+      window.Utils.toast = m => { out.toast = String(m); };
+      PORTAL.stokvels = [{ id: 'SA-1', name: 'Ubuntu' }];
+      PORTAL.subAccounts = [];
+
+      await svcOpenDeepLink('/portal/?stokvel=SA-1');
+      const mine = { ...out };
+
+      out.opened = null; out.toast = null;
+      await svcOpenDeepLink('/portal/?stokvel=SA-NOT-MINE');
+      const theirs = { opened: out.opened, toast: out.toast };
+
+      out.navigated.length = 0;
+      await svcOpenDeepLink('/portal/?view=subaccounts');
+      const invited = { navigated: [...out.navigated] };
+
+      const none = await svcOpenDeepLink('/portal/');
+      window.openStokvelHub = realOpen;
+      return { mine, theirs, invited, none };
+    })()`);
+
+    console.log('\nand the link a notification carries actually opens it');
+    ok('a stokvel link opens that stokvel', deep.mine.opened === 'SA-1',
+       JSON.stringify(deep.mine));
+    ok('after going to the screen it lives on', deep.mine.navigated.includes('subaccounts'));
+    ok('and the link is cleared once acted on', deep.mine.replaced > 0,
+       'otherwise a refresh reopens the hub over whatever they moved on to');
+    ok('a stokvel that is not theirs opens nothing',
+       deep.theirs.opened === null && /not one of yours/i.test(deep.theirs.toast || ''),
+       JSON.stringify(deep.theirs));
+    ok('an invitation link goes to Sub-accounts without opening a hub',
+       deep.invited.navigated.includes('subaccounts'), JSON.stringify(deep.invited));
+    ok('and an ordinary visit is left alone', deep.none === false,
+       'somebody who just opened the portal is not routed anywhere');
 
     /* Back to the hub, so the assertions below read the hub again. */
     await evaluate(`_svRenderHub('SA-1')`);

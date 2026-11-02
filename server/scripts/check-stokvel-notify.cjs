@@ -242,6 +242,15 @@ const settle = async () => {
     ok('both channels were used, not one as a fallback for the other',
        sent.push.length >= 3 && sent.email.length >= 3,
        `push ${sent.push.length}, email ${sent.email.length}`);
+    /* WHERE IT POINTS. Every message used to carry '/portal/' \u2014 the
+       dashboard \u2014 so a signatory told that money needs their approval
+       arrived at a summary and had to find Sub-accounts, then the group,
+       then the panel. */
+    const urls = sent.push.filter(c => c.fn === 'sendPushToInvestor')
+      .map(c => (c.args[1] || {}).url || '');
+    ok('and it points at the stokvel it is about',
+       urls.length > 0 && urls.every(u => u.includes('stokvel=SA-NT-1')),
+       JSON.stringify(urls));
 
     /* A signatory who raises their own request is told by nobody. */
     reset();

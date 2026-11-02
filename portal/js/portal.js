@@ -618,6 +618,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   loadNotifications();
+
+  /* The notification that brought them here, if there was one. Last, so the
+     data it needs has loaded. */
+  if (typeof svcInitDeepLinks === 'function') svcInitDeepLinks();
   checkFirstDepositPrompt();
   _checkAutoStartTour();
   load2FAStatus();

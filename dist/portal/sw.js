@@ -29,8 +29,16 @@ self.addEventListener('notificationclick', e => {
   const url = (e.notification.data && e.notification.data.url) || '/portal/';
   e.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(ws => {
+      /* FOCUS WAS NOT ENOUGH. An open portal tab was brought to the front
+         and the url thrown away, so a notification about one stokvel left
+         the reader wherever they happened to be \u2014 which is why deep links
+         appeared not to work rather than appearing to be missing. The page
+         is told where to go and routes there itself, keeping its state;
+         navigate() is the fallback for a page too old to listen. */
       const match = ws.find(w => w.url.includes('/portal/'));
-      return match ? match.focus() : clients.openWindow(url);
+      if (!match) return clients.openWindow(url);
+      match.postMessage({ type: 'svc-open', url });
+      return match.focus();
     })
   );
 });
