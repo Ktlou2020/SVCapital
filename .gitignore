@@ -11,7 +11,16 @@ server/.env
 !server/.env.example
 
 # Node.js
+# Without the trailing slash as well as with it. A pattern ending in "/"
+# matches a DIRECTORY and not a symlink, so a symlinked node_modules —
+# which is what you get after pointing a git worktree at the real one to
+# run the checks — sails straight past `git add -A` and gets committed.
+# That happened: a symlink to an absolute path inside one container was
+# committed and shipped. The Dockerfile copies real modules over it so
+# nothing broke, and it still had no business being in the repository.
+node_modules
 node_modules/
+server/node_modules
 server/node_modules/
 npm-debug.log*
 yarn-debug.log*

@@ -120,10 +120,19 @@ console.log('\nthe build numbers only ever go up');
      cheaper half: that the number never goes backwards or sideways in this
      repository, which is how a code gets reused. A reverted file, a bad merge
      resolution or an edit that lands on the previous value all show up here
-     instead of after a build, an upload and a rejected release. */
+     instead of after a build, an upload and a rejected release.
+
+     EVERY BRANCH, not this one. A build number is global to the stores: one
+     committed on a branch that has not been merged is spent all the same,
+     because what was uploaded was uploaded. Walking only the current branch's
+     history let main sit behind — its own log tops out at 89 and cannot see
+     the 90 prepared on staging and on mobile-eif-only, neither of which is an
+     ancestor of main — so reusing 90 here would have read as a clean bump and
+     been rejected by App Store Connect (90062) and by Play. --all is what
+     makes "above every earlier value" mean what it says. */
   let history = [];
   try {
-    const shas = execFileSync('git', ['log', '--format=%H', '--', VERSION_FILE],
+    const shas = execFileSync('git', ['log', '--all', '--format=%H', '--', VERSION_FILE],
       { cwd: MOBILE, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
       .split('\n').filter(Boolean);
     for (const sha of shas) {
