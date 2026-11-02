@@ -61,8 +61,7 @@ const SSL  = process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized
  * database. */
 const DB_NAME = 'chk_ifunnel_' + process.pid + '_' + Math.random().toString(36).slice(2, 8);
 const ADMIN = fs.readFileSync(path.join(ROOT, 'admin', 'js', 'admin.js'), 'utf8');
-const CHROME = ['/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
-                '/opt/pw-browsers/chromium/chrome-linux/chrome'].find(p => fs.existsSync(p));
+const CHROME = require('../../scripts/lib/chromium.cjs').findChromium();
 
 let pass = 0, fail = 0;
 const ok = (name, cond, detail) => {

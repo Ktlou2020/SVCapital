@@ -49,4 +49,18 @@ function feesFor({ amount, isReinvestment, mgmtFeePct = 0, evaRate = 0.15 }) {
   };
 }
 
-module.exports = { feesFor, PLATFORM_FEE_PCT, VAT_MULTIPLIER };
+/* WHAT AN INVESTMENT IS EXPECTED TO RETURN.
+
+   Simple interest over the term: amount x rate x (months / 12). It lived
+   inline in recurringCron and nowhere else, which was fine while exactly
+   one thing created investments. Reversing a platform fee INTO an
+   investment raises its principal, and a principal that moves without its
+   expected return moving with it is a maturity that pays the wrong
+   figure — so the formula is here now, next to the fee arithmetic it has
+   to agree with, and both callers use it. */
+function expectedReturnFor({ amount, annualRate, termMonths }) {
+  return round2((Number(amount) || 0) * (Number(annualRate) || 0)
+    * ((Number(termMonths) || 0) / 12));
+}
+
+module.exports = { feesFor, expectedReturnFor, PLATFORM_FEE_PCT, VAT_MULTIPLIER };

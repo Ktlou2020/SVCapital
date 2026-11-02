@@ -1021,6 +1021,21 @@ function stripLeadingGreeting(text) {
   return m ? s.slice(m[0].length) : s;
 }
 
+/* Ops, not a client. No greeting, no portal button, no branding — this goes
+   to whoever is on call and its whole job is to be read fast on a phone.
+   It is deliberately the plainest message this file sends. */
+function sendOpsAlert(to, { subject, body }) {
+  if (!to) return Promise.resolve();
+  const esc = String(body || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return _send({
+    to,
+    subject,
+    type: 'ops_alert',
+    html: `<pre style="font:13px/1.5 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap">${esc}</pre>`,
+    text: String(body || ''),
+  });
+}
+
 function sendAlert(investor, { subject, message }) {
   const { email, first_name, id } = investor;
   if (!email) return Promise.resolve();
@@ -1220,7 +1235,16 @@ function sendChangeRequestSummary(to, { date, stats, requests }) {
   });
 }
 
-/* An idle wallet — money already deposited, sitting where it earns nothing.
+/* An idle wallet — money already deposited, earning the wallet rate
+   rather than a pool's. It used to say the balance "is not working",
+   which stopped being true when wallets became interest bearing: the
+   nudge is now about the DIFFERENCE between the two returns, not about
+   money sitting dead.
+
+   It does NOT mention notice. This goes to an individual about their own
+   wallet, and the 48 hours applies to stokvels alone — a first draft said
+   "available on 48 hours' notice" to three thousand people whose money is
+   available the same day.
 
    Deliberately plain. This is unsolicited mail about somebody's own money, so
    it states the balance, what it could buy, and how to stop receiving it, and
@@ -1228,6 +1252,118 @@ function sendChangeRequestSummary(to, { date, stats, requests }) {
    these products may be described as guaranteed, safe or capital-protected,
    and an email that nudges toward an investment is the last place to get
    loose with that. */
+/* One reminder that a stokvel contribution is outstanding. Deliberately
+   plain: this lands in the inbox of somebody who is behind on money owed to
+   people they know, and a cheerful marketing voice reads as a taunt. State
+   the amount, the period, the stokvel and where to pay it. */
+function sendStokvelArrears(investor, { stokvelName, periodLabel, owed, dueDate, kind, note }) {
+  const { email, first_name } = investor;
+  const fmtR = v => `R${Number(v || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  /* A fine is carried on the same table as a contribution, with a
+     period_label of its own so the unique index never collides. That label
+     is an identifier, not a month, and this message used to read it out to
+     the member: "your FINE-SCF8A2C1 contribution". */
+  const isFine = kind === 'fine';
+  const subject = isFine
+    ? `${stokvelName}: a fine of ${fmtR(owed)} is outstanding`
+    : `${stokvelName}: your ${periodLabel} contribution`;
+
+  return _send({
+    to: email,
+    type: 'stokvel_arrears',
+    subject,
+    html: _wrap(`
+      <h2>${isFine ? 'A fine is outstanding' : 'A contribution is outstanding'}</h2>
+      ${isFine
+        ? `<p>Hi ${escHtml(first_name || 'there')}, a fine of <strong>${fmtR(owed)}</strong> recorded
+             against you by <strong>${escHtml(stokvelName)}</strong> has not been paid.
+             ${note ? `It was for: <strong>${escHtml(note)}</strong>.` : ''}</p>`
+        : `<p>Hi ${escHtml(first_name || 'there')}, your <strong>${escHtml(periodLabel)}</strong> contribution to
+             <strong>${escHtml(stokvelName)}</strong> of <strong>${fmtR(owed)}</strong> was due on
+             ${escHtml(String(dueDate))}.</p>`}
+      <div class="box">
+        <p style="margin:0">You can pay it from your wallet in the app. The group&rsquo;s contribution
+           list shows every member&rsquo;s position, including yours.</p>
+      </div>
+      <p>If you have already arranged this with your treasurer, you can ignore this message.</p>
+    `),
+  });
+}
+
+/* An invitation to join a stokvel.
+   
+   Deliberately has NO LINK in it. A link in an invitation is a capability
+   that can be forwarded, and what is behind this one is a group's balances
+   and roster, so the invitation is addressed instead: it is found by signing
+   in as the person who holds the contact it was sent to. Which means the one
+   job this email absolutely must do is say HOW to find it, and say it in a
+   way that survives being read on a phone by somebody who has never heard
+   of us. */
+function sendStokvelInvite(to, { inviteeName, inviterName, stokvelName, expiresAt, alreadyAUser }) {
+  const when = expiresAt ? new Date(expiresAt).toISOString().slice(0, 10) : null;
+  return _send({
+    to,
+    type: 'stokvel_invite',
+    subject: `${inviterName} invited you to join ${stokvelName}`,
+    text: `${inviterName} has invited you to join ${stokvelName} on SV Capital. `
+        + `Sign in with this email address and the invitation is waiting on your Sub-accounts screen. `
+        + `${BASE_URL}/portal/`,
+    html: _wrap(`
+      <h2>You have been invited to join ${escHtml(stokvelName)}</h2>
+      <p>Hi${inviteeName ? ` ${escHtml(inviteeName)}` : ''}, <strong>${escHtml(inviterName)}</strong>
+         has invited you to join <strong>${escHtml(stokvelName)}</strong> on SV Capital \u2014 where the
+         group saves together, sees what everybody has paid, and needs several
+         signatories to agree before any money leaves.</p>
+      <div class="box">
+        <p style="margin:0"><strong>How to accept.</strong>
+          ${alreadyAUser
+            ? 'Sign in to SV Capital with this email address. The invitation is waiting on your Sub-accounts screen.'
+            : 'Create a free SV Capital account using THIS email address, and the invitation will be waiting on your Sub-accounts screen.'}</p>
+      </div>
+      <p style="text-align:center"><a class="btn" href="${BASE_URL}/portal/">Open SV Capital</a></p>
+      <p style="font-size:0.84rem;color:#777">We deliberately do not put a join link in this email \u2014
+         anyone who was forwarded it could then see the group&rsquo;s money. Signing in as the
+         person this was sent to is what proves the invitation is yours.
+         ${when ? `It is valid until ${escHtml(when)}.` : ''}</p>
+      <p style="font-size:0.84rem;color:#777">If you already have an SV Capital account under a
+         different email address, ask ${escHtml(inviterName)} to send the invitation to that one
+         instead. Joining a stokvel means the group can see your contributions and what you owe \u2014
+         if you did not expect this, simply ignore it.</p>
+    `),
+  });
+}
+
+/* Every message the stokvel mandate sends, from one template.
+   
+   One template rather than five, on purpose. These five emails differ in two
+   sentences and share the facts of the request — the stokvel, the
+   destination, the amount, who asked. Five templates would be five places
+   for the destination to go missing from, and the destination is the whole
+   point of a mandate. The caller supplies the words; the shape is fixed.
+   
+   Plain throughout. This is somebody's savings club asking them to authorise
+   money, and a marketing voice over that reads as a sales pitch about money
+   that is not ours. */
+function sendStokvelMandate(investor, { subject, heading, lead, rows, note, action }) {
+  const { email, first_name } = investor;
+  return _send({
+    to: email,
+    type: 'stokvel_mandate',
+    subject,
+    html: _wrap(`
+      <h2>${escHtml(heading)}</h2>
+      <p>Hi ${escHtml(first_name || 'there')}, ${lead}</p>
+      ${rows && rows.length ? `<div class="box">
+        ${rows.map(([k, v]) => `<div class="row"><span class="lbl">${escHtml(k)}</span><span class="val">${escHtml(v)}</span></div>`).join('')}
+      </div>` : ''}
+      ${action ? `<p>${escHtml(action)}</p>` : ''}
+      <p style="text-align:center"><a class="btn" href="${BASE_URL}/portal/">Open the app</a></p>
+      ${note ? `<p style="font-size:0.84rem;color:#777">${escHtml(note)}</p>` : ''}
+    `),
+  });
+}
+
 function sendIdleWalletNudge(investor, { balance, poolName, minNeeded, poolCount }) {
   const { email, first_name } = investor;
   const fmtR = v => `R${Number(v || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -1239,7 +1375,8 @@ function sendIdleWalletNudge(investor, { balance, poolName, minNeeded, poolCount
     html: _wrap(`
       <h2>Your wallet balance is not invested</h2>
       <p>Hi ${escHtml(first_name || 'there')}, you have <strong>${fmtR(balance)}</strong> in your SV Capital
-         wallet. Money in the wallet is held for you &mdash; it is not in a pool, so it is not working.</p>
+         wallet. It earns interest where it is and you can draw on it whenever you like &mdash;
+         but it is not in a pool, so it is not earning a pool&rsquo;s return.</p>
       <div class="box">
         <p style="margin:0">That balance covers the minimum for
            <strong>${escHtml(poolName)}</strong>${poolCount > 1 ? ` and ${poolCount - 1} other open pool${poolCount > 2 ? 's' : ''}` : ''},
@@ -1257,8 +1394,9 @@ function sendIdleWalletNudge(investor, { balance, poolName, minNeeded, poolCount
       </p>`),
     text:
       `Hi ${first_name || 'there'},\n\n` +
-      `You have ${fmtR(balance)} in your SV Capital wallet. Money in the wallet is held for you — ` +
-      `it is not in a pool, so it is not working.\n\n` +
+      `You have ${fmtR(balance)} in your SV Capital wallet. It earns interest where it is and ` +
+      `you can draw on it whenever you like — but it is not in a pool, so it is not earning a ` +
+      `pool's return.\n\n` +
       `That balance covers the minimum for ${poolName}, which needs ${fmtR(minNeeded)} including the ` +
       `1% platform fee.\n\n` +
       `If you would rather it stayed in the wallet, no action is needed.\n\n` +
@@ -1269,6 +1407,10 @@ function sendIdleWalletNudge(investor, { balance, poolName, minNeeded, poolCount
 }
 
 module.exports = {
+  sendOpsAlert,
+  sendStokvelArrears,
+  sendStokvelMandate,
+  sendStokvelInvite,
   sendIdleWalletNudge,
   sendWelcome,
   sendLeaveRequestSubmitted,

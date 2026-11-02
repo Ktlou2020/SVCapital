@@ -14,7 +14,9 @@ const audit   = require('../services/audit');
 router.use(requireAuth, requireRole('admin', 'director'));
 
 /* Cash-movement definition — single source in services/ledger.js */
-const { cashMovementSQL, cashMovement: CASH_MOVEMENT, movesCash } = require('../services/ledger');
+const { cashMovementSQL, cashMovement: CASH_MOVEMENT, movesCash,
+        recordTransaction, actorFromRequest } = require('../services/ledger');
+const feeReversal = require('../services/feeReversal');
 
 router.post('/manual-credit', async (req, res) => {
   try {
@@ -41,12 +43,10 @@ router.post('/manual-credit', async (req, res) => {
       }
       investor = inv;
 
-      await client.query(
-        `INSERT INTO transactions
-           (id, investor_id, type, amount, status, reference, description, notes, created_at, updated_at)
-         VALUES (gen_random_uuid(), $1, 'deposit', $2, 'completed', $3, 'Manual wallet credit', $4, NOW(), NOW())`,
-        [investorId, numAmount, reference, notes || null]
-      );
+      await recordTransaction(client, {
+        investorId, type: 'deposit', amount: numAmount, reference,
+        description: 'Manual wallet credit', notes: notes || null,
+      }, actorFromRequest(req));
 
       await client.query(
         'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
@@ -94,6 +94,70 @@ router.post('/manual-credit', async (req, res) => {
    pool is declared and then distributed to the people in that pool. Leaving
    it unscoped would make "apply" a platform-wide money button.
    ───────────────────────────────────────────────────────────── */
+/* ─── POST /api/admin/stokvel-attribute ──────────────────────────────
+   Say whose money an amount in a stokvel actually was.
+
+   Money reaches a group wallet by several paths that carry no owner — a
+   manual credit, an EFT approval, a refund — and the share ledger shares
+   those out pro-rata, which is right for interest and for a maturity and
+   wrong when the money was one member's. This is how that is put right.
+
+   It MOVES NO MONEY. The group holds exactly what it held before; what
+   changes is whose share of it is whose, so the sum of the shares is
+   unchanged and the ledger's invariant is untouched. That is also why it is
+   safe to run twice by mistake in a way a credit would not be — the second
+   run attributes a second amount, which is visible and reversible, rather
+   than inventing cash.
+
+   Staff only, audited, and deliberately NOT able to approve anything: it
+   cannot move money out of the stokvel, so it is not a way round the
+   mandate. ──────────────────────────────────────────────────────────── */
+router.post('/stokvel-attribute', async (req, res) => {
+  const { sub_account_id, investor_id, amount, reason } = req.body || {};
+  if (!sub_account_id || !investor_id) {
+    return res.status(400).json({ error: 'sub_account_id and investor_id are required.' });
+  }
+  const client = await pool.connect();
+  try {
+    const { rows: [sa] } = await client.query(
+      `SELECT id, account_type FROM sub_accounts WHERE id = $1`, [sub_account_id]);
+    if (!sa) return res.status(404).json({ error: 'No such account.' });
+    if (sa.account_type !== 'stokvel') {
+      return res.status(400).json({ error: 'Only a stokvel has shares to attribute.' });
+    }
+
+    await client.query('BEGIN');
+    const shares = require('../services/stokvelShares');
+    const out = await shares.attribute(client, {
+      subAccountId: sub_account_id, investorId: investor_id,
+      amount, reason,
+      actor: [req.user?.firstName, req.user?.lastName].filter(Boolean).join(' ')
+             || req.user?.email || 'staff',
+    });
+    if (out.error) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: out.error });
+    }
+    await client.query('COMMIT');
+
+    await audit.log({
+      actorId: req.user?.id, actorEmail: req.user?.email, actorRole: req.user?.role,
+      action: 'stokvel.share_attributed',
+      entityType: 'sub_accounts', entityId: String(sub_account_id),
+      description: `Attributed R${Number(out.attributed).toFixed(2)} of ${sub_account_id} `
+                 + `to ${investor_id}${reason ? ' — ' + String(reason).slice(0, 120) : ''}`,
+    }).catch(() => {});
+
+    return res.json({ data: out });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[admin] stokvel attribute failed:', err.message);
+    return res.status(500).json({ error: 'Could not attribute that amount.' });
+  } finally {
+    client.release();
+  }
+});
+
 router.post('/anniversary-returns/run', requireRole('director'), async (req, res) => {
   const { pool_id, year_index, dry_run } = req.body || {};
   const dryRun = String(dry_run) !== 'false';
@@ -130,7 +194,7 @@ router.post('/anniversary-returns/run', requireRole('director'), async (req, res
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
-        const r = await annual.payOne(client, item);
+        const r = await annual.payOne(client, item, { actor: actorFromRequest(req) });
         await client.query('COMMIT');
         if (r.paid) { paid++; total = annual.round2(total + r.amount); }
       } catch (err) {
@@ -442,11 +506,10 @@ router.post('/eft-approve', async (req, res) => {
         });
       }
     } else {
-      await client.query(
-        `INSERT INTO transactions
-           (id, investor_id, sub_account_id, type, amount, status, reference, description, created_at, updated_at)
-         VALUES (gen_random_uuid(), $1, $2, 'deposit', $3, 'completed', $4, $5, NOW(), NOW())`,
-        [ticket.investor_id, ticket.sub_account_id || null, approved, reference, note]);
+      await recordTransaction(client, {
+        investorId: ticket.investor_id, subAccountId: ticket.sub_account_id || null,
+        type: 'deposit', amount: approved, reference, description: note,
+      }, actorFromRequest(req));
       credited = true;
     }
 
@@ -851,7 +914,10 @@ router.post('/maturity-wallet-fallbacks/apply', async (req, res) => {
       });
     }
 
-    const result = await applyReinvest(pool, opts);
+    /* Named: this reinvestment corrects a maturity, and a correction a
+       director ran must not read afterwards as something the system
+       decided on its own. */
+    const result = await applyReinvest(pool, { ...opts, actor: actorFromRequest(req) });
 
     /* After the writes, like every other money path here: an audit row
        records what happened and must not be able to undo it. */
@@ -1186,6 +1252,67 @@ router.post('/reset-2fa', async (req, res) => {
    investment whose pool_id is NULL but whose pool_name matches a known pool.
    Also updates investments that have a mismatched/stale pool_id.
    ─────────────────────────────────────────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════════════
+   GET  /api/admin/investments/:id/fee-reversal   — what can be done
+   POST /api/admin/investments/:id/fee-reversal   — do it
+
+   The 1% platform fee is charged when an investment is placed and there has
+   never been a way to undo it. A fee charged in error, a goodwill gesture,
+   a pool we said would be fee-free and was not: all of it was a manual
+   wallet credit with a note, which is a figure typed by hand into a balance
+   with nothing tying it to the fee it cancels.
+
+   The GET is what the screen asks before it offers anything, so staff are
+   told what is possible and why rather than finding out by being refused.
+   ════════════════════════════════════════════════════════════════════ */
+router.get('/investments/:id/fee-reversal', async (req, res) => {
+  try {
+    const state = await feeReversal.assess(pool, req.params.id);
+    res.json({ data: state });
+  } catch (err) {
+    console.error('[fee-reversal] assess failed:', err.message);
+    res.status(500).json({ error: 'Could not read that investment.' });
+  }
+});
+
+router.post('/investments/:id/fee-reversal', async (req, res) => {
+  const { destination, reason } = req.body || {};
+  try {
+    const out = await feeReversal.reverse({
+      investmentId: req.params.id,
+      destination,
+      reason,
+      actor: actorFromRequest(req),
+    });
+    if (!out.ok) return res.status(409).json({ error: out.reason, alreadyDone: !!out.alreadyDone });
+
+    setImmediate(() => audit.log({
+      actorId:     req.user.id,
+      actorEmail:  req.user.email,
+      actorRole:   req.user.role,
+      action:      'investment.platform_fee_reversed',
+      entityType:  'investments',
+      entityId:    req.params.id,
+      description: `Platform fee of R${out.amount} reversed to the `
+                 + `${out.destination === 'wallet' ? 'wallet' : 'investment'}. `
+                 + `Reason: ${String(reason).slice(0, 200)}`,
+      ip:          req.ip,
+      metadata:    { amount: out.amount, destination: out.destination,
+                     reference: out.reference, became: out.became },
+    }).catch(e => console.error('[audit] fee reversal:', e.message)));
+
+    res.json({ data: out });
+  } catch (err) {
+    /* A bad destination or a missing reason is the caller's mistake and is
+       worth saying precisely; anything else is ours. */
+    if (/destination must be|reason is required|needs an actor/.test(err.message)) {
+      return res.status(400).json({ error: err.message });
+    }
+    console.error('[fee-reversal] failed:', err.message);
+    res.status(500).json({ error: 'Could not reverse that fee.' });
+  }
+});
+
 router.post('/investments/allocate-pools', async (req, res) => {
   try {
     const { rows: pools } = await pool.query(
@@ -1514,24 +1641,14 @@ router.post('/backfill-matured-funds', async (req, res) => {
     // Apply backfill — each INSERT is idempotent via ON CONFLICT.
     let inserted = 0;
     for (const r of missing) {
-      const { rowCount } = await pool.query(`
-        INSERT INTO transactions
-          (id, investor_id, sub_account_id, type, amount, status, reference,
-           description, investment_id, transaction_date, created_at, updated_at)
-        VALUES
-          (gen_random_uuid(), $1, $2, 'matured_funds', $3, 'completed', $4,
-           $5, $6, $7, $7, NOW())
-        ON CONFLICT (reference) DO NOTHING
-      `, [
-        r.investor_id,
-        r.sub_account_id || null,
-        parseFloat(r.amount),
-        r.matf_ref,
-        `Matured Funds — ${r.pool_name}`,
-        r.original_inv_id,
-        r.transaction_date || r.created_at,
-      ]);
-      if (rowCount) inserted++;
+      const written = await recordTransaction(pool, {
+        investorId: r.investor_id, subAccountId: r.sub_account_id || null,
+        type: 'matured_funds', amount: parseFloat(r.amount), reference: r.matf_ref,
+        description: `Matured Funds — ${r.pool_name}`,
+        investmentId: r.original_inv_id,
+        transactionDate: r.transaction_date || r.created_at,
+      }, actorFromRequest(req), { onConflict: 'reference' });
+      if (written) inserted++;
     }
 
     setImmediate(() => audit.log({
@@ -1625,12 +1742,13 @@ router.post('/override-wallet', async (req, res) => {
         const txDesc    = isDeposit ? 'Wallet balance adjusted' : 'Wallet balance adjusted';
         const adminNote = `Admin balance override — ${isDeposit ? 'deposit' : 'debit'} (R${Math.abs(diff).toFixed(2)} ${isDeposit ? 'added' : 'removed'}). Reason: ${notes || 'none'}`;
 
-        await client.query(
-          `INSERT INTO transactions
-             (id, investor_id, type, amount, status, reference, description, notes, created_at, updated_at)
-           VALUES (gen_random_uuid(), $1, $2, $3, 'completed', $4, $5, $6, NOW(), NOW())`,
-          [investorId, txType, diff, txRef, txDesc, adminNote]
-        );
+        /* A balance override is the single most sensitive write on the
+           platform: it moves money with no business event behind it. Of all
+           the rows here this is the one that most needed a name on it. */
+        await recordTransaction(client, {
+          investorId, type: txType, amount: diff, reference: txRef,
+          description: txDesc, notes: adminNote,
+        }, actorFromRequest(req));
       }
 
       await client.query('COMMIT');
@@ -1740,20 +1858,18 @@ router.post('/invest-on-behalf', async (req, res) => {
     // Optional platform fee transaction
     if (chargeFee && fee > 0) {
       const feeRef = 'FEE-' + crypto.randomUUID().replace(/-/g, '').slice(0, 10).toUpperCase();
-      await client.query(
-        `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, transaction_date, created_at, updated_at)
-         VALUES (gen_random_uuid(),$1,'platform_fee',$2,'completed',$3,$4,NOW(),NOW(),NOW())`,
-        [investorId, -fee, feeRef, `Platform fee (1%) for investment in ${poolRow.name}`]
-      );
+      await recordTransaction(client, {
+        investorId, type: 'platform_fee', amount: -fee, reference: feeRef,
+        description: `Platform fee (1%) for investment in ${poolRow.name}`,
+      }, actorFromRequest(req));
     }
 
     // Deduct investment amount transaction
     const invTxRef = 'INV-TXN-' + crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase();
-    await client.query(
-      `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, transaction_date, created_at, updated_at)
-       VALUES (gen_random_uuid(),$1,'investment',$2,'completed',$3,$4,NOW(),NOW(),NOW())`,
-      [investorId, -amt, invTxRef, `Investment in ${poolRow.name} (admin-created on behalf)`]
-    );
+    await recordTransaction(client, {
+      investorId, type: 'investment', amount: -amt, reference: invTxRef,
+      description: `Investment in ${poolRow.name} (admin-created on behalf)`,
+    }, actorFromRequest(req));
 
     await client.query('COMMIT');
 

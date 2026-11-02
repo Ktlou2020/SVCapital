@@ -113,6 +113,11 @@ function makeEnv({ serverKpis = true, seriesOk = true, ticketsOk = true } = {}) 
     window: {},
     STATE: { investors: [], pools: [], investments: [], transactions: [], tickets: [], charts: {} },
     Utils: realUtils({
+      /* Charts go through Utils.chart now, so a missing library cannot
+         throw inside a render and take the whole load down with it — which
+         is exactly what it used to do. The stub routes the same way, so
+         "did the dashboard draw its charts" is still the thing measured. */
+      chart: () => { reached.push('Chart'); return { destroy() {} }; },
       rand: v => 'R' + Number(v || 0).toFixed(2),
       pct:  v => (Number(v) * 100).toFixed(2) + '%',
       date: () => '24 Mar 2026',
@@ -144,6 +149,8 @@ function makeEnv({ serverKpis = true, seriesOk = true, ticketsOk = true } = {}) 
         throw new Error('unexpected fetch: ' + url);
       },
     },
+    /* Kept so a stray direct construction would still be counted, and
+       check-cdn-resilience fails the build if one reappears. */
     Chart: function Chart() { reached.push('Chart'); return { destroy() {} }; },
     /* loadDashboard wraps its body in try/catch, so an exception inside it does
        NOT surface to the caller — the page just stops building. Toast.error is
@@ -170,6 +177,10 @@ function makeEnv({ serverKpis = true, seriesOk = true, ticketsOk = true } = {}) 
        somebody waits for the operational figures — so it is stubbed here
        rather than lifted, and the assertion below is that it was called. */
     _loadAnnouncements: rec('_loadAnnouncements'),
+    /* The incidents panel, stubbed for the same reason and asserted on for
+       the same one: what is broken right now must not be what stops the
+       figures loading. */
+    _loadIncidents: rec('_loadIncidents'),
     Auth: { getUser: () => ({ name: 'Admin', role: 'admin', email: 'a@b.c' }) },
     /* Real helpers need a real-shaped storage: absent, not throwing. */
     localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
@@ -242,6 +253,12 @@ async function run(opts) {
       /* CLAUDE.md requires a notice for every new feature, so the dashboard
          has to ask for them — and must not wait, because the figures are
          what somebody opened it for. */
+      ok('it asks what is broken right now', r.reached.includes('_loadIncidents'),
+         JSON.stringify(r.reached));
+      ok('and does not wait for that either',
+         !/await\s+_loadIncidents/.test(SRC),
+         'an incidents panel that the figures wait for is a panel that takes '
+         + 'the dashboard down with it on the day it matters');
       ok('it asks for the feature notices', r.reached.includes('_loadAnnouncements'),
          JSON.stringify(r.reached));
       ok('and does not wait for them',

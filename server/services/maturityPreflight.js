@@ -556,7 +556,8 @@ async function runMaturityPreflight(db, { horizonDays = 14 } = {}) {
 }
 
 function money(n) {
-  return 'R' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  /* en-ZA like every other figure the platform writes. */
+  return 'R ' + Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 function dateOnly(d) {
   return d ? new Date(d).toISOString().slice(0, 10) : '—';

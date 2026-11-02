@@ -79,6 +79,10 @@
       </a>
     </div>
 
+    <!-- The stokvel switcher, filled by renderStokvelSwitcher() and hidden
+         for anybody who is not in a stokvel. -->
+    <div id="svSwitcher" style="display:none"></div>
+
     <nav class="sidebar__nav">
       <!-- Primary: 6 core items always visible -->
       <button class="nav-item active" data-view="overview" onclick="navigate('overview', this)">
@@ -1533,6 +1537,19 @@
       </div><!-- end view-learn -->
 
       <!-- ══════════════════════════════════
+           VIEW: STOKVEL WORKSPACE
+           The group's own space. One view rather than seventeen made
+           context-aware: a member switches into it and everything the
+           stokvel has is here, with room, instead of stacked in a modal.
+           The sections render from js/portal-core.js.
+      ══════════════════════════════════ -->
+      <div class="view" id="view-stokvel">
+        <div id="svWsHeader"></div>
+        <div id="svWsTabs"></div>
+        <div id="svWsBody"></div>
+      </div>
+
+      <!-- ══════════════════════════════════
            VIEW: SUB ACCOUNTS
       ══════════════════════════════════ -->
       <div class="view" id="view-subaccounts">
@@ -2904,9 +2921,23 @@
       <button class="modal__close" aria-label="Close" onclick="Modal.close('deleteAccountModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body">
+      <!-- What is still here, fetched when the modal opens. Empty and
+           invisible for an account with nothing outstanding. -->
+      <div id="deleteAccountBlockers"></div>
+      <!-- Rewritten because the previous wording made two claims that were
+           not true: that closing the account would end a client's running
+           investments, and that their records would be erased outright.
+           Neither happens. An investment runs to maturity regardless, and
+           the transaction history is kept because an FSP is required to
+           keep it — it is the name on it that goes. Saying otherwise told
+           a client something false about their own money.
+
+           Paraphrased rather than quoted, deliberately: a check searches
+           these files for the old phrases, and three assertions have now
+           been defeated by a comment repeating the very text it replaced. -->
       <div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:10px;padding:14px;font-size:0.82rem;color:#b91c1c;margin-bottom:16px;line-height:1.6">
         <i class="fa-solid fa-triangle-exclamation" style="margin-right:6px"></i>
-        <strong>Warning:</strong> Requesting account deletion will close your account, cancel all active investments, and permanently delete your personal data. Active investments must be settled first.
+        <strong>This cannot be undone.</strong> Your name, email, phone number, ID number and address are removed, your sign-in stops working, and any card we have on file is deleted. Your transaction history is kept without your name on it, because we are required by law to keep it. Anything you are still owed must be settled first — we will tell you what, below.
       </div>
       <div style="font-size:0.82rem;color:#374151;margin-bottom:12px">To confirm, type <strong>DELETE MY ACCOUNT</strong> in the box below:</div>
       <div class="form-group">
@@ -2915,7 +2946,7 @@
     </div>
     <div class="modal__footer">
       <button class="btn btn--secondary" onclick="Modal.close('deleteAccountModal')">Cancel</button>
-      <button class="btn btn--danger" onclick="confirmAccountDeletion()"><i class="fa-solid fa-trash-can"></i> Delete My Account</button>
+      <button class="btn btn--danger" id="deleteAccountGo" onclick="confirmAccountDeletion()"><i class="fa-solid fa-trash-can"></i> Close My Account</button>
     </div>
   </div>
 </div>
@@ -3021,7 +3052,7 @@
   </div>
 </nav>
 
-<script src="../js/api.js?v=28"></script>
+<script src="../js/api.js?v=29"></script>
 <!-- Capacitor native bridge — detects Capacitor WebView and activates native features
      (push notifications, haptics, status bar, back button, network monitoring) -->
 <script>
@@ -3031,9 +3062,9 @@ if (window.Capacitor) {
 }
 </script>
 <script src="/js/native.js"></script>
-<script src="../js/portal-core.js?v=49"></script>
+<script src="../js/portal-core.js?v=64"></script>
 <script src="../js/investor-documents.js?v=8"></script>
-<script src="js/portal.js?v=135"></script>
+<script src="js/portal.js?v=137"></script>
 <!-- sv-intelligence.js hidden -->
 <script>
 // Service worker: web browsers only (not Capacitor). Handles web push notifications.

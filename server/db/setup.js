@@ -196,6 +196,13 @@ CREATE TABLE IF NOT EXISTS platform_settings (
   key TEXT PRIMARY KEY, value TEXT, description TEXT,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+/* The notice on a withdrawal, in hours. 48 by default: wallets bear
+   interest and notice is what pays for it. Set it to 0 to go back to
+   same-day, without a deploy. */
+INSERT INTO platform_settings (key, value, description)
+VALUES ('withdrawal_notice_hours', '48',
+        'Hours between a withdrawal being requested and it becoming payable.')
+ON CONFLICT (key) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS ifas (
   id TEXT PRIMARY KEY, first_name TEXT, last_name TEXT,
@@ -228,6 +235,100 @@ CREATE TABLE IF NOT EXISTS return_schedules (
   expected_date DATE, status TEXT DEFAULT 'pending',
   paid_at TIMESTAMPTZ, notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+/* WHAT BROKE, AND WHETHER ANYBODY WAS TOLD.
+ *
+ * Every error on this platform went to console.error and nowhere else. The
+ * Express handler logged a line and returned a 500; unhandledRejection
+ * logged a stack; the FICA, maturity, payout, interest and recurring crons
+ * each caught, logged and carried on. All of it landed in a log nobody
+ * watches, so the first person to know a payout had failed was the client
+ * whose money had not arrived.
+ *
+ * Recorded here instead, folded by FINGERPRINT — the same fault in a loop
+ * is one incident with a count, not ten thousand emails. first_seen and
+ * last_seen bracket it, notified_at throttles the telling, and resolved_at
+ * is a person saying they have dealt with it.
+ */
+/* A CARD PAYMENT SOMEBODY IS TAKING BACK.
+ *
+ * The webhook handled charge.success and returned on everything else, so a
+ * dispute, a refund or a reversal was dropped on the floor. Paystack takes
+ * the money back from SV Capital either way; the client's wallet went on
+ * showing the credit, and for a stokvel the contribution had already moved
+ * into the group's pot and been shared across every member — so the pot held
+ * money the platform no longer had, split between people who had done
+ * nothing wrong.
+ *
+ * Every event that moves money the other way lands here first, whether or
+ * not anything could be clawed back, so there is one place that answers
+ * "what is being disputed and what did we do about it".
+ */
+CREATE TABLE IF NOT EXISTS payment_reversals (
+  id TEXT PRIMARY KEY,
+  /* Paystack's own id for the dispute or refund, so a later event about the
+     same one updates rather than duplicates. */
+  gateway_id TEXT UNIQUE,
+  kind TEXT NOT NULL,                      -- dispute | refund | reversal
+  reference TEXT NOT NULL,                 -- the ORIGINAL charge's reference
+  investor_id TEXT REFERENCES investors(id) ON DELETE SET NULL,
+  amount NUMERIC(18,2) NOT NULL,
+  /* What we managed to take back, which is not always the whole amount:
+     the money may already be invested or inside a stokvel's pot. */
+  recovered NUMERIC(18,2) NOT NULL DEFAULT 0,
+  shortfall NUMERIC(18,2) NOT NULL DEFAULT 0,
+  /* Where it went, when it had already been spent. A stokvel is named here
+     because clawing it back is a conversation with a committee, not a
+     database write. */
+  spent_on TEXT,
+  sub_account_id TEXT,
+  status TEXT NOT NULL DEFAULT 'open',     -- open | recovered | written_off | reversed_back
+  gateway_status TEXT,
+  opened_at TIMESTAMPTZ DEFAULT NOW(),
+  resolved_at TIMESTAMPTZ,
+  resolved_by TEXT,
+  note TEXT,
+  raw JSONB
+);
+CREATE INDEX IF NOT EXISTS payment_reversals_open_idx
+  ON payment_reversals(opened_at DESC) WHERE status = 'open';
+CREATE INDEX IF NOT EXISTS payment_reversals_ref_idx ON payment_reversals(reference);
+
+CREATE TABLE IF NOT EXISTS platform_incidents (
+  id TEXT PRIMARY KEY,
+  fingerprint TEXT NOT NULL UNIQUE,
+  severity TEXT NOT NULL DEFAULT 'error',
+  source TEXT,
+  message TEXT NOT NULL,
+  stack TEXT,
+  context JSONB,
+  occurrences INTEGER NOT NULL DEFAULT 1,
+  first_seen TIMESTAMPTZ DEFAULT NOW(),
+  last_seen TIMESTAMPTZ DEFAULT NOW(),
+  notified_at TIMESTAMPTZ,
+  resolved_at TIMESTAMPTZ,
+  resolved_by TEXT
+);
+CREATE INDEX IF NOT EXISTS platform_incidents_open_idx
+  ON platform_incidents(last_seen DESC) WHERE resolved_at IS NULL;
+
+/* WHEN EACH UNATTENDED JOB LAST FINISHED.
+ *
+ * An error that is reported is the easy half. A cron that simply stops
+ * running reports nothing at all: no exception, no log line, no incident —
+ * just maturities that are never paid. So each job writes here when it
+ * finishes, and anything overdue is surfaced as an incident of its own. */
+CREATE TABLE IF NOT EXISTS job_heartbeats (
+  job TEXT PRIMARY KEY,
+  last_started_at TIMESTAMPTZ,
+  last_finished_at TIMESTAMPTZ,
+  last_error TEXT,
+  last_duration_ms INTEGER,
+  runs INTEGER NOT NULL DEFAULT 0,
+  failures INTEGER NOT NULL DEFAULT 0,
+  /* How long this job may go quiet before that is itself a fault. */
+  max_silence_minutes INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS audit_events (
@@ -449,6 +550,20 @@ DO $$ BEGIN
   BEGIN ALTER TABLE investors ADD COLUMN fica_resubmit_requested_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
   -- Referral tracking on transactions
   BEGIN ALTER TABLE transactions ADD COLUMN referred_investor_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  -- WHO MOVED THIS MONEY.
+  -- A transaction row said what happened, to whom, and when, and never who
+  -- did it. A staff member crediting a wallet, posting interest or settling a
+  -- reconciliation left a row indistinguishable from one the client caused
+  -- themselves, and that is the first question a dispute or a regulator asks
+  -- of an FSP holding client money. It cannot be reconstructed afterwards,
+  -- so every day without it was a day of unattributable movement.
+  -- actor_kind is the one that matters: 'client', 'staff' or 'system', so a
+  -- cron's work is never mistaken for a person's.
+  BEGIN ALTER TABLE transactions ADD COLUMN actor_kind TEXT;  EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE transactions ADD COLUMN actor_id TEXT;    EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE transactions ADD COLUMN actor_email TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE transactions ADD COLUMN actor_role TEXT;  EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE transactions ADD COLUMN actor_ip TEXT;    EXCEPTION WHEN duplicate_column THEN NULL; END;
   -- Term sheet URL on investment pools
   BEGIN ALTER TABLE investment_pools ADD COLUMN term_sheet_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
   -- Fee management columns on investment pools
@@ -1058,6 +1173,363 @@ CREATE TABLE IF NOT EXISTS sub_accounts (
   updated_at           TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS sub_accounts_parent_idx ON sub_accounts(parent_investor_id);
+
+/* ─── Stokvel membership ──────────────────────────────────────────────
+   A stokvel is a sub_accounts row with account_type 'stokvel'. Until now it
+   was one account owned by one person — the chairperson — with member_count
+   as a bare integer. Nobody else could log in and see it, which is the whole
+   reason a stokvel banks somewhere that lets three signatories hold it
+   together.
+
+   This is the join that makes the group the account holder: many investors,
+   each with their own login and their own FICA, attached to one stokvel.
+
+   is_signatory and role are RECORDED HERE AND ENFORCE NOTHING YET. They are
+   the mandate as written in the constitution, so staff can capture it when a
+   stokvel is onboarded. The N-of-M approval that makes them bite is the next
+   phase; until it ships, no code path reads is_signatory to authorise
+   anything, and check-stokvel-membership asserts that it does not. A flag
+   that looks like permission and is not is worse than no flag.
+   ──────────────────────────────────────────────────────────────────── */
+/* ─── Contributions ───────────────────────────────────────────────────
+   What each member agreed to pay in, and whether they have.
+
+   The schedule is the RULE; the obligations are the TRUTH. Every period the
+   rule produces one row per active member, carrying the amount as it stood
+   that month — so a stokvel that raises its contribution from R500 to R600
+   in March does not silently restate what February's defaulters owe. An
+   arrears figure derived from today's rule would do exactly that, and the
+   members in arrears are the ones most likely to check.
+
+   Attribution is by construction, not by reconciliation. A member pays from
+   their own wallet on the platform, so the row knows who paid without
+   anybody matching a reference on a bank statement. Cash and external EFT
+   into a stokvel's account are a harder problem and are not solved here.
+   ──────────────────────────────────────────────────────────────────── */
+CREATE TABLE IF NOT EXISTS stokvel_contribution_schedules (
+  id              TEXT PRIMARY KEY,
+  sub_account_id  TEXT NOT NULL REFERENCES sub_accounts(id) ON DELETE CASCADE,
+  amount          NUMERIC(18,2) NOT NULL CHECK (amount > 0),
+  cadence         TEXT NOT NULL DEFAULT 'monthly'
+                    CHECK (cadence IN ('monthly','fortnightly','weekly')),
+  /* Day of the month a monthly contribution falls due. A month shorter than
+     the chosen day settles on its last day rather than spilling into the
+     next one. */
+  due_day         INT NOT NULL DEFAULT 1 CHECK (due_day BETWEEN 1 AND 31),
+  starts_on       DATE NOT NULL DEFAULT CURRENT_DATE,
+  active          BOOLEAN NOT NULL DEFAULT true,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+/* One live rule per stokvel. Changing the contribution means ending the old
+   schedule and starting a new one, which keeps the obligations each produced
+   attributable to the rule in force at the time. */
+CREATE UNIQUE INDEX IF NOT EXISTS scs_one_active
+  ON stokvel_contribution_schedules(sub_account_id) WHERE active;
+
+CREATE TABLE IF NOT EXISTS stokvel_contributions (
+  id              TEXT PRIMARY KEY,
+  sub_account_id  TEXT NOT NULL REFERENCES sub_accounts(id) ON DELETE CASCADE,
+  investor_id     TEXT NOT NULL REFERENCES investors(id)    ON DELETE CASCADE,
+  schedule_id     TEXT REFERENCES stokvel_contribution_schedules(id) ON DELETE SET NULL,
+  period_label    TEXT NOT NULL,
+  amount_due      NUMERIC(18,2) NOT NULL CHECK (amount_due > 0),
+  amount_paid     NUMERIC(18,2) NOT NULL DEFAULT 0 CHECK (amount_paid >= 0),
+  due_date        DATE NOT NULL,
+  status          TEXT NOT NULL DEFAULT 'due'
+                    CHECK (status IN ('due','paid','waived')),
+  paid_at         TIMESTAMPTZ,
+  reminded_at     TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+/* One obligation per member per period. This is what makes generating the
+   period safe to run again: a second run inserts nothing rather than
+   doubling what everybody owes. */
+CREATE UNIQUE INDEX IF NOT EXISTS sc_one_per_period
+  ON stokvel_contributions(sub_account_id, investor_id, period_label);
+CREATE INDEX IF NOT EXISTS sc_group_idx ON stokvel_contributions(sub_account_id);
+CREATE INDEX IF NOT EXISTS sc_due_idx   ON stokvel_contributions(due_date) WHERE status = 'due';
+
+/* ─── The mandate ─────────────────────────────────────────────────────
+   What the constitution says it takes to get money out, made enforceable.
+
+   Today a stokvel withdrawal is a sub-account withdrawal, and that route
+   requires sub_accounts.parent_investor_id to be the caller — so the
+   chairperson, alone, can empty the account. That is the exact fear a
+   stokvel banks around, and it is why they put up with an account paying
+   nothing in exchange for three signatures on a withdrawal slip.
+
+   A request names an AMOUNT AND A DESTINATION, and signatories approve that
+   pair. Approving a sum alone would be a mandate in name only: the money
+   could be approved for the group and sent to whoever carried it out.
+
+   The chairperson still presses the button. They can no longer press it
+   alone.
+   ──────────────────────────────────────────────────────────────────── */
+/* The table is named for withdrawals and now also carries investments. It
+   was not renamed because a rename costs six files and a guarded migration
+   and buys a noun; the kind column says which it is, and the service that
+   reads it is called stokvelMandate, which is the vocabulary that matters.
+
+   An investment is money leaving the group wallet exactly as a withdrawal
+   is. It does not leave for a bank account, so it is approved against a
+   POOL instead — and the gate matches on the pool, because approving an
+   amount and letting whoever carries it out choose the product is the same
+   hole as letting them choose the bank account. */
+CREATE TABLE IF NOT EXISTS stokvel_withdrawal_requests (
+  id                  TEXT PRIMARY KEY,
+  sub_account_id      TEXT NOT NULL REFERENCES sub_accounts(id) ON DELETE CASCADE,
+  requested_by        TEXT NOT NULL REFERENCES investors(id),
+  amount              NUMERIC(18,2) NOT NULL CHECK (amount > 0),
+  bank_name           TEXT,
+  bank_account_number TEXT,
+  reason              TEXT,
+  /* The quorum as it stood when the request was raised, so a later change to
+     the mandate cannot retroactively lower the bar on a request already in
+     flight. Raising it is handled the other way: the gate re-reads the
+     stokvel's current quorum and takes whichever is higher. */
+  quorum_required     INT NOT NULL CHECK (quorum_required >= 2),
+  status              TEXT NOT NULL DEFAULT 'pending'
+                        CHECK (status IN ('pending','approved','rejected','used','expired')),
+  expires_at          TIMESTAMPTZ NOT NULL,
+  used_at             TIMESTAMPTZ,
+  used_by_reference   TEXT,
+  created_at          TIMESTAMPTZ DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS swr_group_idx  ON stokvel_withdrawal_requests(sub_account_id);
+CREATE INDEX IF NOT EXISTS swr_status_idx ON stokvel_withdrawal_requests(status);
+
+CREATE TABLE IF NOT EXISTS stokvel_request_approvals (
+  id           TEXT PRIMARY KEY,
+  request_id   TEXT NOT NULL REFERENCES stokvel_withdrawal_requests(id) ON DELETE CASCADE,
+  investor_id  TEXT NOT NULL REFERENCES investors(id) ON DELETE CASCADE,
+  decision     TEXT NOT NULL CHECK (decision IN ('approve','reject')),
+  decided_at   TIMESTAMPTZ DEFAULT NOW()
+);
+/* One signatory, one vote. Without this a single approver could reach any
+   quorum by approving repeatedly, which is the first thing anybody would
+   try. */
+CREATE UNIQUE INDEX IF NOT EXISTS sra_one_vote_each
+  ON stokvel_request_approvals(request_id, investor_id);
+
+CREATE TABLE IF NOT EXISTS stokvel_members (
+  id              TEXT PRIMARY KEY,
+  sub_account_id  TEXT NOT NULL REFERENCES sub_accounts(id) ON DELETE CASCADE,
+  investor_id     TEXT NOT NULL REFERENCES investors(id)    ON DELETE CASCADE,
+  role            TEXT NOT NULL DEFAULT 'member'
+                    CHECK (role IN ('chairperson','treasurer','secretary','member')),
+  is_signatory    BOOLEAN NOT NULL DEFAULT false,
+  status          TEXT NOT NULL DEFAULT 'invited'
+                    CHECK (status IN ('invited','active','exited')),
+  invited_by      TEXT REFERENCES investors(id),
+  invited_at      TIMESTAMPTZ DEFAULT NOW(),
+  joined_at       TIMESTAMPTZ,
+  exited_at       TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+/* One person is in a stokvel once. Re-inviting somebody who left updates the
+   row they already have rather than giving them a second membership, so a
+   roster can never show the same person twice or count them twice. */
+CREATE UNIQUE INDEX IF NOT EXISTS stokvel_members_uniq
+  ON stokvel_members(sub_account_id, investor_id);
+CREATE INDEX IF NOT EXISTS stokvel_members_investor_idx ON stokvel_members(investor_id);
+CREATE INDEX IF NOT EXISTS stokvel_members_group_idx    ON stokvel_members(sub_account_id);
+
+
+/* An invitation, ADDRESSED to a contact rather than carried by a link.
+   
+   Onboarding was a staff typing job: somebody in the console pasted an
+   investor id into a prompt, and the only thing that ever moved a member
+   from 'invited' to 'active' was a staff dropdown. A fifteen-member stokvel
+   needed fifteen people already registered and fifteen manual rows, and the
+   chairperson could add nobody. That alone stopped the product being sold.
+   
+   WHY THERE IS NO TOKEN IN A LINK. A link is a capability: forwarded once,
+   it lets a stranger into a group's balances and roster. This is addressed
+   to an email or a cell number instead, and the invitee finds it by SIGNING
+   IN as the person who controls that contact — the match IS the
+   authorisation. It also means the flow is identical for somebody who
+   already has an account and somebody who signs up after being asked, with
+   no public page to deploy and no secret to leak.
+   
+   The cost is real and worth naming: an invite sent to an address the person
+   did not sign up with is invisible to them. That is why the committee can
+   see every pending invite and re-send to a different contact.
+   
+   Contacts are stored NORMALISED — email lower-cased, a cell as its last
+   nine digits — because "the same person" has to be decidable, and
+   072 226 9415 and +27 72 226 9415 are the same person. */
+CREATE TABLE IF NOT EXISTS stokvel_invites (
+  id              TEXT PRIMARY KEY,
+  sub_account_id  TEXT NOT NULL REFERENCES sub_accounts(id) ON DELETE CASCADE,
+  invited_by      TEXT NOT NULL REFERENCES investors(id)    ON DELETE CASCADE,
+  invitee_name    TEXT,
+  email           TEXT,
+  cell            TEXT,
+  /* Resolved at invite time when the contact already belongs to an account,
+     so they can be pushed as well as emailed. Not an authorisation: accept
+     re-checks the contact against whoever is signed in. */
+  matched_investor_id TEXT REFERENCES investors(id) ON DELETE SET NULL,
+  status          TEXT NOT NULL DEFAULT 'pending'
+                    CHECK (status IN ('pending','accepted','declined','revoked')),
+  accepted_by     TEXT REFERENCES investors(id) ON DELETE SET NULL,
+  expires_at      TIMESTAMPTZ NOT NULL,
+  responded_at    TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW(),
+  /* An invitation with no way to reach anybody is a row, not an invitation. */
+  CONSTRAINT stokvel_invites_contact_chk CHECK (email IS NOT NULL OR cell IS NOT NULL)
+);
+/* One live invitation per contact per stokvel. Without this, tapping invite
+   twice asks the same person twice and leaves two rows that can each be
+   accepted — and accepting both is two memberships for one person, which the
+   roster unique index would then refuse halfway through. */
+CREATE UNIQUE INDEX IF NOT EXISTS stokvel_invites_live
+  ON stokvel_invites(sub_account_id, COALESCE(email, ''), COALESCE(cell, ''))
+  WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS stokvel_invites_email_idx ON stokvel_invites(email)  WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS stokvel_invites_cell_idx  ON stokvel_invites(cell)   WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS stokvel_invites_group_idx ON stokvel_invites(sub_account_id);
+
+
+/* WHAT EACH MEMBER'S SHARE OF THE POT IS.
+   
+   Contributions were tracked per member; everything else the group earned or
+   spent landed on one undifferentiated wallet — interest from the 3PIM
+   import, returns at maturity, the 1% fee on an investment. So the pot had a
+   total and no owners, and the question every stokvel member actually asks
+   had no answer. Worse, a member set to 'exited' was simply stopped from
+   seeing the group while their money stayed pooled, with nothing calculating
+   what they were owed.
+   
+   A share is the SUM OF THESE ROWS, not a figure derived by summing
+   transactions. services/ledger.js already states the house rule for that:
+   "the column is authoritative, and this definition exists for reporting and
+   reconciliation, not for repair." Shares follow it — a written balance,
+   with a reconciliation that proves it.
+   
+   Only 'contribution' is written at the point of the event, because it is
+   the only event that names a member. Everything else is placed by
+   services/stokvelShares.js reconcile(), which compares the group's net
+   assets against the sum of these rows and allocates the difference
+   pro-rata. NINE code paths credit a stokvel wallet across six files, and
+   hooking each one is the mistake this codebase has already paid for once —
+   see the comment in jobs/maturityCron.js about maturity being the only
+   money path that did not split to sub-accounts, which left them
+   "permanently short by everything it had invested". Deriving instead means
+   a tenth path nobody hooked is still allocated correctly. */
+CREATE TABLE IF NOT EXISTS stokvel_allocations (
+  id              TEXT PRIMARY KEY,
+  sub_account_id  TEXT NOT NULL REFERENCES sub_accounts(id) ON DELETE CASCADE,
+  investor_id     TEXT NOT NULL REFERENCES investors(id)    ON DELETE CASCADE,
+  kind            TEXT NOT NULL
+                    CHECK (kind IN ('contribution','income','cost','payout','adjustment')),
+  /* SIGNED. A cost and a payout are stored negative, so a share is a plain
+     SUM over this column and no reader has to remember which kinds subtract.
+     The CHECK below is what keeps the sign and the kind agreeing. */
+  amount          NUMERIC(18,2) NOT NULL,
+  reason          TEXT,
+  reference       TEXT,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT stokvel_allocations_sign_chk CHECK (
+    (kind IN ('contribution','income') AND amount > 0) OR
+    (kind IN ('cost','payout')         AND amount < 0) OR
+    (kind = 'adjustment')
+  )
+);
+CREATE INDEX IF NOT EXISTS stokvel_alloc_member_idx ON stokvel_allocations(sub_account_id, investor_id);
+CREATE INDEX IF NOT EXISTS stokvel_alloc_when_idx   ON stokvel_allocations(sub_account_id, created_at DESC);
+
+/* What a stokvel still owes somebody who has left.
+   
+   A member's share can outrun the group's CASH: the pot may be R20 000 in an
+   eighteen-month cattle pool and R600 in the wallet. Forcing an early
+   redemption would push everybody else's savings out of a pool to pay one
+   person, so the exit pays what is there and the remainder is recorded here,
+   settled as investments mature.
+   
+   The debt is SENIOR to current members' income — reconcile() pays these
+   before allocating anything — and it EARNS NOTHING, because the leaver's
+   share was crystallised on the day they left. Both halves of that are
+   deliberate: the principal is owed, the growth after they left is not
+   theirs. */
+CREATE TABLE IF NOT EXISTS stokvel_exit_debts (
+  id              TEXT PRIMARY KEY,
+  sub_account_id  TEXT NOT NULL REFERENCES sub_accounts(id) ON DELETE CASCADE,
+  investor_id     TEXT NOT NULL REFERENCES investors(id)    ON DELETE CASCADE,
+  amount_owed     NUMERIC(18,2) NOT NULL CHECK (amount_owed > 0),
+  amount_paid     NUMERIC(18,2) NOT NULL DEFAULT 0 CHECK (amount_paid >= 0),
+  status          TEXT NOT NULL DEFAULT 'owing' CHECK (status IN ('owing','settled')),
+  /* The authority the signatories granted for this exit. An exit is group
+     money leaving, so it clears the mandate like a withdrawal does. */
+  approved_via    TEXT,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  settled_at      TIMESTAMPTZ,
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS stokvel_exit_debt_open_idx
+  ON stokvel_exit_debts(sub_account_id) WHERE status = 'owing';
+
+
+/* THE DAY THE GROUP PAYS ITSELF OUT.
+   
+   Shares answered "what is mine"; this answers "and when do we get it".
+   The December payout is what most savings stokvels exist for, and without
+   it a group of fifteen paying itself out meant fifteen separate withdrawal
+   requests, each approved separately, with nothing recording that the group
+   had decided on a distribution at all.
+   
+   It is the exit settlement applied to everyone at once and WITHOUT the
+   membership change: each member is paid their share less what they owe,
+   the pot resets, and the group carries on with its schedule running.
+   
+   Deliberately NOT a rotating stokvel. In a rotation the member who
+   collects first has received money they have not yet contributed, which
+   means negative shares and a member owing the group - a credit product
+   with its own risk and its own collection problem, not an extension of
+   this one. */
+CREATE TABLE IF NOT EXISTS stokvel_payouts (
+  id              TEXT PRIMARY KEY,
+  sub_account_id  TEXT NOT NULL REFERENCES sub_accounts(id) ON DELETE CASCADE,
+  label           TEXT NOT NULL,
+  pay_on          DATE NOT NULL,
+  status          TEXT NOT NULL DEFAULT 'planned'
+                    CHECK (status IN ('planned','paid','cancelled')),
+  /* The authority the signatories granted. They approve THE DISTRIBUTION,
+     once, rather than one withdrawal per member. */
+  authority_id    TEXT,
+  created_by      TEXT REFERENCES investors(id) ON DELETE SET NULL,
+  paid_at         TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+/* One payout being planned at a time. A group with two open distributions
+   has not decided anything yet, and the second would be approved against a
+   pot the first is about to empty. */
+CREATE UNIQUE INDEX IF NOT EXISTS stokvel_payouts_one_open
+  ON stokvel_payouts(sub_account_id) WHERE status = 'planned';
+CREATE INDEX IF NOT EXISTS stokvel_payouts_group_idx ON stokvel_payouts(sub_account_id);
+
+/* What each member was actually paid, written when it runs. The figures are
+   kept rather than recomputed because a share moves with every credit the
+   group receives afterwards, and "what did I get in December" has to keep
+   answering the same thing in March. */
+CREATE TABLE IF NOT EXISTS stokvel_payout_lines (
+  id              TEXT PRIMARY KEY,
+  payout_id       TEXT NOT NULL REFERENCES stokvel_payouts(id) ON DELETE CASCADE,
+  investor_id     TEXT NOT NULL REFERENCES investors(id) ON DELETE CASCADE,
+  share           NUMERIC(18,2) NOT NULL,
+  arrears         NUMERIC(18,2) NOT NULL DEFAULT 0,
+  net             NUMERIC(18,2) NOT NULL,
+  paid            NUMERIC(18,2) NOT NULL DEFAULT 0,
+  queued          NUMERIC(18,2) NOT NULL DEFAULT 0,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (payout_id, investor_id)
+);
+
 
 CREATE TABLE IF NOT EXISTS sessions (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -2136,6 +2608,40 @@ async function autoSetup() {
       // 1b. Add new columns to existing tables (safe — IF NOT EXISTS)
       await pool.query(`
         DO $$ BEGIN
+          /* COLLECTING A CONTRIBUTION WITHOUT ASKING EVERY MONTH.
+             A stokvel is a group of people paying a fixed amount on a fixed
+             day, and every one of them had to remember to do it by hand.
+             Most of what the arrears screen shows is not somebody refusing
+             to pay; it is friction. A member can now have their contribution
+             taken from the card already on their main account.
+
+             HERE rather than beside the other column additions earlier in
+             this file: those run interleaved with the CREATE TABLEs, and
+             stokvel_members is created LATER than that point. Altering a
+             table that does not exist yet aborts the whole batch, which took
+             every other table down with it. */
+          BEGIN ALTER TABLE stokvel_members ADD COLUMN autopay_enabled BOOLEAN NOT NULL DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE stokvel_members ADD COLUMN autopay_enabled_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          /* What happened last time this obligation was collected. A card
+             that keeps declining must not be retried for ever. */
+          BEGIN ALTER TABLE stokvel_contributions ADD COLUMN autopay_attempted_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE stokvel_contributions ADD COLUMN autopay_attempts INTEGER NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE stokvel_contributions ADD COLUMN autopay_last_error TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          /* WHEN A CARD PAYMENT IS TAKEN BACK.
+             The webhook handled charge.success and dropped everything else,
+             so a dispute or a refund meant Paystack clawed the money back
+             from us while the client's wallet still showed the credit. These
+             mark the original so a statement, a reconciliation and a human
+             can all see that the row no longer represents money we hold. */
+          /* WHICH GATEWAY PUT THIS ROW HERE, if any.
+             Reconciling against Paystack needs to know which of our rows
+             Paystack should also have. The first attempt guessed from the
+             reference prefix, which missed exactly the rows that matter: a
+             credit the gateway no longer has is the one whose reference
+             nobody thought to add to the list. Recorded instead of inferred. */
+          BEGIN ALTER TABLE transactions ADD COLUMN gateway TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE transactions ADD COLUMN reversed_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE transactions ADD COLUMN reversed_reference TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE investors ADD COLUMN last_auto_fica_check TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE investors ADD COLUMN fica_auto_status TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE investors ADD COLUMN xp_points INT DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
@@ -2275,6 +2781,80 @@ async function autoSetup() {
           -- console has always tried to record both. Without this column the
           -- dismiss button failed silently and the notification came back.
           BEGIN ALTER TABLE fund_notifications ADD COLUMN is_dismissed BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          /* How many signatory approvals it takes to get money out. NULL
+             until a mandate is captured; the gate refuses a stokvel
+             withdrawal rather than guessing a default. */
+          /* ── Access terms ──────────────────────────────────────────
+             Wallets are interest bearing, and the price of the return is
+             notice: a withdrawal is payable 48 hours after it is asked for,
+             or on a date the account has set, whichever is later.
+
+             withdrawal_date is OPT-IN and is the shape a stokvel needs —
+             funds committed until, say, the first of December. It is a
+             floor, not a schedule: once the date has passed, ordinary
+             notice applies again and the group sets a new one. Modelling a
+             recurring December would be guessing at a rule nobody has
+             written down.
+
+             The notice itself lives in platform_settings
+             (withdrawal_notice_hours) so it can be changed, or set to zero,
+             without a deploy. transactions.available_at is when the money
+             may actually be paid, decided when the request is made and
+             checked again at approval — stamping it once means a later
+             change to the setting cannot move money that a client has
+             already been promised on a date. */
+          /* A stokvel authority covers money LEAVING the group wallet, and
+             an investment does that as surely as a withdrawal. kind says
+             which; pool_id is where an investment is approved to go. */
+          BEGIN ALTER TABLE stokvel_withdrawal_requests ADD COLUMN kind TEXT NOT NULL DEFAULT 'withdrawal'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE stokvel_withdrawal_requests ADD COLUMN pool_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE stokvel_withdrawal_requests ADD COLUMN exit_investor_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          /* Three kinds now, not two: an exit is group money leaving, so it
+             clears the same mandate. The constraint is DROPPED and re-added
+             rather than added with EXCEPTION duplicate_object, which on a
+             database that already has the two-value version would keep the
+             old one and refuse every exit while reporting success. */
+          BEGIN ALTER TABLE stokvel_withdrawal_requests DROP CONSTRAINT swr_kind_chk; EXCEPTION WHEN undefined_object THEN NULL; END;
+          BEGIN ALTER TABLE stokvel_withdrawal_requests ADD COLUMN payout_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          /* A FINE IS AN OBLIGATION, not a separate concept. Effectively every
+             stokvel constitution has them, and the platform had none. Carried
+             on stokvel_contributions so arrears, the chase, paying in oldest
+             first and the deduction at exit or payout all work on it unchanged
+             \u2014 the alternative was a parallel table and five places that would
+             each have had to learn about it.
+
+             Each fine gets a UNIQUE period_label (FINE-<id>), so the existing
+             (sub_account_id, investor_id, period_label) unique index never
+             collides and needs no migration: two fines in one month for one
+             member are two rows, which a period-keyed index could not hold. */
+          BEGIN ALTER TABLE stokvel_contributions ADD COLUMN kind TEXT NOT NULL DEFAULT 'contribution'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE stokvel_contributions ADD CONSTRAINT stokvel_contributions_kind_chk
+            CHECK (kind IN ('contribution','fine')); EXCEPTION WHEN duplicate_object THEN NULL; END;
+          BEGIN ALTER TABLE stokvel_contributions ADD COLUMN note TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE stokvel_contributions ADD COLUMN levied_by TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          /* What THIS member pays, when the group's constitution does not set
+             one amount for everybody. Null falls back to the schedule, which
+             is what every existing stokvel does. */
+          BEGIN ALTER TABLE stokvel_members ADD COLUMN contribution_amount NUMERIC(18,2); EXCEPTION WHEN duplicate_column THEN NULL; END;
+          /* A fourth kind: the group paying itself out. Dropped and re-added
+             again rather than added with EXCEPTION duplicate_object, which on
+             a database holding the three-value version would keep the old one
+             and refuse every payout while reporting success. */
+          BEGIN ALTER TABLE stokvel_withdrawal_requests DROP CONSTRAINT swr_kind_chk; EXCEPTION WHEN undefined_object THEN NULL; END;
+          BEGIN ALTER TABLE stokvel_withdrawal_requests ADD CONSTRAINT swr_kind_chk CHECK (kind IN ('withdrawal','investment','exit','payout')); EXCEPTION WHEN duplicate_object THEN NULL; END;
+          BEGIN ALTER TABLE sub_accounts ADD COLUMN withdrawal_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE investors    ADD COLUMN withdrawal_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE transactions ADD COLUMN available_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE sub_accounts ADD COLUMN stokvel_quorum INT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          /* How this stokvel's constitution says the pot divides. 'contribution'
+             tracks what each member actually put in and when, which is correct
+             whenever amounts or joining dates differ; 'equal' is the classic
+             stokvel split, where arrears come off your own share. The group's
+             choice, not the platform's, and a mandate-level property — changing
+             how the pot divides is not something one member may do. */
+          BEGIN ALTER TABLE sub_accounts ADD COLUMN share_basis TEXT NOT NULL DEFAULT 'contribution'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE sub_accounts ADD CONSTRAINT sub_accounts_share_basis_chk
+            CHECK (share_basis IN ('contribution','equal')); EXCEPTION WHEN duplicate_object THEN NULL; END;
           BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_holder TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_number TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
@@ -4148,6 +4728,76 @@ async function autoSetup() {
          that comes back after somebody dismissed the idea of it is worse than
          no notice at all. */
       const NOTICES = [
+        { id: 'ANN-2026-STOKVEL-WORKSPACE', area: 'both', icon: 'fa-people-group',
+          title: 'A stokvel is now a place you switch into, not a pop-up',
+          body: 'Everything a stokvel had \u2014 the pot, the mandate, contributions, shares, payouts, invitations, the roster \u2014 was stacked in ONE SCROLLING DIALOG. All of it was there and none of it had room, which is why a stokvel read as an accessory to a personal account rather than the thing a committee runs its group from. A member now SWITCHES INTO the stokvel and gets its own space with nine sections: OVERVIEW, CONTRIBUTIONS, APPROVALS, SHARES, PAYOUTS, MEMBERS, INVESTMENTS, TRANSACTIONS and STATEMENT. The group\u2019s name, the pot, what is in the wallet, what is invested and that member\u2019s own share sit across the top, with a way back to their own account. Switching is from the sidebar, which lists the member\u2019s stokvels and is HIDDEN ENTIRELY for the clients who are not in one. THE OVERVIEW IS THE NEW PART and leads with what is waiting on the person reading it: a request needing THEIR approval first (a mandate is only as fast as the signatory who has not voted), then what they owe, their share, the pot, the next payout and who is behind \u2014 each going to the section that answers it fully. TWO SECTIONS ARE ENTIRELY NEW. The group\u2019s TRANSACTIONS, with a running balance; and its INVESTMENTS, with what is held, at what rate and maturing when. Both read through the stokvel API rather than the table editor, because that scopes by investor and a stokvel\u2019s rows carry the CHAIRPERSON\u2019s id \u2014 an ordinary member could not have read them, and should not be given a way to. ONE THING WORTH KNOWING ABOUT THE LEDGER: its running balance is anchored to the wallet and worked backwards, not added up from zero. Not every movement on a group wallet writes a row against the group \u2014 a payout debits the wallet and writes the rows against each MEMBER \u2014 so a column summed from zero would not reach the balance printed above it. THE PERSONAL SCREENS ARE UNTOUCHED. This is one view of its own rather than seventeen made context-aware, so nothing here can render one account\u2019s money under another\u2019s name.',
+          where: 'Client app \u2192 the sidebar \u2192 under \u201cMy stokvels\u201d, or tap a stokvel card under Sub-accounts. Notifications about a stokvel open it directly. The way back is the \u201cMy account\u201d button at the top right of the group\u2019s header.' },
+
+        { id: 'ANN-2026-NOTIFICATION-DEEP-LINKS', area: 'both', icon: 'fa-location-arrow',
+          title: 'A stokvel notification now opens the thing it is about',
+          body: 'Every stokvel message \u2014 a request waiting on a signatory, a vote recorded, an authority spent, a payout, a fine \u2014 arrived at the DASHBOARD. The member then had to find Sub-accounts, then their group, then the right panel. The badge on the card made that tolerable; it never made it good. Each notification now carries the group it is about, and tapping it opens that stokvel. ONE THING WAS QUIETLY BROKEN THE WHOLE TIME and is the reason this looked harder than it was: the service worker focused whatever portal tab was already open and THREW THE DESTINATION AWAY. So even a message that named where to go did nothing for anybody who had the portal open already \u2014 which is most people, most of the time. The page is now told where to go and routes there itself, keeping its state rather than reloading. The url is the single carrier: it goes in the web-push payload and in the app\u2019s notification data, and the app parses the same string the browser does, so one place decides where a message points rather than two that drift. AN INVITATION POINTS AT SUB-ACCOUNTS rather than the group \u2014 the invitee is not a member yet and the group screen would refuse them; the invitation card is on Sub-accounts. A LINK TO A STOKVEL SOMEBODY IS NOT IN says so plainly instead of opening an empty screen, and the link is cleared once it has been acted on so a refresh does not keep reopening the group over whatever the member moved on to.',
+          where: 'Nothing to do. Tap a stokvel notification on the phone or in the browser and it opens that stokvel. App users get this with the next app release; the web portal has it on deploy.' },
+
+        { id: 'ANN-2026-STOKVEL-FINES', area: 'both', icon: 'fa-gavel',
+          title: 'Stokvel fines, and members who pay different amounts',
+          body: 'Two things a constitution has and the platform did not. FINES: effectively every stokvel\u2019s rules provide for them \u2014 late to the meeting, late with the money \u2014 and there was no way to record one, so committees kept them on paper and the app\u2019s arrears were wrong. A fine is now an OBLIGATION, carried on the same table as a contribution, which means arrears, the monthly chase, paying in oldest-first and the deduction at an exit or a payout ALL WORK ON IT UNCHANGED rather than each having to learn about a new kind of thing. Levied by the COMMITTEE \u2014 chairperson, secretary or treasurer \u2014 never by us: a penalty is something the group\u2019s own rules provide for, and a platform that could impose one would be enforcing somebody else\u2019s constitution. The member is told straight away and A REASON IS REQUIRED, because a fine somebody discovers when their arrears do not add up is the thing that ends stokvels. An unpaid fine can be withdrawn by the committee if they got it wrong; a PAID one cannot, because reversing it would take back money the group has already shared out. The message to the member says plainly that SV Capital does not set or enforce a stokvel\u2019s penalties and that a disputed one is for their committee. SECOND: MEMBERS CAN BE ON DIFFERENT AMOUNTS. The contribution schedule carried a single figure for the whole group, which is right for almost every stokvel and wrong for the ones whose rules set different amounts for different members \u2014 a member on a lower amount, somebody catching up on a higher one. There is now a per-member amount on the members list in the console; leave it blank and that member pays the group\u2019s figure, which is what every existing stokvel does and nothing changes for them.',
+          where: 'Fines: client app \u2192 Sub-accounts \u2192 the stokvel \u2192 Members \u2192 \u201cRecord a fine\u201d (committee only). The member sees it under what they owe, marked as a fine with the reason on it. Per-member amounts: Admin console \u2192 Stokvels \u2192 open one \u2192 Members \u2192 the \u201cPays\u201d column; blank means the group\u2019s amount.' },
+
+        { id: 'ANN-2026-SUBACCOUNT-STATEMENTS', area: 'both', icon: 'fa-file-lines',
+          title: 'Sub-accounts have a statement at last \u2014 and a stokvel can see WHO approved what',
+          body: 'TWO GAPS, both about a group being able to see its own history. FIRST: no sub-account had a statement. Not a stokvel, not a trust, not a business, not a child\u2019s account \u2014 every query in the statement builder was scoped to an investor, so a stokvel\u2019s AGM had nothing to table and a trustee could not produce a year for the trust. One document now serves all of them: the same balances, anchored to that account\u2019s own wallet, the same one definition of what moves cash. The ACCOUNT is named at the top rather than the person who opened it. NOTHING ABOUT AN INDIVIDUAL\u2019S STATEMENT CHANGED, and that was the careful part \u2014 an investor\u2019s statement has always included their sub-accounts\u2019 transactions, and \u201ctidying\u201d that would have silently altered documents clients already hold, so it is left exactly as it was and the check proves two identical calls produce identical documents. SECOND: THE APPROVALS REGISTER IS VISIBLE. It has been recorded since the mandate shipped and never shown \u2014 members saw \u201c2 of 3\u201d and never which two. For a product whose whole claim is that several NAMED people must agree, that was the wrong way round, and an anonymous rejection is worse than a named one because a request dies and nobody can talk about why. Every member now sees who voted, what they decided and when, on each request and again on the statement. A vote from somebody who is no longer a signatory is shown and marked as not counted, so the tally still adds up for anybody checking it by hand. A stokvel\u2019s statement also carries who contributed what in the period, each member\u2019s share, and the pot broken down. Worth knowing when somebody asks for one: a stokvel\u2019s statement can be pulled by any ACTIVE member, not only the chairperson, and the request is refused as \u201cno such account\u201d to anybody else \u2014 an id in a query string is not an entitlement.',
+          where: 'Client app \u2192 Statements, with the account chosen; or Admin console \u2192 Clients \u2192 the client \u2192 Statement. The register is on every request under Signatory approvals in the stokvel, and in the statement\u2019s own section.' },
+
+        { id: 'ANN-2026-STOKVEL-PAYOUTS', area: 'both', icon: 'fa-gift',
+          title: 'The December payout \u2014 a stokvel can pay its whole group out on a date',
+          body: 'The thing most savings stokvels exist for, and the half the platform did not model. Shares answered \u201cwhat is mine\u201d; nothing answered \u201cand when do we get it\u201d, so a group of fifteen paying itself out meant FIFTEEN separate withdrawal requests, each approved separately, with nothing recording that the group had decided on a distribution at all. Now the committee plans one \u2014 a name and a date, \u201cDecember 2026\u201d \u2014 and the signatories approve THE DISTRIBUTION, once. When it runs, every member is paid their share LESS ANYTHING THEY OWE, into their own SV Capital wallet, from where they withdraw in the ordinary way. What a member owed STAYS IN THE POT and is shared among the members, which is the point of having chased it. NOBODY LEAVES: the group keeps its members, its mandate and its contribution schedule, the pot resets, and it starts again. That is the first question a committee asks and the answer is on the screen. A POT THAT CANNOT COVER EVERYBODY pays what it holds PRO-RATA and records the rest as owed \u2014 paying the first few in full and the rest nothing would be a worse answer than everybody waiting together \u2014 and nothing is redeemed early to make a distribution happen. Each member is told what THEY received rather than what the group distributed, because a message quoting the group total leaves fifteen people doing their own arithmetic. What each member got is kept against the payout, so \u201cwhat did I get in December\u201d still answers the same thing in March. ONE PLANNED AT A TIME: a group with two open distributions has not decided anything, and the second would be approved against a pot the first is about to empty. THE CONSOLE DELIBERATELY HAS NO BUTTON TO RUN ONE. A distribution empties the pot, and a staff override on that would hand back exactly the single point of failure the mandate removes. ROTATING STOKVELS ARE NOT THIS and are not built: in a rotation the member who collects first has received money they have not yet contributed, which means negative shares and a member owing the group \u2014 a credit product with its own risk, not an extension of this one.',
+          where: 'Client app \u2192 Sub-accounts \u2192 the stokvel \u2192 Payout, above Shares. The committee plans it there and raises it for the signatories; once it carries, any member can run it from Signatory approvals. Staff view: Admin console \u2192 Stokvels \u2192 open one \u2192 Payouts, read-only.' },
+
+        { id: 'ANN-2026-STOKVEL-ATTRIBUTE', area: 'admin', icon: 'fa-user-check',
+          title: 'Staff can say whose money an amount in a stokvel actually was',
+          body: 'The other half of the pay-in fix. Money a MEMBER puts in is now attributed to them automatically, but money that reaches a group wallet through a staff path \u2014 a manual credit, an EFT approval, a refund \u2014 still carries no owner, and the share ledger shares it across every member pro-rata. That is right for interest and for a maturity. It is wrong when the money was one member\u2019s, and until now there was nothing to do about it. There is now a control on the stokvel\u2019s Shares panel: choose the member, the amount and a reason, and the ledger is corrected. IT MOVES NO MONEY \u2014 the group holds exactly what it held before, and what changes is whose share of it is whose. Every other member\u2019s share drops by their part of the amount and that member\u2019s rises by the whole of it. THE REASON IS REQUIRED, not optional, because the next person to ask why will be reading the ledger rather than this screen, and the adjustment carries both the reason and the name of whoever made it. IT WORKS WHETHER OR NOT THE MONEY HAS ALREADY BEEN SHARED OUT, which is the part worth trusting: the correction shares out anything pending first, so attributing an EFT the moment it lands and attributing one from three weeks ago reach the same answer. REFUSED: more than the stokvel actually holds (it would hand one member more than the pot and push another below zero), anybody who is not an active member of that group, and nothing or less. It cannot move money out of a stokvel, so it is NOT a way round the mandate \u2014 but it does change whose money is whose, so it is staff-only and audited.',
+          where: 'Admin console \u2192 Stokvels \u2192 open one \u2192 Shares \u2192 \u201cAttribute an amount to a member\u201d, under the share list. The adjustment then shows in that member\u2019s ledger with the reason on it.' },
+
+        { id: 'ANN-2026-STOKVEL-PAY-IN', area: 'both', icon: 'fa-wallet',
+          title: 'Money a member puts into a stokvel is THEIRS \u2014 the old Deposit button shared it out',
+          body: 'A hole sitting right beside the contribution flow, and the kind that is far worse to find after a real group has used it. A stokvel account showed the ordinary DEPOSIT button, and that path credits the group wallet with NOTHING RECORDING WHOSE MONEY IT WAS. The share ledger then did exactly what it is built to do \u2014 it found an unexplained increase and divided it between every member in proportion to what they already held. Correct for interest and for a maturity. Badly wrong for a treasurer banking R5\u00a0000 of their own, who would have got back their share of it and no more, with the rest quietly belonging to everybody else. THE FIX IS THAT A GROUP WALLET IS NEVER TOPPED UP DIRECTLY. Money enters it from a member\u2019s OWN wallet, through the same mechanism a scheduled contribution already uses \u2014 which debits the member, credits the group and writes the attribution in ONE transaction, so there is never a moment when the money has moved and the ledger has not. The button on a stokvel now reads PAY IN and does that; the deposit screen itself refuses a stokvel, so a route somebody finds another way to is refused too. Paying in also SETTLES WHAT YOU OWE, oldest obligation first, rather than sitting beside your arrears as an unrelated credit \u2014 so a member catching up on three months pays once. Anyone in the group can pay in and nobody needs approval to make the group better off; it is taking money OUT that the mandate guards. ONE THING THAT HAS NOT CHANGED, deliberately: money credited to a stokvel by STAFF \u2014 a manual credit, an EFT approval, the interest import, a maturity \u2014 is still treated as the group\u2019s and shared pro-rata, because for interest and maturities that is right. If a staff credit is actually one member\u2019s money, it needs to be attributed to them rather than left to the share-out.',
+          where: 'Client app \u2192 Sub-accounts \u2192 the stokvel card \u2192 Pay in; or inside the stokvel under Shares \u2192 \u201cPay into the pot\u201d. The member needs the money in their own SV Capital wallet first, which they top up the normal way.' },
+
+        { id: 'ANN-2026-STOKVEL-SUCCESSION', area: 'both', icon: 'fa-key',
+          title: 'A chairperson who leaves hands the stokvel on \u2014 they no longer keep the keys',
+          body: 'A hole the exit feature itself opened, closed before anybody could walk through it. A stokvel account records WHO OPENED IT, and that column granted access on its own \u2014 so a chairperson could ask to leave, be approved by the signatories, take their share, and STILL see the group\u2019s wallet, its roster, every member\u2019s contributions and every member\u2019s share. They could also still invite new members, because the invitation rule reads the same column. For a product whose whole claim is that no one member controls the money, that was the wrong person to leave holding the door. THREE CHANGES. Settling an exit now HANDS THE ACCOUNT ON: ownership moves to another active member, preferring the committee and the longest-standing, and that person becomes chairperson. It is not a transfer of signing power \u2014 the mandate is separate and is untouched, so if the group has elected a new signatory that still comes to us. Second, somebody whose membership says they have left is refused access even if the ownership column still names them, so the door is shut from both sides. Third, and the root of it: WHOEVER OPENS A STOKVEL IS NOW A MEMBER OF IT. Nothing created that row before, which is why their place in the group rested on the ownership column in the first place \u2014 and it is why such a person could not be exited cleanly at all, since the exit flow works on membership and they had none. Existing stokvels get the same row added automatically, as chairperson and NOT as a signatory: adding signing power to a mandate that already exists is a change to who can move a group\u2019s money, and that is never done quietly. ONE THING STAFF WILL MEET: the last member of a stokvel cannot leave, because the account cannot be left with no owner. A group with nobody left in it should be CLOSED with us rather than emptied one member at a time \u2014 the message says so, and that is a conversation to have rather than a button to find.',
+          where: 'Nothing to click. Client app \u2192 Sub-accounts \u2192 the stokvel \u2192 Shares \u2192 \u201cAsk to leave this stokvel\u201d, then the signatories approve it under Signatory approvals. Staff view: Admin console \u2192 Stokvels \u2192 open one \u2192 Members shows who holds the chairperson role after a handover.' },
+
+        { id: 'ANN-2026-STOKVEL-PUBLIC-PAGE', area: 'both', icon: 'fa-people-group',
+          title: 'There is now a page to send a stokvel to \u2014 and a clause in the terms that covers them',
+          body: 'The platform could run a stokvel before it could tell anybody about one. The word appeared NOWHERE on the public site and NOWHERE in the terms, so there was nothing to point a committee at and the T&Cs did not describe a group account, the mandate, or what happens when a member leaves. stokvels.html is the page. It leads on the thing a bank account cannot offer them \u2014 no one member, including the chairperson, can move the money, and every member sees who has paid \u2014 then walks through opening the account, inviting members, setting the mandate and the monthly amount, and deciding together what the pot does. WHAT IT DELIBERATELY DOES NOT SAY MATTERS AS MUCH: no interest rate is quoted, because the rate comes from a distribution we import and is not a web page\u2019s to promise (the page says to ask us and that we will answer in writing \u2014 so be ready to); no NASASA or self-regulatory membership is claimed, because we have not verified one and a committee would reasonably rely on it; and no minimum is invented. Capital at risk is stated where investing is offered rather than only in the footer, and the 1% platform fee is described as charged ON TOP, which is what it is. TERMS CLAUSE 26 is the contract side, and the sentence to know is the first one: THE CLIENT IS THE STOKVEL, not the member who acts, and a member acting for the group is not personally liable \u2014 the same correction just made to the investment agreement. It also writes down what the platform actually does: a mandate of fewer than two is not accepted, we will not act on one member alone and our staff cannot approve on a group\u2019s behalf, a member becomes a member only by accepting the invitation themselves, shares are defined on either basis, and on an exit the arrears stay in the pot while any shortfall becomes a debt that ranks ahead of remaining members, earns nothing, and will not be met by breaking an investment early. We also say plainly what we do NOT do: arbitrate between members, lend to stokvels, or act as a bank. The page is published through BOTH builds \u2014 the Dockerfile and pages:build \u2014 because a page in one and not the other is live on one host and a 404 on the other, which has happened here before.',
+          where: 'The page is svcapital.co.za/stokvels.html, linked from the home page footer under Get in Touch. The contract wording is Terms of Use \u2192 clause 26, in the table of contents. Worth reading clause 26.7 before answering any question about a member leaving.' },
+
+        { id: 'ANN-2026-AGREEMENT-ACCOUNT-PARTY', area: 'admin', icon: 'fa-file-signature',
+          title: 'An investment agreement for a stokvel, trust, business or child now names THE ACCOUNT',
+          body: 'The contract named the wrong party, and it had done since sub-accounts existed. The Investor on the document was the natural person who tapped Invest, with the account recorded as nothing more than a column on the row \u2014 so a stokvel\u2019s R50\u00a0000 was contracted for PERSONALLY by whichever member happened to place it, with the group\u2019s name nowhere on the page; a trust\u2019s investment was a contract with its trustee; a child\u2019s with the parent. The platform already settles this principle for the other side of the table \u2014 the provider was once misdescribed and the check written then says a contract that misdescribes the counterparty \u201cis the one document where that cannot be waved through; it is the name a client would have to sue\u201d. It cuts both ways. NOW: the Investor is the account, its type is stated in words a client would recognise, its registration number appears where there is one, and the person is listed as \u201cSigned for the account by\u201d. A paragraph under the parties table says the signatory acts in that capacity and NOT personally, and is not personally liable for the account\u2019s obligations \u2014 which is the sentence that matters if a member is ever asked to pay a group\u2019s investment out of their own pocket. For a stokvel the document also records the MANDATE: which authority the signatories granted, and that no single member may commit the group\u2019s funds, so the contract and the mandate can be read against each other years later. THREE OTHER THINGS FIXED IN THE SAME PLACE. The sealed copy is rendered a second time when it is signed, and it was NOT given the account \u2014 so the client would have read a document naming the stokvel while the copy we keep and hash named the member. Both copies now come from one helper. The funding gate matched investor, pool and amount only, which meant a signature a member gave for their OWN R1\u00a0000 into a pool could fund the GROUP\u2019s R1\u00a0000 into the same pool; the account is now part of the match, and a personal agreement funds a personal investment and nothing else. And sub_account_id arrived from the request body with no check at all \u2014 anyone could draw an agreement naming any account on the platform. Now an ordinary sub-account is its owner\u2019s, and a stokvel\u2019s may be drawn by any ACTIVE member, which is the same rule as placing the investment. EVERY TEMPLATE VERSION MOVED (standard v4; the three EIF structures v5) because the parties section is wording, and a version is never edited in place. Agreements already signed keep the version and the words they were signed under. Also corrected: the investor\u2019s email address was being read from a query that did not select it, so every agreement ever drawn showed an em dash where the email should be.',
+          where: 'Nothing to click. Admin console \u2192 Clients \u2192 open a client \u2192 Agreements shows the template and version on each. Worth knowing when answering a query about an agreement signed before today: it will name the individual, and the stored copy is deliberately left exactly as it was signed.' },
+
+        { id: 'ANN-2026-STOKVEL-SHARES-AND-EXITS', area: 'both', icon: 'fa-chart-pie',
+          title: 'A stokvel member can see their share \u2014 and leaving now settles it',
+          body: 'TWO THINGS, and the second was a live bug. Contributions were tracked per member while everything else the group earned or spent landed on one undifferentiated wallet \u2014 interest from the 3PIM import, returns at maturity, the 1% fee on an investment \u2014 so the pot had a total and no owners, and the question every stokvel member actually asks had no answer. Worse: a member set to \u201cexited\u201d was simply stopped from seeing the group WHILE THEIR MONEY STAYED POOLED. Nothing calculated what they were owed and nothing paid it. Both are fixed. EVERY MEMBER NOW HAS A SHARE, visible to the whole group on the stokvel screen, next to a breakdown of the pot \u2014 what is in the wallet, what is invested, what is owed to members who have left \u2014 so a member can do the arithmetic and find that it comes out. It always comes out: the platform refuses to let the sum of the shares drift from the money it is splitting, and the split is to the cent, with the rounding remainder going somewhere rather than being lost. HOW THE POT DIVIDES IS THE GROUP\u2019S CHOICE, not ours: \u201cby what each member put in\u201d (the default, and right whenever amounts or joining dates differ) or \u201cequally, by head\u201d, which is the classic stokvel split with arrears coming off your own share. It is on the mandate card in the console, and it should only ever be set to what the group\u2019s constitution actually says. LEAVING. A member asks to leave from the app; THE SIGNATORIES APPROVE IT, because an exit takes money out of the pot and no one person may end a membership and draw the share. What they still owe comes off and STAYS IN THE POT for the members who chased it, and their outstanding contributions are closed rather than left due against somebody who is no longer a member. AND THE PART TO EXPLAIN TO CLIENTS: a share can outrun the group\u2019s CASH \u2014 the pot may be R20 000 in an eighteen-month cattle pool and R600 in the wallet. Nothing is redeemed early, because that would push everybody else\u2019s savings out of a pool to pay one person. The leaver is paid what the group holds now, leaves immediately, and the rest is recorded as owed to them and paid AUTOMATICALLY as investments mature \u2014 ahead of any further earnings reaching current members. It does not need chasing and it does not grow while it waits, because their share was fixed on the day they left. A SHARE IS NOT A FIELD: it is the sum of a ledger, so there is deliberately nothing in the console to edit. If one looks wrong the cause is in the contributions or in what the group was credited. Existing stokvels need server/scripts/backfill-stokvel-shares.cjs run once \u2014 it previews before it writes and NAMES any group whose books will not balance rather than forcing them.',
+          where: 'Client app \u2192 Sub-accounts \u2192 open the stokvel \u2192 Shares, with your own share on the header beside the group wallet. \u201cAsk to leave this stokvel\u201d is at the bottom of that section; the request then appears under Signatory approvals labelled Exit, and any member can settle it once it carries. Staff view: Admin console \u2192 Stokvels \u2192 open one \u2192 Shares (read-only, with anything still owed to former members), and the mandate card above it for how the pot divides.' },
+
+        { id: 'ANN-2026-STOKVEL-SELF-INVITES', area: 'both', icon: 'fa-user-plus',
+          title: 'A stokvel builds its own roster \u2014 stop typing members into the console',
+          body: 'Onboarding was a staff typing job, and it was the reason this product could not be sold. A member was added by somebody in the console pasting an INVESTOR ID into a prompt, and the only thing that ever moved them from \u201cinvited\u201d to \u201cactive\u201d was a staff dropdown \u2014 so a fifteen-member stokvel needed fifteen people already registered and fifteen manual rows, and the chairperson could add nobody. Now the COMMITTEE invites, by name and email or cell number: the chairperson, the secretary or the treasurer, from the stokvel screen in the app. Not an ordinary member \u2014 a stokvel wallet holds everybody\u2019s savings and \u201cany member can add anyone\u201d is not a door a savings club wants open. THE ONE RULE TO KNOW, AND TO REPEAT TO CLIENTS: AN INVITATION CAN NEVER MAKE A SIGNATORY. It always creates an ordinary member, with no office. If it could do otherwise the mandate would be theatre \u2014 invite two friends, sign them up, approve your own withdrawal \u2014 and somebody who was a signatory, left, and is invited back does NOT get their signing power returned. Signing power is a change to the mandate, made by us against the group\u2019s constitution. THERE IS DELIBERATELY NO JOIN LINK IN THE INVITATION. A link is a capability: forwarded once, it would let a stranger see a group\u2019s balances and roster. The invitation is ADDRESSED to the email or cell number instead, and the invitee claims it by signing in \u2014 or signing up \u2014 with that same contact, at which point it is waiting on their Sub-accounts screen. That works identically for somebody who already banks with us and somebody who has never heard of us, and it is also the one thing to know when a client says they never got it: AN INVITATION SENT TO AN ADDRESS THEY DID NOT SIGN UP WITH IS INVISIBLE TO THEM. The committee can see every pending invitation and send another to the right contact, and the console shows the same list with \u201chas an account\u201d beside each one, which is the diagnosis. Invitations go out by email, by SMS and, where the contact already belongs to an account, by push. They expire after 21 days, can be withdrawn, can only be accepted once, and accepting is the invitee\u2019s own act \u2014 staff cannot accept for somebody, because joining a group that can then see your contributions is not something to have done to you. Caps: 50 members and 25 invitations outstanding, which are bounds on abuse rather than product rules \u2014 talk to us about a bigger group.',
+          where: 'Client app \u2192 Sub-accounts \u2192 open the stokvel \u2192 Invitations \u2192 \u201cInvite someone\u201d (committee only). The invitee sees a purple Invitation card at the top of their own Sub-accounts screen with Accept and Decline. Staff view: Admin console \u2192 Stokvels \u2192 open one \u2192 Invitations, which shows who was asked, whether they had an account when invited, and whether it is still waiting.' },
+
+        { id: 'ANN-2026-STOKVEL-NOTIFICATIONS', area: 'both', icon: 'fa-bell',
+          title: 'Stokvel signatories are now TOLD when money is waiting on them',
+          body: 'The mandate was built over four releases and then sat idle, because nothing told anybody it was waiting. A signatory found out that R10\u00a0000 needed their approval by happening to open the app, so a treasurer raised a request and then phoned three people to ask them to go and tap approve \u2014 a worse system than the bank form it replaced. Five moments now reach people, by push AND email, and no others. ASKED: a request is raised, and every OTHER signatory is told who asked, for how much, and where it is going. PROGRESS: somebody approved but it has not carried, and only the person waiting on it hears the tally \u2014 telling three signatories that a signatory voted is telling them what they are in the middle of doing. CARRIED and REFUSED: the answer is final, so the whole mandate hears, because a dead or carried request that still reads as pending leaves people waiting to vote on nothing. And SPENT: the authority was used, and everybody who granted it is told WHERE THE MONEY WENT \u2014 the message that is easiest to leave out and the one that matters most, because an approval is a promise about money and this is the only chance anybody has to notice an authority used in a way they did not expect while it is still recent. THE DESTINATION IS IN EVERY MESSAGE, including the one line that shows on a lock screen: \u201cR10\u00a0000 needs your approval\u201d tells a signatory nothing they can check, and the destination is the half of a request the mandate exists to pin down. For an investment the message also states what leaves the wallet once the 1% is added, which is the one figure that differs from the one being approved. ALSO, AND SEPARATELY: push needs a permission the member may never have granted and email needs an address that can bounce, so the count of what is waiting is on the stokvel CARD in the app, which cannot fail silently \u2014 including on the chairperson\u2019s card, which is drawn differently from everybody else\u2019s and would otherwise have been the one person not told. Nothing here can break the money: every send happens after the money has committed, none is waited on, and with the mail provider and the push service both failing a withdrawal still goes through and a vote is still recorded.',
+          where: 'Nothing to switch on. Members see the pill on the stokvel card in Sub-accounts (\u201c2 waiting on you\u201d, or what they owe) and get a push and an email as the five moments happen. Staff view: Admin console \u2192 Stokvels \u2192 open one \u2192 Activity shows what is still awaiting approval.' },
+
+        { id: 'ANN-2026-STOKVEL-INVEST-MANDATE', area: 'both', icon: 'fa-seedling',
+          title: 'A stokvel investment now needs the signatories too — not just a withdrawal',
+          body: 'The mandate guarded the wrong half of the door. A stokvel withdrawal to a bank account needed the signatories; INVESTING the same money into a pool needed nobody — one member could put the whole group wallet into an eighteen-month cattle pool on their own, and the money is just as gone, only now it is locked in for the term. Both are the group’s money leaving the group wallet, so both now clear the same mandate. A member raises a request saying HOW MUCH and INTO WHICH POOL, the signatories approve it to the stokvel’s own quorum, and only then can anybody place it. The pool is part of what is approved, not a detail chosen afterwards: an authority approved for one pool is refused for another, an authority for R10 000 will not fund R12 000, and a withdrawal authority cannot be spent on an investment or the reverse. Each authority is good for ONE investment and is marked used, so an approval is not a standing instruction. STAFF ARE NOT EXEMPT — the gate sits in the route every console and every screen writes through, so there is no admin button that bypasses it, deliberately: a staff override would hand back the single point of failure the mandate removes. The amount the signatories approve is what REACHES THE POOL; the 1% platform fee is charged on top, so a little more than the approved figure leaves the wallet, and the request form says so. Two things found while building this: the member-facing stokvel API read the wrong field out of the sign-in token, so EVERY endpoint answered “no stokvels” to every real client — the screens from the last release were unusable in production and are now working; and the withdrawal and investment gates were rewritten onto one shared matcher, so there is one definition of “is this authorised” rather than two that drift. REINVESTMENT AT MATURITY IS NOT GATED — that money never returns to the wallet and the instruction was set when the original investment was approved.',
+          where: 'Client app → Sub-accounts → open the stokvel → Signatory approvals → “Request an investment”. Signatories approve it on the same panel. Once approved, any member places it the normal way: Marketplace → the pool → Invest, from the stokvel. Staff view: Admin console → Stokvels → open one → Activity, where pending requests now show whether each is a withdrawal or an investment and which pool.' },
+
         { id: 'ANN-2026-CLIENT-DOCS', area: 'admin', icon: 'fa-folder-open',
           title: 'Every document a client uploaded, in one place',
           body: 'FICA documents and files attached to support tickets now appear together on the client record, newest first, with the status of each and who reviewed it. Before this, a deposit slip could only be found by remembering which ticket it was attached to.',
@@ -4353,6 +5003,41 @@ async function autoSetup() {
           body: 'The main site is written for a retail investor: start small, top up a wallet, earn XP, climb a ladder. None of that is the right pitch for an institution, a family office or an adviser, and an allocator who reads it decides we are not for them. institutional.html addresses them instead: what each strategy actually finances and with which partner, how a pool is structured and reported, who holds the licence \u2014 SmartVest Financial Services (Pty) Ltd, FSP 52449, with SV Capital as fund manager \u2014 and that capital is at risk. It carries NO minimum and no rand figure at all: mandate size is set in conversation, and a number on a public page is an offer at a price. Where pools have concluded it shows what has actually been paid back, drawn live from the platform, and says plainly that past performance is not a guide. The enquiry form at the bottom writes a HIGH-PRIORITY TICKET into Support, categorised as an institutional enquiry and carrying a reference the sender is given, and emails enquiry@svcapital.co.za as well \u2014 so an enquiry is on the board whether or not the email arrives, rather than living in somebody\u2019s inbox. It is rate-limited and carries a honeypot, because it is the only public write on the platform that is not a signup. Answer it from Support as you would any ticket. Separately: the terms, privacy, PAIA and complaints pages were never in the published build \u2014 they existed in the repository and would have 404\u2019d on the live site \u2014 and are now published alongside it.',
           where: 'The page is linked from the main site\u2019s menu as \u201cInstitutional\u201d and from the footer. Enquiries: Admin console \u2192 Support, category \u201cinstitutional_enquiry\u201d, opened at high priority.' },
 
+        { id: 'ANN-2026-WITHDRAWAL-NOTICE-48H', area: 'both', icon: 'fa-hourglass-half',
+          title: 'Stokvel withdrawals now take 48 hours \u2014 or wait for a date the group has set',
+          body: 'STOKVELS ONLY. Every wallet on the platform bears interest, but the notice applies to STOKVEL wallets and to nothing else \u2014 a personal wallet, a trust and a child\u2019s account all keep same-day access. A stokvel\u2019s money belongs to a group and leaves on a mandate, so a pause between asking and paying is part of what the group is buying; an individual\u2019s own money is their own. A stokvel withdrawal is now payable 48 HOURS after it is requested. The money still leaves the wallet the moment the request is made, so nobody can spend it twice; what changes is when it can be paid out, and the admin approve button REFUSES before then and tells you the date. Rejecting is NOT delayed \u2014 a client who changes their mind should not have to wait out a notice period to do it. Accounts can also commit their money to A SET DATE: a stokvel saving for December sets 1 December and nothing is paid before then. The two combine as the LATER of the pair, not as alternatives \u2014 a stokvel committed until the first of December that asks on the thirtieth of November gets its money after the 48 hours, not on the first. The notice period lives in platform settings (withdrawal_notice_hours) so it can be shortened, or set to zero, without a deploy. TWO THINGS TO KNOW: a stokvel withdrawal now clears TWO gates \u2014 the signatories approve it, and THEN the notice runs \u2014 so tell a treasurer to raise the request early rather than on the day they need the money; and the idle-wallet nudge email has been corrected \u2014 it used to tell clients money in the wallet \u201cis not working\u201d, which stopped being true when wallets became interest bearing. It now says the balance earns interest and can be drawn on whenever they like, but is not earning a pool\u2019s return.',
+          where: 'Admin console \u2192 Withdrawals \u2014 approving before the date is refused with the date in the message. The set date is a field on the investor or sub-account record (withdrawal_date). The notice period: Settings \u2192 withdrawal_notice_hours.' },
+
+        { id: 'ANN-2026-STOKVEL-ADMIN-SCREENS', area: 'admin', icon: 'fa-people-group',
+          title: 'Stokvels has its own section in the console \u2014 stop using the table editor',
+          body: 'A STOKVELS item in the sidebar, listing every stokvel with the one thing the table editor could never show: whether it can actually withdraw. A stokvel with no mandate on file CANNOT WITHDRAW AT ALL \u2014 the platform refuses rather than guessing a default \u2014 and the list now says so in red instead of letting you find out when a member is refused. Open one and you get four things. THE MANDATE: how many approvals a withdrawal needs, which will not save below two (a mandate of one is not a mandate) and warns you if you set it higher than the number of signatories, because three approvals with two signatories named is a stokvel that can never withdraw. MEMBERS: role, signatory flag and status in dropdowns rather than raw columns \u2014 remember only ACTIVE members get contributions and only active signatories count towards a mandate. THE CONTRIBUTION SCHEDULE: amount and day of the month; replacing one ends the old schedule and starts a new one, and obligations already raised keep the amount they were raised at. And ACTIVITY: what is awaiting approval and what is outstanding. ONE THING THE CONSOLE DELIBERATELY WILL NOT DO is approve a withdrawal on a stokvel\u2019s behalf. The mandate belongs to its members and approvals come from them, in the app. A staff button that could satisfy it would hand back exactly the single point of failure the feature removes.',
+          where: 'Admin console \u2192 Stokvels in the sidebar.' },
+
+        { id: 'ANN-2026-STOKVEL-SCREENS', area: 'portal', icon: 'fa-mobile-screen-button',
+          title: 'Stokvel members can now see and run their group in the app',
+          body: 'The screens for everything the last three releases built. A stokvel member opens Sub-accounts and sees their group \u2014 INCLUDING MEMBERS WHO DID NOT OPEN IT, which is new: that list was built from accounts where you are the registered owner, so everybody except the chairperson had nothing there. Inside, one screen with four parts. WHAT YOU OWE, first, with a Pay button that takes it from your wallet. WHO IS BEHIND, for every member, because the argument this ends is \u201cI paid and you did not\u201d and a private view would reproduce it. WITHDRAWALS, showing every request and how many signatories have approved it \u2014 signatories get Approve and Reject buttons, everybody else sees the same list without them, because knowing what is being asked for is the point. And the MEMBER LIST with roles, marking who is a signatory. Raising a request asks for the amount AND the bank account it is going to, because that is what the signatories approve and a request without it can never be used. Everything a member types \u2014 names, the reason on a request \u2014 is escaped before it is shown, and the check drives a real browser with a hostile name in the roster to prove nothing runs.',
+          where: 'Client portal and app \u2192 Sub-accounts \u2192 tap your stokvel.' },
+
+        { id: 'ANN-2026-STOKVEL-CONTRIBUTIONS-PHASE-3', area: 'admin', icon: 'fa-calendar-check',
+          title: 'Stokvel contributions: who owes what, and automatic chasing',
+          body: 'Phase 3. A stokvel now has a CONTRIBUTION SCHEDULE \u2014 an amount, monthly, on a chosen day \u2014 and every month the platform opens that period and creates one obligation per active member. The obligation carries the amount AS IT STOOD when the period opened, which matters more than it sounds: a stokvel that raises its contribution from R500 to R600 in March must not silently restate what February\u2019s defaulters owe, and the members in arrears are exactly the ones who check. MEMBERS PAY FROM THEIR OWN WALLET, which makes attribution automatic \u2014 nobody has to match a reference on a bank statement to work out who paid. The money moves from the member\u2019s wallet into the stokvel\u2019s in one transaction, with both halves written to the ledger as a matched pair so a contribution never reads as money entering or leaving SV Capital. EVERY MEMBER SEES THE WHOLE LIST, not just their own row, and arrears are totalled per member. That is deliberate: the argument this ends is \u201cI paid and you did not\u201d, and a private view would reproduce it. CHASING IS ONCE PER OBLIGATION, ever \u2014 an email and a push the day after it falls overdue, then nothing. A platform that reminds somebody daily that they owe R500 is a platform they mute, and then the message that mattered is muted too; the treasurer chases the rest, which is a conversation. Refused: paying somebody else\u2019s contribution, paying one already settled, paying more than is outstanding, and paying with an empty wallet. Cash and external EFT into a stokvel are NOT handled \u2014 attribution there is a reconciliation problem and this does not pretend to solve it.',
+          where: 'Admin console \u2192 Tables \u2192 stokvel_contribution_schedules to set the amount and day; stokvel_contributions shows every obligation and what has been paid. Members see it in the app once the screens ship.' },
+
+        { id: 'ANN-2026-STOKVEL-MANDATE-PHASE-2', area: 'admin', icon: 'fa-user-shield',
+          title: 'No single person can get money out of a stokvel any more',
+          body: 'The mandate. Until now a stokvel withdrawal was an ordinary sub-account withdrawal, and that asks one question: is the caller the person who opened the account? So the chairperson, alone, could empty it \u2014 which is the exact fear a stokvel banks around, and why they accept an account paying nothing in exchange for three signatures on a slip. Now: a member raises a WITHDRAWAL REQUEST naming an amount AND the bank account it is going to. Signatories approve or reject it. Only when enough have approved can the withdrawal be made, and it must match what was approved \u2014 the same amount, to the same account. The destination matters as much as the sum: approving a figure while whoever carries it out picks where it lands would be a mandate in name only. HOW TO SET ONE UP: capture the signatories on stokvel_members (is_signatory) and how many must approve in sub_accounts.stokvel_quorum. Until that is on file the platform REFUSES stokvel withdrawals outright rather than guessing \u2014 so an existing stokvel will stop being able to withdraw until its mandate is captured, and that is deliberate. The minimum is two: a mandate of one is not a mandate. Things it will not allow, each of which is a thing somebody would try: one signatory voting twice; a member who is not a signatory voting; an authority used for a second withdrawal; an approval from somebody who was a signatory when they voted and has since been removed; a rejection being out-voted. The chairperson still presses the button \u2014 they just cannot press it alone. Ordinary sub-accounts (trusts, children\u2019s accounts) are unaffected and withdraw exactly as before. There is still no client-facing screen; the endpoints and the rules are what shipped.',
+          where: 'Admin console \u2192 Tables: set is_signatory on stokvel_members and stokvel_quorum on the sub_accounts row. Requests and votes are visible in stokvel_withdrawal_requests and stokvel_request_approvals.' },
+
+        { id: 'ANN-2026-STOKVEL-MEMBERS-PHASE-1', area: 'admin', icon: 'fa-users',
+          title: 'A stokvel can now have members \u2014 the first piece of the stokvel platform',
+          body: 'Groundwork, and read-only on purpose. Until now a stokvel was a sub-account owned by ONE person \u2014 whoever opened it \u2014 with a member count that was just a number. Nobody else could log in and see it, which is the main reason a stokvel banks somewhere that lets three signatories hold the account together. There is now a real membership: each member is an investor with their own login and their own FICA, attached to the stokvel with a role (chairperson, treasurer, secretary or member) and a status (invited, active or exited). Members see the group through new endpoints under /api/stokvels, which check that the caller is actually IN the group on every single request \u2014 an invited member who has not accepted sees nothing, somebody who has exited stops seeing it, and a stranger is told the stokvel does not exist rather than that they are not allowed. They can see the group\u2019s balance and the roster: names and roles, and nothing else from anybody\u2019s investor record. TWO THINGS THIS DOES NOT DO YET. It does not move money \u2014 no endpoint here writes anything. And the SIGNATORY flag records what the constitution says and authorises NOTHING: the N-of-M approval that makes it bite is the next phase, and a check fails the build if any code starts treating that flag as permission before then. So capture the mandate when onboarding a stokvel, but do not rely on the platform to enforce it yet. There is no client-facing screen for this either \u2014 the data model and the access rules are what shipped.',
+          where: 'Admin console \u2192 Tables \u2192 stokvel_members to add or edit members (staff only; investors cannot read that table directly). The client-side screens come with the next phase.' },
+
+        { id: 'ANN-2026-MATURITY-CATCHUP-AND-POOL-DATES', area: 'admin', icon: 'fa-rotate',
+          title: 'A missed maturity run now recovers on boot, and investments mature with their pool',
+          body: 'Two fixes behind the October 2025 cattle pool that did not mature on 31 October. FIRST, WHY IT WAS MISSED: the maturity schedules are timers inside the server process, created when it boots. A restart across 23:00 SAST does not make the run late \u2014 it makes it not happen, and the work waits for the following night. The server now checks on boot for investments that matured BEFORE today and were never processed, and runs them. Only overdue ones: a restart can make a late maturity less late, never pull an on-time one forward. It cannot pay twice \u2014 each investment is claimed inside the transaction that moves its money \u2014 and on almost every boot it finds nothing and does nothing. SVC_MATURITY_CATCHUP=off disables it without a deploy. SECOND, AND THIS IS THE ONE TO KNOW ABOUT: an investment was being given a maturity date of its OWN start plus its term, not its pool\u2019s maturity date. Roll over on 1 November into a pool maturing 31 October and the investment was dated 1 November the following year \u2014 one day past the pool it belongs to, on a date no close-out will land on. One cattle pool held investments dated 01 Nov 2027, 31 Oct 2027 and 31 Oct 2027. Because maturity is processed per investment by that date, a pool closed out as one unit matured in dribs across several nights, and the pool could read matured while investments inside it were still active. All three places that create investments \u2014 the maturity rollover, recurring orders and the wallet-fallback reinvestment \u2014 now take the date from the pool. EXISTING ROWS ARE NOT CHANGED BY THIS: server/scripts/backfill-maturity-dates.js realigns them and prints what it will change before it writes.',
+          where: 'Nothing to click. To realign existing investments: run server/scripts/backfill-maturity-dates.js against the database \u2014 it previews first. To see what the next maturity run will do: Admin console \u2192 the maturity pre-flight, or server/scripts/preflight-maturity.cjs.' },
+
         { id: 'ANN-2026-FICA-CONSENT-NAMES-THE-CHECKS', area: 'both', icon: 'fa-clipboard-check',
           title: 'The FICA tick at signup now names all four checks \u2014 and is recorded as version 2.0',
           body: 'The consent box on the signup form used to say only \u201cI consent to FICA / FAIS identity verification as required by the Financial Intelligence Centre Act\u201d. It now names every check we actually run: IDENTITY AND PHOTO VERIFICATION, BANK ACCOUNT VERIFICATION, ADDRESS VERIFICATION, and SANCTIONS, CRIME AND POLITICALLY EXPOSED PERSON (PEP) SCREENING. Three of those were never put to the person agreeing to them, and a consent to identity verification is not a consent to be screened against a sanctions list. Two other things changed with it. The acceptance is now recorded as VERSION 2.0 in accepted_client_documents, where every FICA consent before today was stamped 1.0 \u2014 that is what lets you tell apart somebody who agreed to the four named checks from somebody who agreed to the old single clause. And THE SERVER NOW REFUSES a registration that does not carry the consent: it used to default the answer to yes, so a request that never mentioned consent still had a consent row written against the client\u2019s name. The browser had always required the tick; the server was taking its word for it. WHAT THIS MEANS FOR EXISTING CLIENTS: everybody who signed up before today is on version 1.0, and that wording covers identity verification only. If we need their agreement to the other three on the record, they have to be asked again \u2014 that is a separate piece of work and has not been built.',
@@ -4457,6 +5142,38 @@ async function autoSetup() {
           title: 'Support WhatsApp number changed',
           body: 'The support number is now 079 111 5476. Every WhatsApp link on the site, the portal and the app points at it.',
           where: 'Landing page footer and floating button, and the portal\u2019s support panel.' },
+        { id: 'txn-actor-2026-11', area: 'admin', icon: 'fa-fingerprint',
+          title: 'Every money movement now says who made it',
+          body: 'A transaction row recorded what moved, to whom and when \u2014 and never who did it, so a credit a staff member made read exactly like one the client made themselves. Every movement now carries the person or the job behind it: a client acting on their own account, a named staff member with the address they acted from, or the automated job that ran. It shows under the date on each row, in orange when it was one of us. Rows written before this carry nothing and say nothing rather than guessing. Clients never see our names or addresses on their own statements \u2014 only whether a movement was theirs, ours, or automatic.',
+          where: 'Transactions \u2014 under the date on every row. Also on an investor\u2019s Transactions tab.' },
+        { id: 'incidents-2026-11', area: 'admin', icon: 'fa-heart-pulse',
+          title: 'The dashboard now tells you what is broken',
+          body: 'Every error used to go to a server log nobody watches, which meant the first person to know a payout had failed was the client whose money had not arrived. Errors are now recorded, folded so one fault in a loop is one line with a count, and shown at the top of the dashboard. Separately, every unattended job writes a heartbeat: a job that simply STOPS running throws nothing and logs nothing, so the only sign is a heartbeat that stopped arriving, and that now raises an alert of its own. Mark something \u201cDealt with\u201d and it goes away \u2014 and comes straight back if the same fault happens again. Set OPS_ALERT_EMAIL on the server to be emailed the first time something breaks instead of waiting until somebody opens this page.',
+          where: 'Dashboard \u2014 at the top, above the figures. Empty and invisible when nothing is wrong.' },
+        { id: 'stokvel-autopay-2026-11', area: 'both', icon: 'fa-bolt',
+          title: 'A stokvel contribution can now collect itself',
+          body: 'A stokvel is a group of people paying a fixed amount on a fixed day, and every one of them had to remember to do it by hand \u2014 so most of what the arrears screen shows is friction rather than anybody refusing to pay. A member can now switch on automatic payment and their contribution is taken on the day it falls due. It uses the wallet first and only charges the card already on their main account for what the wallet cannot cover, so nobody pays a gateway fee on money they already had. A declined card still pays whatever the wallet holds, as a part payment, rather than leaving them further behind. After three declines we stop trying and tell them. Nobody can switch it on for anybody else \u2014 it is each member\u2019s own card and their own decision.',
+          where: 'Portal \u2192 switch into the stokvel \u2192 Contributions, under what you owe. Only shown to members who have a card on file.' },
+        { id: 'card-reversals-2026-11', area: 'admin', icon: 'fa-rotate-left',
+          title: 'A disputed or refunded card payment is no longer invisible',
+          body: 'The Paystack webhook handled successful charges and ignored everything else, so a dispute or a refund meant Paystack took the money back from us while the client\u2019s wallet still showed the credit. Every disputed payment is now recorded and acted on: what the wallet still holds is taken back, and anything that cannot be is raised on the dashboard saying exactly where the money went. MONEY IS NEVER CLAWED BACK OUT OF A STOKVEL \u2014 by then it has been shared across the whole group, so taking it back would take it from members who did nothing; the alert names the group and leaves it to you. And every new dispute is surfaced even when recovery went perfectly, because a dispute nobody answers is awarded against us by default. Separately, the gateway\u2019s books and ours are now compared every morning for the day before, which catches a charge taken and never credited, or a credit standing against a charge Paystack no longer has.',
+          where: 'Dashboard \u2014 under Needs attention. Disputes appear as warnings, anything unrecovered as critical.' },
+        { id: 'account-closure-2026-11', area: 'both', icon: 'fa-door-closed',
+          title: 'Closing an account now checks what the client still has here',
+          body: 'The POPIA deletion endpoint checked a typed confirmation and anonymised, looking at nothing else \u2014 so somebody could close an account with money in the wallet, investments still running, or a stokvel that still owed them their share. Those investments matured into a wallet belonging to \u201cDeleted User\u201d that nobody could sign in to. Worse, a CHAIRPERSON could close their account and leave the whole stokvel held under an anonymised record. Closure is now refused until each of those is settled, and the client is shown the list before they type anything, with what to do about each one. Closing also deletes any card on file and switches off every automatic payment, because charging a card on behalf of somebody who asked to be forgotten would be indefensible. Separately: the portal\u2019s own delete button had never worked \u2014 it called the wrong method, quietly filed a support ticket, and told the client their account had been deleted when it had not.',
+          where: 'Portal \u2192 Profile \u2192 Close My Account. Staff see nothing new; this is a client-side gate.' },
+        { id: 'money-format-2026-11', area: 'both', icon: 'fa-money-bill-wave',
+          title: 'Money is now written the South African way everywhere',
+          body: 'The portal and the admin console formatted amounts in American \u2014 R170,000.00 \u2014 while every statement, tax certificate and generated document used R 170 000,00. The same balance in two notations depending on whether somebody was looking at the screen or at the PDF of the screen. In South Africa the comma is the DECIMAL separator, so R170,000.00 is genuinely ambiguous to the person reading it. One formatter now serves all 516 places that write an amount, thousands are grouped with a non-breaking space so a printed figure never breaks across two lines, and the abbreviated tiles read R61,1M to match. Nothing about the figures changed \u2014 only how they are spelled.',
+          where: 'Everywhere an amount appears. Compare any screen with the statement for the same period \u2014 they now read identically.' },
+        { id: 'cdn-resilience-2026-11', area: 'both', icon: 'fa-chart-pie',
+          title: 'A failed chart no longer takes the dashboard down with it',
+          body: 'The portal loads its chart library from an external CDN, and twenty-four of twenty-six chart calls assumed it had arrived. On a weak mobile connection it sometimes had not \u2014 and the resulting error happened INSIDE the data load, so the whole dashboard failed: balances, investments, activity, all of it. The client was then told \u201cServer is waking up, this can take up to 30 seconds\u201d, which was false; the server was answering fine. Every chart now goes through one guarded call, so a missing library puts a line where the picture would be and nothing else is affected. The slow-load message no longer claims to know why it is slow, because most of the time the answer is the client\u2019s signal, not our server.',
+          where: 'Nothing to do \u2014 but if you ever see \u201cThis chart could not load\u201d on a dashboard, that is this working, and the figures beside it are still correct.' },
+        { id: 'fee-reversal-2026-11', area: 'admin', icon: 'fa-rotate-left',
+          title: 'A platform fee can now be given back \u2014 as cash, or as more investment',
+          body: 'The 1% is charged when an investment is placed and there was no way to undo it, so a fee charged in error or a goodwill gesture meant a manual wallet credit with a note \u2014 a figure typed into a balance with nothing tying it to the fee it cancelled. Open any investment and the platform fee now sits in its own panel with two choices. BACK TO THE WALLET is cash the client can withdraw today. ADD IT TO THE INVESTMENT makes it principal: the client earns the pool rate on it for the rest of the term and it matures with the rest, which is worth more to them. The screen shows what the investment would become before you commit. A reason is required and is recorded against the reversal; it can only be done once; a fee charged against a sub-account goes back to THAT wallet, and a stokvel\u2019s is shared across its members. A finished investment can only take the wallet option, and the screen says so rather than offering a button that fails.',
+          where: 'Investments \u2192 open one \u2192 the Platform Fee panel, under At Maturity.' },
       ];
 
       let added = 0;
@@ -4470,6 +5187,61 @@ async function autoSetup() {
         added += rowCount;
       }
       if (added) console.log(`\u2705 Announced ${added} feature(s) to staff.`);
+    });
+
+    await step("28. Every stokvel's chairperson is a member of it", async () => {
+      /* Nothing created a stokvel_members row for whoever opened a stokvel
+         account, so their place in the group rested on
+         sub_accounts.parent_investor_id alone. That is the column that let a
+         chairperson who had LEFT keep seeing the money \u2014 their membership
+         said exited and the ownership column still said yes \u2014 and it is
+         also why such a person could not be exited cleanly at all: the exit
+         flow works on membership, and they had none.
+
+         NOT MADE A SIGNATORY. Adding signing power to an existing mandate is
+         a change to who can move a group's money, and this step must not
+         make one quietly. The row is created so membership is complete;
+         naming signatories stays a deliberate act, done against the group's
+         constitution.
+
+         ON CONFLICT DO NOTHING, so a stokvel whose chairperson is already on
+         the roster keeps the row they have, with whatever role and signing
+         power it carries. */
+      const { rowCount } = await pool.query(`
+        INSERT INTO stokvel_members
+          (id, sub_account_id, investor_id, role, is_signatory, status, joined_at)
+        SELECT 'SM-BF' || SUBSTR(MD5(a.id || a.parent_investor_id), 1, 12),
+               a.id, a.parent_investor_id, 'chairperson', false, 'active', NOW()
+          FROM sub_accounts a
+         WHERE a.account_type = 'stokvel'
+           AND a.parent_investor_id IS NOT NULL
+           AND EXISTS (SELECT 1 FROM investors i WHERE i.id = a.parent_investor_id)
+           AND NOT EXISTS (SELECT 1 FROM stokvel_members m
+                            WHERE m.sub_account_id = a.id
+                              AND m.investor_id = a.parent_investor_id)
+        ON CONFLICT (sub_account_id, investor_id) DO NOTHING`);
+      if (rowCount) console.log(`\u2705 Added ${rowCount} stokvel chairperson(s) to their own roster.`);
+    });
+
+    await step("27. Narrow the withdrawal-notice notice to stokvels", async () => {
+      /* That row went out saying the 48 hours applies to every wallet on the
+         platform. It applies to stokvel wallets and to nothing else, and a
+         staff member reading the console would otherwise tell a client their
+         own money needs two days' notice when it does not.
+
+         Step 19 inserts ON CONFLICT DO NOTHING by design, so editing the text
+         above reaches a brand-new database and nowhere else. Matched on the
+         exact old opening so a notice somebody has reworded keeps their
+         wording and a second run finds nothing to do. */
+      const { rowCount } = await pool.query(`
+        UPDATE feature_announcements
+           SET title = 'Stokvel withdrawals now take 48 hours \u2014 or wait for a date the group has set',
+               body = replace(body,
+                 'A CHANGE EVERY CLIENT WILL NOTICE. Wallets on this platform bear interest, and notice is what pays for it: a withdrawal is now payable 48 HOURS after it is requested rather than the same day.',
+                 'STOKVELS ONLY. Every wallet bears interest, but the notice applies to STOKVEL wallets and to nothing else \u2014 personal wallets, trusts and children''s accounts all keep same-day access. A stokvel withdrawal is now payable 48 HOURS after it is requested.')
+         WHERE id = 'ANN-2026-WITHDRAWAL-NOTICE-48H'
+           AND POSITION('A CHANGE EVERY CLIENT WILL NOTICE' IN COALESCE(body, '')) > 0`);
+      if (rowCount) console.log('\u2705 Narrowed the withdrawal-notice announcement to stokvels.');
     });
 
     await step("26. Correct the no-figure claim in the private-client notice", async () => {

@@ -2,6 +2,7 @@ const express  = require('express');
 const router   = express.Router();
 const pool     = require('../db/pool');
 const { requireAuth, requireRole } = require('../middleware/auth');
+const { recordTransaction, actorFromRequest } = require('../services/ledger');
 
 // Parse the 3PIM CSV export — handles simple comma-delimited format
 function parsePimCsv(text) {
@@ -273,14 +274,11 @@ router.post('/interest/apply', requireAuth, requireRole('admin', 'director'), as
         const txRef     = `INT-${period}-${walletKey}`;
         const desc      = `Interest — ${period}`;
 
-        const txResult = await client.query(
-          `INSERT INTO transactions
-             (id, investor_id, sub_account_id, type, amount, status, reference, description, transaction_date, created_at, updated_at)
-           VALUES (gen_random_uuid(), $1, $2, 'interest', $3, 'completed', $4, $5, NOW(), NOW(), NOW())
-           ON CONFLICT (reference) DO NOTHING RETURNING id`,
-          [item.investor_id, item.sub_account_id || null, item.interest_amount, txRef, desc]
-        );
-        const txId = txResult.rows[0]?.id || null;
+        const written = await recordTransaction(client, {
+          investorId: item.investor_id, subAccountId: item.sub_account_id || null,
+          type: 'interest', amount: item.interest_amount, reference: txRef, description: desc,
+        }, actorFromRequest(req), { onConflict: 'reference' });
+        const txId = written ? written.id : null;
 
         /* The INSERT is the guard, so the credit has to depend on it.
 

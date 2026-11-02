@@ -48,21 +48,7 @@ console.log('\nthe drawer exists and is not a phone-only idea');
 }
 
 /* ── Measured ───────────────────────────────────────────────────── */
-const CHROME = (() => {
-  const base = '/opt/pw-browsers';
-  const link = path.join(base, 'chromium');
-  if (fs.existsSync(link)) return link;
-  if (!fs.existsSync(base)) return null;
-  for (const dir of fs.readdirSync(base)
-        .filter(d => /^chromium-\d+$/.test(d))
-        .sort((a, b) => Number(b.split('-')[1]) - Number(a.split('-')[1]))) {
-    for (const inner of ['chrome-linux64', 'chrome-linux']) {
-      const bin = path.join(base, dir, inner, 'chrome');
-      if (fs.existsSync(bin)) return bin;
-    }
-  }
-  return null;
-})();
+const CHROME = require('../../scripts/lib/chromium.cjs').findChromium();
 
 if (!CHROME) {
   console.log('\n  SKIP  no chromium under /opt/pw-browsers — the measured half did not run');
@@ -106,9 +92,28 @@ const WIDTHS = (() => {
   const BASE = `http://127.0.0.1:${site.address().port}`;
 
   const port = 9453;
+  /* detached, so the kill below reaches the whole process group. Chromium
+     forks a zygote, a GPU process and a renderer; killing only the launcher
+     leaves those running, and a suite that starts five browsers leaves five
+     sets behind. Fourteen of them accumulated during one mutation run and
+     starved the box until the next browser could not start inside its
+     timeout — which presents as a check that has stopped measuring. */
   const proc = spawn(CHROME, ['--headless=new', `--remote-debugging-port=${port}`,
-    '--no-sandbox', '--disable-gpu', '--hide-scrollbars', 'about:blank'], { stdio: 'ignore' });
-  const stop = () => { try { proc.kill(); } catch (_) {} site.close(); };
+    '--no-sandbox', '--disable-gpu', '--hide-scrollbars', 'about:blank'], { stdio: 'ignore', detached: true });
+  /* Browser.close asks Chromium to shut itself down, which is the only
+     thing that reliably reaps it: --headless=new starts a browser process
+     that puts itself in its own session, so killing the launcher's process
+     group leaves the renderers running. Twelve survived every run until
+     this was added, and a suite that starts five browsers leaves sixty
+     behind — which eventually starves the box and presents as a check that
+     has stopped measuring rather than one that failed. The group kill stays
+     as the fallback for a browser too wedged to answer. */
+  const stop = async () => { /* Awaited. Sending it and exiting immediately kills the process
+       before the socket flushes, so the browser never hears it — which
+       is how twelve of them survived a run that looked clean. */
+    try { await Promise.race([send('Browser.close'),
+                              new Promise(r => setTimeout(r, 1500))]); } catch (_) {}
+    try { process.kill(-proc.pid, 'SIGKILL'); } catch (_) { try { proc.kill('SIGKILL'); } catch (_) {} } site.close(); };
 
   try {
     /* Thirty seconds, not ten. Four checks in this suite each start their
@@ -131,7 +136,7 @@ const WIDTHS = (() => {
          proc.exitCode !== null
            ? `chromium exited with code ${proc.exitCode} after ${Date.now() - startedAt}ms`
            : `devtools never answered in ${Date.now() - startedAt}ms`);
-      stop(); return;
+      await stop(); return;
     }
 
     const ws = new WebSocket(tabs.find(t => t.type === 'page').webSocketDebuggerUrl);
@@ -274,7 +279,7 @@ const WIDTHS = (() => {
     console.error('\n  ✗ threw:', err.message);
     fail++;
   } finally {
-    stop();
+    await stop();
     console.log(`\n${pass} passed, ${fail} failed`);
     process.exit(fail ? 1 : 0);
   }

@@ -81,12 +81,65 @@ console.log('\nand SV Capital is named as what it actually is');
      'naming only one of the two leaves the other looking like a guarantor');
 }
 
+console.log('\nand the Investor is the account when the money is not the signer\u2019s own');
+{
+  const facts = {
+    product_type: 'standard', agreement_no: 'AGR-T-1',
+    investor_id: 'INV-9', investor_name: 'Nomsa Dlamini',
+    investor_email: 'nomsa@example.test',
+    pool_name: 'Cattle November', pool_amount_cents: 100000,
+    fee_cents: 1000, amount_cents: 101000, drawn_at: new Date('2026-03-01'),
+  };
+  const personal = A.renderAgreement(facts);
+  const group = A.renderAgreement({ ...facts, account: {
+    id: 'SA-7', name: 'Vukuzenzele Stokvel', type: 'stokvel',
+    reg_number: 'NAS-12345',
+    authority: 'Mandate of the signatories \u2014 authority SWR-ABC, 2 approval(s) required',
+  } });
+
+  ok('an individual\u2019s agreement still names the individual',
+     /<th>Investor<\/th><td>Nomsa Dlamini<\/td>/.test(personal), 'the common case must not move');
+  ok('and carries no capacity paragraph', !/class="capacity"/.test(personal));
+
+  ok('a stokvel\u2019s agreement names the STOKVEL as the Investor',
+     /<th>Investor<\/th><td>Vukuzenzele Stokvel<\/td>/.test(group),
+     'a contract that misdescribes the counterparty is the one document where that '
+     + 'cannot be waved through \u2014 it cuts both ways');
+  ok('the member appears as the person signing for it, not as the investor',
+     /Signed for the account by<\/th><td>Nomsa Dlamini</.test(group)
+     && !/<th>Investor<\/th><td>Nomsa Dlamini<\/td>/.test(group), 'both halves have to hold');
+  ok('the account type is stated in words a client would recognise',
+     /Stokvel \(community savings group\)/.test(group));
+  ok('and its registration number where there is one', /NAS-12345/.test(group));
+  ok('the mandate that authorised it is on the document',
+     /authority SWR-ABC/.test(group),
+     'the document and the mandate have to be readable against each other years later');
+  ok('the signer is said not to be personally liable',
+     /not in their personal capacity/.test(group) && /not personally\s+liable/.test(group),
+     'a member who taps Invest for a fifteen-person group is not the borrower');
+  ok('and the group is said to need more than one member to commit it',
+     /no single member may commit the group/.test(group));
+
+  /* A trust and a minor's account had exactly the same defect. */
+  const trust = A.renderAgreement({ ...facts, account: {
+    id: 'SA-8', name: 'Dlamini Family Trust', type: 'trust', reg_number: 'IT1234/2020' } });
+  ok('a trust is the investor on its own agreement, not its trustee',
+     /<th>Investor<\/th><td>Dlamini Family Trust<\/td>/.test(trust) && /Trust/.test(trust));
+  ok('and a stokvel-only mandate line is not put on it',
+     !/no single member may commit/.test(trust),
+     'a trust is bound by its deed, not by a stokvel mandate');
+}
+
 console.log('\nthe version moved with the wording');
 {
   /* Pinned deliberately. When the wording changes again this check FAILS, and
      the fix is to bump the template and then this line — which is the moment
      somebody is forced to ask whether the version was bumped. */
-  const EXPECTED = { standard: 'v3', eif_murabaha: 'v4', eif_ijara: 'v4', eif_mudarabah: 'v4' };
+  /* Bumped when the parties table learned to name an ACCOUNT as the
+     Investor. That is wording on the one section that says who the contract
+     is with, so every template moved — the pin is here so the next change
+     to it has to be deliberate too. */
+  const EXPECTED = { standard: 'v4', eif_murabaha: 'v5', eif_ijara: 'v5', eif_mudarabah: 'v5' };
   for (const [key, want] of Object.entries(EXPECTED)) {
     ok(`${key} is at ${want}`, A.TEMPLATES[key] && A.TEMPLATES[key].version === want,
        `found ${A.TEMPLATES[key] && A.TEMPLATES[key].version}`);

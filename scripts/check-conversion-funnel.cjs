@@ -30,8 +30,12 @@ const { execFileSync } = require('child_process');
 
 const ROOT  = path.join(__dirname, '..');
 const ADMIN = fs.readFileSync(path.join(ROOT, 'admin', 'js', 'admin.js'), 'utf8');
-const CHROME = ['/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
-                '/opt/pw-browsers/chromium/chrome-linux/chrome'].find(p => fs.existsSync(p));
+const CHROME = require('./lib/chromium.cjs').findChromium();
+/* The probe's answer comes back out through innerHTML, where the
+   non-breaking spaces en-ZA puts between thousands are serialised as
+   &nbsp;. Normalised before parsing, so every assertion below is
+   written against "R 1 704,00" with ordinary spaces. */
+const { readProbe } = require('./lib/rendered.cjs');
 
 let pass = 0, fail = 0;
 const ok = (name, cond, detail) => {
@@ -161,8 +165,7 @@ try {
 const m = dom.match(/id="probe">([\s\S]*?)<\/div>/);
 let r = null;
 try {
-  r = JSON.parse((m ? m[1] : '').replace(/&quot;/g, '"').replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'"));
+  r = readProbe(m ? m[1] : '');
 } catch (_) {}
 
 console.log('\nthe funnel renders');

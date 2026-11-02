@@ -97,10 +97,14 @@ function liftClaimSql() {
            VALUES ($1,$2,$3,$4,'standard',$5,$5,0,'standard','v1',$6,NOW())`,
           [id, 'AGR-T-' + id.slice(-8), o.investor, o.pool, o.cents, o.status || 'signed']
         );
+        if (o.sub_account) {
+          await db.query('UPDATE investment_agreements SET sub_account_id=$2 WHERE id=$1',
+                         [id, o.sub_account]);
+        }
         return id;
       };
-      const claim = (investor, poolId, required, invId) =>
-        db.query(CLAIM, [investor, poolId, Math.round(required * 100), invId]);
+      const claim = (investor, poolId, required, invId, subAccount) =>
+        db.query(CLAIM, [investor, poolId, Math.round(required * 100), invId, subAccount || null]);
 
       const A = await mk({ investor: 'INV-A', pool: 'POOL-A', cents: 100000 });
 
@@ -111,6 +115,37 @@ function liftClaimSql() {
       const second = await claim('INV-A', 'POOL-A', 1000, 'INVST-2');
       ok('and cannot be claimed a second time', second.rows.length === 0,
          'one signature funded two investments');
+
+      /* THE ACCOUNT IS PART OF THE MATCH.
+
+         This matched investor, pool and amount only. A stokvel's investment
+         is placed by a member, under their own investor_id, from the group's
+         sub-account — so a signature that member gave for their OWN R1 000
+         into a pool would fund the GROUP's R1 000 into the same pool. The
+         document would name one account and the money would leave another,
+         which is the defect this work is about, on the funding side rather
+         than the drafting side.
+
+         Each case gets its own AMOUNT so that only the agreement under test
+         can satisfy the claim. The first draft of this created a personal
+         agreement and then asserted a personal claim found nothing, which
+         fails for the honest reason that it found the one just created. */
+      const GROUP_ONLY = 777700, PERSONAL_ONLY = 888800;
+
+      await mk({ investor: 'INV-A', pool: 'POOL-A', cents: GROUP_ONLY, sub_account: 'SA-1' });
+      ok('a personal investment cannot claim a sub-account\u2019s signature',
+         (await claim('INV-A', 'POOL-A', GROUP_ONLY / 100, 'INVST-X1')).rows.length === 0,
+         'the agreement names the group; the money would leave the person');
+      ok('and that signature funds the account it was given for',
+         (await claim('INV-A', 'POOL-A', GROUP_ONLY / 100, 'INVST-X2', 'SA-1')).rows.length === 1);
+
+      const personalOnly = await mk({ investor: 'INV-A', pool: 'POOL-A', cents: PERSONAL_ONLY });
+      ok('a sub-account\u2019s investment cannot claim a personal signature',
+         (await claim('INV-A', 'POOL-A', PERSONAL_ONLY / 100, 'INVST-X3', 'SA-1')).rows.length === 0,
+         'a NULL sub_account_id is a value in this match, not a wildcard');
+      ok('and the personal one is still there for its own investment',
+         (await claim('INV-A', 'POOL-A', PERSONAL_ONLY / 100, 'INVST-X4')).rows.length === 1,
+         JSON.stringify(personalOnly));
 
       const { rows: [after] } = await db.query(
         `SELECT status, investment_id, funded_at FROM investment_agreements WHERE id=$1`, [A]);

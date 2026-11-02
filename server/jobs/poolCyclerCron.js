@@ -37,7 +37,7 @@
    ═══════════════════════════════════════════════════════════ */
 'use strict';
 
-const cron = require('node-cron');
+const cron = require('./_watched');
 const pool = require('../db/pool');
 
 /* The business day — and the one timezone this job reasons in.

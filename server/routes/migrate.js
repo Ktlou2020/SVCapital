@@ -7,6 +7,7 @@ const jwt          = require('jsonwebtoken');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const pool         = require('../db/pool');
 const emailService = require('../services/email');
+const { recordTransaction, actorFromRequest } = require('../services/ledger');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
@@ -355,18 +356,18 @@ router.post('/run',
     const txResult = await inBatches(
       transactions.filter(tx => tx._id && tx.userAccountNumber),
       async tx => {
-        await pool.query(`
-          INSERT INTO transactions
-            (id, investor_id, type, amount, status, reference, description, transaction_date)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-          ON CONFLICT (id) DO NOTHING
-        `, [
-          `TXN-MIGR-${tx._id}`, tx.userAccountNumber,
-          TX_TYPE_MAP[tx.type]||'deposit', parseFloat(tx.amount)||0,
-          TX_STATUS_MAP[tx.status]||'completed', tx.txRef||tx._id,
-          `${tx.investment?.name||tx.type||''}`.trim()||'Migrated transaction',
-          tx.dateCreated ? new Date(tx.dateCreated) : new Date(),
-        ]);
+        /* An import is somebody's decision too: these rows enter a live
+           book, and the staff member who ran the import is who to ask
+           about them. */
+        await recordTransaction(pool, {
+          id: `TXN-MIGR-${tx._id}`, investorId: tx.userAccountNumber,
+          type: TX_TYPE_MAP[tx.type] || 'deposit',
+          amount: parseFloat(tx.amount) || 0,
+          status: TX_STATUS_MAP[tx.status] || 'completed',
+          reference: tx.txRef || tx._id,
+          description: `${tx.investment?.name||tx.type||''}`.trim() || 'Migrated transaction',
+          transactionDate: tx.dateCreated ? new Date(tx.dateCreated) : new Date(),
+        }, actorFromRequest(req), { onConflict: 'id' });
       }
     );
     counts.transactions = txResult.ok;

@@ -19,6 +19,7 @@
 
 const fs   = require('fs');
 const path = require('path');
+const { transactionsFixtureDDL } = require('../services/ledger');
 const ROOT = path.join(__dirname, '..', '..');
 
 let pass = 0, fail = 0;
@@ -45,7 +46,7 @@ console.log('\nthe rule is written once, and the money is cash not accrual');
   ok('the reference is one per investment per year',
      /ANN-\$\{item\.investmentId\}-Y\$\{item\.yearIndex\}/.test(svc));
   ok('the insert is the guard, and it comes first',
-     /ON CONFLICT \(reference\) DO NOTHING[\s\S]{0,400}if \(!rowCount\) return/.test(svc),
+     /onConflict: 'reference'[\s\S]{0,200}if \(!written\) return/.test(svc),
      'crediting first and inserting second double-pays anything that runs twice');
   ok('a year with no posted rate pays nothing',
      /if \(item\.rate == null\) return \{ paid: false/.test(svc),
@@ -188,11 +189,10 @@ async function schema() {
     CREATE TABLE investments (id TEXT PRIMARY KEY, investor_id TEXT, sub_account_id TEXT,
       pool_id TEXT, product_type TEXT, amount NUMERIC(18,2), status TEXT,
       start_date DATE, end_date DATE, term_months INT);
-    CREATE TABLE transactions (id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      investor_id TEXT, sub_account_id TEXT, investment_id TEXT, type TEXT,
-      amount NUMERIC(18,2), status TEXT, reference TEXT, description TEXT,
-      transaction_date TIMESTAMPTZ, created_at TIMESTAMPTZ DEFAULT NOW(),
-      updated_at TIMESTAMPTZ DEFAULT NOW());
+    /* GENERATED from the single writer's own column list, not typed out.
+       Written by hand it fell behind twice — each time failing with
+       "column does not exist", which reads like a product bug and is not. */
+    ${transactionsFixtureDDL()};
     CREATE UNIQUE INDEX idx_txn_ref ON transactions(reference);
     CREATE TABLE pool_annual_returns (pool_id TEXT, year_index INT, rate NUMERIC(8,4),
       note TEXT, posted_by TEXT, posted_at TIMESTAMPTZ DEFAULT NOW(),

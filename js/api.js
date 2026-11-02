@@ -445,21 +445,103 @@ const API = {
    ═══════════════════════════════════════════════ */
 
 const Utils = {
-  /* Format South African Rand */
+  /* ───────────────────────────────────────────────────────────────────
+     MONEY, WRITTEN THE WAY THE PEOPLE READING IT WRITE IT.
+
+     This formatted in en-US — R170,000.00 — while every statement, tax
+     certificate and generated document on the platform used en-ZA:
+     R 170 000,00. The same balance, two notations, depending on whether
+     the client was looking at the screen or at the PDF of the screen.
+
+     That is not a matter of taste. IN SOUTH AFRICA THE COMMA IS THE
+     DECIMAL SEPARATOR, so "R170,000.00" is genuinely ambiguous to the
+     person it is for — read locally it says a hundred and seventy rand.
+     On a platform whose whole job is telling somebody how much money they
+     have, that is the one thing that must never be ambiguous.
+
+     en-ZA groups thousands with a NON-BREAKING space, which is also why
+     "R 170 000,00" never breaks across two lines in a printed statement.
+     The space after the R matches what the documents have always done, so
+     the documents are unchanged and the screens come to meet them.
+
+     Every surface goes through here: 516 call sites, one definition. */
   rand(amount, decimals = 2) {
-    if (amount == null || isNaN(amount)) return 'R0.00';
-    return 'R' + Number(amount).toLocaleString('en-US', {
+    if (amount == null || isNaN(amount)) return Utils.rand(0, decimals);
+    return 'R ' + Number(amount).toLocaleString('en-ZA', {
       minimumFractionDigits: decimals,
       maximumFractionDigits: decimals
     });
   },
 
-  /* Abbreviated Rand for compact tiles — R61.1M, R1.2B, R950K */
+  /* ───────────────────────────────────────────────────────────────────
+     A CHART THAT CANNOT TAKE THE PAGE DOWN WITH IT.
+
+     The portal loads five scripts from a CDN — Chart.js, FontAwesome,
+     QRCode, jsPDF and its autotable plugin — and twenty-four of the
+     twenty-six `new Chart(` call sites assumed the first of them had
+     arrived. Run with the CDN unreachable, which is a normal morning on a
+     South African mobile connection, this is what happened:
+
+       loadPortalData error (attempt 1): ReferenceError: Chart is not defined
+           at renderPortfolioTrendChart
+
+     The throw was inside loadPortalData, so it aborted THE ENTIRE
+     DASHBOARD — balances, investments, activity, all of it — retried,
+     failed again, and showed the client "Server is waking up, this can
+     take up to 30 seconds". The server was up the whole time. A decorative
+     chart library took down the portfolio and then blamed the backend.
+
+     So every chart goes through here. No Chart, no exception: the canvas
+     is replaced with a line saying the chart could not load, which is both
+     true and better than the blank white rectangle the allocation panel
+     rendered as. A chart failing is now a chart failing. */
+  chart(canvas, config) {
+    const el = typeof canvas === 'string' ? document.getElementById(canvas) : canvas;
+    if (!el) return null;
+
+    if (typeof Chart === 'undefined') {
+      Utils._chartUnavailable(el);
+      return null;
+    }
+    try {
+      return new Chart(el, config);
+    } catch (err) {
+      /* A bad dataset must not be fatal either. The figures this chart was
+         drawing are on the page already as numbers; the picture of them is
+         the part that can be missing. */
+      console.warn('[chart] could not render:', err && err.message);
+      Utils._chartUnavailable(el);
+      return null;
+    }
+  },
+
+  /* Said in place of the chart, rather than leaving the hole. */
+  _chartUnavailable(el) {
+    try {
+      if (!el.parentElement || el.dataset.chartFallback) return;
+      el.dataset.chartFallback = '1';
+      const note = document.createElement('div');
+      note.className = 'chart-unavailable';
+      note.setAttribute('role', 'status');
+      note.style.cssText = 'display:flex;align-items:center;justify-content:center;'
+        + 'min-height:120px;padding:18px;text-align:center;font-size:0.8rem;'
+        + 'color:var(--text-muted,#6b7280);line-height:1.5';
+      note.textContent = 'This chart could not load. The figures it draws are '
+        + 'on this page as numbers.';
+      el.style.display = 'none';
+      el.parentElement.insertBefore(note, el);
+    } catch (_) { /* a fallback that throws is worse than no fallback */ }
+  },
+
+  /* Abbreviated Rand for compact tiles — R61,1M, R1,2B, R950K.
+     The decimal separator is a comma here too: a tile reading R61.1M beside
+     a figure reading R61 100 000,00 is the same inconsistency in miniature. */
   randShort(amount) {
     const n = Number(amount) || 0;
-    if (n >= 1e9)  return 'R' + (n / 1e9).toFixed(1) + 'B';
-    if (n >= 1e6)  return 'R' + (n / 1e6).toFixed(1) + 'M';
-    if (n >= 1e3)  return 'R' + (n / 1e3).toFixed(1) + 'K';
+    const one = v => v.toFixed(1).replace('.', ',');
+    if (n >= 1e9)  return 'R' + one(n / 1e9) + 'B';
+    if (n >= 1e6)  return 'R' + one(n / 1e6) + 'M';
+    if (n >= 1e3)  return 'R' + one(n / 1e3) + 'K';
     return 'R' + n.toFixed(0);
   },
 

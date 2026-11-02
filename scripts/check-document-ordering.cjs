@@ -40,8 +40,12 @@ const ROOT  = path.join(__dirname, '..');
    implementation, so the console and the portal cannot drift. This reads
    them from where they now live. */
 const ADMIN = fs.readFileSync(path.join(ROOT, 'js', 'investor-documents.js'), 'utf8');
-const CHROME = ['/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
-                '/opt/pw-browsers/chromium/chrome-linux/chrome'].find(p => fs.existsSync(p));
+const CHROME = require('./lib/chromium.cjs').findChromium();
+/* The probe's answer comes back out through innerHTML, where the
+   non-breaking spaces en-ZA puts between thousands are serialised as
+   &nbsp;. Normalised before parsing, so every assertion below is
+   written against "R 1 704,00" with ordinary spaces. */
+const { readProbe } = require('./lib/rendered.cjs');
 
 /* The REAL Utils from js/api.js, not a hand-written stand-in.
 
@@ -109,8 +113,7 @@ document.getElementById('probe').textContent = JSON.stringify(out);
 
   const m = dom.match(/id="probe">([\s\S]*?)<\/div>/);
   try {
-    return JSON.parse((m ? m[1] : '').replace(/&quot;/g, '"').replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'"));
+    return readProbe(m ? m[1] : '');
   } catch (_) { return null; }
 }
 

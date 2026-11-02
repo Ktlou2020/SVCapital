@@ -78,13 +78,44 @@ console.log('\nthere is one support number, and every link uses it');
   ok(`all ${found.length} WhatsApp links use ${NUMBER}`, wrong.length === 0,
      wrong.map(w => `${w.rel} → ${w.digits}`).join('\n      '));
 
-  /* The app shell is built from mobile/src; a number changed in one and not
-     rebuilt into the other ships the old one to every phone. */
-  const src = found.filter(f => f.rel.startsWith('mobile/src/'));
-  const www = found.filter(f => f.rel.startsWith('mobile/www/'));
+  /* The app shell is a BUILD OUTPUT; a number changed in a source and not
+     rebuilt ships the old one to every phone.
+
+     Each www file is paired with the file it was actually built from, which
+     is not always under mobile/src: www/index.html comes from
+     portal/index.html with the mobile/src override applied on top, and
+     www/js/ comes from the shared js/ at the root. Comparing the two trees
+     as flat lists held only while every link happened to live in a file
+     that exists in both — the moment one appeared in shared js/ the counts
+     could not match, and the check failed on a build that was correct. */
+  const sourceOf = (rel) => {
+    const tail = rel.slice('mobile/www/'.length);
+    for (const cand of [`mobile/src/${tail}`, tail, `portal/${tail}`]) {
+      if (fs.existsSync(path.join(ROOT, cand))) return cand;
+    }
+    return null;
+  };
+  const digitsIn = (rel) => {
+    const text = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+    return [...text.matchAll(LINK)].map(m => m[1]);
+  };
+  /* Walked from the BUILT tree on disk, not from the files that happen to
+     carry a link: a build that dropped the link altogether leaves a www
+     file with none, and a list of files-with-links would simply not
+     mention it. */
+  const built = pages(path.join(ROOT, 'mobile', 'www'))
+    .map(rel => ({ rel, src: sourceOf(rel) }))
+    .filter(f => digitsIn(f.rel).length || (f.src && digitsIn(f.src).length));
+  const orphans = built.filter(f => !f.src);
+  const stale   = built.filter(f => f.src
+    && digitsIn(f.src).join(',') !== digitsIn(f.rel).join(','));
   ok('and the built app shell matches its source',
-     src.length === www.length && src.every((s, i) => s.digits === www[i].digits),
-     `src ${JSON.stringify(src.map(s => s.digits))} vs www ${JSON.stringify(www.map(w => w.digits))}`);
+     built.length > 0 && !orphans.length && !stale.length,
+     orphans.length
+       ? `built with no source: ${orphans.map(f => f.rel).join(', ')}`
+       : stale.map(f => `${f.rel} ${JSON.stringify(digitsIn(f.rel))} was built from `
+           + `${f.src} ${JSON.stringify(digitsIn(f.src))}`).join('\n      ')
+         || 'nothing in mobile/www carries the link — run node mobile/scripts/build.js');
 }
 
 console.log('\nand it is a number WhatsApp can dial');

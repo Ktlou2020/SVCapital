@@ -9,9 +9,10 @@
    ═══════════════════════════════════════════════════════════ */
 'use strict';
 
-const cron         = require('node-cron');
+const cron         = require('./_watched');
 const pool         = require('../db/pool');
 const emailService = require('../services/email');
+const { recordTransaction, systemActor } = require('../services/ledger');
 
 async function runPayoutProcessing() {
   console.log('[payoutCron] Running payout processing…');
@@ -53,12 +54,10 @@ async function runPayoutProcessing() {
           payoutAmount = principal + actualReturn;
 
           // Record payout transaction (principal + returns)
-          await client.query(
-            `INSERT INTO transactions
-               (id, investor_id, type, amount, status, reference, description, transaction_date, created_at)
-             VALUES (gen_random_uuid(), $1, 'payout', $2, 'completed', $3, $4, NOW(), NOW())`,
-            [investment.investor_id, payoutAmount, reference, description]
-          );
+          await recordTransaction(client, {
+            investorId: investment.investor_id, type: 'payout',
+            amount: payoutAmount, reference, description,
+          }, systemActor('payoutCron'));
 
           // Credit full payout to wallet
           await client.query(
@@ -81,12 +80,10 @@ async function runPayoutProcessing() {
           payoutAmount = actualReturn;
 
           // Record payout transaction (returns only)
-          await client.query(
-            `INSERT INTO transactions
-               (id, investor_id, type, amount, status, reference, description, transaction_date, created_at)
-             VALUES (gen_random_uuid(), $1, 'payout', $2, 'completed', $3, $4, NOW(), NOW())`,
-            [investment.investor_id, payoutAmount, reference, description]
-          );
+          await recordTransaction(client, {
+            investorId: investment.investor_id, type: 'payout',
+            amount: payoutAmount, reference, description,
+          }, systemActor('payoutCron'));
 
           // Credit returns only to wallet
           await client.query(

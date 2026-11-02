@@ -19,6 +19,7 @@ const smsService   = require('../services/sms');
 const audit        = require('../services/audit');
 const { validateStoredFile } = require('../services/uploadedFile');
 const { staffRecipients, warnIfNotUsers } = require('../services/staffRecipients');
+const { recordTransaction, actorFromRequest } = require('../services/ledger');
 
 /* ─── Lazy-load push service (graceful if web-push not installed yet) ─── */
 let _pushSvc = null;
@@ -193,6 +194,38 @@ const ADMIN_ONLY_TABLES = new Set([
   'fica_checks', 'accepted_client_documents',
   'compliance_calendar',
   'investor_notes',
+  /* A stokvel's roster: who is in it, their role, and whether the
+     constitution names them a signatory. An investor reads their own
+     memberships and their own group's roster through /api/stokvels, which
+     checks that they are IN the group. Through this generic reader there is
+     no such check — a table with no INVESTOR_COLS entry is readable by every
+     signed-in investor — so every stokvel's membership on the platform would
+     be one request away. */
+  'stokvel_members',
+  /* The mandate and the votes cast against it. Same reason as the roster:
+     unlisted means readable by every signed-in investor, and an approval
+     record is the audit trail for money. Members read their own group's
+     requests through /api/stokvels. */
+  'stokvel_withdrawal_requests', 'stokvel_request_approvals',
+  /* Invitations carry a contact for somebody who may not even be a user
+     yet — an email address and a cell number, with a name beside them.
+     Unlisted here, the generic reader would hand every signed-in investor a
+     contact list of everybody any stokvel has ever asked to join. Members
+     read their own group's invitations through /api/stokvels, which masks
+     the contact. */
+  'stokvel_invites',
+  /* What each member's share is, and what the group owes somebody who has
+     left. Money, per person, for everybody in the group — unlisted here the
+     generic reader would hand every signed-in investor every stokvel's
+     internal split. Members read their own group's through /api/stokvels. */
+  'stokvel_allocations', 'stokvel_exit_debts',
+  /* A group's distributions and what each member was paid in one. Members
+     read their own through /api/stokvels; unlisted here the generic reader
+     would hand every signed-in investor every stokvel's payout history. */
+  'stokvel_payouts', 'stokvel_payout_lines',
+  /* Who owes what. An arrears list is the most sensitive thing a stokvel
+     holds about its members; it is theirs to see, not every investor's. */
+  'stokvel_contributions', 'stokvel_contribution_schedules',
   /* Reads are staff-only so an unpublished draft is not visible to any
      signed-in investor who asks for the table. The public site never touches
      this API — /insights is server-rendered and queries the database directly,
@@ -290,6 +323,14 @@ const STRIP_COLS = {
   investors: ['totp_secret', 'totp_temp_secret'],
   users: ['password_hash', 'staff_pin', 'totp_secret', 'totp_temp_secret'],
   employees: ['pin_hash', 'id_number', 'login_attempts', 'login_locked_until'],
+  /* Who moved the money is recorded on every transaction, and the reader
+     here is SELECT *. A client asking for their own transactions would
+     otherwise be handed the email address and the IP of the staff member
+     who credited them — recording the actor must not become a way to
+     publish our own people's details. actor_kind stays: a client is
+     entitled to know whether a row was their own doing, ours, or an
+     unattended job, and it names nobody. */
+  transactions: ['actor_id', 'actor_email', 'actor_role', 'actor_ip'],
 };
 
 const ADMIN_ROLES = new Set(['admin', 'director', 'fund_manager']);
@@ -302,6 +343,8 @@ function stripSensitive(table, rows, ownEmpId, userRole) {
     cols.forEach(c => {
       // pin_hash is always stripped — never exposed.
       if (c === 'pin_hash') { delete clean[c]; return; }
+      // The actor on a transaction: staff see it, nobody else does.
+      if (c.startsWith('actor_') && ADMIN_ROLES.has(userRole)) return;
       // id_number: visible to the employee themselves and to admin/director roles.
       if (c === 'id_number' && table === 'employees') {
         if ((ownEmpId && row.id === ownEmpId) || ADMIN_ROLES.has(userRole)) return;
@@ -1150,6 +1193,11 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
          somewhere sensible. Nothing in this repository sends it any more. */
       const feeInclusive = !!body.fee_inclusive;
       delete body.fee_inclusive; // not a DB column
+      /* The stokvel authority this investment is made under. Read by the
+         mandate gate below and never written: it is a permission slip, not
+         a column on the investment. */
+      const _authorityId = body.authority_id;
+      delete body.authority_id;
 
       const isReinvestment = !!body.is_reinvestment;
       let poolAmount, platformFee, required;
@@ -1213,6 +1261,10 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
         : (req.user.role === 'investor' ? 'your wallet' : "this investor's wallet");
 
       const _invClient = await pool.connect();
+      /* Carried out of the transaction block: the signatories who approved
+         this are told after the commit, never inside it. */
+      let _spentAuthority = null;
+      let _reconcileStokvel = null;
       try {
         await _invClient.query('BEGIN');
         let walletBal = 0;
@@ -1223,10 +1275,10 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
           const _asInvestor = req.user.role === 'investor';
           const { rows: sa } = _asInvestor
             ? await _invClient.query(
-                'SELECT wallet_balance FROM sub_accounts WHERE id=$1 AND parent_investor_id=$2 FOR UPDATE',
+                'SELECT wallet_balance, account_type, stokvel_quorum FROM sub_accounts WHERE id=$1 AND parent_investor_id=$2 FOR UPDATE',
                 [body.sub_account_id, req.user.investorId])
             : await _invClient.query(
-                'SELECT wallet_balance FROM sub_accounts WHERE id=$1 FOR UPDATE',
+                'SELECT wallet_balance, account_type, stokvel_quorum FROM sub_accounts WHERE id=$1 FOR UPDATE',
                 [body.sub_account_id]);
           if (!sa[0]) {
             await _invClient.query('ROLLBACK');
@@ -1234,6 +1286,47 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
               error: _asInvestor ? 'Forbidden.' : 'Sub-account not found.' });
           }
           walletBal = parseFloat(sa[0].wallet_balance) || 0;
+
+          /* ── The mandate, for investments ────────────────────────────
+             Money going into a pool leaves the group wallet exactly as a
+             withdrawal does, and until now only withdrawals were gated —
+             so a chairperson who could not take R50 000 out could still
+             put it into a seven-year pool on their own.
+
+             Approved against a POOL rather than a bank account, and the
+             matching is the shared one: approving an amount and letting
+             whoever carries it out choose the product is the same hole as
+             letting them choose the account.
+
+             Staff are not exempt. A late investment placed as a correction
+             still moves a group's money, and "the console did it" is not a
+             mandate. If a correction genuinely needs to bypass this, it
+             needs an authority raised for it like anybody else.
+             ──────────────────────────────────────────────────────────── */
+          if (sa[0].account_type === 'stokvel' && !isReinvestment) {
+            const mandate = require('../services/stokvelMandate');
+            const { authority, error } = await mandate.authorityFor(
+              _invClient, { id: body.sub_account_id, stokvel_quorum: sa[0].stokvel_quorum },
+              _authorityId,
+              /* poolAmount, not what leaves the wallet. A signatory who
+                 approves "R1 000 into the cattle pool" means R1 000 reaches
+                 the pool; the 1% fee on top is documented platform
+                 behaviour and the same on every investment. Matching on the
+                 wallet spend would refuse the figure they actually agreed
+                 to. */
+              { kind: 'investment', amount: poolAmount, poolId: body.pool_id });
+            if (error) {
+              await _invClient.query('ROLLBACK');
+              return res.status(/No such authority/.test(error) ? 404 : 403).json({ error });
+            }
+            await mandate.consume(_invClient, authority, body.id || null);
+            _spentAuthority = authority.id;
+            /* Reconciled after the wallet moves, below: investing does not
+               change anybody's share — the money goes from cash to an
+               investment, both of which net assets counts — but the 1% fee
+               is a real cost and belongs to the members pro-rata. */
+            _reconcileStokvel = body.sub_account_id;
+          }
         } else {
           const { rows: iv } = await _invClient.query(
             'SELECT wallet_balance FROM investors WHERE id = $1 FOR UPDATE', [body.investor_id]
@@ -1258,6 +1351,13 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
         if (req.user.role === 'investor' && !isReinvestment &&
             require('../services/agreements').agreementsEnabled()) {
           const _reqCents = Math.round(required * 100);
+          /* THE ACCOUNT IS PART OF THE MATCH. This matched investor, pool
+             and amount only, so a signature given for a personal R1 000
+             into a pool could fund a STOKVEL's R1 000 into the same pool,
+             and the other way round: the document would name one account
+             and the money would leave another. A NULL sub_account_id is
+             itself a value here — a personal agreement funds a personal
+             investment and nothing else. */
           const { rows: _agr } = await _invClient.query(
             `UPDATE investment_agreements
                 SET status = 'funded', funded_at = NOW(), investment_id = $4
@@ -1265,11 +1365,13 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
                 SELECT id FROM investment_agreements
                  WHERE investor_id = $1 AND pool_id = $2
                    AND amount_cents = $3 AND status = 'signed'
+                   AND COALESCE(sub_account_id, '') = COALESCE($5, '')
                  ORDER BY signed_at ASC
                  LIMIT 1
                  FOR UPDATE SKIP LOCKED)
             RETURNING id, agreement_no`,
-            [body.investor_id, body.pool_id || null, _reqCents, body.id || null]
+            [body.investor_id, body.pool_id || null, _reqCents, body.id || null,
+             body.sub_account_id || null]
           );
           if (!_agr.length) {
             await _invClient.query('ROLLBACK');
@@ -1304,15 +1406,37 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
         // For fee_inclusive: record the exact fee now so the hook's ON CONFLICT is a no-op
         if (feeInclusive && !isReinvestment && platformFee > 0 && body.id) {
           const feeId = `FEE-${body.id}`;
-          await _invClient.query(
-            `INSERT INTO transactions (id, investor_id, sub_account_id, type, amount, status, reference, description, transaction_date, created_at, updated_at)
-             VALUES ($1, $2, $3, 'fee', $4, 'completed', $5, '1% platform fee on investment', NOW(), NOW(), NOW())
-             ON CONFLICT (id) DO NOTHING`,
-            [feeId, body.investor_id, body.sub_account_id || null, platformFee, feeId]
-          );
+          await recordTransaction(_invClient, {
+            id: feeId, investorId: body.investor_id,
+            subAccountId: body.sub_account_id || null, type: 'fee',
+            amount: platformFee, reference: feeId,
+            description: '1% platform fee on investment',
+          }, actorFromRequest(req), { onConflict: 'id' });
+        }
+        if (_reconcileStokvel) {
+          /* Inside the transaction, before the commit: a fee charged and a
+             share ledger that has not heard about it are the same bug seen
+             from either side. */
+          try {
+            await require('../services/stokvelShares')
+              .reconcile(_invClient, _reconcileStokvel, { reason: 'Platform fee on an investment', reference: body.id || null });
+          } catch (e) { console.warn('[tables] stokvel reconcile failed:', e.message); }
         }
         await _invClient.query('COMMIT');
         _investmentWalletDeducted = true;
+
+        /* The authority they granted has been spent, and on what. An
+           approval nobody hears the end of asks the signatories to trust
+           the platform rather than to authorise something. Fired after the
+           commit and never awaited — a mail outage must not unwind an
+           investment that has already taken the money. */
+        if (_spentAuthority) {
+          let _n = null;
+          try { _n = require('../services/stokvelNotify'); } catch (_) {}
+          if (_n) _n.spent({ groupId: body.sub_account_id,
+                             authorityId: _spentAuthority, reference: body.id || null })
+                   .catch(e => console.warn('[tables] stokvel notify failed:', e.message));
+        }
       } catch (e) {
         await _invClient.query('ROLLBACK');
         throw e;
@@ -1482,6 +1606,35 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
       );
       rows = r.rows;
     }
+    /* ── A new stokvel's chairperson is a MEMBER of it ──────────────
+       Nothing created a stokvel_members row for whoever opened the
+       account, so their access came from sub_accounts.parent_investor_id
+       alone. That is the fallback that let a chairperson who LEFT keep
+       seeing the group's money: their membership said exited and the
+       ownership column still said yes.
+
+       Making the owner a member closes it at the root, because membership
+       can then be the single answer to "is this person in this stokvel".
+
+       NOT a signatory. Signing power is the one thing this platform never
+       confers implicitly — an invitation cannot grant it either — and the
+       mandate is captured deliberately, with the quorum, by staff against
+       the group's constitution. */
+    if (table === 'sub_accounts' && rows[0] && rows[0].account_type === 'stokvel'
+        && rows[0].parent_investor_id) {
+      try {
+        await pool.query(
+          `INSERT INTO stokvel_members
+             (id, sub_account_id, investor_id, role, is_signatory, status, joined_at)
+           VALUES ($1,$2,$3,'chairperson',false,'active',NOW())
+           ON CONFLICT (sub_account_id, investor_id) DO NOTHING`,
+          ['SM-' + require('crypto').randomUUID().replace(/-/g, '').slice(0, 14).toUpperCase(),
+           rows[0].id, rows[0].parent_investor_id]);
+      } catch (e) {
+        console.error('[tables] stokvel chairperson row failed:', e.message);
+      }
+    }
+
     const [clean] = stripSensitive(table, rows, req.user?.empId, req.user?.role);
     res.status(201).json(clean);
 
@@ -1730,12 +1883,12 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
           // Record the platform fee — skipped for reinvestments (no fee charged)
           if (!isReinvestment) {
             const feeId = `FEE-${clean.id}`;
-            await pool.query(
-              `INSERT INTO transactions (id, investor_id, sub_account_id, type, amount, status, reference, description, transaction_date, created_at)
-               VALUES ($1, $2, $3, 'fee', $4, 'completed', $5, '1% platform fee on investment', NOW(), NOW())
-               ON CONFLICT (id) DO NOTHING`,
-              [feeId, clean.investor_id, clean.sub_account_id || null, platformFee, feeId]
-            );
+            await recordTransaction(pool, {
+              id: feeId, investorId: clean.investor_id,
+              subAccountId: clean.sub_account_id || null, type: 'fee',
+              amount: platformFee, reference: feeId,
+              description: '1% platform fee on investment',
+            }, actorFromRequest(req), { onConflict: 'id' });
           }
 
           // EVA calculation — only on new funds (not reinvestments)
@@ -2560,3 +2713,8 @@ router.delete('/:table/:id', requireAuth, validateTable, async (req, res) => {
 });
 
 module.exports = router;
+/* Exported so a check can exercise the redaction directly rather than
+   asserting on the shape of the source. What matters is what a client is
+   handed, and that is a question only the function can answer. */
+module.exports.stripSensitive = stripSensitive;
+module.exports.STRIP_COLS = STRIP_COLS;

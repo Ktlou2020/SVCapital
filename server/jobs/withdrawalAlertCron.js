@@ -1,5 +1,5 @@
 'use strict';
-const cron         = require('node-cron');
+const cron         = require('./_watched');
 const pool         = require('../db/pool');
 const emailService = require('../services/email');
 const { staffRecipients, warnIfNotUsers, withStandingCopies } = require('../services/staffRecipients');

@@ -9,9 +9,11 @@
 const router       = require('express').Router();
 const pool         = require('../db/pool');
 const { requireAuth, requireRole } = require('../middleware/auth');
+const access = require('../services/withdrawalAccess');
 const emailService = require('../services/email');
 const smsService   = require('../services/sms');
 const audit        = require('../services/audit');
+const { recordTransaction, actorFromRequest } = require('../services/ledger');
 
 /* Lazy-load push service and SSE broadcast */
 let _broadcast = null;
@@ -45,6 +47,10 @@ router.post('/request', requireAuth, async (req, res) => {
     if (sub_account_id) {
       const client = await pool.connect();
       let investor;
+      /* Declared out here so it survives the transaction block: the people
+         who approved this are told after the commit, not inside it. */
+      let _spentAuthority = null;
+      let _reconcileStokvel = null;
       try {
         await client.query('BEGIN');
 
@@ -65,17 +71,83 @@ router.post('/request', requireAuth, async (req, res) => {
           return res.status(400).json({ error: `Insufficient sub-account wallet balance. Available: R${parseFloat(saRow.wallet_balance).toFixed(2)}.` });
         }
 
+        /* ── The mandate ────────────────────────────────────────────────
+           Everything above this point asked whether the caller owns the
+           sub-account. For a stokvel that is the wrong question: the
+           chairperson owns it, and "the chairperson can empty it alone" is
+           the fear the whole product exists to answer.
+
+           So a stokvel withdrawal must quote an authority the signatories
+           granted, and the authority must match what is about to happen —
+           the amount AND the destination. Approving a sum and letting the
+           carrier choose where it lands is not a mandate.
+
+           The request is consumed inside this transaction, so one authority
+           cannot fund two withdrawals even if both are sent at once; the
+           FOR UPDATE below is what makes that true rather than likely.
+           ────────────────────────────────────────────────────────────── */
+        if (saRow.account_type === 'stokvel') {
+          /* The mandate. Everything above asked whether the caller owns the
+             sub-account; for a stokvel that is the wrong question, because
+             the chairperson owns it and "the chairperson can empty it
+             alone" is the fear the product exists to answer.
+
+             The matching lives in services/stokvelMandate so the investment
+             gate in routes/tables.js cannot drift from this one — two
+             answers to "is this authorised" is one answer too many. */
+          const mandate = require('../services/stokvelMandate');
+          const { authority, error } = await mandate.authorityFor(
+            client, saRow, req.body.authority_id,
+            { kind: 'withdrawal', amount: numAmount, bankAccount: bank_account_number });
+          if (error) {
+            await client.query('ROLLBACK');
+            return res.status(/No such authority/.test(error) ? 404 : 403).json({ error });
+          }
+          await mandate.consume(client, authority, reference);
+          /* Remembered for after the commit. The signatories are told the
+             authority they granted has been spent, and on what — an
+             approval nobody hears the end of asks them to trust the
+             platform rather than to authorise something, and this is also
+             the only chance anyone has to notice an authority used in a way
+             they did not expect while it is still recent. */
+          _spentAuthority = authority.id;
+          _reconcileStokvel = sub_account_id;
+        }
+
         const description = `Sub-account withdrawal (${saRow.name})${bank_name ? ` to ${bank_name}` : ''}${bank_account_number ? ` (${bank_account_number})` : ''}`;
-        await client.query(
-          `INSERT INTO transactions (id, investor_id, sub_account_id, type, amount, status, reference, description, notes, created_at, updated_at)
-           VALUES (gen_random_uuid(), $1, $2, 'withdrawal', $3, 'pending', $4, $5, $6, NOW(), NOW())`,
-          [investorId, sub_account_id, numAmount, reference, description, notes || null]
-        );
+        /* Stamped now, honoured later. Wallets bear interest and notice is
+           what pays for it; a set withdrawal date raises the floor further.
+           Writing it on the row means a later change to the notice setting
+           cannot move a date this client has already been given. */
+        const saAvailableAt = await access.availableAt(client, saRow);
+        await recordTransaction(client, {
+          investorId, subAccountId: sub_account_id, type: 'withdrawal',
+          amount: numAmount, status: 'pending', reference, description,
+          notes: notes || null, availableAt: saAvailableAt,
+        }, actorFromRequest(req));
         await client.query(
           'UPDATE sub_accounts SET wallet_balance = wallet_balance - $1, updated_at = NOW() WHERE id = $2',
           [numAmount, sub_account_id]
         );
+        if (_reconcileStokvel) {
+          /* The money has left the group wallet; the share ledger has to
+             hear about it in the same transaction. A withdrawal approved by
+             the signatories is spent on the group's behalf, so it is a cost
+             shared pro-rata — unless it was an exit settlement, which
+             writes its own payout allocation and never reaches here. */
+          try {
+            await require('../services/stokvelShares')
+              .reconcile(client, _reconcileStokvel, { reason: 'Group withdrawal', reference });
+          } catch (e) { console.warn('[withdrawals] stokvel reconcile failed:', e.message); }
+        }
         await client.query('COMMIT');
+
+        if (_spentAuthority) {
+          let n = null;
+          try { n = require('../services/stokvelNotify'); } catch (_) {}
+          if (n) n.spent({ groupId: sub_account_id, authorityId: _spentAuthority, reference })
+                  .catch(e => console.warn('[withdrawals] notify failed:', e.message));
+        }
 
         const { rows: [invRow] } = await pool.query('SELECT * FROM investors WHERE id=$1', [investorId]).catch(() => ({ rows: [] }));
         investor = invRow;
@@ -102,7 +174,12 @@ router.post('/request', requireAuth, async (req, res) => {
       await client.query('BEGIN');
 
       const { rows: [row] } = await client.query(
-        'SELECT id, first_name, last_name, email, wallet_balance, fica_status, kyc_status, status FROM investors WHERE id = $1 FOR UPDATE',
+        /* withdrawal_date is in the list because the access terms are
+           decided from this row. It was not, and the effect was silent: a
+           client who had committed their money until a date got the
+           ordinary 48 hours instead, because an absent column reads as no
+           date rather than as a missing one. */
+        'SELECT id, first_name, last_name, email, wallet_balance, fica_status, kyc_status, status, withdrawal_date FROM investors WHERE id = $1 FOR UPDATE',
         [investorId]
       );
       if (!row) {
@@ -124,12 +201,11 @@ router.post('/request', requireAuth, async (req, res) => {
         });
       }
 
-      await client.query(
-        `INSERT INTO transactions
-           (id, investor_id, type, amount, status, reference, description, notes, created_at, updated_at)
-         VALUES (gen_random_uuid(), $1, 'withdrawal', $2, 'pending', $3, $4, $5, NOW(), NOW())`,
-        [investorId, numAmount, reference, description, notes || null]
-      );
+      const availableAt = await access.availableAt(client, investor);
+      await recordTransaction(client, {
+        investorId, type: 'withdrawal', amount: numAmount, status: 'pending',
+        reference, description, notes: notes || null, availableAt,
+      }, actorFromRequest(req));
 
       await client.query(
         'UPDATE investors SET wallet_balance = wallet_balance - $1, updated_at = NOW() WHERE id = $2',
@@ -185,6 +261,17 @@ router.post('/:txId/approve', requireAuth, requireRole('admin', 'director'), asy
         return res.status(404).json({ error: 'Withdrawal not found or already processed' });
       }
       tx = rows[0];
+
+      /* Notice is only notice if it is checked when the money would move.
+         Refused rather than silently deferred: an admin pressing approve
+         should be told the date, not left wondering why nothing happened.
+         Reject is deliberately NOT gated — a client who changes their mind
+         should not have to wait out a notice period to do it. */
+      const tooEarly = access.blockedUntil(tx.available_at);
+      if (tooEarly) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: tooEarly });
+      }
 
       const { rows: [invRow] } = await client.query(
         `SELECT id, email, first_name, last_name, phone, bank_name FROM investors WHERE id = $1`,

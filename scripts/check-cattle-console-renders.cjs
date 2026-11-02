@@ -25,8 +25,12 @@ const ROOT = path.join(__dirname, '..');
 const SRC  = fs.readFileSync(path.join(ROOT, 'fund', 'js', 'cattle.js'), 'utf8');
 const HTML = fs.readFileSync(path.join(ROOT, 'fund', 'cattle.html'), 'utf8');
 const CSS  = fs.readFileSync(path.join(ROOT, 'fund', 'css', 'cattle.css'), 'utf8');
-const CHROME = ['/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
-                '/opt/pw-browsers/chromium/chrome-linux/chrome'].find(p => fs.existsSync(p));
+const CHROME = require('./lib/chromium.cjs').findChromium();
+/* The probe's answer comes back out through innerHTML, where the
+   non-breaking spaces en-ZA puts between thousands are serialised as
+   &nbsp;. Normalised before parsing, so every assertion below is
+   written against "R 1 704,00" with ordinary spaces. */
+const { readProbe } = require('./lib/rendered.cjs');
 
 let pass = 0, fail = 0;
 const ok = (name, cond, detail) => {
@@ -173,9 +177,7 @@ try {
 const m = dom.match(/id="probe">([\s\S]*?)<\/div>/);
 let r = null;
 try {
-  r = JSON.parse((m ? m[1] : '')
-    .replace(/&quot;/g, '"').replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'"));
+  r = readProbe(m ? m[1] : '');
 } catch (_) { /* reported below */ }
 
 console.log('\nthe console, rendered');
@@ -192,7 +194,7 @@ if (r) {
   ok('and none as NaN', r.nanCount === 0, String(r.nanCount));
 
   ok('the cost ledger shows the amounts it was given', /R\s?240[\s,]?000/.test(r.costsRows),
-     r.costsRows.slice(0, 200));
+     'no 240 000 in: ' + (r.costsRows.match(/R[^<]{0,18}/g) || []).join(' | '));
   ok('and totals them', /240|255/.test(r.costTotal), r.costTotal);
   ok('a cost row names its cycle from the cycle, not from a stored copy',
      r.costsRows.includes('Batch 685 - Agrifund'), r.costsRows.slice(0, 300));

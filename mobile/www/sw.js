@@ -1,5 +1,5 @@
 'use strict';
-const CACHE   = 'svc-portal-v237';
+const CACHE   = 'svc-portal-v252';
 const PRECACHE = [
   './',
   './index.html',
@@ -83,9 +83,12 @@ self.addEventListener('notificationclick', event => {
   const url = event.notification.data?.url || '/portal/';
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      /* Focus alone threw the url away \u2014 see portal/sw.js. The page is
+         told where to go and routes there itself. */
       const match = list.find(c => c.url.includes('/portal'));
-      if (match) return match.focus();
-      return clients.openWindow(url);
+      if (!match) return clients.openWindow(url);
+      match.postMessage({ type: 'svc-open', url });
+      return match.focus();
     })
   );
 });

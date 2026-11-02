@@ -27,10 +27,30 @@ class NotFound extends Error {
   constructor(msg) { super(msg); this.code = 'NOT_FOUND'; }
 }
 
-async function buildAccountStatement(pool, { investorId, from, to }) {
-  if (!investorId || !from || !to) {
-    const e = new Error('investorId, from and to are required'); e.code = 'BAD_REQUEST'; throw e;
+/* ── Statements for a SUB-ACCOUNT ──────────────────────────────────
+   No sub-account had a statement — not a stokvel, a trust, a business or a
+   child's account — because every query here is scoped by investor_id. A
+   stokvel's AGM had nothing to table.
+
+   Scoping, not a second builder: one definition of what moves cash, one set
+   of balances anchored to a wallet, one document. The column each query
+   filters on is the only thing that changes.
+
+   WHEN NO SUB-ACCOUNT IS GIVEN NOTHING CHANGES AT ALL. This service
+   produces live client statements, and an investor's statement includes
+   their sub-accounts' transactions today — rows carry investor_id as well.
+   Narrowing that would silently alter documents clients already have, so
+   the predicate for an investor statement is left exactly as it was, and
+   the check asserts the output is identical. */
+async function buildAccountStatement(pool, { investorId, subAccountId, from, to }) {
+  if ((!investorId && !subAccountId) || !from || !to) {
+    const e = new Error('investorId or subAccountId, and from and to, are required');
+    e.code = 'BAD_REQUEST'; throw e;
   }
+  /* The one knob. $1 is the id in every query below; this says which column
+     it is matched against. */
+  const scopeCol = subAccountId ? 'sub_account_id' : 'investor_id';
+  const scopeId  = subAccountId || investorId;
 
     const fromDt = new Date(from + 'T00:00:00.000Z');
     const toDt   = new Date(to   + 'T23:59:59.999Z');
@@ -39,7 +59,16 @@ async function buildAccountStatement(pool, { investorId, from, to }) {
     }
 
     const [invRes, invstRes, txnRes, openingRes] = await Promise.all([
-      pool.query('SELECT * FROM investors WHERE id = $1 LIMIT 1', [investorId]),
+      subAccountId
+        ? pool.query(
+            `SELECT a.id, a.name, a.account_type, a.wallet_balance, a.sa_reference,
+                    a.stokvel_reg_number, a.parent_investor_id,
+                    p.email, p.id_number, p.phone,
+                    p.street_address, p.suburb, p.address, p.postal_code, p.province
+               FROM sub_accounts a
+               LEFT JOIN investors p ON p.id = a.parent_investor_id
+              WHERE a.id = $1 LIMIT 1`, [scopeId])
+        : pool.query('SELECT * FROM investors WHERE id = $1 LIMIT 1', [scopeId]),
       pool.query(
         `SELECT i.id, i.amount, i.status, i.created_at,
                 COALESCE(i.start_date, i.created_at::date) AS start_date,
@@ -83,23 +112,23 @@ async function buildAccountStatement(pool, { investorId, from, to }) {
           * the period: it began on or before the period ended, and it had not
           * already ended before the period began. An investment with no end
           * date has not ended, so it qualifies on the first test alone. */
-         WHERE i.investor_id = $1
+         WHERE i.${scopeCol} = $1
            AND COALESCE(i.start_date, i.created_at::date) <= $3
            AND (i.end_date IS NULL OR i.end_date >= $2)
          ORDER BY i.created_at ASC`,
-        [investorId, fromDt.toISOString().slice(0,10), toDt.toISOString().slice(0,10)]
+        [scopeId, fromDt.toISOString().slice(0,10), toDt.toISOString().slice(0,10)]
       ),
       // All completed transactions in the period, ordered chronologically
       pool.query(
         `SELECT type, amount, description, reference,
                 COALESCE(transaction_date, created_at) AS txn_date
          FROM transactions
-         WHERE investor_id = $1
+         WHERE ${scopeCol} = $1
            AND status = 'completed'
            AND COALESCE(transaction_date, created_at) >= $2
            AND COALESCE(transaction_date, created_at) <= $3
          ORDER BY COALESCE(transaction_date, created_at) ASC, created_at ASC`,
-        [investorId, fromDt, toDt]
+        [scopeId, fromDt, toDt]
       ),
       // Net cash effect of all completed transactions BEFORE the period, and
       // AFTER it, using the shared CASH_MOVEMENT definition. The first is the
@@ -112,13 +141,13 @@ async function buildAccountStatement(pool, { investorId, from, to }) {
            COALESCE(SUM(${cashMovementSQL()}) FILTER (
              WHERE COALESCE(transaction_date, created_at) > $3), 0) AS after_period
          FROM transactions
-         WHERE investor_id = $1
+         WHERE ${scopeCol} = $1
            AND status = 'completed'`,
-        [investorId, fromDt, toDt]
+        [scopeId, fromDt, toDt]
       ),
     ]);
 
-    if (!invRes.rows[0]) throw new NotFound('Investor not found');
+    if (!invRes.rows[0]) throw new NotFound(subAccountId ? 'Account not found' : 'Investor not found');
 
     const inv = invRes.rows[0];
 
@@ -192,10 +221,103 @@ async function buildAccountStatement(pool, { investorId, from, to }) {
       accrued:     sumTypes('return'),
     };
 
+    /* ── What a STOKVEL's statement needs beyond the cash ──────────
+       The money view above is the same for every account. A stokvel's AGM
+       is asking three further questions, and every one of them is already
+       recorded: who contributed what, what each member's share is, and who
+       approved the money that moved. Read only when it is a stokvel, so no
+       other statement pays for it. */
+    let stokvel = null;
+    if (subAccountId && inv.account_type === 'stokvel') {
+      const shares = require('./stokvelShares');
+      const [contribRes, memberRes, voteRes] = await Promise.all([
+        pool.query(
+          `SELECT c.investor_id, c.period_label, c.amount_due, c.amount_paid,
+                  c.status, c.due_date, i.first_name, i.last_name
+             FROM stokvel_contributions c
+             JOIN investors i ON i.id = c.investor_id
+            WHERE c.sub_account_id = $1 AND c.due_date >= $2 AND c.due_date <= $3
+            ORDER BY c.due_date ASC, i.first_name ASC`,
+          [subAccountId, fromDt.toISOString().slice(0, 10), toDt.toISOString().slice(0, 10)]),
+        pool.query(
+          `SELECT m.investor_id, m.role, m.is_signatory, i.first_name, i.last_name
+             FROM stokvel_members m JOIN investors i ON i.id = m.investor_id
+            WHERE m.sub_account_id = $1 AND m.status = 'active'
+            ORDER BY i.first_name ASC`, [subAccountId]),
+        pool.query(
+          `SELECT r.id, r.kind, r.amount, r.status, r.created_at,
+                  v.decision, v.decided_at AS voted_at,
+                  i.first_name AS voter_first, i.last_name AS voter_last
+             FROM stokvel_withdrawal_requests r
+             LEFT JOIN stokvel_request_approvals v ON v.request_id = r.id
+             LEFT JOIN investors i ON i.id = v.investor_id
+            WHERE r.sub_account_id = $1
+              AND r.created_at >= $2 AND r.created_at <= $3
+            ORDER BY r.created_at ASC, v.decided_at ASC`,
+          [subAccountId, fromDt, toDt]),
+      ]);
+
+      const byId = new Map(memberRes.rows.map(m =>
+        [m.investor_id, [m.first_name, m.last_name].filter(Boolean).join(' ')]));
+      const shareOut = await shares.sharesOf(pool, subAccountId).catch(() => null);
+
+      const approvals = [];
+      for (const row of voteRes.rows) {
+        let entry = approvals.find(a => a.id === row.id);
+        if (!entry) {
+          entry = { id: row.id, kind: row.kind, amount: row.amount,
+                    status: row.status, at: row.created_at, votes: [] };
+          approvals.push(entry);
+        }
+        if (row.decision) {
+          entry.votes.push({
+            name: [row.voter_first, row.voter_last].filter(Boolean).join(' '),
+            decision: row.decision, at: row.voted_at });
+        }
+      }
+
+      stokvel = {
+        name: inv.name,
+        registration: inv.stokvel_reg_number || null,
+        members: memberRes.rows.map(m => ({
+          investor_id: m.investor_id, name: byId.get(m.investor_id),
+          role: m.role, is_signatory: m.is_signatory,
+        })),
+        contributions: contribRes.rows.map(c => ({
+          investor_id: c.investor_id, name: [c.first_name, c.last_name].filter(Boolean).join(' '),
+          period: c.period_label, due: c.amount_due, paid: c.amount_paid,
+          status: c.status, due_date: c.due_date,
+        })),
+        shares: shareOut ? {
+          basis: shareOut.basis,
+          net_assets: shareOut.assets.total,
+          wallet: shareOut.assets.wallet,
+          invested: shareOut.assets.invested,
+          owed_to_former_members: shareOut.assets.owed,
+          members: shareOut.shares.map(x => ({
+            investor_id: x.investor_id, name: byId.get(x.investor_id) || x.investor_id,
+            share: x.share, arrears: x.arrears,
+          })),
+        } : null,
+        /* The approvals register. A stokvel answering to its own members at
+           an AGM needs to show not that two people agreed but WHICH two. */
+        approvals,
+      };
+    }
+
     return {
       paid,
+      ...(stokvel ? { stokvel } : {}),
       investor: {
-        id: inv.id, first_name: inv.first_name, last_name: inv.last_name,
+        id: inv.id,
+        /* A sub-account has a NAME rather than a first and last name. Sent
+           in both shapes so a consumer that only knows about people still
+           has something to print at the top of the page. */
+        first_name: subAccountId ? inv.name : inv.first_name,
+        last_name:  subAccountId ? '' : inv.last_name,
+        account_name: subAccountId ? inv.name : null,
+        account_type: subAccountId ? inv.account_type : null,
+        sa_reference: subAccountId ? inv.sa_reference : null,
         email: inv.email, id_number: inv.id_number,
         mobile: inv.mobile || inv.phone,
         wallet_balance: inv.wallet_balance,

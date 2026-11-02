@@ -17,10 +17,13 @@
    ═══════════════════════════════════════════════════════════ */
 'use strict';
 
-const cron         = require('node-cron');
+const cron         = require('./_watched');
+const { investmentEndDate } = require('../services/investmentTerm');
 const pool         = require('../db/pool');
 const emailService = require('../services/email');
 const pushService  = require('../services/pushService');
+const { recordTransaction, systemActor } = require('../services/ledger');
+const { expectedReturnFor } = require('../services/poolFees');
 
 async function runRecurringInvestments() {
   const todayDay = new Date().getDate(); // 1–31
@@ -121,9 +124,11 @@ async function runRecurringInvestments() {
       const annualRate     = parseFloat(pool_row.annual_rate) || 0;
       const termMonths     = parseInt(pool_row.term_months, 10) || 6;
       const startDate      = new Date();
-      const endDate        = new Date(startDate);
-      endDate.setMonth(endDate.getMonth() + termMonths);
-      const expectedReturn = Math.round(amount * annualRate * (termMonths / 12) * 100) / 100;
+      /* The pool's own maturity date — see services/investmentTerm.js. */
+      const endDay         = investmentEndDate(pool_row, startDate, termMonths);
+      /* One definition, in services/poolFees, so a fee reversal that raises
+         an investment's principal recomputes it exactly as it was set. */
+      const expectedReturn = expectedReturnFor({ amount, annualRate, termMonths });
       // Bug #6 fix: append random suffix to prevent ID collision when two investors
       // resolve DB queries in the same millisecond tick
       const rnd          = Math.random().toString(36).slice(2, 7).toUpperCase();
@@ -154,22 +159,20 @@ async function runRecurringInvestments() {
               investmentId, investor.id, pool_row.id, pool_row.name,
               amount,
               startDate.toISOString().slice(0, 10),
-              endDate.toISOString().slice(0, 10),
+              endDay,
               annualRate, termMonths, expectedReturn, pool_row.product_type,
             ]
           );
-          await txClient.query(
-            `INSERT INTO transactions
-               (id, investor_id, type, amount, status, reference, description, transaction_date, investment_id, pool_id, created_at, updated_at)
-             VALUES (gen_random_uuid(),$1,'investment',$2,'completed',$3,$4,NOW(),$5,$6,NOW(),NOW())`,
-            [investor.id, amount, txRef, `Recurring investment — ${pool_row.name}`, investmentId, pool_row.id]
-          );
-          await txClient.query(
-            `INSERT INTO transactions
-               (id, investor_id, type, amount, status, reference, description, transaction_date, investment_id, pool_id, created_at, updated_at)
-             VALUES (gen_random_uuid(),$1,'fee',$2,'completed',$3,$4,NOW(),$5,$6,NOW(),NOW())`,
-            [investor.id, platformFee, txRef + '-FEE', `Platform fee — ${pool_row.name}`, investmentId, pool_row.id]
-          );
+          await recordTransaction(txClient, {
+            investorId: investor.id, type: 'investment', amount,
+            reference: txRef, description: `Recurring investment — ${pool_row.name}`,
+            investmentId, poolId: pool_row.id,
+          }, systemActor('recurringCron'));
+          await recordTransaction(txClient, {
+            investorId: investor.id, type: 'fee', amount: platformFee,
+            reference: txRef + '-FEE', description: `Platform fee — ${pool_row.name}`,
+            investmentId, poolId: pool_row.id,
+          }, systemActor('recurringCron'));
           await txClient.query(
             'UPDATE investors SET total_invested = COALESCE(total_invested,0) + $1, updated_at = NOW() WHERE id = $2',
             [amount, investor.id]
@@ -191,7 +194,7 @@ async function runRecurringInvestments() {
 
       setImmediate(() => emailService.sendInvestmentCreated(investor, {
         poolName: pool_row.name, amount, annualRate, termMonths, expectedReturn,
-        endDate:  endDate.toISOString(),
+        endDate:  endDay,
       }).catch(err => console.error('[email] sendInvestmentCreated (recurring) failed:', err.message)));
 
       pushService.sendPushToInvestor(investor.id, {
@@ -251,10 +254,11 @@ async function runAutoTopUps() {
 
   for (const inv of investors) {
     const amount   = parseFloat(inv.auto_topup_amount); // net wallet credit
-    // Gross up so SV Capital nets exactly `amount` after Paystack SA fees (1.5% + R2, cap R800)
-    const rawFee   = (amount + 2) / 0.985 - amount;
-    const fee      = Math.min(rawFee, 800);
-    const gross    = Math.round((amount + fee) * 100) / 100;
+    /* Grossed up so the wallet receives exactly `amount` after Paystack's
+       fee. The arithmetic lives in services/paystack now, because the
+       stokvel collection needs the same figure and two copies of a fee
+       calculation is two answers the day the rate changes. */
+    const { fee, gross } = require('../services/paystack').grossUp(amount);
     const amtKobo  = Math.round(gross * 100); // charge gross to Paystack
     // Deterministic reference: same investor+date always produces the same ref.
     // Paystack rejects a duplicate reference → idempotent if the cron fires twice.
@@ -300,11 +304,10 @@ async function runAutoTopUps() {
         const topupClient = await pool.connect();
         try {
           await topupClient.query('BEGIN');
-          await topupClient.query(
-            `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, transaction_date, created_at)
-             VALUES (gen_random_uuid(),$1,'deposit',$2,'completed',$3,$4,NOW(),NOW())`,
-            [inv.id, amount, reference, desc]
-          );
+          await recordTransaction(topupClient, {
+            investorId: inv.id, type: 'deposit', amount, reference, description: desc,
+            gateway: 'paystack',
+          }, systemActor('recurringCron:autoTopUp'));
           await topupClient.query(
             'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at=NOW() WHERE id=$2',
             [amount, inv.id]

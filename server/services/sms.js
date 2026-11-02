@@ -76,4 +76,16 @@ async function sendMaturityAlert(phone, firstName, amount, poolName) {
   return _send(phone, msg).catch(e => console.error('[SMS] maturity alert:', e.message));
 }
 
-module.exports = { sendDepositConfirmed, sendWithdrawalProcessed, sendWithdrawalRejected, sendMaturityAlert, ENABLED };
+/* An invitation to join a stokvel. The one message here sent to somebody who
+   may not be a user at all — a treasurer typing in a cousin's cell number
+   has handed us the only way to reach them — so it has to be complete in
+   160 characters: who, what, and how to find it. No link: the invitation is
+   addressed, and signing in as the holder of this number is what claims it.
+   See services/stokvelInvites.js. */
+async function sendStokvelInvite(phone, { inviterName, stokvelName }) {
+  const msg = `${inviterName} invited you to join ${stokvelName} on SV Capital. `
+            + `Sign in or sign up with this number and the invite is on your Sub-accounts screen: svcapital.co.za`;
+  return _send(phone, msg);
+}
+
+module.exports = { sendDepositConfirmed, sendWithdrawalProcessed, sendWithdrawalRejected, sendMaturityAlert, sendStokvelInvite, ENABLED };

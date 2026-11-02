@@ -83,7 +83,13 @@ function env() {
   ['invDetailTitle', 'invDetailBody', 'admMatInstruction', 'admMatProduct',
    'admMatAmountLabel', 'admMatAmountHint'].forEach(mk);
 
+  /* The fee panel loads itself from the server after the detail is drawn.
+     Stubbed rather than left undefined, so what is measured is that the
+     detail ASKS for it — the renderer guards the call, and without a stub
+     the guard would be the only thing under test. */
+  const feeLoads = [];
   const sandbox = {
+    _loadFeeReversal: (id) => { feeLoads.push(id); },
     document: { getElementById: id => els[id] || null, querySelector: () => null },
     STATE: { investors: [INVESTOR], pools: [POOL_OPEN, SOURCE_POOL], products: [], investments: [] },
     Utils: realUtils({
@@ -119,7 +125,7 @@ function env() {
   for (const f of ['_switchableProducts', '_switchProductOptions', '_backControl', '_renderInvestmentDetail']) {
     vm.runInContext(slice(f), sandbox);
   }
-  return { sandbox, els };
+  return { sandbox, els, feeLoads };
 }
 
 const INV = {
@@ -135,15 +141,16 @@ const INV = {
 /* Returns { html, error } — never throws, so a failure is reported as a
    failure rather than taking the whole run down. */
 function render(backTo, backKind, invOverrides) {
-  const { sandbox, els } = env();
+  const { sandbox, els, feeLoads } = env();
   sandbox.__inv = { ...INV, ...(invOverrides || {}) };
   sandbox.__backTo = backTo;
   sandbox.__backKind = backKind;
   try {
     vm.runInContext('_renderInvestmentDetail(__inv, __backTo, __backKind)', sandbox);
-    return { html: els.invDetailBody.innerHTML, title: els.invDetailTitle.textContent, error: null };
+    return { html: els.invDetailBody.innerHTML, title: els.invDetailTitle.textContent,
+             feeLoads, error: null };
   } catch (err) {
-    return { html: '', title: '', error: `${err.constructor.name}: ${err.message}` };
+    return { html: '', title: '', feeLoads, error: `${err.constructor.name}: ${err.message}` };
   }
 }
 
@@ -163,6 +170,14 @@ function render(backTo, backKind, invOverrides) {
       const fromPool = render('P0', 'pool');
       ok('from the pool investors list',
          !fromPool.error && fromPool.html.length > 500, fromPool.error || `${fromPool.html.length} chars`);
+
+      ok('and the platform fee panel is asked for',
+
+         fromList.feeLoads.length > 0,
+
+         'the fee panel loads itself after the detail is drawn; a detail '
+
+         + 'that never asks for it shows no fee and offers no reversal');
 
       ok('and the title names the pool',
          fromInvestor.title === 'Investment — Short Term Investment - March 2026', fromInvestor.title);

@@ -127,6 +127,10 @@
         <span class="nav-badge" id="acceptedDocsBadge" style="display:none">0</span>
       </button>
 
+      <button class="nav-item" data-view="stokvels" onclick="navigate('stokvels', this)">
+        <i class="fa-solid fa-people-group"></i> Stokvels
+      </button>
+
       <div class="nav-section-label">System</div>
       <button class="nav-item" data-view="terms" onclick="navigate('terms', this)">
         <i class="fa-solid fa-scale-balanced"></i> Legal Documents
@@ -221,6 +225,13 @@
              stays empty and invisible when there is nothing undismissed, so it
              costs a reader nothing once they are up to date. -->
         <div id="adminAnnouncements"></div>
+
+        <!-- What is broken right now. Filled by _loadIncidents(); stays empty
+             and invisible when nothing is open, so a quiet platform costs a
+             reader nothing. Above the figures deliberately: a dashboard that
+             reports healthy numbers from a server throwing 500s is worse
+             than one that reports nothing. -->
+        <div id="adminIncidents"></div>
 
         <!-- Admin Welcome Strip -->
         <div class="admin-welcome-strip" id="adminWelcomeStrip">
@@ -412,6 +423,22 @@
       <!-- ══════════════════════════════════
            VIEW: INVESTORS
       ══════════════════════════════════ -->
+      <!-- Stokvels. Staff captured the mandate and the contribution schedule
+           through the raw table editor until now, which meant typing a
+           quorum into a column with nothing to say what it had to be above,
+           and no sight of whether a stokvel could actually withdraw. -->
+      <div class="view" id="view-stokvels">
+        <div class="card">
+          <div class="card__header">
+            <h3 class="card__title"><i class="fa-solid fa-people-group"></i> Stokvels</h3>
+            <input type="search" id="stokvelSearch" class="input input--sm" placeholder="Search by name…"
+                   oninput="renderStokvelList()" style="max-width:240px">
+          </div>
+          <div id="stokvelList"></div>
+        </div>
+        <div id="stokvelDetail"></div>
+      </div>
+
       <div class="view" id="view-investors">
         <div id="investors-load-errors" style="display:none;margin-bottom:12px"></div>
         <div id="investors-truncation" style="display:none;margin-bottom:12px"></div>
@@ -5186,9 +5213,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
-<script src="../js/api.js?v=21"></script>
+<script src="../js/api.js?v=29"></script>
 <script src="../js/investor-documents.js?v=6"></script>
-<script src="js/admin.js?v=194"></script>
+<script src="js/admin.js?v=205"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>

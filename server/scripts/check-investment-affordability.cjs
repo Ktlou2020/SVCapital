@@ -73,8 +73,13 @@ ok('the message is not "your wallet" when staff act for someone else',
 console.log('\na sub-account is still owned-checked for investors only');
 ok('investors may only spend from a sub-account they own',
    /parent_investor_id=\$2 FOR UPDATE/.test(src));
+/* The point is the absence of the ownership predicate, not the column list.
+   Pinning the exact columns made this fail the day the stokvel gate needed
+   account_type and stokvel_quorum off the same row — a green-to-red on a
+   query whose WHERE clause had not moved. `id=$1 FOR UPDATE` with nothing
+   between is the assertion. */
 ok('staff are not blocked by that ownership predicate',
-   /SELECT wallet_balance FROM sub_accounts WHERE id=\$1 FOR UPDATE/.test(src),
+   /FROM sub_accounts WHERE id=\$1 FOR UPDATE/.test(src),
    'applying it to staff would 403 every staff POST');
 
 /* The arithmetic the guard turns on, checked directly. */

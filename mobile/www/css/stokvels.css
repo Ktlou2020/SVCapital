@@ -1,0 +1,193 @@
+/* ══════════════════════════════════════════════════════════════════
+   Stokvels — the public page.
+
+   Deliberately NOT the private-client or institutional register. Those
+   pages are restrained because an allocator reads restraint as competence.
+   A stokvel committee is three or four people who already trust each other
+   with money and want to know whether a platform will keep that trust
+   legible. So: plain, warm, concrete, and built round the one thing a bank
+   account cannot offer them — that no single member can move the money.
+
+   The green is the one the product already uses for a stokvel account
+   (SA_TYPE_META.stokvel in portal.js), so the page and the thing it is
+   describing look like each other. #eda5ff is the platform's single
+   canonical purple and the only accent.
+   ══════════════════════════════════════════════════════════════════ */
+
+:root {
+  --sv-ink:      #15241b;
+  --sv-ink-soft: #4a5a50;
+  --sv-paper:    #ffffff;
+  --sv-wash:     #f4f8f4;
+  --sv-line:     #dde7e0;
+  --sv-deep:     #064e1e;
+  --sv-deeper:   #033514;
+  --sv-grow:     #22c55e;
+  --sv-accent:   #eda5ff;
+  --sv-amber:    #fec24f;
+}
+
+* { box-sizing: border-box; }
+
+body.sv-page {
+  margin: 0;
+  font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: var(--sv-ink);
+  background: var(--sv-paper);
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.65;
+}
+
+.sv-wrap { width: 100%; max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+
+/* ── Hero ──────────────────────────────────────────────────────── */
+.sv-hero {
+  background: linear-gradient(160deg, var(--sv-deeper) 0%, var(--sv-deep) 55%, #0a6b2b 100%);
+  color: #fff;
+  padding: 26px 0 72px;
+}
+.sv-mark { display: inline-block; margin-bottom: 42px; }
+.sv-mark img { height: 38px; width: auto; display: block; }
+
+.sv-hero__grid { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 56px; align-items: start; }
+
+.sv-eyebrow {
+  font-size: 0.74rem; font-weight: 700; letter-spacing: 1.6px; text-transform: uppercase;
+  color: var(--sv-accent); margin-bottom: 14px;
+}
+.sv-hero h1 {
+  font-family: 'Fraunces', Georgia, serif;
+  font-weight: 500; font-size: clamp(2rem, 4.4vw, 3.1rem); line-height: 1.12;
+  margin: 0 0 20px; text-wrap: balance;
+}
+.sv-hero p { font-size: 1.02rem; color: rgba(255,255,255,0.88); margin: 0 0 16px; max-width: 54ch; }
+.sv-hero strong { color: #fff; font-weight: 600; }
+
+.sv-cta {
+  display: inline-flex; align-items: center; gap: 9px;
+  background: var(--sv-accent); color: #15241b !important;
+  text-decoration: none; font-weight: 700; font-size: 0.95rem;
+  padding: 14px 26px; border-radius: 999px; margin-top: 12px;
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.sv-cta:hover { transform: translateY(-1px); box-shadow: 0 8px 22px rgba(0,0,0,.22); }
+.sv-cta--ghost {
+  background: transparent; color: #fff !important;
+  border: 1px solid rgba(255,255,255,0.45); margin-left: 10px;
+}
+
+/* The four facts, as a card beside the proposition. */
+.sv-facts {
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 18px; padding: 8px 22px; backdrop-filter: blur(3px);
+}
+.sv-fact { padding: 17px 0; border-bottom: 1px solid rgba(255,255,255,0.12); }
+.sv-fact:last-child { border-bottom: none; }
+.sv-fact__k {
+  font-size: 0.68rem; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase;
+  color: rgba(255,255,255,0.6); margin-bottom: 5px;
+}
+.sv-fact__v { font-size: 0.96rem; font-weight: 600; color: #fff; line-height: 1.45; }
+
+/* ── Sections ──────────────────────────────────────────────────── */
+.sv-sec { padding: 72px 0; }
+.sv-sec--wash { background: var(--sv-wash); border-top: 1px solid var(--sv-line); border-bottom: 1px solid var(--sv-line); }
+
+.sv-sec h2 {
+  font-family: 'Fraunces', Georgia, serif;
+  font-weight: 500; font-size: clamp(1.5rem, 2.8vw, 2.1rem); line-height: 1.2;
+  margin: 0 0 14px; text-wrap: balance;
+}
+.sv-sec h2 .sv-q { color: var(--sv-deep); }
+.sv-lede { font-size: 1.02rem; color: var(--sv-ink-soft); max-width: 62ch; margin: 0 0 34px; }
+
+.sv-grid { display: grid; gap: 18px; }
+.sv-grid--3 { grid-template-columns: repeat(3, 1fr); }
+.sv-grid--2 { grid-template-columns: repeat(2, 1fr); }
+
+.sv-card {
+  background: var(--sv-paper); border: 1px solid var(--sv-line);
+  border-radius: 14px; padding: 24px;
+}
+.sv-sec--wash .sv-card { background: #fff; }
+.sv-card h3 { font-size: 1rem; font-weight: 700; margin: 0 0 8px; }
+.sv-card p  { font-size: 0.91rem; color: var(--sv-ink-soft); margin: 0; }
+.sv-card__i {
+  width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center;
+  background: rgba(6,78,30,0.08); color: var(--sv-deep); font-size: 1rem; margin-bottom: 14px;
+}
+
+/* The mandate panel — the page's one piece of emphasis, because it is the
+   one thing a bank account does not do. */
+.sv-mandate {
+  background: linear-gradient(145deg, var(--sv-deeper), var(--sv-deep));
+  color: #fff; border-radius: 20px; padding: 40px;
+}
+.sv-mandate h2 { color: #fff; }
+.sv-mandate .sv-lede { color: rgba(255,255,255,0.82); }
+.sv-mandate__steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 10px; }
+.sv-step {
+  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 12px; padding: 18px;
+}
+.sv-step__n {
+  font-size: 0.68rem; font-weight: 800; letter-spacing: 1.2px;
+  color: var(--sv-accent); margin-bottom: 7px;
+}
+.sv-step b { display: block; font-size: 0.94rem; margin-bottom: 5px; }
+.sv-step span { font-size: 0.86rem; color: rgba(255,255,255,0.78); }
+
+/* A numbered walk-through. Numbered because it genuinely is a sequence. */
+.sv-steps { counter-reset: svstep; display: grid; gap: 14px; }
+.sv-walk {
+  display: grid; grid-template-columns: 42px 1fr; gap: 16px; align-items: start;
+  background: #fff; border: 1px solid var(--sv-line); border-radius: 14px; padding: 20px 22px;
+}
+.sv-walk::before {
+  counter-increment: svstep; content: counter(svstep);
+  width: 42px; height: 42px; border-radius: 11px; display: grid; place-items: center;
+  background: var(--sv-deep); color: #fff; font-weight: 700; font-size: 1rem;
+}
+.sv-walk b { display: block; font-size: 1rem; margin-bottom: 4px; }
+.sv-walk p { margin: 0; font-size: 0.91rem; color: var(--sv-ink-soft); }
+
+/* Plain facts, in a definition table. */
+.sv-kv { width: 100%; border-collapse: collapse; font-size: 0.93rem; }
+.sv-kv th, .sv-kv td { text-align: left; padding: 15px 0; border-bottom: 1px solid var(--sv-line); vertical-align: top; }
+.sv-kv th { width: 34%; font-weight: 600; color: var(--sv-ink); padding-right: 24px; }
+.sv-kv td { color: var(--sv-ink-soft); }
+.sv-kv tr:last-child th, .sv-kv tr:last-child td { border-bottom: none; }
+
+/* What we do not do. Stated plainly rather than buried. */
+.sv-plain {
+  border-left: 3px solid var(--sv-accent); background: #fbf6ff;
+  border-radius: 0 12px 12px 0; padding: 22px 24px;
+}
+.sv-plain h3 { margin: 0 0 10px; font-size: 1rem; }
+.sv-plain ul { margin: 0; padding-left: 20px; }
+.sv-plain li { font-size: 0.91rem; color: var(--sv-ink-soft); margin-bottom: 8px; }
+.sv-plain li:last-child { margin-bottom: 0; }
+
+/* ── Close ─────────────────────────────────────────────────────── */
+.sv-close { background: var(--sv-deeper); color: #fff; padding: 66px 0; text-align: center; }
+.sv-close h2 { font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: clamp(1.6rem, 3vw, 2.3rem); margin: 0 0 14px; }
+.sv-close p { color: rgba(255,255,255,0.85); max-width: 56ch; margin: 0 auto 22px; }
+
+.sv-foot { background: #0b1410; color: rgba(255,255,255,0.6); font-size: 0.8rem; padding: 34px 0; }
+.sv-foot a { color: var(--sv-accent); text-decoration: none; }
+.sv-foot__links { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 16px; }
+.sv-risk { line-height: 1.6; max-width: 90ch; }
+
+@media (max-width: 900px) {
+  .sv-hero__grid { grid-template-columns: 1fr; gap: 34px; }
+  .sv-grid--3, .sv-grid--2, .sv-mandate__steps { grid-template-columns: 1fr; }
+  .sv-mandate { padding: 28px 22px; }
+  .sv-sec { padding: 52px 0; }
+  .sv-kv th { width: 42%; }
+}
+@media (max-width: 520px) {
+  .sv-cta--ghost { margin-left: 0; margin-top: 10px; }
+  .sv-kv th, .sv-kv td { display: block; width: 100%; padding: 6px 0; }
+  .sv-kv th { border-bottom: none; padding-top: 14px; }
+}

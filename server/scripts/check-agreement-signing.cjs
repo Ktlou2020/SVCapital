@@ -410,6 +410,98 @@ function call(method, url, body, user) {
          JSON.stringify(r.key_details));
     }
 
+    console.log('\nand an account\u2019s agreement names the account, in BOTH copies');
+    {
+      /* The copy the client reads is rendered at draw time; the copy that is
+         KEPT and HASHED is rendered again at signing, from a second query.
+         The route's own comment names the risk: "Building the two documents
+         from two different SELECTs is how the sealed copy comes to differ
+         from the one that was read \u2014 and the hash would then describe a
+         document nobody saw." On the field that says who the contract is
+         with, that is the whole defect, so it is checked end to end rather
+         than by reading the source. */
+      const CHAIR  = { role: 'investor', investorId: 'INV-SIGN-CH' };
+      const MEMBER = { role: 'investor', investorId: 'INV-SIGN-MB' };
+      const OUTSIDER = { role: 'investor', investorId: 'INV-SIGN-OUT' };
+      for (const [id, fn, ln] of [['INV-SIGN-CH','Lerato','Ndlovu'],
+                                  ['INV-SIGN-MB','Sipho','Khumalo'],
+                                  ['INV-SIGN-OUT','Nobody','Else']])
+        await db.query(
+          `INSERT INTO investors (id, first_name, last_name, email, fica_status)
+           VALUES ($1,$2,$3,$4,'approved')
+           ON CONFLICT (id) DO UPDATE SET fica_status='approved'`,
+          [id, fn, ln, id.toLowerCase() + '@example.com']);
+
+      await db.query(
+        `INSERT INTO sub_accounts (id, parent_investor_id, account_type, name,
+                                   wallet_balance, kyc_status, status, stokvel_quorum,
+                                   stokvel_reg_number)
+         VALUES ('SA-SIGN-SV','INV-SIGN-CH','stokvel','Masibambane Stokvel',
+                 20000,'approved','active',2,'NASASA-7788')
+         ON CONFLICT (id) DO UPDATE SET status='active'`);
+      await db.query(
+        `INSERT INTO stokvel_members (id, sub_account_id, investor_id, role, is_signatory, status)
+         VALUES ('SM-SIGN-CH','SA-SIGN-SV','INV-SIGN-CH','chairperson',true,'active'),
+                ('SM-SIGN-MB','SA-SIGN-SV','INV-SIGN-MB','member',false,'active')
+         ON CONFLICT (sub_account_id, investor_id) DO UPDATE SET status='active'`);
+
+      const svDrawn = await call('POST', '/draw',
+        { pool_id: 'POOL-SIGN', amount: 5000, sub_account_id: 'SA-SIGN-SV' }, MEMBER);
+      ok('an active member can draw the group\u2019s agreement',
+         svDrawn.status === 200 && !!svDrawn.body.id, JSON.stringify(svDrawn.body).slice(0, 200));
+
+      const drawnHtml = (await db.query(
+        `SELECT document_html FROM investment_agreements WHERE id = $1`,
+        [svDrawn.body.id])).rows[0].document_html;
+      ok('the drawn copy names the stokvel as the Investor',
+         /<th>Investor<\/th><td>Masibambane Stokvel<\/td>/.test(drawnHtml),
+         drawnHtml.slice(drawnHtml.indexOf('Parties'), drawnHtml.indexOf('Parties') + 400));
+      ok('and the member as the person signing for it',
+         /Signed for the account by<\/th><td>Sipho Khumalo</.test(drawnHtml));
+
+      const svKeys = (svDrawn.body.acknowledgements || []).map(a => a.key);
+      const svSigned = await call('POST', `/${svDrawn.body.id}/sign`,
+        { signer_name: 'Sipho Khumalo', acknowledged: svKeys }, MEMBER);
+      ok('the member can sign it', svSigned.status === 200, JSON.stringify(svSigned.body).slice(0, 200));
+
+      const sealed = (await db.query(
+        `SELECT document_html, document_sha256 FROM investment_agreements WHERE id = $1`,
+        [svDrawn.body.id])).rows[0];
+      ok('AND THE SEALED COPY NAMES THE SAME PARTY',
+         /<th>Investor<\/th><td>Masibambane Stokvel<\/td>/.test(sealed.document_html),
+         'the client read one document and we would be keeping another');
+      ok('with the registration number still on it', /NASASA-7788/.test(sealed.document_html));
+      ok('and the mandate recorded against it',
+         /Mandate of the signatories/.test(sealed.document_html),
+         'the document and the mandate have to be readable against each other later');
+      ok('the hash describes the document that was stored',
+         sealed.document_sha256 === AG.sha256(sealed.document_html));
+
+      /* Who may draw one at all. sub_account_id arrived from the request body
+         and was written with no check, and now that the funding gate matches
+         on it this is the authorisation path. */
+      const notMine = await call('POST', '/draw',
+        { pool_id: 'POOL-SIGN', amount: 5000, sub_account_id: 'SA-SIGN-SV' }, OUTSIDER);
+      ok('somebody outside the stokvel cannot draw against it',
+         notMine.status === 404, `${notMine.status} ${JSON.stringify(notMine.body)}`);
+
+      await db.query(
+        `UPDATE stokvel_members SET status='exited'
+          WHERE sub_account_id='SA-SIGN-SV' AND investor_id='INV-SIGN-MB'`);
+      const afterLeaving = await call('POST', '/draw',
+        { pool_id: 'POOL-SIGN', amount: 5000, sub_account_id: 'SA-SIGN-SV' }, MEMBER);
+      ok('and a member who has left cannot either', afterLeaving.status === 404,
+         `${afterLeaving.status} ${JSON.stringify(afterLeaving.body)}`);
+      ok('while the chairperson still can',
+         (await call('POST', '/draw',
+           { pool_id: 'POOL-SIGN', amount: 5000, sub_account_id: 'SA-SIGN-SV' }, CHAIR)).status === 200);
+
+      await db.query(`DELETE FROM investment_agreements WHERE sub_account_id = 'SA-SIGN-SV'`);
+      await db.query(`DELETE FROM stokvel_members WHERE sub_account_id = 'SA-SIGN-SV'`);
+      await db.query(`DELETE FROM sub_accounts WHERE id = 'SA-SIGN-SV'`);
+      await db.query(`DELETE FROM investors WHERE id LIKE 'INV-SIGN-CH' OR id LIKE 'INV-SIGN-MB' OR id LIKE 'INV-SIGN-OUT'`);
+    }
+
     console.log('\nrunning setup again changes nothing');
     {
       const before = (await db.query(

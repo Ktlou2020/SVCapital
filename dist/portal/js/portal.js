@@ -600,10 +600,20 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (tb) tb.innerHTML = _statusRow(4, msg);
     };
     const _coverText = document.getElementById('_nativeCoverText');
+    /* A TIMER, NOT A DIAGNOSIS. This fires five seconds into any slow load
+       and used to assert a cause it cannot possibly know — "the server is
+       waking up". It was wrong the day a CDN failure made a chart throw
+       inside loadPortalData: the server was up and answering, the client
+       was told it was asleep, and the advice was to wait for something
+       that was never going to happen.
+
+       The commonest slow load is not a cold server at all; it is a phone
+       on a weak signal. So it says what is true — this is taking a while —
+       and nothing it cannot stand behind. */
     const _t1 = setTimeout(() => {
-      const wake = '<i class="fa-solid fa-circle-notch fa-spin" style="margin-right:6px"></i>Server is waking up — this can take up to 30 seconds…';
+      const wake = '<i class="fa-solid fa-circle-notch fa-spin" style="margin-right:6px"></i>Still loading — this can take a few seconds on a slow connection…';
       _updateStatus(wake);
-      if (_coverText) _coverText.textContent = 'Server waking up, please wait…';
+      if (_coverText) _coverText.textContent = 'Still loading, please wait…';
     }, 5000);
     const _t2 = setTimeout(() => {
       const almost = '<i class="fa-solid fa-circle-notch fa-spin" style="margin-right:6px"></i>Almost there…';
@@ -618,6 +628,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   loadNotifications();
+
+  /* The notification that brought them here, if there was one. Last, so the
+     data it needs has loaded. */
+  if (typeof svcInitDeepLinks === 'function') svcInitDeepLinks();
   checkFirstDepositPrompt();
   _checkAutoStartTour();
   load2FAStatus();
@@ -1704,6 +1718,19 @@ async function confirmInvestment(pool) {
 
      A cancelled signature is a decision, not a failure: leave the invest
      modal exactly as it was so the amount does not have to be typed again. */
+  /* A stokvel's money does not move on one member's tap. The signatories
+     approve an amount into a named pool, and the server refuses the
+     investment without the id of that approval — see the gate in
+     routes/tables.js. Resolved before the agreement is signed, so a member
+     who has no approval yet is not asked to sign for an investment that
+     cannot be placed. */
+  let _stokvelAuthorityId = null;
+  if (_confSa && _confSa.account_type === 'stokvel') {
+    const _auth = await stokvelInvestAuthority(_confSa.id, pool.id, poolAmount);
+    if (_auth.error) { Toast.error(_auth.error); _investConfirmed = false; return; }
+    _stokvelAuthorityId = _auth.authority_id;
+  }
+
   const _signed = await signAgreementFor(pool, poolAmount, _pmSaId);
   if (!_signed) { _investConfirmed = false; return; }
 
@@ -1731,6 +1758,9 @@ async function confirmInvestment(pool) {
       payout_option: pool.product_type?.includes('delivery_bike') ? 'payout_all' : 'reinvest',
       maturity_instruction: pool.product_type?.includes('delivery_bike') ? 'payout_all' : 'reinvest',
       sub_account_id: _pmSaId || undefined,
+      /* Only a stokvel carries one. Absent on every other account, and the
+         route strips it before the insert either way. */
+      authority_id: _stokvelAuthorityId || undefined,
       is_reinvestment: false,
     });
 

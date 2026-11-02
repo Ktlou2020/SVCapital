@@ -471,6 +471,7 @@ function navigate(view, btnEl) {
     'fica-pipeline': 'FICA Pipeline',
     insights: 'Insight Articles',
     handbook: 'Platform Handbook', rewards: 'Rewards',
+    stokvels: 'Stokvels',
   };
   document.getElementById('topbarTitle').textContent = titles[view] || view;
   STATE.currentView = view;
@@ -499,6 +500,7 @@ function navigate(view, btnEl) {
     opsconsole: loadOpsConsole,
     feedback: () => loadFeedback('pending'),
     rewards: loadRewards,
+    stokvels: loadStokvels,
   };
   if (loaders[view]) loaders[view]();
   // Close mobile sidebar after navigation
@@ -832,6 +834,7 @@ async function loadDashboard() {
   /* Not awaited: the dashboard's figures are what somebody opened it for, and
      a notice about a new feature must never be the reason they wait. */
   _loadAnnouncements();
+  _loadIncidents();
   try {
     const _dash = await _refreshDashboardTotals();
     const nonArchived = STATE.investors.filter(i => i.status !== 'archived');
@@ -1352,7 +1355,7 @@ async function renderAumChart(range) {
   }
 
   if (STATE.charts.aum) STATE.charts.aum.destroy();
-  STATE.charts.aum = new Chart(ctx, {
+  STATE.charts.aum = Utils.chart(ctx, {
     type: 'line',
     data: {
       labels: monthLabels,
@@ -1445,7 +1448,7 @@ function renderProductMixChart() {
   const colors = entries.map(([k]) => PRODUCT_MIX_COLORS[k] || '#9ca3af');
 
   if (STATE.charts.productMix) STATE.charts.productMix.destroy();
-  STATE.charts.productMix = new Chart(ctx, {
+  STATE.charts.productMix = Utils.chart(ctx, {
     type: 'doughnut',
     data: { labels, datasets: [{ data, backgroundColor: colors, borderColor: 'var(--dark-2)', borderWidth: 3, hoverOffset: 4 }] },
     options: {
@@ -3256,6 +3259,124 @@ const ANN_AREA = {
   portal: { label: 'Client portal', colour: '#22c55e' },
   both:   { label: 'Admin & client portal', colour: '#fec24f' },
 };
+
+/* ═══════════════════════════════════════════════════════════
+   WHAT IS BROKEN RIGHT NOW.
+
+   Every error used to go to console.error and nowhere else, so the first
+   person to know a payout had failed was the client whose money had not
+   arrived. Errors are recorded now, and whoever is on call is emailed — but
+   an alert that arrives at 3am and is cleared from an inbox leaves nothing
+   behind. This is the place somebody opening the console in the morning
+   finds out what happened overnight.
+
+   Two kinds sit here. An INCIDENT is something that threw, folded by
+   fingerprint with a count, so one fault in a loop is one line. An OVERDUE
+   JOB is the other failure entirely: nothing threw, the job simply stopped
+   running, and only its missing heartbeat says so.
+   ═══════════════════════════════════════════════════════════ */
+const INC_SEV = {
+  critical: { colour: '#ef4444', icon: 'fa-triangle-exclamation', label: 'Critical' },
+  error:    { colour: '#ff8215', icon: 'fa-circle-exclamation',   label: 'Error' },
+  warning:  { colour: '#fec24f', icon: 'fa-circle-info',          label: 'Warning' },
+};
+
+function _incAgo(ts) {
+  if (!ts) return 'never';
+  const mins = Math.max(0, Math.round((Date.now() - new Date(ts).getTime()) / 60000));
+  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1440) return `${Math.round(mins / 60)}h ago`;
+  return `${Math.round(mins / 1440)}d ago`;
+}
+
+async function _loadIncidents() {
+  const host = document.getElementById('adminIncidents');
+  if (!host) return;
+  let res;
+  try {
+    res = await API._fetch('GET', 'opsconsole/incidents');
+  } catch (e) {
+    /* Silent, like the announcements above it: this panel exists to report
+       trouble and must not become trouble of its own on a console that is
+       otherwise working. */
+    console.warn('[incidents] could not load:', e.message);
+    return;
+  }
+  const open = (res && res.data) || [];
+  const late = ((res && res.jobs) || []).filter(j => j.overdue);
+  const alerting = (res && res.alerting) || {};
+
+  if (!open.length && !late.length) { host.innerHTML = ''; return; }
+
+  const card = (inner, colour) => `<div style="border:1px solid ${colour}33;
+      border-left:3px solid ${colour};background:${colour}0d;border-radius:8px;
+      padding:10px 12px;margin-bottom:8px">${inner}</div>`;
+
+  const jobRows = late.map(j => card(`
+    <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
+      <div>
+        <div style="font-weight:700;font-size:0.84rem">${_esc(j.job)} has stopped running</div>
+        <div style="font-size:0.76rem;color:var(--text-muted);margin-top:2px">
+          Last finished ${_incAgo(j.last_finished_at)}. It should run at least every
+          ${Math.round(Number(j.max_silence_minutes) / 60)}h.
+          ${j.last_error ? `Last error: ${_esc(String(j.last_error).slice(0, 160))}` : ''}
+        </div>
+      </div>
+    </div>`, '#ef4444')).join('');
+
+  const incRows = open.slice(0, 8).map(i => {
+    const sev = INC_SEV[i.severity] || INC_SEV.error;
+    return card(`
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap">
+        <div style="min-width:0;flex:1">
+          <div style="font-weight:700;font-size:0.84rem">
+            <i class="fa-solid ${sev.icon}" style="color:${sev.colour};margin-right:6px"></i>
+            ${_esc(i.source || 'unknown')}
+            ${i.occurrences > 1 ? `<span style="font-weight:600;color:var(--text-muted);font-size:0.76rem">
+               · ${i.occurrences} times</span>` : ''}
+          </div>
+          <div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px;word-break:break-word">
+            ${_esc(String(i.message || '').slice(0, 300))}
+          </div>
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-top:3px">
+            First ${_incAgo(i.first_seen)}, last ${_incAgo(i.last_seen)}
+          </div>
+        </div>
+        <button class="btn btn--ghost btn--sm" onclick="resolveIncident('${_esc(i.id)}')"
+                title="It comes back by itself if the same fault happens again">Dealt with</button>
+      </div>`, sev.colour);
+  }).join('');
+
+  /* Recording an incident and telling nobody is its own fault to fix, and
+     the only person who can fix it is reading this. */
+  const noSink = (!alerting.email && !alerting.webhook) ? `
+    <div style="font-size:0.74rem;color:var(--text-muted);margin-top:6px">
+      Nobody is being emailed about these. Set <code>OPS_ALERT_EMAIL</code> or
+      <code>OPS_ALERT_WEBHOOK</code> on the server so they do not wait for
+      somebody to open this page.
+    </div>` : '';
+
+  host.innerHTML = `
+    <div style="margin-bottom:16px">
+      <div style="font-size:0.74rem;text-transform:uppercase;letter-spacing:.5px;
+                  color:var(--text-muted);margin-bottom:8px">
+        Needs attention
+        ${open.length > 8 ? `<span style="text-transform:none;letter-spacing:0">
+          · showing 8 of ${open.length}</span>` : ''}
+      </div>
+      ${jobRows}${incRows}${noSink}
+    </div>`;
+}
+
+async function resolveIncident(id) {
+  try {
+    await API._fetch('PATCH', `opsconsole/incidents/${encodeURIComponent(id)}`, { resolved: true });
+    Toast.show('Marked as dealt with. It reopens by itself if it happens again.', 'success');
+    _loadIncidents();
+  } catch (e) {
+    Toast.show(e.message || 'Could not update that incident.', 'error');
+  }
+}
 
 async function _loadAnnouncements() {
   const host = document.getElementById('adminAnnouncements');
@@ -7835,6 +7956,128 @@ async function loadInvestments() {
   }
 }
 
+/* ═══════════════════════════════════════════════════════════
+   GIVING A PLATFORM FEE BACK.
+
+   The 1% is charged when an investment is placed and there was never a way
+   to undo it — a fee charged in error, or a goodwill gesture, meant a
+   manual wallet credit with a note, which is a figure typed into a balance
+   with nothing tying it to the fee it cancels.
+
+   Two destinations, and they answer different questions. BACK TO THE WALLET
+   is cash the client can withdraw today, and is right when the fee was
+   simply wrong. INTO THE INVESTMENT makes it principal: the client earns
+   the pool's rate on it for the rest of the term and it matures with the
+   rest, which is worth more to them and is usually the better gesture.
+
+   Everything shown here comes from the server. Whether a fee exists,
+   whether it has already been reversed, and whether the investment is
+   still running are facts it holds — a screen that works them out for
+   itself offers buttons that fail.
+   ═══════════════════════════════════════════════════════════ */
+async function _loadFeeReversal(investmentId) {
+  const host = document.getElementById('admFeePanel');
+  if (!host) return;
+  host.innerHTML = '';
+  let res;
+  try {
+    res = await API._fetch('GET', `admin/investments/${encodeURIComponent(investmentId)}/fee-reversal`);
+  } catch (e) {
+    /* Quiet: this panel is an extra, and an investment detail that will not
+       open because the fee lookup failed is a worse screen than one without
+       the panel. */
+    console.warn('[fee-reversal] could not load:', e.message);
+    return;
+  }
+  const d = (res && res.data) || {};
+  const inv = d.investment || {};
+
+  /* Nothing to offer, and the reason is worth showing: "no fee was charged"
+     and "already reversed" are different facts and staff ask about both. */
+  if (!d.ok) {
+    if (!d.reason) return;
+    host.innerHTML = `
+      <div class="panel" style="padding:12px 14px;margin-bottom:14px">
+        <div style="font-size:0.72rem;font-weight:700;color:var(--text-muted);
+             letter-spacing:0.04em;margin-bottom:4px">PLATFORM FEE</div>
+        <div style="font-size:0.84rem;color:var(--text-muted)">${_esc(d.reason)}</div>
+      </div>`;
+    return;
+  }
+
+  const canInvest = !!(d.destinations && d.destinations.investment);
+  host.innerHTML = `
+    <div class="panel" style="padding:14px;margin-bottom:14px;border-left:3px solid var(--gold)">
+      <div style="font-size:0.72rem;font-weight:700;color:var(--text-muted);
+           letter-spacing:0.04em;margin-bottom:6px">PLATFORM FEE</div>
+      <div style="font-size:0.9rem;font-weight:700;margin-bottom:10px">
+        ${Utils.rand(d.amount)} was charged on this investment
+      </div>
+
+      <label for="admFeeReason" style="display:block;font-size:0.72rem;
+             text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);
+             margin-bottom:4px">Why is it being given back?</label>
+      <input id="admFeeReason" class="form-input" type="text" maxlength="200"
+             placeholder="e.g. charged in error, or goodwill on a late pool"
+             style="width:100%;margin-bottom:4px">
+      <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:12px">
+        Recorded against the reversal. Money given back without a reason is
+        money nobody can account for later.
+      </div>
+      <div id="admFeeNote" style="font-size:0.78rem;color:#ef4444;min-height:18px;margin-bottom:6px"></div>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn--secondary btn--sm"
+                onclick="reverseFee('${_esc(inv.id)}','wallet')">
+          <i class="fa-solid fa-wallet"></i> Back to the wallet
+        </button>
+        <button class="btn btn--primary btn--sm" ${canInvest ? '' : 'disabled'}
+                title="${canInvest ? '' : _esc(d.investmentBlockedBecause || '')}"
+                onclick="reverseFee('${_esc(inv.id)}','investment')">
+          <i class="fa-solid fa-seedling"></i> Add it to the investment
+        </button>
+      </div>
+
+      ${canInvest && d.wouldBecome ? `
+        <div style="font-size:0.76rem;color:var(--text-muted);margin-top:8px">
+          Added to the investment it becomes
+          <strong>${Utils.rand(d.wouldBecome.amount)}</strong> with an expected
+          return of <strong>${Utils.rand(d.wouldBecome.expectedReturn)}</strong>,
+          maturing as normal.
+        </div>` : ''}
+      ${!canInvest && d.investmentBlockedBecause ? `
+        <div style="font-size:0.76rem;color:var(--text-muted);margin-top:8px">
+          ${_esc(d.investmentBlockedBecause)}
+        </div>` : ''}
+    </div>`;
+}
+
+async function reverseFee(investmentId, destination) {
+  const note   = document.getElementById('admFeeNote');
+  const reason = (document.getElementById('admFeeReason') || {}).value || '';
+  if (!reason.trim()) {
+    /* Said under the field rather than in a toast that disappears: the
+       person has to type something here and needs to see where. */
+    if (note) note.textContent = 'Please say why this fee is being given back.';
+    return;
+  }
+  if (note) note.textContent = '';
+  try {
+    const res = await API._fetch('POST',
+      `admin/investments/${encodeURIComponent(investmentId)}/fee-reversal`,
+      { destination, reason });
+    const d = (res && res.data) || {};
+    Toast.show(destination === 'wallet'
+      ? `${Utils.rand(d.amount)} returned to the wallet.`
+      : `${Utils.rand(d.amount)} added to the investment, now ${Utils.rand(d.became && d.became.amount)}.`,
+      'success');
+    await _loadFeeReversal(investmentId);
+    if (typeof loadInvestments === 'function') loadInvestments().catch(() => {});
+  } catch (e) {
+    if (note) note.textContent = e.message || 'Could not reverse that fee.';
+  }
+}
+
 function renderInvestmentStats() {
   const d = STATE.investments;
   const active = d.filter(i => i.status === 'active');
@@ -8183,6 +8426,13 @@ function _renderInvestmentDetail(inv, backTo, backKind) {
       ${_invRate == null ? `<div style="font-size:0.68rem;color:var(--text-muted);margin-top:6px">No return posted on this pool yet — figures shown are capital only.</div>` : ''}
     </div>
 
+    <!-- The platform fee, and what can be done about it. Filled by
+         _loadFeeReversal from the server rather than worked out here: whether
+         a fee exists, whether it has already been given back, and whether the
+         investment is still running are all facts the server holds, and a
+         screen that guesses at them offers buttons that fail. -->
+    <div id="admFeePanel" data-investment="${_esc(inv.id)}"></div>
+
     <div class="panel" style="padding:14px;margin-bottom:14px;background:var(--ci-bg-light,#F7F8FA)">
       <div style="font-size:0.8rem;font-weight:700;color:#1a1a1a;margin-bottom:8px"><i class="fa-solid fa-user-pen" style="color:var(--gold);margin-right:6px"></i>Set instruction on behalf of client</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
@@ -8269,6 +8519,14 @@ function _renderInvestmentDetail(inv, backTo, backKind) {
     ` : ''}
   `;
   Modal.open('investorDetailModal');
+  /* Not awaited: the detail is already drawn and useful, and the fee panel
+     is an extra. An investment that will not open because a fee lookup is
+     slow is a worse screen than one that fills in a moment later.
+
+     Guarded too, because this renderer is sliced out and evaluated on its
+     own in more than one place — an extra that stops the detail opening
+     where it is not present is not an extra. */
+  if (typeof _loadFeeReversal === 'function') _loadFeeReversal(inv.id);
 }
 
 /* Show only the companion fields the chosen instruction actually needs. */
@@ -8716,6 +8974,27 @@ async function bulkApproveDeposits(btn) {
   });
 }
 
+/* WHO MOVED IT, under the date.
+   A transactions row said what moved, to whom and when, and never who did
+   it — so a staff credit read exactly like something the client had done
+   themselves. The columns are recorded now; a figure nobody can see is not
+   an audit trail, so it is shown here, where somebody looking into a
+   disputed movement is already looking.
+
+   Rows written before this exists carry nothing, and say so rather than
+   claiming the client did it. */
+function _txnActor(t) {
+  if (!t.actor_kind) return '';
+  const who = t.actor_kind === 'system'
+    ? `by ${_esc(t.actor_role || 'an automated job')}`
+    : t.actor_kind === 'staff'
+      ? `by ${_esc(t.actor_email || t.actor_role || 'staff')}`
+      : 'by the client';
+  const colour = t.actor_kind === 'staff' ? 'var(--orange)' : 'var(--text-muted)';
+  return `<div style="font-size:0.68rem;color:${colour};margin-top:2px" class="clip"
+      title="${_esc(t.actor_ip ? who + ' from ' + t.actor_ip : who)}">${who}</div>`;
+}
+
 function renderTxnTable() {
   const body = document.getElementById('txnBody');
   const start = (txnPage - 1) * TXN_PG_SIZE;
@@ -8783,7 +9062,7 @@ function renderTxnTable() {
       <td>${statusCell}</td>
       <td class="td-muted clip" style="font-size:0.75rem">${_esc(t.reference || '—')}${t.reference ? `<button class="copy-btn" onclick='copyToClipboard(${_esc(JSON.stringify(t.reference))},this)' title="Copy reference"><i class="fa-regular fa-copy"></i></button>` : ''}</td>
       <td class="td-muted" style="font-size:0.75rem"><div class="clip">${_esc(t.description || '—')}</div>${proofLink}</td>
-      <td class="td-muted">${Utils.date(t.transaction_date || t.created_at)}</td>
+      <td class="td-muted">${Utils.date(t.transaction_date || t.created_at)}${_txnActor(t)}</td>
       <td>
         ${isPendingDeposit ? `<button class="btn btn--success btn--sm" onclick="changeTxnStatus('${t.id}', 'completed', '${t.investor_id}', ${t.amount})" title="Approve deposit — credits wallet"><i class="fa-solid fa-check"></i> Approve</button>` : ''}
       </td>
@@ -10362,7 +10641,7 @@ function renderMaturityForecastChart() {
     }).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0));
   }
   if (STATE.charts.maturityForecast) STATE.charts.maturityForecast.destroy();
-  STATE.charts.maturityForecast = new Chart(ctx, {
+  STATE.charts.maturityForecast = Utils.chart(ctx, {
     type: 'bar',
     data: { labels: months, datasets: [{ label: 'Capital Maturing (R)', data: amounts, backgroundColor: 'rgba(254,194,79,0.7)', borderColor: '#fec24f', borderWidth: 1, borderRadius: 6 }] },
     options: { responsive: true, maintainAspectRatio: false,
@@ -10387,7 +10666,7 @@ function renderCohortChart() {
     }).length);
   }
   if (STATE.charts.cohort) STATE.charts.cohort.destroy();
-  STATE.charts.cohort = new Chart(ctx, {
+  STATE.charts.cohort = Utils.chart(ctx, {
     type: 'bar',
     data: { labels: months, datasets: [{ label: 'New Investors', data: counts, backgroundColor: 'rgba(101,101,101,0.7)', borderColor: '#656565', borderWidth: 1, borderRadius: 6 }] },
     options: { responsive: true, maintainAspectRatio: false,
@@ -10530,7 +10809,7 @@ function renderProductVolChart() {
   const colors = ['#fec24f', '#22c55e', '#4ade80', '#86efac', '#656565', '#f97316'];
 
   if (STATE.charts.productVol) STATE.charts.productVol.destroy();
-  STATE.charts.productVol = new Chart(ctx, {
+  STATE.charts.productVol = Utils.chart(ctx, {
     type: 'bar',
     data: { labels, datasets: [{ label: 'Volume (R)', data, backgroundColor: colors, borderRadius: 6 }] },
     options: {
@@ -10593,7 +10872,7 @@ function renderProvinceChart() {
   const colors = labels.map(l => PROVINCE_COLORS[l] || '#656565');
 
   if (STATE.charts.province) STATE.charts.province.destroy();
-  STATE.charts.province = new Chart(ctx, {
+  STATE.charts.province = Utils.chart(ctx, {
     type: 'pie',
     data: { labels, datasets: [{ data: labels.map(l => prov[l]), backgroundColor: colors, borderColor: 'var(--dark-2)', borderWidth: 3 }] },
     options: {
@@ -10631,7 +10910,7 @@ function renderGenderChart() {
   });
   const total = STATE.investors.length || 1;
   if (STATE.charts.gender) STATE.charts.gender.destroy();
-  STATE.charts.gender = new Chart(ctx, {
+  STATE.charts.gender = Utils.chart(ctx, {
     type: 'doughnut',
     data: {
       labels: ['Male', 'Female', 'Unknown'],
@@ -10670,7 +10949,7 @@ function renderHeardAboutChart() {
   const opts = _chartDefaults();
   opts.indexAxis = 'y';
   opts.plugins.tooltip.callbacks = { label: c => ` ${c.parsed.x} investor${c.parsed.x !== 1 ? 's' : ''}` };
-  STATE.charts.heardAbout = new Chart(ctx, {
+  STATE.charts.heardAbout = Utils.chart(ctx, {
     type: 'bar',
     data: {
       labels: sorted.map(([k]) => k),
@@ -10692,7 +10971,7 @@ function renderRiskChart() {
   STATE.investors.forEach(i => { if (risk[i.risk_profile] !== undefined) risk[i.risk_profile]++; });
 
   if (STATE.charts.risk) STATE.charts.risk.destroy();
-  STATE.charts.risk = new Chart(ctx, {
+  STATE.charts.risk = Utils.chart(ctx, {
     type: 'doughnut',
     data: {
       labels: ['Conservative', 'Moderate', 'Aggressive'],
@@ -10733,7 +11012,7 @@ function renderTxnFlowChart() {
   );
 
   if (STATE.charts.txnFlow) STATE.charts.txnFlow.destroy();
-  STATE.charts.txnFlow = new Chart(ctx, {
+  STATE.charts.txnFlow = Utils.chart(ctx, {
     type: 'bar',
     data: {
       labels: months,
@@ -14014,7 +14293,7 @@ function _opsRenderAumByType(s) {
   const colors = ['#fec24f','#22c55e','#656565','#eda5ff','#fec24f','#656565'];
   const labels  = s.aumByType.map(r => typeLabel[r.type] || r.type);
   const data    = s.aumByType.map(r => r.volume);
-  _opsAumByTypeChart = new Chart(ctx, {
+  _opsAumByTypeChart = Utils.chart(ctx, {
     type: 'doughnut',
     data: {
       labels,
@@ -14074,7 +14353,7 @@ function _opsRenderVelocity(velocity) {
     return r ? parseFloat(r.volume) : 0;
   };
 
-  _opsVelocityChart = new Chart(ctx, {
+  _opsVelocityChart = Utils.chart(ctx, {
     type: 'bar',
     data: {
       labels: days.map(dayLabel),
@@ -15443,7 +15722,7 @@ function renderAnAumChart() {
   opts.scales.y.ticks.callback = v => 'R' + (v >= 1000000 ? (v/1000000).toFixed(1)+'M' : (v/1000).toFixed(0)+'k');
   opts.scales.y1 = { position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#3d5268', font: { size: 10 }, callback: v => 'R' + (v/1000).toFixed(0)+'k' } };
 
-  STATE.charts.anAum = new Chart(ctx, {
+  STATE.charts.anAum = Utils.chart(ctx, {
     type: 'bar',
     data: {
       labels: buckets.map(b => b.label),
@@ -15498,7 +15777,7 @@ function renderAnNewInvChart() {
   const opts = _chartDefaults();
   opts.plugins.tooltip.callbacks = { label: c => ` ${c.parsed.y} investors` };
 
-  STATE.charts.anNewInv = new Chart(ctx, {
+  STATE.charts.anNewInv = Utils.chart(ctx, {
     type: 'bar',
     data: {
       labels: buckets.map(b => b.label),
@@ -15535,7 +15814,7 @@ function renderAnReturnsChart() {
   opts.plugins.tooltip.callbacks = { label: c => ` ${Utils.rand(c.parsed.y)}` };
   opts.scales.y.ticks.callback = v => 'R' + (v / 1000).toFixed(0) + 'k';
 
-  STATE.charts.anReturns = new Chart(ctx, {
+  STATE.charts.anReturns = Utils.chart(ctx, {
     type: 'bar',
     data: {
       labels: buckets.map(b => b.label),
@@ -15561,7 +15840,7 @@ function renderAnStatusChart() {
 
   if (STATE.charts.anStatus) STATE.charts.anStatus.destroy();
 
-  STATE.charts.anStatus = new Chart(ctx, {
+  STATE.charts.anStatus = Utils.chart(ctx, {
     type: 'doughnut',
     data: {
       labels,
@@ -19287,7 +19566,7 @@ async function loadRevenueAnalytics() {
       const opts = _chartDefaults();
       opts.plugins.tooltip.callbacks = { label: c => ` ${Utils.rand(c.parsed.y)}` };
       opts.scales.y.ticks.callback   = v => 'R' + (v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v);
-      STATE.charts.revenueMonthly = new Chart(ctx, {
+      STATE.charts.revenueMonthly = Utils.chart(ctx, {
         type: 'bar',
         data: {
           labels:   data.monthly.map(m => _fmtMonthLabel(m.month)),
@@ -19345,7 +19624,7 @@ async function loadMaturityReinvestment() {
       if (STATE.charts.maturityReinvest) STATE.charts.maturityReinvest.destroy();
       const opts = _chartDefaults();
       opts.plugins.tooltip.callbacks = { label: c => ` ${c.dataset.label}: ${c.parsed.y}` };
-      STATE.charts.maturityReinvest = new Chart(ctx, {
+      STATE.charts.maturityReinvest = Utils.chart(ctx, {
         type: 'bar',
         data: {
           labels:   data.monthly.map(m => _fmtMonthLabel(m.month)),
@@ -19490,7 +19769,7 @@ async function loadSubAccountAnalytics() {
       if (STATE.charts.subAccountMonthly) STATE.charts.subAccountMonthly.destroy();
       const opts = _chartDefaults();
       opts.plugins.tooltip.callbacks = { label: c => ` ${c.parsed.y} new sub-accounts` };
-      STATE.charts.subAccountMonthly = new Chart(ctx, {
+      STATE.charts.subAccountMonthly = Utils.chart(ctx, {
         type: 'bar',
         data: {
           labels:   data.monthly_new.map(m => _fmtMonthLabel(m.month)),
@@ -19611,7 +19890,7 @@ async function loadWithdrawalTrends() {
       opts.plugins.tooltip.callbacks = { label: c => ` ${c.dataset.label}: ${c.dataset.label === 'Count' ? c.parsed.y : Utils.rand(c.parsed.y)}` };
       opts.scales.y.ticks.callback   = v => 'R' + (v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v);
 
-      STATE.charts.withdrawalTrends = new Chart(ctx, {
+      STATE.charts.withdrawalTrends = Utils.chart(ctx, {
         type: 'bar',
         data: {
           labels:   data.monthly.map(m => _fmtMonthLabel(m.month)),
@@ -20066,4 +20345,548 @@ async function _poolReturnApply(year) {
   } catch (e) {
     out.innerHTML = `<span style="color:#ef4444">${_esc(e.message || 'Failed')}</span>`;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Stokvels — the staff side.
+
+   Three releases built the group, the mandate and the contribution ledger,
+   and staff have been operating all of it through the raw table editor:
+   typing a quorum into a column with nothing to say it must be at least
+   two, setting is_signatory on rows identified by id, and having no way to
+   see whether a stokvel could actually withdraw.
+
+   This is the screen that makes those answerable. It writes through the
+   same generic table API the rest of the console uses — there is no new
+   endpoint here, and deliberately so: the rules that matter are enforced
+   server-side at the gate, not in this file. What this adds is sight of
+   them, and refusing the two inputs that are silently useless.
+   ═══════════════════════════════════════════════════════════ */
+
+const STOKVEL_ROLES = ['chairperson', 'treasurer', 'secretary', 'member'];
+const STOKVEL_MIN_QUORUM = 2;
+
+async function loadStokvels() {
+  const host = document.getElementById('stokvelList');
+  if (!host) return;
+  host.innerHTML = '<div class="text-center text-muted" style="padding:20px"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div>';
+  try {
+    const res = await API._fetch('GET', 'tables/sub_accounts', null,
+                                 { account_type: 'stokvel', limit: 1000 });
+    STATE.stokvels = (res && res.data) || [];
+  } catch (err) {
+    host.innerHTML = `<div class="text-center" style="padding:20px;color:#ef4444">
+      Could not load stokvels: ${_esc(err.message || 'error')}<br>
+      <button class="btn btn--secondary btn--sm" style="margin-top:10px" onclick="loadStokvels()">Retry</button></div>`;
+    return;
+  }
+  renderStokvelList();
+}
+
+function renderStokvelList() {
+  const host = document.getElementById('stokvelList');
+  if (!host) return;
+  const q = (document.getElementById('stokvelSearch')?.value || '').toLowerCase().trim();
+  const rows = (STATE.stokvels || [])
+    .filter(s => !q || String(s.name || '').toLowerCase().includes(q));
+
+  if (!rows.length) {
+    host.innerHTML = `<div class="text-center text-muted" style="padding:20px">No stokvels${q ? ' match that' : ' yet'}.</div>`;
+    return;
+  }
+
+  host.innerHTML = `<table class="data-table"><thead><tr>
+      <th>Stokvel</th><th>Mandate</th><th class="text-right">Wallet</th><th></th>
+    </tr></thead><tbody>
+    ${rows.map(s => {
+      const quorum = parseInt(s.stokvel_quorum, 10) || 0;
+      /* The thing staff cannot see in the table editor: a stokvel with no
+         mandate on file cannot withdraw at all. The gate refuses rather
+         than guessing a default, so this has to be obvious from the list
+         and not something discovered when a withdrawal is refused. */
+      const mandate = quorum >= STOKVEL_MIN_QUORUM
+        ? `<span style="color:#22c55e"><i class="fa-solid fa-circle-check"></i> ${quorum} of its signatories</span>`
+        : `<span style="color:#ef4444"><i class="fa-solid fa-triangle-exclamation"></i> none on file — cannot withdraw</span>`;
+      return `<tr>
+        <td><strong>${_esc(s.name)}</strong>${s.stokvel_reg_number ? `<div class="text-muted" style="font-size:0.75rem">${_esc(s.stokvel_reg_number)}</div>` : ''}</td>
+        <td style="font-size:0.82rem">${mandate}</td>
+        <td class="text-right">${Utils.rand(s.wallet_balance)}</td>
+        <td class="text-right"><button class="btn btn--secondary btn--sm" onclick="openStokvelAdmin('${_esc(s.id)}')">Open</button></td>
+      </tr>`;
+    }).join('')}
+    </tbody></table>`;
+}
+
+async function openStokvelAdmin(id) {
+  const host = document.getElementById('stokvelDetail');
+  host.innerHTML = '<div class="card"><div class="text-center text-muted" style="padding:20px"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div></div>';
+  let members, schedules, requests, contributions, invites, allocations, exitDebts, payouts;
+  try {
+    [members, schedules, requests, contributions, invites, allocations, exitDebts, payouts] = await Promise.all([
+      API._fetch('GET', 'tables/stokvel_members', null, { sub_account_id: id, limit: 500 }),
+      API._fetch('GET', 'tables/stokvel_contribution_schedules', null, { sub_account_id: id, limit: 50 }),
+      API._fetch('GET', 'tables/stokvel_withdrawal_requests', null, { sub_account_id: id, limit: 100 }),
+      API._fetch('GET', 'tables/stokvel_contributions', null, { sub_account_id: id, limit: 500 }),
+      API._fetch('GET', 'tables/stokvel_invites', null, { sub_account_id: id, limit: 200 }),
+      API._fetch('GET', 'tables/stokvel_allocations', null, { sub_account_id: id, limit: 2000 }),
+      API._fetch('GET', 'tables/stokvel_exit_debts', null, { sub_account_id: id, limit: 100 }),
+      API._fetch('GET', 'tables/stokvel_payouts', null, { sub_account_id: id, limit: 20 }),
+    ]);
+  } catch (err) {
+    host.innerHTML = `<div class="card" style="color:#ef4444;padding:20px">Could not load: ${_esc(err.message || '')}</div>`;
+    return;
+  }
+
+  const s = (STATE.stokvels || []).find(x => x.id === id) || { id };
+  STATE.stokvelOpen = {
+    id, members: (members && members.data) || [],
+    schedule: ((schedules && schedules.data) || []).find(x => x.active) || null,
+    requests: (requests && requests.data) || [],
+    contributions: (contributions && contributions.data) || [],
+    invites: (invites && invites.data) || [],
+    allocations: (allocations && allocations.data) || [],
+    exitDebts: (exitDebts && exitDebts.data) || [],
+    payouts: (payouts && payouts.data) || [],
+  };
+  host.innerHTML = _stokvelAdminMandate(s) + _stokvelAdminMembers(s)
+                 + _stokvelAdminPayouts(s) + _stokvelAdminShares(s) + _stokvelAdminInvites(s)
+                 + _stokvelAdminSchedule(s) + _stokvelAdminActivity(s);
+  host.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/* ─── The mandate ──────────────────────────────────────────────────── */
+function _stokvelAdminMandate(s) {
+  const o = STATE.stokvelOpen;
+  const signatories = o.members.filter(m => m.is_signatory && m.status === 'active').length;
+  const quorum = parseInt(s.stokvel_quorum, 10) || 0;
+
+  /* Both halves have to hold: a quorum of three with two signatories is a
+     stokvel that can never withdraw, and the table editor would take it
+     without comment. */
+  const warn = quorum < STOKVEL_MIN_QUORUM
+    ? 'No mandate on file — this stokvel cannot withdraw or invest. A mandate of one is not a mandate, so the minimum is two.'
+    : signatories < quorum
+      ? `Only ${signatories} active signator${signatories === 1 ? 'y' : 'ies'} for a quorum of ${quorum} — this stokvel cannot reach its own mandate.`
+      : null;
+
+  return `<div class="card">
+    <div class="card__header"><h3 class="card__title">
+      <i class="fa-solid fa-user-shield"></i> ${_esc(s.name || 'Stokvel')} — mandate</h3></div>
+    <div style="padding:14px">
+      ${warn ? `<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px;margin-bottom:12px;font-size:0.84rem;color:#ef4444">
+        <i class="fa-solid fa-triangle-exclamation"></i> ${_esc(warn)}</div>` : ''}
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <label style="font-size:0.84rem">Approvals required to move money</label>
+        <input type="number" min="${STOKVEL_MIN_QUORUM}" step="1" id="svQuorum" class="input input--sm"
+               value="${quorum || ''}" style="width:90px">
+        <span class="text-muted" style="font-size:0.78rem">of ${signatories} signator${signatories === 1 ? 'y' : 'ies'}</span>
+        <span class="text-muted" style="font-size:0.78rem;flex-basis:100%">Applies to withdrawals to a bank account, investments into a pool, and settling a member&rsquo;s exit alike.</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+        <label style="font-size:0.84rem">How the pot divides</label>
+        <select id="svShareBasis" class="input input--sm" style="width:auto">
+          ${['contribution', 'equal'].map(b => `<option value="${b}"${(s.share_basis || 'contribution') === b ? ' selected' : ''}>${b === 'equal' ? 'Equally, by head' : 'By what each member put in'}</option>`).join('')}
+        </select>
+        <button class="btn btn--secondary btn--sm" onclick="saveStokvelShareBasis('${_esc(s.id)}')">Save</button>
+        <span class="text-muted" style="font-size:0.78rem;flex-basis:100%">
+          The group&rsquo;s own constitution decides this, not us. Most stokvels contribute equally,
+          in which case both give the same answer; a group with unequal contributions or members
+          who joined at different times needs &ldquo;by what each member put in&rdquo;.
+          Changing it re-states every member&rsquo;s share at once — ask before you touch it.
+        </span>
+        <button class="btn btn--primary btn--sm" onclick="saveStokvelQuorum('${_esc(s.id)}')">Save mandate</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function saveStokvelQuorum(id) {
+  const n = parseInt(document.getElementById('svQuorum').value, 10);
+  if (!(n >= STOKVEL_MIN_QUORUM)) {
+    Toast.show(`A mandate of one is not a mandate — the minimum is ${STOKVEL_MIN_QUORUM}.`, 'error');
+    return;
+  }
+  const active = (STATE.stokvelOpen.members || []).filter(m => m.is_signatory && m.status === 'active').length;
+  if (n > active && !confirm(
+      `This stokvel has ${active} active signator${active === 1 ? 'y' : 'ies'} and you are asking for ${n} approvals. ` +
+      `It will not be able to withdraw until more are named. Save anyway?`)) return;
+  try {
+    await API._fetch('PATCH', `tables/sub_accounts/${id}`, { stokvel_quorum: n });
+    Toast.show('Mandate saved.', 'success');
+    await loadStokvels();
+    await openStokvelAdmin(id);
+  } catch (err) {
+    Toast.show('Could not save: ' + (err.message || ''), 'error');
+  }
+}
+
+/* ─── Members ──────────────────────────────────────────────────────── */
+/* The per-member contribution amount lives here, beside role and status,
+   because it is a fact about the member rather than about the schedule.
+   Blank means the group's own amount, which is what almost every stokvel
+   uses — the override exists for the ones whose constitution sets
+   different amounts for different members. */
+function _stokvelAdminMembers(s) {
+  const rows = STATE.stokvelOpen.members;
+  return `<div class="card">
+    <div class="card__header"><h3 class="card__title"><i class="fa-solid fa-users"></i> Members</h3>
+      <button class="btn btn--secondary btn--sm" onclick="addStokvelMember('${_esc(s.id)}')">
+        <i class="fa-solid fa-plus"></i> Add member</button></div>
+    <table class="data-table"><thead><tr>
+      <th>Investor</th><th>Role</th><th>Signatory</th><th>Status</th><th>Pays</th><th></th>
+    </tr></thead><tbody>
+    ${rows.length ? rows.map(m => `<tr>
+      <td><code style="font-size:0.75rem">${_esc(m.investor_id)}</code></td>
+      <td>
+        <select class="input input--sm" onchange="updateStokvelMember('${_esc(m.id)}',{role:this.value})">
+          ${STOKVEL_ROLES.map(r => `<option value="${r}"${m.role === r ? ' selected' : ''}>${r.replace(/^\w/, c => c.toUpperCase())}</option>`).join('')}
+        </select>
+      </td>
+      <td><input type="checkbox"${m.is_signatory ? ' checked' : ''}
+            onchange="updateStokvelMember('${_esc(m.id)}',{is_signatory:this.checked})"></td>
+      <td>
+        <select class="input input--sm" onchange="updateStokvelMember('${_esc(m.id)}',{status:this.value})">
+          ${['invited', 'active', 'exited'].map(st => `<option value="${st}"${m.status === st ? ' selected' : ''}>${st.replace(/^\w/, c => c.toUpperCase())}</option>`).join('')}
+        </select>
+      </td>
+      <td>
+        <input type="number" min="0" step="0.01" class="input input--sm" style="width:100px"
+               value="${m.contribution_amount != null ? _esc(m.contribution_amount) : ''}"
+               placeholder="group"
+               onchange="updateStokvelMember('${_esc(m.id)}',{contribution_amount:this.value===''?null:parseFloat(this.value)})">
+      </td>
+      <td class="text-right text-muted" style="font-size:0.74rem">${m.joined_at ? String(m.joined_at).slice(0, 10) : ''}</td>
+    </tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:16px">No members yet.</td></tr>'}
+    </tbody></table>
+    <div class="text-muted" style="font-size:0.75rem;padding:8px 14px">
+      Only <strong>active</strong> members are given contributions, and only active signatories count towards a mandate.
+      An approval from somebody later removed as a signatory stops counting immediately.
+    </div>
+  </div>`;
+}
+
+async function updateStokvelMember(memberId, patch) {
+  try {
+    await API._fetch('PATCH', `tables/stokvel_members/${memberId}`, patch);
+    Toast.show('Member updated.', 'success');
+    await openStokvelAdmin(STATE.stokvelOpen.id);
+  } catch (err) {
+    Toast.show('Could not update: ' + (err.message || ''), 'error');
+    await openStokvelAdmin(STATE.stokvelOpen.id);
+  }
+}
+
+async function addStokvelMember(stokvelId) {
+  const investorId = prompt('Investor ID of the member to add (e.g. INV-1234):');
+  if (!investorId) return;
+  const role = prompt(`Role — one of: ${STOKVEL_ROLES.join(', ')}`, 'member');
+  if (!role || !STOKVEL_ROLES.includes(role)) {
+    Toast.show('That is not a role this platform knows.', 'error');
+    return;
+  }
+  try {
+    await API._fetch('POST', 'tables/stokvel_members', {
+      sub_account_id: stokvelId, investor_id: investorId.trim(),
+      role, status: 'invited', is_signatory: false,
+    });
+    Toast.show('Member added as invited. They see nothing until the status is active.', 'success');
+    await openStokvelAdmin(stokvelId);
+  } catch (err) {
+    Toast.show('Could not add: ' + (err.message || ''), 'error');
+  }
+}
+
+async function saveStokvelShareBasis(id) {
+  const basis = document.getElementById('svShareBasis').value;
+  if (!confirm(
+      'Change how this stokvel\'s pot divides?\n\nEvery member\'s share is re-stated '
+    + 'immediately. Only do this against what the group\'s constitution actually says.')) return;
+  try {
+    await API._fetch('PATCH', `tables/sub_accounts/${id}`, { share_basis: basis });
+    Toast.show('Saved.', 'success');
+    await openStokvelAdmin(id);
+  } catch (err) {
+    Toast.show('Could not save: ' + (err.message || ''), 'error');
+  }
+}
+
+/* ─── Payouts ──────────────────────────────────────────────────────
+   Read-only here, deliberately. A distribution is planned by the group's
+   own committee in the app and approved by its signatories; a staff button
+   that could run one would be the single point of failure the mandate
+   exists to remove, in the one place where it empties the whole pot. What
+   this screen is for is answering "when is ours" and "what did we get". */
+function _stokvelAdminPayouts(s) {
+  const rows = STATE.stokvelOpen.payouts || [];
+  if (!rows.length) return '';
+  const planned = rows.filter(p => p.status === 'planned');
+
+  return `<div class="card">
+    <div class="card__header"><h3 class="card__title">
+      <i class="fa-solid fa-gift"></i> Payouts</h3>
+      <span class="text-muted" style="font-size:0.78rem">${planned.length ? 'one planned' : 'none planned'}</span>
+    </div>
+    <table class="data-table"><thead><tr>
+      <th>Payout</th><th>Pay on</th><th>Status</th><th>Approved</th><th class="text-right">Members paid</th>
+    </tr></thead><tbody>
+    ${rows.map(p => `<tr>
+      <td>${_esc(p.label)}</td>
+      <td style="font-size:0.8rem">${_esc(String(p.pay_on || '').slice(0, 10))}</td>
+      <td style="font-size:0.8rem">${_esc(p.status)}</td>
+      <td style="font-size:0.8rem">${p.authority_id ? _esc(p.authority_id) : '\u2014'}</td>
+      <td class="text-right" style="font-size:0.8rem">${_esc(String(p.paid_at || '').slice(0, 10)) || '\u2014'}</td>
+    </tr>`).join('')}
+    </tbody></table>
+    <div class="text-muted" style="font-size:0.75rem;padding:8px 14px">
+      Planned by the group&rsquo;s committee in the app and approved by its signatories.
+      There is deliberately no button here to run one: a distribution empties the pot, and
+      a staff override on that would hand back exactly the single point of failure the
+      mandate removes. Nobody leaves the stokvel when it runs \u2014 the pot resets and
+      contributions carry on.
+    </div>
+  </div>`;
+}
+
+/* ─── Shares, and what is owed to members who have left ────────────
+   Staff cannot change a share. It is the sum of a ledger — contributions in,
+   each member's part of what the group earned, what has been paid out — and
+   a staff field that overrode it would be a second answer to the question
+   the ledger exists to answer. What is here is the reading, plus the one
+   thing that needs watching: an exit the group has not finished paying. */
+function _stokvelAdminShares(s) {
+  const o = STATE.stokvelOpen;
+  const alloc = o.allocations || [];
+  const debts = (o.exitDebts || []).filter(d => d.status === 'owing');
+  if (!alloc.length && !debts.length) return '';
+
+  const byMember = new Map();
+  for (const a of alloc) {
+    byMember.set(a.investor_id,
+      Math.round(((byMember.get(a.investor_id) || 0) + Number(a.amount)) * 100) / 100);
+  }
+  const active = new Set(o.members.filter(m => m.status === 'active').map(m => m.investor_id));
+  const name = id => {
+    const m = o.members.find(x => x.investor_id === id);
+    return (m && (m.first_name || m.investor_id)) || id;
+  };
+  const total = [...byMember.entries()]
+    .filter(([id]) => active.has(id))
+    .reduce((n, [, v]) => n + v, 0);
+
+  return `<div class="card">
+    <div class="card__header"><h3 class="card__title"><i class="fa-solid fa-chart-pie"></i> Shares</h3>
+      <span class="text-muted" style="font-size:0.78rem">${Utils.rand(total)} across the members</span>
+    </div>
+    <table class="data-table"><thead><tr>
+      <th>Member</th><th class="text-right">Share</th><th>Status</th>
+    </tr></thead><tbody>
+    ${[...byMember.entries()].map(([id, v]) => `<tr>
+      <td>${_esc(name(id))}</td>
+      <td class="text-right"><strong>${Utils.rand(v)}</strong></td>
+      <td style="font-size:0.8rem">${active.has(id) ? 'Active' : 'Left'}</td>
+    </tr>`).join('')}
+    </tbody></table>
+    ${debts.length ? `<div style="padding:10px 14px">
+      <div style="font-size:0.8rem;font-weight:700;color:#f59e0b;margin-bottom:6px">
+        Still owed to members who have left</div>
+      ${debts.map(d => `<div style="font-size:0.82rem">${_esc(name(d.investor_id))} —
+        ${Utils.rand(Number(d.amount_owed) - Number(d.amount_paid))} outstanding of
+        ${Utils.rand(d.amount_owed)}</div>`).join('')}
+      <div class="text-muted" style="font-size:0.75rem;margin-top:6px">
+        Paid automatically as the group&rsquo;s investments mature, ahead of any further
+        earnings reaching current members. Nothing to do here.
+      </div>
+    </div>` : ''}
+    <div style="padding:12px 14px;border-top:1px solid var(--border)">
+      <div style="font-size:0.84rem;font-weight:700;margin-bottom:6px">Attribute an amount to a member</div>
+      <div class="text-muted" style="font-size:0.78rem;margin-bottom:10px">
+        For money that reached the group wallet with no owner on it — a manual credit, an
+        EFT approval, a refund. Those are shared across the members pro-rata, which is right
+        for interest and for a maturity and wrong when the money was one member&rsquo;s.
+        <strong>This moves no money</strong>: the group holds exactly what it held, and what
+        changes is whose share of it is whose.
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <select id="svAttrMember" class="input input--sm">
+          ${(STATE.stokvelOpen.members || []).filter(m => m.status === 'active')
+            .map(m => `<option value="${_esc(m.investor_id)}">${_esc(name(m.investor_id))}</option>`).join('')}
+        </select>
+        <input id="svAttrAmount" class="input input--sm" type="number" min="0" step="0.01"
+               placeholder="Amount" style="width:120px">
+        <input id="svAttrReason" class="input input--sm" type="text" maxlength="200"
+               placeholder="Why — e.g. EFT of 12 March was Thandi&rsquo;s" style="flex:1;min-width:220px">
+        <button class="btn btn--secondary btn--sm" onclick="attributeStokvelShare('${_esc(s.id)}')">Attribute</button>
+      </div>
+    </div>
+    <div class="text-muted" style="font-size:0.75rem;padding:8px 14px">
+      A share is otherwise the sum of a ledger, not a field — there is deliberately nothing
+      to type over. If one looks wrong and this is not the cause, it is in the contributions
+      or in what the group has been credited, and server/scripts/backfill-stokvel-shares.cjs
+      reports any group whose books do not balance.
+    </div>
+  </div>`;
+}
+
+async function attributeStokvelShare(id) {
+  const investorId = document.getElementById('svAttrMember').value;
+  const amount = parseFloat(document.getElementById('svAttrAmount').value);
+  const reason = document.getElementById('svAttrReason').value || '';
+  if (!investorId) { Toast.show('Choose a member.', 'error'); return; }
+  if (!(amount > 0)) { Toast.show('Enter an amount.', 'error'); return; }
+  if (!reason.trim()) {
+    /* Required, not optional. This changes whose money is whose, and the
+       next person to ask why will be reading the ledger, not this screen. */
+    Toast.show('Say why \u2014 it is recorded against the adjustment.', 'error');
+    return;
+  }
+  if (!confirm(
+      `Attribute ${Utils.rand(amount)} of this stokvel to this member?\n\n`
+    + `No money moves. Every other member's share drops by their part of it, `
+    + `and this member's rises by the whole amount.`)) return;
+  try {
+    await API._fetch('POST', 'admin/stokvel-attribute',
+                     { sub_account_id: id, investor_id: investorId, amount, reason });
+    Toast.show('Attributed.', 'success');
+    await openStokvelAdmin(id);
+  } catch (err) {
+    Toast.show('Could not attribute: ' + (err.message || ''), 'error');
+  }
+}
+
+/* ─── Invitations ──────────────────────────────────────────────────
+   The committee now invites its own members, so this screen's job changed:
+   it is no longer where a roster is typed in, it is where staff can see why
+   somebody has not joined.
+
+   The failure mode worth seeing is specific. A stokvel invitation is
+   ADDRESSED to an email or a cell number rather than carried by a link —
+   see services/stokvelInvites.js — so one sent to an address the person did
+   not sign up with is invisible to them, and from the committee's side it
+   just looks ignored. "Pending, not on SV Capital" beside a contact the
+   client says they use is the diagnosis, and the answer is to invite the
+   address they do use. Staff cannot accept on anybody's behalf: joining a
+   group that can see your money is the invitee's own act. */
+function _stokvelAdminInvites(s) {
+  const rows = STATE.stokvelOpen.invites || [];
+  const live = rows.filter(v => v.status === 'pending' && new Date(v.expires_at) > new Date());
+  const mask = v => v.email
+    ? `${String(v.email).slice(0, 1)}***@${String(v.email).split('@')[1] || ''}`
+    : (v.cell ? `*** *** ${String(v.cell).slice(-4)}` : '—');
+
+  return `<div class="card">
+    <div class="card__header"><h3 class="card__title">
+      <i class="fa-solid fa-user-plus"></i> Invitations</h3>
+      <span class="text-muted" style="font-size:0.78rem">${live.length} waiting</span>
+    </div>
+    ${rows.length ? `<table class="data-table"><thead><tr>
+        <th>Name</th><th>Sent to</th><th>Has an account</th><th>Status</th><th>Expires</th>
+      </tr></thead><tbody>
+      ${rows.slice(0, 50).map(v => {
+        const expired = v.status === 'pending' && new Date(v.expires_at) <= new Date();
+        return `<tr>
+          <td>${_esc(v.invitee_name || '—')}</td>
+          <td style="font-size:0.8rem">${_esc(mask(v))}</td>
+          <td style="font-size:0.8rem">${v.matched_investor_id ? 'Yes' : 'Not when invited'}</td>
+          <td style="font-size:0.8rem">${_esc(expired ? 'expired' : v.status)}</td>
+          <td style="font-size:0.8rem">${_esc(String(v.expires_at || '').slice(0, 10))}</td>
+        </tr>`; }).join('')}
+      </tbody></table>` : '<div class="text-muted" style="padding:14px">Nobody has been invited yet.</div>'}
+    <div class="text-muted" style="font-size:0.75rem;padding:8px 14px">
+      An invitation always creates an ordinary member — never a signatory, never an office.
+      Signing power is a change to the mandate above, made against the group&rsquo;s constitution.
+      A pending invitation for somebody who says they never got it is usually one sent to an
+      address they do not use: have the committee invite the one they do.
+    </div>
+  </div>`;
+}
+
+/* ─── Contribution schedule ────────────────────────────────────────── */
+function _stokvelAdminSchedule(s) {
+  const sch = STATE.stokvelOpen.schedule;
+  return `<div class="card">
+    <div class="card__header"><h3 class="card__title"><i class="fa-solid fa-calendar-check"></i> Contribution schedule</h3></div>
+    <div style="padding:14px;display:flex;gap:10px;align-items:end;flex-wrap:wrap">
+      <div><label style="font-size:0.78rem;display:block" class="text-muted">Amount each</label>
+        <input type="number" min="1" step="0.01" id="svAmount" class="input input--sm" style="width:120px"
+               value="${sch ? _esc(sch.amount) : ''}"></div>
+      <div><label style="font-size:0.78rem;display:block" class="text-muted">Day of the month</label>
+        <input type="number" min="1" max="31" id="svDueDay" class="input input--sm" style="width:90px"
+               value="${sch ? _esc(sch.due_day) : '1'}"></div>
+      <button class="btn btn--primary btn--sm" onclick="saveStokvelSchedule('${_esc(s.id)}')">
+        ${sch ? 'Replace schedule' : 'Start schedule'}</button>
+    </div>
+    <div class="text-muted" style="font-size:0.75rem;padding:0 14px 12px">
+      Monthly only. A day past the end of a short month settles on its last day.
+      ${sch ? 'Replacing ends the current schedule and starts a new one — obligations already raised keep the amount they were raised at.'
+            : 'Nothing is owed until a schedule exists.'}
+    </div>
+  </div>`;
+}
+
+async function saveStokvelSchedule(stokvelId) {
+  const amount = parseFloat(document.getElementById('svAmount').value);
+  const dueDay = parseInt(document.getElementById('svDueDay').value, 10);
+  if (!(amount > 0))               { Toast.show('An amount above zero is required.', 'error'); return; }
+  if (!(dueDay >= 1 && dueDay <= 31)) { Toast.show('The day must be between 1 and 31.', 'error'); return; }
+  const existing = STATE.stokvelOpen.schedule;
+  if (existing && !confirm(
+      `This ends the current schedule of ${Utils.rand(existing.amount)} and starts a new one at ${Utils.rand(amount)}. ` +
+      `Obligations already raised keep the amount they were raised at. Continue?`)) return;
+  try {
+    /* Ended first: one live schedule per stokvel is a partial unique index,
+       so inserting a second active one is refused by the database rather
+       than quietly becoming the one that wins. */
+    if (existing) {
+      await API._fetch('PATCH', `tables/stokvel_contribution_schedules/${existing.id}`, { active: false });
+    }
+    await API._fetch('POST', 'tables/stokvel_contribution_schedules', {
+      sub_account_id: stokvelId, amount, cadence: 'monthly',
+      due_day: dueDay, active: true,
+    });
+    Toast.show('Schedule saved. The next nightly run opens the period.', 'success');
+    await openStokvelAdmin(stokvelId);
+  } catch (err) {
+    Toast.show('Could not save: ' + (err.message || ''), 'error');
+  }
+}
+
+/* ─── What is happening ────────────────────────────────────────────── */
+function _stokvelAdminActivity(s) {
+  const o = STATE.stokvelOpen;
+  const pending = o.requests.filter(r => r.status === 'pending');
+  const arrears = o.contributions
+    .filter(c => c.status === 'due' && (parseFloat(c.amount_due) - parseFloat(c.amount_paid)) > 0);
+  const owed = arrears.reduce((n, c) => n + (parseFloat(c.amount_due) - parseFloat(c.amount_paid)), 0);
+
+  return `<div class="card">
+    <div class="card__header"><h3 class="card__title"><i class="fa-solid fa-list-check"></i> Activity</h3></div>
+    <div style="padding:14px;display:flex;gap:28px;flex-wrap:wrap">
+      <div><div class="text-muted" style="font-size:0.74rem;text-transform:uppercase">Awaiting approval</div>
+        <div style="font-size:1.2rem;font-weight:800">${pending.length}</div></div>
+      <div><div class="text-muted" style="font-size:0.74rem;text-transform:uppercase">Outstanding contributions</div>
+        <div style="font-size:1.2rem;font-weight:800">${Utils.rand(owed)}</div>
+        <div class="text-muted" style="font-size:0.74rem">${arrears.length} obligation${arrears.length === 1 ? '' : 's'}</div></div>
+    </div>
+    ${pending.length ? `<table class="data-table"><thead><tr>
+        <th>Requested</th><th>Kind</th><th class="text-right">Amount</th><th>To</th><th class="text-right">Approvals</th>
+      </tr></thead><tbody>
+      ${pending.map(r => {
+        /* An investment authority names a pool, not a bank account, so the
+           destination column was blank on every one of them. Staff reading
+           this need to see what the signatories are being asked to approve. */
+        const isInv = r.kind === 'investment';
+        const pool  = isInv && r.pool_id ? (STATE.pools || []).find(p => p.id === r.pool_id) : null;
+        const to    = isInv ? (pool ? pool.name : (r.pool_id || '')) : (r.bank_name || '');
+        return `<tr>
+        <td style="font-size:0.78rem">${_esc(String(r.created_at || '').slice(0, 10))}</td>
+        <td style="font-size:0.78rem">${isInv ? 'Investment' : 'Withdrawal'}</td>
+        <td class="text-right"><strong>${Utils.rand(r.amount)}</strong></td>
+        <td style="font-size:0.78rem">${_esc(to)}</td>
+        <td class="text-right">of ${_esc(r.quorum_required)}</td>
+      </tr>`; }).join('')}
+      </tbody></table>
+      <div class="text-muted" style="font-size:0.75rem;padding:8px 14px">
+        Staff cannot approve on a stokvel's behalf. Approvals come from its own signatories, in the app.
+      </div>` : ''}
+  </div>`;
 }

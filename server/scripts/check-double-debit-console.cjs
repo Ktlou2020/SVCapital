@@ -32,8 +32,7 @@ const ROOT = path.join(__dirname, '..', '..');
 const SRC  = fs.readFileSync(path.join(ROOT, 'admin', 'js', 'admin.js'), 'utf8');
 const HTML = fs.readFileSync(path.join(ROOT, 'admin', 'index.html'), 'utf8');
 const CLI  = path.join(__dirname, 'reconcile-withdrawal-double-debits.cjs');
-const CHROME = ['/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
-                '/opt/pw-browsers/chromium/chrome-linux/chrome'].find(p => fs.existsSync(p));
+const CHROME = require('../../scripts/lib/chromium.cjs').findChromium();
 
 let pass = 0, fail = 0;
 const ok = (name, cond, detail) => {

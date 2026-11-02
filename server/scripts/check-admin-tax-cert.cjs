@@ -400,8 +400,7 @@ const sum   = rows => Math.round((rows || []).reduce((a, r) => a + Math.abs(Numb
        rendered as R 0,00, is a defect the endpoint cannot see. */
     console.log('\nthe document, drawn');
     {
-      const CHROME = ['/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
-                      '/opt/pw-browsers/chromium/chrome-linux/chrome'].find(p => require('fs').existsSync(p));
+      const CHROME = require('../../scripts/lib/chromium.cjs').findChromium();
       if (!CHROME) {
         console.log('  SKIP  no headless Chromium — the certificate was not rendered');
       } else {
@@ -451,11 +450,18 @@ out.len=txt.length;
    en-ZA as "1,704.00" while a browser in South Africa renders "1 704,00", so
    a regex written for one locale silently matched nothing in the other. */
 const mTable=[...document.querySelectorAll('table')].find(t=>/TOTAL RETURNS REALISED/.test(t.textContent));
+/* A third trap, and the one that caught this check out: the document
+   sets its amounts with NON-BREAKING spaces, so "R 1 704,00" cannot be
+   broken across a line in a printed certificate. textContent gives those
+   back as U+00A0, and this probe's answer travels out through innerHTML,
+   which serialises them as &nbsp;. Either way a class of ordinary spaces
+   matches nothing. Normalised here, once, so every regex below is written
+   against plain spaces. */
 const retCells=mTable?[...mTable.querySelectorAll('tbody tr:not(.total-row)')]
-  .map(r=>(r.lastElementChild.textContent||'').trim()):[];
+  .map(r=>(r.lastElementChild.textContent||'').replace(/\u00a0/g,' ').trim()):[];
 out.retCells=retCells;
 out.notPosted=retCells.some(c=>/Not yet posted/.test(c));
-out.postedAmount=retCells.some(c=>/1[  ,]704[.,]00/.test(c));
+out.postedAmount=retCells.some(c=>/1[ ,]704[.,]00/.test(c));
 out.warns=/has no posted return/.test(txt);
 out.headerRange=/1 March 2025 . 28 February 2026/.test(txt);
 out.marchFirst=/1 March 2026/.test(txt);
@@ -491,14 +497,17 @@ document.getElementById('probe').textContent=JSON.stringify(out);
         let d2 = null;
         try {
           d2 = JSON.parse((mm ? mm[1] : '').replace(/&quot;/g, '"').replace(/&amp;/g, '&')
-            .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'"));
+            .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'")
+            .replace(/&nbsp;/g, '\u00a0'));
         } catch (_) {}
 
         ok('the certificate renders', !!d2 && d2.built === 'ok',
            d2 ? d2.built : (mm ? mm[1] : dom).slice(0, 300));
         if (d2 && d2.built === 'ok') {
           ok('nothing threw', (d2.errors || []).length === 0, JSON.stringify(d2.errors));
-          ok('a posted return prints its amount', d2.postedAmount === true);
+          ok('a posted return prints its amount', d2.postedAmount === true,
+             `the posted figure of 1 704,00 is in no return cell — cells: `
+             + JSON.stringify(d2.retCells));
           ok('an unposted one prints "Not yet posted" IN ITS CELL', d2.notPosted === true,
              `printing R 0,00 tells a client they earned nothing, which is a different claim — cells: ${JSON.stringify(d2.retCells)}`);
           ok('and no return cell shows a zero', d2.zeroReturn === false,

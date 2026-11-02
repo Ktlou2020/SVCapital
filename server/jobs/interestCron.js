@@ -7,11 +7,12 @@
    ═══════════════════════════════════════════════════════════ */
 'use strict';
 
-const cron = require('node-cron');
+const cron = require('./_watched');
 const pool = require('../db/pool');
 const emailService = require('../services/email');
 const smsService   = require('../services/sms');
 const pushService  = require('../services/pushService');
+const { recordTransaction, systemActor } = require('../services/ledger');
 
 async function runInterestCrediting() {
   console.log('[interestCron] Running monthly interest crediting…');
@@ -67,15 +68,14 @@ async function runInterestCrediting() {
           await client.query('BEGIN');
 
           // FIX 2: INSERT is the idempotency gate — if the reference already exists, rowCount === 0
-          const { rowCount } = await client.query(
-            `INSERT INTO transactions
-               (id, investor_id, type, amount, status, reference, description, transaction_date, created_at)
-             VALUES (gen_random_uuid(), $1, 'return', $2, 'completed', $3, $4, NOW(), NOW())
-             ON CONFLICT (reference) DO NOTHING`,
-            [investment.investor_id, monthlyInterest, reference, description]
-          );
+          /* The row is still the idempotency gate: ON CONFLICT DO NOTHING
+             returns nothing when the reference is already there. */
+          const written = await recordTransaction(client, {
+            investorId: investment.investor_id, type: 'return',
+            amount: monthlyInterest, reference, description,
+          }, systemActor('interestCron'), { onConflict: 'reference' });
 
-          if (!rowCount) {
+          if (!written) {
             await client.query('ROLLBACK');
             skipped++;
             continue; // already processed — finally releases the client

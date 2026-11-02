@@ -58,9 +58,17 @@ const ACK = {
    version is bumped whenever the wording below changes. It is stored on
    every agreement so that a document signed under v1 can still be
    explained after v2 ships. Never edit a version in place. */
+/* The account types, as a contract should name them. */
+const ACCOUNT_LABEL = {
+  stokvel:  'Stokvel (community savings group)',
+  trust:    'Trust',
+  business: 'Business',
+  minor:    'Minor’s account, held by a guardian',
+};
+
 const TEMPLATES = {
   standard: {
-    key: 'standard', version: 'v3',
+    key: 'standard', version: 'v4',
     title: 'Investment Agreement',
     acks: ['target_not_promise', 'fee_on_top', 'term_locked'],
     clauses: [
@@ -72,7 +80,7 @@ const TEMPLATES = {
     ],
   },
   eif_murabaha: {
-    key: 'eif_murabaha', version: 'v4', watermark: true,
+    key: 'eif_murabaha', version: 'v5', watermark: true,
     title: 'Murabaha Investment Agreement',
     gloss: 'cost-plus sale',
     acks: ['murabaha_fixed', 'fee_on_top', 'term_locked'],
@@ -85,7 +93,7 @@ const TEMPLATES = {
     ],
   },
   eif_ijara: {
-    key: 'eif_ijara', version: 'v4', watermark: true,
+    key: 'eif_ijara', version: 'v5', watermark: true,
     title: 'Ijara Investment Agreement',
     gloss: 'lease',
     acks: ['ijara_rent_stops', 'fee_on_top', 'term_locked'],
@@ -98,7 +106,7 @@ const TEMPLATES = {
     ],
   },
   eif_mudarabah: {
-    key: 'eif_mudarabah', version: 'v4', watermark: true,
+    key: 'eif_mudarabah', version: 'v5', watermark: true,
     title: 'Mudarabah Investment Agreement',
     gloss: 'profit-sharing partnership',
     acks: ['mudarabah_loss', 'target_not_promise', 'fee_on_top', 'term_locked'],
@@ -329,7 +337,43 @@ function renderAgreement(o) {
   const rows = pairs => pairs
     .map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join('');
 
-  const parties = rows([
+  /* WHO THE INVESTOR IS, when the money is not the signer's own.
+     
+     This named the natural person as the Investor and recorded the
+     sub-account only as a column on the row. So a stokvel's R50 000 was
+     contracted for by whichever member happened to tap Invest, personally,
+     with the group's name nowhere on the page — and a trust's investment was
+     a contract with its trustee, and a child's with the parent. The
+     authorisation was right and the document said something else.
+     
+     check-agreement-parties already settles the principle for the other side
+     of the table: "a contract that misdescribes the counterparty is the one
+     document where that cannot be waved through — it is the name a client
+     would have to sue". It cuts both ways.
+     
+     So where there is an account, the ACCOUNT is the Investor and the person
+     appears in the capacity they actually acted in. The capacity sits as a
+     paragraph under the table rather than as a numbered clause, so that
+     clause numbering does not diverge between an account's agreement and an
+     individual's of the same template version — a clause cited in a letter
+     has to mean the same thing in both. */
+  const acct = o.account && o.account.name ? o.account : null;
+
+  const parties = rows(acct ? [
+    ['Provider',        'SmartVest Financial Services (Pty) Ltd'],
+    ['FSP number',      '52449'],
+    ['Fund manager',    'SV Capital'],
+    ['Investor',        acct.name],
+    ['Account type',    ACCOUNT_LABEL[acct.type] || 'Sub-account'],
+    ...(acct.reg_number ? [['Registration number', acct.reg_number]] : []),
+    ['Account ID',      acct.id || '—'],
+    ['Signed for the account by', o.investor_name || '—'],
+    ['Signatory ID',    o.investor_id],
+    ['Email',           o.investor_email || '—'],
+    ...(acct.authority ? [['Authorised by', acct.authority]] : []),
+    ['Agreement number', o.agreement_no],
+    ['Date drawn',      when],
+  ] : [
     ['Provider',        'SmartVest Financial Services (Pty) Ltd'],
     ['FSP number',      '52449'],
     ['Fund manager',    'SV Capital'],
@@ -339,6 +383,16 @@ function renderAgreement(o) {
     ['Agreement number', o.agreement_no],
     ['Date drawn',      when],
   ]);
+
+  const capacityNote = acct ? `<p class="capacity">The Investor under this agreement is
+    <b>${esc(acct.name)}</b>. ${esc(o.investor_name || 'The signatory')} signs for that account
+    in the capacity recorded above and not in their personal capacity, and is not personally
+    liable for the Investor's obligations under this agreement.${
+      acct.type === 'stokvel'
+        ? ` The investment is made under the stokvel's mandate: it was authorised by the
+            number of signatories the stokvel's own rules require, recorded against the
+            authority named above, and no single member may commit the group's funds.`
+        : ''}</p>` : '';
 
   const investment = rows([
     ['Pool',              o.pool_name || o.pool_id || '—'],
@@ -448,6 +502,8 @@ function renderAgreement(o) {
   table.fees td.note{font-size:.8rem;color:#555;padding-top:0;border-bottom:1px solid #e3e3e3}
   table.fees tr.none th,table.fees tr.none td{color:#777}
   .clause{margin:13px 0}
+  .capacity{margin:10px 0 0;padding:10px 12px;border-left:3px solid #eda5ff;
+    background:#faf5ff;font-size:.92em;line-height:1.55}
   .clause b{display:block;margin-bottom:2px}
   .acks li{margin-bottom:6px}
   .sigimg{display:block;max-width:280px;border-bottom:1px solid #333;margin-bottom:6px}
@@ -464,6 +520,7 @@ ${wmCss}
 
 <h2>1. Parties</h2>
 <table class="kv">${parties}</table>
+${capacityNote}
 
 <h2>2. The investment</h2>
 <table class="kv">${investment}</table>

@@ -6,7 +6,7 @@
    ═══════════════════════════════════════════════════════════ */
 'use strict';
 
-const cron         = require('node-cron');
+const cron         = require('./_watched');
 const pool         = require('../db/pool');
 const emailService = require('../services/email');
 const BASE_URL     = process.env.BASE_URL || 'https://platform.svcapital.co.za';

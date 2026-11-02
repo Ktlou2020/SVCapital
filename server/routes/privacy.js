@@ -9,6 +9,7 @@ const router       = require('express').Router();
 const pool         = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
 const audit        = require('../services/audit');
+const closure = require('../services/accountClosure');
 
 /* ─── GET /api/privacy/export ─── */
 router.get('/export', requireAuth, async (req, res) => {
@@ -83,6 +84,27 @@ router.get('/export', requireAuth, async (req, res) => {
   }
 });
 
+/* ─── GET /api/privacy/account/closure ───────────────────────────────
+   What is standing in the way, BEFORE they try.
+
+   The same list the DELETE refuses with, offered up front so the screen can
+   say "here is what to settle first" instead of accepting a typed
+   confirmation and then rejecting it.
+   ──────────────────────────────────────────────────────────────────── */
+router.get('/account/closure', requireAuth, async (req, res) => {
+  try {
+    const investorId = req.user.investorId || req.user.investor_id;
+    if (!investorId) {
+      return res.status(403).json({ error: 'This endpoint is only available to investor accounts.' });
+    }
+    const blockers = await closure.blockersFor(pool, investorId);
+    res.json({ data: { can_close: blockers.length === 0, blockers } });
+  } catch (err) {
+    console.error('/privacy/account/closure error:', err.message);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
 /* ─── DELETE /api/privacy/account ─── */
 router.delete('/account', requireAuth, async (req, res) => {
   try {
@@ -96,6 +118,24 @@ router.delete('/account', requireAuth, async (req, res) => {
     const investorId = req.user.investorId || req.user.investor_id;
     if (!investorId) {
       return res.status(403).json({ error: 'This endpoint is only available to investor accounts.' });
+    }
+
+    /* WHAT IS STILL HERE.
+
+       This used to check the confirmation string and anonymise, then say
+       "active investments will continue until maturity" — true, and the
+       problem: they mature into a wallet belonging to Deleted User, on an
+       address at deleted.invalid, behind an inactive login. The money is
+       still theirs and they can no longer reach it.
+
+       Erasure is a right. It is not a way to abandon money, and it is not a
+       way out of a stokvel that still owes you your share. */
+    const blockers = await closure.blockersFor(pool, investorId);
+    if (blockers.length) {
+      return res.status(409).json({
+        error: 'There are a few things to settle before this account can be closed.',
+        blockers,
+      });
     }
 
     // Verify investor exists
@@ -133,6 +173,11 @@ router.delete('/account', requireAuth, async (req, res) => {
       [`deleted-${investorId}@deleted.invalid`, investorId]
     ).catch(() => {}); // best-effort
 
+    /* Nothing may still charge this card or act on their behalf. A payment
+       taken against somebody who has asked to be forgotten is the one
+       mistake here that would be indefensible. */
+    await closure.standDown(pool, investorId);
+
     // Record audit event
     setImmediate(() => audit.log({
       actorId:     investorId,
@@ -147,7 +192,9 @@ router.delete('/account', requireAuth, async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Account anonymised. Active investments will continue until maturity.',
+      message: 'Account closed and your personal details removed. Your transaction '
+             + 'history is kept without your name on it, because we are required to '
+             + 'keep it.',
     });
 
   } catch (err) {

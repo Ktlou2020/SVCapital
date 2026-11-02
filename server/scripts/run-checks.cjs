@@ -27,6 +27,8 @@
  *   …--seed N           a specific shuffle, to reproduce one
  *   …--filter maturity  only checks whose path contains this
  *   …--keep             leave the scratch databases behind for inspection
+ *   …--update-floor     record what each check asserted, as the new floor
+ *   …--allow-skips      let a check skip part of itself (lowers the guarantee)
  */
 'use strict';
 
@@ -44,6 +46,8 @@ const has  = name => ARGV.includes(name);
 const SHUFFLE = has('--shuffle');
 const KEEP    = has('--keep');
 const FILTER  = arg('--filter');
+const RAISE   = has('--update-floor');
+const SKIPS_OK = has('--allow-skips');
 const SEED    = arg('--seed') ? parseInt(arg('--seed'), 10) : Math.floor(Math.random() * 1e9);
 
 if (!process.env.DATABASE_URL) {
@@ -130,6 +134,52 @@ function shuffled(list, seed) {
 const RUN_TAG  = process.pid + '_' + Math.random().toString(36).slice(2, 8);
 const TEMPLATE = 'svc_chk_tpl_' + RUN_TAG;
 
+/* ─── The floor ──────────────────────────────────────────────────────
+   An exit code of 0 says a check did not throw. It does not say the check
+   LOOKED at anything, and 62 of them are written to carry on when something
+   they need is absent: 32 drop their whole browser half with
+   "SKIP no headless Chromium" and 30 drop theirs when a table is missing.
+   All of those exit 0, and the runner used to print a tick for each.
+
+   So a green suite could mean two thousand assertions or four hundred, with
+   nothing in the output to tell the difference — and the gap would widen
+   silently for as long as nobody noticed. Every claim this suite makes,
+   including every mutation test run against it, rests on knowing it is
+   still looking.
+
+   Each check already ends by printing its own tally. The runner now reads
+   it, refuses a check that printed none or asserted nothing, refuses one
+   that said SKIP, and holds every check to the number of assertions it
+   managed last time this file was written. Raising the floor is deliberate:
+     node server/scripts/run-checks.cjs --update-floor
+   which prints what moved. --allow-skips is for a machine that genuinely
+   cannot run a browser; it lowers the guarantee and says so. */
+const FLOOR_PATH = path.join(__dirname, 'assertion-floor.json');
+const FLOOR = (() => {
+  try { return JSON.parse(fs.readFileSync(FLOOR_PATH, 'utf8')).checks || {}; }
+  catch (_) { return {}; }
+})();
+
+/* The last line of the form "N passed, M failed" a check printed. Last,
+   not first: a check that reports a section and then a total should be
+   held to the total. */
+const TALLY = /^\s*(\d+) passed, (\d+) failed/;
+function tallyOf(output) {
+  let found = null;
+  for (const line of String(output).split('\n')) {
+    const m = line.match(TALLY);
+    if (m) found = { passed: Number(m[1]), failed: Number(m[2]) };
+  }
+  return found;
+}
+
+/* The convention across the suite is two spaces then SKIP then two more. */
+function skipsIn(output) {
+  return String(output).split('\n')
+    .filter(l => /(^|\s)SKIP\s\s/.test(l))
+    .map(l => l.trim().slice(0, 160));
+}
+
 /* Where a failed check's full output goes, so a rare failure can be read
    rather than guessed at. */
 const FAIL_LOG_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'svc-checks-'));
@@ -202,8 +252,9 @@ async function buildTemplate() {
     process.exit(2);
   }
 
-  let pass = 0, fail = 0;
+  let pass = 0, fail = 0, raised = 0;
   const failures = [];
+  const asserted = {};
 
   for (let i = 0; i < checks.length; i++) {
     const rel = checks[i];
@@ -234,7 +285,33 @@ async function buildTemplate() {
     }
     const secs = ((Date.now() - started) / 1000).toFixed(1);
 
-    if (ok) { pass++; console.log(`  ✓ ${name.padEnd(42)} ${secs}s${wantsDb ? '' : '  (no db)'}`); }
+    /* What the check itself says it did, which is the thing the exit code
+       does not tell us. */
+    const tally = tallyOf(output);
+    asserted[name] = tally ? tally.passed : 0;
+    if (ok) {
+      const skips = SKIPS_OK ? [] : skipsIn(output);
+      const floor = FLOOR[name];
+      let degraded = null;
+      if (!tally) {
+        degraded = 'printed no "N passed, M failed" line, so the runner cannot '
+                 + 'tell what it looked at';
+      } else if (tally.passed === 0) {
+        degraded = 'exited 0 having asserted nothing';
+      } else if (skips.length) {
+        degraded = `did not run part of itself — ${skips.join(' | ')}`;
+      } else if (floor != null && tally.passed < floor) {
+        degraded = `asserted ${tally.passed}, floor is ${floor} — `
+                 + `${floor - tally.passed} assertion(s) stopped running`;
+      }
+      if (degraded) { ok = false; output += `\n[runner] ${degraded}\n`; }
+    }
+
+    if (ok) {
+      pass++;
+      if (FLOOR[name] != null && tally.passed > FLOOR[name]) raised++;
+      console.log(`  ✓ ${name.padEnd(42)} ${secs}s${wantsDb ? '' : '  (no db)'}`);
+    }
     else {
       fail++;
       /* Keep the whole output. Summarising it to three matching lines is how
@@ -260,11 +337,54 @@ async function buildTemplate() {
   if (!KEEP) await dropDb(TEMPLATE);
   await admin.end().catch(() => {});
 
-  console.log(`\n${pass} passed, ${fail} failed${SHUFFLE ? `  (seed ${SEED})` : ''}`);
+  const total = Object.values(asserted).reduce((n, v) => n + v, 0);
+  console.log(`\n${pass} passed, ${fail} failed`
+    + `  ·  ${total.toLocaleString('en')} assertions`
+    + `${SKIPS_OK ? '  (skips allowed — the floor is not being held)' : ''}`
+    + `${SHUFFLE ? `  (seed ${SEED})` : ''}`);
   if (failures.length) {
     console.log('\nfailures:');
     for (const f of failures) console.log(`  ${f.name}\n     ${f.why}${f.logPath ? `\n     full output: ${f.logPath}` : ''}`);
     if (SHUFFLE) console.log(`\nreproduce this order with:  --shuffle --seed ${SEED}`);
+  }
+
+  /* Raising the floor is a deliberate act with a readable diff, the way
+     asset-stamps --update is: a floor nobody reads before accepting is a
+     floor that gets lowered by accident. */
+  if (RAISE) {
+    if (FILTER) {
+      console.log('\n--update-floor needs the whole suite; --filter would write a partial floor.');
+      process.exit(2);
+    }
+    if (fail) {
+      console.log('\nnot writing the floor: the suite is not green, so these numbers are not what the suite does.');
+      process.exit(1);
+    }
+    const moved = [];
+    for (const [name, n] of Object.entries(asserted)) {
+      const was = FLOOR[name];
+      if (was == null) moved.push(`  + ${name.padEnd(42)} ${n}`);
+      else if (was !== n) moved.push(`  ${n > was ? '↑' : '↓'} ${name.padEnd(42)} ${was} → ${n}`);
+    }
+    for (const name of Object.keys(FLOOR)) {
+      if (asserted[name] == null) moved.push(`  - ${name.padEnd(42)} gone (was ${FLOOR[name]})`);
+    }
+    fs.writeFileSync(FLOOR_PATH, JSON.stringify({
+      note: 'What each check asserted when this was last written. run-checks '
+          + 'refuses a check that asserts fewer. Raise it with '
+          + 'node server/scripts/run-checks.cjs --update-floor',
+      total,
+      checks: asserted,
+    }, null, 2) + '\n');
+    console.log(`\nfloor written: ${Object.keys(asserted).length} checks, ${total.toLocaleString('en')} assertions`);
+    if (moved.length) console.log(moved.join('\n'));
+    else console.log('  nothing moved');
+    process.exit(0);
+  }
+
+  if (raised) {
+    console.log(`\n${raised} check(s) now assert more than the floor. `
+      + 'Raise it with --update-floor so the new ones are held too.');
   }
   process.exit(fail ? 1 : 0);
 })();

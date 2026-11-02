@@ -23,14 +23,16 @@
    ═══════════════════════════════════════════════════════════ */
 'use strict';
 
-const cron         = require('node-cron');
+const cron         = require('./_watched');
 const pool         = require('../db/pool');
 const emailService = require('../services/email');
 const smsService   = require('../services/sms');
 const pushService  = require('../services/pushService');
-const { cycleExpiredPools } = require('./poolCyclerCron');
+const { cycleExpiredPools, TODAY } = require('./poolCyclerCron');
 const { effectiveInstruction } = require('../services/maturityPolicy');
 const annualReturns = require('../services/anniversaryReturns');
+const { investmentEndDate } = require('../services/investmentTerm');
+const { recordTransaction, systemActor } = require('../services/ledger');
 
 // Reinvestments are NOT charged a platform fee — the full matured amount rolls over.
 const round2 = n => Math.round((Number(n) || 0) * 100) / 100;
@@ -76,8 +78,18 @@ function postedReturnFor(inv) {
    23:00 — mark matured, mature the pools, execute payouts.
    Reinvest instructions roll into the open pool closing at month-end.
    ──────────────────────────────────────────────────────────── */
-async function runMaturityProcessing() {
-  console.log('[maturity] running maturity processing (23:00)…');
+/* opts.overdueOnly — process only what a PREVIOUS day's run should have done,
+   leaving today's maturities to tonight's 23:00 job.
+
+   The catch-up below is the only caller that passes it, and the distinction is
+   the whole reason the catch-up is safe to run at boot. Without it, a restart
+   at nine in the morning would process every investment maturing THAT DAY,
+   fourteen hours early — before the pool's rate has been posted, before
+   anybody in the office has closed it out. That is not catching up, it is
+   moving the schedule, and it would do it on every deploy. */
+async function runMaturityProcessing(opts = {}) {
+  const overdueOnly = !!opts.overdueOnly;
+  console.log(`[maturity] running maturity processing${overdueOnly ? ' (catch-up — overdue only)' : ' (23:00)'}…`);
 
   // FIX 10: Removed bulk pool status UPDATE from here. Pool status is now
   // updated inside each investment's own transaction, only after that
@@ -94,6 +106,7 @@ async function runMaturityProcessing() {
     WHERE i.status = 'active'
       AND i.end_date IS NOT NULL
       AND i.end_date <= NOW()
+      ${overdueOnly ? `AND i.end_date < ${TODAY}` : ''}
       AND i.maturity_processed_at IS NULL
   `);
 
@@ -392,12 +405,10 @@ async function creditWallet(client, inv, amount, returnPortion, description, ref
   /* The row carries the sub-account too, or the sub-account's own statement
      never shows the money arriving — the flow would be invisible from the
      account it belongs to. */
-  await client.query(
-    `INSERT INTO transactions
-       (id, investor_id, sub_account_id, type, amount, status, reference, description, investment_id, transaction_date, created_at, updated_at)
-     VALUES (gen_random_uuid(),$1,$2,'payout',$3,'completed',$4,$5,$6,NOW(),NOW(),NOW())`,
-    [inv.investor_id, inv.sub_account_id || null, amt, ref, description, inv.id]
-  );
+  await recordTransaction(client, {
+    investorId: inv.investor_id, subAccountId: inv.sub_account_id || null,
+    type: 'payout', amount: amt, reference: ref, description, investmentId: inv.id,
+  }, systemActor('maturityCron'));
 }
 
 /* ────────────────────────────────────────────────────────────
@@ -499,7 +510,10 @@ async function reinvestAmount(client, inv, amount, productType, sourcePoolName, 
 
     const termMonths   = target.term_months || 6;
     const startDate    = new Date();
-    const endDate      = new Date(startDate); endDate.setMonth(endDate.getMonth() + termMonths);
+    /* The pool's maturity date, not this rollover's own start plus term. A
+       pool is closed out as one unit and its rate is posted on the pool, so
+       everything in it matures the day it does. */
+    const endDay       = investmentEndDate(target, startDate, termMonths);
     const newExpReturn = round2(amt * (parseFloat(target.annual_rate) || 0) * (termMonths / 12));
     const newInvId     = 'INV-RI-' + Date.now() + leg + '-' + String(inv.investor_id).replace(/[^A-Z0-9]/gi, '').slice(-6);
     const switched     = target.product_type !== inv.product_type;
@@ -515,29 +529,25 @@ async function reinvestAmount(client, inv, amount, productType, sourcePoolName, 
           maturity_instruction, is_reinvestment, created_at, updated_at)
        VALUES ($1,$2,$3,$4,$5,$6,'active',$7,$8,$9,$10,$11,0,$12,'reinvest',true,NOW(),NOW())`,
       [newInvId, inv.investor_id, inv.sub_account_id || null, target.id, target.name, amt,
-       startDate.toISOString().slice(0,10), endDate.toISOString().slice(0,10),
+       startDate.toISOString().slice(0,10), endDay,
        target.annual_rate, termMonths, newExpReturn, target.product_type]
     );
 
     // Bookkeeping credit: shows the matured funds arriving back before being reinvested.
     // No wallet update — money goes straight into the new investment, net wallet change = R0.
-    await client.query(
-      `INSERT INTO transactions
-         (id, investor_id, sub_account_id, type, amount, status, reference, description, investment_id, transaction_date, created_at, updated_at)
-       VALUES (gen_random_uuid(),$1,$2,'matured_funds',$3,'completed',$4,$5,$6,NOW(),NOW(),NOW())
-       ON CONFLICT (reference) DO NOTHING`,
-      [inv.investor_id, inv.sub_account_id || null, amt, 'MATF-' + inv.id + leg,
-       `Matured Funds — ${sourcePoolName}`, inv.id]
-    );
+    await recordTransaction(client, {
+      investorId: inv.investor_id, subAccountId: inv.sub_account_id || null,
+      type: 'matured_funds', amount: amt, reference: 'MATF-' + inv.id + leg,
+      description: `Matured Funds — ${sourcePoolName}`, investmentId: inv.id,
+    }, systemActor('maturityCron'), { onConflict: 'reference' });
 
     const verb = switched ? 'switch' : 'reinvestment';
-    await client.query(
-      `INSERT INTO transactions
-         (id, investor_id, sub_account_id, type, amount, status, reference, description, investment_id, pool_id, transaction_date, created_at, updated_at)
-       VALUES (gen_random_uuid(),$1,$2,'reinvestment',$3,'completed',$4,$5,$6,$7,NOW(),NOW(),NOW())`,
-      [inv.investor_id, inv.sub_account_id || null, amt, 'REINV-' + inv.id + leg,
-       `Maturity ${verb} — ${sourcePoolName} → ${target.name}`, newInvId, target.id]
-    );
+    await recordTransaction(client, {
+      investorId: inv.investor_id, subAccountId: inv.sub_account_id || null,
+      type: 'reinvestment', amount: amt, reference: 'REINV-' + inv.id + leg,
+      description: `Maturity ${verb} — ${sourcePoolName} → ${target.name}`,
+      investmentId: newInvId, poolId: target.id,
+    }, systemActor('maturityCron'));
 
     await client.query(
       'UPDATE investment_pools SET current_invested = COALESCE(current_invested,0) + $1, raised_amount = COALESCE(raised_amount,0) + $1, updated_at = NOW() WHERE id = $2',
@@ -667,6 +677,76 @@ async function runMonthlyMaturityReminder() {
   }
 }
 
+/* ────────────────────────────────────────────────────────────
+   Boot-time catch-up — the tick that was never retried.
+
+   The schedules below are node-cron timers living in this process. They are
+   created at boot and they fire only while it is running, so a container that
+   restarts across 23:00 SAST does not run late — it does not run at all. The
+   nightly query is self-healing (end_date <= NOW() AND maturity_processed_at
+   IS NULL), so the work is picked up the FOLLOWING night, and the cost of a
+   missed tick is a day.
+
+   That is what happened on 31 October 2026: a deploy restarted production
+   near 23:00 and a cattle pool of 205 investors did not mature. A day's delay
+   on a maturity is a day in which every rollover instruction is late and the
+   pool they were meant to roll into has closed.
+
+   So: on boot, do what last night should have done. Three things make it safe
+   to run money this way.
+
+   · IT IS OVERDUE WORK ONLY. end_date strictly before today, on the business
+     day the schedule is pinned to. Today's maturities are left for tonight.
+     A restart can therefore never pull a maturity forward, only make a late
+     one less late.
+   · IT CANNOT DOUBLE-PAY. Each investment is claimed with FOR UPDATE SKIP
+     LOCKED on maturity_processed_at IS NULL, inside the transaction that moves
+     its money. A second instance — the old container during a rolling deploy,
+     or this one after a crash loop — finds the row claimed or the flag set.
+     That guard is not new; it is what makes this idea possible.
+   · IT ASKS BEFORE IT ACTS. The count below is a SELECT. On the overwhelming
+     majority of boots it returns zero and nothing else runs.
+
+   The delay lets the boot sequence settle before a money job opens
+   transactions against the same pool. SVC_MATURITY_CATCHUP=off disables it
+   without a deploy, which is the lever you want at 23:30 on a bad night.
+   ──────────────────────────────────────────────────────────── */
+const CATCHUP_DELAY_MS = Number(process.env.SVC_MATURITY_CATCHUP_DELAY_MS || 60000);
+
+async function runMaturityCatchUp() {
+  if (String(process.env.SVC_MATURITY_CATCHUP || '').toLowerCase() === 'off') {
+    console.log('[maturity] boot catch-up disabled by SVC_MATURITY_CATCHUP=off');
+    return { skipped: 'disabled' };
+  }
+  try {
+    const { rows } = await pool.query(`
+      SELECT COUNT(*)::int AS n
+        FROM investments
+       WHERE status = 'active'
+         AND end_date IS NOT NULL
+         AND end_date < ${TODAY}
+         AND maturity_processed_at IS NULL`);
+    const overdue = rows[0].n;
+    if (!overdue) return { overdue: 0 };
+
+    console.warn(`[maturity] BOOT CATCH-UP: ${overdue} investment(s) matured before today and ` +
+                 'were never processed — a scheduled run was missed. Processing them now.');
+    /* Pools first, for the same reason the nightly job does it first: a
+       rollover needs somewhere open to roll into, and the pool it wants may
+       be the one whose cycling was missed by the same restart. */
+    await cycleExpiredPools();
+    await runMaturityProcessing({ overdueOnly: true });
+    console.warn('[maturity] boot catch-up complete.');
+    return { overdue };
+  } catch (err) {
+    /* Never take the server down with it. A failed catch-up leaves every row
+       exactly as it found it — nothing is marked processed outside a committed
+       transaction — and tonight's run will try again. */
+    console.error('[maturity] boot catch-up failed:', err.message);
+    return { error: err.message };
+  }
+}
+
 function startMaturityCron() {
   // 23:00 SAST daily — cycle pools first so the new month's pool exists before
   // reinvestment instructions run, then process maturity + advance alerts.
@@ -690,10 +770,16 @@ function startMaturityCron() {
     }
   }, { timezone: 'Africa/Johannesburg' });
   console.log('[maturity] scheduled: 1st of month at 08:00 SAST — monthly maturity reminder');
+
+  /* Deliberately not awaited: boot must not wait on it, and it must not be
+     able to fail the boot. */
+  setTimeout(() => { runMaturityCatchUp(); }, CATCHUP_DELAY_MS).unref();
+  console.log(`[maturity] boot catch-up armed — overdue check in ${Math.round(CATCHUP_DELAY_MS / 1000)}s`);
 }
 
 module.exports = {
   startMaturityCron,
+  runMaturityCatchUp,
   runMaturityProcessing,
   runMaturityAlerts,
   runMonthlyMaturityReminder,

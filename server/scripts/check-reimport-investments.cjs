@@ -28,6 +28,7 @@
 const fs   = require('fs');
 const os   = require('os');
 const path = require('path');
+const { plain } = require('../../scripts/lib/rendered.cjs');
 
 const ROOT   = path.join(__dirname, '..', '..');
 let pass = 0, fail = 0;
@@ -330,10 +331,15 @@ const state = async () => {
        !!n1 && Number(n1.expected_return) === 1403.85, n1 && String(n1.expected_return));
     ok('start_date is the date of the original investment',
        !!n1 && new Date(n1.start_date).toISOString().slice(0, 10) === '2025-10-16');
+    /* Read through the shared reader: these figures are now written the way
+       every other figure on the platform is — R 10 500,00, not R10,500.00 —
+       and an assertion pinned to the old spelling tests the formatter
+       rather than the note. */
+    const notes1 = plain(n1 && n1.notes);
     ok('the notes say where the row came from, and what the client actually paid',
-       !!n1 && /RI-NEW1/.test(n1.notes) && /RI-A\/NEW001/.test(n1.notes)
-       && /R10,500\.00/.test(n1.notes) && /R10,027\.50 into the pool/.test(n1.notes),
-       n1 && n1.notes);
+       !!n1 && /RI-NEW1/.test(notes1) && /RI-A\/NEW001/.test(notes1)
+       && /R 10 500,00/.test(notes1) && /R 10 027,50 into the pool/.test(notes1),
+       notes1);
     const { rows: [n2] } = await pool.query(
       `SELECT maturity_instruction, is_reinvestment, pool_id FROM investments WHERE id = 'INV-MIGR-RI-NEW2'`);
     ok('a maturity instruction in the export is carried across, normalised',
