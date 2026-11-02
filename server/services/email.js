@@ -1241,19 +1241,32 @@ function sendChangeRequestSummary(to, { date, stats, requests }) {
    plain: this lands in the inbox of somebody who is behind on money owed to
    people they know, and a cheerful marketing voice reads as a taunt. State
    the amount, the period, the stokvel and where to pay it. */
-function sendStokvelArrears(investor, { stokvelName, periodLabel, owed, dueDate }) {
+function sendStokvelArrears(investor, { stokvelName, periodLabel, owed, dueDate, kind, note }) {
   const { email, first_name } = investor;
   const fmtR = v => `R${Number(v || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  /* A fine is carried on the same table as a contribution, with a
+     period_label of its own so the unique index never collides. That label
+     is an identifier, not a month, and this message used to read it out to
+     the member: "your FINE-SCF8A2C1 contribution". */
+  const isFine = kind === 'fine';
+  const subject = isFine
+    ? `${stokvelName}: a fine of ${fmtR(owed)} is outstanding`
+    : `${stokvelName}: your ${periodLabel} contribution`;
 
   return _send({
     to: email,
     type: 'stokvel_arrears',
-    subject: `${stokvelName}: your ${periodLabel} contribution`,
+    subject,
     html: _wrap(`
-      <h2>A contribution is outstanding</h2>
-      <p>Hi ${escHtml(first_name || 'there')}, your <strong>${escHtml(periodLabel)}</strong> contribution to
-         <strong>${escHtml(stokvelName)}</strong> of <strong>${fmtR(owed)}</strong> was due on
-         ${escHtml(String(dueDate))}.</p>
+      <h2>${isFine ? 'A fine is outstanding' : 'A contribution is outstanding'}</h2>
+      ${isFine
+        ? `<p>Hi ${escHtml(first_name || 'there')}, a fine of <strong>${fmtR(owed)}</strong> recorded
+             against you by <strong>${escHtml(stokvelName)}</strong> has not been paid.
+             ${note ? `It was for: <strong>${escHtml(note)}</strong>.` : ''}</p>`
+        : `<p>Hi ${escHtml(first_name || 'there')}, your <strong>${escHtml(periodLabel)}</strong> contribution to
+             <strong>${escHtml(stokvelName)}</strong> of <strong>${fmtR(owed)}</strong> was due on
+             ${escHtml(String(dueDate))}.</p>`}
       <div class="box">
         <p style="margin:0">You can pay it from your wallet in the app. The group&rsquo;s contribution
            list shows every member&rsquo;s position, including yours.</p>

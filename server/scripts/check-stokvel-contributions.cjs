@@ -310,6 +310,41 @@ const db = new Pool({
       ok('though oldest first, so the older obligations go before the fines',
      after.length === 2, JSON.stringify(after));
 
+      /* THE CHASE HAS TO READ AS A FINE. Fines carry a period_label of
+         their own so the unique index never collides, and the arrears
+         reminder used to read that identifier out to the member: "your
+         FINE-SCF8A2C1 contribution of R50,00 is outstanding". */
+      /* A FRESH fine. The two above were settled by the pay-in, and the
+         chase only looks at what is still due — so reusing one of them
+         sent nothing and the assertion failed for the wrong reason. */
+      const chaseMe = await call('POST', '/api/stokvels/SA-C-1/fines', tok(CHAIR),
+        { investor_id: ANN, amount: 30, note: 'Missed the November meeting' });
+      await db.query(
+        `UPDATE stokvel_contributions SET due_date = CURRENT_DATE - 2, reminded_at = NULL
+          WHERE id = $1`, [chaseMe.body.data.id]);
+      await db.query(
+        `UPDATE stokvel_contributions SET reminded_at = NOW()
+          WHERE sub_account_id='SA-C-1' AND kind <> 'fine'`);
+      /* Both channels captured, from here on only — the chase assertions
+         above count real sends and must not be disturbed. chaseArrears
+         requires these inside the function, so seeding require.cache now
+         is enough. */
+      const caught = [];
+      for (const f of ['email.js', 'pushService.js']) {
+        const fp = require('path').join(ROOT, 'server', 'services', f);
+        require.cache[fp] = { id: fp, filename: fp, loaded: true, children: [], paths: [],
+          exports: new Proxy({}, { get(_t, k) {
+            if (typeof k !== 'string' || k === 'then') return undefined;
+            return (...args) => { caught.push(JSON.stringify(args)); return Promise.resolve({}); };
+          } }) };
+      }
+      await chaseArrears();
+      const chased = caught.join(' | ');
+      ok('the chase calls a fine a fine', /fine/i.test(chased), chased.slice(0, 200));
+      ok('and does not read its identifier out as a month',
+         !/FINE-/.test(chased), chased.slice(0, 200));
+      ok('with what it was for', /November meeting/.test(chased), chased.slice(0, 200));
+
       const withdrawn = await call('DELETE',
     `/api/stokvels/SA-C-1/fines/${second.body.data.id}`, tok(CHAIR));
       const stillThere = (await db.query(

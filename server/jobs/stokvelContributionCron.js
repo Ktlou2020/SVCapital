@@ -53,7 +53,7 @@ async function chaseArrears() {
   /* Overdue, unsettled, and never reminded. The reminded_at guard is what
      keeps this to one message rather than one a day until they pay. */
   const { rows } = await pool.query(
-    `SELECT c.id, c.investor_id, c.period_label, c.due_date,
+    `SELECT c.id, c.investor_id, c.period_label, c.due_date, c.kind, c.note,
             (c.amount_due - c.amount_paid) AS owed,
             a.name AS stokvel_name,
             i.email, i.first_name
@@ -69,14 +69,28 @@ async function chaseArrears() {
   let sent = 0;
   for (const r of rows) {
     try {
+      /* A FINE IS NOT A PERIOD. Fines are carried on this table with a
+         period_label of their own (FINE-<id>) so the unique index never
+         collides — which meant the chase said "your FINE-SCF8A2C1
+         contribution of R50,00 is outstanding", an identifier read out to
+         a member as though it were a month. What they need is the word
+         fine and what it was for. */
+      const isFine = r.kind === 'fine';
+      const what = isFine
+        ? ('fine' + (r.note ? ' — ' + String(r.note).slice(0, 80) : ''))
+        : (r.period_label + ' contribution');
+
       await emailService.sendStokvelArrears(
         { email: r.email, first_name: r.first_name },
-        { stokvelName: r.stokvel_name, periodLabel: r.period_label,
-          owed: r.owed, dueDate: r.due_date }
+        /* No label for a fine. FINE-<id> is an identifier, and handing a
+           renderer a value that would be wrong to render is how it ends up
+           rendered — which is what happened. */
+        { stokvelName: r.stokvel_name, periodLabel: isFine ? null : r.period_label,
+          owed: r.owed, dueDate: r.due_date, kind: r.kind, note: r.note }
       ).catch(() => {});
       pushService.sendPushToInvestor(r.investor_id, {
         title: r.stokvel_name,
-        body: `Your ${r.period_label} contribution of R${Number(r.owed).toFixed(2)} is outstanding.`,
+        body: `Your ${what} of R${Number(r.owed).toFixed(2)} is outstanding.`,
       }).catch(() => {});
       /* Marked whether or not the message got through. A failed send that is
          retried daily is the spam this guard exists to prevent, and the
