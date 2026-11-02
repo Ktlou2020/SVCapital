@@ -13110,7 +13110,7 @@ tr.total-row td{font-weight:800;background:#f9fafb;border-top:1.5px solid #d1d5d
 /* ═══════════════════════════════════════════════
    POOL MATURITY INSTRUCTION REPORT
    ═══════════════════════════════════════════════ */
-async function openPoolMaturityReport(poolId) {
+async function openPoolMaturityReport(poolId, into) {
   Toast.info('Building maturity report…');
   try {
     const data = await API._fetch('GET', 'admin/pool-maturity-report', null, { pool_id: poolId });
@@ -13120,13 +13120,39 @@ async function openPoolMaturityReport(poolId) {
       return;
     }
     _POOL_MATURITY_REPORT = data;
-    _openPoolMaturityReportWindow(data);
+    /* Which pool this report is of, so the Refresh button in the report
+       window knows what to ask for again without the caller repeating it. */
+    _POOL_MATURITY_POOL = poolId;
+    _openPoolMaturityReportWindow(data, into);
   } catch (e) {
     Toast.error('Maturity report failed: ' + (e.message || 'error'));
+    throw e;
   }
 }
 
+/* ─── REFRESHING AN OPEN REPORT ──────────────────────────────────────
+   The report is a snapshot written into a popup. Change a maturity
+   instruction, post a pool's return or cancel an investment, and the
+   report somebody has open on the other screen is quietly wrong — and it
+   is the document they reconcile a bank file against.
+
+   Called FROM the report window. It rewrites that same window rather than
+   opening a second one, so there is never a question of which of two
+   reports is current, and no popup blocker to get past on a refresh.
+
+   It returns a promise that REJECTS on failure, because the report window
+   has to be able to tell the person in front of it. The old download
+   callbacks reported through Toast — in the console, behind the report —
+   so a failure looked exactly like a button that did nothing. */
+async function refreshPoolMaturityReport() {
+  if (!_POOL_MATURITY_POOL) throw new Error('This report does not know which pool it is of.');
+  await openPoolMaturityReport(_POOL_MATURITY_POOL, _POOL_MATURITY_WIN);
+  return true;
+}
+
 let _POOL_MATURITY_REPORT = null;
+let _POOL_MATURITY_POOL   = null;
+let _POOL_MATURITY_WIN    = null;
 
 /* The CSV is the row-level report, one line per investment, because that is
    the form someone reconciles against a bank file. The printed page carries
@@ -13384,7 +13410,7 @@ function downloadPoolMaturityPDF() {
   Toast.success('PDF downloaded');
 }
 
-function _openPoolMaturityReportWindow(d) {
+function _openPoolMaturityReportWindow(d, into) {
   /* Both files are built HERE and embedded in the page as data: URLs, rather
      than the report's buttons calling back into this window.
 
@@ -13428,7 +13454,14 @@ function _openPoolMaturityReportWindow(d) {
     return m ? `${+m[3]} ${MONTHS_SHORT[+m[2] - 1]} ${m[1]}` : '—';
   };
   const pct = r => r == null ? '—' : (r * 100).toFixed(2) + '%';
-  const issuedAt = new Date().toLocaleString('en-ZA', { dateStyle: 'long', timeStyle: 'short' });
+  /* WHEN THE FIGURES WERE READ, which is the server's own stamp — not
+     `new Date()` at render. They are not the same thing: a report rebuilt
+     from data already in hand would otherwise claim to be as current as
+     the moment it was drawn, which is exactly the lie a refresh button
+     exists to stop. Falls back to now only if the server sent none. */
+  const takenAt = d.generatedAt ? new Date(d.generatedAt) : new Date();
+  const issuedAt = takenAt.toLocaleString('en-ZA', { dateStyle: 'long', timeStyle: 'short' });
+  const takenClock = takenAt.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' });
   const _logoUrl = window.location.origin + '/assets/sv-capital-logo-horizontal-white-text.png';
   const ref = `SVCMR-${String(d.pool.id).replace(/[^A-Za-z0-9]/g, '').slice(-10)}`;
 
@@ -13499,6 +13532,13 @@ body{font-family:Arial,Helvetica,sans-serif;background:#fff;color:#111;-webkit-p
 .no-print button,.no-print a{border:none;padding:7px 16px;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-block;line-height:1.2}
 .btn-note{background:#4b5563;color:#fff;padding:7px 16px;border-radius:5px;font-size:12px;font-weight:700}
 .btn-print{background:#e5e7eb;color:#111}.btn-csv{background:#22c55e;color:#fff}.btn-pdf{background:#eda5ff;color:#111}
+.btn-refresh{background:#3b82f6;color:#fff}
+.btn-refresh[disabled]{opacity:.6;cursor:default}
+.taken{color:#cbd5e1;font-size:11px;font-weight:500;white-space:nowrap}
+/* Said HERE, in the window the person is looking at. A refresh that failed
+   and reported into the console behind this report would look exactly like
+   a button that did nothing. */
+#svcRefreshNote{display:none;background:#7f1d1d;color:#fff;padding:9px 20px;font-size:12px;font-weight:600}
 .wrap{max-width:1100px;margin:52px auto 32px;padding:24px 30px;border-top:5px solid #eda5ff}
 .hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:14px;border-bottom:3px solid #1f2937;margin-bottom:18px}
 .hdr-brand p{font-size:10px;color:#6b7280;margin-top:7px}
@@ -13527,15 +13567,63 @@ tr.total-row td{font-weight:800;background:#f9fafb;border-top:1.5px solid #d1d5d
 .stamp{display:inline-block;border:2px solid #eda5ff;color:#eda5ff;padding:4px 11px;border-radius:3px;font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-top:10px}
 </style></head><body>
 <div class="no-print">
-  <span>SV Capital &mdash; Maturity Instructions &nbsp;&middot;&nbsp; ${_esc(d.pool.name)}</span>
+  <span>SV Capital &mdash; Maturity Instructions &nbsp;&middot;&nbsp; ${_esc(d.pool.name)}
+    <span class="taken">&nbsp;&middot;&nbsp; figures as at ${takenClock}</span></span>
   <div class="btn-row">
     ${pdfHref
       ? `<a class="btn-pdf" href="${pdfHref}" download="${fileBase}.pdf">Download PDF</a>`
       : `<span class="btn-note" title="jsPDF did not load in the admin console">PDF unavailable &mdash; use Print</span>`}
     <a class="btn-csv" href="${csvHref}" download="${fileBase}.csv">Download CSV</a>
     <button class="btn-print" onclick="window.print()">Print</button>
+    <button class="btn-refresh" id="svcRefreshBtn" onclick="svcRefresh(this)">Refresh</button>
   </div>
 </div>
+<div id="svcRefreshNote" class="no-print"></div>
+<script>
+/* REFRESHING THIS REPORT.
+
+   The figures here are a snapshot. Change a maturity instruction, post a
+   pool's return or cancel an investment, and this document is quietly out
+   of date — and it is the one somebody reconciles a bank file against.
+
+   The work is done by the admin console that opened this window, because
+   that is where the session and the report builder live. The console
+   rewrites THIS window rather than opening another, so there are never two
+   reports on screen with no way to tell which is current.
+
+   Everything that can go wrong is said in this window. The download
+   callbacks this file used to have reported through Toast, in the console
+   behind the report, so a failure looked exactly like a button that did
+   nothing. */
+function svcRefreshFail(msg) {
+  var n = document.getElementById('svcRefreshNote');
+  if (n) { n.textContent = msg; n.style.display = 'block'; }
+  var b = document.getElementById('svcRefreshBtn');
+  if (b) { b.disabled = false; b.textContent = 'Refresh'; }
+}
+function svcRefresh(btn) {
+  var note = document.getElementById('svcRefreshNote');
+  if (note) note.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = 'Refreshing\u2026';
+  var opener = null;
+  try { opener = window.opener; } catch (e) { opener = null; }
+  if (!opener || opener.closed || typeof opener.refreshPoolMaturityReport !== 'function') {
+    svcRefreshFail('This report cannot refresh itself because the admin console '
+      + 'window is closed. Open the console, go to the pool and run the maturity '
+      + 'report again.');
+    return;
+  }
+  var stale = ' The figures below are still as at ${takenClock}.';
+  try {
+    Promise.resolve(opener.refreshPoolMaturityReport()).catch(function (e) {
+      svcRefreshFail('Could not refresh: ' + ((e && e.message) || 'the console refused') + '.' + stale);
+    });
+  } catch (e) {
+    svcRefreshFail('Could not refresh: ' + ((e && e.message) || 'the console refused') + '.' + stale);
+  }
+}
+<\/script>
 <div class="wrap">
   <div class="hdr">
     <div class="hdr-brand">
@@ -13628,11 +13716,18 @@ tr.total-row td{font-weight:800;background:#f9fafb;border-top:1.5px solid #d1d5d
 </div>
 </body></html>`;
 
-  const win = window.open('', '_blank', 'width=1200,height=900');
+  /* Into the window it is already in, when there is one. A refresh that
+     opened a SECOND report would leave two on screen with no way to tell
+     which is current — and the second would meet the popup blocker, since
+     it is no longer inside the click that opened the first. */
+  const reuse = into && !into.closed;
+  const win = reuse ? into : window.open('', '_blank', 'width=1200,height=900');
   if (!win) { Toast.error('Allow pop-ups to open the report'); return; }
+  if (reuse) win.document.open();
   win.document.write(html);
   win.document.close();
   win.focus();
+  _POOL_MATURITY_WIN = win;
 }
 
 /* ═══════════════════════════════════════════════
