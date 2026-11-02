@@ -9,7 +9,7 @@
    ═══════════════════════════════════════════════════════════ */
 'use strict';
 
-const cron         = require('node-cron');
+const cron         = require('./_watched');
 const pool         = require('../db/pool');
 const emailService = require('../services/email');
 const { recordTransaction, systemActor } = require('../services/ledger');

@@ -170,6 +170,10 @@ function makeEnv({ serverKpis = true, seriesOk = true, ticketsOk = true } = {}) 
        somebody waits for the operational figures — so it is stubbed here
        rather than lifted, and the assertion below is that it was called. */
     _loadAnnouncements: rec('_loadAnnouncements'),
+    /* The incidents panel, stubbed for the same reason and asserted on for
+       the same one: what is broken right now must not be what stops the
+       figures loading. */
+    _loadIncidents: rec('_loadIncidents'),
     Auth: { getUser: () => ({ name: 'Admin', role: 'admin', email: 'a@b.c' }) },
     /* Real helpers need a real-shaped storage: absent, not throwing. */
     localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
@@ -242,6 +246,12 @@ async function run(opts) {
       /* CLAUDE.md requires a notice for every new feature, so the dashboard
          has to ask for them — and must not wait, because the figures are
          what somebody opened it for. */
+      ok('it asks what is broken right now', r.reached.includes('_loadIncidents'),
+         JSON.stringify(r.reached));
+      ok('and does not wait for that either',
+         !/await\s+_loadIncidents/.test(SRC),
+         'an incidents panel that the figures wait for is a panel that takes '
+         + 'the dashboard down with it on the day it matters');
       ok('it asks for the feature notices', r.reached.includes('_loadAnnouncements'),
          JSON.stringify(r.reached));
       ok('and does not wait for them',

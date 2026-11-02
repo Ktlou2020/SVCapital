@@ -11,7 +11,7 @@
  * writes down what it saw and the report shows that the price is ageing, which
  * is the signal a person can act on. */
 
-const cron = require('node-cron');
+const cron = require('./_watched');
 const { runBeefPriceFetch } = require('../services/beefPriceFetch');
 
 const BUSINESS_TZ = 'Africa/Johannesburg';

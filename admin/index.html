@@ -226,6 +226,13 @@
              costs a reader nothing once they are up to date. -->
         <div id="adminAnnouncements"></div>
 
+        <!-- What is broken right now. Filled by _loadIncidents(); stays empty
+             and invisible when nothing is open, so a quiet platform costs a
+             reader nothing. Above the figures deliberately: a dashboard that
+             reports healthy numbers from a server throwing 500s is worse
+             than one that reports nothing. -->
+        <div id="adminIncidents"></div>
+
         <!-- Admin Welcome Strip -->
         <div class="admin-welcome-strip" id="adminWelcomeStrip">
           <div class="admin-welcome-strip__left">
@@ -5208,7 +5215,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=21"></script>
 <script src="../js/investor-documents.js?v=6"></script>
-<script src="js/admin.js?v=202"></script>
+<script src="js/admin.js?v=203"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>

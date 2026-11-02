@@ -17,7 +17,7 @@
    ═══════════════════════════════════════════════════════════ */
 'use strict';
 
-const cron         = require('node-cron');
+const cron         = require('./_watched');
 const { investmentEndDate } = require('../services/investmentTerm');
 const pool         = require('../db/pool');
 const emailService = require('../services/email');

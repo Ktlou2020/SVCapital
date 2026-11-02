@@ -16,7 +16,7 @@
    ═══════════════════════════════════════════════════════ */
 'use strict';
 
-const cron = require('node-cron');
+const cron = require('./_watched');
 const pool = require('../db/pool');
 const { KYC_TICKET_MATCH, KYC_TICKET_OPEN } = require('../services/kycTickets');
 

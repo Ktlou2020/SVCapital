@@ -16,7 +16,7 @@
    the rest, which is a conversation rather than a notification.
    ═══════════════════════════════════════════════════════════ */
 
-const cron = require('node-cron');
+const cron = require('./_watched');
 const pool = require('../db/pool');
 const contributions = require('../services/stokvelContributions');
 

@@ -16,6 +16,7 @@ const compression  = require('compression');
 const cookieParser = require('cookie-parser');
 const cors         = require('cors');
 const rateLimit    = require('express-rate-limit');
+const incidents    = require('./services/incidents');
 const path         = require('path');
 const fs           = require('fs');
 
@@ -442,7 +443,20 @@ app.get('*', (req, res) => {
 
 /* ─── Global Error Handler ─── */
 app.use((err, req, res, _next) => {
-  console.error('Unhandled error:', err.message);
+  /* Recorded before it is answered. The client gets the same response it
+     always did; the difference is that somebody now finds out. The route and
+     the method go in rather than the full URL, because a URL carries ids and
+     this row is read by whoever is on call, not by an auditor. */
+  incidents.report(err, {
+    source: `${req.method} ${req.route ? req.route.path : (req.baseUrl || req.path || 'unknown')}`,
+    severity: (err.status || 500) >= 500 ? 'error' : 'warning',
+    details: {
+      status: err.status || 500,
+      path: req.path,
+      actor: req.user ? (req.user.role || 'client') : 'anonymous',
+    },
+  }).catch(() => { /* report() already swallows; this is belt and braces */ });
+
   res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
 });
 
@@ -465,6 +479,11 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
   // Start FICA annual re-check cron (requires DATABASE_URL)
   const { startFicaCron } = require('./jobs/ficaCron');
   startFicaCron();
+
+  /* Last, and watching the rest: every job above writes a heartbeat, and
+     this is what notices when one stops writing them. */
+  const { startHeartbeatCron } = require('./jobs/heartbeatCron');
+  startHeartbeatCron();
 
   // Start maturity alert cron (daily 08:00 SAST)
   const { startMaturityCron } = require('./jobs/maturityCron');
@@ -634,11 +653,19 @@ process.on('SIGINT',  () => shutdown('SIGINT'));
 process.on('unhandledRejection', (reason) => {
   console.error('[unhandledRejection] a background promise rejected and was not caught:');
   console.error(reason instanceof Error ? (reason.stack || reason.message) : reason);
+  incidents.report(reason instanceof Error ? reason : new Error(String(reason)),
+    { source: 'unhandledRejection', severity: 'critical' }).catch(() => {});
 });
 
 process.on('uncaughtException', (err) => {
   console.error('[uncaughtException]', err?.stack || err?.message || err);
-  shutdown('uncaughtException', 1);
+  /* The process is going down either way. Recording is given a moment and
+     then the shutdown proceeds regardless — a reporter that hangs must not
+     be what turns a crash into a hang. */
+  Promise.race([
+    incidents.report(err, { source: 'uncaughtException', severity: 'critical' }),
+    new Promise(r => setTimeout(r, 2000)),
+  ]).catch(() => {}).then(() => shutdown('uncaughtException', 1));
 });
 
 module.exports = app;

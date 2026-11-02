@@ -834,6 +834,7 @@ async function loadDashboard() {
   /* Not awaited: the dashboard's figures are what somebody opened it for, and
      a notice about a new feature must never be the reason they wait. */
   _loadAnnouncements();
+  _loadIncidents();
   try {
     const _dash = await _refreshDashboardTotals();
     const nonArchived = STATE.investors.filter(i => i.status !== 'archived');
@@ -3258,6 +3259,124 @@ const ANN_AREA = {
   portal: { label: 'Client portal', colour: '#22c55e' },
   both:   { label: 'Admin & client portal', colour: '#fec24f' },
 };
+
+/* ═══════════════════════════════════════════════════════════
+   WHAT IS BROKEN RIGHT NOW.
+
+   Every error used to go to console.error and nowhere else, so the first
+   person to know a payout had failed was the client whose money had not
+   arrived. Errors are recorded now, and whoever is on call is emailed — but
+   an alert that arrives at 3am and is cleared from an inbox leaves nothing
+   behind. This is the place somebody opening the console in the morning
+   finds out what happened overnight.
+
+   Two kinds sit here. An INCIDENT is something that threw, folded by
+   fingerprint with a count, so one fault in a loop is one line. An OVERDUE
+   JOB is the other failure entirely: nothing threw, the job simply stopped
+   running, and only its missing heartbeat says so.
+   ═══════════════════════════════════════════════════════════ */
+const INC_SEV = {
+  critical: { colour: '#ef4444', icon: 'fa-triangle-exclamation', label: 'Critical' },
+  error:    { colour: '#ff8215', icon: 'fa-circle-exclamation',   label: 'Error' },
+  warning:  { colour: '#fec24f', icon: 'fa-circle-info',          label: 'Warning' },
+};
+
+function _incAgo(ts) {
+  if (!ts) return 'never';
+  const mins = Math.max(0, Math.round((Date.now() - new Date(ts).getTime()) / 60000));
+  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1440) return `${Math.round(mins / 60)}h ago`;
+  return `${Math.round(mins / 1440)}d ago`;
+}
+
+async function _loadIncidents() {
+  const host = document.getElementById('adminIncidents');
+  if (!host) return;
+  let res;
+  try {
+    res = await API._fetch('GET', 'opsconsole/incidents');
+  } catch (e) {
+    /* Silent, like the announcements above it: this panel exists to report
+       trouble and must not become trouble of its own on a console that is
+       otherwise working. */
+    console.warn('[incidents] could not load:', e.message);
+    return;
+  }
+  const open = (res && res.data) || [];
+  const late = ((res && res.jobs) || []).filter(j => j.overdue);
+  const alerting = (res && res.alerting) || {};
+
+  if (!open.length && !late.length) { host.innerHTML = ''; return; }
+
+  const card = (inner, colour) => `<div style="border:1px solid ${colour}33;
+      border-left:3px solid ${colour};background:${colour}0d;border-radius:8px;
+      padding:10px 12px;margin-bottom:8px">${inner}</div>`;
+
+  const jobRows = late.map(j => card(`
+    <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
+      <div>
+        <div style="font-weight:700;font-size:0.84rem">${_esc(j.job)} has stopped running</div>
+        <div style="font-size:0.76rem;color:var(--text-muted);margin-top:2px">
+          Last finished ${_incAgo(j.last_finished_at)}. It should run at least every
+          ${Math.round(Number(j.max_silence_minutes) / 60)}h.
+          ${j.last_error ? `Last error: ${_esc(String(j.last_error).slice(0, 160))}` : ''}
+        </div>
+      </div>
+    </div>`, '#ef4444')).join('');
+
+  const incRows = open.slice(0, 8).map(i => {
+    const sev = INC_SEV[i.severity] || INC_SEV.error;
+    return card(`
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap">
+        <div style="min-width:0;flex:1">
+          <div style="font-weight:700;font-size:0.84rem">
+            <i class="fa-solid ${sev.icon}" style="color:${sev.colour};margin-right:6px"></i>
+            ${_esc(i.source || 'unknown')}
+            ${i.occurrences > 1 ? `<span style="font-weight:600;color:var(--text-muted);font-size:0.76rem">
+               · ${i.occurrences} times</span>` : ''}
+          </div>
+          <div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px;word-break:break-word">
+            ${_esc(String(i.message || '').slice(0, 300))}
+          </div>
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-top:3px">
+            First ${_incAgo(i.first_seen)}, last ${_incAgo(i.last_seen)}
+          </div>
+        </div>
+        <button class="btn btn--ghost btn--sm" onclick="resolveIncident('${_esc(i.id)}')"
+                title="It comes back by itself if the same fault happens again">Dealt with</button>
+      </div>`, sev.colour);
+  }).join('');
+
+  /* Recording an incident and telling nobody is its own fault to fix, and
+     the only person who can fix it is reading this. */
+  const noSink = (!alerting.email && !alerting.webhook) ? `
+    <div style="font-size:0.74rem;color:var(--text-muted);margin-top:6px">
+      Nobody is being emailed about these. Set <code>OPS_ALERT_EMAIL</code> or
+      <code>OPS_ALERT_WEBHOOK</code> on the server so they do not wait for
+      somebody to open this page.
+    </div>` : '';
+
+  host.innerHTML = `
+    <div style="margin-bottom:16px">
+      <div style="font-size:0.74rem;text-transform:uppercase;letter-spacing:.5px;
+                  color:var(--text-muted);margin-bottom:8px">
+        Needs attention
+        ${open.length > 8 ? `<span style="text-transform:none;letter-spacing:0">
+          · showing 8 of ${open.length}</span>` : ''}
+      </div>
+      ${jobRows}${incRows}${noSink}
+    </div>`;
+}
+
+async function resolveIncident(id) {
+  try {
+    await API._fetch('PATCH', `opsconsole/incidents/${encodeURIComponent(id)}`, { resolved: true });
+    Toast.show('Marked as dealt with. It reopens by itself if it happens again.', 'success');
+    _loadIncidents();
+  } catch (e) {
+    Toast.show(e.message || 'Could not update that incident.', 'error');
+  }
+}
 
 async function _loadAnnouncements() {
   const host = document.getElementById('adminAnnouncements');

@@ -237,6 +237,56 @@ CREATE TABLE IF NOT EXISTS return_schedules (
   created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+/* WHAT BROKE, AND WHETHER ANYBODY WAS TOLD.
+ *
+ * Every error on this platform went to console.error and nowhere else. The
+ * Express handler logged a line and returned a 500; unhandledRejection
+ * logged a stack; the FICA, maturity, payout, interest and recurring crons
+ * each caught, logged and carried on. All of it landed in a log nobody
+ * watches, so the first person to know a payout had failed was the client
+ * whose money had not arrived.
+ *
+ * Recorded here instead, folded by FINGERPRINT — the same fault in a loop
+ * is one incident with a count, not ten thousand emails. first_seen and
+ * last_seen bracket it, notified_at throttles the telling, and resolved_at
+ * is a person saying they have dealt with it.
+ */
+CREATE TABLE IF NOT EXISTS platform_incidents (
+  id TEXT PRIMARY KEY,
+  fingerprint TEXT NOT NULL UNIQUE,
+  severity TEXT NOT NULL DEFAULT 'error',
+  source TEXT,
+  message TEXT NOT NULL,
+  stack TEXT,
+  context JSONB,
+  occurrences INTEGER NOT NULL DEFAULT 1,
+  first_seen TIMESTAMPTZ DEFAULT NOW(),
+  last_seen TIMESTAMPTZ DEFAULT NOW(),
+  notified_at TIMESTAMPTZ,
+  resolved_at TIMESTAMPTZ,
+  resolved_by TEXT
+);
+CREATE INDEX IF NOT EXISTS platform_incidents_open_idx
+  ON platform_incidents(last_seen DESC) WHERE resolved_at IS NULL;
+
+/* WHEN EACH UNATTENDED JOB LAST FINISHED.
+ *
+ * An error that is reported is the easy half. A cron that simply stops
+ * running reports nothing at all: no exception, no log line, no incident —
+ * just maturities that are never paid. So each job writes here when it
+ * finishes, and anything overdue is surfaced as an incident of its own. */
+CREATE TABLE IF NOT EXISTS job_heartbeats (
+  job TEXT PRIMARY KEY,
+  last_started_at TIMESTAMPTZ,
+  last_finished_at TIMESTAMPTZ,
+  last_error TEXT,
+  last_duration_ms INTEGER,
+  runs INTEGER NOT NULL DEFAULT 0,
+  failures INTEGER NOT NULL DEFAULT 0,
+  /* How long this job may go quiet before that is itself a fault. */
+  max_silence_minutes INTEGER
+);
+
 CREATE TABLE IF NOT EXISTS audit_events (
   id TEXT PRIMARY KEY, event_type TEXT NOT NULL,
   entity_type TEXT, entity_id TEXT,
@@ -5018,6 +5068,10 @@ async function autoSetup() {
           title: 'Every money movement now says who made it',
           body: 'A transaction row recorded what moved, to whom and when \u2014 and never who did it, so a credit a staff member made read exactly like one the client made themselves. Every movement now carries the person or the job behind it: a client acting on their own account, a named staff member with the address they acted from, or the automated job that ran. It shows under the date on each row, in orange when it was one of us. Rows written before this carry nothing and say nothing rather than guessing. Clients never see our names or addresses on their own statements \u2014 only whether a movement was theirs, ours, or automatic.',
           where: 'Transactions \u2014 under the date on every row. Also on an investor\u2019s Transactions tab.' },
+        { id: 'incidents-2026-11', area: 'admin', icon: 'fa-heart-pulse',
+          title: 'The dashboard now tells you what is broken',
+          body: 'Every error used to go to a server log nobody watches, which meant the first person to know a payout had failed was the client whose money had not arrived. Errors are now recorded, folded so one fault in a loop is one line with a count, and shown at the top of the dashboard. Separately, every unattended job writes a heartbeat: a job that simply STOPS running throws nothing and logs nothing, so the only sign is a heartbeat that stopped arriving, and that now raises an alert of its own. Mark something \u201cDealt with\u201d and it goes away \u2014 and comes straight back if the same fault happens again. Set OPS_ALERT_EMAIL on the server to be emailed the first time something breaks instead of waiting until somebody opens this page.',
+          where: 'Dashboard \u2014 at the top, above the figures. Empty and invisible when nothing is wrong.' },
       ];
 
       let added = 0;

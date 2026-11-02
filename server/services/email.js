@@ -1021,6 +1021,21 @@ function stripLeadingGreeting(text) {
   return m ? s.slice(m[0].length) : s;
 }
 
+/* Ops, not a client. No greeting, no portal button, no branding — this goes
+   to whoever is on call and its whole job is to be read fast on a phone.
+   It is deliberately the plainest message this file sends. */
+function sendOpsAlert(to, { subject, body }) {
+  if (!to) return Promise.resolve();
+  const esc = String(body || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return _send({
+    to,
+    subject,
+    type: 'ops_alert',
+    html: `<pre style="font:13px/1.5 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap">${esc}</pre>`,
+    text: String(body || ''),
+  });
+}
+
 function sendAlert(investor, { subject, message }) {
   const { email, first_name, id } = investor;
   if (!email) return Promise.resolve();
@@ -1392,6 +1407,7 @@ function sendIdleWalletNudge(investor, { balance, poolName, minNeeded, poolCount
 }
 
 module.exports = {
+  sendOpsAlert,
   sendStokvelArrears,
   sendStokvelMandate,
   sendStokvelInvite,

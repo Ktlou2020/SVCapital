@@ -10,7 +10,7 @@
    ═══════════════════════════════════════════════════════ */
 'use strict';
 
-const cron           = require('node-cron');
+const cron           = require('./_watched');
 const pool           = require('../db/pool');
 const { runFicaCheck } = require('../services/ficaService');
 const emailService   = require('../services/email');

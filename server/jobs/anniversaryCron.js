@@ -15,7 +15,7 @@
  * waiting. That is the designed outcome, not a failure — see the service.
  */
 
-const cron = require('node-cron');
+const cron = require('./_watched');
 const pool = require('../db/pool');
 const audit = require('../services/audit');
 const annual = require('../services/anniversaryReturns');

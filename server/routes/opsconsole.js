@@ -22,6 +22,77 @@ function _ping(url, opts = {}) {
 }
 
 /* ════════════════════════════════════════════════════
+   GET /api/opsconsole/incidents
+   What has broken, and whether a job has stopped running.
+
+   Behind the same admin/director guard as everything else here: a stack
+   trace names internal files and a context carries whichever route threw,
+   and neither is a client's business.
+   ════════════════════════════════════════════════════ */
+router.get('/incidents', requireAuth, requireRole(...ADMIN_OR_DIRECTOR), async (req, res) => {
+  try {
+    const includeResolved = String(req.query.resolved || '') === 'true';
+    const { rows: incidents } = await pool.query(
+      `SELECT id, fingerprint, severity, source, message, occurrences,
+              first_seen, last_seen, notified_at, resolved_at, resolved_by,
+              context,
+              LEFT(COALESCE(stack, ''), 2000) AS stack
+         FROM platform_incidents
+        ${includeResolved ? '' : 'WHERE resolved_at IS NULL'}
+        ORDER BY resolved_at IS NOT NULL, last_seen DESC
+        LIMIT 200`);
+
+    /* The jobs, with how long each has been quiet, so a job that has STOPPED
+       is visible beside the errors rather than only as an incident the sweep
+       may not have raised yet. */
+    const { rows: jobs } = await pool.query(
+      `SELECT job, last_started_at, last_finished_at, last_error, last_duration_ms,
+              runs, failures, max_silence_minutes,
+              EXTRACT(EPOCH FROM (NOW() - COALESCE(last_finished_at, last_started_at))) / 60
+                AS quiet_minutes
+         FROM job_heartbeats
+        ORDER BY job`);
+
+    res.json({
+      data: incidents,
+      jobs: jobs.map(j => ({
+        ...j,
+        overdue: j.max_silence_minutes != null
+          && Number(j.quiet_minutes) > Number(j.max_silence_minutes),
+      })),
+      /* So the panel can say plainly that incidents are being recorded and
+         nobody is being told, which is its own thing to fix. */
+      alerting: {
+        email:   !!(process.env.OPS_ALERT_EMAIL || '').trim(),
+        webhook: !!(process.env.OPS_ALERT_WEBHOOK || '').trim(),
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* PATCH /api/opsconsole/incidents/:id — a person saying they have dealt
+   with it. If the same fault happens again the row reopens itself, so this
+   is a statement about now, not a way to silence something for good. */
+router.patch('/incidents/:id', requireAuth, requireRole(...ADMIN_OR_DIRECTOR), async (req, res) => {
+  try {
+    const resolve = req.body && req.body.resolved !== false;
+    const { rows } = await pool.query(
+      `UPDATE platform_incidents
+          SET resolved_at = ${resolve ? 'NOW()' : 'NULL'},
+              resolved_by = ${resolve ? '$2' : 'NULL'}
+        WHERE id = $1
+        RETURNING id, resolved_at, resolved_by`,
+      resolve ? [req.params.id, req.user.email || req.user.id] : [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'No such incident.' });
+    res.json({ data: rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ════════════════════════════════════════════════════
    GET /api/opsconsole/health
    Platform service health check
    ════════════════════════════════════════════════════ */
