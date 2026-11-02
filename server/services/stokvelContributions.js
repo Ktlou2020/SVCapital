@@ -13,6 +13,7 @@
    ═══════════════════════════════════════════════════════════ */
 
 const crypto = require('crypto');
+const { recordTransaction, systemActor } = require('./ledger');
 
 const round2 = n => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -97,7 +98,7 @@ async function openPeriod(client, subAccountId, when = new Date()) {
  *
  * Returns { paid, outstanding } or throws a message meant for a person.
  */
-async function pay(client, { contribution, investorId, subAccount, amount }) {
+async function pay(client, { contribution, investorId, subAccount, amount, actor }) {
   /* NUMERIC arrives from node-postgres as a STRING, and the first draft of
      this added one to a number: round2(contribution.amount_paid + want) with
      amount_paid "0.00" and want 500 concatenated to "0.00500", which is
@@ -139,15 +140,18 @@ async function pay(client, { contribution, investorId, subAccount, amount }) {
   /* Both sides of the pair. See services/ledger.js: listing one without the
      other would report a contribution as money entering or leaving the
      platform, which it never is. */
-  await client.query(
-    `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, created_at, updated_at)
-     VALUES (gen_random_uuid(), $1, 'stokvel_contribution', $2, 'completed', $3, $4, NOW(), NOW())`,
-    [investorId, want, ref, `Contribution to ${subAccount.name} — ${contribution.period_label}`]);
-  await client.query(
-    `INSERT INTO transactions (id, investor_id, sub_account_id, type, amount, status, reference, description, created_at, updated_at)
-     VALUES (gen_random_uuid(), $1, $2, 'stokvel_contribution_received', $3, 'completed', $4, $5, NOW(), NOW())`,
-    [subAccount.parent_investor_id, subAccount.id, want, ref + '-R',
-     `Contribution received — ${contribution.period_label}`]);
+  /* The same actor on both legs: one member's decision, seen from the
+     member's wallet and from the group's. */
+  const who = actor || systemActor('stokvelContributions');
+  await recordTransaction(client, {
+    investorId, type: 'stokvel_contribution', amount: want, reference: ref,
+    description: `Contribution to ${subAccount.name} — ${contribution.period_label}`,
+  }, who);
+  await recordTransaction(client, {
+    investorId: subAccount.parent_investor_id, subAccountId: subAccount.id,
+    type: 'stokvel_contribution_received', amount: want, reference: ref + '-R',
+    description: `Contribution received — ${contribution.period_label}`,
+  }, who);
 
   /* The share ledger's one hooked event. A contribution is the only movement
      on a stokvel wallet that names a member, so it is the only one written
@@ -188,7 +192,7 @@ async function pay(client, { contribution, investorId, subAccount, amount }) {
    Written as a contribution allocation, in the same transaction as the
    money, so there is never a moment when the wallet has moved and the
    ledger has not. */
-async function payIn(client, { subAccount, investorId, amount, note }) {
+async function payIn(client, { subAccount, investorId, amount, note, actor }) {
   const want = round2(amount);
   if (!(want > 0)) throw new Error('An amount is required.');
 
@@ -212,15 +216,16 @@ async function payIn(client, { subAccount, investorId, amount, note }) {
   /* Both sides of the pair, as services/ledger.js requires: listing one
      without the other reports money entering or leaving the platform, which
      this never does. */
-  await client.query(
-    `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, created_at, updated_at)
-     VALUES (gen_random_uuid(), $1, 'stokvel_contribution', $2, 'completed', $3, $4, NOW(), NOW())`,
-    [investorId, want, ref, `Paid into ${subAccount.name}${note ? ' \u2014 ' + String(note).slice(0, 80) : ''}`]);
-  await client.query(
-    `INSERT INTO transactions (id, investor_id, sub_account_id, type, amount, status, reference, description, created_at, updated_at)
-     VALUES (gen_random_uuid(), $1, $2, 'stokvel_contribution_received', $3, 'completed', $4, $5, NOW(), NOW())`,
-    [subAccount.parent_investor_id, subAccount.id, want, ref + '-R',
-     'Paid in by a member' + (note ? ' \u2014 ' + String(note).slice(0, 80) : '')]);
+  const who = actor || systemActor('stokvelContributions');
+  await recordTransaction(client, {
+    investorId, type: 'stokvel_contribution', amount: want, reference: ref,
+    description: `Paid into ${subAccount.name}${note ? ' \u2014 ' + String(note).slice(0, 80) : ''}`,
+  }, who);
+  await recordTransaction(client, {
+    investorId: subAccount.parent_investor_id, subAccountId: subAccount.id,
+    type: 'stokvel_contribution_received', amount: want, reference: ref + '-R',
+    description: 'Paid in by a member' + (note ? ' \u2014 ' + String(note).slice(0, 80) : ''),
+  }, who);
 
   const shares = require('./stokvelShares');
   await shares.allocateContribution(client, {

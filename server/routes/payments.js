@@ -15,6 +15,7 @@ const emailService = require('../services/email');
 const smsService   = require('../services/sms');
 const audit        = require('../services/audit');
 const aml          = require('../services/aml');
+const { recordTransaction, actorFromRequest, systemActor } = require('../services/ledger');
 
 /* ──────────────────────────────────────────────────────────
    GET /api/payments/config
@@ -30,7 +31,7 @@ router.get('/config', requireAuth, (req, res) => {
    Shared helper — atomically credit wallet and record deposit
    Idempotent: skips silently if the reference is already processed.
 ────────────────────────────────────────────────────────── */
-async function creditWallet(investorId, amount, reference, actorEmail = null, source = 'paystack', subAccountId = null) {
+async function creditWallet(investorId, amount, reference, actorEmail = null, source = 'paystack', subAccountId = null, actor = null) {
   const client = await pool.connect();
   let investor;
   /* Where the money ACTUALLY went, as opposed to where it was asked to go.
@@ -52,13 +53,15 @@ async function creditWallet(investorId, amount, reference, actorEmail = null, so
     const desc = `Top-up via ${sourceLabel} — R${Number(amount).toLocaleString('en-ZA')} credited to ${dest}`;
 
     // Atomic idempotency guard — ON CONFLICT DO NOTHING means rowCount = 0 if duplicate
-    const { rowCount } = await client.query(
-      `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, sub_account_id, transaction_date, created_at)
-       VALUES (gen_random_uuid(), $1, 'deposit', $2, 'completed', $3, $4, $5, NOW(), NOW())
-       ON CONFLICT (reference) DO NOTHING`,
-      [investorId, amount, reference, desc, subAccountId || null]
-    );
-    if (!rowCount) {
+    /* A card deposit has two ways in: the client returning from Paystack,
+       and Paystack's own webhook. The second is nobody's action, so it is
+       recorded as the system rather than as whoever happened to be signed
+       in — the row has to be able to say which one credited the wallet. */
+    const written = await recordTransaction(client, {
+      investorId, type: 'deposit', amount, reference, description: desc,
+      subAccountId: subAccountId || null,
+    }, actor || systemActor(`payments:${source}`), { onConflict: 'reference' });
+    if (!written) {
       await client.query('ROLLBACK');
       console.log(`[payments] ${reference} already processed — skipping duplicate credit`);
       return { alreadyProcessed: true };
@@ -220,7 +223,7 @@ router.post('/paystack/verify', requireAuth, async (req, res) => {
     // Always credit the authenticated user — never trust investor_id from Paystack metadata.
     const creditAmount = Number(psData.data.metadata?.wallet_credit) || (psData.data.amount / 100);
 
-    const result = await creditWallet(investorId, creditAmount, reference, req.user?.email, 'paystack', subAccountId || null);
+    const result = await creditWallet(investorId, creditAmount, reference, req.user?.email, 'paystack', subAccountId || null, actorFromRequest(req));
     aml.checkDeposit(pool, investorId, creditAmount, reference).catch(e => console.error('[aml]', e.message));
 
     // Save reusable authorization code for future auto top-ups
@@ -543,20 +546,17 @@ router.post('/wallet-transfer', requireAuth, async (req, res) => {
       }
 
       // Debit transaction for parent wallet
-      await client.query(
-        `INSERT INTO transactions
-           (id, investor_id, type, amount, status, reference, description, transaction_date, created_at)
-         VALUES (gen_random_uuid(),$1,'transfer_out',$2,'completed',$3,$4,NOW(),NOW())`,
-        [investorId, amountNum, reference, `Wallet transfer to ${saName}`]
-      );
+      await recordTransaction(client, {
+        investorId, type: 'transfer_out', amount: amountNum, reference,
+        description: `Wallet transfer to ${saName}`,
+      }, actorFromRequest(req));
 
       // Credit transaction linked to sub-account
-      await client.query(
-        `INSERT INTO transactions
-           (id, investor_id, type, amount, status, reference, description, transaction_date, sub_account_id, created_at)
-         VALUES (gen_random_uuid(),$1,'transfer_in',$2,'completed',$3,$4,NOW(),$5,NOW())`,
-        [investorId, amountNum, reference + '-IN', `Wallet transfer from main account to ${saName}`, sub_account_id]
-      );
+      await recordTransaction(client, {
+        investorId, type: 'transfer_in', amount: amountNum,
+        reference: reference + '-IN', subAccountId: sub_account_id,
+        description: `Wallet transfer from main account to ${saName}`,
+      }, actorFromRequest(req));
 
       await client.query('COMMIT');
       console.log(`[wallet-transfer] R${amountNum} from investor ${investorId} → sub-account ${sub_account_id} (${saName}), ref: ${reference}`);

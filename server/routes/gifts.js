@@ -5,6 +5,7 @@ const pool    = require('../db/pool');
 const crypto  = require('crypto');
 const { requireAuth } = require('../middleware/auth');
 const email   = require('../services/email');
+const { recordTransaction, actorFromRequest } = require('../services/ledger');
 
 const MIN_GIFT = 50;
 
@@ -74,11 +75,10 @@ router.post('/send', requireAuth, async (req, res) => {
       || recipientEmail.split('@')[0];
 
     // Record sender transaction
-    await client.query(
-      `INSERT INTO transactions (id, investor_id, type, amount, status, description, transaction_date, created_at)
-       VALUES ($1,$2,'gift_sent',$3,'completed',$4,NOW(),NOW())`,
-      [`TXN-${giftId}-S`, senderId, -amt, `Gift sent to ${recipientDisplayName}`]
-    );
+    await recordTransaction(client, {
+      id: `TXN-${giftId}-S`, investorId: senderId, type: 'gift_sent', amount: -amt,
+      description: `Gift sent to ${recipientDisplayName}`,
+    }, actorFromRequest(req));
 
     const isExisting = !!recipient;
     const giftStatus = isExisting ? 'claimed' : 'pending';
@@ -101,11 +101,13 @@ router.post('/send', requireAuth, async (req, res) => {
         'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
         [amt, recipient.id]
       );
-      await client.query(
-        `INSERT INTO transactions (id, investor_id, type, amount, status, description, transaction_date, created_at)
-         VALUES ($1,$2,'gift_received',$3,'completed',$4,NOW(),NOW())`,
-        [`TXN-${giftId}-R`, recipient.id, amt, `Investment gift from ${senderName}`]
-      );
+      /* The SENDER is the actor on both legs: the recipient did nothing.
+         Attributing the credit to the person who received it would make a
+         gift look like a self-credit. */
+      await recordTransaction(client, {
+        id: `TXN-${giftId}-R`, investorId: recipient.id, type: 'gift_received',
+        amount: amt, description: `Investment gift from ${senderName}`,
+      }, actorFromRequest(req));
     }
 
     await client.query('COMMIT');
@@ -207,11 +209,10 @@ router.post('/claim/:token', requireAuth, async (req, res) => {
     );
     const senderName = sender ? `${sender.first_name} ${sender.last_name}`.trim() : 'Someone';
 
-    await client.query(
-      `INSERT INTO transactions (id, investor_id, type, amount, status, description, transaction_date, created_at)
-       VALUES ($1,$2,'gift_received',$3,'completed',$4,NOW(),NOW())`,
-      [`TXN-CLAIM-${gift.id}`, claimantId, gift.amount, `Investment gift from ${senderName}`]
-    );
+    await recordTransaction(client, {
+      id: `TXN-CLAIM-${gift.id}`, investorId: claimantId, type: 'gift_received',
+      amount: gift.amount, description: `Investment gift from ${senderName}`,
+    }, actorFromRequest(req));
 
     await client.query('COMMIT');
     res.json({ success: true, amount: gift.amount, senderName });
@@ -243,11 +244,10 @@ router.delete('/:id', requireAuth, async (req, res) => {
       'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
       [gift.amount, senderId]
     );
-    await client.query(
-      `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, created_at, updated_at)
-       VALUES (gen_random_uuid(), $1, 'gift_cancelled', $2, 'completed', $3, 'Gift cancellation refund', NOW(), NOW())`,
-      [gift.sender_id, gift.amount, 'GIFT-CANCEL-' + gift.id]
-    );
+    await recordTransaction(client, {
+      investorId: gift.sender_id, type: 'gift_cancelled', amount: gift.amount,
+      reference: 'GIFT-CANCEL-' + gift.id, description: 'Gift cancellation refund',
+    }, actorFromRequest(req));
 
     await client.query('COMMIT');
     res.json({ success: true, refunded: gift.amount });

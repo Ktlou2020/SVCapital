@@ -195,7 +195,7 @@ console.log('\nand the button that moves money is built like one');
      chose to make. _stmtDirection puts both in DEBIT, so the running balance
      is unaffected; _stmtLabel is what differs. */
   ok('the statement row is typed reinvestment',
-     /VALUES \(gen_random_uuid\(\),\$1,\$2,'reinvestment'/.test(code),
+     /type: 'reinvestment'/.test(code),
      "_stmtLabel renders 'investment' as Investment and 'reinvestment' as Reinvestment");
   ok('and the investment record carries is_reinvestment',
      /is_reinvestment[\s\S]{0,260}true/.test(code));

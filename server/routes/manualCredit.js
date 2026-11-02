@@ -14,7 +14,8 @@ const audit   = require('../services/audit');
 router.use(requireAuth, requireRole('admin', 'director'));
 
 /* Cash-movement definition — single source in services/ledger.js */
-const { cashMovementSQL, cashMovement: CASH_MOVEMENT, movesCash } = require('../services/ledger');
+const { cashMovementSQL, cashMovement: CASH_MOVEMENT, movesCash,
+        recordTransaction, actorFromRequest } = require('../services/ledger');
 
 router.post('/manual-credit', async (req, res) => {
   try {
@@ -41,12 +42,10 @@ router.post('/manual-credit', async (req, res) => {
       }
       investor = inv;
 
-      await client.query(
-        `INSERT INTO transactions
-           (id, investor_id, type, amount, status, reference, description, notes, created_at, updated_at)
-         VALUES (gen_random_uuid(), $1, 'deposit', $2, 'completed', $3, 'Manual wallet credit', $4, NOW(), NOW())`,
-        [investorId, numAmount, reference, notes || null]
-      );
+      await recordTransaction(client, {
+        investorId, type: 'deposit', amount: numAmount, reference,
+        description: 'Manual wallet credit', notes: notes || null,
+      }, actorFromRequest(req));
 
       await client.query(
         'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
@@ -194,7 +193,7 @@ router.post('/anniversary-returns/run', requireRole('director'), async (req, res
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
-        const r = await annual.payOne(client, item);
+        const r = await annual.payOne(client, item, { actor: actorFromRequest(req) });
         await client.query('COMMIT');
         if (r.paid) { paid++; total = annual.round2(total + r.amount); }
       } catch (err) {
@@ -506,11 +505,10 @@ router.post('/eft-approve', async (req, res) => {
         });
       }
     } else {
-      await client.query(
-        `INSERT INTO transactions
-           (id, investor_id, sub_account_id, type, amount, status, reference, description, created_at, updated_at)
-         VALUES (gen_random_uuid(), $1, $2, 'deposit', $3, 'completed', $4, $5, NOW(), NOW())`,
-        [ticket.investor_id, ticket.sub_account_id || null, approved, reference, note]);
+      await recordTransaction(client, {
+        investorId: ticket.investor_id, subAccountId: ticket.sub_account_id || null,
+        type: 'deposit', amount: approved, reference, description: note,
+      }, actorFromRequest(req));
       credited = true;
     }
 
@@ -915,7 +913,10 @@ router.post('/maturity-wallet-fallbacks/apply', async (req, res) => {
       });
     }
 
-    const result = await applyReinvest(pool, opts);
+    /* Named: this reinvestment corrects a maturity, and a correction a
+       director ran must not read afterwards as something the system
+       decided on its own. */
+    const result = await applyReinvest(pool, { ...opts, actor: actorFromRequest(req) });
 
     /* After the writes, like every other money path here: an audit row
        records what happened and must not be able to undo it. */
@@ -1578,24 +1579,14 @@ router.post('/backfill-matured-funds', async (req, res) => {
     // Apply backfill — each INSERT is idempotent via ON CONFLICT.
     let inserted = 0;
     for (const r of missing) {
-      const { rowCount } = await pool.query(`
-        INSERT INTO transactions
-          (id, investor_id, sub_account_id, type, amount, status, reference,
-           description, investment_id, transaction_date, created_at, updated_at)
-        VALUES
-          (gen_random_uuid(), $1, $2, 'matured_funds', $3, 'completed', $4,
-           $5, $6, $7, $7, NOW())
-        ON CONFLICT (reference) DO NOTHING
-      `, [
-        r.investor_id,
-        r.sub_account_id || null,
-        parseFloat(r.amount),
-        r.matf_ref,
-        `Matured Funds — ${r.pool_name}`,
-        r.original_inv_id,
-        r.transaction_date || r.created_at,
-      ]);
-      if (rowCount) inserted++;
+      const written = await recordTransaction(pool, {
+        investorId: r.investor_id, subAccountId: r.sub_account_id || null,
+        type: 'matured_funds', amount: parseFloat(r.amount), reference: r.matf_ref,
+        description: `Matured Funds — ${r.pool_name}`,
+        investmentId: r.original_inv_id,
+        transactionDate: r.transaction_date || r.created_at,
+      }, actorFromRequest(req), { onConflict: 'reference' });
+      if (written) inserted++;
     }
 
     setImmediate(() => audit.log({
@@ -1689,12 +1680,13 @@ router.post('/override-wallet', async (req, res) => {
         const txDesc    = isDeposit ? 'Wallet balance adjusted' : 'Wallet balance adjusted';
         const adminNote = `Admin balance override — ${isDeposit ? 'deposit' : 'debit'} (R${Math.abs(diff).toFixed(2)} ${isDeposit ? 'added' : 'removed'}). Reason: ${notes || 'none'}`;
 
-        await client.query(
-          `INSERT INTO transactions
-             (id, investor_id, type, amount, status, reference, description, notes, created_at, updated_at)
-           VALUES (gen_random_uuid(), $1, $2, $3, 'completed', $4, $5, $6, NOW(), NOW())`,
-          [investorId, txType, diff, txRef, txDesc, adminNote]
-        );
+        /* A balance override is the single most sensitive write on the
+           platform: it moves money with no business event behind it. Of all
+           the rows here this is the one that most needed a name on it. */
+        await recordTransaction(client, {
+          investorId, type: txType, amount: diff, reference: txRef,
+          description: txDesc, notes: adminNote,
+        }, actorFromRequest(req));
       }
 
       await client.query('COMMIT');
@@ -1804,20 +1796,18 @@ router.post('/invest-on-behalf', async (req, res) => {
     // Optional platform fee transaction
     if (chargeFee && fee > 0) {
       const feeRef = 'FEE-' + crypto.randomUUID().replace(/-/g, '').slice(0, 10).toUpperCase();
-      await client.query(
-        `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, transaction_date, created_at, updated_at)
-         VALUES (gen_random_uuid(),$1,'platform_fee',$2,'completed',$3,$4,NOW(),NOW(),NOW())`,
-        [investorId, -fee, feeRef, `Platform fee (1%) for investment in ${poolRow.name}`]
-      );
+      await recordTransaction(client, {
+        investorId, type: 'platform_fee', amount: -fee, reference: feeRef,
+        description: `Platform fee (1%) for investment in ${poolRow.name}`,
+      }, actorFromRequest(req));
     }
 
     // Deduct investment amount transaction
     const invTxRef = 'INV-TXN-' + crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase();
-    await client.query(
-      `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, transaction_date, created_at, updated_at)
-       VALUES (gen_random_uuid(),$1,'investment',$2,'completed',$3,$4,NOW(),NOW(),NOW())`,
-      [investorId, -amt, invTxRef, `Investment in ${poolRow.name} (admin-created on behalf)`]
-    );
+    await recordTransaction(client, {
+      investorId, type: 'investment', amount: -amt, reference: invTxRef,
+      description: `Investment in ${poolRow.name} (admin-created on behalf)`,
+    }, actorFromRequest(req));
 
     await client.query('COMMIT');
 

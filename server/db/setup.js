@@ -456,6 +456,20 @@ DO $$ BEGIN
   BEGIN ALTER TABLE investors ADD COLUMN fica_resubmit_requested_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
   -- Referral tracking on transactions
   BEGIN ALTER TABLE transactions ADD COLUMN referred_investor_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  -- WHO MOVED THIS MONEY.
+  -- A transaction row said what happened, to whom, and when, and never who
+  -- did it. A staff member crediting a wallet, posting interest or settling a
+  -- reconciliation left a row indistinguishable from one the client caused
+  -- themselves, and that is the first question a dispute or a regulator asks
+  -- of an FSP holding client money. It cannot be reconstructed afterwards,
+  -- so every day without it was a day of unattributable movement.
+  -- actor_kind is the one that matters: 'client', 'staff' or 'system', so a
+  -- cron's work is never mistaken for a person's.
+  BEGIN ALTER TABLE transactions ADD COLUMN actor_kind TEXT;  EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE transactions ADD COLUMN actor_id TEXT;    EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE transactions ADD COLUMN actor_email TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE transactions ADD COLUMN actor_role TEXT;  EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE transactions ADD COLUMN actor_ip TEXT;    EXCEPTION WHEN duplicate_column THEN NULL; END;
   -- Term sheet URL on investment pools
   BEGIN ALTER TABLE investment_pools ADD COLUMN term_sheet_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
   -- Fee management columns on investment pools
@@ -5000,6 +5014,10 @@ async function autoSetup() {
           title: 'Support WhatsApp number changed',
           body: 'The support number is now 079 111 5476. Every WhatsApp link on the site, the portal and the app points at it.',
           where: 'Landing page footer and floating button, and the portal\u2019s support panel.' },
+        { id: 'txn-actor-2026-11', area: 'admin', icon: 'fa-fingerprint',
+          title: 'Every money movement now says who made it',
+          body: 'A transaction row recorded what moved, to whom and when \u2014 and never who did it, so a credit a staff member made read exactly like one the client made themselves. Every movement now carries the person or the job behind it: a client acting on their own account, a named staff member with the address they acted from, or the automated job that ran. It shows under the date on each row, in orange when it was one of us. Rows written before this carry nothing and say nothing rather than guessing. Clients never see our names or addresses on their own statements \u2014 only whether a movement was theirs, ours, or automatic.',
+          where: 'Transactions \u2014 under the date on every row. Also on an investor\u2019s Transactions tab.' },
       ];
 
       let added = 0;

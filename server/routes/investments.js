@@ -14,6 +14,7 @@ const audit  = require('../services/audit');
 const email  = require('../services/email');
 const { requireAuth } = require('../middleware/auth');
 const { instructionRefusal } = require('../services/maturityPolicy');
+const { recordTransaction, actorFromRequest } = require('../services/ledger');
 
 const VALID_INSTRUCTIONS = ['payout_all', 'payout_return', 'payout_custom', 'reinvest', 'switch_product', 'custom_switch', 'switch_amount'];
 const STAFF_ROLES = ['admin', 'director', 'fund_manager', 'staff'];
@@ -408,12 +409,11 @@ router.post('/:id/cancel', requireAuth, async (req, res) => {
       ? `Investment cancellation refund — ${inv.pool_name || inv.pool_id} (R${amount.toFixed(2)} principal + R${platformFee.toFixed(2)} platform fee)`
       : `Investment cancellation refund — ${inv.pool_name || inv.pool_id}`;
 
-    await client.query(
-      `INSERT INTO transactions
-         (id, investor_id, type, amount, status, reference, description, investment_id, pool_id, transaction_date, created_at, updated_at)
-       VALUES (gen_random_uuid(), $1, 'deposit', $2, 'completed', $3, $4, $5, $6, NOW(), NOW(), NOW())`,
-      [inv.investor_id, totalRefund, 'REV-' + id, refundDesc, id, inv.pool_id]
-    );
+    await recordTransaction(client, {
+      investorId: inv.investor_id, type: 'deposit', amount: totalRefund,
+      reference: 'REV-' + id, description: refundDesc,
+      investmentId: id, poolId: inv.pool_id,
+    }, actorFromRequest(req));
 
     // Reduce pool totals
     if (inv.pool_id) {

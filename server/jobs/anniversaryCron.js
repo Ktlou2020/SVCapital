@@ -19,6 +19,7 @@ const cron = require('node-cron');
 const pool = require('../db/pool');
 const audit = require('../services/audit');
 const annual = require('../services/anniversaryReturns');
+const { systemActor } = require('../services/ledger');
 
 const BUSINESS_TZ = 'Africa/Johannesburg';
 
@@ -33,7 +34,7 @@ async function runAnniversaryReturns({ asOf = new Date() } = {}) {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      const res = await annual.payOne(client, item);
+      const res = await annual.payOne(client, item, { actor: systemActor('anniversaryCron') });
       await client.query('COMMIT');
       if (res.paid) { paid++; total = annual.round2(total + res.amount); }
     } catch (err) {

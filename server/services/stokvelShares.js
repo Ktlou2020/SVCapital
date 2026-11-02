@@ -42,6 +42,7 @@
    ═══════════════════════════════════════════════════════════ */
 
 const crypto = require('crypto');
+const { recordTransaction, systemActor } = require('./ledger');
 
 const round2 = v => Math.round(Number(v || 0) * 100) / 100;
 const cents  = v => Math.round(Number(v || 0) * 100);
@@ -177,8 +178,13 @@ async function allocateContribution(client, { subAccountId, investorId, amount, 
    members. A leaver's share was crystallised on the day they left: the
    principal is owed to them and the growth since is not theirs, so the debt
    is senior to current members' income and earns nothing itself. */
-async function reconcile(client, subAccountId, { reason, reference } = {}) {
-  const paid = await payExitDebts(client, subAccountId, reference);
+async function reconcile(client, subAccountId, { reason, reference, actor } = {}) {
+  /* Most reconciles are downstream of something a person did, and the ones
+     that are not are the nightly share-out. Where the caller knows who, it
+     says so; where it genuinely is the system, it says that instead of
+     leaving the row blank. */
+  const paid = await payExitDebts(client, subAccountId, reference,
+                                  actor || systemActor('stokvelShares:reconcile'));
 
   const assets  = await netAssets(client, subAccountId);
   const members = await activeMembers(client, subAccountId);
@@ -211,7 +217,7 @@ async function reconcile(client, subAccountId, { reason, reference } = {}) {
 
 /* Cash towards what the group owes people who have left. Oldest debt first,
    and only as far as the wallet goes. */
-async function payExitDebts(client, subAccountId, reference) {
+async function payExitDebts(client, subAccountId, reference, actor) {
   const { rows: debts } = await client.query(
     `SELECT d.id, d.investor_id, d.amount_owed, d.amount_paid
        FROM stokvel_exit_debts d
@@ -246,11 +252,11 @@ async function payExitDebts(client, subAccountId, reference) {
               settled_at = CASE WHEN $3 = 'settled' THEN NOW() ELSE settled_at END,
               updated_at = NOW()
         WHERE id = $1`, [d.id, nowPaid, done ? 'settled' : 'owing']);
-    await client.query(
-      `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, created_at, updated_at)
-       VALUES (gen_random_uuid(), $1, 'deposit', $2, 'completed', $3, $4, NOW(), NOW())`,
-      [d.investor_id, pay, reference || newId('SXD'),
-       'Stokvel exit settlement' + (done ? '' : ' (part payment)')]);
+    await recordTransaction(client, {
+      investorId: d.investor_id, type: 'deposit', amount: pay,
+      reference: reference || newId('SXD'),
+      description: 'Stokvel exit settlement' + (done ? '' : ' (part payment)'),
+    }, actor || systemActor('stokvelShares:payExitDebts'));
 
     cash = round2(cash - pay);
     total = round2(total + pay);
@@ -311,7 +317,7 @@ async function shareFor(client, subAccountId, investorId) {
    remaining members, which is the whole point of having chased it. Their
    outstanding obligations are marked waived against this settlement rather
    than left due against somebody who is no longer a member. */
-async function settleExit(client, { subAccountId, investorId, authorityId, reference }) {
+async function settleExit(client, { subAccountId, investorId, authorityId, reference, actor }) {
   const ref = reference || newId('SXT');
 
   /* ── Hand the account on, if this is the person who opened it ──────
@@ -372,10 +378,10 @@ async function settleExit(client, { subAccountId, investorId, authorityId, refer
     await client.query(
       'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
       [payNow, investorId]);
-    await client.query(
-      `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, created_at, updated_at)
-       VALUES (gen_random_uuid(), $1, 'deposit', $2, 'completed', $3, $4, NOW(), NOW())`,
-      [investorId, payNow, ref, 'Stokvel exit settlement']);
+    await recordTransaction(client, {
+      investorId, type: 'deposit', amount: payNow, reference: ref,
+      description: 'Stokvel exit settlement',
+    }, actor || systemActor('stokvelShares:settleExit'));
   }
 
   /* The payout allocation is the FULL net share, not only what cash covered.
@@ -468,7 +474,7 @@ async function attribute(client, { subAccountId, investorId, amount, reason, act
     [subAccountId, investorId]);
   if (!m) return { error: 'That person is not an active member of this stokvel.' };
 
-  await reconcile(client, subAccountId, { reason: 'Shared out before attributing' });
+  await reconcile(client, subAccountId, { reason: 'Shared out before attributing', actor });
 
   const assets = await netAssets(client, subAccountId);
   if (cents(amt) > cents(assets.total)) {
@@ -521,7 +527,7 @@ async function attribute(client, { subAccountId, investorId, amount, reason, act
    A pot that cannot cover everybody takes the same path an exit does: each
    member is paid what is there, pro-rata, and the rest is recorded as owed.
    Nothing is redeemed early to make a distribution happen. */
-async function payOut(client, { payoutId }) {
+async function payOut(client, { payoutId, actor }) {
   const { rows: [po] } = await client.query(
     `SELECT * FROM stokvel_payouts WHERE id = $1 FOR UPDATE`, [payoutId]);
   if (!po) return { error: 'No such payout.' };
@@ -530,7 +536,7 @@ async function payOut(client, { payoutId }) {
   const subAccountId = po.sub_account_id;
   const ref = newId('SPO');
 
-  await reconcile(client, subAccountId, { reason: 'Shared out before the payout', reference: ref });
+  await reconcile(client, subAccountId, { reason: 'Shared out before the payout', reference: ref, actor });
 
   const members = await activeMembers(client, subAccountId);
   if (!members.length) return { error: 'This stokvel has no active members to pay.' };
@@ -580,10 +586,11 @@ async function payOut(client, { payoutId }) {
          written \u2014 and the first attempt here failed on exactly that. The
          payout's own reference stays the common prefix, so the set is still
          findable as one distribution. */
-      await client.query(
-        `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, created_at, updated_at)
-         VALUES (gen_random_uuid(), $1, 'deposit', $2, 'completed', $3, $4, NOW(), NOW())`,
-        [id, paid, `${ref}-${String(n).padStart(3, '0')}`, `Stokvel payout \u2014 ${po.label}`]);
+      await recordTransaction(client, {
+        investorId: id, type: 'deposit', amount: paid,
+        reference: `${ref}-${String(n).padStart(3, '0')}`,
+        description: `Stokvel payout \u2014 ${po.label}`,
+      }, actor || systemActor('stokvelShares:payOut'));
     }
     /* The allocation is the FULL net, not only what cash covered: their
        claim on the pot is extinguished either way, and the unpaid part

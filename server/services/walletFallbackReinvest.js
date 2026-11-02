@@ -26,6 +26,7 @@
 
 const { SAME_PRODUCT } = require('./walletFallbackAudit');
 const { investmentEndDate } = require('./investmentTerm');
+const { recordTransaction, systemActor } = require('./ledger');
 
 const r2 = n => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -189,15 +190,15 @@ async function applyReinvest(pool, opts) {
          either way.
 
          UNIQUE on reference — this is what makes a second run a no-op. */
-      await client.query(
-        `INSERT INTO transactions
-           (id, investor_id, sub_account_id, type, amount, status, reference, description,
-            investment_id, pool_id, transaction_date, created_at, updated_at)
-         VALUES (gen_random_uuid(),$1,$2,'reinvestment',$3,'completed',$4,$5,$6,$7,NOW(),NOW(),NOW())`,
-        [c.investor_id, c.sub_account_id || null, c.amount, 'REINV-FIX-' + c.investment_id,
-         `Reinvested into ${lock.name} — corrects the maturity of ${c.src_name || opts.sourcePoolId}, ` +
-         `which was paid to the wallet because no pool matched its product type`,
-         newId, plan.target.id]);
+      await recordTransaction(client, {
+        investorId: c.investor_id, subAccountId: c.sub_account_id || null,
+        type: 'reinvestment', amount: c.amount,
+        reference: 'REINV-FIX-' + c.investment_id,
+        description: `Reinvested into ${lock.name} — corrects the maturity of `
+          + `${c.src_name || opts.sourcePoolId}, which was paid to the wallet `
+          + `because no pool matched its product type`,
+        investmentId: newId, poolId: plan.target.id,
+      }, opts.actor || systemActor('walletFallbackReinvest'));
 
       await client.query(
         `UPDATE investment_pools

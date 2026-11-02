@@ -45,7 +45,7 @@ console.log('\nthe rule is written once, and the money is cash not accrual');
   ok('the reference is one per investment per year',
      /ANN-\$\{item\.investmentId\}-Y\$\{item\.yearIndex\}/.test(svc));
   ok('the insert is the guard, and it comes first',
-     /ON CONFLICT \(reference\) DO NOTHING[\s\S]{0,400}if \(!rowCount\) return/.test(svc),
+     /onConflict: 'reference'[\s\S]{0,200}if \(!written\) return/.test(svc),
      'crediting first and inserting second double-pays anything that runs twice');
   ok('a year with no posted rate pays nothing',
      /if \(item\.rate == null\) return \{ paid: false/.test(svc),
@@ -188,10 +188,16 @@ async function schema() {
     CREATE TABLE investments (id TEXT PRIMARY KEY, investor_id TEXT, sub_account_id TEXT,
       pool_id TEXT, product_type TEXT, amount NUMERIC(18,2), status TEXT,
       start_date DATE, end_date DATE, term_months INT);
-    CREATE TABLE transactions (id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      investor_id TEXT, sub_account_id TEXT, investment_id TEXT, type TEXT,
-      amount NUMERIC(18,2), status TEXT, reference TEXT, description TEXT,
-      transaction_date TIMESTAMPTZ, created_at TIMESTAMPTZ DEFAULT NOW(),
+    /* Every column services/ledger.js writes, because the single writer
+       names all of them. A fixture short of one fails with "column does
+       not exist", which reads like a product bug and is not. */
+    CREATE TABLE transactions (id TEXT PRIMARY KEY,
+      investor_id TEXT, sub_account_id TEXT, investment_id TEXT, pool_id TEXT,
+      type TEXT, amount NUMERIC(18,2), status TEXT, reference TEXT,
+      description TEXT, notes TEXT, referred_investor_id TEXT,
+      transaction_date TIMESTAMPTZ, available_at TIMESTAMPTZ,
+      actor_kind TEXT, actor_id TEXT, actor_email TEXT, actor_role TEXT, actor_ip TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
       updated_at TIMESTAMPTZ DEFAULT NOW());
     CREATE UNIQUE INDEX idx_txn_ref ON transactions(reference);
     CREATE TABLE pool_annual_returns (pool_id TEXT, year_index INT, rate NUMERIC(8,4),

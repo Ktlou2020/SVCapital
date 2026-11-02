@@ -13,6 +13,7 @@ const access = require('../services/withdrawalAccess');
 const emailService = require('../services/email');
 const smsService   = require('../services/sms');
 const audit        = require('../services/audit');
+const { recordTransaction, actorFromRequest } = require('../services/ledger');
 
 /* Lazy-load push service and SSE broadcast */
 let _broadcast = null;
@@ -119,11 +120,11 @@ router.post('/request', requireAuth, async (req, res) => {
            Writing it on the row means a later change to the notice setting
            cannot move a date this client has already been given. */
         const saAvailableAt = await access.availableAt(client, saRow);
-        await client.query(
-          `INSERT INTO transactions (id, investor_id, sub_account_id, type, amount, status, reference, description, notes, available_at, created_at, updated_at)
-           VALUES (gen_random_uuid(), $1, $2, 'withdrawal', $3, 'pending', $4, $5, $6, $7, NOW(), NOW())`,
-          [investorId, sub_account_id, numAmount, reference, description, notes || null, saAvailableAt]
-        );
+        await recordTransaction(client, {
+          investorId, subAccountId: sub_account_id, type: 'withdrawal',
+          amount: numAmount, status: 'pending', reference, description,
+          notes: notes || null, availableAt: saAvailableAt,
+        }, actorFromRequest(req));
         await client.query(
           'UPDATE sub_accounts SET wallet_balance = wallet_balance - $1, updated_at = NOW() WHERE id = $2',
           [numAmount, sub_account_id]
@@ -201,12 +202,10 @@ router.post('/request', requireAuth, async (req, res) => {
       }
 
       const availableAt = await access.availableAt(client, investor);
-      await client.query(
-        `INSERT INTO transactions
-           (id, investor_id, type, amount, status, reference, description, notes, available_at, created_at, updated_at)
-         VALUES (gen_random_uuid(), $1, 'withdrawal', $2, 'pending', $3, $4, $5, $6, NOW(), NOW())`,
-        [investorId, numAmount, reference, description, notes || null, availableAt]
-      );
+      await recordTransaction(client, {
+        investorId, type: 'withdrawal', amount: numAmount, status: 'pending',
+        reference, description, notes: notes || null, availableAt,
+      }, actorFromRequest(req));
 
       await client.query(
         'UPDATE investors SET wallet_balance = wallet_balance - $1, updated_at = NOW() WHERE id = $2',

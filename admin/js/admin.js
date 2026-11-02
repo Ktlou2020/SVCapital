@@ -8718,6 +8718,27 @@ async function bulkApproveDeposits(btn) {
   });
 }
 
+/* WHO MOVED IT, under the date.
+   A transactions row said what moved, to whom and when, and never who did
+   it — so a staff credit read exactly like something the client had done
+   themselves. The columns are recorded now; a figure nobody can see is not
+   an audit trail, so it is shown here, where somebody looking into a
+   disputed movement is already looking.
+
+   Rows written before this exists carry nothing, and say so rather than
+   claiming the client did it. */
+function _txnActor(t) {
+  if (!t.actor_kind) return '';
+  const who = t.actor_kind === 'system'
+    ? `by ${_esc(t.actor_role || 'an automated job')}`
+    : t.actor_kind === 'staff'
+      ? `by ${_esc(t.actor_email || t.actor_role || 'staff')}`
+      : 'by the client';
+  const colour = t.actor_kind === 'staff' ? 'var(--orange)' : 'var(--text-muted)';
+  return `<div style="font-size:0.68rem;color:${colour};margin-top:2px" class="clip"
+      title="${_esc(t.actor_ip ? who + ' from ' + t.actor_ip : who)}">${who}</div>`;
+}
+
 function renderTxnTable() {
   const body = document.getElementById('txnBody');
   const start = (txnPage - 1) * TXN_PG_SIZE;
@@ -8785,7 +8806,7 @@ function renderTxnTable() {
       <td>${statusCell}</td>
       <td class="td-muted clip" style="font-size:0.75rem">${_esc(t.reference || '—')}${t.reference ? `<button class="copy-btn" onclick='copyToClipboard(${_esc(JSON.stringify(t.reference))},this)' title="Copy reference"><i class="fa-regular fa-copy"></i></button>` : ''}</td>
       <td class="td-muted" style="font-size:0.75rem"><div class="clip">${_esc(t.description || '—')}</div>${proofLink}</td>
-      <td class="td-muted">${Utils.date(t.transaction_date || t.created_at)}</td>
+      <td class="td-muted">${Utils.date(t.transaction_date || t.created_at)}${_txnActor(t)}</td>
       <td>
         ${isPendingDeposit ? `<button class="btn btn--success btn--sm" onclick="changeTxnStatus('${t.id}', 'completed', '${t.investor_id}', ${t.amount})" title="Approve deposit — credits wallet"><i class="fa-solid fa-check"></i> Approve</button>` : ''}
       </td>

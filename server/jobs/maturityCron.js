@@ -32,6 +32,7 @@ const { cycleExpiredPools, TODAY } = require('./poolCyclerCron');
 const { effectiveInstruction } = require('../services/maturityPolicy');
 const annualReturns = require('../services/anniversaryReturns');
 const { investmentEndDate } = require('../services/investmentTerm');
+const { recordTransaction, systemActor } = require('../services/ledger');
 
 // Reinvestments are NOT charged a platform fee — the full matured amount rolls over.
 const round2 = n => Math.round((Number(n) || 0) * 100) / 100;
@@ -404,12 +405,10 @@ async function creditWallet(client, inv, amount, returnPortion, description, ref
   /* The row carries the sub-account too, or the sub-account's own statement
      never shows the money arriving — the flow would be invisible from the
      account it belongs to. */
-  await client.query(
-    `INSERT INTO transactions
-       (id, investor_id, sub_account_id, type, amount, status, reference, description, investment_id, transaction_date, created_at, updated_at)
-     VALUES (gen_random_uuid(),$1,$2,'payout',$3,'completed',$4,$5,$6,NOW(),NOW(),NOW())`,
-    [inv.investor_id, inv.sub_account_id || null, amt, ref, description, inv.id]
-  );
+  await recordTransaction(client, {
+    investorId: inv.investor_id, subAccountId: inv.sub_account_id || null,
+    type: 'payout', amount: amt, reference: ref, description, investmentId: inv.id,
+  }, systemActor('maturityCron'));
 }
 
 /* ────────────────────────────────────────────────────────────
@@ -536,23 +535,19 @@ async function reinvestAmount(client, inv, amount, productType, sourcePoolName, 
 
     // Bookkeeping credit: shows the matured funds arriving back before being reinvested.
     // No wallet update — money goes straight into the new investment, net wallet change = R0.
-    await client.query(
-      `INSERT INTO transactions
-         (id, investor_id, sub_account_id, type, amount, status, reference, description, investment_id, transaction_date, created_at, updated_at)
-       VALUES (gen_random_uuid(),$1,$2,'matured_funds',$3,'completed',$4,$5,$6,NOW(),NOW(),NOW())
-       ON CONFLICT (reference) DO NOTHING`,
-      [inv.investor_id, inv.sub_account_id || null, amt, 'MATF-' + inv.id + leg,
-       `Matured Funds — ${sourcePoolName}`, inv.id]
-    );
+    await recordTransaction(client, {
+      investorId: inv.investor_id, subAccountId: inv.sub_account_id || null,
+      type: 'matured_funds', amount: amt, reference: 'MATF-' + inv.id + leg,
+      description: `Matured Funds — ${sourcePoolName}`, investmentId: inv.id,
+    }, systemActor('maturityCron'), { onConflict: 'reference' });
 
     const verb = switched ? 'switch' : 'reinvestment';
-    await client.query(
-      `INSERT INTO transactions
-         (id, investor_id, sub_account_id, type, amount, status, reference, description, investment_id, pool_id, transaction_date, created_at, updated_at)
-       VALUES (gen_random_uuid(),$1,$2,'reinvestment',$3,'completed',$4,$5,$6,$7,NOW(),NOW(),NOW())`,
-      [inv.investor_id, inv.sub_account_id || null, amt, 'REINV-' + inv.id + leg,
-       `Maturity ${verb} — ${sourcePoolName} → ${target.name}`, newInvId, target.id]
-    );
+    await recordTransaction(client, {
+      investorId: inv.investor_id, subAccountId: inv.sub_account_id || null,
+      type: 'reinvestment', amount: amt, reference: 'REINV-' + inv.id + leg,
+      description: `Maturity ${verb} — ${sourcePoolName} → ${target.name}`,
+      investmentId: newInvId, poolId: target.id,
+    }, systemActor('maturityCron'));
 
     await client.query(
       'UPDATE investment_pools SET current_invested = COALESCE(current_invested,0) + $1, raised_amount = COALESCE(raised_amount,0) + $1, updated_at = NOW() WHERE id = $2',

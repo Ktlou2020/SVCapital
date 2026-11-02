@@ -31,6 +31,7 @@ const crypto  = require('crypto');
 const contributions = require('../services/stokvelContributions');
 const invites       = require('../services/stokvelInvites');
 const shares        = require('../services/stokvelShares');
+const { actorFromRequest } = require('../services/ledger');
 /* Lazily required, and never awaited in a way that can fail a request: a
    mandate that cannot send an email must still record the vote. */
 let _notify = null;
@@ -805,6 +806,7 @@ router.post('/:id/pay-in', async (req, res) => {
     const out = await contributions.payIn(client, {
       subAccount: group, investorId: me, amount,
       note: (req.body && req.body.note) || '',
+      actor: actorFromRequest(req),
     });
     await client.query('COMMIT');
     return res.json({ data: out });
@@ -1111,7 +1113,8 @@ router.post('/:id/payouts/:pid/run', async (req, res) => {
       `UPDATE stokvel_payouts SET authority_id = $2, updated_at = NOW() WHERE id = $1`,
       [req.params.pid, authority.id]);
 
-    const out = await shares.payOut(client, { payoutId: req.params.pid });
+    const out = await shares.payOut(client, { payoutId: req.params.pid,
+                                             actor: actorFromRequest(req) });
     if (out.error) {
       await client.query('ROLLBACK');
       return res.status(409).json({ error: out.error });
@@ -1150,7 +1153,8 @@ router.post('/:id/exits', async (req, res) => {
     await client.query('BEGIN');
     /* Reconciled first: a share settled against a stale ledger pays out the
        wrong number, and this is the one place that number becomes cash. */
-    await shares.reconcile(client, group.id, { reason: 'Shared out before an exit' });
+    await shares.reconcile(client, group.id, { reason: 'Shared out before an exit',
+                                              actor: actorFromRequest(req) });
 
     const authorityId = req.body && req.body.authority_id;
     const { rows: [auth] } = await client.query(
@@ -1170,6 +1174,7 @@ router.post('/:id/exits', async (req, res) => {
     const out = await shares.settleExit(client, {
       subAccountId: group.id, investorId: leaving,
       authorityId: authority.id,
+      actor: actorFromRequest(req),
     });
     /* settleExit refuses when the person leaving opened the account and
        there is nobody to hand it to. Nothing has been written at that
@@ -1276,7 +1281,8 @@ router.post('/:id/contributions/:cid/pay', async (req, res) => {
     let result;
     try {
       result = await contributions.pay(client, {
-        contribution, investorId: me, subAccount: group, amount });
+        contribution, investorId: me, subAccount: group, amount,
+        actor: actorFromRequest(req) });
     } catch (e) {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: e.message });

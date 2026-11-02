@@ -1,4 +1,5 @@
 'use strict';
+const { recordTransaction, systemActor } = require('./ledger');
 /* Solar returns are distributed on the anniversary of the investment.
  *
  * A five-year holding earns five returns, each paid to the client's wallet on
@@ -111,7 +112,7 @@ async function due(db, { asOf = new Date() } = {}) {
  * transaction rolls the credit back but inside a batch takes the whole batch
  * with it.
  */
-async function payOne(client, item, { description } = {}) {
+async function payOne(client, item, { description, actor } = {}) {
   if (item.rate == null) return { paid: false, reason: 'no rate posted for that year' };
   const amt = round2(item.amount * item.rate);
   if (!(amt > 0)) return { paid: false, reason: 'the posted rate pays nothing' };
@@ -120,16 +121,16 @@ async function payOne(client, item, { description } = {}) {
   const note = description ||
     `Year ${item.yearIndex} distribution — ${item.poolName || item.productType}`;
 
-  const { rowCount } = await client.query(
-    `INSERT INTO transactions
-       (id, investor_id, sub_account_id, type, amount, status, reference,
-        description, investment_id, transaction_date, created_at, updated_at)
-     VALUES (gen_random_uuid(),$1,$2,'payout',$3,'completed',$4,$5,$6,$7,NOW(),NOW())
-     ON CONFLICT (reference) DO NOTHING`,
-    [item.investorId, item.subAccountId || null, amt, reference, note,
-     item.investmentId, item.dueOn]);
+  /* The same distribution is run by anniversaryCron and by a director in
+     the console, so WHO is a parameter: a cron's work and a person's
+     decision must not read the same afterwards. */
+  const written = await recordTransaction(client, {
+    investorId: item.investorId, subAccountId: item.subAccountId || null,
+    type: 'payout', amount: amt, reference, description: note,
+    investmentId: item.investmentId, transactionDate: item.dueOn,
+  }, actor || systemActor('anniversaryReturns'), { onConflict: 'reference' });
 
-  if (!rowCount) return { paid: false, reason: 'already paid', reference };
+  if (!written) return { paid: false, reason: 'already paid', reference };
 
   /* Back to the account the money came from — a sub-account has its own
      wallet, and the same split every other money path on this platform

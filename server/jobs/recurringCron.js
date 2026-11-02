@@ -22,6 +22,7 @@ const { investmentEndDate } = require('../services/investmentTerm');
 const pool         = require('../db/pool');
 const emailService = require('../services/email');
 const pushService  = require('../services/pushService');
+const { recordTransaction, systemActor } = require('../services/ledger');
 
 async function runRecurringInvestments() {
   const todayDay = new Date().getDate(); // 1–31
@@ -159,18 +160,16 @@ async function runRecurringInvestments() {
               annualRate, termMonths, expectedReturn, pool_row.product_type,
             ]
           );
-          await txClient.query(
-            `INSERT INTO transactions
-               (id, investor_id, type, amount, status, reference, description, transaction_date, investment_id, pool_id, created_at, updated_at)
-             VALUES (gen_random_uuid(),$1,'investment',$2,'completed',$3,$4,NOW(),$5,$6,NOW(),NOW())`,
-            [investor.id, amount, txRef, `Recurring investment — ${pool_row.name}`, investmentId, pool_row.id]
-          );
-          await txClient.query(
-            `INSERT INTO transactions
-               (id, investor_id, type, amount, status, reference, description, transaction_date, investment_id, pool_id, created_at, updated_at)
-             VALUES (gen_random_uuid(),$1,'fee',$2,'completed',$3,$4,NOW(),$5,$6,NOW(),NOW())`,
-            [investor.id, platformFee, txRef + '-FEE', `Platform fee — ${pool_row.name}`, investmentId, pool_row.id]
-          );
+          await recordTransaction(txClient, {
+            investorId: investor.id, type: 'investment', amount,
+            reference: txRef, description: `Recurring investment — ${pool_row.name}`,
+            investmentId, poolId: pool_row.id,
+          }, systemActor('recurringCron'));
+          await recordTransaction(txClient, {
+            investorId: investor.id, type: 'fee', amount: platformFee,
+            reference: txRef + '-FEE', description: `Platform fee — ${pool_row.name}`,
+            investmentId, poolId: pool_row.id,
+          }, systemActor('recurringCron'));
           await txClient.query(
             'UPDATE investors SET total_invested = COALESCE(total_invested,0) + $1, updated_at = NOW() WHERE id = $2',
             [amount, investor.id]
@@ -301,11 +300,9 @@ async function runAutoTopUps() {
         const topupClient = await pool.connect();
         try {
           await topupClient.query('BEGIN');
-          await topupClient.query(
-            `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, transaction_date, created_at)
-             VALUES (gen_random_uuid(),$1,'deposit',$2,'completed',$3,$4,NOW(),NOW())`,
-            [inv.id, amount, reference, desc]
-          );
+          await recordTransaction(topupClient, {
+            investorId: inv.id, type: 'deposit', amount, reference, description: desc,
+          }, systemActor('recurringCron:autoTopUp'));
           await topupClient.query(
             'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at=NOW() WHERE id=$2',
             [amount, inv.id]

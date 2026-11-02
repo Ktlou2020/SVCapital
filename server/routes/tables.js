@@ -19,6 +19,7 @@ const smsService   = require('../services/sms');
 const audit        = require('../services/audit');
 const { validateStoredFile } = require('../services/uploadedFile');
 const { staffRecipients, warnIfNotUsers } = require('../services/staffRecipients');
+const { recordTransaction, actorFromRequest } = require('../services/ledger');
 
 /* ─── Lazy-load push service (graceful if web-push not installed yet) ─── */
 let _pushSvc = null;
@@ -322,6 +323,14 @@ const STRIP_COLS = {
   investors: ['totp_secret', 'totp_temp_secret'],
   users: ['password_hash', 'staff_pin', 'totp_secret', 'totp_temp_secret'],
   employees: ['pin_hash', 'id_number', 'login_attempts', 'login_locked_until'],
+  /* Who moved the money is recorded on every transaction, and the reader
+     here is SELECT *. A client asking for their own transactions would
+     otherwise be handed the email address and the IP of the staff member
+     who credited them — recording the actor must not become a way to
+     publish our own people's details. actor_kind stays: a client is
+     entitled to know whether a row was their own doing, ours, or an
+     unattended job, and it names nobody. */
+  transactions: ['actor_id', 'actor_email', 'actor_role', 'actor_ip'],
 };
 
 const ADMIN_ROLES = new Set(['admin', 'director', 'fund_manager']);
@@ -334,6 +343,8 @@ function stripSensitive(table, rows, ownEmpId, userRole) {
     cols.forEach(c => {
       // pin_hash is always stripped — never exposed.
       if (c === 'pin_hash') { delete clean[c]; return; }
+      // The actor on a transaction: staff see it, nobody else does.
+      if (c.startsWith('actor_') && ADMIN_ROLES.has(userRole)) return;
       // id_number: visible to the employee themselves and to admin/director roles.
       if (c === 'id_number' && table === 'employees') {
         if ((ownEmpId && row.id === ownEmpId) || ADMIN_ROLES.has(userRole)) return;
@@ -1395,12 +1406,12 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
         // For fee_inclusive: record the exact fee now so the hook's ON CONFLICT is a no-op
         if (feeInclusive && !isReinvestment && platformFee > 0 && body.id) {
           const feeId = `FEE-${body.id}`;
-          await _invClient.query(
-            `INSERT INTO transactions (id, investor_id, sub_account_id, type, amount, status, reference, description, transaction_date, created_at, updated_at)
-             VALUES ($1, $2, $3, 'fee', $4, 'completed', $5, '1% platform fee on investment', NOW(), NOW(), NOW())
-             ON CONFLICT (id) DO NOTHING`,
-            [feeId, body.investor_id, body.sub_account_id || null, platformFee, feeId]
-          );
+          await recordTransaction(_invClient, {
+            id: feeId, investorId: body.investor_id,
+            subAccountId: body.sub_account_id || null, type: 'fee',
+            amount: platformFee, reference: feeId,
+            description: '1% platform fee on investment',
+          }, actorFromRequest(req), { onConflict: 'id' });
         }
         if (_reconcileStokvel) {
           /* Inside the transaction, before the commit: a fee charged and a
@@ -1872,12 +1883,12 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
           // Record the platform fee — skipped for reinvestments (no fee charged)
           if (!isReinvestment) {
             const feeId = `FEE-${clean.id}`;
-            await pool.query(
-              `INSERT INTO transactions (id, investor_id, sub_account_id, type, amount, status, reference, description, transaction_date, created_at)
-               VALUES ($1, $2, $3, 'fee', $4, 'completed', $5, '1% platform fee on investment', NOW(), NOW())
-               ON CONFLICT (id) DO NOTHING`,
-              [feeId, clean.investor_id, clean.sub_account_id || null, platformFee, feeId]
-            );
+            await recordTransaction(pool, {
+              id: feeId, investorId: clean.investor_id,
+              subAccountId: clean.sub_account_id || null, type: 'fee',
+              amount: platformFee, reference: feeId,
+              description: '1% platform fee on investment',
+            }, actorFromRequest(req), { onConflict: 'id' });
           }
 
           // EVA calculation — only on new funds (not reinvestments)
@@ -2702,3 +2713,8 @@ router.delete('/:table/:id', requireAuth, validateTable, async (req, res) => {
 });
 
 module.exports = router;
+/* Exported so a check can exercise the redaction directly rather than
+   asserting on the shape of the source. What matters is what a client is
+   handed, and that is a question only the function can answer. */
+module.exports.stripSensitive = stripSensitive;
+module.exports.STRIP_COLS = STRIP_COLS;
