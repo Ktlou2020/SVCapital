@@ -61,8 +61,12 @@ async function openPeriod(client, subAccountId, when = new Date()) {
 
   const { label, dueDate } = periodFor(schedule, when);
 
+  /* What each member pays. A group whose constitution sets one amount for
+     everybody — which is most of them — leaves contribution_amount null and
+     gets the schedule's figure; a group with members on different amounts
+     sets it per member. */
   const { rows: members } = await client.query(
-    `SELECT investor_id FROM stokvel_members
+    `SELECT investor_id, contribution_amount FROM stokvel_members
       WHERE sub_account_id = $1 AND status = 'active'`,
     [subAccountId]
   );
@@ -77,7 +81,7 @@ async function openPeriod(client, subAccountId, when = new Date()) {
        ON CONFLICT (sub_account_id, investor_id, period_label) DO NOTHING`,
       ['SC-' + crypto.randomUUID().replace(/-/g, '').slice(0, 14).toUpperCase(),
        subAccountId, m.investor_id, schedule.id, label,
-       round2(schedule.amount), dueDate]
+       round2(m.contribution_amount != null ? m.contribution_amount : schedule.amount), dueDate]
     );
     created += rowCount;
   }

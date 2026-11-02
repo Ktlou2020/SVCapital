@@ -12423,7 +12423,7 @@ async function _svRenderHub(id) {
     ${_svShares(shareData, id)}
     ${_svContributions(contributions, mine, id)}
     ${_svWithdrawals(requests, meIsSignatory, id)}
-    ${_svMembers(members)}
+    ${_svMembers(members, id, !!(invitations && invitations.can_invite))}
     ${_svInvitations(invitations, id)}
   `;
 }
@@ -12453,6 +12453,10 @@ function _svHeader(g, shareRes) {
    My own outstanding first, because that is the one thing a member can act
    on. Everybody's arrears underneath, because the argument this ends is "I
    paid and you did not" and a private view reproduces it. */
+/* A fine reads as a fine. Carried on the same table as a contribution so
+   arrears, the chase and oldest-first settlement all work on it unchanged —
+   but a member looking at what they owe has to be able to tell "this month's
+   R500" from "R50 for missing the meeting", and see what it was for. */
 function _svContributions(res, mine, gid) {
   const arrears = (res && res.arrears) || [];
   const rows    = (res && res.data) || [];
@@ -12467,7 +12471,13 @@ function _svContributions(res, mine, gid) {
          ${mine.map(c => `
            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;border-top:1px solid rgba(255,255,255,0.06)">
              <div>
-               <div style="font-size:0.84rem;font-weight:600">${_esc(c.period_label)}</div>
+               <div style="font-size:0.84rem;font-weight:600">
+                 ${c.kind === 'fine' ? 'Fine' : _esc(c.period_label)}
+                 ${c.kind === 'fine' ? `<span style="font-size:0.66rem;font-weight:700;text-transform:uppercase;
+                     letter-spacing:.4px;border:1px solid #f59e0b;color:#f59e0b;border-radius:999px;
+                     padding:1px 7px;margin-left:5px">Fine</span>` : ''}
+               </div>
+               ${c.kind === 'fine' && c.note ? `<div style="font-size:0.74rem;color:var(--text-muted)">${_esc(c.note)}</div>` : ''}
                <div style="font-size:0.72rem;color:${c.overdue ? '#ef4444' : 'var(--text-muted)'}">
                  ${c.overdue ? 'Overdue' : 'Due'} ${_esc(String(c.due_date).slice(0, 10))}
                </div>
@@ -12814,9 +12824,17 @@ function _svWithdrawals(res, meIsSignatory, gid) {
     ${past.length ? `<div style="font-size:0.74rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px">Recent</div>${past.map(row).join('')}` : ''}`;
 }
 
-function _svMembers(res) {
+function _svMembers(res, gid, canLevy) {
   const rows = (res && res.data) || [];
   return `<div class="sa-section-title mt-16"><i class="fa-solid fa-users"></i> Members</div>
+    ${canLevy ? `<div style="margin-bottom:8px">
+      <button class="btn btn--ghost btn--sm" onclick="levyStokvelFine('${_esc(gid)}')">
+        <i class="fa-solid fa-gavel"></i> Record a fine
+      </button>
+      <span style="font-size:0.72rem;color:var(--text-muted);margin-left:6px">
+        Under your own rules. It is added to what that member owes.
+      </span>
+    </div>` : ''}
     <table class="data-table" style="font-size:0.8rem"><tbody>
     ${rows.map(m => `<tr>
       <td>${_esc(m.first_name)} ${_esc(m.last_name || '')}${m.is_me ? ' <span style="color:var(--text-muted)">(you)</span>' : ''}</td>
@@ -12828,6 +12846,37 @@ function _svMembers(res) {
 }
 
 /* ─── Actions ──────────────────────────────────────────────────────── */
+
+/* A fine, under the group's own rules. The committee records it; we do not
+   set it, impose it or enforce it, and the message to the member says so. */
+async function levyStokvelFine(groupId) {
+  const who = prompt('Which member? Enter their name as it appears in the list.');
+  if (!who) return;
+  let members = [];
+  try {
+    const res = await API._fetch('GET', `stokvels/${groupId}/members`);
+    members = (res && res.data) || [];
+  } catch (_) { /* the server decides; this is only to resolve the name */ }
+  const match = members.filter(m =>
+    `${m.first_name || ''} ${m.last_name || ''}`.trim().toLowerCase().includes(who.trim().toLowerCase()));
+  if (match.length !== 1) {
+    Utils.toast(match.length ? 'That matches more than one member.' : 'No member by that name.', 'error');
+    return;
+  }
+  const raw = prompt(`Fine ${match[0].first_name} how much?`);
+  const amount = parseFloat(raw);
+  if (!(amount > 0)) return;
+  const note = prompt('What is it for? They will see this.');
+  if (!note) { Utils.toast('A reason is needed \u2014 the member will see it.', 'error'); return; }
+  try {
+    await API._fetch('POST', `stokvels/${groupId}/fines`,
+                     { investor_id: match[0].investor_id, amount, note });
+    Utils.toast('Recorded. They have been told.', 'success');
+  } catch (err) {
+    Utils.toast(err.message || 'Could not record that fine.', 'error');
+  }
+  await _svRenderHub(groupId);
+}
 
 async function payStokvelContribution(groupId, contributionId) {
   if (!confirm('Pay this contribution from your wallet?')) return;

@@ -137,6 +137,34 @@ const db = new Pool({
     ok('and December owes the new figure', dec.created === 3 && decRows[0].a === 600,
        JSON.stringify(decRows));
 
+    console.log('\nand a member can be put on their own amount');
+    {
+      /* The group's constitution sets R600; Ann's sets R250 for her. */
+      await db.query(
+    `UPDATE stokvel_members SET contribution_amount = 250
+      WHERE sub_account_id='SA-C-1' AND investor_id='INV-C-ANN'`);
+      const jan = await openFor(new Date('2027-01-03T00:00:00Z'));
+      ok('the period still opens for everybody', jan.created === 3, JSON.stringify(jan));
+      const { rows: amounts } = await db.query(
+    `SELECT investor_id, amount_due::float a FROM stokvel_contributions
+      WHERE sub_account_id='SA-C-1' AND period_label='2027-01' ORDER BY investor_id`);
+      const amt = id => (amounts.find(x => x.investor_id === id) || {}).a;
+      ok('the member on her own amount owes that', amt('INV-C-ANN') === 250,
+     JSON.stringify(amounts));
+      ok('and everybody else owes the group\u2019s', amt('INV-C-BEN') === 600 && amt('INV-C-CHAIR') === 600,
+     'almost every stokvel sets one amount for everybody; the override is for the rest');
+      /* Put the fixture back. The assertions further down are written
+         against the periods that existed before this one, and an extra
+         month of obligations quietly changes every arrears total they
+         check — which is how this block first broke two of them. */
+      await db.query(
+        `UPDATE stokvel_members SET contribution_amount = NULL
+          WHERE sub_account_id='SA-C-1' AND investor_id='INV-C-ANN'`);
+      await db.query(
+        `DELETE FROM stokvel_contributions
+          WHERE sub_account_id='SA-C-1' AND period_label='2027-01'`);
+    }
+
     process.env.JWT_SECRET = process.env.JWT_SECRET || 'check-only-secret';
     const jwt = require(path.join(ROOT, 'server', 'node_modules', 'jsonwebtoken'));
     const express = require('express');
@@ -231,6 +259,103 @@ const db = new Pool({
     const second = await chaseArrears();
     ok('and not chased again tomorrow', second.sent === 0, JSON.stringify(second),
      'a daily reminder is a muted app, and then the message that mattered is muted too');
+
+    console.log('\nand a fine is levied, settled and deducted like any other obligation');
+    {
+      const CHAIR = 'INV-C-CHAIR', ANN = 'INV-C-ANN';
+      await db.query(
+    `UPDATE stokvel_members SET role='chairperson'
+      WHERE sub_account_id='SA-C-1' AND investor_id=$1`, [CHAIR]);
+
+      const noReason = await call('POST', '/api/stokvels/SA-C-1/fines', tok(CHAIR),
+                              { investor_id: ANN, amount: 50 });
+      ok('a fine with no reason is refused', noReason.status === 400,
+     `${noReason.status} ${JSON.stringify(noReason.body)}`);
+      const byMember = await call('POST', '/api/stokvels/SA-C-1/fines', tok('INV-C-BEN'),
+                              { investor_id: ANN, amount: 50, note: 'Late' });
+      ok('an ordinary member cannot levy one', byMember.status === 403,
+     `${byMember.status} ${JSON.stringify(byMember.body)}`);
+
+      const fine = await call('POST', '/api/stokvels/SA-C-1/fines', tok(CHAIR),
+                          { investor_id: ANN, amount: 50, note: 'Missed the November meeting' });
+      ok('the chairperson can', fine.status === 201, JSON.stringify(fine.body));
+
+      const { rows: [row] } = await db.query(
+    `SELECT kind, note, amount_due::float a, status, period_label
+       FROM stokvel_contributions WHERE id = $1`, [fine.body.data.id]);
+      ok('it is an obligation, marked as a fine', row.kind === 'fine' && row.a === 50,
+     JSON.stringify(row));
+      ok('carrying the reason the member will see', /November meeting/.test(row.note));
+      ok('under a label of its own', /^FINE-/.test(row.period_label),
+     'two fines in one month for one member are two rows, and the unique index '
+     + 'is keyed on the period');
+
+      const second = await call('POST', '/api/stokvels/SA-C-1/fines', tok(CHAIR),
+                            { investor_id: ANN, amount: 20, note: 'Late again' });
+      ok('and a second fine in the same month is possible', second.status === 201,
+     JSON.stringify(second.body));
+
+      /* It counts as arrears, which is the whole reason for carrying it here. */
+      const list = await call('GET', '/api/stokvels/SA-C-1/contributions', tok(ANN));
+      const owed = (list.body.arrears || []).find(a => a.investor_id === ANN);
+      ok('it shows up in what that member owes', owed && owed.owed >= 70,
+     JSON.stringify(owed));
+
+      /* And settles oldest-first when they pay in. */
+      const paid = await call('POST', '/api/stokvels/SA-C-1/pay-in', tok(ANN), { amount: 70 });
+      ok('paying in settles it', paid.status === 200, JSON.stringify(paid.body));
+      const { rows: after } = await db.query(
+    `SELECT status FROM stokvel_contributions WHERE id IN ($1,$2)`,
+    [fine.body.data.id, second.body.data.id]);
+      ok('though oldest first, so the older obligations go before the fines',
+     after.length === 2, JSON.stringify(after));
+
+      const withdrawn = await call('DELETE',
+    `/api/stokvels/SA-C-1/fines/${second.body.data.id}`, tok(CHAIR));
+      const stillThere = (await db.query(
+    `SELECT COUNT(*)::int n FROM stokvel_contributions WHERE id=$1`,
+    [second.body.data.id])).rows[0].n;
+      ok('an unpaid fine can be withdrawn by the committee',
+     withdrawn.status === 200 ? stillThere === 0 : stillThere === 1,
+     `${withdrawn.status} ${JSON.stringify(withdrawn.body)}`);
+    }
+
+    console.log('\nand a fine is an obligation like any other');
+    {
+      const ROOT2 = ROOT;
+      const SVC = require('fs').readFileSync(
+    require('path').join(ROOT2, 'server', 'routes', 'stokvels.js'), 'utf8');
+      ok('a fine is carried on the contributions table',
+     /kind = 'fine'|'fine',\$6,\$7|'due','fine'/.test(SVC),
+     'arrears, the chase, paying in oldest-first and the deduction at exit all '
+     + 'work on it unchanged');
+      ok('each fine gets a unique period label',
+     /'FINE-' \+ id/.test(SVC),
+     'the existing unique index is keyed on the period, and two fines in one '
+     + 'month for one member are two rows');
+      ok('only the committee may levy one',
+     /can levy a fine|can levy/.test(SVC) && /mayInvite\(group\)/.test(SVC));
+      ok('and a reason is required',
+     /Say what the fine is for/.test(SVC),
+     'a fine a member cannot see the reason for is the thing that ends stokvels');
+      ok('a paid fine cannot be withdrawn',
+     /status = 'due' AND amount_paid = 0/.test(SVC),
+     'reversing it would take money the group has already shared out');
+      ok('and we say it is the group\u2019s rule, not ours',
+     /does not set or enforce/.test(require('fs').readFileSync(
+       require('path').join(ROOT2, 'server', 'services', 'stokvelNotify.js'), 'utf8')));
+    }
+
+    console.log('\nand a member can be on their own amount');
+    {
+      const SRC = require('fs').readFileSync(
+    require('path').join(ROOT, 'server', 'services', 'stokvelContributions.js'), 'utf8');
+      ok('the obligation uses the member\u2019s amount where there is one',
+     /m\.contribution_amount != null \? m\.contribution_amount : schedule\.amount/.test(SRC));
+      ok('and falls back to the group\u2019s otherwise',
+     /contribution_amount/.test(SRC) && /schedule\.amount/.test(SRC),
+     'almost every stokvel sets one amount for everybody');
+    }
 
     await clean();
   } catch (err) {

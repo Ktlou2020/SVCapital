@@ -20244,6 +20244,11 @@ async function saveStokvelQuorum(id) {
 }
 
 /* ─── Members ──────────────────────────────────────────────────────── */
+/* The per-member contribution amount lives here, beside role and status,
+   because it is a fact about the member rather than about the schedule.
+   Blank means the group's own amount, which is what almost every stokvel
+   uses — the override exists for the ones whose constitution sets
+   different amounts for different members. */
 function _stokvelAdminMembers(s) {
   const rows = STATE.stokvelOpen.members;
   return `<div class="card">
@@ -20251,7 +20256,7 @@ function _stokvelAdminMembers(s) {
       <button class="btn btn--secondary btn--sm" onclick="addStokvelMember('${_esc(s.id)}')">
         <i class="fa-solid fa-plus"></i> Add member</button></div>
     <table class="data-table"><thead><tr>
-      <th>Investor</th><th>Role</th><th>Signatory</th><th>Status</th><th></th>
+      <th>Investor</th><th>Role</th><th>Signatory</th><th>Status</th><th>Pays</th><th></th>
     </tr></thead><tbody>
     ${rows.length ? rows.map(m => `<tr>
       <td><code style="font-size:0.75rem">${_esc(m.investor_id)}</code></td>
@@ -20266,6 +20271,12 @@ function _stokvelAdminMembers(s) {
         <select class="input input--sm" onchange="updateStokvelMember('${_esc(m.id)}',{status:this.value})">
           ${['invited', 'active', 'exited'].map(st => `<option value="${st}"${m.status === st ? ' selected' : ''}>${st.replace(/^\w/, c => c.toUpperCase())}</option>`).join('')}
         </select>
+      </td>
+      <td>
+        <input type="number" min="0" step="0.01" class="input input--sm" style="width:100px"
+               value="${m.contribution_amount != null ? _esc(m.contribution_amount) : ''}"
+               placeholder="group"
+               onchange="updateStokvelMember('${_esc(m.id)}',{contribution_amount:this.value===''?null:parseFloat(this.value)})">
       </td>
       <td class="text-right text-muted" style="font-size:0.74rem">${m.joined_at ? String(m.joined_at).slice(0, 10) : ''}</td>
     </tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:16px">No members yet.</td></tr>'}

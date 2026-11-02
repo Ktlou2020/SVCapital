@@ -554,6 +554,40 @@ async function paidOut({ groupId, payout, db } = {}) {
   }
 }
 
+/* ─── FINED ────────────────────────────────────────────────────────
+   Told straight away and with the reason on it. A fine a member finds out
+   about when their arrears do not add up is the thing that ends stokvels;
+   one they are told about, with what it is for, is their committee applying
+   rules they agreed to. */
+async function fined({ groupId, investorId, amount, note, db } = {}) {
+  const pool = db || defaultPool;
+  try {
+    const { rows: [row] } = await pool.query(
+      `SELECT name FROM sub_accounts WHERE id = $1`, [groupId]);
+    if (!row) return { notified: [] };
+    const person = await _person(pool, investorId);
+    const told = await _tell(person, {
+      title: row.name,
+      body: `A fine of ${fmtR(amount)} has been recorded against you: ${note || ''}`.trim(),
+      email: {
+        subject: `${row.name}: a fine of ${fmtR(amount)}`,
+        heading: 'A fine has been recorded',
+        lead: `Your stokvel\u2019s committee has recorded a fine of <strong>${fmtR(amount)}</strong> `
+            + 'against you, under the group\u2019s own rules.',
+        rows: [['Stokvel', row.name], ['Amount', fmtR(amount)], ['What it is for', note || '\u2014']],
+        note: 'It is added to what you owe the group and settles like a contribution \u2014 '
+            + 'oldest first when you pay in, or off your share if the group pays out or you '
+            + 'leave. SV Capital does not set or enforce a stokvel\u2019s penalties; if you think '
+            + 'this is wrong, it is your committee to take it up with.',
+      },
+    });
+    return { notified: [told].filter(Boolean) };
+  } catch (err) {
+    console.error('[stokvelNotify] fined failed:', err.message);
+    return { notified: [], error: err.message };
+  }
+}
+
 /* The facts of the request, as label/value pairs. Every message carries the
    same ones, so a reader comparing two emails is comparing like with like. */
 function _rows(a, required, reference) {
@@ -577,4 +611,4 @@ function _rows(a, required, reference) {
   return out;
 }
 
-module.exports = { approvalNeeded, decided, spent, invited, inviteAccepted, exitSettled, paidOut, describe };
+module.exports = { approvalNeeded, decided, spent, invited, inviteAccepted, exitSettled, paidOut, fined, describe };

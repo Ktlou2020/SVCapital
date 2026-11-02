@@ -2674,6 +2674,26 @@ async function autoSetup() {
              old one and refuse every exit while reporting success. */
           BEGIN ALTER TABLE stokvel_withdrawal_requests DROP CONSTRAINT swr_kind_chk; EXCEPTION WHEN undefined_object THEN NULL; END;
           BEGIN ALTER TABLE stokvel_withdrawal_requests ADD COLUMN payout_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          /* A FINE IS AN OBLIGATION, not a separate concept. Effectively every
+             stokvel constitution has them, and the platform had none. Carried
+             on stokvel_contributions so arrears, the chase, paying in oldest
+             first and the deduction at exit or payout all work on it unchanged
+             \u2014 the alternative was a parallel table and five places that would
+             each have had to learn about it.
+
+             Each fine gets a UNIQUE period_label (FINE-<id>), so the existing
+             (sub_account_id, investor_id, period_label) unique index never
+             collides and needs no migration: two fines in one month for one
+             member are two rows, which a period-keyed index could not hold. */
+          BEGIN ALTER TABLE stokvel_contributions ADD COLUMN kind TEXT NOT NULL DEFAULT 'contribution'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE stokvel_contributions ADD CONSTRAINT stokvel_contributions_kind_chk
+            CHECK (kind IN ('contribution','fine')); EXCEPTION WHEN duplicate_object THEN NULL; END;
+          BEGIN ALTER TABLE stokvel_contributions ADD COLUMN note TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE stokvel_contributions ADD COLUMN levied_by TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          /* What THIS member pays, when the group's constitution does not set
+             one amount for everybody. Null falls back to the schedule, which
+             is what every existing stokvel does. */
+          BEGIN ALTER TABLE stokvel_members ADD COLUMN contribution_amount NUMERIC(18,2); EXCEPTION WHEN duplicate_column THEN NULL; END;
           /* A fourth kind: the group paying itself out. Dropped and re-added
              again rather than added with EXCEPTION duplicate_object, which on
              a database holding the three-value version would keep the old one
@@ -4566,6 +4586,11 @@ async function autoSetup() {
          that comes back after somebody dismissed the idea of it is worse than
          no notice at all. */
       const NOTICES = [
+        { id: 'ANN-2026-STOKVEL-FINES', area: 'both', icon: 'fa-gavel',
+          title: 'Stokvel fines, and members who pay different amounts',
+          body: 'Two things a constitution has and the platform did not. FINES: effectively every stokvel\u2019s rules provide for them \u2014 late to the meeting, late with the money \u2014 and there was no way to record one, so committees kept them on paper and the app\u2019s arrears were wrong. A fine is now an OBLIGATION, carried on the same table as a contribution, which means arrears, the monthly chase, paying in oldest-first and the deduction at an exit or a payout ALL WORK ON IT UNCHANGED rather than each having to learn about a new kind of thing. Levied by the COMMITTEE \u2014 chairperson, secretary or treasurer \u2014 never by us: a penalty is something the group\u2019s own rules provide for, and a platform that could impose one would be enforcing somebody else\u2019s constitution. The member is told straight away and A REASON IS REQUIRED, because a fine somebody discovers when their arrears do not add up is the thing that ends stokvels. An unpaid fine can be withdrawn by the committee if they got it wrong; a PAID one cannot, because reversing it would take back money the group has already shared out. The message to the member says plainly that SV Capital does not set or enforce a stokvel\u2019s penalties and that a disputed one is for their committee. SECOND: MEMBERS CAN BE ON DIFFERENT AMOUNTS. The contribution schedule carried a single figure for the whole group, which is right for almost every stokvel and wrong for the ones whose rules set different amounts for different members \u2014 a member on a lower amount, somebody catching up on a higher one. There is now a per-member amount on the members list in the console; leave it blank and that member pays the group\u2019s figure, which is what every existing stokvel does and nothing changes for them.',
+          where: 'Fines: client app \u2192 Sub-accounts \u2192 the stokvel \u2192 Members \u2192 \u201cRecord a fine\u201d (committee only). The member sees it under what they owe, marked as a fine with the reason on it. Per-member amounts: Admin console \u2192 Stokvels \u2192 open one \u2192 Members \u2192 the \u201cPays\u201d column; blank means the group\u2019s amount.' },
+
         { id: 'ANN-2026-SUBACCOUNT-STATEMENTS', area: 'both', icon: 'fa-file-lines',
           title: 'Sub-accounts have a statement at last \u2014 and a stokvel can see WHO approved what',
           body: 'TWO GAPS, both about a group being able to see its own history. FIRST: no sub-account had a statement. Not a stokvel, not a trust, not a business, not a child\u2019s account \u2014 every query in the statement builder was scoped to an investor, so a stokvel\u2019s AGM had nothing to table and a trustee could not produce a year for the trust. One document now serves all of them: the same balances, anchored to that account\u2019s own wallet, the same one definition of what moves cash. The ACCOUNT is named at the top rather than the person who opened it. NOTHING ABOUT AN INDIVIDUAL\u2019S STATEMENT CHANGED, and that was the careful part \u2014 an investor\u2019s statement has always included their sub-accounts\u2019 transactions, and \u201ctidying\u201d that would have silently altered documents clients already hold, so it is left exactly as it was and the check proves two identical calls produce identical documents. SECOND: THE APPROVALS REGISTER IS VISIBLE. It has been recorded since the mandate shipped and never shown \u2014 members saw \u201c2 of 3\u201d and never which two. For a product whose whole claim is that several NAMED people must agree, that was the wrong way round, and an anonymous rejection is worse than a named one because a request dies and nobody can talk about why. Every member now sees who voted, what they decided and when, on each request and again on the statement. A vote from somebody who is no longer a signatory is shown and marked as not counted, so the tally still adds up for anybody checking it by hand. A stokvel\u2019s statement also carries who contributed what in the period, each member\u2019s share, and the pot broken down. Worth knowing when somebody asks for one: a stokvel\u2019s statement can be pulled by any ACTIVE member, not only the chairperson, and the request is refused as \u201cno such account\u201d to anybody else \u2014 an id in a query string is not an entitlement.',

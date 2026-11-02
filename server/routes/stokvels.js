@@ -692,6 +692,85 @@ router.post('/:id/withdrawal-requests/:rid/vote', async (req, res) => {
 });
 
 
+/* ─── Fines ──────────────────────────────────────────────────────────
+   Effectively every stokvel constitution has them and the platform had
+   none. A fine is an OBLIGATION, carried on stokvel_contributions with
+   kind = 'fine', so arrears, the chase, paying in oldest-first and the
+   deduction at exit or payout all work on it unchanged.
+
+   Levied by the committee, never by us: a penalty is a thing the group's
+   own rules provide for, and a platform that could impose one would be
+   enforcing somebody else's constitution. Reversible while unpaid, because
+   a committee that fined the wrong member must be able to say so.
+   ──────────────────────────────────────────────────────────────────── */
+router.post('/:id/fines', async (req, res) => {
+  const me = callerInvestorId(req);
+  try {
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) return res.status(404).json({ error: 'No such stokvel.' });
+    if (!invites.mayInvite(group)) {
+      return res.status(403).json({ error: 'Only the chairperson, secretary or treasurer can levy a fine.' });
+    }
+    const investorId = String((req.body && req.body.investor_id) || '').trim();
+    const amount = Math.round((parseFloat(req.body && req.body.amount) || 0) * 100) / 100;
+    const note = String((req.body && req.body.note) || '').trim().slice(0, 200);
+    if (!(amount > 0)) return res.status(400).json({ error: 'An amount is required.' });
+    if (!note) {
+      /* Required. A fine a member cannot see the reason for is the thing
+         that ends stokvels, and the reason has to be on the row rather than
+         in somebody's memory of the meeting. */
+      return res.status(400).json({ error: 'Say what the fine is for \u2014 the member will see it.' });
+    }
+    const { rows: m } = await pool.query(
+      `SELECT 1 FROM stokvel_members
+        WHERE sub_account_id = $1 AND investor_id = $2 AND status = 'active'`,
+      [group.id, investorId]);
+    if (!m.length) return res.status(400).json({ error: 'That person is not an active member of this stokvel.' });
+
+    const id = 'SCF-' + crypto.randomUUID().replace(/-/g, '').slice(0, 14).toUpperCase();
+    await pool.query(
+      `INSERT INTO stokvel_contributions
+         (id, sub_account_id, investor_id, period_label, amount_due, amount_paid,
+          due_date, status, kind, note, levied_by)
+       VALUES ($1,$2,$3,$4,$5,0,CURRENT_DATE,'due','fine',$6,$7)`,
+      [id, group.id, investorId, 'FINE-' + id.slice(4), amount, note, me]);
+
+    const n = notify();
+    if (n) n.fined({ groupId: group.id, investorId, amount, note })
+            .catch(e => console.warn('[stokvels] notify failed:', e.message));
+
+    return res.status(201).json({ data: { id, amount, note } });
+  } catch (err) {
+    console.error('[stokvels] fine failed:', err.message);
+    return res.status(500).json({ error: 'Could not record that fine.' });
+  }
+});
+
+/* Called off. Only while unpaid — a fine the member has settled is history,
+   and reversing it would take money the group has already shared out. */
+router.delete('/:id/fines/:fid', async (req, res) => {
+  const me = callerInvestorId(req);
+  try {
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) return res.status(404).json({ error: 'No such stokvel.' });
+    if (!invites.mayInvite(group)) {
+      return res.status(403).json({ error: 'Only the chairperson, secretary or treasurer can withdraw a fine.' });
+    }
+    const { rowCount } = await pool.query(
+      `DELETE FROM stokvel_contributions
+        WHERE id = $1 AND sub_account_id = $2 AND kind = 'fine'
+          AND status = 'due' AND amount_paid = 0`,
+      [req.params.fid, group.id]);
+    if (!rowCount) {
+      return res.status(404).json({ error: 'No unpaid fine with that id. A fine that has been paid cannot be withdrawn.' });
+    }
+    return res.json({ data: { withdrawn: true } });
+  } catch (err) {
+    console.error('[stokvels] withdraw fine failed:', err.message);
+    return res.status(500).json({ error: 'Could not withdraw that fine.' });
+  }
+});
+
 /* ─── POST /api/stokvels/:id/pay-in ──────────────────────────────────
    Extra money into the pot, from the member's own wallet.
 
@@ -1036,7 +1115,7 @@ router.get('/:id/contributions', async (req, res) => {
 
     const { rows } = await pool.query(
       `SELECT c.id, c.investor_id, c.period_label, c.amount_due, c.amount_paid,
-              c.due_date, c.status, c.paid_at,
+              c.due_date, c.status, c.paid_at, c.kind, c.note,
               i.first_name, i.last_name,
               (c.investor_id = $2) AS is_me,
               (c.status = 'due' AND c.due_date < CURRENT_DATE) AS overdue
