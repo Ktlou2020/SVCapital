@@ -114,5 +114,47 @@ async function charge({ authorizationCode, email, net, reference, metadata = {} 
   };
 }
 
-module.exports = { grossUp, charge, authorizationFor, secretKey,
+/* What the GATEWAY thinks happened, for a day.
+
+   Nothing on this platform ever compared Paystack's record against ours.
+   Two different silences follow from that, and both cost money: a charge
+   Paystack took that we never credited — the client is out of pocket and
+   waiting — and a credit we made that Paystack later reversed, which leaves
+   every balance overstated by that amount with nothing saying so.
+
+   Paged, because a busy day is more than fifty rows and a comparison that
+   reads only the first page reports every row beyond it as missing. */
+async function listTransactions({ from, to, status = 'success', perPage = 100, maxPages = 20 } = {}) {
+  const key = secretKey();
+  if (!key) return { ok: false, reason: 'PAYSTACK_SECRET_KEY is not set', data: [] };
+
+  const out = [];
+  for (let page = 1; page <= maxPages; page++) {
+    const url = `https://api.paystack.co/transaction?perPage=${perPage}&page=${page}`
+      + `&status=${encodeURIComponent(status)}`
+      + (from ? `&from=${encodeURIComponent(from)}` : '')
+      + (to ? `&to=${encodeURIComponent(to)}` : '');
+    let body;
+    try {
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${key}` } });
+      body = await res.json();
+    } catch (err) {
+      /* Partial, and SAID to be partial. A reconciliation that reports what
+         it managed to fetch as though it were the whole day would invent
+         discrepancies for every row it never saw. */
+      return { ok: false, reason: `could not reach Paystack: ${err.message}`, data: out, partial: true };
+    }
+    if (!body || body.status !== true) {
+      return { ok: false, reason: (body && body.message) || 'Paystack refused the request',
+               data: out, partial: out.length > 0 };
+    }
+    const rows = body.data || [];
+    out.push(...rows);
+    if (rows.length < perPage) return { ok: true, data: out, pages: page };
+  }
+  /* Ran out of pages before running out of data. */
+  return { ok: false, reason: `more than ${maxPages} pages of transactions`, data: out, partial: true };
+}
+
+module.exports = { grossUp, charge, authorizationFor, secretKey, listTransactions,
                    FEE_RATE, FEE_FLAT, FEE_CAP, CHARGE_URL };

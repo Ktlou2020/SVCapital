@@ -19,6 +19,7 @@
 
 const fs   = require('fs');
 const path = require('path');
+const { transactionsFixtureDDL } = require('../services/ledger');
 const ROOT = path.join(__dirname, '..', '..');
 
 let pass = 0, fail = 0;
@@ -188,17 +189,10 @@ async function schema() {
     CREATE TABLE investments (id TEXT PRIMARY KEY, investor_id TEXT, sub_account_id TEXT,
       pool_id TEXT, product_type TEXT, amount NUMERIC(18,2), status TEXT,
       start_date DATE, end_date DATE, term_months INT);
-    /* Every column services/ledger.js writes, because the single writer
-       names all of them. A fixture short of one fails with "column does
-       not exist", which reads like a product bug and is not. */
-    CREATE TABLE transactions (id TEXT PRIMARY KEY,
-      investor_id TEXT, sub_account_id TEXT, investment_id TEXT, pool_id TEXT,
-      type TEXT, amount NUMERIC(18,2), status TEXT, reference TEXT,
-      description TEXT, notes TEXT, referred_investor_id TEXT,
-      transaction_date TIMESTAMPTZ, available_at TIMESTAMPTZ,
-      actor_kind TEXT, actor_id TEXT, actor_email TEXT, actor_role TEXT, actor_ip TEXT,
-      created_at TIMESTAMPTZ DEFAULT NOW(),
-      updated_at TIMESTAMPTZ DEFAULT NOW());
+    /* GENERATED from the single writer's own column list, not typed out.
+       Written by hand it fell behind twice — each time failing with
+       "column does not exist", which reads like a product bug and is not. */
+    ${transactionsFixtureDDL()};
     CREATE UNIQUE INDEX idx_txn_ref ON transactions(reference);
     CREATE TABLE pool_annual_returns (pool_id TEXT, year_index INT, rate NUMERIC(8,4),
       note TEXT, posted_by TEXT, posted_at TIMESTAMPTZ DEFAULT NOW(),

@@ -251,6 +251,50 @@ CREATE TABLE IF NOT EXISTS return_schedules (
  * last_seen bracket it, notified_at throttles the telling, and resolved_at
  * is a person saying they have dealt with it.
  */
+/* A CARD PAYMENT SOMEBODY IS TAKING BACK.
+ *
+ * The webhook handled charge.success and returned on everything else, so a
+ * dispute, a refund or a reversal was dropped on the floor. Paystack takes
+ * the money back from SV Capital either way; the client's wallet went on
+ * showing the credit, and for a stokvel the contribution had already moved
+ * into the group's pot and been shared across every member — so the pot held
+ * money the platform no longer had, split between people who had done
+ * nothing wrong.
+ *
+ * Every event that moves money the other way lands here first, whether or
+ * not anything could be clawed back, so there is one place that answers
+ * "what is being disputed and what did we do about it".
+ */
+CREATE TABLE IF NOT EXISTS payment_reversals (
+  id TEXT PRIMARY KEY,
+  /* Paystack's own id for the dispute or refund, so a later event about the
+     same one updates rather than duplicates. */
+  gateway_id TEXT UNIQUE,
+  kind TEXT NOT NULL,                      -- dispute | refund | reversal
+  reference TEXT NOT NULL,                 -- the ORIGINAL charge's reference
+  investor_id TEXT REFERENCES investors(id) ON DELETE SET NULL,
+  amount NUMERIC(18,2) NOT NULL,
+  /* What we managed to take back, which is not always the whole amount:
+     the money may already be invested or inside a stokvel's pot. */
+  recovered NUMERIC(18,2) NOT NULL DEFAULT 0,
+  shortfall NUMERIC(18,2) NOT NULL DEFAULT 0,
+  /* Where it went, when it had already been spent. A stokvel is named here
+     because clawing it back is a conversation with a committee, not a
+     database write. */
+  spent_on TEXT,
+  sub_account_id TEXT,
+  status TEXT NOT NULL DEFAULT 'open',     -- open | recovered | written_off | reversed_back
+  gateway_status TEXT,
+  opened_at TIMESTAMPTZ DEFAULT NOW(),
+  resolved_at TIMESTAMPTZ,
+  resolved_by TEXT,
+  note TEXT,
+  raw JSONB
+);
+CREATE INDEX IF NOT EXISTS payment_reversals_open_idx
+  ON payment_reversals(opened_at DESC) WHERE status = 'open';
+CREATE INDEX IF NOT EXISTS payment_reversals_ref_idx ON payment_reversals(reference);
+
 CREATE TABLE IF NOT EXISTS platform_incidents (
   id TEXT PRIMARY KEY,
   fingerprint TEXT NOT NULL UNIQUE,
@@ -2583,6 +2627,21 @@ async function autoSetup() {
           BEGIN ALTER TABLE stokvel_contributions ADD COLUMN autopay_attempted_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE stokvel_contributions ADD COLUMN autopay_attempts INTEGER NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE stokvel_contributions ADD COLUMN autopay_last_error TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          /* WHEN A CARD PAYMENT IS TAKEN BACK.
+             The webhook handled charge.success and dropped everything else,
+             so a dispute or a refund meant Paystack clawed the money back
+             from us while the client's wallet still showed the credit. These
+             mark the original so a statement, a reconciliation and a human
+             can all see that the row no longer represents money we hold. */
+          /* WHICH GATEWAY PUT THIS ROW HERE, if any.
+             Reconciling against Paystack needs to know which of our rows
+             Paystack should also have. The first attempt guessed from the
+             reference prefix, which missed exactly the rows that matter: a
+             credit the gateway no longer has is the one whose reference
+             nobody thought to add to the list. Recorded instead of inferred. */
+          BEGIN ALTER TABLE transactions ADD COLUMN gateway TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE transactions ADD COLUMN reversed_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE transactions ADD COLUMN reversed_reference TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE investors ADD COLUMN last_auto_fica_check TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE investors ADD COLUMN fica_auto_status TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE investors ADD COLUMN xp_points INT DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
@@ -5095,6 +5154,10 @@ async function autoSetup() {
           title: 'A stokvel contribution can now collect itself',
           body: 'A stokvel is a group of people paying a fixed amount on a fixed day, and every one of them had to remember to do it by hand \u2014 so most of what the arrears screen shows is friction rather than anybody refusing to pay. A member can now switch on automatic payment and their contribution is taken on the day it falls due. It uses the wallet first and only charges the card already on their main account for what the wallet cannot cover, so nobody pays a gateway fee on money they already had. A declined card still pays whatever the wallet holds, as a part payment, rather than leaving them further behind. After three declines we stop trying and tell them. Nobody can switch it on for anybody else \u2014 it is each member\u2019s own card and their own decision.',
           where: 'Portal \u2192 switch into the stokvel \u2192 Contributions, under what you owe. Only shown to members who have a card on file.' },
+        { id: 'card-reversals-2026-11', area: 'admin', icon: 'fa-rotate-left',
+          title: 'A disputed or refunded card payment is no longer invisible',
+          body: 'The Paystack webhook handled successful charges and ignored everything else, so a dispute or a refund meant Paystack took the money back from us while the client\u2019s wallet still showed the credit. Every disputed payment is now recorded and acted on: what the wallet still holds is taken back, and anything that cannot be is raised on the dashboard saying exactly where the money went. MONEY IS NEVER CLAWED BACK OUT OF A STOKVEL \u2014 by then it has been shared across the whole group, so taking it back would take it from members who did nothing; the alert names the group and leaves it to you. And every new dispute is surfaced even when recovery went perfectly, because a dispute nobody answers is awarded against us by default. Separately, the gateway\u2019s books and ours are now compared every morning for the day before, which catches a charge taken and never credited, or a credit standing against a charge Paystack no longer has.',
+          where: 'Dashboard \u2014 under Needs attention. Disputes appear as warnings, anything unrecovered as critical.' },
       ];
 
       let added = 0;

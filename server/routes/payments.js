@@ -16,6 +16,8 @@ const smsService   = require('../services/sms');
 const audit        = require('../services/audit');
 const aml          = require('../services/aml');
 const { recordTransaction, actorFromRequest, systemActor } = require('../services/ledger');
+const reversals    = require('../services/reversals');
+const incidents    = require('../services/incidents');
 
 /* ──────────────────────────────────────────────────────────
    GET /api/payments/config
@@ -59,7 +61,7 @@ async function creditWallet(investorId, amount, reference, actorEmail = null, so
        in — the row has to be able to say which one credited the wallet. */
     const written = await recordTransaction(client, {
       investorId, type: 'deposit', amount, reference, description: desc,
-      subAccountId: subAccountId || null,
+      subAccountId: subAccountId || null, gateway: 'paystack',
     }, actor || systemActor(`payments:${source}`), { onConflict: 'reference' });
     if (!written) {
       await client.query('ROLLBACK');
@@ -284,6 +286,23 @@ router.post('/paystack/webhook', async (req, res) => {
   res.sendStatus(200);
 
   const { event, data } = req.body;
+
+  /* MONEY GOING THE OTHER WAY.
+
+     This handler used to be `if (event !== 'charge.success') return;` — so a
+     dispute, a refund or a reversal was dropped on the floor while Paystack
+     took the money back from us and the client's wallet went on showing the
+     credit. Automatic collection made that likely rather than rare: a card
+     charged every month without the client present is the exact pattern
+     that produces "I do not recognise this debit". */
+  if (reversals.REVERSING_EVENTS[event]) {
+    reversals.record({ event, data }).catch(err =>
+      incidents.report(err, {
+        source: 'paystack:webhook', severity: 'critical',
+        details: { event, reference: data?.reference } }));
+    return;
+  }
+
   if (event !== 'charge.success') return;
 
   const reference    = data?.reference;

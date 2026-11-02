@@ -303,6 +303,7 @@ async function runAutoTopUps() {
           await topupClient.query('BEGIN');
           await recordTransaction(topupClient, {
             investorId: inv.id, type: 'deposit', amount, reference, description: desc,
+            gateway: 'paystack',
           }, systemActor('recurringCron:autoTopUp'));
           await topupClient.query(
             'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at=NOW() WHERE id=$2',

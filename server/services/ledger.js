@@ -33,8 +33,13 @@
    money entering or leaving SV Capital, which it never is. */
 const CASH_CREDIT_TYPES = ['deposit', 'payout', 'interest', 'gift_received', 'referral_bonus', 'matured_funds',
                            'stokvel_contribution_received'];
+/* `reversal` is money LEAVING because a card payment was taken back — a
+   dispute the client won, or a refund. It is a debit like any other, and it
+   has to be in this list: without it a reversed deposit stays counted as
+   money the platform holds, and every balance derived from the ledger is
+   overstated by exactly the amount somebody took back. */
 const CASH_DEBIT_TYPES  = ['withdrawal', 'investment', 'reinvestment', 'fee', 'platform_fee', 'gift_sent',
-                           'stokvel_contribution'];
+                           'stokvel_contribution', 'reversal'];
 
 /* The transaction types that are INVESTMENT INCOME — what a client earned, as
    opposed to what moved.
@@ -144,7 +149,7 @@ function systemActor(jobName) {
 
 const TX_COLUMNS = ['id', 'investor_id', 'sub_account_id', 'type', 'amount', 'status',
                     'reference', 'description', 'notes', 'investment_id', 'pool_id',
-                    'transaction_date', 'referred_investor_id', 'available_at',
+                    'transaction_date', 'referred_investor_id', 'available_at', 'gateway',
                     'actor_kind', 'actor_id', 'actor_email', 'actor_role', 'actor_ip'];
 
 /* db is a pool or a client already inside a transaction — the caller's
@@ -176,6 +181,10 @@ async function recordTransaction(db, tx, actor, opts = {}) {
     /* When a pending withdrawal becomes available. A date already given to a
        client, so it is written with the row rather than derived later. */
     available_at: tx.availableAt ?? tx.available_at ?? null,
+    /* The payment gateway this row came from, where one did. Reconciliation
+       asks for exactly these rows, so it is recorded rather than guessed
+       at from the shape of a reference. */
+    gateway: tx.gateway ?? null,
     actor_kind: actor.kind,
     actor_id: actor.id ? String(actor.id) : null,
     actor_email: actor.email || null,
@@ -220,8 +229,28 @@ async function recordTransaction(db, tx, actor, opts = {}) {
   return rows[0];
 }
 
+/* The columns the writer needs, as DDL, for a check that builds a minimal
+   transactions table of its own rather than running the whole schema.
+
+   Two fixtures have now broken because a column was added here and not
+   there — each failing with "column does not exist", which reads like a
+   product bug and costs an hour before anybody looks at the fixture. A
+   fixture generated from TX_COLUMNS cannot fall behind it. */
+const TX_COLUMN_TYPES = {
+  amount: 'NUMERIC(18,2)',
+  transaction_date: 'TIMESTAMPTZ',
+  available_at: 'TIMESTAMPTZ',
+};
+function transactionsFixtureDDL(table = 'transactions') {
+  const cols = TX_COLUMNS.map(c =>
+    c === 'id' ? 'id TEXT PRIMARY KEY' : `${c} ${TX_COLUMN_TYPES[c] || 'TEXT'}`);
+  cols.push('reversed_at TIMESTAMPTZ', 'reversed_reference TEXT',
+            'created_at TIMESTAMPTZ DEFAULT NOW()', 'updated_at TIMESTAMPTZ DEFAULT NOW()');
+  return `CREATE TABLE ${table} (\n  ${cols.join(',\n  ')}\n)`;
+}
+
 module.exports = { CASH_CREDIT_TYPES, CASH_DEBIT_TYPES, INCOME_TYPES,
                    cashMovementSQL, incomeTypesSQL,
                    cashMovement, movesCash, CASH_MOVEMENT: cashMovement,
                    recordTransaction, actorFromRequest, systemActor, ACTOR_KINDS,
-                   TX_COLUMNS };
+                   TX_COLUMNS, transactionsFixtureDDL };

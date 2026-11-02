@@ -127,7 +127,7 @@ async function collectOne(item, { asOf = new Date() } = {}) {
         await client.query('BEGIN');
         await recordTransaction(client, {
           investorId: item.investor_id, type: 'deposit', amount: result.net,
-          reference: result.reference,
+          reference: result.reference, gateway: 'paystack',
           description: `Card top-up for ${item.stokvel_name} — ${item.period_label}`
             + ` (charged R${result.gross.toLocaleString('en-ZA')})`,
         }, ACTOR(), { onConflict: 'reference' });
