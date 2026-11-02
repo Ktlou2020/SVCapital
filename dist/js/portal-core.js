@@ -1114,9 +1114,14 @@ function _animateNum(el, target, prefix = '', suffix = '', duration = 900) {
   /* Reduced motion: land on the value immediately. Besides the motion itself,
      the count-up rewrites textContent every frame — inside a live region that
      is a screen reader reading a balance sixty times a second. */
+  /* en-ZA, like everything else. This counter draws the biggest number on
+     the platform — the one in the hero — and it was the last place still
+     writing it in American. */
+  const money = v => Number(v).toLocaleString('en-ZA',
+    { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
   if (Utils.reducedMotion && Utils.reducedMotion()) {
-    el.textContent = prefix + Number(safeTarget).toLocaleString('en-US',
-      { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + suffix;
+    el.textContent = prefix + money(safeTarget) + suffix;
     el.dataset.animated = safeTarget;
     return;
   }
@@ -1127,9 +1132,9 @@ function _animateNum(el, target, prefix = '', suffix = '', duration = 900) {
     const progress = Math.min(elapsed / duration, 1);
     const eased = 1 - Math.pow(1 - progress, 3);
     const current = start + (safeTarget - start) * eased;
-    el.textContent = prefix + Number(current).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + suffix;
+    el.textContent = prefix + money(current) + suffix;
     if (progress < 1) requestAnimationFrame(step);
-    else { el.textContent = prefix + Number(safeTarget).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + suffix; el.dataset.animated = safeTarget; }
+    else { el.textContent = prefix + money(safeTarget) + suffix; el.dataset.animated = safeTarget; }
   };
   requestAnimationFrame(step);
 }
@@ -1791,7 +1796,7 @@ function renderPortfolioTrendChart() {
   const yMax = Math.ceil(Math.max(...data) * 1.08 / 1000) * 1000;
 
   if (PORTAL.charts.trend) { PORTAL.charts.trend.destroy(); PORTAL.charts.trend = null; }
-  PORTAL.charts.trend = new Chart(canvas, {
+  PORTAL.charts.trend = Utils.chart(canvas, {
     type: 'line',
     data: {
       labels: months,
@@ -1882,7 +1887,7 @@ function renderAllocationChart() {
   const total  = values.reduce((s, v) => s + v, 0);
 
   if (PORTAL.charts.alloc) PORTAL.charts.alloc.destroy();
-  PORTAL.charts.alloc = new Chart(ctx, {
+  PORTAL.charts.alloc = Utils.chart(ctx, {
     type: 'doughnut',
     data: {
       labels,
@@ -3848,12 +3853,14 @@ function backToProducts() {
 
 function _renderProductGrowthChart(rate, termMonths, color) {
   const canvas = document.getElementById('prodGrowthChart');
-  if (!canvas || typeof Chart === 'undefined') return;
+  /* The Chart check moved into Utils.chart, which also puts a line in
+     place of the picture. Returning here left a blank panel. */
+  if (!canvas) return;
   try { if (_prodGrowthChart) { _prodGrowthChart.destroy(); _prodGrowthChart = null; } } catch (_) {}
   const months = Math.max(1, Math.min(120, parseInt(termMonths) || 12));
   const labels = [], data = [];
   for (let m = 0; m <= months; m++) { labels.push(m === 0 ? 'Start' : `M${m}`); data.push(Math.round(10000 * Math.pow(1 + rate, m / 12))); }
-  _prodGrowthChart = new Chart(canvas.getContext('2d'), {
+  _prodGrowthChart = Utils.chart(canvas.getContext('2d'), {
     type: 'line',
     data: { labels, datasets: [{ data, borderColor: color, backgroundColor: color + '22', fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2 }] },
     options: {
@@ -3961,9 +3968,11 @@ async function _renderSolarHistory(containerId, color) {
     <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:8px"><i class="fa-solid fa-chart-column" style="color:${color}"></i> Daily generation this month</div>
     <div style="position:relative;height:150px"><canvas id="prodSolarHistChart"></canvas></div>`;
   const canvas = document.getElementById('prodSolarHistChart');
-  if (!canvas || typeof Chart === 'undefined') return;
+  /* The Chart check moved into Utils.chart, which also puts a line in
+     place of the picture. Returning here left a blank panel. */
+  if (!canvas) return;
   try { if (_solarHistChart) { _solarHistChart.destroy(); _solarHistChart = null; } } catch (_) {}
-  _solarHistChart = new Chart(canvas.getContext('2d'), {
+  _solarHistChart = Utils.chart(canvas.getContext('2d'), {
     type: 'bar',
     data: { labels: h.series.map(d => d.day), datasets: [{ data: h.series.map(d => d.kwh), backgroundColor: color + 'cc' }] },
     options: {
@@ -10913,7 +10922,7 @@ function _renderMonthlyReturnsChart() {
   const data = last12.map(k => +monthly[k].toFixed(2));
 
   if (PORTAL.charts.analyticsMonthly) { PORTAL.charts.analyticsMonthly.destroy(); }
-  PORTAL.charts.analyticsMonthly = new Chart(ctx, {
+  PORTAL.charts.analyticsMonthly = Utils.chart(ctx, {
     type: 'bar',
     data: {
       labels: labels.length ? labels : ['No data'],
@@ -10954,7 +10963,7 @@ function _renderAnalyticsAllocChart() {
   const colors  = entries.map(([, v]) => Utils.productColor(v.product_type));
 
   if (PORTAL.charts.analyticsAlloc) { PORTAL.charts.analyticsAlloc.destroy(); }
-  PORTAL.charts.analyticsAlloc = new Chart(ctx, {
+  PORTAL.charts.analyticsAlloc = Utils.chart(ctx, {
     type: 'doughnut',
     data: {
       labels: entries.map(([n]) => n),

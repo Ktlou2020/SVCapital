@@ -81,7 +81,11 @@ function load(isNative) {
   const { ctx, win } = load(false);
   check('web: Utils.ficaBadge exists', typeof ctx.Utils.ficaBadge === 'function', 'missing');
   check('web: Utils.randShort exists', typeof ctx.Utils.randShort === 'function', 'missing');
-  check('web: rand(null) is R0.00', ctx.Utils.rand(null) === 'R0.00', ctx.Utils.rand(null));
+  /* en-ZA, like every other figure the platform writes. This said R0.00
+     back when the portal formatted in American and the documents did not. */
+  check('web: rand(null) is R 0,00', ctx.Utils.rand(null) === 'R 0,00', ctx.Utils.rand(null));
+  check('web: rand groups with a non-breaking space',
+        ctx.Utils.rand(170000) === 'R 170\u00a0000,00', JSON.stringify(ctx.Utils.rand(170000)));
   check('web: platform tag is web', ctx._svcPlatform() === 'web', ctx._svcPlatform());
 
   // The overlay must exist but must not have been rendered on web.
@@ -102,7 +106,9 @@ function load(isNative) {
 {
   const { ctx, win } = load(true);
   check('native: same Utils are present', typeof ctx.Utils.ficaBadge === 'function' && typeof ctx.Utils.randShort === 'function', 'missing');
-  check('native: rand(null) matches web', ctx.Utils.rand(null) === 'R0.00', ctx.Utils.rand(null));
+  check('native: rand(null) matches web', ctx.Utils.rand(null) === 'R 0,00', ctx.Utils.rand(null));
+  check('native: rand groups the same way web does',
+        ctx.Utils.rand(170000) === 'R 170\u00a0000,00', JSON.stringify(ctx.Utils.rand(170000)));
 
   ctx._showSessionExpiredOverlay();
   const overlay = win.document._byId['_svcSessionExpired'];

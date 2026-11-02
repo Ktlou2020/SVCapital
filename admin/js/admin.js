@@ -1355,7 +1355,7 @@ async function renderAumChart(range) {
   }
 
   if (STATE.charts.aum) STATE.charts.aum.destroy();
-  STATE.charts.aum = new Chart(ctx, {
+  STATE.charts.aum = Utils.chart(ctx, {
     type: 'line',
     data: {
       labels: monthLabels,
@@ -1448,7 +1448,7 @@ function renderProductMixChart() {
   const colors = entries.map(([k]) => PRODUCT_MIX_COLORS[k] || '#9ca3af');
 
   if (STATE.charts.productMix) STATE.charts.productMix.destroy();
-  STATE.charts.productMix = new Chart(ctx, {
+  STATE.charts.productMix = Utils.chart(ctx, {
     type: 'doughnut',
     data: { labels, datasets: [{ data, backgroundColor: colors, borderColor: 'var(--dark-2)', borderWidth: 3, hoverOffset: 4 }] },
     options: {
@@ -10504,7 +10504,7 @@ function renderMaturityForecastChart() {
     }).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0));
   }
   if (STATE.charts.maturityForecast) STATE.charts.maturityForecast.destroy();
-  STATE.charts.maturityForecast = new Chart(ctx, {
+  STATE.charts.maturityForecast = Utils.chart(ctx, {
     type: 'bar',
     data: { labels: months, datasets: [{ label: 'Capital Maturing (R)', data: amounts, backgroundColor: 'rgba(254,194,79,0.7)', borderColor: '#fec24f', borderWidth: 1, borderRadius: 6 }] },
     options: { responsive: true, maintainAspectRatio: false,
@@ -10529,7 +10529,7 @@ function renderCohortChart() {
     }).length);
   }
   if (STATE.charts.cohort) STATE.charts.cohort.destroy();
-  STATE.charts.cohort = new Chart(ctx, {
+  STATE.charts.cohort = Utils.chart(ctx, {
     type: 'bar',
     data: { labels: months, datasets: [{ label: 'New Investors', data: counts, backgroundColor: 'rgba(101,101,101,0.7)', borderColor: '#656565', borderWidth: 1, borderRadius: 6 }] },
     options: { responsive: true, maintainAspectRatio: false,
@@ -10672,7 +10672,7 @@ function renderProductVolChart() {
   const colors = ['#fec24f', '#22c55e', '#4ade80', '#86efac', '#656565', '#f97316'];
 
   if (STATE.charts.productVol) STATE.charts.productVol.destroy();
-  STATE.charts.productVol = new Chart(ctx, {
+  STATE.charts.productVol = Utils.chart(ctx, {
     type: 'bar',
     data: { labels, datasets: [{ label: 'Volume (R)', data, backgroundColor: colors, borderRadius: 6 }] },
     options: {
@@ -10735,7 +10735,7 @@ function renderProvinceChart() {
   const colors = labels.map(l => PROVINCE_COLORS[l] || '#656565');
 
   if (STATE.charts.province) STATE.charts.province.destroy();
-  STATE.charts.province = new Chart(ctx, {
+  STATE.charts.province = Utils.chart(ctx, {
     type: 'pie',
     data: { labels, datasets: [{ data: labels.map(l => prov[l]), backgroundColor: colors, borderColor: 'var(--dark-2)', borderWidth: 3 }] },
     options: {
@@ -10773,7 +10773,7 @@ function renderGenderChart() {
   });
   const total = STATE.investors.length || 1;
   if (STATE.charts.gender) STATE.charts.gender.destroy();
-  STATE.charts.gender = new Chart(ctx, {
+  STATE.charts.gender = Utils.chart(ctx, {
     type: 'doughnut',
     data: {
       labels: ['Male', 'Female', 'Unknown'],
@@ -10812,7 +10812,7 @@ function renderHeardAboutChart() {
   const opts = _chartDefaults();
   opts.indexAxis = 'y';
   opts.plugins.tooltip.callbacks = { label: c => ` ${c.parsed.x} investor${c.parsed.x !== 1 ? 's' : ''}` };
-  STATE.charts.heardAbout = new Chart(ctx, {
+  STATE.charts.heardAbout = Utils.chart(ctx, {
     type: 'bar',
     data: {
       labels: sorted.map(([k]) => k),
@@ -10834,7 +10834,7 @@ function renderRiskChart() {
   STATE.investors.forEach(i => { if (risk[i.risk_profile] !== undefined) risk[i.risk_profile]++; });
 
   if (STATE.charts.risk) STATE.charts.risk.destroy();
-  STATE.charts.risk = new Chart(ctx, {
+  STATE.charts.risk = Utils.chart(ctx, {
     type: 'doughnut',
     data: {
       labels: ['Conservative', 'Moderate', 'Aggressive'],
@@ -10875,7 +10875,7 @@ function renderTxnFlowChart() {
   );
 
   if (STATE.charts.txnFlow) STATE.charts.txnFlow.destroy();
-  STATE.charts.txnFlow = new Chart(ctx, {
+  STATE.charts.txnFlow = Utils.chart(ctx, {
     type: 'bar',
     data: {
       labels: months,
@@ -14156,7 +14156,7 @@ function _opsRenderAumByType(s) {
   const colors = ['#fec24f','#22c55e','#656565','#eda5ff','#fec24f','#656565'];
   const labels  = s.aumByType.map(r => typeLabel[r.type] || r.type);
   const data    = s.aumByType.map(r => r.volume);
-  _opsAumByTypeChart = new Chart(ctx, {
+  _opsAumByTypeChart = Utils.chart(ctx, {
     type: 'doughnut',
     data: {
       labels,
@@ -14216,7 +14216,7 @@ function _opsRenderVelocity(velocity) {
     return r ? parseFloat(r.volume) : 0;
   };
 
-  _opsVelocityChart = new Chart(ctx, {
+  _opsVelocityChart = Utils.chart(ctx, {
     type: 'bar',
     data: {
       labels: days.map(dayLabel),
@@ -15585,7 +15585,7 @@ function renderAnAumChart() {
   opts.scales.y.ticks.callback = v => 'R' + (v >= 1000000 ? (v/1000000).toFixed(1)+'M' : (v/1000).toFixed(0)+'k');
   opts.scales.y1 = { position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#3d5268', font: { size: 10 }, callback: v => 'R' + (v/1000).toFixed(0)+'k' } };
 
-  STATE.charts.anAum = new Chart(ctx, {
+  STATE.charts.anAum = Utils.chart(ctx, {
     type: 'bar',
     data: {
       labels: buckets.map(b => b.label),
@@ -15640,7 +15640,7 @@ function renderAnNewInvChart() {
   const opts = _chartDefaults();
   opts.plugins.tooltip.callbacks = { label: c => ` ${c.parsed.y} investors` };
 
-  STATE.charts.anNewInv = new Chart(ctx, {
+  STATE.charts.anNewInv = Utils.chart(ctx, {
     type: 'bar',
     data: {
       labels: buckets.map(b => b.label),
@@ -15677,7 +15677,7 @@ function renderAnReturnsChart() {
   opts.plugins.tooltip.callbacks = { label: c => ` ${Utils.rand(c.parsed.y)}` };
   opts.scales.y.ticks.callback = v => 'R' + (v / 1000).toFixed(0) + 'k';
 
-  STATE.charts.anReturns = new Chart(ctx, {
+  STATE.charts.anReturns = Utils.chart(ctx, {
     type: 'bar',
     data: {
       labels: buckets.map(b => b.label),
@@ -15703,7 +15703,7 @@ function renderAnStatusChart() {
 
   if (STATE.charts.anStatus) STATE.charts.anStatus.destroy();
 
-  STATE.charts.anStatus = new Chart(ctx, {
+  STATE.charts.anStatus = Utils.chart(ctx, {
     type: 'doughnut',
     data: {
       labels,
@@ -19429,7 +19429,7 @@ async function loadRevenueAnalytics() {
       const opts = _chartDefaults();
       opts.plugins.tooltip.callbacks = { label: c => ` ${Utils.rand(c.parsed.y)}` };
       opts.scales.y.ticks.callback   = v => 'R' + (v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v);
-      STATE.charts.revenueMonthly = new Chart(ctx, {
+      STATE.charts.revenueMonthly = Utils.chart(ctx, {
         type: 'bar',
         data: {
           labels:   data.monthly.map(m => _fmtMonthLabel(m.month)),
@@ -19487,7 +19487,7 @@ async function loadMaturityReinvestment() {
       if (STATE.charts.maturityReinvest) STATE.charts.maturityReinvest.destroy();
       const opts = _chartDefaults();
       opts.plugins.tooltip.callbacks = { label: c => ` ${c.dataset.label}: ${c.parsed.y}` };
-      STATE.charts.maturityReinvest = new Chart(ctx, {
+      STATE.charts.maturityReinvest = Utils.chart(ctx, {
         type: 'bar',
         data: {
           labels:   data.monthly.map(m => _fmtMonthLabel(m.month)),
@@ -19632,7 +19632,7 @@ async function loadSubAccountAnalytics() {
       if (STATE.charts.subAccountMonthly) STATE.charts.subAccountMonthly.destroy();
       const opts = _chartDefaults();
       opts.plugins.tooltip.callbacks = { label: c => ` ${c.parsed.y} new sub-accounts` };
-      STATE.charts.subAccountMonthly = new Chart(ctx, {
+      STATE.charts.subAccountMonthly = Utils.chart(ctx, {
         type: 'bar',
         data: {
           labels:   data.monthly_new.map(m => _fmtMonthLabel(m.month)),
@@ -19753,7 +19753,7 @@ async function loadWithdrawalTrends() {
       opts.plugins.tooltip.callbacks = { label: c => ` ${c.dataset.label}: ${c.dataset.label === 'Count' ? c.parsed.y : Utils.rand(c.parsed.y)}` };
       opts.scales.y.ticks.callback   = v => 'R' + (v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v);
 
-      STATE.charts.withdrawalTrends = new Chart(ctx, {
+      STATE.charts.withdrawalTrends = Utils.chart(ctx, {
         type: 'bar',
         data: {
           labels:   data.monthly.map(m => _fmtMonthLabel(m.month)),

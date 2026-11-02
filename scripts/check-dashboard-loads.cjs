@@ -113,6 +113,11 @@ function makeEnv({ serverKpis = true, seriesOk = true, ticketsOk = true } = {}) 
     window: {},
     STATE: { investors: [], pools: [], investments: [], transactions: [], tickets: [], charts: {} },
     Utils: realUtils({
+      /* Charts go through Utils.chart now, so a missing library cannot
+         throw inside a render and take the whole load down with it — which
+         is exactly what it used to do. The stub routes the same way, so
+         "did the dashboard draw its charts" is still the thing measured. */
+      chart: () => { reached.push('Chart'); return { destroy() {} }; },
       rand: v => 'R' + Number(v || 0).toFixed(2),
       pct:  v => (Number(v) * 100).toFixed(2) + '%',
       date: () => '24 Mar 2026',
@@ -144,6 +149,8 @@ function makeEnv({ serverKpis = true, seriesOk = true, ticketsOk = true } = {}) 
         throw new Error('unexpected fetch: ' + url);
       },
     },
+    /* Kept so a stray direct construction would still be counted, and
+       check-cdn-resilience fails the build if one reappears. */
     Chart: function Chart() { reached.push('Chart'); return { destroy() {} }; },
     /* loadDashboard wraps its body in try/catch, so an exception inside it does
        NOT surface to the caller — the page just stops building. Toast.error is

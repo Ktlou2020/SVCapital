@@ -600,10 +600,20 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (tb) tb.innerHTML = _statusRow(4, msg);
     };
     const _coverText = document.getElementById('_nativeCoverText');
+    /* A TIMER, NOT A DIAGNOSIS. This fires five seconds into any slow load
+       and used to assert a cause it cannot possibly know — "the server is
+       waking up". It was wrong the day a CDN failure made a chart throw
+       inside loadPortalData: the server was up and answering, the client
+       was told it was asleep, and the advice was to wait for something
+       that was never going to happen.
+
+       The commonest slow load is not a cold server at all; it is a phone
+       on a weak signal. So it says what is true — this is taking a while —
+       and nothing it cannot stand behind. */
     const _t1 = setTimeout(() => {
-      const wake = '<i class="fa-solid fa-circle-notch fa-spin" style="margin-right:6px"></i>Server is waking up — this can take up to 30 seconds…';
+      const wake = '<i class="fa-solid fa-circle-notch fa-spin" style="margin-right:6px"></i>Still loading — this can take a few seconds on a slow connection…';
       _updateStatus(wake);
-      if (_coverText) _coverText.textContent = 'Server waking up, please wait…';
+      if (_coverText) _coverText.textContent = 'Still loading, please wait…';
     }, 5000);
     const _t2 = setTimeout(() => {
       const almost = '<i class="fa-solid fa-circle-notch fa-spin" style="margin-right:6px"></i>Almost there…';

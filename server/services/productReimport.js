@@ -46,7 +46,8 @@ const lastSeg = v => {
   return parts[parts.length - 1] || null;
 };
 const round2 = n => Math.round((Number(n) || 0) * 100) / 100;
-const money = n => 'R' + Number(n || 0).toLocaleString('en-US',
+/* en-ZA like every other figure the platform writes. */
+const money = n => 'R ' + Number(n || 0).toLocaleString('en-ZA',
   { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /* "id=type,id=type" — from --map on the CLI, or the same field in the panel. */

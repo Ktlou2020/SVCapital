@@ -33,6 +33,7 @@ if (!process.env.DATABASE_URL) {
 const fs   = require('fs');
 const path = require('path');
 const { Pool } = require('pg');
+const { plain } = require('../../scripts/lib/rendered.cjs');
 
 const ROOT = path.join(__dirname, '..', '..');
 const pool = new Pool({
@@ -225,10 +226,16 @@ const legs = async () => (await pool.query(
          plan.label === 'Switch an amount, reinvest the rest', plan.label);
       ok('and not treated as no instruction at all',
          !/has not chosen/.test(plan.detail), plan.detail);
+      /* Amounts read through the shared reader, so these assert the FIGURE
+         and the sentence around it rather than one notation of it. The
+         strings here were written when the portal formatted in en-US; the
+         money now reads R 4 000,00 like everything else, and an assertion
+         pinned to the old spelling tests the formatter, not the feature. */
+      const detail = plain(plan.detail);
       ok('the switched amount and its target are stated',
-         /R4,000\.00 switched into Cattle Investment/.test(plan.detail), plan.detail);
+         /R 4 000,00 switched into Cattle Investment/.test(detail), detail);
       ok('and the balance is described as staying invested',
-         /R6,213\.00 reinvested where it is/.test(plan.detail), plan.detail);
+         /R 6 213,00 reinvested where it is/.test(detail), detail);
       ok('nothing is reported as paid to the wallet',
          plan.payout === null,
          'both legs stay invested — a payout figure here would tell the client money is coming that is not');
