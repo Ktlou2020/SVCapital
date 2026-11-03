@@ -14,6 +14,7 @@ const audit  = require('../services/audit');
 const email  = require('../services/email');
 const { requireAuth } = require('../middleware/auth');
 const { instructionRefusal } = require('../services/maturityPolicy');
+const { switchRefusal, switchRefusalForSet } = require('../services/switchMinimum');
 const { recordTransaction, actorFromRequest } = require('../services/ledger');
 
 const VALID_INSTRUCTIONS = ['payout_all', 'payout_return', 'payout_custom', 'reinvest', 'switch_product', 'custom_switch', 'switch_amount'];
@@ -149,6 +150,23 @@ router.post('/:id/instruction', requireAuth, async (req, res) => {
       });
     }
 
+    /* A pool will not take less than its minimum, so neither will an
+       instruction to put money into one. The portal only offers destinations
+       this amount can reach; this catches the stale page and the direct call.
+
+       Clients only. Staff setting an instruction on somebody's behalf may
+       know what the threshold does not — a larger pool opening, a top-up
+       coming — so this follows the 17:00 cutoff rather than the payout-only
+       refusal above, which binds everyone because it is about what the
+       contract can carry rather than what a sum clears today. */
+    if (!isStaff) {
+      const minRefusal = await switchRefusal(client, inv, instruction, switch_product_type, custom_payout_amount);
+      if (minRefusal) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: minRefusal, code: 'SWITCH_BELOW_MINIMUM' });
+      }
+    }
+
     await client.query(
       `UPDATE investments
           SET maturity_instruction = $1,
@@ -279,6 +297,16 @@ router.post('/pool/:poolId/instruction', requireAuth, async (req, res) => {
         return res.status(400).json({
           error: `${rand(custom_payout_amount)} is applied to each investment. The smallest in this pool is worth ${rand(smallest)}, so it cannot ${AMOUNT_IS_SWITCH.includes(instruction) ? 'switch' : 'pay out'} that much.`,
         });
+      }
+    }
+
+    /* The pool minimum, cleared by the smallest holding. Clients only, for the
+       reason given on the single-investment route. */
+    if (!isStaff) {
+      const minRefusal = await switchRefusalForSet(client, invs, instruction, switch_product_type, custom_payout_amount);
+      if (minRefusal) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: minRefusal, code: 'SWITCH_BELOW_MINIMUM' });
       }
     }
 

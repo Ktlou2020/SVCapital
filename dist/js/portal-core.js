@@ -4787,8 +4787,154 @@ function _matErrorSlot() {
 function _switchOptionAttrs(canSwitch) {
   return canSwitch ? '' : ' disabled';
 }
-function _switchUnavailableNote(canSwitch) {
-  return canSwitch ? '' : ` <span style="opacity:.7">(no other product is open right now)</span>`;
+function _switchUnavailableNote(canSwitch, reason) {
+  if (canSwitch) return '';
+  return ` <span style="opacity:.7">(${_esc(reason || 'no other product is open right now')})</span>`;
+}
+
+/* ─── What a maturity can actually be switched into ────────────────────
+
+   The destination list was every product that had a pool ROW, which was
+   wrong twice over.
+
+   It ignored whether the pool was still open, so a product whose last pool
+   closed months ago was offered as somewhere to put money — while the
+   option's own note claimed nothing else was open.
+
+   And it ignored the pool's MINIMUM. A client with R2 000 maturing was shown
+   a product that will not take less than R10 000. They chose it, the
+   instruction saved without complaint, and nothing told them: at maturity
+   the money goes wherever the engine can put it, which is not where they
+   asked.
+
+   A minimum belongs to the POOL, not the product — CLAUDE.md is explicit,
+   and the two figures are set in different places in the console and drift.
+   So a product's minimum here is its CHEAPEST OPEN POOL: the cheapest thing
+   that can be bought today, which is the same rule eifCardMinimum states for
+   the marketplace card.
+
+   Open means what the maturity engine means by it — status 'open' and not
+   past its close date. Waitlist pools are left out: the engine will not
+   place into one, so offering it would be a promise we cannot keep.
+
+   Canonical product types on both sides, so the alias pair (delivery_bikes /
+   delivery_bike) cannot offer a client a switch into what they already hold.
+
+   Sorted by minimum ascending, which makes candidates[0] of a rejected set
+   the cheapest thing out of reach — the one figure worth telling somebody. */
+function _matSwitchCandidates(fromProductType) {
+  const from   = svcCanonProductType(fromProductType);
+  const byType = new Map();
+
+  (PORTAL.pools || []).forEach(p => {
+    if (!p || !p.product_type) return;
+    if (p.status !== 'open' || _poolPastClose(p)) return;
+    if (svcCanonProductType(p.product_type) === from) return;
+    /* A category-exclusive product is reached through its own tab, on
+       purpose. Offering it here would hand it to every client, including one
+       switching out of a conventional product. */
+    if (_isCategoryExclusive((_mktProducts || []).find(x => x.product_type === p.product_type))) return;
+
+    const raw = parseFloat(p.min_investment);
+    const min = Number.isFinite(raw) && raw > 0 ? raw : 0;
+    const cur = byType.get(p.product_type);
+    if (cur === undefined || min < cur) byType.set(p.product_type, min);
+  });
+
+  return [...byType.entries()]
+    .map(([productType, min]) => ({
+      productType, min,
+      label: (Utils.productInfo(productType) || {}).label || productType,
+    }))
+    .sort((a, b) => a.min - b.min || String(a.label).localeCompare(String(b.label)));
+}
+
+/* Split on what this amount can reach. A cent of tolerance, because the
+   amount is money arithmetic and a minimum met exactly must not be refused
+   by a rounding artefact. */
+function _matAffordable(candidates, switchable) {
+  const amt = Number.isFinite(switchable) ? switchable : 0;
+  return {
+    offered: (candidates || []).filter(c => c.min <= amt + 0.005),
+    blocked: (candidates || []).filter(c => c.min >  amt + 0.005),
+  };
+}
+
+/* The amount this instruction actually sends INTO the new product — which is
+   what the minimum is a rule about, never the gross payout.
+
+   Switch Product sends the whole payout. Custom Switch sends what is left
+   after the client takes their cash, so the list shrinks as they type a
+   larger figure. Nothing typed yet means nothing has been taken yet, so the
+   whole payout is the honest assumption until they do.
+
+   No fee enters this: both legs of a maturity go through reinvestAmount in
+   the engine and are fee-free, which is the reason the switch instructions
+   exist at all. */
+function _matSwitchableAmount(perInvestmentValue, type, customAmount) {
+  const base = Number(perInvestmentValue) || 0;
+  if (type !== 'custom_switch') return base;
+  const take = Number(customAmount);
+  if (!Number.isFinite(take) || take <= 0) return base;
+  return Math.max(0, base - take);
+}
+
+function _matSwitchOptionsHtml(candidates, switchable, selected) {
+  const { offered } = _matAffordable(candidates, switchable);
+  if (!offered.length) {
+    return `<option value="" disabled>${(candidates || []).length
+      ? 'Nothing this amount can be switched into'
+      : 'No other product has an open pool'}</option>`;
+  }
+  return offered.map(c =>
+    `<option value="${_esc(c.productType)}"${c.productType === selected ? ' selected' : ''}>` +
+    `${_esc(c.label)}${c.min > 0 ? ` — from ${Utils.rand(c.min)}` : ''}</option>`
+  ).join('');
+}
+
+/* An empty list, or a shorter one than the client expected, must say why.
+   A select that silently holds three of six products reads as the platform
+   being broken; naming the next minimum up makes it a decision instead. */
+function _matSwitchNoteHtml(candidates, switchable, perLabel) {
+  if (!(candidates || []).length) return '';
+  const { offered, blocked } = _matAffordable(candidates, switchable);
+  const suffix = perLabel ? ` ${perLabel}` : '';
+
+  if (!offered.length) {
+    const cheapest = blocked[0];
+    return `<div style="font-size:0.72rem;color:#f59e0b;margin-top:6px;padding:9px 11px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.28);border-radius:8px;line-height:1.55">
+      <i class="fa-solid fa-circle-exclamation" style="margin-right:5px"></i>
+      ${Utils.rand(switchable)}${_esc(suffix)} does not meet the minimum of any other product open today. The smallest is <strong>${Utils.rand(cheapest.min)}</strong> (${_esc(cheapest.label)}). Take less in cash, or choose a payout instead.
+    </div>`;
+  }
+  if (blocked.length) {
+    const n = blocked.length;
+    return `<div style="font-size:0.72rem;color:var(--text-dim);margin-top:6px;padding:9px 11px;background:rgba(0,150,255,0.07);border:1px solid rgba(0,150,255,0.22);border-radius:8px;line-height:1.55">
+      <i class="fa-solid fa-filter" style="margin-right:5px"></i>
+      Showing what ${Utils.rand(switchable)}${_esc(suffix)} can be put into. ${n} other product${n === 1 ? '' : 's'} ${n === 1 ? 'is' : 'are'} not listed because ${n === 1 ? 'its' : 'their'} pool minimum is higher — the next starts at <strong>${Utils.rand(blocked[0].min)}</strong>.
+    </div>`;
+  }
+  return '';
+}
+
+/* Repaint the destination list in place. Called when the instruction changes
+   and on every keystroke in the cash amount, because on Custom Switch the
+   amount typed is what decides which products are reachable.
+
+   The selection is kept when it is still reachable and dropped when it is
+   not — silently leaving a now-unreachable product selected is how the
+   original defect would come back through the back door. */
+function _matRepaintSwitchTargets(candidates, perInvestmentValue, perLabel) {
+  const sel = document.getElementById('matSwitchProductType');
+  if (!sel) return;
+  const type       = (document.getElementById('matInstructionType') || {}).value || '';
+  const customEl   = document.getElementById('matCustomAmount');
+  const switchable = _matSwitchableAmount(perInvestmentValue, type, customEl ? customEl.value : null);
+  const wanted     = _matSelectedProduct('switch_product');
+
+  sel.innerHTML = _matSwitchOptionsHtml(candidates, switchable, wanted);
+  const note = document.getElementById('matSwitchMinNote');
+  if (note) note.innerHTML = _matSwitchNoteHtml(candidates, switchable, perLabel);
 }
 
 /* Why an Ethical & Interest-Free holding offers nothing but a payout.
@@ -4835,29 +4981,33 @@ async function openMaturityModal(investmentId) {
       ? (inv.maturity_instruction === 'reinvest' || !inv.maturity_instruction ? 'payout_all' : inv.maturity_instruction)
       : (inv.maturity_instruction || '');
 
-  // All product types for switch option (resolved at maturity, pool may not be open yet)
-  /* Switch targets come from the open pools, so a category-exclusive product
-     with an open pool would be offered here to every client — including one
-     switching out of a conventional product, which is exactly what "EIF only"
-     is meant to prevent. It is left out of this list entirely; a client who
-     wants it invests through the Ethical & Interest-Free tab, deliberately.
+  /* Where this maturity could go, and what each destination will take.
+
+     _matSwitchCandidates holds the two rules: the pool has to still be open,
+     and a category-exclusive product is reached through its own tab rather
+     than offered to everybody here.
 
      This does NOT settle the larger question of whether a client who has
      elected interest-free should be offered conventional products at maturity
-     — that picker is still category-blind and needs its own decision. */
-  const allProductTypes = [...new Set(
-    (PORTAL.pools || [])
-      .filter(p => p.product_type && p.product_type !== inv.product_type)
-      .filter(p => !_isCategoryExclusive((_mktProducts || []).find(x => x.product_type === p.product_type)))
-      .map(p => p.product_type)
-  )];
-  const canSwitch = allProductTypes.length > 0;
-  const switchProductsHtml = canSwitch
-    ? allProductTypes.map(pt => {
-        const pi = Utils.productInfo(pt);
-        return `<option value="${pt}" ${existing==='switch_product' && inv.switch_product_type===pt?'selected':''}>${pi.label || pt}</option>`;
-      }).join('')
-    : `<option value="" disabled>No other product types available</option>`;
+     — that picker is still category-blind and needs its own decision.
+
+     The value tested is capital plus the return that has been DECLARED, the
+     same figure submitMaturityInstruction caps the custom payout with. One
+     definition, so the list of destinations and the cap on the cash cannot
+     disagree about what this investment is worth. */
+  const candidates  = _matSwitchCandidates(inv.product_type);
+  const invValue    = (parseFloat(inv.amount) || 0) + Utils.earnedReturns([inv]);
+  /* Switch Product sends the whole value, so if nothing is reachable with THAT
+     then nothing is reachable at all and both switch instructions are closed
+     off. Custom Switch can still empty the list once an amount is typed; the
+     note and the submit guard carry that case. */
+  const reachable   = _matAffordable(candidates, invValue);
+  const canSwitch   = reachable.offered.length > 0;
+  const noSwitchWhy = candidates.length
+    ? `${Utils.rand(invValue)} is below every other product’s minimum`
+    : 'no other product is open right now';
+  const switchProductsHtml = _matSwitchOptionsHtml(candidates, invValue,
+    existing === 'switch_product' || existing === 'custom_switch' ? inv.switch_product_type : null);
 
   const poolNote = `<div style="font-size:0.72rem;color:var(--text-dim);margin-top:4px"><i class="fa-solid fa-info-circle"></i> The first available open pool for this product will be assigned when your investment matures.</div>`;
 
@@ -4877,13 +5027,13 @@ async function openMaturityModal(investmentId) {
       <select class="form-select" id="matInstructionType"${payoutOnly ? ' disabled' : ''}>
         <option value="payout_all"     ${existing==='payout_all'    ?'selected':''}>Payout All — Receive full capital + returns</option>
         ${payoutOnly ? '' : isDeliveryBike ? `
-        <option value="switch_product" ${existing==='switch_product'?'selected':''}${_switchOptionAttrs(canSwitch)}>Switch Product — into a different product${_switchUnavailableNote(canSwitch)}</option>
+        <option value="switch_product" ${existing==='switch_product'?'selected':''}${_switchOptionAttrs(canSwitch)}>Switch Product — into a different product${_switchUnavailableNote(canSwitch, noSwitchWhy)}</option>
         ` : `
         <option value="payout_return"  ${existing==='payout_return' ?'selected':''}>Payout Returns Only — keep capital invested</option>
         <option value="reinvest"       ${existing==='reinvest'      ?'selected':''}>Reinvest — roll over into the same product</option>
-        <option value="switch_product" ${existing==='switch_product'?'selected':''}${_switchOptionAttrs(canSwitch)}>Switch Product — into a different product${_switchUnavailableNote(canSwitch)}</option>
+        <option value="switch_product" ${existing==='switch_product'?'selected':''}${_switchOptionAttrs(canSwitch)}>Switch Product — into a different product${_switchUnavailableNote(canSwitch, noSwitchWhy)}</option>
         <option value="payout_custom"  ${existing==='payout_custom' ?'selected':''}>Custom Payout — take an amount, reinvest the rest</option>
-        <option value="custom_switch"  ${existing==='custom_switch' ?'selected':''}${_switchOptionAttrs(canSwitch)}>Custom Switch — take an amount, switch the rest${_switchUnavailableNote(canSwitch)}</option>
+        <option value="custom_switch"  ${existing==='custom_switch' ?'selected':''}${_switchOptionAttrs(canSwitch)}>Custom Switch — take an amount, switch the rest${_switchUnavailableNote(canSwitch, noSwitchWhy)}</option>
         `}
       </select>
       ${payoutOnly ? _payoutOnlyNote(inv.product_type) : ''}
@@ -4905,6 +5055,7 @@ async function openMaturityModal(investmentId) {
         <select class="form-select" id="matSwitchProductType">
           ${switchProductsHtml}
         </select>
+        <div id="matSwitchMinNote">${_matSwitchNoteHtml(candidates, invValue)}</div>
         ${poolNote}
       </div>
     </div>`}
@@ -4938,7 +5089,14 @@ async function openMaturityModal(investmentId) {
       document.getElementById('reinvestGroup').style.display      = v === 'reinvest'       ? 'block' : 'none';
       document.getElementById('customPayoutGroup').style.display  = (v === 'payout_custom' || v === 'custom_switch') ? 'block' : 'none';
     }
+    _matRepaintSwitchTargets(candidates, invValue);
   });
+
+  /* On Custom Switch the cash the client takes decides what the remainder can
+     buy, so the destinations are re-read as they type rather than left showing
+     what the full payout could have reached. */
+  const matCustomEl = document.getElementById('matCustomAmount');
+  if (matCustomEl) matCustomEl.addEventListener('input', () => _matRepaintSwitchTargets(candidates, invValue));
 
   const matBtn = document.getElementById('maturityConfirmBtn');
   matBtn.onclick = () => _withBtn(matBtn, () => submitMaturityInstruction(inv));
@@ -4963,8 +5121,25 @@ async function submitMaturityInstruction(inv) {
   if (needsCustom && (!customAmt || customAmt <= 0))  { _matShowError('Enter the amount you want paid out.'); return; }
   if (needsCustom && customAmt >= total)              { _matShowError(`The payout amount must be less than ${Utils.rand(total)}, the value of this investment.`); return; }
   if ((type === 'switch_product' || type === 'custom_switch') && !switchProductType) {
-    _matShowError('Choose the product to switch into. If the list is empty, no other product has an open pool right now — choose a different instruction or contact support.');
+    _matShowError('Choose the product to switch into. If the list is empty, nothing open today will take what this maturity would send it — choose a payout, or take less in cash.');
     return;
+  }
+
+  /* The list is filtered, so reaching here with an unreachable product means
+     the amount moved after the list was painted. Checked against the figure
+     actually being switched rather than the gross, because that is what the
+     pool minimum is a rule about. */
+  if (type === 'switch_product' || type === 'custom_switch') {
+    const chosen = _matSwitchCandidates(inv.product_type).find(c => c.productType === switchProductType);
+    const going  = _matSwitchableAmount(total, type, customAmt);
+    if (!chosen) {
+      _matShowError('That product no longer has an open pool. Choose another, or a payout.');
+      return;
+    }
+    if (chosen.min > going + 0.005) {
+      _matShowError(`${Utils.rand(going)} would be switched into ${chosen.label}, which will not take less than ${Utils.rand(chosen.min)}. Take less in cash, or choose a different product.`);
+      return;
+    }
   }
 
   try {
@@ -5006,13 +5181,27 @@ async function openPoolMaturityModal(poolId) {
   if (payoutOnly) existing = 'payout_all';
   else if (isDeliveryBike && (existing === 'reinvest' || !existing)) existing = 'payout_all';
 
-  const allProductTypes = [...new Set(
-    (PORTAL.pools || []).filter(p => p.product_type && p.product_type !== first.product_type).map(p => p.product_type)
-  )];
-  const canSwitch = allProductTypes.length > 0;
-  const switchProductsHtml = canSwitch
-    ? allProductTypes.map(pt => { const pi = Utils.productInfo(pt); return `<option value="${pt}">${pi.label || pt}</option>`; }).join('')
-    : `<option value="" disabled>No other product types available</option>`;
+  /* One instruction, many investments — and the cash amount on this form is
+     applied PER INVESTMENT, which the form says. So the minimum has to be
+     cleared by the SMALLEST holding in the pool, not by their total: a
+     destination the big ones can reach and the small one cannot would place
+     that one below the pool's own minimum, which is the defect this filter
+     exists to stop.
+
+     This modal also never had the category-exclusive rule the per-investment
+     one has, so it offered EIF-only products to everybody. Both now come from
+     the one helper. */
+  const candidates  = _matSwitchCandidates(first.product_type);
+  const perValues   = poolInvs.map(i => (parseFloat(i.amount) || 0) + Utils.earnedReturns([i]));
+  const smallestInv = perValues.length ? Math.min(...perValues) : 0;
+  const reachable   = _matAffordable(candidates, smallestInv);
+  const canSwitch   = reachable.offered.length > 0;
+  const noSwitchWhy = candidates.length
+    ? `the smallest investment here, ${Utils.rand(smallestInv)}, is below every other product’s minimum`
+    : 'no other product is open right now';
+  const perLabel    = poolInvs.length > 1 ? 'per investment' : '';
+  const switchProductsHtml = _matSwitchOptionsHtml(candidates, smallestInv,
+    existing === 'switch_product' || existing === 'custom_switch' ? first.switch_product_type : null);
   const poolNote = `<div style="font-size:0.72rem;color:var(--text-dim);margin-top:4px"><i class="fa-solid fa-info-circle"></i> The first available open pool for this product will be assigned when your investment matures.</div>`;
 
   document.getElementById('maturityModalBody').innerHTML = `
@@ -5031,13 +5220,13 @@ async function openPoolMaturityModal(poolId) {
       <select class="form-select" id="matInstructionType"${payoutOnly ? ' disabled' : ''}>
         <option value="payout_all"     ${existing==='payout_all'    ?'selected':''}>Payout All — Receive full capital + returns</option>
         ${payoutOnly ? '' : isDeliveryBike ? `
-        <option value="switch_product" ${existing==='switch_product'?'selected':''}${_switchOptionAttrs(canSwitch)}>Switch Product — into a different product${_switchUnavailableNote(canSwitch)}</option>
+        <option value="switch_product" ${existing==='switch_product'?'selected':''}${_switchOptionAttrs(canSwitch)}>Switch Product — into a different product${_switchUnavailableNote(canSwitch, noSwitchWhy)}</option>
         ` : `
         <option value="payout_return"  ${existing==='payout_return' ?'selected':''}>Payout Returns Only — keep capital invested</option>
         <option value="reinvest"       ${existing==='reinvest'      ?'selected':''}>Reinvest — roll over into the same product</option>
-        <option value="switch_product" ${existing==='switch_product'?'selected':''}${_switchOptionAttrs(canSwitch)}>Switch Product — into a different product${_switchUnavailableNote(canSwitch)}</option>
+        <option value="switch_product" ${existing==='switch_product'?'selected':''}${_switchOptionAttrs(canSwitch)}>Switch Product — into a different product${_switchUnavailableNote(canSwitch, noSwitchWhy)}</option>
         <option value="payout_custom"  ${existing==='payout_custom' ?'selected':''}>Custom Payout — take an amount, reinvest the rest</option>
-        <option value="custom_switch"  ${existing==='custom_switch' ?'selected':''}${_switchOptionAttrs(canSwitch)}>Custom Switch — take an amount, switch the rest${_switchUnavailableNote(canSwitch)}</option>
+        <option value="custom_switch"  ${existing==='custom_switch' ?'selected':''}${_switchOptionAttrs(canSwitch)}>Custom Switch — take an amount, switch the rest${_switchUnavailableNote(canSwitch, noSwitchWhy)}</option>
         `}
       </select>
       ${payoutOnly ? _payoutOnlyNote(first.product_type) : ''}
@@ -5055,6 +5244,7 @@ async function openPoolMaturityModal(poolId) {
       <div class="form-group">
         <label class="form-label">Switch to Product *</label>
         <select class="form-select" id="matSwitchProductType">${switchProductsHtml}</select>
+        <div id="matSwitchMinNote">${_matSwitchNoteHtml(candidates, smallestInv, perLabel)}</div>
         ${poolNote}
       </div>
     </div>`}
@@ -5082,7 +5272,11 @@ async function openPoolMaturityModal(poolId) {
       document.getElementById('reinvestGroup').style.display      = v === 'reinvest' ? 'block' : 'none';
       document.getElementById('customPayoutGroup').style.display  = (v === 'payout_custom' || v === 'custom_switch') ? 'block' : 'none';
     }
+    _matRepaintSwitchTargets(candidates, smallestInv, perLabel);
   });
+
+  const matCustomEl = document.getElementById('matCustomAmount');
+  if (matCustomEl) matCustomEl.addEventListener('input', () => _matRepaintSwitchTargets(candidates, smallestInv, perLabel));
 
   const matBtn = document.getElementById('maturityConfirmBtn');
   matBtn.onclick = () => _withBtn(matBtn, () => submitPoolMaturityInstruction(poolId));
@@ -5101,8 +5295,24 @@ async function submitPoolMaturityInstruction(poolId) {
   _matClearError();
   if (needsCustom && (!customAmt || customAmt <= 0)) { _matShowError('Enter the amount you want paid out.'); return; }
   if ((type === 'switch_product' || type === 'custom_switch') && !switchProductType) {
-    _matShowError('Choose the product to switch into. If the list is empty, no other product has an open pool right now — choose a different instruction or contact support.');
+    _matShowError('Choose the product to switch into. If the list is empty, nothing open today will take what these investments would send it — choose a payout, or take less in cash.');
     return;
+  }
+
+  /* Cleared by the SMALLEST holding, because the instruction is applied to
+     each investment separately and so is the cash amount. */
+  if (type === 'switch_product' || type === 'custom_switch') {
+    const chosen   = _matSwitchCandidates(poolInvs[0].product_type).find(c => c.productType === switchProductType);
+    const smallest = Math.min(...poolInvs.map(i => (parseFloat(i.amount) || 0) + Utils.earnedReturns([i])));
+    const going    = _matSwitchableAmount(smallest, type, customAmt);
+    if (!chosen) {
+      _matShowError('That product no longer has an open pool. Choose another, or a payout.');
+      return;
+    }
+    if (chosen.min > going + 0.005) {
+      _matShowError(`The smallest investment here would send ${Utils.rand(going)} into ${chosen.label}, which will not take less than ${Utils.rand(chosen.min)}. Take less in cash, choose a different product, or set this one on its own under Individual instructions.`);
+      return;
+    }
   }
 
   try {

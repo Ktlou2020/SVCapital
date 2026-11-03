@@ -64,6 +64,16 @@ async function schema() {
 async function seed() {
   await pool.query(`DELETE FROM investments`);
   await pool.query(`DELETE FROM investors`);
+  /* An OPEN cattle pool, because the switch cases below switch into cattle and
+     a product with no open pool is not somewhere money can go — the route
+     refuses it now (services/switchMinimum.js), which is the point of that
+     rule. Its minimum is small enough that every amount here clears it; what
+     is being asserted below is that the companion fields land in the same
+     write, not the threshold. */
+  await pool.query(`DELETE FROM investment_pools WHERE id = 'POOL-CATTLE-OPEN'`);
+  await pool.query(`INSERT INTO investment_pools
+      (id, name, product_type, status, end_date, annual_rate, term_months, min_investment)
+    VALUES ('POOL-CATTLE-OPEN','Cattle — open','cattle','open', CURRENT_DATE + 60, 0.16, 12, 100)`);
   await pool.query(`INSERT INTO investors (id, first_name, last_name, email) VALUES
     ($1,'Test','Investor','test@example.invalid'), ($2,'Other','Person','other@example.invalid')`, [INVESTOR, OTHER]);
   const future = '2099-12-31';
