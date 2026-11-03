@@ -5186,6 +5186,10 @@ async function autoSetup() {
           title: 'A client switching at maturity is now only shown products they can actually buy',
           body: 'The \u201cSwitch to Product\u201d list was every product that had a pool ROW, and it consulted neither of the two things that decide whether the switch can happen. It ignored whether the pool was still OPEN, so a product whose last pool closed months ago was offered as somewhere to put money \u2014 while the form\u2019s own note said nothing else was open. And it ignored the pool MINIMUM: a client with R2 000 maturing was shown a product that will not take less than R10 000, chose it, saved the instruction without a word of complaint, and found out only when the money landed somewhere else. The list now holds only destinations the amount can actually reach, with each product\u2019s minimum printed beside it, and it says how many were left out and what the next one up costs \u2014 a short list that explains itself rather than looking like a fault. ON CUSTOM SWITCH THE LIST FOLLOWS THE CASH as the client types it, because the destination is bought with what is LEFT after their payout. On a pool-wide instruction it is held to the SMALLEST investment in the pool, since the amount is applied to each one separately. The minimum used is the product\u2019s cheapest open pool, which is CLAUDE.md\u2019s rule that a minimum belongs to the pool rather than the product. STAFF ARE NOT FILTERED and the server does not refuse them \u2014 you may know what the threshold does not, like a larger pool opening next week. ONE THING STILL OUTSTANDING: the maturity engine itself does not check the minimum when it places the money, so an instruction that was valid when it was saved can still land in a dearer pool. Flag it if you see it.',
           where: 'Portal \u2192 Investments \u2192 open one \u2192 Maturity Instruction \u2192 Switch Product or Custom Switch. Also on the pool-level card. Admin \u2192 Investments \u2192 open one still lists every product, on purpose.' },
+        { id: 'fee-pool-column-2026-11', area: 'admin', icon: 'fa-percent',
+          title: 'The fee report now says which pool each fee was charged against',
+          body: 'The Pool column on Platform Fees was a dash on EVERY line. transactions has carried investment_id and pool_id for as long as the fee has existed and the fee written at investment time filled neither of them, so the only trace of what a fee was for was its reference \u2014 and totalling a month\u2019s fees by pool meant reading an investment id out of a string by eye. Both write paths now set the columns, and the fees ALREADY RECORDED have been linked back to their pools from that reference, so the column is populated for history as well as for new fees. The CSV export carries it too. A DASH STILL MEANS SOMETHING and it now says what: \u201cNot charged to a pool\u201d. That is the honest answer for a gateway fee on a deposit or a fee on a manual credit \u2014 those were never charged against a pool, and they still belong in the total. TWO OTHER CORRECTIONS ON THE SAME SCREEN. The amount now reads as NEGATIVE, as a fee must everywhere it appears; it was printed in red without a minus, and red is a colour, not a sign. The CSV was unsigned too and now matches the table it came from. And the subtitle said the 1% is \u201cdeducted on each investment\u201d, which is the opposite of what happens: it is charged ON TOP, so the full amount a client enters reaches the pool.',
+          where: 'Analytics \u2192 Platform Fees \u2192 the Fee Transactions table, and the CSV export beside it.' },
       ];
 
       let added = 0;
@@ -5199,6 +5203,39 @@ async function autoSetup() {
         added += rowCount;
       }
       if (added) console.log(`\u2705 Announced ${added} feature(s) to staff.`);
+    });
+
+    await step("29. Say which pool each platform fee was charged against", async () => {
+      /* transactions.investment_id and .pool_id existed and the fee written
+         at investment time filled neither, so the fee report's Pool column
+         was a dash on every line and nobody could total a month's fees by
+         pool without parsing an id out of a string.
+
+         The only trace was the reference, which is FEE-<investment id> —
+         both write paths set the row's id to the same thing. So the link is
+         recoverable, and recovered here rather than left to a join that
+         guesses at the shape of a reference every time the page loads.
+
+         Matched on the FEE- prefix explicitly. Stripping it unconditionally
+         would leave a reference that never had it intact, and an ordinary
+         transaction reference that happened to equal an investment id would
+         then be attached to that investment.
+
+         Fees with no investment behind them are left alone and SHOULD read
+         as a dash: a fee on a manual credit (FEE-<random>) and a gateway fee
+         on a deposit were not charged against a pool. */
+      const { rowCount } = await pool.query(`
+        UPDATE transactions t
+           SET investment_id = i.id,
+               pool_id       = COALESCE(t.pool_id, i.pool_id)
+          FROM investments i
+         WHERE t.type IN ('fee', 'platform_fee')
+           AND (t.investment_id IS NULL OR t.pool_id IS NULL)
+           AND (
+                 (t.reference LIKE 'FEE-%' AND i.id = SUBSTRING(t.reference FROM 5))
+              OR (t.id        LIKE 'FEE-%' AND i.id = SUBSTRING(t.id        FROM 5))
+               )`);
+      if (rowCount) console.log(`✅ Fees: ${rowCount} now name the pool they were charged against.`);
     });
 
     await step("28. Every stokvel's chairperson is a member of it", async () => {

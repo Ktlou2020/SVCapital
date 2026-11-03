@@ -20154,6 +20154,21 @@ function _pfFilter() {
   _pfRenderTable();
 }
 
+/* The Pool cell.
+
+   Every row used to read "—", because the fee written at investment time
+   filled neither investment_id nor pool_id; setup step 29 recovered the link
+   on the rows already written and both write paths now set the columns.
+
+   A dash still means something, and it is not "we lost it": this report
+   catches every fee, and a fee on a manual credit or a gateway fee on a
+   deposit was never charged against a pool. Those say so rather than leaving
+   a reader to wonder which of the two kinds of blank they are looking at. */
+function _pfPoolCell(r) {
+  if (r.pool_name && r.pool_name !== '—') return _esc(r.pool_name);
+  return `<span style="opacity:.55">Not charged to a pool</span>`;
+}
+
 function _pfRenderTable() {
   const body = document.getElementById('pfBody');
   const foot = document.getElementById('pfFooter');
@@ -20177,9 +20192,9 @@ function _pfRenderTable() {
   body.innerHTML = page.map(r => `
     <tr>
       <td class="td-strong clip">${_esc(r.investor_name)}</td>
-      <td class="td-muted clip" style="font-size:0.8rem">${_esc(r.pool_name)}</td>
+      <td class="td-muted clip" style="font-size:0.8rem">${_pfPoolCell(r)}</td>
       <td class="td-muted" style="font-size:0.75rem">${_esc(r.reference || '—')}</td>
-      <td class="td-red fw-700">${Utils.rand(Math.abs(r.amount))}</td>
+      <td class="td-red fw-700">-${Utils.rand(Math.abs(r.amount))}</td>
       <td class="td-muted">${Utils.date(r.created_at)}</td>
     </tr>`).join('');
 
@@ -20259,9 +20274,13 @@ function exportPlatformFeesCSV() {
     Date:            Utils.csvDate(Utils.txnDate(r)),
     Time:            Utils.csvTime(Utils.txnDate(r)),
     Investor:        r.investor_name || '',
-    Pool:            r.pool_name || '',
+    /* Blank, not the dash the API sends for "none" — a spreadsheet filtering
+       on an empty cell is the point of the column. */
+    Pool:            (r.pool_name && r.pool_name !== '—') ? r.pool_name : '',
     Reference:       r.reference || '',
-    'Amount (R)':    Math.abs(r.amount),
+    /* Negative, matching the table it was exported from and the rule that a
+       fee reads as money leaving everywhere it appears. */
+    'Amount (R)':    -Math.abs(r.amount),
     Description:     r.description || '',
   })), `platform-fees-${new Date().toISOString().slice(0,10)}.csv`);
 }

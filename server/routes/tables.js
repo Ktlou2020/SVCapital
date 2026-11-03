@@ -1406,10 +1406,17 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
         // For fee_inclusive: record the exact fee now so the hook's ON CONFLICT is a no-op
         if (feeInclusive && !isReinvestment && platformFee > 0 && body.id) {
           const feeId = `FEE-${body.id}`;
+          /* investment_id and pool_id are written WITH the row. They were
+             left null, and the only trace of what the fee was for was the
+             reference — so the fee report's Pool column was a dash on every
+             line, and reconciling a month's fees against a pool meant
+             parsing an id out of a string. The columns exist; the join is
+             only as good as what is put in them. */
           await recordTransaction(_invClient, {
             id: feeId, investorId: body.investor_id,
             subAccountId: body.sub_account_id || null, type: 'fee',
             amount: platformFee, reference: feeId,
+            investmentId: body.id, poolId: body.pool_id || null,
             description: '1% platform fee on investment',
           }, actorFromRequest(req), { onConflict: 'id' });
         }
@@ -1883,10 +1890,13 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
           // Record the platform fee — skipped for reinvestments (no fee charged)
           if (!isReinvestment) {
             const feeId = `FEE-${clean.id}`;
+            // Same two columns as the fee_inclusive path above, for the same
+            // reason: the fee has to say which pool it was charged against.
             await recordTransaction(pool, {
               id: feeId, investorId: clean.investor_id,
               subAccountId: clean.sub_account_id || null, type: 'fee',
               amount: platformFee, reference: feeId,
+              investmentId: clean.id, poolId: clean.pool_id || null,
               description: '1% platform fee on investment',
             }, actorFromRequest(req), { onConflict: 'id' });
           }
