@@ -325,9 +325,36 @@ console.log('\nthe client’s own copies order the same way');
      'a second implementation is a second answer to "what did I earn"');
 
   const svc = fs.readFileSync(path.join(ROOT, 'server', 'services', 'incomeReference.js'), 'utf8');
+  /* Read off the TYPE PREDICATES rather than the whole file. The rule is
+     that no query selects payouts as income; it was written as "the word
+     'payout' appears nowhere", which also forbade saying the word — and
+     the settlement guard's incident message has to say it, because
+     "correct the transaction type to 'payout'" is the instruction. */
+  /* Balanced to the closing bracket, not /\([^)]*\)/ — the clause reads
+     `type IN (${incomeTypesSQL()})` and a lazy match stops at the inner
+     bracket, so appending 'payout' to the list sat outside what was
+     examined and the check passed. */
+  const typePredicates = (() => {
+    const out = [];
+    const re = /type\s*(?:IN\s*(?=\()|=\s*)/gi;
+    let m;
+    while ((m = re.exec(svc)) !== null) {
+      const at = m.index + m[0].length;
+      if (svc[at] !== '(') { out.push(svc.slice(m.index, at + 24)); continue; }
+      let depth = 0;
+      for (let i = at; i < svc.length; i++) {
+        if (svc[i] === '(') depth++;
+        else if (svc[i] === ')' && --depth === 0) { out.push(svc.slice(m.index, i + 1)); break; }
+      }
+    }
+    return out;
+  })();
   ok('the service counts income, not returned capital',
-     /incomeTypesSQL\(\)/.test(svc) && !/'payout'/.test(svc),
-     'a payout is capital PLUS return; counting it declares the client’s own capital as income');
+     /incomeTypesSQL\(\)/.test(svc)
+     && typePredicates.length > 0
+     && !typePredicates.some(p => /payout/i.test(p)),
+     'a payout is capital PLUS return; counting it declares the client’s own capital as income — '
+     + JSON.stringify(typePredicates));
   ok('and windows the tax year on the date the money moved',
      /COALESCE\(transaction_date, created_at\) >= \$2::date/.test(svc),
      'created_at is when the row was written — one import timestamp across a migrated ledger');

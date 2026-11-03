@@ -42,11 +42,101 @@ function taxYearWindow(taxYear) {
 const WINDOW = `COALESCE(transaction_date, created_at) >= $2::date
             AND COALESCE(transaction_date, created_at) <  ($3::date + INTERVAL '1 day')`;
 
+/* investment_id is selected for the settlement guard below: a row that
+   names the investment it settles identifies itself, and that is worth
+   more than any amount-and-date resemblance. */
 const TXN_COLS = `id, COALESCE(transaction_date, created_at) AS txn_date,
-                  created_at, type, description, amount, reference`;
+                  created_at, type, description, amount, reference, investment_id`;
 
 class NotFound extends Error {
   constructor(msg) { super(msg); this.code = 'NOT_FOUND'; }
+}
+
+/* ─── A maturity settlement wearing an income type ──────────────────────
+
+   What this is for, in the words of the client who found it:
+
+     "The statement shows R1 631,18 under Returns realised at maturity and
+      R678 under Returns credited. Do these amounts overlap?"
+
+   They did. One ledger row — 30 Apr 2025, description "PAYOUT", R678,00 —
+   was typed as income. R678,00 was that client's R600,00 of capital plus
+   the R78,00 return on an investment that had matured the day before, and
+   the R78,00 was already inside the R1 631,18. Had the two figures been
+   added for SARS, R600 of the client's own money would have been declared
+   as earnings and the R78 counted twice.
+
+   The current engine cannot produce this: creditWallet writes maturity
+   settlements as `payout`, which INCOME_TYPES excludes. The row came in
+   with the Firebase import, which is also why its description is the bare
+   uppercase type. So this guard is about the ledger we inherited, and
+   about any future path that gets the type wrong.
+
+   WHAT IT MATCHES, and why it is drawn this tight. A row is a settlement
+   only when its amount equals capital PLUS the realised return of a
+   matured investment, to the cent, and it sits within a month of that
+   maturity — or when it names that investment outright. Genuine interim
+   income is a fraction of capital and can never equal capital plus return,
+   so the two cannot be confused. The tight rule is deliberate: the costly
+   error here is excluding real income and UNDER-declaring, which is the
+   direction that gets a client into trouble rather than merely confused.
+
+   WHAT IT DOES NOT DO is decide quietly. The row is taken out of the
+   income total because it demonstrably is not income, and it is then named
+   on the face of the document beside the investment it settles, with its
+   amount, so a reader can see exactly what was removed and put it back if
+   they disagree. A tax figure silently adjusted is worse than a wrong one.
+   ─────────────────────────────────────────────────────────────────────── */
+const SETTLEMENT_WINDOW_DAYS = 31;
+
+const _dayMs = 24 * 60 * 60 * 1000;
+const _at = v => { const d = new Date(v); return isNaN(d.getTime()) ? null : d.getTime(); };
+
+/* The investment this row settles, or null. */
+function settlementFor(txn, maturedInvestments) {
+  const amount = Math.abs(parseFloat(txn.amount) || 0);
+  if (!(amount > 0)) return null;
+
+  for (const m of maturedInvestments) {
+    /* A return that has not been posted gives no figure to compare, and
+       guessing one would be the under-declaring mistake this guard exists
+       to avoid. Such an investment is simply not matched. */
+    if (!m.return_posted) continue;
+    const gross = (parseFloat(m.amount) || 0) + (parseFloat(m.realised_return) || 0);
+    if (Math.abs(amount - gross) > 0.005) continue;
+
+    /* The row naming the investment is conclusive on its own — no date
+       test, because an import can carry any date it likes. */
+    if (txn.investment_id && txn.investment_id === m.id) return m;
+
+    const tAt = _at(txn.txn_date || txn.created_at);
+    const mAt = _at(m.end_date);
+    if (tAt === null || mAt === null) continue;
+    if (Math.abs(tAt - mAt) <= SETTLEMENT_WINDOW_DAYS * _dayMs) return m;
+  }
+  return null;
+}
+
+/* Splits the income rows into the ones that are income and the ones that
+   are a matured investment coming back. Pure, and exported, so a check can
+   put rows through the real rule rather than a retyped copy of it. */
+function partitionIncome(returns, maturedInvestments) {
+  const income = [], settlements = [];
+  for (const t of returns) {
+    const m = settlementFor(t, maturedInvestments);
+    if (m) settlements.push({
+      id: t.id, txn_date: t.txn_date, created_at: t.created_at,
+      type: t.type, description: t.description, reference: t.reference,
+      amount: Math.abs(parseFloat(t.amount) || 0),
+      matches_investment_id: m.id,
+      matches_pool_name: m.pool_name,
+      matches_capital: Math.abs(parseFloat(m.amount) || 0),
+      matches_return: Math.abs(parseFloat(m.realised_return) || 0),
+      matured_on: m.end_date,
+    });
+    else income.push(t);
+  }
+  return { income, settlements };
 }
 
 /* Returns the exact payload both documents are rendered from. Throws NotFound
@@ -134,13 +224,12 @@ async function buildIncomeReference(pool, { investorId, year, now }) {
       ORDER BY i.end_date`,
     [investorId, from, to, subIds]);
 
-  const returns  = [...returnsRes.rows,  ...saReturns];
-  const deposits = [...depositsRes.rows, ...saDeposits];
+  const allIncomeRows = [...returnsRes.rows,  ...saReturns];
+  const deposits      = [...depositsRes.rows, ...saDeposits];
   const when = t => new Date(t.txn_date || t.created_at);
-  returns.sort((a, b)  => when(a) - when(b));
+  allIncomeRows.sort((a, b) => when(a) - when(b));
   deposits.sort((a, b) => when(a) - when(b));
 
-  const totalReturns  = returns.reduce((s, t)  => s + Math.abs(parseFloat(t.amount) || 0), 0);
   const totalDeposits = deposits.reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
 
   /* The platform's one rule for what a matured investment earned, imported
@@ -170,6 +259,33 @@ async function buildIncomeReference(pool, { investorId, year, now }) {
      understates and looks authoritative. */
   const maturedUnposted = maturedInvestments.filter(r => !r.return_posted).length;
 
+  /* Applied AFTER maturedInvestments is built, because the rule needs each
+     matured holding's capital and realised return to compare against. */
+  const { income: returns, settlements } = partitionIncome(allIncomeRows, maturedInvestments);
+  const totalReturns   = returns.reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
+  const settlementsTotal = Math.round(
+    settlements.reduce((s, t) => s + t.amount, 0) * 100) / 100;
+
+  /* Raised where whoever can correct the ledger is already looking. One
+     mis-typed row is a data fault, not a fault of whoever asked for the
+     document, and it will go on producing confused clients until somebody
+     changes the row's type. Incidents fold by fingerprint, so regenerating
+     the same certificate moves a counter rather than filling the page.
+
+     Fire-and-forget and never awaited: a tax document must not fail to
+     issue because an alerter is unhappy. */
+  if (settlements.length) {
+    try {
+      require('./incidents').report(
+        new Error(`Income reference ${taxYear} for ${investorId}: ${settlements.length} ` +
+                  `maturity settlement(s) totalling R${settlementsTotal.toFixed(2)} are typed as ` +
+                  `income in the ledger. They are excluded from the income total and named on the ` +
+                  `document. Correct the transaction type to 'payout'.`),
+        { source: 'income-reference', severity: 'error' })
+        .catch(() => {});
+    } catch (_) { /* never block the document */ }
+  }
+
   const inv = invRes.rows[0];
   return {
     investor: {
@@ -183,6 +299,10 @@ async function buildIncomeReference(pool, { investorId, year, now }) {
        end of the tax year onto the following morning. */
     from, to,
     returns, totalReturns,
+    /* Named rather than dropped. The document prints them beside the
+       investment each one settles, so a reader can see exactly what was
+       taken out of the figure above and why. */
+    settlements, settlementsTotal,
     deposits, totalDeposits,
     maturedInvestments,
     maturedReturns: Math.round(maturedReturns * 100) / 100,
@@ -190,4 +310,5 @@ async function buildIncomeReference(pool, { investorId, year, now }) {
   };
 }
 
-module.exports = { buildIncomeReference, taxYearWindow, latestCompleteTaxYear, NotFound };
+module.exports = { buildIncomeReference, taxYearWindow, latestCompleteTaxYear,
+                   partitionIncome, settlementFor, SETTLEMENT_WINDOW_DAYS, NotFound };
