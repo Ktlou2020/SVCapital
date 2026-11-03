@@ -286,33 +286,59 @@ function documentAssertions(data) {
   SVCDocs.openIncomeReference(data);
   const html = N(written);
 
-  console.log('\nand the page says what it took out, and why');
+  console.log('\nand the page shows the corrected figure, and says nothing about why');
   ok('the document rendered at all', html.length > 2000, `only ${html.length} characters`);
-  ok('the excluded amount is stated at the top', /R 678,00 has been excluded/.test(html),
-     'a reader must meet this before the figures, not after');
-  ok('the section naming it is present',
-     /Excluded from Returns Credited/.test(html), html.slice(0, 200));
-  ok('it names the investment that was settled',
-     /Cattle Investment-April 2024/.test(html));
-  ok('and shows the two halves it is made of',
-     /capital R 600,00 \+ return R 78,00/.test(html),
-     'the arithmetic is the explanation — without it this is an assertion');
-  ok('it says plainly what adding them would do',
-     /declare the client.s capital as earnings and count\s*the return twice/.test(html),
-     'this is the sentence that stops somebody filing R2 309,18');
+
+  /* The exclusion is NOT explained to the client. This document goes to
+     SARS with their return, and a red box about an SV Capital data defect
+     raises a question they cannot answer and did not ask. The figure is
+     right; the reason staff need is raised as an incident instead, and
+     fix-income-typed-settlements.cjs ends it at the source. */
+  ok('no banner about an exclusion',
+     !/has been excluded/.test(html) && !/excluded from Returns Credited/i.test(html),
+     html.slice(0, 1200));
+  ok('and no section listing what was taken out',
+     !/Excluded from Returns Credited/.test(html) && !/TOTAL EXCLUDED/.test(html));
+  ok('nothing on the page mentions the settled investment',
+     !/Cattle Investment-April 2024[\s\S]{0,200}capital R 600,00/.test(html),
+     'the pool legitimately appears under Returns Realised at Maturity; what must ' +
+     'not appear is it being named as the source of an exclusion');
+  ok('and no wording about the client’s capital being declared as earnings',
+     !/declare the client.s capital as earnings/.test(html));
+
+  /* The half that still has to be true. Removing the explanation must not
+     have removed the correction with it. */
+  ok('the R678 is still out of the Returns Credited figure',
+     !/>R 678,00<\/div>/.test(html),
+     'the headline must be the adjusted figure, not the raw ledger total');
   ok('and the genuine R25 of interest is still shown as credited',
      /R 25,00/.test(html), 'excluding the settlement must not hide real income');
-  ok('the headline Returns Credited is the adjusted figure',
-     !/>R 678,00<\/div>/.test(html),
-     'the excluded amount must not still be the number in the box');
+  ok('while Returns Realised at Maturity still reads R78,00',
+     /R 78,00/.test(html), 'the return itself is income and belongs on the document');
 
-  console.log('\nand a clean account carries none of that');
+  console.log('\nand the page is the same whether or not anything was excluded');
   const clean = Object.assign({}, data, { settlements: [], settlementsTotal: 0 });
   written = '';
   SVCDocs.openIncomeReference(clean);
   const cleanHtml = N(written);
-  ok('no warning', !/has been excluded/.test(cleanHtml));
-  ok('and no empty section', !/Excluded from Returns Credited/.test(cleanHtml));
+  ok('a clean account renders the same document',
+     cleanHtml.length === html.length,
+     'a settlement must leave no trace on the client’s copy — ' +
+     `${html.length} vs ${cleanHtml.length} characters`);
+
+  /* Against the SOURCE, not the output. The two assertions above say this
+     fixture produced no banner; this one says there is no branch that could
+     produce one for any payload — which is what "remove it completely"
+     means, and what stops it returning as a condition nobody triggers in a
+     test. The service still computes settlements, and must: that is what
+     keeps the figure right and raises the incident. It is the DOCUMENT that
+     carries none of it. */
+  const docSrc = read('js/investor-documents.js')
+    .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  ok('and the document has no branch that could render one',
+     !/settlements/.test(docSrc),
+     'a dormant branch is a banner waiting for the right payload — ' +
+     (docSrc.match(/.{0,60}settlements.{0,60}/) || [''])[0]);
 }
 
 (async () => {

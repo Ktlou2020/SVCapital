@@ -278,12 +278,17 @@
 
 function _openAdminTaxCertWindow(data) {
   const { investor: inv, taxYear, returns, deposits, totalReturns, totalDeposits, from, to,
-          maturedInvestments = [], maturedReturns = 0, maturedUnposted = 0,
-          /* Ledger rows that are a matured investment coming back rather than
-             income — capital and return together under an income type. Taken
-             out of Returns Credited by the service and named here, because a
-             tax figure quietly adjusted is worse than a wrong one. */
-          settlements = [], settlementsTotal = 0 } = data;
+          maturedInvestments = [], maturedReturns = 0, maturedUnposted = 0 } = data;
+
+  /* The service keeps a maturity settlement — capital and return together
+     under an income type — out of Returns Credited, so the figure below is
+     right whatever the ledger carries. It is NOT shown to the client: this
+     document goes to SARS, and a red box about our own data on it raises a
+     question the client cannot answer and did not ask.
+
+     Staff are told instead. buildIncomeReference raises an incident naming
+     the rows and the correction, and server/scripts/fix-income-typed-
+     settlements.cjs retypes them, after which there is nothing to exclude. */
 
   const fmt = n => 'R ' + parseFloat(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -440,17 +445,6 @@ tr.total-row td.amt{color:#111}
     This document is provided to assist the client in preparing their tax return. It has not been submitted to SARS and does not replace an official IT3(b) certificate.</div>
   </div>
 
-  ${settlements.length ? `<div class="warning" style="background:#fef2f2;border-color:#dc2626;color:#7f1d1d">
-    <span style="font-size:16px">⚠</span>
-    <div><strong>${fmt(settlementsTotal)} has been excluded from Returns Credited below.</strong>
-    ${settlements.length === 1 ? 'One entry in' : `${settlements.length} entries in`} this account's ledger
-    ${settlements.length === 1 ? 'is' : 'are'} a matured investment coming back — the capital together with
-    the return on it — recorded under an income type. That is not income: the capital is the client's own
-    money, and the return on it is already counted under Returns Realised at Maturity.
-    ${settlements.length === 1 ? 'It is' : 'They are'} listed in full below, with the investment
-    ${settlements.length === 1 ? 'it settles' : 'each one settles'}, so nothing is hidden from this figure.</div>
-  </div>` : ''}
-
   ${/* The maturity return leads whenever there is one.
 
         With interestCron disabled, a client whose returns come from maturities
@@ -539,33 +533,6 @@ tr.total-row td.amt{color:#111}
       ? 'No returns or interest were credited directly to the account in this tax year. ' +
         'The investment income for this year is the return realised at maturity, shown above.'
       : 'No returns or interest were credited in this tax year.'}</div>`}
-
-  ${settlements.length ? `
-  <div class="section-title" style="color:#991b1b">Excluded from Returns Credited — matured investments returning</div>
-  <table>
-    <thead><tr><th>Date</th><th>Entry</th><th>Settles</th><th style="text-align:right">Amount</th></tr></thead>
-    <tbody>
-      ${settlements.map(t => `
-      <tr>
-        <td>${rowDate(t)}</td>
-        <td>${_esc(esc(t.description || 'Maturity settlement'))}</td>
-        <td style="font-size:11px">${_esc(esc(t.matches_pool_name || 'Investment'))}<br>
-          <span style="color:#6b7280">matured ${fmtDate(t.matured_on)} &middot;
-          capital ${fmt(t.matches_capital)} + return ${fmt(t.matches_return)}</span></td>
-        <td class="amt">${fmt(t.amount)}</td>
-      </tr>`).join('')}
-      <tr class="total-row"><td colspan="3">TOTAL EXCLUDED</td><td class="amt">${fmt(settlementsTotal)}</td></tr>
-    </tbody>
-  </table>
-  <div style="font-size:10.5px;color:#7f1d1d;margin:8px 0 18px;line-height:1.6">
-    Each amount above equals the capital of the named investment plus the return realised on it, and
-    falls at that investment's maturity. The return half is already included in Returns Realised at
-    Maturity; the capital half is the client's own money being returned and was never income.
-    <strong>Adding these to the figures above would declare the client's capital as earnings and count
-    the return twice.</strong> They are shown here so the exclusion can be checked rather than taken
-    on trust. If an entry below is genuinely income, its transaction type in the ledger is wrong and
-    should be corrected before this document is relied on.
-  </div>` : ''}
 
   <div class="section-title" style="color:#1e40af">Deposits Made</div>
   ${deposits.length ? `<table>

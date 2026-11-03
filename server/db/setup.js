@@ -5200,8 +5200,8 @@ async function autoSetup() {
           where: 'Team \u2192 Training \u2192 Generate Course, and PE \u2192 document extraction. If you see \u201cThe AI service is out of credit\u201d, that is an Anthropic account balance \u2014 top it up and generate again.' },
         { id: 'income-settlement-guard-2026-11', area: 'admin', icon: 'fa-file-invoice-dollar',
           title: 'A matured investment coming back can no longer be counted as income on a tax document',
-          body: 'A CLIENT FOUND THIS DURING A SARS VERIFICATION. Their Investment Income Reference showed R1 631,18 under Returns Realised at Maturity and R678,00 under Returns Credited, and they asked whether the two overlapped. They did. One ledger row \u2014 dated the day after an investment matured, described \u201cPAYOUT\u201d \u2014 was R600,00 of their own capital plus the R78,00 return on it, recorded under an income type; and that R78,00 was already inside the R1 631,18. Adding the two figures, which is the obvious thing to do, would have declared R600 of the client\u2019s own money as earnings and counted the R78 twice. THE DOCUMENT NOW CATCHES IT. Any income-typed entry whose amount equals a matured investment\u2019s capital PLUS its realised return, at that investment\u2019s maturity, is taken out of Returns Credited \u2014 and then NAMED on the face of the document, beside the investment it settles, with the capital and return it is made of, so the exclusion can be checked rather than taken on trust. The rule is drawn tight on purpose: genuine interim income is a fraction of the capital and can never equal capital plus return, and an investment whose return has not been posted matches nothing at all, because excluding real income would make a client UNDER-declare. It also raises an incident, since one mis-typed row keeps producing confused clients until the transaction type is corrected to \u201cpayout\u201d. If you see that incident, fix the row and reissue the document.',
-          where: 'Clients \u2192 open a client \u2192 Documents \u2192 Investment Income Reference, and the client\u2019s own copy in the portal. The warning appears above the figures; the detail sits under Returns Credited.' },
+          body: 'A CLIENT FOUND THIS DURING A SARS VERIFICATION. Their Investment Income Reference showed R1 631,18 under Returns Realised at Maturity and R678,00 under Returns Credited, and they asked whether the two overlapped. They did. One ledger row \u2014 dated the day after an investment matured, described \u201cPAYOUT\u201d \u2014 was R600,00 of their own capital plus the R78,00 return on it, recorded under an income type; and that R78,00 was already inside the R1 631,18. Adding the two figures, which is the obvious thing to do, would have declared R600 of the client\u2019s own money as earnings and counted the R78 twice. THE DOCUMENT NOW CATCHES IT. Any income-typed entry whose amount equals a matured investment\u2019s capital PLUS its realised return, at that investment\u2019s maturity, is taken out of Returns Credited. NOTHING ABOUT IT IS SHOWN TO THE CLIENT: the document goes to SARS with their return, and a notice about an SV Capital data defect on it raises a question they cannot answer and did not ask. You are told instead \u2014 see the incident below. The rule is drawn tight on purpose: genuine interim income is a fraction of the capital and can never equal capital plus return, and an investment whose return has not been posted matches nothing at all, because excluding real income would make a client UNDER-declare. It also raises an incident, since one mis-typed row keeps producing confused clients until the transaction type is corrected to \u201cpayout\u201d. If you see that incident, fix the row and reissue the document.',
+          where: 'Clients \u2192 open a client \u2192 Documents \u2192 Investment Income Reference, and the client\u2019s own copy in the portal. Nothing marks the adjustment on the document itself \u2014 look for the incident on the Dashboard.' },
         { id: 'settlement-retype-tool-2026-11', area: 'admin', icon: 'fa-screwdriver-wrench',
           title: 'And a tool to correct those mis-typed rows in the ledger itself',
           body: 'The guard makes the tax DOCUMENT honest. This makes the LEDGER right, so the row stops needing to be explained: server/scripts/fix-income-typed-settlements.cjs retypes an income row that is really a matured investment coming back. IT IS NOT A ONE-LINE UPDATE, and the reason matters. cashMovement signs a row by its type and the lists are not symmetrical \u2014 `interest` and `payout` are both cash CREDITS, but `return` has NO cash effect at all. So interest\u2192payout moves nothing, while return\u2192payout turns a row that counted for nothing into a credit and moves that investor\u2019s derived balance UP by the amount. That is almost certainly a correction, because the money did reach the wallet, but it is client-visible. So the script sorts candidates into three piles: CASH-NEUTRAL, applied with --apply; BALANCE-SHIFTING, which additionally needs --allow-balance-shift and prints the change per investor first; and SKIPPED, where another row already credits that money and retyping would count it twice \u2014 never written under any flag. IT PREVIEWS BY DEFAULT and writes nothing without --apply, and --investor=<id> confines it to one account. Every row it changes keeps a note saying what was changed and why. After running it, reopen the client\u2019s Investment Income Reference \u2014 it is built from live data, so reopening is the reissue.',
@@ -5219,6 +5219,36 @@ async function autoSetup() {
         added += rowCount;
       }
       if (added) console.log(`\u2705 Announced ${added} feature(s) to staff.`);
+    });
+
+    await step("30. The income-reference notice no longer promises a banner", async () => {
+      /* That notice went out saying the excluded entry is NAMED on the face
+         of the document. It is not, and deliberately: a tax document goes to
+         SARS with a client's return, and a red box about an SV Capital data
+         defect on it raises a question the client cannot answer and did not
+         ask. The adjustment is silent on their copy and raised as an incident
+         for staff instead.
+
+         Step 19 inserts ON CONFLICT DO NOTHING by design, so editing the text
+         there reaches a brand-new database and nowhere else. Matched on the
+         exact old sentence, so a notice somebody has reworded keeps their
+         wording and a second run finds nothing to do. */
+      const { rowCount } = await pool.query(`
+        UPDATE feature_announcements
+           SET body = replace(body,
+                 'is taken out of Returns Credited \u2014 and then NAMED on the face of the ' ||
+                 'document, beside the investment it settles, with the capital and return it ' ||
+                 'is made of, so the exclusion can be checked rather than taken on trust.',
+                 'is taken out of Returns Credited. NOTHING ABOUT IT IS SHOWN TO THE CLIENT: ' ||
+                 'the document goes to SARS with their return, and a notice about an SV Capital ' ||
+                 'data defect on it raises a question they cannot answer and did not ask. You ' ||
+                 'are told instead \u2014 see the incident below.'),
+               where_to_find = 'Clients \u2192 open a client \u2192 Documents \u2192 Investment Income Reference, ' ||
+                 'and the client\u2019s own copy in the portal. Nothing marks the adjustment on the ' ||
+                 'document itself \u2014 look for the incident on the Dashboard.'
+         WHERE id = 'income-settlement-guard-2026-11'
+           AND POSITION('NAMED on the face of the document' IN COALESCE(body, '')) > 0`);
+      if (rowCount) console.log('\u2705 Corrected the income-reference notice: no banner on the client copy.');
     });
 
     await step("29. Say which pool each platform fee was charged against", async () => {
