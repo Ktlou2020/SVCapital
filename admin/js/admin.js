@@ -20140,8 +20140,95 @@ function _pfRender(data, period) {
     }
   }
 
+  // Fees by pool
+  _pfRenderByPool(data.by_pool || [], s.total || 0);
+
   // Transaction table
   _pfRenderTable();
+}
+
+/* Fees by pool — the view a month is reconciled against.
+
+   The figures come from the server aggregated over EVERY fee in the period.
+   Summing them out of data.transactions would have been less code and
+   wrong: that array is capped at 500 rows, so a busy month would show a
+   table whose total disagreed with the headline above it, which is the one
+   thing a reconciliation view may not do.
+
+   A fee with no pool is a row here rather than a row left out. A gateway
+   fee on a deposit and a fee on a manual credit are money we charged;
+   dropping them would make the column stop adding up, and a total that
+   does not tie out is not worth printing. The footer states the tie
+   explicitly so nobody has to add the column up to trust it. */
+function _pfRenderByPool(rows, periodTotal) {
+  const body = document.getElementById('pfPoolBody');
+  const foot = document.getElementById('pfPoolFoot');
+  if (!body) return;
+
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text-muted)">
+      <i class="fa-solid fa-layer-group" style="font-size:1.5rem;display:block;margin-bottom:8px;opacity:.35"></i>
+      No fees in this period
+    </td></tr>`;
+    if (foot) foot.innerHTML = '';
+    return;
+  }
+
+  const total = rows.reduce((s, r) => s + (Number(r.total) || 0), 0);
+  body.innerHTML = rows.map(r => {
+    const amount = Number(r.total) || 0;
+    const share  = total > 0 ? (amount / total) * 100 : 0;
+    const named  = !!r.pool_name;
+    const label  = named
+      ? _esc(r.pool_name)
+      : `<span style="opacity:.55">Not charged to a pool</span>`;
+    const product = r.product_type
+      ? _esc((Utils.productInfo(r.product_type) || {}).label || r.product_type)
+      : `<span style="opacity:.45">—</span>`;
+    return `
+    <tr>
+      <td class="td-strong clip" style="font-size:0.84rem">${label}</td>
+      <td class="td-muted" style="font-size:0.8rem">${product}</td>
+      <td class="td-muted" style="text-align:right;font-size:0.8rem">${r.count}</td>
+      <td class="fw-700" style="text-align:right;color:#eda5ff">${Utils.rand(amount)}</td>
+      <td style="text-align:right">
+        <span style="font-size:0.78rem;color:var(--text-muted)">${share.toFixed(1)}%</span>
+        <span style="display:inline-block;vertical-align:middle;margin-left:8px;width:52px;height:5px;border-radius:3px;background:rgba(255,255,255,0.08)">
+          <span style="display:block;height:100%;border-radius:3px;background:#eda5ff;width:${Math.max(0, Math.min(100, share)).toFixed(1)}%"></span>
+        </span>
+      </td>
+    </tr>`;
+  }).join('');
+
+  /* The tie-out. Stated rather than left to be checked by eye, and said
+     out loud when it fails — a reconciliation table that is quietly short
+     is worse than one that admits it. */
+  if (foot) {
+    const ties = Math.abs(total - (Number(periodTotal) || 0)) < 0.005;
+    foot.innerHTML = `<tr>
+      <td colspan="3" style="font-weight:700;padding-top:12px">${rows.length} pool${rows.length === 1 ? '' : 's'}</td>
+      <td class="fw-700" style="text-align:right;color:#eda5ff;padding-top:12px">${Utils.rand(total)}</td>
+      <td style="text-align:right;padding-top:12px;font-size:0.74rem;color:${ties ? 'var(--text-muted)' : '#f59e0b'}">
+        ${ties ? 'ties to the total above' : `does not tie — total above is ${Utils.rand(periodTotal)}`}
+      </td>
+    </tr>`;
+  }
+}
+
+function exportFeesByPoolCSV() {
+  const rows = (_pfData && _pfData.by_pool) || [];
+  if (!rows.length) { Toast.warning('Load platform fees data first'); return; }
+  const total = rows.reduce((s, r) => s + (Number(r.total) || 0), 0);
+  _exportCSV(rows.map(r => ({
+    Pool:         r.pool_name || 'Not charged to a pool',
+    Product:      r.product_type ? ((Utils.productInfo(r.product_type) || {}).label || r.product_type) : '',
+    Fees:         r.count,
+    /* Positive here, unlike the transaction export. This is a total
+       COLLECTED, not a line on somebody's statement — a column of negatives
+       would read as money we owed. */
+    'Total (R)':  Number(r.total) || 0,
+    'Share (%)':  total > 0 ? Math.round(((Number(r.total) || 0) / total) * 1000) / 10 : 0,
+  })), `platform-fees-by-pool-${new Date().toISOString().slice(0,10)}.csv`);
 }
 
 function _pfFilter() {

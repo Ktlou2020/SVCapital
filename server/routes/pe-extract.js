@@ -11,6 +11,7 @@ const multer   = require('multer');
 const Anthropic = require('@anthropic-ai/sdk');
 
 const { requireAuth } = require('../middleware/auth');
+const { aiFailureMessage } = require('../services/aiFailure');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -118,8 +119,8 @@ router.post('/extract-company', requireAuth, upload.single('document'), async (r
 
     return res.json({ ok: true, fields });
   } catch (err) {
-    console.error('[PE Extract]', err.message);
-    return res.status(500).json({ error: err.message || 'Extraction failed' });
+    console.error('[PE Extract]', err.status || '', err.message);
+    return res.status(500).json({ error: aiFailureMessage(err, 'Extraction failed.') });
   }
 });
 
@@ -185,8 +186,8 @@ router.post('/extract-deal', requireAuth, upload.single('document'), async (req,
 
     return res.json({ ok: true, fields });
   } catch (err) {
-    console.error('[PE Extract Deal]', err.message);
-    return res.status(500).json({ error: err.message || 'Extraction failed' });
+    console.error('[PE Extract Deal]', err.status || '', err.message);
+    return res.status(500).json({ error: aiFailureMessage(err, 'Extraction failed.') });
   }
 });
 
@@ -273,8 +274,8 @@ router.post('/extract-financials', requireAuth, upload.single('document'), async
 
     return res.json({ ok: true, fields });
   } catch (err) {
-    console.error('[PE Extract Financials]', err.message);
-    return res.status(500).json({ error: err.message || 'Extraction failed' });
+    console.error('[PE Extract Financials]', err.status || '', err.message);
+    return res.status(500).json({ error: aiFailureMessage(err, 'Extraction failed.') });
   }
 });
 

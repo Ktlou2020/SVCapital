@@ -702,7 +702,7 @@ router.get('/platform-fees', requireAuth, _admin, async (req, res) => {
     // Match fees by type OR by reference pattern (FEE-...) — catches all recording paths
     const feeFilter = `(t.type IN ('fee', 'platform_fee') OR t.reference LIKE 'FEE-%') AND COALESCE(t.status, '') <> 'cancelled'`;
 
-    const [summaryRow, breakdownRows, txnRows, topRows] = await Promise.all([
+    const [summaryRow, breakdownRows, txnRows, topRows, poolRows] = await Promise.all([
       pool.query(`
         SELECT COUNT(*) AS count,
                COALESCE(SUM(ABS(t.amount)), 0) AS total,
@@ -748,6 +748,37 @@ router.get('/platform-fees', requireAuth, _admin, async (req, res) => {
           ${dateClause}
         GROUP BY t.investor_id ORDER BY total DESC LIMIT 10
       `, dateParams),
+
+      /* Fees by the pool they were charged against.
+
+         Aggregated in SQL over EVERY fee in the period, not summed from the
+         transactions array above — that one is capped at 500 rows, so a busy
+         month would have shown a by-pool table whose total quietly
+         disagreed with the headline figure beside it.
+
+         Fees with no pool fall into one NULL group rather than being
+         filtered out, for the same reason: a gateway fee or a fee on a
+         manual credit is real money we charged, and dropping it would make
+         this table stop adding up to the total. It is labelled rather than
+         hidden.
+
+         No LIMIT. The point of the table is reconciliation, and a total you
+         cannot tie out is not one. */
+      pool.query(`
+        SELECT COALESCE(p.id, p2.id)                       AS pool_id,
+               COALESCE(p.name, p2.name)                   AS pool_name,
+               COALESCE(p.product_type, p2.product_type)   AS product_type,
+               COUNT(*)                                    AS count,
+               SUM(ABS(t.amount))                          AS total
+        FROM transactions t
+        LEFT JOIN investment_pools p  ON p.id  = t.pool_id
+        LEFT JOIN investments inv     ON inv.id = t.investment_id
+        LEFT JOIN investment_pools p2 ON p2.id = inv.pool_id
+        WHERE ${feeFilter}
+          ${dateClause}
+        GROUP BY 1, 2, 3
+        ORDER BY total DESC NULLS LAST
+      `, dateParams),
     ]);
 
     const s = summaryRow.rows[0];
@@ -777,6 +808,17 @@ router.get('/platform-fees', requireAuth, _admin, async (req, res) => {
         investor_name: r.investor_name || '—',
         count:  parseInt(r.count),
         total:  parseFloat(r.total || 0),
+      })),
+      /* pool_id null is the real answer for a fee that was never charged
+         against one, and the client says so in words. It is not collapsed
+         to a dash here, because a caller totalling this needs to be able to
+         tell the group apart rather than match on a character. */
+      by_pool: poolRows.rows.map(r => ({
+        pool_id:      r.pool_id || null,
+        pool_name:    r.pool_name || null,
+        product_type: r.product_type || null,
+        count:        parseInt(r.count),
+        total:        parseFloat(r.total || 0),
       })),
     });
   } catch (err) {

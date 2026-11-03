@@ -1,6 +1,6 @@
 {
   "note": "What each check asserted when this was last written. run-checks refuses a check that asserts fewer. Raise it with node server/scripts/run-checks.cjs --update-floor",
-  "total": 7923,
+  "total": 7973,
   "checks": {
     "check-apply-android.cjs": 20,
     "check-shared-api.cjs": 22,
@@ -8,6 +8,7 @@
     "check-admin-queue-tools.cjs": 35,
     "check-admin-statement-renders.cjs": 19,
     "check-agreement-read-gate.cjs": 70,
+    "check-ai-failure-message.cjs": 26,
     "check-analytics-panels.cjs": 23,
     "check-analytics-truncation.cjs": 21,
     "check-auto-order-offer.cjs": 50,
@@ -56,7 +57,7 @@
     "check-switch-target-options.cjs": 29,
     "check-tab-load-guards.cjs": 46,
     "check-transaction-dates.cjs": 21,
-    "check-utils-calls.cjs": 661,
+    "check-utils-calls.cjs": 666,
     "check-account-closure.cjs": 39,
     "check-account-statement.cjs": 13,
     "check-action-centre.cjs": 22,
@@ -109,7 +110,7 @@
     "check-email-greeting.cjs": 30,
     "check-factsheet-survival.cjs": 29,
     "check-feature-announcements.cjs": 30,
-    "check-fee-pool-attribution.cjs": 25,
+    "check-fee-pool-attribution.cjs": 44,
     "check-fee-reversal.cjs": 47,
     "check-fica-consent.cjs": 32,
     "check-fund-run-generation.cjs": 55,

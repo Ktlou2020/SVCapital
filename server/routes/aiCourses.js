@@ -8,6 +8,7 @@ const router   = require('express').Router();
 const Anthropic = require('@anthropic-ai/sdk');
 const pool     = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
+const { aiFailureMessage, isProviderAccountFailure } = require('../services/aiFailure');
 
 const client = new Anthropic();
 
@@ -460,15 +461,34 @@ RULES:
     console.log(`[ai-courses] Generated "${title}" (job ${jobId}) — ${modules.length} modules`);
 
   } catch (err) {
-    console.error(`[ai-courses] job ${jobId} failed:`, err.message);
+    /* The provider's own words, with its request id, go to the log — that is
+       what anyone debugging this actually needs, and it is the one place it
+       is safe to put them. */
+    console.error(`[ai-courses] job ${jobId} failed:`, err.status || '', err.message);
+
     /* The message reaches the person who pressed the button, by way of the
        poll, so it has to say what to do about it. err.message is already
-       written that way for the cases this route raises itself. */
+       written that way for the cases this route raises itself; a failure
+       raised by the SDK is not, and used to arrive as a wall of JSON naming
+       a billing page the reader has no account on. */
+    const message = aiFailureMessage(err, 'Course generation failed. Please try again.');
+    if (isProviderAccountFailure(err)) {
+      /* Nobody can press through this one, so it is raised where whoever can
+         act on it is already looking rather than left in one person's toast.
+         Reported, not thrown — a broken alerter must not also lose the
+         failure record below. */
+      try {
+        await require('../services/incidents').report(
+          new Error(`AI course generation is blocked: ${message}`),
+          { source: 'ai-courses', severity: 'critical' });
+      } catch (e) { console.error('[ai-courses] could not raise incident:', e.message); }
+    }
+
     await pool.query(
       `UPDATE ai_course_jobs
           SET status='failed', stage=NULL, error=$2, finished_at=NOW(), updated_at=NOW()
         WHERE id=$1`,
-      [jobId, String(err.message || 'Course generation failed.')]
+      [jobId, message]
     ).catch(e => console.error('[ai-courses] could not record failure:', e.message));
   }
 }
@@ -524,8 +544,10 @@ Rules:
 
     res.json({ questions });
   } catch (err) {
-    console.error('[ai-courses] generate-quiz error:', err.message);
-    res.status(500).json({ error: 'Quiz generation failed: ' + err.message });
+    console.error('[ai-courses] generate-quiz error:', err.status || '', err.message);
+    res.status(500).json({
+      error: aiFailureMessage(err, 'Quiz generation failed. Please try again.'),
+    });
   }
 });
 
@@ -580,8 +602,15 @@ Rules: vary correct index (0-3) across questions. Return ONLY the JSON array.`;
         updated++;
         console.log(`[ai-courses] backfill: quiz added to module "${mod.title}"`);
       } catch (e) {
-        errors.push({ module: mod.title, error: e.message });
-        console.error(`[ai-courses] backfill error for "${mod.title}":`, e.message);
+        errors.push({ module: mod.title, error: aiFailureMessage(e, 'Quiz generation failed.') });
+        console.error(`[ai-courses] backfill error for "${mod.title}":`, e.status || '', e.message);
+        /* An empty account fails identically for every remaining module, so
+           carrying on spends the rest of the list on calls that cannot work
+           and buries the one fact that matters under fifty copies of it. */
+        if (isProviderAccountFailure(e)) {
+          console.error('[ai-courses] backfill stopped — the AI account cannot serve any module');
+          break;
+        }
       }
     }
 

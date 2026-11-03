@@ -35,6 +35,7 @@ const path = require('path');
 const http = require('http');
 const vm   = require('vm');
 const { Pool } = require('pg');
+const { nbsp } = require('../../scripts/lib/rendered.cjs');
 
 const ROOT = path.join(__dirname, '..', '..');
 const SSL  = process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false };
@@ -272,18 +273,95 @@ async function feeRowWithin(id, ms = 5000) {
          JSON.stringify(byId['TXN-FP-MANUAL']));
     }
 
+    /* ── Fees by pool ───────────────────────────────────────────────── */
+    console.log('\nand the by-pool summary adds up to the figure beside it');
+    {
+      /* A second pool with its own fee, and a fee belonging to no pool, so
+         the grouping has something to get wrong. */
+      await pool.query(`
+        INSERT INTO investment_pools (id, name, product_type, status, annual_rate, term_months,
+            start_date, end_date, min_investment)
+        VALUES ('FPP-CATTLE','Cattle — November 2026','cattle','open',0.16,12,
+                CURRENT_DATE - 5, CURRENT_DATE + 40, 100)`);
+      await pool.query(`
+        INSERT INTO investments (id, investor_id, pool_id, pool_name, amount, status,
+            start_date, end_date, annual_rate, term_months, product_type)
+        VALUES ('INVST-FP-CAT','FP-1','FPP-CATTLE','Cattle — November 2026', 4000,'active',
+                CURRENT_DATE - 2, CURRENT_DATE + 360, 0.16, 12, 'cattle')`);
+      await pool.query(`
+        INSERT INTO transactions (id, investor_id, type, amount, status, reference, description,
+            investment_id, pool_id)
+        VALUES ('FEE-INVST-FP-CAT','FP-1','fee', 40,'completed','FEE-INVST-FP-CAT',
+                '1% platform fee on investment','INVST-FP-CAT','FPP-CATTLE')`);
+
+      const r = await call(port, 'GET', '/api/analytics/platform-fees?period=all');
+      const byPool  = (r.body && r.body.by_pool) || [];
+      const headline = r.body && r.body.summary && r.body.summary.total;
+      const find = id => byPool.find(x => x.pool_id === id);
+
+      ok('every pool that was charged a fee appears',
+         !!find('FPP-SOLAR') && !!find('FPP-CATTLE'), JSON.stringify(byPool));
+      ok('a pool groups ALL of its fees into one row',
+         find('FPP-SOLAR') && find('FPP-SOLAR').count === 3,
+         'three solar fees were written — ' + JSON.stringify(find('FPP-SOLAR')));
+      /* R10 on the R1 000 placement, R20 on the legacy one, and R14,85 on
+         the fee_inclusive R1 500 — inclusive means the 1% comes OUT of the
+         1 500 rather than on top, so the pool takes R1 485,15 and the fee
+         is 1% of that. Worth stating: the first draft of this assertion
+         expected R15 and the product was right. */
+      ok('and totals them',
+         find('FPP-SOLAR') && Math.abs(find('FPP-SOLAR').total - 44.85) < 0.005,
+         JSON.stringify(find('FPP-SOLAR')));
+      ok('it carries the product, so the table can name it',
+         find('FPP-CATTLE') && find('FPP-CATTLE').product_type === 'cattle',
+         JSON.stringify(find('FPP-CATTLE')));
+
+      const orphan = byPool.find(x => x.pool_id === null);
+      ok('fees charged to no pool are a row, not a row dropped',
+         !!orphan && orphan.count >= 1,
+         'dropping them is how the column stops adding up — ' + JSON.stringify(byPool));
+      ok('and that row carries no pool name to invent one from',
+         orphan && orphan.pool_name === null, JSON.stringify(orphan));
+
+      const summed = byPool.reduce((a, x) => a + x.total, 0);
+      ok('the rows tie out to the headline total exactly',
+         Math.abs(summed - headline) < 0.005,
+         `grouped ${summed} vs headline ${headline} — a reconciliation view that ` +
+         `does not tie is not one`);
+
+      ok('the biggest pool comes first',
+         byPool.length > 1 && byPool[0].total >= byPool[1].total, JSON.stringify(byPool));
+    }
+
     /* ── The screen ─────────────────────────────────────────────────── */
     console.log('\nand the table reads as money leaving, with the blank explained');
     {
       const ADMIN = read('admin/js/admin.js');
-      const s = { console, Math, Number, String, JSON, Object, Array,
-                  _esc: v => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;') };
-      s.globalThis = s; s.window = s;
+      const box = {};
+      const s = { console, Math, Number, String, JSON, Object, Array, Boolean, Date,
+                  parseFloat, parseInt, isNaN, RegExp, Set, Map, Error,
+                  localStorage: { getItem: () => null, setItem() {} },
+                  navigator: { userAgent: 'node' }, location: { href: '', origin: '' },
+                  document: {
+                    addEventListener() {},
+                    getElementById: id => (box[id] = box[id] || { innerHTML: '', style: {},
+                      textContent: '', classList: { add() {}, remove() {} } }),
+                  },
+                  _esc: v => String(v == null ? '' : v)
+                    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;').replace(/'/g, '&#39;') };
+      s.globalThis = s; s.window = s; s.self = s;
       vm.createContext(s);
-      /* The shipped function, lifted and run — a copy of the rule here would
+      /* js/api.js for the real Utils.rand and Utils.productInfo — the money
+         format and the product label are both things this table prints. */
+      vm.runInContext(read('js/api.js'), s, { filename: 'js/api.js' });
+      /* The shipped functions, lifted and run — a copy of the rule here would
          keep agreeing with itself after the real one changed. */
-      const src = ADMIN.slice(ADMIN.indexOf('function _pfPoolCell'));
-      vm.runInContext(src.slice(0, src.indexOf('\nfunction _pfRenderTable')), s);
+      const from = ADMIN.indexOf('function _pfRenderByPool');
+      const to   = ADMIN.indexOf('function _pfRenderTable');
+      ok('both renderers were found to lift', from > 0 && to > from,
+         'a slice that misses them would test nothing while passing');
+      vm.runInContext(ADMIN.slice(from, to), s);
 
       ok('a pool name renders as itself',
          s._pfPoolCell({ pool_name: 'Solar — November 2026' }).includes('Solar'),
@@ -313,6 +391,63 @@ async function feeRowWithin(id, ms = 5000) {
       ok('the export leaves the pool blank rather than exporting a dash',
          /Pool:\s+\(r\.pool_name && r\.pool_name !== '—'\) \? r\.pool_name : ''/.test(csv.slice(0, 900)),
          'filtering on an empty cell is the point of the column');
+
+      /* The by-pool table, rendered. The figures are the server's; what is
+         asserted here is that the table SAYS whether they tie out, because
+         a reconciliation view that is quietly short is worse than one that
+         admits it. */
+      const ROWS = [
+        { pool_id: 'P-A', pool_name: 'Solar — November 2026', product_type: 'solar', count: 3, total: 75 },
+        /* The name deliberately does NOT contain the word the product label
+           uses. The first version of the assertion below matched "Cattle"
+           and passed against the pool NAME with the product column empty. */
+        { pool_id: 'P-B', pool_name: 'Herd <b>2026</b>',      product_type: 'cattle', count: 1, total: 20 },
+        { pool_id: null,  pool_name: null,                    product_type: null,     count: 2, total: 5 },
+      ];
+      s._pfRenderByPool(ROWS, 100);
+      const poolHtml = nbsp(box.pfPoolBody.innerHTML);
+      const poolFoot = nbsp(box.pfPoolFoot.innerHTML);
+
+      ok('each pool is a row with its total',
+         /Solar/.test(poolHtml) && /R 75,00/.test(poolHtml), poolHtml.slice(0, 300));
+      ok('the product is named, not printed as its enum',
+         /Cattle Investment/.test(poolHtml) && !/>cattle</.test(poolHtml),
+         poolHtml.slice(0, 900));
+      ok('the group with no pool says so rather than showing blank',
+         /Not charged to a pool/.test(poolHtml));
+      ok('a pool name is escaped before it reaches the page',
+         !/<b>2026<\/b>/.test(poolHtml) && /&lt;b&gt;2026/.test(poolHtml),
+         'a pool is named in the admin console by a person');
+      ok('each row carries its share of the period',
+         /75\.0%/.test(poolHtml) && /20\.0%/.test(poolHtml) && /5\.0%/.test(poolHtml),
+         poolHtml.slice(0, 900));
+      ok('the footer totals the column',
+         /R 100,00/.test(poolFoot), poolFoot);
+      ok('and says it ties to the headline figure',
+         /ties to the total above/.test(poolFoot), poolFoot);
+
+      /* The half that matters more. If the grouping ever drifts from the
+         headline, the table has to SAY so — silently printing a short total
+         beside a correct one is the failure this panel exists to prevent. */
+      s._pfRenderByPool(ROWS, 140);
+      const shortFoot = nbsp(box.pfPoolFoot.innerHTML);
+      ok('a total that does not tie is called out, not printed quietly',
+         /does not tie/.test(shortFoot) && /R 140,00/.test(shortFoot), shortFoot);
+
+      s._pfRenderByPool([], 0);
+      ok('and no fees at all is an empty state, not a broken table',
+         /No fees in this period/.test(nbsp(box.pfPoolBody.innerHTML)),
+         box.pfPoolBody.innerHTML.slice(0, 200));
+
+      /* And that the report actually calls it. Lifting the renderer tests
+         what it draws; nothing tested that anything draws it, and the
+         mutation that deleted the call went unnoticed. */
+      const stripC = t => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+      const render = stripC(ADMIN.slice(ADMIN.indexOf('function _pfRender(data'),
+                                        ADMIN.indexOf('function _pfRenderByPool')));
+      ok('the report renders the by-pool panel from the server’s own figures',
+         /_pfRenderByPool\(data\.by_pool[^)]*,\s*s\.total/.test(render),
+         'summing the transactions array instead would be capped at 500 rows — ' + render.slice(-300));
 
       const HTML = read('admin/index.html');
       ok('and the table does not describe the fee as deducted',

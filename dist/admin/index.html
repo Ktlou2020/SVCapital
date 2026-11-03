@@ -3020,6 +3020,36 @@
           </div>
         </div>
 
+        <!-- Fees by pool. Aggregated server-side over every fee in the
+             period, so the Total column ties out to the headline figure
+             above rather than to the 500 rows the table below can hold. -->
+        <div class="table-card" style="margin-bottom:20px">
+          <div class="table-card__header">
+            <div>
+              <div class="table-card__title">Fees by Pool</div>
+              <div class="table-card__sub">Every fee in this period, grouped by the pool it was charged against</div>
+            </div>
+            <div class="table-card__controls">
+              <button class="btn btn--secondary btn--sm" onclick="exportFeesByPoolCSV()">
+                <i class="fa-solid fa-file-csv"></i> Export
+              </button>
+            </div>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead><tr>
+                <th style="width:38%">Pool</th>
+                <th style="width:20%">Product</th>
+                <th style="width:10%;text-align:right">Fees</th>
+                <th style="width:16%;text-align:right">Total</th>
+                <th style="width:16%;text-align:right">Share</th>
+              </tr></thead>
+              <tbody id="pfPoolBody"><tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</td></tr></tbody>
+              <tfoot id="pfPoolFoot"></tfoot>
+            </table>
+          </div>
+        </div>
+
         <!-- Individual fee transactions table -->
         <div class="table-card">
           <div class="table-card__header">
@@ -5215,7 +5245,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=29"></script>
 <script src="../js/investor-documents.js?v=6"></script>
-<script src="js/admin.js?v=208"></script>
+<script src="js/admin.js?v=209"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>
