@@ -8399,7 +8399,7 @@ async function confirmWithdrawal() {
   }
 }
 
-async function generateTaxCertificate() {
+async function generateTaxCertificate(yearArg) {
   /* THE SAME DOCUMENT THE CONSOLE PRODUCES.
    *
    * This used to build its own certificate from whatever the browser had
@@ -8420,8 +8420,13 @@ async function generateTaxCertificate() {
    * R 0,00 against every matured holding. */
   if (!PORTAL.investor) { Toast.error('Portfolio data still loading — please wait'); return; }
 
+  /* A year may be passed in. The statement archive's certificate buttons name
+     the year on the button and have no picker to read, and they used to call
+     a SECOND implementation of this document — see _downloadTaxCert, now
+     gone. One function, one document, whoever asks. */
   const taxYearEl = document.getElementById('taxYearSelect');
-  const taxYear = taxYearEl ? parseInt(taxYearEl.value, 10) : NaN;
+  const taxYear = Number.isFinite(yearArg) ? yearArg
+                : taxYearEl ? parseInt(taxYearEl.value, 10) : NaN;
   /* Second line of defence. The picker is emptied and the buttons disabled for
      a client with no completed tax year, but a disabled button is a UI state
      and this is the function that would build the document. */
@@ -10358,7 +10363,7 @@ async function _loadStatementArchive() {
         <div style="font-size:0.84rem;font-weight:700;margin-bottom:6px"><i class="fa-solid fa-file-shield" style="color:var(--gold);margin-right:6px"></i>Investment Income Certificate</div>
         <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px">Download your annual IT3(b)-style investment income summary for SARS submission.</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          ${[taxYear, taxYear-1, taxYear-2].map(y => `<button class="btn btn--ghost btn--sm" onclick="_downloadTaxCert(${y})" style="font-size:0.75rem"><i class="fa-solid fa-download"></i> ${y}/${y+1}</button>`).join('')}
+          ${[taxYear, taxYear-1, taxYear-2].map(y => `<button class="btn btn--ghost btn--sm" onclick="generateTaxCertificate(${y})" style="font-size:0.75rem"><i class="fa-solid fa-file-lines"></i> ${y}/${y+1}</button>`).join('')}
         </div>
       </div>`;
     if (!data.statements || !data.statements.length) {
@@ -10376,45 +10381,24 @@ async function _loadStatementArchive() {
   }
 }
 
-async function _downloadTaxCert(year) {
-  try {
-    Toast.info?.(`Generating ${year} tax certificate…`) || Toast.success?.(`Generating ${year} tax certificate…`);
-    const data = await API._fetch('GET', `statements/tax-cert/${year}`);
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-    let y = 20;
-    const lh = 7;
-    const fmt = (n) => `R ${parseFloat(n||0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    doc.setFontSize(18); doc.setFont(undefined,'bold');
-    doc.text('SV CAPITAL — Investment Income Certificate', 14, y); y += 10;
-    doc.setFontSize(10); doc.setFont(undefined,'normal');
-    doc.text(`Tax Year: 1 March ${year} — 28 February ${year+1}`, 14, y); y += lh;
-    doc.text(`Generated: ${new Date().toLocaleDateString('en-ZA')}`, 14, y); y += 12;
-    doc.setFont(undefined,'bold'); doc.text('Investor Details', 14, y); y += lh;
-    doc.setFont(undefined,'normal');
-    doc.text(`Name: ${data.investor.first_name} ${data.investor.last_name}`, 14, y); y += lh;
-    doc.text(`Email: ${data.investor.email}`, 14, y); y += lh;
-    doc.text(`ID / Ref: ${data.investor.id}`, 14, y); y += 12;
-    doc.setFont(undefined,'bold'); doc.text('Summary', 14, y); y += lh;
-    doc.setFont(undefined,'normal');
-    doc.text(`Total Deposits:    ${fmt(data.deposits)}`, 14, y); y += lh;
-    doc.text(`Total Withdrawals: ${fmt(data.withdrawals)}`, 14, y); y += lh;
-    doc.text(`Investment Returns: ${fmt(data.totalReturns)}`, 14, y); y += 12;
-    if (data.investments.length) {
-      doc.setFont(undefined,'bold'); doc.text('Matured Investments', 14, y); y += lh;
-      doc.setFont(undefined,'normal');
-      data.investments.forEach(inv => {
-        const ret = Utils.earnedReturns([inv]);
-        doc.text(`• ${inv.pool_name || 'Investment'} — Return: ${fmt(ret)} — Matured: ${new Date(inv.end_date).toLocaleDateString('en-ZA')}`, 14, y); y += lh;
-        if (y > 270) { doc.addPage(); y = 20; }
-      });
-    }
-    y += 6;
-    doc.setFontSize(8); doc.setTextColor(100);
-    doc.text('This document is for informational purposes. Please consult a tax advisor for official SARS submissions.', 14, y);
-    doc.save(`SVC-TaxCert-${year}-${year+1}.pdf`);
-  } catch (e) { Toast.error('Could not generate tax certificate — please try again.'); }
-}
+/* _downloadTaxCert is gone.
+ *
+ * It was a SECOND tax certificate, built in the browser with jsPDF, and it
+ * was wrong in three ways at once. It printed `totalReturns` and dropped
+ * `maturedReturns` — the figure the endpoint returns separately and which,
+ * for a client whose income comes from maturities, IS their income; so the
+ * certificate reported a fraction of what they earned. It ended in
+ * doc.save(), which is an anchor download and does nothing inside a WebView,
+ * so in the packaged app it built a PDF and silently dropped it — reported as
+ * "Investment Income Certificates are not loading nor is there a download
+ * option". And it destructured window.jspdf without checking, so a missing
+ * library threw before any of that.
+ *
+ * The buttons now call generateTaxCertificate(year), which asks the server
+ * for the same payload the admin console reads and renders it with the same
+ * builder — the one that excludes a maturity settlement typed as income, and
+ * that reaches the share sheet on a phone. A client and a staff member
+ * cannot be shown two different answers to what the client earned. */
 
 /* load2FAStatus — fetches 2FA status and updates all UI elements */
 async function load2FAStatus() {

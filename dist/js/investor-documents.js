@@ -79,8 +79,24 @@
    * overlay prints the IFRAME, so the @page rules still apply and the output
    * is the same A4 document. */
   function _present(html, width, height) {
-    const win = window.open('', '_blank', 'width=' + width + ',height=' + height);
-    if (win) { win.document.write(html); win.document.close(); return true; }
+    /* IN THE PACKAGED APP, DO NOT ASK FOR A WINDOW AT ALL.
+     *
+     * This tried window.open first and fell back to the overlay when it
+     * returned null. That is right in a browser and wrong in a WebView: the
+     * Capacitor shell does not return null — it hands back a window object
+     * for a view the client never sees, or routes the URL to the system
+     * browser, which then has nothing to show because the document is
+     * written into it afterwards. Either way `win` is truthy, the overlay
+     * never renders, and "Print / Save PDF" looks like a button that does
+     * nothing. That is exactly how it was reported.
+     *
+     * The overlay is also the better experience here — it carries the zoom
+     * controls and the share-sheet route that a WebView needs — so there is
+     * nothing to fall back FROM. A browser still gets its own window. */
+    if (!_isNativeApp()) {
+      const win = window.open('', '_blank', 'width=' + width + ',height=' + height);
+      if (win) { win.document.write(html); win.document.close(); return true; }
+    }
     _overlay(html, width);
     return true;
   }

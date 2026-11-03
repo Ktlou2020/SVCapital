@@ -31,7 +31,7 @@
   <link rel="stylesheet" href="css/portal.css?v=6" />
   <link rel="stylesheet" href="../css/ci-theme.css?v=2" />
   <!-- sv-intelligence hidden -->
-  <link rel="stylesheet" href="css/portal-premium.css?v=17" />
+  <link rel="stylesheet" href="css/portal-premium.css?v=18" />
   <!-- Payment modal must retain dark theme — isolate from ci-theme overrides -->
   <style>
     #topUpModal.modal-overlay { background: rgba(0,0,0,0.82) !important; }
@@ -929,7 +929,7 @@
                       <div id="pushNotifStatusText" style="font-size:0.72rem;color:var(--text-muted)">Enable to receive investment alerts</div>
                     </div>
                   </div>
-                  <label style="position:relative;display:inline-block;width:42px;height:24px;flex-shrink:0">
+                  <label class="svc-switch" style="position:relative;display:inline-block;width:42px;height:24px;flex-shrink:0">
                     <input type="checkbox" id="pushNotifToggle" onchange="togglePushNotifications(this.checked)" style="opacity:0;width:0;height:0">
                     <span style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#ccc;border-radius:24px;transition:.3s" id="pushNotifSlider"></span>
                   </label>
@@ -2770,7 +2770,7 @@
           <div style="font-size:0.88rem;font-weight:700;color:#1a1a1a">Enable Recurring Investment</div>
           <div style="font-size:0.75rem;color:var(--text-muted)">Toggle to activate automatic monthly investment</div>
         </div>
-        <label style="position:relative;display:inline-block;width:48px;height:26px;flex-shrink:0">
+        <label class="svc-switch" style="position:relative;display:inline-block;width:48px;height:26px;flex-shrink:0">
           <input type="checkbox" id="recurringEnabledToggle" style="opacity:0;width:0;height:0" onchange="updateRecurringToggleStyle()">
           <span style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#ccc;border-radius:26px;transition:.3s;display:block" id="recurringToggleSlider"></span>
         </label>
@@ -3062,8 +3062,8 @@ if (window.Capacitor) {
 }
 </script>
 <script src="/js/native.js"></script>
-<script src="../js/portal-core.js?v=66"></script>
-<script src="../js/investor-documents.js?v=10"></script>
+<script src="../js/portal-core.js?v=67"></script>
+<script src="../js/investor-documents.js?v=11"></script>
 <script src="js/portal.js?v=137"></script>
 <!-- sv-intelligence.js hidden -->
 <script>

@@ -4024,8 +4024,27 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
 
   /* A checkbox's hit area is its label. These sit as `<label><input> text`,
      so the label carries the height and the box stays 20px. */
-  label:has(> input[type="checkbox"]), label:has(> input[type="radio"]),
+  /* NOT a switch. This rule is for `<label><input type=checkbox> some text`,
+     where the label IS the hit area and 44px is the floor. A switch is a
+     label of exactly the same shape, so it matched — and a 24px pill
+     stretched to 44px with a 24px radius becomes an orange blob with the
+     knob stranded at the bottom, which is what a client photographed.
+
+     The switch keeps its own size and gets the 44px target from ::after
+     below, which is part of the label and so still toggles it. :has() is
+     why this showed on a current iOS WebView and not on an older Android
+     one — the rule simply never applied there. */
+  label:has(> input[type="checkbox"]):not(.svc-switch),
+  label:has(> input[type="radio"]):not(.svc-switch),
   .form-check, .checkbox-row { min-height: 44px; display: flex; align-items: center; gap: 10px; }
+
+  /* An invisible 44px-tall strip over the track. Absolutely positioned, so
+     it changes no layout, and part of the label, so a tap on it toggles. */
+  .svc-switch::after {
+    content: ''; position: absolute; left: 0; right: 0;
+    top: 50%; transform: translateY(-50%);
+    height: 44px; min-height: 44px;
+  }
 
   /* A 13px checkbox is not a target. The box grows to 20px and the label
      around it carries the 44px. */

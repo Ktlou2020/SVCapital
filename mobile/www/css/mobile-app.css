@@ -2962,10 +2962,29 @@ input[disabled].form-input {
   margin-bottom: 20px !important;
   gap: 0 !important;
 }
+/* The row above is a DARK panel and the text below is white, so the card has
+   to stop being a white card.
+
+   portal-premium.css gives .rewards-stat `background:#fff` and a 3px coloured
+   ::before strip, for the light web layout. This block redesigned the row as
+   one dark panel with divider rules and set the value text to #ffffff — and
+   never reset either. The result was white text on a white card: five blank
+   cards, each with a coloured bar across the top, which is exactly what a
+   client photographed and sent in. It was never an iOS fault; Chromium
+   renders it identically. */
 .rewards-stat {
+  background: transparent !important;
+  border: none !important;
   border-right: 1px solid rgba(255,255,255,0.07) !important;
+  border-radius: 0 !important;
+  overflow: visible !important;
 }
+.rewards-stat::before { display: none !important; }
+.rewards-stat:hover { box-shadow: none !important; transform: none !important; }
 .rewards-stat:last-child { border-right: none !important; }
+/* Five stats in a 2-column grid leaves the last one alone on its row, with a
+   divider against nothing. */
+.rewards-stat:nth-child(2n) { border-right: none !important; }
 .rewards-stat__val {
   color: #ffffff !important;
   font-size: 1.05rem !important;
