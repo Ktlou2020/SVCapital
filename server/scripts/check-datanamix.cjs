@@ -569,6 +569,28 @@ async function dbPart() {
       ok('and the guard has lifted', (await require(path.join(ROOT, 'server', 'services', 'ficaReview.js'))
          .guardInvestorUpdate('DX-ART', { kyc_status: 'approved' })) === null);
 
+      /* Decided on staging: an approved review settles KYC, not the account.
+         The account stays pending until the FICA documents are approved, and
+         then the ordinary document flow activates it. */
+      await pool.query(`INSERT INTO investors (id, first_name, last_name, email, status, kyc_status, fica_status)
+                        VALUES ('DX-DOCS','Docs','Later','docs@example.test','pending','pending','pending')`);
+      await pool.query(`INSERT INTO fica_checks (id, investor_id, trigger, overall_status, id_check_status, sanctions_check_status, check_date)
+                        VALUES ('FC-DOCS','DX-DOCS','manual','manual_review','manual_review','clear', NOW())`);
+      ok('a review with no documents on file can be approved',
+         (await dec(ADMIN2, 'FC-DOCS', { decision: 'approve', note: 'Surname confirmed from marriage certificate' })).status === 200);
+      const docsAfter = (await pool.query(`SELECT status, kyc_status, fica_status FROM investors WHERE id = 'DX-DOCS'`)).rows[0];
+      ok('approving the review makes the client KYC verified but leaves the account pending',
+         docsAfter.kyc_status === 'verified' && docsAfter.status === 'pending' && docsAfter.fica_status === 'pending',
+         JSON.stringify(docsAfter));
+      for (const t of ['id_document', 'proof_of_address', 'proof_of_bank']) {
+        await pool.query(`INSERT INTO kyc_documents (id, investor_id, doc_type, status) VALUES ($1,'DX-DOCS',$2,'approved')`, ['KD-DOCS-' + t, t]);
+      }
+      const qL2 = console.log, qW2 = console.warn; console.log = () => {}; console.warn = () => {};
+      try { await runKycReconcile(); } finally { console.log = qL2; console.warn = qW2; }
+      const docsDone = (await pool.query(`SELECT status, fica_status FROM investors WHERE id = 'DX-DOCS'`)).rows[0];
+      ok('and once their documents are approved, the account is activated as usual',
+         docsDone.status === 'active' && docsDone.fica_status === 'approved', JSON.stringify(docsDone));
+
       /* A later screen that comes back clear does not take a confirmed PEP's banner away. */
       await pool.query(`INSERT INTO fica_checks (id, investor_id, trigger, overall_status, sanctions_check_status, check_date)
                         VALUES ('FC-LATER-CLEAR','DX-ART','annual_recheck','pass','clear', NOW() + INTERVAL '1 minute')`);
