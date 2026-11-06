@@ -605,6 +605,74 @@ async function dbPart() {
       ok('declined: the client is KYC rejected', li.kyc_status === 'rejected' && li.fica_auto_status === 'declined', JSON.stringify(li));
       ok('and has no PEP banner', (await callR(router, 'GET', '/flags/DX-LANCE', ADMIN2)).body.watchlist === null);
 
+      console.log('\na declined review holds the client until a director reverses it');
+      const declinedId = la.openReviewId;
+      const heldPatch = await callR(tables, 'PATCH', '/investors/DX-LANCE', ADMIN2, { kyc_status: 'approved', fica_status: 'approved', status: 'active' });
+      ok('approving a declined client through the profile is refused, naming the director\'s reversal',
+         heldPatch.status === 409 && /declined/.test(heldPatch.body.error) && /director reverses/.test(heldPatch.body.error),
+         JSON.stringify(heldPatch));
+      for (const t of ['id_document', 'proof_of_address', 'proof_of_bank']) {
+        await pool.query(`INSERT INTO kyc_documents (id, investor_id, doc_type, status) VALUES ($1,'DX-LANCE',$2,'approved')`, ['KD-LANCE-' + t, t]);
+      }
+      const qL3 = console.log, qW3 = console.warn; console.log = () => {}; console.warn = () => {};
+      try { await runKycReconcile(); } finally { console.log = qL3; console.warn = qW3; }
+      const lHeld = (await pool.query(`SELECT kyc_status, fica_status, status FROM investors WHERE id = 'DX-LANCE'`)).rows[0];
+      ok('approved documents and the hourly reconcile do not undo the decline',
+         lHeld.kyc_status === 'rejected' && lHeld.fica_status !== 'approved', JSON.stringify(lHeld));
+
+      const reRun = await run('DX-LANCE');
+      ok('a fresh automated check still runs and is recorded', reRun.overallStatus === 'manual_review', JSON.stringify(reRun));
+      const lAfterRun = await inv('DX-LANCE');
+      ok('but it does not move the client off rejected', lAfterRun.kyc_status === 'rejected' && lAfterRun.fica_auto_status === 'declined',
+         JSON.stringify(lAfterRun));
+      const lPanel = (await callR(router, 'GET', '/checks/DX-LANCE', ADMIN2)).body;
+      ok('the panel shows the hold, and who declined', lPanel.heldBy && lPanel.heldBy.checkId === declinedId && lPanel.heldBy.by === 'Ada Min',
+         JSON.stringify(lPanel.heldBy));
+      ok('and is told an admin cannot reverse it, a director can',
+         lPanel.viewer.canReverse === false && (await callR(router, 'GET', '/checks/DX-LANCE', DIRECTOR)).body.viewer.canReverse === true);
+      const newer = lPanel.openReviewId;
+      ok('the newer review cannot be approved while the decline stands',
+         newer && newer !== declinedId
+         && /reverse that decline/.test((await dec(ADMIN2, newer, { decision: 'approve', note: 'Surname now matches' })).body.error || ''));
+      const rev = (who, id, note) => callR(router, 'POST', `/checks/${id}/reverse`, who, { note });
+      ok('an admin cannot reverse a decline', (await rev(ADMIN2, declinedId, 'Client sent a marriage certificate')).status === 403);
+      ok('a reversal needs a reason', (await rev(DIRECTOR, declinedId, '')).status === 400);
+      ok('only a declined review can be reversed', (await rev(DIRECTOR, newer, 'Not a decline at all')).status === 409);
+      const done = await rev(DIRECTOR, declinedId, 'Client sent a marriage certificate; surname change explained.');
+      ok('a director reverses it', done.status === 200 && done.body.stillHeld === false, JSON.stringify(done));
+      const lRev = await inv('DX-LANCE');
+      ok('and the client is back to KYC pending — not approved', lRev.kyc_status === 'pending' && lRev.fica_auto_status === 'reversed',
+         JSON.stringify(lRev));
+      const { rows: [revRow] } = await pool.query(`SELECT * FROM fica_checks WHERE id = $1`, [declinedId]);
+      ok('the reversal is recorded beside the decline, which stays',
+         revRow.review_decision === 'declined' && revRow.reversed_by === 'Dee Rector' && revRow.reversed_by_role === 'director'
+         && revRow.reversed_at && /marriage certificate/.test(revRow.reversal_note), JSON.stringify(revRow));
+      ok('a decline is reversed once', (await rev(DIRECTOR, declinedId, 'Again, for luck')).status === 409);
+      const lPanel2 = (await callR(router, 'GET', '/checks/DX-LANCE', ADMIN2)).body;
+      ok('the panel shows the reversal and no hold', lPanel2.heldBy === null
+         && lPanel2.checks.find(c => c.id === declinedId).review.reversal.by === 'Dee Rector');
+      ok('and the newer review can now be approved',
+         (await dec(ADMIN2, newer, { decision: 'approve', note: 'Surname explained by marriage certificate' })).status === 200);
+      const qL4 = console.log, qW4 = console.warn; console.log = () => {}; console.warn = () => {};
+      try { await runKycReconcile(); } finally { console.log = qL4; console.warn = qW4; }
+      const lDone = (await pool.query(`SELECT kyc_status, fica_status FROM investors WHERE id = 'DX-LANCE'`)).rows[0];
+      ok('after which their approved documents promote them in the usual way', lDone.fica_status === 'approved', JSON.stringify(lDone));
+
+      /* A check that PASSES does not lift a decline either. */
+      await add('DX-HOLD', 'Guinevere', 'Pendragon', '7906124223083', '1979-06-12');
+      await pool.query(`UPDATE investors SET kyc_status = 'rejected' WHERE id = 'DX-HOLD'`);
+      await pool.query(`INSERT INTO fica_checks (id, investor_id, trigger, overall_status, review_decision, reviewed_by, reviewed_at, check_date)
+                        VALUES ('FC-HOLD','DX-HOLD','manual','manual_review','declined','Ada Min', NOW() - INTERVAL '1 day', NOW() - INTERVAL '1 day')`);
+      const passRun = await run('DX-HOLD');
+      const hAfter = await inv('DX-HOLD');
+      ok('a later automated check that passes leaves a declined client rejected',
+         passRun.overallStatus === 'pass' && hAfter.kyc_status === 'rejected', `${JSON.stringify(passRun)} ${JSON.stringify(hAfter)}`);
+      ok('though it is still recorded as having checked them', hAfter.last_auto_fica_check !== null);
+      const { rows: [ann3] } = await pool.query(
+        `SELECT where_to_find FROM feature_announcements WHERE id = 'fica-decline-hold-2026-11'`);
+      ok('staff are told a decline holds the client, and where a director reverses it',
+         ann3 && /Held: FICA review declined/.test(ann3.where_to_find) && /directors only/.test(ann3.where_to_find), JSON.stringify(ann3));
+
       const gNow = (await callR(router, 'GET', '/checks/DX-GUIN', ADMIN2)).body;
       ok('a check that passed has nothing to decide', gNow.openReviewId === null
          && (await dec(ADMIN2, gNow.checks[0].id, { decision: 'approve', note: 'Nothing to decide here' })).status === 409);
@@ -712,6 +780,17 @@ function uiPart() {
      (js.match(/[^\n]*\binv\.kyc_status *=== *'approved'[^\n]*/g) || []).filter(l => !/verified/.test(l)).join('\n'));
   ok('approving documents while a review is open says the client is held, not that it failed',
      /if \(result\.held\) Toast\.warning/.test(js));
+
+  console.log('\na declined review\'s hold, in the console');
+  ok('the checks panel shows the hold at the top', /_fcHoldBox\(d\.heldBy, d\.viewer \|\| \{\}\)/.test(js));
+  ok('Reverse decline is offered to directors only, and says so to anyone else',
+     /viewer\.canReverse \? `/.test(js) && /Only a director can reverse a declined review/.test(js));
+  ok('it posts the reason to the reverse endpoint',
+     /API\._fetch\('POST', `fica\/checks\/\$\{encodeURIComponent\(checkId\)\}\/reverse`, \{ note \}\)/.test(js));
+  ok('Approve on a newer check is disabled while a decline stands',
+     /\(held && held\.checkId !== c\.id\)\s*\? 'An earlier review of this client was declined/.test(js));
+  ok('approving documents of a held client says it is held, not that it failed',
+     /automated FICA check is waiting\|FICA review was declined/.test(js));
 
   /* Found on staging: the confirmation opened BEHIND the checks panel, a
      click on the panel's backdrop closed it and cleared the remembered

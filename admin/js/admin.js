@@ -5700,7 +5700,7 @@ async function _recomputeInvestorFicaStatus(investorId) {
       /* The documents are complete, but the client's automated FICA check is
          waiting on a review decision — the server will not approve them
          around it. The document approval itself stood. */
-      if (/automated FICA check is waiting/.test(e.message || '')) {
+      if (/automated FICA check is waiting|FICA review was declined/.test(e.message || '')) {
         return { verified: false, held: e.message, missing: [] };
       }
       throw e;
@@ -6149,6 +6149,7 @@ const _FC_STATUS = {
   pending:       { label: 'Pending',       color: '#7a92a8', icon: 'fa-clock' },
   approved:      { label: 'Approved after review', color: '#22c55e', icon: 'fa-user-check' },
   declined:      { label: 'Declined after review', color: '#ef4444', icon: 'fa-user-xmark' },
+  reversed:      { label: 'Decline reversed',      color: '#60a5fa', icon: 'fa-rotate-left' },
 };
 const _FC_PROVIDER = { datanamix: 'Datanamix', smile: 'Smile Identity', stitch: 'Stitch' };
 const _FC_TRIGGER  = { first_deposit: 'First deposit', annual_recheck: 'Annual re-check', manual: 'Run by staff', webhook: 'Provider callback' };
@@ -6219,7 +6220,50 @@ function _fcReviewRecord(r) {
     <div style="font-weight:700;color:${s.color}">${_esc(r.decision === 'approved' ? 'Approved' : 'Declined')} by ${_esc(r.by || 'staff')}${r.role ? ` (${_esc(r.role)})` : ''} · ${r.at ? Utils.date(r.at) : ''}</div>
     ${r.matchOutcome ? `<div style="margin-top:4px;font-weight:600;color:var(--text)">Possible match: ${r.matchOutcome === 'confirmed' ? 'confirmed — this is the client' : 'not this person'}</div>` : ''}
     <div style="margin-top:4px;color:var(--text-muted);white-space:pre-wrap">${_esc(r.note || '')}</div>
+    ${r.reversal ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.08)">
+      <div style="font-weight:700;color:#60a5fa">Decline reversed by ${_esc(r.reversal.by || 'a director')}${r.reversal.role ? ` (${_esc(r.reversal.role)})` : ''} · ${r.reversal.at ? Utils.date(r.reversal.at) : ''}</div>
+      <div style="margin-top:4px;color:var(--text-muted);white-space:pre-wrap">${_esc(r.reversal.note || '')}</div>
+    </div>` : ''}
   </div>`;
+}
+
+/* A declined review holds the client rejected until a director reverses
+   it. Shown at the top of their checks, with the reverse action for a
+   director and the reason it is not offered for anyone else. */
+function _fcHoldBox(held, viewer) {
+  if (!held) return '';
+  return `<div style="margin-bottom:14px;padding:12px 14px;border-radius:10px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.4)">
+    <div style="font-weight:800;color:#f87171;font-size:0.86rem"><i class="fa-solid fa-lock"></i> Held: FICA review declined</div>
+    <div style="font-size:0.76rem;color:var(--text-muted);margin-top:4px">Declined by ${_esc(held.by || 'a reviewer')}${held.role ? ` (${_esc(held.role)})` : ''}${held.at ? ' on ' + Utils.date(held.at) : ''}. Until a director reverses it, nothing approves this client — not a new check, not their documents, not the FICA approval on their profile.</div>
+    ${held.note ? `<div style="font-size:0.76rem;color:var(--text-muted);margin-top:4px;white-space:pre-wrap">“${_esc(held.note)}”</div>` : ''}
+    ${viewer.canReverse ? `
+      <textarea id="fcReverseNote" rows="2" maxlength="2000" placeholder="Why the decline is being reversed — recorded on the check" style="margin-top:10px;width:100%;box-sizing:border-box;background:rgba(0,0,0,0.25);border:1px solid rgba(255,255,255,0.12);border-radius:8px;color:var(--text);padding:8px 10px;font-size:0.8rem;font-family:inherit;resize:vertical"></textarea>
+      <div style="display:flex;justify-content:flex-end;margin-top:8px">
+        <button class="btn btn--secondary btn--sm" onclick='reverseFicaDecline(${_esc(JSON.stringify(held.checkId))}, this)'><i class="fa-solid fa-rotate-left"></i> Reverse decline</button>
+      </div>`
+      : `<div style="font-size:0.72rem;color:#f97316;margin-top:8px">Only a director can reverse a declined review.</div>`}
+  </div>`;
+}
+
+async function reverseFicaDecline(checkId, btn) {
+  const investorId = _ficaChecksInvestor;
+  const note = (document.getElementById('fcReverseNote')?.value || '').trim();
+  if (note.length < 5) { Toast.error('Give the reason for reversing the decline — it is recorded on the check.'); return; }
+  const ok = await Confirm.ask('Reverse this declined review?', {
+    body: 'The client goes back to KYC pending. This does not approve them: they are approved afterwards by a fresh check or their documents, in the usual way. Your name, the time and your reason are recorded on the check, beside the decline.',
+    confirmLabel: 'Reverse decline',
+  });
+  if (!ok) return;
+  await _withBtn(btn, async () => {
+    try {
+      const r = await API._fetch('POST', `fica/checks/${encodeURIComponent(checkId)}/reverse`, { note });
+      Toast.success(r.stillHeld ? 'Decline reversed — but another declined review still holds this client'
+                                : 'Decline reversed — client is back to KYC pending');
+      if (_ficaChecksInvestor === investorId) await _renderFicaChecks();
+    } catch (e) {
+      Toast.error(e.message || 'Could not reverse the decline');
+    }
+  });
 }
 
 /* The PEP / watch-list banner: on the client's profile and at the top of
@@ -6263,13 +6307,15 @@ async function _loadInvestorWatchlistBanner(investorId) {
 
 /* The decision for the one check that is waiting on it. The server
    enforces every rule shown here; this only shows them. */
-function _fcDecisionBox(c, viewer) {
+function _fcDecisionBox(c, viewer, held) {
   if (!viewer.canDecide) {
     return `<div style="margin-top:10px;font-size:0.76rem;color:var(--text-muted)">Waiting on a review decision by admin, director or fund manager staff.</div>`;
   }
   const isMatch      = c.sanctions && c.sanctions.status === 'hit';
   const notScreened  = c.sanctions && c.sanctions.status === 'error';
-  const approveBlock = notScreened
+  const approveBlock = (held && held.checkId !== c.id)
+    ? 'An earlier review of this client was declined. A director must reverse that decline before they can be approved.'
+    : notScreened
     ? 'The sanctions screen did not run, so this client has not been screened. Run the check again before approving.'
     : (isMatch && !viewer.canApproveMatch ? 'A possible sanctions or PEP match can only be approved by a director. You can decline it.' : '');
   return `<div style="margin-top:12px;padding:12px;border-radius:8px;background:rgba(254,194,79,0.06);border:1px solid rgba(254,194,79,0.3)">
@@ -6346,7 +6392,8 @@ async function _renderFicaChecks() {
         if (typeof _renderFicaPipeline === 'function' && document.getElementById('ficaPipelineBody')) _renderFicaPipeline();
       }
     }
-    const summary = _fcWatchlistBanner(d.watchlist, null, { withLink: false }) + (d.investor ? _fcSummary(d.investor) : '');
+    const summary = _fcWatchlistBanner(d.watchlist, null, { withLink: false }) + _fcHoldBox(d.heldBy, d.viewer || {})
+                  + (d.investor ? _fcSummary(d.investor) : '');
     const bannerEl = document.getElementById('invWatchlistBanner');
     if (bannerEl && _currentInvestorId === _ficaChecksInvestor) bannerEl.innerHTML = _fcWatchlistBanner(d.watchlist, _ficaChecksInvestor);
     if (!checks.length) {
@@ -6367,7 +6414,7 @@ async function _renderFicaChecks() {
         ${_fcStep('Bank account', c.bank, 'Stitch')}
         ${_fcStep('Sanctions / PEP', c.sanctions, '')}
         ${c.review ? _fcReviewRecord(c.review) : ''}
-        ${c.id === d.openReviewId ? _fcDecisionBox(c, d.viewer || {}) : ''}
+        ${c.id === d.openReviewId ? _fcDecisionBox(c, d.viewer || {}, d.heldBy) : ''}
       </div>`).join('');
   } catch (e) {
     el.innerHTML = `<div style="text-align:center;padding:30px;color:#ef4444">Could not load checks: ${_esc(e.message)}</div>`;

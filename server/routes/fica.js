@@ -8,6 +8,7 @@
    GET  /api/fica/checks/:investorId  — automated check results, staff only
    POST /api/fica/checks/:checkId/decision — approve / decline a review
    GET  /api/fica/flags/:investorId   — PEP / watch-list banner, staff only
+   POST /api/fica/checks/:checkId/reverse  — a director reverses a decline
    POST /api/fica/webhook/smile       — Smile Identity async callback
    POST /api/fica/webhook/stitch      — Stitch async callback
    ═══════════════════════════════════════════════════════ */
@@ -212,7 +213,8 @@ router.get(
         `SELECT id, trigger, check_date, overall_status,
                 id_check_status, id_result, bank_check_status, bank_result,
                 sanctions_check_status, sanctions_result,
-                review_decision, review_note, reviewed_by, reviewed_by_role, reviewed_at, match_outcome
+                review_decision, review_note, reviewed_by, reviewed_by_role, reviewed_at, match_outcome,
+                reversed_by, reversed_by_role, reversed_at, reversal_note
            FROM fica_checks
           WHERE investor_id = $1
           ORDER BY check_date DESC
@@ -235,6 +237,7 @@ router.get(
           review: c.review_decision ? {
             decision: c.review_decision, note: c.review_note, by: c.reviewed_by,
             role: c.reviewed_by_role, at: c.reviewed_at, matchOutcome: c.match_outcome || null,
+            reversal: c.reversed_at ? { by: c.reversed_by, role: c.reversed_by_role, at: c.reversed_at, note: c.reversal_note } : null,
           } : null,
         };
       });
@@ -247,9 +250,40 @@ router.get(
         openReviewId: open ? open.id : null,
         viewer: ficaReview.permissions(req.user),
         watchlist: await ficaReview.watchlistFlag(req.params.investorId),
+        /* A declined review no director has reversed: the client is held
+           rejected until one does. */
+        heldBy: await (async () => {
+          const d = await ficaReview.standingDecline(req.params.investorId);
+          return d ? { checkId: d.id, by: d.reviewed_by, role: d.reviewed_by_role, at: d.reviewed_at, note: d.review_note } : null;
+        })(),
       });
     } catch (err) {
       console.error('FICA checks error:', err.message);
+      res.status(500).json({ error: 'Internal server error.' });
+    }
+  }
+);
+
+/* ═══════════════════════════════════════════════════════
+   POST /api/fica/checks/:checkId/reverse
+   Body: { note }
+   A director reverses a declined review. The client goes back to pending,
+   to be approved in the ordinary way. The decline and its reversal both
+   stay on the check.
+   ═══════════════════════════════════════════════════════ */
+router.post(
+  '/checks/:checkId/reverse',
+  requireAuth,
+  requireRole('admin', 'director', 'fund_manager'),
+  async (req, res) => {
+    try {
+      const result = await ficaReview.reverse({
+        checkId: req.params.checkId, note: req.body && req.body.note, user: req.user,
+      });
+      res.json({ success: true, ...result });
+    } catch (err) {
+      if (err instanceof ficaReview.ReviewError) return res.status(err.status).json({ error: err.message });
+      console.error('FICA reverse error:', err.message);
       res.status(500).json({ error: 'Internal server error.' });
     }
   }

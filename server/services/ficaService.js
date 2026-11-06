@@ -232,19 +232,25 @@ async function runFicaCheck(investor, trigger) {
    * that the attempt happened and what went wrong; the investor stays in
    * the queue, which is where somebody not yet verified belongs. */
   const checked = overallStatus !== 'error';
-  const sets = [
-    checked ? 'last_auto_fica_check = NOW()' : null,
-    'fica_auto_status = $1',
-    newKycStatus ? 'kyc_status = $3' : null,
-    'updated_at = NOW()',
-  ].filter(Boolean);
+  /* A declined review stands until a director reverses it. A later check
+     is still recorded in full — and still raises a sanctions incident —
+     but it does not move the client off rejected: a nightly re-check that
+     passes must not quietly undo a person's decision. */
+  let held = null;
+  try { held = await require('./ficaReview').standingDecline(investorId); }
+  catch (err) { console.error('[FICA] could not read standing declines:', err.message); }
+  /* Parameters are numbered as they are added, so a held client's update
+     carries no parameter it does not use — Postgres refuses those. */
+  const params = [investorId];
+  const sets = ['updated_at = NOW()'];
+  const param = v => { params.push(v); return '$' + params.length; };
+  if (checked) sets.push('last_auto_fica_check = NOW()');
+  if (!held) {
+    sets.push('fica_auto_status = ' + param(overallStatus));
+    if (newKycStatus) sets.push('kyc_status = ' + param(newKycStatus));
+  }
 
-  await pool.query(
-    `UPDATE investors SET ${sets.join(', ')} WHERE id = $2`,
-    newKycStatus
-      ? [overallStatus, investorId, newKycStatus]
-      : [overallStatus, investorId]
-  );
+  await pool.query(`UPDATE investors SET ${sets.join(', ')} WHERE id = $1`, params);
 
   /* And say so where somebody can act. A verification provider that cannot
      answer is not a client's problem and not a thing to leave in a log:

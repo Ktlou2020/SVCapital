@@ -1134,6 +1134,12 @@ ALTER TABLE fica_checks ADD COLUMN IF NOT EXISTS reviewed_at      TIMESTAMPTZ;
    'false_positive' (not this client) or 'confirmed' (this is the client).
    It is what the PEP banner on the client's profile is drawn from. */
 ALTER TABLE fica_checks ADD COLUMN IF NOT EXISTS match_outcome    TEXT;
+/* A declined review holds the client rejected until a director reverses
+   it. The reversal is recorded beside the decline it reverses. */
+ALTER TABLE fica_checks ADD COLUMN IF NOT EXISTS reversed_by      TEXT;
+ALTER TABLE fica_checks ADD COLUMN IF NOT EXISTS reversed_by_role TEXT;
+ALTER TABLE fica_checks ADD COLUMN IF NOT EXISTS reversed_at      TIMESTAMPTZ;
+ALTER TABLE fica_checks ADD COLUMN IF NOT EXISTS reversal_note    TEXT;
 CREATE INDEX IF NOT EXISTS fica_checks_investor_idx ON fica_checks(investor_id);
 CREATE INDEX IF NOT EXISTS fica_checks_date_idx     ON fica_checks(check_date);
 
@@ -5321,6 +5327,25 @@ async function autoSetup() {
          + '\u2192 Review decision, under the latest check. The PEP banner is at the top of the client\u2019s '
          + 'profile (Clients \u2192 open a client), above the tabs.']);
       if (rowCount) console.log('\u2705 Announced FICA review decisions.');
+    });
+
+    await step("33. Announce that a declined FICA review holds the client", async () => {
+      const { rowCount } = await pool.query(
+        `INSERT INTO feature_announcements
+           (id, title, body, where_to_find, area, audience, icon, published_at, created_by)
+         VALUES ($1,$2,$3,$4,'admin','staff','fa-lock', NOW(), 'setup')
+         ON CONFLICT (id) DO NOTHING`,
+        ['fica-decline-hold-2026-11',
+         'A declined FICA review now holds the client until a director reverses it',
+         'Before, declining a review could be quietly undone: approving the client\u2019s documents, the FICA '
+         + 'approval on their profile or the hourly document reconcile would approve and activate them anyway. '
+         + 'Now a declined review holds the client rejected. Nothing approves them while it stands \u2014 not their '
+         + 'documents, not the profile approval, not a newer review, and not a later automated check that passes. '
+         + 'Only a director can lift it, with Reverse decline and a reason. The client then goes back to KYC '
+         + 'pending, to be approved in the usual way. The decline and its reversal both stay on the check.',
+         'KYC / FICA \u2192 FICA Pipeline tab \u2192 Checks on the client \u2192 the \u201cHeld: FICA review declined\u201d '
+         + 'box at the top. Reverse decline is shown to directors only.']);
+      if (rowCount) console.log('\u2705 Announced the FICA decline hold.');
     });
 
     await step("29. Say which pool each platform fee was charged against", async () => {
