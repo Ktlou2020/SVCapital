@@ -4,8 +4,9 @@
 'use strict';
 
 const pool   = require('../db/pool');
-const smile  = require('./smileIdentity');
-const stitch = require('./stitch');
+const smile     = require('./smileIdentity');
+const stitch    = require('./stitch');
+const datanamix = require('./datanamix');
 
 /* ─── Country code lookup ─────────────────────────────── */
 const NATIONALITY_TO_CODE = {
@@ -48,11 +49,14 @@ function ficaId() {
    trigger: 'first_deposit' | 'annual_recheck' | 'manual' | 'webhook'
 
    1. Detect SA ID vs Passport from investor.notes field
-   2. Call Smile Identity for ID check
-   3. Call Stitch for bank account check (if maturity instructions exist)
-   4. Write result to fica_checks table
-   5. Update investor kyc_status + last_auto_fica_check
-   Returns: { checkId, idStatus, bankStatus, overallStatus }
+   2. ID check — Datanamix Real-Time IDV (Home Affairs) for an SA ID when
+      DATANAMIX_ENV is set; Smile Identity for passports, and for everything
+      when it is not
+   3. Bank account check — Datanamix AVS when enabled, otherwise Stitch
+   4. Sanctions / PEP screen — Datanamix when enabled, otherwise skipped
+   5. Write result to fica_checks table
+   6. Update investor kyc_status + last_auto_fica_check
+   Returns: { checkId, idStatus, bankStatus, sanctionsStatus, overallStatus }
    ═══════════════════════════════════════════════════════════════════════ */
 async function runFicaCheck(investor, trigger) {
   const { id: investorId, first_name, last_name, id_number, notes, date_of_birth } = investor;
@@ -69,10 +73,20 @@ async function runFicaCheck(investor, trigger) {
     }
   } catch (_) {}
 
-  /* ── 1. ID / Passport check ── */
+  const useDatanamix = datanamix.enabled();
+
+  /* ── 1. ID / Passport check ──
+     Datanamix's Real-Time IDV reads Home Affairs, which knows SA ID numbers
+     and nothing else, so a passport still goes to Smile. */
   let idResult, idStatus;
   try {
-    if (isPassport) {
+    if (useDatanamix && !isPassport) {
+      const raw    = await datanamix.verifyIdRealtime({ idNumber: id_number });
+      const mapped = datanamix.mapIdResult(raw, investor);
+      idStatus = mapped.status;
+      idResult = { provider: 'datanamix', product: 'realtime_idv', reasons: mapped.reasons, response: raw };
+      if (idStatus === 'error') idResult.error = mapped.reasons.join('; ') || 'Datanamix returned no answer';
+    } else if (isPassport) {
       const natMatch = (notes || '').match(/Nationality:\s*([^.]+)/);
       const country  = natMatch ? nationalityToCode(natMatch[1].trim()) : 'ZW';
       idResult = await smile.verifyPassport({
@@ -91,16 +105,19 @@ async function runFicaCheck(investor, trigger) {
         dob:       date_of_birth || '',
       });
     }
-    idStatus = smile.mapResult(idResult);
+    if (!idStatus) idStatus = smile.mapResult(idResult);
   } catch (err) {
-    console.error(`[FICA] Smile error for ${investorId}:`, err.message);
-    idResult = { error: err.message };
+    const provider = useDatanamix && !isPassport ? 'datanamix' : 'smile';
+    console.error(`[FICA] ${provider} ID error for ${investorId}:`, err.message);
+    idResult = { provider, error: err.message };
     idStatus = 'error';
   }
 
   /* ── 2. Bank account check ── */
   let bankResult = null, bankStatus = 'skipped';
-  try {
+  if (useDatanamix) {
+    ({ bankResult, bankStatus } = await _datanamixBank(investor, isPassport));
+  } else try {
     const { rows: mat } = await pool.query(
       `SELECT account_number, bank_name, account_holder
        FROM maturity_instructions
@@ -124,37 +141,74 @@ async function runFicaCheck(investor, trigger) {
     bankStatus = 'error';
   }
 
-  /* ── 3. Derive overall status ── */
+  /* ── 3. Sanctions / PEP screen ── */
+  let sanctionsResult = null, sanctionsStatus = 'skipped';
+  if (useDatanamix) {
+    try {
+      let country = 'ZA';
+      if (isPassport) {
+        const natMatch = (notes || '').match(/Nationality:\s*([^.]+)/);
+        try { country = nationalityToCode(natMatch ? natMatch[1].trim() : investor.nationality); } catch (_) { country = 'ZA'; }
+      }
+      const raw    = await datanamix.screenIndividual({
+        reference:   `SVC-${investorId}`,
+        firstName:   first_name,
+        lastName:    last_name,
+        dateOfBirth: date_of_birth,
+        idNumber:    id_number,
+        country,
+      });
+      const mapped = datanamix.mapSanctionsResult(raw);
+      sanctionsStatus = mapped.status;
+      sanctionsResult = { provider: 'datanamix', product: 'sanctions_standard', ...mapped, response: raw };
+    } catch (err) {
+      console.error(`[FICA] Datanamix sanctions error for ${investorId}:`, err.message);
+      sanctionsResult = { provider: 'datanamix', error: err.message };
+      sanctionsStatus = 'error';
+    }
+  }
+
+  /* ── 4. Derive overall status ── */
   let overallStatus;
   if (idStatus === 'error') {
     overallStatus = 'error';
-  } else if (idStatus === 'pass' && (bankStatus === 'pass' || bankStatus === 'skipped')) {
+  } else if (idStatus === 'fail') {
+    overallStatus = 'fail';
+  } else if (sanctionsStatus === 'hit') {
+    /* A possible sanctions or PEP match is never ours to clear or to act on
+       automatically: it goes to a person, whatever else passed. */
+    overallStatus = 'manual_review';
+  } else if (idStatus === 'pass' && (bankStatus === 'pass' || bankStatus === 'skipped')
+             && (sanctionsStatus === 'clear' || sanctionsStatus === 'skipped')) {
     overallStatus = 'pass';
   } else if (idStatus === 'manual_review' || bankStatus === 'manual_review') {
     overallStatus = 'manual_review';
-  } else if (bankStatus === 'error') {
-    // Bank error shouldn't block ID pass — flag for review
-    overallStatus = idStatus === 'pass' ? 'manual_review' : 'fail';
+  } else if (bankStatus === 'error' || sanctionsStatus === 'error') {
+    // A bank or screening error shouldn't block an ID pass — but it is not a
+    // pass either: somebody has to look.
+    overallStatus = idStatus === 'pass' && bankStatus !== 'fail' ? 'manual_review' : 'fail';
   } else {
     overallStatus = 'fail';
   }
 
-  /* ── 4. Persist to fica_checks ── */
+  /* ── 5. Persist to fica_checks ── */
   const checkId = ficaId();
   await pool.query(
     `INSERT INTO fica_checks
        (id, investor_id, trigger, id_check_status, bank_check_status,
-        overall_status, id_result, bank_result, check_date)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())`,
+        sanctions_check_status, overall_status, id_result, bank_result,
+        sanctions_result, check_date)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW())`,
     [
       checkId, investorId, trigger,
-      idStatus, bankStatus, overallStatus,
+      idStatus, bankStatus, sanctionsStatus, overallStatus,
       JSON.stringify(idResult || {}),
       JSON.stringify(bankResult || {}),
+      JSON.stringify(sanctionsResult || {}),
     ]
   );
 
-  /* ── 5. Update investor record ── */
+  /* ── 6. Update investor record ── */
   const newKycStatus =
     overallStatus === 'pass'           ? 'verified' :
     overallStatus === 'fail'           ? 'rejected' :
@@ -207,8 +261,81 @@ async function runFicaCheck(investor, trigger) {
     } catch (e) { console.error('[FICA] could not raise incident:', e.message); }
   }
 
-  console.log(`[FICA] ${investorId} | ${trigger} | id:${idStatus} bank:${bankStatus} → ${overallStatus}`);
-  return { checkId, idStatus, bankStatus, overallStatus };
+  /* A possible sanctions/PEP match is a compliance event with a deadline,
+     not a status to be found by whoever next opens this client. Raised on
+     its own fingerprint per investor, so two hits are two rows. */
+  if (sanctionsStatus === 'hit') {
+    try {
+      await require('./incidents').report(
+        new Error(`Possible sanctions/PEP match for investor ${investorId} `
+                + `(${first_name || ''} ${last_name || ''}). Their FICA check is held for review: `
+                + (sanctionsResult.reasons || []).slice(0, 3).join('; ')),
+        { source: 'fica', severity: 'critical' });
+    } catch (e) { console.error('[FICA] could not raise sanctions incident:', e.message); }
+  }
+
+  console.log(`[FICA] ${investorId} | ${trigger} | id:${idStatus} bank:${bankStatus} sanctions:${sanctionsStatus} → ${overallStatus}`);
+  return { checkId, idStatus, bankStatus, sanctionsStatus, overallStatus };
+}
+
+/* ─── Datanamix AVS for the account we would pay this client into ────
+   The profile's bank details first — they are what payouts use — and the
+   latest maturity instruction's when the profile has none, which is where
+   the Stitch path has always looked. */
+async function _datanamixBank(investor, isPassport) {
+  const { id: investorId, first_name, last_name, id_number } = investor;
+  let acct = null;
+  try {
+    const { rows: [p] } = await pool.query(
+      `SELECT bank_name, bank_account_number, bank_branch_code, bank_account_type,
+              bank_account_holder, phone, email
+         FROM investors WHERE id = $1`, [investorId]);
+    if (p && p.bank_account_number) {
+      acct = { number: p.bank_account_number, bank: p.bank_name, branch: p.bank_branch_code,
+               type: p.bank_account_type, phone: p.phone, email: p.email };
+    } else {
+      const { rows: [m] } = await pool.query(
+        `SELECT account_number, bank_name, branch_code
+           FROM maturity_instructions
+          WHERE investor_id = $1 AND account_number IS NOT NULL
+          ORDER BY created_at DESC LIMIT 1`, [investorId]);
+      if (m && m.account_number) {
+        acct = { number: m.account_number, bank: m.bank_name, branch: m.branch_code,
+                 phone: p && p.phone, email: p && p.email };
+      }
+    }
+  } catch (err) {
+    return { bankStatus: 'error', bankResult: { provider: 'datanamix', error: err.message } };
+  }
+
+  if (!acct) return { bankStatus: 'skipped', bankResult: null };
+
+  const branch = acct.branch || datanamix.universalBranchCode(acct.bank);
+  if (!branch) {
+    return { bankStatus: 'manual_review', bankResult: { provider: 'datanamix',
+      reasons: [`No branch code on file and none known for "${acct.bank || 'unnamed bank'}"`] } };
+  }
+
+  try {
+    const raw = await datanamix.verifyBankAccount({
+      reference:     `SVC-${investorId}`,
+      idNumber:      id_number,
+      identityType:  isPassport ? 'Passport' : 'IDNumber',
+      firstName:     first_name,
+      lastName:      last_name,
+      accountNumber: acct.number,
+      branchCode:    branch,
+      accountType:   acct.type,
+      mobile:        acct.phone,
+      email:         acct.email,
+    });
+    const mapped = datanamix.mapAvsResult(raw);
+    return { bankStatus: mapped.status,
+             bankResult: { provider: 'datanamix', product: 'avs', reasons: mapped.reasons, response: raw } };
+  } catch (err) {
+    console.error(`[FICA] Datanamix AVS error for ${investorId}:`, err.message);
+    return { bankStatus: 'error', bankResult: { provider: 'datanamix', error: err.message } };
+  }
 }
 
 module.exports = { runFicaCheck, nationalityToCode };

@@ -1118,6 +1118,10 @@ CREATE TABLE IF NOT EXISTS fica_checks (
   check_date        TIMESTAMPTZ DEFAULT NOW(),
   created_at        TIMESTAMPTZ DEFAULT NOW()
 );
+/* Sanctions / PEP screening, run by Datanamix when it is the provider.
+   'skipped' when it did not run — every row before this column existed. */
+ALTER TABLE fica_checks ADD COLUMN IF NOT EXISTS sanctions_check_status TEXT DEFAULT 'skipped';
+ALTER TABLE fica_checks ADD COLUMN IF NOT EXISTS sanctions_result       JSONB DEFAULT '{}';
 CREATE INDEX IF NOT EXISTS fica_checks_investor_idx ON fica_checks(investor_id);
 CREATE INDEX IF NOT EXISTS fica_checks_date_idx     ON fica_checks(check_date);
 

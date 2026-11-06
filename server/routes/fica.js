@@ -4,6 +4,7 @@
    GET  /api/fica/status/:investorId  — check history + next due date
    POST /api/fica/trigger/:investorId — manual admin trigger
    GET  /api/fica/queue               — investors due for (re-)check
+   GET  /api/fica/providers           — which verification provider is live
    POST /api/fica/webhook/smile       — Smile Identity async callback
    POST /api/fica/webhook/stitch      — Stitch async callback
    ═══════════════════════════════════════════════════════ */
@@ -14,6 +15,7 @@ const pool        = require('../db/pool');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { runFicaCheck } = require('../services/ficaService');
 const smile       = require('../services/smileIdentity');
+const datanamix   = require('../services/datanamix');
 
 /* ═══════════════════════════════════════════════════════
    GET /api/fica/status/:investorId
@@ -37,7 +39,8 @@ router.get('/status/:investorId', requireAuth, async (req, res) => {
     if (!inv.length) return res.status(404).json({ error: 'Investor not found.' });
 
     const { rows: checks } = await pool.query(
-      `SELECT id, trigger, id_check_status, bank_check_status, overall_status, check_date
+      `SELECT id, trigger, id_check_status, bank_check_status, sanctions_check_status,
+              overall_status, check_date
        FROM fica_checks
        WHERE investor_id = $1
        ORDER BY check_date DESC
@@ -138,6 +141,34 @@ router.get(
       console.error('FICA queue error:', err.message);
       res.status(500).json({ error: 'Internal server error.' });
     }
+  }
+);
+
+/* ═══════════════════════════════════════════════════════
+   GET /api/fica/providers
+   Which provider each step of an automated check will use, and whether it
+   can run. The answer to "why is nobody being verified" without reading
+   environment variables. Never returns a key.
+   ═══════════════════════════════════════════════════════ */
+router.get(
+  '/providers',
+  requireAuth,
+  requireRole('admin', 'director', 'fund_manager'),
+  (req, res) => {
+    const dnx = datanamix.describe();
+    const smileReady  = !!(process.env.SMILE_PARTNER_ID && process.env.SMILE_API_KEY);
+    const stitchReady = !!(process.env.STITCH_CLIENT_ID && process.env.STITCH_CLIENT_SECRET);
+    res.json({
+      datanamix: dnx,
+      steps: {
+        sa_id:     dnx.enabled ? 'datanamix' : 'smile',
+        passport:  'smile',
+        bank:      dnx.enabled ? 'datanamix' : 'stitch',
+        sanctions: dnx.enabled ? 'datanamix' : 'none',
+      },
+      smile:  { configured: smileReady },
+      stitch: { configured: stitchReady },
+    });
   }
 );
 
