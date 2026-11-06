@@ -1122,6 +1122,9 @@ CREATE TABLE IF NOT EXISTS fica_checks (
    'skipped' when it did not run — every row before this column existed. */
 ALTER TABLE fica_checks ADD COLUMN IF NOT EXISTS sanctions_check_status TEXT DEFAULT 'skipped';
 ALTER TABLE fica_checks ADD COLUMN IF NOT EXISTS sanctions_result       JSONB DEFAULT '{}';
+/* Address: the credit bureaus' residential address against the profile's. */
+ALTER TABLE fica_checks ADD COLUMN IF NOT EXISTS address_check_status TEXT DEFAULT 'skipped';
+ALTER TABLE fica_checks ADD COLUMN IF NOT EXISTS address_result       JSONB DEFAULT '{}';
 /* A check held for review is closed by a person: approved or declined,
    with the reason, by whom and when. That record is the FICA audit trail
    for every decision an automated check could not make on its own. */
@@ -5346,6 +5349,27 @@ async function autoSetup() {
          'KYC / FICA \u2192 FICA Pipeline tab \u2192 Checks on the client \u2192 the \u201cHeld: FICA review declined\u201d '
          + 'box at the top. Reverse decline is shown to directors only.']);
       if (rowCount) console.log('\u2705 Announced the FICA decline hold.');
+    });
+
+    await step("34. Announce the address check", async () => {
+      const { rowCount } = await pool.query(
+        `INSERT INTO feature_announcements
+           (id, title, body, where_to_find, area, audience, icon, published_at, created_by)
+         VALUES ($1,$2,$3,$4,'admin','staff','fa-house-circle-check', NOW(), 'setup')
+         ON CONFLICT (id) DO NOTHING`,
+        ['fica-address-check-2026-11',
+         'The automated FICA check now verifies the client\u2019s address',
+         'A fourth step, through Datanamix: the residential address the credit bureaus hold for the client '
+         + 'is compared with the address on their profile \u2014 street number, street name and postal code, '
+         + 'with abbreviations like \u201cCres\u201d read as \u201cCrescent\u201d. A match passes the step. It goes to '
+         + 'review when the addresses differ, when the profile only matches an older bureau address (the client '
+         + 'may have moved), when there is no address on the profile, when the bureaus hold none for the client, '
+         + 'or when the client is listed with the Southern African Fraud Prevention Service (SAFPS). It never '
+         + 'fails a client on its own. The panel shows the address on file beside the bureaus\u2019, current and '
+         + 'past. It does not replace the proof-of-address document.',
+         'KYC / FICA \u2192 FICA Pipeline tab \u2192 Checks on a client \u2192 the Address row of a check. Run check now '
+         + 'to run it for a client checked before it existed.']);
+      if (rowCount) console.log('\u2705 Announced the address check.');
     });
 
     await step("29. Say which pool each platform fee was charged against", async () => {

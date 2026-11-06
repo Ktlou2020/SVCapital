@@ -6204,6 +6204,17 @@ function _fcStep(label, step, fallbackProvider) {
         ${m.id ? `<div style="color:#7a92a8;font-family:monospace;font-size:0.68rem">${_esc(m.id)}</div>` : ''}
       </div>`).join('')}</div>`;
   }
+  /* The address step: what is on file beside what the bureaus hold, so a
+     reviewer can see the difference rather than be told there is one. */
+  if (step.onFile !== undefined || (step.bureau && step.bureau.length)) {
+    const row = (k, v, hl) => `<div style="display:grid;grid-template-columns:124px 1fr;gap:8px;font-size:0.74rem;margin-top:3px">
+      <span style="color:var(--text-muted)">${k}</span><span style="color:${hl ? '#22c55e' : 'var(--text)'}">${v}</span></div>`;
+    matches += `<div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07)">
+      ${row('On file', step.onFile ? _esc(step.onFile) : '<em style="color:var(--text-muted)">none</em>')}
+      ${(step.bureau || []).map((b, i) => row(b.current ? 'Bureau (current)' : `Bureau${b.lastUpdated ? ' ' + _esc(b.lastUpdated) : ''}`,
+          _esc(b.address) + (step.matchedOn === b.address ? ' <i class="fa-solid fa-check"></i>' : ''), step.matchedOn === b.address)).join('')}
+    </div>`;
+  }
   return `<div style="display:grid;grid-template-columns:120px 1fr;gap:10px;padding:8px 0;border-top:1px solid rgba(255,255,255,0.05)">
     <div style="font-size:0.75rem;font-weight:600;color:var(--text-muted)">${label}${provider ? `<div style="font-weight:400;font-size:0.68rem">${_esc(provider)}</div>` : ''}</div>
     <div>${_fcBadge(step.status)}
@@ -6413,6 +6424,7 @@ async function _renderFicaChecks() {
         ${_fcStep('ID number', c.id_check, 'Smile Identity')}
         ${_fcStep('Bank account', c.bank, 'Stitch')}
         ${_fcStep('Sanctions / PEP', c.sanctions, '')}
+        ${c.address_check && c.address_check.status !== 'skipped' ? _fcStep('Address', c.address_check, '') : ''}
         ${c.review ? _fcReviewRecord(c.review) : ''}
         ${c.id === d.openReviewId ? _fcDecisionBox(c, d.viewer || {}, d.heldBy) : ''}
       </div>`).join('');
@@ -19020,7 +19032,7 @@ async function _loadFicaProviders() {
     }
     el.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,.03);border:1px solid ${tone}44;font-size:0.8rem">
       <span style="color:${tone}"><i class="fa-solid fa-circle" style="font-size:0.5rem;vertical-align:middle;margin-right:6px"></i>${text}</span>
-      <span style="color:#7a92a8">SA ID: ${NAMES[steps.sa_id] || '—'} · Passport: ${NAMES[steps.passport] || '—'} · Bank: ${NAMES[steps.bank] || '—'} · Sanctions/PEP: ${NAMES[steps.sanctions] || '—'}</span>
+      <span style="color:#7a92a8">SA ID: ${NAMES[steps.sa_id] || '—'} · Passport: ${NAMES[steps.passport] || '—'} · Bank: ${NAMES[steps.bank] || '—'} · Sanctions/PEP: ${NAMES[steps.sanctions] || '—'} · Address: ${NAMES[steps.address_check] || '—'}</span>
     </div>`;
   } catch (e) {
     el.innerHTML = '';

@@ -45,7 +45,7 @@ router.get('/status/:investorId', requireAuth, async (req, res) => {
 
     const { rows: checks } = await pool.query(
       `SELECT id, trigger, id_check_status, bank_check_status, sanctions_check_status,
-              overall_status, check_date
+              address_check_status, overall_status, check_date
        FROM fica_checks
        WHERE investor_id = $1
        ORDER BY check_date DESC
@@ -170,6 +170,7 @@ router.get(
         passport:  'smile',
         bank:      dnx.enabled ? 'datanamix' : 'stitch',
         sanctions: dnx.enabled ? 'datanamix' : 'none',
+        address_check: dnx.enabled ? 'datanamix' : 'none',
       },
       smile:  { configured: smileReady },
       stitch: { configured: stitchReady },
@@ -213,6 +214,7 @@ router.get(
         `SELECT id, trigger, check_date, overall_status,
                 id_check_status, id_result, bank_check_status, bank_result,
                 sanctions_check_status, sanctions_result,
+                address_check_status, address_result,
                 review_decision, review_note, reviewed_by, reviewed_by_role, reviewed_at, match_outcome,
                 reversed_by, reversed_by_role, reversed_at, reversal_note
            FROM fica_checks
@@ -234,6 +236,15 @@ router.get(
           id_check:  _step(c.id_check_status, c.id_result),
           bank:      _step(c.bank_check_status, c.bank_result),
           sanctions,
+          address_check: (() => {
+            const a = _step(c.address_check_status, c.address_result);
+            const r = c.address_result || {};
+            a.onFile = r.onFile || null;
+            a.bureau = Array.isArray(r.bureau) ? r.bureau.slice(0, 5) : [];
+            a.matchedOn = r.matchedOn || null;
+            a.safps = !!r.safps;
+            return a;
+          })(),
           review: c.review_decision ? {
             decision: c.review_decision, note: c.review_note, by: c.reviewed_by,
             role: c.reviewed_by_role, at: c.reviewed_at, matchOutcome: c.match_outcome || null,

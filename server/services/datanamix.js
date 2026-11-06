@@ -385,6 +385,137 @@ function mapSanctionsResult(resp) {
   };
 }
 
+/* ═══ Address verification (Address Plus Profile IDV) ═════════════
+   The residential address the credit bureaus hold for a person, found by
+   surname plus SA ID or passport number, with their address history and
+   fraud indicators (including a SAFPS listing). We compare it with the
+   address on the client's profile. */
+async function verifyAddress({ reference, surname, idNumber, passportNumber }) {
+  const payload = {
+    ClientReference: String(reference || `SVC-ADDR-${Date.now()}`).slice(0, 50),
+    Surname:         String(surname || '').trim(),
+  };
+  /* Exactly one of the two — both, or neither, is a validation error. */
+  if (passportNumber) payload.PassportNumber = String(passportNumber).replace(/\s+/g, '');
+  else                payload.IDNumber       = String(idNumber || '').replace(/\s+/g, '');
+  return _post('/v1/kyc/address-plus-profile-idv', payload);
+}
+
+/* Street words written two ways on SA addresses, read as one. */
+const _ADDR_WORDS = {
+  st: 'street', str: 'street', rd: 'road', ave: 'avenue', av: 'avenue', dr: 'drive', drv: 'drive',
+  cres: 'crescent', cr: 'crescent', cl: 'close', ln: 'lane', pl: 'place', blvd: 'boulevard',
+  ext: 'extension', hwy: 'highway', ct: 'court', crt: 'court', sq: 'square', tce: 'terrace', est: 'estate',
+};
+const _ADDR_GENERIC = new Set(['street', 'road', 'avenue', 'drive', 'crescent', 'close', 'lane', 'place',
+  'boulevard', 'extension', 'highway', 'court', 'square', 'terrace', 'estate', 'unit', 'flat', 'no',
+  'south', 'africa', 'za', 'gauteng', 'western', 'cape', 'kwazulu', 'natal', 'eastern', 'northern',
+  'free', 'state', 'limpopo', 'mpumalanga', 'north', 'west', 'the', 'of']);
+
+function _addrTokens(s) {
+  return _tokens(s).map(t => _ADDR_WORDS[t] || t);
+}
+
+/* The parts of an address that identify it: the street number, the
+   distinctive words (street and suburb names, not "Road" or "Gauteng"),
+   and the four-digit postal code. */
+function _addrParts(s) {
+  const toks   = _addrTokens(s);
+  const postal = toks.filter(t => /^\d{4}$/.test(t)).pop() || null;
+  const number = toks.find(t => /^\d+[a-z]?$/.test(t) && t !== postal) || null;
+  const words  = new Set(toks.filter(t => !/^\d/.test(t) && t.length > 1 && !_ADDR_GENERIC.has(t)));
+  return { postal, number, words, text: String(s || '').trim() };
+}
+
+/* Does the address on file describe the same place as a bureau address?
+   The street number and at least one distinctive name must agree, and the
+   postal codes must not contradict each other where both are known. */
+function _sameAddress(mine, theirs) {
+  if (!mine.words.size || !theirs.words.size) return false;
+  if (mine.postal && theirs.postal && mine.postal !== theirs.postal) return false;
+  if (mine.number && theirs.number && mine.number !== theirs.number) return false;
+  if (!(mine.number && theirs.number) && !(mine.postal && theirs.postal)) return false;
+  let shared = 0;
+  for (const w of mine.words) if (theirs.words.has(w)) shared++;
+  return shared >= 1 && shared / mine.words.size >= 0.5;
+}
+
+/* The client's address as their profile holds it: the structured fields,
+   or the older free-text one. */
+function clientAddress(investor = {}) {
+  const parts = [investor.street_address, investor.suburb, investor.province, investor.postal_code]
+    .map(x => String(x || '').trim()).filter(Boolean);
+  if (parts.length && String(investor.street_address || '').trim()) return parts.join(', ');
+  return String(investor.address || '').trim() || (parts.length ? parts.join(', ') : '');
+}
+
+/* → { status: 'pass'|'manual_review'|'error', reasons, onFile, bureau, matchedOn, safps }
+
+   Never 'fail': a client whose address differs from the bureaus' has very
+   often just moved, and that is a person's call, not a rejection. */
+function mapAddressResult(resp, investor = {}) {
+  const onFile = clientAddress(investor);
+  const base = { onFile: onFile || null, bureau: [], matchedOn: null, safps: false };
+  if (!resp || typeof resp !== 'object') return { ...base, status: 'error', reasons: ['no response'] };
+  const code = Number(resp.ResponseCode);
+  if (resp.Success !== true || code !== 0) {
+    const msg = _messages(resp);
+    if (code === 4) return { ...base, status: 'manual_review', reasons: ['The credit bureaus hold no address for this client — confirm it from their proof of address'] };
+    if (code === 6) return { ...base, status: 'manual_review', reasons: [`Address lookup rejected the details sent${msg ? ': ' + msg : ''}`] };
+    return { ...base, status: 'error', reasons: [msg || `ResponseCode ${resp.ResponseCode}`] };
+  }
+
+  const r = resp.Result || {};
+  const detail  = r.ConsumerDetail || {};
+  const flags   = r.ConsumerFraudIndicatorsSummary || {};
+  const history = Array.isArray(r.ConsumerAddressHistory) ? r.ConsumerAddressHistory : [];
+
+  /* Current first, then the history newest-first; residential only. */
+  const seen = new Set();
+  const bureau = [];
+  const push = (text, when, current) => {
+    const t = String(text || '').trim();
+    if (!t || seen.has(t.toLowerCase())) return;
+    seen.add(t.toLowerCase());
+    bureau.push({ address: t, lastUpdated: when || null, current });
+  };
+  push(detail.ResidentialAddress, null, true);
+  history
+    .filter(h => !h.AddressTypeIndicator || String(h.AddressTypeIndicator).toUpperCase() === 'R'
+              || /resid/i.test(h.AddressType || ''))
+    .sort((a, b) => String(b.LastUpdatedDate || '').localeCompare(String(a.LastUpdatedDate || '')))
+    .forEach(h => push(h.Address || [h.Address1, h.Address2, h.Address3, h.Address4, h.PostalCode].filter(Boolean).join(' '),
+                       h.LastUpdatedDate, false));
+
+  const safps   = String(flags.SAFPSListingYN || '').toLowerCase().startsWith('y');
+  const reasons = [];
+  if (safps) reasons.push('Listed with the Southern African Fraud Prevention Service (SAFPS)');
+
+  const out = { ...base, bureau: bureau.slice(0, 10), safps };
+  if (!onFile) {
+    reasons.push('No residential address on the client\'s profile to compare with');
+    return { ...out, status: 'manual_review', reasons };
+  }
+  if (!bureau.length) {
+    reasons.push('The credit bureaus hold no residential address for this client — confirm it from their proof of address');
+    return { ...out, status: 'manual_review', reasons };
+  }
+
+  const mine = _addrParts(onFile);
+  const hit  = bureau.find(b => _sameAddress(mine, _addrParts(b.address)));
+  if (!hit) {
+    reasons.push(`Address on file does not match the bureaus' — on file: "${onFile}"; bureau: "${bureau[0].address}"`);
+    return { ...out, status: 'manual_review', reasons };
+  }
+  out.matchedOn = hit.address;
+  if (!hit.current) {
+    reasons.push(`Address on file matches an older bureau address${hit.lastUpdated ? ' (last updated ' + hit.lastUpdated + ')' : ''}; `
+               + `the bureaus' current one is "${bureau[0].address}" — the client may have moved`);
+    return { ...out, status: 'manual_review', reasons };
+  }
+  return { ...out, status: safps ? 'manual_review' : 'pass', reasons };
+}
+
 /* ─── What an operator needs to know, without the secret ──────────── */
 function describe() {
   const mode = env();
@@ -405,5 +536,6 @@ module.exports = {
   verifyIdRealtime, mapIdResult,
   verifyBankAccount, mapAvsResult, universalBranchCode,
   screenIndividual, mapSanctionsResult,
+  verifyAddress, mapAddressResult, clientAddress,
   _resetToken,
 };

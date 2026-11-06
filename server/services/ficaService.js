@@ -54,9 +54,11 @@ function ficaId() {
       when it is not
    3. Bank account check — Datanamix AVS when enabled, otherwise Stitch
    4. Sanctions / PEP screen — Datanamix when enabled, otherwise skipped
+   4b. Address — Datanamix Address Plus when enabled: the bureaus' residential
+      address against the profile's; a mismatch goes to review, never fails
    5. Write result to fica_checks table
    6. Update investor kyc_status + last_auto_fica_check
-   Returns: { checkId, idStatus, bankStatus, sanctionsStatus, overallStatus }
+   Returns: { checkId, idStatus, bankStatus, sanctionsStatus, addressStatus, overallStatus }
    ═══════════════════════════════════════════════════════════════════════ */
 async function runFicaCheck(investor, trigger) {
   const { id: investorId, first_name, last_name, id_number, notes, date_of_birth } = investor;
@@ -168,6 +170,14 @@ async function runFicaCheck(investor, trigger) {
     }
   }
 
+  /* ── 3b. Address — the bureaus' residential address against the one on
+     the client's profile. Never fails a client: an address that differs has
+     usually just moved, and that is a person's call. */
+  let addressResult = null, addressStatus = 'skipped';
+  if (useDatanamix) {
+    ({ addressResult, addressStatus } = await _datanamixAddress(investor, isPassport));
+  }
+
   /* ── 4. Derive overall status ── */
   let overallStatus;
   if (idStatus === 'error') {
@@ -179,11 +189,14 @@ async function runFicaCheck(investor, trigger) {
        automatically: it goes to a person, whatever else passed. */
     overallStatus = 'manual_review';
   } else if (idStatus === 'pass' && (bankStatus === 'pass' || bankStatus === 'skipped')
-             && (sanctionsStatus === 'clear' || sanctionsStatus === 'skipped')) {
+             && (sanctionsStatus === 'clear' || sanctionsStatus === 'skipped')
+             && (addressStatus === 'pass' || addressStatus === 'skipped')) {
     overallStatus = 'pass';
-  } else if (idStatus === 'manual_review' || bankStatus === 'manual_review') {
+  } else if (idStatus === 'manual_review' || bankStatus === 'manual_review'
+             /* an address to confirm does not soften a bank account that failed */
+             || (addressStatus === 'manual_review' && bankStatus !== 'fail')) {
     overallStatus = 'manual_review';
-  } else if (bankStatus === 'error' || sanctionsStatus === 'error') {
+  } else if (bankStatus === 'error' || sanctionsStatus === 'error' || addressStatus === 'error') {
     // A bank or screening error shouldn't block an ID pass — but it is not a
     // pass either: somebody has to look.
     overallStatus = idStatus === 'pass' && bankStatus !== 'fail' ? 'manual_review' : 'fail';
@@ -196,15 +209,16 @@ async function runFicaCheck(investor, trigger) {
   await pool.query(
     `INSERT INTO fica_checks
        (id, investor_id, trigger, id_check_status, bank_check_status,
-        sanctions_check_status, overall_status, id_result, bank_result,
-        sanctions_result, check_date)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW())`,
+        sanctions_check_status, address_check_status, overall_status, id_result, bank_result,
+        sanctions_result, address_result, check_date)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW())`,
     [
       checkId, investorId, trigger,
-      idStatus, bankStatus, sanctionsStatus, overallStatus,
+      idStatus, bankStatus, sanctionsStatus, addressStatus, overallStatus,
       JSON.stringify(idResult || {}),
       JSON.stringify(bankResult || {}),
       JSON.stringify(sanctionsResult || {}),
+      JSON.stringify(addressResult || {}),
     ]
   );
 
@@ -281,7 +295,40 @@ async function runFicaCheck(investor, trigger) {
   }
 
   console.log(`[FICA] ${investorId} | ${trigger} | id:${idStatus} bank:${bankStatus} sanctions:${sanctionsStatus} → ${overallStatus}`);
-  return { checkId, idStatus, bankStatus, sanctionsStatus, overallStatus };
+  return { checkId, idStatus, bankStatus, sanctionsStatus, addressStatus, overallStatus };
+}
+
+/* ─── Datanamix Address Plus: the bureaus' address against the profile's ──
+   Read from the investor row here rather than trusted from the caller: the
+   nightly sweep selects a short column list without the address in it. */
+async function _datanamixAddress(investor, isPassport) {
+  const { id: investorId, last_name, id_number } = investor;
+  let profile = investor;
+  try {
+    const { rows: [p] } = await pool.query(
+      `SELECT address, street_address, suburb, province, postal_code FROM investors WHERE id = $1`, [investorId]);
+    if (p) profile = { ...investor, ...p };
+  } catch (err) {
+    return { addressStatus: 'error', addressResult: { provider: 'datanamix', error: err.message } };
+  }
+  try {
+    const raw = await datanamix.verifyAddress({
+      reference: `SVC-${investorId}`, surname: last_name,
+      idNumber: isPassport ? null : id_number, passportNumber: isPassport ? id_number : null,
+    });
+    const mapped = datanamix.mapAddressResult(raw, profile);
+    /* What a reviewer compares: the address on file and the bureaus'. The
+       rest of the bureau profile (phones, employer) stays in the raw
+       response, as it does for every other step. */
+    return { addressStatus: mapped.status,
+             addressResult: { provider: 'datanamix', product: 'address_plus_profile_idv', reasons: mapped.reasons,
+                              onFile: mapped.onFile, bureau: mapped.bureau, matchedOn: mapped.matchedOn,
+                              safps: mapped.safps, response: raw,
+                              ...(mapped.status === 'error' ? { error: mapped.reasons.join('; ') } : {}) } };
+  } catch (err) {
+    console.error(`[FICA] Datanamix address error for ${investorId}:`, err.message);
+    return { addressStatus: 'error', addressResult: { provider: 'datanamix', error: err.message } };
+  }
 }
 
 /* ─── Datanamix AVS for the account we would pay this client into ────

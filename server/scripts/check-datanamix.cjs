@@ -42,6 +42,40 @@ const PERSONAS = {
 };
 const DHA_DOWN = '8012257259082';   // answered as "DHA unavailable"
 
+/* Address Plus: the bureaus' residential address per persona. Arthur's is
+   the published sample, with an older address in his history; Loki is
+   listed with SAFPS, as the "Severe Fraud Risk" persona. */
+const DEFAULT_ADDRESS = { street: '10 Round Table Road', suburb: 'Camelot', postal: '2194' };
+const BUREAU_ADDRESS = {
+  '7603219452087': { street: '1 Camelot Crescent', suburb: 'Avalon Estate', postal: '2194',
+                     history: [{ Address: '22 Old Road Sandton 2196', LastUpdatedDate: '2019-05-01' }] },
+};
+const SAFPS_LISTED = new Set(['8304019799087']);
+function addressAnswer(b) {
+  if (/DX-ADDR-DOWN/.test(b.ClientReference || '')) return { status: 500, body: { Success: false, Messages: ['Internal System Error.'], ResponseCode: 7 } };
+  const idNo = b.IDNumber || null;
+  const p = idNo ? PERSONAS[idNo] : null;
+  /* Exact on surname, as the sandbox is. */
+  if (!p || String(b.Surname || '').toLowerCase() !== p.LastName.toLowerCase()) {
+    return { status: 200, body: { Success: false, Messages: ['No record found'], ResponseCode: 4 } };
+  }
+  const a = BUREAU_ADDRESS[idNo] || DEFAULT_ADDRESS;
+  const full = `${a.street} ${a.suburb} Gauteng ${a.postal}`;
+  return { status: 200, body: {
+    Header: { ClientReference: b.ClientReference, ReportType: 'CONSUMER' },
+    Result: {
+      ConsumerDetail: { FirstName: p.FirstName, Surname: p.LastName, IDNumber: idNo, ResidentialAddress: full, PostalAddress: '',
+                        CellularNumber: '0830000000', EmployerDetail: 'Camelot Kingdom (Pty) Ltd' },
+      ConsumerFraudIndicatorsSummary: { SAFPSListingYN: SAFPS_LISTED.has(idNo) ? 'Yes' : 'No', HomeAffairsVerificationYN: 'Yes', HomeAffairsDeceasedStatus: p.DeceasedStatus },
+      ConsumerAddressHistory: [
+        { AddressType: 'Residential', AddressTypeIndicator: 'R', LastUpdatedDate: '2026-07-11', Address: full },
+        ...((a.history || []).map(h => ({ AddressType: 'Residential', AddressTypeIndicator: 'R', ...h }))),
+        { AddressType: 'Postal', AddressTypeIndicator: 'P', LastUpdatedDate: '2026-07-11', Address: 'PO Box 1 Camelot 2194' },
+      ],
+    },
+    Success: true, Messages: ['Sandbox data returned'], ResponseCode: 0 } };
+}
+
 function idvAnswer(idNo) {
   if (idNo === DHA_DOWN) return { Success: false, Messages: ['DHA Unavailable'], ResponseCode: 5 };
   const p = PERSONAS[idNo];
@@ -120,6 +154,7 @@ function fakeFetch(url, init = {}) {
   if (u.pathname === '/v1/id-verification/realtime') return reply(200, idvAnswer(body.IdNumber));
   if (u.pathname === '/v1/bank/account-verification') return reply(200, avsAnswer(body));
   if (u.pathname === '/v1/sanctions-standard/SanctionsIndividual') return reply(200, sanctionsAnswer(body));
+  if (u.pathname === '/v1/kyc/address-plus-profile-idv') { const a = addressAnswer(body); return reply(a.status, a.body); }
   return reply(404, { Success: false, Messages: ['unknown route'], ResponseCode: 404 });
 }
 global.fetch = fakeFetch;
@@ -268,6 +303,29 @@ async function unitPart() {
   ok('a failed screen is an error, never a clear',
      dnx.mapSanctionsResult({ Success: false, Messages: ['Internal System Error.'], ResponseCode: 7 }).status === 'error');
 
+  console.log('\nreading an address answer');
+  const ad = (resp, a) => dnx.mapAddressResult(resp, a);
+  const arthurAddr = addressAnswer({ IDNumber: '7603219452087', Surname: 'Pendragon', ClientReference: 'U' }).body;
+  ok('the same address, abbreviated, passes', ad(arthurAddr, { street_address: '1 Camelot Cres', suburb: 'Avalon Est', postal_code: '2194' }).status === 'pass');
+  ok('a different house number on the same street is not a match',
+     ad(arthurAddr, { street_address: '2 Camelot Crescent', postal_code: '2194' }).status === 'manual_review');
+  ok('a different postal code is not a match',
+     ad(arthurAddr, { street_address: '1 Camelot Crescent', postal_code: '2001' }).status === 'manual_review');
+  const moved = ad(arthurAddr, { street_address: '22 Old Rd', suburb: 'Sandton', postal_code: '2196' });
+  ok('matching only an older bureau address is a review: the client may have moved',
+     moved.status === 'manual_review' && /older bureau address/.test(moved.reasons.join(' ')), JSON.stringify(moved.reasons));
+  ok('a postal address in the history is never compared', !ad(arthurAddr, { street_address: 'PO Box 1', suburb: 'Camelot', postal_code: '2194' }).matchedOn);
+  ok('the older free-text address field is used when the structured one is empty',
+     ad(arthurAddr, { address: '1 Camelot Crescent, Avalon Estate, Johannesburg 2194' }).status === 'pass');
+  ok('no address on file is a review, not a failure', ad(arthurAddr, {}).status === 'manual_review');
+  ok('a bureau "no record" is a review, not a failure',
+     ad({ Success: false, Messages: ['No record found'], ResponseCode: 4 }, { street_address: '1 X Road' }).status === 'manual_review');
+  ok('an address step can never fail a client', !['fail'].includes(ad({ Success: false, ResponseCode: 6, Messages: ['Invalid RSA ID number'] }, {}).status));
+  const lokiAddr = addressAnswer({ IDNumber: '8304019799087', Surname: 'Laufeyson', ClientReference: 'U' }).body;
+  const saf = ad(lokiAddr, { street_address: '10 Round Table Road', suburb: 'Camelot', postal_code: '2194' });
+  ok('a SAFPS listing holds a matching address for review, naming SAFPS',
+     saf.status === 'manual_review' && saf.safps === true && /SAFPS/.test(saf.reasons.join(' ')), JSON.stringify(saf));
+
   calls.length = 0;
   await dnx.screenIndividual({ firstName: 'Arthur', lastName: 'Pendragon', dateOfBirth: '1976-03-21', idNumber: '7603219452087' });
   const sc = calls.find(c => c.path === '/v1/sanctions-standard/SanctionsIndividual').body;
@@ -300,12 +358,19 @@ async function dbPart() {
     pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: SSL, max: 2 });
     pool.on('error', () => {});
 
-    const add = (id, first, last, idNo, dob, extra = {}) => pool.query(`
+    /* Each test investor's address on file is, by default, the one the
+       bureaus hold for their persona — so the address step passes unless a
+       test sets out to make it differ. */
+    const add = (id, first, last, idNo, dob, extra = {}) => {
+      const a = extra.noAddress ? {} : (extra.address || BUREAU_ADDRESS[idNo] || DEFAULT_ADDRESS);
+      return pool.query(`
       INSERT INTO investors (id, first_name, last_name, email, status, kyc_status, id_number,
-          date_of_birth, nationality, notes, bank_name, bank_account_number, bank_branch_code, bank_account_type)
-      VALUES ($1,$2,$3,$1 || '@example.test','active','pending',$4,$5,'South African',$6,$7,$8,$9,$10)`,
+          date_of_birth, nationality, notes, bank_name, bank_account_number, bank_branch_code, bank_account_type,
+          street_address, suburb, postal_code, address)
+      VALUES ($1,$2,$3,$1 || '@example.test','active','pending',$4,$5,'South African',$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
       [id, first, last, idNo, dob, extra.notes || null, extra.bank || null, extra.acct || null,
-       extra.branch || null, extra.type || null]);
+       extra.branch || null, extra.type || null, a.street || null, a.suburb || null, a.postal || null, extra.legacyAddress || null]);
+    };
 
     await add('DX-GUIN',  'Guinevere', 'Pendragon', '7906124223083', '1979-06-12');
     await add('DX-ART',   'Arthur',    'Pendragon', '7603219452087', '1976-03-21',
@@ -431,6 +496,47 @@ async function dbPart() {
        pp.sanctionsStatus === 'clear' && lastScreen.body.Name === 'Ama Mensah' && lastScreen.body.Country === 'GH',
        JSON.stringify(lastScreen && lastScreen.body));
 
+    console.log('\nthe address step, end to end');
+    const addrCall = () => calls.filter(c => c.path === '/v1/kyc/address-plus-profile-idv').pop();
+    ok('the clean client\'s check ran the address step and passed it', (await row('DX-GUIN')).address_check_status === 'pass');
+    ok('sending the surname and the SA ID, not a passport',
+       (() => { const b = calls.filter(c => c.path === '/v1/kyc/address-plus-profile-idv' && c.body.IDNumber === '7906124223083')[0];
+                return b && b.body.Surname === 'Pendragon' && !('PassportNumber' in b.body); })());
+    ok('a passport holder\'s lookup sends the passport number instead',
+       calls.some(c => c.path === '/v1/kyc/address-plus-profile-idv' && c.body.PassportNumber === 'G1234567' && !('IDNumber' in c.body)));
+
+    await add('DX-ADDR-ABBR', 'Guinevere', 'Pendragon', '7906124223083', '1979-06-12',
+              { address: { street: '10 Round Table Rd', suburb: 'Camelot', postal: '2194' } });
+    ok('an abbreviated street on file still passes', (await run('DX-ADDR-ABBR')).overallStatus === 'pass');
+
+    await add('DX-ADDR-DIFF', 'Guinevere', 'Pendragon', '7906124223083', '1979-06-12',
+              { address: { street: '5 Other Street', suburb: 'Durban', postal: '4001' } });
+    const adDiff = await run('DX-ADDR-DIFF');
+    ok('a different address holds an otherwise clean client for review',
+       adDiff.addressStatus === 'manual_review' && adDiff.overallStatus === 'manual_review'
+       && (await inv('DX-ADDR-DIFF')).kyc_status === 'pending', JSON.stringify(adDiff));
+
+    await add('DX-ADDR-NONE', 'Guinevere', 'Pendragon', '7906124223083', '1979-06-12', { noAddress: true });
+    const adNone = await run('DX-ADDR-NONE');
+    ok('no address on the profile is a review', adNone.addressStatus === 'manual_review'
+       && /No residential address/.test((await row('DX-ADDR-NONE')).address_result.reasons.join(' ')));
+
+    await add('DX-ADDR-FREE', 'Guinevere', 'Pendragon', '7906124223083', '1979-06-12',
+              { noAddress: true, legacyAddress: '10 Round Table Road, Camelot, Gauteng 2194' });
+    ok('the older free-text address on a profile is checked too', (await run('DX-ADDR-FREE')).addressStatus === 'pass');
+
+    await add('DX-ADDR-SAFPS', 'Loki', 'Laufeyson', '8304019799087', '1983-04-01');
+    const adSaf = await run('DX-ADDR-SAFPS');
+    ok('a SAFPS listing holds the client for review', adSaf.addressStatus === 'manual_review' && adSaf.overallStatus === 'manual_review'
+       && (await row('DX-ADDR-SAFPS')).address_result.safps === true, JSON.stringify(adSaf));
+    ok('and an address to confirm does not soften a bank account that failed',
+       (await run('DX-LOKI')).overallStatus === 'fail');
+
+    await add('DX-ADDR-DOWN', 'Guinevere', 'Pendragon', '7906124223083', '1979-06-12');
+    const adDown = await run('DX-ADDR-DOWN');
+    ok('an address lookup that cannot run holds a clean client for review — never a pass',
+       adDown.addressStatus === 'error' && adDown.overallStatus === 'manual_review', JSON.stringify(adDown));
+
     console.log('\nstaff can read what the checks found; the client cannot');
     const jwt = require(path.join(ROOT, 'server', 'node_modules', 'jsonwebtoken'));
     delete require.cache[require.resolve(path.join(ROOT, 'server', 'routes', 'fica.js'))];
@@ -464,6 +570,12 @@ async function dbPart() {
     ok('and the watch-list match itself, named',
        latest && latest.sanctions.matches[0] && latest.sanctions.matches[0].list === 'PEP'
        && latest.sanctions.matches[0].name === 'Arthur Pendragon', JSON.stringify(latest && latest.sanctions));
+    const gChecks = (await call('GET', '/checks/DX-ADDR-DIFF', ADMIN)).body.checks[0].address_check;
+    ok('the panel gets the address on file beside the bureaus\'',
+       gChecks && gChecks.status === 'manual_review' && /5 Other Street/.test(gChecks.onFile)
+       && gChecks.bureau[0] && gChecks.bureau[0].current === true && /Round Table Road/.test(gChecks.bureau[0].address),
+       JSON.stringify(gChecks));
+    ok('but not the rest of the bureau profile', !/0830000000|Camelot Kingdom/.test(JSON.stringify(gChecks)));
     ok('but never the raw provider response',
        !JSON.stringify(staff.body).includes('"response"'), 'reasons and matches are what a reviewer needs');
     ok('a review shows its reason',
@@ -474,7 +586,8 @@ async function dbPart() {
        JSON.stringify(status.body && status.body.checks));
     ok('the provider strip is told Datanamix runs every step but passports',
        prov.body && prov.body.steps.sa_id === 'datanamix' && prov.body.steps.passport === 'smile'
-       && prov.body.steps.sanctions === 'datanamix' && prov.body.datanamix.environment === 'SANDBOX',
+       && prov.body.steps.sanctions === 'datanamix' && prov.body.steps.address_check === 'datanamix'
+       && prov.body.datanamix.environment === 'SANDBOX',
        JSON.stringify(prov.body));
     ok('and never a key', !JSON.stringify(prov.body).includes('api-password'));
 
@@ -670,6 +783,10 @@ async function dbPart() {
       ok('though it is still recorded as having checked them', hAfter.last_auto_fica_check !== null);
       const { rows: [ann3] } = await pool.query(
         `SELECT where_to_find FROM feature_announcements WHERE id = 'fica-decline-hold-2026-11'`);
+      const { rows: [ann4] } = await pool.query(
+        `SELECT where_to_find, body FROM feature_announcements WHERE id = 'fica-address-check-2026-11'`);
+      ok('staff are told about the address check, and where to see it',
+         ann4 && /Address row/.test(ann4.where_to_find) && /never\s+fails a client/.test(ann4.body.replace(/'\s*\+\s*'/g, '')), JSON.stringify(ann4 && ann4.where_to_find));
       ok('staff are told a decline holds the client, and where a director reverses it',
          ann3 && /Held: FICA review declined/.test(ann3.where_to_find) && /directors only/.test(ann3.where_to_find), JSON.stringify(ann3));
 
@@ -780,6 +897,13 @@ function uiPart() {
      (js.match(/[^\n]*\binv\.kyc_status *=== *'approved'[^\n]*/g) || []).filter(l => !/verified/.test(l)).join('\n'));
   ok('approving documents while a review is open says the client is held, not that it failed',
      /if \(result\.held\) Toast\.warning/.test(js));
+
+  console.log('\nthe address step, in the console');
+  ok('a check shows an Address row when the step ran',
+     /c\.address_check && c\.address_check\.status !== 'skipped' \? _fcStep\('Address', c\.address_check, ''\)/.test(js));
+  ok('with the address on file beside the bureaus\' current and past ones',
+     /row\('On file'/.test(js) && /b\.current \? 'Bureau \(current\)'/.test(js));
+  ok('the provider strip lists the address step', /Address: \$\{NAMES\[steps\.address_check\]/.test(js));
 
   console.log('\na declined review\'s hold, in the console');
   ok('the checks panel shows the hold at the top', /_fcHoldBox\(d\.heldBy, d\.viewer \|\| \{\}\)/.test(js));
