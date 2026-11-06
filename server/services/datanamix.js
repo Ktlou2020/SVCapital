@@ -300,7 +300,7 @@ function mapAvsResult(resp) {
   const code = Number(resp.ResponseCode);
   if (resp.Success !== true || code !== 0) {
     const msg = _messages(resp);
-    if (code === 4) return { status: 'fail',          reasons: ['Bank has no record of this account'] };
+    if (code === 4) return { status: 'fail', notFound: true, reasons: ['Bank has no record of this account'] };
     if (code === 6) return { status: 'manual_review', reasons: [`Bank details rejected as invalid${msg ? ': ' + msg : ''}`] };
     /* 5 = the bank is not in AVS real-time or could not be reached. Not the
        client's fault, and not ours to fix by retrying tonight. */
@@ -311,7 +311,7 @@ function mapAvsResult(resp) {
   const yes = v => String(v || '').toLowerCase() === 'yes';
   const no  = v => String(v || '').toLowerCase() === 'no';
 
-  if (!yes(a.accountFound))  return { status: 'fail', reasons: ['Account not found at the bank'] };
+  if (!yes(a.accountFound))  return { status: 'fail', notFound: true, reasons: ['Account not found at the bank'] };
   if (no(a.identityMatch))   return { status: 'fail', reasons: ['Account is not held under this ID number'] };
   if (no(a.accountOpen))     return { status: 'fail', reasons: ['Account is closed'] };
   if (no(a.acceptsCredits))  return { status: 'fail', reasons: ['Account does not accept credits'] };

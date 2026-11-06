@@ -310,7 +310,8 @@ async function _datanamixBank(investor, isPassport) {
 
   if (!acct) return { bankStatus: 'skipped', bankResult: null };
 
-  const branch = acct.branch || datanamix.universalBranchCode(acct.bank);
+  const branchFilledIn = !String(acct.branch || '').trim();
+  const branch = branchFilledIn ? datanamix.universalBranchCode(acct.bank) : acct.branch;
   if (!branch) {
     return { bankStatus: 'manual_review', bankResult: { provider: 'datanamix',
       reasons: [`No branch code on file and none known for "${acct.bank || 'unnamed bank'}"`] } };
@@ -330,8 +331,20 @@ async function _datanamixBank(investor, isPassport) {
       email:         acct.email,
     });
     const mapped = datanamix.mapAvsResult(raw);
+    /* A "no such account" is only the client's to answer for if the branch
+       code was theirs. When it was ours — the bank's universal code, filled
+       in because they gave none — the miss may be our guess, so a person
+       looks rather than the client being failed on it. Every other bank
+       outcome (closed, someone else's ID) does not depend on the branch
+       code and stands. */
+    if (branchFilledIn && mapped.status === 'fail' && mapped.notFound) {
+      mapped.status  = 'manual_review';
+      mapped.reasons = [...mapped.reasons,
+        `Branch code ${branch} was filled in from the bank's universal code because none was on file — confirm the client's branch code`];
+    }
     return { bankStatus: mapped.status,
-             bankResult: { provider: 'datanamix', product: 'avs', reasons: mapped.reasons, response: raw } };
+             bankResult: { provider: 'datanamix', product: 'avs', reasons: mapped.reasons,
+                           branchCodeFilledIn: branchFilledIn, response: raw } };
   } catch (err) {
     console.error(`[FICA] Datanamix AVS error for ${investorId}:`, err.message);
     return { bankStatus: 'error', bankResult: { provider: 'datanamix', error: err.message } };

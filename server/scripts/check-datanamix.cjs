@@ -37,6 +37,8 @@ const PERSONAS = {
   '8802142683086': { FirstName: 'Elaine',    LastName: 'Astolat',   Names: 'Elaine',    DateOfBirth: '1988-02-14', DeceasedStatus: 'Deceased' },
   '8304019799087': { FirstName: 'Loki',      LastName: 'Laufeyson', Names: 'Loki',      DateOfBirth: '1983-04-01', DeceasedStatus: 'Alive' },
   '8205199001089': { FirstName: 'Lancelot',  LastName: 'Du Lac',    Names: 'Lancelot',  DateOfBirth: '1982-05-19', DeceasedStatus: 'Alive' },
+  '6811017954086': { FirstName: 'Merlin',    LastName: 'Ambrosius', Names: 'Merlin',    DateOfBirth: '1968-11-01', DeceasedStatus: 'Alive' },
+  '8604091870080': { FirstName: 'Nimue',     LastName: 'Avalon',    Names: 'Nimue',     DateOfBirth: '1986-04-09', DeceasedStatus: 'Alive' },
 };
 const DHA_DOWN = '8012257259082';   // answered as "DHA unavailable"
 
@@ -61,7 +63,9 @@ const ACCOUNTS = {
   SB5345: { id: '8304019799087', open: false },   // Loki, closed
 };
 function avsAnswer(b) {
-  const a = ACCOUNTS[b.BankAccountNumber];
+  /* Exact on account AND branch, as the sandbox is: its accounts are
+     seeded at branch 250655 and found under no other code. */
+  const a = b.BankBranchCode === '250655' ? ACCOUNTS[b.BankAccountNumber] : null;
   if (!a) return { Success: false, Messages: ['No record found'], ResponseCode: 4 };
   const y = v => (v ? 'Yes' : 'No');
   return {
@@ -224,7 +228,7 @@ async function unitPart() {
      m({ Success: false, Messages: ['Internal System Error.'], ResponseCode: 7 }, arthur).status === 'error');
 
   console.log('\nreading a bank answer');
-  const a = (acc, id) => dnx.mapAvsResult(avsAnswer({ BankAccountNumber: acc, IdentityNumber: id }));
+  const a = (acc, id) => dnx.mapAvsResult(avsAnswer({ BankAccountNumber: acc, IdentityNumber: id, BankBranchCode: '250655' }));
   ok('an open account held under this ID passes', a('SB1233', '7603219452087').status === 'pass');
   ok('a closed account fails', a('SB5345', '8304019799087').status === 'fail');
   ok('an account held under somebody else\'s ID fails', a('SB1233', '7906124223083').status === 'fail');
@@ -307,6 +311,15 @@ async function dbPart() {
     await add('DX-ART',   'Arthur',    'Pendragon', '7603219452087', '1976-03-21',
               { bank: 'FNB', acct: 'SB1233', type: 'cheque' });          // branch from the universal code
     await add('DX-ELA',   'Elaine',    'Astolat',   '8802142683086', '1988-02-14');
+    /* The same account, no branch code on file: Standard Bank's universal
+       code is filled in, and the bank does not find it there. */
+    await add('DX-GUESS', 'Merlin',    'Ambrosius', '6811017954086', '1968-11-01',
+              { bank: 'Standard Bank', acct: 'SB1233', type: 'current' });
+    /* And the client's OWN branch code, wrong. */
+    await add('DX-WRONG', 'Nimue',     'Avalon',    '8604091870080', '1986-04-09',
+              { bank: 'Standard Bank', acct: 'SB1233', branch: '051001', type: 'current' });
+    await add('DX-LOKI2', 'Loki',      'Laufeyson', '8304019799087', '1983-04-01',
+              { bank: 'FNB', acct: 'SB5345', type: 'current' });   // branch filled in, account closed
     await add('DX-LOKI',  'Loki',      'Laufeyson', '8304019799087', '1983-04-01',
               { bank: 'Standard Bank', acct: 'SB5345', branch: '250655', type: 'current' });
     await add('DX-DOWN',  'Gawain',    'Green',     DHA_DOWN,        '1980-12-25');
@@ -373,6 +386,25 @@ async function dbPart() {
        el.overallStatus === 'fail' && (await inv('DX-ELA')).kyc_status === 'rejected', JSON.stringify(el));
     const lo = await run('DX-LOKI');
     ok('a closed bank account fails the check', lo.bankStatus === 'fail' && lo.overallStatus === 'fail', JSON.stringify(lo));
+
+    console.log('\na branch code we filled in is ours to doubt, not the client\'s');
+    const gu = await run('DX-GUESS');
+    const guSent = calls.filter(c => c.path === '/v1/bank/account-verification').pop();
+    ok('with no branch code on file, Standard Bank\'s universal code is sent',
+       guSent && guSent.body.BankBranchCode === '051001', JSON.stringify(guSent && guSent.body));
+    ok('and the bank not finding the account there is a review, not a failure',
+       gu.bankStatus === 'manual_review' && gu.overallStatus === 'manual_review', JSON.stringify(gu));
+    ok('the client is left pending, not rejected', (await inv('DX-GUESS')).kyc_status === 'pending');
+    const guRow = await row('DX-GUESS');
+    ok('and the reason says the branch code was filled in, and which',
+       /filled in/.test(guRow.bank_result.reasons.join(' ')) && /051001/.test(guRow.bank_result.reasons.join(' '))
+       && guRow.bank_result.branchCodeFilledIn === true, JSON.stringify(guRow.bank_result.reasons));
+    const wr = await run('DX-WRONG');
+    ok('the client\'s own branch code, not found, still fails',
+       wr.bankStatus === 'fail' && wr.overallStatus === 'fail', JSON.stringify(wr));
+    const lo2 = await run('DX-LOKI2');
+    ok('a closed account still fails when we filled in the branch',
+       lo2.bankStatus === 'fail' && lo2.overallStatus === 'fail', `${JSON.stringify(lo2)} — only "not found" depends on the branch code`);
 
     console.log('\nwhat is only doubtful, goes to a person');
     const la = await run('DX-LANCE');
@@ -476,6 +508,23 @@ function uiPart() {
   ok('a check can be run from it, after a confirmation', /async function runFicaCheckNow[\s\S]{0,600}Confirm\.ask/.test(js));
   ok('the provider strip has somewhere to render', /id="ficaProviderStrip"/.test(html) && /fica\/providers/.test(js));
   ok('match names are escaped before they are shown', /_esc\(m\.name \|\| 'Unnamed'\)/.test(js));
+
+  /* Found on staging: a client held on a possible PEP match still showed
+     "Not Started" — the stage was worked out from uploaded documents only. */
+  const stageFn = (js.match(/function _ficaStageOf\(inv\) \{[\s\S]*?\n\}/) || [''])[0];
+  let stageOf = null;
+  try { stageOf = new Function('STATE', stageFn + '; return _ficaStageOf;')({ kyc: [] }); } catch (_) {}
+  ok('a client whose automated check needs review is In Review, not Not Started',
+     stageOf && stageOf({ id: 'X', kyc_status: 'pending', fica_auto_status: 'manual_review' }) === 'in_review');
+  ok('a client the check rejected is under Rejected / Issues',
+     stageOf && stageOf({ id: 'X', kyc_status: 'rejected', fica_auto_status: 'fail' }) === 'rejected');
+  ok('a verified client is still Approved', stageOf && stageOf({ id: 'X', kyc_status: 'verified', fica_auto_status: 'pass' }) === 'approved');
+  ok('and one never checked, with no documents, is still Not Started', stageOf && stageOf({ id: 'X', kyc_status: 'pending' }) === 'not_started');
+  ok('each row shows the last automated result under its stage', /\$\{stageBadge\}\$\{_fcAutoLine\(inv\)\}/.test(js));
+  ok('the panel opens with the client\'s KYC status and stage',
+     /el\.innerHTML = summary \+ checks\.map/.test(js) && /cell\('KYC status'/.test(js) && /cell\('FICA stage'/.test(js));
+  ok('and a check run from it updates the row behind it',
+     /Object\.assign\(local, \{ kyc_status: d\.investor\.kyc_status, fica_auto_status/.test(js));
 
   /* Found on staging: the confirmation opened BEHIND the checks panel, a
      click on the panel's backdrop closed it and cleared the remembered

@@ -6131,6 +6131,35 @@ const _FC_STATUS = {
 const _FC_PROVIDER = { datanamix: 'Datanamix', smile: 'Smile Identity', stitch: 'Stitch' };
 const _FC_TRIGGER  = { first_deposit: 'First deposit', annual_recheck: 'Annual re-check', manual: 'Run by staff', webhook: 'Provider callback' };
 
+/* One line under the FICA stage: what the last automated check said. */
+function _fcAutoLine(inv) {
+  const st = inv && inv.fica_auto_status;
+  if (!st) return '';
+  const s = _FC_STATUS[st] || { label: st, color: '#7a92a8' };
+  return `<div style="margin-top:4px;font-size:0.68rem;color:${s.color}" title="Last automated FICA check">Auto check: ${_esc(s.label)}</div>`;
+}
+
+const _FC_KYC = {
+  verified: { label: 'Verified', color: '#22c55e' }, approved: { label: 'Verified', color: '#22c55e' },
+  rejected: { label: 'Rejected', color: '#ef4444' }, pending:  { label: 'Pending',  color: '#fec24f' },
+};
+
+function _fcSummary(investor) {
+  const local = STATE.investors.find(i => i.id === investor.id) || {};
+  const merged = { ...local, ...investor };
+  const stage  = _ficaStageOf(merged);
+  const sc     = _ficaStageColors[stage] || {};
+  const kyc    = _FC_KYC[investor.kyc_status] || { label: investor.kyc_status || 'Not set', color: '#7a92a8' };
+  const cell = (label, html) => `<div style="flex:1;min-width:130px">
+      <div style="font-size:0.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:5px">${label}</div>${html}</div>`;
+  return `<div style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:14px;padding:12px 14px;border-radius:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08)">
+    ${cell('KYC status', `<span style="font-weight:700;font-size:0.85rem;color:${kyc.color}">${_esc(kyc.label)}</span>`)}
+    ${cell('FICA stage', `<span style="background:${sc.badge || 'transparent'};color:${sc.badgeText || '#7a92a8'};border-radius:6px;padding:2px 8px;font-size:0.75rem;font-weight:700">${_esc(_ficaStageLabels[stage] || stage)}</span>`)}
+    ${cell('Last automated check', investor.fica_auto_status ? _fcBadge(investor.fica_auto_status) : '<span style="font-size:0.8rem;color:var(--text-muted)">Never run</span>')}
+    ${cell('Checked', `<span style="font-size:0.8rem;color:var(--text-muted)">${investor.last_auto_fica_check ? Utils.date(investor.last_auto_fica_check) : '—'}</span>`)}
+  </div>`;
+}
+
 function _fcBadge(status) {
   const s = _FC_STATUS[status] || { label: status || '—', color: '#7a92a8', icon: 'fa-circle' };
   return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:0.72rem;font-weight:700;color:${s.color};background:${s.color}1f;border-radius:6px;padding:2px 8px"><i class="fa-solid ${s.icon}"></i>${_esc(s.label)}</span>`;
@@ -6179,15 +6208,26 @@ async function _renderFicaChecks() {
   try {
     const d = await API._fetch('GET', `fica/checks/${encodeURIComponent(_ficaChecksInvestor)}`);
     const checks = d.checks || [];
+    /* Keep the pipeline row behind this panel in step with what the server
+       now says — a check run from here changes the client's status. */
+    if (d.investor) {
+      const local = STATE.investors.find(i => i.id === d.investor.id);
+      if (local) {
+        Object.assign(local, { kyc_status: d.investor.kyc_status, fica_auto_status: d.investor.fica_auto_status,
+                               last_auto_fica_check: d.investor.last_auto_fica_check });
+        if (typeof _renderFicaPipeline === 'function' && document.getElementById('ficaPipelineBody')) _renderFicaPipeline();
+      }
+    }
+    const summary = d.investor ? _fcSummary(d.investor) : '';
     if (!checks.length) {
-      el.innerHTML = `<div style="text-align:center;padding:36px;color:var(--text-muted)">
+      el.innerHTML = summary + `<div style="text-align:center;padding:36px;color:var(--text-muted)">
         <i class="fa-solid fa-shield-halved fa-2x" style="opacity:0.25;display:block;margin-bottom:12px"></i>
         <div style="font-weight:600">No automated check has run for this client yet.</div>
         <div style="margin-top:6px;font-size:0.78rem">One runs overnight after their first deposit, or use <strong>Run check now</strong>.</div>
       </div>`;
       return;
     }
-    el.innerHTML = checks.map((c, i) => `
+    el.innerHTML = summary + checks.map((c, i) => `
       <div style="margin-bottom:14px;padding:12px 14px;border-radius:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,${i === 0 ? '0.12' : '0.06'})">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
           <div style="font-size:0.78rem;color:var(--text-muted)">${i === 0 ? '<strong style="color:var(--text)">Latest</strong> · ' : ''}${Utils.date(c.check_date)} · ${_esc(_FC_TRIGGER[c.trigger] || c.trigger || '')}</div>
@@ -18733,6 +18773,11 @@ let _ficaStageFilter = 'all';
 
 function _ficaStageOf(inv) {
   if (inv.fica_status === 'approved' || inv.kyc_status === 'verified') return 'approved';
+  /* The automated check is a FICA stage too. Without these two lines a
+     client whose check failed, or is held on a possible sanctions match,
+     showed as "Not Started" because they had uploaded nothing. */
+  if (inv.kyc_status === 'rejected') return 'rejected';
+  if (inv.fica_auto_status === 'manual_review') return 'in_review';
   const docs = (STATE.kyc || []).filter(d => d.investor_id === inv.id && !d.sub_account_id);
   if (!docs.length) return 'not_started';
   if (docs.some(d => d.status === 'rejected')) return 'rejected';
@@ -18868,7 +18913,7 @@ function _renderFicaPipeline() {
     return `<tr style="${hasPriority ? 'background:rgba(254,194,79,0.02)' : ''}">
       <td><div style="font-weight:600;font-size:0.83rem">${_esc(inv.first_name)} ${_esc(inv.last_name)} ${priorityBadge}</div><div style="font-size:0.72rem;color:#7a92a8">${_esc(inv.email||'')}</div></td>
       <td style="font-size:0.82rem;color:#7a92a8">${Utils.date(inv.created_at)}</td>
-      <td>${stageBadge}</td>
+      <td>${stageBadge}${_fcAutoLine(inv)}</td>
       <td style="font-size:0.82rem;color:#7a92a8">${docCount ? `${approvedCount}/${docCount} approved` : '—'}</td>
       <td>
         <div style="display:flex;gap:4px;flex-wrap:wrap">
