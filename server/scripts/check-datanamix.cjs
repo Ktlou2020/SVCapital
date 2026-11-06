@@ -484,6 +484,140 @@ async function dbPart() {
        ann && ann.area === 'admin' && /FICA Pipeline/.test(ann.where_to_find) && /Checks button/.test(ann.where_to_find),
        JSON.stringify(ann));
 
+    console.log('\na review is closed by a person, with a reason');
+    const callR = (rtr, method, url, user, body) => new Promise(resolve => {
+      const token = jwt.sign(user, process.env.JWT_SECRET, { algorithm: 'HS256', expiresIn: '10m' });
+      const req = { method, url, originalUrl: url, baseUrl: '', body: body || {}, query: {}, cookies: {},
+        headers: { authorization: 'Bearer ' + token, 'user-agent': 'check-datanamix' }, ip: '198.51.100.7',
+        get(h) { return this.headers[String(h).toLowerCase()]; } };
+      let code = 200;
+      const res = { statusCode: 200, status(c) { code = c; this.statusCode = c; return this; }, set() { return this; },
+        setHeader() {}, json(b) { resolve({ status: code, body: b }); return this; },
+        send(b) { resolve({ status: code, body: b }); return this; },
+        sendStatus(c) { resolve({ status: c, body: null }); return this; } };
+      rtr(req, res, () => resolve({ status: 404, body: null }));
+    });
+    const DIRECTOR = { role: 'director', id: 'U-DIR', email: 'dir@example.test', firstName: 'Dee', lastName: 'Rector' };
+    const ADMIN2   = { role: 'admin',    id: 'U-ADM', email: 'adm@example.test', firstName: 'Ada', lastName: 'Min' };
+    const STAFF    = { role: 'staff',    id: 'U-STF', email: 'stf@example.test' };
+    const dec = (who, checkId, body) => callR(router, 'POST', `/checks/${checkId}/decision`, who, body);
+    const quietE2 = console.error; console.error = () => {};
+    try {
+      const artAdmin = await callR(router, 'GET', '/checks/DX-ART', ADMIN2);
+      const artDir   = await callR(router, 'GET', '/checks/DX-ART', DIRECTOR);
+      const artCheck = artAdmin.body.checks[0];
+      ok('the panel is told which check is waiting on a decision',
+         artAdmin.body.openReviewId === artCheck.id, JSON.stringify({ open: artAdmin.body.openReviewId, latest: artCheck.id }));
+      ok('and that an admin may not approve a possible PEP match, but a director may',
+         artAdmin.body.viewer.canApproveMatch === false && artDir.body.viewer.canApproveMatch === true);
+
+      ok('the banner shows a possible match, review pending',
+         artAdmin.body.watchlist && artAdmin.body.watchlist.status === 'possible' && artAdmin.body.watchlist.kind === 'pep',
+         JSON.stringify(artAdmin.body.watchlist));
+      const flagOwn = await callR(router, 'GET', '/flags/DX-ART', OWNER);
+      ok('the PEP flag is staff only — the client cannot read it', flagOwn.status === 403, JSON.stringify(flagOwn));
+      const { rows: [artRow] } = await pool.query(`SELECT * FROM investors WHERE id = 'DX-ART'`);
+      ok('and it is not written onto the investor row the client\'s portal reads',
+         !Object.keys(artRow).some(k => /pep|watchlist/i.test(k)), Object.keys(artRow).filter(k => /pep|watch/i.test(k)).join(','));
+
+      /* While the review is open, nothing else may approve the client. */
+      delete require.cache[require.resolve(path.join(ROOT, 'server', 'routes', 'tables.js'))];
+      const tables = require(path.join(ROOT, 'server', 'routes', 'tables.js'));
+      const patched = await callR(tables, 'PATCH', '/investors/DX-ART', ADMIN2, { kyc_status: 'approved', fica_status: 'approved', status: 'active' });
+      ok('approving the client through the profile is refused while the review is open',
+         patched.status === 409 && patched.body.code === 'fica_review_open' && /Checks/.test(patched.body.error),
+         JSON.stringify(patched));
+      ok('and so is the old "Verified" spelling', (await callR(tables, 'PUT', '/investors/DX-ART', ADMIN2, { kyc_status: 'verified' })).status === 409);
+      ok('an update that approves nothing still goes through',
+         (await callR(tables, 'PATCH', '/investors/DX-ART', ADMIN2, { phone: '0831000137' })).status === 200);
+      for (const t of ['id_document', 'proof_of_address', 'proof_of_bank']) {
+        await pool.query(`INSERT INTO kyc_documents (id, investor_id, doc_type, status) VALUES ($1,'DX-ART',$2,'approved')`, ['KD-' + t, t]);
+      }
+      delete require.cache[require.resolve(path.join(ROOT, 'server', 'jobs', 'kycReconcileCron.js'))];
+      const { runKycReconcile } = require(path.join(ROOT, 'server', 'jobs', 'kycReconcileCron.js'));
+      const qL = console.log, qW = console.warn; console.log = () => {}; console.warn = () => {};
+      try { await runKycReconcile(); } finally { console.log = qL; console.warn = qW; }
+      ok('and the hourly reconcile does not promote them from their documents',
+         (await inv('DX-ART')).kyc_status === 'pending', JSON.stringify(await inv('DX-ART')));
+
+      ok('a decision needs a reason', (await dec(ADMIN2, artCheck.id, { decision: 'approve', note: '', matchOutcome: 'false_positive' })).status === 400);
+      ok('a possible match needs to be called: this client, or not',
+         (await dec(DIRECTOR, artCheck.id, { decision: 'approve', note: 'Looks fine to me' })).status === 400);
+      const admApprove = await dec(ADMIN2, artCheck.id, { decision: 'approve', note: 'PEP accepted after EDD', matchOutcome: 'confirmed' });
+      ok('an admin cannot approve a possible PEP match', admApprove.status === 403 && /director/.test(admApprove.body.error), JSON.stringify(admApprove));
+      ok('staff without FICA access cannot decide at all',
+         (await dec(STAFF, artCheck.id, { decision: 'decline', note: 'Not allowed', matchOutcome: 'confirmed' })).status === 403);
+      const dirApprove = await dec(DIRECTOR, artCheck.id, { decision: 'approve',
+        note: 'Confirmed PEP — provincial MEC. Source of funds verified, EDD on file.', matchOutcome: 'confirmed' });
+      ok('a director can approve it', dirApprove.status === 200 && dirApprove.body.decision === 'approved', JSON.stringify(dirApprove));
+      const ai = await inv('DX-ART');
+      ok('the client is now KYC verified, approved after review',
+         ai.kyc_status === 'verified' && ai.fica_auto_status === 'approved', JSON.stringify(ai));
+      const { rows: [rec] } = await pool.query(`SELECT * FROM fica_checks WHERE id = $1`, [artCheck.id]);
+      ok('who, when, which way, why and what the match was are recorded on the check',
+         rec.review_decision === 'approved' && rec.reviewed_by === 'Dee Rector' && rec.reviewed_by_role === 'director'
+         && rec.reviewed_at && /provincial MEC/.test(rec.review_note) && rec.match_outcome === 'confirmed', JSON.stringify(rec));
+      ok('a decision is made once', (await dec(DIRECTOR, artCheck.id, { decision: 'decline', note: 'Changed my mind', matchOutcome: 'confirmed' })).status === 409);
+
+      const after = await callR(router, 'GET', '/checks/DX-ART', ADMIN2);
+      ok('the panel shows the decision and nothing left to decide',
+         after.body.openReviewId === null && after.body.checks[0].review && after.body.checks[0].review.by === 'Dee Rector'
+         && after.body.checks[0].review.matchOutcome === 'confirmed', JSON.stringify(after.body.checks[0].review));
+      const flag = (await callR(router, 'GET', '/flags/DX-ART', ADMIN2)).body.watchlist;
+      ok('the profile banner now says confirmed PEP, by whom',
+         flag && flag.status === 'confirmed' && flag.kind === 'pep' && flag.decidedBy === 'Dee Rector', JSON.stringify(flag));
+      ok('and the guard has lifted', (await require(path.join(ROOT, 'server', 'services', 'ficaReview.js'))
+         .guardInvestorUpdate('DX-ART', { kyc_status: 'approved' })) === null);
+
+      /* A later screen that comes back clear does not take a confirmed PEP's banner away. */
+      await pool.query(`INSERT INTO fica_checks (id, investor_id, trigger, overall_status, sanctions_check_status, check_date)
+                        VALUES ('FC-LATER-CLEAR','DX-ART','annual_recheck','pass','clear', NOW() + INTERVAL '1 minute')`);
+      ok('a confirmed PEP stays flagged after a later clear screen',
+         ((await callR(router, 'GET', '/flags/DX-ART', ADMIN2)).body.watchlist || {}).status === 'confirmed');
+
+      console.log('\nother reviews, and the ones that cannot be decided');
+      const la = (await callR(router, 'GET', '/checks/DX-LANCE', ADMIN2)).body;
+      ok('a name difference with no watch-list match needs no match question, and an admin may decide it',
+         (await dec(ADMIN2, la.openReviewId, { decision: 'decline', note: 'Surname does not match Home Affairs; asked for documents' })).status === 200);
+      const li = await inv('DX-LANCE');
+      ok('declined: the client is KYC rejected', li.kyc_status === 'rejected' && li.fica_auto_status === 'declined', JSON.stringify(li));
+      ok('and has no PEP banner', (await callR(router, 'GET', '/flags/DX-LANCE', ADMIN2)).body.watchlist === null);
+
+      const gNow = (await callR(router, 'GET', '/checks/DX-GUIN', ADMIN2)).body;
+      ok('a check that passed has nothing to decide', gNow.openReviewId === null
+         && (await dec(ADMIN2, gNow.checks[0].id, { decision: 'approve', note: 'Nothing to decide here' })).status === 409);
+
+      await pool.query(`INSERT INTO investors (id, first_name, last_name, email, kyc_status) VALUES ('DX-NOSCR','No','Screen','noscr@example.test','pending')`);
+      await pool.query(`INSERT INTO fica_checks (id, investor_id, trigger, overall_status, id_check_status, sanctions_check_status, check_date)
+                        VALUES ('FC-NOSCR','DX-NOSCR','manual','manual_review','pass','error', NOW())`);
+      const ns = await dec(DIRECTOR, 'FC-NOSCR', { decision: 'approve', note: 'Approving anyway' });
+      ok('a client whose sanctions screen did not run cannot be approved, even by a director',
+         ns.status === 409 && /not been screened/.test(ns.body.error), JSON.stringify(ns));
+
+      const oldGuess = (await row('DX-GUESS')).id;
+      await run('DX-GUESS');
+      ok('only the latest check can be decided — an older one is refused',
+         (await dec(ADMIN2, oldGuess, { decision: 'approve', note: 'Branch code confirmed with client' })).status === 409);
+
+      /* A false match leaves no banner. */
+      await pool.query(`INSERT INTO investors (id, first_name, last_name, email, kyc_status) VALUES ('DX-FP','Fal','Sepos','fp@example.test','pending')`);
+      await pool.query(`INSERT INTO fica_checks (id, investor_id, trigger, overall_status, id_check_status, sanctions_check_status, sanctions_result, check_date)
+                        VALUES ('FC-FP','DX-FP','manual','manual_review','pass','hit', $1, NOW())`,
+                       [JSON.stringify({ matches: [{ name: 'Fal Sepos', list: 'PEP', programmes: ['PEP'] }] })]);
+      ok('an undecided match shows as possible', ((await callR(router, 'GET', '/flags/DX-FP', ADMIN2)).body.watchlist || {}).status === 'possible');
+      ok('an admin still cannot approve it, even called a false match',
+         (await dec(ADMIN2, 'FC-FP', { decision: 'approve', note: 'Different person: DOB 1951 vs client 1990', matchOutcome: 'false_positive' })).status === 403,
+         'approving a possible match is still a director\'s, whatever the outcome');
+      ok('a director approves it as not this person',
+         (await dec(DIRECTOR, 'FC-FP', { decision: 'approve', note: 'Different person: DOB 1951 vs client 1990', matchOutcome: 'false_positive' })).status === 200);
+      ok('and the client carries no banner', (await callR(router, 'GET', '/flags/DX-FP', ADMIN2)).body.watchlist === null);
+
+      const { rows: [ann2] } = await pool.query(
+        `SELECT where_to_find FROM feature_announcements WHERE id = 'fica-review-decisions-2026-11'`);
+      ok('staff are told how to decide a review, and where the banner is',
+         ann2 && /Review decision/.test(ann2.where_to_find) && /profile/.test(ann2.where_to_find), JSON.stringify(ann2));
+    } finally { console.error = quietE2; }
+
     console.log('\nand with Datanamix off, nothing changes');
     delete process.env.DATANAMIX_ENV;
     const n0 = calls.length;
@@ -525,6 +659,24 @@ function uiPart() {
      /el\.innerHTML = summary \+ checks\.map/.test(js) && /cell\('KYC status'/.test(js) && /cell\('FICA stage'/.test(js));
   ok('and a check run from it updates the row behind it',
      /Object\.assign\(local, \{ kyc_status: d\.investor\.kyc_status, fica_auto_status/.test(js));
+
+  console.log('\nreview decisions and the PEP banner, in the console');
+  const viewInv = (js.match(/async function viewInvestor\(id\) \{[\s\S]*?\n\}/) || [''])[0];
+  ok('the client profile has a banner slot above its tabs',
+     /<div id="invWatchlistBanner"><\/div>\s*<div class="tab-bar"/.test(viewInv));
+  ok('and fills it from the staff-only flag every time a profile opens', /_loadInvestorWatchlistBanner\(inv\.id\);/.test(viewInv)
+     && /API\._fetch\('GET', `fica\/flags\/\$\{encodeURIComponent\(investorId\)\}`\)/.test(js));
+  ok('a confirmed PEP banner says who confirmed it', /Politically Exposed Person' : 'Sanctions \/ watch-list match'/.test(js)
+     && /Confirmed by \$\{_esc\(flag\.decidedBy/.test(js));
+  ok('the decision box asks whether a possible match is the client', /name="fcMatchOutcome" value="false_positive"/.test(js)
+     && /name="fcMatchOutcome" value="confirmed"/.test(js));
+  ok('and sends the answer with the decision', /\{ decision, note, matchOutcome \}/.test(js));
+  ok('Approve is disabled, with the reason, for an admin facing a possible match',
+     /isMatch && !viewer\.canApproveMatch \? 'A possible sanctions or PEP match can only be approved by a director/.test(js));
+  ok('a client verified by the automated check reads KYC Verified on their profile',
+     /\(inv\.kyc_status==='approved'\|\|inv\.kyc_status==='verified'\)/.test(js));
+  ok('approving documents while a review is open says the client is held, not that it failed',
+     /if \(result\.held\) Toast\.warning/.test(js));
 
   /* Found on staging: the confirmation opened BEHIND the checks panel, a
      click on the panel's backdrop closed it and cleared the remembered

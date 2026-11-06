@@ -48,6 +48,8 @@ async function runKycReconcile() {
              updated_at       = NOW()
        WHERE COALESCE(inv.fica_status, '') <> 'approved'
          AND ${ALL_DOCS_APPROVED}
+         -- a client held on an automated FICA review is decided by a person
+         AND ${require('../services/ficaReview').noOpenReviewSql('inv')}
        RETURNING inv.id`);
     promoted = promote.rowCount;
     if (promoted) {

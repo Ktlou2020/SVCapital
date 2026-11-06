@@ -2003,6 +2003,11 @@ router.put('/:table/:id', requireAuth, validateTable, async (req, res) => {
     delete body.created_at;
     body.updated_at = new Date().toISOString();
 
+    if (table === 'investors') {
+      const refusal = await require('../services/ficaReview').guardInvestorUpdate(req.params.id, body);
+      if (refusal) return res.status(409).json({ error: refusal, code: 'fica_review_open' });
+    }
+
     const _fileRefusal = storedFileRefusal(table, body);
     if (_fileRefusal) return res.status(400).json({ error: _fileRefusal });
 
@@ -2091,6 +2096,15 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
 
     if (body.fica_status && _FICA_NORM_MAP[body.fica_status]) body.fica_status = _FICA_NORM_MAP[body.fica_status];
     if (body.kyc_status  && _FICA_NORM_MAP[body.kyc_status])  body.kyc_status  = _FICA_NORM_MAP[body.kyc_status];
+
+    /* An automated FICA check waiting on a review decision is closed in the
+       checks panel, with a reason. A document or profile approval here knows
+       nothing about it and must not clear it — least of all a possible
+       sanctions or PEP match. */
+    if (table === 'investors') {
+      const refusal = await require('../services/ficaReview').guardInvestorUpdate(req.params.id, body);
+      if (refusal) return res.status(409).json({ error: refusal, code: 'fica_review_open' });
+    }
 
     // Auto-inject reviewer identity whenever an approval or rejection is recorded
     {
@@ -2466,7 +2480,8 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
                         status            = CASE WHEN status IN ('pending','pending_fica','fica_submitted') THEN 'active' ELSE status END,
                         fica_approved_at  = COALESCE(fica_approved_at, NOW()),
                         updated_at        = NOW()
-                  WHERE id = $1 AND COALESCE(fica_status, '') <> 'approved'`,
+                  WHERE id = $1 AND COALESCE(fica_status, '') <> 'approved'
+                    AND ${require('../services/ficaReview').noOpenReviewSql('investors')}`,
                 [updated.investor_id]
               );
 

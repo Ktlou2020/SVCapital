@@ -1122,6 +1122,18 @@ CREATE TABLE IF NOT EXISTS fica_checks (
    'skipped' when it did not run — every row before this column existed. */
 ALTER TABLE fica_checks ADD COLUMN IF NOT EXISTS sanctions_check_status TEXT DEFAULT 'skipped';
 ALTER TABLE fica_checks ADD COLUMN IF NOT EXISTS sanctions_result       JSONB DEFAULT '{}';
+/* A check held for review is closed by a person: approved or declined,
+   with the reason, by whom and when. That record is the FICA audit trail
+   for every decision an automated check could not make on its own. */
+ALTER TABLE fica_checks ADD COLUMN IF NOT EXISTS review_decision  TEXT;
+ALTER TABLE fica_checks ADD COLUMN IF NOT EXISTS review_note      TEXT;
+ALTER TABLE fica_checks ADD COLUMN IF NOT EXISTS reviewed_by      TEXT;
+ALTER TABLE fica_checks ADD COLUMN IF NOT EXISTS reviewed_by_role TEXT;
+ALTER TABLE fica_checks ADD COLUMN IF NOT EXISTS reviewed_at      TIMESTAMPTZ;
+/* For a possible sanctions/PEP match, what the reviewer found it to be:
+   'false_positive' (not this client) or 'confirmed' (this is the client).
+   It is what the PEP banner on the client's profile is drawn from. */
+ALTER TABLE fica_checks ADD COLUMN IF NOT EXISTS match_outcome    TEXT;
 CREATE INDEX IF NOT EXISTS fica_checks_investor_idx ON fica_checks(investor_id);
 CREATE INDEX IF NOT EXISTS fica_checks_date_idx     ON fica_checks(check_date);
 
@@ -5283,6 +5295,32 @@ async function autoSetup() {
          'KYC / FICA \u2192 FICA Pipeline tab \u2192 the Checks button on a client\u2019s row. The strip at the top of '
          + 'the FICA Pipeline shows which provider is running the checks and whether it can run.']);
       if (rowCount) console.log('\u2705 Announced Datanamix automated FICA checks.');
+    });
+
+    await step("32. Announce FICA review decisions", async () => {
+      const { rowCount } = await pool.query(
+        `INSERT INTO feature_announcements
+           (id, title, body, where_to_find, area, audience, icon, published_at, created_by)
+         VALUES ($1,$2,$3,$4,'admin','staff','fa-gavel', NOW(), 'setup')
+         ON CONFLICT (id) DO NOTHING`,
+        ['fica-review-decisions-2026-11',
+         'Approve or decline an automated FICA check that needs review \u2014 with the reason on record',
+         'When an automated check cannot decide on its own \u2014 a possible sanctions or PEP match, a name '
+         + 'that differs from Home Affairs, a bank that could not confirm the account \u2014 the client is held '
+         + 'as pending until somebody decides. You now decide it on the check itself: Approve marks the client '
+         + 'KYC verified, Decline marks them KYC rejected, and a reason is required either way. Who decided, '
+         + 'when, which way and why is recorded on the check and kept in its history. For a possible sanctions '
+         + 'or PEP match you also say whether it is the client: \u201cnot this person\u201d, or \u201cconfirmed\u201d. '
+         + 'A confirmed match puts a standing PEP / watch-list banner at the top of the client\u2019s profile, '
+         + 'and an undecided one a \u201creview pending\u201d banner; clients never see either. Approving a possible '
+         + 'sanctions or PEP match is for directors only. A check whose sanctions screen did not run cannot be '
+         + 'approved until it is run again. Declined clients are not emailed. While a check is waiting on a '
+         + 'decision, approving the client\u2019s documents or FICA elsewhere no longer approves them around it, '
+         + 'and neither does the hourly document reconcile.',
+         'KYC / FICA \u2192 FICA Pipeline tab \u2192 Checks on a client marked \u201cAuto check: Needs review\u201d '
+         + '\u2192 Review decision, under the latest check. The PEP banner is at the top of the client\u2019s '
+         + 'profile (Clients \u2192 open a client), above the tabs.']);
+      if (rowCount) console.log('\u2705 Announced FICA review decisions.');
     });
 
     await step("29. Say which pool each platform fee was charged against", async () => {

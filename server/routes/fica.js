@@ -6,6 +6,8 @@
    GET  /api/fica/queue               — investors due for (re-)check
    GET  /api/fica/providers           — which verification provider is live
    GET  /api/fica/checks/:investorId  — automated check results, staff only
+   POST /api/fica/checks/:checkId/decision — approve / decline a review
+   GET  /api/fica/flags/:investorId   — PEP / watch-list banner, staff only
    POST /api/fica/webhook/smile       — Smile Identity async callback
    POST /api/fica/webhook/stitch      — Stitch async callback
    ═══════════════════════════════════════════════════════ */
@@ -17,6 +19,7 @@ const { requireAuth, requireRole } = require('../middleware/auth');
 const { runFicaCheck } = require('../services/ficaService');
 const smile       = require('../services/smileIdentity');
 const datanamix   = require('../services/datanamix');
+const ficaReview  = require('../services/ficaReview');
 
 /* ═══════════════════════════════════════════════════════
    GET /api/fica/status/:investorId
@@ -208,7 +211,8 @@ router.get(
       const { rows } = await pool.query(
         `SELECT id, trigger, check_date, overall_status,
                 id_check_status, id_result, bank_check_status, bank_result,
-                sanctions_check_status, sanctions_result
+                sanctions_check_status, sanctions_result,
+                review_decision, review_note, reviewed_by, reviewed_by_role, reviewed_at, match_outcome
            FROM fica_checks
           WHERE investor_id = $1
           ORDER BY check_date DESC
@@ -228,12 +232,71 @@ router.get(
           id_check:  _step(c.id_check_status, c.id_result),
           bank:      _step(c.bank_check_status, c.bank_result),
           sanctions,
+          review: c.review_decision ? {
+            decision: c.review_decision, note: c.review_note, by: c.reviewed_by,
+            role: c.reviewed_by_role, at: c.reviewed_at, matchOutcome: c.match_outcome || null,
+          } : null,
         };
       });
 
-      res.json({ investor: inv[0], checks });
+      /* Only the latest check can be decided; say which, so the panel puts
+         the buttons on that one alone. */
+      const open = await ficaReview.openReview(req.params.investorId);
+      res.json({
+        investor: inv[0], checks,
+        openReviewId: open ? open.id : null,
+        viewer: ficaReview.permissions(req.user),
+        watchlist: await ficaReview.watchlistFlag(req.params.investorId),
+      });
     } catch (err) {
       console.error('FICA checks error:', err.message);
+      res.status(500).json({ error: 'Internal server error.' });
+    }
+  }
+);
+
+/* ═══════════════════════════════════════════════════════
+   GET /api/fica/flags/:investorId
+   Whether a client is a confirmed or possible PEP / watch-list match, for
+   the banner on their profile. Staff only — the client is never shown it.
+   ═══════════════════════════════════════════════════════ */
+router.get(
+  '/flags/:investorId',
+  requireAuth,
+  requireRole('admin', 'director', 'fund_manager'),
+  async (req, res) => {
+    try {
+      res.json({ watchlist: await ficaReview.watchlistFlag(req.params.investorId) });
+    } catch (err) {
+      console.error('FICA flags error:', err.message);
+      res.status(500).json({ error: 'Internal server error.' });
+    }
+  }
+);
+
+/* ═══════════════════════════════════════════════════════
+   POST /api/fica/checks/:checkId/decision
+   Body: { decision: 'approve' | 'decline', note }
+   Closes a check held for review. Approving a possible sanctions/PEP match
+   is a director's decision; the rest are in services/ficaReview.js.
+   ═══════════════════════════════════════════════════════ */
+router.post(
+  '/checks/:checkId/decision',
+  requireAuth,
+  requireRole('admin', 'director', 'fund_manager'),
+  async (req, res) => {
+    try {
+      const result = await ficaReview.decide({
+        checkId:  req.params.checkId,
+        decision: req.body && req.body.decision,
+        note:     req.body && req.body.note,
+        matchOutcome: req.body && req.body.matchOutcome,
+        user:     req.user,
+      });
+      res.json({ success: true, ...result });
+    } catch (err) {
+      if (err instanceof ficaReview.ReviewError) return res.status(err.status).json({ error: err.message });
+      console.error('FICA decision error:', err.message);
       res.status(500).json({ error: 'Internal server error.' });
     }
   }

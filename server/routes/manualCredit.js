@@ -1432,6 +1432,7 @@ router.post('/backfill/fica-from-kyc', async (req, res) => {
          -- is out of step, and NULL is the commonest way for it to be. Without
          -- this it skipped exactly the rows it was written to fix.
          AND COALESCE(fica_status, '') <> 'approved'
+         AND ${require('../services/ficaReview').noOpenReviewSql('investors')}
     `);
 
     // fica_status approved → ensure kyc_status is also approved
@@ -1442,6 +1443,7 @@ router.post('/backfill/fica-from-kyc', async (req, res) => {
              updated_at  = NOW()
        WHERE fica_status = 'approved'
          AND COALESCE(kyc_status, '') <> 'approved'
+         AND ${require('../services/ficaReview').noOpenReviewSql('investors')}
     `);
 
     const total = fromKyc + fromFica;
@@ -2298,6 +2300,7 @@ router.post('/restore/investor-statuses', async (req, res) => {
           ),
           updated_at = NOW()
         WHERE (COALESCE(i.kyc_status, '') <> 'approved' OR COALESCE(i.fica_status, '') <> 'approved')
+          AND ${require('../services/ficaReview').noOpenReviewSql('i')}
           AND EXISTS (
             SELECT 1 FROM kyc_documents kd
             WHERE kd.investor_id = i.id AND kd.status = 'approved'
