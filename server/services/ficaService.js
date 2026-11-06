@@ -161,17 +161,51 @@ async function runFicaCheck(investor, trigger) {
     overallStatus === 'manual_review'  ? 'pending'  :
     overallStatus === 'error'          ? 'pending'  : null;
 
+  /* THE STAMP IS NOT WRITTEN WHEN THE PROVIDER ERRORED.
+   *
+   * last_auto_fica_check is the column the nightly sweep's first-deposit
+   * batch tests for: `WHERE last_auto_fica_check IS NULL`. Stamping it on
+   * every outcome meant an error — a provider that is down, or whose
+   * credentials are not configured — counted as having checked the person.
+   * One such sweep silently marked every depositor as checked and dropped
+   * them out of that batch for a YEAR, until the annual window reopened.
+   *
+   * That is what production has been doing: the sweep has reported
+   * "0 annual re-checks, 0 first-deposit checks" every night, with no
+   * provider keys set and so no verification ever performed.
+   *
+   * An error means we did not check them. The row in fica_checks records
+   * that the attempt happened and what went wrong; the investor stays in
+   * the queue, which is where somebody not yet verified belongs. */
+  const checked = overallStatus !== 'error';
+  const sets = [
+    checked ? 'last_auto_fica_check = NOW()' : null,
+    'fica_auto_status = $1',
+    newKycStatus ? 'kyc_status = $3' : null,
+    'updated_at = NOW()',
+  ].filter(Boolean);
+
   await pool.query(
-    `UPDATE investors SET
-       last_auto_fica_check = NOW(),
-       fica_auto_status     = $1,
-       ${newKycStatus ? 'kyc_status = $3,' : ''}
-       updated_at = NOW()
-     WHERE id = $2`,
+    `UPDATE investors SET ${sets.join(', ')} WHERE id = $2`,
     newKycStatus
       ? [overallStatus, investorId, newKycStatus]
       : [overallStatus, investorId]
   );
+
+  /* And say so where somebody can act. A verification provider that cannot
+     answer is not a client's problem and not a thing to leave in a log:
+     until it is fixed, nobody is being verified at all. Incidents fold by
+     fingerprint, so a sweep of fifty raises one row with a count, not fifty.
+     Reported, never thrown — a broken alerter must not also lose the check. */
+  if (!checked) {
+    try {
+      await require('./incidents').report(
+        new Error('FICA verification is not running: the ID provider returned an error. '
+                + 'No investor can be verified until it answers. '
+                + `Last: ${(idResult && idResult.error) || 'unknown error'}`),
+        { source: 'fica', severity: 'critical' });
+    } catch (e) { console.error('[FICA] could not raise incident:', e.message); }
+  }
 
   console.log(`[FICA] ${investorId} | ${trigger} | id:${idStatus} bank:${bankStatus} → ${overallStatus}`);
   return { checkId, idStatus, bankStatus, overallStatus };
