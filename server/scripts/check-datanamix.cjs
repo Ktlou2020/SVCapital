@@ -673,8 +673,21 @@ function uiPart() {
   ok('and sends the answer with the decision', /\{ decision, note, matchOutcome \}/.test(js));
   ok('Approve is disabled, with the reason, for an admin facing a possible match',
      /isMatch && !viewer\.canApproveMatch \? 'A possible sanctions or PEP match can only be approved by a director/.test(js));
-  ok('a client verified by the automated check reads KYC Verified on their profile',
-     /\(inv\.kyc_status==='approved'\|\|inv\.kyc_status==='verified'\)/.test(js));
+  /* Found on staging: Arthur, approved by a director, still read "KYC
+     Pending" in the Clients list — it tested for 'approved' and the review
+     writes 'verified'. */
+  const kv = (js.match(/const _kycVerified = inv => [^\n]+/) || [''])[0];
+  let kycVerified = null;
+  try { kycVerified = new Function(kv + '; return _kycVerified;')(); } catch (_) {}
+  ok('both spellings of verified count as KYC verified',
+     kycVerified && kycVerified({ kyc_status: 'verified' }) && kycVerified({ kyc_status: 'approved' })
+     && !kycVerified({ kyc_status: 'pending' }) && !kycVerified({ kyc_status: 'rejected' }));
+  ok('the Clients list badge, the profile badge, the timeline and the dashboard FICA rate all use it',
+     /const kycBadge = _kycVerified\(inv\)/.test(js) && /\$\{_kycVerified\(inv\)\?`<span class="badge badge--green"><i class="fa-solid fa-shield-check"><\/i> KYC Verified/.test(js)
+     && /if \(_kycVerified\(inv\)\) events\.push/.test(js) && /i\.fica_status === 'approved' \|\| _kycVerified\(i\)/.test(js));
+  ok('and no client-level test for "approved" alone is left',
+     !/\binv\.kyc_status *=== *'approved'(?![^\n]*'verified')/.test(js.replace(/const _kycVerified[^\n]+/, '')),
+     (js.match(/[^\n]*\binv\.kyc_status *=== *'approved'[^\n]*/g) || []).filter(l => !/verified/.test(l)).join('\n'));
   ok('approving documents while a review is open says the client is held, not that it failed',
      /if \(result\.held\) Toast\.warning/.test(js));
 

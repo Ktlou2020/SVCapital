@@ -126,6 +126,13 @@ function makeEnv({ serverKpis = true, seriesOk = true, ticketsOk = true } = {}) 
       debounce: f => f,
     }),
     _esc: s => String(s == null ? '' : s),
+    /* The real helper, read from admin.js rather than restated, so the
+       dashboard's FICA rate is computed the way the console computes it. */
+    _kycVerified: (() => {
+      const m = SRC.match(/const _kycVerified = (inv => [^\n]+);/);
+      if (!m) throw new Error('admin.js no longer defines _kycVerified the way this check reads it');
+      return new Function('return ' + m[1])();
+    })(),
     API: {
       investors:    { list: async () => ({ data: [{ id: 'i1', status: 'active', created_at: '2026-08-01' }], total: 1 }) },
       pools:        { list: async () => ({ data: [{ id: 'p1', status: 'open' }], total: 1 }) },

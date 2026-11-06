@@ -3,6 +3,13 @@
    ═══════════════════════════════════════════════ */
 'use strict';
 
+/* KYC verified, whichever way it was reached. Document approval writes
+   'approved'; the automated FICA check and a review approval write
+   'verified' — and the server's own gates (investing, withdrawals) accept
+   both. Testing for 'approved' alone showed a verified client as
+   "KYC Pending". */
+const _kycVerified = inv => !!inv && (inv.kyc_status === 'approved' || inv.kyc_status === 'verified');
+
 /* Escape user-controlled strings before inserting into innerHTML */
 /* A swallowed error should be a decision, not a leftover.
 
@@ -861,7 +868,7 @@ async function loadDashboard() {
       _set2('ds-upcoming-maturities',  _k.upcoming_maturities);
       _set2('ds-pending-withdrawals',  _k.pending_withdrawals);
     } else {
-      const ficaApproved = nonArchived.filter(i => i.fica_status === 'approved' || i.kyc_status === 'approved').length;
+      const ficaApproved = nonArchived.filter(i => i.fica_status === 'approved' || _kycVerified(i)).length;
       _set2('ds-fica-rate', `${nonArchived.length ? Math.round((ficaApproved / nonArchived.length) * 100) : 0}%`);
 
       _set2('ds-pending-kyc', pendingKycCount);
@@ -2083,7 +2090,7 @@ function renderInvestorsTable() {
     const liveInvested   = liveInvestedMap[inv.id] || 0;
     const hasLogin       = loginSet.has(inv.id);
     const isSelected     = selectedInvestors.has(inv.id);
-    const kycBadge = inv.kyc_status === 'approved'
+    const kycBadge = _kycVerified(inv)
       ? '<span class="badge badge--green" style="font-size:0.68rem;padding:2px 6px"><i class="fa-solid fa-shield-check"></i> KYC</span>'
       : inv.kyc_status === 'rejected'
       ? '<span class="badge badge--red" style="font-size:0.68rem;padding:2px 6px">KYC Fail</span>'
@@ -2669,7 +2676,7 @@ async function viewInvestor(id) {
         <div style="font-family:monospace;font-size:0.78rem;color:var(--text-muted);margin:2px 0">${_esc(inv.id)||''}<button class="copy-btn" onclick='copyToClipboard(${_esc(JSON.stringify(inv.id||""))},this)' title="Copy account number"><i class="fa-regular fa-copy"></i></button></div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
           ${Utils.statusBadge(inv.status)}
-          ${(inv.kyc_status==='approved'||inv.kyc_status==='verified')?`<span class="badge badge--green"><i class="fa-solid fa-shield-check"></i> KYC Verified</span>${inv.fica_reviewed_by?`<span style="font-size:0.65rem;color:var(--text-muted);margin-left:2px">by ${_esc(inv.fica_reviewed_by)}</span>`:''}` : '<span class="badge badge--yellow">KYC Pending</span>'}
+          ${_kycVerified(inv)?`<span class="badge badge--green"><i class="fa-solid fa-shield-check"></i> KYC Verified</span>${inv.fica_reviewed_by?`<span style="font-size:0.65rem;color:var(--text-muted);margin-left:2px">by ${_esc(inv.fica_reviewed_by)}</span>`:''}` : '<span class="badge badge--yellow">KYC Pending</span>'}
         </div>
       </div>
     </div>
@@ -15876,7 +15883,7 @@ function loadInvestorTimeline(inv, invsts, txns) {
   });
 
   // KYC status change
-  if (inv.kyc_status === 'approved') events.push({
+  if (_kycVerified(inv)) events.push({
     date: new Date(inv.updated_at || inv.date_joined || Date.now()), icon: 'fa-shield-check', color: '#22c55e',
     title: 'KYC Approved', sub: 'FICA verification completed'
   });
