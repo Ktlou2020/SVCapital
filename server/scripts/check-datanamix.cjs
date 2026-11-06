@@ -20,7 +20,9 @@
 'use strict';
 
 const path = require('path');
+const fs   = require('fs');
 const ROOT = path.join(__dirname, '..', '..');
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'check-datanamix-secret';
 
 let pass = 0, fail = 0;
 const ok = (name, cond, detail) => {
@@ -391,6 +393,59 @@ async function dbPart() {
        pp.sanctionsStatus === 'clear' && lastScreen.body.Name === 'Ama Mensah' && lastScreen.body.Country === 'GH',
        JSON.stringify(lastScreen && lastScreen.body));
 
+    console.log('\nstaff can read what the checks found; the client cannot');
+    const jwt = require(path.join(ROOT, 'server', 'node_modules', 'jsonwebtoken'));
+    delete require.cache[require.resolve(path.join(ROOT, 'server', 'routes', 'fica.js'))];
+    const router = require(path.join(ROOT, 'server', 'routes', 'fica.js'));
+    const call = (method, url, user) => new Promise(resolve => {
+      const token = jwt.sign(user, process.env.JWT_SECRET, { algorithm: 'HS256', expiresIn: '10m' });
+      const req = { method, url, originalUrl: url, baseUrl: '', body: {}, query: {}, cookies: {},
+        headers: { authorization: 'Bearer ' + token }, ip: '198.51.100.7',
+        get(h) { return this.headers[String(h).toLowerCase()]; } };
+      let code = 200;
+      const res = { statusCode: 200, status(c) { code = c; this.statusCode = c; return this; }, set() { return this; },
+        json(b) { resolve({ status: code, body: b }); return this; },
+        send(b) { resolve({ status: code, body: b }); return this; },
+        sendStatus(c) { resolve({ status: c, body: null }); return this; } };
+      router(req, res, () => resolve({ status: 404, body: null }));
+    });
+    const ADMIN = { role: 'admin' }, OWNER = { role: 'investor', investorId: 'DX-ART' };
+    const quietE = console.error; console.error = () => {};
+    let staff, own, status, prov;
+    try {
+      staff  = await call('GET', '/checks/DX-ART', ADMIN);
+      own    = await call('GET', '/checks/DX-ART', OWNER);
+      status = await call('GET', '/status/DX-ART', OWNER);
+      prov   = await call('GET', '/providers', ADMIN);
+    } finally { console.error = quietE; }
+    const latest = staff.body && staff.body.checks && staff.body.checks[0];
+    ok('staff get the checks', staff.status === 200 && latest, JSON.stringify(staff).slice(0, 300));
+    ok('with each step, its provider and outcome',
+       latest && latest.id_check.provider === 'datanamix' && latest.id_check.status === 'pass'
+       && latest.bank.status === 'pass' && latest.sanctions.status === 'hit', JSON.stringify(latest));
+    ok('and the watch-list match itself, named',
+       latest && latest.sanctions.matches[0] && latest.sanctions.matches[0].list === 'PEP'
+       && latest.sanctions.matches[0].name === 'Arthur Pendragon', JSON.stringify(latest && latest.sanctions));
+    ok('but never the raw provider response',
+       !JSON.stringify(staff.body).includes('"response"'), 'reasons and matches are what a reviewer needs');
+    ok('a review shows its reason',
+       ((await call('GET', '/checks/DX-LANCE', ADMIN)).body.checks[0].id_check.reasons.join(' ')).includes('Surname differs'));
+    ok('the client cannot read their own check detail', own.status === 403, JSON.stringify(own));
+    ok('and their status page says nothing about a watch-list match',
+       status.status === 200 && !/PEP|Pendragon"|matches/.test(JSON.stringify(status.body.checks)),
+       JSON.stringify(status.body && status.body.checks));
+    ok('the provider strip is told Datanamix runs every step but passports',
+       prov.body && prov.body.steps.sa_id === 'datanamix' && prov.body.steps.passport === 'smile'
+       && prov.body.steps.sanctions === 'datanamix' && prov.body.datanamix.environment === 'SANDBOX',
+       JSON.stringify(prov.body));
+    ok('and never a key', !JSON.stringify(prov.body).includes('api-password'));
+
+    const { rows: [ann] } = await pool.query(
+      `SELECT where_to_find, area FROM feature_announcements WHERE id = 'datanamix-fica-checks-2026-11'`);
+    ok('staff are told the feature exists, and where',
+       ann && ann.area === 'admin' && /FICA Pipeline/.test(ann.where_to_find) && /Checks button/.test(ann.where_to_find),
+       JSON.stringify(ann));
+
     console.log('\nand with Datanamix off, nothing changes');
     delete process.env.DATANAMIX_ENV;
     const n0 = calls.length;
@@ -405,9 +460,22 @@ async function dbPart() {
   }
 }
 
+function uiPart() {
+  console.log('\nthe admin console shows it');
+  const js   = fs.readFileSync(path.join(ROOT, 'admin', 'js', 'admin.js'), 'utf8');
+  const html = fs.readFileSync(path.join(ROOT, 'admin', 'index.html'), 'utf8');
+  ok('each FICA Pipeline row has a Checks button', /onclick='openFicaChecks\(\$\{_esc\(JSON\.stringify\(inv\.id\)\)\}\)'/.test(js));
+  ok('which reads the staff-only endpoint', /API\._fetch\('GET', `fica\/checks\/\$\{encodeURIComponent/.test(js));
+  ok('the modal it opens exists', /id="ficaChecksModal"/.test(html) && /id="ficaChecksContent"/.test(html));
+  ok('a check can be run from it, after a confirmation', /async function runFicaCheckNow[\s\S]{0,200}Confirm\.ask/.test(js));
+  ok('the provider strip has somewhere to render', /id="ficaProviderStrip"/.test(html) && /fica\/providers/.test(js));
+  ok('match names are escaped before they are shown', /_esc\(m\.name \|\| 'Unnamed'\)/.test(js));
+}
+
 (async () => {
   try {
     await unitPart();
+    uiPart();
     await dbPart();
   } catch (err) {
     console.error('\n  ✗ threw:', err.stack || err.message);

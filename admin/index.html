@@ -747,6 +747,8 @@
         </div>
         </div><!-- end vtab-pane kyc -->
         <div class="vtab-pane" data-pane="fica-pipeline">
+          <!-- Which provider runs the automated checks -->
+                  <div id="ficaProviderStrip" style="margin-bottom:14px"></div>
           <!-- Stage tiles -->
                   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:20px" id="ficaPipelineTiles"></div>
           
@@ -4899,6 +4901,22 @@
 </div>
 
 <!-- KYC Timeline Modal -->
+<div class="modal-overlay" id="ficaChecksModal" style="z-index:10002;display:none" onclick="if(event.target===this)closeFicaChecks()">
+  <div class="modal" style="max-width:680px">
+    <div class="modal__header">
+      <span class="modal__title"><i class="fa-solid fa-shield-halved" style="color:#eda5ff;margin-right:8px"></i><span id="ficaChecksTitle">Automated FICA checks</span></span>
+      <button onclick="closeFicaChecks()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:1.1rem;padding:4px 8px;border-radius:6px"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body" style="max-height:65vh;overflow-y:auto">
+      <div id="ficaChecksContent"><div style="text-align:center;padding:40px;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i></div></div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--primary" id="ficaChecksRunBtn" onclick="runFicaCheckNow()"><i class="fa-solid fa-play"></i> Run check now</button>
+      <button class="btn btn--secondary" onclick="closeFicaChecks()">Close</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="kycTimelineModal" style="z-index:10002;display:none" onclick="if(event.target===this)closeKycTimeline()">
   <div class="modal" style="max-width:560px">
     <div class="modal__header">
@@ -5245,7 +5263,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=29"></script>
 <script src="../js/investor-documents.js?v=9"></script>
-<script src="js/admin.js?v=209"></script>
+<script src="js/admin.js?v=210"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>

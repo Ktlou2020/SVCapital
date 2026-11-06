@@ -5263,6 +5263,28 @@ async function autoSetup() {
       if (rowCount) console.log('\u2705 Corrected the income-reference notice: no banner on the client copy.');
     });
 
+    await step("31. Announce Datanamix automated FICA checks", async () => {
+      /* ON CONFLICT DO NOTHING, as for every notice: a redeploy must never
+         overwrite wording somebody has edited or switched off. */
+      const { rowCount } = await pool.query(
+        `INSERT INTO feature_announcements
+           (id, title, body, where_to_find, area, audience, icon, published_at, created_by)
+         VALUES ($1,$2,$3,$4,'admin','staff','fa-shield-halved', NOW(), 'setup')
+         ON CONFLICT (id) DO NOTHING`,
+        ['datanamix-fica-checks-2026-11',
+         'Automated FICA checks: ID, bank account and sanctions screening, with the results on screen',
+         'Datanamix can now run the automated FICA check. It verifies a South African ID number '
+         + 'directly with Home Affairs, confirms with the bank that the client\u2019s account is open '
+         + 'and held under their ID, and screens every client against sanctions and PEP lists. '
+         + 'Passports are still verified by Smile Identity. A possible sanctions or PEP match is '
+         + 'never cleared automatically: the client is held as pending and a critical incident is '
+         + 'raised. Until now these results were written to the database with nowhere to read them. '
+         + 'Each step\u2019s outcome and reasons are now shown per client, and a check can be run on demand.',
+         'KYC / FICA \u2192 FICA Pipeline tab \u2192 the Checks button on a client\u2019s row. The strip at the top of '
+         + 'the FICA Pipeline shows which provider is running the checks and whether it can run.']);
+      if (rowCount) console.log('\u2705 Announced Datanamix automated FICA checks.');
+    });
+
     await step("29. Say which pool each platform fee was charged against", async () => {
       /* transactions.investment_id and .pool_id existed and the fee written
          at investment time filled neither, so the fee report's Pool column

@@ -5,6 +5,7 @@
    POST /api/fica/trigger/:investorId — manual admin trigger
    GET  /api/fica/queue               — investors due for (re-)check
    GET  /api/fica/providers           — which verification provider is live
+   GET  /api/fica/checks/:investorId  — automated check results, staff only
    POST /api/fica/webhook/smile       — Smile Identity async callback
    POST /api/fica/webhook/stitch      — Stitch async callback
    ═══════════════════════════════════════════════════════ */
@@ -169,6 +170,72 @@ router.get(
       smile:  { configured: smileReady },
       stitch: { configured: stitchReady },
     });
+  }
+);
+
+/* ═══════════════════════════════════════════════════════
+   GET /api/fica/checks/:investorId
+   What each automated check found, step by step: provider, outcome and the
+   reasons — including any sanctions / PEP matches.
+
+   Staff only, and deliberately not part of /status: that one is readable by
+   the investor themselves, and a possible watch-list match is not something
+   a client is told by a status page. Raw provider responses stay in the
+   database; this returns what a reviewer acts on.
+   ═══════════════════════════════════════════════════════ */
+function _step(status, result) {
+  const r = result || {};
+  return {
+    status:   status || 'skipped',
+    provider: r.provider || null,
+    product:  r.product || null,
+    reasons:  Array.isArray(r.reasons) ? r.reasons.slice(0, 10) : [],
+    error:    r.error || null,
+  };
+}
+
+router.get(
+  '/checks/:investorId',
+  requireAuth,
+  requireRole('admin', 'director', 'fund_manager'),
+  async (req, res) => {
+    try {
+      const { rows: inv } = await pool.query(
+        `SELECT id, first_name, last_name, kyc_status, fica_auto_status, last_auto_fica_check
+           FROM investors WHERE id = $1`, [req.params.investorId]);
+      if (!inv.length) return res.status(404).json({ error: 'Investor not found.' });
+
+      const { rows } = await pool.query(
+        `SELECT id, trigger, check_date, overall_status,
+                id_check_status, id_result, bank_check_status, bank_result,
+                sanctions_check_status, sanctions_result
+           FROM fica_checks
+          WHERE investor_id = $1
+          ORDER BY check_date DESC
+          LIMIT 20`, [req.params.investorId]);
+
+      const checks = rows.map(c => {
+        const sanctions = _step(c.sanctions_check_status, c.sanctions_result);
+        const m = c.sanctions_result && Array.isArray(c.sanctions_result.matches)
+          ? c.sanctions_result.matches : [];
+        sanctions.matches = m.slice(0, 20).map(x => ({
+          name: x.name, score: x.score, list: x.list,
+          programmes: x.programmes || [], dob: x.dob || [], nationality: x.nationality || [],
+          remarks: x.remarks || null, id: x.id || null,
+        }));
+        return {
+          id: c.id, trigger: c.trigger, check_date: c.check_date, overall: c.overall_status,
+          id_check:  _step(c.id_check_status, c.id_result),
+          bank:      _step(c.bank_check_status, c.bank_result),
+          sanctions,
+        };
+      });
+
+      res.json({ investor: inv[0], checks });
+    } catch (err) {
+      console.error('FICA checks error:', err.message);
+      res.status(500).json({ error: 'Internal server error.' });
+    }
   }
 );
 

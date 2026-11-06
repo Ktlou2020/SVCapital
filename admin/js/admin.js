@@ -6114,6 +6114,123 @@ function closeKycTimeline() {
 }
 
 /* ═══════════════════════════════════════════════
+   AUTOMATED FICA CHECKS — what the ID, bank and sanctions steps found
+   ═══════════════════════════════════════════════ */
+let _ficaChecksInvestor = null;
+
+const _FC_STATUS = {
+  pass:          { label: 'Passed',        color: '#22c55e', icon: 'fa-circle-check' },
+  clear:         { label: 'Clear',         color: '#22c55e', icon: 'fa-circle-check' },
+  fail:          { label: 'Failed',        color: '#ef4444', icon: 'fa-circle-xmark' },
+  hit:           { label: 'Possible match', color: '#ef4444', icon: 'fa-triangle-exclamation' },
+  manual_review: { label: 'Needs review',  color: '#fec24f', icon: 'fa-eye' },
+  error:         { label: 'Could not run', color: '#f97316', icon: 'fa-plug-circle-xmark' },
+  skipped:       { label: 'Not run',       color: '#7a92a8', icon: 'fa-minus' },
+  pending:       { label: 'Pending',       color: '#7a92a8', icon: 'fa-clock' },
+};
+const _FC_PROVIDER = { datanamix: 'Datanamix', smile: 'Smile Identity', stitch: 'Stitch' };
+const _FC_TRIGGER  = { first_deposit: 'First deposit', annual_recheck: 'Annual re-check', manual: 'Run by staff', webhook: 'Provider callback' };
+
+function _fcBadge(status) {
+  const s = _FC_STATUS[status] || { label: status || '—', color: '#7a92a8', icon: 'fa-circle' };
+  return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:0.72rem;font-weight:700;color:${s.color};background:${s.color}1f;border-radius:6px;padding:2px 8px"><i class="fa-solid ${s.icon}"></i>${_esc(s.label)}</span>`;
+}
+
+function _fcStep(label, step, fallbackProvider) {
+  const provider = _FC_PROVIDER[step.provider] || (step.status !== 'skipped' ? fallbackProvider : '');
+  const lines = [...(step.reasons || [])];
+  if (step.error) lines.push(step.error);
+  let matches = '';
+  if (step.matches && step.matches.length) {
+    matches = `<div style="margin-top:8px;display:flex;flex-direction:column;gap:6px">${step.matches.map(m => `
+      <div style="padding:8px 10px;border-radius:8px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.25);font-size:0.75rem">
+        <div style="font-weight:700;color:#f87171">${_esc(m.name || 'Unnamed')} <span style="font-weight:600;color:#7a92a8">· ${_esc(m.list || 'watch list')}${m.score != null ? ` · score ${_esc(String(m.score))}` : ''}</span></div>
+        ${(m.programmes || []).length ? `<div style="color:#7a92a8">Programme: ${_esc(m.programmes.join(', '))}</div>` : ''}
+        ${(m.dob || []).length ? `<div style="color:#7a92a8">Date of birth on list: ${_esc(m.dob.join(', '))}</div>` : ''}
+        ${(m.nationality || []).length ? `<div style="color:#7a92a8">Nationality: ${_esc(m.nationality.join(', '))}</div>` : ''}
+        ${m.remarks ? `<div style="color:#7a92a8">${_esc(m.remarks)}</div>` : ''}
+        ${m.id ? `<div style="color:#7a92a8;font-family:monospace;font-size:0.68rem">${_esc(m.id)}</div>` : ''}
+      </div>`).join('')}</div>`;
+  }
+  return `<div style="display:grid;grid-template-columns:120px 1fr;gap:10px;padding:8px 0;border-top:1px solid rgba(255,255,255,0.05)">
+    <div style="font-size:0.75rem;font-weight:600;color:var(--text-muted)">${label}${provider ? `<div style="font-weight:400;font-size:0.68rem">${_esc(provider)}</div>` : ''}</div>
+    <div>${_fcBadge(step.status)}
+      ${lines.length ? `<ul style="margin:6px 0 0;padding-left:16px;font-size:0.75rem;color:var(--text-muted)">${lines.map(l => `<li>${_esc(l)}</li>`).join('')}</ul>` : ''}
+      ${matches}
+    </div>
+  </div>`;
+}
+
+async function openFicaChecks(investorId) {
+  _ficaChecksInvestor = investorId;
+  const inv = STATE.investors.find(i => i.id === investorId);
+  const name = inv ? `${inv.first_name || ''} ${inv.last_name || ''}`.trim() : investorId;
+  const titleEl = document.getElementById('ficaChecksTitle');
+  if (titleEl) titleEl.textContent = `Automated FICA checks — ${name}`;
+  const overlay = document.getElementById('ficaChecksModal');
+  if (overlay) { overlay.style.display = 'flex'; overlay.classList.add('open'); document.body.style.overflow = 'hidden'; }
+  await _renderFicaChecks();
+}
+
+async function _renderFicaChecks() {
+  const el = document.getElementById('ficaChecksContent');
+  if (!el) return;
+  el.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i></div>`;
+  try {
+    const d = await API._fetch('GET', `fica/checks/${encodeURIComponent(_ficaChecksInvestor)}`);
+    const checks = d.checks || [];
+    if (!checks.length) {
+      el.innerHTML = `<div style="text-align:center;padding:36px;color:var(--text-muted)">
+        <i class="fa-solid fa-shield-halved fa-2x" style="opacity:0.25;display:block;margin-bottom:12px"></i>
+        <div style="font-weight:600">No automated check has run for this client yet.</div>
+        <div style="margin-top:6px;font-size:0.78rem">One runs overnight after their first deposit, or use <strong>Run check now</strong>.</div>
+      </div>`;
+      return;
+    }
+    el.innerHTML = checks.map((c, i) => `
+      <div style="margin-bottom:14px;padding:12px 14px;border-radius:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,${i === 0 ? '0.12' : '0.06'})">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+          <div style="font-size:0.78rem;color:var(--text-muted)">${i === 0 ? '<strong style="color:var(--text)">Latest</strong> · ' : ''}${Utils.date(c.check_date)} · ${_esc(_FC_TRIGGER[c.trigger] || c.trigger || '')}</div>
+          <div>${_fcBadge(c.overall)}</div>
+        </div>
+        ${_fcStep('ID number', c.id_check, 'Smile Identity')}
+        ${_fcStep('Bank account', c.bank, 'Stitch')}
+        ${_fcStep('Sanctions / PEP', c.sanctions, '')}
+      </div>`).join('');
+  } catch (e) {
+    el.innerHTML = `<div style="text-align:center;padding:30px;color:#ef4444">Could not load checks: ${_esc(e.message)}</div>`;
+  }
+}
+
+async function runFicaCheckNow() {
+  if (!_ficaChecksInvestor) return;
+  const ok = await Confirm.ask('Run an automated FICA check now?', {
+    body: 'This checks the client’s ID, bank account and sanctions status with the live provider. Each check is billed by the provider. A failed ID check marks the client rejected; anything doubtful is left pending for review.',
+    confirmLabel: 'Run check',
+  });
+  if (!ok) return;
+  const btn = document.getElementById('ficaChecksRunBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Running…'; }
+  try {
+    const r = await API._fetch('POST', `fica/trigger/${encodeURIComponent(_ficaChecksInvestor)}`, { trigger: 'manual' });
+    const s = _FC_STATUS[r.overallStatus];
+    Toast.success(`Check complete: ${s ? s.label : r.overallStatus}`);
+    await _renderFicaChecks();
+  } catch (e) {
+    Toast.error('Check failed: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-play"></i> Run check now'; }
+  }
+}
+
+function closeFicaChecks() {
+  const overlay = document.getElementById('ficaChecksModal');
+  if (overlay) { overlay.style.display = 'none'; overlay.classList.remove('open'); }
+  document.body.style.overflow = '';
+  _ficaChecksInvestor = null;
+}
+
+/* ═══════════════════════════════════════════════
    POOLS
    ═══════════════════════════════════════════════ */
 
@@ -18645,6 +18762,41 @@ async function loadFicaPipeline() {
     if (!STATE.kyc.length) STATE.kyc = kycRes.data || [];
     _renderFicaPipeline();
   } catch (e) { Toast.error('Failed to load FICA pipeline'); }
+  _loadFicaProviders();
+}
+
+/* Which provider the automated checks run on, and whether they can run at
+   all. Shown above the pipeline because "nobody is being verified" was a
+   state this platform sat in for months with nothing on screen to say so. */
+async function _loadFicaProviders() {
+  const el = document.getElementById('ficaProviderStrip');
+  if (!el) return;
+  try {
+    const p = await API._fetch('GET', 'fica/providers');
+    const d = p.datanamix || {};
+    const NAMES = { datanamix: 'Datanamix', smile: 'Smile Identity', stitch: 'Stitch', none: 'not run' };
+    const steps = p.steps || {};
+    let tone, text;
+    if (d.enabled && d.usable) {
+      tone = d.environment === 'LIVE' ? '#22c55e' : '#fec24f';
+      text = `Automated checks run on <strong>Datanamix (${_esc(d.environment)})</strong>`
+           + (d.environment === 'SANDBOX' ? ' — test data only, real clients will not verify' : '');
+    } else if (d.enabled) {
+      tone = '#ef4444';
+      text = `Datanamix is switched on but cannot run: ${_esc(d.problem || 'unknown problem')}`;
+    } else {
+      const ready = p.smile && p.smile.configured;
+      tone = ready ? '#60a5fa' : '#ef4444';
+      text = ready ? 'Automated checks run on <strong>Smile Identity</strong> (Datanamix is off)'
+                   : 'No verification provider is configured — automated checks cannot verify anybody';
+    }
+    el.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,.03);border:1px solid ${tone}44;font-size:0.8rem">
+      <span style="color:${tone}"><i class="fa-solid fa-circle" style="font-size:0.5rem;vertical-align:middle;margin-right:6px"></i>${text}</span>
+      <span style="color:#7a92a8">SA ID: ${NAMES[steps.sa_id] || '—'} · Passport: ${NAMES[steps.passport] || '—'} · Bank: ${NAMES[steps.bank] || '—'} · Sanctions/PEP: ${NAMES[steps.sanctions] || '—'}</span>
+    </div>`;
+  } catch (e) {
+    el.innerHTML = '';
+  }
 }
 
 function _renderFicaPipeline() {
@@ -18717,6 +18869,7 @@ function _renderFicaPipeline() {
       <td>
         <div style="display:flex;gap:4px;flex-wrap:wrap">
           <button class="btn btn--secondary btn--sm" title="View KYC timeline" onclick='openKycTimeline(${_esc(JSON.stringify(inv.id))})'><i class="fa-solid fa-timeline"></i> Timeline</button>
+          <button class="btn btn--secondary btn--sm" title="Automated ID, bank and sanctions checks" onclick='openFicaChecks(${_esc(JSON.stringify(inv.id))})'><i class="fa-solid fa-shield-halved"></i> Checks</button>
           <button class="btn btn--secondary btn--sm" onclick='navigate("kyc", document.querySelector("[data-view=kyc]"))'><i class="fa-solid fa-id-card"></i> Queue</button>
         </div>
       </td>

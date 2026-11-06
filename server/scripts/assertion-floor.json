@@ -1,6 +1,6 @@
 {
   "note": "What each check asserted when this was last written. run-checks refuses a check that asserts fewer. Raise it with node server/scripts/run-checks.cjs --update-floor",
-  "total": 8168,
+  "total": 8185,
   "checks": {
     "check-apply-android.cjs": 20,
     "check-shared-api.cjs": 22,
@@ -59,7 +59,7 @@
     "check-switch-target-options.cjs": 29,
     "check-tab-load-guards.cjs": 46,
     "check-transaction-dates.cjs": 21,
-    "check-utils-calls.cjs": 666,
+    "check-utils-calls.cjs": 667,
     "check-account-closure.cjs": 39,
     "check-account-statement.cjs": 13,
     "check-action-centre.cjs": 22,
@@ -97,6 +97,7 @@
     "check-course-cattle-minimum.cjs": 19,
     "check-course-completion.cjs": 37,
     "check-course-quiz-render.cjs": 16,
+    "check-datanamix.cjs": 84,
     "check-deployed-pages.cjs": 6,
     "check-director-report.cjs": 81,
     "check-document-print.cjs": 18,
@@ -216,7 +217,6 @@
     "check-webhook-chain.cjs": 6,
     "check-withdrawal-alert-reach.cjs": 45,
     "check-withdrawal-notice.cjs": 25,
-    "check-withdrawal-reconciliation.cjs": 40,
-    "check-datanamix.cjs": 68
+    "check-withdrawal-reconciliation.cjs": 40
   }
 }
