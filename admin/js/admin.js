@@ -6203,7 +6203,11 @@ async function _renderFicaChecks() {
 }
 
 async function runFicaCheckNow() {
-  if (!_ficaChecksInvestor) return;
+  /* Held locally: the panel can be closed while the confirmation is open,
+     and closing it clears _ficaChecksInvestor. Reading that after the await
+     sent POST /fica/trigger/null. */
+  const investorId = _ficaChecksInvestor;
+  if (!investorId) return;
   const ok = await Confirm.ask('Run an automated FICA check now?', {
     body: 'This checks the client’s ID, bank account and sanctions status with the live provider. Each check is billed by the provider. A failed ID check marks the client rejected; anything doubtful is left pending for review.',
     confirmLabel: 'Run check',
@@ -6212,10 +6216,10 @@ async function runFicaCheckNow() {
   const btn = document.getElementById('ficaChecksRunBtn');
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Running…'; }
   try {
-    const r = await API._fetch('POST', `fica/trigger/${encodeURIComponent(_ficaChecksInvestor)}`, { trigger: 'manual' });
+    const r = await API._fetch('POST', `fica/trigger/${encodeURIComponent(investorId)}`, { trigger: 'manual' });
     const s = _FC_STATUS[r.overallStatus];
     Toast.success(`Check complete: ${s ? s.label : r.overallStatus}`);
-    await _renderFicaChecks();
+    if (_ficaChecksInvestor === investorId) await _renderFicaChecks();
   } catch (e) {
     Toast.error('Check failed: ' + e.message);
   } finally {

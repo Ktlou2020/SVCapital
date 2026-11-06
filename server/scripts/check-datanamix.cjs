@@ -467,9 +467,25 @@ function uiPart() {
   ok('each FICA Pipeline row has a Checks button', /onclick='openFicaChecks\(\$\{_esc\(JSON\.stringify\(inv\.id\)\)\}\)'/.test(js));
   ok('which reads the staff-only endpoint', /API\._fetch\('GET', `fica\/checks\/\$\{encodeURIComponent/.test(js));
   ok('the modal it opens exists', /id="ficaChecksModal"/.test(html) && /id="ficaChecksContent"/.test(html));
-  ok('a check can be run from it, after a confirmation', /async function runFicaCheckNow[\s\S]{0,200}Confirm\.ask/.test(js));
+  ok('a check can be run from it, after a confirmation', /async function runFicaCheckNow[\s\S]{0,600}Confirm\.ask/.test(js));
   ok('the provider strip has somewhere to render', /id="ficaProviderStrip"/.test(html) && /fica\/providers/.test(js));
   ok('match names are escaped before they are shown', /_esc\(m\.name \|\| 'Unnamed'\)/.test(js));
+
+  /* Found on staging: the confirmation opened BEHIND the checks panel, a
+     click on the panel's backdrop closed it and cleared the remembered
+     investor, and the confirm then sent POST /fica/trigger/null. */
+  const zOf = id => { const m = html.match(new RegExp(`id="${id}"[^>]*z-index:\\s*(\\d+)`)); return m ? +m[1] : null; };
+  const overlays = [...html.matchAll(/class="modal-overlay" id="([^"]+)"[^>]*z-index:\s*(\d+)/g)]
+    .map(m => ({ id: m[1], z: +m[2] })).filter(o => o.id !== 'confirmModal');
+  const above = overlays.filter(o => o.z >= zOf('confirmModal'));
+  ok('the confirmation dialog sits above every other dialog, the checks panel included',
+     zOf('confirmModal') > zOf('ficaChecksModal') && above.length === 0,
+     `confirm ${zOf('confirmModal')}; at or above it: ${JSON.stringify(above)}`);
+  const run = (js.match(/async function runFicaCheckNow\(\) \{[\s\S]*?\n\}/) || [''])[0];
+  ok('Run check now holds the investor before it waits for the confirmation',
+     /const investorId = _ficaChecksInvestor;[\s\S]*await Confirm\.ask/.test(run)
+     && /fica\/trigger\/\$\{encodeURIComponent\(investorId\)\}/.test(run),
+     'reading _ficaChecksInvestor after the await sends null if the panel was closed meanwhile');
 }
 
 (async () => {
