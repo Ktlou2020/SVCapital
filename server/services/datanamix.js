@@ -358,7 +358,11 @@ function mapSanctionsResult(resp) {
   if (resp.Success === false && code === 4) {
     return { status: 'clear', matches: [], reasons: [] };
   }
-  if (resp.Success === false || (resp.ResponseCode !== undefined && code !== 0)) {
+  /* Success here is ResponseCode 200 ("Items found"), not the 0 that ID
+     verification and AVS use. Reading 200 as a failure turned every
+     completed screen into "could not run" — found on the first real
+     sandbox call from staging. */
+  if (resp.Success !== true || (resp.ResponseCode !== undefined && code !== 0 && code !== 200)) {
     return { status: 'error', matches: [], reasons: [_messages(resp) || `ResponseCode ${resp.ResponseCode}`] };
   }
   const results = (resp.PossibleMatches && Array.isArray(resp.PossibleMatches.Results))

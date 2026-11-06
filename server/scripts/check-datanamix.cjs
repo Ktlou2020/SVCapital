@@ -89,7 +89,9 @@ function sanctionsAnswer(b) {
     Header: { ClientReference: b.ClientReference },
     SearchResults: { InputName: b.Name, Found: true, RecordCount: results.length },
     PossibleMatches: { Found: true, HasNextPage: false, Results: results },
-    Success: true, ResponseCode: 0,
+    /* Exactly as the published sample: the sanctions product answers 200
+       for success, where ID verification and AVS answer 0. */
+    Success: true, Messages: ['Items found'], ResponseCode: 200,
   };
 }
 
@@ -255,6 +257,10 @@ async function unitPart() {
   ok('naming the list', hit.matches[0] && hit.matches[0].list === 'PEP', JSON.stringify(hit.matches));
   ok('an EntityNumber beyond 32 bits is kept exactly, as a string',
      hit.matches[0] && hit.matches[0].id === 'PEP-P001');
+  ok('a completed screen is read as completed, though it says ResponseCode 200 rather than 0',
+     dnx.mapSanctionsResult({ Success: true, Messages: ['Items found'], ResponseCode: 200,
+       PossibleMatches: { Found: false, Results: [] } }).status === 'clear',
+     'staging\'s first real sandbox screen came back "could not run: Items found"');
   ok('a failed screen is an error, never a clear',
      dnx.mapSanctionsResult({ Success: false, Messages: ['Internal System Error.'], ResponseCode: 7 }).status === 'error');
 
