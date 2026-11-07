@@ -40,6 +40,13 @@ const path = require('path');
 const { Pool } = require('pg');
 
 const ROOT = path.join(__dirname, '..', '..');
+/* "Today" has to mean what the ENGINE means by it: the South African business
+   day, not the database's UTC date and not a second answer computed in JS.
+   See scripts/lib/businessDay.cjs for why this check used to fail for two
+   hours every night. */
+const { TODAY, businessToday, businessTodayUTC } =
+  require(path.join(ROOT, 'scripts', 'lib', 'businessDay.cjs'));
+
 const db = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
@@ -97,12 +104,12 @@ const wipe = async () => {
          start_date,end_date,investment_start_date,min_investment,target_amount,current_invested)
       VALUES ('HO-OPEN','Short Term - raising','short_term','open',0.12,0,5,
               ${'$'}1::date - 29, ${'$'}1::date, ${'$'}1::date + 1, 1000, 5000000, 0)`,
-      [new Date().toISOString().slice(0, 10)]);
+      [await businessToday(db)]);
     await db.query(`
       INSERT INTO investment_pools
         (id,name,product_type,status,annual_rate,actual_rate,term_months,start_date,end_date,maturity_date,min_investment,target_amount)
       VALUES ('HO-MAT','Short Term - maturing','short_term','active',0.12,0.05,5,
-              CURRENT_DATE-150, CURRENT_DATE-120, CURRENT_DATE, 1000, 5000000)`);
+              ${TODAY}-150, ${TODAY}-120, ${TODAY}, 1000, 5000000)`);
     /* Two decoys, so the target query's own guards are exercised rather than
        assumed. Without them the fixture has one candidate and the rollover
        lands in it whatever the predicates say.
@@ -116,9 +123,9 @@ const wipe = async () => {
       INSERT INTO investment_pools
         (id,name,product_type,status,annual_rate,term_months,start_date,end_date,investment_start_date,min_investment,target_amount)
       VALUES ('HO-STALE','Short Term - stale, never cycled','short_term','open',0.12,5,
-              CURRENT_DATE-400, CURRENT_DATE-370, CURRENT_DATE-369, 1000, 5000000),
+              ${TODAY}-400, ${TODAY}-370, ${TODAY}-369, 1000, 5000000),
              ('HO-ACTIVE','Short Term - already deployed','short_term','active',0.12,5,
-              CURRENT_DATE-29, CURRENT_DATE, CURRENT_DATE+1, 1000, 5000000)`);
+              ${TODAY}-29, ${TODAY}, ${TODAY}+1, 1000, 5000000)`);
     /* HO-ACTIVE closes on the SAME day as the real target and was created
        first, so the ordering — end_date ASC, then created_at ASC — hands it
        the win the moment the status predicate stops excluding it. A decoy
@@ -126,11 +133,18 @@ const wipe = async () => {
     await db.query(`UPDATE investment_pools SET created_at = NOW() - INTERVAL '2 days' WHERE id='HO-ACTIVE'`);
     await db.query(`INSERT INTO investors (id,first_name,last_name,email,wallet_balance,status)
                     VALUES ('HO-1','Hand','Over','ho@example.com',0,'active')`);
+    /* Due the day BEFORE the business day. The maturity query asks
+       end_date <= NOW(), which compares a DATE against an instant and so
+       resolves in UTC; the cycle pass above asks the business day. An end_date
+       of "today" is therefore not yet due for the two hours a night when the
+       two are on different dates, which is all that used to fail here. What
+       this check is about is whether the TARGET is still open when the money
+       arrives, and that is unaffected. */
     await db.query(`
       INSERT INTO investments (id,investor_id,pool_id,pool_name,product_type,amount,status,
                                maturity_instruction,start_date,end_date,annual_rate,term_months)
       VALUES ('HO-INV','HO-1','HO-MAT','Short Term - maturing','short_term',10000,'active',
-              NULL, CURRENT_DATE-150, CURRENT_DATE, 0.12, 5)`);
+              NULL, ${TODAY}-151, ${TODAY}-1, 0.12, 5)`);
 
     /* The 23:00 job, in its own order: cycle first, then process maturities. */
     await quiet(() => cycleExpiredPools());
@@ -160,7 +174,7 @@ const wipe = async () => {
     /* ── 00:01 the next day ───────────────────────────────────────── */
     console.log('\n00:01 the next day — it deploys, and a new one opens');
     await db.query(`UPDATE investment_pools
-                       SET end_date = CURRENT_DATE - 1, investment_start_date = CURRENT_DATE
+                       SET end_date = ${TODAY} - 1, investment_start_date = ${TODAY}
                      WHERE id='HO-OPEN'`);
     await quiet(() => cycleExpiredPools());
     const { rows: [deployed] } = await db.query(`SELECT status FROM investment_pools WHERE id='HO-OPEN'`);
@@ -187,9 +201,9 @@ const wipe = async () => {
       INSERT INTO investment_pools
         (id,name,product_type,status,annual_rate,term_months,start_date,end_date,investment_start_date,min_investment,target_amount)
       VALUES ('HO-BAD','deploys on its close date','short_term','open',0.12,5,
-              CURRENT_DATE-29, CURRENT_DATE, CURRENT_DATE, 1000, 5000000),
+              ${TODAY}-29, ${TODAY}, ${TODAY}, 1000, 5000000),
              ('HO-OK','deploys the day after','short_term','open',0.12,5,
-              CURRENT_DATE-29, CURRENT_DATE, CURRENT_DATE+1, 1000, 5000000)`);
+              ${TODAY}-29, ${TODAY}, ${TODAY}+1, 1000, 5000000)`);
     const { runMaturityPreflight } = require(path.join(ROOT, 'server', 'services', 'maturityPreflight.js'));
     const pf = await quiet(() => runMaturityPreflight(db, {}));
     const flagged = (pf.handover || []).map(h => h.poolId);

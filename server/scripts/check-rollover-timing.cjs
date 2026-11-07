@@ -4,18 +4,23 @@
  * The month-end timing is tighter than it looks, and two crons interact:
  *
  *   23:00 SAST  maturity engine — cycleExpiredPools() FIRST, then
- *               runMaturityProcessing(). 23:00 SAST is 21:00 UTC the SAME day,
- *               so the database's CURRENT_DATE has not rolled over.
+ *               runMaturityProcessing().
  *   00:01 SAST  pool cycler on its own schedule. 00:01 SAST on the 1st is
- *               22:01 UTC on the 31st — still "the 31st" to a UTC database.
+ *               22:01 UTC on the 31st — still "the 31st" to a UTC database,
+ *               which is why neither job asks the database what day it is.
+ *               Both reason on the South African business day, and so do the
+ *               fixtures below: a fixture on CURRENT_DATE disagreed with the
+ *               engine for the two hours each night when UTC and SAST are on
+ *               different dates, which is the window this check is about.
  *
  * The target pool for a month-end rollover typically closes on the very day
  * the investments mature (end_date = 31 Aug for both). Two questions follow,
  * and both are answered here by running the real functions in the real order:
  *
  *   1. Does a pool closing TODAY still accept the rollover at 23:00?
- *      The floor is `end_date >= CURRENT_DATE`, so it should — but that is
- *      exactly the kind of boundary worth executing rather than reasoning about.
+ *      The floor is `end_date >= ` the business day, so it should — but that
+ *      is exactly the kind of boundary worth executing rather than reasoning
+ *      about.
  *
  *   2. Does cycleExpiredPools, which runs FIRST, take the target away?
  *      It used to. Cycling any pool also deployed every OTHER open pool of
@@ -44,6 +49,13 @@ const path = require('path');
 const { Pool } = require('pg');
 
 const ROOT = path.join(__dirname, '..', '..');
+/* "Today" has to mean what the ENGINE means by it: the South African business
+   day, not the database's UTC date and not a second answer computed in JS.
+   See scripts/lib/businessDay.cjs for why this check used to fail for two
+   hours every night. */
+const { TODAY, businessToday, businessTodayUTC } =
+  require(path.join(ROOT, 'scripts', 'lib', 'businessDay.cjs'));
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
@@ -77,8 +89,22 @@ async function ensureSchema() {
   return true;
 }
 
-/* Today stands in for 31 August: the investments mature today and the
-   successor pool closes today. Relative dates keep this true whenever it runs. */
+/* Today stands in for 31 August: the investments are due and the successor
+   pool closes today.
+
+   TWO CLOCKS, AND THE FIXTURE HAS TO SATISFY BOTH. The cycler asks the
+   business day whether a pool is still raising (${TODAY}); the maturity query
+   asks `end_date <= NOW()`, which compares a DATE against an instant and so
+   resolves in UTC. Between 22:00 and 00:00 UTC those disagree by a day, and a
+   fixture that gave the maturing investment an end_date of "today" was
+   therefore not yet due to the engine for two hours every night — this check
+   failed nightly on that alone.
+
+   So the investment is due the day BEFORE the business day, which is at or
+   before the UTC date at every hour, while the target still closes ON the
+   business day, which keeps it open at every hour. Nothing here stages a
+   particular hour; the relationships hold whenever it runs, which is what
+   this comment always claimed. */
 async function seed({ withCyclablePool }) {
   await pool.query(`DELETE FROM transactions WHERE investor_id LIKE 'RT-%'`);
   await pool.query(`DELETE FROM investments  WHERE investor_id LIKE 'RT-%' OR pool_id LIKE 'RT-%'`);
@@ -91,19 +117,19 @@ async function seed({ withCyclablePool }) {
     `UPDATE investment_pools SET status='active', cycled_at = NOW()
       WHERE product_type IN ('cattle','short_term') AND id NOT LIKE 'RT-%'`);
 
-  // The maturing pool: rate posted, matures today.
+  // The maturing pool: rate posted, and its investments already due.
   await pool.query(`
     INSERT INTO investment_pools (id,name,product_type,status,annual_rate,actual_rate,term_months,
         start_date,end_date,maturity_date,min_investment,cycled_at)
     VALUES ('RT-MATURING','Cattle Investment - August 2025','cattle','active',0.16,0.1223,12,
-            CURRENT_DATE-360, CURRENT_DATE, CURRENT_DATE, 500, NOW())`);
+            ${TODAY}-361, ${TODAY}-1, ${TODAY}-1, 500, NOW())`);
 
   // The successor the rollovers are meant for — open, and closing TODAY.
   await pool.query(`
     INSERT INTO investment_pools (id,name,product_type,status,annual_rate,term_months,
         start_date,end_date,maturity_date,min_investment,cycled_at)
     VALUES ('RT-TARGET','Cattle Investment - August 2026','cattle','open',0.16,12,
-            CURRENT_DATE-30, CURRENT_DATE, CURRENT_DATE+365, 500, NOW())`);
+            ${TODAY}-30, ${TODAY}, ${TODAY}+365, 500, NOW())`);
 
   if (withCyclablePool) {
     /* A cattle pool that closed inside the cycler's 60-day window and has
@@ -113,7 +139,7 @@ async function seed({ withCyclablePool }) {
       INSERT INTO investment_pools (id,name,product_type,status,annual_rate,term_months,
           start_date,end_date,maturity_date,min_investment,cycled_at)
       VALUES ('RT-STALE','Cattle Investment - July 2026','cattle','active',0.16,12,
-              CURRENT_DATE-90, CURRENT_DATE-10, CURRENT_DATE+270, 500, NULL)`);
+              ${TODAY}-90, ${TODAY}-10, ${TODAY}+270, 500, NULL)`);
   }
 
   await pool.query(`
@@ -123,7 +149,7 @@ async function seed({ withCyclablePool }) {
     INSERT INTO investments (id,investor_id,pool_id,pool_name,amount,status,start_date,end_date,
         annual_rate,term_months,expected_return,actual_return,product_type,maturity_instruction)
     VALUES ('RT-1','RT-I','RT-MATURING','Cattle Investment - August 2025',100000,'active',
-            CURRENT_DATE-360, CURRENT_DATE, 0.16, 12, 0, 0, 'cattle', 'reinvest')`);
+            ${TODAY}-361, ${TODAY}-1, 0.16, 12, 0, 0, 'cattle', 'reinvest')`);
 }
 
 const landed = async () => (await pool.query(
@@ -222,11 +248,11 @@ const statusOf = async id => (await pool.query(
             start_date,end_date,maturity_date,min_investment,cycled_at)
         VALUES
          ('RT-SWEEP-PAST','Cattle - stale but open','cattle','open',0.16,12,
-          CURRENT_DATE-120, CURRENT_DATE-5, CURRENT_DATE+240, 500, NOW()),
+          ${TODAY}-120, ${TODAY}-5, ${TODAY}+240, 500, NOW()),
          ('RT-SWEEP-NOW','Cattle - current and open','cattle','open',0.16,12,
-          CURRENT_DATE-5, CURRENT_DATE+25, CURRENT_DATE+360, 500, NOW()),
+          ${TODAY}-5, ${TODAY}+25, ${TODAY}+360, 500, NOW()),
          ('RT-SWEEP-TRIGGER','Cattle - due a cycle','cattle','active',0.16,12,
-          CURRENT_DATE-100, CURRENT_DATE-9, CURRENT_DATE+260, 500, NULL)`);
+          ${TODAY}-100, ${TODAY}-9, ${TODAY}+260, 500, NULL)`);
       const log2 = console.log; console.log = quiet;
       await cycleExpiredPools();
       console.log = log2;
@@ -266,7 +292,7 @@ const statusOf = async id => (await pool.query(
         INSERT INTO investment_pools (id,name,product_type,status,annual_rate,term_months,
             start_date,end_date,maturity_date,min_investment,cycled_at)
         VALUES ('RT-TODAY','Cattle - closing today','cattle','open',0.16,12,
-                CURRENT_DATE-25, CURRENT_DATE, CURRENT_DATE+365, 500, NULL)`);
+                ${TODAY}-25, ${TODAY}, ${TODAY}+365, 500, NULL)`);
       const log3 = console.log; console.log = quiet;
       await cycleExpiredPools();
       console.log = log3;

@@ -33,6 +33,13 @@ const path = require('path');
 const { Pool } = require('pg');
 
 const ROOT = path.join(__dirname, '..', '..');
+/* "Today" has to mean what the ENGINE means by it: the South African business
+   day, not the database's UTC date and not a second answer computed in JS.
+   See scripts/lib/businessDay.cjs for why this check used to fail for two
+   hours every night. */
+const { TODAY, businessToday, businessTodayUTC } =
+  require(path.join(ROOT, 'scripts', 'lib', 'businessDay.cjs'));
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
@@ -111,20 +118,21 @@ async function makePool(id, { product = 'cattle', status = 'open', close, invest
        one that reached a client statement. Sixty days before its own close is
        a window that could really have existed. */
     VALUES ($1,$2,$3,$4,0.16,0.09,$5,
-            CURRENT_DATE + $6::int - 60, CURRENT_DATE + $6::int, NULL,
-            CURRENT_DATE + 400, 500,
+            ${TODAY} + $6::int - 60, ${TODAY} + $6::int, NULL,
+            ${TODAY} + 400, 500,
             9000000, 12000000, 'medium', 'Beefcor',
             0.02,'once',
             0.01,'annual',
             750000, 750000, 9, ${cycled ? 'NOW()' : 'NULL'})`,
     [id, `${product} under test — ${id}`, product, status, term, close]);
-  /* Set separately: the offsets above are day counts, and CURRENT_DATE + $n
-     needs the cast in a place where it cannot be confused for the DATE the
-     column actually holds. Leaving it NULL is a case in its own right — that
-     is the shape every pool created before this column existed still has. */
+  /* Set separately: the offsets above are day counts, and the business day
+     plus $n needs the cast in a place where it cannot be confused for the
+     DATE the column actually holds. Leaving it NULL is a case in its own
+     right — that is the shape every pool created before this column existed
+     still has. */
   if (investStart !== null) {
     await pool.query(
-      `UPDATE investment_pools SET investment_start_date = CURRENT_DATE + $2::int WHERE id = $1`,
+      `UPDATE investment_pools SET investment_start_date = ${TODAY} + $2::int WHERE id = $1`,
       [id, investStart]);
   }
 }
@@ -289,7 +297,10 @@ const iso = d => (d instanceof Date ? d : new Date(d)).toISOString().slice(0, 10
        year, which is what the old assertion could not do: it could only fail
        between the 28th and the 31st, and so it did not, for years. */
     const DAY   = 86400000;
-    const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+    /* The business day, carried as midnight UTC so the day counts below come
+       out whole. Computing it from new Date() here would put these offsets a
+       day out from the ${TODAY} they are added to, for two hours a night. */
+    const today = await businessTodayUTC(pool);
     const monthEnd = d => new Date(d.getTime() + DAY).getUTCMonth() !== d.getUTCMonth();
 
     /* The last day of the previous month: strictly before today, and never
@@ -401,6 +412,38 @@ const iso = d => (d instanceof Date ? d : new Date(d)).toISOString().slice(0, 10
          (code.match(/\$\{TODAY\}/g) || []).length >= 5,
          `found ${(code.match(/\$\{TODAY\}/g) || []).length}`);
 
+      /* And the same rule for the FIXTURES that judge it. The rule above was
+         held for the job for a year while four checks seeded their rows with
+         CURRENT_DATE, so for the two hours each night when UTC and SAST are on
+         different dates the fixture's "today" was a day behind the engine's,
+         all four failed, and run-checks failed with them — the suite could not
+         go green and the floor could not be raised, nightly, for a reason that
+         was never in the product. A rule that covers the code under test and
+         not the test is half a rule.
+
+         THIS file is not in the list. It has to say CURRENT_DATE in order to
+         forbid it to the job, and two attempts to read "only the SQL" out of
+         it both broke on its own punctuation — one on the backticks inside a
+         regex literal, the next on the detector matching its own source. A
+         detector that needs an exception for the file it lives in is a
+         detector that will quietly stop detecting, so this one does not try:
+         the boundary in this check is held by the behavioural assertions
+         below, which run the real expression at the real firing moment. */
+      for (const dated of ['check-rollover-timing', 'check-maturity-catchup',
+                           'check-maturity-pool-handover']) {
+        const src = fs.readFileSync(path.join(__dirname, `${dated}.cjs`), 'utf8');
+        /* Comments name the bug to explain it; only the code is read. */
+        const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+        ok(`${dated} takes today from the shared helper`,
+           /businessDay/.test(code) && /\$\{TODAY\}/.test(code),
+           'scripts/lib/businessDay.cjs holds the one definition the engine uses');
+        ok(`and ${dated} never asks the database what day it is`,
+           !/CURRENT_DATE/.test(code),
+           'CURRENT_DATE is evaluated in the database timezone, which is UTC');
+        ok(`nor the container clock`, !/new Date\(\s*\)/.test(code),
+           `${dated}: new Date() is a third notion of today`);
+      }
+
       /* The boundary, tested against the real expression at the real firing
          moment rather than whenever this check happens to run.
 
@@ -457,7 +500,7 @@ const iso = d => (d instanceof Date ? d : new Date(d)).toISOString().slice(0, 10
             start_date,end_date,annual_rate,term_months,expected_return,actual_return,
             product_type,maturity_instruction)
         VALUES ('PC-INV-1','PC-INV','PC-PF-DUE','cattle under test — PC-PF-DUE',
-                50000,'active',CURRENT_DATE-365,CURRENT_DATE,0.16,12,0,0,'cattle','payout')`);
+                50000,'active',${TODAY}-365,${TODAY},0.16,12,0,0,'cattle','payout')`);
 
       const { runMaturityPreflight } =
         require(path.join(ROOT, 'server', 'services', 'maturityPreflight.js'));

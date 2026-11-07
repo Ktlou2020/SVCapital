@@ -43,6 +43,13 @@ const path = require('path');
 const { Pool } = require('pg');
 
 const ROOT = path.join(__dirname, '..', '..');
+/* "Today" has to mean what the ENGINE means by it: the South African business
+   day, not the database's UTC date and not a second answer computed in JS.
+   See scripts/lib/businessDay.cjs for why this check used to fail for two
+   hours every night. */
+const { TODAY, businessToday, businessTodayUTC } =
+  require(path.join(ROOT, 'scripts', 'lib', 'businessDay.cjs'));
+
 const SSL  = process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false };
 const db   = new Pool({ connectionString: process.env.DATABASE_URL, ssl: SSL });
 
@@ -89,7 +96,7 @@ console.log('\nit is armed at boot, and it can be disarmed');
         (id, name, product_type, status, annual_rate, actual_rate, term_months,
          start_date, end_date, maturity_date, min_investment, current_invested, raised_amount)
       VALUES ('POOL-CU-DONE','Cattle - catch-up source','cattle','active',0.12,0.1317,12,
-              CURRENT_DATE - 370, CURRENT_DATE - 1, CURRENT_DATE - 1, 1000, 100000, 100000)`);
+              ${TODAY} - 370, ${TODAY} - 1, ${TODAY} - 1, 1000, 100000, 100000)`);
 
     const seed = async (id, endDateSql) => {
       await db.query(
@@ -102,14 +109,14 @@ console.log('\nit is armed at boot, and it can be disarmed');
             annual_rate, term_months, expected_return, product_type,
             maturity_instruction, maturity_processed_at)
          VALUES ($1,$2,'POOL-CU-DONE','Cattle - catch-up source',100000,'active',
-                 CURRENT_DATE - 370, ${endDateSql}, 0.12, 12, 12000, 'cattle',
+                 ${TODAY} - 370, ${endDateSql}, 0.12, 12, 12000, 'cattle',
                  'payout_all', NULL)`,
         [`INVST-${id}`, id]);
     };
     /* Yesterday's maturity, never processed — the pool of 205, in miniature. */
-    await seed('INV-CU-OVERDUE', 'CURRENT_DATE - 1');
+    await seed('INV-CU-OVERDUE', `${TODAY} - 1`);
     /* And one maturing today, which tonight's 23:00 run owns. */
-    await seed('INV-CU-TODAY',   'CURRENT_DATE');
+    await seed('INV-CU-TODAY',   TODAY);
 
     process.env.JWT_SECRET = process.env.JWT_SECRET || 'check-only-secret';
     const { runMaturityCatchUp } = require(path.join(ROOT, 'server', 'jobs', 'maturityCron.js'));
