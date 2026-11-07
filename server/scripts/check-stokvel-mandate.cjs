@@ -66,7 +66,7 @@ console.log('\nand an exit is matched on the member, not the amount');
      '"settle her share" is whatever it comes to on the day \u2014 interest arriving between '
      + 'the approval and the settlement must not send her round the signatories again');
   ok('every kind is constrained in the schema',
-     /kind IN \('withdrawal','investment','exit','payout'\)/.test(read('server/db/setup.js')),
+     /kind IN \('withdrawal','investment','exit','payout','mandate'\)/.test(read('server/db/setup.js')),
      'a kind the database will not store is a feature that fails at the last step');
   ok('a payout authority pins WHICH distribution',
      /payout_id/.test(code) && /approved for a different payout/.test(SVC),

@@ -12754,6 +12754,7 @@ function _svTabList() {
     ['overview',      'Overview',      'fa-gauge-high'],
     ['contributions', 'Contributions', 'fa-calendar-check'],
     ['approvals',     'Approvals',     'fa-user-shield'],
+    ['proposals',     'Proposals',     'fa-check-to-slot'],
     ['shares',        'Shares',        'fa-chart-pie'],
     ['payouts',       'Payouts',       'fa-gift'],
     ['members',       'Members',       'fa-users'],
@@ -12840,12 +12841,17 @@ async function _svRenderHub(id, tab, opts) {
   let html = '';
   switch (open) {
     case 'contributions': html = _svContributions(contributions, mine, id); break;
-    case 'approvals':     html = _svWithdrawals(requests, meIsSignatory, id); break;
+    case 'approvals':     html = _svWithdrawals(requests, meIsSignatory, id, {
+                              g, canPropose: meIsSignatory || !!g.i_opened_it
+                                || ['chairperson', 'secretary', 'treasurer'].includes(g.my_role),
+                              signatories: ((members && members.data) || [])
+                                .filter(m => m.status === 'active' && m.is_signatory).length }); break;
     case 'shares':        html = _svShares(shareData, id); break;
     case 'payouts':       html = _svPayouts(payoutData, id); break;
     case 'members':       html = _svMembers(members, id, !!(invitations && invitations.can_invite))
                                + _svInvitations(invitations, id); break;
     case 'investments':   html = await _svInvestments(id); break;
+    case 'proposals':     html = await _svProposals(id); break;
     case 'transactions':  html = await _svTransactions(id); break;
     case 'statement':     html = _svStatement(g, id); break;
     default:              html = _svOverview(id, { g, shareData, payoutData, contributions,
@@ -13165,27 +13171,225 @@ async function _svInvestments(id) {
   catch (err) { return `<div class="empty-state"><p>Could not load the investments. ${_esc(err.message || '')}</p></div>`; }
   const rows = (res && res.data) || [];
   const t = (res && res.totals) || {};
+  const lock = (res && res.lock_date) || '';
   if (!rows.length) {
     return `<div class="empty-state"><p>This group has not invested anything yet.</p>
       <p style="font-size:0.84rem;color:var(--text-muted)">Investing the pot is the group&rsquo;s own
       decision and needs the signatories&rsquo; approval. Capital is at risk.</p></div>`;
   }
-  return `<div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:14px">
-      <div><div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase">Invested now</div>
-        <div style="font-size:1.3rem;font-weight:800">${Utils.rand(t.active)}</div></div>
-      <div><div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase">Returns realised</div>
-        <div style="font-size:1.3rem;font-weight:800">${Utils.rand(t.returns)}</div></div>
+
+  /* Your part of each investment, read off your share of the pot today. An
+     indication, not an entitlement: shares move with every contribution,
+     and the Shares section is the record. */
+  const cached = _svCache(id) || {};
+  const sd = (cached.shareData && cached.shareData.data) || {};
+  const frac = Number(sd.net_assets) > 0 ? Math.max(0, Number(sd.my_share) || 0) / Number(sd.net_assets) : 0;
+  const day = v => String(v || '').slice(0, 10);
+  const month = d => {
+    const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${names[Number(d.slice(5, 7)) - 1] || ''} ${d.slice(0, 4)}`;
+  };
+
+  /* The maturity calendar: active money, grouped by the month it comes
+     back. Anything returning after the lock date is marked, because that is
+     money the group cannot pay out on the day it locked itself until. */
+  const active = rows.filter(r => r.status === 'active' && r.maturity_date)
+    .sort((a, b) => day(a.maturity_date).localeCompare(day(b.maturity_date)));
+  const groups = [];
+  for (const r of active) {
+    const m = month(day(r.maturity_date));
+    if (!groups.length || groups[groups.length - 1].m !== m) groups.push({ m, rows: [] });
+    groups[groups.length - 1].rows.push(r);
+  }
+  const tile = (label, value, hint) => `<div style="min-width:140px">
+      <div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase">${label}</div>
+      <div style="font-size:1.3rem;font-weight:800">${value}</div>
+      ${hint ? `<div style="font-size:0.7rem;color:var(--text-muted)">${hint}</div>` : ''}</div>`;
+
+  return `<div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:16px">
+      ${tile('Invested now', Utils.rand(t.active))}
+      ${tile('Expected on that', Utils.rand(t.expected_active), 'The pools&rsquo; targets, not a promise')}
+      ${tile('Returns realised', Utils.rand(t.returns), 'Paid back into the group wallet')}
+      ${tile('Next maturity', t.next_maturity ? _esc(day(t.next_maturity)) : '—',
+             lock ? `Money locked until ${_esc(lock)}` : '')}
     </div>
+    ${groups.length ? `<div class="sa-section-title"><i class="fa-solid fa-calendar-days"></i> When the money comes back</div>
+      ${groups.map(gr => `<div style="margin-bottom:10px">
+        <div style="font-size:0.74rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
+                    color:var(--text-muted);margin:8px 0 4px">${_esc(gr.m)}</div>
+        ${gr.rows.map(r => {
+          const late = lock && day(r.maturity_date) > lock;
+          return `<div style="border:1px solid ${late ? '#f59e0b' : 'var(--border)'};border-radius:10px;
+                              padding:9px 12px;margin-bottom:6px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
+            <div><strong>${_esc(r.pool_name || 'Investment')}</strong>
+              <div style="font-size:0.74rem;color:var(--text-muted)">Matures ${_esc(day(r.maturity_date))}
+                ${late ? ' &middot; <span style="color:#f59e0b">after the lock date</span>' : ''}</div></div>
+            <div style="text-align:right;font-size:0.82rem">
+              <div>${Utils.rand(r.amount)} invested &middot; ${Utils.rand(r.expected_return)} expected</div>
+              ${frac > 0 ? `<div style="font-size:0.72rem;color:var(--text-muted)">Your part today:
+                ${Utils.rand(Number(r.amount) * frac)}</div>` : ''}
+            </div>
+          </div>`; }).join('')}
+      </div>`).join('')}` : ''}
+    <div class="sa-section-title mt-16"><i class="fa-solid fa-seedling"></i> Every investment</div>
     <table class="data-table" style="font-size:0.82rem"><thead><tr>
-      <th>Pool</th><th class="text-right">Amount</th><th>Status</th><th>Matures</th>
+      <th>Pool</th><th class="text-right">Amount</th><th class="text-right">Earned</th><th>Status</th><th>Matures</th>
     </tr></thead><tbody>
     ${rows.map(r => `<tr>
       <td>${_esc(r.pool_name || '—')}</td>
       <td class="text-right"><strong>${Utils.rand(r.amount)}</strong></td>
+      <td class="text-right">${Number(r.actual_return) ? Utils.rand(r.actual_return) : '—'}</td>
       <td>${_esc(r.status)}</td>
-      <td>${_esc(String(r.maturity_date || '').slice(0, 10) || '—')}</td>
+      <td>${_esc(day(r.maturity_date) || '—')}</td>
     </tr>`).join('')}
-    </tbody></table>`;
+    </tbody></table>
+    <div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px">
+      Expected figures are each pool&rsquo;s target return. Capital is at risk and a target is not a promise.
+      &ldquo;Your part&rdquo; is read off your share of the pot today; the Shares section is the record.
+    </div>`;
+}
+
+/* ─── Proposals ────────────────────────────────────────────────
+   What the members decide before the signatories authorise. Every active
+   member votes; a carried proposal to invest can then be put to the
+   signatories, who still approve it to the quorum. Fetched when the section
+   opens, like the holdings, so the overview stays quick. */
+async function _svProposals(id) {
+  let res;
+  try { res = await API._fetch('GET', `stokvels/${id}/proposals`); }
+  catch (err) { return `<div class="empty-state"><p>Could not load the proposals. ${_esc(err.message || '')}</p></div>`; }
+  const rows = (res && res.data) || [];
+  const mayWithdrawAny = !!(res && res.may_withdraw_any);
+  const gid = _esc(id);
+  const label = { open: 'Voting open', carried: 'Carried', defeated: 'Defeated', withdrawn: 'Withdrawn' };
+  const colour = { open: 'var(--text-muted)', carried: '#22c55e', defeated: '#ef4444', withdrawn: 'var(--text-muted)' };
+  const card = p => {
+    const t = p.tally || {};
+    const voteBtn = (v, text) => `<button class="btn btn--${p.my_vote === v ? 'primary' : 'ghost'} btn--sm"
+        onclick="voteStokvelProposal('${gid}','${_esc(p.id)}','${v}')">${text}</button>`;
+    return `<div style="border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:start">
+        <div>
+          <div style="font-weight:800">${_esc(p.title)}</div>
+          <div style="font-size:0.74rem;color:var(--text-muted)">${_esc(p.raised_by_name || 'A member')}
+            ${p.amount ? ' &middot; ' + Utils.rand(p.amount) : ''}${p.pool_name ? ' into ' + _esc(p.pool_name) : ''}
+            &middot; ${p.status === 'open' ? 'closes ' + _esc(String(p.closes_at || '').slice(0, 10)) : _esc(String(p.decided_at || '').slice(0, 10))}</div>
+          ${p.details ? `<div style="font-size:0.8rem;margin-top:6px">${_esc(p.details)}</div>` : ''}
+        </div>
+        <div style="text-align:right;white-space:nowrap">
+          <div style="font-size:0.78rem;font-weight:700;color:${colour[p.status] || 'var(--text-muted)'}">${label[p.status] || _esc(p.status)}</div>
+          <div style="font-size:0.72rem;color:var(--text-muted)">${t.yes || 0} yes &middot; ${t.no || 0} no &middot; ${t.abstain || 0} abstain</div>
+          <div style="font-size:0.7rem;color:var(--text-muted)">${t.needed || 0} of ${t.members || 0} carries it</div>
+        </div>
+      </div>
+      ${p.status === 'open' ? `<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          ${voteBtn('yes', 'Yes')}${voteBtn('no', 'No')}${voteBtn('abstain', 'Abstain')}
+          ${p.i_raised_it || mayWithdrawAny ? `<button class="btn btn--ghost btn--sm" style="margin-left:auto"
+            onclick="withdrawStokvelProposal('${gid}','${_esc(p.id)}')">Withdraw</button>` : ''}
+        </div>` : ''}
+      ${p.status === 'carried' && p.pool_id && p.amount && !p.request_id ? `<div style="margin-top:10px">
+          <button class="btn btn--primary btn--sm" onclick="proposalToSignatories('${gid}','${_esc(p.id)}','${_esc(p.pool_id)}','${_esc(String(p.amount))}')">
+            <i class="fa-solid fa-user-shield"></i> Put it to the signatories</button></div>` : ''}
+      ${p.request_id ? `<div style="font-size:0.74rem;color:var(--text-muted);margin-top:8px">
+          Put to the signatories &mdash; see Approvals.</div>` : ''}
+    </div>`;
+  };
+  const open = rows.filter(p => p.status === 'open');
+  const past = rows.filter(p => p.status !== 'open').slice(0, 10);
+  return `<div class="sa-section-title mt-16"><i class="fa-solid fa-check-to-slot"></i> Proposals</div>
+    <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px">
+      Put a question to the whole group &mdash; &ldquo;should we invest R50 000 for 12 months?&rdquo; &mdash; and
+      every member votes. It carries when more than half the members say yes, or on more yes than no when
+      voting closes. A carried proposal moves no money: an investment still needs the signatories to approve it.
+    </div>
+    ${open.length ? open.map(card).join('') : `<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:8px">Nothing is being voted on.</div>`}
+    <button class="btn btn--secondary btn--sm" onclick="raiseStokvelProposal('${gid}')">
+      <i class="fa-solid fa-plus"></i> Propose something</button>
+    ${past.length ? `<div style="font-size:0.74rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px">Decided</div>${past.map(card).join('')}` : ''}`;
+}
+
+function raiseStokvelProposal(groupId) {
+  const pools = (PORTAL.pools || []).filter(p => p.status === 'open' && !_poolPastClose(p));
+  _svFormShell(groupId, {
+    icon: 'fa-check-to-slot',
+    title: 'Propose something to the group',
+    intro: 'Every member gets a vote. If it is an investment, name the pool and amount, so that a carried '
+         + 'proposal can be put straight to the signatories.',
+    fields: _svField('svPrTitle', 'What should the group decide?', 'text', '', 'maxlength="120"')
+      + _svField('svPrDetails', 'More detail (optional)', 'text', '', 'maxlength="1000"')
+      + `<label for="svPrPool" style="display:block;font-size:0.74rem;text-transform:uppercase;
+          letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">Invest in a pool? (optional)</label>
+        <select id="svPrPool" class="form-input" style="width:100%;margin-bottom:12px">
+          <option value="">Not an investment</option>
+          ${pools.map(p => `<option value="${_esc(p.id)}">${_esc(p.name)} \u2014 ${(parseFloat(p.annual_rate) * 100).toFixed(1)}% over ${_esc(String(p.term_months))} months</option>`).join('')}
+        </select>`
+      + _svField('svPrAmount', 'How much should reach the pool (if investing)', 'number', '',
+                 'min="0" step="0.01" inputmode="decimal"')
+      + _svField('svPrDays', 'Voting stays open for (days)', 'number', '1 to 30 days.', 'min="1" max="30" step="1" value="7"'),
+    submit: `submitStokvelProposal('${_esc(groupId)}')`,
+    submitIcon: 'fa-paper-plane',
+    submitLabel: 'Put it to the vote',
+  });
+}
+
+async function submitStokvelProposal(groupId) {
+  const title = _svVal('svPrTitle').trim();
+  if (!title) return _svFormError('Say what the group is being asked to decide.');
+  const poolId = _svVal('svPrPool');
+  const amount = _svVal('svPrAmount') ? parseFloat(_svVal('svPrAmount')) : null;
+  if (poolId && !(amount > 0)) return _svFormError('Say how much should reach the pool.');
+  try {
+    await API._fetch('POST', `stokvels/${groupId}/proposals`, {
+      title, details: _svVal('svPrDetails'), pool_id: poolId || null, amount,
+      closes_in_days: parseInt(_svVal('svPrDays'), 10) || 7,
+    });
+    Utils.toast('Proposal raised. Every member can now vote on it.', 'success');
+  } catch (err) {
+    return _svFormError(err.message || 'Could not raise that proposal.');
+  }
+  await _svRenderHub(groupId, 'proposals');
+}
+
+async function voteStokvelProposal(groupId, proposalId, vote) {
+  try {
+    const res = await API._fetch('POST', `stokvels/${groupId}/proposals/${proposalId}/vote`, { vote });
+    const st = res && res.data && res.data.status;
+    Utils.toast(st === 'carried' ? 'Vote recorded \u2014 the proposal has carried.'
+      : st === 'defeated' ? 'Vote recorded \u2014 the proposal has been defeated.'
+      : 'Vote recorded. You can change it while voting is open.', 'success');
+  } catch (err) {
+    Utils.toast(err.message || 'Could not record that vote.', 'error');
+  }
+  await _svRenderHub(groupId, 'proposals');
+}
+
+async function withdrawStokvelProposal(groupId, proposalId) {
+  if (!confirm('Withdraw this proposal? Voting on it will stop.')) return;
+  try {
+    await API._fetch('POST', `stokvels/${groupId}/proposals/${proposalId}/withdraw`, {});
+    Utils.toast('Proposal withdrawn.', 'success');
+  } catch (err) {
+    Utils.toast(err.message || 'Could not withdraw that proposal.', 'error');
+  }
+  await _svRenderHub(groupId, 'proposals');
+}
+
+/* The members said yes; the signatories still decide whether the money
+   moves. This raises that request for exactly what was voted on. */
+async function proposalToSignatories(groupId, proposalId, poolId, amount) {
+  try {
+    const res = await API._fetch('POST', `stokvels/${groupId}/withdrawal-requests`, {
+      kind: 'investment', pool_id: poolId, amount: parseFloat(amount), proposal_id: proposalId,
+      reason: 'Carried by the group\u2019s vote',
+    });
+    Utils.toast(res && res.data && res.data.lock_warning
+      ? 'Put to the signatories. Note: ' + res.data.lock_warning
+      : 'Put to the signatories. They have been asked to approve it.', 'success');
+  } catch (err) {
+    Utils.toast(err.message || 'Could not put that to the signatories.', 'error');
+    return;
+  }
+  await _svRenderHub(groupId, 'approvals');
 }
 
 /* ─── The group's ledger ───────────────────────────────────────────
@@ -13646,7 +13850,9 @@ async function settleStokvelExit(groupId, requestId) {
    going INTO one of our pools. Both move the group's money, so both need the
    signatories; the row has to say which, or a signatory approving "R10 000"
    cannot tell a withdrawal from an investment. */
-function _svWithdrawals(res, meIsSignatory, gid) {
+function _svWithdrawals(res, meIsSignatory, gid, ctx) {
+  const c = ctx || {};
+  const g = c.g || {};
   const rows = (res && res.data) || [];
   const open = rows.filter(r => r.status === 'pending');
   const past = rows.filter(r => r.status !== 'pending').slice(0, 5);
@@ -13655,12 +13861,13 @@ function _svWithdrawals(res, meIsSignatory, gid) {
       <div style="display:flex;justify-content:space-between;align-items:start;gap:10px">
         <div>
           <div style="font-weight:800">
-            ${Utils.rand(r.amount)}
+            ${r.kind === 'mandate' ? 'Change to the mandate' : Utils.rand(r.amount)}
             <span style="font-size:0.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
                          border:1px solid var(--border);border-radius:999px;padding:1px 7px;margin-left:6px;
-                         color:${r.kind === 'investment' ? '#eda5ff' : (r.kind === 'exit' ? '#f59e0b' : 'var(--text-muted)')}">
+                         color:${r.kind === 'investment' || r.kind === 'mandate' ? '#eda5ff' : (r.kind === 'exit' ? '#f59e0b' : 'var(--text-muted)')}">
               ${r.kind === 'investment' ? 'Invest'
                 : r.kind === 'exit' ? 'Exit'
+                : r.kind === 'mandate' ? 'Mandate'
                 : r.kind === 'payout' ? 'Payout' : 'Withdraw'}
             </span>
           </div>
@@ -13676,9 +13883,13 @@ function _svWithdrawals(res, meIsSignatory, gid) {
                    to is that the whole group is paid, not that a sum goes
                    somewhere. */
                 ? ' · ' + _esc(r.payout_label || 'the whole group') + ' — everybody paid out'
+              : r.kind === 'mandate'
+                ? ' · proposes to ' + _esc(r.change_summary || 'change the mandate')
                 : (r.bank_name ? ' · ' + _esc(r.bank_name) : '')}
           </div>
-          ${r.reason ? `<div style="font-size:0.78rem;margin-top:4px">${_esc(r.reason)}</div>` : ''}
+          ${r.reason && r.reason !== r.change_summary ? `<div style="font-size:0.78rem;margin-top:4px">${_esc(r.reason)}</div>` : ''}
+          ${r.lock_warning ? `<div style="font-size:0.76rem;margin-top:6px;color:#f59e0b">
+            <i class="fa-solid fa-triangle-exclamation"></i> ${_esc(r.lock_warning)}</div>` : ''}
         </div>
         <div style="text-align:right;white-space:nowrap">
           <div style="font-size:0.78rem;font-weight:700;color:${r.satisfied ? '#22c55e' : 'var(--text-muted)'}">
@@ -13725,6 +13936,14 @@ function _svWithdrawals(res, meIsSignatory, gid) {
       when enough signatories approve it. No one member can do it alone, and the whole
       group can see who has agreed to what.
     </div>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:0.8rem;margin-bottom:12px">
+      <span><i class="fa-solid fa-pen-nib" style="color:#eda5ff"></i>
+        ${g.stokvel_quorum ? `<strong>${_esc(String(g.stokvel_quorum))} of ${_esc(String(c.signatories || 0))}</strong> signatories must approve`
+                           : 'No mandate on file yet'}</span>
+      <span><i class="fa-solid fa-lock" style="color:#eda5ff"></i>
+        ${g.lock_date ? `Money locked until <strong>${_esc(String(g.lock_date).slice(0, 10))}</strong>`
+                      : 'No lock date set'}</span>
+    </div>
     ${open.length ? open.map(row).join('') : `<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:8px">Nothing awaiting approval.</div>`}
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn--secondary btn--sm" onclick="raiseStokvelWithdrawal('${_esc(gid)}')">
@@ -13733,6 +13952,9 @@ function _svWithdrawals(res, meIsSignatory, gid) {
       <button class="btn btn--secondary btn--sm" onclick="raiseStokvelInvestment('${_esc(gid)}')">
         <i class="fa-solid fa-seedling"></i> Request an investment
       </button>
+      ${c.canPropose && g.stokvel_quorum ? `<button class="btn btn--ghost btn--sm" onclick="raiseStokvelMandateChange('${_esc(gid)}')">
+        <i class="fa-solid fa-pen-nib"></i> Change the mandate or lock date
+      </button>` : ''}
     </div>
     ${past.length ? `<div style="font-size:0.74rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px">Recent</div>${past.map(row).join('')}` : ''}`;
 }
@@ -13890,13 +14112,17 @@ function raiseStokvelInvestment(groupId) {
           letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">Which pool</label>
       <select id="svInvPool" class="form-input" style="width:100%;margin-bottom:12px"
               onchange="_svInvRecalc()">
-        ${pools.map(p => `<option value="${_esc(p.id)}" data-min="${parseFloat(p.min_investment) || 0}">
+        ${pools.map(p => `<option value="${_esc(p.id)}" data-min="${parseFloat(p.min_investment) || 0}"
+                  data-term="${parseInt(p.term_months, 10) || 0}"
+                  data-maturity="${_esc(String(p.maturity_date || '').slice(0, 10))}">
           ${_esc(p.name)} \u2014 ${(parseFloat(p.annual_rate) * 100).toFixed(1)}% over ${_esc(String(p.term_months))} months \u00b7 from ${Utils.rand(p.min_investment)}
         </option>`).join('')}
       </select>`
       + _svField('svInvAmount', 'How much should reach the pool', 'number', '',
                  'min="0" step="0.01" inputmode="decimal" oninput="_svInvRecalc()"')
       + `<div id="svInvNote" style="font-size:0.76rem;color:var(--text-muted);margin-bottom:12px"></div>`
+      + `<div id="svInvLock" data-lock="${_esc(_svLockDate(groupId))}"
+            style="font-size:0.76rem;color:#f59e0b;margin-bottom:12px"></div>`
       + _svField('svInvReason', 'What is it for? (optional)', 'text', '', 'maxlength="200"'),
     submit: `submitStokvelInvestment('${_esc(groupId)}')`,
     submitIcon: 'fa-paper-plane',
@@ -13911,6 +14137,7 @@ function _svInvRecalc() {
   const sel  = document.getElementById('svInvPool');
   const note = document.getElementById('svInvNote');
   if (!sel || !note) return;
+  _svInvLockNote(sel);
   const min = parseFloat(sel.selectedOptions[0] && sel.selectedOptions[0].dataset.min) || 0;
   const amt = parseFloat((document.getElementById('svInvAmount') || {}).value) || 0;
   if (!amt) {
@@ -13927,6 +14154,34 @@ function _svInvRecalc() {
   note.innerHTML = `${Utils.rand(amt)} reaches the pool. With the 1% platform fee on top,
     <strong>${Utils.rand(spend)}</strong> leaves the group wallet.`;
   note.style.color = 'var(--text-muted)';
+}
+
+/* A savings club locked until December that invests into an eighteen-month
+   pool will not have the money back for its payout. Said before the
+   request is raised, not discovered on payout day. The server says it
+   again on the request itself, to every signatory. */
+function _svLockDate(groupId) {
+  const cached = _svCache(groupId) || {};
+  const g = (cached.group && cached.group.data) || {};
+  return String(g.lock_date || '').slice(0, 10);
+}
+
+function _svInvLockNote(sel) {
+  const box = document.getElementById('svInvLock');
+  if (!box) return;
+  const lock = box.getAttribute('data-lock') || '';
+  const opt = sel.selectedOptions[0];
+  let maturity = (opt && opt.dataset.maturity) || '';
+  const term = parseInt(opt && opt.dataset.term, 10) || 0;
+  if (!maturity && term) {
+    const d = new Date(); d.setMonth(d.getMonth() + term);
+    maturity = d.toISOString().slice(0, 10);
+  }
+  box.innerHTML = (lock && maturity && maturity > lock)
+    ? `<i class="fa-solid fa-triangle-exclamation"></i> This pool matures around ${_esc(maturity)},
+       after the group&rsquo;s lock date of ${_esc(lock)}. The money will not be back in the
+       wallet in time for a payout on that date.`
+    : '';
 }
 
 async function submitStokvelInvestment(groupId) {
@@ -14002,12 +14257,76 @@ async function stokvelInvestAuthority(subAccountId, poolId, poolAmount) {
     + 'Open the group, request an investment into this pool, and place it once they have.' };
 }
 
+/* ─── Changing the mandate ───────────────────────────────────
+   Who signs, how many must agree, and the date the money is locked until.
+   The group proposes; the signatories approve it to the quorum, exactly as
+   they approve money, and it takes effect the moment the last approval
+   lands. The roster comes from what the workspace already loaded, so the
+   choices are people, never ids to type. */
+function raiseStokvelMandateChange(groupId) {
+  const cached  = _svCache(groupId) || {};
+  const g       = (cached.group && cached.group.data) || {};
+  const roster  = ((cached.members && cached.members.data) || []).filter(m => m.status === 'active');
+  const name    = m => _esc(`${m.first_name || ''} ${m.last_name || ''}`.trim() || 'A member');
+  const sigs    = roster.filter(m => m.is_signatory);
+  const others  = roster.filter(m => !m.is_signatory);
+  const opt     = (list, none) => `<option value="">${none}</option>`
+    + list.map(m => `<option value="${_esc(m.investor_id)}">${name(m)}</option>`).join('');
+  const sel = (id, label, list, none) => `<label for="${id}" style="display:block;font-size:0.74rem;
+      text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">${label}</label>
+    <select id="${id}" class="form-input" style="width:100%;margin-bottom:12px">${opt(list, none)}</select>`;
+  _svFormShell(groupId, {
+    icon: 'fa-pen-nib',
+    title: 'Change the mandate',
+    intro: `This changes nothing yet. It asks the signatories to approve the change, to the same
+      ${_esc(String(g.stokvel_quorum || 2))} approvals the group needs to move money, and it takes effect
+      as soon as they have. A signatory cannot vote on their own removal.`,
+    fields: sel('svMcAdd', 'Make a signatory (optional)', others, 'Nobody')
+      + sel('svMcRemove', 'Remove a signatory (optional)', sigs, 'Nobody')
+      + _svField('svMcQuorum', `Approvals needed (now ${_esc(String(g.stokvel_quorum || '—'))})`, 'number',
+                 'At least 2, and no more than the number of signatories.', 'min="2" step="1" inputmode="numeric"')
+      + _svField('svMcLock', `Lock the money until (now ${g.lock_date ? _esc(String(g.lock_date).slice(0, 10)) : 'no date'})`,
+                 'date', 'Nothing can be paid out of the group wallet before this date.', '')
+      + (g.lock_date ? `<label style="display:flex;gap:8px;align-items:center;font-size:0.82rem;margin-bottom:12px">
+          <input type="checkbox" id="svMcClear"> Remove the lock date</label>` : '')
+      + _svField('svMcReason', 'Why? (optional)', 'text', '', 'maxlength="200"'),
+    submit: `submitStokvelMandateChange('${_esc(groupId)}')`,
+    submitIcon: 'fa-paper-plane',
+    submitLabel: 'Ask the signatories',
+  });
+}
+
+async function submitStokvelMandateChange(groupId) {
+  const clearEl = document.getElementById('svMcClear');
+  const body = {
+    kind: 'mandate',
+    add_signatory:    _svVal('svMcAdd') || null,
+    remove_signatory: _svVal('svMcRemove') || null,
+    quorum:           _svVal('svMcQuorum') ? parseInt(_svVal('svMcQuorum'), 10) : null,
+    lock_date:        _svVal('svMcLock') || null,
+    clear_lock:       !!(clearEl && clearEl.checked),
+    reason:           _svVal('svMcReason'),
+  };
+  if (!body.add_signatory && !body.remove_signatory && body.quorum === null && !body.lock_date && !body.clear_lock) {
+    return _svFormError('Choose what should change.');
+  }
+  try {
+    await API._fetch('POST', `stokvels/${groupId}/withdrawal-requests`, body);
+    Utils.toast('Proposed. The signatories have been asked to approve the change.', 'success');
+  } catch (err) {
+    return _svFormError(err.message || 'Could not propose that change.');
+  }
+  await _svRenderHub(groupId, 'approvals');
+}
+
 async function voteStokvelRequest(groupId, requestId, decision) {
   if (decision === 'reject' && !confirm('Reject this withdrawal? It cannot be out-voted afterwards.')) return;
   try {
     const res = await API._fetch('POST',
       `stokvels/${groupId}/withdrawal-requests/${requestId}/vote`, { decision });
-    Utils.toast(res.data.satisfied
+    Utils.toast(res.data.applied
+      ? 'Approved — the change to the mandate is now in force.'
+      : res.data.satisfied
       ? 'Approved — the mandate is satisfied.'
       : `Recorded. ${res.data.approvals} of ${res.data.required}.`, 'success');
     await _svRenderHub(groupId);

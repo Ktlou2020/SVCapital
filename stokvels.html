@@ -18,7 +18,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Fraunces:opsz,wght@9..144,300;9..144,500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
-  <link rel="stylesheet" href="css/stokvels.css?v=1" />
+  <link rel="stylesheet" href="css/stokvels.css?v=2" />
 </head>
 <body class="sv-page">
 
@@ -66,7 +66,7 @@
         </div>
         <div class="sv-fact">
           <div class="sv-fact__k">The balance</div>
-          <div class="sv-fact__v">Interest-bearing while it sits in the group wallet, with 48 hours&rsquo; notice to withdraw</div>
+          <div class="sv-fact__v">Interest-bearing while it sits in the group wallet, and locked until the date your group sets &mdash; 1 December, if that is your payout</div>
         </div>
         <div class="sv-fact">
           <div class="sv-fact__k">Investing the pot</div>
@@ -76,6 +76,72 @@
     </div>
   </div>
 </header>
+
+<!-- ══ Two ways groups use it ═══════════════════════════════════════
+     Savings clubs and investment groups are the two kinds of group the
+     account is built for, and they want different things from it: one wants
+     the money safe and untouchable until payout day, the other wants a fair
+     way to decide what to put it into. Each gets its own story. -->
+<section class="sv-sec">
+  <div class="sv-wrap">
+    <h2>Save for December. Or invest together.</h2>
+    <p class="sv-lede">
+      Most groups that bank with us do one of two things with their pot. The account is
+      built for both, and a savings club that wants to start investing later does not
+      have to move anywhere.
+    </p>
+    <div class="sv-grid sv-grid--2">
+      <div class="sv-card sv-story">
+        <div class="sv-card__i"><i class="fa-solid fa-lock"></i></div>
+        <h3>Save for December</h3>
+        <p>For savings clubs that pay out once a year.</p>
+        <ul>
+          <li><b>Locked until payout day.</b> The group sets the date &mdash; 1 December, say &mdash; and nothing is paid out of the group wallet before it. Not to the chairperson, not to anybody.</li>
+          <li><b>Earning while it waits.</b> The group wallet is interest-bearing for the whole year.</li>
+          <li><b>One payout, everybody at once.</b> The committee plans the December payout, the signatories approve it once, and every member is paid their share on the day.</li>
+          <li><b>Moving the date takes the signatories.</b> Bringing it forward releases money early, so it needs the same approvals as a withdrawal.</li>
+        </ul>
+      </div>
+      <div class="sv-card sv-story">
+        <div class="sv-card__i"><i class="fa-solid fa-seedling"></i></div>
+        <h3>Invest together</h3>
+        <p>For investment groups and clubs growing a pot.</p>
+        <ul>
+          <li><b>The members vote first.</b> Anybody can put a proposal to the group &mdash; &ldquo;should we invest R50 000 for twelve months?&rdquo; &mdash; and every member has a vote.</li>
+          <li><b>The signatories still decide.</b> A carried proposal moves no money. The investment goes to the signatories, who approve that amount into that product.</li>
+          <li><b>See what it is doing.</b> What the group has invested, what it has earned, when each investment comes back and each member&rsquo;s part of it.</li>
+          <li><b>Told before it clashes.</b> If an investment would still be running on the group&rsquo;s payout date, the request says so to every signatory. Capital is at risk.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ What the pot comes to ═══════════════════════════════════════
+     Arithmetic the committee can do themselves, done for them. It shows
+     what the members put in and NOTHING ELSE: no rate is assumed, because
+     this page does not quote one, and a projection with a made-up rate in it
+     is a promise by another name. -->
+<section class="sv-sec sv-sec--wash">
+  <div class="sv-wrap">
+    <h2>What your pot comes to</h2>
+    <p class="sv-lede">
+      Put in your group&rsquo;s numbers. This is what the members save between them, before
+      any interest &mdash; ask us for the current rate on the group wallet and we will give it
+      to you in writing.
+    </p>
+    <div class="sv-calc">
+      <label>Members<input id="svcMembers" type="number" min="2" max="50" step="1" value="15" inputmode="numeric" /></label>
+      <label>Monthly, each (R)<input id="svcMonthly" type="number" min="0" step="50" value="500" inputmode="decimal" /></label>
+      <label>Months until payout<input id="svcMonths" type="number" min="1" max="36" step="1" value="11" inputmode="numeric" /></label>
+      <div class="sv-calc__out" aria-live="polite">
+        <div class="sv-calc__k">The group saves</div>
+        <div class="sv-calc__v" id="svcTotal">&mdash;</div>
+        <div class="sv-calc__s" id="svcEach"></div>
+      </div>
+    </div>
+  </div>
+</section>
 
 <!-- ══ The mandate ═══════════════════════════════════════════════════
      The one piece of emphasis on the page, because it is the one thing a
@@ -142,7 +208,13 @@
       <div class="sv-walk">
         <div>
           <b>Set the mandate</b>
-          <p>Tell us who the signatories are and how many must approve before money moves. We will not accept fewer than two, because a mandate of one is not a mandate.</p>
+          <p>Tell us who the signatories are and how many must approve before money moves. We will not accept fewer than two, because a mandate of one is not a mandate. After that the group changes it in the app &mdash; a new signatory, a different number of approvals &mdash; and the existing signatories approve the change, as they would money. Nobody votes on their own removal.</p>
+        </div>
+      </div>
+      <div class="sv-walk">
+        <div>
+          <b>Lock it until payout day</b>
+          <p>If you save for December, set the date. Nothing leaves the group wallet before it, and changing it needs the signatories.</p>
         </div>
       </div>
       <div class="sv-walk">
@@ -154,7 +226,7 @@
       <div class="sv-walk">
         <div>
           <b>Decide together what the pot does</b>
-          <p>Leave it in the wallet earning interest, or put some of it into one of our agricultural investments &mdash; on the signatories&rsquo; approval, with capital at risk. That choice stays the group&rsquo;s.</p>
+          <p>Leave it in the wallet earning interest, or put a proposal to the members and, if it carries, some of it into one of our agricultural investments &mdash; on the signatories&rsquo; approval, with capital at risk. That choice stays the group&rsquo;s.</p>
         </div>
       </div>
     </div>
@@ -280,6 +352,23 @@
 
 <script>
   document.getElementById('svYear').textContent = new Date().getFullYear();
+(function () {
+  var ids = ['svcMembers', 'svcMonthly', 'svcMonths'];
+  var rand = function (n) {
+    return 'R' + Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0');
+  };
+  function calc() {
+    var m = Math.max(0, parseInt(document.getElementById('svcMembers').value, 10) || 0);
+    var a = Math.max(0, parseFloat(document.getElementById('svcMonthly').value) || 0);
+    var n = Math.max(0, parseInt(document.getElementById('svcMonths').value, 10) || 0);
+    document.getElementById('svcTotal').textContent = rand(m * a * n);
+    document.getElementById('svcEach').textContent = m && n
+      ? rand(a * n) + ' each, over ' + n + ' month' + (n === 1 ? '' : 's') + ', before interest'
+      : '';
+  }
+  ids.forEach(function (id) { document.getElementById(id).addEventListener('input', calc); });
+  calc();
+})();
 </script>
 </body>
 </html>
