@@ -2042,6 +2042,18 @@ const INVESTOR_SORT = {
   _investments: i => STATE.investments.filter(x => x.investor_id === i.id).length,
 };
 
+/* One badge for the client's type, used by the list and the detail panel.
+   Colours separate the three entity kinds from a natural person at a glance,
+   and 'Not set' is grey and says the words — FICA verifies a trust, a
+   company and a person differently, so the gap is worth seeing. */
+function _investorTypeBadge(value) {
+  const v = String(value || '').toLowerCase().trim();
+  const cls = { individual: 'badge--blue', business: 'badge--purple',
+                trust: 'badge--gold', group: 'badge--green' }[v] || 'badge--grey';
+  return `<span class="badge ${cls}" style="font-size:0.68rem;padding:2px 7px;white-space:nowrap">`
+       + `${_esc(Utils.investorTypeLabel(v))}</span>`;
+}
+
 function renderInvestorsTable() {
   const body = document.getElementById('investorsBody');
   const start = (investorPage - 1) * INV_PAGE_SIZE;
@@ -2101,6 +2113,9 @@ function renderInvestorsTable() {
     const loginBadge = hasLogin
       ? ''
       : '<span class="badge badge--grey" style="font-size:0.65rem;padding:2px 6px"><i class="fa-solid fa-user-slash"></i> No Login</span>';
+    /* Unset is its own state and says so. A dash here would read as
+       "individual", which is the assumption this column exists to stop. */
+    const typeBadge = _investorTypeBadge(inv.investor_type);
     const province = (inv.province||'').replace(/\s+$/,'');
     const _trunc = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block';
     return `<tr style="cursor:pointer;${isSelected ? 'background:rgba(254,194,79,0.06)' : ''}" tabindex="0" onclick="viewInvestor('${inv.id}')" onkeydown="if(event.key==='Enter')viewInvestor('${inv.id}')">
@@ -2121,6 +2136,7 @@ function renderInvestorsTable() {
         <div style="font-size:0.75rem;${_trunc}">${_esc(inv.email || '—')}</div>
         <div class="td-muted" style="font-size:0.71rem;${_trunc}">${_esc(inv.phone || '—')}</div>
       </td>
+      <td style="overflow:hidden">${typeBadge}</td>
       <td style="overflow:hidden">
         <div style="display:flex;flex-direction:column;gap:3px">${kycBadge}${stBadge}${loginBadge}</div>
       </td>
@@ -2536,6 +2552,9 @@ async function _saveInvProfile(btn) {
       postal_code:    document.getElementById('ipf-postal_code').value.trim() || null,
       province:       document.getElementById('ipf-province').value,
       occupation:       document.getElementById('ipf-occupation').value.trim(),
+      /* null, not '', when nobody has said. The column is nullable on
+         purpose and an empty string is not the same as unknown. */
+      investor_type:    document.getElementById('ipf-investor_type').value || null,
       risk_profile:     document.getElementById('ipf-risk_profile').value,
       pim_account_ref:  document.getElementById('ipf-pim_account_ref').value.trim() || null,
     };
@@ -2798,6 +2817,7 @@ async function viewInvestor(id) {
         <div class="info-row"><span class="info-row__label">Employer</span><span class="info-row__value">${_esc(invProfile.employer||'')||'—'}</span></div>
         <div class="info-row"><span class="info-row__label">Next of Kin</span><span class="info-row__value">${_esc(invProfile.next_of_kin||'')||'—'}</span></div>
         <div class="info-row"><span class="info-row__label">Kin Contact</span><span class="info-row__value">${_esc(invProfile.kin_contact||'')||'—'}</span></div>
+        <div class="info-row"><span class="info-row__label">Investor Type</span><span class="info-row__value">${_investorTypeBadge(inv.investor_type)}</span></div>
         <div class="info-row"><span class="info-row__label">Risk Profile</span><span class="info-row__value" style="text-transform:capitalize">${_esc(inv.risk_profile)||'—'}</span></div>
         ${inv.pim_account_ref ? `<div class="info-row"><span class="info-row__label">3PIM Ref</span><span class="info-row__value" style="font-family:monospace">${_esc(inv.pim_account_ref)}</span></div>` : ''}
         <div class="info-row"><span class="info-row__label">Account Created</span><span class="info-row__value">${Utils.date(inv.date_joined)}</span></div>
@@ -2858,6 +2878,12 @@ async function viewInvestor(id) {
         <div class="form-group">
           <label class="form-label">Kin Contact</label>
           <input type="text" class="form-control" id="ipf-kin_contact" value="${_esc(invProfile.kin_contact||'')}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Investor Type <span style="font-size:0.7rem;color:var(--text-muted);font-weight:400">(a natural person, or the entity this client is)</span></label>
+          <select class="form-control" id="ipf-investor_type">
+            ${[''].concat(Utils.INVESTOR_TYPES).map(t=>`<option value="${t}" ${(inv.investor_type||'')===t?'selected':''}>${t?_esc(Utils.investorTypeLabel(t)):'\u2014 Not set \u2014'}</option>`).join('')}
+          </select>
         </div>
         <div class="form-group">
           <label class="form-label">Risk Profile</label>

@@ -543,12 +543,13 @@
             <table class="data-table" id="investorsTable" data-sort-table="investors" style="table-layout:fixed;width:100%">
               <thead><tr>
                 <th style="width:3%;padding:8px 10px"><input type="checkbox" id="invSelectAll" onchange="toggleAllInvestors(this)" title="Select all on this page"></th>
-                <th style="width:23%" data-sort="last_name"      data-sort-type="text">Investor</th>
-                <th style="width:20%" data-sort="email"          data-sort-type="text">Contact</th>
-                <th style="width:16%" data-sort="fica_status"    data-sort-type="text">KYC / Status</th>
-                <th style="width:15%" data-sort="_portfolio"     data-sort-type="num">Portfolio</th>
-                <th style="width:10%" data-sort="_investments"   data-sort-type="num">Investments</th>
-                <th style="width:13%">Actions</th>
+                <th style="width:21%" data-sort="last_name"      data-sort-type="text">Investor</th>
+                <th style="width:17%" data-sort="email"          data-sort-type="text">Contact</th>
+                <th style="width:8%"  data-sort="investor_type"  data-sort-type="text">Type</th>
+                <th style="width:14%" data-sort="fica_status"    data-sort-type="text">KYC / Status</th>
+                <th style="width:14%" data-sort="_portfolio"     data-sort-type="num">Portfolio</th>
+                <th style="width:9%"  data-sort="_investments"   data-sort-type="num">Investments</th>
+                <th style="width:14%">Actions</th>
               </tr></thead>
               <tbody id="investorsBody">
                 <tr><td colspan="6" class="text-center text-muted" style="padding:32px">Loading...</td></tr>
@@ -5261,9 +5262,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
-<script src="../js/api.js?v=29"></script>
+<script src="../js/api.js?v=30"></script>
 <script src="../js/investor-documents.js?v=9"></script>
-<script src="js/admin.js?v=216"></script>
+<script src="js/admin.js?v=217"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>

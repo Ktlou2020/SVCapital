@@ -3,6 +3,13 @@
    ═══════════════════════════════════════════════ */
 'use strict';
 
+/* KYC verified, whichever way it was reached. Document approval writes
+   'approved'; the automated FICA check and a review approval write
+   'verified' — and the server's own gates (investing, withdrawals) accept
+   both. Testing for 'approved' alone showed a verified client as
+   "KYC Pending". */
+const _kycVerified = inv => !!inv && (inv.kyc_status === 'approved' || inv.kyc_status === 'verified');
+
 /* Escape user-controlled strings before inserting into innerHTML */
 /* A swallowed error should be a decision, not a leftover.
 
@@ -861,7 +868,7 @@ async function loadDashboard() {
       _set2('ds-upcoming-maturities',  _k.upcoming_maturities);
       _set2('ds-pending-withdrawals',  _k.pending_withdrawals);
     } else {
-      const ficaApproved = nonArchived.filter(i => i.fica_status === 'approved' || i.kyc_status === 'approved').length;
+      const ficaApproved = nonArchived.filter(i => i.fica_status === 'approved' || _kycVerified(i)).length;
       _set2('ds-fica-rate', `${nonArchived.length ? Math.round((ficaApproved / nonArchived.length) * 100) : 0}%`);
 
       _set2('ds-pending-kyc', pendingKycCount);
@@ -2035,6 +2042,18 @@ const INVESTOR_SORT = {
   _investments: i => STATE.investments.filter(x => x.investor_id === i.id).length,
 };
 
+/* One badge for the client's type, used by the list and the detail panel.
+   Colours separate the three entity kinds from a natural person at a glance,
+   and 'Not set' is grey and says the words — FICA verifies a trust, a
+   company and a person differently, so the gap is worth seeing. */
+function _investorTypeBadge(value) {
+  const v = String(value || '').toLowerCase().trim();
+  const cls = { individual: 'badge--blue', business: 'badge--purple',
+                trust: 'badge--gold', group: 'badge--green' }[v] || 'badge--grey';
+  return `<span class="badge ${cls}" style="font-size:0.68rem;padding:2px 7px;white-space:nowrap">`
+       + `${_esc(Utils.investorTypeLabel(v))}</span>`;
+}
+
 function renderInvestorsTable() {
   const body = document.getElementById('investorsBody');
   const start = (investorPage - 1) * INV_PAGE_SIZE;
@@ -2083,7 +2102,7 @@ function renderInvestorsTable() {
     const liveInvested   = liveInvestedMap[inv.id] || 0;
     const hasLogin       = loginSet.has(inv.id);
     const isSelected     = selectedInvestors.has(inv.id);
-    const kycBadge = inv.kyc_status === 'approved'
+    const kycBadge = _kycVerified(inv)
       ? '<span class="badge badge--green" style="font-size:0.68rem;padding:2px 6px"><i class="fa-solid fa-shield-check"></i> KYC</span>'
       : inv.kyc_status === 'rejected'
       ? '<span class="badge badge--red" style="font-size:0.68rem;padding:2px 6px">KYC Fail</span>'
@@ -2094,6 +2113,9 @@ function renderInvestorsTable() {
     const loginBadge = hasLogin
       ? ''
       : '<span class="badge badge--grey" style="font-size:0.65rem;padding:2px 6px"><i class="fa-solid fa-user-slash"></i> No Login</span>';
+    /* Unset is its own state and says so. A dash here would read as
+       "individual", which is the assumption this column exists to stop. */
+    const typeBadge = _investorTypeBadge(inv.investor_type);
     const province = (inv.province||'').replace(/\s+$/,'');
     const _trunc = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block';
     return `<tr style="cursor:pointer;${isSelected ? 'background:rgba(254,194,79,0.06)' : ''}" tabindex="0" onclick="viewInvestor('${inv.id}')" onkeydown="if(event.key==='Enter')viewInvestor('${inv.id}')">
@@ -2114,6 +2136,7 @@ function renderInvestorsTable() {
         <div style="font-size:0.75rem;${_trunc}">${_esc(inv.email || '—')}</div>
         <div class="td-muted" style="font-size:0.71rem;${_trunc}">${_esc(inv.phone || '—')}</div>
       </td>
+      <td style="overflow:hidden">${typeBadge}</td>
       <td style="overflow:hidden">
         <div style="display:flex;flex-direction:column;gap:3px">${kycBadge}${stBadge}${loginBadge}</div>
       </td>
@@ -2529,6 +2552,9 @@ async function _saveInvProfile(btn) {
       postal_code:    document.getElementById('ipf-postal_code').value.trim() || null,
       province:       document.getElementById('ipf-province').value,
       occupation:       document.getElementById('ipf-occupation').value.trim(),
+      /* null, not '', when nobody has said. The column is nullable on
+         purpose and an empty string is not the same as unknown. */
+      investor_type:    document.getElementById('ipf-investor_type').value || null,
       risk_profile:     document.getElementById('ipf-risk_profile').value,
       pim_account_ref:  document.getElementById('ipf-pim_account_ref').value.trim() || null,
     };
@@ -2645,6 +2671,7 @@ async function viewInvestor(id) {
   const _stmtFromDef = _stmtToday.slice(0, 7) + '-01';
 
   document.getElementById('invDetailBody').innerHTML = `
+  <div id="invWatchlistBanner"></div>
   <div class="tab-bar" style="display:flex;gap:4px;padding:4px;border-radius:10px;margin-bottom:16px;flex-wrap:wrap">
     <button class="tab-btn inv-tab-btn active" id="invTab-overview"      onclick="_invTab('overview')"><i class="fa-solid fa-gauge-simple" style="margin-right:5px"></i>Overview</button>
     <button class="tab-btn inv-tab-btn"        id="invTab-profile"       onclick="_invTab('profile')"><i class="fa-solid fa-address-card" style="margin-right:5px"></i>Profile</button>
@@ -2668,7 +2695,7 @@ async function viewInvestor(id) {
         <div style="font-family:monospace;font-size:0.78rem;color:var(--text-muted);margin:2px 0">${_esc(inv.id)||''}<button class="copy-btn" onclick='copyToClipboard(${_esc(JSON.stringify(inv.id||""))},this)' title="Copy account number"><i class="fa-regular fa-copy"></i></button></div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
           ${Utils.statusBadge(inv.status)}
-          ${inv.kyc_status==='approved'?`<span class="badge badge--green"><i class="fa-solid fa-shield-check"></i> KYC Verified</span>${inv.fica_reviewed_by?`<span style="font-size:0.65rem;color:var(--text-muted);margin-left:2px">by ${_esc(inv.fica_reviewed_by)}</span>`:''}` : '<span class="badge badge--yellow">KYC Pending</span>'}
+          ${_kycVerified(inv)?`<span class="badge badge--green"><i class="fa-solid fa-shield-check"></i> KYC Verified</span>${inv.fica_reviewed_by?`<span style="font-size:0.65rem;color:var(--text-muted);margin-left:2px">by ${_esc(inv.fica_reviewed_by)}</span>`:''}` : '<span class="badge badge--yellow">KYC Pending</span>'}
         </div>
       </div>
     </div>
@@ -2790,6 +2817,7 @@ async function viewInvestor(id) {
         <div class="info-row"><span class="info-row__label">Employer</span><span class="info-row__value">${_esc(invProfile.employer||'')||'—'}</span></div>
         <div class="info-row"><span class="info-row__label">Next of Kin</span><span class="info-row__value">${_esc(invProfile.next_of_kin||'')||'—'}</span></div>
         <div class="info-row"><span class="info-row__label">Kin Contact</span><span class="info-row__value">${_esc(invProfile.kin_contact||'')||'—'}</span></div>
+        <div class="info-row"><span class="info-row__label">Investor Type</span><span class="info-row__value">${_investorTypeBadge(inv.investor_type)}</span></div>
         <div class="info-row"><span class="info-row__label">Risk Profile</span><span class="info-row__value" style="text-transform:capitalize">${_esc(inv.risk_profile)||'—'}</span></div>
         ${inv.pim_account_ref ? `<div class="info-row"><span class="info-row__label">3PIM Ref</span><span class="info-row__value" style="font-family:monospace">${_esc(inv.pim_account_ref)}</span></div>` : ''}
         <div class="info-row"><span class="info-row__label">Account Created</span><span class="info-row__value">${Utils.date(inv.date_joined)}</span></div>
@@ -2850,6 +2878,12 @@ async function viewInvestor(id) {
         <div class="form-group">
           <label class="form-label">Kin Contact</label>
           <input type="text" class="form-control" id="ipf-kin_contact" value="${_esc(invProfile.kin_contact||'')}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Investor Type <span style="font-size:0.7rem;color:var(--text-muted);font-weight:400">(a natural person, or the entity this client is)</span></label>
+          <select class="form-control" id="ipf-investor_type">
+            ${[''].concat(Utils.INVESTOR_TYPES).map(t=>`<option value="${t}" ${(inv.investor_type||'')===t?'selected':''}>${t?_esc(Utils.investorTypeLabel(t)):'\u2014 Not set \u2014'}</option>`).join('')}
+          </select>
         </div>
         <div class="form-group">
           <label class="form-label">Risk Profile</label>
@@ -3238,6 +3272,7 @@ async function viewInvestor(id) {
   loadInvestorTimeline(inv, invsts, txns);
   _loadInvestorRewards(inv.id);
   _loadClientDocuments(inv.id);
+  _loadInvestorWatchlistBanner(inv.id);
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -5685,7 +5720,17 @@ async function _recomputeInvestorFicaStatus(investorId) {
   const verified = missing.length === 0;
 
   if (verified) {
-    await API._fetch('PATCH', `tables/investors/${investorId}`, { kyc_status: 'approved', fica_status: 'approved', status: 'active' });
+    try {
+      await API._fetch('PATCH', `tables/investors/${investorId}`, { kyc_status: 'approved', fica_status: 'approved', status: 'active' });
+    } catch (e) {
+      /* The documents are complete, but the client's automated FICA check is
+         waiting on a review decision — the server will not approve them
+         around it. The document approval itself stood. */
+      if (/automated FICA check is waiting|FICA review was declined/.test(e.message || '')) {
+        return { verified: false, held: e.message, missing: [] };
+      }
+      throw e;
+    }
   } else {
     await API._fetch('PATCH', `tables/investors/${investorId}`, { kyc_status: 'pending', fica_status: 'submitted' });
   }
@@ -5732,10 +5777,11 @@ async function approveKyc(id, btn) {
           await API._fetch('PATCH', `tables/investors/${doc.investor_id}`, { bank_account_status: 'approved', bank_account_notes: null });
         }
         const result = await _recomputeInvestorFicaStatus(doc?.investor_id);
-        Toast.success(result.verified
+        if (result.held) Toast.warning(`Document approved. ${result.held}`);
+        else Toast.success(result.verified
           ? 'Document approved — investor is now FICA-verified'
           : `Document approved — still needed: ${result.missing.join(', ')}`);
-        _fica = result.verified
+        _fica = result.held ? null : result.verified
           ? { kyc_status: 'approved', fica_status: 'approved', status: 'active' }
           : { kyc_status: 'pending',  fica_status: 'submitted' };
       }
@@ -6111,6 +6157,338 @@ function closeKycTimeline() {
   const overlay = document.getElementById('kycTimelineModal');
   if (overlay) { overlay.style.display = 'none'; overlay.classList.remove('open'); }
   document.body.style.overflow = '';
+}
+
+/* ═══════════════════════════════════════════════
+   AUTOMATED FICA CHECKS — what the ID, bank and sanctions steps found
+   ═══════════════════════════════════════════════ */
+let _ficaChecksInvestor = null;
+
+const _FC_STATUS = {
+  pass:          { label: 'Passed',        color: '#22c55e', icon: 'fa-circle-check' },
+  clear:         { label: 'Clear',         color: '#22c55e', icon: 'fa-circle-check' },
+  fail:          { label: 'Failed',        color: '#ef4444', icon: 'fa-circle-xmark' },
+  hit:           { label: 'Possible match', color: '#ef4444', icon: 'fa-triangle-exclamation' },
+  manual_review: { label: 'Needs review',  color: '#fec24f', icon: 'fa-eye' },
+  error:         { label: 'Could not run', color: '#f97316', icon: 'fa-plug-circle-xmark' },
+  skipped:       { label: 'Not run',       color: '#7a92a8', icon: 'fa-minus' },
+  pending:       { label: 'Pending',       color: '#7a92a8', icon: 'fa-clock' },
+  approved:      { label: 'Approved after review', color: '#22c55e', icon: 'fa-user-check' },
+  declined:      { label: 'Declined after review', color: '#ef4444', icon: 'fa-user-xmark' },
+  reversed:      { label: 'Decline reversed',      color: '#60a5fa', icon: 'fa-rotate-left' },
+};
+const _FC_PROVIDER = { datanamix: 'Datanamix', smile: 'Smile Identity', stitch: 'Stitch' };
+const _FC_TRIGGER  = { first_deposit: 'First deposit', annual_recheck: 'Annual re-check', manual: 'Run by staff', webhook: 'Provider callback' };
+
+/* One line under the FICA stage: what the last automated check said. */
+function _fcAutoLine(inv) {
+  const st = inv && inv.fica_auto_status;
+  if (!st) return '';
+  const s = _FC_STATUS[st] || { label: st, color: '#7a92a8' };
+  return `<div style="margin-top:4px;font-size:0.68rem;color:${s.color}" title="Last automated FICA check">Auto check: ${_esc(s.label)}</div>`;
+}
+
+const _FC_KYC = {
+  verified: { label: 'Verified', color: '#22c55e' }, approved: { label: 'Verified', color: '#22c55e' },
+  rejected: { label: 'Rejected', color: '#ef4444' }, pending:  { label: 'Pending',  color: '#fec24f' },
+};
+
+function _fcSummary(investor) {
+  const local = STATE.investors.find(i => i.id === investor.id) || {};
+  const merged = { ...local, ...investor };
+  const stage  = _ficaStageOf(merged);
+  const sc     = _ficaStageColors[stage] || {};
+  const kyc    = _FC_KYC[investor.kyc_status] || { label: investor.kyc_status || 'Not set', color: '#7a92a8' };
+  const cell = (label, html) => `<div style="flex:1;min-width:130px">
+      <div style="font-size:0.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:5px">${label}</div>${html}</div>`;
+  return `<div style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:14px;padding:12px 14px;border-radius:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08)">
+    ${cell('KYC status', `<span style="font-weight:700;font-size:0.85rem;color:${kyc.color}">${_esc(kyc.label)}</span>`)}
+    ${cell('FICA stage', `<span style="background:${sc.badge || 'transparent'};color:${sc.badgeText || '#7a92a8'};border-radius:6px;padding:2px 8px;font-size:0.75rem;font-weight:700">${_esc(_ficaStageLabels[stage] || stage)}</span>`)}
+    ${cell('Last automated check', investor.fica_auto_status ? _fcBadge(investor.fica_auto_status) : '<span style="font-size:0.8rem;color:var(--text-muted)">Never run</span>')}
+    ${cell('Checked', `<span style="font-size:0.8rem;color:var(--text-muted)">${investor.last_auto_fica_check ? Utils.date(investor.last_auto_fica_check) : '—'}</span>`)}
+  </div>`;
+}
+
+function _fcBadge(status) {
+  const s = _FC_STATUS[status] || { label: status || '—', color: '#7a92a8', icon: 'fa-circle' };
+  return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:0.72rem;font-weight:700;color:${s.color};background:${s.color}1f;border-radius:6px;padding:2px 8px"><i class="fa-solid ${s.icon}"></i>${_esc(s.label)}</span>`;
+}
+
+function _fcStep(label, step, fallbackProvider) {
+  const provider = _FC_PROVIDER[step.provider] || (step.status !== 'skipped' ? fallbackProvider : '');
+  const lines = [...(step.reasons || [])];
+  if (step.error) lines.push(step.error);
+  let matches = '';
+  if (step.matches && step.matches.length) {
+    matches = `<div style="margin-top:8px;display:flex;flex-direction:column;gap:6px">${step.matches.map(m => `
+      <div style="padding:8px 10px;border-radius:8px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.25);font-size:0.75rem">
+        <div style="font-weight:700;color:#f87171">${_esc(m.name || 'Unnamed')} <span style="font-weight:600;color:#7a92a8">· ${_esc(m.list || 'watch list')}${m.score != null ? ` · score ${_esc(String(m.score))}` : ''}</span></div>
+        ${(m.programmes || []).length ? `<div style="color:#7a92a8">Programme: ${_esc(m.programmes.join(', '))}</div>` : ''}
+        ${(m.dob || []).length ? `<div style="color:#7a92a8">Date of birth on list: ${_esc(m.dob.join(', '))}</div>` : ''}
+        ${(m.nationality || []).length ? `<div style="color:#7a92a8">Nationality: ${_esc(m.nationality.join(', '))}</div>` : ''}
+        ${m.remarks ? `<div style="color:#7a92a8">${_esc(m.remarks)}</div>` : ''}
+        ${m.id ? `<div style="color:#7a92a8;font-family:monospace;font-size:0.68rem">${_esc(m.id)}</div>` : ''}
+      </div>`).join('')}</div>`;
+  }
+  /* The address step: what is on file beside what the bureaus hold, so a
+     reviewer can see the difference rather than be told there is one. */
+  if (step.onFile !== undefined || (step.bureau && step.bureau.length)) {
+    const row = (k, v, hl) => `<div style="display:grid;grid-template-columns:124px 1fr;gap:8px;font-size:0.74rem;margin-top:3px">
+      <span style="color:var(--text-muted)">${k}</span><span style="color:${hl ? '#22c55e' : 'var(--text)'}">${v}</span></div>`;
+    matches += `<div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07)">
+      ${row('On file', step.onFile ? _esc(step.onFile) : '<em style="color:var(--text-muted)">none</em>')}
+      ${(step.bureau || []).map((b, i) => row(b.current ? 'Bureau (current)' : `Bureau${b.lastUpdated ? ' ' + _esc(b.lastUpdated) : ''}`,
+          _esc(b.address) + (step.matchedOn === b.address ? ' <i class="fa-solid fa-check"></i>' : ''), step.matchedOn === b.address)).join('')}
+    </div>`;
+  }
+  return `<div style="display:grid;grid-template-columns:120px 1fr;gap:10px;padding:8px 0;border-top:1px solid rgba(255,255,255,0.05)">
+    <div style="font-size:0.75rem;font-weight:600;color:var(--text-muted)">${label}${provider ? `<div style="font-weight:400;font-size:0.68rem">${_esc(provider)}</div>` : ''}</div>
+    <div>${_fcBadge(step.status)}
+      ${lines.length ? `<ul style="margin:6px 0 0;padding-left:16px;font-size:0.75rem;color:var(--text-muted)">${lines.map(l => `<li>${_esc(l)}</li>`).join('')}</ul>` : ''}
+      ${matches}
+    </div>
+  </div>`;
+}
+
+/* Who decided a reviewed check, which way, when and why. */
+function _fcReviewRecord(r) {
+  const s = _FC_STATUS[r.decision] || { color: '#7a92a8' };
+  return `<div style="margin-top:10px;padding:10px 12px;border-radius:8px;background:${s.color}12;border:1px solid ${s.color}40;font-size:0.76rem">
+    <div style="font-weight:700;color:${s.color}">${_esc(r.decision === 'approved' ? 'Approved' : 'Declined')} by ${_esc(r.by || 'staff')}${r.role ? ` (${_esc(r.role)})` : ''} · ${r.at ? Utils.date(r.at) : ''}</div>
+    ${r.matchOutcome ? `<div style="margin-top:4px;font-weight:600;color:var(--text)">Possible match: ${r.matchOutcome === 'confirmed' ? 'confirmed — this is the client' : 'not this person'}</div>` : ''}
+    <div style="margin-top:4px;color:var(--text-muted);white-space:pre-wrap">${_esc(r.note || '')}</div>
+    ${r.reversal ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.08)">
+      <div style="font-weight:700;color:#60a5fa">Decline reversed by ${_esc(r.reversal.by || 'a director')}${r.reversal.role ? ` (${_esc(r.reversal.role)})` : ''} · ${r.reversal.at ? Utils.date(r.reversal.at) : ''}</div>
+      <div style="margin-top:4px;color:var(--text-muted);white-space:pre-wrap">${_esc(r.reversal.note || '')}</div>
+    </div>` : ''}
+  </div>`;
+}
+
+/* A declined review holds the client rejected until a director reverses
+   it. Shown at the top of their checks, with the reverse action for a
+   director and the reason it is not offered for anyone else. */
+function _fcHoldBox(held, viewer) {
+  if (!held) return '';
+  return `<div style="margin-bottom:14px;padding:12px 14px;border-radius:10px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.4)">
+    <div style="font-weight:800;color:#f87171;font-size:0.86rem"><i class="fa-solid fa-lock"></i> Held: FICA review declined</div>
+    <div style="font-size:0.76rem;color:var(--text-muted);margin-top:4px">Declined by ${_esc(held.by || 'a reviewer')}${held.role ? ` (${_esc(held.role)})` : ''}${held.at ? ' on ' + Utils.date(held.at) : ''}. Until a director reverses it, nothing approves this client — not a new check, not their documents, not the FICA approval on their profile.</div>
+    ${held.note ? `<div style="font-size:0.76rem;color:var(--text-muted);margin-top:4px;white-space:pre-wrap">“${_esc(held.note)}”</div>` : ''}
+    ${viewer.canReverse ? `
+      <textarea id="fcReverseNote" rows="2" maxlength="2000" placeholder="Why the decline is being reversed — recorded on the check" style="margin-top:10px;width:100%;box-sizing:border-box;background:rgba(0,0,0,0.25);border:1px solid rgba(255,255,255,0.12);border-radius:8px;color:var(--text);padding:8px 10px;font-size:0.8rem;font-family:inherit;resize:vertical"></textarea>
+      <div style="display:flex;justify-content:flex-end;margin-top:8px">
+        <button class="btn btn--secondary btn--sm" onclick='reverseFicaDecline(${_esc(JSON.stringify(held.checkId))}, this)'><i class="fa-solid fa-rotate-left"></i> Reverse decline</button>
+      </div>`
+      : `<div style="font-size:0.72rem;color:#f97316;margin-top:8px">Only a director can reverse a declined review.</div>`}
+  </div>`;
+}
+
+async function reverseFicaDecline(checkId, btn) {
+  const investorId = _ficaChecksInvestor;
+  const note = (document.getElementById('fcReverseNote')?.value || '').trim();
+  if (note.length < 5) { Toast.error('Give the reason for reversing the decline — it is recorded on the check.'); return; }
+  const ok = await Confirm.ask('Reverse this declined review?', {
+    body: 'The client goes back to KYC pending. This does not approve them: they are approved afterwards by a fresh check or their documents, in the usual way. Your name, the time and your reason are recorded on the check, beside the decline.',
+    confirmLabel: 'Reverse decline',
+  });
+  if (!ok) return;
+  await _withBtn(btn, async () => {
+    try {
+      const r = await API._fetch('POST', `fica/checks/${encodeURIComponent(checkId)}/reverse`, { note });
+      Toast.success(r.stillHeld ? 'Decline reversed — but another declined review still holds this client'
+                                : 'Decline reversed — client is back to KYC pending');
+      if (_ficaChecksInvestor === investorId) await _renderFicaChecks();
+    } catch (e) {
+      Toast.error(e.message || 'Could not reverse the decline');
+    }
+  });
+}
+
+/* The PEP / watch-list banner: on the client's profile and at the top of
+   their checks. Drawn from the staff-only flag, never from the investor
+   row the client's own portal reads. */
+function _fcWatchlistBanner(flag, investorId, { withLink = true } = {}) {
+  if (!flag) return '';
+  const what = flag.kind === 'pep' ? 'Politically Exposed Person' : 'Sanctions / watch-list match';
+  const lists = (flag.lists || []).length ? ` · ${_esc(flag.lists.join(', '))}` : '';
+  const link = withLink && investorId
+    ? `<button class="btn btn--secondary btn--sm" style="margin-left:auto" onclick='openFicaChecks(${_esc(JSON.stringify(investorId))})'><i class="fa-solid fa-shield-halved"></i> ${flag.status === 'possible' ? 'Decide in Checks' : 'View checks'}</button>`
+    : '';
+  if (flag.status === 'confirmed') {
+    return `<div class="fc-watchlist-banner" data-status="confirmed" style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;padding:12px 14px;margin-bottom:14px;border-radius:10px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.45)">
+      <i class="fa-solid fa-triangle-exclamation" style="color:#ef4444;font-size:1.1rem;margin-top:2px"></i>
+      <div style="flex:1;min-width:200px">
+        <div style="font-weight:800;color:#f87171;font-size:0.88rem">${what} — confirmed${lists}</div>
+        <div style="font-size:0.76rem;color:var(--text-muted);margin-top:3px">Enhanced due diligence applies. Confirmed by ${_esc(flag.decidedBy || 'a reviewer')}${flag.decidedRole ? ` (${_esc(flag.decidedRole)})` : ''}${flag.decidedAt ? ' on ' + Utils.date(flag.decidedAt) : ''}${flag.decision ? ` · client ${flag.decision === 'approved' ? 'approved' : 'declined'}` : ''}.</div>
+        ${flag.note ? `<div style="font-size:0.76rem;color:var(--text-muted);margin-top:3px;white-space:pre-wrap">“${_esc(flag.note)}”</div>` : ''}
+      </div>${link}
+    </div>`;
+  }
+  return `<div class="fc-watchlist-banner" data-status="possible" style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;padding:12px 14px;margin-bottom:14px;border-radius:10px;background:rgba(254,194,79,0.08);border:1px solid rgba(254,194,79,0.45)">
+    <i class="fa-solid fa-user-shield" style="color:#fec24f;font-size:1.1rem;margin-top:2px"></i>
+    <div style="flex:1;min-width:200px">
+      <div style="font-weight:800;color:#fec24f;font-size:0.88rem">Possible ${flag.kind === 'pep' ? 'PEP' : 'sanctions / watch-list'} match — review pending${lists}</div>
+      <div style="font-size:0.76rem;color:var(--text-muted);margin-top:3px">The automated FICA check on ${flag.checkedAt ? Utils.date(flag.checkedAt) : 'record'} matched ${_esc((flag.names || []).join(', ') || 'a listing')}. Nobody has decided yet whether it is this client.</div>
+    </div>${link}
+  </div>`;
+}
+
+async function _loadInvestorWatchlistBanner(investorId) {
+  const el = document.getElementById('invWatchlistBanner');
+  if (!el) return;
+  try {
+    const r = await API._fetch('GET', `fica/flags/${encodeURIComponent(investorId)}`);
+    if (_currentInvestorId !== investorId) return;   // another profile opened meanwhile
+    el.innerHTML = _fcWatchlistBanner(r.watchlist, investorId);
+  } catch (_) { el.innerHTML = ''; }
+}
+
+/* The decision for the one check that is waiting on it. The server
+   enforces every rule shown here; this only shows them. */
+function _fcDecisionBox(c, viewer, held) {
+  if (!viewer.canDecide) {
+    return `<div style="margin-top:10px;font-size:0.76rem;color:var(--text-muted)">Waiting on a review decision by admin, director or fund manager staff.</div>`;
+  }
+  const isMatch      = c.sanctions && c.sanctions.status === 'hit';
+  const notScreened  = c.sanctions && c.sanctions.status === 'error';
+  const approveBlock = (held && held.checkId !== c.id)
+    ? 'An earlier review of this client was declined. A director must reverse that decline before they can be approved.'
+    : notScreened
+    ? 'The sanctions screen did not run, so this client has not been screened. Run the check again before approving.'
+    : (isMatch && !viewer.canApproveMatch ? 'A possible sanctions or PEP match can only be approved by a director. You can decline it.' : '');
+  return `<div style="margin-top:12px;padding:12px;border-radius:8px;background:rgba(254,194,79,0.06);border:1px solid rgba(254,194,79,0.3)">
+    <div style="font-weight:700;font-size:0.8rem;color:#fec24f;margin-bottom:6px"><i class="fa-solid fa-gavel"></i> Review decision</div>
+    <div style="font-size:0.74rem;color:var(--text-muted);margin-bottom:8px">${isMatch
+      ? 'Decide whether this match is the client. If it is a PEP you accept, say so and why — the reason is recorded on this check.'
+      : 'Approve or decline what the check could not decide. The reason is recorded on this check.'}</div>
+    ${isMatch ? `<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;font-size:0.78rem">
+      <div style="font-weight:600;color:var(--text)">Is the possible match this client?</div>
+      <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer"><input type="radio" name="fcMatchOutcome" value="false_positive" style="margin-top:2px"> <span><strong>Not this person</strong> — a different individual with a similar name. No PEP flag on the profile.</span></label>
+      <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer"><input type="radio" name="fcMatchOutcome" value="confirmed" style="margin-top:2px"> <span><strong>Confirmed — this is the client.</strong> Their profile carries a standing PEP / watch-list banner.</span></label>
+    </div>` : ''}
+    <textarea id="fcDecisionNote" rows="3" maxlength="2000" placeholder="${isMatch ? 'e.g. Different person — date of birth and ID number do not match the listing' : 'e.g. Surname confirmed from marriage certificate'}" style="width:100%;box-sizing:border-box;background:rgba(0,0,0,0.25);border:1px solid rgba(255,255,255,0.12);border-radius:8px;color:var(--text);padding:8px 10px;font-size:0.8rem;font-family:inherit;resize:vertical"></textarea>
+    ${approveBlock ? `<div style="margin-top:6px;font-size:0.72rem;color:#f97316">${_esc(approveBlock)}</div>` : ''}
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+      <button class="btn btn--danger btn--sm" onclick='decideFicaReview(${_esc(JSON.stringify(c.id))}, "decline", this)'><i class="fa-solid fa-user-xmark"></i> Decline</button>
+      <button class="btn btn--success btn--sm" ${approveBlock ? 'disabled title="' + _esc(approveBlock) + '"' : ''} onclick='decideFicaReview(${_esc(JSON.stringify(c.id))}, "approve", this)'><i class="fa-solid fa-user-check"></i> Approve</button>
+    </div>
+  </div>`;
+}
+
+async function decideFicaReview(checkId, decision, btn) {
+  const investorId = _ficaChecksInvestor;
+  const note = (document.getElementById('fcDecisionNote')?.value || '').trim();
+  if (note.length < 5) { Toast.error('Give the reason for the decision — it is recorded on the check.'); return; }
+  const matchEl = document.querySelector('input[name="fcMatchOutcome"]:checked');
+  const hasMatchQuestion = !!document.querySelector('input[name="fcMatchOutcome"]');
+  const matchOutcome = matchEl ? matchEl.value : null;
+  if (hasMatchQuestion && !matchOutcome) { Toast.error('Say whether the possible match is this client first.'); return; }
+  const approve = decision === 'approve';
+  const ok = await Confirm.ask(approve ? 'Approve this FICA review?' : 'Decline this FICA review?', {
+    body: approve
+      ? 'The client will be marked KYC verified. Your name, the time and your reason are recorded on this check.'
+      : 'The client will be marked KYC rejected. They are not emailed. Your name, the time and your reason are recorded on this check.',
+    confirmLabel: approve ? 'Approve' : 'Decline', danger: !approve,
+  });
+  if (!ok) return;
+  await _withBtn(btn, async () => {
+    try {
+      await API._fetch('POST', `fica/checks/${encodeURIComponent(checkId)}/decision`, { decision, note, matchOutcome });
+      Toast.success(approve ? 'Review approved — client is KYC verified' : 'Review declined — client is KYC rejected');
+      if (_ficaChecksInvestor === investorId) await _renderFicaChecks();
+    } catch (e) {
+      Toast.error(e.message || 'Could not record the decision');
+    }
+  });
+}
+
+async function openFicaChecks(investorId) {
+  _ficaChecksInvestor = investorId;
+  const inv = STATE.investors.find(i => i.id === investorId);
+  const name = inv ? `${inv.first_name || ''} ${inv.last_name || ''}`.trim() : investorId;
+  const titleEl = document.getElementById('ficaChecksTitle');
+  if (titleEl) titleEl.textContent = `Automated FICA checks — ${name}`;
+  const overlay = document.getElementById('ficaChecksModal');
+  if (overlay) { overlay.style.display = 'flex'; overlay.classList.add('open'); document.body.style.overflow = 'hidden'; }
+  await _renderFicaChecks();
+}
+
+async function _renderFicaChecks() {
+  const el = document.getElementById('ficaChecksContent');
+  if (!el) return;
+  el.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i></div>`;
+  try {
+    const d = await API._fetch('GET', `fica/checks/${encodeURIComponent(_ficaChecksInvestor)}`);
+    const checks = d.checks || [];
+    /* Keep the pipeline row behind this panel in step with what the server
+       now says — a check run from here changes the client's status. */
+    if (d.investor) {
+      const local = STATE.investors.find(i => i.id === d.investor.id);
+      if (local) {
+        Object.assign(local, { kyc_status: d.investor.kyc_status, fica_auto_status: d.investor.fica_auto_status,
+                               last_auto_fica_check: d.investor.last_auto_fica_check });
+        if (typeof _renderFicaPipeline === 'function' && document.getElementById('ficaPipelineBody')) _renderFicaPipeline();
+      }
+    }
+    const summary = _fcWatchlistBanner(d.watchlist, null, { withLink: false }) + _fcHoldBox(d.heldBy, d.viewer || {})
+                  + (d.investor ? _fcSummary(d.investor) : '');
+    const bannerEl = document.getElementById('invWatchlistBanner');
+    if (bannerEl && _currentInvestorId === _ficaChecksInvestor) bannerEl.innerHTML = _fcWatchlistBanner(d.watchlist, _ficaChecksInvestor);
+    if (!checks.length) {
+      el.innerHTML = summary + `<div style="text-align:center;padding:36px;color:var(--text-muted)">
+        <i class="fa-solid fa-shield-halved fa-2x" style="opacity:0.25;display:block;margin-bottom:12px"></i>
+        <div style="font-weight:600">No automated check has run for this client yet.</div>
+        <div style="margin-top:6px;font-size:0.78rem">One runs overnight after their first deposit, or use <strong>Run check now</strong>.</div>
+      </div>`;
+      return;
+    }
+    el.innerHTML = summary + checks.map((c, i) => `
+      <div style="margin-bottom:14px;padding:12px 14px;border-radius:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,${i === 0 ? '0.12' : '0.06'})">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+          <div style="font-size:0.78rem;color:var(--text-muted)">${i === 0 ? '<strong style="color:var(--text)">Latest</strong> · ' : ''}${Utils.date(c.check_date)} · ${_esc(_FC_TRIGGER[c.trigger] || c.trigger || '')}</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">${_fcBadge(c.overall)}${c.review ? _fcBadge(c.review.decision) : ''}</div>
+        </div>
+        ${_fcStep('ID number', c.id_check, 'Smile Identity')}
+        ${_fcStep('Bank account', c.bank, 'Stitch')}
+        ${_fcStep('Sanctions / PEP', c.sanctions, '')}
+        ${c.address_check && c.address_check.status !== 'skipped' ? _fcStep('Address', c.address_check, '') : ''}
+        ${c.review ? _fcReviewRecord(c.review) : ''}
+        ${c.id === d.openReviewId ? _fcDecisionBox(c, d.viewer || {}, d.heldBy) : ''}
+      </div>`).join('');
+  } catch (e) {
+    el.innerHTML = `<div style="text-align:center;padding:30px;color:#ef4444">Could not load checks: ${_esc(e.message)}</div>`;
+  }
+}
+
+async function runFicaCheckNow() {
+  /* Held locally: the panel can be closed while the confirmation is open,
+     and closing it clears _ficaChecksInvestor. Reading that after the await
+     sent POST /fica/trigger/null. */
+  const investorId = _ficaChecksInvestor;
+  if (!investorId) return;
+  const ok = await Confirm.ask('Run an automated FICA check now?', {
+    body: 'This checks the client’s ID, bank account and sanctions status with the live provider. Each check is billed by the provider. A failed ID check marks the client rejected; anything doubtful is left pending for review.',
+    confirmLabel: 'Run check',
+  });
+  if (!ok) return;
+  const btn = document.getElementById('ficaChecksRunBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Running…'; }
+  try {
+    const r = await API._fetch('POST', `fica/trigger/${encodeURIComponent(investorId)}`, { trigger: 'manual' });
+    const s = _FC_STATUS[r.overallStatus];
+    Toast.success(`Check complete: ${s ? s.label : r.overallStatus}`);
+    if (_ficaChecksInvestor === investorId) await _renderFicaChecks();
+  } catch (e) {
+    Toast.error('Check failed: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-play"></i> Run check now'; }
+  }
+}
+
+function closeFicaChecks() {
+  const overlay = document.getElementById('ficaChecksModal');
+  if (overlay) { overlay.style.display = 'none'; overlay.classList.remove('open'); }
+  document.body.style.overflow = '';
+  _ficaChecksInvestor = null;
 }
 
 /* ═══════════════════════════════════════════════
@@ -15590,7 +15968,7 @@ function loadInvestorTimeline(inv, invsts, txns) {
   });
 
   // KYC status change
-  if (inv.kyc_status === 'approved') events.push({
+  if (_kycVerified(inv)) events.push({
     date: new Date(inv.updated_at || inv.date_joined || Date.now()), icon: 'fa-shield-check', color: '#22c55e',
     title: 'KYC Approved', sub: 'FICA verification completed'
   });
@@ -18612,6 +18990,11 @@ let _ficaStageFilter = 'all';
 
 function _ficaStageOf(inv) {
   if (inv.fica_status === 'approved' || inv.kyc_status === 'verified') return 'approved';
+  /* The automated check is a FICA stage too. Without these two lines a
+     client whose check failed, or is held on a possible sanctions match,
+     showed as "Not Started" because they had uploaded nothing. */
+  if (inv.kyc_status === 'rejected') return 'rejected';
+  if (inv.fica_auto_status === 'manual_review') return 'in_review';
   const docs = (STATE.kyc || []).filter(d => d.investor_id === inv.id && !d.sub_account_id);
   if (!docs.length) return 'not_started';
   if (docs.some(d => d.status === 'rejected')) return 'rejected';
@@ -18645,6 +19028,41 @@ async function loadFicaPipeline() {
     if (!STATE.kyc.length) STATE.kyc = kycRes.data || [];
     _renderFicaPipeline();
   } catch (e) { Toast.error('Failed to load FICA pipeline'); }
+  _loadFicaProviders();
+}
+
+/* Which provider the automated checks run on, and whether they can run at
+   all. Shown above the pipeline because "nobody is being verified" was a
+   state this platform sat in for months with nothing on screen to say so. */
+async function _loadFicaProviders() {
+  const el = document.getElementById('ficaProviderStrip');
+  if (!el) return;
+  try {
+    const p = await API._fetch('GET', 'fica/providers');
+    const d = p.datanamix || {};
+    const NAMES = { datanamix: 'Datanamix', smile: 'Smile Identity', stitch: 'Stitch', none: 'not run' };
+    const steps = p.steps || {};
+    let tone, text;
+    if (d.enabled && d.usable) {
+      tone = d.environment === 'LIVE' ? '#22c55e' : '#fec24f';
+      text = `Automated checks run on <strong>Datanamix (${_esc(d.environment)})</strong>`
+           + (d.environment === 'SANDBOX' ? ' — test data only, real clients will not verify' : '');
+    } else if (d.enabled) {
+      tone = '#ef4444';
+      text = `Datanamix is switched on but cannot run: ${_esc(d.problem || 'unknown problem')}`;
+    } else {
+      const ready = p.smile && p.smile.configured;
+      tone = ready ? '#60a5fa' : '#ef4444';
+      text = ready ? 'Automated checks run on <strong>Smile Identity</strong> (Datanamix is off)'
+                   : 'No verification provider is configured — automated checks cannot verify anybody';
+    }
+    el.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,.03);border:1px solid ${tone}44;font-size:0.8rem">
+      <span style="color:${tone}"><i class="fa-solid fa-circle" style="font-size:0.5rem;vertical-align:middle;margin-right:6px"></i>${text}</span>
+      <span style="color:#7a92a8">SA ID: ${NAMES[steps.sa_id] || '—'} · Passport: ${NAMES[steps.passport] || '—'} · Bank: ${NAMES[steps.bank] || '—'} · Sanctions/PEP: ${NAMES[steps.sanctions] || '—'} · Address: ${NAMES[steps.address_check] || '—'}</span>
+    </div>`;
+  } catch (e) {
+    el.innerHTML = '';
+  }
 }
 
 function _renderFicaPipeline() {
@@ -18712,11 +19130,12 @@ function _renderFicaPipeline() {
     return `<tr style="${hasPriority ? 'background:rgba(254,194,79,0.02)' : ''}">
       <td><div style="font-weight:600;font-size:0.83rem">${_esc(inv.first_name)} ${_esc(inv.last_name)} ${priorityBadge}</div><div style="font-size:0.72rem;color:#7a92a8">${_esc(inv.email||'')}</div></td>
       <td style="font-size:0.82rem;color:#7a92a8">${Utils.date(inv.created_at)}</td>
-      <td>${stageBadge}</td>
+      <td>${stageBadge}${_fcAutoLine(inv)}</td>
       <td style="font-size:0.82rem;color:#7a92a8">${docCount ? `${approvedCount}/${docCount} approved` : '—'}</td>
       <td>
         <div style="display:flex;gap:4px;flex-wrap:wrap">
           <button class="btn btn--secondary btn--sm" title="View KYC timeline" onclick='openKycTimeline(${_esc(JSON.stringify(inv.id))})'><i class="fa-solid fa-timeline"></i> Timeline</button>
+          <button class="btn btn--secondary btn--sm" title="Automated ID, bank and sanctions checks" onclick='openFicaChecks(${_esc(JSON.stringify(inv.id))})'><i class="fa-solid fa-shield-halved"></i> Checks</button>
           <button class="btn btn--secondary btn--sm" onclick='navigate("kyc", document.querySelector("[data-view=kyc]"))'><i class="fa-solid fa-id-card"></i> Queue</button>
         </div>
       </td>

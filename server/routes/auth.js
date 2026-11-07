@@ -374,8 +374,13 @@ router.post('/register', registerLimiter, async (req, res) => {
               (id, first_name, last_name, email, phone, id_number, province, occupation,
                risk_profile, referred_by, notes, gender, heard_about_us,
                street_address, suburb, address, postal_code, nationality,
+               investor_type,
                kyc_status, status, wallet_balance, referral_code, date_joined)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 'pending', 'active', 0, $19, NOW())
+            /* 'individual' is not a default here, it is a fact: this form
+               signs up a natural person. An entity reaches the platform as a
+               sub-account opened by one. */
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
+                    'individual', 'pending', 'active', 0, $19, NOW())
           `, [invId, firstName.trim(), lastName.trim(),
               email.toLowerCase().trim(), phone || null,
               idNumber || null, province || null, occupation || null,

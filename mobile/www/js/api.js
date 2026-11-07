@@ -853,6 +853,28 @@ const Utils = {
   /* Every maturity instruction the server accepts, in words. The portal had
      its own map covering four of the six, so a client who chose a custom
      payout was shown the raw enum with the underscores swapped for spaces. */
+  /* What kind of client this is: individual, business, trust or group.
+
+     The SERVER owns turning the Firebase export's investorType into one of
+     these — services/investorType.js, with the aliases and the reasoning.
+     The browser only ever receives a canonical value, so it mirrors the four
+     and their labels and nothing else; there is no second copy of the alias
+     table to drift. A check asserts these four agree with the server's.
+
+     'Not set' is a real state and reads as one. It is not the same as
+     individual, and showing a dash would let somebody assume it was. */
+  INVESTOR_TYPES: ['individual', 'business', 'trust', 'group'],
+
+  INVESTOR_TYPE_LABELS: {
+    individual: 'Individual', business: 'Business',
+    trust: 'Trust', group: 'Group',
+  },
+
+  investorTypeLabel(value) {
+    const v = String(value == null ? '' : value).toLowerCase().trim();
+    return Utils.INVESTOR_TYPE_LABELS[v] || 'Not set';
+  },
+
   INSTRUCTION_LABELS: {
     reinvest:       'Reinvest',
     payout_all:     'Pay out all',

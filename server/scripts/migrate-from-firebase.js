@@ -20,6 +20,7 @@ require('dotenv').config({ path: require('path').join(__dirname, '../../.env') }
 const fs   = require('fs');
 const path = require('path');
 const pool = require('../db/pool');
+const { normaliseInvestorType } = require('../services/investorType');
 
 const DATA_DIR = path.join(__dirname, '../../migration-data');
 
@@ -179,8 +180,13 @@ async function migrate() {
   /* ══════════════════════════════════════════════════════════════
      STEP 1 — Investors
   ══════════════════════════════════════════════════════════════ */
-  console.log('👤  [1/6] Migrating investors...');
+  console.log('\u{1F464}  [1/6] Migrating investors...');
   let investorOk = 0;
+  /* Values of investorType this mapper does not recognise. NAMED at the
+     end rather than defaulted: an unknown that silently becomes
+     'individual' turns an imported trust into a person, and the next
+     FICA run verifies it as one. */
+  const unmappedTypes = new Map();
 
   for (const u of users) {
     const id = u.userAccountNumber;
@@ -212,6 +218,12 @@ async function migrate() {
     const province    = addr?.province?.trim() || null;
 
     const kycMapped = KYC_STATUS_MAP[u.kycStatus] || 'pending';
+    /* The export has carried this all along and nothing read it. */
+    const investorType = normaliseInvestorType(u.investorType);
+    if (u.investorType && !investorType) {
+      unmappedTypes.set(String(u.investorType),
+        (unmappedTypes.get(String(u.investorType)) || 0) + 1);
+    }
     const status    = u.status === 'ACTIVE' ? 'active' : u.status === 'ARCHIVED' ? 'archived' : 'suspended';
 
     try {
@@ -219,8 +231,8 @@ async function migrate() {
         INSERT INTO investors
           (id, first_name, last_name, email, phone, id_number, date_of_birth,
            kyc_status, fica_status, status, wallet_balance, total_invested, risk_profile,
-           occupation, notes, address, province, date_joined, updated_at)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,NOW())
+           occupation, notes, address, province, date_joined, investor_type, updated_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,NOW())
         ON CONFLICT (id) DO UPDATE SET
           first_name     = EXCLUDED.first_name,
           last_name      = EXCLUDED.last_name,
@@ -239,6 +251,9 @@ async function migrate() {
           address        = EXCLUDED.address,
           province       = EXCLUDED.province,
           date_joined    = COALESCE(EXCLUDED.date_joined, investors.date_joined),
+          /* COALESCE, so a re-run with an unrecognised value does not wipe a
+             type somebody has since set by hand in the console. */
+          investor_type  = COALESCE(EXCLUDED.investor_type, investors.investor_type),
           updated_at     = NOW()
       `, [
         id,
@@ -259,6 +274,7 @@ async function migrate() {
         fullAddress,
         province,
         u.created_time ? new Date(u.created_time) : new Date(),
+        investorType,
       ]);
       investorOk++;
     } catch (err) {
@@ -266,7 +282,14 @@ async function migrate() {
       errors++;
     }
   }
-  console.log(`  ✓ ${investorOk} investors imported\n`);
+  console.log(`  \u2713 ${investorOk} investors imported`);
+  if (unmappedTypes.size) {
+    console.log(`  \u26a0 ${unmappedTypes.size} investorType value(s) were not recognised and were`);
+    console.log('    left UNSET rather than guessed. Add them to ALIASES in');
+    console.log('    server/services/investorType.js and re-run, or set them in the console:');
+    for (const [v, n] of unmappedTypes) console.log(`      ${JSON.stringify(v)} — ${n} investor(s)`);
+  }
+  console.log('');
 
   /* ══════════════════════════════════════════════════════════════
      STEP 2 — Investment pools

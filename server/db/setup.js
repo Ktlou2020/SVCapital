@@ -89,6 +89,19 @@ DO $$ BEGIN
 EXCEPTION WHEN OTHERS THEN NULL;
 END $$;
 
+/* What kind of client this is: individual, business, trust or group.
+
+   NULLABLE WITH NO DEFAULT, deliberately. A default would backfill every
+   existing row to 'individual' in one statement, which for an imported trust
+   or company is a wrong answer written silently and permanently — and the
+   next FICA run would verify it as a person. NULL is an open question
+   somebody can see and close; 'individual' is an assertion nobody made.
+   services/investorType.js carries the reasoning and the normaliser. */
+DO $$ BEGIN
+  ALTER TABLE investors ADD COLUMN IF NOT EXISTS investor_type TEXT;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
 CREATE TABLE IF NOT EXISTS investment_pools (
   id TEXT PRIMARY KEY, name TEXT NOT NULL,
   product_type TEXT NOT NULL, status TEXT DEFAULT 'open',
@@ -5239,6 +5252,10 @@ async function autoSetup() {
           title: 'Four faults a client reported from the app \u2014 and only one of them was an iOS fault',
           body: 'PRINT / SAVE PDF DID NOTHING. Opening a document asked for a pop-up window first and only fell back to the full-screen viewer when the browser refused. In the packaged app the WebView does not refuse \u2014 it hands back a window the client never sees \u2014 so the fallback never fired and the button looked dead. The app now goes straight to the viewer, which is also where the Save-to-Files share sheet lives. INVESTMENT INCOME CERTIFICATES DID NOT DOWNLOAD. Those buttons called a SECOND certificate built in the browser, which ended in a file download the WebView ignores \u2014 so it made a PDF and dropped it. Worse, it reported only returns CREDITED and left out returns realised at maturity, which for most clients is all of their income. They now open the same Investment Income Reference the admin console produces. THE EARN REWARDS STATS WERE BLANK. Five white cards with a coloured bar and no text: the row was restyled as a dark panel with white text and the cards were never stopped from being white. Reported as iOS; it rendered identically in every browser. THE PUSH NOTIFICATIONS SWITCH WAS A CIRCLE. A 44px minimum-tap-target rule written for text checkboxes also matched the switch and stretched its 24px track into a blob. It keeps its 44px tap target \u2014 the rule\u2019s purpose \u2014 without being stretched. THAT ONE WAS GENUINELY iOS-ONLY: the rule uses :has(), which an older Android WebView ignores.',
           where: 'The app: any document \u2192 Print / Save PDF; Profile \u2192 Monthly Statements \u2192 Investment Income Certificate; Earn Rewards; Profile \u2192 Push Notifications. Clients need the new build \u2014 the service-worker cache is bumped, so it arrives on next launch.' },
+        { id: 'investor-type-2026-11', area: 'admin', icon: 'fa-user-tag',
+          title: 'A client now says what KIND of client it is',
+          body: 'The console could tell you a client HAD a trust \u2014 entities live as sub-accounts beneath somebody \u2014 but never that the client WAS one, because investors held a natural person and nothing else. There is now an INVESTOR TYPE on every client: Individual, Business, Trust or Group. It shows as a column in the clients list, as a row in the client detail, and it is editable under Edit Profile. THE IMPORT HAD THE ANSWER ALL ALONG. The Firebase export carries a field called investorType and the migration never read it \u2014 it maps name, surname, kycStatus, status and a dozen others, and that one fell on the floor. It is now read and mapped, and it understands the spellings another system would use (COMPANY, PTY_LTD, NATURAL_PERSON, inter vivos trust, STOKVEL and so on). A VALUE IT DOES NOT RECOGNISE IS LEFT UNSET AND NAMED IN THE IMPORT OUTPUT, never guessed: calling an unknown \u201cIndividual\u201d would turn an imported trust into a person silently and permanently, and the next FICA run would verify it as one. For the same reason the column has NO DEFAULT \u2014 existing clients read \u201cNot set\u201d until somebody says, rather than all being called individuals by a single migration. New signups are recorded as Individual, because that form signs up a person. WHY NOW: FICA verifies a person against Home Affairs, a company against CIPC and a trust against its deed and trustees, so the Datanamix integration needs to know which it is looking at.',
+          where: 'Clients \u2014 the new Type column, and inside a client: Investor Type above Risk Profile. Change it with Edit Profile. Anything reading \u201cNot set\u201d has never been classified.' },
       ];
 
       let added = 0;
