@@ -18076,6 +18076,133 @@ async function backfillCourseQuizzes(btn) {
   }
 }
 
+/* ════════════════════════════════════════════
+   INVESTOR TYPES FROM THE EXPORT
+   Settings → Data Migration → Post-Migration Utilities.
+
+   The same survey/execute the command-line script runs, so staff do not need
+   a database URL and a shell to see what the export would do. It previews on
+   the first press and only offers Apply once there is something to apply.
+════════════════════════════════════════════ */
+function _itypeBuckets(d) {
+  const c = d.counts || {};
+  const row = (label, n, colour, asideHtml) => n ? `
+    <div style="display:flex;align-items:baseline;gap:8px;padding:4px 0">
+      <span style="min-width:2.6rem;text-align:right;font-weight:700;color:${colour}">${n.toLocaleString()}</span>
+      <span style="color:var(--text)">${label}</span>
+      ${asideHtml ? `<span style="color:var(--text-muted);font-size:0.76rem">${asideHtml}</span>` : ''}
+    </div>` : '';
+  const types = Object.entries(d.byType || {})
+    .map(([t, n]) => `<span style="font-size:0.72rem;padding:2px 8px;border-radius:100px;background:rgba(237,165,255,0.14);color:#eda5ff;white-space:nowrap">${_esc(Utils.investorTypeLabel(t))} ${n}</span>`)
+    .join(' ');
+
+  /* The unrecognised values are the actionable part of a preview, so they are
+     quoted exactly and say where to add them — not summarised as a count. */
+  const unmapped = (d.unmapped || []).length ? `
+    <div style="margin-top:10px;padding:10px 12px;background:rgba(254,194,79,0.08);border-radius:8px">
+      <div style="font-weight:600;color:#fec24f;margin-bottom:4px">
+        <i class="fa-solid fa-circle-question"></i> ${d.unmapped.length} value(s) not recognised — skipped, never guessed
+      </div>
+      <div style="font-size:0.76rem;color:var(--text-muted);margin-bottom:6px">
+        Calling an unknown &ldquo;Individual&rdquo; would turn an imported trust into a natural person, and
+        the next FICA check would verify it against Home Affairs rather than its deed. Add these to
+        <code>ALIASES</code> in <code>server/services/investorType.js</code> and run this again.
+      </div>
+      ${d.unmapped.map(u => `<div style="font-family:monospace;font-size:0.78rem">${_esc(JSON.stringify(u.value))} — ${u.count} record(s)</div>`).join('')}
+    </div>` : '';
+
+  const conflicts = (d.conflicts || []).length ? `
+    <div style="margin-top:10px;padding:10px 12px;background:rgba(239,68,68,0.07);border-radius:8px">
+      <div style="font-weight:600;color:#ef4444;margin-bottom:4px">
+        <i class="fa-solid fa-triangle-exclamation"></i> ${c.conflicts} already set, and the export disagrees
+      </div>
+      <div style="font-size:0.76rem;color:var(--text-muted);margin-bottom:6px">
+        The console is the more recent authority, so these are skipped unless you tick Overwrite. Look at them first.
+      </div>
+      ${d.conflicts.slice(0, 12).map(x => `<div style="font-size:0.78rem"><span style="font-family:monospace;color:var(--gold)">${_esc(x.id)}</span> ${_esc(x.name || '')} — console says <strong>${_esc(Utils.investorTypeLabel(x.was))}</strong>, export says <strong>${_esc(Utils.investorTypeLabel(x.type))}</strong></div>`).join('')}
+      ${c.conflicts > 12 ? `<div style="font-size:0.76rem;color:var(--text-muted)">… and ${c.conflicts - 12} more</div>` : ''}
+    </div>` : '';
+
+  return `
+    ${row('to set', c.toSet, '#22c55e', 'currently &ldquo;Not set&rdquo;')}
+    ${types ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin:2px 0 6px 3.4rem">${types}</div>` : ''}
+    ${row('already correct', c.unchanged, 'var(--text-muted)')}
+    ${row('in the export, not in this database', c.missing, 'var(--text-muted)', 'never imported, or another environment')}
+    ${row('carry no investorType at all', c.noType, 'var(--text-muted)')}
+    ${row('carry no userAccountNumber', c.noId, 'var(--text-muted)')}
+    ${conflicts}
+    ${unmapped}`;
+}
+
+async function backfillInvestorTypes(btn, apply) {
+  const fileInput = document.getElementById('itypeFile');
+  const resultEl  = document.getElementById('itypeResult');
+  const applyBtn  = document.getElementById('itypeApplyBtn');
+  const overwrite = !!document.getElementById('itypeOverwrite')?.checked;
+  const file      = fileInput?.files[0];
+  if (!file) return Toast.error('Choose the export’s users.json first.');
+
+  /* The confirmation names what Apply would change, including the overwrites,
+     because this writes across the whole book in one go. */
+  if (apply) {
+    const n  = parseInt(resultEl?.dataset.toset || '0', 10);
+    const cf = parseInt(resultEl?.dataset.conflicts || '0', 10);
+    if (!await Confirm.ask('Write these investor types?', {
+      body: `${n} client(s) currently reading "Not set" will be classified from the export`
+          + (overwrite && cf ? `, and ${cf} type(s) already set in the console will be OVERWRITTEN` : '')
+          + (!overwrite && cf ? `. The ${cf} disagreement(s) will be left alone.` : '.')
+          + ' All in one transaction.',
+      confirmLabel: 'Apply',
+      danger: overwrite && cf > 0,
+    })) return;
+  }
+
+  const label = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${apply ? 'Writing' : 'Reading'}…`;
+
+  try {
+    const fd = new FormData();
+    fd.append('users', file);
+    if (apply)     fd.append('apply', 'true');
+    if (overwrite) fd.append('overwrite', 'true');
+    const res = await fetch('/api/migrate/investor-types', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${localStorage.getItem('svc_token')}` },
+      body: fd,
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error || 'Failed');
+
+    resultEl.dataset.toset     = String(d.counts?.toSet ?? 0);
+    resultEl.dataset.conflicts = String(d.counts?.conflicts ?? 0);
+
+    const head = d.applied
+      ? `<div style="color:#22c55e;font-weight:600;margin-bottom:6px"><i class="fa-solid fa-check-circle"></i> ${(d.written || 0).toLocaleString()} client(s) classified${d.overwritten ? `, ${d.overwritten} overwritten` : ''}.</div>`
+      : `<div style="color:var(--text-muted);margin-bottom:6px"><i class="fa-solid fa-eye"></i> Preview of <strong>${_esc(file.name)}</strong> — ${(d.total || 0).toLocaleString()} record(s) read. <strong>Nothing has been written.</strong></div>`;
+    const warn = (d.warnings || []).length
+      ? `<div style="margin-top:8px;font-size:0.76rem;color:#fec24f">${d.warnings.map(w => `• ${_esc(w)}`).join('<br>')}</div>` : '';
+    resultEl.innerHTML = head + _itypeBuckets(d) + warn;
+
+    /* Apply is offered only when there is something for it to do. */
+    const can = (d.counts?.toSet || 0) + (overwrite ? (d.counts?.conflicts || 0) : 0);
+    applyBtn.style.display = (!d.applied && can) ? '' : 'none';
+
+    if (d.applied) {
+      Toast.success(`${d.written || 0} client(s) classified`);
+      await loadInvestors();        /* so the Type column reflects it at once */
+    } else if (!can) {
+      Toast.success('Nothing to write — every client the export names is already classified');
+    }
+  } catch (e) {
+    resultEl.innerHTML = `<span style="color:#ef4444">${_esc(e.message || 'Failed')}</span>`;
+    Toast.error(e.message || 'Failed');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = label;
+  }
+}
+
 async function reimportBankAccounts(btn) {
   const fileInput = document.getElementById('bankJsonFile');
   const resultEl  = document.getElementById('bankReimportResult');

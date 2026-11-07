@@ -5,6 +5,12 @@
  * migration never read it, so every imported client reads "Not set" in the
  * console. This fills them in.
  *
+ * THE CLASSIFICATION AND THE WRITE ARE IN services/investorTypeBackfill, which
+ * the console panel calls too (Settings → Data Migration → Post-Migration
+ * Utilities → Investor Types from the Export). This file is the command line
+ * over it: it reads the file off disk and prints. A second copy of the
+ * classification here would drift from the one somebody runs in the console.
+ *
  * ── WHY NOT JUST RE-RUN THE MIGRATION ─────────────────────────────────
  *
  * migrate-from-firebase.js now maps investorType, so re-running it WOULD set
@@ -40,7 +46,8 @@
 const fs   = require('fs');
 const path = require('path');
 const { Pool } = require('pg');
-const { normaliseInvestorType, investorTypeLabel } = require('../services/investorType');
+const { investorTypeLabel } = require('../services/investorType');
+const svc = require('../services/investorTypeBackfill');
 
 const APPLY     = process.argv.includes('--apply');
 const OVERWRITE = process.argv.includes('--overwrite');
@@ -65,15 +72,19 @@ const pool = new Pool({
 (async () => {
   let exitCode = 0;
   try {
-    let users;
+    let records;
     try {
-      users = JSON.parse(fs.readFileSync(FILE, 'utf8'));
+      records = JSON.parse(fs.readFileSync(FILE, 'utf8'));
     } catch (e) {
       console.error(`Could not read ${FILE}: ${e.message}`);
       process.exit(1);
     }
-    if (!Array.isArray(users)) {
-      console.error('Expected users.json to be an array of user records.');
+
+    let s;
+    try {
+      s = await svc.survey(pool, { records });
+    } catch (e) {
+      console.error(e.message);
       process.exit(1);
     }
 
@@ -81,116 +92,68 @@ const pool = new Pool({
     console.log(APPLY
       ? `  MODE: APPLY${OVERWRITE ? ' (overwriting types already set)' : ''}`
       : '  MODE: preview only — nothing will be written. Add --apply to write.');
-    console.log(`  ${users.length} record(s) in the export\n`);
+    console.log(`  ${s.total} record(s) in the export\n`);
 
-    /* What the export says, per account number. */
-    const wanted = new Map();          // id → canonical type
-    const unmapped = new Map();        // raw value → count
-    let noType = 0;
-    for (const u of users) {
-      const id = u && u.userAccountNumber;
-      if (!id) continue;
-      if (!u.investorType) { noType++; continue; }
-      const t = normaliseInvestorType(u.investorType);
-      if (!t) {
-        unmapped.set(String(u.investorType), (unmapped.get(String(u.investorType)) || 0) + 1);
-        continue;
-      }
-      wanted.set(String(id), t);
+    console.log(`  TO SET (${s.toSet.length}) — currently "Not set"`);
+    for (const [t, n] of Object.entries(s.byType)) {
+      console.log(`      ${investorTypeLabel(t).padEnd(12)} ${n}`);
     }
-
-    /* What the database has. Only the ones the export actually names. */
-    const ids = [...wanted.keys()];
-    const { rows: current } = ids.length
-      ? await pool.query(
-          `SELECT id, first_name, last_name, investor_type FROM investors WHERE id = ANY($1::text[])`,
-          [ids])
-      : { rows: [] };
-    const have = new Map(current.map(r => [r.id, r]));
-
-    const toSet = [], conflicts = [], unchanged = [], missing = [];
-    for (const [id, type] of wanted) {
-      const row = have.get(id);
-      if (!row) { missing.push({ id, type }); continue; }
-      if (!row.investor_type) { toSet.push({ id, type, row }); continue; }
-      if (row.investor_type === type) { unchanged.push(id); continue; }
-      conflicts.push({ id, type, was: row.investor_type, row });
+    for (const t of s.toSet.slice(0, 10)) {
+      console.log(`        ${t.id}  ${t.name} → ${investorTypeLabel(t.type)}`);
     }
+    if (s.toSet.length > 10) console.log(`        … and ${s.toSet.length - 10} more`);
 
-    const name = r => [r.first_name, r.last_name].filter(Boolean).join(' ') || r.id;
-
-    const counts = {};
-    for (const t of toSet) counts[t.type] = (counts[t.type] || 0) + 1;
-    console.log(`  TO SET (${toSet.length}) — currently "Not set"`);
-    for (const [t, n] of Object.entries(counts)) console.log(`      ${investorTypeLabel(t).padEnd(12)} ${n}`);
-    for (const t of toSet.slice(0, 10)) {
-      console.log(`        ${t.id}  ${name(t.row)} → ${investorTypeLabel(t.type)}`);
-    }
-    if (toSet.length > 10) console.log(`        … and ${toSet.length - 10} more`);
-
-    if (conflicts.length) {
-      console.log(`\n  ALREADY SET, AND THE EXPORT DISAGREES (${conflicts.length})`);
+    if (s.conflicts.length) {
+      console.log(`\n  ALREADY SET, AND THE EXPORT DISAGREES (${s.conflicts.length})`);
       console.log('      The console is the more recent authority, so these are SKIPPED');
       console.log('      unless you pass --overwrite. Look at them before you do.');
-      for (const c of conflicts.slice(0, 10)) {
-        console.log(`        ${c.id}  ${name(c.row)}: console says ${investorTypeLabel(c.was)}, `
+      for (const c of s.conflicts.slice(0, 10)) {
+        console.log(`        ${c.id}  ${c.name}: console says ${investorTypeLabel(c.was)}, `
                   + `export says ${investorTypeLabel(c.type)}`);
       }
-      if (conflicts.length > 10) console.log(`        … and ${conflicts.length - 10} more`);
+      if (s.conflicts.length > 10) console.log(`        … and ${s.conflicts.length - 10} more`);
     }
 
-    if (unmapped.size) {
-      console.log(`\n  NOT RECOGNISED (${unmapped.size} value(s)) — SKIPPED, never guessed`);
+    if (s.unmapped.length) {
+      console.log(`\n  NOT RECOGNISED (${s.unmapped.length} value(s)) — SKIPPED, never guessed`);
       console.log('      Calling an unknown "Individual" would turn an imported trust into a');
       console.log('      natural person, and the next FICA run would verify it as one. Add');
       console.log('      these to ALIASES in server/services/investorType.js and re-run:');
-      for (const [v, n] of unmapped) console.log(`        ${JSON.stringify(v)} — ${n} record(s)`);
+      for (const u of s.unmapped) console.log(`        ${JSON.stringify(u.value)} — ${u.count} record(s)`);
       exitCode = 0;   // reporting, not failing — the operator decides
     }
 
-    if (missing.length) {
-      console.log(`\n  IN THE EXPORT BUT NOT IN THIS DATABASE (${missing.length}) — skipped`);
+    if (s.missing.length) {
+      console.log(`\n  IN THE EXPORT BUT NOT IN THIS DATABASE (${s.missing.length}) — skipped`);
       console.log('      Usually a client who was never imported, or a different environment.');
     }
-    if (noType)          console.log(`\n  ${noType} export record(s) carry no investorType at all — skipped.`);
-    if (unchanged.length) console.log(`  ${unchanged.length} already correct.`);
+    if (s.noType)          console.log(`\n  ${s.noType} export record(s) carry no investorType at all — skipped.`);
+    if (s.noId)            console.log(`  ${s.noId} export record(s) carry no userAccountNumber — skipped.`);
+    if (s.unchanged.length) console.log(`  ${s.unchanged.length} already correct.`);
 
-    const writes = OVERWRITE ? [...toSet, ...conflicts] : toSet;
     if (!APPLY) {
-      console.log(`\n  Preview only. --apply would set ${toSet.length}`
-                + `${conflicts.length ? `, and ${conflicts.length} more with --overwrite` : ''}.\n`);
+      console.log(`\n  Preview only. --apply would set ${s.toSet.length}`
+                + `${s.conflicts.length ? `, and ${s.conflicts.length} more with --overwrite` : ''}.\n`);
       return;
     }
-    if (!writes.length) { console.log('\n  Nothing to write.\n'); return; }
 
-    /* One transaction: a half-applied classification across the book is
-       worse than none, because the console would show a mixture nobody
-       could tell apart from a partial import. */
-    const client = await pool.connect();
-    let written = 0;
-    try {
-      await client.query('BEGIN');
-      for (const w of writes) {
-        const { rowCount } = await client.query(
-          `UPDATE investors SET investor_type = $2, updated_at = NOW() WHERE id = $1`,
-          [w.id, w.type]);
-        written += rowCount;
-      }
-      await client.query('COMMIT');
-    } catch (e) {
-      await client.query('ROLLBACK').catch(() => {});
-      throw e;
-    } finally {
-      client.release();
-    }
+    const r = await svc.execute(pool, {
+      survey: s, overwrite: OVERWRITE, source: path.basename(FILE),
+      actor: { id: null, email: 'cli', role: 'admin' },
+    });
+    if (!r.written) { console.log('\n  Nothing to write.\n'); return; }
 
-    console.log(`\n  ✅ ${written} client(s) classified.`);
+    console.log(`\n  ✅ ${r.written} client(s) classified.`);
+    for (const w of r.warnings) console.log(`  ⚠  ${w}`);
     console.log('  Clients → the Type column. Filter by "Not set" to see what is left.\n');
   } catch (err) {
     console.error('\n  Failed:', err.message);
     exitCode = 1;
   } finally {
     await pool.end().catch(() => {});
+    /* services/audit writes through db/pool, whose idle connections hold the
+       event loop open long after the work is done. */
+    await require('../db/pool').end().catch(() => {});
     process.exit(exitCode);
   }
 })();

@@ -636,4 +636,74 @@ router.post('/reimport-product',
   }
 );
 
+/* ── POST /api/migrate/investor-types ────────────────────────────────
+   Fill in investor_type from the export's investorType field, and nothing
+   else. Previews unless apply is explicitly 'true', because this writes
+   across the whole book.
+
+   The classification and the write are in services/investorTypeBackfill,
+   which the command-line script calls too. A second copy here would drift
+   from the one somebody runs with a database URL.
+
+   The file is held in memory by multer and never written to disk: it is a
+   dump of real client records and has no business sitting on the server's
+   filesystem after the request.
+   ──────────────────────────────────────────────────────────────────── */
+router.post('/investor-types',
+  requireAuth,
+  requireRole('admin', 'director'),
+  upload.fields([{ name: 'users', maxCount: 1 }]),
+  async (req, res) => {
+    const svc = require('../services/investorTypeBackfill');
+    const f = (req.files && req.files.users && req.files.users[0]) || null;
+    if (!f) return res.status(400).json({ error: 'Choose the export’s users.json first.' });
+
+    const body      = req.body || {};
+    const apply     = String(body.apply)     === 'true';
+    const overwrite = String(body.overwrite) === 'true';
+
+    let records;
+    try { records = JSON.parse(f.buffer.toString('utf8')); }
+    catch (err) { return res.status(400).json({ error: `That file is not valid JSON: ${err.message}` }); }
+
+    try {
+      const s = await svc.survey(pool, { records });
+
+      /* The counts are always exact; the per-client listings are capped so a
+         book of thousands does not arrive as one response. */
+      const CAP = 100;
+      const plan = {
+        total: s.total,
+        byType: s.byType,
+        counts: {
+          toSet: s.toSet.length, conflicts: s.conflicts.length,
+          unchanged: s.unchanged.length, missing: s.missing.length,
+          unmapped: s.unmapped.length, noType: s.noType, noId: s.noId,
+        },
+        toSet:     s.toSet.slice(0, CAP),
+        conflicts: s.conflicts.slice(0, CAP),
+        missing:   s.missing.slice(0, CAP).map(m => m.id),
+        unmapped:  s.unmapped,
+        capped: CAP,
+      };
+
+      if (!apply) return res.json({ ...plan, applied: false });
+
+      const r = await svc.execute(pool, {
+        survey: s, overwrite, source: f.originalname || 'upload',
+        actor: { id: req.user && req.user.id,
+                 email: (req.user && req.user.email) || 'admin',
+                 role: (req.user && req.user.role) || 'admin' },
+      });
+      res.json({ ...plan, applied: true, written: r.written,
+                 overwritten: r.overwritten, warnings: r.warnings });
+    } catch (err) {
+      /* A 400 is the caller's mistake, not a fault — stacking it into the
+         deploy log buries the failures that are. */
+      if (!err.status) console.error('[migrate/investor-types]', err);
+      res.status(err.status || 500).json({ error: err.message });
+    }
+  }
+);
+
 module.exports = router;
