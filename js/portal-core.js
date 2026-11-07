@@ -12509,7 +12509,7 @@ async function loadStokvelInvites() {
 function _svInviteCard(v) {
   return `<div class="sa-card" style="--sa-color:#eda5ff;border:2px solid #eda5ff">
     <div class="sa-card__header" style="background:linear-gradient(135deg,#2d1d6e 0%,#eda5ff 100%)">
-      <div class="sa-card__type"><i class="fa-solid fa-envelope-open-text"></i> Invitation</div>
+      <div class="sa-card__type"><i class="fa-solid fa-envelope-open-text"></i> ${_esc(_svT('inv.card', 'Invitation'))}</div>
       <div class="sa-card__name">${_esc(v.stokvel_name)}</div>
       <div style="font-size:0.72rem;color:rgba(255,255,255,0.85);margin-top:2px">
         ${_esc(v.invited_by_name || 'A member')} invited you · ${v.active_members || 0} member${v.active_members === 1 ? '' : 's'}
@@ -12517,17 +12517,15 @@ function _svInviteCard(v) {
     </div>
     <div class="sa-card__body">
       <div style="font-size:0.8rem;color:var(--text-muted);line-height:1.5">
-        Joining means the group can see what you contribute and what you owe, and that
-        several signatories must agree before any of its money moves. You join as an
-        ordinary member.
+        ${_esc(_svT('inv.card.body', 'Joining means the group can see what you contribute and what you owe, and that several signatories must agree before any of its money moves. You join as an ordinary member.'))}
       </div>
     </div>
     <div class="sa-card__actions">
       <button class="btn btn--sm btn--primary" onclick="acceptStokvelInvite('${_esc(v.id)}')">
-        <i class="fa-solid fa-check"></i> Accept
+        <i class="fa-solid fa-check"></i> ${_esc(_svT('inv.accept', 'Accept'))}
       </button>
       <button class="btn btn--sm btn--ghost" onclick="declineStokvelInvite('${_esc(v.id)}')">
-        Decline
+        ${_esc(_svT('inv.decline', 'Decline'))}
       </button>
     </div>
   </div>`;
@@ -12742,6 +12740,258 @@ async function openStokvelHub(id) {
   await _svRenderHub(id);
 }
 
+/* ─── The group workspace in isiZulu and Sesotho ──────────────────────
+   Many members of a savings club or investment group read isiZulu or
+   Sesotho more comfortably than English, and the screens that settle
+   who has paid and who approved what should be readable by all of them.
+
+   THESE ARE DRAFTS until a qualified translator has checked them. A
+   language reaches clients only when staff list it in Settings →
+   group_languages_live; until then it is offered only to a reviewer who
+   opens the portal with ?svDraftLang=1, and every screen in it carries a
+   banner saying it is a draft. Money words matter here — "signatory",
+   "mandate", "maturity" — and a translation that is nearly right about
+   who must approve a withdrawal is wrong.
+
+   English stays the source: every call passes its English text, so a
+   missing key shows English rather than a blank, and English is what
+   every member sees by default. Functions only: portal-core may declare
+   no top-level state (check-portal-split). */
+function _svLangList() {
+  return [['en', 'English'], ['zu', 'isiZulu'], ['st', 'Sesotho']];
+}
+
+function _svDict() {
+  return {
+    zu: {
+      'lang.label': 'Ulimi',
+      'kind.investment': 'Tshala',
+      'kind.exit': 'Ukuphuma',
+      'kind.mandate': 'Imithetho',
+      'kind.payout': 'Inkokhelo',
+      'kind.withdrawal': 'Khipha',
+      'status.pending': 'kulindile',
+      'status.approved': 'kuvunyiwe',
+      'status.rejected': 'kwenqatshiwe',
+      'status.used': 'kwenziwe',
+      'status.expired': 'kuphelelwe yisikhathi',
+      'lang.draft': 'Lokhu ukuhumusha okusalingwayo — kusahlolwa ngumhumushi. Uma kukhona okungacacile, buyela esiNgisini.',
+      'tab.overview': 'Isifinyezo',
+      'tab.contributions': 'Iminikelo',
+      'tab.approvals': 'Izimvume',
+      'tab.proposals': 'Iziphakamiso',
+      'tab.shares': 'Izabelo',
+      'tab.payouts': 'Izinkokhelo',
+      'tab.members': 'Amalungu',
+      'tab.investments': 'Ukutshala imali',
+      'tab.transactions': 'Ukuhamba kwemali',
+      'tab.statement': 'Isitatimende',
+      'hdr.pot': 'Isikhwama seqembu',
+      'hdr.wallet': 'Esikhwameni semali',
+      'hdr.invested': 'Okutshaliwe',
+      'hdr.myshare': 'Isabelo sakho',
+      'hdr.back': 'I-akhawunti yami',
+      'hdr.member': 'Ilungu',
+      'ap.title': 'Izimvume zabasayinayo',
+      'ap.intro': 'Imali yeqembu iyahamba kuphela uma abasayinayo abanele beyivumile — iya e-akhawunti yasebhange noma ekutshalweni kwemali. Akekho ilungu elilodwa elingakwenza lodwa, futhi lonke iqembu liyabona ukuthi ubani uvume ini.',
+      'ap.mustapprove': 'abasayinayo kumele bavume',
+      'ap.nomandate': 'Ayikabi khona imithetho yokusayina',
+      'ap.locked': 'Imali ikhiyiwe kuze kube ngu',
+      'ap.nolock': 'Alukho usuku lokukhiya olubekiwe',
+      'ap.none': 'Akukho okulindele imvume.',
+      'ap.recent': 'Okwakamuva',
+      'btn.withdraw': 'Cela ukukhipha imali',
+      'btn.invest': 'Cela ukutshala imali',
+      'btn.mandate': 'Shintsha imithetho yokusayina noma usuku lokukhiya',
+      'btn.approve': 'Vuma',
+      'btn.reject': 'Yenqaba',
+      'pr.title': 'Iziphakamiso',
+      'pr.intro': 'Buza lonke iqembu umbuzo, bese wonke amalungu evota. Isiphakamiso siyaphumelela uma amalungu angaphezu kwesigamu ethi yebo, noma uma kunamavoti ayebo amaningi kunawacha lapho ukuvota kuvalwa. Isiphakamiso esiphumelele asiyihambisi imali: ukutshala imali kusadinga ukuthi abasayinayo bakuvume.',
+      'pr.none': 'Akukho okuvotelwayo.',
+      'pr.new': 'Phakamisa okuthile',
+      'pr.decided': 'Okunqunyiwe',
+      'pr.put': 'Kudlulisele kubasayinayo',
+      'pr.withdraw': 'Hoxisa',
+      'pr.carries': 'kuyaphumelela',
+      'vote.yes': 'Yebo',
+      'vote.no': 'Cha',
+      'vote.abstain': 'Angivoti',
+      'st.open': 'Ukuvota kuvuliwe',
+      'st.carried': 'Siphumelele',
+      'st.defeated': 'Sehlulekile',
+      'st.withdrawn': 'Sihoxisiwe',
+      'inv.none': 'Leli qembu alikatshali lutho okwamanje.',
+      'inv.now': 'Okutshaliwe manje',
+      'inv.expected': 'Okulindelekile kukho',
+      'inv.expected.hint': 'Okuhlosiwe yisikhwama sokutshala, akusona isithembiso',
+      'inv.realised': 'Inzuzo etholakele',
+      'inv.realised.hint': 'Ibuyiselwe esikhwameni semali seqembu',
+      'inv.next': 'Ukuphela okulandelayo',
+      'inv.calendar': 'Imali izobuya nini',
+      'inv.every': 'Konke ukutshala imali',
+      'inv.late': 'ngemuva kosuku lokukhiya',
+      'mem.title': 'Amalungu',
+      'mem.fine': 'Bhala inhlawulo',
+      'mem.templates': 'Izifanekiso zekomidi lakho:',
+      'mem.constitution': 'Umthethosisekelo',
+      'mem.policy': 'Inqubomgomo yokutshala imali',
+      'inv.card': 'Isimemo',
+      'inv.card.body': 'Ukujoyina kusho ukuthi iqembu lingabona okufakayo nokukweletayo, nokuthi abasayinayo abaningana kumele bavumelane ngaphambi kokuba imali yalo ihambe. Ujoyina njengelungu elijwayelekile.',
+      'inv.accept': 'Yamukela',
+      'inv.decline': 'Yenqaba',
+    },
+    st: {
+      'lang.label': 'Puo',
+      'kind.investment': 'Tsetela',
+      'kind.exit': 'Ho tswa',
+      'kind.mandate': 'Melao',
+      'kind.payout': 'Tefo',
+      'kind.withdrawal': 'Ntsha',
+      'status.pending': 'e emetse',
+      'status.approved': 'e dumelletswe',
+      'status.rejected': 'e hannwe',
+      'status.used': 'e entswe',
+      'status.expired': 'nako e fedile',
+      'lang.draft': 'Ena ke phetolelo ya teko — e ntse e hlahlojwa ke mofetoledi. Haeba ho na le se sa hlakang, kgutlela Sekgoweng.',
+      'tab.overview': 'Kakaretso',
+      'tab.contributions': 'Menehelo',
+      'tab.approvals': 'Ditumello',
+      'tab.proposals': 'Ditlhahiso',
+      'tab.shares': 'Dikarolo',
+      'tab.payouts': 'Ditefo',
+      'tab.members': 'Ditho',
+      'tab.investments': 'Matsete',
+      'tab.transactions': 'Motsamao wa tjhelete',
+      'tab.statement': 'Setatemente',
+      'hdr.pot': 'Sekgwama sa sehlopha',
+      'hdr.wallet': 'Ka sepacheng',
+      'hdr.invested': 'Se tsetetsweng',
+      'hdr.myshare': 'Karolo ya hao',
+      'hdr.back': 'Akhaonto ya ka',
+      'hdr.member': 'Setho',
+      'ap.title': 'Ditumello tsa basaeni',
+      'ap.intro': 'Tjhelete ya sehlopha e tsamaya feela ha basaeni ba lekaneng ba e dumeletse — e ya akhaontong ya banka kapa letseteng. Ha ho setho se le seng se ka e etsa se le seng, mme sehlopha kaofela se bona hore na ke mang ya dumetseng eng.',
+      'ap.mustapprove': 'basaeni ba tlameha ho dumela',
+      'ap.nomandate': 'Ha ho so be le melao ya ho saena',
+      'ap.locked': 'Tjhelete e notletswe ho fihlela',
+      'ap.nolock': 'Ha ho letsatsi la ho notlela le behilweng',
+      'ap.none': 'Ha ho letho le emetseng tumello.',
+      'ap.recent': 'Tsa morao tjena',
+      'btn.withdraw': 'Kopa ho ntsha tjhelete',
+      'btn.invest': 'Kopa ho tsetela',
+      'btn.mandate': 'Fetola melao ya ho saena kapa letsatsi la ho notlela',
+      'btn.approve': 'Dumela',
+      'btn.reject': 'Hana',
+      'pr.title': 'Ditlhahiso',
+      'pr.intro': 'Botsa sehlopha kaofela potso, mme setho se seng le se seng se a vouta. Tlhahiso e a atleha ha ditho tse fetang halofo di re e, kapa ha divoutu tsa e di feta tsa tjhe ha ho vouta ho kwalwa. Tlhahiso e atlehileng ha e tsamaise tjhelete: letsete le ntse le hloka hore basaeni ba le dumele.',
+      'pr.none': 'Ha ho letho le voutelwang.',
+      'pr.new': 'Hlahisa ntho e itseng',
+      'pr.decided': 'Tse nketsweng qeto',
+      'pr.put': 'E fetisetse ho basaeni',
+      'pr.withdraw': 'Hula',
+      'pr.carries': 'e a atleha',
+      'vote.yes': 'E',
+      'vote.no': 'Tjhe',
+      'vote.abstain': 'Ha ke voute',
+      'st.open': 'Ho vouta ho butswe',
+      'st.carried': 'E atlehile',
+      'st.defeated': 'E hlotswe',
+      'st.withdrawn': 'E hutswe',
+      'inv.none': 'Sehlopha sena ha se so tsetele letho.',
+      'inv.now': 'Se tsetetsweng hona jwale',
+      'inv.expected': 'Se lebelletsweng ho sona',
+      'inv.expected.hint': 'Sepheo sa letlole la matsete, eseng tshepiso',
+      'inv.realised': 'Phaello e fumanweng',
+      'inv.realised.hint': 'E kgutlisetswa sepacheng sa sehlopha',
+      'inv.next': 'Ho fela ho latelang ha nako',
+      'inv.calendar': 'Tjhelete e tla kgutla neng',
+      'inv.every': 'Matsete ohle',
+      'inv.late': 'kamora letsatsi la ho notlela',
+      'mem.title': 'Ditho',
+      'mem.fine': 'Ngola faene',
+      'mem.templates': 'Ditempleite tsa komiti ya hao:',
+      'mem.constitution': 'Molaotheo',
+      'mem.policy': 'Leano la matsete',
+      'inv.card': 'Memo',
+      'inv.card.body': 'Ho kena ho bolela hore sehlopha se ka bona seo o se kenyang le seo o se kolotang, le hore basaeni ba mmalwa ba tlameha ho dumellana pele tjhelete ya sona e tsamaya. O kena jwalo ka setho se tlwaelehileng.',
+      'inv.accept': 'Amohela',
+      'inv.decline': 'Hana',
+    },
+  };
+}
+
+/* Which languages have been signed off, read once per page load from the
+   public release flags and kept on window (made on first use, like the
+   workspace cache). Fails closed: if the flags cannot be read, only English
+   is offered. */
+async function _svLoadReleased() {
+  if (window.__SVREL) return window.__SVREL;
+  let live = [], templates = false;
+  try {
+    const r = await API._fetch('GET', 'legal/group-resources');
+    live = (r && Array.isArray(r.languages_live)) ? r.languages_live : [];
+    templates = !!(r && r.templates_live === true);
+  } catch (_) { live = []; templates = false; }
+  window.__SVREL = { live, templates };
+  return window.__SVREL;
+}
+
+/* A reviewer sees the drafts: ?svDraftLang=1 once, remembered for the tab. */
+function _svDraftPreview() {
+  try {
+    if (/[?&]svDraftLang=1\b/.test(location.search)) sessionStorage.setItem('svc_draft_lang', '1');
+    return sessionStorage.getItem('svc_draft_lang') === '1';
+  } catch (_) { return false; }
+}
+
+function _svOfferedLangs() {
+  const live = ((window.__SVREL || {}).live) || [];
+  const preview = _svDraftPreview();
+  return _svLangList().filter(([code]) => code === 'en' || live.includes(code) || preview);
+}
+
+function _svLang() {
+  let want = 'en';
+  try { want = localStorage.getItem('svc_group_lang') || 'en'; } catch (_) {}
+  return _svOfferedLangs().some(([code]) => code === want) ? want : 'en';
+}
+
+/* The text for a key in the member's language, or the English given. */
+function _svT(key, en) {
+  const lang = _svLang();
+  if (lang === 'en') return en;
+  const d = _svDict()[lang] || {};
+  return Object.prototype.hasOwnProperty.call(d, key) ? d[key] : en;
+}
+
+function svSetGroupLang(code, groupId) {
+  try { localStorage.setItem('svc_group_lang', code); } catch (_) {}
+  if (groupId) _svRenderHub(groupId, null, { cached: true });
+}
+
+/* The picker, and the draft banner when the language on screen has not been
+   signed off. Hidden entirely while English is the only language offered. */
+function _svLangBar(groupId) {
+  const offered = _svOfferedLangs();
+  if (offered.length < 2) return '';
+  const lang = _svLang();
+  const live = ((window.__SVREL || {}).live) || [];
+  const draft = lang !== 'en' && !live.includes(lang);
+  return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 0 0">
+      <label for="svLangPick" style="font-size:0.74rem;color:var(--text-muted)">
+        <i class="fa-solid fa-language"></i> ${_esc(_svT('lang.label', 'Language'))}</label>
+      <select id="svLangPick" class="form-input" style="width:auto;padding:4px 8px;font-size:0.8rem"
+              onchange="svSetGroupLang(this.value,'${_esc(groupId)}')">
+        ${offered.map(([code, name]) => `<option value="${code}"${code === lang ? ' selected' : ''}>${_esc(name)}${
+          code !== 'en' && !live.includes(code) ? ' (draft)' : ''}</option>`).join('')}
+      </select>
+    </div>
+    ${draft ? `<div role="note" style="margin-top:8px;padding:8px 10px;border-radius:8px;font-size:0.78rem;
+        background:rgba(254,194,79,0.12);border:1px solid #fec24f">
+        <i class="fa-solid fa-triangle-exclamation" style="color:#fec24f"></i>
+        ${_esc(_svT('lang.draft', 'This translation is a draft and is being checked by a translator.'))}</div>` : ''}`;
+}
+
 /* Which section is open. Threaded through the handlers rather than parked
    in a module variable: portal-core is shared by the web portal and the
    app and may declare no top-level state — check-portal-split refuses one. */
@@ -12832,6 +13082,7 @@ async function _svRenderHub(id, tab, opts) {
   const meIsSignatory = ((members && members.data) || [])
     .some(m => m.is_me && m.is_signatory);
 
+  await _svLoadReleased();
   const head = document.getElementById('svWsHeader');
   if (head) head.innerHTML = _svWsHeader(g, shareData, id);
   const tabs = document.getElementById('svWsTabs');
@@ -12858,7 +13109,7 @@ async function _svRenderHub(id, tab, opts) {
                                                    requests, members, mine, meIsSignatory });
   }
   if (body) {
-    body.innerHTML = html;
+    body.innerHTML = _svLangBar(id) + html;
     body.setAttribute('data-tab', open);
     body.setAttribute('role', 'tabpanel');
     body.setAttribute('aria-labelledby', 'svTab-' + open);
@@ -12883,21 +13134,21 @@ function _svWsHeader(g, shareRes, id) {
         <div>
           <div style="font-size:1.15rem;font-weight:800;color:#fff">${_esc(g.name)}</div>
           <div style="font-size:0.78rem;color:rgba(255,255,255,0.75)">
-            ${g.my_role ? _esc(String(g.my_role).replace(/^\w/, c => c.toUpperCase())) : 'Member'}
+            ${g.my_role ? _esc(String(g.my_role).replace(/^\w/, c => c.toUpperCase())) : _esc(_svT('hdr.member', 'Member'))}
             ${g.stokvel_reg_number ? ' · ' + _esc(g.stokvel_reg_number) : ''}
           </div>
         </div>
       </div>
       <button class="btn btn--ghost btn--sm" style="color:#fff;border-color:rgba(255,255,255,0.4)"
               onclick="svLeaveWorkspace()">
-        <i class="fa-solid fa-arrow-left"></i> My account
+        <i class="fa-solid fa-arrow-left"></i> ${_esc(_svT('hdr.back', 'My account'))}
       </button>
     </div>
     <div style="display:flex;gap:24px;margin-top:16px;flex-wrap:wrap">
-      ${stat('The pot', Utils.rand(d ? d.net_assets : g.wallet_balance))}
-      ${stat('In the wallet', Utils.rand(d ? d.wallet : g.wallet_balance))}
-      ${stat('Invested', Utils.rand(d ? d.invested : g.total_invested))}
-      ${d ? stat('Your share', Utils.rand(d.my_share), '#eda5ff') : ''}
+      ${stat(_esc(_svT('hdr.pot', 'The pot')), Utils.rand(d ? d.net_assets : g.wallet_balance))}
+      ${stat(_esc(_svT('hdr.wallet', 'In the wallet')), Utils.rand(d ? d.wallet : g.wallet_balance))}
+      ${stat(_esc(_svT('hdr.invested', 'Invested')), Utils.rand(d ? d.invested : g.total_invested))}
+      ${d ? stat(_esc(_svT('hdr.myshare', 'Your share')), Utils.rand(d.my_share), '#eda5ff') : ''}
     </div>
   </div>`;
 }
@@ -12933,7 +13184,7 @@ function _svWsTabs(id, open, counts) {
               class="btn btn--sm ${key === open ? 'btn--primary' : 'btn--ghost'}"
               style="white-space:nowrap;scroll-snap-align:center"
               onclick="svWorkspaceTab('${_esc(id)}','${key}')">
-        <i class="fa-solid ${icon}"></i> ${label}${key === 'approvals' ? badge(waiting) : ''}${key === 'contributions' ? badge(owed) : ''}
+        <i class="fa-solid ${icon}"></i> ${_esc(_svT('tab.' + key, label))}${key === 'approvals' ? badge(waiting) : ''}${key === 'contributions' ? badge(owed) : ''}
       </button>`).join('')}
   </div>
   <style>
@@ -13173,7 +13424,7 @@ async function _svInvestments(id) {
   const t = (res && res.totals) || {};
   const lock = (res && res.lock_date) || '';
   if (!rows.length) {
-    return `<div class="empty-state"><p>This group has not invested anything yet.</p>
+    return `<div class="empty-state"><p>${_esc(_svT('inv.none', 'This group has not invested anything yet.'))}</p>
       <p style="font-size:0.84rem;color:var(--text-muted)">Investing the pot is the group&rsquo;s own
       decision and needs the signatories&rsquo; approval. Capital is at risk.</p></div>`;
   }
@@ -13207,13 +13458,15 @@ async function _svInvestments(id) {
       ${hint ? `<div style="font-size:0.7rem;color:var(--text-muted)">${hint}</div>` : ''}</div>`;
 
   return `<div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:16px">
-      ${tile('Invested now', Utils.rand(t.active))}
-      ${tile('Expected on that', Utils.rand(t.expected_active), 'The pools&rsquo; targets, not a promise')}
-      ${tile('Returns realised', Utils.rand(t.returns), 'Paid back into the group wallet')}
-      ${tile('Next maturity', t.next_maturity ? _esc(day(t.next_maturity)) : '—',
-             lock ? `Money locked until ${_esc(lock)}` : '')}
+      ${tile(_esc(_svT('inv.now', 'Invested now')), Utils.rand(t.active))}
+      ${tile(_esc(_svT('inv.expected', 'Expected on that')), Utils.rand(t.expected_active),
+             _esc(_svT('inv.expected.hint', 'The pools\u2019 targets, not a promise')))}
+      ${tile(_esc(_svT('inv.realised', 'Returns realised')), Utils.rand(t.returns),
+             _esc(_svT('inv.realised.hint', 'Paid back into the group wallet')))}
+      ${tile(_esc(_svT('inv.next', 'Next maturity')), t.next_maturity ? _esc(day(t.next_maturity)) : '—',
+             lock ? `${_esc(_svT('ap.locked', 'Money locked until'))} ${_esc(lock)}` : '')}
     </div>
-    ${groups.length ? `<div class="sa-section-title"><i class="fa-solid fa-calendar-days"></i> When the money comes back</div>
+    ${groups.length ? `<div class="sa-section-title"><i class="fa-solid fa-calendar-days"></i> ${_esc(_svT('inv.calendar', 'When the money comes back'))}</div>
       ${groups.map(gr => `<div style="margin-bottom:10px">
         <div style="font-size:0.74rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
                     color:var(--text-muted);margin:8px 0 4px">${_esc(gr.m)}</div>
@@ -13223,7 +13476,7 @@ async function _svInvestments(id) {
                               padding:9px 12px;margin-bottom:6px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
             <div><strong>${_esc(r.pool_name || 'Investment')}</strong>
               <div style="font-size:0.74rem;color:var(--text-muted)">Matures ${_esc(day(r.maturity_date))}
-                ${late ? ' &middot; <span style="color:#f59e0b">after the lock date</span>' : ''}</div></div>
+                ${late ? ` &middot; <span style="color:#f59e0b">${_esc(_svT('inv.late', 'after the lock date'))}</span>` : ''}</div></div>
             <div style="text-align:right;font-size:0.82rem">
               <div>${Utils.rand(r.amount)} invested &middot; ${Utils.rand(r.expected_return)} expected</div>
               ${frac > 0 ? `<div style="font-size:0.72rem;color:var(--text-muted)">Your part today:
@@ -13231,7 +13484,7 @@ async function _svInvestments(id) {
             </div>
           </div>`; }).join('')}
       </div>`).join('')}` : ''}
-    <div class="sa-section-title mt-16"><i class="fa-solid fa-seedling"></i> Every investment</div>
+    <div class="sa-section-title mt-16"><i class="fa-solid fa-seedling"></i> ${_esc(_svT('inv.every', 'Every investment'))}</div>
     <table class="data-table" style="font-size:0.82rem"><thead><tr>
       <th>Pool</th><th class="text-right">Amount</th><th class="text-right">Earned</th><th>Status</th><th>Matures</th>
     </tr></thead><tbody>
@@ -13261,12 +13514,13 @@ async function _svProposals(id) {
   const rows = (res && res.data) || [];
   const mayWithdrawAny = !!(res && res.may_withdraw_any);
   const gid = _esc(id);
-  const label = { open: 'Voting open', carried: 'Carried', defeated: 'Defeated', withdrawn: 'Withdrawn' };
+  const label = { open: _svT('st.open', 'Voting open'), carried: _svT('st.carried', 'Carried'),
+                  defeated: _svT('st.defeated', 'Defeated'), withdrawn: _svT('st.withdrawn', 'Withdrawn') };
   const colour = { open: 'var(--text-muted)', carried: '#22c55e', defeated: '#ef4444', withdrawn: 'var(--text-muted)' };
   const card = p => {
     const t = p.tally || {};
     const voteBtn = (v, text) => `<button class="btn btn--${p.my_vote === v ? 'primary' : 'ghost'} btn--sm"
-        onclick="voteStokvelProposal('${gid}','${_esc(p.id)}','${v}')">${text}</button>`;
+        onclick="voteStokvelProposal('${gid}','${_esc(p.id)}','${v}')">${_esc(text)}</button>`;
     return `<div style="border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;gap:10px;align-items:start">
         <div>
@@ -13277,35 +13531,33 @@ async function _svProposals(id) {
           ${p.details ? `<div style="font-size:0.8rem;margin-top:6px">${_esc(p.details)}</div>` : ''}
         </div>
         <div style="text-align:right;white-space:nowrap">
-          <div style="font-size:0.78rem;font-weight:700;color:${colour[p.status] || 'var(--text-muted)'}">${label[p.status] || _esc(p.status)}</div>
+          <div style="font-size:0.78rem;font-weight:700;color:${colour[p.status] || 'var(--text-muted)'}">${_esc(label[p.status] || p.status)}</div>
           <div style="font-size:0.72rem;color:var(--text-muted)">${t.yes || 0} yes &middot; ${t.no || 0} no &middot; ${t.abstain || 0} abstain</div>
-          <div style="font-size:0.7rem;color:var(--text-muted)">${t.needed || 0} of ${t.members || 0} carries it</div>
+          <div style="font-size:0.7rem;color:var(--text-muted)">${t.needed || 0} / ${t.members || 0} ${_esc(_svT('pr.carries', 'carries it'))}</div>
         </div>
       </div>
       ${p.status === 'open' ? `<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-          ${voteBtn('yes', 'Yes')}${voteBtn('no', 'No')}${voteBtn('abstain', 'Abstain')}
+          ${voteBtn('yes', _svT('vote.yes', 'Yes'))}${voteBtn('no', _svT('vote.no', 'No'))}${voteBtn('abstain', _svT('vote.abstain', 'Abstain'))}
           ${p.i_raised_it || mayWithdrawAny ? `<button class="btn btn--ghost btn--sm" style="margin-left:auto"
-            onclick="withdrawStokvelProposal('${gid}','${_esc(p.id)}')">Withdraw</button>` : ''}
+            onclick="withdrawStokvelProposal('${gid}','${_esc(p.id)}')">${_esc(_svT('pr.withdraw', 'Withdraw'))}</button>` : ''}
         </div>` : ''}
       ${p.status === 'carried' && p.pool_id && p.amount && !p.request_id ? `<div style="margin-top:10px">
           <button class="btn btn--primary btn--sm" onclick="proposalToSignatories('${gid}','${_esc(p.id)}','${_esc(p.pool_id)}','${_esc(String(p.amount))}')">
-            <i class="fa-solid fa-user-shield"></i> Put it to the signatories</button></div>` : ''}
+            <i class="fa-solid fa-user-shield"></i> ${_esc(_svT('pr.put', 'Put it to the signatories'))}</button></div>` : ''}
       ${p.request_id ? `<div style="font-size:0.74rem;color:var(--text-muted);margin-top:8px">
           Put to the signatories &mdash; see Approvals.</div>` : ''}
     </div>`;
   };
   const open = rows.filter(p => p.status === 'open');
   const past = rows.filter(p => p.status !== 'open').slice(0, 10);
-  return `<div class="sa-section-title mt-16"><i class="fa-solid fa-check-to-slot"></i> Proposals</div>
+  return `<div class="sa-section-title mt-16"><i class="fa-solid fa-check-to-slot"></i> ${_esc(_svT('pr.title', 'Proposals'))}</div>
     <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px">
-      Put a question to the whole group &mdash; &ldquo;should we invest R50 000 for 12 months?&rdquo; &mdash; and
-      every member votes. It carries when more than half the members say yes, or on more yes than no when
-      voting closes. A carried proposal moves no money: an investment still needs the signatories to approve it.
+      ${_esc(_svT('pr.intro', 'Put a question to the whole group \u2014 \u201cshould we invest R50 000 for 12 months?\u201d \u2014 and every member votes. It carries when more than half the members say yes, or on more yes than no when voting closes. A carried proposal moves no money: an investment still needs the signatories to approve it.'))}
     </div>
-    ${open.length ? open.map(card).join('') : `<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:8px">Nothing is being voted on.</div>`}
+    ${open.length ? open.map(card).join('') : `<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:8px">${_esc(_svT('pr.none', 'Nothing is being voted on.'))}</div>`}
     <button class="btn btn--secondary btn--sm" onclick="raiseStokvelProposal('${gid}')">
-      <i class="fa-solid fa-plus"></i> Propose something</button>
-    ${past.length ? `<div style="font-size:0.74rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px">Decided</div>${past.map(card).join('')}` : ''}`;
+      <i class="fa-solid fa-plus"></i> ${_esc(_svT('pr.new', 'Propose something'))}</button>
+    ${past.length ? `<div style="font-size:0.74rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px">${_esc(_svT('pr.decided', 'Decided'))}</div>${past.map(card).join('')}` : ''}`;
 }
 
 function raiseStokvelProposal(groupId) {
@@ -13865,10 +14117,10 @@ function _svWithdrawals(res, meIsSignatory, gid, ctx) {
             <span style="font-size:0.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
                          border:1px solid var(--border);border-radius:999px;padding:1px 7px;margin-left:6px;
                          color:${r.kind === 'investment' || r.kind === 'mandate' ? '#eda5ff' : (r.kind === 'exit' ? '#f59e0b' : 'var(--text-muted)')}">
-              ${r.kind === 'investment' ? 'Invest'
-                : r.kind === 'exit' ? 'Exit'
-                : r.kind === 'mandate' ? 'Mandate'
-                : r.kind === 'payout' ? 'Payout' : 'Withdraw'}
+              ${_esc(r.kind === 'investment' ? _svT('kind.investment', 'Invest')
+                : r.kind === 'exit' ? _svT('kind.exit', 'Exit')
+                : r.kind === 'mandate' ? _svT('kind.mandate', 'Mandate')
+                : r.kind === 'payout' ? _svT('kind.payout', 'Payout') : _svT('kind.withdrawal', 'Withdraw'))}
             </span>
           </div>
           <div style="font-size:0.74rem;color:var(--text-muted)">
@@ -13895,13 +14147,13 @@ function _svWithdrawals(res, meIsSignatory, gid, ctx) {
           <div style="font-size:0.78rem;font-weight:700;color:${r.satisfied ? '#22c55e' : 'var(--text-muted)'}">
             ${r.approvals} of ${r.required}
           </div>
-          <div style="font-size:0.7rem;color:var(--text-muted)">${_esc(r.status)}</div>
+          <div style="font-size:0.7rem;color:var(--text-muted)">${_esc(_svT('status.' + r.status, r.status))}</div>
         </div>
       </div>
       ${r.status === 'pending' && meIsSignatory ? `
         <div style="display:flex;gap:8px;margin-top:10px">
-          <button class="btn btn--primary btn--sm" onclick="voteStokvelRequest('${_esc(gid)}','${_esc(r.id)}','approve')">Approve</button>
-          <button class="btn btn--ghost btn--sm" onclick="voteStokvelRequest('${_esc(gid)}','${_esc(r.id)}','reject')">Reject</button>
+          <button class="btn btn--primary btn--sm" onclick="voteStokvelRequest('${_esc(gid)}','${_esc(r.id)}','approve')">${_esc(_svT('btn.approve', 'Approve'))}</button>
+          <button class="btn btn--ghost btn--sm" onclick="voteStokvelRequest('${_esc(gid)}','${_esc(r.id)}','reject')">${_esc(_svT('btn.reject', 'Reject'))}</button>
         </div>` : ''}
       ${r.kind === 'payout' && r.satisfied && r.status === 'pending' ? `
         <div style="margin-top:10px">
@@ -13930,41 +14182,39 @@ function _svWithdrawals(res, meIsSignatory, gid, ctx) {
         <div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px">${_esc(r.blocked_because)}</div>` : ''}
     </div>`;
 
-  return `<div class="sa-section-title mt-16"><i class="fa-solid fa-user-shield"></i> Signatory approvals</div>
+  return `<div class="sa-section-title mt-16"><i class="fa-solid fa-user-shield"></i> ${_esc(_svT('ap.title', 'Signatory approvals'))}</div>
     <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px">
-      The group's money only moves — out to a bank account or into one of our pools —
-      when enough signatories approve it. No one member can do it alone, and the whole
-      group can see who has agreed to what.
+      ${_esc(_svT('ap.intro', 'The group\u2019s money only moves \u2014 out to a bank account or into one of our pools \u2014 when enough signatories approve it. No one member can do it alone, and the whole group can see who has agreed to what.'))}
     </div>
     <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:0.8rem;margin-bottom:12px">
       <span><i class="fa-solid fa-pen-nib" style="color:#eda5ff"></i>
-        ${g.stokvel_quorum ? `<strong>${_esc(String(g.stokvel_quorum))} of ${_esc(String(c.signatories || 0))}</strong> signatories must approve`
-                           : 'No mandate on file yet'}</span>
+        ${g.stokvel_quorum ? `<strong>${_esc(String(g.stokvel_quorum))} / ${_esc(String(c.signatories || 0))}</strong> ${_esc(_svT('ap.mustapprove', 'signatories must approve'))}`
+                           : _esc(_svT('ap.nomandate', 'No mandate on file yet'))}</span>
       <span><i class="fa-solid fa-lock" style="color:#eda5ff"></i>
-        ${g.lock_date ? `Money locked until <strong>${_esc(String(g.lock_date).slice(0, 10))}</strong>`
-                      : 'No lock date set'}</span>
+        ${g.lock_date ? `${_esc(_svT('ap.locked', 'Money locked until'))} <strong>${_esc(String(g.lock_date).slice(0, 10))}</strong>`
+                      : _esc(_svT('ap.nolock', 'No lock date set'))}</span>
     </div>
-    ${open.length ? open.map(row).join('') : `<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:8px">Nothing awaiting approval.</div>`}
+    ${open.length ? open.map(row).join('') : `<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:8px">${_esc(_svT('ap.none', 'Nothing awaiting approval.'))}</div>`}
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn--secondary btn--sm" onclick="raiseStokvelWithdrawal('${_esc(gid)}')">
-        <i class="fa-solid fa-plus"></i> Request a withdrawal
+        <i class="fa-solid fa-plus"></i> ${_esc(_svT('btn.withdraw', 'Request a withdrawal'))}
       </button>
       <button class="btn btn--secondary btn--sm" onclick="raiseStokvelInvestment('${_esc(gid)}')">
-        <i class="fa-solid fa-seedling"></i> Request an investment
+        <i class="fa-solid fa-seedling"></i> ${_esc(_svT('btn.invest', 'Request an investment'))}
       </button>
       ${c.canPropose && g.stokvel_quorum ? `<button class="btn btn--ghost btn--sm" onclick="raiseStokvelMandateChange('${_esc(gid)}')">
-        <i class="fa-solid fa-pen-nib"></i> Change the mandate or lock date
+        <i class="fa-solid fa-pen-nib"></i> ${_esc(_svT('btn.mandate', 'Change the mandate or lock date'))}
       </button>` : ''}
     </div>
-    ${past.length ? `<div style="font-size:0.74rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px">Recent</div>${past.map(row).join('')}` : ''}`;
+    ${past.length ? `<div style="font-size:0.74rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px">${_esc(_svT('ap.recent', 'Recent'))}</div>${past.map(row).join('')}` : ''}`;
 }
 
 function _svMembers(res, gid, canLevy) {
   const rows = (res && res.data) || [];
-  return `<div class="sa-section-title mt-16"><i class="fa-solid fa-users"></i> Members</div>
+  return `<div class="sa-section-title mt-16"><i class="fa-solid fa-users"></i> ${_esc(_svT('mem.title', 'Members'))}</div>
     ${canLevy ? `<div style="margin-bottom:8px">
       <button class="btn btn--ghost btn--sm" onclick="levyStokvelFine('${_esc(gid)}')">
-        <i class="fa-solid fa-gavel"></i> Record a fine
+        <i class="fa-solid fa-gavel"></i> ${_esc(_svT('mem.fine', 'Record a fine'))}
       </button>
       <span style="font-size:0.72rem;color:var(--text-muted);margin-left:6px">
         Under your own rules. It is added to what that member owes.
@@ -13977,7 +14227,13 @@ function _svMembers(res, gid, canLevy) {
       <td class="text-right">${m.is_signatory ? '<i class="fa-solid fa-pen-nib" title="Signatory" style="color:#eda5ff"></i>' : ''}</td>
       <td class="text-right" style="color:var(--text-muted)">${m.status === 'invited' ? 'Invited' : ''}</td>
     </tr>`).join('')}
-    </tbody></table>`;
+    </tbody></table>
+    ${(window.__SVREL || {}).templates ? `<div style="font-size:0.8rem;margin-top:12px;color:var(--text-muted)">
+      <i class="fa-solid fa-file-signature" style="color:#eda5ff"></i>
+      ${_esc(_svT('mem.templates', 'Templates for your committee:'))}
+      <a href="../group-constitution-template.html" target="_blank" rel="noopener">${_esc(_svT('mem.constitution', 'Constitution'))}</a> &middot;
+      <a href="../group-investment-policy-template.html" target="_blank" rel="noopener">${_esc(_svT('mem.policy', 'Investment policy'))}</a>
+    </div>` : ''}`;
 }
 
 /* ─── Actions ──────────────────────────────────────────────────────── */

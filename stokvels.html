@@ -117,6 +117,32 @@
   </div>
 </section>
 
+<!-- ══ Templates ═════════════════════════════════════════════════════
+     Hidden until legal review has approved them: shown by the script at
+     the foot of the page when group_templates_live is true. -->
+<section class="sv-sec" id="svTemplates" hidden>
+  <div class="sv-wrap">
+    <h2>Templates for your committee</h2>
+    <p class="sv-lede">
+      A constitution and an investment policy written to match how the account works. Fill them
+      in on screen, print them, and have every member sign. They are a starting point, not legal
+      or financial advice.
+    </p>
+    <div class="sv-grid sv-grid--2">
+      <a class="sv-card" href="group-constitution-template.html" style="text-decoration:none;color:inherit">
+        <div class="sv-card__i"><i class="fa-solid fa-file-signature"></i></div>
+        <h3>Group constitution</h3>
+        <p>Members, contributions, the mandate, the payout, leaving the group and changing the rules.</p>
+      </a>
+      <a class="sv-card" href="group-investment-policy-template.html" style="text-decoration:none;color:inherit">
+        <div class="sv-card__i"><i class="fa-solid fa-scale-balanced"></i></div>
+        <h3>Investment policy</h3>
+        <p>What the group may invest in, how much it keeps for the payout, and how a decision is made.</p>
+      </a>
+    </div>
+  </div>
+</section>
+
 <!-- ══ What the pot comes to ═══════════════════════════════════════
      Arithmetic the committee can do themselves, done for them. It shows
      what the members put in and NOTHING ELSE: no rate is assumed, because
@@ -352,6 +378,9 @@
 
 <script>
   document.getElementById('svYear').textContent = new Date().getFullYear();
+fetch('/api/legal/group-resources').then(function (r) { return r.json(); }).then(function (d) {
+  if (d && d.templates_live === true) document.getElementById('svTemplates').hidden = false;
+}).catch(function () {});
 (function () {
   var ids = ['svcMembers', 'svcMonthly', 'svcMonths'];
   var rand = function (n) {

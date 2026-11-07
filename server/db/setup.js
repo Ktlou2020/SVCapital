@@ -203,6 +203,19 @@ INSERT INTO platform_settings (key, value, description)
 VALUES ('withdrawal_notice_hours', '48',
         'Hours between a withdrawal being requested and it becoming payable.')
 ON CONFLICT (key) DO NOTHING;
+/* Group resources that need a professional's sign-off before clients see
+   them. Both start OFF. A translation reaches clients only when its code is
+   listed here ('zu', 'st', or 'zu,st'), after a qualified translator has
+   checked it; the templates are linked only once legal review has approved
+   them. Until then a reviewer can still see each in place, marked draft. */
+INSERT INTO platform_settings (key, value, description)
+VALUES ('group_languages_live', '',
+        'Group workspace translations released to clients, comma separated: zu (isiZulu), st (Sesotho). Empty until a qualified translator has reviewed them.')
+ON CONFLICT (key) DO NOTHING;
+INSERT INTO platform_settings (key, value, description)
+VALUES ('group_templates_live', 'false',
+        'Set to true once legal review has approved the group constitution and investment policy templates. Until then they are unlinked and marked draft.')
+ON CONFLICT (key) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS ifas (
   id TEXT PRIMARY KEY, first_name TEXT, last_name TEXT,
@@ -4807,6 +4820,14 @@ async function autoSetup() {
          that comes back after somebody dismissed the idea of it is worse than
          no notice at all. */
       const NOTICES = [
+        { id: 'ANN-2026-GROUP-LANGUAGES', area: 'portal', icon: 'fa-language',
+          title: 'The group workspace in isiZulu and Sesotho \u2014 drafted, waiting for a translator\u2019s sign-off',
+          body: 'The group workspace \u2014 its sections, the header, approvals, proposals, investments, members and the invitation card \u2014 now has isiZulu and Sesotho text, with a language picker. THE TRANSLATIONS ARE DRAFTS and NO CLIENT SEES THEM YET: a language reaches clients only once it is listed in Settings \u2192 group_languages_live (zu, st, or zu,st), and that should only happen after a qualified translator has checked it. Until then a reviewer opens the client portal with ?svDraftLang=1 added to the address, and every screen in a draft language carries a banner saying so. English stays the default and the fallback; messages written by the server (errors, notifications, emails) are still English only.',
+          where: 'To review: sign in to the client portal as a group member, add ?svDraftLang=1 to the address, open the group, and choose the language under the header. To release: Admin console \u2192 Settings \u2192 group_languages_live.' },
+        { id: 'ANN-2026-GROUP-TEMPLATES', area: 'both', icon: 'fa-file-signature',
+          title: 'A constitution and an investment policy template for groups \u2014 waiting for legal review',
+          body: 'Two documents a committee fills in on screen, prints and signs: a GROUP CONSTITUTION and an INVESTMENT POLICY. Both are written to agree with Terms clause 26 and with how the account works \u2014 at least two signatories, one rejection ends a request, mandate changes approved by the signatories, no lending from the account, exits settled under the mandate, money for a payout not invested past it. Neither recommends a product or quotes a rate. THEY ARE NOT LINKED ANYWHERE YET: each page carries a draft notice (which also prints) and is kept out of search engines. When legal review has approved them, setting group_templates_live to true removes the notice and links them from the public stokvels page and from each group\u2019s Members section.',
+          where: 'Review the pages directly: /group-constitution-template.html and /group-investment-policy-template.html. To release: Admin console \u2192 Settings \u2192 group_templates_live = true. Before release, also remove the noindex line from both pages if they should appear in search.' },
         { id: 'ANN-2026-STOKVEL-MANDATE-CHANGES', area: 'both', icon: 'fa-pen-nib',
           title: 'A group now changes its own mandate and lock date \u2014 the signatories approve it, not us',
           body: 'Who signs, how many approvals money needs, and the date a group\u2019s money is locked until were all set by staff in the console. A group now PROPOSES THE CHANGE ITSELF and the existing signatories approve it to the quorum, exactly as they approve a withdrawal: one rejection ends it, and only current signatories count. It takes effect in the vote that carries it. The rules: a quorum below two, or more approvals than there are signatories, is refused when raised AND re-checked when it carries; only an active member can be made a signatory (an invitation still never makes one); a signatory cannot vote on their own removal; the lock date can be set, moved or cleared, but only this way. WHAT IT DOES NOT CHANGE: a brand-new group\u2019s FIRST mandate is still captured by staff against its constitution, and staff can still correct one in the console. Worth knowing for compliance: Terms clause 26.3 says signatory status is recorded by us on the stokvel\u2019s instruction given under 26.2; a quorum-approved request is that instruction, recorded by the platform.',
