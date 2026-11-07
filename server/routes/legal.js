@@ -40,4 +40,24 @@ router.put('/terms-content',   ...terms.put);
 router.get('/privacy-content', privacy.get);
 router.put('/privacy-content', ...privacy.put);
 
+/* What of the group resources has been signed off for clients. Public and
+   read-only: it says only which translations and templates are released,
+   which the public stokvels page and the template pages need without a
+   sign-in. Anything not listed is a draft, and the screens say so. */
+const LANGS = ['zu', 'st'];
+const pgPool = require('../db/pool');
+async function groupResources() {
+  const { rows } = await pgPool.query(
+    `SELECT key, value FROM platform_settings WHERE key IN ('group_languages_live','group_templates_live')`);
+  const v = Object.fromEntries(rows.map(r => [r.key, String(r.value || '')]));
+  const live = String(v.group_languages_live || '').split(',')
+    .map(x => x.trim().toLowerCase()).filter(x => LANGS.includes(x));
+  return { languages_live: [...new Set(live)], templates_live: String(v.group_templates_live).trim() === 'true' };
+}
+router.get('/group-resources', async (req, res) => {
+  try { res.json(await groupResources()); }
+  catch (_) { res.json({ languages_live: [], templates_live: false }); }
+});
+
 module.exports = router;
+module.exports.groupResources = groupResources;

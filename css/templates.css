@@ -1,0 +1,54 @@
+/* Group document templates — a constitution and an investment policy a
+   committee fills in on screen and prints. Plain, document-like, and built
+   to print well: the page is the document. */
+:root {
+  --tp-ink: #15241b;
+  --tp-soft: #4a5a50;
+  --tp-line: #dde7e0;
+  --tp-deep: #064e1e;
+  --tp-accent: #eda5ff;
+  --tp-amber: #fec24f;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: #f4f8f4; color: var(--tp-ink);
+       font-family: 'Poppins', system-ui, sans-serif; font-size: 15px; line-height: 1.6; }
+.tp-bar { background: var(--tp-deep); color: #fff; padding: 14px 16px; }
+.tp-bar__in { max-width: 820px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.tp-bar img { height: 30px; display: block; }
+.tp-btn { font: inherit; font-size: 0.86rem; font-weight: 600; border-radius: 999px; padding: 8px 16px; cursor: pointer;
+          border: 1px solid var(--tp-accent); background: var(--tp-accent); color: #1a1a1a; text-decoration: none; }
+.tp-btn--ghost { background: transparent; color: #fff; border-color: rgba(255,255,255,0.5); }
+.tp-doc { max-width: 820px; margin: 24px auto 48px; background: #fff; border: 1px solid var(--tp-line);
+          border-radius: 14px; padding: 40px 44px; }
+.tp-draft { max-width: 820px; margin: 18px auto 0; padding: 12px 16px; border-radius: 10px;
+            background: rgba(254,194,79,0.14); border: 1px solid var(--tp-amber); font-size: 0.88rem; }
+.tp-draft b { display: block; }
+.tp-note { font-size: 0.84rem; color: var(--tp-soft); border-left: 3px solid var(--tp-accent); padding: 4px 0 4px 12px; margin: 0 0 24px; }
+.tp-doc h1 { font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: 1.9rem; margin: 0 0 6px; line-height: 1.2; }
+.tp-doc h2 { font-size: 1.02rem; margin: 28px 0 8px; padding-top: 14px; border-top: 1px solid var(--tp-line); }
+.tp-doc ol, .tp-doc ul { padding-left: 22px; margin: 6px 0; }
+.tp-doc li { margin-bottom: 6px; }
+.tp-sub { color: var(--tp-soft); margin: 0 0 22px; }
+.fill { display: inline-block; min-width: 9em; border-bottom: 1px solid var(--tp-ink); padding: 0 4px; outline: none; }
+.fill--wide { min-width: 18em; }
+.fill--short { min-width: 3.5em; }
+.fill:empty::before { content: attr(data-ph); color: #9aa69e; font-size: 0.86em; }
+.fill:focus { background: rgba(237,165,255,0.16); }
+.tick { display: inline-block; width: 1em; height: 1em; border: 1px solid var(--tp-ink); border-radius: 3px; vertical-align: -2px; margin-right: 6px; }
+.tp-sign { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.88rem; }
+.tp-sign th, .tp-sign td { border: 1px solid var(--tp-line); padding: 10px 8px; text-align: left; height: 40px; }
+.tp-sign th { background: #f4f8f4; }
+.tp-foot { font-size: 0.78rem; color: var(--tp-soft); margin-top: 28px; }
+@media (max-width: 640px) {
+  .tp-doc { padding: 24px 18px; border-radius: 0; margin: 12px 0 32px; }
+  .tp-draft { margin: 12px 12px 0; }
+  .fill--wide { min-width: 12em; }
+}
+@media print {
+  body { background: #fff; font-size: 12pt; }
+  .tp-bar, .tp-btn, .tp-noprint { display: none !important; }
+  .tp-doc { border: none; margin: 0; padding: 0; max-width: none; }
+  .fill:empty::before { content: ''; }
+  .tp-doc h2 { break-after: avoid; }
+  .tp-sign { break-inside: avoid; }
+}

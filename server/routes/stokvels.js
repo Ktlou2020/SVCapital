@@ -31,6 +31,8 @@ const crypto  = require('crypto');
 const contributions = require('../services/stokvelContributions');
 const invites       = require('../services/stokvelInvites');
 const shares        = require('../services/stokvelShares');
+const mandateChange = require('../services/stokvelMandateChange');
+const proposals     = require('../services/stokvelProposals');
 const { actorFromRequest } = require('../services/ledger');
 /* Lazily required, and never awaited in a way that can fail a request: a
    mandate that cannot send an email must still record the vote. */
@@ -98,6 +100,29 @@ async function groupForCaller(investorId, groupId) {
     [investorId, groupId]
   );
   return rows[0] || null;
+}
+
+/* When an investment into this pool would come back: the pool's own
+   maturity date when it has one, otherwise today plus its term. A date
+   string, or null when neither is known. */
+function maturityOf(p) {
+  if (!p) return null;
+  if (p.maturity_date) return new Date(p.maturity_date).toISOString().slice(0, 10);
+  const months = Number(p.term_months) || 0;
+  if (!months) return null;
+  const d = new Date();
+  d.setMonth(d.getMonth() + months);
+  return d.toISOString().slice(0, 10);
+}
+
+/* The sentence a signatory needs when money would still be invested on the
+   day the group has locked it until — the day it means to pay out. */
+function lockDateWarning(lockDate, maturity) {
+  if (!lockDate || !maturity) return null;
+  const lock = new Date(lockDate).toISOString().slice(0, 10);
+  if (maturity <= lock) return null;
+  return `This investment matures around ${maturity}, after the group’s lock date of ${lock}. `
+       + 'The money will not be back in the wallet in time for a payout on that date.';
 }
 
 /* ─── GET /api/stokvels — the groups I am in ─────────────────────────── */
@@ -383,6 +408,10 @@ router.get('/:id', async (req, res) => {
            state — which asks whether there is a quorum — would treat every
            stokvel as though it had never started. */
         stokvel_quorum: group.stokvel_quorum,
+        /* The date the group's money is locked until, if it has set one.
+           Shown on the workspace so every member can see it, and changed
+           only by a mandate change the signatories approve. */
+        lock_date: group.withdrawal_date || null,
         share_basis: group.share_basis,
         my_role: group.my_role || (group.i_opened_it ? 'chairperson' : null),
         i_opened_it: group.i_opened_it,
@@ -445,29 +474,69 @@ router.post('/:id/withdrawal-requests', async (req, res) => {
     const group = await groupForCaller(me, req.params.id);
     if (!group) return res.status(404).json({ error: 'No such stokvel.' });
 
-    const amount = Math.round((parseFloat(req.body && req.body.amount) || 0) * 100) / 100;
-    if (!(amount > 0)) return res.status(400).json({ error: 'An amount is required.' });
-
     /* Two kinds of money leaving the group wallet, one mandate. A
        withdrawal names a bank account; an investment names a pool. Either
        way the DESTINATION is part of what is approved — without it the
        signatories authorise a sum and whoever carries it out chooses where
        it lands, which is a mandate in name only. */
     const kind = String((req.body && req.body.kind) || 'withdrawal');
-    if (!['withdrawal', 'investment', 'exit', 'payout'].includes(kind)) {
-      return res.status(400).json({ error: 'kind must be withdrawal, investment, exit or payout.' });
+    if (!['withdrawal', 'investment', 'exit', 'payout', 'mandate'].includes(kind)) {
+      return res.status(400).json({ error: 'kind must be withdrawal, investment, exit, payout or mandate.' });
     }
 
+    /* A mandate change moves no money, so it is the one kind without an
+       amount; every other kind must name one. */
+    const amount = kind === 'mandate' ? 0
+      : Math.round((parseFloat(req.body && req.body.amount) || 0) * 100) / 100;
+    if (kind !== 'mandate' && !(amount > 0)) return res.status(400).json({ error: 'An amount is required.' });
+
     let bankName = '', bankAcct = '', poolId = null, exitInvestorId = null, payoutId = null;
-    if (kind === 'investment') {
+    let change = null, summary = null, lockWarning = null, proposalId = null;
+    if (kind === 'mandate') {
+      /* Who may ASK: the committee, or a signatory. Who may DECIDE is the
+         same as for money — the signatories, to the quorum. Asking grants
+         nothing, so this is an administrative bound, not a financial one. */
+      const sigs = await mandate.currentSignatories(pool, group.id);
+      if (!invites.mayInvite(group) && !sigs.has(me)) {
+        return res.status(403).json({
+          error: 'Only the chairperson, secretary, treasurer or a signatory can propose a change to the mandate.' });
+      }
+      const parsed = mandateChange.parse(req.body);
+      if (parsed.error) return res.status(400).json({ error: parsed.error });
+      const v = await mandateChange.validate(pool, group, parsed.change);
+      if (v.error) return res.status(400).json({ error: v.error });
+      change = Object.assign({}, parsed.change, { summary: v.summary });
+      summary = v.summary;
+    } else if (kind === 'investment') {
       poolId = String((req.body && req.body.pool_id) || '').trim();
       if (!poolId) {
         return res.status(400).json({
           error: 'The pool must be part of the request — signatories approve a product, not just an amount.' });
       }
       const { rows: pool_ } = await pool.query(
-        `SELECT id, name FROM investment_pools WHERE id = $1`, [poolId]);
+        `SELECT id, name, term_months, maturity_date FROM investment_pools WHERE id = $1`, [poolId]);
       if (!pool_.length) return res.status(400).json({ error: 'No such pool.' });
+      /* Money that is still invested on the group's lock date is money the
+         group cannot pay out on it. Not refused — a group may decide to
+         invest past December — but said, to the person raising it and to
+         every signatory asked to approve it. */
+      lockWarning = lockDateWarning(group.withdrawal_date, maturityOf(pool_[0]));
+      /* Raised from a proposal the members carried? Then it must be the
+         same pool and amount they voted for, and only once. The proposal
+         is context for the signatories, not an authority: they still
+         approve this request to the quorum like any other. */
+      proposalId = String((req.body && req.body.proposal_id) || '').trim() || null;
+      if (proposalId) {
+        const { rows: [pr] } = await pool.query(
+          `SELECT * FROM stokvel_proposals WHERE id = $1 AND sub_account_id = $2`, [proposalId, group.id]);
+        if (!pr) return res.status(400).json({ error: 'No such proposal in this group.' });
+        if (pr.status !== 'carried') return res.status(400).json({ error: 'Only a carried proposal can be put to the signatories.' });
+        if (pr.request_id) return res.status(409).json({ error: 'That proposal has already been put to the signatories.' });
+        if (String(pr.pool_id || '') !== poolId
+            || Math.round(parseFloat(pr.amount) * 100) !== Math.round(amount * 100)) {
+          return res.status(400).json({ error: 'The request must be for the pool and amount the members voted for.' });
+        }
+      }
     } else if (kind === 'payout') {
       /* What is approved is the DISTRIBUTION, named by its id. The amount on
          the request is the pot as it stood when it was raised, shown to the
@@ -514,12 +583,18 @@ router.post('/:id/withdrawal-requests', async (req, res) => {
     await pool.query(
       `INSERT INTO stokvel_withdrawal_requests
          (id, sub_account_id, requested_by, amount, kind, bank_name, bank_account_number,
-          pool_id, exit_investor_id, payout_id, reason, quorum_required, status, expires_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'pending', NOW() + INTERVAL '7 days')`,
+          pool_id, exit_investor_id, payout_id, reason, quorum_required, status, expires_at,
+          mandate_change, proposal_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'pending', NOW() + INTERVAL '7 days', $13, $14)`,
       [id, group.id, me, amount, kind, bankName || null, bankAcct || null, poolId,
        exitInvestorId, payoutId,
-       String((req.body && req.body.reason) || '').slice(0, 500) || null, quorum]
+       String((req.body && req.body.reason) || '').slice(0, 500) || summary || null, quorum,
+       change ? JSON.stringify(change) : null, proposalId]
     );
+    if (proposalId) {
+      await pool.query(
+        `UPDATE stokvel_proposals SET request_id = $2, updated_at = NOW() WHERE id = $1`, [proposalId, id]);
+    }
     /* The signatories are told now. Until this existed the mandate was a
        queue nobody was watching: a treasurer raised a request and then had
        to phone three people to ask them to go and tap approve. Fired after
@@ -529,7 +604,8 @@ router.post('/:id/withdrawal-requests', async (req, res) => {
     if (n) n.approvalNeeded({ groupId: group.id, authorityId: id })
             .catch(e => console.warn('[stokvels] notify failed:', e.message));
 
-    return res.status(201).json({ data: { id, amount, kind, quorum_required: quorum } });
+    return res.status(201).json({ data: { id, amount, kind, quorum_required: quorum,
+                                          change_summary: summary, lock_warning: lockWarning } });
   } catch (err) {
     console.error('[stokvels] request failed:', err.message);
     return res.status(500).json({ error: 'Could not raise that request.' });
@@ -557,6 +633,7 @@ router.get('/:id/withdrawal-requests', async (req, res) => {
        the name is what they actually recognise. */
     const { rows } = await pool.query(
       `SELECT r.*, i.first_name AS requested_by_name, p.name AS pool_name,
+              p.term_months AS pool_term_months, p.maturity_date AS pool_maturity_date,
               x.first_name AS exit_name, po.label AS payout_label
          FROM stokvel_withdrawal_requests r
          JOIN investors i ON i.id = r.requested_by
@@ -602,6 +679,12 @@ router.get('/:id/withdrawal-requests', async (req, res) => {
         bank_name: r.bank_name, pool_id: r.pool_id, pool_name: r.pool_name,
         exit_investor_id: r.exit_investor_id, exit_name: r.exit_name,
         payout_id: r.payout_id, payout_label: r.payout_label,
+        change_summary: (mandateChange.changeOf(r) || {}).summary || null,
+        proposal_id: r.proposal_id || null,
+        lock_warning: (r.kind === 'investment' && r.status === 'pending')
+          ? lockDateWarning(group.withdrawal_date,
+              maturityOf({ term_months: r.pool_term_months, maturity_date: r.pool_maturity_date }))
+          : null,
         reason: r.reason,
         status: r.status, expires_at: r.expires_at,
         requested_by_name: r.requested_by_name,
@@ -650,6 +733,8 @@ router.post('/:id/withdrawal-requests/:rid/vote', async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(409).json({ error: `That request is already ${request.status}.` });
     }
+    const own = mandateChange.voteRefusal(request, me);
+    if (own) { await client.query('ROLLBACK'); return res.status(403).json({ error: own }); }
 
     try {
       await client.query(
@@ -675,6 +760,19 @@ router.post('/:id/withdrawal-requests/:rid/vote', async (req, res) => {
         `UPDATE stokvel_withdrawal_requests SET status = $2, updated_at = NOW() WHERE id = $1`,
         [request.id, status]);
     }
+    /* A carried mandate change takes effect NOW, inside this transaction,
+       and the request is spent. Nobody has to press a second button, and
+       it cannot be applied twice. If the roster has moved so far that the
+       change no longer makes a valid mandate, the vote is not recorded. */
+    let applied = null;
+    if (status === 'approved' && String(request.kind) === 'mandate') {
+      applied = await mandateChange.apply(client, group, request);
+      if (applied.error) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: applied.error });
+      }
+      status = 'used';
+    }
     await client.query('COMMIT');
 
     /* After the commit, on the plain pool. Whoever is waiting on this hears
@@ -688,7 +786,8 @@ router.post('/:id/withdrawal-requests/:rid/vote', async (req, res) => {
 
     return res.json({ data: { id: request.id, status,
                               approvals: state.approvals, required: state.required,
-                              satisfied: status === 'approved' } });
+                              satisfied: status === 'approved' || !!(applied && applied.applied),
+                              applied: !!(applied && applied.applied) } });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     console.error('[stokvels] vote failed:', err.message);
@@ -962,10 +1061,22 @@ router.get('/:id/investments', async (req, res) => {
       .filter(r => !only || r.status === only)
       .reduce((n, r) => n + (Number(r[f]) || 0), 0) * 100) / 100;
 
+    /* The maturity calendar: what comes back to the group, and when. A
+       savings club needs to know whether the money is home before its
+       payout; an investment group needs to know what it has to decide on
+       next. The projection is the pool's target, not a promise, and the
+       screen says so. */
+    const upcoming = rows
+      .filter(r => r.status === 'active' && r.maturity_date)
+      .map(r => new Date(r.maturity_date).toISOString().slice(0, 10))
+      .sort();
     return res.json({
       data: rows,
       totals: { active: sum('amount', 'active'), all: sum('amount'),
-                returns: sum('actual_return') },
+                returns: sum('actual_return'),
+                expected_active: sum('expected_return', 'active'),
+                next_maturity: upcoming[0] || null },
+      lock_date: group.withdrawal_date ? new Date(group.withdrawal_date).toISOString().slice(0, 10) : null,
     });
   } catch (err) {
     console.error('[stokvels] investments failed:', err.message);
@@ -1362,6 +1473,132 @@ router.post('/:id/contributions/:cid/pay', async (req, res) => {
     return res.status(500).json({ error: 'Could not record that payment.' });
   } finally {
     client.release();
+  }
+});
+
+/* ─── Proposals ──────────────────────────────────────────────────────
+   The members' say before the signatories' approval. Any active member may
+   propose and every active member may vote; nothing here moves money or
+   grants an authority (services/stokvelProposals.js). */
+router.get('/:id/proposals', async (req, res) => {
+  const me = callerInvestorId(req);
+  try {
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) return res.status(404).json({ error: 'No such stokvel.' });
+    const { rows } = await pool.query(
+      `SELECT p.*, i.first_name AS raised_by_name, ip.name AS pool_name,
+              (SELECT vote FROM stokvel_proposal_votes v WHERE v.proposal_id = p.id AND v.investor_id = $2) AS my_vote
+         FROM stokvel_proposals p
+         JOIN investors i ON i.id = p.raised_by
+         LEFT JOIN investment_pools ip ON ip.id = p.pool_id
+        WHERE p.sub_account_id = $1
+        ORDER BY (p.status = 'open') DESC, p.created_at DESC
+        LIMIT 50`, [group.id, me]);
+    const out = [];
+    for (const p of rows) {
+      const status = await proposals.settle(pool, p);
+      const t = await proposals.tally(pool, p.id, group.id);
+      out.push({
+        id: p.id, title: p.title, details: p.details,
+        amount: p.amount, pool_id: p.pool_id, pool_name: p.pool_name,
+        status, closes_at: p.closes_at, decided_at: p.decided_at,
+        raised_by_name: p.raised_by_name, i_raised_it: p.raised_by === me,
+        request_id: p.request_id, my_vote: p.my_vote,
+        tally: t,
+      });
+    }
+    return res.json({ data: out, may_withdraw_any: invites.mayInvite(group) });
+  } catch (err) {
+    console.error('[stokvels] proposals failed:', err.message);
+    return res.status(500).json({ error: 'Could not load the proposals.' });
+  }
+});
+
+router.post('/:id/proposals', async (req, res) => {
+  const me = callerInvestorId(req);
+  try {
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) return res.status(404).json({ error: 'No such stokvel.' });
+    const parsed = proposals.parseNew(req.body);
+    if (parsed.error) return res.status(400).json({ error: parsed.error });
+    const p = parsed.proposal;
+    if (p.pool_id) {
+      const { rows } = await pool.query(`SELECT 1 FROM investment_pools WHERE id = $1`, [p.pool_id]);
+      if (!rows.length) return res.status(400).json({ error: 'No such pool.' });
+    }
+    const id = 'SPR-' + crypto.randomUUID().replace(/-/g, '').slice(0, 14).toUpperCase();
+    await pool.query(
+      `INSERT INTO stokvel_proposals (id, sub_account_id, raised_by, title, details, amount, pool_id, closes_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7, NOW() + ($8 || ' days')::interval)`,
+      [id, group.id, me, p.title, p.details, p.amount, p.pool_id, String(p.days)]);
+    return res.status(201).json({ data: { id, status: 'open' } });
+  } catch (err) {
+    console.error('[stokvels] propose failed:', err.message);
+    return res.status(500).json({ error: 'Could not raise that proposal.' });
+  }
+});
+
+router.post('/:id/proposals/:pid/vote', async (req, res) => {
+  const me = callerInvestorId(req);
+  const vote = String((req.body && req.body.vote) || '').toLowerCase();
+  if (!proposals.VOTES.includes(vote)) return res.status(400).json({ error: 'vote must be yes, no or abstain.' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'No such stokvel.' }); }
+    /* A vote belongs to a MEMBER. Opening the account does not make
+       somebody a member of it, and only members decide. */
+    const { rows: m } = await client.query(
+      `SELECT 1 FROM stokvel_members WHERE sub_account_id = $1 AND investor_id = $2 AND status = 'active'`,
+      [group.id, me]);
+    if (!m.length) { await client.query('ROLLBACK'); return res.status(403).json({ error: 'Only an active member of the group can vote.' }); }
+    const { rows: [p] } = await client.query(
+      `SELECT * FROM stokvel_proposals WHERE id = $1 AND sub_account_id = $2 FOR UPDATE`,
+      [req.params.pid, group.id]);
+    if (!p) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'No such proposal.' }); }
+    const before = await proposals.settle(client, p);
+    if (before !== 'open') {
+      await client.query('COMMIT');
+      return res.status(409).json({ error: `Voting has closed: the proposal was ${before}.` });
+    }
+    await client.query(
+      `INSERT INTO stokvel_proposal_votes (proposal_id, investor_id, vote) VALUES ($1,$2,$3)
+       ON CONFLICT (proposal_id, investor_id) DO UPDATE SET vote = EXCLUDED.vote, voted_at = NOW()`,
+      [p.id, me, vote]);
+    const status = await proposals.settle(client, p);
+    const t = await proposals.tally(client, p.id, group.id);
+    await client.query('COMMIT');
+    return res.json({ data: { id: p.id, status, tally: t } });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[stokvels] proposal vote failed:', err.message);
+    return res.status(500).json({ error: 'Could not record that vote.' });
+  } finally {
+    client.release();
+  }
+});
+
+/* Withdrawn by whoever raised it, or by the committee, while it is open. */
+router.post('/:id/proposals/:pid/withdraw', async (req, res) => {
+  const me = callerInvestorId(req);
+  try {
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) return res.status(404).json({ error: 'No such stokvel.' });
+    const { rows: [p] } = await pool.query(
+      `SELECT * FROM stokvel_proposals WHERE id = $1 AND sub_account_id = $2`, [req.params.pid, group.id]);
+    if (!p) return res.status(404).json({ error: 'No such proposal.' });
+    if (p.raised_by !== me && !invites.mayInvite(group)) {
+      return res.status(403).json({ error: 'Only the person who raised it, or the committee, can withdraw a proposal.' });
+    }
+    const { rowCount } = await pool.query(
+      `UPDATE stokvel_proposals SET status = 'withdrawn', decided_at = NOW(), updated_at = NOW()
+        WHERE id = $1 AND status = 'open'`, [p.id]);
+    if (!rowCount) return res.status(409).json({ error: `That proposal is already ${p.status}.` });
+    return res.json({ data: { id: p.id, status: 'withdrawn' } });
+  } catch (err) {
+    console.error('[stokvels] withdraw proposal failed:', err.message);
+    return res.status(500).json({ error: 'Could not withdraw that proposal.' });
   }
 });
 

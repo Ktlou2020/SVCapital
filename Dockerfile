@@ -39,6 +39,8 @@ COPY signup.html          ./
 COPY institutional.html   ./
 COPY private-clients.html ./
 COPY stokvels.html        ./
+COPY group-constitution-template.html      ./
+COPY group-investment-policy-template.html ./
 COPY terms.html      ./
 COPY popia.html      ./
 COPY paia.html       ./

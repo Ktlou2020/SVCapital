@@ -191,3 +191,22 @@ body.sv-page {
   .sv-kv th, .sv-kv td { display: block; width: 100%; padding: 6px 0; }
   .sv-kv th { border-bottom: none; padding-top: 14px; }
 }
+
+/* ── Two stories and the calculator ───────────────────────────────── */
+.sv-story ul { margin: 14px 0 0; padding-left: 18px; }
+.sv-story li { font-size: 0.9rem; color: var(--sv-ink-soft); margin-bottom: 9px; }
+.sv-story li b { color: var(--sv-ink); }
+.sv-story > p { font-weight: 600; color: var(--sv-deep); }
+.sv-calc { display: grid; grid-template-columns: repeat(3, 1fr) 1.3fr; gap: 16px; align-items: end;
+           background: #fff; border: 1px solid var(--sv-line); border-radius: 16px; padding: 22px; }
+.sv-calc label { display: flex; flex-direction: column; gap: 6px; font-size: 0.8rem; font-weight: 600; color: var(--sv-ink-soft); }
+.sv-calc input { font: inherit; font-size: 1rem; font-weight: 600; color: var(--sv-ink); padding: 10px 12px;
+                 border: 1px solid var(--sv-line); border-radius: 10px; width: 100%; box-sizing: border-box; }
+.sv-calc__out { background: var(--sv-deeper); color: #fff; border-radius: 12px; padding: 14px 16px; }
+.sv-calc__k { font-size: 0.72rem; text-transform: uppercase; letter-spacing: .6px; color: rgba(255,255,255,0.7); }
+.sv-calc__v { font-family: 'Fraunces', Georgia, serif; font-size: 1.9rem; font-weight: 500; }
+.sv-calc__s { font-size: 0.78rem; color: rgba(255,255,255,0.78); }
+@media (max-width: 760px) {
+  .sv-calc { grid-template-columns: 1fr 1fr; }
+  .sv-calc__out { grid-column: 1 / -1; }
+}

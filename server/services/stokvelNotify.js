@@ -102,6 +102,13 @@ async function _person(db, investorId) {
    DESTINATION is in it on purpose: "R10 000" tells a signatory nothing they
    can check, and the destination is the half of the request the mandate
    exists to pin down. */
+function _removalSubject(authority) {
+  if (String(authority.kind || '') !== 'mandate') return null;
+  let c = authority.mandate_change;
+  if (typeof c === 'string') { try { c = JSON.parse(c); } catch (_) { c = null; } }
+  return (c && c.remove_signatory) || null;
+}
+
 function describe(authority) {
   const amount = fmtR(authority.amount);
   const kind = String(authority.kind || 'withdrawal');
@@ -114,6 +121,13 @@ function describe(authority) {
      agreeing to is that the whole group is paid out, not that a sum goes
      somewhere. */
   if (kind === 'payout') return `a payout of the whole group \u2014 ${authority.payout_label || 'the planned distribution'}`;
+  /* A change to the mandate moves no money; what a signatory approves is
+     the change itself, spelt out, so "R0" never appears in a message. */
+  if (kind === 'mandate') {
+    let c = authority.mandate_change;
+    if (typeof c === 'string') { try { c = JSON.parse(c); } catch (_) { c = null; } }
+    return `a change to the mandate: ${(c && c.summary) || 'see the request'}`;
+  }
   return `${amount} to ${authority.bank_name || 'a bank account'}`;
 }
 
@@ -165,6 +179,9 @@ async function approvalNeeded({ groupId, authorityId, db } = {}) {
     const told = [];
     for (const s of await _signatories(pool, groupId)) {
       if (s.id === a.requested_by) continue;
+      /* A signatory cannot vote on their own removal, so asking them to is
+         asking for something the platform will refuse. */
+      if (_removalSubject(a) === s.id) continue;
       told.push(await _tell(s, {
         url: hubUrl(groupId),
         title: a.stokvel_name || 'Your group',
@@ -245,10 +262,17 @@ async function decided({ groupId, authorityId, voterId, decision, db } = {}) {
       return { notified: told.filter(Boolean), outcome: 'rejected' };
     }
 
-    const state = await mandate.evaluate(pool, a, { id: groupId, stokvel_quorum: a.stokvel_quorum });
+    const evaluated = await mandate.evaluate(pool, a, { id: groupId, stokvel_quorum: a.stokvel_quorum });
+    /* A carried mandate change is applied and spent in the same vote, so it
+       reads as 'used' by the time anybody is told. It was carried; say so. */
+    const isMandate = String(a.kind || 'withdrawal') === 'mandate';
+    const state = (isMandate && a.status === 'used')
+      ? Object.assign({}, evaluated, { satisfied: true }) : evaluated;
 
     if (state.satisfied) {
-      const next = String(a.kind || 'withdrawal') === 'investment'
+      const next = isMandate
+        ? 'The change is now in force.'
+        : String(a.kind || 'withdrawal') === 'investment'
         ? 'Any member can now place it from the marketplace.'
         : 'It will be paid out once the notice period has run.';
       if (raiser) {

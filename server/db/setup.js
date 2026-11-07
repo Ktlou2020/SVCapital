@@ -216,6 +216,19 @@ INSERT INTO platform_settings (key, value, description)
 VALUES ('withdrawal_notice_hours', '48',
         'Hours between a withdrawal being requested and it becoming payable.')
 ON CONFLICT (key) DO NOTHING;
+/* Group resources that need a professional's sign-off before clients see
+   them. Both start OFF. A translation reaches clients only when its code is
+   listed here ('zu', 'st', or 'zu,st'), after a qualified translator has
+   checked it; the templates are linked only once legal review has approved
+   them. Until then a reviewer can still see each in place, marked draft. */
+INSERT INTO platform_settings (key, value, description)
+VALUES ('group_languages_live', '',
+        'Group workspace translations released to clients, comma separated: zu (isiZulu), st (Sesotho). Empty until a qualified translator has reviewed them.')
+ON CONFLICT (key) DO NOTHING;
+INSERT INTO platform_settings (key, value, description)
+VALUES ('group_templates_live', 'false',
+        'Set to true once legal review has approved the group constitution and investment policy templates. Until then they are unlinked and marked draft.')
+ON CONFLICT (key) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS ifas (
   id TEXT PRIMARY KEY, first_name TEXT, last_name TEXT,
@@ -1555,6 +1568,47 @@ CREATE INDEX IF NOT EXISTS stokvel_payouts_group_idx ON stokvel_payouts(sub_acco
    kept rather than recomputed because a share moves with every credit the
    group receives afterwards, and "what did I get in December" has to keep
    answering the same thing in March. */
+/* ─── Proposals ───────────────────────────────────────────────────────
+   What the group DECIDES, before the signatories AUTHORISE.
+
+   An investment group does not begin with a request for money; it begins
+   with somebody at a meeting saying "should we put R50 000 into the
+   eighteen-month pool?" and everybody having a say. The mandate answers a
+   different question — may this money move — and is answered by the
+   signatories alone. A proposal is the members' vote that comes first.
+
+   IT AUTHORISES NOTHING. A carried proposal moves no money and is no
+   authority: it can be turned into an investment request, which the
+   signatories still approve to the quorum exactly as before. That keeps
+   the one gate on money where it was, and gives the rest of the group a
+   recorded voice in front of it. One vote per member, enforced by the key.
+   ──────────────────────────────────────────────────────────────────── */
+CREATE TABLE IF NOT EXISTS stokvel_proposals (
+  id              TEXT PRIMARY KEY,
+  sub_account_id  TEXT NOT NULL REFERENCES sub_accounts(id) ON DELETE CASCADE,
+  raised_by       TEXT NOT NULL REFERENCES investors(id),
+  title           TEXT NOT NULL,
+  details         TEXT,
+  amount          NUMERIC(18,2) CHECK (amount IS NULL OR amount > 0),
+  pool_id         TEXT,
+  status          TEXT NOT NULL DEFAULT 'open'
+                    CHECK (status IN ('open','carried','defeated','withdrawn')),
+  closes_at       TIMESTAMPTZ NOT NULL,
+  decided_at      TIMESTAMPTZ,
+  request_id      TEXT,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS stokvel_proposals_group_idx ON stokvel_proposals(sub_account_id);
+
+CREATE TABLE IF NOT EXISTS stokvel_proposal_votes (
+  proposal_id  TEXT NOT NULL REFERENCES stokvel_proposals(id) ON DELETE CASCADE,
+  investor_id  TEXT NOT NULL REFERENCES investors(id) ON DELETE CASCADE,
+  vote         TEXT NOT NULL CHECK (vote IN ('yes','no','abstain')),
+  voted_at     TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (proposal_id, investor_id)
+);
+
 CREATE TABLE IF NOT EXISTS stokvel_payout_lines (
   id              TEXT PRIMARY KEY,
   payout_id       TEXT NOT NULL REFERENCES stokvel_payouts(id) ON DELETE CASCADE,
@@ -2879,7 +2933,20 @@ async function autoSetup() {
              a database holding the three-value version would keep the old one
              and refuse every payout while reporting success. */
           BEGIN ALTER TABLE stokvel_withdrawal_requests DROP CONSTRAINT swr_kind_chk; EXCEPTION WHEN undefined_object THEN NULL; END;
-          BEGIN ALTER TABLE stokvel_withdrawal_requests ADD CONSTRAINT swr_kind_chk CHECK (kind IN ('withdrawal','investment','exit','payout')); EXCEPTION WHEN duplicate_object THEN NULL; END;
+          /* A fifth kind: a change to the mandate itself, approved by the
+             signatories like money (services/stokvelMandateChange.js). Widened
+             HERE rather than dropped and re-added further down: this line runs
+             on every deploy, and re-adding the four-value list over a stored
+             mandate row would fail the whole step. A mandate change moves no
+             money, so it is the one kind whose amount may be zero, and what
+             it changes is carried in mandate_change. */
+          BEGIN ALTER TABLE stokvel_withdrawal_requests ADD CONSTRAINT swr_kind_chk CHECK (kind IN ('withdrawal','investment','exit','payout','mandate')); EXCEPTION WHEN duplicate_object THEN NULL; END;
+          BEGIN ALTER TABLE stokvel_withdrawal_requests ADD COLUMN mandate_change JSONB; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          /* The members' proposal an investment request was raised from, when
+             it was. Context for the signatories, never an authority. */
+          BEGIN ALTER TABLE stokvel_withdrawal_requests ADD COLUMN proposal_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          ALTER TABLE stokvel_withdrawal_requests DROP CONSTRAINT IF EXISTS stokvel_withdrawal_requests_amount_check;
+          BEGIN ALTER TABLE stokvel_withdrawal_requests ADD CONSTRAINT swr_amount_chk CHECK (amount > 0 OR kind = 'mandate'); EXCEPTION WHEN duplicate_object THEN NULL; END;
           BEGIN ALTER TABLE sub_accounts ADD COLUMN withdrawal_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE investors    ADD COLUMN withdrawal_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE transactions ADD COLUMN available_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
@@ -4766,6 +4833,26 @@ async function autoSetup() {
          that comes back after somebody dismissed the idea of it is worse than
          no notice at all. */
       const NOTICES = [
+        { id: 'ANN-2026-GROUP-LANGUAGES', area: 'portal', icon: 'fa-language',
+          title: 'The group workspace in isiZulu and Sesotho \u2014 drafted, waiting for a translator\u2019s sign-off',
+          body: 'The group workspace \u2014 its sections, the header, approvals, proposals, investments, members and the invitation card \u2014 now has isiZulu and Sesotho text, with a language picker. THE TRANSLATIONS ARE DRAFTS and NO CLIENT SEES THEM YET: a language reaches clients only once it is listed in Settings \u2192 group_languages_live (zu, st, or zu,st), and that should only happen after a qualified translator has checked it. Until then a reviewer opens the client portal with ?svDraftLang=1 added to the address, and every screen in a draft language carries a banner saying so. English stays the default and the fallback; messages written by the server (errors, notifications, emails) are still English only.',
+          where: 'To review: sign in to the client portal as a group member, add ?svDraftLang=1 to the address, open the group, and choose the language under the header. To release: Admin console \u2192 Settings \u2192 group_languages_live.' },
+        { id: 'ANN-2026-GROUP-TEMPLATES', area: 'both', icon: 'fa-file-signature',
+          title: 'A constitution and an investment policy template for groups \u2014 waiting for legal review',
+          body: 'Two documents a committee fills in on screen, prints and signs: a GROUP CONSTITUTION and an INVESTMENT POLICY. Both are written to agree with Terms clause 26 and with how the account works \u2014 at least two signatories, one rejection ends a request, mandate changes approved by the signatories, no lending from the account, exits settled under the mandate, money for a payout not invested past it. Neither recommends a product or quotes a rate. THEY ARE NOT LINKED ANYWHERE YET: each page carries a draft notice (which also prints) and is kept out of search engines. When legal review has approved them, setting group_templates_live to true removes the notice and links them from the public stokvels page and from each group\u2019s Members section.',
+          where: 'Review the pages directly: /group-constitution-template.html and /group-investment-policy-template.html. To release: Admin console \u2192 Settings \u2192 group_templates_live = true. Before release, also remove the noindex line from both pages if they should appear in search.' },
+        { id: 'ANN-2026-STOKVEL-MANDATE-CHANGES', area: 'both', icon: 'fa-pen-nib',
+          title: 'A group now changes its own mandate and lock date \u2014 the signatories approve it, not us',
+          body: 'Who signs, how many approvals money needs, and the date a group\u2019s money is locked until were all set by staff in the console. A group now PROPOSES THE CHANGE ITSELF and the existing signatories approve it to the quorum, exactly as they approve a withdrawal: one rejection ends it, and only current signatories count. It takes effect in the vote that carries it. The rules: a quorum below two, or more approvals than there are signatories, is refused when raised AND re-checked when it carries; only an active member can be made a signatory (an invitation still never makes one); a signatory cannot vote on their own removal; the lock date can be set, moved or cleared, but only this way. WHAT IT DOES NOT CHANGE: a brand-new group\u2019s FIRST mandate is still captured by staff against its constitution, and staff can still correct one in the console. Worth knowing for compliance: Terms clause 26.3 says signatory status is recorded by us on the stokvel\u2019s instruction given under 26.2; a quorum-approved request is that instruction, recorded by the platform.',
+          where: 'Client app \u2192 the group \u2192 Approvals \u2192 \u201cChange the mandate or lock date\u201d (committee or a signatory). The current mandate and lock date are shown at the top of Approvals. Proposed changes show in the same list as money requests, marked Mandate.' },
+        { id: 'ANN-2026-STOKVEL-PROPOSALS', area: 'portal', icon: 'fa-check-to-slot',
+          title: 'Group proposals \u2014 the members vote before the signatories approve',
+          body: 'An investment group starts with a question at a meeting, not a request for money. Any member can now put a PROPOSAL to the group (\u201cshould we put R20 000 into the twelve-month pool?\u201d) and every active member votes yes, no or abstain. It carries as soon as more than half the members say yes, or at the close on more yes than no; it is defeated early only when it could no longer carry. A CARRIED PROPOSAL MOVES NO MONEY: if it names a pool and an amount it can be put to the signatories as an investment request, once, for exactly what was voted on, and they still approve it to the quorum. The person who raised it, or the committee, can withdraw it while voting is open.',
+          where: 'Client app \u2192 the group \u2192 the new Proposals section \u2192 \u201cPropose something\u201d. A carried investment proposal shows \u201cPut it to the signatories\u201d.' },
+        { id: 'ANN-2026-STOKVEL-RETURNS-VIEW', area: 'portal', icon: 'fa-calendar-days',
+          title: 'A group sees what its investments are doing, when the money comes back, and whether that is after its payout date',
+          body: 'The group\u2019s Investments section was a list of amounts. It now shows what is invested, what that is expected to earn (the pools\u2019 targets, labelled as not a promise), what has been realised, the next maturity, a MATURITY CALENDAR grouped by month with each member\u2019s indicative part, and an Earned column. Anything maturing AFTER THE GROUP\u2019S LOCK DATE is marked. The same warning appears on the investment request form and on the request every signatory is asked to approve, so a savings club saving for December does not put its payout into an eighteen-month pool without being told. It is a warning, not a refusal: a group may choose to invest past its payout. The public stokvels page also now tells the two stories separately \u2014 Save for December, Invest together \u2014 and has a calculator of what the members save between them, with no interest rate assumed.',
+          where: 'Client app \u2192 the group \u2192 Investments. The warning: Approvals \u2192 Request an investment, and on each pending investment request. Public page: svcapital.co.za/stokvels.html.' },
         { id: 'ANN-2026-STOKVEL-WORKSPACE', area: 'both', icon: 'fa-people-group',
           title: 'A stokvel is now a place you switch into, not a pop-up',
           body: 'Everything a stokvel had \u2014 the pot, the mandate, contributions, shares, payouts, invitations, the roster \u2014 was stacked in ONE SCROLLING DIALOG. All of it was there and none of it had room, which is why a stokvel read as an accessory to a personal account rather than the thing a committee runs its group from. A member now SWITCHES INTO the stokvel and gets its own space with nine sections: OVERVIEW, CONTRIBUTIONS, APPROVALS, SHARES, PAYOUTS, MEMBERS, INVESTMENTS, TRANSACTIONS and STATEMENT. The group\u2019s name, the pot, what is in the wallet, what is invested and that member\u2019s own share sit across the top, with a way back to their own account. Switching is from the sidebar, which lists the member\u2019s stokvels and is HIDDEN ENTIRELY for the clients who are not in one. THE OVERVIEW IS THE NEW PART and leads with what is waiting on the person reading it: a request needing THEIR approval first (a mandate is only as fast as the signatory who has not voted), then what they owe, their share, the pot, the next payout and who is behind \u2014 each going to the section that answers it fully. TWO SECTIONS ARE ENTIRELY NEW. The group\u2019s TRANSACTIONS, with a running balance; and its INVESTMENTS, with what is held, at what rate and maturing when. Both read through the stokvel API rather than the table editor, because that scopes by investor and a stokvel\u2019s rows carry the CHAIRPERSON\u2019s id \u2014 an ordinary member could not have read them, and should not be given a way to. ONE THING WORTH KNOWING ABOUT THE LEDGER: its running balance is anchored to the wallet and worked backwards, not added up from zero. Not every movement on a group wallet writes a row against the group \u2014 a payout debits the wallet and writes the rows against each MEMBER \u2014 so a column summed from zero would not reach the balance printed above it. THE PERSONAL SCREENS ARE UNTOUCHED. This is one view of its own rather than seventeen made context-aware, so nothing here can render one account\u2019s money under another\u2019s name.',
