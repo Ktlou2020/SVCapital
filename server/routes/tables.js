@@ -564,8 +564,17 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
       pe_bee_verifications:      'verification_year',
       pe_afs_requests:           'financial_year',
       accepted_client_documents: 'accepted_at',
+      /* Neither of these has a created_at, and the fallback below named one
+         regardless: every unsorted read of them was a 500 ("column
+         created_at does not exist"), which is why the console's Platform
+         Settings panel sat on "Loading..." for months. Settings read A-Z by
+         key, the way a person looks one up. check-table-default-sort.cjs
+         holds every listed table to a sort column it actually has. */
+      platform_settings:         'key',
+      quest_completions:         'completed_at',
     };
-    const defaultDir = (table === 'cattle_animals' || table === 'cattle_cycles') ? 'ASC' : 'DESC';
+    const ASC_BY_DEFAULT = ['cattle_animals', 'cattle_cycles', 'platform_settings'];
+    const defaultDir = ASC_BY_DEFAULT.includes(table) ? 'ASC' : 'DESC';
     let orderClause = `ORDER BY ${defaultSort[table] || 'created_at'} ${defaultDir} NULLS LAST`;
     if (sort && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(sort)) {
       const dir = order.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
