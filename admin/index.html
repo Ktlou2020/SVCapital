@@ -477,6 +477,17 @@
                 <option value="pending">Pending</option>
                 <option value="rejected">Rejected</option>
               </select>
+              <select class="tbl-filter" id="investorTypeFilter">
+                <option value="">All Types</option>
+                <option value="individual">Individual</option>
+                <option value="business">Business</option>
+                <option value="trust">Trust</option>
+                <option value="group">Group</option>
+                <!-- Its own option, because "nobody has classified this yet" is
+                     the state worth finding: it is what an unmapped import and
+                     an untouched legacy client both look like. -->
+                <option value="__unset">Not set</option>
+              </select>
               <select class="tbl-filter" id="investorProvinceFilter">
                 <option value="">All Provinces</option>
                 <option value="Gauteng">Gauteng</option>
@@ -5264,7 +5275,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=30"></script>
 <script src="../js/investor-documents.js?v=9"></script>
-<script src="js/admin.js?v=217"></script>
+<script src="js/admin.js?v=218"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>

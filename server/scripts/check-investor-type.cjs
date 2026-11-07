@@ -179,13 +179,63 @@ let pool;
     const HTML  = strip(read('admin/index.html'));
     ok('the clients list has a Type column',
        /data-sort="investor_type"[^>]*>Type</.test(HTML), 'this is the question that was asked');
-    ok('and every row renders the badge', /<td style="overflow:hidden">\$\{typeBadge\}<\/td>/.test(ADMIN));
+    /* That the row RENDERS it, not how the cell is punctuated — the first
+       version of this matched a one-line <td> and broke the moment the cell
+       grew a second line, which says nothing about whether the badge shows. */
+    ok('and every row renders the badge',
+       /\$\{typeBadge\}/.test(ADMIN) && /const typeBadge = _investorTypeBadge\(inv\.investor_type\)/.test(ADMIN));
     ok('the client detail names it', /Investor Type<\/span>/.test(ADMIN));
     ok('it is editable, because an import can be wrong',
        /id="ipf-investor_type"/.test(ADMIN));
     ok('and saving an empty choice stores nothing rather than an empty string',
        /investor_type:\s*document\.getElementById\('ipf-investor_type'\)\.value \|\| null/.test(ADMIN),
        "'' is not the same as unknown");
+    console.log('\nand the list can be filtered by it, including by what is missing');
+    ok('the filter control exists',
+       /id="investorTypeFilter"/.test(HTML), 'the question was how to find them');
+    ok('it offers the four kinds',
+       IT.INVESTOR_TYPES.every(t => new RegExp(`<option value="${t}"`).test(HTML)),
+       JSON.stringify(IT.INVESTOR_TYPES));
+    ok('and "Not set" as a choice of its own',
+       /<option value="__unset">Not set<\/option>/.test(HTML),
+       'unclassified is the state worth finding — it is what an unmapped import ' +
+       'and an untouched legacy client both look like');
+    ok('the filter honours it', /ty === '__unset' \? !inv\.investor_type/.test(ADMIN));
+    ok('and it is part of the row test', /matchTy/.test(ADMIN));
+    ok('the choice survives a reload like the other filters',
+       /saved\.ty/.test(ADMIN) && /STATE\.filters\.investors = \{ q, st, ky, ty,/.test(ADMIN));
+
+    console.log('\nand each row shows which sub-accounts that client has opened');
+    ok('the kinds are indexed from the sub-accounts already loaded',
+       /saKindsByInvestor/.test(ADMIN) && /STATE\.subAccounts \|\| \[\]/.test(ADMIN),
+       'they load with the investors, so this costs no extra request');
+    /* Not one spelling of per-row filtering — any of them. The row template
+       must not reach for STATE.subAccounts at all; the index above it is the
+       only reader, so a reintroduced per-row scan written as filter, find,
+       reduce or a bare loop all show up the same way here. The slice is
+       checked first, because a slice that lifted nothing would pass the
+       assertion it exists to make. */
+    const rowTemplate = (() => {
+      const from = ADMIN.indexOf('body.innerHTML = page.map(inv =>');
+      if (from < 0) return null;
+      const to = ADMIN.indexOf('\nfunction ', from);
+      return ADMIN.slice(from, to < 0 ? ADMIN.length : to);
+    })();
+    ok('the row template was found, so the next assertion means something',
+       !!rowTemplate && /\$\{typeBadge\}/.test(rowTemplate),
+       'renderInvestorsTable\u2019s row map could not be located in admin.js');
+    ok('indexed once per page \u2014 the row never scans the sub-accounts itself',
+       !!rowTemplate && !/STATE\.subAccounts/.test(rowTemplate),
+       'one pass over STATE.subAccounts for the page, not one per row');
+    ok('and rendered beside the client\u2019s own type',
+       /saKinds\.length \?/.test(ADMIN));
+    ok('a stokvel sub-account reads as Group, as it does everywhere else',
+       /stokvel: 'Group'/.test(ADMIN),
+       'the stored value is stokvel; the platform calls it a group on screen');
+    ok('and an unknown kind still renders rather than vanishing',
+       /replace\(\/_\/g, ' '\)\.replace\(\/\^\\w\/, c => c\.toUpperCase\(\)\)/.test(ADMIN),
+       'a new account_type must not silently disappear from this column');
+
     ok('the badge is built from the shared labels',
        /Utils\.investorTypeLabel/.test(ADMIN),
        'a second label table in the console is a second answer');

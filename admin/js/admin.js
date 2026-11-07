@@ -2046,6 +2046,16 @@ const INVESTOR_SORT = {
    Colours separate the three entity kinds from a natural person at a glance,
    and 'Not set' is grey and says the words — FICA verifies a trust, a
    company and a person differently, so the gap is worth seeing. */
+/* A sub-account kind, in the words the platform uses elsewhere. `stokvel` is
+   the stored value and GROUP is what it is now called on screen, so this is
+   where the console translates it for this list. */
+function _subAccountKindLabel(kind) {
+  const k = String(kind || '').trim().toLowerCase();
+  return { business: 'Business', trust: 'Trust', stokvel: 'Group',
+           group: 'Group', minor: 'Minor', individual: 'Individual' }[k]
+       || k.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase());
+}
+
 function _investorTypeBadge(value) {
   const v = String(value || '').toLowerCase().trim();
   const cls = { individual: 'badge--blue', business: 'badge--purple',
@@ -2093,6 +2103,21 @@ function renderInvestorsTable() {
   }
 
   const loginSet = STATE.investorLoginSet || new Set();
+  /* The sub-account kinds each client has opened, built once for the whole
+     page rather than filtered per row. STATE.subAccounts is already loaded
+     alongside the investors, so this costs no extra request.
+
+     This is a DIFFERENT fact from the client's own type and sits beside it:
+     an individual may hold a trust and a group, and a business client may
+     hold none at all. One says what the client IS, the other what they have
+     opened. */
+  const saKindsByInvestor = {};
+  (STATE.subAccounts || []).forEach(sa => {
+    const who = sa.parent_investor_id;
+    if (!who || !sa.account_type) return;
+    (saKindsByInvestor[who] = saKindsByInvestor[who] || new Set())
+      .add(String(sa.account_type).trim().toLowerCase());
+  });
 
   body.innerHTML = page.map(inv => {
     const fullName = `${inv.first_name || ''} ${inv.last_name || ''}`.trim() || '—';
@@ -2116,6 +2141,7 @@ function renderInvestorsTable() {
     /* Unset is its own state and says so. A dash here would read as
        "individual", which is the assumption this column exists to stop. */
     const typeBadge = _investorTypeBadge(inv.investor_type);
+    const saKinds   = [...(saKindsByInvestor[inv.id] || [])].sort();
     const province = (inv.province||'').replace(/\s+$/,'');
     const _trunc = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block';
     return `<tr style="cursor:pointer;${isSelected ? 'background:rgba(254,194,79,0.06)' : ''}" tabindex="0" onclick="viewInvestor('${inv.id}')" onkeydown="if(event.key==='Enter')viewInvestor('${inv.id}')">
@@ -2136,7 +2162,12 @@ function renderInvestorsTable() {
         <div style="font-size:0.75rem;${_trunc}">${_esc(inv.email || '—')}</div>
         <div class="td-muted" style="font-size:0.71rem;${_trunc}">${_esc(inv.phone || '—')}</div>
       </td>
-      <td style="overflow:hidden">${typeBadge}</td>
+      <td style="overflow:hidden">
+        ${typeBadge}
+        ${saKinds.length ? `<div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:2px">${
+          saKinds.map(k => `<span style="font-size:0.6rem;padding:1px 5px;border-radius:100px;background:rgba(237,165,255,0.14);color:#eda5ff;white-space:nowrap" title="Sub-account opened">${_esc(_subAccountKindLabel(k))}</span>`).join('')
+        }</div>` : ''}
+      </td>
       <td style="overflow:hidden">
         <div style="display:flex;flex-direction:column;gap:3px">${kycBadge}${stBadge}${loginBadge}</div>
       </td>
@@ -2246,6 +2277,7 @@ function setupInvestorFilters() {
   const search  = document.getElementById('investorSearch');
   const statusF = document.getElementById('investorStatusFilter');
   const kycF    = document.getElementById('investorKycFilter');
+  const typeF   = document.getElementById('investorTypeFilter');
   const provF   = document.getElementById('investorProvinceFilter');
   const loginF  = document.getElementById('investorLoginFilter');
   const sortSel = document.getElementById('investorSortOrder');
@@ -2256,6 +2288,7 @@ function setupInvestorFilters() {
     if (saved.q)  search.value  = saved.q;
     if (saved.st) statusF.value = saved.st;
     if (saved.ky) kycF.value    = saved.ky;
+    if (saved.ty && typeF) typeF.value = saved.ty;
     if (saved.pv) provF.value   = saved.pv;
     if (saved.lo && loginF) loginF.value = saved.lo;
     if (saved.so && sortSel) sortSel.value = saved.so;
@@ -2265,11 +2298,12 @@ function setupInvestorFilters() {
     const q  = (search.value || '').toLowerCase();
     const st = statusF.value;
     const ky = kycF.value;
+    const ty = typeF ? typeF.value : '';
     const pv = provF.value;
     const lo = loginF ? loginF.value : '';
     const so = sortSel ? sortSel.value : 'date_desc';
     const loginSet = STATE.investorLoginSet || new Set();
-    STATE.filters.investors = { q, st, ky, pv, lo, so };
+    STATE.filters.investors = { q, st, ky, ty, pv, lo, so };
     filteredInvestors = STATE.investors.filter(inv => {
       const name = `${inv.first_name||''} ${inv.last_name||''}`.toLowerCase();
       const matchQ  = !q  || name.includes(q)
@@ -2281,11 +2315,17 @@ function setupInvestorFilters() {
         : st ? inv.status === st
         : true;
       const matchKy = !ky || inv.kyc_status === ky;
+      /* '__unset' finds the clients nobody has classified — an import the
+         mapper could not read, or a legacy account from before the column
+         existed. An empty value is a real state, so it needs a real option
+         rather than being reachable only by scrolling the whole list. */
+      const matchTy = !ty
+        || (ty === '__unset' ? !inv.investor_type : inv.investor_type === ty);
       const matchPv = !pv || (inv.province||'').toLowerCase().includes(pv.toLowerCase());
       const matchLo = !lo
         || (lo === 'no_login'  && !loginSet.has(inv.id))
         || (lo === 'has_login' &&  loginSet.has(inv.id));
-      return matchQ && matchSt && matchKy && matchPv && matchLo;
+      return matchQ && matchSt && matchKy && matchTy && matchPv && matchLo;
     });
 
     // Sort
@@ -2320,6 +2360,7 @@ function setupInvestorFilters() {
   search.addEventListener('input', filter);
   statusF.addEventListener('change', filter);
   kycF.addEventListener('change', filter);
+  if (typeF) typeF.addEventListener('change', filter);
   provF.addEventListener('change', filter);
   if (loginF)  loginF.addEventListener('change', filter);
   if (sortSel) sortSel.addEventListener('change', filter);
