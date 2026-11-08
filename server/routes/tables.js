@@ -1130,6 +1130,48 @@ const STORED_FILE_COLS = {
    `body` holds something this platform is willing to hand back to a browser.
    A column that is absent, or explicitly cleared, is not a file — clearing
    one is how a factsheet is removed. */
+/* ─── The mandate is not an ordinary column ─────────────────────────────
+   A stokvel's mandate is four things: who may sign, how many of them must
+   approve, how long the money is locked, and how the pot divides. Three of
+   them live on sub_accounts, and sub_accounts is a table its owner may PATCH
+   — so whoever created the group could set its quorum, bring its lock date
+   forward and change its share basis with one request and no vote. Verified
+   against the live route, not inferred: all three returned 200.
+
+   That is the whole mandate undone by the generic writer. services/
+   stokvelMandateChange exists to make these changes need the signatories'
+   quorum, states that a lock date may be "set, moved or cleared, but only
+   this way", and says bringing one forward "releases money earlier than the
+   group agreed, which is exactly the kind of thing one person must not do
+   alone". It was not the only way. (Who may SIGN was never reachable here —
+   stokvel_members is not in ALLOWED_TABLES at all.)
+
+   REFUSED, not silently dropped. The protected-column list deletes a field
+   and returns 200, which is right for a stray fica_status but wrong here: a
+   committee would be told their mandate was saved while it had not changed.
+   The refusal names the route that does work.
+
+   Staff are unaffected: the console corrects a mandate as a privileged role,
+   and the vote service writes with its own SQL, not through this endpoint. */
+const MANDATE_COLS = {
+  sub_accounts: {
+    stokvel_quorum:  'how many signatories must approve',
+    withdrawal_date: 'the date the money is locked until',
+    share_basis:     'how the pot divides between members',
+  },
+};
+function mandateRefusal(table, body, role) {
+  if (['admin', 'director', 'fund_manager'].includes(role)) return null;
+  const cols = MANDATE_COLS[table];
+  if (!cols || !body) return null;
+  for (const [col, what] of Object.entries(cols)) {
+    if (!Object.prototype.hasOwnProperty.call(body, col)) continue;
+    return `${what} is part of the group\u2019s mandate and cannot be changed here. `
+         + 'Raise it in the group\u2019s Approvals section, where the signatories vote on it.';
+  }
+  return null;
+}
+
 function storedFileRefusal(table, body) {
   const cols = STORED_FILE_COLS[table];
   if (!cols || !body) return null;
@@ -1157,6 +1199,9 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
 
     const _fileRefusal = storedFileRefusal(table, body);
     if (_fileRefusal) return res.status(400).json({ error: _fileRefusal });
+
+    const _mandateRefusal = mandateRefusal(table, body, req.user && req.user.role);
+    if (_mandateRefusal) return res.status(403).json({ error: _mandateRefusal });
 
     const isPrivileged = ['admin', 'director', 'fund_manager'].includes(req.user.role);
     ALWAYS_PROTECTED_COLS.forEach(c => delete body[c]);
@@ -2020,6 +2065,9 @@ router.put('/:table/:id', requireAuth, validateTable, async (req, res) => {
     const _fileRefusal = storedFileRefusal(table, body);
     if (_fileRefusal) return res.status(400).json({ error: _fileRefusal });
 
+    const _mandateRefusal = mandateRefusal(table, body, req.user && req.user.role);
+    if (_mandateRefusal) return res.status(403).json({ error: _mandateRefusal });
+
     const isPrivileged = ['admin', 'director', 'fund_manager'].includes(req.user.role);
     ALWAYS_PROTECTED_COLS.forEach(c => delete body[c]);
     if (!isPrivileged) {
@@ -2093,6 +2141,9 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
 
     const _fileRefusal = storedFileRefusal(table, body);
     if (_fileRefusal) return res.status(400).json({ error: _fileRefusal });
+
+    const _mandateRefusal = mandateRefusal(table, body, req.user && req.user.role);
+    if (_mandateRefusal) return res.status(403).json({ error: _mandateRefusal });
 
     const isPrivileged = ['admin', 'director', 'fund_manager'].includes(req.user.role);
     ALWAYS_PROTECTED_COLS.forEach(c => delete body[c]);
