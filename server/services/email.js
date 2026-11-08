@@ -1300,21 +1300,37 @@ function sendStokvelArrears(investor, { stokvelName, periodLabel, owed, dueDate,
    job this email absolutely must do is say HOW to find it, and say it in a
    way that survives being read on a phone by somebody who has never heard
    of us. */
-function sendStokvelInvite(to, { inviteeName, inviterName, stokvelName, expiresAt, alreadyAUser }) {
+function sendStokvelInvite(to, { inviteeName, inviterName, stokvelName, expiresAt,
+                                 alreadyAUser, terms, asSignatory }) {
   const when = expiresAt ? new Date(expiresAt).toISOString().slice(0, 10) : null;
+  /* The plain-text fallback used to say "sign in" to everybody, including the
+     people who have no account — which is most of the recipients of this
+     particular email and the whole point of sending it. The HTML branched
+     correctly and this did not. */
+  const how = alreadyAUser
+    ? 'Sign in with this email address and the invitation is waiting on your Sub-accounts screen.'
+    : 'Create a free SV Capital account using this email address and the invitation will be waiting on your Sub-accounts screen.';
   return _send({
     to,
     type: 'stokvel_invite',
     subject: `${inviterName} invited you to join ${stokvelName}`,
     text: `${inviterName} has invited you to join ${stokvelName} on SV Capital. `
-        + `Sign in with this email address and the invitation is waiting on your Sub-accounts screen. `
-        + `${BASE_URL}/portal/`,
+        + (terms ? `The group's rules: ${terms} ` : '')
+        + `${how} ${BASE_URL}/portal/`,
     html: _wrap(`
       <h2>You have been invited to join ${escHtml(stokvelName)}</h2>
       <p>Hi${inviteeName ? ` ${escHtml(inviteeName)}` : ''}, <strong>${escHtml(inviterName)}</strong>
          has invited you to join <strong>${escHtml(stokvelName)}</strong> on SV Capital \u2014 where the
          group saves together, sees what everybody has paid, and needs several
          signatories to agree before any money leaves.</p>
+      ${terms ? `<div class="box" style="border-left:3px solid #eda5ff">
+        <p style="margin:0 0 6px"><strong>The group&rsquo;s rules, before you decide.</strong></p>
+        <p style="margin:0">${escHtml(terms)}</p>
+        ${asSignatory ? `<p style="margin:8px 0 0;font-size:0.88rem">Being a signatory means the
+           group&rsquo;s money cannot move unless you and the other signatories approve it. You will
+           be asked to confirm this yourself after you join &mdash; this invitation does not make
+           you one.</p>` : ''}
+      </div>` : ''}
       <div class="box">
         <p style="margin:0"><strong>How to accept.</strong>
           ${alreadyAUser

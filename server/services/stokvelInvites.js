@@ -75,7 +75,13 @@ function mayInvite(group) {
 /* ── Raise one ─────────────────────────────────────────────────────
    Returns { invite } or { error, status }. Every refusal is a sentence the
    person who tapped invite can act on. */
-async function create(client, group, invitedBy, { name, email, cell }) {
+/* asSignatory is a NOMINATION and confers nothing. Terms 26.3: "An
+   invitation does not confer signatory status or any office." It is carried
+   so the invitation can SAY who is being asked — somebody deciding whether
+   to put their savings in a group is entitled to know whether they are also
+   being asked to sign for it — and the nominee becomes a signatory only by
+   their own later act. See services/stokvelFoundingMandate. */
+async function create(client, group, invitedBy, { name, email, cell, asSignatory }) {
   if (!mayInvite(group)) {
     return { status: 403, error: 'Only the chairperson, secretary or treasurer can invite members.' };
   }
@@ -127,11 +133,11 @@ async function create(client, group, invitedBy, { name, email, cell }) {
     const { rows: [invite] } = await client.query(
       `INSERT INTO stokvel_invites
          (id, sub_account_id, invited_by, invitee_name, email, cell,
-          matched_investor_id, expires_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7, NOW() + ($8 || ' days')::interval)
+          matched_investor_id, as_signatory, expires_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8, NOW() + ($9 || ' days')::interval)
        RETURNING *`,
       [id, group.id, invitedBy, (name || '').trim().slice(0, 80) || null,
-       e, c, who ? who.id : null, String(EXPIRES_DAYS)]);
+       e, c, who ? who.id : null, !!asSignatory, String(EXPIRES_DAYS)]);
     return { invite, matched: who };
   } catch (err) {
     /* The partial unique index on live invitations. Tapping invite twice is
@@ -154,6 +160,11 @@ async function forInvestor(client, investor) {
   if (!e && !c) return [];
   const { rows } = await client.query(
     `SELECT v.*, a.name AS stokvel_name, a.stokvel_reg_number,
+            /* The mandate, so the accept screen can state the rules the
+               person is agreeing to. Before this there was nothing to show
+               them: they were asked to put savings into a group without
+               being told how many people it takes to move the money. */
+            a.stokvel_quorum, a.share_basis, a.withdrawal_date,
             i.first_name AS invited_by_name,
             (SELECT COUNT(*)::int FROM stokvel_members m
               WHERE m.sub_account_id = v.sub_account_id AND m.status = 'active') AS active_members
@@ -213,16 +224,26 @@ async function accept(client, invite, investor) {
      written here rather than read from the invitation so that there is
      nothing to tamper with. Re-inviting somebody who left updates the row
      they already have, which is what the roster's unique index wants, and
-     it deliberately does NOT restore a signatory flag they used to hold. */
+     it deliberately does NOT restore a signatory flag they used to hold.
+
+     THE ONE THING TAKEN FROM THE INVITATION is the nomination, and a
+     nomination is not an appointment: is_signatory stays false here whatever
+     the invitation said. It records that this person was ASKED, which is
+     what lets them confirm it themselves afterwards and what makes the
+     asking disclosable. The grant is in
+     services/stokvelFoundingMandate.confirmSignatory and nowhere else. */
   await client.query(
     `INSERT INTO stokvel_members
-       (id, sub_account_id, investor_id, role, is_signatory, status, invited_by, invited_at, joined_at)
-     VALUES ($1,$2,$3,'member',false,'active',$4,$5,NOW())
+       (id, sub_account_id, investor_id, role, is_signatory, status, invited_by, invited_at,
+        joined_at, signatory_nominated_at)
+     VALUES ($1,$2,$3,'member',false,'active',$4,$5,NOW(),$6)
      ON CONFLICT (sub_account_id, investor_id) DO UPDATE
         SET status = 'active', role = 'member', is_signatory = false,
-            joined_at = NOW(), exited_at = NULL, updated_at = NOW()`,
+            joined_at = NOW(), exited_at = NULL, updated_at = NOW(),
+            signatory_nominated_at = $6`,
     ['SM-' + crypto.randomUUID().replace(/-/g, '').slice(0, 14).toUpperCase(),
-     invite.sub_account_id, investor.id, invite.invited_by, invite.created_at]);
+     invite.sub_account_id, investor.id, invite.invited_by, invite.created_at,
+     invite.as_signatory ? new Date().toISOString() : null]);
 
   await client.query(
     `UPDATE stokvel_invites

@@ -82,8 +82,11 @@ async function sendMaturityAlert(phone, firstName, amount, poolName) {
    160 characters: who, what, and how to find it. No link: the invitation is
    addressed, and signing in as the holder of this number is what claims it.
    See services/stokvelInvites.js. */
-async function sendStokvelInvite(phone, { inviterName, stokvelName }) {
+async function sendStokvelInvite(phone, { inviterName, stokvelName, terms }) {
+  /* The rules are in the SMS and not only in the email, because for a great
+     many stokvel members the SMS is the only one of the two they will read. */
   const msg = `${inviterName} invited you to join ${stokvelName} on SV Capital. `
+            + (terms ? `${terms} ` : '')
             + `Sign in or sign up with this number and the invite is on your Sub-accounts screen: svcapital.co.za`;
   return _send(phone, msg);
 }

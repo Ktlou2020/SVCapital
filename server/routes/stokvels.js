@@ -30,6 +30,7 @@ const mandate = require('../services/stokvelMandate');
 const crypto  = require('crypto');
 const contributions = require('../services/stokvelContributions');
 const invites       = require('../services/stokvelInvites');
+const founding    = require('../services/stokvelFoundingMandate');
 const shares        = require('../services/stokvelShares');
 const mandateChange = require('../services/stokvelMandateChange');
 const proposals     = require('../services/stokvelProposals');
@@ -214,11 +215,21 @@ router.get('/invites/mine', async (req, res) => {
     const investor = await callerContacts(req);
     if (!investor) return res.json({ data: [] });
     const rows = await invites.forInvestor(pool, investor);
-    return res.json({ data: rows.map(v => ({
-      id: v.id, stokvel_name: v.stokvel_name, stokvel_reg_number: v.stokvel_reg_number,
-      invited_by_name: v.invited_by_name, active_members: v.active_members,
-      invitee_name: v.invitee_name, expires_at: v.expires_at, created_at: v.created_at,
-    })) });
+    /* The mandate goes out with the invitation. A group's founding mandate is
+       set by whoever starts it and is checked by nobody — the only thing
+       standing between that and somebody's savings is that they were TOLD
+       the rules before they agreed to them. So this is not decoration. */
+    return res.json({ data: rows.map(v => {
+      const d = founding.disclosure(v);
+      return {
+        id: v.id, stokvel_name: v.stokvel_name, stokvel_reg_number: v.stokvel_reg_number,
+        invited_by_name: v.invited_by_name, active_members: v.active_members,
+        invitee_name: v.invitee_name, expires_at: v.expires_at, created_at: v.created_at,
+        as_signatory: !!v.as_signatory,
+        mandate: d,
+        mandate_line: founding.disclosureLine(d, !!v.as_signatory),
+      };
+    }) });
   } catch (err) {
     console.error('[stokvels] invites/mine failed:', err.message);
     return res.status(500).json({ error: 'Could not load your invitations.' });
@@ -301,6 +312,12 @@ router.post('/:id/invites', async (req, res) => {
       name:  (req.body && req.body.name)  || '',
       email: (req.body && req.body.email) || '',
       cell:  (req.body && req.body.cell)  || '',
+      /* A nomination, which confers nothing — see the service. Only offered
+         while the group is still founding: once the mandate is in force,
+         adding a signatory is a vote, and an invitation that implied
+         otherwise would be a promise the platform then refuses to keep. */
+      asSignatory: !!(req.body && req.body.as_signatory)
+                   && (await founding.state(client, group)).founding,
     });
     if (out.error) {
       await client.query('ROLLBACK');
@@ -415,6 +432,18 @@ router.get('/:id', async (req, res) => {
         share_basis: group.share_basis,
         my_role: group.my_role || (group.i_opened_it ? 'chairperson' : null),
         i_opened_it: group.i_opened_it,
+        /* Where the group stands on its mandate: none yet, still gathering
+           confirmations, or in force. The workspace needs all three to tell
+           a group what to do next instead of only refusing its withdrawals. */
+        mandate_state: await founding.state(pool, group),
+        i_am_signatory: !!group.my_is_signatory,
+        i_am_nominated: await (async () => {
+          const { rows: [m] } = await pool.query(
+            `SELECT signatory_nominated_at IS NOT NULL AND NOT is_signatory AS yes
+               FROM stokvel_members WHERE sub_account_id = $1 AND investor_id = $2
+                AND status = 'active'`, [group.id, me]);
+          return !!(m && m.yes);
+        })(),
       },
     });
   } catch (err) {
@@ -1599,6 +1628,97 @@ router.post('/:id/proposals/:pid/withdraw', async (req, res) => {
   } catch (err) {
     console.error('[stokvels] withdraw proposal failed:', err.message);
     return res.status(500).json({ error: 'Could not withdraw that proposal.' });
+  }
+});
+
+/* ─── POST /api/stokvels/:id/founding-mandate ────────────────────────
+   The first mandate, set by the committee rather than typed in by staff.
+
+   The rules and the reasoning are in services/stokvelFoundingMandate: this
+   can only be done ONCE, only before the group has a mandate, and it sets
+   the numbers — never who signs, because nobody can be made a signatory by
+   somebody else.
+   ──────────────────────────────────────────────────────────────────── */
+router.post('/:id/founding-mandate', async (req, res) => {
+  const me = callerInvestorId(req);
+  const client = await pool.connect();
+  try {
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) return res.status(404).json({ error: 'No such stokvel.' });
+    await client.query('BEGIN');
+    const out = await founding.setFounding(client, group, me, req.body || {});
+    if (out.error) {
+      await client.query('ROLLBACK');
+      return res.status(out.status || 400).json({ error: out.error });
+    }
+    await client.query('COMMIT');
+
+    /* Audited after the commit. This is the one mandate nobody voted on, so
+       the record of who set it and what it said is the only account of it. */
+    require('../services/audit').log({
+      actorId: me, actorEmail: (req.user && req.user.email) || null, actorRole: 'investor',
+      action: 'stokvel_founding_mandate_set',
+      entityType: 'sub_account', entityId: group.id,
+      description: `Founding mandate set for ${group.name}: `
+        + `${out.mandate.quorum} signatories must approve, pot divides by `
+        + `${out.mandate.share_basis}`
+        + (out.mandate.lock_date ? `, locked until ${out.mandate.lock_date}` : '')
+        + '. Set by the committee before any signatory existed; every member who '
+        + 'joins is shown it in their invitation.',
+      after: out.mandate,
+    }).catch(() => {});
+
+    const st = await founding.state(pool, Object.assign({}, group, {
+      stokvel_quorum: out.mandate.quorum, mandate_adopted_at: null }));
+    return res.status(201).json({ data: { mandate: out.mandate, mandate_state: st } });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[stokvels] founding mandate failed:', err.message);
+    return res.status(500).json({ error: 'Could not set that mandate.' });
+  } finally {
+    client.release();
+  }
+});
+
+/* ─── POST /api/stokvels/:id/signatory-confirmation ───────────────────
+   A nominee accepting their own appointment. The only way somebody becomes a
+   signatory without a vote, and it is their own act: an invitation cannot do
+   it (Terms 26.3) and neither can the chairperson.
+
+   Only while the group is founding. The moment confirmations reach the
+   quorum the window shuts for good and signatories change by vote.
+   ──────────────────────────────────────────────────────────────────── */
+router.post('/:id/signatory-confirmation', async (req, res) => {
+  const me = callerInvestorId(req);
+  const client = await pool.connect();
+  try {
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) return res.status(404).json({ error: 'No such stokvel.' });
+    await client.query('BEGIN');
+    const out = await founding.confirmSignatory(client, group, me);
+    if (out.error) {
+      await client.query('ROLLBACK');
+      return res.status(out.status || 400).json({ error: out.error });
+    }
+    await client.query('COMMIT');
+
+    require('../services/audit').log({
+      actorId: me, actorEmail: (req.user && req.user.email) || null, actorRole: 'investor',
+      action: 'stokvel_signatory_confirmed',
+      entityType: 'sub_account', entityId: group.id,
+      description: `Confirmed their own appointment as a signatory of ${group.name} `
+        + `(${out.signatories} of ${out.quorum})`
+        + (out.adopted ? '. The mandate is now in force; further changes need a vote.' : '.'),
+      after: { signatories: out.signatories, quorum: out.quorum, adopted: out.adopted },
+    }).catch(() => {});
+
+    return res.json({ data: out });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[stokvels] signatory confirmation failed:', err.message);
+    return res.status(500).json({ error: 'Could not confirm that.' });
+  } finally {
+    client.release();
   }
 });
 

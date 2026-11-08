@@ -386,7 +386,8 @@ async function invited({ inviteId, db } = {}) {
   const pool = db || defaultPool;
   try {
     const { rows: [v] } = await pool.query(
-      `SELECT v.*, a.name AS stokvel_name, i.first_name AS invited_by_name
+      `SELECT v.*, a.name AS stokvel_name, i.first_name AS invited_by_name,
+              a.stokvel_quorum, a.share_basis, a.withdrawal_date
          FROM stokvel_invites v
          JOIN sub_accounts a ON a.id = v.sub_account_id
          LEFT JOIN investors i ON i.id = v.invited_by
@@ -398,6 +399,13 @@ async function invited({ inviteId, db } = {}) {
     const line  = `${who} has invited you to join ${group} on SV Capital.`;
     const find  = 'Sign in to the app with this email address or cell number and the '
                 + 'invitation is waiting on your Sub-accounts screen.';
+    /* THE RULES GO OUT WITH THE INVITATION. A group's founding mandate is set
+       by whoever starts it and approved by nobody; the only thing between
+       that and a member's savings is that they were told the rules before
+       agreeing to them. So the mandate is in the message, not only on the
+       screen they reach later. */
+    const fm    = require('./stokvelFoundingMandate');
+    const terms = fm.disclosureLine(fm.disclosure(v), !!v.as_signatory);
     const reached = [];
 
     const { email, push } = services();
@@ -405,6 +413,7 @@ async function invited({ inviteId, db } = {}) {
       await Promise.resolve(email.sendStokvelInvite(v.email, {
         inviteeName: v.invitee_name, inviterName: who, stokvelName: group,
         expiresAt: v.expires_at, alreadyAUser: !!v.matched_investor_id,
+        terms, asSignatory: !!v.as_signatory,
       })).then(() => reached.push('email'))
         .catch(e => console.warn('[stokvelNotify] invite email failed:', e.message));
     }
@@ -420,7 +429,8 @@ async function invited({ inviteId, db } = {}) {
            invitation recorded and the SMS never sent. Restored here, where
            the storage convention is known. */
         const dialable = /^\d{9}$/.test(String(v.cell)) ? '0' + v.cell : v.cell;
-        await Promise.resolve(sms.sendStokvelInvite(dialable, { inviterName: who, stokvelName: group }))
+        await Promise.resolve(sms.sendStokvelInvite(dialable,
+          { inviterName: who, stokvelName: group, terms }))
           .then(() => reached.push('sms'))
           .catch(e => console.warn('[stokvelNotify] invite sms failed:', e.message));
       }

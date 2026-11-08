@@ -2960,6 +2960,42 @@ async function autoSetup() {
           BEGIN ALTER TABLE sub_accounts ADD COLUMN share_basis TEXT NOT NULL DEFAULT 'contribution'; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE sub_accounts ADD CONSTRAINT sub_accounts_share_basis_chk
             CHECK (share_basis IN ('contribution','equal')); EXCEPTION WHEN duplicate_object THEN NULL; END;
+          /* ── The FOUNDING mandate ─────────────────────────────────
+             A group's first mandate cannot be approved by its signatories,
+             because it is the thing that creates them. Staff used to type it
+             in. Now the founder sets it and everybody else agrees to it BY
+             JOINING a group whose rules the invitation stated in full.
+
+             Two columns carry that.
+
+             signatory_nominated_at is a NOMINATION, not an appointment.
+             Terms 26.3: "An invitation does not confer signatory status or
+             any office." So the invitation says who is being asked, which is
+             disclosure, and the nominee becomes a signatory only by their own
+             later act. Nothing somebody else does makes a person a signatory.
+
+             mandate_adopted_at shuts the founding window, permanently, the
+             moment confirmed signatories first reach the quorum. It is a
+             stamp rather than a count because a count would REOPEN: a group
+             that later lost a signatory would be back in its founding
+             window, and the chairperson could nominate a replacement who
+             confirms themselves in — appointing a signatory with no vote,
+             which is the whole thing the mandate exists to prevent. */
+          BEGIN ALTER TABLE stokvel_members ADD COLUMN signatory_nominated_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE stokvel_invites ADD COLUMN as_signatory BOOLEAN NOT NULL DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE sub_accounts    ADD COLUMN mandate_adopted_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          /* Every group that already has a working mandate is ALREADY past
+             its founding: staff captured it, signatories are in place, and
+             the window must not be open for them. Stamped from the roster
+             they already have rather than defaulted, so a group that is
+             genuinely mid-setup keeps its window. */
+          UPDATE sub_accounts s SET mandate_adopted_at = NOW()
+           WHERE s.account_type = 'stokvel'
+             AND s.mandate_adopted_at IS NULL
+             AND s.stokvel_quorum IS NOT NULL
+             AND (SELECT COUNT(*) FROM stokvel_members m
+                   WHERE m.sub_account_id = s.id AND m.is_signatory
+                     AND m.status = 'active') >= s.stokvel_quorum;
           BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_holder TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_number TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
