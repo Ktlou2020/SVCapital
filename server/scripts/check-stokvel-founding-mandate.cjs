@@ -36,6 +36,7 @@ if (!process.env.DATABASE_URL) {
   process.exit(0);
 }
 
+const fs   = require('fs');
 const path = require('path');
 const http = require('http');
 const { Pool } = require('pg');
@@ -316,6 +317,67 @@ const call = (port, method, p, body, who) => new Promise(resolve => {
       ok('but it does not carry a nomination it could not honour',
          v2.as_signatory === false,
          'offering signing power the platform would then refuse is worse than not offering it');
+    }
+    /* ── What a member actually sees ──────────────────────────────
+       The shipped renderer, lifted and run. Source greps would have passed
+       happily while this threw: two placeholders leaked out of the patch
+       that wrote it as ${D} and ${RSQ}, which node --check accepts and which
+       are a ReferenceError the moment the panel renders. A panel that throws
+       takes the whole Approvals section with it. */
+    console.log('\nand the panel renders, in each of the three states');
+    {
+      const vm = require('vm');
+      const CORE = fs.readFileSync(path.join(ROOT, 'js', 'portal-core.js'), 'utf8');
+      const ctx = { console, Math, Number, String, Object, Array, Boolean, Date, JSON,
+                    parseFloat, parseInt, isNaN, RegExp, Set, Map, Error,
+                    _esc: v => String(v == null ? '' : v)
+                      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                      .replace(/"/g, '&quot;').replace(/'/g, '&#39;'),
+                    /* The real translator is in the file; this stands in for
+                       the dictionary lookup so the English fallbacks render. */
+                    _svT: (_k, fallback) => fallback };
+      ctx.globalThis = ctx; ctx.window = ctx; ctx.self = ctx;
+      vm.createContext(ctx);
+      const from = CORE.indexOf('function _svFoundingPanel(');
+      const to   = CORE.indexOf('async function setFoundingMandate(');
+      ok('the panel was found to lift', from > 0 && to > from,
+         'a slice that missed it would test nothing while passing');
+      vm.runInContext(CORE.slice(from, to), ctx);
+
+      const noMandate = ctx._svFoundingPanel(
+        { my_role: 'chairperson', i_opened_it: true,
+          mandate_state: { needs_mandate: true, adopted: false } }, 'G1');
+      ok('with no mandate it says the money cannot move, and offers to fix it',
+         /no signing rules yet/i.test(noMandate) && /setFoundingMandate\('G1'\)/.test(noMandate),
+         noMandate.slice(0, 220));
+      const notCommittee = ctx._svFoundingPanel(
+        { my_role: 'member', i_opened_it: false,
+          mandate_state: { needs_mandate: true, adopted: false } }, 'G1');
+      ok('and an ordinary member is told who sets them, not given the button',
+         !/setFoundingMandate/.test(notCommittee) && /chairperson, secretary or treasurer/i.test(notCommittee),
+         notCommittee.slice(0, 220));
+
+      const open = ctx._svFoundingPanel(
+        { my_role: 'chairperson', i_opened_it: true, i_am_nominated: true,
+          mandate_state: { needs_mandate: false, adopted: false, founding: true,
+                           quorum: 3, signatories: 1, short_by: 2, awaiting_confirmation: 2 } }, 'G1');
+      ok('while founding it says how far along the group is',
+         /1 of 3/.test(open) && /2 still to go/.test(open), open.slice(0, 400));
+      ok('and a nominee is offered the confirmation',
+         /confirmStokvelSignatory\('G1'\)/.test(open), open.slice(-300));
+      const notNominated = ctx._svFoundingPanel(
+        { my_role: 'member', mandate_state: { needs_mandate: false, adopted: false,
+          founding: true, quorum: 3, signatories: 1, short_by: 2 } }, 'G1');
+      ok('somebody who was not asked is not offered it',
+         !/confirmStokvelSignatory/.test(notNominated), notNominated.slice(-240));
+
+      ok('and once it is in force the panel disappears entirely',
+         ctx._svFoundingPanel({ mandate_state: { adopted: true } }, 'G1') === '',
+         'a group with a working mandate does not need setup instructions');
+      /* The leak that syntax checking cannot see. */
+      ok('nothing in it renders an unresolved placeholder',
+         ![noMandate, open, notNominated, notCommittee].some(h => /\$\{/.test(h)),
+         'a ${...} in the output means a template literal was written as text');
     }
   } catch (err) {
     console.error('\n  ✗ threw:', err.stack || err.message);

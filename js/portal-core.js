@@ -7352,6 +7352,33 @@ function _saFormFields(type) {
     <div class="form-row form-row--2">
       <div class="form-group"><label class="form-label">Club Contact Email</label><input type="email" class="form-input" id="saFieldEmail" placeholder="yourclub@email.com" /></div>
       <div class="form-group"><label class="form-label">Club Phone</label><input type="tel" class="form-input" id="saFieldPhone" placeholder="+27 72 000 0000" /></div>
+    </div>
+    <!-- THE SIGNING RULES, SET HERE. A group's first mandate is the one no
+         signatory can approve, because it is what creates them; the check is
+         that everybody invited afterwards is SHOWN it before they join. Asked
+         at creation so there is never a window in which somebody can be
+         invited to a group with no rules to disclose. -->
+    <div style="margin-top:4px;padding:12px 14px;border-radius:12px;
+                background:rgba(237,165,255,0.09);border-left:3px solid #eda5ff">
+      <div style="font-weight:800;font-size:0.84rem;margin-bottom:2px">Signing rules</div>
+      <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:10px;line-height:1.5">
+        Everybody you invite is shown these before they decide to join. Once they are in
+        force, changing them needs the signatories&rsquo; approval &mdash; not yours alone.
+      </div>
+      <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">Approvals needed before money leaves <span style="color:#ef4444">*</span></label>
+          <input type="number" class="form-input" id="saFieldQuorum" min="2" max="20" value="2" />
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-top:3px">Two at least &mdash; a mandate of one is not a mandate.</div></div>
+        <div class="form-group"><label class="form-label">How the pot divides</label>
+          <select class="form-input" id="saFieldBasis">
+            <option value="contribution">By what each member paid in</option>
+            <option value="equal">Equally between members</option>
+          </select></div>
+      </div>
+      <div class="form-group"><label class="form-label">Lock the money until (optional)</label>
+        <input type="date" class="form-input" id="saFieldLock" />
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:3px">
+          Leave blank unless the group has agreed a date.</div></div>
     </div>`;
 
   // Minor
@@ -7474,7 +7501,26 @@ async function saConfirmCreate() {
   }
 
   try {
-    await API._fetch('POST', 'tables/sub_accounts', body);
+    const made = await API._fetch('POST', 'tables/sub_accounts', body);
+    /* The signing rules, as their own call: they are a mandate and not a
+       column somebody may PATCH, so the generic writer refuses them — see
+       MANDATE_COLS in server/routes/tables.js. The group exists either way,
+       so a failure here is reported and the founder can set them from the
+       group's Approvals section rather than losing the account. */
+    if (_saCreateType === 'stokvel' && made && made.id) {
+      const q = parseInt((document.getElementById('saFieldQuorum') || {}).value, 10);
+      try {
+        await API._fetch('POST', `stokvels/${made.id}/founding-mandate`, {
+          quorum: q >= 2 ? q : 2,
+          share_basis: (document.getElementById('saFieldBasis') || {}).value || 'contribution',
+          lock_date: (document.getElementById('saFieldLock') || {}).value || null,
+          nominate_me: true,
+        });
+      } catch (e) {
+        Toast.error('The group was created, but its signing rules were not saved: '
+          + (e.message || 'unknown error') + ' Set them in the group\u2019s Approvals section.');
+      }
+    }
     Toast.success(`${SA_TYPE_META[_saCreateType].label} account created! Please upload the required FICA documents.`);
     Modal.close('createSaModal');
     await loadSubAccounts();
@@ -12519,6 +12565,19 @@ function _svInviteCard(v) {
       <div style="font-size:0.8rem;color:var(--text-muted);line-height:1.5">
         ${_esc(_svT('inv.card.body', 'Joining means the group can see what you contribute and what you owe, and that several signatories must agree before any of its money moves. You join as an ordinary member.'))}
       </div>
+      ${/* THE RULES, BEFORE THE BUTTON. A group's first mandate is set by
+            whoever starts it and approved by nobody \u2014 agreeing to it IS the
+            check, so it cannot be a screen somebody reaches afterwards. */
+        v.mandate_line ? `<div style="margin-top:10px;padding:10px 12px;border-radius:10px;
+            background:rgba(237,165,255,0.10);border-left:3px solid #eda5ff">
+          <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:.5px;color:#eda5ff;font-weight:800;margin-bottom:4px">
+            ${_esc(_svT('inv.rules', 'The group\u2019s rules'))}
+          </div>
+          <div style="font-size:0.79rem;line-height:1.5">${_esc(v.mandate_line)}</div>
+          ${v.as_signatory ? `<div style="font-size:0.74rem;color:var(--text-muted);margin-top:6px">
+            ${_esc(_svT('inv.sigask', 'You will be asked to confirm this yourself once you have joined \u2014 accepting the invitation does not make you a signatory.'))}
+          </div>` : ''}
+        </div>` : ''}
     </div>
     <div class="sa-card__actions">
       <button class="btn btn--sm btn--primary" onclick="acceptStokvelInvite('${_esc(v.id)}')">
@@ -12585,8 +12644,12 @@ function _svInvitations(res, gid) {
         <i class="fa-solid fa-plus"></i> Invite someone
       </button>
       <div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px">
-        They join as an ordinary member. Signing power is a change to the mandate —
-        an invitation cannot grant it, and no one person can arrange it.
+        ${_svFoundingOpen(gid)
+          ? `They join as an ordinary member. You can ask somebody to be a signatory while
+             the group is still setting up — the invitation says so and they confirm it
+             themselves. An invitation never grants it.`
+          : `They join as an ordinary member. Signing power is a change to the mandate —
+             an invitation cannot grant it, and no one person can arrange it.`}
       </div>` : ''}
     ${past.length ? `<div style="font-size:0.74rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px">Answered</div>${past.map(row).join('')}` : ''}`;
 }
@@ -12604,7 +12667,18 @@ function inviteToStokvel(groupId) {
       + _svField('svInvCell', 'Cell number', 'tel',
           `Either one is enough; both means we can reach them either way. Use the address
            they already have an SV Capital account under, if they have one &mdash; an
-           invitation sent anywhere else is invisible to them.`, 'inputmode="tel"'),
+           invitation sent anywhere else is invisible to them.`, 'inputmode="tel"')
+      /* Offered only while the group is still gathering its founding
+         signatories. After that, signing power is a vote, and a tick box
+         here would be promising something the platform then refuses. */
+      + (_svFoundingOpen(groupId) ? `<label style="display:flex;gap:9px;align-items:flex-start;
+            margin:4px 0 2px;cursor:pointer">
+          <input type="checkbox" id="svInvSig" style="margin-top:3px">
+          <span style="font-size:0.82rem">Ask them to be a <strong>signatory</strong>
+            <span style="display:block;font-size:0.74rem;color:var(--text-muted);margin-top:2px">
+              The invitation will say so, and they confirm it themselves after joining.
+              This does not make them one.</span></span>
+        </label>` : ''),
     submit: `submitStokvelInvite('${_esc(groupId)}')`,
     submitIcon: 'fa-paper-plane',
     submitLabel: 'Send the invitation',
@@ -12621,7 +12695,8 @@ async function submitStokvelInvite(groupId) {
   }
   let res;
   try {
-    res = await API._fetch('POST', `stokvels/${groupId}/invites`, { name, email, cell });
+    res = await API._fetch('POST', `stokvels/${groupId}/invites`, { name, email, cell,
+      as_signatory: !!(document.getElementById('svInvSig') || {}).checked });
   } catch (err) {
     _svFormError(err.message || 'Could not send that invitation.');
     return;
@@ -12837,6 +12912,18 @@ function _svDict() {
       'mem.policy': 'Inqubomgomo yokutshala imali',
       'inv.card': 'Isimemo',
       'inv.card.body': 'Ukujoyina kusho ukuthi iqembu lingabona okufakayo nokukweletayo, nokuthi abasayinayo abaningana kumele bavumelane ngaphambi kokuba imali yalo ihambe. Ujoyina njengelungu elijwayelekile.',
+      'inv.rules': 'Imithetho yeqembu',
+      'inv.sigask': 'Uzocelwa ukuqinisekisa lokhu wena uqobo uma usujoyinile — ukwamukela isimemo akukwenzi umsayini.',
+      'fm.none.t': 'Leli qembu alinayo imithetho yokusayina',
+      'fm.none.b': 'Kuze kube nayo, imali yeqembu ayikwazi ukuhamba. Beka ukuthi bangaki abasayinayo okumele bavume, ukuthi imali yehlukaniswa kanjani, nokuthi ikhiyiwe kuze kube nini. Wonke umuntu omenywayo kusukela manje uboniswa le mithetho ngaphambi kokujoyina.',
+      'fm.set': 'Beka imithetho yokusayina',
+      'fm.none.who': 'Usihlalo, unobhala noma umgcinimafa uyibeka.',
+      'fm.open.t': 'Imithetho yokusayina ibekwe, kodwa ayikasebenzi',
+      'fm.open.b': 'Izosebenza uma abasayinayo abanele sebeqinisekisile ukumiswa kwabo — akekho ongenziwa umsayini ngomunye umuntu.',
+      'fm.open.c': 'baqinisekisile',
+      'fm.open.more': 'abasele',
+      'fm.open.asked': 'ilungu/amalungu aceliwe kodwa angakaqinisekisi.',
+      'fm.confirm': 'Ngiyaqinisekisa ukuthi ngizoba umsayini',
       'inv.accept': 'Yamukela',
       'inv.decline': 'Yenqaba',
     },
@@ -12914,6 +13001,18 @@ function _svDict() {
       'mem.policy': 'Leano la matsete',
       'inv.card': 'Memo',
       'inv.card.body': 'Ho kena ho bolela hore sehlopha se ka bona seo o se kenyang le seo o se kolotang, le hore basaeni ba mmalwa ba tlameha ho dumellana pele tjhelete ya sona e tsamaya. O kena jwalo ka setho se tlwaelehileng.',
+      'inv.rules': 'Melao ya sehlopha',
+      'inv.sigask': 'O tla kopuwa ho netefatsa sena ka bowena ha o se o kene — ho amohela memo ha ho o etse mosaeni.',
+      'fm.none.t': 'Sehlopha sena ha se na melao ya ho saena',
+      'fm.none.b': 'Ho fihlela se e na le yona, tjhelete ya sehlopha e ke ke ya tsamaya. Beha hore basaeni ba bakae ba tlameha ho dumela, hore tjhelete e arolwa jwang, le hore e notletswe ho fihlela neng. Mang kapa mang ya memuwang ho tloha jwale o bontshwa melao ena pele a kena.',
+      'fm.set': 'Beha melao ya ho saena',
+      'fm.none.who': 'Modulasetulo, mongodi kapa ramatlotlo o e beha.',
+      'fm.open.t': 'Melao ya ho saena e behilwe, empa ha e so sebetse',
+      'fm.open.b': 'E tla sebetsa ha basaeni ba lekaneng ba netefalitse ho khethwa ha bona — ha ho motho ya ka etswang mosaeni ke motho e mong.',
+      'fm.open.c': 'ba netefalitse',
+      'fm.open.more': 'ba setseng',
+      'fm.open.asked': 'setho/ditho ba kopuwe empa ha ba so netefatse.',
+      'fm.confirm': 'Ke netefatsa hore ke tla ba mosaeni',
       'inv.accept': 'Amohela',
       'inv.decline': 'Hana',
     },
@@ -13036,6 +13135,18 @@ function svWorkspaceTab(id, tab) {
    top-level state and no load-time statements, so the holder is made on
    first use. Keyed by the stokvel's id, so switching groups cannot show
    the previous group's figures for a frame. */
+/* Is this group still gathering its FOUNDING signatories?
+   Read from the group the hub already loaded, so a screen and the server
+   cannot disagree about which phase a group is in. Defaults to false on a
+   cache miss: offering to nominate a signatory when we do not know would
+   promise something the server then refuses, and the opposite mistake only
+   hides a tick box for one render. */
+function _svFoundingOpen(id) {
+  const c = _svCache(id);
+  const st = c && c.group && c.group.data && c.group.data.mandate_state;
+  return !!(st && st.founding);
+}
+
 function _svCache(id, data) {
   if (!window.__SVWS || window.__SVWS.id !== id) window.__SVWS = { id, data: null };
   if (data) window.__SVWS.data = data;
@@ -14186,6 +14297,7 @@ function _svWithdrawals(res, meIsSignatory, gid, ctx) {
     <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px">
       ${_esc(_svT('ap.intro', 'The group\u2019s money only moves \u2014 out to a bank account or into one of our pools \u2014 when enough signatories approve it. No one member can do it alone, and the whole group can see who has agreed to what.'))}
     </div>
+    ${_svFoundingPanel(g, gid)}
     <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:0.8rem;margin-bottom:12px">
       <span><i class="fa-solid fa-pen-nib" style="color:#eda5ff"></i>
         ${g.stokvel_quorum ? `<strong>${_esc(String(g.stokvel_quorum))} / ${_esc(String(c.signatories || 0))}</strong> ${_esc(_svT('ap.mustapprove', 'signatories must approve'))}`
@@ -14207,6 +14319,126 @@ function _svWithdrawals(res, meIsSignatory, gid, ctx) {
       </button>` : ''}
     </div>
     ${past.length ? `<div style="font-size:0.74rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px">${_esc(_svT('ap.recent', 'Recent'))}</div>${past.map(row).join('')}` : ''}`;
+}
+
+/* The founding mandate, which is the one nobody votes on.
+
+   Three states, and a group in any of them needs to be told what to do next
+   rather than only refused when it tries to move money:
+
+     no mandate      the committee writes the rules, once
+     founding        waiting on nominees to confirm their own appointments
+     in force        this panel disappears; changes are a vote
+
+   The second state is the one that used to be invisible: the group had a
+   quorum on file, no signatories yet, and the only sign of it was a
+   withdrawal being refused. */
+function _svFoundingPanel(g, gid) {
+  const d  = (g && g.mandate_state) || {};
+  const me = g || {};
+  if (d.adopted) return '';
+  const box = (colour, title, body, actions) => `<div style="margin-bottom:12px;padding:12px 14px;
+      border-radius:12px;background:rgba(237,165,255,0.09);border-left:3px solid ${colour}">
+      <div style="font-weight:800;font-size:0.86rem;margin-bottom:4px">${title}</div>
+      <div style="font-size:0.79rem;color:var(--text-muted);line-height:1.5">${body}</div>
+      ${actions ? `<div style="margin-top:9px;display:flex;gap:8px;flex-wrap:wrap">${actions}</div>` : ''}
+    </div>`;
+
+  if (d.needs_mandate) {
+    const canSet = me.i_opened_it
+      || ['chairperson', 'secretary', 'treasurer'].includes(me.my_role);
+    return box('#fec24f',
+      _esc(_svT('fm.none.t', 'This group has no signing rules yet')),
+      _esc(_svT('fm.none.b', 'Until it does, the group\u2019s money cannot move. Set how many signatories must approve a withdrawal, how the pot divides, and whether the money is locked until a date. Everybody invited from then on is shown these rules before they join.')),
+      canSet
+        ? `<button class="btn btn--primary btn--sm" onclick="setFoundingMandate('${_esc(gid)}')">
+             <i class="fa-solid fa-pen-nib"></i> ${_esc(_svT('fm.set', 'Set the signing rules'))}
+           </button>`
+        : `<span style="font-size:0.76rem;color:var(--text-muted)">${_esc(_svT('fm.none.who', 'The chairperson, secretary or treasurer sets them.'))}</span>`);
+  }
+
+  /* Founding: the rules exist and are not yet in force. */
+  const short = d.short_by || 0;
+  return box('#eda5ff',
+    _esc(_svT('fm.open.t', 'The signing rules are set, and not in force yet')),
+    `${_esc(_svT('fm.open.b', 'They take effect once enough signatories have confirmed their own appointment \u2014 nobody can be made a signatory by somebody else.'))}
+     <div style="margin-top:6px"><strong>${d.signatories || 0} of ${d.quorum || 0}</strong>
+       ${_esc(_svT('fm.open.c', 'confirmed'))}${short ? ` — ${short} ${_esc(_svT('fm.open.more', 'still to go'))}` : ''}.
+       ${d.awaiting_confirmation ? `${d.awaiting_confirmation} ${_esc(_svT('fm.open.asked', 'member(s) have been asked and have not confirmed.'))}` : ''}
+     </div>`,
+    g.i_am_nominated
+      ? `<button class="btn btn--primary btn--sm" onclick="confirmStokvelSignatory('${_esc(gid)}')">
+           <i class="fa-solid fa-signature"></i> ${_esc(_svT('fm.confirm', 'Confirm that I will be a signatory'))}
+         </button>`
+      : '');
+}
+
+async function setFoundingMandate(groupId) {
+  _svFormShell(groupId, {
+    icon: 'fa-pen-nib',
+    title: 'The group\u2019s signing rules',
+    intro: `Set once, by the committee, because there are no signatories yet to vote on it.
+      Everybody invited from now on is shown these rules before they decide to join, and
+      after they are in force a change needs the signatories’ approval.`,
+    fields: _svField('fmQuorum', 'How many signatories must approve before money leaves?',
+        'number', 'Two at least. A mandate of one is not a mandate.', 'min="2" max="20" value="2"')
+      + `<div class="form-group"><label class="form-label">How does the pot divide?</label>
+          <select class="form-input" id="fmBasis">
+            <option value="contribution">By what each member has paid in</option>
+            <option value="equal">Equally between members</option>
+          </select>
+          <div style="font-size:0.74rem;color:var(--text-muted);margin-top:4px">
+            Your own constitution decides this. Most groups divide by contribution.
+          </div></div>`
+      + _svField('fmLock', 'Lock the money until (optional)', 'date',
+          `Leave blank unless the group has agreed one. Before this date a withdrawal is
+           refused even with full approval.`)
+      + `<label style="display:flex;gap:9px;align-items:flex-start;margin:4px 0 2px;cursor:pointer">
+          <input type="checkbox" id="fmMe" checked style="margin-top:3px">
+          <span style="font-size:0.82rem">Ask me to be one of the signatories
+            <span style="display:block;font-size:0.74rem;color:var(--text-muted);margin-top:2px">
+              You will still confirm it yourself afterwards. Setting the rules does not
+              make you a signatory of them.</span></span>
+        </label>`,
+    submit: `submitFoundingMandate('${_esc(groupId)}')`,
+    submitIcon: 'fa-check',
+    submitLabel: 'Set the rules',
+  });
+}
+
+async function submitFoundingMandate(groupId) {
+  const quorum = parseInt(_svVal('fmQuorum'), 10);
+  if (!(quorum >= 2)) {
+    _svFormError('At least two signatories must approve. A mandate of one is not a mandate.');
+    return;
+  }
+  try {
+    await API._fetch('POST', `stokvels/${groupId}/founding-mandate`, {
+      quorum,
+      share_basis: (document.getElementById('fmBasis') || {}).value || 'contribution',
+      lock_date: _svVal('fmLock') || null,
+      nominate_me: !!(document.getElementById('fmMe') || {}).checked,
+    });
+  } catch (err) {
+    _svFormError(err.message || 'Could not set those rules.');
+    return;
+  }
+  Utils.toast('Set. They take effect once the signatories have confirmed.', 'success');
+  await _svRenderHub(groupId, 'approvals');
+}
+
+async function confirmStokvelSignatory(groupId) {
+  if (!confirm('Confirm that you will be a signatory of this group?\n\n'
+      + 'The group\u2019s money cannot move unless you and the other signatories approve it.')) return;
+  try {
+    const r = await API._fetch('POST', `stokvels/${groupId}/signatory-confirmation`, {});
+    Utils.toast(r.data && r.data.adopted
+      ? 'Confirmed. The signing rules are now in force.'
+      : `Confirmed. ${r.data.signatories} of ${r.data.quorum} signatories so far.`, 'success');
+  } catch (err) {
+    Utils.toast(err.message || 'Could not confirm that.', 'error');
+  }
+  await _svRenderHub(groupId, 'approvals');
 }
 
 function _svMembers(res, gid, canLevy) {
