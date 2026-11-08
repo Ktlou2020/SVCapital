@@ -25,6 +25,17 @@
  * not go green and the assertion floor could not be raised. None of it was a
  * fault in the product. The engine was right every time.
  *
+ * THE SAME SHAPE, TWO HOURS LATER. check-payment-reversals seeded a card
+ * deposit "two hours ago" and then asked the reconciler to compare TODAY,
+ * which is one UTC calendar day — so for the two hours AFTER midnight UTC the
+ * deposit sat in yesterday's window, the comparison could not see it, and the
+ * check reported a client's own top-up as a charge we never credited. It is
+ * not a business-day problem and it is not fixed here; it is listed because
+ * the lesson is the same one. A fixture pinned to the current instant and
+ * then asked about a calendar day will be wrong for as many hours as the gap
+ * between them, every single night, and the output will look like a finding
+ * rather than an error.
+ *
  * So: a fixture that means "today" uses the SAME expression the engine does,
  * and one that needs the date in JavaScript reads it back through that
  * expression rather than computing a second answer. Not a reimplementation of

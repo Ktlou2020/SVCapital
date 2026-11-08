@@ -25,6 +25,20 @@ const fs   = require('fs');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..', '..');
+/* The fixture's card deposit is created a couple of hours before now, and
+   compareDay compares one UTC CALENDAR DAY. So the day to ask it about is the
+   day that deposit is IN — not "today".
+
+   Asking about today meant that for the first two hours after midnight UTC
+   the deposit sat in yesterday's window, the comparison could not see it, and
+   this check reported the client's own top-up as a charge we never credited —
+   every night, on a check whose whole subject is not raising false alarms.
+   (The sibling trap, in the two hours before midnight, is in
+   scripts/lib/businessDay.cjs.) One constant, used by the fixture that writes
+   the row and by the question asked about it. */
+const DEPOSIT_AGE_H = 2;
+const dayOfDeposit = () => new Date(Date.now() - DEPOSIT_AGE_H * 3600 * 1000);
+
 let pass = 0, fail = 0;
 const ok = (name, cond, detail) => {
   if (cond) { pass++; console.log(`  ✓ ${name}`); }
@@ -86,7 +100,7 @@ console.log('the webhook no longer drops everything but one event');
       `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description,
                                  actor_kind, actor_role, created_at)
        VALUES ('TX-RV-DEP','INV-RV','deposit',$1,'completed','RV-REF-1','Card top-up',
-               'client','investor', NOW() - INTERVAL '2 hours')`, [deposit]);
+               'client','investor', NOW() - INTERVAL '${DEPOSIT_AGE_H} hours')`, [deposit]);
     await pool.query(`UPDATE transactions SET gateway = 'paystack' WHERE id = 'TX-RV-DEP'`);
 
     if (spentOn === 'stokvel_contribution') {
@@ -213,26 +227,39 @@ console.log('the webhook no longer drops everything but one event');
       { reference: 'RV-REF-1', amount: 50000 },
       { reference: 'RV-GHOST', amount: 25000 },
     ] });
-    let cmp = await reconcile.compareDay(new Date());
+    /* Asserted BEFORE the comparison, so a future mis-aim says which thing is
+       wrong. A fixture sitting outside the window it is compared against
+       reports every row as a discrepancy — which looks exactly like the bug
+       this check exists to find, and is how the real fault stayed invisible:
+       the output was a plausible finding, not an obvious error. */
+    const { from: winFrom, to: winTo } = reconcile.dayBounds(dayOfDeposit());
+    ok('the deposit under test is inside the day being compared',
+       (await pool.query(
+         `SELECT created_at >= $1::timestamptz AND created_at <= $2::timestamptz AS inside
+            FROM transactions WHERE id = 'TX-RV-DEP'`, [winFrom, winTo])).rows[0].inside === true,
+       `TX-RV-DEP is not in ${winFrom.slice(0, 10)} — every row would read as a ` +
+       'discrepancy and the findings below would be meaningless');
+
+    let cmp = await reconcile.compareDay(dayOfDeposit());
     ok('a charge the gateway took and we never credited is found',
        cmp.onlyAtGateway.length === 1 && cmp.onlyAtGateway[0].reference === 'RV-GHOST',
        JSON.stringify(cmp.onlyAtGateway) + ' — the client is out of pocket and waiting');
 
     paystack.listTransactions = async () => ({ ok: true, data: [] });
-    cmp = await reconcile.compareDay(new Date());
+    cmp = await reconcile.compareDay(dayOfDeposit());
     ok('and a credit the gateway has no charge for is found too',
        cmp.onlyHere.some(r => r.reference === 'RV-REF-1'),
        JSON.stringify(cmp.onlyHere));
 
     await pool.query(`UPDATE transactions SET reversed_at = NOW() WHERE id='TX-RV-DEP'`);
-    cmp = await reconcile.compareDay(new Date());
+    cmp = await reconcile.compareDay(dayOfDeposit());
     ok('but one already reversed is not reported again',
        !cmp.onlyHere.some(r => r.reference === 'RV-REF-1'),
        'an alert that fires for every reversal this already handled is an '
        + 'alert somebody turns off');
 
     paystack.listTransactions = async () => ({ ok: false, reason: 'timeout', data: [], partial: true });
-    cmp = await reconcile.compareDay(new Date());
+    cmp = await reconcile.compareDay(dayOfDeposit());
     ok('and a read that only half worked reports nothing rather than everything',
        cmp.ok === false && cmp.onlyAtGateway.length === 0 && cmp.onlyHere.length === 0,
        'reporting the rows it never fetched as missing is a page of false '
