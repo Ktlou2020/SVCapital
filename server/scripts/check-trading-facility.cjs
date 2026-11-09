@@ -760,6 +760,81 @@ const CAPITAL_HTML = `<html><body><table>
       ok('and that this is short-term money that drives no payout',
          /Funded from the short-term investment/.test(html)
          && /not<\/strong> fed into NAV or into any payout/.test(html));
+      /* EVERY COLOUR THE SCRIPT NAMES HAS TO EXIST. The panel shipped
+         styled with var(--stl-muted), which this console's stylesheet does
+         not define. An undefined custom property with no fallback makes the
+         whole declaration invalid, so the colour is simply dropped — and
+         since neither body nor .stl-card sets a text colour, the text fell
+         back to the browser default. Black, on a #111827 card. It rendered
+         perfectly and could not be read, which is why no assertion about
+         rendering caught it. */
+      const CSS = fs.readFileSync(path.join(ROOT, 'fund', 'shortterm.html'), 'utf8');
+      const defined = new Set((CSS.match(/--[a-z-]+\s*:/g) || [])
+        .map(d => d.replace(/\s*:$/, '')));
+      const used = [...new Set((UI.match(/var\(--[a-z-]+\)/g) || [])
+        .map(v => v.slice(4, -1)))];
+      ok('the stylesheet was read, so the next assertion means something',
+         defined.size > 3, `${defined.size} custom properties found`);
+      ok('every CSS variable the script names is defined in the stylesheet',
+         used.every(v => defined.has(v)),
+         `undefined: ${used.filter(v => !defined.has(v)).join(', ')}`);
+      /* And the text it draws says what colour it is, because nothing above
+         it does. */
+      /* Asserted on what the panel DREW, not on the file. The console's own
+         dashboard uses these classes too, so a file-wide grep for them
+         passes however this panel is styled — it was the first version of
+         this assertion and it caught nothing. */
+      ok('the panels carry their own text colour rather than inheriting one',
+         (html.match(/stl-kpi-label/g) || []).length >= 8
+         && /stl-kpi-value/.test(html) && /stl-kpi-sub/.test(html),
+         'the console’s own classes carry the colours; hand-styling them is how '
+         + 'the undefined variable got in');
+      /* Nothing above this panel sets a text colour — not body, not
+         .stl-card — so an element that sizes text without saying what
+         colour it is gets the browser default: black, on a #111827 card.
+
+         A class only excuses it if that class actually PAINTS. The first
+         version of this exempted anything carrying a class at all, and
+         missed the loads table: .stl-table sets a font-size and no colour,
+         so stripping the inline colour left it black and the scan said
+         nothing. So the stylesheet is read and each class is asked. */
+      const ruleFor = cls => {
+        const m = CSS.match(new RegExp('\\.' + cls + '\\s*\\{([^}]*)\\}'));
+        return m ? m[1] : '';
+      };
+      const classesOf = tag =>
+        ((tag.match(/class="([^"]*)"/i) || [])[1] || '').split(/\s+/).filter(Boolean);
+      const unpainted = (html.match(/<[a-z0-9]+[^>]*>/gi) || []).filter(tag => {
+        const style = (tag.match(/style="([^"]*)"/i) || [])[1] || '';
+        const classes = classesOf(tag);
+        const sizes = /font-size/i.test(style)
+                   || classes.some(c => /font-size/i.test(ruleFor(c)));
+        if (!sizes) return false;
+        const painted = /(^|;)\s*color\s*:/i.test(style)
+                     || classes.some(c => /(^|;|\s)color\s*:/i.test(ruleFor(c)));
+        return !painted;
+      });
+      ok('and no text in it is sized without being given a colour',
+         unpainted.length === 0,
+         `${unpainted.length}: ${unpainted.slice(0, 2).join(' | ').slice(0, 220)}`);
+      ok('and the headings are given one explicitly',
+         !/<h3 style="margin-top:0">/.test(UI) && !/<h3>/.test(UI),
+         'an h3 on this page inherits black');
+
+      /* The empty facility, which is what production showed before its first
+         sync: "Every load has been paid for" is true of a facility whose
+         loads have all settled and false of one with no loads at all. */
+      const empty = svc.summarise([], 141990, '2026-11-09');
+      ctx.stlGet = async p2 => /loads/.test(p2)
+        ? { data: [], facility: FAC, summary: empty,
+            coverage: svc.coverage(empty, { target_rate: 0.08, target_months: 5 }, '2026-11-09') }
+        : { data: [FAC] };
+      await ctx.renderFacilitiesView().catch(() => {});
+      const bare = (box['stl-view-facilities'] || {}).innerHTML || '';
+      ok('an empty facility does not claim every load has been paid for',
+         !/Every load has been paid for/.test(bare), bare.slice(0, 200));
+      ok('it says no loads have been read yet', /No loads read from the sheet yet/.test(bare));
+
       ok('nothing renders an unresolved placeholder', !/\$\{/.test(html),
          'a ${...} in the output means a template literal was written as text');
 

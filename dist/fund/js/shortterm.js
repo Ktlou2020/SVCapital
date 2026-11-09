@@ -264,8 +264,8 @@ async function renderFacilitiesView() {
     return;
   }
   if (!list.length) {
-    el.innerHTML = `<div class="stl-card"><h3>No trading facilities</h3>
-      <p style="color:var(--stl-muted)">A facility is capital placed in an outside operation
+    el.innerHTML = `<div class="stl-card" style="padding:20px"><h3 style="margin-top:0;color:#fff">No trading facilities</h3>
+      <p style="color:rgba(255,255,255,.55)">A facility is capital placed in an outside operation
       where the return is a share of what it earns, rather than interest on a loan.</p></div>`;
     return;
   }
@@ -284,10 +284,10 @@ async function renderFacilitiesView() {
   const share = meta.our_share_pct ? (meta.our_share_pct * 100).toFixed(0) + '%' : '—';
 
   const card = (label, value, sub, colour) => `
-    <div class="stl-card" style="flex:1;min-width:190px">
-      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--stl-muted)">${label}</div>
-      <div style="font-size:24px;font-weight:800;margin:4px 0;color:${colour || 'inherit'}">${value}</div>
-      <div style="font-size:11px;color:var(--stl-muted)">${sub}</div>
+    <div class="stl-kpi" style="flex:1;min-width:190px">
+      <div class="stl-kpi-label">${label}</div>
+      <div class="stl-kpi-value" style="margin:4px 0${colour ? `;color:${colour}` : ''}">${value}</div>
+      <div class="stl-kpi-sub">${sub}</div>
     </div>`;
 
   const row = l => `<tr>
@@ -296,10 +296,10 @@ async function renderFacilitiesView() {
       <td>${_stlEsc(l.date_buyer_paid || '—')}</td>
       <td style="text-align:right">${stlfmt.num(l.tons)}</td>
       <td style="text-align:right;font-weight:800;color:#34d399">
-        ${l.settled ? stlfmt.zar(l.our_margin) : '<span style="color:var(--stl-muted);font-weight:500">not settled</span>'}
+        ${l.settled ? stlfmt.zar(l.our_margin) : '<span style="color:rgba(255,255,255,.45);font-weight:500">not settled</span>'}
       </td>
-      <td style="text-align:right;color:var(--stl-muted)">${stlfmt.zar(l.margin_total)}</td>
-      <td style="text-align:right;color:var(--stl-muted)">${l.pool_pct == null ? '—' : (l.pool_pct * 100).toFixed(1) + '%'}</td>
+      <td style="text-align:right;color:rgba(255,255,255,.55)">${stlfmt.zar(l.margin_total)}</td>
+      <td style="text-align:right;color:rgba(255,255,255,.55)">${l.pool_pct == null ? '—' : (l.pool_pct * 100).toFixed(1) + '%'}</td>
       <td>${_stlEsc(l.status || '—')}</td>
     </tr>`;
 
@@ -323,9 +323,9 @@ async function renderFacilitiesView() {
     ${_stlCoverage(cov, meta)}
 
     <div class="stl-card" style="margin-bottom:14px">
-      <h3 style="margin-top:0">Tons and timing</h3>
+      <h3 style="margin-top:0;color:#fff">Tons and timing</h3>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:14px">
-        ${_stlStat('Tons funded to date', stlfmt.num(s.tons_total) + ' t',
+        ${_stlStat('Tons funded to date', s.loads ? stlfmt.num(s.tons_total) + ' t' : '\u2014',
                `${stlfmt.num(s.tons_settled)} t settled &middot; ${stlfmt.num(s.tons_awaiting)} t still out`
                + (s.tons_missing_on_loads ? `<br><span style="color:#fec24f">${s.tons_missing_on_loads} load(s) have no tonnage on the sheet</span>` : ''))}
         ${_stlStat('Our margin per ton', stlfmt.zar(s.our_margin_per_ton),
@@ -337,14 +337,17 @@ async function renderFacilitiesView() {
         ${_stlStat('Our average per settled load', stlfmt.zar(s.our_avg_per_settled_load),
                `Across ${s.settled || 0} settled load(s)`)}
         ${_stlStat('Still awaiting payment', _stlDays(s.days_outstanding_unsettled),
+               /* "Every load has been paid for" is true of a facility whose
+                  loads have all settled and false of one with no loads at
+                  all, which is how it read on an empty facility. */
                s.oldest_unsettled
                  ? `Oldest is load <strong>${_stlEsc(s.oldest_unsettled.load_ref)}</strong>,
                     bought ${_stlEsc(s.oldest_unsettled.date_bought)} &mdash;
                     <strong>${s.oldest_unsettled.days} days</strong> ago`
-                 : 'Every load has been paid for')}
+                 : (s.loads ? 'Every load has been paid for' : 'No loads read from the sheet yet'))}
       </div>
       <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--stl-border)">
-        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--stl-muted);margin-bottom:8px">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:rgba(255,255,255,.55);margin-bottom:8px">
           The facility's own trading &mdash; not our money
         </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:14px">
@@ -362,8 +365,8 @@ async function renderFacilitiesView() {
     <div class="stl-card" style="margin-bottom:14px">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
         <div>
-          <h3 style="margin:0">${_stlEsc(meta.name || 'Facility')}</h3>
-          <div style="font-size:12px;color:var(--stl-muted)">
+          <h3 style="margin:0;color:#fff">${_stlEsc(meta.name || 'Facility')}</h3>
+          <div style="font-size:12px;color:rgba(255,255,255,.55)">
             Operated by ${_stlEsc(meta.partner_name || 'the partner')} &middot;
             read from their spreadsheet${meta.last_synced_at
               ? ' on ' + new Date(meta.last_synced_at).toLocaleString('en-ZA')
@@ -380,44 +383,44 @@ async function renderFacilitiesView() {
         </div>
       </div>
       ${meta.funded_from === 'short_term' ? `<div style="margin-top:10px;padding:10px 12px;border-radius:8px;
-          background:rgba(52,211,153,0.10);border-left:3px solid #34d399;font-size:12px;line-height:1.55">
+          background:rgba(52,211,153,0.10);border-left:3px solid #34d399;color:rgba(255,255,255,.82);font-size:12px;line-height:1.55">
           <strong>Funded from the short-term investment.</strong> The capital in this facility is
           short-term investors' money, so the margin above is what <em>backs</em> what they are
           paid. It is <strong>not</strong> fed into NAV or into any payout &mdash; those run on the
           product's contracted rate. Reconciling the two is a deliberate step, with that rate in hand.
         </div>` : ''}
       <div style="margin-top:10px;padding:10px 12px;border-radius:8px;background:rgba(237,165,255,0.08);
-                  border-left:3px solid #eda5ff;font-size:12px;line-height:1.55">
+                  border-left:3px solid #eda5ff;color:rgba(255,255,255,.82);font-size:12px;line-height:1.55">
         <strong>These figures come from a spreadsheet the operator maintains</strong>, not from
         this platform's ledger. Nothing here moves money, credits a wallet or feeds investor
         returns. The <strong>load cost and facility margin are NOT ours</strong> &mdash; our
         capital sits in the facility's account and earns ${share} of each load's Pool A margin.
       </div>
       ${(meta.warnings || []).length ? `<div style="margin-top:10px;padding:10px 12px;border-radius:8px;
-          background:rgba(254,194,79,0.10);border-left:3px solid #fec24f;font-size:12px">
+          background:rgba(254,194,79,0.10);border-left:3px solid #fec24f;color:rgba(255,255,255,.82);font-size:12px">
           <strong>The sheet's arithmetic did not tie on ${meta.warnings.length} load(s)</strong>
-          <div style="margin-top:4px;color:var(--stl-muted)">${meta.warnings.slice(0, 6).map(w => _stlEsc(w)).join('<br>')}</div>
+          <div style="margin-top:4px;color:rgba(255,255,255,.55)">${meta.warnings.slice(0, 6).map(w => _stlEsc(w)).join('<br>')}</div>
         </div>` : ''}
-      <div id="facilitySyncResult" style="margin-top:10px;font-size:12px"></div>
+      <div id="facilitySyncResult" style="margin-top:10px;font-size:12px;color:rgba(255,255,255,.7)"></div>
     </div>
 
     <div class="stl-card">
-      <h3 style="margin-top:0">Loads &mdash; our share</h3>
+      <h3 style="margin-top:0;color:#fff">Loads &mdash; our share</h3>
       <div style="overflow-x:auto">
-        <table class="stl-table" style="width:100%">
+        <table class="stl-table" style="width:100%;color:rgba(255,255,255,.85)">
           <thead><tr>
             <th>Load</th><th>Bought</th><th>Buyer paid</th>
             <th style="text-align:right">Tons</th>
             <th style="text-align:right">OUR SHARE</th>
-            <th style="text-align:right;color:var(--stl-muted)">Facility margin<br><span style="font-weight:400;font-size:10px">(not ours)</span></th>
-            <th style="text-align:right;color:var(--stl-muted)">Pool A %</th>
+            <th style="text-align:right;color:rgba(255,255,255,.55)">Facility margin<br><span style="font-weight:400;font-size:10px;color:rgba(255,255,255,.45)">(not ours)</span></th>
+            <th style="text-align:right;color:rgba(255,255,255,.55)">Pool A %</th>
             <th>Status</th>
           </tr></thead>
           <tbody>${loads.map(row).join('')}</tbody>
           <tfoot><tr style="border-top:2px solid var(--stl-border);font-weight:800">
             <td colspan="4">${s.settled || 0} settled of ${s.loads || 0}</td>
             <td style="text-align:right;color:#34d399">${stlfmt.zar(s.our_margin_earned)}</td>
-            <td style="text-align:right;color:var(--stl-muted)">${stlfmt.zar(s.facility_margin_settled)}</td>
+            <td style="text-align:right;color:rgba(255,255,255,.55)">${stlfmt.zar(s.facility_margin_settled)}</td>
             <td colspan="2"></td>
           </tr></tfoot>
         </table>
@@ -447,7 +450,39 @@ async function syncFacility(id, apply) {
   if (out) {
     out.innerHTML = r.applied
       ? `<span style="color:#34d399"><i class="fa-solid fa-check"></i> Re-read: ${_stlEsc(what)}.</span>`
-      : `<span style="color:var(--stl-muted)"><i class="fa-solid fa-eye"></i> A re-read would change:
+      : `<span style="color:rgba(255,255,255,.55)"><i class="fa-solid fa-eye"></i> A re-read would change:
+         ${_stlEsc(what)}. <strong>Nothing has been written.</strong></span>`
+       + ((r.warnings || []).length ? `<div style="margin-top:6px;color:#fec24f">${r.warnings.slice(0,6).map(w=>_stlEsc(w)).join('<br>')}</div>` : '');
+  }
+  if (r.applied) await renderFacilitiesView();
+}
+
+/* One stat tile. Top level because two renderers use it, and a local const
+   would be out of scope in the second — a ReferenceError the moment that
+   panel renders, which a syntax check cannot see. */
+/* Previews first. What a re-read writes is what this console then reports, so
+   it says what would change before it changes it. */
+async function syncFacility(id, apply) {
+  const out = document.getElementById('facilitySyncResult');
+  if (out) out.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Reading the sheet…`;
+  let r;
+  try {
+    r = await stlPost(`fund/facilities/${encodeURIComponent(id)}/sync`, { apply: apply ? 'true' : 'false' });
+  } catch (e) {
+    if (out) out.innerHTML = `<span style="color:#f87171">${_stlEsc(e.message)}</span>`;
+    return;
+  }
+  const c = r.counts || {};
+  const bits = [];
+  if (c.added)          bits.push(`${c.added} new load(s)`);
+  if (c.newly_settled)  bits.push(`${c.newly_settled} newly settled`);
+  if (c.changed)        bits.push(`${c.changed} changed`);
+  if (c.no_longer_in_sheet) bits.push(`${c.no_longer_in_sheet} no longer in the sheet (kept, not deleted)`);
+  const what = bits.length ? bits.join(', ') : 'nothing to change';
+  if (out) {
+    out.innerHTML = r.applied
+      ? `<span style="color:#34d399"><i class="fa-solid fa-check"></i> Re-read: ${_stlEsc(what)}.</span>`
+      : `<span style="color:rgba(255,255,255,.55)"><i class="fa-solid fa-eye"></i> A re-read would change:
          ${_stlEsc(what)}. <strong>Nothing has been written.</strong></span>`
        + ((r.warnings || []).length ? `<div style="margin-top:6px;color:#fec24f">${r.warnings.slice(0,6).map(w=>_stlEsc(w)).join('<br>')}</div>` : '');
   }
@@ -458,10 +493,17 @@ async function syncFacility(id, apply) {
    would be out of scope in the second — a ReferenceError the moment that
    panel renders, which a syntax check cannot see. */
 function _stlStat(label, value, sub) {
+  /* The console's own label/value/sub classes rather than inline styles.
+     The first version styled these by hand and reached for rgba(255,255,255,.55),
+     which this stylesheet does not define — an undefined custom property with
+     no fallback makes the whole declaration invalid, so the colour was
+     dropped. Nothing sets a text colour on body or .stl-card either, so the
+     text fell back to the browser default: black, on a #111827 card. The
+     panel rendered perfectly and could not be read. */
   return `<div>
-      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--stl-muted)">${label}</div>
-      <div style="font-size:19px;font-weight:800;margin:2px 0">${value}</div>
-      <div style="font-size:11px;color:var(--stl-muted);line-height:1.5">${sub}</div>
+      <div class="stl-kpi-label">${label}</div>
+      <div class="stl-kpi-value" style="font-size:19px">${value}</div>
+      <div class="stl-kpi-sub" style="line-height:1.5">${sub}</div>
     </div>`;
 }
 
@@ -480,8 +522,8 @@ function _stlStat(label, value, sub) {
 function _stlCoverage(c, meta) {
   if (!c || !c.known) {
     return `<div class="stl-card" style="margin-bottom:14px">
-      <h3 style="margin-top:0">Against the target</h3>
-      <div style="font-size:12px;color:var(--stl-muted)">
+      <h3 style="margin-top:0;color:#fff">Against the target</h3>
+      <div style="font-size:12px;color:rgba(255,255,255,.55)">
         Not worked out yet &mdash; ${(c && c.missing || []).map(m => _stlEsc(m)).join(', ') || 'no target set'}.
       </div></div>`;
   }
@@ -489,8 +531,8 @@ function _stlCoverage(c, meta) {
   const pct = n => (n * 100).toFixed(1) + '%';
   return `<div class="stl-card" style="margin-bottom:14px;border-left:3px solid ${ahead ? '#34d399' : '#f87171'}">
     <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">
-      <h3 style="margin:0">Against the target</h3>
-      <div style="font-size:12px;color:var(--stl-muted)">
+      <h3 style="margin:0;color:#fff">Against the target</h3>
+      <div style="font-size:12px;color:rgba(255,255,255,.55)">
         ${pct(c.target_rate)} over ${c.target_months} months on
         ${stlfmt.zar(c.on_capital)} &middot; ${_stlEsc(c.period_start)} to ${_stlEsc(c.period_end)}
       </div>
@@ -509,7 +551,7 @@ function _stlCoverage(c, meta) {
     </div>
     <div style="margin-top:12px;padding:10px 12px;border-radius:8px;
                 background:${ahead ? 'rgba(52,211,153,0.10)' : 'rgba(248,113,113,0.10)'};
-                font-size:12px;line-height:1.55">
+                color:rgba(255,255,255,.85);font-size:12px;line-height:1.55">
       ${c.cover_full_period >= 1
         ? `<strong>The whole ${c.target_months}-month target is already earned.</strong>
            ${stlfmt.zar(c.earned)} against ${stlfmt.zar(c.target_full_period)} &mdash;
@@ -518,7 +560,7 @@ function _stlCoverage(c, meta) {
            earned so far</strong>, in ${c.days_elapsed} of ${c.period_days} days.`}
       ${c.period_complete ? ' The period has ended.' : ''}
     </div>
-    <div style="margin-top:8px;font-size:11px;color:var(--stl-muted);line-height:1.55">
+    <div style="margin-top:8px;font-size:11px;color:rgba(255,255,255,.55);line-height:1.55">
       A <strong>target</strong>, not a liability: being behind it is something to act on, not a
       debt this facility owes. And this is cover on the <strong>${stlfmt.zar(c.on_capital)} placed in
       this facility</strong> &mdash; not on the short-term book, which is larger and deployed
