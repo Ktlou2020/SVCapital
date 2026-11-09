@@ -5660,6 +5660,36 @@ async function autoSetup() {
       if (rowCount) console.log('\u2705 Announced the FICA decline hold.');
     });
 
+    await step("36. Correct how an app fix actually reaches a phone", async () => {
+      /* The app-document-fixes notice told staff the fixes "arrive on next
+         launch" because the service-worker cache was bumped. That is true of
+         the WEB PORTAL and false of the PACKAGED APP, and the difference
+         matters when a client reports a fix that has not reached them.
+
+         capacitor.config.json carries no server.url, so the app runs assets
+         bundled into its binary at build time, and no live-update plugin is
+         configured. A Railway deploy, and a service-worker bump with it,
+         changes nothing on an installed app: the only route is a new build
+         and a store release.
+
+         Step 19's notices insert ON CONFLICT DO NOTHING by design, so editing
+         the text there reaches a brand-new database and nowhere else. Matched
+         on the exact sentence, so a notice somebody has reworded keeps their
+         wording and a second run finds nothing to do. */
+      const { rowCount } = await pool.query(`
+        UPDATE feature_announcements
+           SET where_to_find = replace(where_to_find,
+                 'Clients need the new build \u2014 the service-worker cache is bumped, so it '
+                 || 'arrives on next launch.',
+                 'THE WEB PORTAL HAS THESE NOW. The packaged app does NOT: it runs assets '
+                 || 'bundled into the binary, there is no live update, and a deploy cannot '
+                 || 'change an installed app \u2014 these reach a phone only in a new app build '
+                 || 'and store release. A client still seeing one of these is on the old build.')
+         WHERE id = 'app-document-fixes-2026-11'
+           AND where_to_find LIKE '%service-worker cache is bumped%'`);
+      if (rowCount) console.log('   \u2713 app-document-fixes notice corrected');
+    });
+
     await step("35. Register the Grain Co maize facility", async () => {
       /* The first external trading facility. Our capital sits in Grain Co's
          account and earns 40% of each load's Pool A margin; the loads
