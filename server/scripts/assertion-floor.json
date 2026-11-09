@@ -1,6 +1,6 @@
 {
   "note": "What each check asserted when this was last written. run-checks refuses a check that asserts fewer. Raise it with node server/scripts/run-checks.cjs --update-floor",
-  "total": 8793,
+  "total": 8798,
   "checks": {
     "check-apply-android.cjs": 20,
     "check-shared-api.cjs": 22,
@@ -218,7 +218,7 @@
     "check-table-default-sort.cjs": 5,
     "check-tax-year-options.cjs": 39,
     "check-track-record-rates.cjs": 27,
-    "check-trading-facility.cjs": 143,
+    "check-trading-facility.cjs": 148,
     "check-transaction-actor.cjs": 17,
     "check-transaction-reference-search.cjs": 40,
     "check-uploaded-file-type.cjs": 47,

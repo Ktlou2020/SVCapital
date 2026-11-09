@@ -284,7 +284,7 @@ async function renderFacilitiesView() {
   const share = meta.our_share_pct ? (meta.our_share_pct * 100).toFixed(0) + '%' : '—';
 
   const card = (label, value, sub, colour) => `
-    <div class="stl-kpi" style="flex:1;min-width:190px">
+    <div class="stl-kpi">
       <div class="stl-kpi-label">${label}</div>
       <div class="stl-kpi-value" style="margin:4px 0${colour ? `;color:${colour}` : ''}">${value}</div>
       <div class="stl-kpi-sub">${sub}</div>
@@ -304,7 +304,11 @@ async function renderFacilitiesView() {
     </tr>`;
 
   el.innerHTML = `
-    <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px">
+    <!-- A grid, not a flex row. With flex:1 and a min-width the fourth tile
+         dropped to a line of its own the moment the content got wide, which
+         is how it looked on a real screen. Four across, two on a narrow one,
+         and never an orphan. -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));gap:14px;margin-bottom:16px">
       ${card('Our capital in the facility', stlfmt.zar(s.our_capital),
              `${_stlEsc(meta.our_name || 'SV Capital')} &middot; ${share} of Pool A margin`)}
       ${card('Our margin earned', stlfmt.zar(s.our_margin_earned),
@@ -322,9 +326,12 @@ async function renderFacilitiesView() {
          read as settled fact. -->
     ${_stlCoverage(cov, meta)}
 
-    <div class="stl-card" style="margin-bottom:14px">
-      <h3 style="margin-top:0;color:#fff">Tons and timing</h3>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:14px">
+    <div class="stl-card">
+      <div class="stl-card-hd"><div class="stl-card-title">Tons and timing</div></div>
+      <div class="stl-card-body">
+      <!-- Three across, because there are six tiles: four across left two
+           orphaned on a second row beside a gap the width of the card. -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(360px,100%),1fr));gap:18px">
         ${_stlStat('Tons funded to date', s.loads ? stlfmt.num(s.tons_total) + ' t' : '\u2014',
                `${stlfmt.num(s.tons_settled)} t settled &middot; ${stlfmt.num(s.tons_awaiting)} t still out`
                + (s.tons_missing_on_loads ? `<br><span style="color:#fec24f">${s.tons_missing_on_loads} load(s) have no tonnage on the sheet</span>` : ''))}
@@ -346,11 +353,11 @@ async function renderFacilitiesView() {
                     <strong>${s.oldest_unsettled.days} days</strong> ago`
                  : (s.loads ? 'Every load has been paid for' : 'No loads read from the sheet yet'))}
       </div>
-      <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--stl-border)">
-        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:rgba(255,255,255,.55);margin-bottom:8px">
+      <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--stl-border)">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:rgba(255,255,255,.45);margin-bottom:10px">
           The facility's own trading &mdash; not our money
         </div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:14px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(360px,100%),1fr));gap:18px">
           ${_stlStat('Maize bought, settled loads', stlfmt.zar(s.facility_cost_settled),
                  `${stlfmt.zar(s.facility_cost_total)} across all ${s.loads || 0} loads`)}
           ${_stlStat('Gross trading margin', s.facility_margin_on_cost == null ? '—'
@@ -360,13 +367,14 @@ async function renderFacilitiesView() {
                  'The facility\u2019s exposure on one trade, not ours')}
         </div>
       </div>
+      </div>
     </div>
 
-    <div class="stl-card" style="margin-bottom:14px">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+    <div class="stl-card">
+      <div class="stl-card-hd">
         <div>
-          <h3 style="margin:0;color:#fff">${_stlEsc(meta.name || 'Facility')}</h3>
-          <div style="font-size:12px;color:rgba(255,255,255,.55)">
+          <div class="stl-card-title">${_stlEsc(meta.name || 'Facility')}</div>
+          <div style="font-size:12px;color:rgba(255,255,255,.55);margin-top:3px">
             Operated by ${_stlEsc(meta.partner_name || 'the partner')} &middot;
             read from their spreadsheet${meta.last_synced_at
               ? ' on ' + new Date(meta.last_synced_at).toLocaleString('en-ZA')
@@ -382,7 +390,8 @@ async function renderFacilitiesView() {
           </button>
         </div>
       </div>
-      ${meta.funded_from === 'short_term' ? `<div style="margin-top:10px;padding:10px 12px;border-radius:8px;
+      <div class="stl-card-body">
+      ${meta.funded_from === 'short_term' ? `<div style="padding:10px 12px;border-radius:8px;
           background:rgba(52,211,153,0.10);border-left:3px solid #34d399;color:rgba(255,255,255,.82);font-size:12px;line-height:1.55">
           <strong>Funded from the short-term investment.</strong> The capital in this facility is
           short-term investors' money, so the margin above is what <em>backs</em> what they are
@@ -402,10 +411,14 @@ async function renderFacilitiesView() {
           <div style="margin-top:4px;color:rgba(255,255,255,.55)">${meta.warnings.slice(0, 6).map(w => _stlEsc(w)).join('<br>')}</div>
         </div>` : ''}
       <div id="facilitySyncResult" style="margin-top:10px;font-size:12px;color:rgba(255,255,255,.7)"></div>
+      </div>
     </div>
 
     <div class="stl-card">
-      <h3 style="margin-top:0;color:#fff">Loads &mdash; our share</h3>
+      <div class="stl-card-hd"><div class="stl-card-title">Loads &mdash; our share</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.45)">${s.settled || 0} of ${s.loads || 0} settled</div>
+      </div>
+      <div class="stl-card-body">
       <div style="overflow-x:auto">
         <table class="stl-table" style="width:100%;color:rgba(255,255,255,.85)">
           <thead><tr>
@@ -424,6 +437,7 @@ async function renderFacilitiesView() {
             <td colspan="2"></td>
           </tr></tfoot>
         </table>
+      </div>
       </div>
     </div>`;
 }
@@ -529,15 +543,20 @@ function _stlCoverage(c, meta) {
   }
   const ahead = c.shortfall === 0;
   const pct = n => (n * 100).toFixed(1) + '%';
-  return `<div class="stl-card" style="margin-bottom:14px;border-left:3px solid ${ahead ? '#34d399' : '#f87171'}">
-    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">
-      <h3 style="margin:0;color:#fff">Against the target</h3>
-      <div style="font-size:12px;color:rgba(255,255,255,.55)">
+  /* .stl-card-hd and .stl-card-body, because .stl-card itself carries no
+     padding — it is background, border and overflow:hidden only. Content put
+     straight into it sits flush against the edges and the last line is
+     clipped, which is how this read on a real screen. */
+  return `<div class="stl-card" style="border-left:3px solid ${ahead ? '#34d399' : '#f87171'}">
+    <div class="stl-card-hd">
+      <div class="stl-card-title">Against the target</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.55);text-align:right">
         ${pct(c.target_rate)} over ${c.target_months} months on
-        ${stlfmt.zar(c.on_capital)} &middot; ${_stlEsc(c.period_start)} to ${_stlEsc(c.period_end)}
+        ${stlfmt.zar(c.on_capital)}<br>${_stlEsc(c.period_start)} to ${_stlEsc(c.period_end)}
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-top:12px">
+    <div class="stl-card-body">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));gap:16px">
       ${_stlStat('Target, whole period', stlfmt.zar(c.target_full_period),
              `${c.period_days} days from when our capital went in`)}
       ${_stlStat('Target so far', stlfmt.zar(c.target_to_date),
@@ -560,11 +579,12 @@ function _stlCoverage(c, meta) {
            earned so far</strong>, in ${c.days_elapsed} of ${c.period_days} days.`}
       ${c.period_complete ? ' The period has ended.' : ''}
     </div>
-    <div style="margin-top:8px;font-size:11px;color:rgba(255,255,255,.55);line-height:1.55">
+    <div style="margin-top:10px;font-size:11px;color:rgba(255,255,255,.55);line-height:1.6">
       A <strong>target</strong>, not a liability: being behind it is something to act on, not a
       debt this facility owes. And this is cover on the <strong>${stlfmt.zar(c.on_capital)} placed in
       this facility</strong> &mdash; not on the short-term book, which is larger and deployed
       elsewhere too.
+    </div>
     </div>
   </div>`;
 }

@@ -309,6 +309,15 @@ const CAPITAL_HTML = `<html><body><table>
       ok('a load that vanishes from the sheet is reported, never deleted',
          /no_longer_in_sheet/.test(SYNC0) && !/DELETE FROM stl_facility_loads/.test(SYNC0),
          'a row disappearing from somebody else’s spreadsheet is not authority to drop ours');
+      /* Stored and then dropped on the way out, so summarise() could not
+         work out the lag from the buyer paying to Pool A being paid and the
+         tile read "Nothing to measure yet" on a facility with six loads to
+         measure. A column fetched and left out of the response is an empty
+         metric wearing the face of an honest absence. */
+      ok('every date the summary needs is returned by the route',
+         /payout_date: r\.payout_date/.test(ROUTE) && /date_buyer_paid: r\.date_buyer_paid/.test(ROUTE)
+         && /date_bought: r\.date_bought/.test(ROUTE),
+         'summarise() measures buyer-paid to payout, and cannot without it');
       ok('nothing here credits a wallet or touches investor returns',
          !/wallet_balance/.test(ROUTE) && !/recordTransaction/.test(ROUTE)
          && !/investor_allocations/.test(ROUTE));
@@ -834,6 +843,28 @@ const CAPITAL_HTML = `<html><body><table>
       ok('an empty facility does not claim every load has been paid for',
          !/Every load has been paid for/.test(bare), bare.slice(0, 200));
       ok('it says no loads have been read yet', /No loads read from the sheet yet/.test(bare));
+
+      /* THE CARD HAS NO PADDING OF ITS OWN. .stl-card is background, border,
+         radius and overflow:hidden; the padding lives on .stl-card-hd and
+         .stl-card-body. Content put straight into it sits flush against the
+         edges and the last line is clipped away — which is how every panel
+         here read on a real screen. */
+      ok('every panel puts its content in a padded body',
+         (html.match(/stl-card-body/g) || []).length
+           === (html.match(/class="stl-card"/g) || []).length,
+         `${(html.match(/stl-card-body/g) || []).length} bodies for `
+         + `${(html.match(/class="stl-card"/g) || []).length} cards`);
+      ok('and its heading in the card header, not a bare h3',
+         (html.match(/stl-card-title/g) || []).length >= 4 && !/<h3/.test(html),
+         'an h3 here has no font-family or colour to inherit either');
+      /* A flex row of four tiles with flex:1 drops the fourth onto a line of
+         its own as soon as the content is wide. A grid does not. */
+      ok('the headline tiles are laid out as a grid',
+         /display:grid;grid-template-columns:repeat\(auto-fit,minmax\(min\(240px/.test(html),
+         'flex:1 with a min-width wrapped four tiles as three and an orphan');
+      ok('and the six-tile panels ask for three columns, not four',
+         (html.match(/minmax\(min\(360px,100%\),1fr\)/g) || []).length >= 2,
+         'four across leaves two orphaned beside a gap the width of the card');
 
       ok('nothing renders an unresolved placeholder', !/\$\{/.test(html),
          'a ${...} in the output means a template literal was written as text');

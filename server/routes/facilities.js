@@ -54,6 +54,12 @@ router.get('/facilities/:id/loads', requireAuth, requireRole(...STAFF), async (r
       load_ref: r.load_ref,
       date_bought: r.date_bought ? r.date_bought.toISOString().slice(0, 10) : null,
       date_buyer_paid: r.date_buyer_paid ? r.date_buyer_paid.toISOString().slice(0, 10) : null,
+      /* Stored, and until now dropped here — so summarise() could not work
+         out the lag from the buyer paying to Pool A being paid, and the tile
+         read "Nothing to measure yet" on a facility that had six loads to
+         measure. A column fetched and then left out of the response is an
+         empty metric that looks like an honest absence. */
+      payout_date: r.payout_date ? r.payout_date.toISOString().slice(0, 10) : null,
       tons: r.tons === null ? null : Number(r.tons),
       load_cost: r.load_cost === null ? null : Number(r.load_cost),
       margin_total: r.margin_total === null ? null : Number(r.margin_total),
