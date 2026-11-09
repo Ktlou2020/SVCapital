@@ -267,34 +267,135 @@ function parseCapital(html, { ourName }) {
   return { deposits, capital };
 }
 
+/* ── Days between two of the sheet's dates ───────────────────────────
+   The zone is written out rather than left to the parser. A date-only
+   'YYYY-MM-DD' is UTC by specification, so this is belt and braces for that
+   form — but the moment anybody appends a time to one of these columns, an
+   unzoned 'YYYY-MM-DDTHH:MM' is parsed as LOCAL, and on a server two hours
+   off the business day a difference of whole days comes out wrong by one.
+   These are calendar days with no time in them and are compared as such. */
+function daysBetween(fromIso, toIso) {
+  if (!fromIso || !toIso) return null;
+  const a = Date.parse(fromIso + 'T00:00:00Z');
+  const b = Date.parse(toIso + 'T00:00:00Z');
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+  return Math.round((b - a) / 86400000);
+}
+
+/* A mean, with the count it is a mean OF. An average over two loads is not an
+   average, and a figure on a fund screen that does not say what it is drawn
+   from invites being read as settled fact. */
+function mean(values) {
+  const v = values.filter(x => Number.isFinite(x));
+  if (!v.length) return { value: null, n: 0, min: null, max: null };
+  const total = v.reduce((t, x) => t + x, 0);
+  return {
+    value: Math.round((total / v.length) * 10) / 10,
+    n: v.length,
+    min: Math.min(...v),
+    max: Math.max(...v),
+  };
+}
+
 /* ── What the report says ────────────────────────────────────────────
-   Totals over OUR share only. Settled and unsettled are counted apart
-   because a facility whose loads have not been paid for yet has earned
-   nothing, and one number covering both would say otherwise. */
-function summarise(loads, capital) {
+   Totals over OUR share only, with the facility's own figures kept apart and
+   labelled. Settled and unsettled are counted apart because a facility whose
+   loads have not been paid for yet has earned nothing on them, and one number
+   covering both would say otherwise.
+
+   Every average carries the number of loads behind it, and every total that
+   could be understated by a missing cell says how many were missing. A
+   spreadsheet has blanks; a report that quietly treats a blank as nought is
+   how a figure gets smaller than the truth and nobody notices.
+
+   `asAt` is the day "outstanding for N days" is counted from. Passed in
+   rather than read off the clock so the same loads always produce the same
+   report, and so a test can state the day it is asking about. */
+function summarise(loads, capital, asAt) {
+  const today = asAt || new Date().toISOString().slice(0, 10);
   const settled = loads.filter(l => l.settled);
-  const earned = settled.reduce((t, l) => t + (l.our_margin || 0), 0);
   const awaiting = loads.filter(l => !l.settled);
+  const earned = settled.reduce((t, l) => t + (l.our_margin || 0), 0);
+  const r2 = n => Math.round(n * 100) / 100;
+
+  /* Tons. Counted across every load, because tons are funded when the load is
+     bought and not when the buyer pays. The loads with no tons recorded are
+     counted so the total is never read as complete when it is not. */
+  const tonsOf = ls => ls.reduce((t, l) => t + (Number.isFinite(l.tons) ? l.tons : 0), 0);
+  const tonsTotal = tonsOf(loads);
+  const tonsSettled = tonsOf(settled);
+  const tonsMissing = loads.filter(l => !Number.isFinite(l.tons)).length;
+
+  /* How long the buyer takes to pay — the facility's real working-capital
+     cycle, and the figure that says how long our money is tied up in a load.
+
+     Over EVERY load the buyer has paid for, not only the ones whose margin
+     has been split. The repayment period is a fact about the trade; if the
+     sheet has recorded the payment and not yet worked out our share, that
+     load's period is still known and leaving it out would bias the average
+     towards whatever the bookkeeping has caught up on. Loads with no payment
+     date yield null and mean() drops them. */
+  const toPayment = mean(loads.map(l => daysBetween(l.date_bought, l.date_buyer_paid)));
+  /* And how long after the buyer pays before Pool A is paid out. */
+  const toPayout = mean(settled.map(l => daysBetween(l.date_buyer_paid, l.payout_date)));
+  /* Aging on what has NOT been paid for. The oldest unsettled load is the
+     one worth asking about, so it is reported rather than averaged away. */
+  const outstanding = mean(awaiting.map(l => daysBetween(l.date_bought, today)));
+
+  const costSettled = settled.reduce((t, l) => t + (l.load_cost || 0), 0);
+  const costTotal = loads.reduce((t, l) => t + (l.load_cost || 0), 0);
+  const facilityMarginSettled = settled.reduce((t, l) => t + (l.margin_total || 0), 0);
+
   return {
     loads: loads.length,
     settled: settled.length,
     awaiting_settlement: awaiting.length,
-    our_margin_earned: Math.round(earned * 100) / 100,
-    /* The facility's gross margin is NOT our money and is reported as
-       context only, clearly labelled, because it is the figure somebody
-       would otherwise read as a return. */
-    facility_margin_settled: Math.round(
-      settled.reduce((t, l) => t + (l.margin_total || 0), 0) * 100) / 100,
+
+    /* ── Ours ── */
+    our_margin_earned: r2(earned),
     our_capital: capital,
-    /* Return on our capital, only where capital is known. Not annualised:
-       the facility is weeks old and an annualised figure off three weeks of
-       trading is a projection dressed as a measurement. */
-    return_on_capital: (capital && capital > 0)
-      ? Math.round((earned / capital) * 10000) / 10000 : null,
-    first_load: loads.reduce((m, l) => (!m || l.date_bought < m) ? l.date_bought : m, null),
-    last_load: loads.reduce((m, l) => (!m || l.date_bought > m) ? l.date_bought : m, null),
+    /* Not annualised. The facility is weeks old and an annualised figure off
+       three weeks of trading is a projection dressed as a measurement. */
+    return_on_capital: (capital && capital > 0) ? Math.round((earned / capital) * 10000) / 10000 : null,
+    our_margin_per_ton: tonsSettled > 0 ? r2(earned / tonsSettled) : null,
+    our_avg_per_settled_load: settled.length ? r2(earned / settled.length) : null,
+
+    /* ── Tons funded ── */
+    tons_total: Math.round(tonsTotal * 10) / 10,
+    tons_settled: Math.round(tonsSettled * 10) / 10,
+    tons_awaiting: Math.round((tonsTotal - tonsSettled) * 10) / 10,
+    tons_missing_on_loads: tonsMissing,
+
+    /* ── How long the money is out ── */
+    days_to_buyer_payment: toPayment,
+    days_buyer_paid_to_payout: toPayout,
+    days_outstanding_unsettled: outstanding,
+    oldest_unsettled: awaiting.length
+      ? awaiting.reduce((worst, l) => {
+          const d = daysBetween(l.date_bought, today);
+          return (worst === null || (Number.isFinite(d) && d > worst.days))
+            ? { load_ref: l.load_ref, date_bought: l.date_bought, days: d } : worst;
+        }, null)
+      : null,
+
+    /* ── The facility's own, kept apart and labelled ── */
+    facility_margin_settled: r2(facilityMarginSettled),
+    facility_cost_settled: r2(costSettled),
+    facility_cost_total: r2(costTotal),
+    /* Gross trading margin on cost. The facility's, not a return on our
+       capital — the two differ by more than tenfold and conflating them is
+       the single most misleading thing this report could do. */
+    facility_margin_on_cost: costSettled > 0
+      ? Math.round((facilityMarginSettled / costSettled) * 10000) / 10000 : null,
+    largest_load_cost: loads.length
+      ? r2(loads.reduce((m, l) => Math.max(m, l.load_cost || 0), 0)) : null,
+
+    first_load: loads.reduce((m, l) => (!m || (l.date_bought && l.date_bought < m)) ? (l.date_bought || m) : m, null),
+    last_load: loads.reduce((m, l) => (!m || (l.date_bought && l.date_bought > m)) ? (l.date_bought || m) : m, null),
+    as_at: today,
   };
 }
 
 module.exports = { cellsOf, money, pct, isoDate, headerIndex, columnMap,
-                   parseLoads, parseCapital, summarise, SHARE_TOLERANCE };
+                   parseLoads, parseCapital, summarise, daysBetween, mean,
+                   SHARE_TOLERANCE };

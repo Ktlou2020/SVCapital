@@ -487,6 +487,12 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
   const { startPaystackReconcileCron } = require('./jobs/paystackReconcileCron');
   startPaystackReconcileCron();
 
+  /* Trading facility sheets, re-read so the fund console is not stale by
+     default. A report nobody refreshed is not neutral — it is wrong, and
+     wrong in the direction of looking finished. */
+  const { startFacilitySyncCron } = require('./jobs/facilitySyncCron');
+  startFacilitySyncCron();
+
   /* Last, and watching the rest: every job above writes a heartbeat, and
      this is what notices when one stops writing them. */
   const { startHeartbeatCron } = require('./jobs/heartbeatCron');

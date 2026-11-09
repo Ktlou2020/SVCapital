@@ -282,6 +282,13 @@ async function renderFacilitiesView() {
   const meta = payload.facility || {};
   const share = meta.our_share_pct ? (meta.our_share_pct * 100).toFixed(0) + '%' : '—';
 
+  const stat = (label, value, sub) => `
+    <div>
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--stl-muted)">${label}</div>
+      <div style="font-size:19px;font-weight:800;margin:2px 0">${value}</div>
+      <div style="font-size:11px;color:var(--stl-muted);line-height:1.5">${sub}</div>
+    </div>`;
+
   const card = (label, value, sub, colour) => `
     <div class="stl-card" style="flex:1;min-width:190px">
       <div style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--stl-muted)">${label}</div>
@@ -315,6 +322,47 @@ async function renderFacilitiesView() {
              `${s.awaiting_settlement || 0} awaiting buyer payment`)}
     </div>
 
+    <!-- The facility's operating shape. Every average carries the number of
+         loads behind it: an average over two loads is not an average, and a
+         figure on a fund screen that does not say what it is drawn from gets
+         read as settled fact. -->
+    <div class="stl-card" style="margin-bottom:14px">
+      <h3 style="margin-top:0">Tons and timing</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:14px">
+        ${stat('Tons funded to date', fmt.num(s.tons_total) + ' t',
+               `${fmt.num(s.tons_settled)} t settled &middot; ${fmt.num(s.tons_awaiting)} t still out`
+               + (s.tons_missing_on_loads ? `<br><span style="color:#fec24f">${s.tons_missing_on_loads} load(s) have no tonnage on the sheet</span>` : ''))}
+        ${stat('Our margin per ton', fmt.zar(s.our_margin_per_ton),
+               'Over settled tons only')}
+        ${stat('Average buyer repayment period', _stlDays(s.days_to_buyer_payment),
+               _stlRange(s.days_to_buyer_payment, 'from purchase to the buyer paying'))}
+        ${stat('Buyer paid &rarr; Pool A paid out', _stlDays(s.days_buyer_paid_to_payout),
+               _stlRange(s.days_buyer_paid_to_payout, 'before our cut is paid'))}
+        ${stat('Our average per settled load', fmt.zar(s.our_avg_per_settled_load),
+               `Across ${s.settled || 0} settled load(s)`)}
+        ${stat('Still awaiting payment', _stlDays(s.days_outstanding_unsettled),
+               s.oldest_unsettled
+                 ? `Oldest is load <strong>${_stlEsc(s.oldest_unsettled.load_ref)}</strong>,
+                    bought ${_stlEsc(s.oldest_unsettled.date_bought)} &mdash;
+                    <strong>${s.oldest_unsettled.days} days</strong> ago`
+                 : 'Every load has been paid for')}
+      </div>
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--stl-border)">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--stl-muted);margin-bottom:8px">
+          The facility's own trading &mdash; not our money
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:14px">
+          ${stat('Maize bought, settled loads', fmt.zar(s.facility_cost_settled),
+                 `${fmt.zar(s.facility_cost_total)} across all ${s.loads || 0} loads`)}
+          ${stat('Gross trading margin', s.facility_margin_on_cost == null ? '—'
+                   : (s.facility_margin_on_cost * 100).toFixed(2) + '%',
+                 'Facility margin on what it paid for the maize. <strong>Not</strong> a return on our capital.')}
+          ${stat('Largest single load', fmt.zar(s.largest_load_cost),
+                 'The facility\u2019s exposure on one trade, not ours')}
+        </div>
+      </div>
+    </div>
+
     <div class="stl-card" style="margin-bottom:14px">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
         <div>
@@ -323,7 +371,7 @@ async function renderFacilitiesView() {
             Operated by ${_stlEsc(meta.partner_name || 'the partner')} &middot;
             read from their spreadsheet${meta.last_synced_at
               ? ' on ' + new Date(meta.last_synced_at).toLocaleString('en-ZA')
-              : ' &mdash; never yet'}
+              : ' &mdash; never yet'}, and re-read on its own every 6 hours
           </div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -408,6 +456,19 @@ async function syncFacility(id, apply) {
        + ((r.warnings || []).length ? `<div style="margin-top:6px;color:#fec24f">${r.warnings.slice(0,6).map(w=>_stlEsc(w)).join('<br>')}</div>` : '');
   }
   if (r.applied) await renderFacilitiesView();
+}
+
+/* A mean of days, or a dash. Never "0 days" when there is nothing to
+   average: an empty average reads as instant payment. */
+function _stlDays(m) {
+  if (!m || m.value == null || !m.n) return '—';
+  return m.value + (m.value === 1 ? ' day' : ' days');
+}
+/* What the average is drawn from, which is the part that makes it honest. */
+function _stlRange(m, what) {
+  if (!m || m.value == null || !m.n) return 'Nothing to measure yet';
+  const spread = (m.min === m.max) ? `all ${m.min}` : `${m.min}–${m.max}`;
+  return `Over ${m.n} load${m.n === 1 ? '' : 's'} ${what} &middot; range ${spread} days`;
 }
 
 function _stlEsc(v) {

@@ -107,11 +107,20 @@ const LOADS_HTML = `<html><head><style>
     <td class="s9">22.1%</td><td class="s9">77.9%</td><td class="s9">R 2,000.00</td>
     <td class="s9">R 1,200.00</td><td class="s9">R 950.00</td><td class="s9">R 7,000.00</td>
     <td class="s9">Paid</td></tr>
+<!-- buyer HAS paid, and the sheet has not worked out our share yet. Its
+     repayment period is a known fact; our earnings on it are not. -->
+<tr><td>8b</td><td class="s9">5</td><td class="s9">07 Nov 2026</td><td></td><td class="s9">20.0</td>
+    <td class="s9">R 3,800</td><td class="s9">R 3,300</td><td class="s9">R 3,500</td>
+    <td class="s9">09 Nov 2026</td><td class="s9"></td><td class="s9">R 60,000</td>
+    <td class="s9">R 4,000</td><td class="s9">R 141,990</td><td class="s9">R 500,000</td>
+    <td class="s9">22.1%</td><td class="s9">77.9%</td><td class="s9">R 884.00</td>
+    <td class="s9"></td><td class="s9"></td><td class="s9"></td>
+    <td class="s9">Awaiting Pool A split</td></tr>
 <!-- blank template rows: NOT italic, and must be skipped anyway -->
-<tr><td>9</td><td class="s10">5</td><td class="s10"></td><td></td><td class="s10"></td>
+<tr><td>9</td><td class="s10">6</td><td class="s10"></td><td></td><td class="s10"></td>
     <td class="s10"></td><td class="s10"></td><td class="s10"></td><td class="s10"></td>
     <td class="s10"></td><td class="s10"></td><td class="s10"></td></tr>
-<tr><td>10</td><td class="s10">6</td><td class="s10"></td><td></td><td class="s10"></td>
+<tr><td>10</td><td class="s10">7</td><td class="s10"></td><td></td><td class="s10"></td>
     <td class="s10"></td><td class="s10"></td><td class="s10"></td><td class="s10"></td>
     <td class="s10"></td><td class="s10"></td><td class="s10"></td></tr>
 </table></body></html>`;
@@ -156,11 +165,12 @@ const CAPITAL_HTML = `<html><body><table>
     const parsed = svc.parseLoads(LOADS_HTML, {
       ourColumn: 'sv capital from pool a (r)', ourSharePct: 0.40, warnings });
     ok('the italic live rows are all read',
-       parsed.loads.length === 4,
+       parsed.loads.length === 5,
        `${parsed.loads.length} load(s) — the operator's live rows are italic, because the real `
        + 'data was typed over the template’s samples and kept their styling');
     ok('and the non-italic blank template rows are not',
-       parsed.skipped === 2 && !parsed.loads.some(l => l.load_ref === '5'),
+       parsed.skipped === 2 && !parsed.loads.some(l => l.load_ref === '6')
+       && !parsed.loads.some(l => l.load_ref === '7'),
        `skipped ${parsed.skipped}`);
     ok('the parser contains no notion of italics at all',
        !/italic|font-style/.test(
@@ -271,7 +281,7 @@ const CAPITAL_HTML = `<html><body><table>
       const again = svc.parseLoads(shifted, {
         ourColumn: 'sv capital from pool a (r)', ourSharePct: 0.40 });
       ok('a row inserted above the table does not shift the reading',
-         again.loads.length === 4 && again.loads[0].our_margin === 4000,
+         again.loads.length === 5 && again.loads[0].our_margin === 4000,
          `${again.loads.length} load(s)`);
     }
 
@@ -279,19 +289,25 @@ const CAPITAL_HTML = `<html><body><table>
     console.log('\nand it is a report, not a ledger');
     {
       const ROUTE = fs.readFileSync(path.join(ROOT, 'server', 'routes', 'facilities.js'), 'utf8');
+      /* The fetch, the plan and the write moved into services/facilitySync
+         when the schedule needed them too, so these look where the code
+         lives now rather than where it was first written. */
+      const SYNC0 = fs.readFileSync(path.join(ROOT, 'server', 'services', 'facilitySync.js'), 'utf8');
       ok('it previews unless told to apply',
          /const apply = String\(\(req\.body \|\| \{\}\)\.apply\) === 'true'/.test(ROUTE)
-         && /if \(!apply\) return res\.json\(plan\)/.test(ROUTE));
+         && /\{ apply, actor/.test(ROUTE));
+      ok('and the service writes nothing until told to',
+         /if \(!apply\) return plan;/.test(SYNC0));
       ok('staff only', /requireRole\(\.\.\.STAFF\)/.test(ROUTE)
          && /const STAFF\s*=\s*\['admin', 'director', 'fund_manager'\]/.test(ROUTE));
       ok('and only a published Google sheet is fetched',
-         /\^https:\\\/\\\/docs\\\.google\\\.com\\\//.test(ROUTE),
+         /docs\\\.google\\\.com/.test(SYNC0),
          'an arbitrary URL from a database row is a request this server makes on somebody’s behalf');
       ok('the fetch has a timeout and a size cap',
-         /FETCH_TIMEOUT_MS/.test(ROUTE) && /MAX_BYTES/.test(ROUTE),
+         /FETCH_TIMEOUT_MS/.test(SYNC0) && /MAX_BYTES/.test(SYNC0),
          'a read with no ceiling can hang a worker');
       ok('a load that vanishes from the sheet is reported, never deleted',
-         /no_longer_in_sheet/.test(ROUTE) && !/DELETE FROM stl_facility_loads/.test(ROUTE),
+         /no_longer_in_sheet/.test(SYNC0) && !/DELETE FROM stl_facility_loads/.test(SYNC0),
          'a row disappearing from somebody else’s spreadsheet is not authority to drop ours');
       ok('nothing here credits a wallet or touches investor returns',
          !/wallet_balance/.test(ROUTE) && !/recordTransaction/.test(ROUTE)
@@ -344,6 +360,171 @@ const CAPITAL_HTML = `<html><body><table>
       ok('and nothing in the route touches the NAV engine or a schedule',
          !/return_schedules/.test(ROUTE2) && !/LoanNAV/.test(ROUTE2)
          && !/UPDATE investments/.test(ROUTE2));
+    }
+    /* ── Tons and timing ─────────────────────────────────────────── */
+    console.log('\nand it reports the tons funded and how long the money is out');
+    {
+      /* A fixed as-at date, so "outstanding for N days" is the same answer
+         every time this runs rather than growing by one a day. */
+      const a = svc.summarise(parsed.loads, 141990, '2026-11-10');
+      ok('tons are counted across every load, paid for or not',
+         a.tons_total === 159.3, String(a.tons_total));
+      ok('and settled tons apart from tons still out',
+         a.tons_settled === 103.9 && a.tons_awaiting === 55.4,
+         `${a.tons_settled} settled / ${a.tons_awaiting} out`);
+      /* Tons are funded when the load is BOUGHT. Counting only settled ones
+         would understate what the facility has put through. */
+      ok('so the total is the tons funded, not the tons earned on',
+         a.tons_total > a.tons_settled);
+
+      ok('the average buyer repayment period is the mean of purchase to payment',
+         a.days_to_buyer_payment.value === 2.5, JSON.stringify(a.days_to_buyer_payment));
+      /* The count and the range are what make an average honest. Three loads
+         is not a trend, and 1–6 days is a different fact from "about 3". */
+      ok('and it carries how many loads it is drawn from, and the spread',
+         a.days_to_buyer_payment.n === 4 && a.days_to_buyer_payment.min === 1
+         && a.days_to_buyer_payment.max === 6, JSON.stringify(a.days_to_buyer_payment));
+      ok('the lag from the buyer paying to our pool being paid is its own figure',
+         a.days_buyer_paid_to_payout.value === 1.7 && a.days_buyer_paid_to_payout.n === 3,
+         JSON.stringify(a.days_buyer_paid_to_payout));
+      ok('unsettled loads are aged from the day asked about',
+         a.days_outstanding_unsettled.value === 4 && a.days_outstanding_unsettled.n === 2,
+         JSON.stringify(a.days_outstanding_unsettled));
+      ok('and the oldest one is named, not averaged away',
+         a.oldest_unsettled && a.oldest_unsettled.load_ref === '3'
+         && a.oldest_unsettled.days === 5, JSON.stringify(a.oldest_unsettled));
+      /* THE CASE A MUTATION EXPOSED. Load 5's buyer has paid and the sheet
+         has not yet worked out our share. Its repayment period is a known
+         fact about the trade and belongs in that average; our earnings on it
+         do not exist yet. Measuring the average over settled loads only
+         would bias it towards whatever the bookkeeping has caught up on. */
+      ok('a load the buyer paid for but whose share is not worked out yet counts in the period',
+         a.days_to_buyer_payment.n === 4
+         && parsed.loads.find(l => l.load_ref === '5').date_buyer_paid === '2026-11-09',
+         JSON.stringify(a.days_to_buyer_payment));
+      ok('but is not counted as earned', a.our_margin_earned === 5750.64
+         && parsed.loads.find(l => l.load_ref === '5').our_margin === null,
+         String(a.our_margin_earned));
+      ok('and still reads as awaiting settlement',
+         parsed.loads.find(l => l.load_ref === '5').settled === false
+         && a.awaiting_settlement === 2, String(a.awaiting_settlement));
+      ok('the report says which day it was drawn for',
+         a.as_at === '2026-11-10', a.as_at);
+
+      /* AN EMPTY AVERAGE IS NOT ZERO. "0 days" reads as instant payment,
+         which is the opposite of nothing to measure. */
+      /* Loads the buyer has not paid for AT ALL — the only set with nothing
+         to measure, now that one unsettled load has a payment date. */
+      const none = svc.summarise(parsed.loads.filter(l => !l.date_buyer_paid), 141990, '2026-11-10');
+      ok('an average with nothing behind it is null, not 0',
+         none.days_to_buyer_payment.value === null && none.days_to_buyer_payment.n === 0,
+         JSON.stringify(none.days_to_buyer_payment));
+      ok('and it earns nothing rather than earning zero per ton',
+         none.our_margin_earned === 0 && none.our_margin_per_ton === null,
+         JSON.stringify({ e: none.our_margin_earned, t: none.our_margin_per_ton }));
+
+      ok('our margin per ton is over settled tons only',
+         a.our_margin_per_ton === Math.round((5750.64 / 103.9) * 100) / 100,
+         String(a.our_margin_per_ton));
+      ok('and our average per settled load over the settled ones only',
+         a.our_avg_per_settled_load === Math.round((5750.64 / 3) * 100) / 100,
+         String(a.our_avg_per_settled_load));
+
+      /* The facility's trading margin and our return on capital differ by
+         more than tenfold here. Conflating them is the single most
+         misleading thing this report could do, so they are separate keys. */
+      ok('the facility’s gross trading margin is on ITS cost',
+         a.facility_margin_on_cost === Math.round((28050 / 319618) * 10000) / 10000,
+         String(a.facility_margin_on_cost));
+      ok('and is nowhere near our return on capital, which is the point of keeping them apart',
+         a.facility_margin_on_cost !== a.return_on_capital
+         && a.facility_cost_settled === 319618, JSON.stringify(
+           { margin_on_cost: a.facility_margin_on_cost, roc: a.return_on_capital }));
+      ok('a missing tonnage is counted, so the total is never read as complete',
+         svc.summarise([{ settled: true, our_margin: 1, tons: null, load_cost: 1 }], 1, '2026-11-10')
+           .tons_missing_on_loads === 1);
+      /* Calendar days, parsed as UTC midnight. A 'YYYY-MM-DD' given to
+         new Date() unzoned is local midnight in some runtimes, and
+         subtracting two of those on a server off the business day is wrong
+         by one whole day. */
+      ok('days are counted as calendar days, from the dates as written',
+         svc.daysBetween('2026-10-30', '2026-11-09') === 10
+         && svc.daysBetween('2026-11-05', '2026-11-05') === 0);
+      ok('and a missing date gives no number rather than a wrong one',
+         svc.daysBetween(null, '2026-11-09') === null
+         && svc.daysBetween('2026-11-09', null) === null);
+    }
+
+    /* ── One write path, two callers ──────────────────────────────── */
+    console.log('\nand the button and the schedule are the same operation');
+    {
+      const ROUTE = fs.readFileSync(path.join(ROOT, 'server', 'routes', 'facilities.js'), 'utf8');
+      const CRON  = fs.readFileSync(path.join(ROOT, 'server', 'jobs', 'facilitySyncCron.js'), 'utf8');
+      for (const [what, src] of [['the route', ROUTE], ['the schedule', CRON]]) {
+        ok(`${what} calls services/facilitySync`, /services\/facilitySync/.test(src));
+        ok(`${what} has no write of its own`,
+           !/INSERT INTO stl_facility_loads/.test(src),
+           'two upserts drift, and the drift is a figure a fund manager reads');
+      }
+      ok('the schedule goes through the watched wrapper, not node-cron',
+         /require\('\.\/_watched'\)/.test(CRON) && !/require\('node-cron'\)/.test(CRON),
+         'a schedule that silently stops being scheduled produces nothing, and a '
+         + 'stale report looks exactly like a correct one');
+      ok('it applies rather than previewing, because it has nobody to show a preview to',
+         /apply: true/.test(CRON));
+      ok('and one facility failing does not stop the others',
+         /for \(const f of rows\)/.test(CRON) && /failed\+\+/.test(CRON)
+         && /catch \(err\)/.test(CRON),
+         'an unpublished sheet on one facility must not take the rest of the report with it');
+      ok('it is started at boot', /startFacilitySyncCron\(\)/.test(
+         fs.readFileSync(path.join(ROOT, 'server', 'index.js'), 'utf8')));
+      /* A run that changed nothing must not write an audit row, or the runs
+         that moved a figure are buried among the quiet ones. */
+      const SYNC = fs.readFileSync(path.join(ROOT, 'server', 'services', 'facilitySync.js'), 'utf8');
+      ok('a quiet scheduled run writes no audit row',
+         /if \(added\.length \|\| newlySettled\.length \|\| changed\.length \|\| warnings\.length\)/.test(SYNC));
+      ok('and the schedule still cannot delete a load',
+         !/DELETE FROM stl_facility_loads/.test(SYNC) && /no_longer_in_sheet/.test(SYNC));
+      ok('nor reach a wallet, a schedule, NAV or a payout',
+         !/wallet_balance/.test(SYNC) && !/return_schedules/.test(SYNC)
+         && !/recordTransaction/.test(SYNC) && !/UPDATE investments/.test(SYNC));
+    }
+
+    /* ── The panel renders ───────────────────────────────────────── */
+    console.log('\nand the screen renders what it was given');
+    {
+      const vm = require('vm');
+      const UI = fs.readFileSync(path.join(ROOT, 'fund', 'js', 'shortterm.js'), 'utf8');
+      const ctx = { console, Math, Number, String, Object, Array, Boolean, Date, JSON,
+                    parseFloat, parseInt, isNaN, RegExp, Set, Map, Error };
+      ctx.globalThis = ctx; ctx.window = ctx; ctx.self = ctx;
+      vm.createContext(ctx);
+      const from = UI.indexOf('/* A mean of days, or a dash.');
+      const to   = UI.indexOf('function _stlEsc(v) {');
+      ok('the day formatters were found to lift', from > 0 && to > from,
+         'a slice that missed them would test nothing while passing');
+      vm.runInContext(UI.slice(from, UI.indexOf('\n', UI.indexOf('}', to + 40))), ctx);
+      ok('an average of days reads as days',
+         ctx._stlDays({ value: 2.7, n: 3 }) === '2.7 days', ctx._stlDays({ value: 2.7, n: 3 }));
+      ok('one day is not "1 days"', ctx._stlDays({ value: 1, n: 2 }) === '1 day');
+      /* The failure this exists for: an average over nothing shown as
+         "0 days" reads as the buyer paying instantly. */
+      ok('and nothing to average is a dash, never 0 days',
+         ctx._stlDays({ value: null, n: 0 }) === '—' && ctx._stlDays(null) === '—');
+      ok('the range says what the average is drawn from',
+         /Over 3 loads/.test(ctx._stlRange({ value: 2.7, n: 3, min: 1, max: 6 }, 'x'))
+         && /range 1–6 days/.test(ctx._stlRange({ value: 2.7, n: 3, min: 1, max: 6 }, 'x')),
+         ctx._stlRange({ value: 2.7, n: 3, min: 1, max: 6 }, 'x'));
+      ok('and says so plainly when there is nothing',
+         /Nothing to measure yet/.test(ctx._stlRange({ value: null, n: 0 }, 'x')));
+      ok('nothing in the panel renders an unresolved placeholder',
+         !/\$\{[A-Z]{2,}\}/.test(UI.slice(UI.indexOf('async function renderFacilitiesView'),
+                                          UI.indexOf('async function syncFacility'))),
+         'a ${...} written as text is a ReferenceError the moment it renders');
+      ok('the screen says the report re-reads itself',
+         /re-read on its own every 6 hours/.test(UI));
+      ok('and labels the facility’s trading as not ours',
+         /not our money/.test(UI) && /<strong>Not<\/strong> a return on our capital/.test(UI));
     }
   } catch (err) {
     console.error('\n  ✗ threw:', err.stack || err.message);
