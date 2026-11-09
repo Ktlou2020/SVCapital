@@ -176,13 +176,15 @@ console.log('\nthe invitation sends a new person to sign-up');
   ok('no message talks about a Sub-accounts screen any more',
      !/Sub-accounts screen/.test(noComments(EMAIL + SMS + NOTE)));
   ok('the email’s button goes to sign-up for somebody with no account',
-     /alreadyAUser \? `\$\{BASE_URL\}\/portal\/` : `\$\{BASE_URL\}\/signup\.html`/.test(EMAIL)
+     /alreadyAUser \? `\$\{BASE_URL\}\/portal\/\?view=groups`/.test(EMAIL)
+     && /: `\$\{BASE_URL\}\/signup\.html/.test(EMAIL)
      && /Create my account/.test(EMAIL));
   ok('and tells them documents can wait', /You can upload your documents later/.test(EMAIL));
   ok('the SMS says to use THIS number, and where', /Sign up with THIS number/.test(SMS) && /\/signup/.test(SMS));
   ok('and knows whether they already have an account',
-     /alreadyAUser: !!v\.matched_investor_id \}/.test(NOTE));
-  ok('and still carries no join link', !/invites?\/\$\{/.test(EMAIL + SMS));
+     /alreadyAUser: !!v\.matched_investor_id[,} ]/.test(NOTE));
+  ok('and the only link it carries opens sign-up, never an accept',
+     !/invites?\/\$\{|\/accept/.test(EMAIL + SMS));
 }
 
 console.log('\nthe creation form asks only what the group decides');

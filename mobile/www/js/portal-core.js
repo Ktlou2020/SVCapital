@@ -12997,6 +12997,7 @@ function _svDict() {
       'tab.investments': 'Ukutshala imali',
       'tab.transactions': 'Ukuhamba kwemali',
       'tab.statement': 'Isitatimende',
+      'tab.documents': 'Amadokhumenti',
       'hdr.pot': 'Isikhwama seqembu',
       'hdr.wallet': 'Esikhwameni semali',
       'hdr.invested': 'Okutshaliwe',
@@ -13086,6 +13087,7 @@ function _svDict() {
       'tab.investments': 'Matsete',
       'tab.transactions': 'Motsamao wa tjhelete',
       'tab.statement': 'Setatemente',
+      'tab.documents': 'Ditokomane',
       'hdr.pot': 'Sekgwama sa sehlopha',
       'hdr.wallet': 'Ka sepacheng',
       'hdr.invested': 'Se tsetetsweng',
@@ -13246,6 +13248,7 @@ function _svTabList() {
     ['investments',   'Investments',   'fa-seedling'],
     ['transactions',  'Transactions',  'fa-receipt'],
     ['statement',     'Statement',     'fa-file-lines'],
+    ['documents',     'Documents',     'fa-folder-open'],
   ];
 }
 
@@ -13350,6 +13353,7 @@ async function _svRenderHub(id, tab, opts) {
                                + _svInvitations(invitations, id); break;
     case 'investments':   html = await _svInvestments(id); break;
     case 'proposals':     html = await _svProposals(id); break;
+    case 'documents':     html = await _svDocuments(id); break;
     case 'transactions':  html = await _svTransactions(id); break;
     case 'statement':     html = _svStatement(g, id); break;
     default:              html = _svOverview(id, { g, shareData, payoutData, contributions,
@@ -13592,16 +13596,15 @@ function _svSetupSteps(id, ctx, d) {
         ? askUs('Send us the amount', `Please set the contribution for ${name} (${id}): R___ per member, due on day __ of the month.`)
         : '' },
     { key: 'documents', core: false, done: kyc === 'approved',
-      title: 'Send the group\u2019s documents',
+      title: 'Upload the group\u2019s documents',
       note: kyc === 'approved'
         ? 'The group is verified.'
         : kyc === 'under_review'
           ? 'We have the documents and are checking them. Withdrawals open once the group is verified.'
           : 'The group\u2019s constitution, proof of its bank account and the signatories\u2019 ID. Money can come in now; withdrawals open once the group is verified.'
             + (tpl ? ' No constitution yet? Start from our <a href="../group-constitution-template.html" target="_blank" rel="noopener">template</a>.' : ''),
-      action: committee && kyc !== 'under_review'
-        ? `<a class="btn btn--secondary btn--sm" href="mailto:enquiry@svcapital.co.za?subject=${encodeURIComponent(`Group documents: ${name} (${id})`)}">
-             <i class="fa-solid fa-envelope"></i> Email the documents</a>`
+      action: (committee || g.i_am_signatory) && kyc !== 'approved'
+        ? btn(kyc === 'under_review' ? 'See the documents' : 'Upload the documents', `svWorkspaceTab('${gid}','documents')`, 'fa-upload')
         : '' },
     { key: 'money', core: true, done: pot > 0,
       title: 'First money into the pot',
@@ -13831,6 +13834,123 @@ async function _svInvestments(id) {
       Expected figures are each pool&rsquo;s target return. Capital is at risk and a target is not a promise.
       &ldquo;Your part&rdquo; is read off your share of the pot today; the Shares section is the record.
     </div>`;
+}
+
+/* ─── The group's documents ──────────────────────────────────────
+   What the group has to send before withdrawals open, where each stands,
+   and the form to send one. Members see the list; the committee and the
+   signatories get the button. Fetched when the section opens. */
+async function _svDocuments(id) {
+  let res;
+  try { res = await API._fetch('GET', `stokvels/${id}/documents`); }
+  catch (err) { return `<div class="empty-state"><p>Could not load the group&rsquo;s documents. ${_esc(err.message || '')}</p></div>`; }
+  window.__SVDOCS = { id, res };
+  const gid  = _esc(id);
+  const reqs = (res && res.requirements) || [];
+  const docs = (res && res.data) || [];
+  const ver  = String((res && res.verification) || 'pending');
+  const chip = st => {
+    const m = { approved: ['#22c55e', 'Approved'], pending: ['#f59e0b', 'Being checked'],
+                rejected: ['#ef4444', 'Not accepted'], missing: ['var(--text-muted)', 'Not sent'] }[st] || ['var(--text-muted)', st];
+    return `<span style="font-size:0.72rem;font-weight:700;border:1px solid ${m[0]};color:${m[0]};border-radius:999px;padding:1px 8px;white-space:nowrap">${m[1]}</span>`;
+  };
+  const head = ver === 'approved'
+    ? `<div style="padding:12px 14px;border-radius:12px;border:1px solid #22c55e;margin-bottom:14px">
+         <i class="fa-solid fa-circle-check" style="color:#22c55e"></i> <strong>The group is verified.</strong>
+         Withdrawals are open, under the mandate.</div>`
+    : `<div style="font-size:0.84rem;color:var(--text-muted);line-height:1.6;margin-bottom:14px">
+         Money can come into the group now. <strong>Withdrawals open once these are approved</strong> &mdash; usually
+         within 1&ndash;2 working days of the last one arriving. Send a PDF or a clear photo of each, under 5 MB.
+       </div>`;
+  const line = r => {
+    const extra = r.type === 'stokvel_signatory_id'
+      ? `<div style="font-size:0.76rem;color:var(--text-muted)">${r.approved} approved, ${r.sent} sent &mdash; ${r.need} needed, one for each signatory.</div>
+         ${(r.rejected || []).map(x => `<div style="font-size:0.76rem;color:#ef4444">${_esc(x.name || 'A signatory')}&rsquo;s ID was not accepted${x.notes ? ': ' + _esc(x.notes) : ''}. Send it again.</div>`).join('')}`
+      : (r.status === 'rejected' && r.notes ? `<div style="font-size:0.76rem;color:#ef4444">Not accepted: ${_esc(r.notes)}. Send it again.</div>` : '');
+    return `<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;padding:11px 0;border-bottom:1px solid var(--border)">
+        <div><div style="font-weight:700;font-size:0.9rem">${_esc(r.label)}</div>${extra}</div>${chip(r.status)}</div>`;
+  };
+  return `<div style="max-width:680px">
+    <div class="sa-section-title mt-16"><i class="fa-solid fa-folder-open"></i> The group&rsquo;s documents</div>
+    ${head}
+    ${reqs.map(line).join('')}
+    ${res && res.may_upload && ver !== 'approved' ? `<div style="margin-top:12px">
+      <button class="btn btn--primary btn--sm" onclick="raiseStokvelDocument('${gid}')"><i class="fa-solid fa-upload"></i> Upload a document</button>
+      ${(window.__SVREL || {}).templates ? `<a style="font-size:0.8rem;margin-left:10px" href="../group-constitution-template.html" target="_blank" rel="noopener">No constitution yet? Start from our template</a>` : ''}
+    </div>` : (ver !== 'approved' ? `<div style="font-size:0.8rem;color:var(--text-muted);margin-top:10px">The chairperson, secretary, treasurer or a signatory sends these.</div>` : '')}
+    ${docs.length ? `<div style="font-size:0.74rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:18px 0 6px">Sent</div>
+      <table class="data-table" style="font-size:0.8rem"><tbody>
+      ${docs.map(d => `<tr>
+        <td>${_esc(d.label)}${d.signatory_name ? ' &middot; ' + _esc(d.signatory_name) : ''}<div style="font-size:0.72rem;color:var(--text-muted)">${_esc(d.file_name)} &middot; ${_esc(d.uploaded_by_name || '')} &middot; ${_esc(String(d.submitted_at || '').slice(0, 10))}</div></td>
+        <td class="text-right">${chip(d.status)}</td></tr>`).join('')}
+      </tbody></table>
+      <div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px">Members can see what was sent and where it stands. The files themselves are seen only by SV Capital&rsquo;s compliance team.</div>` : ''}
+  </div>`;
+}
+
+function raiseStokvelDocument(groupId) {
+  const cached = window.__SVDOCS && window.__SVDOCS.id === groupId ? window.__SVDOCS.res : {};
+  const people = (cached && cached.signatories) || [];
+  _svFormShell(groupId, {
+    icon: 'fa-upload',
+    title: 'Upload a group document',
+    intro: 'A PDF or a clear photo, under 5 MB. It goes to SV Capital&rsquo;s compliance team; the other members see that it was sent, not the file.',
+    fields: `<label for="svDocType" style="display:block;font-size:0.74rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">What is it?</label>
+      <select id="svDocType" class="form-input" style="width:100%;margin-bottom:12px" onchange="_svDocTypeChange()">
+        <option value="stokvel_constitution">The group&rsquo;s constitution or rules</option>
+        <option value="stokvel_bank_proof">Proof of the group&rsquo;s bank account</option>
+        <option value="stokvel_signatory_id">A signatory&rsquo;s ID document</option>
+        <option value="stokvel_resolution">Minutes or resolution appointing the signatories</option>
+      </select>
+      <div id="svDocWhoWrap" style="display:none">
+        <label for="svDocWho" style="display:block;font-size:0.74rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">Whose ID is it?</label>
+        <select id="svDocWho" class="form-input" style="width:100%;margin-bottom:12px">
+          ${people.length ? people.map(p => `<option value="${_esc(p.investor_id)}">${_esc(p.name)}${p.is_signatory ? '' : ' (asked to sign)'}</option>`).join('')
+                          : '<option value="">Nobody is a signatory or has been asked yet</option>'}
+        </select>
+      </div>
+      <label for="svDocFile" style="display:block;font-size:0.74rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">The file</label>
+      <input id="svDocFile" type="file" accept="application/pdf,image/jpeg,image/png,image/webp,image/heic" class="form-input" style="width:100%;margin-bottom:12px" />`,
+    submit: `submitStokvelDocument('${_esc(groupId)}')`,
+    submitIcon: 'fa-upload',
+    submitLabel: 'Send it',
+  });
+}
+
+function _svDocTypeChange() {
+  const t = document.getElementById('svDocType');
+  const w = document.getElementById('svDocWhoWrap');
+  if (t && w) w.style.display = t.value === 'stokvel_signatory_id' ? '' : 'none';
+}
+
+async function submitStokvelDocument(groupId) {
+  const type = _svVal('svDocType');
+  const input = document.getElementById('svDocFile');
+  const file = input && input.files && input.files[0];
+  if (!file) return _svFormError('Choose the file to send.');
+  if (file.size > 5 * 1024 * 1024) return _svFormError('The file must be under 5 MB.');
+  const who = type === 'stokvel_signatory_id' ? _svVal('svDocWho') : null;
+  if (type === 'stokvel_signatory_id' && !who) return _svFormError('Say whose ID document this is.');
+  let data;
+  try {
+    data = await new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = e => resolve(e.target.result);
+      r.onerror = () => reject(new Error('Could not read the file.'));
+      r.readAsDataURL(file);
+    });
+  } catch (e) { return _svFormError(e.message); }
+  try {
+    const res = await API._fetch('POST', `stokvels/${groupId}/documents`, {
+      doc_type: type, file_name: file.name, file_data: data, signatory_investor_id: who,
+    });
+    Utils.toast(res && res.data && res.data.group_status === 'under_review'
+      ? 'Sent. That is everything — we will check them and tell the group.'
+      : 'Sent. Our compliance team will check it.', 'success');
+  } catch (err) {
+    return _svFormError(err.message || 'Could not send that document.');
+  }
+  await _svRenderHub(groupId, 'documents');
 }
 
 /* ─── Proposals ────────────────────────────────────────────────

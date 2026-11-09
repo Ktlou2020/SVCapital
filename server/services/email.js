@@ -964,6 +964,8 @@ function sendKycDocumentReceived(admin, { investorName, docType, investorId }) {
     id_document: 'ID Document', proof_of_address: 'Proof of Address',
     proof_of_bank: 'Proof of Bank Account', selfie: 'Selfie / Liveness',
     tax_certificate: 'Tax Certificate', bank_statement: 'Bank Statement', other: 'Other Document',
+    stokvel_constitution: 'Group constitution', stokvel_bank_proof: 'Group proof of bank account',
+    stokvel_signatory_id: 'Group signatory\u2019s ID', stokvel_resolution: 'Group resolution or minutes',
   };
   const docLabel = typeLabels[docType] || docType || 'Document';
   return _send({
@@ -1301,7 +1303,7 @@ function sendStokvelArrears(investor, { stokvelName, periodLabel, owed, dueDate,
    way that survives being read on a phone by somebody who has never heard
    of us. */
 function sendStokvelInvite(to, { inviteeName, inviterName, stokvelName, expiresAt,
-                                 alreadyAUser, terms, asSignatory }) {
+                                 alreadyAUser, terms, asSignatory, inviteId }) {
   const when = expiresAt ? new Date(expiresAt).toISOString().slice(0, 10) : null;
   /* The plain-text fallback used to say "sign in" to everybody, including the
      people who have no account — which is most of the recipients of this
@@ -1315,7 +1317,12 @@ function sendStokvelInvite(to, { inviteeName, inviterName, stokvelName, expiresA
   const how = alreadyAUser
     ? 'Sign in with this email address. The invitation is at the top of your dashboard, and under My groups.'
     : 'Create a free SV Capital account using this email address. As soon as you have, the invitation will be at the top of your dashboard.';
-  const go = alreadyAUser ? `${BASE_URL}/portal/` : `${BASE_URL}/signup.html`;
+  /* A new person's link opens sign-up showing THIS invitation (the group,
+     who sent it, the rules, which address to use). It is not a way in:
+     accepting still needs them signed in as this address — see
+     routes/invitePreview.js for why that makes it safe to send. */
+  const go = alreadyAUser ? `${BASE_URL}/portal/?view=groups`
+           : `${BASE_URL}/signup.html${inviteId ? `?invite=${encodeURIComponent(inviteId)}` : ''}`;
   return _send({
     to,
     type: 'stokvel_invite',
@@ -1344,10 +1351,9 @@ function sendStokvelInvite(to, { inviteeName, inviterName, stokvelName, expiresA
             : 'Create a free SV Capital account using THIS email address. You can upload your documents later. As soon as your account exists, the invitation is at the top of your dashboard.'}</p>
       </div>
       <p style="text-align:center"><a class="btn" href="${go}">${alreadyAUser ? 'Sign in to SV Capital' : 'Create my account'}</a></p>
-      <p style="font-size:0.84rem;color:#777">We deliberately do not put a join link in this email \u2014
-         anyone who was forwarded it could then see the group&rsquo;s money. Signing in as the
-         person this was sent to is what proves the invitation is yours.
-         ${when ? `It is valid until ${escHtml(when)}.` : ''}</p>
+      <p style="font-size:0.84rem;color:#777">The button does not let anybody join on its own: only
+         the person signed in with this email address can accept, so a forwarded copy shows the
+         group&rsquo;s name and nothing of its money. ${when ? `The invitation is valid until ${escHtml(when)}.` : ''}</p>
       <p style="font-size:0.84rem;color:#777">If you already have an SV Capital account under a
          different email address, ask ${escHtml(inviterName)} to send the invitation to that one
          instead. Joining a savings group means the group can see your contributions and what you owe \u2014

@@ -415,7 +415,7 @@ async function invited({ inviteId, db } = {}) {
       await Promise.resolve(email.sendStokvelInvite(v.email, {
         inviteeName: v.invitee_name, inviterName: who, stokvelName: group,
         expiresAt: v.expires_at, alreadyAUser: !!v.matched_investor_id,
-        terms, asSignatory: !!v.as_signatory,
+        terms, asSignatory: !!v.as_signatory, inviteId: v.id,
       })).then(() => reached.push('email'))
         .catch(e => console.warn('[stokvelNotify] invite email failed:', e.message));
     }
@@ -432,7 +432,7 @@ async function invited({ inviteId, db } = {}) {
            the storage convention is known. */
         const dialable = /^\d{9}$/.test(String(v.cell)) ? '0' + v.cell : v.cell;
         await Promise.resolve(sms.sendStokvelInvite(dialable,
-          { inviterName: who, stokvelName: group, terms, alreadyAUser: !!v.matched_investor_id }))
+          { inviterName: who, stokvelName: group, terms, alreadyAUser: !!v.matched_investor_id, inviteId: v.id }))
           .then(() => reached.push('sms'))
           .catch(e => console.warn('[stokvelNotify] invite sms failed:', e.message));
       }

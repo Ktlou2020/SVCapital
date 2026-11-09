@@ -34,6 +34,7 @@ const founding    = require('../services/stokvelFoundingMandate');
 const shares        = require('../services/stokvelShares');
 const mandateChange = require('../services/stokvelMandateChange');
 const proposals     = require('../services/stokvelProposals');
+const groupDocs     = require('../services/stokvelDocuments');
 const { actorFromRequest } = require('../services/ledger');
 /* Lazily required, and never awaited in a way that can fail a request: a
    mandate that cannot send an email must still record the vote. */
@@ -1512,6 +1513,85 @@ router.post('/:id/contributions/:cid/pay', async (req, res) => {
     return res.status(500).json({ error: 'Could not record that payment.' });
   } finally {
     client.release();
+  }
+});
+
+/* ─── The group's documents ──────────────────────────────────────────
+   Constitution, proof of bank account, signatories' IDs. Every member sees
+   what has been sent and where it stands; only the committee or a
+   signatory sends one; nobody downloads them here
+   (services/stokvelDocuments.js). */
+router.get('/:id/documents', async (req, res) => {
+  const me = callerInvestorId(req);
+  try {
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) return res.status(404).json({ error: 'No such stokvel.' });
+    const rows = await groupDocs.list(pool, group.id);
+    const sigs = await mandate.currentSignatories(pool, group.id);
+    const { rows: people } = await pool.query(
+      `SELECT sm.investor_id, i.first_name, i.last_name, sm.is_signatory,
+              (sm.signatory_nominated_at IS NOT NULL) AS nominated
+         FROM stokvel_members sm JOIN investors i ON i.id = sm.investor_id
+        WHERE sm.sub_account_id = $1 AND sm.status = 'active'
+          AND (sm.is_signatory OR sm.signatory_nominated_at IS NOT NULL)
+        ORDER BY i.first_name`, [group.id]);
+    return res.json({
+      data: rows.map(r => ({
+        id: r.id, doc_type: r.doc_type, label: (groupDocs.TYPES[r.doc_type] || {}).label || r.doc_type,
+        file_name: r.file_name, status: r.status, submitted_at: r.submitted_at,
+        uploaded_by_name: r.uploaded_by_name,
+        signatory_name: [r.signatory_first_name, r.signatory_last_name].filter(Boolean).join(' ') || null,
+        /* The reviewer's note is shown only when it is the reason a document
+           was refused; on anything else it is our own internal description. */
+        reason: r.status === 'rejected' ? r.notes : null,
+      })),
+      requirements: groupDocs.requirements(rows, group).items,
+      verification: group.kyc_status || 'pending',
+      may_upload: invites.mayInvite(group) || sigs.has(me),
+      signatories: people.map(p => ({ investor_id: p.investor_id,
+        name: [p.first_name, p.last_name].filter(Boolean).join(' '),
+        is_signatory: p.is_signatory, nominated: p.nominated })),
+    });
+  } catch (err) {
+    console.error('[stokvels] documents failed:', err.message);
+    return res.status(500).json({ error: 'Could not load the group\u2019s documents.' });
+  }
+});
+
+router.post('/:id/documents', async (req, res) => {
+  const me = callerInvestorId(req);
+  try {
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) return res.status(404).json({ error: 'No such stokvel.' });
+    const sigs = await mandate.currentSignatories(pool, group.id);
+    if (!invites.mayInvite(group) && !sigs.has(me)) {
+      return res.status(403).json({ error: 'Only the chairperson, secretary, treasurer or a signatory can send the group\u2019s documents.' });
+    }
+    if (group.kyc_status === 'approved') {
+      return res.status(409).json({ error: 'The group is already verified. If a document has changed, talk to us.' });
+    }
+    const parsed = groupDocs.parseUpload(req.body);
+    if (parsed.error) return res.status(400).json({ error: parsed.error });
+    const out = await groupDocs.upload(pool, group, me, parsed.doc);
+    if (out.error) return res.status(400).json({ error: out.error });
+
+    /* Staff are told, as for any FICA document, and after the write so a
+       mail outage cannot lose the upload. */
+    (async () => {
+      try {
+        const { staffRecipients } = require('../services/staffRecipients');
+        const email = require('../services/email');
+        const { to } = await staffRecipients();
+        for (const s of to) {
+          await email.sendKycDocumentReceived(s, { investorName: `${group.name} (group)`,
+            docType: parsed.doc.docType, investorId: group.id }).catch(() => {});
+        }
+      } catch (e) { console.warn('[stokvels] document notify failed:', e.message); }
+    })();
+    return res.status(201).json({ data: out });
+  } catch (err) {
+    console.error('[stokvels] document upload failed:', err.message);
+    return res.status(500).json({ error: 'Could not store that document.' });
   }
 });
 

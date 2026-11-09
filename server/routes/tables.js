@@ -2585,6 +2585,22 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
           }
         }
 
+        /* A GROUP's documents follow the group's own rule — constitution,
+           bank proof and enough signatories' IDs — written once in
+           services/stokvelDocuments. Rejecting one puts a group that was
+           under review back to pending, so its checklist asks again. */
+        if (table === 'kyc_documents' && updated.sub_account_id && /^stokvel_/.test(String(updated.doc_type || ''))
+            && (body.status === 'approved' || body.status === 'rejected')) {
+          try {
+            const outcome = await require('../services/stokvelDocuments').afterReview(pool, updated.sub_account_id);
+            if (outcome === 'approved') {
+              const { rows: [g] } = await pool.query('SELECT name, parent_investor_id FROM sub_accounts WHERE id=$1', [updated.sub_account_id]);
+              const { rows: [owner] } = await pool.query('SELECT * FROM investors WHERE id=$1', [g && g.parent_investor_id]);
+              if (owner) await emailService.sendSubAccountFicaApproved(owner, { saName: g.name }).catch(() => {});
+            }
+          } catch (e) { console.error('[tables] group document review hook failed:', e.message); }
+        }
+
         // Sub-account KYC document approved → check if sub-account is now fully FICA-verified
         if (table === 'kyc_documents' && body.status === 'approved' && updated.sub_account_id) {
           const saId = updated.sub_account_id;

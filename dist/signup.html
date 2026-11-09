@@ -1002,6 +1002,11 @@
       <div class="draft-status" id="draftStatus" aria-live="polite"></div>
     </div>
 
+    <!-- An invitation to a group, when the link carried one (?invite=).
+         Filled by prefillInvite(); see server/routes/invitePreview.js. -->
+    <div id="inviteBanner" style="display:none;margin:0 0 18px;padding:14px 16px;border-radius:14px;
+         border:2px solid #eda5ff;background:rgba(237,165,255,0.10);font-size:0.86rem;line-height:1.5"></div>
+
     <!-- Step Indicator -->
     <div class="form-steps" id="formSteps">
       <div class="form-step active" id="stepIndicator1">
@@ -1890,6 +1895,7 @@ const _FT = (function() {
 window.addEventListener('DOMContentLoaded', () => {
   _FT.stepEntered(1);
   prefillReferral();
+  prefillInvite();
   initSocialProofCounters();
   initReturnEstimate();
   bindDraftAutosave();
@@ -2895,7 +2901,14 @@ async function _doSubmit(skippedFica) {
       } catch (_) {}
     }
 
-    setTimeout(() => { window.location.href = '/portal/index.html'; }, 4000);
+    /* Invited to a group: land on My Groups, where the invitation is. */
+    if (window.__SVINVITE) {
+      document.getElementById('successMsg').textContent +=
+        ` Your invitation to ${window.__SVINVITE.group_name} is waiting for you under My Groups.`;
+    }
+    setTimeout(() => {
+      window.location.href = window.__SVINVITE ? '/portal/index.html?view=groups' : '/portal/index.html';
+    }, 4000);
 
   } catch (err) {
     console.error('Registration error:', err);
@@ -2955,6 +2968,83 @@ function launchConfetti() {
     else canvas.remove();
   }
   requestAnimationFrame(draw);
+}
+
+/* ── An invitation to a group (?invite=SVI-…) ──────────────────────
+   The person was invited to a savings club or investment group and has no
+   account yet. Show them what they were invited to, the group's rules, and
+   which email address or cell number to sign up with — the one thing that
+   decides whether the invitation is waiting for them afterwards. The link
+   grants nothing: accepting still needs them signed in as that contact. */
+function _inviteId() {
+  const id = new URLSearchParams(window.location.search).get('invite') || '';
+  return /^SVI-[0-9A-Fa-f]{14}$/.test(id) ? id.toUpperCase() : '';
+}
+
+async function prefillInvite() {
+  const id = _inviteId();
+  const box = document.getElementById('inviteBanner');
+  if (!id || !box) return;
+  const esc = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  let d = null;
+  try {
+    const r = await fetch('/api/invite-preview/' + encodeURIComponent(id));
+    const j = await r.json();
+    d = r.ok ? j.data : null;
+    if (!d) {
+      box.innerHTML = `<strong>This invitation is no longer available.</strong><br>${esc(j.error || '')}
+        You can still create an account; whoever invited you can send a new invitation to it.`;
+      box.style.display = '';
+      return;
+    }
+  } catch (_) { return; }
+  window.__SVINVITE = d;
+  const use = [d.email_hint && `the email address <strong>${esc(d.email_hint)}</strong>`,
+               d.cell_hint && `the cell number ending <strong>${esc(d.cell_hint.slice(-4))}</strong>`]
+              .filter(Boolean).join(' or ');
+  box.innerHTML = `
+    <div style="font-weight:800;font-size:1rem;margin-bottom:4px">
+      <i class="fa-solid fa-people-group" style="color:#c26ee0"></i>
+      ${esc(d.invited_by)} invited you to join ${esc(d.group_name)}</div>
+    <div style="margin-bottom:6px"><strong>The group&rsquo;s rules:</strong> ${esc(d.rules)}</div>
+    <div>Sign up with ${use}. That is how the invitation finds you &mdash; it will be waiting under
+      My Groups as soon as your account exists. You can upload your documents later.</div>
+    <div id="inviteMismatch" style="display:none;margin-top:8px;color:#b45309;font-weight:600"></div>
+    <div style="margin-top:8px;font-size:0.8rem">Already have an account with that address?
+      <a href="login.html">Sign in</a> and open My Groups.</div>`;
+  box.style.display = '';
+  const hear = document.getElementById('hearAbout');
+  if (hear && !hear.value) hear.value = 'friend';
+  ['email', 'phone'].forEach(f => {
+    const el = document.getElementById(f);
+    if (el) el.addEventListener('blur', _checkInviteContact);
+  });
+}
+
+/* A soft check against the masked address: the first letter, the length
+   and the domain of an email, or the last four digits of a number. Never
+   blocks — the person may have been invited on both, or may want a
+   different address and a new invitation — but says so before they finish. */
+function _checkInviteContact() {
+  const d = window.__SVINVITE;
+  const note = document.getElementById('inviteMismatch');
+  if (!d || !note) return;
+  const email = v('email').toLowerCase();
+  const digits = v('phone').replace(/\D/g, '');
+  const emailOk = (() => {
+    if (!d.email_hint || !email) return false;
+    const [hu, hd] = d.email_hint.split('@');
+    const [eu, ed] = email.split('@');
+    return !!eu && ed === hd && eu[0] === hu[0] && eu.length === hu.length;
+  })();
+  const cellOk = !!(d.cell_hint && digits && digits.slice(-4) === d.cell_hint.slice(-4));
+  const typed = email || digits;
+  const bad = typed && !emailOk && !cellOk
+    && ((d.email_hint && email) || (d.cell_hint && digits.length >= 9));
+  note.style.display = bad ? '' : 'none';
+  note.textContent = bad
+    ? 'That does not look like the address the invitation was sent to. Sign up with that one, or the invitation will not be waiting for you.'
+    : '';
 }
 
 /* ── Pre-fill referral code from URL ── */

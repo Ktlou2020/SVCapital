@@ -138,6 +138,9 @@ app.use('/api/payments/paystack/webhook', (req, res, next) => {
 });
 // Routes that embed base64 file data — raised body limit
 app.use('/api/tables/kyc_documents', express.json({ limit: '15mb' }));
+/* A group's documents arrive the same way, base64 inside JSON, to its own
+   endpoint (POST /api/stokvels/:id/documents). The route caps a file at 5 MB. */
+app.use(/^\/api\/stokvels\/[^/]+\/documents$/, express.json({ limit: '15mb' }));
 app.use('/api/tables/kyc_documents', express.urlencoded({ extended: true, limit: '15mb' }));
 app.use('/api/tables/support_tickets', express.json({ limit: '15mb' }));
 /* Insight hero images arrive as a data: URI inside the article row. A photo
@@ -224,6 +227,11 @@ app.use('/api/address',   require('./routes/address'));
 app.use('/api/events',    require('./routes/events').router);
 app.use('/api/settings',  require('./routes/settings'));
 app.use('/api/legal',     require('./routes/legal'));
+/* What an invitation link shows before sign-up (routes/invitePreview.js).
+   Public, so it has its own tight limit: 30 looks per 15 minutes per
+   address is plenty for a person and useless for walking ids. */
+app.use('/api/invite-preview', rateLimit({ windowMs: 15 * 60 * 1000, max: 30,
+  standardHeaders: true, legacyHeaders: false }), require('./routes/invitePreview'));
 app.use('/api/quests',        require('./routes/quests'));
 app.use('/api/referrals',     require('./routes/referrals'));
 app.use('/api/testimonials',  require('./routes/testimonials'));
