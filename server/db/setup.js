@@ -1175,6 +1175,29 @@ CREATE TABLE IF NOT EXISTS stl_facility_loads (
 );
 /* One load is one row, so a re-sync updates what it already read rather than
    reporting the facility twice. */
+/* A column added to the CREATE TABLE above reaches a FRESH database and no
+   other. CREATE TABLE IF NOT EXISTS does nothing to a table that is already
+   there, so every existing deployment keeps the shape it was created with —
+   and the INSERT below, which names the new columns, fails on exactly the
+   databases that matter.
+
+   That is what happened: target_rate, target_months and capital_since were
+   added to the CREATE, the whole check suite passed because every check runs
+   against a scratch database built from scratch, and production failed on
+   the next deploy with "column target_rate does not exist".
+
+   So every column this table has gained since it shipped is added here too,
+   idempotently. New columns go in BOTH places, and the one that matters to a
+   running system is this one. */
+DO $$ BEGIN
+  ALTER TABLE stl_facilities ADD COLUMN IF NOT EXISTS our_capital   NUMERIC(18,2);
+  ALTER TABLE stl_facilities ADD COLUMN IF NOT EXISTS funded_from   TEXT;
+  ALTER TABLE stl_facilities ADD COLUMN IF NOT EXISTS target_rate   NUMERIC(8,6);
+  ALTER TABLE stl_facilities ADD COLUMN IF NOT EXISTS target_months INT;
+  ALTER TABLE stl_facilities ADD COLUMN IF NOT EXISTS capital_since DATE;
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+
 CREATE UNIQUE INDEX IF NOT EXISTS stl_facility_loads_uniq
   ON stl_facility_loads(facility_id, load_ref);
 CREATE INDEX IF NOT EXISTS stl_facility_loads_bought_idx
@@ -5647,6 +5670,23 @@ async function autoSetup() {
                  || 'buyer has paid, so an unsettled load has no share yet.')
          ON CONFLICT (id) DO NOTHING`,
         ['https://docs.google.com/spreadsheets/d/e/2PACX-1vRlrDmF_WKFH798d1PB7iZjB2paIAVK0CAVCurBkZ__ELDLbFinBT9JKxo78xzw6_MhJsCoRiKfseXF/pubhtml/sheet?gid=1291242987', 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRlrDmF_WKFH798d1PB7iZjB2paIAVK0CAVCurBkZ__ELDLbFinBT9JKxo78xzw6_MhJsCoRiKfseXF/pubhtml/sheet?gid=1623775025']);
+      /* The row was registered before the target columns existed, so the
+         INSERT above cannot fill them — ON CONFLICT DO NOTHING leaves the
+         facility exactly as the earlier deploy created it, with the targets
+         NULL and the coverage panel reading "not worked out yet".
+
+         Filled ONLY where they are still NULL, so this never overwrites a
+         target somebody has since corrected in the console. Same principle
+         as the COALESCE on the sync: a column that did not exist is a gap to
+         close, a value somebody set is not. */
+      await pool.query(
+        `UPDATE stl_facilities
+            SET target_rate = 0.08, target_months = 5, updated_at = NOW()
+          WHERE id = 'FAC-GRAINCO'
+            AND target_rate IS NULL AND target_months IS NULL`);
+      await pool.query(
+        `UPDATE stl_facilities SET funded_from = 'short_term', updated_at = NOW()
+          WHERE id = 'FAC-GRAINCO' AND funded_from IS NULL`);
     });
 
     await step("34. Announce the address check", async () => {

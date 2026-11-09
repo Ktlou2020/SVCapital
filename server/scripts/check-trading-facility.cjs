@@ -326,6 +326,72 @@ const CAPITAL_HTML = `<html><body><table>
          && /not settled/.test(UI));
     }
 
+    /* ── The upgrade path, which a fresh database cannot show ────────
+       EVERY CHECK IN THIS SUITE RUNS ON A DATABASE BUILT FROM SCRATCH, so a
+       column added to a CREATE TABLE always exists and every check passes.
+       A running deployment is the opposite case: CREATE TABLE IF NOT EXISTS
+       does nothing to a table that is already there, so the column never
+       arrives and the first INSERT naming it fails.
+
+       That is not hypothetical. target_rate, target_months and capital_since
+       were added to the CREATE, the whole suite went green, and production
+       answered the next deploy with "column target_rate of relation
+       stl_facilities does not exist" — the setup step that registers the
+       facility failed, on the only kind of database anybody actually has.
+
+       So the upgrade is exercised: the columns are dropped to put the table
+       back in the shape a deployed database had, setup is run again, and
+       they have to come back. */
+    console.log('\nand a database that already has the table gains the new columns');
+    {
+      const COLS = ['target_rate', 'target_months', 'capital_since', 'funded_from', 'our_capital'];
+      const present = async () => (await pool.query(
+        `SELECT COUNT(*)::int AS n FROM information_schema.columns
+          WHERE table_name = 'stl_facilities' AND column_name = ANY($1::text[])`,
+        [COLS])).rows[0].n;
+      ok('they are there to begin with', (await present()) === COLS.length);
+
+      /* The shape a deployment created before these columns existed. */
+      for (const c of COLS) {
+        await pool.query(`ALTER TABLE stl_facilities DROP COLUMN IF EXISTS ${c}`);
+      }
+      ok('and the table can be put back the way a deployed one was',
+         (await present()) === 0, 'the drop is the point of the test');
+
+      const quiet = console.log; console.log = () => {};
+      let setupErr = null;
+      try { await require(path.join(ROOT, 'server', 'db', 'setup.js'))(); }
+      catch (e) { setupErr = e; }
+      finally { console.log = quiet; }
+      ok('setup runs against it without failing', !setupErr, setupErr && setupErr.message);
+      ok('and every column is added back',
+         (await present()) === COLS.length,
+         'a column added only to CREATE TABLE never reaches a database that already has it');
+
+      /* The failure as production saw it: the INSERT that names the columns. */
+      const { rows: [f2] } = await pool.query(
+        `SELECT target_rate, target_months FROM stl_facilities WHERE id = 'FAC-GRAINCO'`);
+      ok('so the facility can be registered on an upgraded database',
+         !!f2 && Number(f2.target_rate) === 0.08 && Number(f2.target_months) === 5,
+         JSON.stringify(f2));
+
+      /* The gap is filled, a CORRECTION is not overwritten. A target the
+         product moved and somebody changed in the console must survive every
+         redeploy, exactly as the ON CONFLICT DO NOTHING on the row itself
+         protects wording somebody has edited. */
+      await pool.query(
+        `UPDATE stl_facilities SET target_rate = 0.095, target_months = 6
+          WHERE id = 'FAC-GRAINCO'`);
+      const q2 = console.log; console.log = () => {};
+      try { await require(path.join(ROOT, 'server', 'db', 'setup.js'))(); }
+      finally { console.log = q2; }
+      const { rows: [f3] } = await pool.query(
+        `SELECT target_rate, target_months FROM stl_facilities WHERE id = 'FAC-GRAINCO'`);
+      ok('and a target somebody has corrected survives a redeploy',
+         Number(f3.target_rate) === 0.095 && Number(f3.target_months) === 6,
+         JSON.stringify(f3));
+    }
+
     /* ── Registered, not hardcoded ────────────────────────────────── */
     console.log('\nand the facility is registered, with no loads read on deploy');
     {
