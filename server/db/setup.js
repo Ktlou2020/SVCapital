@@ -1078,6 +1078,97 @@ CREATE TABLE IF NOT EXISTS shortterm_loans (
 );
 CREATE INDEX IF NOT EXISTS shortterm_loans_status_idx ON shortterm_loans(status);
 
+/* ─── External trading facilities ─────────────────────────────────────
+   Money SV Capital has placed in somebody else's operation, where the return
+   is a SHARE of what that operation makes rather than interest on a loan.
+
+   The Grain Co maize facility is the first: one bank account, two pools, and
+   each load of maize bought and sold with the margin split between the pools
+   by their capital on the day, then Pool A's share split again between Grain
+   Co and us.
+
+   WHY NOT shortterm_loans. That table holds one borrower, one principal and
+   one repayment. A load written as a loan row would report a R120 000
+   exposure per load — sixteen loads reading as R1.9m deployed — when the
+   capital at risk is one figure for the whole facility. So a facility carries
+   OUR capital, and the loads hang off it as activity, each reported with only
+   our own share.
+
+   THE FIGURES COME FROM A DOCUMENT WE DO NOT OWN: a published spreadsheet the
+   operator maintains. So every row records where it came from and when it was
+   read, and nothing here moves money, credits a wallet or feeds investor
+   returns. It is a report. our_margin is NULL, never 0, while a load is
+   unsettled — the margin is not split until the buyer pays, and zero would
+   read as "earned nothing on it". */
+CREATE TABLE IF NOT EXISTS stl_facilities (
+  id              TEXT PRIMARY KEY,
+  name            TEXT NOT NULL,
+  partner_name    TEXT,
+  /* Whose share we are reporting, and the column in the sheet that holds it.
+     Named rather than assumed: the sheet calls it "SV Capital from Pool A
+     (R)", and a facility with a different operator will call it something
+     else. */
+  our_name        TEXT NOT NULL DEFAULT 'SV Capital',
+  our_column      TEXT NOT NULL,
+  our_share_pct   NUMERIC(8,6),
+  /* OUR capital in the facility, read from its investor register at sync.
+     The one figure actually at risk, as against the sum of the loads. */
+  our_capital     NUMERIC(18,2),
+  /* WHERE THE CAPITAL CAME FROM. Grain Co is funded from the short-term
+     investment product, which makes this facility's margin the money that
+     BACKS what short-term investors are paid — not loose balance-sheet
+     income. Recorded so the report can say so on its face.
+
+     It is deliberately NOT a feed into the NAV engine or into investor
+     payouts. Those are driven by the contracted rate on the product; this is
+     an outside spreadsheet somebody edits by hand, and a hand-edited document
+     must not move what a client is paid. Reconciling the two is a separate,
+     deliberate step with the contracted rate in hand. */
+  funded_from     TEXT,
+  loads_url       TEXT,
+  capital_url     TEXT,
+  status          TEXT NOT NULL DEFAULT 'active'
+                    CHECK (status IN ('active','closed')),
+  notes           TEXT,
+  last_synced_at  TIMESTAMPTZ,
+  last_sync_by    TEXT,
+  last_warnings   JSONB DEFAULT '[]',
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS stl_facility_loads (
+  id              TEXT PRIMARY KEY,
+  facility_id     TEXT NOT NULL REFERENCES stl_facilities(id) ON DELETE CASCADE,
+  load_ref        TEXT NOT NULL,
+  date_bought     DATE,
+  tons            NUMERIC(12,2),
+  safax           NUMERIC(14,2),
+  buy_price       NUMERIC(14,2),
+  sell_price      NUMERIC(14,2),
+  date_buyer_paid DATE,
+  payout_date     DATE,
+  load_cost       NUMERIC(18,2),
+  /* The facility's gross margin on the load. NOT ours, and reported only as
+     context beside our share, because it is the figure somebody would
+     otherwise read as a return. */
+  margin_total    NUMERIC(18,2),
+  pool_pct        NUMERIC(10,6),
+  pool_margin     NUMERIC(18,2),
+  /* OUR share. NULL until the buyer has paid and the margin is split. */
+  our_margin      NUMERIC(18,2),
+  status          TEXT,
+  synced_at       TIMESTAMPTZ DEFAULT NOW(),
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+/* One load is one row, so a re-sync updates what it already read rather than
+   reporting the facility twice. */
+CREATE UNIQUE INDEX IF NOT EXISTS stl_facility_loads_uniq
+  ON stl_facility_loads(facility_id, load_ref);
+CREATE INDEX IF NOT EXISTS stl_facility_loads_bought_idx
+  ON stl_facility_loads(facility_id, date_bought);
+
 CREATE TABLE IF NOT EXISTS loan_documents (
   id TEXT PRIMARY KEY,
   loan_id TEXT REFERENCES shortterm_loans(id) ON DELETE CASCADE,
@@ -5383,6 +5474,10 @@ async function autoSetup() {
           title: 'Find clients by type \u2014 and fill in the types the import already knew',
           body: 'The Type column arrived with most of the book reading \u201cNot set\u201d, which is the honest answer and not a useful one. Two things close that gap. A FILTER, beside Status and KYC on the clients list: Individual, Business, Trust, Group, and \u201cNot set\u201d as a choice of its own \u2014 which is the one that matters, because an unclassified client is what both an unmapped import and an untouched legacy client look like, and you cannot work through a list you cannot isolate. The choice survives a reload like the other filters do. A BACKFILL that reads the Firebase export and writes that one column. The export has carried investorType all along; re-running the whole migration WOULD set it, and would also rewrite names, phone numbers, ID numbers, addresses, KYC and FICA statuses, risk profiles and notes from a file that predates every correction staff have made since the import \u2014 on every client, to fill in one field. This reads the same users.json and writes investor_type and nothing else. It PREVIEWS by default and writes nothing without --apply. It NEVER GUESSES: a spelling the mapper does not recognise is listed by name and skipped, with the file to add it to. It DEFERS to the console: a type somebody has already set by hand is left alone and the disagreement is reported, unless you pass --overwrite. And it is one transaction, so the book is never half-classified. ALSO ON EVERY ROW: the kinds of sub-account that client has actually opened, as pills under the type badge. That is a different fact and sits beside it \u2014 an Individual may hold a trust and a group, a Business client may hold none at all. One says what the client IS, the other what they have opened.',
           where: 'Clients \u2014 the Type dropdown beside Status and KYC; pick \u201cNot set\u201d to see what is still unclassified. The pills under each type badge are that client\u2019s sub-accounts. The backfill runs from the server: DATABASE_URL=\u2026 node server/scripts/backfill-investor-types.cjs (add --apply to write).' },
+        { id: 'trading-facility-grainco-2026-11', area: 'admin', icon: 'fa-wheat-awn',
+          title: 'The Grain Co maize facility now reports in the console \u2014 our share of it, load by load',
+          body: 'Capital from the SHORT-TERM INVESTMENT is placed in Grain Co\u2019s maize facility, and the only record of what it earns was a spreadsheet. It is now a screen. WHY IT IS NOT A LIST OF LOANS: Grain Co buys a load of maize for around R120\u00a0000, sells it, and the MARGIN is split between two pools by their capital on the day the load was bought \u2014 then Pool A\u2019s share is split 60/40 between Grain Co and us. None of that R120\u00a0000 principal is ours. Sixteen loads written as loan rows would have reported R1,9 MILLION deployed against capital at risk of R141\u00a0990, which is why facilities and their loads have their own tables and nothing is written into the loan book. EVERY LOAD SHOWS OUR SHARE. The facility\u2019s own gross margin sits beside it, labelled as not ours, because it is the figure somebody would otherwise read as a return and because without it the report cannot be checked against the sheet. A LOAD THE BUYER HAS NOT PAID FOR SHOWS A DASH, NEVER R0,00 \u2014 margin is split only on payment, and most of the facility at any moment is simply not due yet; zero would read as a trade that earned nothing. THE SHEET\u2019S OWN ARITHMETIC IS CHECKED, against its Pool A margin rather than its printed pool percentage: that percentage is displayed to one decimal and computed at full precision, so re-deriving from what is printed flagged four live loads as wrong by cents. A verification that cries wolf is the one somebody turns off. A load whose share does not tie is reported WITH the discrepancy and still imported, never silently dropped, and a load that disappears from the sheet is reported and kept, because a row vanishing from somebody else\u2019s spreadsheet is not authority to drop what we have reported. IT PREVIEWS: Check for changes says what a re-read would alter and writes nothing. AND IT DRIVES NO PAYOUT. The margin is what BACKS what short-term investors are paid; it is not fed into NAV or into any payout, which run on the product\u2019s contracted rate. Reconciling the two is a separate, deliberate step.',
+          where: 'Fund Console \u2192 Short-Term Loans \u2192 Trading Facilities. Re-read the sheet there; the spreadsheet URL and our 40% share are stored on the facility, so a republished or re-tabbed sheet is a field to edit, not a deploy.' },
         { id: 'stokvel-founding-mandate-2026-11', area: 'portal', icon: 'fa-pen-nib',
           title: 'A group now sets its own signing rules \u2014 staff no longer type the first mandate',
           body: 'Changing a mandate was already a vote. The FIRST one was a staff job, because the argument that makes the vote safe collapses there: a mandate change is safe because the signatories approving it could already move the money, and a brand-new group HAS no signatories, so nothing bounds whoever sets it. Staff therefore captured it against the group\u2019s constitution \u2014 safe, and a queue, and the thing that stopped a committee running its own group. SO THE CHECK IS NOT A VOTE. IT IS CONSENT AT THE POINT OF JOINING. Nobody\u2019s money is in a group until they accept an invitation, and the invitation now carries the rules in full: how many signatories must approve before money leaves, how the pot divides, any date the money is locked until, and whether that person is being asked to sign. The founder sets the rules when the group is created; everybody else agrees to them by joining a group whose rules they were shown, which is how a stokvel adopts a constitution at its first meeting. The rules are in the email AND the SMS, because for many members the SMS is the only one they read. AN INVITATION STILL CONFERS NOTHING \u2014 Terms 26.3 says it cannot. It carries a NOMINATION, which is only disclosure, and the person becomes a signatory by confirming it themselves after they have joined. Nothing anybody else does makes somebody a signatory. ONCE ENOUGH HAVE CONFIRMED, the rules come into force and the setup window shuts PERMANENTLY \u2014 deliberately a stamp and not a count, because a count would reopen the moment a signatory left the group, and the chairperson could then nominate a replacement who confirms themselves in, appointing a signatory with no vote. From then on every change is a vote, as before. Also fixed: the invitation email\u2019s plain-text version told everybody to \u201csign in\u201d, including the people with no account \u2014 who are most of its recipients and the whole reason it is sent.',
@@ -5501,6 +5596,34 @@ async function autoSetup() {
          'KYC / FICA \u2192 FICA Pipeline tab \u2192 Checks on the client \u2192 the \u201cHeld: FICA review declined\u201d '
          + 'box at the top. Reverse decline is shown to directors only.']);
       if (rowCount) console.log('\u2705 Announced the FICA decline hold.');
+    });
+
+    await step("35. Register the Grain Co maize facility", async () => {
+      /* The first external trading facility. Our capital sits in Grain Co's
+         account and earns 40% of each load's Pool A margin; the loads
+         themselves are R120 000 maize trades of which none of the principal
+         is ours, which is why they are not rows in shortterm_loans.
+
+         The URLs are the operator's PUBLISHED sheet, tab by tab. Registered
+         rather than hardcoded in a route so the operator can republish or
+         re-tab without a deploy, and ON CONFLICT DO NOTHING so a redeploy
+         never overwrites a URL or a share somebody has corrected.
+
+         NO LOADS ARE READ HERE. Somebody presses Re-read in the console, sees
+         what it would change, and applies it \u2014 a deploy must not silently
+         restate what the fund reports. */
+      await pool.query(
+        `INSERT INTO stl_facilities
+           (id, name, partner_name, our_name, our_column, our_share_pct,
+            funded_from, loads_url, capital_url, status, notes)
+         VALUES ('FAC-GRAINCO','Grain Co maize facility','Grain Co','SV Capital',
+                 'SV Capital from Pool A (R)', 0.40, 'short_term', $1, $2, 'active',
+                 'One bank account, two pools. Each load\u2019s margin is split between the pools '
+                 || 'by their capital on the day the load was bought, then Pool A\u2019s share is '
+                 || 'split 60/40 between Grain Co and SV Capital. Margin is split only once the '
+                 || 'buyer has paid, so an unsettled load has no share yet.')
+         ON CONFLICT (id) DO NOTHING`,
+        ['https://docs.google.com/spreadsheets/d/e/2PACX-1vRlrDmF_WKFH798d1PB7iZjB2paIAVK0CAVCurBkZ__ELDLbFinBT9JKxo78xzw6_MhJsCoRiKfseXF/pubhtml/sheet?gid=1291242987', 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRlrDmF_WKFH798d1PB7iZjB2paIAVK0CAVCurBkZ__ELDLbFinBT9JKxo78xzw6_MhJsCoRiKfseXF/pubhtml/sheet?gid=1623775025']);
     });
 
     await step("34. Announce the address check", async () => {

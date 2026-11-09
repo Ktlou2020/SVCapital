@@ -260,6 +260,11 @@
       <span id="stlOverdueBadge" style="display:none;background:#ef4444;color:#fff;font-size:9px;padding:1px 6px;border-radius:10px;margin-left:auto">0</span>
     </button>
 
+    <div class="stl-nav-label">Facilities</div>
+    <button class="stl-nav-btn" data-view="facilities" onclick="stlNavigate('facilities',this)">
+      <i class="fa-solid fa-wheat-awn"></i> Trading Facilities
+    </button>
+
     <div class="stl-nav-label">Analytics</div>
     <button class="stl-nav-btn" data-view="returns" onclick="stlNavigate('returns',this)">
       <i class="fa-solid fa-chart-line"></i> NAV &amp; Returns
@@ -303,6 +308,14 @@
       </section>
 
       <section class="stl-view" id="stl-view-overdue">
+        <div class="stl-loading"><div class="stl-spinner"></div> Loading…</div>
+      </section>
+
+      <!-- Money placed in somebody else's operation, where the return is a
+           SHARE of what that operation makes rather than interest on a loan.
+           Reported with our own share only: the loads are R120k maize trades
+           and none of that principal is ours. -->
+      <section class="stl-view" id="stl-view-facilities">
         <div class="stl-loading"><div class="stl-spinner"></div> Loading…</div>
       </section>
 

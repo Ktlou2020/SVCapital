@@ -229,11 +229,191 @@ function stlNavigate(view, btn) {
   if (el) el.classList.add('active');
   if (btn) btn.classList.add('active');
 
-  const titles = { dashboard:'Dashboard', loans:'All Loans', overdue:'Overdue Loans', returns:'NAV & Fund Returns' };
+  const titles = { dashboard:'Dashboard', loans:'All Loans', overdue:'Overdue Loans', facilities:'Trading Facilities', returns:'NAV & Fund Returns' };
   document.getElementById('stlTopTitle').textContent = titles[view] || view;
 
-  const loaders = { dashboard: renderSTLDashboard, loans: renderLoansView, overdue: renderOverdueView, returns: renderReturnsView };
+  const loaders = { dashboard: renderSTLDashboard, loans: renderLoansView, overdue: renderOverdueView, facilities: renderFacilitiesView, returns: renderReturnsView };
   if (loaders[view]) loaders[view]();
+}
+
+/* ══════════════════════════════════════════════════════════════
+   VIEW: TRADING FACILITIES
+
+   Money placed in somebody else's operation, where the return is a SHARE of
+   what that operation makes. Grain Co is the first: each load is a maize
+   trade of about R120 000, and NONE of that principal is ours — our capital
+   sits in the facility's account and earns a cut of each load's margin.
+
+   SO THE LOADS ARE REPORTED WITH OUR SHARE ONLY. The facility's own gross
+   margin is shown beside it, explicitly labelled as not ours, because it is
+   the number somebody would otherwise read as a return and because without
+   it the report cannot be checked against the sheet.
+
+   A LOAD THAT HAS NOT SETTLED SHOWS A DASH, NOT R0,00. Margin is split only
+   once the buyer has paid. Zero would read as "we earned nothing on it";
+   most of this facility at any moment is simply not due yet.
+══════════════════════════════════════════════════════════════ */
+async function renderFacilitiesView() {
+  const el = document.getElementById('stl-view-facilities');
+  el.innerHTML = `<div class="stl-loading"><div class="stl-spinner"></div> Reading facilities…</div>`;
+  let list;
+  try {
+    list = (await stlGet('fund/facilities')).data || [];
+  } catch (e) {
+    el.innerHTML = `<div class="stl-card"><p style="color:#f87171">Could not load the facilities: ${_stlEsc(e.message)}</p></div>`;
+    return;
+  }
+  if (!list.length) {
+    el.innerHTML = `<div class="stl-card"><h3>No trading facilities</h3>
+      <p style="color:var(--stl-muted)">A facility is capital placed in an outside operation
+      where the return is a share of what it earns, rather than interest on a loan.</p></div>`;
+    return;
+  }
+  const f = list[0];
+  let payload;
+  try {
+    payload = await stlGet(`fund/facilities/${encodeURIComponent(f.id)}/loads`);
+  } catch (e) {
+    el.innerHTML = `<div class="stl-card"><p style="color:#f87171">Could not load that facility: ${_stlEsc(e.message)}</p></div>`;
+    return;
+  }
+  const loads = payload.data || [];
+  const s = payload.summary || {};
+  const meta = payload.facility || {};
+  const share = meta.our_share_pct ? (meta.our_share_pct * 100).toFixed(0) + '%' : '—';
+
+  const card = (label, value, sub, colour) => `
+    <div class="stl-card" style="flex:1;min-width:190px">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--stl-muted)">${label}</div>
+      <div style="font-size:24px;font-weight:800;margin:4px 0;color:${colour || 'inherit'}">${value}</div>
+      <div style="font-size:11px;color:var(--stl-muted)">${sub}</div>
+    </div>`;
+
+  const row = l => `<tr>
+      <td style="font-weight:700">${_stlEsc(l.load_ref)}</td>
+      <td>${_stlEsc(l.date_bought || '—')}</td>
+      <td>${_stlEsc(l.date_buyer_paid || '—')}</td>
+      <td style="text-align:right">${fmt.num(l.tons)}</td>
+      <td style="text-align:right;font-weight:800;color:#34d399">
+        ${l.settled ? fmt.zar(l.our_margin) : '<span style="color:var(--stl-muted);font-weight:500">not settled</span>'}
+      </td>
+      <td style="text-align:right;color:var(--stl-muted)">${fmt.zar(l.margin_total)}</td>
+      <td style="text-align:right;color:var(--stl-muted)">${l.pool_pct == null ? '—' : (l.pool_pct * 100).toFixed(1) + '%'}</td>
+      <td>${_stlEsc(l.status || '—')}</td>
+    </tr>`;
+
+  el.innerHTML = `
+    <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px">
+      ${card('Our capital in the facility', fmt.zar(s.our_capital),
+             `${_stlEsc(meta.our_name || 'SV Capital')} &middot; ${share} of Pool A margin`)}
+      ${card('Our margin earned', fmt.zar(s.our_margin_earned),
+             `${s.settled || 0} settled load${s.settled === 1 ? '' : 's'}`, '#34d399')}
+      ${card('Return on our capital',
+             s.return_on_capital == null ? '—' : (s.return_on_capital * 100).toFixed(2) + '%',
+             'Since ' + _stlEsc(s.first_load || '—') + ' &middot; not annualised')}
+      ${card('Loads', fmt.num(s.loads),
+             `${s.awaiting_settlement || 0} awaiting buyer payment`)}
+    </div>
+
+    <div class="stl-card" style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+        <div>
+          <h3 style="margin:0">${_stlEsc(meta.name || 'Facility')}</h3>
+          <div style="font-size:12px;color:var(--stl-muted)">
+            Operated by ${_stlEsc(meta.partner_name || 'the partner')} &middot;
+            read from their spreadsheet${meta.last_synced_at
+              ? ' on ' + new Date(meta.last_synced_at).toLocaleString('en-ZA')
+              : ' &mdash; never yet'}
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="stl-btn stl-btn-secondary stl-btn-sm" onclick="syncFacility('${_stlEsc(f.id)}', false)">
+            <i class="fa-solid fa-magnifying-glass"></i> Check for changes
+          </button>
+          <button class="stl-btn stl-btn-primary stl-btn-sm" onclick="syncFacility('${_stlEsc(f.id)}', true)">
+            <i class="fa-solid fa-rotate"></i> Re-read the sheet
+          </button>
+        </div>
+      </div>
+      ${meta.funded_from === 'short_term' ? `<div style="margin-top:10px;padding:10px 12px;border-radius:8px;
+          background:rgba(52,211,153,0.10);border-left:3px solid #34d399;font-size:12px;line-height:1.55">
+          <strong>Funded from the short-term investment.</strong> The capital in this facility is
+          short-term investors' money, so the margin above is what <em>backs</em> what they are
+          paid. It is <strong>not</strong> fed into NAV or into any payout &mdash; those run on the
+          product's contracted rate. Reconciling the two is a deliberate step, with that rate in hand.
+        </div>` : ''}
+      <div style="margin-top:10px;padding:10px 12px;border-radius:8px;background:rgba(237,165,255,0.08);
+                  border-left:3px solid #eda5ff;font-size:12px;line-height:1.55">
+        <strong>These figures come from a spreadsheet the operator maintains</strong>, not from
+        this platform's ledger. Nothing here moves money, credits a wallet or feeds investor
+        returns. The <strong>load cost and facility margin are NOT ours</strong> &mdash; our
+        capital sits in the facility's account and earns ${share} of each load's Pool A margin.
+      </div>
+      ${(meta.warnings || []).length ? `<div style="margin-top:10px;padding:10px 12px;border-radius:8px;
+          background:rgba(254,194,79,0.10);border-left:3px solid #fec24f;font-size:12px">
+          <strong>The sheet's arithmetic did not tie on ${meta.warnings.length} load(s)</strong>
+          <div style="margin-top:4px;color:var(--stl-muted)">${meta.warnings.slice(0, 6).map(w => _stlEsc(w)).join('<br>')}</div>
+        </div>` : ''}
+      <div id="facilitySyncResult" style="margin-top:10px;font-size:12px"></div>
+    </div>
+
+    <div class="stl-card">
+      <h3 style="margin-top:0">Loads &mdash; our share</h3>
+      <div style="overflow-x:auto">
+        <table class="stl-table" style="width:100%">
+          <thead><tr>
+            <th>Load</th><th>Bought</th><th>Buyer paid</th>
+            <th style="text-align:right">Tons</th>
+            <th style="text-align:right">OUR SHARE</th>
+            <th style="text-align:right;color:var(--stl-muted)">Facility margin<br><span style="font-weight:400;font-size:10px">(not ours)</span></th>
+            <th style="text-align:right;color:var(--stl-muted)">Pool A %</th>
+            <th>Status</th>
+          </tr></thead>
+          <tbody>${loads.map(row).join('')}</tbody>
+          <tfoot><tr style="border-top:2px solid var(--stl-border);font-weight:800">
+            <td colspan="4">${s.settled || 0} settled of ${s.loads || 0}</td>
+            <td style="text-align:right;color:#34d399">${fmt.zar(s.our_margin_earned)}</td>
+            <td style="text-align:right;color:var(--stl-muted)">${fmt.zar(s.facility_margin_settled)}</td>
+            <td colspan="2"></td>
+          </tr></tfoot>
+        </table>
+      </div>
+    </div>`;
+}
+
+/* Previews first. What a re-read writes is what this console then reports, so
+   it says what would change before it changes it. */
+async function syncFacility(id, apply) {
+  const out = document.getElementById('facilitySyncResult');
+  if (out) out.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Reading the sheet…`;
+  let r;
+  try {
+    r = await stlPost(`fund/facilities/${encodeURIComponent(id)}/sync`, { apply: apply ? 'true' : 'false' });
+  } catch (e) {
+    if (out) out.innerHTML = `<span style="color:#f87171">${_stlEsc(e.message)}</span>`;
+    return;
+  }
+  const c = r.counts || {};
+  const bits = [];
+  if (c.added)          bits.push(`${c.added} new load(s)`);
+  if (c.newly_settled)  bits.push(`${c.newly_settled} newly settled`);
+  if (c.changed)        bits.push(`${c.changed} changed`);
+  if (c.no_longer_in_sheet) bits.push(`${c.no_longer_in_sheet} no longer in the sheet (kept, not deleted)`);
+  const what = bits.length ? bits.join(', ') : 'nothing to change';
+  if (out) {
+    out.innerHTML = r.applied
+      ? `<span style="color:#34d399"><i class="fa-solid fa-check"></i> Re-read: ${_stlEsc(what)}.</span>`
+      : `<span style="color:var(--stl-muted)"><i class="fa-solid fa-eye"></i> A re-read would change:
+         ${_stlEsc(what)}. <strong>Nothing has been written.</strong></span>`
+       + ((r.warnings || []).length ? `<div style="margin-top:6px;color:#fec24f">${r.warnings.slice(0,6).map(w=>_stlEsc(w)).join('<br>')}</div>` : '');
+  }
+  if (r.applied) await renderFacilitiesView();
+}
+
+function _stlEsc(v) {
+  return String(v == null ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 /* ══════════════════════════════════════════════════════════════
