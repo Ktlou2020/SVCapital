@@ -322,7 +322,7 @@ const CAPITAL_HTML = `<html><body><table>
       ok('and says the load cost is not ours',
          /NOT ours/.test(UI), 'it is the figure somebody would read as a return');
       ok('an unsettled load shows as unsettled, not as R0,00',
-         /l\.settled \? fmt\.zar\(l\.our_margin\) : /.test(UI)
+         /l\.settled \? stlfmt\.zar\(l\.our_margin\) : /.test(UI)
          && /not settled/.test(UI));
     }
 
@@ -490,41 +490,238 @@ const CAPITAL_HTML = `<html><body><table>
          && !/recordTransaction/.test(SYNC) && !/UPDATE investments/.test(SYNC));
     }
 
-    /* ── The panel renders ───────────────────────────────────────── */
+    /* ── Against the target ──────────────────────────────────────── */
+    console.log('\nand it says whether the capital here earns its target');
+    {
+      const a = svc.summarise(parsed.loads, 141990, '2026-11-09');
+      const F = { target_rate: 0.08, target_months: 5, capital_since: '2026-10-06' };
+      const c = svc.coverage(a, F, '2026-11-09');
+      ok('the period runs in calendar months from the day the capital went in',
+         c.period_start === '2026-10-06' && c.period_end === '2027-03-06'
+         && c.period_days === 151, JSON.stringify(
+           { s: c.period_start, e: c.period_end, d: c.period_days }));
+      ok('the whole-period target is the rate on our capital',
+         c.target_full_period === 11359.2, String(c.target_full_period));
+      /* Pro rata on days, NOT a monthly rate compounded: 8% over five months
+         is one rate over one period, and compounding 1.6% a month would
+         invent a target nobody set. */
+      ok('and the target so far is pro rata on days elapsed',
+         c.days_elapsed === 34
+         && c.target_to_date === Math.round(11359.2 * (34 / 151) * 100) / 100,
+         JSON.stringify({ d: c.days_elapsed, t: c.target_to_date }));
+      ok('earned is measured against it', c.earned === 5750.64
+         && c.surplus === Math.round((5750.64 - c.target_to_date) * 100) / 100,
+         JSON.stringify({ e: c.earned, s: c.surplus }));
+      /* One of the two is always zero. A single figure that could be either
+         sign is one somebody reads with the wrong sign. */
+      ok('a surplus means no shortfall', c.shortfall === 0);
+      /* Both figures, because they answer different questions: 2.2x the
+         target SO FAR, and half the whole five-month target already. */
+      ok('and the cover is stated both to date and against the whole period',
+         c.cover_to_date === Math.round((5750.64 / c.target_to_date) * 1000) / 1000
+         && c.cover_full_period === Math.round((5750.64 / 11359.2) * 1000) / 1000
+         && c.cover_to_date > 1 && c.cover_full_period < 1,
+         JSON.stringify({ td: c.cover_to_date, full: c.cover_full_period }));
+
+      /* THE SCOPE. This is cover on the capital in THIS facility, not on the
+         short-term book, which is larger and deployed elsewhere too. */
+      ok('the capital it was computed on is named in the result',
+         c.on_capital === 141990, String(c.on_capital));
+
+      console.log('\nand it is a target, never a debt');
+      const words = JSON.stringify(c).toLowerCase();
+      ok('nothing in it is called owed, due or arrears',
+         !/owed|arrears/.test(words) && !/"due/.test(words),
+         'a shortfall against a target is a fact to act on, not a liability');
+      ok('and the words used are surplus and shortfall',
+         'surplus' in c && 'shortfall' in c);
+
+      console.log('\nand a behind-target facility says so plainly');
+      const thin = svc.coverage({ our_margin_earned: 500, our_capital: 141990,
+                                  as_at: '2026-11-09' }, F, '2026-11-09');
+      ok('a shortfall is reported', thin.shortfall > 0 && thin.surplus === 0,
+         JSON.stringify({ s: thin.surplus, sf: thin.shortfall }));
+      ok('and cover below one', thin.cover_to_date < 1, String(thin.cover_to_date));
+
+      console.log('\nand it refuses to work it out on a guess');
+      for (const [what, f2] of [
+        ['no target rate',   { target_months: 5, capital_since: '2026-10-06' }],
+        ['no target period', { target_rate: 0.08, capital_since: '2026-10-06' }],
+      ]) {
+        const u = svc.coverage(a, f2, '2026-11-09');
+        ok(`with ${what} it says so instead of answering`,
+           u.known === false && u.missing.length > 0, JSON.stringify(u));
+      }
+      const noCap = svc.coverage(svc.summarise(parsed.loads, null, '2026-11-09'), F, '2026-11-09');
+      ok('and with no capital figure it names that as what is missing',
+         noCap.known === false && /capital/.test(noCap.missing.join(' ')),
+         JSON.stringify(noCap.missing));
+
+      console.log('\nand the period has an end');
+      const after = svc.coverage(a, F, '2027-06-01');
+      ok('past the end, the target is the whole target and not more',
+         after.target_to_date === after.target_full_period
+         && after.days_elapsed === after.period_days, JSON.stringify(
+           { t: after.target_to_date, f: after.target_full_period }));
+      ok('and it says the period has ended', after.period_complete === true);
+
+      /* THE BUG THAT ONLY AN END-TO-END RUN FOUND. node-postgres hands a DATE
+         column back as a JS Date, and the first version concatenated it onto
+         'T00:00:00Z' — an Invalid Date whose toISOString() THREW, 500ing the
+         whole facility screen. The check had passed throughout, because it
+         called coverage() with a string the way a test does and not with the
+         row shape the route actually holds. */
+      console.log('\nand it takes the date in whatever shape the caller holds it');
+      const asDate = svc.coverage(a,
+        { target_rate: 0.08, target_months: 5, capital_since: new Date('2026-10-06T00:00:00Z') },
+        '2026-11-09');
+      ok('a Date out of the database works, not only an ISO string',
+         asDate.known === true && asDate.period_start === '2026-10-06'
+         && asDate.period_end === '2027-03-06', JSON.stringify(asDate).slice(0, 150));
+      ok('and gives the same answer as the string did',
+         asDate.target_to_date === c.target_to_date
+         && asDate.cover_to_date === c.cover_to_date);
+      ok('a timestamp is read as its calendar day',
+         svc._asIsoDay(new Date('2026-10-06T22:30:00Z')) === '2026-10-06'
+         && svc._asIsoDay('2026-10-06T00:00:00.000Z') === '2026-10-06');
+      /* A REPORT MUST NOT THROW. An unreadable date is the same answer as any
+         other missing input: said, not crashed. */
+      let threw3 = false, out3 = null;
+      try {
+        out3 = svc.coverage(a, { target_rate: 0.08, target_months: 5,
+                                 capital_since: 'not a date' }, '2026-11-09');
+      } catch (_) { threw3 = true; }
+      ok('and an unreadable date is reported rather than thrown',
+         !threw3 && out3 && out3.known === false,
+         threw3 ? 'it threw, which 500s the whole screen' : JSON.stringify(out3));
+      ok('with what was wrong named', !threw3 && /capital went in/.test((out3.missing || []).join(' ')),
+         JSON.stringify(out3 && out3.missing));
+      /* ABSENT is not the same as UNREADABLE. With no capital_since at all —
+         a facility whose capital sheet has not been read yet — the first
+         load is a fair proxy, and the result SAYS it is one, so a figure
+         resting on it is not read as resting on the real date. */
+      const proxy = svc.coverage(a, { target_rate: 0.08, target_months: 5 }, '2026-11-09');
+      ok('with no start date at all it falls back to the first load',
+         proxy.known === true && proxy.period_start === a.first_load,
+         JSON.stringify({ s: proxy.period_start, f: a.first_load }));
+      ok('and says the start date is a stand-in',
+         proxy.period_start_is_proxy === true, String(proxy.period_start_is_proxy));
+      ok('while a real start date is not flagged as one',
+         c.period_start_is_proxy === false, String(c.period_start_is_proxy));
+
+      console.log('\nand the start date is the capital still in, not money taken back');
+      const SYNC1 = fs.readFileSync(path.join(ROOT, 'server', 'services', 'facilitySync.js'), 'utf8');
+      ok('a withdrawn deposit does not pull the start date earlier',
+         /deposits\.filter\(d => !d\.date_out && d\.date_in\)/.test(SYNC1),
+         'money that has been taken back out is not capital the target runs on');
+      ok('and it is stored rather than re-derived on every read',
+         /capital_since = COALESCE/.test(SYNC1));
+    }
+
+    /* ── The panel renders ─────────────────────────────────────────
+       THE WHOLE FILE IS LOADED AND THE VIEW IS RUN, not a slice of it with
+       the awkward parts stubbed.
+
+       The first version lifted the functions it wanted and supplied `fmt`
+       itself, because `fmt` was not in the slice. That hid the bug: the
+       formatter in this file is called stlfmt, every `fmt.zar(...)` in the
+       facilities view was a ReferenceError, and production hung on "Reading
+       facilities…" with both API calls returning 200. A check that stubs the
+       thing that is missing proves only that the stub works.
+
+       So: the real file, in a context holding nothing but the browser
+       globals it may legitimately expect. Anything it references that it did
+       not define is a ReferenceError here, exactly as in the browser. This is
+       the third bug of this shape in this work — a placeholder written as
+       text, a helper out of scope, and now a misnamed global — and all three
+       are invisible to node --check. */
     console.log('\nand the screen renders what it was given');
     {
       const vm = require('vm');
       const UI = fs.readFileSync(path.join(ROOT, 'fund', 'js', 'shortterm.js'), 'utf8');
-      const ctx = { console, Math, Number, String, Object, Array, Boolean, Date, JSON,
-                    parseFloat, parseInt, isNaN, RegExp, Set, Map, Error };
+      const box = {};
+      const node = () => ({ innerHTML: '', style: {}, textContent: '', value: '', files: [],
+                            classList: { add() {}, remove() {} }, addEventListener() {} });
+      const ctx = { console: { log() {}, warn() {}, error() {} },
+                    Math, Number, String, Object, Array, Boolean, Date, JSON,
+                    parseFloat, parseInt, isNaN, RegExp, Set, Map, Error,
+                    encodeURIComponent, setTimeout, clearTimeout,
+                    fetch: async () => { throw new Error('the check makes no requests'); },
+                    localStorage: { getItem: () => null, setItem() {} },
+                    location: { replace() {}, href: '' },
+                    document: { getElementById: id => (box[id] = box[id] || node()),
+                                querySelector: () => node(), querySelectorAll: () => [],
+                                createElement: () => node(), addEventListener() {}, body: node() } };
       ctx.globalThis = ctx; ctx.window = ctx; ctx.self = ctx;
       vm.createContext(ctx);
-      const from = UI.indexOf('/* A mean of days, or a dash.');
-      const to   = UI.indexOf('function _stlEsc(v) {');
-      ok('the day formatters were found to lift', from > 0 && to > from,
-         'a slice that missed them would test nothing while passing');
-      vm.runInContext(UI.slice(from, UI.indexOf('\n', UI.indexOf('}', to + 40))), ctx);
-      ok('an average of days reads as days',
-         ctx._stlDays({ value: 2.7, n: 3 }) === '2.7 days', ctx._stlDays({ value: 2.7, n: 3 }));
+      let loadErr = null;
+      try { vm.runInContext(UI, ctx); } catch (e) { loadErr = e; }
+      ok('the console script loads', !loadErr, loadErr && loadErr.message);
+
+      /* The payload shapes the route really returns, taken from a live run. */
+      const FAC = { id: 'FAC-GRAINCO', name: 'Grain Co maize facility', partner_name: 'Grain Co',
+                    our_name: 'SV Capital', funded_from: 'short_term', our_share_pct: 0.4,
+                    last_synced_at: '2026-11-09T07:24:24.982Z', warnings: [] };
+      const SUM = svc.summarise(parsed.loads, 141990, '2026-11-09');
+      const COV = svc.coverage(SUM, { target_rate: 0.08, target_months: 5,
+                                      capital_since: '2026-10-06' }, '2026-11-09');
+      ctx.stlGet = async p => /loads/.test(p)
+        ? { data: parsed.loads, facility: FAC, summary: SUM, coverage: COV }
+        : { data: [FAC] };
+
+      let threwR = null;
+      await ctx.renderFacilitiesView().catch(e => { threwR = e; });
+      const html = (box['stl-view-facilities'] || {}).innerHTML || '';
+      /* THE ASSERTION THAT WOULD HAVE CAUGHT IT. A throw here leaves the
+         spinner up and the screen dead, with the API returning 200 — which
+         is exactly what it looked like in production. */
+      ok('the facilities view renders without throwing', !threwR,
+         threwR && `${threwR.constructor.name}: ${threwR.message}`);
+      ok('and replaces the loading spinner',
+         html.length > 800 && !/Reading facilities/.test(html), html.slice(0, 160));
+
+      ok('it shows the coverage panel', /Against the target/.test(html));
+      ok('the tons and timing panel', /Tons funded to date/.test(html)
+         && /Average buyer repayment period/.test(html));
+      ok('our share column, headed as ours', /OUR SHARE/.test(html));
+      ok('and the facility’s own margin marked not ours',
+         /not ours/.test(html) && /not our money/.test(html));
+      ok('an unsettled load reads as unsettled rather than R0,00',
+         /not settled/.test(html) && !/>R0,00</.test(html));
+      ok('it says where the figures came from and that it re-reads itself',
+         /come from a spreadsheet the operator maintains/.test(html)
+         && /re-read on its own every 6 hours/.test(html));
+      ok('and that this is short-term money that drives no payout',
+         /Funded from the short-term investment/.test(html)
+         && /not<\/strong> fed into NAV or into any payout/.test(html));
+      ok('nothing renders an unresolved placeholder', !/\$\{/.test(html),
+         'a ${...} in the output means a template literal was written as text');
+
+      /* The empty and error paths render too — a facility list that is empty
+         must say so rather than leaving the spinner, which is the same
+         failure wearing different clothes. */
+      ctx.stlGet = async () => ({ data: [] });
+      await ctx.renderFacilitiesView().catch(() => {});
+      ok('with no facilities it says so rather than spinning',
+         /No trading facilities/.test((box['stl-view-facilities'] || {}).innerHTML || ''));
+      ctx.stlGet = async () => { throw new Error('API 500: boom'); };
+      await ctx.renderFacilitiesView().catch(() => {});
+      ok('and a failing request shows the failure rather than spinning',
+         /Could not load/.test((box['stl-view-facilities'] || {}).innerHTML || ''));
+
+      /* The day formatters, directly: an average over nothing shown as
+         "0 days" would read as the buyer paying instantly. */
+      ok('an average of days reads as days', ctx._stlDays({ value: 2.7, n: 3 }) === '2.7 days');
       ok('one day is not "1 days"', ctx._stlDays({ value: 1, n: 2 }) === '1 day');
-      /* The failure this exists for: an average over nothing shown as
-         "0 days" reads as the buyer paying instantly. */
       ok('and nothing to average is a dash, never 0 days',
          ctx._stlDays({ value: null, n: 0 }) === '—' && ctx._stlDays(null) === '—');
       ok('the range says what the average is drawn from',
-         /Over 3 loads/.test(ctx._stlRange({ value: 2.7, n: 3, min: 1, max: 6 }, 'x'))
-         && /range 1–6 days/.test(ctx._stlRange({ value: 2.7, n: 3, min: 1, max: 6 }, 'x')),
-         ctx._stlRange({ value: 2.7, n: 3, min: 1, max: 6 }, 'x'));
-      ok('and says so plainly when there is nothing',
-         /Nothing to measure yet/.test(ctx._stlRange({ value: null, n: 0 }, 'x')));
-      ok('nothing in the panel renders an unresolved placeholder',
-         !/\$\{[A-Z]{2,}\}/.test(UI.slice(UI.indexOf('async function renderFacilitiesView'),
-                                          UI.indexOf('async function syncFacility'))),
-         'a ${...} written as text is a ReferenceError the moment it renders');
-      ok('the screen says the report re-reads itself',
-         /re-read on its own every 6 hours/.test(UI));
-      ok('and labels the facility’s trading as not ours',
-         /not our money/.test(UI) && /<strong>Not<\/strong> a return on our capital/.test(UI));
+         /Over 3 loads/.test(ctx._stlRange({ value: 2.7, n: 3, min: 1, max: 6 }, 'x')));
+      ok('a behind-target facility says behind, not ahead',
+         /Behind target by/.test(ctx._stlCoverage(Object.assign({}, COV,
+           { earned: 500, surplus: 0, shortfall: 2057.7, cover_to_date: 0.195 }), {})));
+      ok('and one with no target says so rather than showing zero',
+         /Not worked out yet/.test(ctx._stlCoverage({ known: false, missing: ['the target rate'] }, {})));
     }
   } catch (err) {
     console.error('\n  ✗ threw:', err.stack || err.message);

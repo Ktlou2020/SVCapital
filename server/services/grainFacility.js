@@ -396,6 +396,132 @@ function summarise(loads, capital, asAt) {
   };
 }
 
+/* A calendar day as 'YYYY-MM-DD', from whatever shape the caller holds it
+   in: a Date out of the database, an ISO string out of the sheet, or null. */
+function _asIsoDay(v) {
+  if (!v) return null;
+  if (v instanceof Date) {
+    return Number.isFinite(v.getTime()) ? v.toISOString().slice(0, 10) : null;
+  }
+  const s = String(v).trim();
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : null;
+}
+
+/* ── Does the capital in this facility earn its target? ──────────────
+   The capital here came from the short-term investment, where investors are
+   on a TARGET of 8% every five months. So the question a fund manager
+   actually has is not "what did this earn" but "did it earn its keep".
+
+   IT IS A TARGET AND NOT A LIABILITY, and that governs every word this
+   returns. A target is a thing to measure against: beating it is headroom,
+   missing it is a fact to act on. It is not money the facility owes, there is
+   no arrears, and nothing here is a provision. The keys say surplus and
+   shortfall rather than owed and due for that reason.
+
+   WHAT IT DOES NOT ANSWER. Whether the SHORT-TERM PRODUCT is covered. This
+   facility holds one slice of that book — R141 990 of it — and the rest is
+   deployed elsewhere. Coverage here is coverage on the capital placed in
+   THIS facility and nothing wider, which is why the result names the capital
+   it was computed on. Reading it as cover for the product would be the same
+   mistake as reading the facility's trading margin as our return.
+
+   PRO RATA ON DAYS ELAPSED, against a period measured in calendar months
+   from the day the capital went in. Not a monthly rate compounded: 8% over
+   five months is one rate over one period, and turning it into 1.6% a month
+   and compounding would invent a target nobody set. */
+function coverage(summary, facility, asAt) {
+  const capital = summary && summary.our_capital;
+  const rate    = facility && facility.target_rate   !== null && facility.target_rate   !== undefined
+    ? Number(facility.target_rate) : null;
+  const months  = facility && facility.target_months !== null && facility.target_months !== undefined
+    ? Number(facility.target_months) : null;
+  /* node-postgres hands a DATE column back as a JS Date, not a string, and
+     the first version of this concatenated it onto 'T00:00:00Z' — producing
+     an Invalid Date whose toISOString() THREW, which took the whole facility
+     screen down with a 500. Normalised here, and the only place a caller's
+     date shape matters. */
+  /* ABSENT and UNREADABLE are different answers. A facility whose capital
+     sheet has not been read yet has no capital_since, and the first load is
+     a fair proxy for when the money went in — said so in the result. But a
+     capital_since that is PRESENT and cannot be read is a corrupt value, and
+     falling back there would compute the target from a date nobody set. */
+  const rawSince = facility && facility.capital_since;
+  const since    = rawSince
+    ? _asIsoDay(rawSince)
+    : ((summary && summary.first_load) || null);
+  const sinceIsProxy = !rawSince && !!since;
+  const today   = asAt || (summary && summary.as_at) || new Date().toISOString().slice(0, 10);
+
+  /* Each missing input is named rather than defaulted. A coverage figure
+     computed off a guessed capital or a guessed start date is worse than
+     none, because it looks like an answer. */
+  const missing = [];
+  if (!capital || !(capital > 0)) missing.push('our capital in the facility');
+  if (!rate)   missing.push('the target rate');
+  if (!months) missing.push('the target period');
+  if (!since)  missing.push(rawSince
+    ? 'a readable date for when our capital went in'
+    : 'the date our capital went in');
+  if (missing.length) return { known: false, missing, as_at: today };
+
+  /* The period, in calendar months from the day the capital went in, so a
+     five-month target ends on the same day of the month and not 150-odd days
+     later. */
+  const start = new Date(Date.parse(since + 'T00:00:00Z'));
+  /* A report must not throw. An unparseable date here used to reach
+     toISOString() and take the screen down; it is now the same answer as any
+     other missing input — said, not crashed. */
+  if (!Number.isFinite(start.getTime())) {
+    return { known: false, missing: ['a readable date for when our capital went in'], as_at: today };
+  }
+  const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + months,
+                                start.getUTCDate()));
+  const endIso = end.toISOString().slice(0, 10);
+  const periodDays  = daysBetween(since, endIso);
+  const elapsedRaw  = daysBetween(since, today);
+  /* Clamped: past the end of the period the target is the whole target, and
+     before the start it is nothing. An elapsed share over 1 would quietly
+     invent a second period. */
+  const elapsed = Math.max(0, Math.min(elapsedRaw === null ? 0 : elapsedRaw, periodDays));
+
+  const r2 = n => Math.round(n * 100) / 100;
+  const targetFull = r2(capital * rate);
+  const targetToDate = r2(targetFull * (periodDays > 0 ? elapsed / periodDays : 0));
+  const earned = (summary && summary.our_margin_earned) || 0;
+
+  return {
+    known: true,
+    as_at: today,
+    /* The capital this was computed on, named so it cannot be read as cover
+       for the whole short-term book. */
+    on_capital: capital,
+    target_rate: rate,
+    target_months: months,
+    period_start: since,
+    /* Said, so a figure resting on the first load date is not read as
+       resting on the day the capital actually went in. */
+    period_start_is_proxy: sinceIsProxy,
+    period_end: endIso,
+    period_days: periodDays,
+    days_elapsed: elapsed,
+    period_complete: elapsedRaw !== null && elapsedRaw >= periodDays,
+    target_full_period: targetFull,
+    target_to_date: targetToDate,
+    earned: r2(earned),
+    /* Surplus above the pro-rata target, or shortfall below it. One of them
+       is always zero: a figure that could be either sign invites being read
+       as the wrong one. */
+    surplus: r2(Math.max(0, earned - targetToDate)),
+    shortfall: r2(Math.max(0, targetToDate - earned)),
+    /* Earned over the pro-rata target. 1 is exactly on target. */
+    cover_to_date: targetToDate > 0 ? Math.round((earned / targetToDate) * 1000) / 1000 : null,
+    /* And over the WHOLE period's target, which is the figure that says
+       whether the five months are already paid for. */
+    cover_full_period: targetFull > 0 ? Math.round((earned / targetFull) * 1000) / 1000 : null,
+  };
+}
+
 module.exports = { cellsOf, money, pct, isoDate, headerIndex, columnMap,
-                   parseLoads, parseCapital, summarise, daysBetween, mean,
+                   parseLoads, parseCapital, summarise, coverage, daysBetween, mean, _asIsoDay,
                    SHARE_TOLERANCE };

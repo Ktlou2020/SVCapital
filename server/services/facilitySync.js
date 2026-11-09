@@ -77,10 +77,15 @@ async function sync(db, facility, { apply = false, actor, fetchImpl } = {}) {
     warnings,
   });
 
-  let capital = null, deposits = [];
+  let capital = null, deposits = [], since = null;
   if (f.capital_url) {
     const c = svc.parseCapital(await readSheet(f.capital_url, fetchImpl), { ourName: f.our_name });
     capital = c.capital; deposits = c.deposits;
+    /* The day the target starts running: the earliest deposit STILL IN. One
+       that has been taken back out is not capital at risk and must not pull
+       the start date earlier than the money that is actually there. */
+    since = deposits.filter(d => !d.date_out && d.date_in)
+      .reduce((m, d) => (!m || d.date_in < m) ? d.date_in : m, null);
   }
 
   /* What this sheet would change, against what is already stored — so a
@@ -99,9 +104,15 @@ async function sync(db, facility, { apply = false, actor, fetchImpl } = {}) {
   const gone = [...have.keys()].filter(k => !parsed.loads.some(l => l.load_ref === k));
 
   const summary = svc.summarise(parsed.loads, capital);
+  /* The preview answers the question the screen asks, so a person can see
+     what a re-read would do to the coverage figure and not only to the
+     row counts. */
+  const cover = svc.coverage(summary, Object.assign({}, f,
+    { capital_since: since || f.capital_since }));
   const plan = {
     applied: false,
     summary,
+    coverage: cover,
     counts: { added: added.length, newly_settled: newlySettled.length,
               changed: changed.length, unchanged: unchanged.length,
               skipped_blank: parsed.skipped, no_longer_in_sheet: gone.length },
@@ -139,8 +150,9 @@ async function sync(db, facility, { apply = false, actor, fetchImpl } = {}) {
     await client.query(
       `UPDATE stl_facilities SET last_synced_at = NOW(), last_sync_by = $2,
               last_warnings = $3::jsonb, our_capital = COALESCE($4, our_capital),
+              capital_since = COALESCE($5, capital_since),
               updated_at = NOW() WHERE id = $1`,
-      [f.id, (actor && actor.email) || 'schedule', JSON.stringify(warnings), capital]);
+      [f.id, (actor && actor.email) || 'schedule', JSON.stringify(warnings), capital, since]);
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});

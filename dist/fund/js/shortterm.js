@@ -279,15 +279,9 @@ async function renderFacilitiesView() {
   }
   const loads = payload.data || [];
   const s = payload.summary || {};
+  const cov = payload.coverage || {};
   const meta = payload.facility || {};
   const share = meta.our_share_pct ? (meta.our_share_pct * 100).toFixed(0) + '%' : '—';
-
-  const stat = (label, value, sub) => `
-    <div>
-      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--stl-muted)">${label}</div>
-      <div style="font-size:19px;font-weight:800;margin:2px 0">${value}</div>
-      <div style="font-size:11px;color:var(--stl-muted);line-height:1.5">${sub}</div>
-    </div>`;
 
   const card = (label, value, sub, colour) => `
     <div class="stl-card" style="flex:1;min-width:190px">
@@ -300,25 +294,25 @@ async function renderFacilitiesView() {
       <td style="font-weight:700">${_stlEsc(l.load_ref)}</td>
       <td>${_stlEsc(l.date_bought || '—')}</td>
       <td>${_stlEsc(l.date_buyer_paid || '—')}</td>
-      <td style="text-align:right">${fmt.num(l.tons)}</td>
+      <td style="text-align:right">${stlfmt.num(l.tons)}</td>
       <td style="text-align:right;font-weight:800;color:#34d399">
-        ${l.settled ? fmt.zar(l.our_margin) : '<span style="color:var(--stl-muted);font-weight:500">not settled</span>'}
+        ${l.settled ? stlfmt.zar(l.our_margin) : '<span style="color:var(--stl-muted);font-weight:500">not settled</span>'}
       </td>
-      <td style="text-align:right;color:var(--stl-muted)">${fmt.zar(l.margin_total)}</td>
+      <td style="text-align:right;color:var(--stl-muted)">${stlfmt.zar(l.margin_total)}</td>
       <td style="text-align:right;color:var(--stl-muted)">${l.pool_pct == null ? '—' : (l.pool_pct * 100).toFixed(1) + '%'}</td>
       <td>${_stlEsc(l.status || '—')}</td>
     </tr>`;
 
   el.innerHTML = `
     <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px">
-      ${card('Our capital in the facility', fmt.zar(s.our_capital),
+      ${card('Our capital in the facility', stlfmt.zar(s.our_capital),
              `${_stlEsc(meta.our_name || 'SV Capital')} &middot; ${share} of Pool A margin`)}
-      ${card('Our margin earned', fmt.zar(s.our_margin_earned),
+      ${card('Our margin earned', stlfmt.zar(s.our_margin_earned),
              `${s.settled || 0} settled load${s.settled === 1 ? '' : 's'}`, '#34d399')}
       ${card('Return on our capital',
              s.return_on_capital == null ? '—' : (s.return_on_capital * 100).toFixed(2) + '%',
              'Since ' + _stlEsc(s.first_load || '—') + ' &middot; not annualised')}
-      ${card('Loads', fmt.num(s.loads),
+      ${card('Loads', stlfmt.num(s.loads),
              `${s.awaiting_settlement || 0} awaiting buyer payment`)}
     </div>
 
@@ -326,21 +320,23 @@ async function renderFacilitiesView() {
          loads behind it: an average over two loads is not an average, and a
          figure on a fund screen that does not say what it is drawn from gets
          read as settled fact. -->
+    ${_stlCoverage(cov, meta)}
+
     <div class="stl-card" style="margin-bottom:14px">
       <h3 style="margin-top:0">Tons and timing</h3>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:14px">
-        ${stat('Tons funded to date', fmt.num(s.tons_total) + ' t',
-               `${fmt.num(s.tons_settled)} t settled &middot; ${fmt.num(s.tons_awaiting)} t still out`
+        ${_stlStat('Tons funded to date', stlfmt.num(s.tons_total) + ' t',
+               `${stlfmt.num(s.tons_settled)} t settled &middot; ${stlfmt.num(s.tons_awaiting)} t still out`
                + (s.tons_missing_on_loads ? `<br><span style="color:#fec24f">${s.tons_missing_on_loads} load(s) have no tonnage on the sheet</span>` : ''))}
-        ${stat('Our margin per ton', fmt.zar(s.our_margin_per_ton),
+        ${_stlStat('Our margin per ton', stlfmt.zar(s.our_margin_per_ton),
                'Over settled tons only')}
-        ${stat('Average buyer repayment period', _stlDays(s.days_to_buyer_payment),
+        ${_stlStat('Average buyer repayment period', _stlDays(s.days_to_buyer_payment),
                _stlRange(s.days_to_buyer_payment, 'from purchase to the buyer paying'))}
-        ${stat('Buyer paid &rarr; Pool A paid out', _stlDays(s.days_buyer_paid_to_payout),
+        ${_stlStat('Buyer paid &rarr; Pool A paid out', _stlDays(s.days_buyer_paid_to_payout),
                _stlRange(s.days_buyer_paid_to_payout, 'before our cut is paid'))}
-        ${stat('Our average per settled load', fmt.zar(s.our_avg_per_settled_load),
+        ${_stlStat('Our average per settled load', stlfmt.zar(s.our_avg_per_settled_load),
                `Across ${s.settled || 0} settled load(s)`)}
-        ${stat('Still awaiting payment', _stlDays(s.days_outstanding_unsettled),
+        ${_stlStat('Still awaiting payment', _stlDays(s.days_outstanding_unsettled),
                s.oldest_unsettled
                  ? `Oldest is load <strong>${_stlEsc(s.oldest_unsettled.load_ref)}</strong>,
                     bought ${_stlEsc(s.oldest_unsettled.date_bought)} &mdash;
@@ -352,12 +348,12 @@ async function renderFacilitiesView() {
           The facility's own trading &mdash; not our money
         </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:14px">
-          ${stat('Maize bought, settled loads', fmt.zar(s.facility_cost_settled),
-                 `${fmt.zar(s.facility_cost_total)} across all ${s.loads || 0} loads`)}
-          ${stat('Gross trading margin', s.facility_margin_on_cost == null ? '—'
+          ${_stlStat('Maize bought, settled loads', stlfmt.zar(s.facility_cost_settled),
+                 `${stlfmt.zar(s.facility_cost_total)} across all ${s.loads || 0} loads`)}
+          ${_stlStat('Gross trading margin', s.facility_margin_on_cost == null ? '—'
                    : (s.facility_margin_on_cost * 100).toFixed(2) + '%',
                  'Facility margin on what it paid for the maize. <strong>Not</strong> a return on our capital.')}
-          ${stat('Largest single load', fmt.zar(s.largest_load_cost),
+          ${_stlStat('Largest single load', stlfmt.zar(s.largest_load_cost),
                  'The facility\u2019s exposure on one trade, not ours')}
         </div>
       </div>
@@ -420,8 +416,8 @@ async function renderFacilitiesView() {
           <tbody>${loads.map(row).join('')}</tbody>
           <tfoot><tr style="border-top:2px solid var(--stl-border);font-weight:800">
             <td colspan="4">${s.settled || 0} settled of ${s.loads || 0}</td>
-            <td style="text-align:right;color:#34d399">${fmt.zar(s.our_margin_earned)}</td>
-            <td style="text-align:right;color:var(--stl-muted)">${fmt.zar(s.facility_margin_settled)}</td>
+            <td style="text-align:right;color:#34d399">${stlfmt.zar(s.our_margin_earned)}</td>
+            <td style="text-align:right;color:var(--stl-muted)">${stlfmt.zar(s.facility_margin_settled)}</td>
             <td colspan="2"></td>
           </tr></tfoot>
         </table>
@@ -456,6 +452,79 @@ async function syncFacility(id, apply) {
        + ((r.warnings || []).length ? `<div style="margin-top:6px;color:#fec24f">${r.warnings.slice(0,6).map(w=>_stlEsc(w)).join('<br>')}</div>` : '');
   }
   if (r.applied) await renderFacilitiesView();
+}
+
+/* One stat tile. Top level because two renderers use it, and a local const
+   would be out of scope in the second — a ReferenceError the moment that
+   panel renders, which a syntax check cannot see. */
+function _stlStat(label, value, sub) {
+  return `<div>
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--stl-muted)">${label}</div>
+      <div style="font-size:19px;font-weight:800;margin:2px 0">${value}</div>
+      <div style="font-size:11px;color:var(--stl-muted);line-height:1.5">${sub}</div>
+    </div>`;
+}
+
+/* Does the capital placed in this facility earn its target?
+
+   The capital came from the short-term investment, where investors are on a
+   TARGET of 8% every five months. Every word here keeps that a target: ahead
+   and behind, surplus and shortfall — never owed, due or arrears. A shortfall
+   on a target is a fact to act on, not a debt the facility carries.
+
+   AND IT IS COVERAGE ON THIS FACILITY'S CAPITAL ONLY. The short-term book is
+   much larger and deployed in other places too, so the panel names the
+   capital it was computed on and says so in as many words. Reading it as
+   cover for the product would be the same mistake as reading the facility's
+   trading margin as our return. */
+function _stlCoverage(c, meta) {
+  if (!c || !c.known) {
+    return `<div class="stl-card" style="margin-bottom:14px">
+      <h3 style="margin-top:0">Against the target</h3>
+      <div style="font-size:12px;color:var(--stl-muted)">
+        Not worked out yet &mdash; ${(c && c.missing || []).map(m => _stlEsc(m)).join(', ') || 'no target set'}.
+      </div></div>`;
+  }
+  const ahead = c.shortfall === 0;
+  const pct = n => (n * 100).toFixed(1) + '%';
+  return `<div class="stl-card" style="margin-bottom:14px;border-left:3px solid ${ahead ? '#34d399' : '#f87171'}">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">
+      <h3 style="margin:0">Against the target</h3>
+      <div style="font-size:12px;color:var(--stl-muted)">
+        ${pct(c.target_rate)} over ${c.target_months} months on
+        ${stlfmt.zar(c.on_capital)} &middot; ${_stlEsc(c.period_start)} to ${_stlEsc(c.period_end)}
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-top:12px">
+      ${_stlStat('Target, whole period', stlfmt.zar(c.target_full_period),
+             `${c.period_days} days from when our capital went in`)}
+      ${_stlStat('Target so far', stlfmt.zar(c.target_to_date),
+             `Pro rata, ${c.days_elapsed} of ${c.period_days} days`)}
+      ${_stlStat('Earned so far', stlfmt.zar(c.earned),
+             `Our share of settled loads`)}
+      ${_stlStat(ahead ? 'Ahead of target by' : 'Behind target by',
+             stlfmt.zar(ahead ? c.surplus : c.shortfall),
+             ahead ? `${c.cover_to_date}&times; the target to date`
+                   : `${pct(c.cover_to_date)} of the target to date`)}
+    </div>
+    <div style="margin-top:12px;padding:10px 12px;border-radius:8px;
+                background:${ahead ? 'rgba(52,211,153,0.10)' : 'rgba(248,113,113,0.10)'};
+                font-size:12px;line-height:1.55">
+      ${c.cover_full_period >= 1
+        ? `<strong>The whole ${c.target_months}-month target is already earned.</strong>
+           ${stlfmt.zar(c.earned)} against ${stlfmt.zar(c.target_full_period)} &mdash;
+           ${pct(c.cover_full_period)} of it, in ${c.days_elapsed} of ${c.period_days} days.`
+        : `<strong>${pct(c.cover_full_period)} of the whole ${c.target_months}-month target
+           earned so far</strong>, in ${c.days_elapsed} of ${c.period_days} days.`}
+      ${c.period_complete ? ' The period has ended.' : ''}
+    </div>
+    <div style="margin-top:8px;font-size:11px;color:var(--stl-muted);line-height:1.55">
+      A <strong>target</strong>, not a liability: being behind it is something to act on, not a
+      debt this facility owes. And this is cover on the <strong>${stlfmt.zar(c.on_capital)} placed in
+      this facility</strong> &mdash; not on the short-term book, which is larger and deployed
+      elsewhere too.
+    </div>
+  </div>`;
 }
 
 /* A mean of days, or a dash. Never "0 days" when there is nothing to

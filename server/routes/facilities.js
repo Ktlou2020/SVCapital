@@ -62,6 +62,7 @@ router.get('/facilities/:id/loads', requireAuth, requireRole(...STAFF), async (r
       settled: r.our_margin !== null,
       status: r.status,
     }));
+    const sum = svc.summarise(loads, f.our_capital === null ? null : Number(f.our_capital));
     res.json({
       data: loads,
       facility: { id: f.id, name: f.name, partner_name: f.partner_name,
@@ -69,7 +70,11 @@ router.get('/facilities/:id/loads', requireAuth, requireRole(...STAFF), async (r
                   our_share_pct: f.our_share_pct === null
                     ? null : Number(f.our_share_pct),
                   last_synced_at: f.last_synced_at, warnings: f.last_warnings || [] },
-      summary: svc.summarise(loads, f.our_capital === null ? null : Number(f.our_capital)),
+      summary: sum,
+      /* Does the capital we placed here earn its target? A target, not a
+         liability — and coverage on THIS facility's capital only, never on
+         the whole short-term book. */
+      coverage: svc.coverage(sum, f),
     });
   } catch (err) {
     console.error('[facilities] loads failed:', err.message);
