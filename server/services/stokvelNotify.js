@@ -374,8 +374,8 @@ async function spent({ groupId, authorityId, reference, db } = {}) {
 /* ─── INVITED ──────────────────────────────────────────────────────
    Somebody has been asked to join. There is no link in the message, so this
    has to do two jobs: tell them it happened, and tell them how to find it —
-   sign in as the person who holds the contact it was sent to, and the
-   invitation is on the Sub-accounts screen.
+   sign in (or sign up) as the person who holds the contact it was sent to,
+   and the invitation is at the top of the dashboard and under My Groups.
 
    THREE CHANNELS, because this is the one message sent to somebody who may
    not be a user at all. Email where there is an address, SMS where there is
@@ -397,8 +397,10 @@ async function invited({ inviteId, db } = {}) {
     const who   = v.invited_by_name || 'A member';
     const group = v.stokvel_name || 'a group';
     const line  = `${who} has invited you to join ${group} on SV Capital.`;
-    const find  = 'Sign in to the app with this email address or cell number and the '
-                + 'invitation is waiting on your Sub-accounts screen.';
+    const find  = v.matched_investor_id
+      ? 'They already have an account: the invitation is at the top of their dashboard and under My groups.'
+      : 'They do not have an account yet. Once they sign up with this email address or cell number, '
+        + 'the invitation will be at the top of their dashboard.';
     /* THE RULES GO OUT WITH THE INVITATION. A group's founding mandate is set
        by whoever starts it and approved by nobody; the only thing between
        that and a member's savings is that they were told the rules before
@@ -430,17 +432,17 @@ async function invited({ inviteId, db } = {}) {
            the storage convention is known. */
         const dialable = /^\d{9}$/.test(String(v.cell)) ? '0' + v.cell : v.cell;
         await Promise.resolve(sms.sendStokvelInvite(dialable,
-          { inviterName: who, stokvelName: group, terms }))
+          { inviterName: who, stokvelName: group, terms, alreadyAUser: !!v.matched_investor_id }))
           .then(() => reached.push('sms'))
           .catch(e => console.warn('[stokvelNotify] invite sms failed:', e.message));
       }
     }
     if (push && v.matched_investor_id) {
       await push.sendPushToInvestor(v.matched_investor_id, {
-        title: group, body: `${line} Open Sub-accounts to accept it.`,
+        title: group, body: `${line} Tap to see the group's rules and accept it.`,
         /* Not the group's hub: they are not a member yet and the hub would
-           refuse them. The invitation card is on Sub-accounts. */
-        url: '/portal/?view=subaccounts', tag: 'sv-stokvel-invite',
+           refuse them. My groups holds the invitation card, with the rules. */
+        url: '/portal/?view=groups', tag: 'sv-stokvel-invite',
         icon: '/assets/logo.png', badge: '/assets/logo.png',
       }).then(() => reached.push('push'))
         .catch(e => console.warn('[stokvelNotify] invite push failed:', e.message));

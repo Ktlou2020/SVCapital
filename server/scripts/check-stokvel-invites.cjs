@@ -221,11 +221,11 @@ const settle = async () => {
           await settle();
           return sent.push.some(c => c.fn === 'sendPushToInvestor'); })()),
        'they are holding the phone — an email is the slow way to reach them');
-    ok('an invitation points at Sub-accounts, not a hub they cannot open',
+    ok('an invitation points at My Groups, not a hub they cannot open',
        sent.push.filter(c => c.fn === 'sendPushToInvestor')
-         .every(c => ((c.args[1] || {}).url || '').includes('view=subaccounts')),
+         .every(c => ((c.args[1] || {}).url || '').includes('view=groups')),
        'they are not a member yet \u2014 the hub would refuse them, and the invitation '
-       + 'card is on Sub-accounts');
+       + 'card is on My Groups');
     ok('and no message carries a join link',
        !/\/invites?\/[A-Z0-9-]{8,}/.test(JSON.stringify(sent.email) + JSON.stringify(sent.sms)),
        'a link is a capability — forwarded once it shows a stranger the group’s money');

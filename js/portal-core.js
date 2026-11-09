@@ -1437,6 +1437,7 @@ function navigate(view, btnEl) {
     maturity: 'When Your Investment Ends', profile: 'My Profile',
     support: 'Support', referral: 'Refer & Earn', statement: 'Account Statement',
     quests: 'Earn Rewards', learn: 'Learning Hub', subaccounts: 'My Accounts',
+    groups: 'My Groups',
     documents: 'Document Vault', policies: 'Platform Policies',
     gifts: 'Send a Gift',
   };
@@ -1460,6 +1461,14 @@ function navigate(view, btnEl) {
          person invited to a stokvel before they have opened anything of
          their own has an empty screen, and the invitation is the one thing
          on it. */
+      await Promise.all([loadSubAccounts(), loadStokvels(), loadStokvelInvites()]);
+      renderSubAccountsView();
+    },
+    /* The same three loads as Sub-accounts: a group is either one the
+       caller opened or one they joined, and an invitation is the first
+       thing a new member needs to see. renderSubAccountsView draws My
+       Groups too, so every action that refreshes one refreshes both. */
+    groups: async () => {
       await Promise.all([loadSubAccounts(), loadStokvels(), loadStokvelInvites()]);
       renderSubAccountsView();
     },
@@ -1530,6 +1539,7 @@ function _startPolling() {
 }
 
 function renderOverview(skipCharts) {
+  _svBootGroups();
   const inv = PORTAL.investor;
   if (!inv) return;
 
@@ -7193,6 +7203,7 @@ function renderSubAccountsView() {
   /* The sidebar switcher is built from the same two lists, so it is kept
      current here rather than by every caller remembering to. */
   try { renderStokvelSwitcher(); } catch (_) {}
+  try { _svRenderGroupSurfaces(); } catch (_) {}
 
   const grid  = document.getElementById('subacctsGrid');
   const empty = document.getElementById('subacctsEmpty');
@@ -7345,13 +7356,13 @@ function _saFormFields(type) {
     </div>`;
 
   if (type === 'stokvel') return common + `
-    <div class="form-row form-row--2">
-      <div class="form-group"><label class="form-label">Group registration number (if any)</label><input type="text" class="form-input" id="saFieldReg" placeholder="Leave blank if unregistered" /></div>
-      <div class="form-group"><label class="form-label">Number of Members</label><input type="number" class="form-input" id="saFieldMembers" placeholder="e.g. 12" min="2" max="200" /></div>
-    </div>
-    <div class="form-row form-row--2">
-      <div class="form-group"><label class="form-label">Club Contact Email</label><input type="email" class="form-input" id="saFieldEmail" placeholder="yourclub@email.com" /></div>
-      <div class="form-group"><label class="form-label">Club Phone</label><input type="tel" class="form-input" id="saFieldPhone" placeholder="+27 72 000 0000" /></div>
+    <!-- No member count and no club email or phone. The roster is built
+         from the invitations, so a typed-in count was a number nothing read
+         (and allowed 200 against a limit of 50); the contact details were
+         stored and never used. What is left is what the group decides. -->
+    <div class="form-group"><label class="form-label">Group registration number (if any)</label><input type="text" class="form-input" id="saFieldReg" placeholder="Leave blank if unregistered" /></div>
+    <div style="font-size:0.76rem;color:var(--text-muted);margin:-4px 0 12px;line-height:1.5">
+      You add members after this, by inviting them. A group can have up to 50 members.
     </div>
     <!-- THE SIGNING RULES, SET HERE. A group's first mandate is the one no
          signatory can approve, because it is what creates them; the check is
@@ -7455,10 +7466,16 @@ function _saRenderReview() {
       <div style="font-size:0.8rem;color:rgba(255,255,255,0.8)">${meta.tagline}</div>
     </div>
     <div class="info-list mt-16">${rows.map(([k,v]) => `<div class="info-row"><span class="info-row__label">${k}</span><span class="info-row__value">${v}</span></div>`).join('')}</div>
-    <div class="sa-fica-notice">
+    ${_saCreateType === 'stokvel' ? `<div class="sa-fica-notice">
+      <i class="fa-solid fa-list-check" style="color:#fec24f"></i>
+      <div><strong>What happens next</strong><br><span style="font-size:0.8rem;color:var(--text-muted)">The group opens on a
+        short checklist: invite the members, have the signatories confirm, and send us the group&rsquo;s
+        constitution, proof of its bank account and the signatories&rsquo; ID. Money can come in straight
+        away; withdrawals open once the group is verified.</span></div>
+    </div>` : `<div class="sa-fica-notice">
       <i class="fa-solid fa-id-card" style="color:#fec24f"></i>
       <div><strong>FICA documents required</strong><br><span style="font-size:0.8rem;color:var(--text-muted)">After creating, you'll upload the required documents in the account details view. Investing is enabled once FICA is approved.</span></div>
-    </div>`;
+    </div>`}`;
 }
 
 async function saConfirmCreate() {
@@ -7489,9 +7506,6 @@ async function saConfirmCreate() {
     body.phone         = document.getElementById('saFieldPhone')?.value?.trim() || '';
   } else if (_saCreateType === 'stokvel') {
     body.stokvel_reg_number = document.getElementById('saFieldReg')?.value?.trim() || '';
-    body.member_count       = parseInt(document.getElementById('saFieldMembers')?.value || '0', 10);
-    body.email              = document.getElementById('saFieldEmail')?.value?.trim() || '';
-    body.phone              = document.getElementById('saFieldPhone')?.value?.trim() || '';
   } else if (_saCreateType === 'minor') {
     body.date_of_birth   = document.getElementById('saFieldDob')?.value || '';
     body.id_number       = document.getElementById('saFieldId')?.value?.trim() || '';
@@ -12506,7 +12520,8 @@ async function svcOpenDeepLink(href) {
 
   /* Sub-accounts either way: it is where a stokvel lives, and where an
      invitation card appears for somebody who is not in one yet. */
-  const target = view === 'subaccounts' || stokvel ? 'subaccounts' : view;
+  const target = view === 'groups' ? 'groups'
+               : view === 'subaccounts' || stokvel ? 'subaccounts' : view;
   if (typeof navigate === 'function') {
     navigate(target, document.querySelector(`[data-view="${target}"]`));
   }
@@ -12788,6 +12803,127 @@ function renderStokvelSwitcher() {
         <i class="fa-solid fa-people-group"></i>
         <span>${_esc(g.name)}${pill(waiting(g))}</span>
       </button>`).join('')}`;
+}
+
+/* ─── My groups ─────────────────────────────────────────────────────
+   Groups used to live under More → My Accounts, filed beside trusts and
+   children's accounts, and the sidebar list of a member's groups only
+   appeared after they had opened that screen. So a member who never went
+   there never saw their group in the menu, and an invitation waited on a
+   screen the invitee had no reason to open.
+
+   Now: a My Groups entry in the main menu, a screen that holds the groups,
+   the invitations and "Start a group", and a banner on the dashboard when
+   an invitation is waiting. All three are drawn from the same loads as
+   Sub-accounts, by _svRenderGroupSurfaces, which renderSubAccountsView
+   calls — so accepting, declining or creating refreshes every one. */
+function _svAllGroups() {
+  const groups = (PORTAL.stokvels || []).slice();
+  for (const sa of (PORTAL.subAccounts || [])) {
+    if (sa.account_type === 'stokvel' && !groups.some(g => g.id === sa.id)) groups.push(sa);
+  }
+  return groups;
+}
+
+/* Load the groups once per page load, in the background, so the menu, the
+   badge and the dashboard banner are right without visiting a screen. */
+function _svBootGroups() {
+  if (window.__SVGRPBOOT) return;
+  window.__SVGRPBOOT = true;
+  Promise.all([loadSubAccounts(), loadStokvels(), loadStokvelInvites()])
+    .then(() => { try { renderSubAccountsView(); } catch (_) { _svRenderGroupSurfaces(); } })
+    .catch(() => { window.__SVGRPBOOT = false; });
+}
+
+function _svRenderGroupSurfaces() {
+  const invites = PORTAL.stokvelInvites || [];
+  const badge = document.getElementById('navGroupsBadge');
+  if (badge) {
+    badge.textContent = invites.length ? String(invites.length) : '';
+    badge.style.display = invites.length ? '' : 'none';
+  }
+  _svRenderInviteBanner();
+  renderGroupsView();
+}
+
+function _svRenderInviteBanner() {
+  const host = document.getElementById('svInviteBanner');
+  if (!host) return;
+  const invites = PORTAL.stokvelInvites || [];
+  if (!invites.length) { host.innerHTML = ''; return; }
+  const v = invites[0];
+  const more = invites.length - 1;
+  host.innerHTML = `<div role="status" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;
+        margin-bottom:16px;padding:14px 16px;border-radius:14px;border:2px solid #eda5ff;
+        background:rgba(237,165,255,0.10)">
+      <i class="fa-solid fa-envelope-open-text" style="font-size:1.4rem;color:#eda5ff"></i>
+      <div style="flex:1;min-width:200px">
+        <div style="font-weight:800">${_esc(v.invited_by_name || 'Somebody')} invited you to join ${_esc(v.stokvel_name || 'a group')}</div>
+        <div style="font-size:0.8rem;color:var(--text-muted)">See the group&rsquo;s rules before you decide.${
+          more > 0 ? ` You have ${more} more invitation${more === 1 ? '' : 's'} waiting.` : ''}</div>
+      </div>
+      <button class="btn btn--primary btn--sm" onclick="navigate('groups', document.querySelector('[data-view=&quot;groups&quot;]'))">
+        See the invitation</button>
+    </div>`;
+}
+
+function renderGroupsView() {
+  const host = document.getElementById('groupsBody');
+  if (!host) return;
+  const invites = PORTAL.stokvelInvites || [];
+  const groups  = _svAllGroups();
+  const card = g => {
+    const waiting = parseInt(g.awaiting_my_vote, 10) || 0;
+    const owed = parseFloat(g.my_outstanding) || 0;
+    const role = g.my_role || (g.i_opened_it ? 'chairperson' : 'member');
+    return `<button type="button" onclick="openStokvelHub('${_esc(g.id)}')"
+        style="text-align:left;width:100%;cursor:pointer;border:1px solid var(--border);border-left:3px solid #eda5ff;
+               border-radius:14px;padding:14px 16px;background:var(--card-bg,transparent);color:inherit;font:inherit">
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:start">
+          <div>
+            <div style="font-weight:800;font-size:1rem">${_esc(g.name)}</div>
+            <div style="font-size:0.76rem;color:var(--text-muted)">${_esc(String(role).replace(/^\w/, c => c.toUpperCase()))}${
+              g.active_members ? ` &middot; ${_esc(String(g.active_members))} members` : ''}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase">In the wallet</div>
+            <div style="font-weight:800">${Utils.rand(g.wallet_balance)}</div>
+          </div>
+        </div>
+        ${waiting || owed > 0 ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+          ${waiting ? `<span style="font-size:0.72rem;font-weight:700;background:#eda5ff;color:#1a1a1a;border-radius:999px;padding:2px 9px">
+            ${waiting} waiting on your approval</span>` : ''}
+          ${owed > 0 ? `<span style="font-size:0.72rem;font-weight:700;border:1px solid #f59e0b;color:#f59e0b;border-radius:999px;padding:2px 9px">
+            You owe ${Utils.rand(owed)}</span>` : ''}
+        </div>` : ''}
+      </button>`;
+  };
+  host.innerHTML = `<div style="max-width:860px">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px">
+      <div>
+        <div style="font-size:1.3rem;font-weight:800">My groups</div>
+        <div style="font-size:0.84rem;color:var(--text-muted)">Savings clubs and investment groups you belong to.</div>
+      </div>
+      <button class="btn btn--primary btn--sm" onclick="openCreateSubAccountModal('stokvel')">
+        <i class="fa-solid fa-plus"></i> Start a group</button>
+    </div>
+    ${invites.length ? `<div class="sa-section-title mt-16"><i class="fa-solid fa-envelope-open-text"></i> Waiting for your answer</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">
+        ${invites.map(_svInviteCard).join('')}</div>` : ''}
+    ${groups.length ? `<div class="sa-section-title mt-16"><i class="fa-solid fa-people-group"></i> Your groups</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
+        ${groups.map(card).join('')}</div>`
+      : !invites.length ? `<div class="empty-state" style="margin-top:20px;text-align:left;max-width:560px">
+          <p style="font-weight:700">You are not in a group yet.</p>
+          <p style="font-size:0.86rem;color:var(--text-muted);line-height:1.6">
+            Start one for your savings club or investment group: you set how many signatories must
+            approve before money leaves, invite the members, and everybody sees who has paid. If somebody
+            has invited you, the invitation appears here as soon as you are signed in with the email
+            address or cell number they used.</p>
+          <button class="btn btn--secondary btn--sm" onclick="openCreateSubAccountModal('stokvel')">
+            <i class="fa-solid fa-plus"></i> Start a group</button>
+        </div>` : ''}
+  </div>`;
 }
 
 /* ─── Switching into a stokvel ─────────────────────────────────────
@@ -13397,6 +13533,99 @@ function _svFormError(msg) {
 }
 function _svVal(id) { const el = document.getElementById(id); return el ? el.value : ''; }
 
+/* The setup steps for a group, each { key, core, done, title, note, action }.
+   Pure: reads only what the workspace has already loaded. A group record
+   from before mandate_state existed falls back to the quorum and the
+   roster, so an older group is judged on the same facts. */
+function _svSetupSteps(id, ctx, d) {
+  const g       = ctx.g || {};
+  const gid     = _esc(id);
+  const roster  = ((ctx.members && ctx.members.data) || []).filter(m => m.status === 'active');
+  const quorum  = parseInt(g.stokvel_quorum, 10) || 0;
+  const sigs    = roster.filter(m => m.is_signatory).length;
+  const ms      = g.mandate_state || { has_mandate: !!quorum, quorum: quorum || null,
+                                       signatories: sigs, short_by: quorum ? Math.max(0, quorum - sigs) : null };
+  const setup   = g.setup || {};
+  const pot     = d ? Number(d.net_assets) : Number(g.wallet_balance) || 0;
+  const committee = !!g.i_opened_it || ['chairperson', 'secretary', 'treasurer'].includes(g.my_role);
+  const name    = String(g.name || 'our group');
+  const btn = (label, onclick, icon) => `<button class="btn btn--secondary btn--sm" onclick="${onclick}">
+      ${icon ? `<i class="fa-solid ${icon}"></i> ` : ''}${label}</button>`;
+  const askUs = (label, text) => `<a class="btn btn--secondary btn--sm" target="_blank" rel="noopener"
+      href="https://api.whatsapp.com/send?phone=27722269415&text=${encodeURIComponent(text)}">
+      <i class="fa-brands fa-whatsapp"></i> ${label}</a>`;
+  const kyc = String(setup.verification || g.kyc_status || '');
+  const sched = setup.schedule || null;
+  const tpl = (window.__SVREL || {}).templates;
+
+  return [
+    { key: 'rules', core: true, done: !!ms.has_mandate,
+      title: 'Set the signing rules',
+      note: ms.has_mandate
+        ? `${ms.quorum} signatories must approve before money moves.`
+        : committee
+          ? 'How many signatories must approve before money leaves (two at least), how the pot divides, and any date the money is locked until. Everybody you invite is shown these before they join.'
+          : 'The chairperson, secretary or treasurer sets these. Nothing can be paid out until they have.',
+      action: committee ? btn('Set the signing rules', `svWorkspaceTab('${gid}','approvals')`, 'fa-pen-nib') : '' },
+    { key: 'members', core: true, done: roster.length >= 2,
+      title: 'Get the members in',
+      note: roster.length >= 2
+        ? `${roster.length} members are in.`
+        : 'Invite them by email address or cell number. They accept it themselves \u2014 nobody is added to a group that can see their money without agreeing to it. When you invite somebody you want as a signatory, tick the box to ask them.',
+      action: committee ? btn('Invite members', `svWorkspaceTab('${gid}','members')`, 'fa-user-plus') : '' },
+    { key: 'signatories', core: true, done: !!ms.has_mandate && ms.short_by === 0,
+      title: 'Signatories confirm',
+      note: !ms.has_mandate
+        ? 'Once the rules are set, the people asked to sign confirm it themselves. Nobody is made a signatory by somebody else.'
+        : ms.short_by === 0
+          ? `${ms.signatories} signatories have confirmed. The rules are in force.`
+          : `${ms.signatories} of the ${ms.quorum} signatories needed have confirmed. ${ms.short_by} more must confirm before any money can leave.`,
+      action: g.i_am_nominated
+        ? btn('Confirm I will sign', `svWorkspaceTab('${gid}','approvals')`, 'fa-signature')
+        : (committee && ms.has_mandate ? btn('Ask somebody to sign', `svWorkspaceTab('${gid}','members')`, 'fa-user-plus') : '') },
+    { key: 'schedule', core: false, done: !!sched,
+      title: 'Set the monthly contribution',
+      note: sched
+        ? `${Utils.rand(sched.amount)} ${_esc(sched.cadence || 'monthly')}, due on day ${_esc(String(sched.due_day || 1))}.`
+        : 'The amount each member pays and the day it is due. For now SV Capital sets this for you \u2014 send us the amount and the day and we will put it in, usually the same working day.',
+      action: committee
+        ? askUs('Send us the amount', `Please set the contribution for ${name} (${id}): R___ per member, due on day __ of the month.`)
+        : '' },
+    { key: 'documents', core: false, done: kyc === 'approved',
+      title: 'Send the group\u2019s documents',
+      note: kyc === 'approved'
+        ? 'The group is verified.'
+        : kyc === 'under_review'
+          ? 'We have the documents and are checking them. Withdrawals open once the group is verified.'
+          : 'The group\u2019s constitution, proof of its bank account and the signatories\u2019 ID. Money can come in now; withdrawals open once the group is verified.'
+            + (tpl ? ' No constitution yet? Start from our <a href="../group-constitution-template.html" target="_blank" rel="noopener">template</a>.' : ''),
+      action: committee && kyc !== 'under_review'
+        ? `<a class="btn btn--secondary btn--sm" href="mailto:enquiry@svcapital.co.za?subject=${encodeURIComponent(`Group documents: ${name} (${id})`)}">
+             <i class="fa-solid fa-envelope"></i> Email the documents</a>`
+        : '' },
+    { key: 'money', core: true, done: pot > 0,
+      title: 'First money into the pot',
+      note: pot > 0
+        ? `The pot holds ${Utils.rand(pot)}.`
+        : 'Each member pays their share from their own wallet, and the whole group can see who has and who has not.',
+      action: btn('Pay into the pot', `payIntoStokvel('${gid}')`, 'fa-wallet') },
+  ];
+}
+
+function _svSetupStep(x) {
+  return `<div style="display:flex;gap:12px;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--border)">
+      <div style="width:26px;height:26px;border-radius:50%;flex-shrink:0;display:grid;place-items:center;
+                  background:${x.done ? '#22c55e' : 'var(--border)'};color:${x.done ? '#fff' : 'var(--text-muted)'};font-size:0.72rem">
+        <i class="fa-solid ${x.done ? 'fa-check' : 'fa-ellipsis'}"></i>
+      </div>
+      <div style="flex:1">
+        <div style="font-weight:700;font-size:0.92rem;${x.done ? 'text-decoration:line-through;opacity:.6' : ''}">${_esc(x.title)}</div>
+        <div style="font-size:0.8rem;color:var(--text-muted);line-height:1.5">${x.note}</div>
+        ${!x.done && x.action ? `<div style="margin-top:8px">${x.action}</div>` : ''}
+      </div>
+    </div>`;
+}
+
 function _svOverview(id, ctx) {
   const d        = (ctx.shareData && ctx.shareData.data) || null;
   const payouts  = (ctx.payoutData && ctx.payoutData.data) || [];
@@ -13431,57 +13660,48 @@ function _svOverview(id, ctx) {
       <div style="font-size:0.77rem;color:var(--text-muted);line-height:1.45">${note}</div>
     </div>`;
 
-  /* A STOKVEL THAT HAS NOT STARTED YET. Without this the overview of a
-     brand-new group is two tiles and a lot of white: every tile that
-     matters is conditional on there being money, members or a mandate, and
-     a committee that has just opened an account has none of them. What
-     they need is the three things standing between them and a working
-     group, in order. */
-  const roster  = (ctx.members && ctx.members.data) || [];
-  const quorum  = parseInt(ctx.g.stokvel_quorum, 10) || 0;
-  const pot     = d ? Number(d.net_assets) : 0;
-  if (roster.length < 2 || !quorum || pot <= 0) {
-    const step = (done, title, note, action) => `
-      <div style="display:flex;gap:12px;align-items:flex-start;padding:14px 0;
-                  border-bottom:1px solid var(--border)">
-        <div style="width:26px;height:26px;border-radius:50%;flex-shrink:0;display:grid;place-items:center;
-                    background:${done ? '#22c55e' : 'var(--border)'};color:${done ? '#fff' : 'var(--text-muted)'};
-                    font-size:0.72rem">
-          <i class="fa-solid ${done ? 'fa-check' : 'fa-ellipsis'}"></i>
-        </div>
-        <div style="flex:1">
-          <div style="font-weight:700;font-size:0.92rem;${done ? 'text-decoration:line-through;opacity:.6' : ''}">${title}</div>
-          <div style="font-size:0.8rem;color:var(--text-muted);line-height:1.5">${note}</div>
-          ${!done && action ? `<div style="margin-top:8px">${action}</div>` : ''}
-        </div>
-      </div>`;
+  /* GETTING A GROUP GOING. The checklist is read off the group's real
+     state, step by step, in the order a committee actually works through
+     it: the rules, the people, the signatures, the contribution, the
+     documents, the first rand. It used to name three of those, send the
+     mandate step to WhatsApp after founders could set it themselves, and say
+     nothing about the two steps only SV Capital can complete today — so a
+     group found out about them when its first withdrawal was refused.
 
+     The four that make a group WORK (rules, members, signatories, money)
+     take over the overview until they are done. The two that can lag
+     behind (the contribution schedule and the group's documents) then sit
+     above the ordinary overview as "still to do" until they are done too. */
+  const steps = _svSetupSteps(id, ctx, d);
+  const core  = steps.filter(x => x.core);
+  /* Only a group with no money in yet loses its overview to the checklist.
+     One that is already running \u2014 contributions, arrears, requests waiting
+     on a vote \u2014 keeps its overview and gets the unfinished steps above it,
+     because hiding a pending approval behind a to-do list is worse than
+     the to-do list being one scroll further down. */
+  const started = steps.some(x => x.key === 'money' && x.done);
+  if (!started && core.some(x => !x.done)) {
+    const left = steps.filter(x => !x.done).length;
     return `<div style="max-width:640px">
       <div class="sa-section-title"><i class="fa-solid fa-flag-checkered"></i> Getting ${_esc(ctx.g.name)} going</div>
       <p style="font-size:0.86rem;color:var(--text-muted);line-height:1.6;margin-bottom:6px">
-        Three things stand between this account and a working group.
+        ${left === 1 ? 'One thing is' : `${left} things are`} left before this is a working group.
+        Each step says who does it.
       </p>
-      ${step(roster.length >= 2, 'Get the members in',
-        roster.length >= 2
-          ? `${roster.length} members are in.`
-          : 'Invite them by email address or cell number. They accept it themselves \u2014 nobody is added to a group that can see their money without agreeing to it.',
-        `<button class="btn btn--secondary btn--sm" onclick="svWorkspaceTab('${_esc(id)}','members')">Invite members</button>`)}
-      ${step(!!quorum, 'Agree the mandate',
-        quorum ? `${quorum} signatories must approve before money moves.`
-               : 'Tell us who the signatories are and how many must approve before money leaves. It cannot be fewer than two \u2014 a mandate of one is not a mandate. Talk to us and we will capture it against your constitution.',
-        `<a class="btn btn--secondary btn--sm" href="https://api.whatsapp.com/send?phone=27722269415" target="_blank" rel="noopener">
-           <i class="fa-brands fa-whatsapp"></i> Set up the mandate</a>`)}
-      ${step(pot > 0, 'Start contributing',
-        pot > 0 ? `The pot holds ${Utils.rand(pot)}.`
-                : 'Once the schedule is set, each member pays their share from their own wallet and the whole group can see who has and who has not.',
-        `<button class="btn btn--secondary btn--sm" onclick="payIntoStokvel('${_esc(id)}')">Pay into the pot</button>`)}
+      ${steps.map(_svSetupStep).join('')}
       <p style="font-size:0.78rem;color:var(--text-muted);margin-top:14px">
         The other sections above are already here and will fill up as the group gets going.
       </p>
     </div>`;
   }
+  const todo = steps.filter(x => !x.done);
 
   return `
+    ${todo.length ? `<div style="border:1px solid #f59e0b;border-radius:12px;padding:4px 14px 6px;margin-bottom:16px">
+      <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.5px;color:#f59e0b;margin-top:10px">
+        <i class="fa-solid fa-list-check"></i> Still to do</div>
+      ${todo.map(_svSetupStep).join('')}
+    </div>` : ''}
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
                 gap:12px;margin-bottom:18px">
       ${myVotes ? tile('fa-user-shield', 'Waiting on you', String(myVotes),

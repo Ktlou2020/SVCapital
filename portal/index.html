@@ -97,6 +97,13 @@
       <button class="nav-item" data-view="investments" onclick="navigate('investments', this)">
         <i class="fa-solid fa-chart-line"></i> My Investments
       </button>
+      <!-- Groups are a place of their own, not a kind of sub-account filed
+           under More. The badge counts invitations waiting on this person. -->
+      <button class="nav-item" data-view="groups" onclick="navigate('groups', this)">
+        <i class="fa-solid fa-people-group"></i> My Groups
+        <span id="navGroupsBadge" style="display:none;margin-left:auto;background:#eda5ff;color:#1a1a1a;
+              border-radius:999px;font-size:0.64rem;font-weight:800;padding:1px 7px"></span>
+      </button>
       <button class="nav-item" data-view="support" onclick="navigate('support', this)">
         <i class="fa-solid fa-headset"></i> Support
       </button>
@@ -236,6 +243,9 @@
            VIEW: PORTFOLIO OVERVIEW
       ══════════════════════════════════ -->
       <div class="view active" id="view-overview">
+        <!-- An invitation to a group, where a new member lands first. Filled by
+             _svRenderInviteBanner; empty when there is nothing waiting. -->
+        <div id="svInviteBanner"></div>
 
         <!-- Welcome Banner -->
         <div class="welcome-banner" id="welcomeBanner">
@@ -1552,6 +1562,10 @@
       <!-- ══════════════════════════════════
            VIEW: SUB ACCOUNTS
       ══════════════════════════════════ -->
+      <div class="view" id="view-groups">
+        <div id="groupsBody"></div>
+      </div>
+
       <div class="view" id="view-subaccounts">
         <div class="sa-view-header">
           <div>
@@ -3062,7 +3076,7 @@ if (window.Capacitor) {
 }
 </script>
 <script src="/js/native.js"></script>
-<script src="../js/portal-core.js?v=70"></script>
+<script src="../js/portal-core.js?v=71"></script>
 <script src="../js/investor-documents.js?v=11"></script>
 <script src="js/portal.js?v=137"></script>
 <!-- sv-intelligence.js hidden -->

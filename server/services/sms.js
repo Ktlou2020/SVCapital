@@ -82,12 +82,17 @@ async function sendMaturityAlert(phone, firstName, amount, poolName) {
    160 characters: who, what, and how to find it. No link: the invitation is
    addressed, and signing in as the holder of this number is what claims it.
    See services/stokvelInvites.js. */
-async function sendStokvelInvite(phone, { inviterName, stokvelName, terms }) {
+async function sendStokvelInvite(phone, { inviterName, stokvelName, terms, alreadyAUser }) {
   /* The rules are in the SMS and not only in the email, because for a great
-     many stokvel members the SMS is the only one of the two they will read. */
+     many stokvel members the SMS is the only one of the two they will read.
+     And the SMS says the one thing that decides whether they ever see the
+     invitation: use THIS number. A person who signs up under another number
+     gets an account with no invitation in it. */
   const msg = `${inviterName} invited you to join ${stokvelName} on SV Capital. `
             + (terms ? `${terms} ` : '')
-            + `Sign in or sign up with this number and the invite is on your Sub-accounts screen: svcapital.co.za`;
+            + (alreadyAUser
+              ? 'Sign in and the invite is at the top of your dashboard: platform.svcapital.co.za'
+              : 'Sign up with THIS number and the invite will be waiting for you: platform.svcapital.co.za/signup');
   return _send(phone, msg);
 }
 

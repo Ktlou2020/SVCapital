@@ -436,6 +436,16 @@ router.get('/:id', async (req, res) => {
            confirmations, or in force. The workspace needs all three to tell
            a group what to do next instead of only refusing its withdrawals. */
         mandate_state: await founding.state(pool, group),
+        /* The two setup steps the group cannot complete itself yet: the
+           contribution schedule (set by staff) and the group's own
+           verification. Reported so the setup checklist can say where each
+           stands instead of leaving a group to find out from a refusal. */
+        setup: await (async () => {
+          const { rows: [sc] } = await pool.query(
+            `SELECT amount, cadence, due_day FROM stokvel_contribution_schedules
+              WHERE sub_account_id = $1 AND active LIMIT 1`, [group.id]);
+          return { schedule: sc || null, verification: group.kyc_status || 'pending' };
+        })(),
         i_am_signatory: !!group.my_is_signatory,
         i_am_nominated: await (async () => {
           const { rows: [m] } = await pool.query(

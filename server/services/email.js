@@ -1307,16 +1307,22 @@ function sendStokvelInvite(to, { inviteeName, inviterName, stokvelName, expiresA
      people who have no account — which is most of the recipients of this
      particular email and the whole point of sending it. The HTML branched
      correctly and this did not. */
+  /* WHERE THEY LAND. A person with no account was sent to the portal's
+     sign-in page and told to find a "Sub-accounts screen" — two things they
+     did not have. They now go to sign-up, and everybody is pointed at what
+     they will actually see: the invitation at the top of the dashboard, and
+     under My groups. */
   const how = alreadyAUser
-    ? 'Sign in with this email address and the invitation is waiting on your Sub-accounts screen.'
-    : 'Create a free SV Capital account using this email address and the invitation will be waiting on your Sub-accounts screen.';
+    ? 'Sign in with this email address. The invitation is at the top of your dashboard, and under My groups.'
+    : 'Create a free SV Capital account using this email address. As soon as you have, the invitation will be at the top of your dashboard.';
+  const go = alreadyAUser ? `${BASE_URL}/portal/` : `${BASE_URL}/signup.html`;
   return _send({
     to,
     type: 'stokvel_invite',
     subject: `${inviterName} invited you to join ${stokvelName}`,
     text: `${inviterName} has invited you to join ${stokvelName} on SV Capital. `
         + (terms ? `The group's rules: ${terms} ` : '')
-        + `${how} ${BASE_URL}/portal/`,
+        + `${how} ${go}`,
     html: _wrap(`
       <h2>You have been invited to join ${escHtml(stokvelName)}</h2>
       <p>Hi${inviteeName ? ` ${escHtml(inviteeName)}` : ''}, <strong>${escHtml(inviterName)}</strong>
@@ -1334,10 +1340,10 @@ function sendStokvelInvite(to, { inviteeName, inviterName, stokvelName, expiresA
       <div class="box">
         <p style="margin:0"><strong>How to accept.</strong>
           ${alreadyAUser
-            ? 'Sign in to SV Capital with this email address. The invitation is waiting on your Sub-accounts screen.'
-            : 'Create a free SV Capital account using THIS email address, and the invitation will be waiting on your Sub-accounts screen.'}</p>
+            ? 'Sign in to SV Capital with this email address. The invitation is at the top of your dashboard, and under My groups.'
+            : 'Create a free SV Capital account using THIS email address. You can upload your documents later. As soon as your account exists, the invitation is at the top of your dashboard.'}</p>
       </div>
-      <p style="text-align:center"><a class="btn" href="${BASE_URL}/portal/">Open SV Capital</a></p>
+      <p style="text-align:center"><a class="btn" href="${go}">${alreadyAUser ? 'Sign in to SV Capital' : 'Create my account'}</a></p>
       <p style="font-size:0.84rem;color:#777">We deliberately do not put a join link in this email \u2014
          anyone who was forwarded it could then see the group&rsquo;s money. Signing in as the
          person this was sent to is what proves the invitation is yours.
