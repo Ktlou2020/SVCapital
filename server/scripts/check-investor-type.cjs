@@ -236,6 +236,77 @@ let pool;
        /replace\(\/_\/g, ' '\)\.replace\(\/\^\\w\/, c => c\.toUpperCase\(\)\)/.test(ADMIN),
        'a new account_type must not silently disappear from this column');
 
+    console.log('\nand filtering by a type filters the SUB-ACCOUNT rows too');
+    /* The sub-account rows beneath the investors ignored every dropdown —
+       "if (!q) return true" — so filtering to Group showed the three group
+       investors and then every trust, business and minor sub-account on the
+       platform. The Type column is what made it obvious.
+
+       THE REAL PREDICATE IS RUN, not a copy of it. The first version of this
+       rebuilt the rule as a string in the check and asserted that; both
+       mutations that neutered the console's own copy sailed through, because
+       the reconstruction agreed with itself. So _saMatchesInvestorType is
+       lifted out of admin.js and evaluated beside api.js, the way the
+       browser loads them. */
+    {
+      const vm = require('vm');
+      const ctx = { console: { log() {}, warn() {}, error() {} }, Math, Number, String,
+                    Object, Array, Boolean, JSON, RegExp, Set, Map, Date,
+                    parseFloat, parseInt, isNaN, setTimeout, clearTimeout,
+                    encodeURIComponent,
+                    fetch: async () => ({ ok: true, json: async () => ({}) }),
+                    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+                    location: { href: '', replace() {} } };
+      const el = () => ({ innerHTML: '', style: {}, textContent: '', value: '',
+                          classList: { add() {}, remove() {} }, addEventListener() {} });
+      ctx.document = { getElementById: () => el(), querySelector: () => el(),
+                       querySelectorAll: () => [], createElement: () => el(),
+                       addEventListener() {}, body: el() };
+      ctx.globalThis = ctx; ctx.window = ctx; ctx.self = ctx;
+      vm.createContext(ctx);
+      const RAW  = read('admin/js/admin.js');
+      const FROM = RAW.indexOf('function _subAccountKindLabel');
+      const TO   = RAW.indexOf('function renderInvestorsTable');
+      ok('the rule was found to lift', FROM > 0 && TO > FROM
+         && /_saMatchesInvestorType/.test(RAW.slice(FROM, TO)),
+         'a slice that missed it would test nothing while passing');
+      vm.runInContext(read('js/api.js') + '\n' + RAW.slice(FROM, TO)
+        + '\nglobalThis.pick = ty => [\'stokvel\',\'business\',\'trust\',\'minor\',\'\']'
+        + '.filter(t => _saMatchesInvestorType({ account_type: t }, ty));', ctx);
+
+      ok('Group shows the stokvel sub-accounts and nothing else',
+         JSON.stringify(ctx.pick('group')) === JSON.stringify(['stokvel']),
+         JSON.stringify(ctx.pick('group')));
+      ok('Business shows the business ones',
+         JSON.stringify(ctx.pick('business')) === JSON.stringify(['business']));
+      ok('Trust shows the trusts', JSON.stringify(ctx.pick('trust')) === JSON.stringify(['trust']));
+      /* A minor's account is not a business, a trust or a group, and calling
+         it an individual would be the guess this whole column refuses. */
+      ok('Individual shows none, because no sub-account kind is a person',
+         ctx.pick('individual').length === 0, JSON.stringify(ctx.pick('individual')));
+      ok('and the kinds with no investor-type equivalent are what "Not set" shows',
+         JSON.stringify(ctx.pick('__unset')) === JSON.stringify(['minor', '']),
+         JSON.stringify(ctx.pick('__unset')));
+      ok('with no type chosen, every sub-account still shows',
+         ctx.pick('').length === 5 && ctx.pick(null).length === 5,
+         'the filter must not hide rows nobody asked it to hide');
+
+      /* The rule being right is half of it. The list has to USE it, and the
+         mutation that wraps the call in if(false) leaves every grep for the
+         call intact — so the call site is asserted as the single line it is. */
+      const SRC = strip(RAW);
+      ok('and it is the only type gate on the sub-account rows',
+         /if \(!_saMatchesInvestorType\(sa, ty\)\) return false;/.test(SRC),
+         'a rule the console does not apply is a rule in name only');
+      ok('with no second mapping between a kind and a type',
+         !/'stokvel':\s*'group'|stokvel.{0,10}===.{0,10}'group'/.test(SRC),
+         'the labels both sides already use are the mapping');
+      /* Status, KYC and province are the PARENT's. Said, so that leaving
+         them out reads as a decision rather than an omission. */
+      ok('status, KYC and province still do not filter sub-accounts',
+         /ignore status, KYC and province/.test(RAW));
+    }
+
     ok('the badge is built from the shared labels',
        /Utils\.investorTypeLabel/.test(ADMIN),
        'a second label table in the console is a second answer');

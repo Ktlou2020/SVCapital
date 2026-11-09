@@ -2056,6 +2056,34 @@ function _subAccountKindLabel(kind) {
        || k.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase());
 }
 
+/* Does this sub-account belong under the chosen investor type?
+   
+   The clients list shows sub-account rows beneath the investors, and they
+   used to ignore every dropdown — so filtering to Group showed the group
+   investors and then every trust, business and minor sub-account on the
+   platform. A list that shows everything is not a filtered list.
+
+   The kind is matched through the labels both sides already use:
+   _subAccountKindLabel turns the stored 'stokvel' into "Group" and
+   Utils.investorTypeLabel turns the investor type 'group' into "Group". No
+   third table maps one to the other, so nothing falls out of step when a
+   kind is added.
+
+   A kind with no investor-type equivalent — a minor's account — matches none
+   of the four and is hidden while a type filter is on. It is not a business,
+   a trust or a group, and calling it an individual would be exactly the
+   guess the investor type exists to refuse. Those are what "Not set" shows.
+
+   Named rather than written inline so the check can run THIS, and not a
+   copy of it that agrees with itself. */
+function _saMatchesInvestorType(sa, ty) {
+  if (!ty) return true;
+  const kind = _subAccountKindLabel(sa && sa.account_type);
+  const canon = (Utils.INVESTOR_TYPES || []).map(t => Utils.investorTypeLabel(t));
+  return ty === '__unset' ? !canon.includes(kind)
+                          : kind === Utils.investorTypeLabel(ty);
+}
+
 function _investorTypeBadge(value) {
   const v = String(value || '').toLowerCase().trim();
   const cls = { individual: 'badge--blue', business: 'badge--purple',
@@ -2340,10 +2368,27 @@ function setupInvestorFilters() {
       return new Date(b.date_joined || 0) - new Date(a.date_joined || 0);
     });
 
-    // Filter sub-accounts by name or SA reference (ignore status/kyc/province filters)
+    /* Sub-accounts are filtered by name or reference, and by TYPE.
+       They still ignore status, KYC and province, which are the parent's
+       and not theirs.
+
+       Type is different, because a sub-account HAS one: filtering the list
+       to Group and being shown every trust, business and minor account on
+       the platform is not a filtered list. The kind is matched through the
+       labels both sides already use — _subAccountKindLabel turns the stored
+       'stokvel' into "Group", Utils.investorTypeLabel turns the investor
+       type 'group' into "Group" — so there is no third table mapping one to
+       the other, and nothing to fall out of step when a kind is added.
+
+       A kind with no investor-type equivalent, like a minor's account,
+       matches none of the four and is hidden while a type filter is on. It
+       is not a business, a trust or a group, and calling it an individual
+       would be exactly the guess the investor type exists to refuse. Those
+       are what "Not set" shows. */
     const _pmap = {};
     STATE.investors.forEach(inv => { _pmap[inv.id] = inv; });
     filteredSubAccounts = STATE.subAccounts.filter(sa => {
+      if (!_saMatchesInvestorType(sa, ty)) return false;
       if (!q) return true;
       const p = _pmap[sa.parent_investor_id] || {};
       return (sa.name||'').toLowerCase().includes(q)
