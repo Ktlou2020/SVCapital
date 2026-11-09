@@ -13341,7 +13341,7 @@ async function _svRenderHub(id, tab, opts) {
 
   let html = '';
   switch (open) {
-    case 'contributions': html = _svContributions(contributions, mine, id); break;
+    case 'contributions': html = _svContributions(contributions, mine, id, g); break;
     case 'approvals':     html = _svWithdrawals(requests, meIsSignatory, id, {
                               g, canPropose: meIsSignatory || !!g.i_opened_it
                                 || ['chairperson', 'secretary', 'treasurer'].includes(g.my_role),
@@ -13552,12 +13552,8 @@ function _svSetupSteps(id, ctx, d) {
   const setup   = g.setup || {};
   const pot     = d ? Number(d.net_assets) : Number(g.wallet_balance) || 0;
   const committee = !!g.i_opened_it || ['chairperson', 'secretary', 'treasurer'].includes(g.my_role);
-  const name    = String(g.name || 'our group');
   const btn = (label, onclick, icon) => `<button class="btn btn--secondary btn--sm" onclick="${onclick}">
       ${icon ? `<i class="fa-solid ${icon}"></i> ` : ''}${label}</button>`;
-  const askUs = (label, text) => `<a class="btn btn--secondary btn--sm" target="_blank" rel="noopener"
-      href="https://api.whatsapp.com/send?phone=27722269415&text=${encodeURIComponent(text)}">
-      <i class="fa-brands fa-whatsapp"></i> ${label}</a>`;
   const kyc = String(setup.verification || g.kyc_status || '');
   const sched = setup.schedule || null;
   const tpl = (window.__SVREL || {}).templates;
@@ -13591,10 +13587,10 @@ function _svSetupSteps(id, ctx, d) {
       title: 'Set the monthly contribution',
       note: sched
         ? `${Utils.rand(sched.amount)} ${_esc(sched.cadence || 'monthly')}, due on day ${_esc(String(sched.due_day || 1))}.`
-        : 'The amount each member pays and the day it is due. For now SV Capital sets this for you \u2014 send us the amount and the day and we will put it in, usually the same working day.',
-      action: committee
-        ? askUs('Send us the amount', `Please set the contribution for ${name} (${id}): R___ per member, due on day __ of the month.`)
-        : '' },
+        : committee
+          ? 'The amount each member pays and the day of the month it is due. Every member is told when you set it or change it.'
+          : 'The chairperson, secretary or treasurer sets this. You will be told what it is.',
+      action: committee ? btn('Set the contribution', `raiseStokvelSchedule('${gid}')`, 'fa-calendar-check') : '' },
     { key: 'documents', core: false, done: kyc === 'approved',
       title: 'Upload the group\u2019s documents',
       note: kyc === 'approved'
@@ -14226,7 +14222,7 @@ async function toggleStokvelAutopay(groupId, enabled) {
   await _svRenderHub(groupId, 'contributions');
 }
 
-function _svContributions(res, mine, gid) {
+function _svContributions(res, mine, gid, g) {
   const arrears = (res && res.arrears) || [];
   const rows    = (res && res.data) || [];
 
@@ -14305,11 +14301,93 @@ function _svContributions(res, mine, gid) {
     : '';
 
   return `<div class="sa-section-title mt-16"><i class="fa-solid fa-calendar-check"></i> Contributions</div>
+    ${_svScheduleBlock(g || {}, gid)}
     ${mineBlock}
     ${autopayBlock}
     <div style="font-size:0.74rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Who is behind</div>
     ${arrearsBlock}
     ${rows.length ? '' : `<div style="font-size:0.82rem;color:var(--text-muted);margin-top:8px">No contributions have been scheduled yet.</div>`}`;
+}
+
+/* ─── The contribution schedule ──────────────────────────────────
+   What each member pays and the day it is due, at the top of
+   Contributions, with the committee's button to set or change it. */
+function _svScheduleBlock(g, gid) {
+  const sch = (g.setup && g.setup.schedule) || null;
+  const committee = !!g.i_opened_it || ['chairperson', 'secretary', 'treasurer'].includes(g.my_role);
+  const btn = committee ? `<button class="btn btn--secondary btn--sm" onclick="raiseStokvelSchedule('${_esc(gid)}')">
+      <i class="fa-solid fa-calendar-check"></i> ${sch ? 'Change the contribution' : 'Set the contribution'}</button>` : '';
+  if (!sch) {
+    return `<div style="border:1px dashed var(--border);border-radius:12px;padding:12px 14px;margin-bottom:14px">
+      <div style="font-weight:700;margin-bottom:2px">No contribution set yet</div>
+      <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:${btn ? '10px' : '0'}">${committee
+        ? 'Set what each member pays and the day it is due. Nothing is owed until you do.'
+        : 'The chairperson, secretary or treasurer sets it. Nothing is owed until they do.'}</div>
+      ${btn}</div>`;
+  }
+  const starts = String(sch.starts_on || '').slice(0, 10);
+  const today = new Date(Date.now() + 2 * 3600 * 1000).toISOString().slice(0, 10);
+  return `<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;
+      border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:14px">
+    <div>
+      <div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">Each member pays</div>
+      <div style="font-size:1.15rem;font-weight:800">${Utils.rand(sch.amount)} a month, due on day ${_esc(String(sch.due_day))}</div>
+      <div style="font-size:0.74rem;color:var(--text-muted)">${starts && starts > today ? `Starts ${_esc(starts)}. ` : ''}${
+        sch.set_by_name ? `Set by ${_esc(sch.set_by_name)}.` : ''} Members on a different amount keep theirs.</div>
+    </div>${btn}</div>`;
+}
+
+function raiseStokvelSchedule(groupId) {
+  const cached = _svCache(groupId) || {};
+  const g = (cached.group && cached.group.data) || {};
+  const sch = (g.setup && g.setup.schedule) || null;
+  const today = Number(new Date(Date.now() + 2 * 3600 * 1000).toISOString().slice(8, 10));
+  const day = sch ? Number(sch.due_day) : 1;
+  _svFormShell(groupId, {
+    icon: 'fa-calendar-check',
+    title: sch ? 'Change the contribution' : 'Set the contribution',
+    intro: `What each member pays every month, and the day it is due. Every member is told.
+      ${sch ? 'Contributions already raised keep the amount they were raised at; the new amount applies from the month you choose.' : ''}`,
+    fields: _svField('svSchAmount', 'Each member pays (R)', 'number', '', `min="1" step="0.01" inputmode="decimal" value="${sch ? _esc(String(sch.amount)) : ''}"`)
+      + _svField('svSchDay', 'Due on day of the month', 'number', 'A day past the end of a short month settles on its last day.',
+                 `min="1" max="31" step="1" inputmode="numeric" value="${_esc(String(day))}" oninput="_svSchStartHint()"`)
+      + `<label for="svSchStart" style="display:block;font-size:0.74rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px">Starting</label>
+        <select id="svSchStart" class="form-input" style="width:100%;margin-bottom:6px">
+          <option value="this_month"${today > day ? '' : ' selected'}>This month</option>
+          <option value="next_month"${today > day ? ' selected' : ''}>Next month</option>
+        </select>
+        <div id="svSchStartNote" style="font-size:0.74rem;color:var(--text-muted);margin-bottom:12px"></div>`,
+    submit: `submitStokvelSchedule('${_esc(groupId)}')`,
+    submitIcon: 'fa-check',
+    submitLabel: sch ? 'Change it' : 'Set it',
+  });
+  _svSchStartHint();
+}
+
+/* Starting this month when its due day has passed raises a contribution
+   that is overdue the day it appears. Said, and the default avoids it. */
+function _svSchStartHint() {
+  const note = document.getElementById('svSchStartNote');
+  if (!note) return;
+  const day = parseInt(_svVal('svSchDay'), 10) || 1;
+  const today = Number(new Date(Date.now() + 2 * 3600 * 1000).toISOString().slice(8, 10));
+  note.textContent = today > day
+    ? `Day ${day} has already passed this month, so starting this month would make this month’s contribution overdue straight away.`
+    : '';
+}
+
+async function submitStokvelSchedule(groupId) {
+  const amount = parseFloat(_svVal('svSchAmount'));
+  const due_day = parseInt(_svVal('svSchDay'), 10);
+  if (!(amount > 0)) return _svFormError('Say how much each member pays.');
+  if (!(due_day >= 1 && due_day <= 31)) return _svFormError('The due day must be between 1 and 31.');
+  try {
+    const res = await API._fetch('PUT', `stokvels/${groupId}/schedule`, { amount, due_day, start: _svVal('svSchStart') });
+    Utils.toast(`Done: ${Utils.rand(amount)} a month from ${(res && res.data && res.data.first_month) || 'the month you chose'}. Every member has been told.`, 'success');
+  } catch (err) {
+    return _svFormError(err.message || 'Could not set the contribution.');
+  }
+  await _svRenderHub(groupId, 'contributions');
 }
 
 /* ─── Payouts ──────────────────────────────────────────────────────

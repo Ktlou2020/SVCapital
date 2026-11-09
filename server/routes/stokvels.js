@@ -35,6 +35,7 @@ const shares        = require('../services/stokvelShares');
 const mandateChange = require('../services/stokvelMandateChange');
 const proposals     = require('../services/stokvelProposals');
 const groupDocs     = require('../services/stokvelDocuments');
+const schedules     = require('../services/stokvelSchedule');
 const { actorFromRequest } = require('../services/ledger');
 /* Lazily required, and never awaited in a way that can fail a request: a
    mandate that cannot send an email must still record the vote. */
@@ -443,8 +444,10 @@ router.get('/:id', async (req, res) => {
            stands instead of leaving a group to find out from a refusal. */
         setup: await (async () => {
           const { rows: [sc] } = await pool.query(
-            `SELECT amount, cadence, due_day FROM stokvel_contribution_schedules
-              WHERE sub_account_id = $1 AND active LIMIT 1`, [group.id]);
+            `SELECT s.amount, s.cadence, s.due_day, s.starts_on, i.first_name AS set_by_name
+               FROM stokvel_contribution_schedules s
+               LEFT JOIN investors i ON i.id = s.set_by
+              WHERE s.sub_account_id = $1 AND s.active LIMIT 1`, [group.id]);
           return { schedule: sc || null, verification: group.kyc_status || 'pending' };
         })(),
         i_am_signatory: !!group.my_is_signatory,
@@ -1511,6 +1514,44 @@ router.post('/:id/contributions/:cid/pay', async (req, res) => {
     await client.query('ROLLBACK').catch(() => {});
     console.error('[stokvels] pay failed:', err.message);
     return res.status(500).json({ error: 'Could not record that payment.' });
+  } finally {
+    client.release();
+  }
+});
+
+/* ─── The contribution schedule ──────────────────────────────────────
+   The committee sets what each member pays and the day it is due; every
+   member is told. What is already owed keeps its amount
+   (services/stokvelSchedule.js). */
+router.put('/:id/schedule', async (req, res) => {
+  const me = callerInvestorId(req);
+  const client = await pool.connect();
+  try {
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) return res.status(404).json({ error: 'No such stokvel.' });
+    if (!invites.mayInvite(group)) {
+      return res.status(403).json({ error: 'Only the chairperson, secretary or treasurer can set the contribution.' });
+    }
+    const parsed = schedules.parse(req.body);
+    if (parsed.error) return res.status(400).json({ error: parsed.error });
+    await client.query('BEGIN');
+    const out = await schedules.set(client, group, me, parsed.schedule);
+    if (out.error) { await client.query('ROLLBACK'); return res.status(409).json({ error: out.error }); }
+    await client.query('COMMIT');
+
+    const n = notify();
+    if (n && n.scheduleChanged) n.scheduleChanged({ groupId: group.id, actorId: me,
+      schedule: out.schedule, previous: out.previous })
+      .catch(e => console.warn('[stokvels] notify failed:', e.message));
+
+    const s = out.schedule;
+    return res.json({ data: { amount: s.amount, due_day: s.due_day, cadence: s.cadence,
+      starts_on: s.starts_on, first_month: schedules.monthLabel(new Date(s.starts_on).toISOString()),
+      replaced: !!out.previous } });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[stokvels] set schedule failed:', err.message);
+    return res.status(500).json({ error: 'Could not set the contribution.' });
   } finally {
     client.release();
   }

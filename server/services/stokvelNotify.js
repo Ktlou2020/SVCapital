@@ -675,4 +675,46 @@ function _rows(a, required, reference) {
   return out;
 }
 
-module.exports = { approvalNeeded, decided, spent, invited, inviteAccepted, exitSettled, paidOut, fined, describe };
+/* ─── THE CONTRIBUTION CHANGED ────────────────────────────────────────
+   Every member, except whoever set it, because it is what each of them now
+   owes every month. Said with the month it starts and the reassurance that
+   matters most: what they already owe has not changed. */
+async function scheduleChanged({ groupId, actorId, schedule, previous, db } = {}) {
+  const pool = db || defaultPool;
+  try {
+    const { monthLabel } = require('./stokvelSchedule');
+    const { rows: [g] } = await pool.query(`SELECT name FROM sub_accounts WHERE id = $1`, [groupId]);
+    const actor = await _person(pool, actorId);
+    const { rows: members } = await pool.query(
+      `SELECT i.id, i.email, i.first_name FROM stokvel_members m JOIN investors i ON i.id = m.investor_id
+        WHERE m.sub_account_id = $1 AND m.status = 'active' AND m.investor_id <> $2`, [groupId, actorId]);
+    const who = (actor && actor.first_name) || 'The committee';
+    const from = monthLabel(new Date(schedule.starts_on).toISOString());
+    const now = `${fmtR(schedule.amount)} a month, due on day ${schedule.due_day}`;
+    const body = previous
+      ? `${who} changed the contribution from ${fmtR(previous.amount)} to ${now}, from ${from}. What you already owe is unchanged.`
+      : `${who} set the contribution: ${now}, from ${from}.`;
+    const told = [];
+    for (const m of members) {
+      told.push(await _tell(m, {
+        url: hubUrl(groupId), title: (g && g.name) || 'Your group', body,
+        email: {
+          subject: `${(g && g.name) || 'Your group'}: the contribution is now ${fmtR(schedule.amount)} a month`,
+          heading: previous ? 'The contribution has changed' : 'The contribution is set',
+          lead: body,
+          rows: [['Group', (g && g.name) || ''], ['Each member pays', `${fmtR(schedule.amount)} a month`],
+                 ['Due on', `day ${schedule.due_day} of the month`], ['From', from], ['Set by', who]],
+          note: 'Contributions raised before this keep the amount they were raised at. '
+              + 'If you think this is wrong, raise it with your committee.',
+        },
+      }));
+    }
+    return { notified: told.filter(Boolean) };
+  } catch (err) {
+    console.error('[stokvelNotify] scheduleChanged failed:', err.message);
+    return { notified: [], error: err.message };
+  }
+}
+
+module.exports = { approvalNeeded, decided, spent, invited, inviteAccepted, exitSettled, paidOut, fined, describe,
+                   scheduleChanged };

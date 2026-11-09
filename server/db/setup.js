@@ -3070,6 +3070,10 @@ async function autoSetup() {
           /* The members' proposal an investment request was raised from, when
              it was. Context for the signatories, never an authority. */
           BEGIN ALTER TABLE stokvel_withdrawal_requests ADD COLUMN proposal_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          /* Who set a contribution schedule, now that the committee sets it
+             itself (services/stokvelSchedule.js). Null on a schedule staff
+             set in the console. */
+          BEGIN ALTER TABLE stokvel_contribution_schedules ADD COLUMN set_by TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           ALTER TABLE stokvel_withdrawal_requests DROP CONSTRAINT IF EXISTS stokvel_withdrawal_requests_amount_check;
           BEGIN ALTER TABLE stokvel_withdrawal_requests ADD CONSTRAINT swr_amount_chk CHECK (amount > 0 OR kind = 'mandate'); EXCEPTION WHEN duplicate_object THEN NULL; END;
           BEGIN ALTER TABLE sub_accounts ADD COLUMN withdrawal_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
@@ -4994,6 +4998,10 @@ async function autoSetup() {
          that comes back after somebody dismissed the idea of it is worse than
          no notice at all. */
       const NOTICES = [
+        { id: 'ANN-2026-GROUP-CONTRIBUTION-SCHEDULE', area: 'both', icon: 'fa-calendar-check',
+          title: 'A group\u2019s committee now sets its own monthly contribution',
+          body: 'The amount each member pays and the day it is due were typed in by staff, and the setup checklist sent the committee to WhatsApp to ask. The chairperson, secretary or treasurer now sets it from the group\u2019s Contributions section (or the checklist), and can change it. EVERY MEMBER IS TOLD, by push and email, with the old and new amount and the month it starts. WHAT IS ALREADY OWED DOES NOT CHANGE: a month already raised keeps the amount it was raised at, and the new amount applies from the month the committee chooses \u2014 next month by default whenever this month\u2019s due day has passed, so nobody is overdue the moment it is set. Monthly only; per-member amounts set in the console still win over the group\u2019s amount. It does not need the signatories, because it moves no money out of the group. The console\u2019s own schedule form still works and does the same thing. With this, nothing in a group\u2019s setup needs to come to us any more.',
+          where: 'Client app \u2192 the group \u2192 Contributions \u2192 \u201cSet the contribution\u201d / \u201cChange the contribution\u201d (committee only). Console: Stokvels \u2192 open one \u2192 Contribution schedule, unchanged.' },
         { id: 'ANN-2026-GROUP-DOCS-AND-INVITE-LINK', area: 'both', icon: 'fa-folder-open',
           title: 'Groups upload their own documents, and an invitation link opens sign-up',
           body: 'TWO HANDOFFS TO US ARE GONE. GROUP DOCUMENTS: a group now uploads its constitution, proof of its bank account and its signatories\u2019 IDs itself, from a new Documents section (the setup checklist links to it). Only the committee or a signatory can upload; every member sees what was sent and where it stands, never the files. They arrive in the console\u2019s FICA queue like any other document, marked with the group\u2019s name and with their own types \u2014 Group constitution, Group proof of bank account, Group signatory\u2019s ID \u2014 and staff are emailed as for any upload. THE GROUP IS VERIFIED AUTOMATICALLY when its constitution, bank proof and IDs for as many signatories as its mandate needs (at least two) are all approved; rejecting one, with the reason in the notes, puts the group back to waiting and the members see the reason. Approving a group document never counts towards the uploader\u2019s OWN FICA \u2014 that was the trap in using the ordinary id_document type. INVITATION LINK: an invitation to somebody with no account now carries a link that opens sign-up showing the group, who invited them, the rules and which email address or cell number to use, warns them if they type a different one, and lands them on My Groups afterwards. The link grants nothing: accepting still needs them signed in as the invited address, and it shows nothing of the group\u2019s money or members.',

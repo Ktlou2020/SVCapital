@@ -115,8 +115,8 @@ console.log('\nthe two steps only we can finish yet');
   const html = overview(s, lagging);
   ok('once the group works, they sit above the ordinary overview as still to do',
      /Still to do/.test(html) && /Your share/.test(html) && !/Getting .* going/.test(html));
-  ok('the schedule step says we set it, and how to ask',
-     /SV Capital sets this for you/.test(html) && /whatsapp/i.test(html));
+  ok('the committee sets the contribution itself, in the app',
+     /raiseStokvelSchedule\('SA-ON-1'\)/.test(html) && !/whatsapp/i.test(html));
   ok('the documents step says withdrawals wait for verification',
      /withdrawals open once the group is verified/.test(html));
   const reviewing = overview(s, group({ setup: { schedule: { amount: 500, due_day: 1 }, verification: 'under_review' } }));
