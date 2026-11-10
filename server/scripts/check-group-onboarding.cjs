@@ -187,6 +187,27 @@ console.log('\nthe invitation sends a new person to sign-up');
      !/invites?\/\$\{|\/accept/.test(EMAIL + SMS));
 }
 
+console.log('\nthe group screens can tell a member what happened');
+{
+  /* Utils.toast never existed in the portal (js/api.js has Toast), so every
+     success message in a group threw — and inside a try, an action that had
+     gone through was reported as an error. */
+  const API_JS = read('js/api.js');
+  const utilsBlock = API_JS.slice(API_JS.indexOf('const Utils = {'), API_JS.indexOf('const Toast = {'));
+  ok('the portal has no Utils.toast, so nothing may call it directly',
+     !/\btoast\s*[:(]/.test(utilsBlock)
+     && (CORE.match(/Utils\.toast\(/g) || []).length === 1);
+  ok('every group message goes through one helper that uses the real Toast and never throws',
+     /function _svToast\(message, type\)[\s\S]{0,600}Toast[\s\S]{0,400}catch \(_\)/.test(CORE));
+  const s2 = sandbox();
+  let shown = null;
+  s2.Toast = { success: m => { shown = m; } };
+  vm.runInContext('Toast = this.Toast', s2);
+  let threw = false;
+  try { s2._svToast('Saved.', 'success'); } catch (_) { threw = true; }
+  ok('and it reaches the portal\u2019s Toast', !threw && shown === 'Saved.');
+}
+
 console.log('\nthe creation form asks only what the group decides');
 {
   ok('no member count', !/saFieldMembers/.test(CORE) && !/member_count\s*=/.test(CORE));

@@ -5716,7 +5716,7 @@ async function submitStokvelPayIn(groupId) {
   try {
     const res = await API._fetch('POST', `stokvels/${groupId}/pay-in`, { amount });
     const d = (res && res.data) || {};
-    Utils.toast(Number(d.settled) > 0
+    _svToast(Number(d.settled) > 0
       ? `Paid in ${Utils.rand(d.paid)} \u2014 ${Utils.rand(d.settled)} of it went to what you owed.`
       : `Paid in ${Utils.rand(d.paid)}.`, 'success');
   } catch (err) {
@@ -12536,7 +12536,7 @@ async function svcOpenDeepLink(href) {
   if (!mine) {
     /* A link to a stokvel they are not in. Says so rather than opening an
        empty modal or a spinner that never resolves. */
-    Utils.toast('That group is not one of yours.', 'error');
+    _svToast('That group is not one of yours.', 'error');
     return true;
   }
   openStokvelHub(stokvel);
@@ -12608,9 +12608,9 @@ function _svInviteCard(v) {
 async function acceptStokvelInvite(inviteId) {
   try {
     await API._fetch('POST', `stokvels/invites/${inviteId}/accept`, {});
-    Utils.toast('You have joined. Welcome in.', 'success');
+    _svToast('You have joined. Welcome in.', 'success');
   } catch (err) {
-    Utils.toast(err.message || 'Could not accept that invitation.', 'error');
+    _svToast(err.message || 'Could not accept that invitation.', 'error');
   }
   await Promise.all([loadSubAccounts(), loadStokvels(), loadStokvelInvites()]);
   renderSubAccountsView();
@@ -12620,9 +12620,9 @@ async function declineStokvelInvite(inviteId) {
   if (!confirm('Decline this invitation? Whoever invited you would have to send another.')) return;
   try {
     await API._fetch('POST', `stokvels/invites/${inviteId}/decline`, {});
-    Utils.toast('Declined.', 'success');
+    _svToast('Declined.', 'success');
   } catch (err) {
-    Utils.toast(err.message || 'Could not decline that invitation.', 'error');
+    _svToast(err.message || 'Could not decline that invitation.', 'error');
   }
   await loadStokvelInvites();
   renderSubAccountsView();
@@ -12716,7 +12716,7 @@ async function submitStokvelInvite(groupId) {
     _svFormError(err.message || 'Could not send that invitation.');
     return;
   }
-  Utils.toast(res.data && res.data.already_on_the_platform
+  _svToast(res.data && res.data.already_on_the_platform
     ? 'Sent. They already have an SV Capital account, so it is waiting in their app.'
     : 'Sent. They accept it by signing up with the same details.', 'success');
   await _svRenderHub(groupId, 'members');
@@ -12726,9 +12726,9 @@ async function revokeStokvelInvite(groupId, inviteId) {
   if (!confirm('Withdraw this invitation?')) return;
   try {
     await API._fetch('DELETE', `stokvels/${groupId}/invites/${inviteId}`);
-    Utils.toast('Withdrawn.', 'success');
+    _svToast('Withdrawn.', 'success');
   } catch (err) {
-    Utils.toast(err.message || 'Could not withdraw it.', 'error');
+    _svToast(err.message || 'Could not withdraw it.', 'error');
   }
   await _svRenderHub(groupId);
 }
@@ -12949,6 +12949,25 @@ async function openStokvelHub(id) {
     navigate('stokvel', document.querySelector('[data-view="stokvel"]'));
   }
   await _svRenderHub(id);
+}
+
+/* A message to the member, from the group screens. They called
+   Utils.toast, which the portal never had — the portal's notices are
+   Toast.success / Toast.error (js/api.js) — so every success message in a
+   group threw. Inside a try, that turned a vote, an invitation or a saved
+   contribution that HAD gone through into a red "Utils.toast is not a
+   function" under the form. One function, so it cannot drift again: it
+   uses Utils.toast where something provides one (the screen checks stub
+   it) and the portal's Toast everywhere else. Never throws. */
+function _svToast(message, type) {
+  try {
+    if (typeof Utils !== 'undefined' && Utils && typeof Utils.toast === 'function') return Utils.toast(message, type);
+    const T = typeof Toast !== 'undefined' ? Toast : (typeof window !== 'undefined' ? window.Toast : null);
+    if (!T) return;
+    const kind = type === 'warn' ? 'warning' : (type || 'info');
+    if (typeof T[kind] === 'function') return T[kind](message);
+    if (typeof T.show === 'function') return T.show(message, kind);
+  } catch (_) { /* a notice that cannot be shown must never undo what happened */ }
 }
 
 /* ─── The group workspace in isiZulu and Sesotho ──────────────────────
@@ -13533,7 +13552,7 @@ function _svField(id, label, type, hint, attrs) {
 
 function _svFormError(msg) {
   const n = document.getElementById('svFormNote');
-  if (n) n.textContent = msg; else Utils.toast(msg, 'error');
+  if (n) n.textContent = msg; else _svToast(msg, 'error');
 }
 function _svVal(id) { const el = document.getElementById(id); return el ? el.value : ''; }
 
@@ -13816,7 +13835,7 @@ async function submitNoticeDeposit(groupId) {
   if (!(amount > 0)) return _svFormError('Say how much.');
   try {
     await API._fetch('POST', `stokvels/${groupId}/withdrawal-requests`, { kind: 'notice_deposit', amount });
-    Utils.toast('Asked. The signatories have been told.', 'success');
+    _svToast('Asked. The signatories have been told.', 'success');
   } catch (err) { return _svFormError(err.message || 'Could not ask for that.'); }
   await _svRenderHub(groupId, 'approvals');
 }
@@ -13824,8 +13843,8 @@ async function submitNoticeDeposit(groupId) {
 async function moveIntoNoticeFund(groupId, authorityId) {
   try {
     await API._fetch('POST', `stokvels/${groupId}/notice/subscribe`, { authority_id: authorityId });
-    Utils.toast('Moved into the fund. It buys units at the next published price.', 'success');
-  } catch (err) { Utils.toast(err.message || 'Could not move it into the fund.', 'error'); return; }
+    _svToast('Moved into the fund. It buys units at the next published price.', 'success');
+  } catch (err) { _svToast(err.message || 'Could not move it into the fund.', 'error'); return; }
   await _svRenderHub(groupId, 'investments');
 }
 
@@ -13856,15 +13875,15 @@ async function submitNoticeRedemption(groupId) {
   if (!all && !(amount > 0)) return _svFormError('Say how much, or tick everything.');
   try {
     const r = await API._fetch('POST', `stokvels/${groupId}/notice/redeem`, all ? { all: true } : { amount });
-    Utils.toast(`Notice given. It comes back to the wallet after ${String(r.data.payable_at).slice(0, 10)}.`, 'success');
+    _svToast(`Notice given. It comes back to the wallet after ${String(r.data.payable_at).slice(0, 10)}.`, 'success');
   } catch (err) { return _svFormError(err.message || 'Could not give notice.'); }
   await _svRenderHub(groupId, 'investments');
 }
 
 async function cancelNoticeRedemption(groupId, orderId) {
   if (!confirm('Cancel this withdrawal from the fund? The money stays invested.')) return;
-  try { await API._fetch('POST', `stokvels/${groupId}/notice/redeem/${orderId}/cancel`, {}); Utils.toast('Cancelled.', 'success'); }
-  catch (err) { Utils.toast(err.message || 'Could not cancel it.', 'error'); }
+  try { await API._fetch('POST', `stokvels/${groupId}/notice/redeem/${orderId}/cancel`, {}); _svToast('Cancelled.', 'success'); }
+  catch (err) { _svToast(err.message || 'Could not cancel it.', 'error'); }
   await _svRenderHub(groupId, 'investments');
 }
 
@@ -14065,7 +14084,7 @@ async function submitStokvelDocument(groupId) {
     const res = await API._fetch('POST', `stokvels/${groupId}/documents`, {
       doc_type: type, file_name: file.name, file_data: data, signatory_investor_id: who,
     });
-    Utils.toast(res && res.data && res.data.group_status === 'under_review'
+    _svToast(res && res.data && res.data.group_status === 'under_review'
       ? 'Sent. That is everything — we will check them and tell the group.'
       : 'Sent. Our compliance team will check it.', 'success');
   } catch (err) {
@@ -14167,7 +14186,7 @@ async function submitStokvelProposal(groupId) {
       title, details: _svVal('svPrDetails'), pool_id: poolId || null, amount,
       closes_in_days: parseInt(_svVal('svPrDays'), 10) || 7,
     });
-    Utils.toast('Proposal raised. Every member can now vote on it.', 'success');
+    _svToast('Proposal raised. Every member can now vote on it.', 'success');
   } catch (err) {
     return _svFormError(err.message || 'Could not raise that proposal.');
   }
@@ -14178,11 +14197,11 @@ async function voteStokvelProposal(groupId, proposalId, vote) {
   try {
     const res = await API._fetch('POST', `stokvels/${groupId}/proposals/${proposalId}/vote`, { vote });
     const st = res && res.data && res.data.status;
-    Utils.toast(st === 'carried' ? 'Vote recorded \u2014 the proposal has carried.'
+    _svToast(st === 'carried' ? 'Vote recorded \u2014 the proposal has carried.'
       : st === 'defeated' ? 'Vote recorded \u2014 the proposal has been defeated.'
       : 'Vote recorded. You can change it while voting is open.', 'success');
   } catch (err) {
-    Utils.toast(err.message || 'Could not record that vote.', 'error');
+    _svToast(err.message || 'Could not record that vote.', 'error');
   }
   await _svRenderHub(groupId, 'proposals');
 }
@@ -14191,9 +14210,9 @@ async function withdrawStokvelProposal(groupId, proposalId) {
   if (!confirm('Withdraw this proposal? Voting on it will stop.')) return;
   try {
     await API._fetch('POST', `stokvels/${groupId}/proposals/${proposalId}/withdraw`, {});
-    Utils.toast('Proposal withdrawn.', 'success');
+    _svToast('Proposal withdrawn.', 'success');
   } catch (err) {
-    Utils.toast(err.message || 'Could not withdraw that proposal.', 'error');
+    _svToast(err.message || 'Could not withdraw that proposal.', 'error');
   }
   await _svRenderHub(groupId, 'proposals');
 }
@@ -14206,11 +14225,11 @@ async function proposalToSignatories(groupId, proposalId, poolId, amount) {
       kind: 'investment', pool_id: poolId, amount: parseFloat(amount), proposal_id: proposalId,
       reason: 'Carried by the group\u2019s vote',
     });
-    Utils.toast(res && res.data && res.data.lock_warning
+    _svToast(res && res.data && res.data.lock_warning
       ? 'Put to the signatories. Note: ' + res.data.lock_warning
       : 'Put to the signatories. They have been asked to approve it.', 'success');
   } catch (err) {
-    Utils.toast(err.message || 'Could not put that to the signatories.', 'error');
+    _svToast(err.message || 'Could not put that to the signatories.', 'error');
     return;
   }
   await _svRenderHub(groupId, 'approvals');
@@ -14274,7 +14293,7 @@ async function svOpenStatement(id) {
   const from = (document.getElementById('svStFrom') || {}).value;
   const to   = (document.getElementById('svStTo')   || {}).value;
   const out  = document.getElementById('svStOut');
-  if (!from || !to) { Utils.toast('Choose both dates.', 'error'); return; }
+  if (!from || !to) { _svToast('Choose both dates.', 'error'); return; }
   if (out) out.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Building…`;
   try {
     const res = await API._fetch('GET', 'statements/account-statement', null,
@@ -14338,11 +14357,11 @@ function _svHeader(g, shareRes) {
 async function toggleStokvelAutopay(groupId, enabled) {
   try {
     await API._fetch('PUT', `stokvels/${groupId}/autopay`, { enabled });
-    Utils.toast(enabled
+    _svToast(enabled
       ? 'On. Your contribution will be taken on the day it is due.'
       : 'Off. You will pay each contribution yourself.', 'success');
   } catch (err) {
-    Utils.toast(err.message || 'Could not change that setting.', 'error');
+    _svToast(err.message || 'Could not change that setting.', 'error');
   }
   await _svRenderHub(groupId, 'contributions');
 }
@@ -14508,7 +14527,7 @@ async function submitStokvelSchedule(groupId) {
   if (!(due_day >= 1 && due_day <= 31)) return _svFormError('The due day must be between 1 and 31.');
   try {
     const res = await API._fetch('PUT', `stokvels/${groupId}/schedule`, { amount, due_day, start: _svVal('svSchStart') });
-    Utils.toast(`Done: ${Utils.rand(amount)} a month from ${(res && res.data && res.data.first_month) || 'the month you chose'}. Every member has been told.`, 'success');
+    _svToast(`Done: ${Utils.rand(amount)} a month from ${(res && res.data && res.data.first_month) || 'the month you chose'}. Every member has been told.`, 'success');
   } catch (err) {
     return _svFormError(err.message || 'Could not set the contribution.');
   }
@@ -14589,7 +14608,7 @@ async function submitStokvelPayout(groupId) {
   if (!payOn) return _svFormError('Choose the date it is paid on.');
   try {
     await API._fetch('POST', `stokvels/${groupId}/payouts`, { label, pay_on: payOn });
-    Utils.toast('Planned. Raise it for the signatories to approve.', 'success');
+    _svToast('Planned. Raise it for the signatories to approve.', 'success');
   } catch (err) {
     return _svFormError(err.message || 'Could not plan that payout.');
   }
@@ -14600,9 +14619,9 @@ async function cancelStokvelPayout(groupId, payoutId) {
   if (!confirm('Call this payout off? The group can plan another at any time.')) return;
   try {
     await API._fetch('DELETE', `stokvels/${groupId}/payouts/${payoutId}`);
-    Utils.toast('Called off.', 'success');
+    _svToast('Called off.', 'success');
   } catch (err) {
-    Utils.toast(err.message || 'Could not cancel it.', 'error');
+    _svToast(err.message || 'Could not cancel it.', 'error');
   }
   await _svRenderHub(groupId);
 }
@@ -14622,9 +14641,9 @@ async function requestStokvelPayout(groupId, payoutId, label) {
          literal says which of the two it is. */
       reason: ('Payout — ' + (label || '')).trim(),
     });
-    Utils.toast('Asked. The signatories have to approve it.', 'success');
+    _svToast('Asked. The signatories have to approve it.', 'success');
   } catch (err) {
-    Utils.toast(err.message || 'Could not raise that request.', 'error');
+    _svToast(err.message || 'Could not raise that request.', 'error');
   }
   await _svRenderHub(groupId);
 }
@@ -14636,11 +14655,11 @@ async function runStokvelPayout(groupId, payoutId, authorityId) {
     const res = await API._fetch('POST', `stokvels/${groupId}/payouts/${payoutId}/run`,
                                  { authority_id: authorityId });
     const d = (res && res.data) || {};
-    Utils.toast(Number(d.queued) > 0
+    _svToast(Number(d.queued) > 0
       ? `Paid ${Utils.rand(d.paid)}. ${Utils.rand(d.queued)} is owed as investments mature.`
       : `Paid ${Utils.rand(d.paid)} to ${(d.lines || []).length} member(s).`, 'success');
   } catch (err) {
-    Utils.toast(err.message || 'Could not run that payout.', 'error');
+    _svToast(err.message || 'Could not run that payout.', 'error');
   }
   await Promise.all([loadSubAccounts(), loadStokvels()]);
   await _svRenderHub(groupId);
@@ -14724,9 +14743,9 @@ async function requestStokvelExit(groupId) {
       kind: 'exit', amount: share > 0 ? share : 0.01,
       reason: 'Member asked to leave',
     });
-    Utils.toast('Asked. The signatories have to approve it.', 'success');
+    _svToast('Asked. The signatories have to approve it.', 'success');
   } catch (err) {
-    Utils.toast(err.message || 'Could not raise that request.', 'error');
+    _svToast(err.message || 'Could not raise that request.', 'error');
   }
   await _svRenderHub(groupId);
 }
@@ -14738,11 +14757,11 @@ async function settleStokvelExit(groupId, requestId) {
   try {
     const res = await API._fetch('POST', `stokvels/${groupId}/exits`, { authority_id: requestId });
     const d = (res && res.data) || {};
-    Utils.toast(Number(d.queued) > 0
+    _svToast(Number(d.queued) > 0
       ? `Settled. ${Utils.rand(d.paid)} paid, ${Utils.rand(d.queued)} owed as investments mature.`
       : `Settled. ${Utils.rand(d.paid)} paid.`, 'success');
   } catch (err) {
-    Utils.toast(err.message || 'Could not settle that exit.', 'error');
+    _svToast(err.message || 'Could not settle that exit.', 'error');
   }
   await _svRenderHub(groupId);
 }
@@ -14975,7 +14994,7 @@ async function submitFoundingMandate(groupId) {
     _svFormError(err.message || 'Could not set those rules.');
     return;
   }
-  Utils.toast('Set. They take effect once the signatories have confirmed.', 'success');
+  _svToast('Set. They take effect once the signatories have confirmed.', 'success');
   await _svRenderHub(groupId, 'approvals');
 }
 
@@ -14984,11 +15003,11 @@ async function confirmStokvelSignatory(groupId) {
       + 'The group\u2019s money cannot move unless you and the other signatories approve it.')) return;
   try {
     const r = await API._fetch('POST', `stokvels/${groupId}/signatory-confirmation`, {});
-    Utils.toast(r.data && r.data.adopted
+    _svToast(r.data && r.data.adopted
       ? 'Confirmed. The signing rules are now in force.'
       : `Confirmed. ${r.data.signatories} of ${r.data.quorum} signatories so far.`, 'success');
   } catch (err) {
-    Utils.toast(err.message || 'Could not confirm that.', 'error');
+    _svToast(err.message || 'Could not confirm that.', 'error');
   }
   await _svRenderHub(groupId, 'approvals');
 }
@@ -15034,10 +15053,10 @@ async function levyStokvelFine(groupId) {
     const res = await API._fetch('GET', `stokvels/${groupId}/members`);
     roster = ((res && res.data) || []).filter(m => m.status === 'active');
   } catch (err) {
-    Utils.toast(err.message || 'Could not load the members.', 'error');
+    _svToast(err.message || 'Could not load the members.', 'error');
     return;
   }
-  if (!roster.length) { Utils.toast('There is nobody to fine.', 'error'); return; }
+  if (!roster.length) { _svToast('There is nobody to fine.', 'error'); return; }
 
   _svFormShell(groupId, {
     icon: 'fa-gavel',
@@ -15070,7 +15089,7 @@ async function submitStokvelFine(groupId) {
   if (!note)         return _svFormError('Say what the fine is for \u2014 the member will see it.');
   try {
     await API._fetch('POST', `stokvels/${groupId}/fines`, { investor_id: investorId, amount, note });
-    Utils.toast('Recorded. They have been told.', 'success');
+    _svToast('Recorded. They have been told.', 'success');
   } catch (err) {
     return _svFormError(err.message || 'Could not record that fine.');
   }
@@ -15081,11 +15100,11 @@ async function payStokvelContribution(groupId, contributionId) {
   if (!confirm('Pay this contribution from your wallet?')) return;
   try {
     const res = await API._fetch('POST', `stokvels/${groupId}/contributions/${contributionId}/pay`, {});
-    Utils.toast(`Paid ${Utils.rand(res.data.paid)}.`, 'success');
+    _svToast(`Paid ${Utils.rand(res.data.paid)}.`, 'success');
     await _svRenderHub(groupId);
     if (typeof loadPortalData === 'function') loadPortalData();
   } catch (err) {
-    Utils.toast(err.message || 'That payment did not go through.', 'error');
+    _svToast(err.message || 'That payment did not go through.', 'error');
   }
 }
 
@@ -15118,7 +15137,7 @@ async function submitStokvelWithdrawal(groupId) {
     await API._fetch('POST', `stokvels/${groupId}/withdrawal-requests`, {
       amount, bank_name: bank, bank_account_number: acct, reason: _svVal('svWdReason'),
     });
-    Utils.toast('Request raised. The signatories have been asked to approve it.', 'success');
+    _svToast('Request raised. The signatories have been asked to approve it.', 'success');
   } catch (err) {
     return _svFormError(err.message || 'Could not raise that request.');
   }
@@ -15140,7 +15159,7 @@ async function submitStokvelWithdrawal(groupId) {
 function raiseStokvelInvestment(groupId) {
   const pools = (PORTAL.pools || []).filter(p => p.status === 'open' && !_poolPastClose(p));
   if (!pools.length) {
-    Utils.toast('There are no open pools to invest in right now.', 'error');
+    _svToast('There are no open pools to invest in right now.', 'error');
     return;
   }
   _svFormShell(groupId, {
@@ -15252,7 +15271,7 @@ async function submitStokvelInvestment(groupId) {
     _svFormError(err.message || 'Could not raise that request.');
     return;
   }
-  Utils.toast('Request raised. The signatories have been asked to approve it.', 'success');
+  _svToast('Request raised. The signatories have been asked to approve it.', 'success');
   await _svRenderHub(groupId, 'approvals');
 }
 
@@ -15352,7 +15371,7 @@ async function submitStokvelMandateChange(groupId) {
   }
   try {
     await API._fetch('POST', `stokvels/${groupId}/withdrawal-requests`, body);
-    Utils.toast('Proposed. The signatories have been asked to approve the change.', 'success');
+    _svToast('Proposed. The signatories have been asked to approve the change.', 'success');
   } catch (err) {
     return _svFormError(err.message || 'Could not propose that change.');
   }
@@ -15364,13 +15383,13 @@ async function voteStokvelRequest(groupId, requestId, decision) {
   try {
     const res = await API._fetch('POST',
       `stokvels/${groupId}/withdrawal-requests/${requestId}/vote`, { decision });
-    Utils.toast(res.data.applied
+    _svToast(res.data.applied
       ? 'Approved — the change to the mandate is now in force.'
       : res.data.satisfied
       ? 'Approved — the mandate is satisfied.'
       : `Recorded. ${res.data.approvals} of ${res.data.required}.`, 'success');
     await _svRenderHub(groupId);
   } catch (err) {
-    Utils.toast(err.message || 'Could not record that vote.', 'error');
+    _svToast(err.message || 'Could not record that vote.', 'error');
   }
 }
