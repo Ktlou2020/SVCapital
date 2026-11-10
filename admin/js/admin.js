@@ -21753,14 +21753,27 @@ async function loadNoticeFundAdmin() {
         </div>
       </div>
       <div style="display:flex;gap:24px;flex-wrap:wrap;margin:10px 0;font-size:0.84rem">
-        <div><div class="text-muted" style="font-size:0.72rem;text-transform:uppercase">Unit price today</div>
-          <strong>${f.price ? `R${Number(f.price.unit_price).toFixed(6)}` : (f.missing ? `waiting for ${_esc(f.missing)}&rsquo;s rate` : 'no rate yet')}</strong></div>
+        <!-- This tile used to read the unit price to six decimals. The price
+             is still how the fund values money; it is simply not a figure
+             anybody acts on. What it ALSO carried is operational and had to
+             stay: whether the fund can be priced at all, and which month's
+             rate is missing when it cannot. A fund that cannot be priced
+             takes no money in and pays none out. -->
+        <div><div class="text-muted" style="font-size:0.72rem;text-transform:uppercase">Pricing</div>
+          <strong>${f.price
+            ? 'up to date'
+            : `<span style="color:#f59e0b">${f.missing
+                ? `waiting for ${_esc(f.missing)}&rsquo;s rate`
+                : 'no rate yet'}</span>`}</strong></div>
         <div><div class="text-muted" style="font-size:0.72rem;text-transform:uppercase">Projected this / next month</div>
           <strong>${f.projected && f.projected.this_rate != null ? `${(f.projected.this_rate * 100).toFixed(4)}%` : '<span style="color:#ef4444">not declared</span>'}
           / ${f.projected && f.projected.next_rate != null ? `${(f.projected.next_rate * 100).toFixed(4)}%` : '<span style="color:#f59e0b">not declared</span>'}</strong></div>
         <div><div class="text-muted" style="font-size:0.72rem;text-transform:uppercase">Groups holding</div><strong>${f.groups}</strong></div>
-        <div><div class="text-muted" style="font-size:0.72rem;text-transform:uppercase">Units</div><strong>${Number(f.units).toFixed(6)}</strong></div>
-        <div><div class="text-muted" style="font-size:0.72rem;text-transform:uppercase">At cost / at price</div>
+        <!-- The units tile is gone with the price. "At cost / at value" stays:
+             both are rands, and the gap between them is what the fund has
+             earned or lost, which is the figure a fund manager reads.
+             Relabelled from "at price" because price is no longer shown. -->
+        <div><div class="text-muted" style="font-size:0.72rem;text-transform:uppercase">At cost / at value</div>
           <strong>${Utils.rand(f.cost)} / ${f.value == null ? '—' : Utils.rand(f.value)}</strong></div>
       </div>
       ${(f.needs_actual || []).length ? `<div style="margin:8px 0;padding:8px 10px;border-radius:8px;border:1px solid #f59e0b;font-size:0.8rem">

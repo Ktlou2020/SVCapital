@@ -272,7 +272,17 @@ async function subscribe(client, { group, fund, amount, authorityId, actor, now 
   const who = actor || systemActor('noticeFund:subscribe');
   await recordTransaction(client, {
     investorId: g.parent_investor_id, subAccountId: group.id, type: 'investment', amount,
-    reference: id, description: `Into ${fund.name} — ${units} units at R${price.unit_price}`,
+    /* A transaction description is the most durable display there is — it
+       sits on a statement for as long as the account exists. It named the
+       units and the price; it now names neither, because the member is not
+       shown units anywhere else and a statement is the wrong place to meet
+       them for the first time. The units and the price are still RECORDED,
+       on notice_fund_orders, which is where a reconciliation looks.
+
+       Only new rows carry this wording. Rows already written keep theirs,
+       deliberately: a statement that changes its own past is worse than one
+       that reads two ways. */
+    reference: id, description: `Into ${fund.name}`,
   }, who);
   if (fee > 0) {
     await recordTransaction(client, {
@@ -386,7 +396,7 @@ async function _payOne(client, fund, orderId) {
   await recordTransaction(client, {
     investorId: g && g.parent_investor_id, subAccountId: o.sub_account_id, type: 'payout', amount: proceeds,
     reference: `${o.id}-PAID`,
-    description: `From ${fund.name} after ${fund.notice_days} days' notice — ${units} units at R${p.unit_price}`,
+    description: `From ${fund.name} after ${fund.notice_days} days' notice`,
   }, systemActor('noticeFund:settle'));
   await require('./stokvelShares').reconcile(client, o.sub_account_id,
     { reason: `${fund.name}: withdrawal priced ${day}`, reference: o.id });

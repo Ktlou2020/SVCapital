@@ -13811,17 +13811,21 @@ async function _svNoticeFund(id) {
         pr.last_projected != null ? ` <span style="color:var(--text-muted)">(projected ${pct(pr.last_projected)})</span>` : ''}.</div>` : ''}
     </div>
     ${waitingOut ? `<div style="font-size:0.8rem;margin-top:8px;color:#f59e0b"><i class="fa-solid fa-clock"></i>
-      ${waitingOut.all_units ? 'Everything' : Utils.rand(waitingOut.amount)} is coming back to the wallet after ${day(waitingOut.payable_at)}, at the price on that day.
+      ${waitingOut.all_units ? 'Everything' : Utils.rand(waitingOut.amount)} is coming back to the wallet after ${day(waitingOut.payable_at)}, at its value on that day.
       ${d.may_redeem ? `<button class="btn btn--ghost btn--sm" onclick="cancelNoticeRedemption('${gid}','${_esc(waitingOut.id)}')">Cancel</button>` : ''}</div>` : ''}
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
       <button class="btn btn--secondary btn--sm" onclick="raiseNoticeDeposit('${gid}')"><i class="fa-solid fa-plus"></i> Ask to move money in</button>
       ${d.may_redeem && !waitingOut && p.units > 0 ? `<button class="btn btn--ghost btn--sm" onclick="raiseNoticeRedemption('${gid}')">
         <i class="fa-solid fa-arrow-right-from-bracket"></i> Give notice to take money out</button>` : ''}
     </div>
-    ${p.price ? `<div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px">${Number(p.units).toFixed(4)} units &middot; latest unit price R${Number(p.price.unit_price).toFixed(4)} on ${day(p.price.price_date)}</div>` : ''}
+    <!-- The unit count and the unit price used to be shown here. They are
+         still how the fund values money — see services/noticeFund — but a
+         member reads their holding in rands, and a line of six-decimal units
+         beside it invites the question "is that a lot?" with no answer. The
+         rand value above is the same fact, said once. -->
     ${recent.length ? `<table class="data-table" style="font-size:0.78rem;margin-top:10px"><tbody>
       ${recent.map(o => `<tr><td>${o.kind === 'subscription' ? 'In' : 'Out'}</td>
-        <td>${o.status === 'cancelled' ? 'Cancelled' : `${Utils.rand(o.kind === 'subscription' ? o.amount : o.proceeds)} at R${Number(o.unit_price || 0).toFixed(4)}${
+        <td>${o.status === 'cancelled' ? 'Cancelled' : `${Utils.rand(o.kind === 'subscription' ? o.amount : o.proceeds)}${
           o.kind === 'subscription' && Number(o.fee) > 0 ? ` <span style="color:var(--text-muted)">+ ${Utils.rand(o.fee)} fee</span>` : ''}`}</td>
         <td class="text-right">${day(o.completed_at)}</td></tr>`).join('')}
     </tbody></table>` : ''}

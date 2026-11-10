@@ -257,6 +257,74 @@ if (!process.env.DATABASE_URL) {
        log.filter(l => l.m === M0 && l.field === 'projected').length === 3
        && log.some(l => l.m === M0 && Number(l.old_rate) === 0.03 && Number(l.new_rate) === 0.01)
        && log.some(l => l.m === Mprev && l.field === 'actual' && Number(l.new_rate) === 0.025), JSON.stringify(log));
+
+    /* ── The price is KEPT and not SHOWN ───────────────────────────
+       Asked for: take the unit price off the screens, leave the mechanism
+       alone. Those pull in opposite directions, so both halves are held
+       here — every assertion above this point is the mechanism still
+       working, and these are the screens no longer carrying it.
+
+       A member reads their holding in rands. Units are six decimals of a
+       thing nothing else on their screen mentions, and the price is a
+       number nobody acts on. Both are still recorded on
+       notice_fund_orders, which is where a reconciliation looks, and the
+       assertions above read them from there. */
+    console.log('\nand the price is recorded without being put on a screen');
+    {
+      const fs = require('fs');
+      const pc = fs.readFileSync(path.join(ROOT, 'js', 'portal-core.js'), 'utf8');
+      const ad = fs.readFileSync(path.join(ROOT, 'admin', 'js', 'admin.js'), 'utf8');
+      const strip = t => t.replace(/\/\*[\s\S]*?\*\//g, '')
+                          .replace(/<!--[\s\S]*?-->/g, '')
+                          .replace(/^\s*\/\/.*$/gm, '');
+      /* The member's panel, by name, so this cannot pass by reading a part
+         of the file that never had a price in it. */
+      const from = pc.indexOf('async function _svNoticeFund(');
+      const to   = pc.indexOf('function raiseNoticeDeposit(');
+      ok('the member\'s notice fund panel was found', from > 0 && to > from,
+         'a slice that missed it would assert nothing while passing');
+      const panel = strip(pc.slice(from, to));
+      ok('it shows no unit price', !/unit_price/.test(panel), panel.slice(0, 300));
+      /* p.units > 0 gates the redeem button — a holding of nothing cannot be
+         redeemed. That is logic, not display, and it stays. What must go is
+         units printed for somebody to read. */
+      ok('and prints no unit count', !/\.units\s*\)?\s*\.toFixed|units\s*&middot;|\} units/.test(panel),
+         panel.slice(0, 300));
+      ok('while still deciding what to offer from the holding it has',
+         /p\.units\s*>\s*0/.test(panel),
+         'the gate on the redeem button is logic and was not meant to go');
+
+      const af = ad.indexOf('Groups holding');
+      ok('the admin fund tiles were found', af > 0);
+      const tiles = strip(ad.slice(af - 2500, af + 1200));
+      ok('the console shows no unit price either', !/unit_price/.test(tiles), tiles.slice(0, 300));
+      /* The tile that showed the price also said WHICH month's rate was
+         missing, and that is operational: an unpriced fund takes no money
+         in and pays none out. It had to survive the number going. */
+      ok('but it still says when a fund cannot be priced, and why',
+         /waiting for/.test(tiles) && /no rate yet/.test(tiles),
+         tiles.slice(0, 400));
+
+      /* A transaction description is the most durable display there is — it
+         sits on a statement for as long as the account exists. Every line
+         this check's fund wrote is read, both directions, rather than one
+         looked up by reference: money in and money out had the wording, and
+         checking one would leave the other free to keep it. */
+      const lines = (await db.query(
+        `SELECT type, description FROM transactions
+          WHERE description LIKE '%Check NF%' ORDER BY id`)).rows;
+      ok('the fund wrote statement lines both ways',
+         lines.some(l => /^Into /.test(l.description))
+         && lines.some(l => /^From /.test(l.description)),
+         JSON.stringify(lines));
+      ok('and not one of them carries units or a price',
+         lines.length > 0 && !lines.some(l => /\bunits?\b|at R/.test(l.description)),
+         JSON.stringify(lines));
+      ok('while the order still carries both, for reconciling',
+         Number((await db.query(
+           `SELECT unit_price FROM notice_fund_orders WHERE id = $1`, [out.body.data.id])
+         ).rows[0].unit_price) > 0);
+    }
     await clean();
   } catch (err) {
     console.error('\n  ✗ threw:', err.stack || err.message);
