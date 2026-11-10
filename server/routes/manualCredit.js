@@ -1058,6 +1058,53 @@ router.get('/withdrawal-double-debits', async (req, res) => {
   }
 });
 
+/* ─── GET /api/admin/ledger-gap ────────────────────────────────────────
+   Why a client's wallet and their transaction history disagree.
+
+   accountStatement already reports `ledger_gap` — the SIZE of the difference —
+   and a client reading it asks what it consists of. The decomposition existed
+   only as scripts/explain-ledger-gap.cjs, which needs a DATABASE_URL, so the
+   answer was gated on whoever held production credentials. Same service, same
+   arithmetic, through the console.
+
+   ?investor=S-112415   one account; omitted, every account over the threshold
+   ?min=100             the smallest gap worth reporting, in rand
+   ?recent=25           carry this many recent rows as context
+
+   It matters that an unknown id is not reported as a clean result: `found`
+   false means nothing was checked, which is a different answer from "it ties".
+
+   Read-only — the service is SELECT only, and this runs it inside a READ ONLY
+   transaction so a future edit to it cannot write through this route either.
+   Admin/director only, via the router-level guard at the top of this file.
+   ──────────────────────────────────────────────────────────────────── */
+router.get('/ledger-gap', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { explain } = require('../services/ledgerGap');
+    /* Without a scope this walks every investor's ledger, so it is given a
+       ceiling rather than being allowed to hold a connection open. */
+    await client.query(`SET statement_timeout = '60s'`);
+    await client.query('BEGIN');
+    await client.query('SET TRANSACTION READ ONLY');
+    const report = await explain(client, {
+      investorId: req.query.investor || null,
+      min:        req.query.min,
+      /* Context rows only where one account was asked for. Across every
+         account it would be a few thousand rows nobody asked to read. */
+      recent:     req.query.investor ? (req.query.recent ?? 25) : 0,
+    });
+    await client.query('ROLLBACK');
+    return res.json(report);
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[ledger-gap]', err);
+    return res.status(500).json({ error: 'Could not explain the gap: ' + err.message });
+  } finally {
+    client.release();
+  }
+});
+
 /* ─── POST /api/admin/pools/remap-product-type ─────────────────────────
    Set a pool's product_type AND its investments' product_type together.
 

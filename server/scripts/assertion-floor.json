@@ -1,6 +1,6 @@
 {
   "note": "What each check asserted when this was last written. run-checks refuses a check that asserts fewer. Raise it with node server/scripts/run-checks.cjs --update-floor",
-  "total": 8920,
+  "total": 8975,
   "checks": {
     "check-apply-android.cjs": 20,
     "check-shared-api.cjs": 22,
@@ -33,6 +33,7 @@
     "check-investment-detail-renders.cjs": 24,
     "check-investment-row-open.cjs": 18,
     "check-js-parses.cjs": 7,
+    "check-ledger-gap-screen.cjs": 25,
     "check-marketplace-close-date.cjs": 32,
     "check-markup-interpolation.cjs": 17,
     "check-mobile-build-reproducible.cjs": 7,
@@ -59,7 +60,7 @@
     "check-switch-target-options.cjs": 29,
     "check-tab-load-guards.cjs": 46,
     "check-transaction-dates.cjs": 21,
-    "check-utils-calls.cjs": 685,
+    "check-utils-calls.cjs": 688,
     "check-account-closure.cjs": 39,
     "check-account-statement.cjs": 13,
     "check-action-centre.cjs": 22,
@@ -145,7 +146,7 @@
     "check-kyc-approval.cjs": 28,
     "check-kyc-page-speed.cjs": 18,
     "check-late-placement.cjs": 13,
-    "check-ledger-gap-explained.cjs": 25,
+    "check-ledger-gap-explained.cjs": 52,
     "check-markup-audit-endpoint.cjs": 32,
     "check-maturity-catchup.cjs": 16,
     "check-maturity-csv.cjs": 30,

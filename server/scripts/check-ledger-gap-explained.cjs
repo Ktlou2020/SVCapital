@@ -86,11 +86,16 @@ const run = (...args) => execFileSync(process.execPath, [SCRIPT, ...args], {
  *
  * GAP-B ties exactly, and is here so "every account ties" can be distinguished
  * from "this tool finds nothing". */
+/* GAP-C is the other direction: the history explains MORE than the wallet
+   holds (R900 of deposits against a R100 wallet). Without it, the reported
+   direction could be hardcoded to the under-accounting case and every
+   assertion would still pass. */
 async function seed() {
   await pool.query(`
     INSERT INTO investors (id, first_name, last_name, email, status, wallet_balance) VALUES
       ('GAP-A','Bongani','Sibanda','a@example.test','active', 2000),
-      ('GAP-B','Thandi','Nkosi','b@example.test','active', 500)`);
+      ('GAP-B','Thandi','Nkosi','b@example.test','active', 500),
+      ('GAP-C','Lerato','Mahlangu','c@example.test','active', 100)`);
   await pool.query(`
     INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, transaction_date)
     VALUES
@@ -99,7 +104,8 @@ async function seed() {
       ('G-RI-B','GAP-A','reinvestment',  300,'completed','REINV-INV-B','Reinvested','2025-07-10'),
       ('G-MF-B','GAP-A','matured_funds', 300,'completed','MATF-INV-B','Matured Funds','2025-07-10'),
       ('G-RET', 'GAP-A','return',         50,'completed','RET-1','Return accrued','2025-08-10'),
-      ('G-DEP-B','GAP-B','deposit',      500,'completed','DEP-B','Deposit','2025-03-10')`);
+      ('G-DEP-B','GAP-B','deposit',      500,'completed','DEP-B','Deposit','2025-03-10'),
+      ('G-DEP-C','GAP-C','deposit',      900,'completed','DEP-C','Deposit','2025-03-10')`);
 }
 
 (async () => {
@@ -193,6 +199,162 @@ async function seed() {
          /Every account ties/.test(only), only);
     }
 
+    /* ── The same question, from the console ───────────────────────────
+       The decomposition used to live only in the script, so the answer to
+       "why does this client's statement not tie?" was gated on whoever held a
+       production DATABASE_URL. The route exists so it is not. These run the
+       REAL router — only requireAuth is stubbed, to choose a role; requireRole
+       is the shipped one, so the guard below is the guard that guards. */
+    console.log('\nand the console can ask the same question without a database');
+    {
+      const express  = require('express');
+      const authMod  = require.resolve(path.join(ROOT, 'server', 'middleware', 'auth'));
+      const realAuth = require(authMod);
+      let ROLE = 'admin';
+      require.cache[authMod].exports = Object.assign({}, realAuth, {
+        requireAuth: (req, _r, next) => {
+          req.user = { role: ROLE, id: 'u-lg', email: 'lg@chk.test' };
+          next();
+        },
+      });
+      const app = express();
+      app.use(express.json());
+      app.use('/api/admin', require(path.join(ROOT, 'server', 'routes', 'manualCredit')));
+      const srv = app.listen(0);
+      await new Promise(r => srv.on('listening', r));
+      const PORT = srv.address().port;
+      const get = p => new Promise(res => {
+        require('http').get({ host: '127.0.0.1', port: PORT, path: p }, r => {
+          let b = ''; r.on('data', c => { b += c; });
+          r.on('end', () => { let j = null; try { j = JSON.parse(b); } catch (_) {} res({ status: r.statusCode, body: j }); });
+        }).on('error', e => res({ status: 0, body: { error: e.message } }));
+      });
+
+      try {
+        const r = await get('/api/admin/ledger-gap?investor=GAP-A');
+        ok('the endpoint answers', r.status === 200, JSON.stringify(r.body).slice(0, 200));
+        const a = r.body && r.body.accounts && r.body.accounts[0];
+        ok('it returns the one account asked about', !!a && a.id === 'GAP-A',
+           JSON.stringify(r.body).slice(0, 300));
+        /* The figure the screen shows must BE the script's figure, not one
+           that resembles it. Two copies of this arithmetic drift, and the
+           drift is what somebody quotes to a client. */
+        ok('with the same R700 gap the script and the statement report',
+           !!a && Math.abs(a.gap - 700) < 0.005, String(a && a.gap));
+        ok('and the wallet and ledger behind it',
+           !!a && Math.abs(a.wallet - 2000) < 0.005 && Math.abs(a.derived - 1300) < 0.005,
+           JSON.stringify({ w: a && a.wallet, d: a && a.derived }));
+        ok('the direction is stated rather than left to a sign',
+           !!a && a.direction === 'ledger-under-accounts', String(a && a.direction));
+        /* The opposite case, so `direction` has to be derived and cannot be a
+           constant. R900 of history against a R100 wallet: the remedy here is
+           the reverse of GAP-A's, and telling the two apart is the point. */
+        {
+          const over = await get('/api/admin/ledger-gap?investor=GAP-C');
+          const c = over.body && over.body.accounts && over.body.accounts[0];
+          ok('an account the history over-accounts for is named as such',
+             !!c && c.direction === 'ledger-over-accounts'
+             && Math.abs(c.gap + 800) < 0.005,
+             JSON.stringify({ d: c && c.direction, g: c && c.gap }));
+          ok('and nothing is attributed to a cause that cannot explain it',
+             !!c && c.causes.unpairedReinvestments.count === 0
+             && Math.abs(c.accountedFor) < 0.005
+             && Math.abs(c.unexplained + 800) < 0.005,
+             JSON.stringify({ acc: c && c.accountedFor, un: c && c.unexplained }));
+        }
+        ok('the unpaired reinvestment is attributed, with its reference',
+           !!a && a.causes.unpairedReinvestments.count === 1
+           && Math.abs(a.causes.unpairedReinvestments.total - 700) < 0.005
+           && a.causes.unpairedReinvestments.rows[0].reference === 'REINV-INV-A',
+           JSON.stringify(a && a.causes.unpairedReinvestments));
+        ok('and the paired one is not blamed',
+           !!a && !JSON.stringify(a.causes).includes('REINV-INV-B'),
+           'it has its matured_funds credit and is not part of the gap');
+        ok('the remedy travels with the cause',
+           !!a && /backfill-matured-funds/.test(a.causes.unpairedReinvestments.remedy),
+           'a cause with no remedy is half an answer');
+
+        /* The restraint has to survive the trip through JSON. A field that
+           says `counted: false` and a total that was nonetheless added to
+           accountedFor would be worse than silence. */
+        ok('the accrual is reported but marked uncounted',
+           !!a && a.causes.noCashEffect.counted === false
+           && Math.abs(a.causes.noCashEffect.total - 50) < 0.005,
+           JSON.stringify(a && a.causes.noCashEffect));
+        ok('and really is absent from what is accounted for',
+           !!a && Math.abs(a.accountedFor - 700) < 0.005 && Math.abs(a.unexplained) < 0.005,
+           `accountedFor ${a && a.accountedFor} — the R50 accrual must not be in it`);
+
+        /* A single account carries context rows; a sweep must not, or the
+           response is a few thousand rows nobody asked to read. */
+        ok('a single account carries its recent rows as context',
+           !!a && Array.isArray(a.recent) && a.recent.length > 0,
+           JSON.stringify((a && a.recent || []).length));
+        ok('and the cash effect of each is on the row, so "none" is visible',
+           !!a && a.recent.some(x => x.type === 'return' && x.cash === 0)
+           && a.recent.some(x => x.type === 'deposit' && x.cash > 0),
+           JSON.stringify(a && a.recent));
+
+        const sweep = await get('/api/admin/ledger-gap?min=100');
+        ok('a sweep finds the broken account',
+           sweep.status === 200 && sweep.body.accounts.some(x => x.id === 'GAP-A'));
+        ok('and leaves out the one that ties',
+           !sweep.body.accounts.some(x => x.id === 'GAP-B'),
+           'a reconciliation report listing accounts that reconcile is noise');
+        ok('and carries no context rows across every account',
+           sweep.body.accounts.every(x => !x.recent || x.recent.length === 0),
+           'a sweep that returns every ledger is a different endpoint');
+
+        /* THE ONE THAT MATTERS MOST. An id that matches nobody must not read
+           as a clean bill of health — that is how a typo becomes a sign-off
+           on an account nobody looked at. */
+        const nope = await get('/api/admin/ledger-gap?investor=NO-SUCH-ID');
+        ok('an unknown account is reported as not found, not as balancing',
+           nope.status === 200 && nope.body.found === false && !nope.body.accounts.length,
+           JSON.stringify(nope.body));
+        const ties = await get('/api/admin/ledger-gap?investor=GAP-B');
+        ok('while an account that really ties is found and empty',
+           ties.status === 200 && ties.body.found === true && !ties.body.accounts.length,
+           JSON.stringify(ties.body));
+        ok('so the two answers are distinguishable',
+           nope.body.found !== ties.body.found,
+           'if both said the same thing the field would be decoration');
+
+        /* The guard is the shipped requireRole, so this is the real refusal. */
+        ROLE = 'investor';
+        const asClient = await get('/api/admin/ledger-gap?investor=GAP-A');
+        ok('a client cannot read it', asClient.status === 403, String(asClient.status));
+        ROLE = 'fund_manager';
+        const asFm = await get('/api/admin/ledger-gap?investor=GAP-A');
+        ok('and neither can a fund manager — it is admin/director only',
+           asFm.status === 403, String(asFm.status));
+        ROLE = 'director';
+        const asDir = await get('/api/admin/ledger-gap?investor=GAP-A');
+        ok('a director can', asDir.status === 200, String(asDir.status));
+        ROLE = 'admin';
+
+        /* READ ONLY on the transaction, so a future edit to the service
+           cannot write through this route even by accident. */
+        const before = (await pool.query(
+          `SELECT count(*) AS n, COALESCE(SUM(amount),0) AS total FROM transactions`)).rows[0];
+        await get('/api/admin/ledger-gap?investor=GAP-A');
+        await get('/api/admin/ledger-gap?min=1');
+        const after = (await pool.query(
+          `SELECT count(*) AS n, COALESCE(SUM(amount),0) AS total FROM transactions`)).rows[0];
+        ok('and the route writes nothing',
+           before.n === after.n && String(before.total) === String(after.total),
+           JSON.stringify({ before, after }));
+        ok('because it holds the connection READ ONLY',
+           /SET TRANSACTION READ ONLY/.test(
+             require('fs').readFileSync(path.join(ROOT, 'server', 'routes', 'manualCredit.js'), 'utf8')
+               .split("router.get('/ledger-gap'")[1].slice(0, 1200)),
+           'the guard belongs on the transaction, not on the service being careful');
+      } finally {
+        srv.close();
+        require.cache[authMod].exports = realAuth;
+      }
+    }
+
     console.log('\nand it never writes');
     {
       const before = (await pool.query(
@@ -203,11 +365,25 @@ async function seed() {
       ok('the ledger is byte-for-byte unchanged',
          before.n === after.n && String(before.total) === String(after.total),
          JSON.stringify({ before, after }));
-      ok('and the source contains no write at all',
-         !/\b(INSERT|UPDATE|DELETE)\b/i.test(
-           require('fs').readFileSync(SCRIPT, 'utf8')
-             .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')),
-         'a diagnostic that can write is not a diagnostic');
+      /* The SQL moved out of the script and into the service when the console
+         needed it too, which left this assertion reading a file that no
+         longer holds any SQL — passing while testing nothing. Both files are
+         named, so the check cannot be satisfied by moving the query again. */
+      const SERVICE = path.join(ROOT, 'server', 'services', 'ledgerGap.js');
+      const naked = f => require('fs').readFileSync(f, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+      for (const [label, file] of [['the script', SCRIPT], ['the service', SERVICE]]) {
+        ok(`${label} contains no write at all`,
+           !/\b(INSERT|UPDATE|DELETE|TRUNCATE)\b/i.test(naked(file)),
+           'a diagnostic that can write is not a diagnostic');
+      }
+      /* And one definition, not two. A script that grew its own copy of the
+         query would pass every assertion above and still be the thing this
+         refactor existed to prevent. */
+      ok('and the script owns no query of its own — it reads the service',
+         !/\bSELECT\b/i.test(naked(SCRIPT))
+         && /require\(['"]\.\.\/services\/ledgerGap['"]\)/.test(naked(SCRIPT)),
+         'two copies of this arithmetic drift, and the drift is what gets quoted to a client');
     }
   } catch (err) {
     console.error('\n  ✗ threw:', err.stack || err.message);

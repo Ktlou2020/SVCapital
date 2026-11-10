@@ -17278,6 +17278,203 @@ function exportDoubleDebitCSV() {
   _downloadCSV(rows, `withdrawal-double-debits-${new Date().toISOString().slice(0, 10)}.csv`);
 }
 
+/* ═══════════════════════════════════════════════
+   LEDGER GAP EXPLAINED
+   ═══════════════════════════════════════════════
+   A statement flags that the wallet and the history disagree, and states the
+   size. This states what it consists of, so somebody about to add a missing
+   transaction knows whether the wallet needs to move as well — the one
+   question that decides between "correct the record" and "pay the client
+   twice".
+
+   Names, emails and references are client data, so every one goes through
+   _esc. `accountedFor` and the no-cash-effect total are shown apart and
+   labelled: only the first is arithmetic, and adding them would produce a
+   number that overstates what is explained. */
+let _lgLast = null;
+
+async function runLedgerGap(btn) {
+  const resultEl = document.getElementById('lgResult');
+  resultEl.innerHTML = '';
+  document.getElementById('lgExportBtn').style.display = 'none';
+  await _withBtn(btn, async () => {
+    try {
+      const qs  = new URLSearchParams();
+      const who = (document.getElementById('lgInvestor')?.value || '').trim();
+      const min = document.getElementById('lgMin')?.value;
+      if (who) qs.set('investor', who);
+      if (min !== '' && min != null) qs.set('min', min);
+      const r = await API._fetch('GET', 'admin/ledger-gap' + (qs.toString() ? `?${qs}` : ''));
+      _lgLast = r;
+
+      /* An id that matches nobody is NOT a clean result. Reporting "it ties"
+         for an account that does not exist is how a typo becomes a sign-off. */
+      if (r.found === false) {
+        resultEl.innerHTML = `<span style="color:#f59e0b"><i class="fa-solid fa-triangle-exclamation"></i>
+          No account with id <strong>${_esc(who)}</strong>. Nothing was checked &mdash;
+          this is not the same as the account balancing.</span>`;
+        return;
+      }
+
+      if (!r.accounts.length) {
+        resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-circle-check"></i>
+          ${who ? `${_esc(who)} ties` : `Every one of ${_esc(r.scanned.toLocaleString())} accounts ties`}:
+          the wallet equals the sum of the ledger${who ? '' : ` at or above ${_esc(Utils.rand(r.threshold))}`}.</span>`;
+        return;
+      }
+
+      const money = n => Utils.rand(n || 0);
+      const parts = [];
+
+      if (!who) {
+        parts.push(`<div style="font-size:0.74rem;color:var(--text-muted);margin-bottom:12px;
+            border-left:2px solid var(--border);padding-left:10px">
+          ${_esc(r.accounts.length)} of ${_esc(r.scanned.toLocaleString())} accounts differ by
+          ${_esc(money(r.threshold))} or more.
+        </div>`);
+      }
+
+      for (const a of r.accounts) {
+        const c    = a.causes;
+        const under = a.direction === 'ledger-under-accounts';
+        parts.push(`<div style="border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px">
+          <div style="font-weight:700;margin-bottom:2px">${_esc(a.name)}
+            <span style="font-weight:400;color:var(--text-muted);font-size:0.78rem">
+              ${_esc(a.id)}${a.email ? ' · ' + _esc(a.email) : ''}</span></div>
+          <div style="display:flex;gap:22px;flex-wrap:wrap;margin:10px 0 8px">
+            <div><span style="font-size:1.15rem;font-weight:800">${_esc(money(a.wallet))}</span>
+              <span style="font-size:0.72rem;color:var(--text-muted);margin-left:5px">wallet</span></div>
+            <div><span style="font-size:1.15rem;font-weight:800">${_esc(money(a.derived))}</span>
+              <span style="font-size:0.72rem;color:var(--text-muted);margin-left:5px">ledger</span></div>
+            <div><span style="font-size:1.15rem;font-weight:800;color:${under ? '#f59e0b' : '#f87171'}">
+              ${a.gap > 0 ? '+' : ''}${_esc(money(a.gap))}</span>
+              <span style="font-size:0.72rem;color:var(--text-muted);margin-left:5px">gap</span></div>
+          </div>
+          <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px">${under
+            ? 'The ledger <strong>under-accounts</strong>: the wallet holds more than the history explains, so rows are missing. Add the rows; do <strong>not</strong> credit the wallet again.'
+            : 'The ledger <strong>over-accounts</strong>: the history explains more than the wallet holds. Either a row was written that should not have been, or money left without one.'}
+          </div>`);
+
+        if (c.unpairedReinvestments.count) {
+          const u = c.unpairedReinvestments;
+          parts.push(`<div style="border-left:3px solid #eda5ff;padding:6px 10px;margin-bottom:8px;background:var(--surface);border-radius:0 6px 6px 0">
+            <div style="font-weight:700;font-size:0.8rem">1 · Reinvestments with no matured-funds credit
+              &mdash; ${_esc(u.count)}, ${_esc(money(u.total))}</div>
+            <div style="font-size:0.74rem;color:var(--text-muted);margin:4px 0 6px">
+              The pair is a bookkeeping device: the matured money arrives and is spent in the same
+              breath. The debit alone leaves the ledger short by the whole amount, once per rollover.
+            </div>
+            <div style="font-family:monospace;font-size:0.74rem">
+              ${u.rows.slice(0, 8).map(x => `${_esc(x.at)} &nbsp; ${_esc(money(x.amount))} &nbsp; ${_esc(x.reference)}`).join('<br>')}
+              ${u.rows.length > 8 ? `<br>… and ${_esc(u.rows.length - 8)} more` : ''}
+            </div>
+            <div style="font-size:0.74rem;margin-top:6px">
+              <strong>Fix:</strong> Reconciliation &rarr; Backfill Matured Funds, dry run first.
+              Closes ${_esc(money(u.total))} of the gap.</div>
+          </div>`);
+        }
+
+        if (c.unpairableReinvestments.count) {
+          const u = c.unpairableReinvestments;
+          parts.push(`<div style="border-left:3px solid #f59e0b;padding:6px 10px;margin-bottom:8px;background:var(--surface);border-radius:0 6px 6px 0">
+            <div style="font-weight:700;font-size:0.8rem">1b · Reinvestments the backfill cannot pair
+              &mdash; ${_esc(u.count)}, ${_esc(money(u.total))}</div>
+            <div style="font-size:0.74rem;color:var(--text-muted);margin:4px 0 6px">
+              Their reference is not in the shape that repair matches on, so it will not touch
+              them. These are by hand.
+            </div>
+            <div style="font-family:monospace;font-size:0.74rem">
+              ${u.rows.slice(0, 5).map(x => `${_esc(x.at)} &nbsp; ${_esc(money(x.amount))} &nbsp; ${_esc(x.reference || '(no reference)')} &nbsp; ${_esc(x.id)}`).join('<br>')}
+            </div>
+          </div>`);
+        }
+
+        if (c.noCashEffect.byType.length) {
+          const n = c.noCashEffect;
+          parts.push(`<div style="border-left:3px solid var(--border);padding:6px 10px;margin-bottom:8px;background:var(--surface);border-radius:0 6px 6px 0">
+            <div style="font-weight:700;font-size:0.8rem">2 · Rows carrying no cash effect
+              &mdash; ${_esc(money(n.total))}</div>
+            <div style="font-family:monospace;font-size:0.74rem;margin:4px 0 6px">
+              ${n.byType.map(x => `${_esc(x.type)} &nbsp; ${_esc(x.n)} row(s) &nbsp; ${_esc(money(x.total))}`).join('<br>')}
+            </div>
+            <div style="font-size:0.74rem;color:var(--text-muted)">
+              <strong>Not counted</strong> as part of the gap. <code>return</code> is an accrual by
+              design, and calling a genuine accrual cash would invent money. It is a cause only
+              where that money really did reach the wallet.
+            </div>
+          </div>`);
+        }
+
+        parts.push(`<div style="display:flex;gap:22px;flex-wrap:wrap;margin-top:10px;
+            border-top:1px solid var(--border);padding-top:10px">
+          <div><span style="font-size:0.95rem;font-weight:800;color:#22c55e">${_esc(money(a.accountedFor))}</span>
+            <span style="font-size:0.72rem;color:var(--text-muted);margin-left:5px">accounted for, exactly</span></div>
+          <div><span style="font-size:0.95rem;font-weight:800;color:${Math.abs(a.unexplained) < 0.005 ? '#22c55e' : '#f59e0b'}">
+            ${_esc(money(a.unexplained))}</span>
+            <span style="font-size:0.72rem;color:var(--text-muted);margin-left:5px">unexplained</span></div>
+        </div>`);
+
+        if (Math.abs(a.unexplained) >= 0.005) {
+          parts.push(`<div style="font-size:0.74rem;color:var(--text-muted);margin-top:6px">
+            Look at cause 2 first. Beyond that it is a wallet that moved with no row written, which
+            cannot be named from the ledger alone &mdash; the remedy there is an adjustment dated to
+            when the money actually moved, not today.
+          </div>`);
+        }
+
+        if (a.recent && a.recent.length) {
+          parts.push(`<details style="margin-top:10px">
+            <summary style="cursor:pointer;font-size:0.76rem;color:var(--text-muted)">
+              ${_esc(a.recent.length)} most recent completed rows</summary>
+            <div style="overflow-x:auto;margin-top:8px"><table class="data-table" style="font-size:0.74rem">
+              <thead><tr><th>Date</th><th>Type</th><th style="text-align:right">Amount</th>
+                <th style="text-align:right">Cash effect</th><th>Reference</th></tr></thead>
+              <tbody>${a.recent.map(x => `<tr>
+                <td>${_esc(x.at)}</td><td>${_esc(x.type)}</td>
+                <td style="text-align:right">${_esc(money(x.amount))}</td>
+                <td style="text-align:right;color:${x.cash === 0 ? 'var(--text-muted)' : 'inherit'}">
+                  ${x.cash === 0 ? 'none' : _esc(money(x.cash))}</td>
+                <td>${_esc(x.reference || '—')}</td></tr>`).join('')}</tbody>
+            </table></div>
+          </details>`);
+        }
+
+        parts.push('</div>');
+      }
+
+      resultEl.innerHTML = parts.join('');
+      document.getElementById('lgExportBtn').style.display = '';
+    } catch (e) {
+      resultEl.innerHTML = `<span style="color:#f87171"><i class="fa-solid fa-circle-exclamation"></i>
+        ${_esc(e.message || 'Could not explain the gap')}</span>`;
+      console.error('[runLedgerGap]', e);
+    }
+  });
+}
+
+function exportLedgerGapCSV() {
+  if (!_lgLast || !_lgLast.accounts) { Toast.error('Run the explanation first'); return; }
+  const rows = [[
+    'investor_id', 'name', 'email', 'wallet', 'ledger', 'gap', 'direction',
+    'unpaired_reinvestments', 'unpaired_total', 'unpairable_reinvestments',
+    'unpairable_total', 'no_cash_effect_total', 'accounted_for', 'unexplained',
+  ]];
+  for (const a of _lgLast.accounts) {
+    const c = a.causes;
+    /* toFixed, not Utils.rand: the on-screen figures are South African format
+       (R1 250,00) and anything parsing that would read it as 125000. */
+    rows.push([
+      a.id, a.name, a.email || '', a.wallet.toFixed(2), a.derived.toFixed(2),
+      a.gap.toFixed(2), a.direction,
+      c.unpairedReinvestments.count, c.unpairedReinvestments.total.toFixed(2),
+      c.unpairableReinvestments.count, c.unpairableReinvestments.total.toFixed(2),
+      c.noCashEffect.total.toFixed(2),
+      a.accountedFor.toFixed(2), a.unexplained.toFixed(2),
+    ]);
+  }
+  _downloadCSV(rows, `ledger-gap-${new Date().toISOString().slice(0, 10)}.csv`);
+}
+
 /* The stored-markup audit, rendered into the console.
 
    Everything a finding contains is the very text that was suspect, so every
