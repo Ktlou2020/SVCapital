@@ -7521,6 +7521,7 @@ async function saConfirmCreate() {
        MANDATE_COLS in server/routes/tables.js. The group exists either way,
        so a failure here is reported and the founder can set them from the
        group's Approvals section rather than losing the account. */
+    let rulesSaved = true;
     if (_saCreateType === 'stokvel' && made && made.id) {
       const q = parseInt((document.getElementById('saFieldQuorum') || {}).value, 10);
       try {
@@ -7531,13 +7532,38 @@ async function saConfirmCreate() {
           nominate_me: true,
         });
       } catch (e) {
-        Toast.error('The group was created, but its signing rules were not saved: '
+        rulesSaved = false;
+        Toast.error('The group is open, but its signing rules were not saved: '
           + (e.message || 'unknown error') + ' Set them in the group\u2019s Approvals section.');
       }
     }
-    Toast.success(`${SA_TYPE_META[_saCreateType].label} account created! Please upload the required FICA documents.`);
+
     Modal.close('createSaModal');
     await loadSubAccounts();
+
+    /* \u2500\u2500 What the founder is told, and where they land \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+       This said "account created! Please upload the required FICA
+       documents" for EVERY type, including a stokvel \u2014 one screen after the
+       review panel had told them the opposite: that the group opens on a
+       checklist and money can come in straight away. A founder read both in
+       the space of a tap and went looking for a FICA upload that is not
+       their next step.
+
+       It also fired a success toast on top of the error toast when the
+       signing rules failed to save, so a half-made group announced itself
+       as finished.
+
+       A group now OPENS. Landing inside it on the first thing to do is the
+       whole answer to "what now?" \u2014 better than any sentence, and it is
+       what the review panel promised. The other types keep their FICA
+       notice, which is right for them: they have no checklist to land on. */
+    if (_saCreateType === 'stokvel' && made && made.id) {
+      if (rulesSaved) Toast.success(`${name || 'The group'} is open. Here is what to do next.`);
+      await openStokvelHub(made.id);
+      return;
+    }
+    Toast.success(`${SA_TYPE_META[_saCreateType].label} account created! `
+      + 'Please upload the required FICA documents.');
   } catch (e) {
     Toast.error('Failed to create account. Please try again.');
     console.error(e);
@@ -13255,28 +13281,134 @@ function _svLangBar(groupId) {
    the app and may declare NO TOP-LEVEL STATE — a const here is a
    redeclaration waiting for the next script that loads beside it, and
    check-portal-split refuses one. */
-function _svTabList() {
+/* ── Sections, and the five tabs they live under ──────────────────────
+   There were ELEVEN tabs, every one of them from the moment a group was
+   created. A committee opening its first stokvel met Overview,
+   Contributions, Approvals, Proposals, Shares, Payouts, Members,
+   Investments, Transactions, Statement and Documents — ten of them empty,
+   several about things that did not exist yet — scrolling off the side of a
+   phone. That is the screen this group experience was reported as
+   confusing on.
+
+   The eleven SECTIONS are unchanged; what changed is that they are now
+   grouped under five tabs, and a tab is only in the bar once the group has
+   something in it. A new group shows Overview and People. It grows the rest
+   as it grows into them.
+
+   Section keys are kept as the unit of navigation, so every existing
+   svWorkspaceTab(id, 'approvals') call, every checklist action and every
+   deep link still works and still lands on the right thing. */
+function _svSections() {
+  return {
+    overview:      ['Overview',      'fa-gauge-high'],
+    contributions: ['Contributions', 'fa-calendar-check'],
+    approvals:     ['Approvals',     'fa-user-shield'],
+    proposals:     ['Proposals',     'fa-check-to-slot'],
+    shares:        ['Shares',        'fa-chart-pie'],
+    payouts:       ['Payouts',       'fa-gift'],
+    members:       ['Members',       'fa-users'],
+    investments:   ['Investments',   'fa-seedling'],
+    transactions:  ['Transactions',  'fa-receipt'],
+    statement:     ['Statement',     'fa-file-lines'],
+    documents:     ['Documents',     'fa-folder-open'],
+  };
+}
+
+/* Every tab, in order, with the sections it holds. `when` decides whether it
+   is in the bar; a tab that is not in the bar is still REACHABLE — see
+   svWorkspaceTab — so a checklist action or a notification link can take
+   somebody to a section before the group has grown into it. Hidden means
+   "not worth a tab yet", never "shut". */
+function _svTabGroups() {
   return [
-    ['overview',      'Overview',      'fa-gauge-high'],
-    ['contributions', 'Contributions', 'fa-calendar-check'],
-    ['approvals',     'Approvals',     'fa-user-shield'],
-    ['proposals',     'Proposals',     'fa-check-to-slot'],
-    ['shares',        'Shares',        'fa-chart-pie'],
-    ['payouts',       'Payouts',       'fa-gift'],
-    ['members',       'Members',       'fa-users'],
-    ['investments',   'Investments',   'fa-seedling'],
-    ['transactions',  'Transactions',  'fa-receipt'],
-    ['statement',     'Statement',     'fa-file-lines'],
-    ['documents',     'Documents',     'fa-folder-open'],
+    { key: 'overview',  label: 'Overview',  icon: 'fa-gauge-high',
+      sections: ['overview'], when: () => true },
+    { key: 'people',    label: 'People',    icon: 'fa-users',
+      sections: ['members'], when: () => true },
+    { key: 'money',     label: 'Money',     icon: 'fa-sack-dollar',
+      sections: ['contributions', 'shares', 'investments', 'payouts', 'transactions', 'statement'],
+      /* Once there is money, or a schedule that will bring some. Before
+         that every one of these six sections is an empty table. */
+      when: c => c.hasMoney || c.hasSchedule },
+    { key: 'decisions', label: 'Decisions', icon: 'fa-user-shield',
+      sections: ['approvals', 'proposals'],
+      /* Once there is something to decide, or somebody who can decide it.
+         A group with no signatories confirmed has nothing to put here. */
+      when: c => c.waiting > 0 || c.proposals > 0 || c.signatories > 0 || c.iAmNominated },
+    { key: 'records',   label: 'Records',   icon: 'fa-folder-open',
+      sections: ['documents'],
+      /* The committee has to get the documents in; everybody else only
+         needs this once there is something to look at. */
+      when: c => c.committee || c.hasDocuments },
   ];
+}
+
+/* Kept because svTabKeys and the deep-link router read it: the flat list of
+   section keys, in tab order. */
+function _svTabList() {
+  const s = _svSections();
+  return _svTabGroups().reduce((out, g) =>
+    out.concat(g.sections.map(k => [k, s[k][0], s[k][1]])), []);
+}
+
+/* Which tab a section lives under. */
+function _svGroupOf(section) {
+  const g = _svTabGroups().find(x => x.sections.includes(section));
+  return g ? g.key : 'overview';
+}
+
+/* The tabs to draw. A tab whose `when` is false is left out UNLESS
+   something has already navigated into it this session, which is what keeps
+   a revealed tab on screen instead of vanishing under the person who just
+   used it. */
+function _svVisibleGroups(ctx) {
+  const revealed = (typeof window !== 'undefined' && window.__svRevealed) || {};
+  return _svTabGroups().filter(g => g.when(ctx) || revealed[g.key]);
+}
+
+/* What the visibility rules are read from, in one place so the bar and any
+   check agree about what "this group has money" means. */
+function _svTabContext(g, parts) {
+  const members = (parts.members && parts.members.data) || [];
+  const contribs = (parts.contributions && parts.contributions.data) || [];
+  const d = (parts.shareData && parts.shareData.data) || null;
+  const setup = g.setup || {};
+  return {
+    hasMoney: Number(d ? d.net_assets : g.wallet_balance) > 0
+      || Number(g.total_invested) > 0 || contribs.length > 0,
+    hasSchedule: !!setup.schedule,
+    waiting: ((parts.requests && parts.requests.data) || [])
+      .filter(r => r.status === 'pending').length,
+    proposals: Number(g.open_proposals) || 0,
+    signatories: members.filter(m => m.status === 'active' && m.is_signatory).length,
+    iAmNominated: !!g.i_am_nominated,
+    committee: !!g.i_opened_it
+      || ['chairperson', 'secretary', 'treasurer'].includes(g.my_role),
+    hasDocuments: !!(setup.verification && setup.verification !== 'pending'),
+  };
 }
 
 /* Moving between sections reuses what is loaded, so a tab is instant
    instead of seven requests. */
 function svWorkspaceTab(id, tab) {
+  /* Navigating to a section REVEALS its tab, whether or not the group has
+     grown into it yet. A checklist that says "Set the signing rules" and a
+     notification that links to an approval must both land somewhere, and a
+     tab that vanished under the person who had just been sent to it would
+     be worse than the eleven this replaced. Held on window rather than in a
+     module variable: portal-core may declare no top-level state and
+     check-portal-split refuses one. */
+  if (typeof window !== 'undefined') {
+    window.__svRevealed = window.__svRevealed || {};
+    window.__svRevealed[_svGroupOf(tab)] = true;
+  }
   const body = document.getElementById('svWsBody');
   if (body) body.setAttribute('data-tab', tab);
-  _svRenderHub(id, tab, { cached: true });
+  /* Returned, not fired and forgotten. An onclick ignores it, but anything
+     that needs to know the section has actually drawn — a deep link, the
+     founder being dropped on step one, a check driving the workspace — can
+     await it instead of guessing at a timeout. */
+  return _svRenderHub(id, tab, { cached: true });
 }
 
 /* The workspace, rendered. One fetch of everything the group has, then the
@@ -13354,35 +13486,68 @@ async function _svRenderHub(id, tab, opts) {
   await _svLoadReleased();
   const head = document.getElementById('svWsHeader');
   if (head) head.innerHTML = _svWsHeader(g, shareData, id);
+  const tabCtx = _svTabContext(g, { members, contributions, requests, shareData });
   const tabs = document.getElementById('svWsTabs');
-  if (tabs) tabs.innerHTML = _svWsTabs(id, open, { requests, contributions });
-  _svScrollTabIntoView(open);
+  if (tabs) tabs.innerHTML = _svWsTabs(id, open, { requests, contributions, tabCtx });
+  _svScrollTabIntoView(_svGroupOf(open));
 
-  let html = '';
-  switch (open) {
-    case 'contributions': html = _svContributions(contributions, mine, id, g); break;
-    case 'approvals':     html = _svWithdrawals(requests, meIsSignatory, id, {
+  /* One section or several. A tab holds its sections stacked, each under its
+     own heading, because a member on a phone scrolls far more readily than
+     they hunt through a row of tabs for the one that has what they want. */
+  const section = async key => {
+    let out = '';
+    switch (key) {
+    case 'contributions': out = _svContributions(contributions, mine, id, g); break;
+    case 'approvals':     out = _svWithdrawals(requests, meIsSignatory, id, {
                               g, canPropose: meIsSignatory || !!g.i_opened_it
                                 || ['chairperson', 'secretary', 'treasurer'].includes(g.my_role),
                               signatories: ((members && members.data) || [])
                                 .filter(m => m.status === 'active' && m.is_signatory).length }); break;
-    case 'shares':        html = _svShares(shareData, id); break;
-    case 'payouts':       html = _svPayouts(payoutData, id); break;
-    case 'members':       html = _svMembers(members, id, !!(invitations && invitations.can_invite))
+    case 'shares':        out = _svShares(shareData, id); break;
+    case 'payouts':       out = _svPayouts(payoutData, id); break;
+    case 'members':       out = _svMembers(members, id, !!(invitations && invitations.can_invite))
                                + _svInvitations(invitations, id); break;
-    case 'investments':   html = (await _svNoticeFund(id)) + (await _svInvestments(id)); break;
-    case 'proposals':     html = await _svProposals(id); break;
-    case 'documents':     html = await _svDocuments(id); break;
-    case 'transactions':  html = await _svTransactions(id); break;
-    case 'statement':     html = _svStatement(g, id); break;
-    default:              html = _svOverview(id, { g, shareData, payoutData, contributions,
+    case 'investments':   out = (await _svNoticeFund(id)) + (await _svInvestments(id)); break;
+    case 'proposals':     out = await _svProposals(id); break;
+    case 'documents':     out = await _svDocuments(id); break;
+    case 'transactions':  out = await _svTransactions(id); break;
+    case 'statement':     out = _svStatement(g, id); break;
+    default:              out = _svOverview(id, { g, shareData, payoutData, contributions,
                                                    requests, members, mine, meIsSignatory });
+    }
+    return out;
+  };
+
+  const grp  = _svTabGroups().find(x => x.key === _svGroupOf(open));
+  const keys = grp ? grp.sections : [open];
+  const defs = _svSections();
+  const parts = [];
+  for (const key of keys) {
+    const inner = await section(key);
+    /* A single-section tab carries no heading: the tab already said what it
+       is, and a heading repeating it is noise. Several sections stacked need
+       their names, and an anchor each so arriving at a section scrolls to
+       it rather than to the top of the tab. */
+    parts.push(keys.length === 1 ? `<div id="svSec-${key}">${inner}</div>`
+      : `<section id="svSec-${key}" style="margin-bottom:26px">
+           <div class="sa-section-title"><i class="fa-solid ${defs[key][1]}"></i>
+             ${_esc(_svT('tab.' + key, defs[key][0]))}</div>
+           ${inner}
+         </section>`);
   }
+
   if (body) {
-    body.innerHTML = _svLangBar(id) + html;
+    body.innerHTML = _svLangBar(id) + parts.join('');
     body.setAttribute('data-tab', open);
     body.setAttribute('role', 'tabpanel');
-    body.setAttribute('aria-labelledby', 'svTab-' + open);
+    body.setAttribute('aria-labelledby', 'svTab-' + _svGroupOf(open));
+    /* Arrived at a section inside a stacked tab: take them to it. */
+    if (keys.length > 1 && keys[0] !== open) {
+      const at = document.getElementById('svSec-' + open);
+      if (at && at.scrollIntoView) {
+        try { at.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (_) {}
+      }
+    }
   }
 }
 
@@ -13409,7 +13574,14 @@ function _svWsHeader(g, shareRes, id) {
           </div>
         </div>
       </div>
-      <button class="btn btn--ghost btn--sm" style="color:#fff;border-color:rgba(255,255,255,0.4)"
+      <!-- The way out, and it has to be legible. btn--ghost is not defined
+           in the portal's stylesheets at all, so this fell back to .btn's
+           pale background and rendered white text on near-white INSIDE the
+           group's green banner: the one control somebody needs when they
+           feel lost was the one they could not see. The background is set
+           here rather than left to a class that does not exist. -->
+      <button class="btn btn--sm" style="color:#fff;background:rgba(0,0,0,0.22);
+              border:1px solid rgba(255,255,255,0.55)"
               onclick="svLeaveWorkspace()">
         <i class="fa-solid fa-arrow-left"></i> ${_esc(_svT('hdr.back', 'My account'))}
       </button>
@@ -13448,14 +13620,21 @@ function _svWsTabs(id, open, counts) {
        style="display:flex;gap:4px;overflow-x:auto;scroll-snap-type:x proximity;
               padding:10px 0;border-bottom:1px solid var(--border);margin-bottom:14px;
               -webkit-overflow-scrolling:touch">
-    ${_svTabList().map(([key, label, icon]) => `
-      <button role="tab" id="svTab-${key}" data-tab="${key}"
-              aria-selected="${key === open}" tabindex="${key === open ? 0 : -1}"
-              class="btn btn--sm ${key === open ? 'btn--primary' : 'btn--ghost'}"
+    ${_svVisibleGroups(counts.tabCtx || {}).map(g => {
+      /* The open SECTION decides which tab reads as open, so arriving at a
+         section directly lights its tab rather than none of them. */
+      const isOpen = g.sections.includes(open);
+      return `
+      <button role="tab" id="svTab-${g.key}" data-tab="${g.key}"
+              aria-selected="${isOpen}" tabindex="${isOpen ? 0 : -1}"
+              class="btn btn--sm ${isOpen ? 'btn--primary' : 'btn--ghost'}"
               style="white-space:nowrap;scroll-snap-align:center"
-              onclick="svWorkspaceTab('${_esc(id)}','${key}')">
-        <i class="fa-solid ${icon}"></i> ${_esc(_svT('tab.' + key, label))}${key === 'approvals' ? badge(waiting) : ''}${key === 'contributions' ? badge(owed) : ''}
-      </button>`).join('')}
+              onclick="svWorkspaceTab('${_esc(id)}','${g.sections[0]}')">
+        <i class="fa-solid ${g.icon}"></i> ${_esc(_svT('tab.' + g.key, g.label))}${
+          g.sections.includes('approvals') ? badge(waiting) : ''}${
+          g.sections.includes('contributions') ? badge(owed) : ''}
+      </button>`;
+    }).join('')}
   </div>
   <style>
     @media (max-width: 760px) {
@@ -13467,7 +13646,14 @@ function _svWsTabs(id, open, counts) {
 
 /* Arrow keys move along the tablist, as a tablist is expected to. */
 function svTabKeys(ev, id) {
-  const keys = _svTabList().map(t => t[0]);
+  /* Read off the tabs actually rendered, not off a list of every section
+     there is. The bar now holds TAB keys and shows only the tabs this group
+     has grown into, so a static list would walk the arrow keys onto tabs
+     that are not on screen. */
+  const list = document.getElementById('svWsTablist');
+  const keys = list
+    ? [...list.querySelectorAll('[role="tab"]')].map(b => b.getAttribute('data-tab'))
+    : _svTabGroups().map(g => g.key);
   const here = keys.indexOf(ev.target && ev.target.getAttribute('data-tab'));
   if (here < 0) return;
   let next = null;
@@ -13477,7 +13663,10 @@ function svTabKeys(ev, id) {
   if (ev.key === 'End')        next = keys[keys.length - 1];
   if (!next) return;
   ev.preventDefault();
-  svWorkspaceTab(id, next);
+  /* `next` is a TAB key; svWorkspaceTab takes a section. Open the tab's
+     first section, which is what clicking the tab does too. */
+  const grp = _svTabGroups().find(x => x.key === next);
+  svWorkspaceTab(id, grp ? grp.sections[0] : next);
   const el = document.getElementById('svTab-' + next);
   if (el) el.focus();
 }
@@ -13699,17 +13888,52 @@ function _svOverview(id, ctx) {
      the to-do list being one scroll further down. */
   const started = steps.some(x => x.key === 'money' && x.done);
   if (!started && core.some(x => !x.done)) {
-    const left = steps.filter(x => !x.done).length;
+    /* ── ONE STEP AT A TIME ───────────────────────────────────────────
+       This drew all six steps at equal weight under "6 things are left
+       before this is a working group" — which is a mountain to open on, and
+       gives no answer to the only question a founder has, which is what to
+       do FIRST. The steps are sequential in practice: the rules come before
+       anybody can be asked to sign, and signing comes before money can
+       leave.
+
+       So the next undone step is the screen, with its action in it. What is
+       already done collapses to a line of ticks. What comes after is listed
+       small, because hiding it entirely would leave somebody unable to see
+       how long the road is — and a founder deciding whether to start today
+       deserves to know that. */
+    const done = steps.filter(x => x.done);
+    const left = steps.filter(x => !x.done);
+    const now  = left[0];
+    const rest = left.slice(1);
+    const n    = done.length + 1;
+
     return `<div style="max-width:640px">
       <div class="sa-section-title"><i class="fa-solid fa-flag-checkered"></i> Getting ${_esc(ctx.g.name)} going</div>
-      <p style="font-size:0.86rem;color:var(--text-muted);line-height:1.6;margin-bottom:6px">
-        ${left === 1 ? 'One thing is' : `${left} things are`} left before this is a working group.
-        Each step says who does it.
-      </p>
-      ${steps.map(_svSetupStep).join('')}
-      <p style="font-size:0.78rem;color:var(--text-muted);margin-top:14px">
-        The other sections above are already here and will fill up as the group gets going.
-      </p>
+
+      <div style="display:flex;gap:4px;margin:2px 0 14px">
+        ${steps.map(x => `<div title="${_esc(x.title)}" style="height:4px;flex:1;border-radius:999px;
+          background:${x.done ? '#22c55e' : (x === now ? '#eda5ff' : 'var(--border)')}"></div>`).join('')}
+      </div>
+
+      ${done.length ? `<div style="font-size:0.76rem;color:var(--text-muted);margin-bottom:12px">
+        <i class="fa-solid fa-circle-check" style="color:#22c55e"></i>
+        ${done.map(x => _esc(x.title)).join(' · ')}
+      </div>` : ''}
+
+      <div style="border:1px solid #eda5ff;border-radius:14px;padding:16px">
+        <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:.6px;color:#eda5ff;font-weight:800">
+          Step ${n} of ${steps.length}</div>
+        <div style="font-weight:800;font-size:1.05rem;margin:4px 0 6px">${_esc(now.title)}</div>
+        <div style="font-size:0.86rem;color:var(--text-muted);line-height:1.6">${now.note}</div>
+        ${now.action ? `<div style="margin-top:12px">${now.action}</div>` : ''}
+      </div>
+
+      ${rest.length ? `<div style="margin-top:14px">
+        <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:6px">
+          Then</div>
+        ${rest.map(x => `<div style="font-size:0.82rem;color:var(--text-muted);padding:3px 0">
+          <i class="fa-regular fa-circle" style="font-size:0.7rem;margin-right:6px"></i>${_esc(x.title)}</div>`).join('')}
+      </div>` : ''}
     </div>`;
   }
   const todo = steps.filter(x => !x.done);

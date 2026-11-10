@@ -88,8 +88,29 @@ console.log('\nthe checklist is the group’s real state');
   ok('the founder sets the rules in the app, not on WhatsApp',
      /svWorkspaceTab\('SA-ON-1','approvals'\)/.test(steps[0].action) && !/whatsapp/i.test(steps[0].action));
   const html = overview(s, fresh, { members: members(1), pot: 0 });
-  ok('and the overview is the checklist, saying how many things are left',
-     /Getting Kopanang Savings Club going/.test(html) && /6 things are/.test(html), html.slice(0, 300));
+  /* The overview IS the checklist for a group that has not started, and it
+     now shows ONE step rather than six at equal weight. It opened on "6
+     things are left before this is a working group", which is a mountain
+     and answers neither of a founder's questions: what do I do first, and
+     how long is this. */
+  ok('and the overview is the checklist, named for this group',
+     /Getting Kopanang Savings Club going/.test(html), html.slice(0, 300));
+  ok('showing which step they are on, of how many',
+     /Step 1 of 6/.test(html), html.slice(0, 600));
+  ok('with that one step’s own action in it, not a list of six to pick from',
+     /Set the signing rules/.test(html)
+     && /svWorkspaceTab\('SA-ON-1','approvals'\)/.test(html),
+     html.slice(0, 600));
+  /* The road ahead is still visible. Hiding it would leave somebody unable
+     to judge whether to start today, which is worse than the mountain. */
+  ok('and what comes after is listed, so the road is not hidden',
+     /Then/.test(html) && /Get the members in/.test(html)
+     && /First money into the pot/.test(html), html.slice(-600));
+  /* Only the step they are on carries a button. Six buttons is the screen
+     this replaced. */
+  ok('only the current step offers a button',
+     (html.match(/<button/g) || []).length === 1,
+     `${(html.match(/<button/g) || []).length} buttons`);
 
   const member = s._svSetupSteps('SA-ON-1', { g: Object.assign({}, fresh, { my_role: 'member', i_opened_it: false }),
     members: members(1) }, shares(0).data);
@@ -229,6 +250,81 @@ if (!process.env.DATABASE_URL) {
     ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false } });
   let srv;
   try {
+  /* ── What a founder is told, and where they land ───────────────────────
+     The review panel tells them the group opens on a checklist and money can
+     come in straight away. One tap later saConfirmCreate used to say
+     "Please upload the required FICA documents" — the generic sub-account
+     message, fired for every type — and leave them on the Sub-accounts list
+     hunting for an upload that is not their next step.
+
+     It also fired that success toast ON TOP of the error toast when the
+     signing rules failed to save, so a half-made group announced itself as
+     finished.
+
+     Driven here rather than read: the toast, the landing and the double
+     message are three different lines in one function, and a grep for the old
+     wording would pass against a version that still never opened the group. */
+  console.log('\nand creating a group opens it, on the first thing to do');
+  {
+    const run = async ({ mandateFails = false, type = 'stokvel' } = {}) => {
+      const s = sandbox();
+      const seen = { toasts: [], opened: null, closed: null, posted: [] };
+      s.Toast = { success: m => seen.toasts.push(['success', String(m)]),
+                  error:   m => seen.toasts.push(['error',   String(m)]) };
+      s.Modal = { close: m => { seen.closed = m; }, open: () => {} };
+      s.SA_TYPE_META = { stokvel: { label: 'Stokvel' }, business: { label: 'Business' } };
+      s.API = { _fetch: async (m, p, body) => {
+        seen.posted.push(p);
+        if (/founding-mandate/.test(p)) {
+          if (mandateFails) throw new Error('quorum must be at least 2');
+          return { data: {} };
+        }
+        return { id: 'SA-MADE-1', ...body };
+      } };
+      s.openStokvelHub = async id => { seen.opened = id; };
+      s.loadSubAccounts = async () => {};
+      s.DEMO_INVESTOR_ID = 'INV-DEMO';
+      s.PORTAL = { investor: { id: 'INV-1' } };
+      s._saCreateType = type;
+      s.el('saFieldName').value = 'Kopanang Savings Club';
+      s.el('saFieldQuorum').value = '2';
+      s.el('saFieldBasis').value = 'contribution';
+      s.el('saCreateBtn').innerHTML = '';
+      await s.saConfirmCreate();
+      return seen;
+    };
+
+    const okRun = await run();
+    ok('the group is opened, so "what now?" is answered by being inside it',
+       okRun.opened === 'SA-MADE-1', JSON.stringify(okRun));
+    ok('and the create dialog is closed behind them', okRun.closed === 'createSaModal',
+       String(okRun.closed));
+    /* The contradiction, named directly. */
+    ok('NOBODY IS TOLD TO UPLOAD FICA DOCUMENTS',
+       !okRun.toasts.some(([, m]) => /FICA/i.test(m)),
+       JSON.stringify(okRun.toasts)
+       + ' — the review panel said the group opens on a checklist one tap earlier');
+    ok('they are told the group is open', okRun.toasts.some(([k, m]) =>
+       k === 'success' && /is open/.test(m)), JSON.stringify(okRun.toasts));
+    ok('and told it once', okRun.toasts.length === 1, JSON.stringify(okRun.toasts));
+
+    const badRun = await run({ mandateFails: true });
+    ok('when the signing rules fail to save, that is said', badRun.toasts.some(([k, m]) =>
+       k === 'error' && /signing rules were not saved/.test(m)), JSON.stringify(badRun.toasts));
+    ok('AND NOT CONTRADICTED by a success message beside it',
+       !badRun.toasts.some(([k]) => k === 'success'),
+       JSON.stringify(badRun.toasts) + ' — a half-made group announcing itself as finished');
+    ok('the group still opens, because it exists either way',
+       badRun.opened === 'SA-MADE-1', String(badRun.opened));
+
+    /* The other account types have no checklist to land on, so the FICA
+       notice is right for them and must not have been swept away with it. */
+    const biz = await run({ type: 'business' });
+    ok('a business account still gets its FICA notice',
+       biz.toasts.some(([, m]) => /FICA/i.test(m)) && biz.opened === null,
+       JSON.stringify(biz.toasts));
+    }
+
     const G = 'SA-ON-DB', P = 'INV-ON-';
     const clean = async () => {
       await db.query(`DELETE FROM stokvel_contribution_schedules WHERE sub_account_id = $1`, [G]);

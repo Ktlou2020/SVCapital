@@ -66,8 +66,17 @@ const TOAST_SRC = (() => {
   return api.slice(at, end + 3).replace('const Toast = {', 'window.Toast = {');
 })();
 const read = rel => fs.readFileSync(path.join(ROOT, rel), 'utf8');
-const _svTabsExpected = ['Overview', 'Contributions', 'Approvals', 'Shares',
-                         'Payouts', 'Members', 'Investments', 'Transactions', 'Statement'];
+/* The eleven SECTIONS now live under five TABS, and a tab is only in the bar
+   once the group has grown into it — a new group met eleven, ten of them
+   empty, which is the screen this was reported as confusing on.
+
+   What this check held before was "every section is offered", by name, in
+   the bar. That is no longer true and should not be. What has to stay true
+   is the INTENT behind it: a member can still reach every section. So the
+   assertions below are about reachability, not about the bar's contents. */
+const _svSectionsAll = ['overview', 'contributions', 'approvals', 'proposals', 'shares',
+                        'payouts', 'members', 'investments', 'transactions',
+                        'statement', 'documents'];
 
 console.log('\nthe member is let in');
 {
@@ -595,8 +604,137 @@ const STUB = {
     ok('and a way back to their own account',
        /My account/.test(overview.header),
        'somebody who switches in and cannot see how to leave will not switch in again');
-    ok('every section is offered',
-       _svTabsExpected.every(t => overview.tabs.includes(t)), overview.tabs);
+    /* ── Five tabs, not eleven, and every section still reachable ──── */
+    const nav = await evaluate(`(async () => {
+      const tabNames = () => [...document.querySelectorAll('#svWsTablist [role=tab]')]
+        .map(b => b.textContent.trim());
+      const out = { shown: tabNames(), reached: {}, revealed: {} };
+      for (const key of ${JSON.stringify(_svSectionsAll)}) {
+        await svWorkspaceTab('SA-1', key);
+        const body = document.getElementById('svWsBody');
+        out.reached[key] = (body.textContent || '').trim().length > 20
+          && !!document.getElementById('svSec-' + key);
+        /* Navigating to a section must put its tab in the bar, or somebody
+           sent there by a checklist or a notification has no way back to it. */
+        out.revealed[key] = tabNames().length >= out.shown.length;
+      }
+      out.after = tabNames();
+      await svWorkspaceTab('SA-1', 'overview');
+      return out;
+    })()`);
+
+    ok('the bar holds a handful of tabs, not one per section',
+       nav.shown.length > 0 && nav.shown.length <= 5,
+       `${nav.shown.length}: ${nav.shown.join(' | ')} — eleven is the screen this replaced`);
+    ok('and every one of them is a real tab name',
+       nav.shown.every(t => /Overview|People|Money|Decisions|Records/.test(t)),
+       nav.shown.join(' | '));
+    /* The intent the old assertion carried: nothing became unreachable. */
+    const unreachable = _svSectionsAll.filter(k => !nav.reached[k]);
+    ok('EVERY SECTION IS STILL REACHABLE',
+       unreachable.length === 0,
+       `could not reach: ${unreachable.join(', ')} — a tab hidden from the bar `
+       + 'must still be somewhere a checklist or a notification can send somebody');
+    ok('and reaching one never shrinks the bar under them',
+       _svSectionsAll.every(k => nav.revealed[k]),
+       JSON.stringify(nav.revealed));
+
+    /* A tab holds SEVERAL sections stacked. Opening one must draw them all,
+       or the five tabs have simply lost nine sections. */
+    const stacked = await evaluate(`(async () => {
+      await svWorkspaceTab('SA-1', 'contributions');
+      const ids = [...document.querySelectorAll('[id^="svSec-"]')].map(e => e.id);
+      await svWorkspaceTab('SA-1', 'overview');
+      return ids;
+    })()`);
+    ok('opening a tab draws every section under it, not just the first',
+       ['contributions', 'shares', 'investments', 'payouts', 'transactions', 'statement']
+         .every(k => stacked.includes('svSec-' + k)),
+       JSON.stringify(stacked));
+
+    /* ── A BRAND-NEW GROUP ──────────────────────────────────────────
+       The stubbed group has R12 500 and a roster, so every tab is earned.
+       The screen that was reported as confusing is the OTHER one: a group
+       created a minute ago. Without this scenario the visibility rules are
+       never exercised, and "show tabs only when they mean something" can be
+       deleted without a single assertion noticing. */
+    const fresh = await evaluate(`(async () => {
+      const real = API._fetch;
+      const G = 'SA-FRESH';
+      const empty = { data: [] };
+      API._fetch = async (m, p) => {
+        const k = String(p).split('?')[0];
+        if (k === 'stokvels/' + G) return { data: { id: G, name: 'Brand New Club',
+          wallet_balance: 0, total_invested: 0, my_role: 'chairperson', i_opened_it: true,
+          kyc_status: 'pending', mandate_state: { has_mandate: false, quorum: null,
+            signatories: 0, short_by: null }, setup: { verification: 'pending', schedule: null } } };
+        if (k.indexOf('stokvels/' + G) === 0) return k.slice(-6) === 'shares'
+          ? { data: { net_assets: 0, wallet: 0, invested: 0, my_share: 0, basis: 'contribution' } }
+          : empty;
+        return real(m, p);
+      };
+      const names = () => [...document.querySelectorAll('#svWsTablist [role=tab]')]
+        .map(b => b.textContent.trim());
+      if (typeof window !== 'undefined') window.__svRevealed = {};
+      await _svRenderHub(G, 'overview');
+      const atStart = names();
+      /* A section inside a tab this group has NOT grown into. */
+      await svWorkspaceTab(G, 'shares');
+      const afterNav = names();
+      const drew = !!document.getElementById('svSec-shares');
+      API._fetch = real;
+      if (typeof window !== 'undefined') window.__svRevealed = {};
+      return { atStart, afterNav, drew };
+    })()`);
+
+    ok('a brand-new group opens on a handful of tabs, not eleven',
+       fresh.atStart.length <= 3,
+       `${fresh.atStart.length}: ${fresh.atStart.join(' | ')}`);
+    ok('and is not offered Money before it has any',
+       !fresh.atStart.some(t => /Money/.test(t)),
+       fresh.atStart.join(' | '));
+    ok('nor Decisions before anybody can make one',
+       !fresh.atStart.some(t => /Decisions/.test(t)),
+       fresh.atStart.join(' | '));
+    /* Hidden must mean "not worth a tab yet", never "shut". */
+    ok('but a hidden section still opens when something sends them there',
+       fresh.drew === true, 'a checklist action or a notification must land somewhere');
+    ok('AND ITS TAB APPEARS, so it does not vanish under them',
+       fresh.afterNav.some(t => /Money/.test(t)),
+       `${fresh.atStart.join(' | ')}  →  ${fresh.afterNav.join(' | ')}`);
+
+    /* ── The way out has to be visible ─────────────────────────────
+       btn--ghost is not defined in the portal's stylesheets, so the back
+       button fell back to .btn's pale background and drew white text on
+       near-white inside the group's green banner. The one control somebody
+       needs when they feel lost was the one they could not see. Measured
+       off the rendered button, not read off the source. */
+    const backBtn = await evaluate(`(() => {
+      const b = [...document.querySelectorAll('#svWsHeader button')]
+        .find(x => /My account/.test(x.textContent));
+      if (!b) return { missing: true };
+      const cs = getComputedStyle(b);
+      const lum = c => {
+        const m = String(c).match(/[\\d.]+/g) || [0, 0, 0];
+        const [r, g, bl] = m.slice(0, 3).map(v => {
+          const s = Number(v) / 255;
+          return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+        });
+        return 0.2126 * r + 0.7152 * g + 0.0722 * bl;
+      };
+      /* Against what is actually painted behind it. */
+      let bg = cs.backgroundColor, el = b;
+      while ((!bg || bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') && el.parentElement) {
+        el = el.parentElement; bg = getComputedStyle(el).backgroundColor;
+      }
+      const a = lum(cs.color), c = lum(bg);
+      return { ratio: (Math.max(a, c) + 0.05) / (Math.min(a, c) + 0.05),
+               color: cs.color, bg };
+    })()`);
+    ok('the way back out of a group is legible against what is behind it',
+       !backBtn.missing && backBtn.ratio >= 4.5,
+       `contrast ${backBtn.ratio && backBtn.ratio.toFixed(2)} of ${backBtn.color} on ${backBtn.bg} `
+       + '— somebody who switches in and cannot see how to leave will not switch in again');
     ok('it lands on the overview, not a blank body', overview.text.trim().length > 40,
        overview.text.slice(0, 120));
     ok('and shows what this member owes', /You owe/.test(overview.text),
