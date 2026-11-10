@@ -51,6 +51,20 @@ const ok = (name, cond, detail) => {
   else { fail++; console.log(`  ✗ ${name}${detail ? `\n      ${detail}` : ''}`); }
 };
 const CORE = fs.readFileSync(path.join(ROOT, 'js', 'portal-core.js'), 'utf8');
+
+/* The real Toast object out of js/api.js, lifted whole and rebound to window
+   so the page has the one the portal actually loads. Lifted rather than
+   written out here: a hand-made Toast is a stand-in, and a stand-in is what
+   hid the bug this guards against. If the literal ever cannot be found this
+   throws, rather than quietly leaving the page without a Toast and failing
+   every assertion below for the wrong reason. */
+const TOAST_SRC = (() => {
+  const api = fs.readFileSync(path.join(ROOT, 'js', 'api.js'), 'utf8');
+  const at  = api.indexOf('const Toast = {');
+  const end = api.indexOf('\n};\n', at);
+  if (at < 0 || end < 0) throw new Error('could not lift Toast out of js/api.js');
+  return api.slice(at, end + 3).replace('const Toast = {', 'window.Toast = {');
+})();
 const read = rel => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 const _svTabsExpected = ['Overview', 'Contributions', 'Approvals', 'Shares',
                          'Payouts', 'Members', 'Investments', 'Transactions', 'Statement'];
@@ -490,7 +504,26 @@ const STUB = {
       window.SA_TYPE_META = { stokvel: { icon:'fa-people-group', label:'Stokvel', color:'#22c55e', bg:'#064e1e' } };
       window._esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;')
                       .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-      window.Utils = { rand: v => 'R' + Number(v || 0).toFixed(2), toast: () => {} };
+      /* toast IS NOT STUBBED HERE, deliberately, and must never be again.
+         This harness used to carry a do-nothing toast, and js/portal-core.js
+         called Utils.toast in 53 places. Utils has no toast member and never
+         has — so every one of those threw in a real browser while this check
+         passed, because the single thing that was broken was the single thing
+         the harness supplied. A member pressed "Send the invitation", the
+         invitation was sent, the throw landed between the toast and the
+         re-render, and the screen never moved.
+
+         That is the second time in this repo a stand-in has hidden exactly the
+         call it stood in for (the fund console's fmt was the first). The
+         rule it leaves behind: supply the real thing, or supply nothing.
+
+         Utils.rand is still a stand-in and should not be — several assertions
+         below read its output and expect toFixed(2) rather than the South
+         African format the product uses. Noted rather than changed here: it is
+         a separate repair with its own assertions to rewrite. */
+      window.Utils = { rand: v => 'R' + Number(v || 0).toFixed(2) };
+      /* The REAL Toast, lifted whole out of js/api.js. */
+      ${TOAST_SRC}
       window.Modal = { open: () => {}, close: () => {} };
       window.API = { _fetch: async (m, p) => {
         const stub = ${JSON.stringify(STUB)};
@@ -813,6 +846,52 @@ const STUB = {
        /email address or a cell number is needed/.test(inv.note || ''),
        inv.note || '(nothing said)');
 
+    /* ── THE SUCCESS PATH ──────────────────────────────────────────
+       Reported: "I click Send the invitation, it sends, but no message
+       comes and it stays on this screen making you think it hasn't worked."
+
+       It had been sent. submitStokvelInvite called Utils.toast, which does
+       not exist, so the throw landed between the request returning and the
+       re-render — the invitation was created and the form never moved.
+
+       Only the REFUSAL path was covered here before: the form was submitted
+       empty and the inline note asserted. A handler's happy path is the one
+       a member actually walks, and it was the one nobody drove. */
+    const sent = await evaluate(`(async () => {
+      const real = window.API._fetch;
+      let posted = null;
+      window.API._fetch = async (m, p, body) => {
+        if (m === 'POST' && /invites$/.test(p)) { posted = { p, body }; return { data: {} }; }
+        return real(m, p, body);
+      };
+      inviteToStokvel('SA-1');
+      document.getElementById('svInvName').value  = 'Ayanda';
+      document.getElementById('svInvEmail').value = 'ayanda@svcapital.co.za';
+      try { await submitStokvelInvite('SA-1'); }
+      catch (e) { window.API._fetch = real; return { threw: String(e && e.message || e) }; }
+      window.API._fetch = real;
+      const toasts = [...document.querySelectorAll('.toast')].map(t => t.textContent);
+      return {
+        posted,
+        toasts,
+        /* Did the screen move? The form is gone once the members section has
+           been drawn again. */
+        formStillUp: !!document.getElementById('svInvEmail'),
+        body: document.getElementById('svWsBody').textContent.slice(0, 200),
+      };
+    })()`);
+
+    ok('the invitation is actually posted', !!sent.posted && !sent.threw,
+       JSON.stringify(sent).slice(0, 300));
+    ok('AND THE MEMBER IS TOLD', (sent.toasts || []).some(t => /Sent\./.test(t)),
+       `toasts ${JSON.stringify(sent.toasts)} — this is the bug that was reported: `
+       + 'the invitation went out and the screen said nothing');
+    ok('and the form is replaced, so it does not look like it failed',
+       sent.formStillUp === false,
+       'sitting on a filled-in form after a successful send reads as a failure');
+    ok('and nothing threw between the send and the re-render',
+       !sent.threw, sent.threw || '');
+
     /* ── The invitation card ───────────────────────────────────────
        The one piece of UI in the whole invitation feature that cannot be
        allowed to be subtle: there is no link in a stokvel invitation, so
@@ -872,7 +951,11 @@ const STUB = {
       window.history.replaceState = () => { out.replaced++; };
       const realOpen = window.openStokvelHub;
       window.openStokvelHub = id => { out.opened = id; };
-      window.Utils.toast = m => { out.toast = String(m); };
+      /* Spies on the REAL Toast and passes the call through, rather than
+         replacing it. A capture that swallows the call is a stand-in, and a
+         stand-in on this exact function is what hid the invitation bug. */
+      const realShow = window.Toast.show.bind(window.Toast);
+      window.Toast.show = (m, t) => { out.toast = String(m); return realShow(m, t); };
       PORTAL.stokvels = [{ id: 'SA-1', name: 'Ubuntu' }];
       PORTAL.subAccounts = [];
 
