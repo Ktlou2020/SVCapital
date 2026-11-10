@@ -177,14 +177,83 @@ const TYPES = { '.html': 'text/html', '.js': 'application/javascript', '.css': '
         if (!res.fn || !res.panel) return res;
         /* The pickers come from STATE, so give it something to fill from. */
         window.STATE = window.STATE || {};
-        STATE.pools = [{ id: 'P-ST', name: 'Short Term Investment', status: 'matured' }];
-        STATE.investors = [{ id: 'S-112415', first_name: 'Puno', last_name: 'Stokvel' }];
+        /* Enough of each that filtering is a real question. The console
+           carries about fifty pools and a hundred and fifty clients, which is
+           why the search boxes exist. */
+        STATE.pools = [
+          { id: 'P-ST',  name: 'Short Term Investment', status: 'matured', product_type: 'short_term' },
+          { id: 'P-CAT', name: 'Cattle Fund Q1',        status: 'open',    product_type: 'cattle' },
+          { id: 'P-SOL', name: 'Solar Infrastructure',  status: 'open',    product_type: 'solar' },
+        ];
+        STATE.investors = [
+          { id: 'S-112415', first_name: 'Puno',  last_name: 'Stokvel', email: 'puno@x.test' },
+          { id: 'S-220001', first_name: 'Zodwa', last_name: 'Mthembu', email: 'zodwa@x.test' },
+          { id: 'S-330002', first_name: 'Sipho', last_name: 'Khumalo', email: 'sipho@x.test' },
+          /* A name that tries to close its own <option> and open another one
+             carrying somebody else's account number. The label sits between
+             tags, so escaping it is the only thing standing between a client
+             who chose their own name and an option that records money against
+             an account they do not own. */
+          { id: 'S-440003', first_name: '</option><option value="S-999999">Hijacked',
+            last_name: 'Ndlovu', email: 'nd@x.test' },
+        ];
         STATE.subAccounts = [
           { id: 'SA-1', parent_investor_id: 'S-112415', name: 'Burial Society' },
           { id: 'SA-9', parent_investor_id: 'SOMEONE-ELSE', name: 'Not Theirs' },
         ];
         _hiFillPickers();
         res.poolOpts = [...document.getElementById('hiPool').options].map(o => o.value);
+        res.investorOpts = [...document.getElementById('hiInvestor').options].map(o => o.value);
+
+        /* ── The search boxes ───────────────────────────────────────────
+           Driven the way a person drives them: type, read the list, read the
+           count. Including the case that must never happen — a filter that
+           excludes the chosen client and takes the choice with it. */
+        const vals = id => [...document.getElementById(id).options].map(o => o.value);
+        const type = (id, v) => {
+          const el = document.getElementById(id);
+          el.value = v;
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+        };
+        res.search = {};
+        /* The three pickers must sit on one line. The search box and the count
+           made the first two columns taller, and the row bottom-aligns, so
+           without spacers the sub-account select drops a line below the two it
+           belongs beside. Measured, not eyeballed. */
+        res.selectTops = ['hiPool', 'hiInvestor', 'hiSub']
+          .map(id => Math.round(document.getElementById(id).getBoundingClientRect().top));
+
+        type('hiPoolSearch', 'cattle');
+        res.search.poolNarrowed = vals('hiPool');
+        res.search.poolCount = document.getElementById('hiPoolCount').textContent;
+
+        type('hiPoolSearch', '');
+        res.search.poolRestored = vals('hiPool');
+
+        /* By account number, which is what arrives in the request. */
+        type('hiInvestorSearch', 's-112415');
+        res.search.byAccount = vals('hiInvestor');
+        /* By email. */
+        type('hiInvestorSearch', 'zodwa@');
+        res.search.byEmail = vals('hiInvestor');
+        /* By full name across both fields. */
+        type('hiInvestorSearch', 'puno stokvel');
+        res.search.byFullName = vals('hiInvestor');
+        /* Nothing at all. */
+        type('hiInvestorSearch', 'zzzzzz');
+        res.search.noMatch = vals('hiInvestor');
+        res.search.noMatchCount = document.getElementById('hiInvestorCount').textContent;
+
+        /* THE ONE THAT MATTERS. Choose a client, then filter them out. */
+        type('hiInvestorSearch', '');
+        document.getElementById('hiInvestor').value = 'S-112415';
+        type('hiInvestorSearch', 'zodwa');
+        res.search.keptValue = document.getElementById('hiInvestor').value;
+        res.search.keptOpts  = vals('hiInvestor');
+        res.search.keptCount = document.getElementById('hiInvestorCount').textContent;
+
+        type('hiInvestorSearch', '');
+        type('hiPoolSearch', '');
         document.getElementById('hiInvestor').value = 'S-112415';
         _hiLoadSubAccounts();
         res.subOpts = [...document.getElementById('hiSub').options].map(o => o.value);
@@ -230,6 +299,61 @@ const TYPES = { '.html': 'text/html', '.js': 'application/javascript', '.css': '
     ok('and nothing in the file references a helper that is not there',
        !r.errors.some(e => /is not defined|is not a function/.test(e)),
        JSON.stringify(r.errors).slice(0, 400));
+
+    console.log('\nand each picker has a search box over it');
+    {
+      const s = r.search || {};
+      ok('every pool and client is listed to start with',
+         (r.poolOpts || []).length === 4 && (r.investorOpts || []).length === 5,
+         JSON.stringify({ p: r.poolOpts, i: r.investorOpts }));
+      /* A name that tries to close its own <option> and open another one. The
+         label is text between tags, so nothing but escaping stops a client
+         named this from putting an account they do not own on the list. */
+      ok('a client name cannot inject an option carrying another account number',
+         !(r.investorOpts || []).includes('S-999999')
+         && (r.investorOpts || []).includes('S-440003'),
+         JSON.stringify(r.investorOpts));
+      /* Within a few pixels, not identical: a count span carrying text is a
+         pixel taller than the empty spacer beside it, and chasing that would
+         be a check about font metrics. What this is for is the whole LINE the
+         sub-account select used to drop by, which is about forty. */
+      ok('the three pickers sit on one line',
+         Math.max(...(r.selectTops || [0])) - Math.min(...(r.selectTops || [0])) <= 4,
+         `tops ${JSON.stringify(r.selectTops)} — the search boxes made two columns `
+         + 'taller, and the row bottom-aligns');
+      ok('typing narrows the pools to the ones that match',
+         JSON.stringify(s.poolNarrowed) === JSON.stringify(['', 'P-CAT']),
+         JSON.stringify(s.poolNarrowed));
+      ok('and says how many of how many', /1 of 3/.test(s.poolCount || ''), s.poolCount);
+      ok('clearing the box brings them all back',
+         JSON.stringify(s.poolRestored) === JSON.stringify(r.poolOpts),
+         JSON.stringify(s.poolRestored));
+
+      ok('a client is findable by account number',
+         JSON.stringify(s.byAccount) === JSON.stringify(['', 'S-112415']),
+         JSON.stringify(s.byAccount));
+      ok('and by email, which identifies a client whose name is spelled three ways',
+         JSON.stringify(s.byEmail) === JSON.stringify(['', 'S-220001']),
+         JSON.stringify(s.byEmail));
+      ok('and by a full name spanning both name fields',
+         JSON.stringify(s.byFullName) === JSON.stringify(['', 'S-112415']),
+         JSON.stringify(s.byFullName));
+      ok('and a search matching nobody says so rather than going blank',
+         JSON.stringify(s.noMatch) === JSON.stringify(['']) && /No clients match/.test(s.noMatchCount || ''),
+         JSON.stringify({ o: s.noMatch, c: s.noMatchCount }));
+
+      /* THE ONE THAT MATTERS. Rebuilding a <select> drops a selection that no
+         longer matches, and .value silently becomes ''. On a form that writes
+         money by hand, a search typed after choosing a client must not change
+         who the record is for. */
+      ok('A CLIENT ALREADY CHOSEN SURVIVES A SEARCH THAT EXCLUDES THEM',
+         s.keptValue === 'S-112415',
+         `${s.keptValue} — filtering must never silently change who this is recorded against`);
+      ok('they are kept in the list so the box is not showing a value it has no option for',
+         (s.keptOpts || []).includes('S-112415'), JSON.stringify(s.keptOpts));
+      ok('and the count says they are being held there, rather than lying about the match',
+         /keeping the one you chose/.test(s.keptCount || ''), s.keptCount);
+    }
 
     console.log('\nand it offers only the client\'s OWN sub-accounts');
     ok('the chosen client\'s group is offered',

@@ -1512,13 +1512,28 @@
             </p>
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:10px">
               <label style="font-size:0.76rem;color:var(--text-muted);display:flex;flex-direction:column;gap:4px">Pool
-                <select id="hiPool" class="form-input" style="height:32px;font-size:0.78rem;min-width:220px"></select>
+                <input type="search" id="hiPoolSearch" class="form-input" placeholder="Search pools&hellip;"
+                       oninput="_hiFilterPools()" autocomplete="off"
+                       style="height:30px;font-size:0.76rem;min-width:220px">
+                <select id="hiPool" class="form-input" size="1" style="height:32px;font-size:0.78rem;min-width:220px"></select>
+                <span id="hiPoolCount" style="font-size:0.7rem;color:var(--text-muted);min-height:14px"></span>
               </label>
               <label style="font-size:0.76rem;color:var(--text-muted);display:flex;flex-direction:column;gap:4px">Client
-                <select id="hiInvestor" class="form-input" onchange="_hiLoadSubAccounts()" style="height:32px;font-size:0.78rem;min-width:240px"></select>
+                <input type="search" id="hiInvestorSearch" class="form-input" placeholder="Search name, account no. or email&hellip;"
+                       oninput="_hiFilterInvestors()" autocomplete="off"
+                       style="height:30px;font-size:0.76rem;min-width:240px">
+                <select id="hiInvestor" class="form-input" size="1" onchange="_hiLoadSubAccounts()" style="height:32px;font-size:0.78rem;min-width:240px"></select>
+                <span id="hiInvestorCount" style="font-size:0.7rem;color:var(--text-muted);min-height:14px"></span>
               </label>
               <label style="font-size:0.76rem;color:var(--text-muted);display:flex;flex-direction:column;gap:4px">Sub-account
                 <select id="hiSub" class="form-input" style="height:32px;font-size:0.78rem;min-width:180px"></select>
+                <!-- Stands in for the match count under the two pickers that
+                     have one. The row is bottom-aligned, so without something
+                     below this select it sits level with THEIR counts — a line
+                     lower than the two controls it belongs beside. Nothing is
+                     needed above it for the same reason: bottom alignment
+                     makes the extra height up there cost nothing. -->
+                <span aria-hidden="true" style="min-height:14px"></span>
               </label>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:10px">
@@ -5397,7 +5412,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=30"></script>
 <script src="../js/investor-documents.js?v=9"></script>
-<script src="js/admin.js?v=224"></script>
+<script src="js/admin.js?v=225"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>

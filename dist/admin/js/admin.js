@@ -17305,23 +17305,80 @@ function exportDoubleDebitCSV() {
    Every value shown is client data and goes through _esc. */
 let _hiLast = null;
 
+const _hiNorm = s => String(s == null ? '' : s).toLowerCase().trim();
+
+/* Repaint a picker against its search box.
+
+   THE SELECTION SURVIVES THE FILTER, always. Rebuilding a <select>'s options
+   drops the chosen row when it no longer matches and select.value silently
+   becomes '' — and on a form that writes money onto the books by hand that is
+   the worst shape of bug there is: the operator picks a client, types in the
+   search box to check something, the client falls out of the list, and either
+   Preview runs against nobody or — worse — they do not notice and record it
+   against whoever is now first. So whatever is selected is kept in the list
+   whether it matches or not, and the count says it is being held there.
+
+   Rebuilding is idempotent, so this is also what fills the pickers initially
+   and what picks up clients that loaded after the view opened. */
+function _hiPaint(selId, countId, all, hit, idOf, labelOf, placeholder, noun) {
+  const sel = document.getElementById(selId);
+  if (!sel) return;
+  const chosen = sel.value;
+  const matches = all.filter(hit);
+  const held = chosen && !matches.some(x => idOf(x) === chosen)
+    ? all.filter(x => idOf(x) === chosen) : [];
+  const shown = [...held, ...matches];
+
+  sel.innerHTML = `<option value="">${_esc(placeholder)}</option>` +
+    shown.map(x => `<option value="${_esc(idOf(x))}">${_esc(labelOf(x))}${
+      held.length && idOf(x) === chosen ? ' — selected' : ''}</option>`).join('');
+  /* Set after the options exist; assigning a value the list does not carry is
+     what silently blanks it. */
+  sel.value = chosen;
+
+  const countEl = document.getElementById(countId);
+  if (!countEl) return;
+  if (!all.length)            countEl.textContent = '';
+  else if (matches.length === all.length) countEl.textContent = `${all.length} ${noun}`;
+  else if (!matches.length)   countEl.textContent = held.length
+    ? `No ${noun} match — keeping the one you chose`
+    : `No ${noun} match`;
+  else                        countEl.textContent = `${matches.length} of ${all.length}`
+    + (held.length ? ' · keeping the one you chose' : '');
+}
+
+function _hiFilterPools() {
+  const q = _hiNorm(document.getElementById('hiPoolSearch')?.value);
+  const all = [...(STATE.pools || [])]
+    .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+  /* Searchable by what is actually on the operator's note: the pool's name,
+     its id, its status, or the product it belongs to. */
+  const hit = p => !q || [p.name, p.id, p.status, p.product_type]
+    .some(v => _hiNorm(v).includes(q));
+  _hiPaint('hiPool', 'hiPoolCount', all, hit, p => p.id,
+    p => `${p.name} · ${p.status}`, 'Select pool…', 'pools');
+}
+
+function _hiFilterInvestors() {
+  const q = _hiNorm(document.getElementById('hiInvestorSearch')?.value);
+  const all = [...(STATE.investors || [])]
+    .sort((a, b) => `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`));
+  /* Account number and email as well as name, because the account number is
+     what arrives in the request and the email is what identifies a client
+     whose name is spelled three ways across the book. The full name is
+     matched as one string so "puno stokvel" finds a client whose first and
+     last names are those two words. */
+  const hit = i => !q || [
+    `${i.first_name || ''} ${i.last_name || ''}`, i.first_name, i.last_name, i.id, i.email,
+  ].some(v => _hiNorm(v).includes(q));
+  _hiPaint('hiInvestor', 'hiInvestorCount', all, hit, i => i.id,
+    i => `${i.first_name || ''} ${i.last_name || ''} (${i.id})`.trim(),
+    'Select client…', 'clients');
+}
+
 function _hiFillPickers() {
-  const pools = document.getElementById('hiPool');
-  if (pools && !pools.options.length) {
-    pools.innerHTML = '<option value="">Select pool…</option>' +
-      [...(STATE.pools || [])]
-        .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
-        .map(p => `<option value="${_esc(p.id)}">${_esc(p.name)} · ${_esc(p.status)}</option>`)
-        .join('');
-  }
-  const inv = document.getElementById('hiInvestor');
-  if (inv && !inv.options.length) {
-    inv.innerHTML = '<option value="">Select client…</option>' +
-      [...(STATE.investors || [])]
-        .sort((a, b) => `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`))
-        .map(i => `<option value="${_esc(i.id)}">${_esc(i.first_name)} ${_esc(i.last_name)} (${_esc(i.id)})</option>`)
-        .join('');
-  }
+  _hiFilterPools();
+  _hiFilterInvestors();
   _hiLoadSubAccounts();
 }
 
