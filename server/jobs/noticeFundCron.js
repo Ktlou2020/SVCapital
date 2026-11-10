@@ -1,10 +1,9 @@
 'use strict';
-/* Settle the 30-day notice fund each morning.
+/* Pay the 30-day notice fund's withdrawals each morning.
  *
- * Posting a price settles what it prices at once (routes/noticeFundAdmin.js).
- * This catches the rest: a withdrawal whose notice ran out overnight, when a
- * price on or after that day was posted earlier. Without it, that group's
- * money would wait for the next price to be posted.
+ * A withdrawal is paid once its notice has run, at the unit price on that
+ * day, which the month's declared rate fixes. This is what pays it. A month
+ * with no rate yet leaves it waiting; declaring the rate pays it at once.
  */
 const cron = require('./_watched');
 const pool = require('../db/pool');
@@ -13,17 +12,17 @@ const noticeFund = require('../services/noticeFund');
 async function settleAll() {
   const { rows: funds } = await pool.query(
     `SELECT DISTINCT fund_id FROM notice_fund_orders WHERE status = 'pending'`);
-  const totals = { subscriptions: 0, redemptions: 0, waiting: 0 };
+  const totals = { redemptions: 0, waiting: 0 };
   for (const f of funds) {
     try {
       const r = await noticeFund.settle(pool, f.fund_id);
-      totals.subscriptions += r.subscriptions; totals.redemptions += r.redemptions; totals.waiting += r.waiting;
+      totals.redemptions += r.redemptions; totals.waiting += r.waiting;
     } catch (err) {
       console.error(`[noticeFund] settling ${f.fund_id} failed:`, err.message);
     }
   }
-  if (totals.subscriptions || totals.redemptions) {
-    console.log(`[noticeFund] settled ${totals.subscriptions} in, ${totals.redemptions} out; ${totals.waiting} waiting for a price`);
+  if (totals.redemptions || totals.waiting) {
+    console.log(`[noticeFund] paid ${totals.redemptions} withdrawal(s); ${totals.waiting} waiting for a month's rate`);
   }
   return totals;
 }

@@ -21730,8 +21730,9 @@ async function loadStokvels() {
 
 /* ─── The 30-day notice fund ──────────────────────────────────────────
    Groups hold it beside their wallet; the fund's managers run it here:
-   create it, open or close it to new money, and post its unit price.
-   Posting a price settles every order it covers. Staff never move a
+   create it, open or close it to new money, and declare each month's
+   PROJECTED return before the month starts. The rate sets the unit price
+   day by day and is fixed once its month begins. Staff never move a
    group's money from this card. (routes/noticeFundAdmin.js) */
 async function loadNoticeFundAdmin() {
   const host = document.getElementById('noticeFundAdmin');
@@ -21751,22 +21752,27 @@ async function loadNoticeFundAdmin() {
         </div>
       </div>
       <div style="display:flex;gap:24px;flex-wrap:wrap;margin:10px 0;font-size:0.84rem">
-        <div><div class="text-muted" style="font-size:0.72rem;text-transform:uppercase">Latest price</div>
-          <strong>${f.latest_price ? `R${Number(f.latest_price.unit_price).toFixed(6)} on ${_esc(f.latest_price.price_date)}` : 'none posted'}</strong></div>
+        <div><div class="text-muted" style="font-size:0.72rem;text-transform:uppercase">Unit price today</div>
+          <strong>${f.price ? `R${Number(f.price.unit_price).toFixed(6)}` : (f.missing ? `waiting for ${_esc(f.missing)}&rsquo;s rate` : 'no rate yet')}</strong></div>
+        <div><div class="text-muted" style="font-size:0.72rem;text-transform:uppercase">Projected this / next month</div>
+          <strong>${f.projected && f.projected.this_rate != null ? `${(f.projected.this_rate * 100).toFixed(4)}%` : '<span style="color:#ef4444">not declared</span>'}
+          / ${f.projected && f.projected.next_rate != null ? `${(f.projected.next_rate * 100).toFixed(4)}%` : '<span style="color:#f59e0b">not declared</span>'}</strong></div>
         <div><div class="text-muted" style="font-size:0.72rem;text-transform:uppercase">Groups holding</div><strong>${f.groups}</strong></div>
         <div><div class="text-muted" style="font-size:0.72rem;text-transform:uppercase">Units</div><strong>${Number(f.units).toFixed(6)}</strong></div>
         <div><div class="text-muted" style="font-size:0.72rem;text-transform:uppercase">At cost / at price</div>
           <strong>${Utils.rand(f.cost)} / ${f.value == null ? '—' : Utils.rand(f.value)}</strong></div>
       </div>
       <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap">
-        <div><label class="text-muted" style="font-size:0.75rem;display:block">Price date</label>
-          <input type="date" id="nfDate-${_esc(f.id)}" class="input input--sm" value="${new Date(Date.now() + 2 * 3600 * 1000).toISOString().slice(0, 10)}"></div>
-        <div><label class="text-muted" style="font-size:0.75rem;display:block">Unit price (R)</label>
-          <input type="number" step="0.000001" min="0" id="nfPrice-${_esc(f.id)}" class="input input--sm" style="width:140px"></div>
-        <button class="btn btn--primary btn--sm" onclick="postNoticeFundPrice('${_esc(f.id)}')">Post price</button>
+        <div><label class="text-muted" style="font-size:0.75rem;display:block">Month</label>
+          <input type="month" id="nfMonth-${_esc(f.id)}" class="input input--sm" value="${_esc(f.projected && f.projected.this_rate == null ? f.projected.this_month : (f.projected ? f.projected.next_month : ''))}"></div>
+        <div><label class="text-muted" style="font-size:0.75rem;display:block">Projected return (% per month)</label>
+          <input type="number" step="0.0001" min="0" max="19.99" id="nfRate-${_esc(f.id)}" class="input input--sm" style="width:140px"></div>
+        <button class="btn btn--primary btn--sm" onclick="declareNoticeFundRate('${_esc(f.id)}')">Declare rate</button>
       </div>
-      <div class="text-muted" style="font-size:0.74rem;margin-top:6px">A posted price is final: it deals every order it covers, at once. Prices are not overwritten.</div>
-      ${(f.pending || []).length ? `<table class="data-table" style="margin-top:10px;font-size:0.8rem"><thead><tr><th>Waiting</th><th>Group</th><th class="text-right">Amount</th><th>Priced from</th></tr></thead><tbody>
+      <div class="text-muted" style="font-size:0.74rem;margin-top:6px">Declare each month before it starts. It can be changed until the month begins and is fixed after that. Groups see it as a projection, not a promise.</div>
+      ${(f.rates || []).length ? `<div style="font-size:0.78rem;margin-top:8px">${f.rates.map(r =>
+        `<span style="display:inline-block;margin:2px 10px 2px 0">${_esc(r.month)}: <strong>${_esc(String(r.monthly_rate_pct))}%</strong></span>`).join('')}</div>` : ''}
+      ${(f.pending || []).length ? `<table class="data-table" style="margin-top:10px;font-size:0.8rem"><thead><tr><th>Waiting</th><th>Group</th><th class="text-right">Amount</th><th>Paid from</th></tr></thead><tbody>
         ${f.pending.map(o => `<tr><td>${o.kind === 'subscription' ? 'Money in' : 'Money out'}</td><td>${_esc(o.group_name)}</td>
           <td class="text-right">${o.all_units ? 'everything' : Utils.rand(o.amount)}</td>
           <td>${_esc(String(o.kind === 'subscription' ? o.requested_at : o.payable_at).slice(0, 10))}</td></tr>`).join('')}
@@ -21777,6 +21783,7 @@ async function loadNoticeFundAdmin() {
       <span style="font-size:0.78rem;color:${live ? '#22c55e' : 'var(--text-muted)'}">${live ? 'Offered to groups' : 'Not offered to groups (Settings \u2192 notice_fund_live)'}</span></div>
     <div style="padding:14px">
       ${funds.length ? funds.map(fund).join('') : '<div class="text-muted" style="margin-bottom:10px">No fund set up yet.</div>'}
+      <div class="text-muted" style="font-size:0.74rem;margin-bottom:8px">Money in is charged the 1% platform fee on top, as on the pools.</div>
       <details><summary style="cursor:pointer;font-size:0.84rem">Set up a fund</summary>
         <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-top:8px">
           <div><label class="text-muted" style="font-size:0.75rem;display:block">Name</label><input id="nfNewName" class="input input--sm" placeholder="Group Notice Fund"></div>
@@ -21792,7 +21799,7 @@ async function createNoticeFund() {
     await API._fetch('POST', 'admin/notice-funds', {
       name: document.getElementById('nfNewName').value, notice_days: document.getElementById('nfNewDays').value,
       min_deposit: document.getElementById('nfNewMin').value });
-    Toast.show('Fund created in draft. Post a first price, then open it.', 'success');
+    Toast.show('Fund created in draft. Declare this month\u2019s projected rate, then open it.', 'success');
   } catch (err) { Toast.show(err.message || 'Could not create the fund.', 'error'); }
   loadNoticeFundAdmin();
 }
@@ -21804,16 +21811,16 @@ async function setNoticeFundStatus(id, status) {
   loadNoticeFundAdmin();
 }
 
-async function postNoticeFundPrice(id) {
-  const date = document.getElementById('nfDate-' + id).value;
-  const price = document.getElementById('nfPrice-' + id).value;
-  if (!(parseFloat(price) > 0)) { Toast.show('Enter the unit price.', 'error'); return; }
-  if (!confirm(`Post R${price} as the unit price for ${date}? It deals every order it covers and cannot be changed afterwards.`)) return;
+async function declareNoticeFundRate(id) {
+  const month = document.getElementById('nfMonth-' + id).value;
+  const rate = document.getElementById('nfRate-' + id).value;
+  if (!/^\d{4}-\d{2}$/.test(month)) { Toast.show('Choose the month.', 'error'); return; }
+  if (!(parseFloat(rate) >= 0)) { Toast.show('Enter the projected return for the month.', 'error'); return; }
+  if (!confirm(`Declare ${rate}% as the projected return for ${month}? Once ${month} begins it is fixed.`)) return;
   try {
-    const r = await API._fetch('POST', `admin/notice-funds/${id}/prices`, { price_date: date, unit_price: price });
-    const s = (r && r.data && r.data.settled) || {};
-    Toast.show(`Price posted. Settled ${s.subscriptions || 0} in and ${s.redemptions || 0} out.`, 'success');
-  } catch (err) { Toast.show(err.message || 'Could not post that price.', 'error'); }
+    await API._fetch('POST', 'admin/notice-funds/' + id + '/rates', { month, monthly_rate_pct: rate });
+    Toast.show('Rate declared.', 'success');
+  } catch (err) { Toast.show(err.message || 'Could not declare that rate.', 'error'); }
   loadNoticeFundAdmin();
 }
 

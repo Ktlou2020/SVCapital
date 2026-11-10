@@ -1563,7 +1563,11 @@ router.get('/:id/notice', async (req, res) => {
     return res.json({ data: {
       available: true,
       fund: { id: fund.id, name: fund.name, notice_days: fund.notice_days,
-              min_deposit: Number(fund.min_deposit), description: fund.description },
+              min_deposit: Number(fund.min_deposit), description: fund.description,
+              fee_pct: 1 },
+      /* The projected monthly rate for this month and next, as declared. A
+         projection: the screen says so. */
+      projected: await noticeFund.projected(pool, fund.id),
       position, orders,
       may_redeem: invites.mayInvite(group) || sigs.has(me),
     } });

@@ -1721,12 +1721,11 @@ CREATE INDEX IF NOT EXISTS stokvel_payouts_group_idx ON stokvel_payouts(sub_acco
    period (30 days at least) after the group asks. services/noticeFund.js
    holds the rules; this is only the record.
 
-   UNITS, FORWARD-PRICED. A group holds units, not rands. Money in buys
-   units at the first price published ON OR AFTER the day it arrived; money
-   out is priced at the first price on or after the day its notice ends.
-   Pricing forward is what stops anybody choosing a price they already
-   know: a fund priced monthly and sold at last month's price would let a
-   group that has seen this month's figure buy yesterday's units.
+   UNITS, PRICED FROM A DECLARED MONTHLY RATE. A group holds units, not
+   rands. The unit price follows the projected monthly return the fund's
+   managers declare before each month (notice_fund_rates), so it is known
+   for every day of a month that has a rate: money in buys units at that
+   day's price, and money out is priced on the day its notice ends.
 
    KEPT OUT OF investments AND investment_pools on purpose. The maturity,
    pool-cycling and lapsed-pool jobs all act on those tables, and an
@@ -1743,13 +1742,20 @@ CREATE TABLE IF NOT EXISTS notice_funds (
   created_at   TIMESTAMPTZ DEFAULT NOW(),
   updated_at   TIMESTAMPTZ DEFAULT NOW()
 );
-CREATE TABLE IF NOT EXISTS notice_fund_prices (
-  fund_id     TEXT NOT NULL REFERENCES notice_funds(id) ON DELETE RESTRICT,
-  price_date  DATE NOT NULL,
-  unit_price  NUMERIC(18,6) NOT NULL CHECK (unit_price > 0),
-  posted_by   TEXT,
-  posted_at   TIMESTAMPTZ DEFAULT NOW(),
-  PRIMARY KEY (fund_id, price_date)
+/* The fund's PROJECTED monthly return, declared by its managers before the
+   month starts. It sets the unit price: within a month the price rises day
+   by day at that month's rate, and each month starts from where the last
+   ended, so returns compound monthly and accrue daily. A month's rate is
+   fixed once the month has begun — groups dealt in it at that rate. It is
+   a projection, and is described to groups as one, never as a promise. */
+CREATE TABLE IF NOT EXISTS notice_fund_rates (
+  fund_id       TEXT NOT NULL REFERENCES notice_funds(id) ON DELETE RESTRICT,
+  month         DATE NOT NULL CHECK (EXTRACT(DAY FROM month) = 1),
+  monthly_rate  NUMERIC(9,6) NOT NULL CHECK (monthly_rate >= 0 AND monthly_rate < 0.2),
+  declared_by   TEXT,
+  declared_at   TIMESTAMPTZ DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (fund_id, month)
 );
 /* What a group holds: units, and what they cost. Cost is what the group's
    shares carry it at (stokvelShares.netAssets) — the platform's rule that a
@@ -3161,6 +3167,9 @@ async function autoSetup() {
              itself (services/stokvelSchedule.js). Null on a schedule staff
              set in the console. */
           BEGIN ALTER TABLE stokvel_contribution_schedules ADD COLUMN set_by TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          /* The 1% platform fee charged on top of money into the notice fund,
+             recorded on the order it was charged with. */
+          BEGIN ALTER TABLE notice_fund_orders ADD COLUMN fee NUMERIC(18,2); EXCEPTION WHEN duplicate_column THEN NULL; END;
           ALTER TABLE stokvel_withdrawal_requests DROP CONSTRAINT IF EXISTS stokvel_withdrawal_requests_amount_check;
           BEGIN ALTER TABLE stokvel_withdrawal_requests ADD CONSTRAINT swr_amount_chk CHECK (amount > 0 OR kind = 'mandate'); EXCEPTION WHEN duplicate_object THEN NULL; END;
           BEGIN ALTER TABLE sub_accounts ADD COLUMN withdrawal_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
@@ -5087,8 +5096,8 @@ async function autoSetup() {
       const NOTICES = [
         { id: 'ANN-2026-NOTICE-FUND', area: 'both', icon: 'fa-hourglass-half',
           title: 'The 30-day notice fund for groups \u2014 built, and switched off until it is approved',
-          body: 'A pooled fund a group holds BESIDE its wallet. ALWAYS OPEN to money coming in: a member asks, the signatories approve that amount into that fund (as for any investment), and any member then moves it in. MONEY OUT needs AT LEAST 30 DAYS\u2019 NOTICE (the fund\u2019s notice period can never be set lower), is asked for by the committee or a signatory, and comes back ONLY to the group\u2019s own wallet, where the mandate still guards it. UNITS ARE FORWARD-PRICED: money in buys units at the first price posted on or after the day it arrived, and money out is priced at the first price on or after the day its notice ends, so nobody deals at a price they already know. Posting a price deals every order it covers, at once; a posted price is never overwritten and none can be posted for a future date; a daily job at 06:40 settles anything an earlier price already covers. The group\u2019s shares carry the fund at cost, and a gain is shared out when a withdrawal realises it. One withdrawal can wait at a time and can be cancelled. NOT OFFERED TO GROUPS until notice_fund_live is set to true \u2014 that should wait for finance and compliance to approve the fund (a pooled, unit-priced fund may be a collective investment scheme), its documents, its fees (none are charged yet) and how its money is invested.',
-          where: 'Console: Groups \u2192 the 30-day notice fund card under the list \u2014 create a fund (draft), post its first price, open it, post prices. To offer it: Settings \u2192 notice_fund_live = true. Groups: the group \u2192 Investments, at the top.' },
+          body: 'A pooled fund a group holds BESIDE its wallet. ALWAYS OPEN to money coming in: a member asks, the signatories approve that amount into that fund (as for any investment), and any member then moves it in. THE 1% PLATFORM FEE IS CHARGED ON TOP, as on the pools: the approved amount reaches the fund and the wallet pays it plus 1% (R4 000 in, R4 040 out of the wallet); the fund\u2019s minimum is tested against the amount reaching the fund. THE RETURN IS A PROJECTED MONTHLY RATE the fund\u2019s managers declare before each month starts: money earns it day by day, it stays in the fund and compounds month to month, and a month\u2019s rate is fixed once that month begins. Groups see it as a projection, never a promise. Because the rate sets the unit price for every day of a declared month, money goes in at that day\u2019s price at once. MONEY OUT needs AT LEAST 30 DAYS\u2019 NOTICE (the notice period can never be set lower), is asked for by the committee or a signatory, comes back ONLY to the group\u2019s own wallet, and is priced on the day the notice ends; a daily job at 06:40 pays it. A month with no declared rate cannot be priced, so money in or out waits for it \u2014 declare each month before it starts. The group\u2019s shares carry the fund at cost; the fee leaves the pot when charged and the return enters it when a withdrawal realises it. NOT OFFERED TO GROUPS until notice_fund_live is true \u2014 that should wait for finance and compliance to approve the fund (a pooled, unit-priced fund may be a collective investment scheme), how it is invested, and how a projected return is described.',
+          where: 'Console: Groups \u2192 the 30-day notice fund card under the list \u2014 create a fund (draft), declare this month\u2019s projected rate, open it, and declare each following month before it starts. To offer it: Settings \u2192 notice_fund_live = true. Groups: the group \u2192 Investments, at the top.' },
         { id: 'ANN-2026-GROUP-CONTRIBUTION-SCHEDULE', area: 'both', icon: 'fa-calendar-check',
           title: 'A group\u2019s committee now sets its own monthly contribution',
           body: 'The amount each member pays and the day it is due were typed in by staff, and the setup checklist sent the committee to WhatsApp to ask. The chairperson, secretary or treasurer now sets it from the group\u2019s Contributions section (or the checklist), and can change it. EVERY MEMBER IS TOLD, by push and email, with the old and new amount and the month it starts. WHAT IS ALREADY OWED DOES NOT CHANGE: a month already raised keeps the amount it was raised at, and the new amount applies from the month the committee chooses \u2014 next month by default whenever this month\u2019s due day has passed, so nobody is overdue the moment it is set. Monthly only; per-member amounts set in the console still win over the group\u2019s amount. It does not need the signatories, because it moves no money out of the group. The console\u2019s own schedule form still works and does the same thing. With this, nothing in a group\u2019s setup needs to come to us any more.',
@@ -5664,6 +5673,22 @@ async function autoSetup() {
         added += rowCount;
       }
       if (added) console.log(`\u2705 Announced ${added} feature(s) to staff.`);
+
+      /* The notice fund's first notice described staff POSTING unit prices,
+         which the fund no longer does: its return is a declared monthly rate
+         and money in carries the 1% fee. Inserted ON CONFLICT DO NOTHING, so
+         a database that already has the first wording keeps it unless it is
+         corrected here — and only while it is still the original, so a
+         version somebody has edited is left alone. */
+      {
+        const nf = NOTICES.find(n => n.id === 'ANN-2026-NOTICE-FUND');
+        if (nf) {
+          const { rowCount } = await pool.query(
+            `UPDATE feature_announcements SET body = $2, where_to_find = $3
+              WHERE id = $1 AND body LIKE '%Posting a price deals every order%'`, [nf.id, nf.body, nf.where]);
+          if (rowCount) console.log('\u2705 Notice fund announcement corrected: declared monthly rate and 1% fee.');
+        }
+      }
     });
 
     await step("30. The income-reference notice no longer promises a banner", async () => {

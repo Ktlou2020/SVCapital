@@ -1,19 +1,22 @@
 #!/usr/bin/env node
-/* The 30-day notice fund: always open to money in; money out only after
- * the notice, only to the group's own wallet, at the price on that day.
+/* The 30-day notice fund: always open to money in, 1% fee on top, a
+ * projected monthly return declared before each month and earned day by
+ * day, and money out only after the notice, only to the group's own wallet.
  *
- * Checked against a real database:
- *   · OFF means off: groups see nothing and cannot ask, until the setting
- *   · money in clears the mandate like any investment, once, for that fund
- *   · units are FORWARD-priced: a deposit is dealt at the first price on or
- *     after it arrived, never at a price already known
- *   · the group's shares carry the fund at cost the whole time, so moving
- *     money in is not read as the pot shrinking
+ * Checked:
+ *   · the unit price follows the declared rates exactly: day-by-day within
+ *     a month, compounding month to month, and unpriceable (not guessed)
+ *     when a month has no rate
+ *   · a month's rate can change until the month starts, and is fixed after
+ *   · OFF means off until the setting says otherwise
+ *   · money in clears the mandate once, for that fund; the approved amount
+ *     reaches the fund and the wallet pays it plus 1%, charged as its own fee
+ *     row and shared out of the pot at once; the minimum is tested against
+ *     the fund amount, not the wallet spend
  *   · money out waits for the notice, is priced on the day it ends, lands in
- *     the group wallet, and the gain is shared out when it is realised
+ *     the group's wallet, and the realised return is shared out
  *   · one withdrawal waiting at a time; it can be cancelled
- *   · a posted price is never overwritten, and none is posted for the future
- *   · only staff who run funds can post prices; a member cannot
+ *   · only staff who run funds can declare rates; a member cannot
  *
  * Run: DATABASE_URL=… DATABASE_SSL=false node server/scripts/check-notice-fund.cjs
  */
@@ -29,17 +32,25 @@ const ok = (name, cond, detail) => {
   else { fail++; console.log(`  ✗ ${name}${detail ? `\n      ${detail}` : ''}`); }
 };
 const read = p => fs.readFileSync(path.join(ROOT, p), 'utf8');
+const NF = require(path.join(ROOT, 'server', 'services', 'noticeFund.js'));
 
-console.log('\nwithout a database');
+console.log('\nthe price follows the declared rates');
 {
+  const rates = [{ month: '2026-01-01', rate: 0.02 }, { month: '2026-02-01', rate: 0.01 }];
+  ok('the fund starts at R1 on its first day', NF.priceFrom(rates, '2026-01-01').unit_price === 1);
+  ok('and earns day by day: the 16th of a 31-day month at 2% is 1 + 0.02 x 15/31',
+     NF.priceFrom(rates, '2026-01-16').unit_price === Math.round((1 + 0.02 * 15 / 31) * 1e6) / 1e6);
+  ok('each month starts where the last ended: 1 February is 1.02', NF.priceFrom(rates, '2026-02-01').unit_price === 1.02);
+  ok('so the return compounds: 15 February is 1.02 x (1 + 0.01 x 14/28)',
+     NF.priceFrom(rates, '2026-02-15').unit_price === Math.round(1.02 * (1 + 0.01 * 14 / 28) * 1e6) / 1e6);
+  ok('a month with no rate is not priced at a guess', (NF.priceFrom(rates, '2026-03-05') || {}).missing === '2026-03');
+  ok('nor is a day before the fund began', NF.priceFrom(rates, '2025-12-31') === null);
+  ok('the fee is 1% on top, as on the pools', NF.feeOn(4000) === 40 && NF.feeOn(1234.56) === 12.35);
   const SETUP = read('server/db/setup.js');
-  ok('the notice period can never be set below 30 days', /notice_days\s+INT\s+NOT NULL DEFAULT 30 CHECK \(notice_days >= 30\)/.test(SETUP));
-  ok('the fund is switched off until someone switches it on', /'notice_fund_live', 'false'/.test(SETUP));
-  ok('it is kept out of the tables the maturity and pool jobs act on',
+  ok('the notice period can never be below 30 days', /CHECK \(notice_days >= 30\)/.test(SETUP));
+  ok('the fund is off until switched on', /'notice_fund_live', 'false'/.test(SETUP));
+  ok('and it is kept out of the tables the maturity and pool jobs act on',
      !/notice_fund/.test(read('server/jobs/maturityCron.js') + read('server/jobs/poolCyclerCron.js')));
-  ok('the group’s shares count it at cost', /notice_fund_holdings h[\s\S]{0,200}notice_fund_orders o/.test(read('server/services/stokvelShares.js')));
-  ok('and money into it is a kind the mandate knows', /'mandate','notice_deposit'\)/.test(SETUP)
-     && /approved for a different fund/.test(read('server/services/stokvelMandate.js')));
 }
 
 if (!process.env.DATABASE_URL) {
@@ -54,18 +65,20 @@ if (!process.env.DATABASE_URL) {
   const db = new Pool({ connectionString: process.env.DATABASE_URL,
     ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false } });
   let srv;
-  const G = 'SA-NF-1', P = 'INV-NF-';
+  const G = 'SA-NF-1', G2 = 'SA-NF-2', P = 'INV-NF-';
   const clean = async () => {
-    await db.query(`DELETE FROM notice_fund_orders WHERE sub_account_id = $1`, [G]);
-    await db.query(`DELETE FROM notice_fund_holdings WHERE sub_account_id = $1`, [G]);
-    await db.query(`DELETE FROM notice_fund_prices WHERE fund_id IN (SELECT id FROM notice_funds WHERE name LIKE 'Check NF%')`);
+    for (const g of [G, G2]) {
+      await db.query(`DELETE FROM notice_fund_orders WHERE sub_account_id = $1`, [g]);
+      await db.query(`DELETE FROM notice_fund_holdings WHERE sub_account_id = $1`, [g]);
+      await db.query(`DELETE FROM stokvel_request_approvals WHERE request_id IN (SELECT id FROM stokvel_withdrawal_requests WHERE sub_account_id = $1)`, [g]);
+      await db.query(`DELETE FROM stokvel_withdrawal_requests WHERE sub_account_id = $1`, [g]);
+      await db.query(`DELETE FROM stokvel_allocations WHERE sub_account_id = $1`, [g]);
+      await db.query(`DELETE FROM transactions WHERE sub_account_id = $1`, [g]);
+      await db.query(`DELETE FROM stokvel_members WHERE sub_account_id = $1`, [g]);
+      await db.query(`DELETE FROM sub_accounts WHERE id = $1`, [g]);
+    }
+    await db.query(`DELETE FROM notice_fund_rates WHERE fund_id IN (SELECT id FROM notice_funds WHERE name LIKE 'Check NF%')`);
     await db.query(`DELETE FROM notice_funds WHERE name LIKE 'Check NF%'`);
-    await db.query(`DELETE FROM stokvel_request_approvals WHERE request_id IN (SELECT id FROM stokvel_withdrawal_requests WHERE sub_account_id = $1)`, [G]);
-    await db.query(`DELETE FROM stokvel_withdrawal_requests WHERE sub_account_id = $1`, [G]);
-    await db.query(`DELETE FROM stokvel_allocations WHERE sub_account_id = $1`, [G]);
-    await db.query(`DELETE FROM transactions WHERE sub_account_id = $1`, [G]);
-    await db.query(`DELETE FROM stokvel_members WHERE sub_account_id = $1`, [G]);
-    await db.query(`DELETE FROM sub_accounts WHERE id = $1`, [G]);
     await db.query(`DELETE FROM investors WHERE id LIKE 'INV-NF-%'`);
     await db.query(`UPDATE platform_settings SET value = 'false' WHERE key = 'notice_fund_live'`);
   };
@@ -74,11 +87,13 @@ if (!process.env.DATABASE_URL) {
     for (const who of ['CHAIR', 'SIG', 'PLAIN'])
       await db.query(`INSERT INTO investors (id, first_name, last_name, email, status, wallet_balance)
                       VALUES ($1,$2,'Nf',$3,'active',0)`, [P + who, who.charAt(0) + who.slice(1).toLowerCase(), `${(P + who).toLowerCase()}@example.test`]);
-    await db.query(`INSERT INTO sub_accounts (id, parent_investor_id, account_type, name, kyc_status, status, stokvel_quorum, wallet_balance)
-                    VALUES ($1,$2,'stokvel','Alexandra Savings Club','approved','active',2,10000)`, [G, P + 'CHAIR']);
-    for (const [who, role, sig] of [['CHAIR', 'chairperson', true], ['SIG', 'member', true], ['PLAIN', 'member', false]])
-      await db.query(`INSERT INTO stokvel_members (id, sub_account_id, investor_id, role, is_signatory, status, joined_at)
-                      VALUES ($1,$2,$3,$4,$5,'active',NOW())`, ['SM-NF-' + who, G, P + who, role, sig]);
+    for (const g of [G, G2]) {
+      await db.query(`INSERT INTO sub_accounts (id, parent_investor_id, account_type, name, kyc_status, status, stokvel_quorum, wallet_balance)
+                      VALUES ($1,$2,'stokvel',$3,'approved','active',2,10000)`, [g, P + 'CHAIR', g === G ? 'Alexandra Savings Club' : 'Diepsloot Club']);
+      for (const [who, role, sig] of [['CHAIR', 'chairperson', true], ['SIG', 'member', true], ['PLAIN', 'member', false]])
+        await db.query(`INSERT INTO stokvel_members (id, sub_account_id, investor_id, role, is_signatory, status, joined_at)
+                        VALUES ($1,$2,$3,$4,$5,'active',NOW())`, [`SM-${g}-${who}`, g, P + who, role, sig]);
+    }
 
     process.env.JWT_SECRET = process.env.JWT_SECRET || 'check-only-secret';
     const jwt = require(path.join(ROOT, 'server', 'node_modules', 'jsonwebtoken'));
@@ -99,97 +114,109 @@ if (!process.env.DATABASE_URL) {
       if (payload) r.write(payload);
       r.end();
     });
-    const NF = require(path.join(ROOT, 'server', 'services', 'noticeFund.js'));
     const shares = require(path.join(ROOT, 'server', 'services', 'stokvelShares.js'));
-    const sast = d => new Date(Date.now() + 2 * 3600e3 - d * 86400e3).toISOString().slice(0, 10);
-    const wallet = async () => Number((await db.query(`SELECT wallet_balance FROM sub_accounts WHERE id = $1`, [G])).rows[0].wallet_balance);
-    const assets = async () => (await shares.netAssets(db, G)).total;
+    const today = NF.sastDate(Date.now());
+    const M0 = today.slice(0, 7);
+    const shift = (m, k) => { const [y, mm] = m.split('-').map(Number); const d = new Date(Date.UTC(y, mm - 1 + k, 1)); return d.toISOString().slice(0, 7); };
+    const Mprev = shift(M0, -1), Mnext = shift(M0, 1), Mprev2 = shift(M0, -2);
+    const wallet = async g => Number((await db.query(`SELECT wallet_balance FROM sub_accounts WHERE id = $1`, [g])).rows[0].wallet_balance);
+    const assets = async g => (await shares.netAssets(db, g)).total;
+    const shareSum = async g => (await shares.sharesOf(db, g)).shares.reduce((n, s) => n + Number(s.share), 0);
 
-    console.log('\nthe fund’s managers set it up');
-    const notStaff = await call('POST', '/api/admin/notice-funds', 'PLAIN', { name: 'Check NF' });
-    ok('a member cannot', notStaff.status === 403, `${notStaff.status}`);
+    console.log('\nthe fund’s managers declare the projected rate');
+    ok('a member cannot set a fund up', (await call('POST', '/api/admin/notice-funds', 'PLAIN', { name: 'Check NF' })).status === 403);
     const made = await call('POST', '/api/admin/notice-funds', 'FUNDMGR', { name: 'Check NF Group Notice Fund', notice_days: 30, min_deposit: 500 });
-    ok('a fund manager creates it, in draft', made.status === 201 && made.body.data.status === 'draft', JSON.stringify(made.body));
     const F = made.body.data.id;
-    const short = await call('POST', '/api/admin/notice-funds', 'FUNDMGR', { name: 'Check NF short', notice_days: 7 });
-    ok('a notice period under 30 days is refused', short.status === 400);
-    const openNoPrice = await call('PATCH', `/api/admin/notice-funds/${F}`, 'FUNDMGR', { status: 'open' });
-    ok('it cannot open without a first price', openNoPrice.status === 400, openNoPrice.body.error);
-    await call('POST', `/api/admin/notice-funds/${F}/prices`, 'FUNDMGR', { price_date: sast(20), unit_price: 1 });
-    const opened = await call('PATCH', `/api/admin/notice-funds/${F}`, 'FUNDMGR', { status: 'open' });
-    ok('and opens once it has one', opened.status === 200);
+    ok('a fund manager creates it, in draft', made.status === 201 && made.body.data.status === 'draft');
+    ok('a notice under 30 days is refused',
+       (await call('POST', '/api/admin/notice-funds', 'FUNDMGR', { name: 'Check NF short', notice_days: 7 })).status === 400);
+    ok('it cannot open until this month has a projected rate',
+       (await call('PATCH', `/api/admin/notice-funds/${F}`, 'FUNDMGR', { status: 'open' })).status === 400);
+    const rate = (month, pct) => call('POST', `/api/admin/notice-funds/${F}/rates`, 'FUNDMGR', { month, monthly_rate_pct: pct });
+    ok('a member cannot declare one', (await call('POST', `/api/admin/notice-funds/${F}/rates`, 'PLAIN', { month: M0, monthly_rate_pct: 1 })).status === 403);
+    ok('last month and this month are declared (the fund’s first months)',
+       (await rate(Mprev, 2)).status === 201 && (await rate(M0, 1)).status === 201);
+    const fixed = await rate(M0, 3);
+    ok('a month that has started keeps its rate', fixed.status === 400 && /fixed/.test(fixed.body.error || ''), fixed.body.error);
+    ok('next month can be declared, and changed until it starts',
+       (await rate(Mnext, 1.5)).status === 201 && (await rate(Mnext, 1.6)).status === 201);
+    ok('nothing before the fund’s first month', (await rate(Mprev2, 1)).status === 400);
+    ok('a rate of 20% a month or more is refused', (await rate(shift(M0, 2), 20)).status === 400);
+    ok('and with a rate it opens', (await call('PATCH', `/api/admin/notice-funds/${F}`, 'FUNDMGR', { status: 'open' })).status === 200);
 
     console.log('\noff means off');
     const off = await call('GET', `/api/stokvels/${G}/notice`, 'CHAIR');
-    ok('while the setting is off, a group is not offered it', off.status === 200 && off.body.data.available === false);
-    const offAsk = await call('POST', `/api/stokvels/${G}/withdrawal-requests`, 'PLAIN', { kind: 'notice_deposit', amount: 4000 });
-    ok('and cannot ask to put money in', offAsk.status === 403, `${offAsk.status}`);
+    ok('while the setting is off, a group is not offered it', off.body.data && off.body.data.available === false);
+    ok('and cannot ask to put money in',
+       (await call('POST', `/api/stokvels/${G}/withdrawal-requests`, 'PLAIN', { kind: 'notice_deposit', amount: 4000 })).status === 403);
     await db.query(`UPDATE platform_settings SET value = 'true' WHERE key = 'notice_fund_live'`);
+    const on = await call('GET', `/api/stokvels/${G}/notice`, 'PLAIN');
+    ok('switched on, members see this month’s projected rate and the fee',
+       on.body.data.available === true && on.body.data.projected.this_rate === 0.01 && on.body.data.fund.fee_pct === 1,
+       JSON.stringify(on.body.data && on.body.data.projected));
 
-    console.log('\nmoney in, with the signatories');
-    const tooSmall = await call('POST', `/api/stokvels/${G}/withdrawal-requests`, 'PLAIN', { kind: 'notice_deposit', amount: 100 });
-    ok('under the fund’s minimum is refused', tooSmall.status === 400);
+    console.log('\nmoney in: the amount reaches the fund, the wallet pays 1% on top');
+    ok('under the fund’s minimum is refused',
+       (await call('POST', `/api/stokvels/${G}/withdrawal-requests`, 'PLAIN', { kind: 'notice_deposit', amount: 499 })).status === 400);
+    const atMin = await call('POST', `/api/stokvels/${G}/withdrawal-requests`, 'PLAIN', { kind: 'notice_deposit', amount: 500 });
+    ok('the minimum is the fund amount: R500 is allowed though R505 leaves the wallet', atMin.status === 201);
     const ask = await call('POST', `/api/stokvels/${G}/withdrawal-requests`, 'PLAIN', { kind: 'notice_deposit', amount: 4000 });
-    ok('any member can ask', ask.status === 201, JSON.stringify(ask.body));
-    const early = await call('POST', `/api/stokvels/${G}/notice/subscribe`, 'PLAIN', { authority_id: ask.body.data.id });
-    ok('nothing moves before the signatories approve', early.status === 403 && await wallet() === 10000, early.body.error);
+    ok('nothing moves before the signatories approve',
+       (await call('POST', `/api/stokvels/${G}/notice/subscribe`, 'PLAIN', { authority_id: ask.body.data.id })).status === 403
+       && await wallet(G) === 10000);
     for (const s of ['CHAIR', 'SIG']) await call('POST', `/api/stokvels/${G}/withdrawal-requests/${ask.body.data.id}/vote`, s, { decision: 'approve' });
-    const before = await assets();
     const moved = await call('POST', `/api/stokvels/${G}/notice/subscribe`, 'PLAIN', { authority_id: ask.body.data.id });
-    ok('once they have, any member moves it in', moved.status === 201 && await wallet() === 6000, JSON.stringify(moved.body));
-    ok('and the group’s pot is unchanged: the fund is counted at cost', await assets() === before, `${before} → ${await assets()}`);
-    const again = await call('POST', `/api/stokvels/${G}/notice/subscribe`, 'PLAIN', { authority_id: ask.body.data.id });
-    ok('an approval moves money once', again.status === 403 && await wallet() === 6000);
+    ok('once approved, R4 000 goes in and R4 040 leaves the wallet',
+       moved.status === 201 && moved.body.data.amount === 4000 && moved.body.data.fee === 40 && await wallet(G) === 5960,
+       JSON.stringify(moved.body));
+    const price = NF.priceFrom([{ month: `${Mprev}-01`, rate: 0.02 }, { month: `${M0}-01`, rate: 0.01 }], today).unit_price;
+    ok('dealt at today’s price', moved.body.data.unit_price === price
+       && Math.abs(moved.body.data.units - Math.round(4000 / price * 1e6) / 1e6) < 1e-6, `${moved.body.data.unit_price} vs ${price}`);
+    const feeRow = (await db.query(`SELECT type, amount FROM transactions WHERE reference = $1`, [`FEE-${moved.body.data.id}`])).rows[0];
+    ok('the fee is its own ledger row', feeRow && feeRow.type === 'fee' && Number(feeRow.amount) === 40, JSON.stringify(feeRow));
+    ok('and has left the pot: R10 000 less the R40 fee, shared out across the members',
+       await assets(G) === 9960 && Math.abs(await shareSum(G) - 9960) < 0.02, `${await assets(G)} / ${await shareSum(G)}`);
+    ok('an approval moves money once',
+       (await call('POST', `/api/stokvels/${G}/notice/subscribe`, 'PLAIN', { authority_id: ask.body.data.id })).status === 403);
+    const big = await call('POST', `/api/stokvels/${G}/withdrawal-requests`, 'PLAIN', { kind: 'notice_deposit', amount: 5950 });
+    for (const s of ['CHAIR', 'SIG']) await call('POST', `/api/stokvels/${G}/withdrawal-requests/${big.body.data.id}/vote`, s, { decision: 'approve' });
+    const short = await call('POST', `/api/stokvels/${G}/notice/subscribe`, 'PLAIN', { authority_id: big.body.data.id });
+    ok('a wallet that holds the amount but not the fee on top is refused, and nothing moves',
+       short.status === 400 && /1% fee/.test(short.body.error || '') && await wallet(G) === 5960, short.body.error);
+    const unspent = (await db.query(`SELECT status FROM stokvel_withdrawal_requests WHERE id = $1`, [big.body.data.id])).rows[0].status;
+    ok('and the approval is not used up by the failed attempt', unspent !== 'used', unspent);
 
-    console.log('\nforward pricing');
-    await db.query(`UPDATE notice_fund_orders SET requested_at = NOW() - INTERVAL '10 days' WHERE sub_account_id = $1`, [G]);
-    let pos = await NF.position(db, F, G);
-    ok('the money waits for the next price; it does not buy at the last one', pos.units === 0 && pos.waiting_in === 4000, JSON.stringify(pos));
-    const p1 = await call('POST', `/api/admin/notice-funds/${F}/prices`, 'FUNDMGR', { price_date: sast(9), unit_price: 1 });
-    pos = await NF.position(db, F, G);
-    ok('posting the next price deals it', p1.status === 201 && p1.body.data.settled.subscriptions === 1
-       && pos.units === 4000 && pos.cost === 4000, JSON.stringify(pos));
-    const dup = await call('POST', `/api/admin/notice-funds/${F}/prices`, 'FUNDMGR', { price_date: sast(9), unit_price: 2 });
-    ok('a posted price is never overwritten', dup.status === 400, dup.body.error);
-    const future = await call('POST', `/api/admin/notice-funds/${F}/prices`, 'FUNDMGR', { price_date: sast(-3), unit_price: 1 });
-    ok('nor is one posted for a day that has not happened', future.status === 400);
-
-    console.log('\nmoney out, after the notice');
-    const plainOut = await call('POST', `/api/stokvels/${G}/notice/redeem`, 'PLAIN', { amount: 2000 });
-    ok('an ordinary member cannot give notice', plainOut.status === 403);
-    const out = await call('POST', `/api/stokvels/${G}/notice/redeem`, 'CHAIR', { amount: 2000 });
+    console.log('\nmoney out, after the notice, with the declared return');
+    /* A second group, dealt on the fund's first day so the arithmetic is round:
+       R4 000 at R1.00 is 4 000 units; on the 1st of this month the price is 1.02. */
+    const c = await db.connect();
+    await c.query('BEGIN');
+    const fundRow = (await c.query(`SELECT * FROM notice_funds WHERE id = $1`, [F])).rows[0];
+    const sub = await NF.subscribe(c, { group: { id: G2, name: 'Diepsloot Club' }, fund: fundRow, amount: 4000,
+      now: new Date(`${Mprev}-01T10:00:00Z`).getTime() });
+    await c.query('COMMIT'); c.release();
+    ok('R4 000 on the first day buys 4 000 units', sub.order && sub.order.units === 4000 && await wallet(G2) === 5960,
+       JSON.stringify(sub));
+    ok('a member cannot give notice', (await call('POST', `/api/stokvels/${G2}/notice/redeem`, 'PLAIN', { amount: 2040 })).status === 403);
+    const out = await call('POST', `/api/stokvels/${G2}/notice/redeem`, 'CHAIR', { amount: 2040 });
     const days = (new Date(out.body.data.payable_at) - Date.now()) / 86400e3;
-    ok('the chairperson can, and it is payable in 30 days', out.status === 201 && days > 29.9 && days < 30.1, JSON.stringify(out.body));
-    const second = await call('POST', `/api/stokvels/${G}/notice/redeem`, 'SIG', { all: true });
-    ok('one withdrawal waits at a time', second.status === 400, second.body.error);
+    ok('the chairperson can, payable in 30 days', out.status === 201 && days > 29.9 && days < 30.1);
+    ok('one withdrawal waits at a time',
+       (await call('POST', `/api/stokvels/${G2}/notice/redeem`, 'SIG', { all: true })).status === 400);
     await NF.settle(db, F);
-    ok('nothing is paid before the notice runs', await wallet() === 6000);
-    /* The notice runs out: move the clock by moving the date. */
-    await db.query(`UPDATE notice_fund_orders SET payable_at = NOW() - INTERVAL '3 days' WHERE id = $1`, [out.body.data.id]);
+    ok('nothing is paid before the notice runs', await wallet(G2) === 5960);
+    await db.query(`UPDATE notice_fund_orders SET payable_at = $2 WHERE id = $1`, [out.body.data.id, new Date(`${M0}-01T08:00:00Z`)]);
     await NF.settle(db, F);
-    ok('and not until a price on or after its last day exists', await wallet() === 6000);
-    await call('POST', `/api/admin/notice-funds/${F}/prices`, 'FUNDMGR', { price_date: sast(2), unit_price: 1.1 });
-    const paidOrder = (await db.query(`SELECT * FROM notice_fund_orders WHERE id = $1`, [out.body.data.id])).rows[0];
-    ok('then it is dealt at that price', paidOrder.status === 'completed' && Number(paidOrder.unit_price) === 1.1,
-       JSON.stringify({ status: paidOrder.status, price: paidOrder.unit_price }));
-    ok('and lands in the group’s own wallet', await wallet() === 8000, String(await wallet()));
-    pos = await NF.position(db, F, G);
-    ok('the units it used are gone, at a proportionate cost', Math.abs(pos.units - 2181.818182) < 1e-5 && pos.cost === 2181.82,
-       JSON.stringify(pos));
-    const total = await assets();
-    const sumShares = (await shares.sharesOf(db, G)).shares.reduce((n, s) => n + Number(s.share), 0);
-    ok('the realised gain is shared out across the members',
-       Math.abs(total - 10181.82) < 0.01 && Math.abs(sumShares - total) < 0.02, `assets ${total}, shares ${sumShares}`);
-
-    console.log('\ncancelling');
-    const all = await call('POST', `/api/stokvels/${G}/notice/redeem`, 'SIG', { all: true });
-    const cancel = await call('POST', `/api/stokvels/${G}/notice/redeem/${all.body.data.id}/cancel`, 'SIG', {});
-    ok('a signatory can cancel a withdrawal waiting on its notice',
-       all.status === 201 && cancel.status === 200, JSON.stringify([all.body, cancel.body]));
-
-    const view = await call('GET', `/api/stokvels/${G}/notice`, 'PLAIN');
-    ok('every member sees the holding and its history', view.body.data.available === true
-       && view.body.data.position.units > 0 && view.body.data.orders.length >= 3 && view.body.data.may_redeem === false);
+    const paid = (await db.query(`SELECT * FROM notice_fund_orders WHERE id = $1`, [out.body.data.id])).rows[0];
+    ok('once it has, it is dealt at the price on that day (1.02)', paid.status === 'completed' && Number(paid.unit_price) === 1.02,
+       JSON.stringify({ status: paid.status, price: paid.unit_price }));
+    ok('R2 040 for 2 000 units lands in the group’s own wallet', Number(paid.proceeds) === 2040 && await wallet(G2) === 8000,
+       `${paid.proceeds} → ${await wallet(G2)}`);
+    ok('the R40 return it earned is realised and shared: the pot is back to R10 000',
+       await assets(G2) === 10000 && Math.abs(await shareSum(G2) - 10000) < 0.02, `${await assets(G2)} / ${await shareSum(G2)}`);
+    const all = await call('POST', `/api/stokvels/${G2}/notice/redeem`, 'SIG', { all: true });
+    ok('a signatory can give notice on everything, and cancel it',
+       all.status === 201 && (await call('POST', `/api/stokvels/${G2}/notice/redeem/${all.body.data.id}/cancel`, 'SIG', {})).status === 200);
     await clean();
   } catch (err) {
     console.error('\n  ✗ threw:', err.stack || err.message);

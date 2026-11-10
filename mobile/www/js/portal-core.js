@@ -13766,7 +13766,9 @@ function _svOverview(id, ctx) {
    A pooled fund the group holds beside its wallet: always open to money
    coming in (with the signatories' approval, as any investment), paid back
    to the group's wallet no sooner than the notice period after the group
-   asks. Shown at the top of Investments, only once it is offered. */
+   asks. Its return is a PROJECTED monthly rate the fund's managers declare
+   before each month, earned day by day and added to the fund. Shown at the
+   top of Investments, only once it is offered. */
 async function _svNoticeFund(id) {
   let res;
   try { res = await API._fetch('GET', `stokvels/${id}/notice`); }
@@ -13774,7 +13776,8 @@ async function _svNoticeFund(id) {
   const d = res && res.data;
   if (!d || !d.available) return '';
   window.__SVNF = { id, d };
-  const gid = _esc(id), f = d.fund, p = d.position || {};
+  const gid = _esc(id), f = d.fund, p = d.position || {}, pr = d.projected || {};
+  const pct = r => r == null ? null : `${(Number(r) * 100).toFixed(2).replace(/\.?0+$/, '')}%`;
   const days = Number(f.notice_days) || 30;
   const day = v => _esc(String(v || '').slice(0, 10));
   const waitingOut = (d.orders || []).find(o => o.kind === 'redemption' && o.status === 'pending');
@@ -13784,8 +13787,8 @@ async function _svNoticeFund(id) {
       <div>
         <div style="font-weight:800;font-size:1rem"><i class="fa-solid fa-hourglass-half" style="color:#eda5ff"></i> ${_esc(f.name)}</div>
         <div style="font-size:0.8rem;color:var(--text-muted);max-width:520px;line-height:1.5">
-          Always open to money coming in. Taking money out needs ${days} days&rsquo; notice, and it comes back to the
-          group&rsquo;s wallet. Capital is at risk and returns are not guaranteed.</div>
+          Always open to money coming in, with the 1% platform fee on top. Taking money out needs ${days} days&rsquo;
+          notice, and it comes back to the group&rsquo;s wallet. Capital is at risk and returns are not guaranteed.</div>
       </div>
       <div style="text-align:right">
         <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase">Worth now</div>
@@ -13794,7 +13797,13 @@ async function _svNoticeFund(id) {
           p.gain != null && p.cost > 0 ? ` &middot; <span style="color:${p.gain >= 0 ? '#22c55e' : '#ef4444'}">${p.gain >= 0 ? '+' : ''}${Utils.rand(p.gain)}</span>` : ''}</div>
       </div>
     </div>
-    ${p.waiting_in > 0 ? `<div style="font-size:0.8rem;margin-top:8px"><i class="fa-solid fa-clock"></i> ${Utils.rand(p.waiting_in)} is waiting for the next unit price.</div>` : ''}
+    <div style="font-size:0.82rem;margin-top:10px;padding:8px 10px;border-radius:10px;background:rgba(237,165,255,0.08)">
+      <i class="fa-solid fa-chart-line" style="color:#eda5ff"></i>
+      Projected return: <strong>${pct(pr.this_rate) ? `${pct(pr.this_rate)} this month` : 'not declared for this month yet'}</strong>${
+        pct(pr.next_rate) ? `, ${pct(pr.next_rate)} next month` : ''}.
+      <span style="color:var(--text-muted)">Declared before each month starts and earned day by day; it stays in the
+        fund and earns too. A projection, not a promise.</span>
+    </div>
     ${waitingOut ? `<div style="font-size:0.8rem;margin-top:8px;color:#f59e0b"><i class="fa-solid fa-clock"></i>
       ${waitingOut.all_units ? 'Everything' : Utils.rand(waitingOut.amount)} is coming back to the wallet after ${day(waitingOut.payable_at)}, at the price on that day.
       ${d.may_redeem ? `<button class="btn btn--ghost btn--sm" onclick="cancelNoticeRedemption('${gid}','${_esc(waitingOut.id)}')">Cancel</button>` : ''}</div>` : ''}
@@ -13806,7 +13815,8 @@ async function _svNoticeFund(id) {
     ${p.price ? `<div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px">${Number(p.units).toFixed(4)} units &middot; latest unit price R${Number(p.price.unit_price).toFixed(4)} on ${day(p.price.price_date)}</div>` : ''}
     ${recent.length ? `<table class="data-table" style="font-size:0.78rem;margin-top:10px"><tbody>
       ${recent.map(o => `<tr><td>${o.kind === 'subscription' ? 'In' : 'Out'}</td>
-        <td>${o.status === 'cancelled' ? 'Cancelled' : `${Utils.rand(o.kind === 'subscription' ? o.amount : o.proceeds)} at R${Number(o.unit_price || 0).toFixed(4)}`}</td>
+        <td>${o.status === 'cancelled' ? 'Cancelled' : `${Utils.rand(o.kind === 'subscription' ? o.amount : o.proceeds)} at R${Number(o.unit_price || 0).toFixed(4)}${
+          o.kind === 'subscription' && Number(o.fee) > 0 ? ` <span style="color:var(--text-muted)">+ ${Utils.rand(o.fee)} fee</span>` : ''}`}</td>
         <td class="text-right">${day(o.completed_at)}</td></tr>`).join('')}
     </tbody></table>` : ''}
   </div>`;
@@ -13819,15 +13829,26 @@ function raiseNoticeDeposit(groupId) {
     icon: 'fa-hourglass-half',
     title: 'Move money into the notice fund',
     intro: `This moves nothing yet. It asks the signatories to approve this amount going from the group wallet
-      into ${_esc(f.name || 'the fund')}. Once approved, any member can move it in; it buys units at the next
-      published price. Taking it out later needs ${_esc(String(f.notice_days || 30))} days&rsquo; notice.`,
-    fields: _svField('svNfAmount', 'How much', 'number',
+      into ${_esc(f.name || 'the fund')}. Once approved, any member can move it in, at that day&rsquo;s unit price.
+      Taking it out later needs ${_esc(String(f.notice_days || 30))} days&rsquo; notice.`,
+    fields: _svField('svNfAmount', 'How much should reach the fund', 'number',
       Number(f.min_deposit) > 0 ? `The fund takes ${Utils.rand(f.min_deposit)} or more at a time.` : '',
-      'min="1" step="0.01" inputmode="decimal"'),
+      'min="1" step="0.01" inputmode="decimal" oninput="_svNfFeeNote()"')
+      + `<div id="svNfFee" style="font-size:0.76rem;color:var(--text-muted);margin:-4px 0 12px"></div>`,
     submit: `submitNoticeDeposit('${_esc(groupId)}')`,
     submitIcon: 'fa-paper-plane',
     submitLabel: 'Ask the signatories',
   });
+}
+
+/* What the wallet actually pays, said as it is typed: the amount reaches
+   the fund and the 1% platform fee is charged on top, as on the pools. */
+function _svNfFeeNote() {
+  const el = document.getElementById('svNfFee');
+  if (!el) return;
+  const a = parseFloat(_svVal('svNfAmount')) || 0;
+  el.innerHTML = a > 0 ? `${Utils.rand(a)} reaches the fund. With the 1% platform fee on top,
+    <strong>${Utils.rand(svcWalletSpend(a))}</strong> leaves the group wallet.` : '';
 }
 
 async function submitNoticeDeposit(groupId) {
@@ -13843,7 +13864,7 @@ async function submitNoticeDeposit(groupId) {
 async function moveIntoNoticeFund(groupId, authorityId) {
   try {
     await API._fetch('POST', `stokvels/${groupId}/notice/subscribe`, { authority_id: authorityId });
-    _svToast('Moved into the fund. It buys units at the next published price.', 'success');
+    _svToast('Moved into the fund at today\u2019s unit price, with the 1% fee on top.', 'success');
   } catch (err) { _svToast(err.message || 'Could not move it into the fund.', 'error'); return; }
   await _svRenderHub(groupId, 'investments');
 }
@@ -14813,6 +14834,7 @@ function _svWithdrawals(res, meIsSignatory, gid, ctx) {
                 ? ' · proposes to ' + _esc(r.change_summary || 'change the mandate')
               : r.kind === 'notice_deposit'
                 ? ' · into ' + _esc(r.fund_name || 'the 30-day notice fund')
+                  + ' · ' + Utils.rand(svcWalletSpend(r.amount)) + ' leaves the wallet with the 1% fee'
                 : (r.bank_name ? ' · ' + _esc(r.bank_name) : '')}
           </div>
           ${r.reason && r.reason !== r.change_summary ? `<div style="font-size:0.78rem;margin-top:4px">${_esc(r.reason)}</div>` : ''}
