@@ -1495,6 +1495,67 @@
           </div>
         </div>
 
+        <!-- Record a historical investment -->
+        <div class="panel mb-16">
+          <div class="panel__header">
+            <span class="panel__title"><i class="fa-solid fa-clock-rotate-left" style="color:#eda5ff;margin-right:6px"></i>Record a Past Investment</span>
+            <span style="font-size:0.72rem;color:var(--text-muted)">Previews first &mdash; writes nothing until you apply</span>
+          </div>
+          <div class="panel__body">
+            <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px">
+              For an investment that <strong>already happened</strong> and is not on the platform.
+              It writes the holding and nothing else: <strong>no wallet is debited</strong>, no
+              platform fee is charged, no client is emailed, and no signed agreement is required &mdash;
+              every one of those belongs to money that is about to move, and this money moved
+              already. A holding whose maturity has passed is recorded as settled, so tonight's
+              maturity and payout jobs leave it alone rather than paying it a second time.
+            </p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:10px">
+              <label style="font-size:0.76rem;color:var(--text-muted);display:flex;flex-direction:column;gap:4px">Pool
+                <select id="hiPool" class="form-input" style="height:32px;font-size:0.78rem;min-width:220px"></select>
+              </label>
+              <label style="font-size:0.76rem;color:var(--text-muted);display:flex;flex-direction:column;gap:4px">Client
+                <select id="hiInvestor" class="form-input" onchange="_hiLoadSubAccounts()" style="height:32px;font-size:0.78rem;min-width:240px"></select>
+              </label>
+              <label style="font-size:0.76rem;color:var(--text-muted);display:flex;flex-direction:column;gap:4px">Sub-account
+                <select id="hiSub" class="form-input" style="height:32px;font-size:0.78rem;min-width:180px"></select>
+              </label>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:10px">
+              <label style="font-size:0.76rem;color:var(--text-muted);display:flex;flex-direction:column;gap:4px">Amount (R)
+                <input type="number" id="hiAmount" min="0" step="0.01" class="form-input" style="height:32px;font-size:0.78rem;width:130px">
+              </label>
+              <label style="font-size:0.76rem;color:var(--text-muted);display:flex;flex-direction:column;gap:4px">Start date
+                <input type="date" id="hiStart" class="form-input" style="height:32px;font-size:0.78rem;width:150px">
+              </label>
+              <label style="font-size:0.76rem;color:var(--text-muted);display:flex;flex-direction:column;gap:4px" title="Leave blank to take the pool's term">Term (months)
+                <input type="number" id="hiTerm" min="1" max="120" class="form-input" placeholder="pool" style="height:32px;font-size:0.78rem;width:100px">
+              </label>
+              <label style="font-size:0.76rem;color:var(--text-muted);display:flex;flex-direction:column;gap:4px" title="Leave blank to compute it from the start date and the term">Maturity
+                <input type="date" id="hiEnd" class="form-input" style="height:32px;font-size:0.78rem;width:150px">
+              </label>
+              <label style="font-size:0.76rem;color:var(--text-muted);display:flex;flex-direction:column;gap:4px" title="What was actually paid out, if it has matured. Left at zero when unknown.">Return paid (R)
+                <input type="number" id="hiActual" min="0" step="0.01" class="form-input" placeholder="0.00" style="height:32px;font-size:0.78rem;width:130px">
+              </label>
+            </div>
+            <label style="font-size:0.78rem;color:var(--text-muted);display:flex;gap:7px;align-items:flex-start;margin-bottom:12px;max-width:760px">
+              <input type="checkbox" id="hiLedger" style="margin-top:3px">
+              <span>Also write the matching <strong>investment debit</strong> on the ledger, dated to
+                the start date. Tick this when the client's wallet already reflects the money leaving
+                but their transaction history does not. <strong>Leave it unticked if the debit is
+                already there</strong> &mdash; a second one makes the statement wrong by the same
+                amount again. Ops Console &rarr; Ledger Gap Explained says which case the account is in.</span>
+            </label>
+            <button class="btn btn--secondary" onclick="previewHistoricalInvestment(this)">
+              <i class="fa-solid fa-clock-rotate-left"></i> Preview
+            </button>
+            <button class="btn btn--primary" id="hiApplyBtn" style="display:none" onclick="applyHistoricalInvestment(this)">
+              <i class="fa-solid fa-check"></i> Record it
+            </button>
+            <div id="hiResult" style="margin-top:14px;font-size:0.82rem"></div>
+          </div>
+        </div>
+
         <!-- Ledger gap explained -->
         <div class="panel mb-16">
           <div class="panel__header">
@@ -5336,7 +5397,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=30"></script>
 <script src="../js/investor-documents.js?v=9"></script>
-<script src="js/admin.js?v=223"></script>
+<script src="js/admin.js?v=224"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>

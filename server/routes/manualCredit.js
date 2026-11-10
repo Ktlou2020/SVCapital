@@ -1058,6 +1058,76 @@ router.get('/withdrawal-double-debits', async (req, res) => {
   }
 });
 
+/* ─── POST /api/admin/historical-investments ───────────────────────────
+   Record investments that already happened, in a chosen pool, backdated.
+
+   PREVIEWS unless apply is 'true'. The preview is the whole safety argument:
+   this writes money onto the books by hand, and the operator reads what it
+   would do before it does it.
+
+   It is NOT the investment route with editable dates. See
+   services/historicalInvestment for why each of that route's six safeguards
+   is deliberately absent here — and for the maturity_processed_at stamp,
+   without which payoutCron settles a holding that was settled months ago.
+
+   Admin/director only, via the router-level guard at the top of this file.
+   ──────────────────────────────────────────────────────────────────── */
+router.post('/historical-investments', async (req, res) => {
+  const body  = req.body || {};
+  const apply = String(body.apply) === 'true';
+  const hist  = require('../services/historicalInvestment');
+  const actor = {
+    id:    (req.user && (req.user.empId || req.user.id)) || null,
+    email: (req.user && req.user.email) || 'staff',
+    role:  (req.user && req.user.role) || 'admin',
+    ip:    req.ip || null,
+  };
+  const client = await pool.connect();
+  try {
+    await client.query(`SET statement_timeout = '60s'`);
+
+    if (!apply) {
+      /* The preview is held READ ONLY, so the thing that tells the operator
+         it is safe cannot itself write. */
+      await client.query('BEGIN');
+      await client.query('SET TRANSACTION READ ONLY');
+      const out = await hist.survey(client, {
+        poolId: body.pool_id || body.poolId,
+        records: body.records,
+        ledger: body.ledger === true || String(body.ledger) === 'true',
+      });
+      await client.query('ROLLBACK');
+      return res.json({ applied: false, ...out });
+    }
+
+    /* Surveyed again on the way in rather than trusting the plan the browser
+       sends back. A client that could post its own plan could write any
+       amount, to any account, under any date — the preview would be
+       decoration. This is also what makes the duplicate check real: it is
+       re-run against the database as it is now, not as it was when the
+       operator pressed Preview. */
+    const fresh = await hist.survey(client, {
+      poolId: body.pool_id || body.poolId,
+      records: body.records,
+      ledger: body.ledger === true || String(body.ledger) === 'true',
+    });
+    if (fresh.refusals.length) {
+      return res.status(400).json({
+        error: 'Some rows cannot be recorded. Nothing was written.',
+        applied: false, ...fresh,
+      });
+    }
+    const out = await hist.execute(client, { survey: fresh, actor });
+    return res.json({ applied: true, ...out, survey: fresh });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    if (!err.status) console.error('[historical-investments]', err);
+    return res.status(err.status || 500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
 /* ─── GET /api/admin/ledger-gap ────────────────────────────────────────
    Why a client's wallet and their transaction history disagree.
 

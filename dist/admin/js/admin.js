@@ -14760,6 +14760,19 @@ async function toggleEmailDelivery() {
 
 async function loadOpsConsole() {
   _loadEmailToggle().catch(() => {});
+  /* The Record a Past Investment pickers. Filled from STATE rather than
+     fetched again, and guarded so a console opened straight onto this view —
+     before the clients and pools have loaded — does not leave two empty
+     selects with no way back. */
+  try {
+    if (!(STATE.investors || []).length || !(STATE.pools || []).length) {
+      await Promise.all([
+        (STATE.investors || []).length ? null : loadInvestors(),
+        (STATE.pools || []).length ? null : loadPools(),
+      ].filter(Boolean));
+    }
+    _hiFillPickers();
+  } catch (_) { /* the rest of the console must still render */ }
   try {
     const [summary, health, funnel, comms, activity, velocity] = await Promise.all([
       _opsGet('summary').catch(() => null),
@@ -17276,6 +17289,192 @@ function exportDoubleDebitCSV() {
   _ddLast.deposits.forEach(r => push(r, 'deposit'));
   (_ddLast.other || []).forEach(r => push(r, 'other'));
   _downloadCSV(rows, `withdrawal-double-debits-${new Date().toISOString().slice(0, 10)}.csv`);
+}
+
+/* ═══════════════════════════════════════════════
+   RECORD A PAST INVESTMENT
+   ═══════════════════════════════════════════════
+   Writing money onto the books by hand, so the preview is the safety
+   argument and Apply is deliberately a second press against a plan that has
+   been read. The server surveys again on apply rather than trusting what
+   this sends back, so nothing here is load-bearing for correctness — but it
+   has to SHOW the operator the two things that decide whether the record is
+   right: whether the holding counts as settled, and what the ledger debit
+   would do to an account that may already have one.
+
+   Every value shown is client data and goes through _esc. */
+let _hiLast = null;
+
+function _hiFillPickers() {
+  const pools = document.getElementById('hiPool');
+  if (pools && !pools.options.length) {
+    pools.innerHTML = '<option value="">Select pool…</option>' +
+      [...(STATE.pools || [])]
+        .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
+        .map(p => `<option value="${_esc(p.id)}">${_esc(p.name)} · ${_esc(p.status)}</option>`)
+        .join('');
+  }
+  const inv = document.getElementById('hiInvestor');
+  if (inv && !inv.options.length) {
+    inv.innerHTML = '<option value="">Select client…</option>' +
+      [...(STATE.investors || [])]
+        .sort((a, b) => `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`))
+        .map(i => `<option value="${_esc(i.id)}">${_esc(i.first_name)} ${_esc(i.last_name)} (${_esc(i.id)})</option>`)
+        .join('');
+  }
+  _hiLoadSubAccounts();
+}
+
+/* Only the chosen client's own sub-accounts are offered. The server refuses
+   one belonging to somebody else, but offering it at all invites the mistake
+   that puts a group's money on a person's statement. */
+function _hiLoadSubAccounts() {
+  const sel = document.getElementById('hiSub');
+  if (!sel) return;
+  const who = document.getElementById('hiInvestor')?.value || '';
+  const mine = (STATE.subAccounts || []).filter(s => s.parent_investor_id === who);
+  sel.innerHTML = '<option value="">The client’s own account</option>' +
+    mine.map(s => `<option value="${_esc(s.id)}">${_esc(s.name)}</option>`).join('');
+  sel.disabled = !mine.length;
+}
+
+function _hiRecord() {
+  const num = id => {
+    const v = document.getElementById(id)?.value;
+    return v === '' || v == null ? null : Number(v);
+  };
+  return {
+    poolId: document.getElementById('hiPool')?.value || '',
+    ledger: !!document.getElementById('hiLedger')?.checked,
+    record: {
+      investorId:   document.getElementById('hiInvestor')?.value || '',
+      subAccountId: document.getElementById('hiSub')?.value || null,
+      amount:       num('hiAmount'),
+      startDate:    document.getElementById('hiStart')?.value || '',
+      endDate:      document.getElementById('hiEnd')?.value || null,
+      termMonths:   num('hiTerm'),
+      actualReturn: num('hiActual'),
+    },
+  };
+}
+
+async function previewHistoricalInvestment(btn) {
+  const resultEl = document.getElementById('hiResult');
+  resultEl.innerHTML = '';
+  document.getElementById('hiApplyBtn').style.display = 'none';
+  _hiLast = null;
+  await _withBtn(btn, async () => {
+    const { poolId, ledger, record } = _hiRecord();
+    try {
+      const r = await API._fetch('POST', 'admin/historical-investments',
+        { pool_id: poolId, ledger, records: [record] });
+      _hiLast = { poolId, ledger, record };
+      resultEl.innerHTML = _hiRender(r);
+      if (r.totals.willWrite > 0) document.getElementById('hiApplyBtn').style.display = '';
+    } catch (e) {
+      resultEl.innerHTML = `<span style="color:#f87171"><i class="fa-solid fa-circle-exclamation"></i>
+        ${_esc(e.message || 'Could not preview')}</span>`;
+    }
+  });
+}
+
+async function applyHistoricalInvestment(btn) {
+  if (!_hiLast) { Toast.error('Preview it first'); return; }
+  const money = n => Utils.rand(n || 0);
+  const { poolId, ledger, record } = _hiLast;
+  if (!await Confirm.ask('Record this investment?', {
+    body: `This writes ${money(record.amount)} into the books for ${record.investorId}, dated `
+      + `${record.startDate}. No wallet is debited and no fee is charged. `
+      + `${ledger ? 'The matching ledger debit WILL be written.' : 'No ledger row will be written.'}`,
+    confirmLabel: 'Record it' })) return;
+
+  const resultEl = document.getElementById('hiResult');
+  await _withBtn(btn, async () => {
+    try {
+      const r = await API._fetch('POST', 'admin/historical-investments',
+        { pool_id: poolId, ledger, records: [record], apply: 'true' });
+      Toast.success(`Recorded ${r.written} investment(s)`);
+      document.getElementById('hiApplyBtn').style.display = 'none';
+      _hiLast = null;
+      resultEl.innerHTML = `<div style="color:#22c55e;margin-bottom:8px">
+          <i class="fa-solid fa-circle-check"></i> Recorded
+          ${_esc(r.investments.map(i => i.id).join(', '))}.</div>
+        <div style="font-size:0.76rem;color:var(--text-muted)">
+          The pool’s raise and investor count now include it. Nothing was taken from any wallet.
+        </div>`;
+      /* The figures on every other screen are now stale. */
+      await loadInvestors();
+    } catch (e) {
+      resultEl.innerHTML = `<span style="color:#f87171"><i class="fa-solid fa-circle-exclamation"></i>
+        ${_esc(e.message || 'Could not record it')}</span>`;
+    }
+  });
+}
+
+function _hiRender(r) {
+  const money = n => Utils.rand(n || 0);
+  const parts = [];
+
+  if (r.refusals && r.refusals.length) {
+    parts.push(`<div style="border-left:3px solid #f87171;padding:8px 10px;margin-bottom:10px;background:var(--surface);border-radius:0 6px 6px 0">
+      <div style="font-weight:700;font-size:0.8rem;color:#f87171">Cannot be recorded</div>
+      ${r.refusals.map(x => `<div style="font-size:0.78rem;margin-top:4px">${_esc(x.reason)}</div>`).join('')}
+    </div>`);
+  }
+
+  for (const p of (r.plan || [])) {
+    if (p.alreadyRecorded) {
+      parts.push(`<div style="border-left:3px solid #f59e0b;padding:8px 10px;margin-bottom:10px;background:var(--surface);border-radius:0 6px 6px 0">
+        <div style="font-weight:700;font-size:0.8rem">Already recorded</div>
+        <div style="font-size:0.78rem;margin-top:4px;color:var(--text-muted)">
+          ${_esc(p.name)} already holds ${_esc(money(p.amount))} in this pool from
+          ${_esc(p.startDate)} &mdash; ${_esc(p.alreadyRecorded)}. Nothing would be written.
+        </div></div>`);
+      continue;
+    }
+    parts.push(`<div style="border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px">
+      <div style="font-weight:700">${_esc(p.name)}
+        <span style="font-weight:400;color:var(--text-muted);font-size:0.78rem">${_esc(p.investorId)}${
+          p.subAccountName ? ' · ' + _esc(p.subAccountName) : ''}</span></div>
+      <div style="display:flex;gap:20px;flex-wrap:wrap;margin:10px 0">
+        <div><span style="font-size:1.1rem;font-weight:800">${_esc(money(p.amount))}</span>
+          <span style="font-size:0.72rem;color:var(--text-muted);margin-left:5px">into ${_esc(r.pool.name)}</span></div>
+        <div><span style="font-size:0.95rem;font-weight:700">${_esc(p.startDate)} → ${_esc(p.endDate || '—')}</span>
+          <span style="font-size:0.72rem;color:var(--text-muted);margin-left:5px">${_esc(p.termMonths || '?')} months at ${
+            _esc((p.annualRate * 100).toFixed(2))}%</span></div>
+      </div>
+      <div style="border-left:3px solid ${p.settled ? '#eda5ff' : '#22c55e'};padding:6px 10px;background:var(--surface);border-radius:0 6px 6px 0">
+        ${p.settled
+          ? `<div style="font-weight:700;font-size:0.8rem">Recorded as settled</div>
+             <div style="font-size:0.76rem;color:var(--text-muted);margin-top:3px">
+               Its maturity (${_esc(p.endDate)}) has already passed, so it is written
+               <code>matured</code> with the settled stamp. <strong>Tonight's maturity and payout
+               jobs will not touch it</strong> &mdash; without that stamp they would pay this
+               holding a second time.</div>`
+          : `<div style="font-weight:700;font-size:0.8rem">Recorded as running</div>
+             <div style="font-size:0.76rem;color:var(--text-muted);margin-top:3px">
+               It matures on ${_esc(p.endDate || 'no date')}, which is still ahead, so the engine
+               will settle it on the day as it would any other.</div>`}
+      </div>
+      <div style="font-size:0.76rem;color:var(--text-muted);margin-top:8px">
+        Contracted return ${_esc(money(p.expectedReturn))}.
+        ${p.actualReturn
+          ? `Return actually paid: <strong>${_esc(money(p.actualReturn))}</strong>.`
+          : 'Return actually paid is left at <strong>zero</strong> — nothing here knows it, and inventing it would put money on a tax document.'}
+      </div>
+      <div style="font-size:0.76rem;margin-top:6px;color:${p.ledgerRow ? '#f59e0b' : 'var(--text-muted)'}">
+        ${p.ledgerRow
+          ? 'A matching <strong>investment debit</strong> will be written on the ledger, dated '
+            + _esc(p.startDate) + '. No wallet balance changes.'
+          : 'No ledger row will be written.'}
+      </div>
+    </div>`);
+  }
+
+  parts.push(`<div style="font-size:0.76rem;color:var(--text-muted);border-top:1px solid var(--border);padding-top:9px">
+    This will <strong>not</strong> ${(r.willNot || []).map(w => _esc(w)).join(', ')}.
+  </div>`);
+  return parts.join('');
 }
 
 /* ═══════════════════════════════════════════════
