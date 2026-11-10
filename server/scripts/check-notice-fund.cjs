@@ -7,7 +7,10 @@
  *   · the unit price follows the declared rates exactly: day-by-day within
  *     a month, compounding month to month, and unpriceable (not guessed)
  *     when a month has no rate
- *   · a month's rate can change until the month starts, and is fixed after
+ *   · a projection can be amended while its month is current or ahead; an
+ *     ended month gets its ACTUAL instead, which is final, replaces the
+ *     projection in every price, and pays a waiting withdrawal on the true
+ *     figure; every change is logged
  *   · OFF means off until the setting says otherwise
  *   · money in clears the mandate once, for that fund; the approved amount
  *     reaches the fund and the wallet pays it plus 1%, charged as its own fee
@@ -77,6 +80,7 @@ if (!process.env.DATABASE_URL) {
       await db.query(`DELETE FROM stokvel_members WHERE sub_account_id = $1`, [g]);
       await db.query(`DELETE FROM sub_accounts WHERE id = $1`, [g]);
     }
+    await db.query(`DELETE FROM notice_fund_rate_log WHERE fund_id IN (SELECT id FROM notice_funds WHERE name LIKE 'Check NF%')`);
     await db.query(`DELETE FROM notice_fund_rates WHERE fund_id IN (SELECT id FROM notice_funds WHERE name LIKE 'Check NF%')`);
     await db.query(`DELETE FROM notice_funds WHERE name LIKE 'Check NF%'`);
     await db.query(`DELETE FROM investors WHERE id LIKE 'INV-NF-%'`);
@@ -136,8 +140,17 @@ if (!process.env.DATABASE_URL) {
     ok('a member cannot declare one', (await call('POST', `/api/admin/notice-funds/${F}/rates`, 'PLAIN', { month: M0, monthly_rate_pct: 1 })).status === 403);
     ok('last month and this month are declared (the fund’s first months)',
        (await rate(Mprev, 2)).status === 201 && (await rate(M0, 1)).status === 201);
-    const fixed = await rate(M0, 3);
-    ok('a month that has started keeps its rate', fixed.status === 400 && /fixed/.test(fixed.body.error || ''), fixed.body.error);
+    const amended = await rate(M0, 3);
+    ok('this month\u2019s projection can be amended', amended.status === 201 && amended.body.data.declared.amended === true,
+       JSON.stringify(amended.body));
+    await rate(M0, 1);
+    const ended = await rate(Mprev, 5);
+    ok('an ended month\u2019s projection cannot: its actual is posted instead',
+       ended.status === 400 && /Post its actual/.test(ended.body.error || ''), ended.body.error);
+    const act = (month, pct) => call('POST', `/api/admin/notice-funds/${F}/actuals`, 'FUNDMGR', { month, actual_rate_pct: pct });
+    ok('no actual for a month that has not ended', (await act(M0, 1)).status === 400);
+    ok('nor a loss of half the fund or worse in a month', (await act(Mprev, -60)).status === 400);
+    ok('a member cannot post one', (await call('POST', `/api/admin/notice-funds/${F}/actuals`, 'PLAIN', { month: Mprev, actual_rate_pct: 2 })).status === 403);
     ok('next month can be declared, and changed until it starts',
        (await rate(Mnext, 1.5)).status === 201 && (await rate(Mnext, 1.6)).status === 201);
     ok('nothing before the fund’s first month', (await rate(Mprev2, 1)).status === 400);
@@ -217,6 +230,33 @@ if (!process.env.DATABASE_URL) {
     const all = await call('POST', `/api/stokvels/${G2}/notice/redeem`, 'SIG', { all: true });
     ok('a signatory can give notice on everything, and cancel it',
        all.status === 201 && (await call('POST', `/api/stokvels/${G2}/notice/redeem/${all.body.data.id}/cancel`, 'SIG', {})).status === 200);
+
+    console.log('\nthe actual return replaces the projection');
+    /* Notice on the remaining 2 000 units, run out on the 1st of this month
+       but not yet paid: last month's actual decides what it is worth. */
+    const rest = await call('POST', `/api/stokvels/${G2}/notice/redeem`, 'CHAIR', { all: true });
+    await db.query(`UPDATE notice_fund_orders SET payable_at = $2 WHERE id = $1`, [rest.body.data.id, new Date(`${M0}-01T08:00:00Z`)]);
+    const posted = await act(Mprev, 2.5);
+    ok('last month\u2019s actual return is posted', posted.status === 201
+       && posted.body.data.posted.actual_rate_pct === 2.5 && posted.body.data.posted.projected_rate_pct === 2, JSON.stringify(posted.body));
+    ok('and from then on prices use it: the 1st of this month is now 1.025, not 1.02',
+       (await NF.priceOn(db, F, `${M0}-01`)).unit_price === 1.025);
+    const restPaid = (await db.query(`SELECT * FROM notice_fund_orders WHERE id = $1`, [rest.body.data.id])).rows[0];
+    ok('a withdrawal still waiting is paid on what the month really earned: 2 000 units at 1.025 is R2 050',
+       restPaid.status === 'completed' && Number(restPaid.unit_price) === 1.025 && Number(restPaid.proceeds) === 2050
+       && await wallet(G2) === 10050, JSON.stringify({ s: restPaid.status, p: restPaid.unit_price, r: restPaid.proceeds }));
+    ok('the earlier withdrawal keeps the price it was dealt at',
+       Number((await db.query(`SELECT unit_price FROM notice_fund_orders WHERE id = $1`, [out.body.data.id])).rows[0].unit_price) === 1.02);
+    ok('a posted actual is final', (await act(Mprev, 3)).status === 400);
+    const seen = await call('GET', `/api/stokvels/${G}/notice`, 'PLAIN');
+    ok('members see last month\u2019s actual beside its projection',
+       seen.body.data.projected.last_actual === 0.025 && seen.body.data.projected.last_projected === 0.02,
+       JSON.stringify(seen.body.data.projected));
+    const log = (await db.query(`SELECT field, to_char(month,'YYYY-MM') m, old_rate, new_rate FROM notice_fund_rate_log WHERE fund_id = $1 ORDER BY id`, [F])).rows;
+    ok('every change is logged, with what it was before',
+       log.filter(l => l.m === M0 && l.field === 'projected').length === 3
+       && log.some(l => l.m === M0 && Number(l.old_rate) === 0.03 && Number(l.new_rate) === 0.01)
+       && log.some(l => l.m === Mprev && l.field === 'actual' && Number(l.new_rate) === 0.025), JSON.stringify(log));
     await clean();
   } catch (err) {
     console.error('\n  ✗ threw:', err.stack || err.message);

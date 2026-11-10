@@ -13767,7 +13767,8 @@ function _svOverview(id, ctx) {
    coming in (with the signatories' approval, as any investment), paid back
    to the group's wallet no sooner than the notice period after the group
    asks. Its return is a PROJECTED monthly rate the fund's managers declare
-   before each month, earned day by day and added to the fund. Shown at the
+   before each month, earned day by day and added to the fund, replaced by
+   the month's ACTUAL return once it is posted. Shown at the
    top of Investments, only once it is offered. */
 async function _svNoticeFund(id) {
   let res;
@@ -13777,7 +13778,9 @@ async function _svNoticeFund(id) {
   if (!d || !d.available) return '';
   window.__SVNF = { id, d };
   const gid = _esc(id), f = d.fund, p = d.position || {}, pr = d.projected || {};
-  const pct = r => r == null ? null : `${(Number(r) * 100).toFixed(2).replace(/\.?0+$/, '')}%`;
+  /* 0.015 -> "1.5%", 0 -> "0%", -0.004 -> "-0.4%". Number() drops the
+     trailing zeros; trimming them off a string would leave "%" for zero. */
+  const pct = r => r == null ? null : `${Number((Number(r) * 100).toFixed(2))}%`;
   const days = Number(f.notice_days) || 30;
   const day = v => _esc(String(v || '').slice(0, 10));
   const waitingOut = (d.orders || []).find(o => o.kind === 'redemption' && o.status === 'pending');
@@ -13802,7 +13805,10 @@ async function _svNoticeFund(id) {
       Projected return: <strong>${pct(pr.this_rate) ? `${pct(pr.this_rate)} this month` : 'not declared for this month yet'}</strong>${
         pct(pr.next_rate) ? `, ${pct(pr.next_rate)} next month` : ''}.
       <span style="color:var(--text-muted)">Declared before each month starts and earned day by day; it stays in the
-        fund and earns too. A projection, not a promise.</span>
+        fund and earns too. A projection, not a promise: once a month ends, what it actually earned replaces it.</span>
+      ${pr.last_actual != null ? `<div style="margin-top:4px">${_esc(pr.last_month)} actually returned
+        <strong style="color:${pr.last_actual >= 0 ? '#22c55e' : '#ef4444'}">${pct(pr.last_actual)}</strong>${
+        pr.last_projected != null ? ` <span style="color:var(--text-muted)">(projected ${pct(pr.last_projected)})</span>` : ''}.</div>` : ''}
     </div>
     ${waitingOut ? `<div style="font-size:0.8rem;margin-top:8px;color:#f59e0b"><i class="fa-solid fa-clock"></i>
       ${waitingOut.all_units ? 'Everything' : Utils.rand(waitingOut.amount)} is coming back to the wallet after ${day(waitingOut.payable_at)}, at the price on that day.

@@ -8,8 +8,11 @@
    this is every rule, in one place.
 
    THE RETURN IS A PROJECTED MONTHLY RATE, declared by the fund's managers
-   before each month starts (notice_fund_rates) and fixed once the month
-   has begun. It drives the unit price:
+   before each month starts (notice_fund_rates), which they can amend while
+   the month is current. Once the month has ended they post its ACTUAL
+   return, which is final and replaces the projection for that month in
+   every price from then on. The rate in force for a month — actual where
+   posted, projected until then — drives the unit price:
 
      · each month starts at the price the last one ended on;
      · within a month the price rises DAY BY DAY at that month's rate —
@@ -80,11 +83,17 @@ async function openFund(db) {
   return f || null;
 }
 
+/* Each month's rates. `rate` is the one in force: the actual return where
+   it has been posted, the projection until then. */
 async function rates(db, fundId) {
   const { rows } = await db.query(
-    `SELECT to_char(month, 'YYYY-MM-DD') AS month, monthly_rate FROM notice_fund_rates
+    `SELECT to_char(month, 'YYYY-MM-DD') AS month, monthly_rate, actual_rate FROM notice_fund_rates
       WHERE fund_id = $1 ORDER BY month ASC`, [fundId]);
-  return rows.map(r => ({ month: r.month, rate: Number(r.monthly_rate) }));
+  return rows.map(r => {
+    const projected = Number(r.monthly_rate);
+    const actual = r.actual_rate == null ? null : Number(r.actual_rate);
+    return { month: r.month, projected, actual, rate: actual == null ? projected : actual };
+  });
 }
 
 /**
@@ -117,13 +126,28 @@ async function priceOn(db, fundId, date) {
   return priceFrom(await rates(db, fundId), date);
 }
 
-/* The rate for this month and the next, as groups see them. */
+function prevMonth(month) {
+  const y = Number(month.slice(0, 4)), m = Number(month.slice(5, 7));
+  return m === 1 ? `${y - 1}-12-01` : `${y}-${String(m - 1).padStart(2, '0')}-01`;
+}
+
+/* This month's and next month's projected rate, and what last month
+   projected against what it actually earned, as groups see them. */
 async function projected(db, fundId, now = Date.now()) {
   const list = await rates(db, fundId);
   const thisMonth = monthOf(sastDate(now));
-  const find = m => { const r = list.find(x => x.month === m); return r ? r.rate : null; };
-  return { this_month: thisMonth.slice(0, 7), this_rate: find(thisMonth),
-           next_month: nextMonth(thisMonth).slice(0, 7), next_rate: find(nextMonth(thisMonth)) };
+  const row = m => list.find(x => x.month === m) || null;
+  const last = row(prevMonth(thisMonth));
+  return { this_month: thisMonth.slice(0, 7), this_rate: row(thisMonth) ? row(thisMonth).projected : null,
+           next_month: nextMonth(thisMonth).slice(0, 7), next_rate: row(nextMonth(thisMonth)) ? row(nextMonth(thisMonth)).projected : null,
+           last_month: prevMonth(thisMonth).slice(0, 7),
+           last_projected: last ? last.projected : null, last_actual: last ? last.actual : null };
+}
+
+async function _log(db, fundId, month, field, oldRate, newRate, by) {
+  await db.query(
+    `INSERT INTO notice_fund_rate_log (fund_id, month, field, old_rate, new_rate, changed_by)
+     VALUES ($1,$2,$3,$4,$5,$6)`, [fundId, month, field, oldRate, newRate, by || null]);
 }
 
 async function position(db, fundId, groupId, now = Date.now()) {
@@ -138,32 +162,66 @@ async function position(db, fundId, groupId, now = Date.now()) {
            gain: value == null ? null : round2(value - cost) };
 }
 
-/* ── Declaring the month's projected rate ───────────────────────────── */
+/* ── Projected and actual rates ─────────────────────────────────────── */
 
-/* A month's rate can be set, and changed, until that month starts. After
-   that it is fixed: groups have been dealt at it. A month that has started
-   with no rate (the managers missed it) can be declared once, late, and
-   is then fixed like any other — money waiting on it is dealt straight
-   away by settle(). */
+/* A month's PROJECTED rate is declared before it starts and can be amended
+   while it is current or still to come — until its actual is posted. An
+   amendment changes the price from then on; money already dealt keeps the
+   price it was dealt at. A month that ended with no rate at all (the
+   managers missed it) can be given one, late, so money waiting on it can
+   move; once a month has ended its record is its ACTUAL, posted below. */
 async function declareRate(db, { fundId, month, ratePct, by, now = Date.now() }) {
   if (!/^\d{4}-\d{2}$/.test(String(month || ''))) return { error: 'The month is required (YYYY-MM).' };
   const pct = Number(ratePct);
-  if (!(pct >= 0) || pct / 100 >= MAX_MONTHLY_RATE) return { error: 'The monthly rate must be from 0% to under 20%.' };
+  if (!(pct >= 0) || pct / 100 >= MAX_MONTHLY_RATE) return { error: 'The projected rate must be from 0% to under 20% a month.' };
   const m = `${month}-01`;
-  const started = m <= monthOf(sastDate(now));
+  const current = monthOf(sastDate(now));
   const { rows: [f] } = await db.query(`SELECT id FROM notice_funds WHERE id = $1`, [fundId]);
   if (!f) return { error: 'No such fund.' };
   const list = await rates(db, fundId);
-  if (list.length && m < list[0].month) return { error: 'That is before the fund’s first month.' };
+  if (list.length && m < list[0].month) return { error: 'That is before the fund\u2019s first month.' };
   const existing = list.find(r => r.month === m);
-  if (existing && started) return { error: `${month} has started, so its rate is fixed. Groups have been dealt at it.` };
+  if (existing && existing.actual != null) {
+    return { error: `${month}\u2019s actual return is posted, so its projection is history now.` };
+  }
+  if (existing && m < current) {
+    return { error: `${month} has ended. Post its actual return instead of changing the projection.` };
+  }
+  const rate = round6(pct / 100);
   await db.query(
     `INSERT INTO notice_fund_rates (fund_id, month, monthly_rate, declared_by) VALUES ($1,$2,$3,$4)
      ON CONFLICT (fund_id, month) DO UPDATE SET monthly_rate = EXCLUDED.monthly_rate,
             declared_by = EXCLUDED.declared_by, updated_at = NOW()`,
-    [fundId, m, round6(pct / 100), by || null]);
+    [fundId, m, rate, by || null]);
+  await _log(db, fundId, m, 'projected', existing ? existing.projected : null, rate, by);
   const settled = await settle(db, fundId, { now });
-  return { declared: { fund_id: fundId, month, monthly_rate_pct: pct }, settled };
+  return { declared: { fund_id: fundId, month, monthly_rate_pct: pct, amended: !!existing }, settled };
+}
+
+/* A month's ACTUAL return, once the month has ended. It replaces the
+   projection for that month in every price from now on — so every holding
+   is valued at what the month really earned — and is final: correcting a
+   posted actual is a decision to take by hand, with the groups it would
+   move in front of you. It may be negative. */
+async function postActual(db, { fundId, month, ratePct, by, now = Date.now() }) {
+  if (!/^\d{4}-\d{2}$/.test(String(month || ''))) return { error: 'The month is required (YYYY-MM).' };
+  const pct = Number(ratePct);
+  if (!Number.isFinite(pct) || pct / 100 <= -0.5 || pct / 100 >= MAX_MONTHLY_RATE) {
+    return { error: 'The actual return must be above -50% and under 20% for the month.' };
+  }
+  const m = `${month}-01`;
+  if (m >= monthOf(sastDate(now))) return { error: `${month} has not ended yet. Post its actual return once it has.` };
+  const list = await rates(db, fundId);
+  const existing = list.find(r => r.month === m);
+  if (!existing) return { error: `${month} has no projected rate, so the fund did not run that month.` };
+  if (existing.actual != null) return { error: `${month}\u2019s actual return is already posted and is final.` };
+  const rate = round6(pct / 100);
+  await db.query(
+    `UPDATE notice_fund_rates SET actual_rate = $3, actual_posted_by = $4, actual_posted_at = NOW(), updated_at = NOW()
+      WHERE fund_id = $1 AND month = $2`, [fundId, m, rate, by || null]);
+  await _log(db, fundId, m, 'actual', null, rate, by);
+  const settled = await settle(db, fundId, { now });
+  return { posted: { fund_id: fundId, month, actual_rate_pct: pct, projected_rate_pct: round6(existing.projected * 100) }, settled };
 }
 
 /* ── Money in ───────────────────────────────────────────────────────── */
@@ -336,4 +394,4 @@ async function _payOne(client, fund, orderId) {
 }
 
 module.exports = { isLive, openFund, rates, priceFrom, priceOn, projected, position, feeOn,
-                   declareRate, subscribe, requestRedemption, cancelRedemption, settle, sastDate };
+                   declareRate, postActual, subscribe, requestRedemption, cancelRedemption, settle, sastDate };

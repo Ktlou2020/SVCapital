@@ -21730,10 +21730,11 @@ async function loadStokvels() {
 
 /* ─── The 30-day notice fund ──────────────────────────────────────────
    Groups hold it beside their wallet; the fund's managers run it here:
-   create it, open or close it to new money, and declare each month's
-   PROJECTED return before the month starts. The rate sets the unit price
-   day by day and is fixed once its month begins. Staff never move a
-   group's money from this card. (routes/noticeFundAdmin.js) */
+   create it, open or close it to new money, declare each month's
+   PROJECTED return (and amend it while the month is current), and post
+   the ACTUAL return once a month ends, which replaces the projection in
+   every price. Staff never move a group's money from this card.
+   (routes/noticeFundAdmin.js) */
 async function loadNoticeFundAdmin() {
   const host = document.getElementById('noticeFundAdmin');
   if (!host) return;
@@ -21762,16 +21763,41 @@ async function loadNoticeFundAdmin() {
         <div><div class="text-muted" style="font-size:0.72rem;text-transform:uppercase">At cost / at price</div>
           <strong>${Utils.rand(f.cost)} / ${f.value == null ? '—' : Utils.rand(f.value)}</strong></div>
       </div>
-      <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap">
-        <div><label class="text-muted" style="font-size:0.75rem;display:block">Month</label>
-          <input type="month" id="nfMonth-${_esc(f.id)}" class="input input--sm" value="${_esc(f.projected && f.projected.this_rate == null ? f.projected.this_month : (f.projected ? f.projected.next_month : ''))}"></div>
-        <div><label class="text-muted" style="font-size:0.75rem;display:block">Projected return (% per month)</label>
-          <input type="number" step="0.0001" min="0" max="19.99" id="nfRate-${_esc(f.id)}" class="input input--sm" style="width:140px"></div>
-        <button class="btn btn--primary btn--sm" onclick="declareNoticeFundRate('${_esc(f.id)}')">Declare rate</button>
+      ${(f.needs_actual || []).length ? `<div style="margin:8px 0;padding:8px 10px;border-radius:8px;border:1px solid #f59e0b;font-size:0.8rem">
+        <i class="fa-solid fa-triangle-exclamation" style="color:#f59e0b"></i>
+        ${f.needs_actual.map(_esc).join(', ')} ${f.needs_actual.length === 1 ? 'has' : 'have'} ended without an actual return posted. Until it is, the projection stands for ${f.needs_actual.length === 1 ? 'that month' : 'those months'}.</div>` : ''}
+      <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:6px">
+        <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap">
+          <div><label class="text-muted" style="font-size:0.75rem;display:block">Month</label>
+            <input type="month" id="nfMonth-${_esc(f.id)}" class="input input--sm" value="${_esc(f.projected && f.projected.this_rate == null ? f.projected.this_month : (f.projected ? f.projected.next_month : ''))}"></div>
+          <div><label class="text-muted" style="font-size:0.75rem;display:block">Projected (% per month)</label>
+            <input type="number" step="0.0001" min="0" max="19.99" id="nfRate-${_esc(f.id)}" class="input input--sm" style="width:120px"></div>
+          <button class="btn btn--primary btn--sm" onclick="declareNoticeFundRate('${_esc(f.id)}')">Declare or amend</button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap">
+          <div><label class="text-muted" style="font-size:0.75rem;display:block">Ended month</label>
+            <select id="nfActMonth-${_esc(f.id)}" class="input input--sm">
+              ${(f.needs_actual || []).length ? f.needs_actual.map(m => `<option value="${_esc(m)}">${_esc(m)}</option>`).join('')
+                : '<option value="">None waiting</option>'}</select></div>
+          <div><label class="text-muted" style="font-size:0.75rem;display:block">Actual return (%)</label>
+            <input type="number" step="0.0001" id="nfAct-${_esc(f.id)}" class="input input--sm" style="width:120px" ${(f.needs_actual || []).length ? '' : 'disabled'}></div>
+          <button class="btn btn--secondary btn--sm" onclick="postNoticeFundActual('${_esc(f.id)}')" ${(f.needs_actual || []).length ? '' : 'disabled'}>Post actual</button>
+        </div>
       </div>
-      <div class="text-muted" style="font-size:0.74rem;margin-top:6px">Declare each month before it starts. It can be changed until the month begins and is fixed after that. Groups see it as a projection, not a promise.</div>
-      ${(f.rates || []).length ? `<div style="font-size:0.78rem;margin-top:8px">${f.rates.map(r =>
-        `<span style="display:inline-block;margin:2px 10px 2px 0">${_esc(r.month)}: <strong>${_esc(String(r.monthly_rate_pct))}%</strong></span>`).join('')}</div>` : ''}
+      <div class="text-muted" style="font-size:0.74rem;margin-top:6px">A projection can be amended for this month and months ahead, until the month&rsquo;s actual is posted; money already dealt keeps its price. Once a month ends, post what it actually earned: it replaces the projection in every price and is final.</div>
+      ${(f.rates || []).length ? `<table class="data-table" style="margin-top:8px;font-size:0.8rem;max-width:520px"><thead><tr>
+          <th>Month</th><th class="text-right">Projected</th><th class="text-right">Actual</th><th class="text-right">Difference</th></tr></thead><tbody>
+        ${f.rates.map(r => `<tr><td>${_esc(r.month)}</td>
+          <td class="text-right">${_esc(String(r.monthly_rate_pct))}%</td>
+          <td class="text-right">${r.actual_rate_pct == null ? (r.ended ? '<span style="color:#f59e0b">not posted</span>' : '&mdash;') : `<strong>${_esc(String(r.actual_rate_pct))}%</strong>`}</td>
+          <td class="text-right">${r.actual_rate_pct == null ? '' : `${(r.actual_rate_pct - r.monthly_rate_pct >= 0 ? '+' : '')}${(Math.round((r.actual_rate_pct - r.monthly_rate_pct) * 1e4) / 1e4)}%`}</td></tr>`).join('')}
+        </tbody></table>` : ''}
+      ${(f.log || []).length ? `<details style="margin-top:8px"><summary style="cursor:pointer;font-size:0.8rem">Changes to the rates</summary>
+        <table class="data-table" style="font-size:0.76rem;margin-top:6px"><tbody>
+        ${f.log.map(l => `<tr><td>${_esc(String(l.at).slice(0, 16).replace('T', ' '))}</td><td>${_esc(l.month)}</td>
+          <td>${l.field === 'actual' ? 'Actual posted' : (l.old_pct == null ? 'Projection declared' : 'Projection amended')}</td>
+          <td>${l.old_pct == null ? '' : `${_esc(String(l.old_pct))}% &rarr; `}${_esc(String(l.new_pct))}%</td><td>${_esc(l.by || '')}</td></tr>`).join('')}
+        </tbody></table></details>` : ''}
       ${(f.pending || []).length ? `<table class="data-table" style="margin-top:10px;font-size:0.8rem"><thead><tr><th>Waiting</th><th>Group</th><th class="text-right">Amount</th><th>Paid from</th></tr></thead><tbody>
         ${f.pending.map(o => `<tr><td>${o.kind === 'subscription' ? 'Money in' : 'Money out'}</td><td>${_esc(o.group_name)}</td>
           <td class="text-right">${o.all_units ? 'everything' : Utils.rand(o.amount)}</td>
@@ -21816,11 +21842,24 @@ async function declareNoticeFundRate(id) {
   const rate = document.getElementById('nfRate-' + id).value;
   if (!/^\d{4}-\d{2}$/.test(month)) { Toast.show('Choose the month.', 'error'); return; }
   if (!(parseFloat(rate) >= 0)) { Toast.show('Enter the projected return for the month.', 'error'); return; }
-  if (!confirm(`Declare ${rate}% as the projected return for ${month}? Once ${month} begins it is fixed.`)) return;
+  if (!confirm(`Set ${rate}% as the projected return for ${month}? It applies to prices from now on; money already dealt keeps its price.`)) return;
   try {
     await API._fetch('POST', 'admin/notice-funds/' + id + '/rates', { month, monthly_rate_pct: rate });
     Toast.show('Rate declared.', 'success');
   } catch (err) { Toast.show(err.message || 'Could not declare that rate.', 'error'); }
+  loadNoticeFundAdmin();
+}
+
+async function postNoticeFundActual(id) {
+  const month = document.getElementById('nfActMonth-' + id).value;
+  const rate = document.getElementById('nfAct-' + id).value;
+  if (!month) { Toast.show('No ended month is waiting for its actual return.', 'error'); return; }
+  if (rate === '' || !Number.isFinite(parseFloat(rate))) { Toast.show('Enter what the month actually returned.', 'error'); return; }
+  if (!confirm(`Post ${rate}% as ${month}'s ACTUAL return? It replaces the projection in every price from now on, revalues every group's holding, and cannot be changed afterwards.`)) return;
+  try {
+    await API._fetch('POST', 'admin/notice-funds/' + id + '/actuals', { month, actual_rate_pct: rate });
+    Toast.show(`Actual return for ${month} posted.`, 'success');
+  } catch (err) { Toast.show(err.message || 'Could not post that actual return.', 'error'); }
   loadNoticeFundAdmin();
 }
 

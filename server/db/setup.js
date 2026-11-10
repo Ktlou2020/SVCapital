@@ -1757,6 +1757,21 @@ CREATE TABLE IF NOT EXISTS notice_fund_rates (
   updated_at    TIMESTAMPTZ DEFAULT NOW(),
   PRIMARY KEY (fund_id, month)
 );
+/* Every change to a month's projected or actual rate: who, when, from what
+   to what. A rate is what every group's money is valued at, so changing
+   one leaves a record nobody can tidy away. */
+CREATE TABLE IF NOT EXISTS notice_fund_rate_log (
+  id          BIGSERIAL PRIMARY KEY,
+  fund_id     TEXT NOT NULL,
+  month       DATE NOT NULL,
+  field       TEXT NOT NULL CHECK (field IN ('projected','actual')),
+  old_rate    NUMERIC(9,6),
+  new_rate    NUMERIC(9,6) NOT NULL,
+  changed_by  TEXT,
+  changed_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS nfrl_fund_idx ON notice_fund_rate_log(fund_id, month);
+
 /* What a group holds: units, and what they cost. Cost is what the group's
    shares carry it at (stokvelShares.netAssets) — the platform's rule that a
    gain is somebody's money only once it is realised. */
@@ -3170,6 +3185,15 @@ async function autoSetup() {
           /* The 1% platform fee charged on top of money into the notice fund,
              recorded on the order it was charged with. */
           BEGIN ALTER TABLE notice_fund_orders ADD COLUMN fee NUMERIC(18,2); EXCEPTION WHEN duplicate_column THEN NULL; END;
+          /* The ACTUAL return a month earned, posted by the fund's managers once
+             the month has ended. Where it is posted it replaces the projection
+             for that month in every price (services/noticeFund.priceFrom).
+             May be negative: a month can lose money. Final once posted. */
+          BEGIN ALTER TABLE notice_fund_rates ADD COLUMN actual_rate NUMERIC(9,6); EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE notice_fund_rates ADD COLUMN actual_posted_by TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE notice_fund_rates ADD COLUMN actual_posted_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE notice_fund_rates ADD CONSTRAINT nfr_actual_bounds
+            CHECK (actual_rate IS NULL OR (actual_rate > -0.5 AND actual_rate < 0.2)); EXCEPTION WHEN duplicate_object THEN NULL; END;
           ALTER TABLE stokvel_withdrawal_requests DROP CONSTRAINT IF EXISTS stokvel_withdrawal_requests_amount_check;
           BEGIN ALTER TABLE stokvel_withdrawal_requests ADD CONSTRAINT swr_amount_chk CHECK (amount > 0 OR kind = 'mandate'); EXCEPTION WHEN duplicate_object THEN NULL; END;
           BEGIN ALTER TABLE sub_accounts ADD COLUMN withdrawal_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
@@ -5094,9 +5118,13 @@ async function autoSetup() {
          that comes back after somebody dismissed the idea of it is worse than
          no notice at all. */
       const NOTICES = [
+        { id: 'ANN-2026-NOTICE-FUND-ACTUALS', area: 'admin', icon: 'fa-scale-balanced',
+          title: 'Notice fund: amend a month\u2019s projected rate, and post what the month actually returned',
+          body: 'A PROJECTION CAN NOW BE AMENDED while its month is current (and for months ahead), not only before the month starts. An amendment applies to prices from then on; money already dealt keeps the price it was dealt at. ONCE A MONTH ENDS, POST ITS ACTUAL RETURN. It replaces the projection for that month in every price from then on, so every group\u2019s holding is revalued at what the month really earned, and a withdrawal still waiting is paid on the true figure. It may be negative. A posted actual is FINAL and the month\u2019s projection can no longer be changed, so check the figure before posting. The card warns when an ended month is still waiting for its actual, shows each month\u2019s projection against its actual, and keeps a log of every change: who, when, and from what to what. Groups see last month\u2019s actual beside what was projected.',
+          where: 'Console: Groups \u2192 30-day notice fund card \u2192 \u201cDeclare or amend\u201d for a projection, \u201cPost actual\u201d for an ended month, and \u201cChanges to the rates\u201d for the log.' },
         { id: 'ANN-2026-NOTICE-FUND', area: 'both', icon: 'fa-hourglass-half',
           title: 'The 30-day notice fund for groups \u2014 built, and switched off until it is approved',
-          body: 'A pooled fund a group holds BESIDE its wallet. ALWAYS OPEN to money coming in: a member asks, the signatories approve that amount into that fund (as for any investment), and any member then moves it in. THE 1% PLATFORM FEE IS CHARGED ON TOP, as on the pools: the approved amount reaches the fund and the wallet pays it plus 1% (R4 000 in, R4 040 out of the wallet); the fund\u2019s minimum is tested against the amount reaching the fund. THE RETURN IS A PROJECTED MONTHLY RATE the fund\u2019s managers declare before each month starts: money earns it day by day, it stays in the fund and compounds month to month, and a month\u2019s rate is fixed once that month begins. Groups see it as a projection, never a promise. Because the rate sets the unit price for every day of a declared month, money goes in at that day\u2019s price at once. MONEY OUT needs AT LEAST 30 DAYS\u2019 NOTICE (the notice period can never be set lower), is asked for by the committee or a signatory, comes back ONLY to the group\u2019s own wallet, and is priced on the day the notice ends; a daily job at 06:40 pays it. A month with no declared rate cannot be priced, so money in or out waits for it \u2014 declare each month before it starts. The group\u2019s shares carry the fund at cost; the fee leaves the pot when charged and the return enters it when a withdrawal realises it. NOT OFFERED TO GROUPS until notice_fund_live is true \u2014 that should wait for finance and compliance to approve the fund (a pooled, unit-priced fund may be a collective investment scheme), how it is invested, and how a projected return is described.',
+          body: 'A pooled fund a group holds BESIDE its wallet. ALWAYS OPEN to money coming in: a member asks, the signatories approve that amount into that fund (as for any investment), and any member then moves it in. THE 1% PLATFORM FEE IS CHARGED ON TOP, as on the pools: the approved amount reaches the fund and the wallet pays it plus 1% (R4 000 in, R4 040 out of the wallet); the fund\u2019s minimum is tested against the amount reaching the fund. THE RETURN IS A PROJECTED MONTHLY RATE the fund\u2019s managers declare before each month starts: money earns it day by day, it stays in the fund and compounds month to month. The projection can be amended while its month is current, and once a month ends its ACTUAL return is posted, which replaces the projection in every price and is final. Groups see it as a projection, never a promise. Because the rate sets the unit price for every day of a declared month, money goes in at that day\u2019s price at once. MONEY OUT needs AT LEAST 30 DAYS\u2019 NOTICE (the notice period can never be set lower), is asked for by the committee or a signatory, comes back ONLY to the group\u2019s own wallet, and is priced on the day the notice ends; a daily job at 06:40 pays it. A month with no declared rate cannot be priced, so money in or out waits for it \u2014 declare each month before it starts. The group\u2019s shares carry the fund at cost; the fee leaves the pot when charged and the return enters it when a withdrawal realises it. NOT OFFERED TO GROUPS until notice_fund_live is true \u2014 that should wait for finance and compliance to approve the fund (a pooled, unit-priced fund may be a collective investment scheme), how it is invested, and how a projected return is described.',
           where: 'Console: Groups \u2192 the 30-day notice fund card under the list \u2014 create a fund (draft), declare this month\u2019s projected rate, open it, and declare each following month before it starts. To offer it: Settings \u2192 notice_fund_live = true. Groups: the group \u2192 Investments, at the top.' },
         { id: 'ANN-2026-GROUP-CONTRIBUTION-SCHEDULE', area: 'both', icon: 'fa-calendar-check',
           title: 'A group\u2019s committee now sets its own monthly contribution',

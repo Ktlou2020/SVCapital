@@ -2,10 +2,12 @@
 /* ═══════════════════════════════════════════════════════════
    /api/admin/notice-funds — the fund's managers run the 30-day notice fund.
 
-   Create it (in draft), open or close it to new money, and declare each
-   month's PROJECTED return before the month starts. The rate sets the unit
-   price day by day (services/noticeFund.priceFrom) and is fixed once its
-   month has begun.
+   Create it (in draft), open or close it to new money, declare each
+   month's PROJECTED return before the month starts (and amend it while the
+   month is current), and post the ACTUAL return once the month has ended.
+   The rate in force — actual where posted, projected until then — sets the
+   unit price day by day (services/noticeFund.priceFrom). Every change is
+   logged (notice_fund_rate_log).
 
    Staff never move a group's money here. Money into the fund needs the
    group's signatories; money out goes only to the group's own wallet when
@@ -38,14 +40,25 @@ router.get('/', async (req, res) => {
            FROM notice_fund_orders o JOIN sub_accounts a ON a.id = o.sub_account_id
           WHERE o.fund_id = $1 AND o.status = 'pending' ORDER BY COALESCE(o.payable_at, o.requested_at) ASC`, [f.id]);
       const { rows: rateRows } = await pool.query(
-        `SELECT to_char(month, 'YYYY-MM') AS month, monthly_rate, declared_by FROM notice_fund_rates
-          WHERE fund_id = $1 ORDER BY month DESC LIMIT 14`, [f.id]);
+        `SELECT to_char(month, 'YYYY-MM') AS month, monthly_rate, actual_rate, declared_by, actual_posted_by
+           FROM notice_fund_rates WHERE fund_id = $1 ORDER BY month DESC LIMIT 14`, [f.id]);
+      const { rows: log } = await pool.query(
+        `SELECT to_char(month, 'YYYY-MM') AS month, field, old_rate, new_rate, changed_by, changed_at
+           FROM notice_fund_rate_log WHERE fund_id = $1 ORDER BY changed_at DESC LIMIT 15`, [f.id]);
+      const thisMonth = noticeFund.sastDate(Date.now()).slice(0, 7);
+      const pct = v => v == null ? null : Math.round(Number(v) * 1e6) / 1e4;
       out.push({ ...f, price, missing: p && p.missing ? p.missing : null,
                  projected: await noticeFund.projected(pool, f.id),
                  groups: t.groups, units: Number(t.units), cost: Number(t.cost),
                  value: price ? Math.round(Number(t.units) * price.unit_price * 100) / 100 : null,
-                 pending, rates: rateRows.map(r => ({ month: r.month,
-                   monthly_rate_pct: Math.round(Number(r.monthly_rate) * 1e6) / 1e4, declared_by: r.declared_by })) });
+                 pending,
+                 rates: rateRows.map(r => ({ month: r.month, monthly_rate_pct: pct(r.monthly_rate),
+                   actual_rate_pct: pct(r.actual_rate), declared_by: r.declared_by, actual_posted_by: r.actual_posted_by,
+                   ended: r.month < thisMonth })),
+                 /* Ended months still waiting for their actual return. */
+                 needs_actual: rateRows.filter(r => r.month < thisMonth && r.actual_rate == null).map(r => r.month),
+                 log: log.map(l => ({ month: l.month, field: l.field, old_pct: pct(l.old_rate), new_pct: pct(l.new_rate),
+                   by: l.changed_by, at: l.changed_at })) });
     }
     return res.json({ data: out, live: await noticeFund.isLive(pool) });
   } catch (err) {
@@ -98,7 +111,7 @@ router.patch('/:id', async (req, res) => {
   }
 });
 
-/* Declare a month's projected rate, as a percentage per month. */
+/* Declare or amend a month's projected rate, as a percentage per month. */
 router.post('/:id/rates', async (req, res) => {
   try {
     const out = await noticeFund.declareRate(pool, { fundId: req.params.id,
@@ -108,6 +121,19 @@ router.post('/:id/rates', async (req, res) => {
   } catch (err) {
     console.error('[notice-funds] rate failed:', err.message);
     return res.status(500).json({ error: 'Could not declare that rate.' });
+  }
+});
+
+/* Post a month's actual return, once the month has ended. Final. */
+router.post('/:id/actuals', async (req, res) => {
+  try {
+    const out = await noticeFund.postActual(pool, { fundId: req.params.id,
+      month: req.body && req.body.month, ratePct: req.body && req.body.actual_rate_pct, by: who(req) });
+    if (out.error) return res.status(400).json({ error: out.error });
+    return res.status(201).json({ data: out });
+  } catch (err) {
+    console.error('[notice-funds] actual failed:', err.message);
+    return res.status(500).json({ error: 'Could not post that actual return.' });
   }
 });
 
