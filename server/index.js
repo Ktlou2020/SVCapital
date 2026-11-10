@@ -205,6 +205,9 @@ app.use('/api/users',       require('./routes/users'));
 app.use('/api/tables',      require('./routes/tables'));
 app.use('/api/fica',        require('./routes/fica'));
 app.use('/api/payments',    require('./routes/payments'));
+/* Before the routers mounted on /api/admin as a whole, so none of their
+   blanket checks answers for this one. */
+app.use('/api/admin/notice-funds', require('./routes/noticeFundAdmin'));
 app.use('/api/admin',       require('./routes/broadcast'));
 app.use('/api/admin',       require('./routes/bankVerify'));
 app.use('/api/admin',       require('./routes/manualCredit'));
@@ -513,6 +516,10 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
   // Stokvel contributions: open the period at 00:20, chase arrears at 09:00
   const { startStokvelContributionCron } = require('./jobs/stokvelContributionCron');
   startStokvelContributionCron();
+
+  // The 30-day notice fund: settle what posted prices cover, 06:40 SAST
+  const { startNoticeFundCron } = require('./jobs/noticeFundCron');
+  startNoticeFundCron();
 
   // Start PE review reminder cron (daily 08:00 SAST)
   const { startReviewReminderCron } = require('./jobs/reviewReminderCron');

@@ -225,6 +225,13 @@ INSERT INTO platform_settings (key, value, description)
 VALUES ('group_languages_live', '',
         'Group workspace translations released to clients, comma separated: zu (isiZulu), st (Sesotho). Empty until a qualified translator has reviewed them.')
 ON CONFLICT (key) DO NOTHING;
+/* The 30-day notice fund is OFF until finance and compliance have signed
+   it off. While off, staff can set up the fund and post prices; groups see
+   nothing and the client endpoints refuse. */
+INSERT INTO platform_settings (key, value, description)
+VALUES ('notice_fund_live', 'false',
+        'Set to true to offer groups the 30-day notice fund. Leave false until finance and compliance have approved the fund, its documents and its pricing.')
+ON CONFLICT (key) DO NOTHING;
 INSERT INTO platform_settings (key, value, description)
 VALUES ('group_templates_live', 'false',
         'Set to true once legal review has approved the group constitution and investment policy templates. Until then they are unlinked and marked draft.')
@@ -1708,6 +1715,86 @@ CREATE INDEX IF NOT EXISTS stokvel_payouts_group_idx ON stokvel_payouts(sub_acco
    the one gate on money where it was, and gives the rest of the group a
    recorded voice in front of it. One vote per member, enforced by the key.
    ──────────────────────────────────────────────────────────────────── */
+/* ─── The 30-day notice fund ──────────────────────────────────────────
+   A pooled fund a GROUP holds alongside its wallet: always open to money
+   coming in, and paid back to the group's wallet no sooner than its notice
+   period (30 days at least) after the group asks. services/noticeFund.js
+   holds the rules; this is only the record.
+
+   UNITS, FORWARD-PRICED. A group holds units, not rands. Money in buys
+   units at the first price published ON OR AFTER the day it arrived; money
+   out is priced at the first price on or after the day its notice ends.
+   Pricing forward is what stops anybody choosing a price they already
+   know: a fund priced monthly and sold at last month's price would let a
+   group that has seen this month's figure buy yesterday's units.
+
+   KEPT OUT OF investments AND investment_pools on purpose. The maturity,
+   pool-cycling and lapsed-pool jobs all act on those tables, and an
+   always-open fund with no end date is exactly what they would mature,
+   cycle or sweep in error. */
+CREATE TABLE IF NOT EXISTS notice_funds (
+  id           TEXT PRIMARY KEY,
+  name         TEXT NOT NULL,
+  notice_days  INT  NOT NULL DEFAULT 30 CHECK (notice_days >= 30),
+  min_deposit  NUMERIC(18,2) NOT NULL DEFAULT 0 CHECK (min_deposit >= 0),
+  status       TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','open','closed')),
+  description  TEXT,
+  created_by   TEXT,
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS notice_fund_prices (
+  fund_id     TEXT NOT NULL REFERENCES notice_funds(id) ON DELETE RESTRICT,
+  price_date  DATE NOT NULL,
+  unit_price  NUMERIC(18,6) NOT NULL CHECK (unit_price > 0),
+  posted_by   TEXT,
+  posted_at   TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (fund_id, price_date)
+);
+/* What a group holds: units, and what they cost. Cost is what the group's
+   shares carry it at (stokvelShares.netAssets) — the platform's rule that a
+   gain is somebody's money only once it is realised. */
+CREATE TABLE IF NOT EXISTS notice_fund_holdings (
+  fund_id         TEXT NOT NULL REFERENCES notice_funds(id) ON DELETE RESTRICT,
+  sub_account_id  TEXT NOT NULL REFERENCES sub_accounts(id) ON DELETE RESTRICT,
+  units           NUMERIC(24,6) NOT NULL DEFAULT 0 CHECK (units >= 0),
+  cost            NUMERIC(18,2) NOT NULL DEFAULT 0 CHECK (cost >= 0),
+  updated_at      TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (fund_id, sub_account_id)
+);
+CREATE TABLE IF NOT EXISTS notice_fund_orders (
+  id              TEXT PRIMARY KEY,
+  fund_id         TEXT NOT NULL REFERENCES notice_funds(id) ON DELETE RESTRICT,
+  sub_account_id  TEXT NOT NULL REFERENCES sub_accounts(id) ON DELETE RESTRICT,
+  kind            TEXT NOT NULL CHECK (kind IN ('subscription','redemption')),
+  status          TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','completed','cancelled')),
+  /* Subscription: the rands that left the wallet. Redemption: the rands
+     asked for, or NULL with all_units for everything. */
+  amount          NUMERIC(18,2) CHECK (amount IS NULL OR amount > 0),
+  all_units       BOOLEAN NOT NULL DEFAULT false,
+  units           NUMERIC(24,6),
+  unit_price      NUMERIC(18,6),
+  price_date      DATE,
+  proceeds        NUMERIC(18,2),
+  cost_released   NUMERIC(18,2),
+  requested_by    TEXT,
+  authority_id    TEXT,
+  requested_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  payable_at      TIMESTAMPTZ,
+  completed_at    TIMESTAMPTZ,
+  cancelled_by    TEXT,
+  reference       TEXT UNIQUE,
+  CONSTRAINT nfo_redemption_has_amount CHECK (kind <> 'redemption' OR amount IS NOT NULL OR all_units),
+  CONSTRAINT nfo_subscription_has_amount CHECK (kind <> 'subscription' OR amount IS NOT NULL)
+);
+CREATE INDEX IF NOT EXISTS nfo_pending_idx ON notice_fund_orders(fund_id, status) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS nfo_group_idx   ON notice_fund_orders(sub_account_id);
+/* One redemption waiting at a time per group and fund. Two would each be
+   sized against the same units and the second would ask for money the
+   first had already taken. */
+CREATE UNIQUE INDEX IF NOT EXISTS nfo_one_pending_redemption
+  ON notice_fund_orders(fund_id, sub_account_id) WHERE status = 'pending' AND kind = 'redemption';
+
 CREATE TABLE IF NOT EXISTS stokvel_proposals (
   id              TEXT PRIMARY KEY,
   sub_account_id  TEXT NOT NULL REFERENCES sub_accounts(id) ON DELETE CASCADE,
@@ -3065,7 +3152,7 @@ async function autoSetup() {
              mandate row would fail the whole step. A mandate change moves no
              money, so it is the one kind whose amount may be zero, and what
              it changes is carried in mandate_change. */
-          BEGIN ALTER TABLE stokvel_withdrawal_requests ADD CONSTRAINT swr_kind_chk CHECK (kind IN ('withdrawal','investment','exit','payout','mandate')); EXCEPTION WHEN duplicate_object THEN NULL; END;
+          BEGIN ALTER TABLE stokvel_withdrawal_requests ADD CONSTRAINT swr_kind_chk CHECK (kind IN ('withdrawal','investment','exit','payout','mandate','notice_deposit')); EXCEPTION WHEN duplicate_object THEN NULL; END;
           BEGIN ALTER TABLE stokvel_withdrawal_requests ADD COLUMN mandate_change JSONB; EXCEPTION WHEN duplicate_column THEN NULL; END;
           /* The members' proposal an investment request was raised from, when
              it was. Context for the signatories, never an authority. */
@@ -4998,6 +5085,10 @@ async function autoSetup() {
          that comes back after somebody dismissed the idea of it is worse than
          no notice at all. */
       const NOTICES = [
+        { id: 'ANN-2026-NOTICE-FUND', area: 'both', icon: 'fa-hourglass-half',
+          title: 'The 30-day notice fund for groups \u2014 built, and switched off until it is approved',
+          body: 'A pooled fund a group holds BESIDE its wallet. ALWAYS OPEN to money coming in: a member asks, the signatories approve that amount into that fund (as for any investment), and any member then moves it in. MONEY OUT needs AT LEAST 30 DAYS\u2019 NOTICE (the fund\u2019s notice period can never be set lower), is asked for by the committee or a signatory, and comes back ONLY to the group\u2019s own wallet, where the mandate still guards it. UNITS ARE FORWARD-PRICED: money in buys units at the first price posted on or after the day it arrived, and money out is priced at the first price on or after the day its notice ends, so nobody deals at a price they already know. Posting a price deals every order it covers, at once; a posted price is never overwritten and none can be posted for a future date; a daily job at 06:40 settles anything an earlier price already covers. The group\u2019s shares carry the fund at cost, and a gain is shared out when a withdrawal realises it. One withdrawal can wait at a time and can be cancelled. NOT OFFERED TO GROUPS until notice_fund_live is set to true \u2014 that should wait for finance and compliance to approve the fund (a pooled, unit-priced fund may be a collective investment scheme), its documents, its fees (none are charged yet) and how its money is invested.',
+          where: 'Console: Groups \u2192 the 30-day notice fund card under the list \u2014 create a fund (draft), post its first price, open it, post prices. To offer it: Settings \u2192 notice_fund_live = true. Groups: the group \u2192 Investments, at the top.' },
         { id: 'ANN-2026-GROUP-CONTRIBUTION-SCHEDULE', area: 'both', icon: 'fa-calendar-check',
           title: 'A group\u2019s committee now sets its own monthly contribution',
           body: 'The amount each member pays and the day it is due were typed in by staff, and the setup checklist sent the committee to WhatsApp to ask. The chairperson, secretary or treasurer now sets it from the group\u2019s Contributions section (or the checklist), and can change it. EVERY MEMBER IS TOLD, by push and email, with the old and new amount and the month it starts. WHAT IS ALREADY OWED DOES NOT CHANGE: a month already raised keeps the amount it was raised at, and the new amount applies from the month the committee chooses \u2014 next month by default whenever this month\u2019s due day has passed, so nobody is overdue the moment it is set. Monthly only; per-member amounts set in the console still win over the group\u2019s amount. It does not need the signatories, because it moves no money out of the group. The console\u2019s own schedule form still works and does the same thing. With this, nothing in a group\u2019s setup needs to come to us any more.',

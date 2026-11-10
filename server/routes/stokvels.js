@@ -36,6 +36,7 @@ const mandateChange = require('../services/stokvelMandateChange');
 const proposals     = require('../services/stokvelProposals');
 const groupDocs     = require('../services/stokvelDocuments');
 const schedules     = require('../services/stokvelSchedule');
+const noticeFund    = require('../services/noticeFund');
 const { actorFromRequest } = require('../services/ledger');
 /* Lazily required, and never awaited in a way that can fail a request: a
    mandate that cannot send an email must still record the vote. */
@@ -523,8 +524,8 @@ router.post('/:id/withdrawal-requests', async (req, res) => {
        signatories authorise a sum and whoever carries it out chooses where
        it lands, which is a mandate in name only. */
     const kind = String((req.body && req.body.kind) || 'withdrawal');
-    if (!['withdrawal', 'investment', 'exit', 'payout', 'mandate'].includes(kind)) {
-      return res.status(400).json({ error: 'kind must be withdrawal, investment, exit, payout or mandate.' });
+    if (!['withdrawal', 'investment', 'exit', 'payout', 'mandate', 'notice_deposit'].includes(kind)) {
+      return res.status(400).json({ error: 'kind must be withdrawal, investment, exit, payout, mandate or notice_deposit.' });
     }
 
     /* A mandate change moves no money, so it is the one kind without an
@@ -550,6 +551,16 @@ router.post('/:id/withdrawal-requests', async (req, res) => {
       if (v.error) return res.status(400).json({ error: v.error });
       change = Object.assign({}, parsed.change, { summary: v.summary });
       summary = v.summary;
+    } else if (kind === 'notice_deposit') {
+      /* Into the 30-day notice fund: money leaving the wallet for an
+         investment, so the signatories approve the amount AND the fund. */
+      if (!(await noticeFund.isLive(pool))) return res.status(403).json({ error: 'The notice fund is not available yet.' });
+      const fund = await noticeFund.openFund(pool);
+      if (!fund) return res.status(400).json({ error: 'The notice fund is not taking money at the moment.' });
+      if (amount + 0.0001 < Number(fund.min_deposit || 0)) {
+        return res.status(400).json({ error: `The fund takes R${Number(fund.min_deposit).toFixed(2)} or more at a time.` });
+      }
+      poolId = fund.id;
     } else if (kind === 'investment') {
       poolId = String((req.body && req.body.pool_id) || '').trim();
       if (!poolId) {
@@ -677,10 +688,12 @@ router.get('/:id/withdrawal-requests', async (req, res) => {
     const { rows } = await pool.query(
       `SELECT r.*, i.first_name AS requested_by_name, p.name AS pool_name,
               p.term_months AS pool_term_months, p.maturity_date AS pool_maturity_date,
+              nf.name AS fund_name,
               x.first_name AS exit_name, po.label AS payout_label
          FROM stokvel_withdrawal_requests r
          JOIN investors i ON i.id = r.requested_by
          LEFT JOIN investment_pools p ON p.id = r.pool_id
+         LEFT JOIN notice_funds nf ON nf.id = r.pool_id
          LEFT JOIN investors x ON x.id = r.exit_investor_id
          LEFT JOIN stokvel_payouts po ON po.id = r.payout_id
         WHERE r.sub_account_id = $1
@@ -719,7 +732,7 @@ router.get('/:id/withdrawal-requests', async (req, res) => {
       const state = await mandate.evaluate(pool, r, group);
       out.push({
         id: r.id, amount: r.amount, kind: r.kind || 'withdrawal',
-        bank_name: r.bank_name, pool_id: r.pool_id, pool_name: r.pool_name,
+        bank_name: r.bank_name, pool_id: r.pool_id, pool_name: r.pool_name, fund_name: r.fund_name,
         exit_investor_id: r.exit_investor_id, exit_name: r.exit_name,
         payout_id: r.payout_id, payout_label: r.payout_label,
         change_summary: (mandateChange.changeOf(r) || {}).summary || null,
@@ -1516,6 +1529,121 @@ router.post('/:id/contributions/:cid/pay', async (req, res) => {
     return res.status(500).json({ error: 'Could not record that payment.' });
   } finally {
     client.release();
+  }
+});
+
+/* ─── The 30-day notice fund ─────────────────────────────────────────
+   services/noticeFund.js has the rules. Money IN spends an authority the
+   signatories approved; money OUT goes only to the group's own wallet, after
+   the notice, and is asked for by the committee or a signatory. */
+async function _noticeGate(req, res, group) {
+  const me = callerInvestorId(req);
+  if (!group) { res.status(404).json({ error: 'No such stokvel.' }); return null; }
+  if (!(await noticeFund.isLive(pool))) { res.status(403).json({ error: 'The notice fund is not available yet.' }); return null; }
+  const fund = await noticeFund.openFund(pool);
+  if (!fund) { res.status(400).json({ error: 'The notice fund is not open at the moment.' }); return null; }
+  return { me, group, fund };
+}
+
+router.get('/:id/notice', async (req, res) => {
+  const me = callerInvestorId(req);
+  try {
+    const group = await groupForCaller(me, req.params.id);
+    if (!group) return res.status(404).json({ error: 'No such stokvel.' });
+    if (!(await noticeFund.isLive(pool))) return res.json({ data: { available: false } });
+    const fund = await noticeFund.openFund(pool);
+    if (!fund) return res.json({ data: { available: false } });
+    const position = await noticeFund.position(pool, fund.id, group.id);
+    const { rows: orders } = await pool.query(
+      `SELECT id, kind, status, amount, all_units, units, unit_price, price_date, proceeds,
+              requested_at, payable_at, completed_at
+         FROM notice_fund_orders WHERE fund_id = $1 AND sub_account_id = $2
+        ORDER BY requested_at DESC LIMIT 20`, [fund.id, group.id]);
+    const sigs = await mandate.currentSignatories(pool, group.id);
+    return res.json({ data: {
+      available: true,
+      fund: { id: fund.id, name: fund.name, notice_days: fund.notice_days,
+              min_deposit: Number(fund.min_deposit), description: fund.description },
+      position, orders,
+      may_redeem: invites.mayInvite(group) || sigs.has(me),
+    } });
+  } catch (err) {
+    console.error('[stokvels] notice fund failed:', err.message);
+    return res.status(500).json({ error: 'Could not load the notice fund.' });
+  }
+});
+
+/* Spend an approved authority: the money leaves the wallet now and buys
+   units at the next price. Any member may carry out what the signatories
+   approved, as with an investment. */
+router.post('/:id/notice/subscribe', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const gate = await _noticeGate(req, res, await groupForCaller(callerInvestorId(req), req.params.id));
+    if (!gate) return;
+    const { group, fund } = gate;
+    await client.query('BEGIN');
+    /* The amount is the one the signatories approved, read off the
+       authority; the matcher then checks kind, fund and quorum as it does
+       for every movement. */
+    const authorityId = String((req.body && req.body.authority_id) || '');
+    const { rows: [approved] } = await client.query(
+      `SELECT amount FROM stokvel_withdrawal_requests WHERE id = $1 AND sub_account_id = $2`, [authorityId, group.id]);
+    const { authority, error } = await mandate.authorityFor(client, group, authorityId,
+      { kind: 'notice_deposit', amount: approved ? Number(approved.amount) : 0, fundId: fund.id });
+    if (error) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error });
+    }
+    const out = await noticeFund.subscribe(client, { group, fund, amount: authority.amount,
+      authorityId: authority.id, actor: actorFromRequest(req) });
+    if (out.error) { await client.query('ROLLBACK'); return res.status(400).json({ error: out.error }); }
+    await mandate.consume(client, authority, out.order.id);
+    await client.query('COMMIT');
+    return res.status(201).json({ data: out.order });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[stokvels] notice subscribe failed:', err.message);
+    return res.status(500).json({ error: 'Could not move that into the fund.' });
+  } finally {
+    client.release();
+  }
+});
+
+router.post('/:id/notice/redeem', async (req, res) => {
+  try {
+    const gate = await _noticeGate(req, res, await groupForCaller(callerInvestorId(req), req.params.id));
+    if (!gate) return;
+    const { me, group, fund } = gate;
+    const sigs = await mandate.currentSignatories(pool, group.id);
+    if (!invites.mayInvite(group) && !sigs.has(me)) {
+      return res.status(403).json({ error: 'Only the chairperson, secretary, treasurer or a signatory can take money out of the fund.' });
+    }
+    const all = req.body && (req.body.all === true || req.body.all === 'true');
+    const out = await noticeFund.requestRedemption(pool, { group, fund, amount: req.body && req.body.amount, all, actorId: me });
+    if (out.error) return res.status(400).json({ error: out.error });
+    return res.status(201).json({ data: out.order });
+  } catch (err) {
+    console.error('[stokvels] notice redeem failed:', err.message);
+    return res.status(500).json({ error: 'Could not ask for that withdrawal.' });
+  }
+});
+
+router.post('/:id/notice/redeem/:oid/cancel', async (req, res) => {
+  try {
+    const gate = await _noticeGate(req, res, await groupForCaller(callerInvestorId(req), req.params.id));
+    if (!gate) return;
+    const { me, group } = gate;
+    const sigs = await mandate.currentSignatories(pool, group.id);
+    if (!invites.mayInvite(group) && !sigs.has(me)) {
+      return res.status(403).json({ error: 'Only the chairperson, secretary, treasurer or a signatory can cancel it.' });
+    }
+    const out = await noticeFund.cancelRedemption(pool, { group, orderId: req.params.oid, actorId: me });
+    if (out.error) return res.status(404).json({ error: out.error });
+    return res.json({ data: out });
+  } catch (err) {
+    console.error('[stokvels] notice cancel failed:', err.message);
+    return res.status(500).json({ error: 'Could not cancel that.' });
   }
 });
 

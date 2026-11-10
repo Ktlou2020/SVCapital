@@ -68,13 +68,15 @@ async function _load(db, groupId, authorityId) {
             p.name            AS pool_name,
             i.first_name      AS raised_by_name,
             x.first_name      AS exit_name,
-            po.label          AS payout_label
+            po.label          AS payout_label,
+            nf.name           AS fund_name
        FROM stokvel_withdrawal_requests r
        JOIN sub_accounts a ON a.id = r.sub_account_id
        LEFT JOIN investment_pools p ON p.id = r.pool_id
        LEFT JOIN investors i ON i.id = r.requested_by
        LEFT JOIN investors x ON x.id = r.exit_investor_id
        LEFT JOIN stokvel_payouts po ON po.id = r.payout_id
+       LEFT JOIN notice_funds nf ON nf.id = r.pool_id
       WHERE r.id = $1 AND r.sub_account_id = $2`,
     [authorityId, groupId]);
   return rows[0] || null;
@@ -113,6 +115,7 @@ function describe(authority) {
   const amount = fmtR(authority.amount);
   const kind = String(authority.kind || 'withdrawal');
   if (kind === 'investment') return `${amount} into ${authority.pool_name || 'a pool'}`;
+  if (kind === 'notice_deposit') return `${amount} into ${authority.fund_name || 'the 30-day notice fund'}`;
   /* An exit names the PERSON, not an account. "R4 200 to a bank account"
      would be the one description a signatory could not act on, because what
      they are being asked to authorise is somebody's membership ending. */
@@ -274,6 +277,8 @@ async function decided({ groupId, authorityId, voterId, decision, db } = {}) {
         ? 'The change is now in force.'
         : String(a.kind || 'withdrawal') === 'investment'
         ? 'Any member can now place it from the marketplace.'
+        : String(a.kind || 'withdrawal') === 'notice_deposit'
+        ? 'Any member can now move it into the fund from the group\u2019s Investments section.'
         : 'It will be paid out once the notice period has run.';
       if (raiser) {
         told.push(await _tell(raiser, {

@@ -21469,6 +21469,96 @@ async function loadStokvels() {
     return;
   }
   renderStokvelList();
+  loadNoticeFundAdmin();
+}
+
+/* ─── The 30-day notice fund ──────────────────────────────────────────
+   Groups hold it beside their wallet; the fund's managers run it here:
+   create it, open or close it to new money, and post its unit price.
+   Posting a price settles every order it covers. Staff never move a
+   group's money from this card. (routes/noticeFundAdmin.js) */
+async function loadNoticeFundAdmin() {
+  const host = document.getElementById('noticeFundAdmin');
+  if (!host) return;
+  let res;
+  try { res = await API._fetch('GET', 'admin/notice-funds'); }
+  catch (err) { host.innerHTML = ''; return; }   // not a role that runs the fund
+  const funds = (res && res.data) || [];
+  const live = !!(res && res.live);
+  const fund = f => `<div style="border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
+        <div><strong>${_esc(f.name)}</strong> <span class="text-muted" style="font-size:0.78rem">${_esc(f.id)} &middot; ${_esc(String(f.notice_days))} days&rsquo; notice &middot; from ${Utils.rand(f.min_deposit)}</span></div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <span class="badge">${_esc(f.status)}</span>
+          ${f.status !== 'open' ? `<button class="btn btn--secondary btn--sm" onclick="setNoticeFundStatus('${_esc(f.id)}','open')">Open to new money</button>` : ''}
+          ${f.status === 'open' ? `<button class="btn btn--ghost btn--sm" onclick="setNoticeFundStatus('${_esc(f.id)}','closed')">Close to new money</button>` : ''}
+        </div>
+      </div>
+      <div style="display:flex;gap:24px;flex-wrap:wrap;margin:10px 0;font-size:0.84rem">
+        <div><div class="text-muted" style="font-size:0.72rem;text-transform:uppercase">Latest price</div>
+          <strong>${f.latest_price ? `R${Number(f.latest_price.unit_price).toFixed(6)} on ${_esc(f.latest_price.price_date)}` : 'none posted'}</strong></div>
+        <div><div class="text-muted" style="font-size:0.72rem;text-transform:uppercase">Groups holding</div><strong>${f.groups}</strong></div>
+        <div><div class="text-muted" style="font-size:0.72rem;text-transform:uppercase">Units</div><strong>${Number(f.units).toFixed(6)}</strong></div>
+        <div><div class="text-muted" style="font-size:0.72rem;text-transform:uppercase">At cost / at price</div>
+          <strong>${Utils.rand(f.cost)} / ${f.value == null ? '—' : Utils.rand(f.value)}</strong></div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap">
+        <div><label class="text-muted" style="font-size:0.75rem;display:block">Price date</label>
+          <input type="date" id="nfDate-${_esc(f.id)}" class="input input--sm" value="${new Date(Date.now() + 2 * 3600 * 1000).toISOString().slice(0, 10)}"></div>
+        <div><label class="text-muted" style="font-size:0.75rem;display:block">Unit price (R)</label>
+          <input type="number" step="0.000001" min="0" id="nfPrice-${_esc(f.id)}" class="input input--sm" style="width:140px"></div>
+        <button class="btn btn--primary btn--sm" onclick="postNoticeFundPrice('${_esc(f.id)}')">Post price</button>
+      </div>
+      <div class="text-muted" style="font-size:0.74rem;margin-top:6px">A posted price is final: it deals every order it covers, at once. Prices are not overwritten.</div>
+      ${(f.pending || []).length ? `<table class="data-table" style="margin-top:10px;font-size:0.8rem"><thead><tr><th>Waiting</th><th>Group</th><th class="text-right">Amount</th><th>Priced from</th></tr></thead><tbody>
+        ${f.pending.map(o => `<tr><td>${o.kind === 'subscription' ? 'Money in' : 'Money out'}</td><td>${_esc(o.group_name)}</td>
+          <td class="text-right">${o.all_units ? 'everything' : Utils.rand(o.amount)}</td>
+          <td>${_esc(String(o.kind === 'subscription' ? o.requested_at : o.payable_at).slice(0, 10))}</td></tr>`).join('')}
+        </tbody></table>` : ''}
+    </div>`;
+  host.innerHTML = `<div class="card" style="margin-top:16px">
+    <div class="card__header"><h3 class="card__title"><i class="fa-solid fa-hourglass-half"></i> 30-day notice fund</h3>
+      <span style="font-size:0.78rem;color:${live ? '#22c55e' : 'var(--text-muted)'}">${live ? 'Offered to groups' : 'Not offered to groups (Settings \u2192 notice_fund_live)'}</span></div>
+    <div style="padding:14px">
+      ${funds.length ? funds.map(fund).join('') : '<div class="text-muted" style="margin-bottom:10px">No fund set up yet.</div>'}
+      <details><summary style="cursor:pointer;font-size:0.84rem">Set up a fund</summary>
+        <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-top:8px">
+          <div><label class="text-muted" style="font-size:0.75rem;display:block">Name</label><input id="nfNewName" class="input input--sm" placeholder="Group Notice Fund"></div>
+          <div><label class="text-muted" style="font-size:0.75rem;display:block">Notice (days, 30+)</label><input id="nfNewDays" type="number" min="30" value="30" class="input input--sm" style="width:90px"></div>
+          <div><label class="text-muted" style="font-size:0.75rem;display:block">Minimum (R)</label><input id="nfNewMin" type="number" min="0" value="0" class="input input--sm" style="width:110px"></div>
+          <button class="btn btn--secondary btn--sm" onclick="createNoticeFund()">Create in draft</button>
+        </div></details>
+    </div></div>`;
+}
+
+async function createNoticeFund() {
+  try {
+    await API._fetch('POST', 'admin/notice-funds', {
+      name: document.getElementById('nfNewName').value, notice_days: document.getElementById('nfNewDays').value,
+      min_deposit: document.getElementById('nfNewMin').value });
+    Toast.show('Fund created in draft. Post a first price, then open it.', 'success');
+  } catch (err) { Toast.show(err.message || 'Could not create the fund.', 'error'); }
+  loadNoticeFundAdmin();
+}
+
+async function setNoticeFundStatus(id, status) {
+  if (status === 'closed' && !confirm('Close the fund to new money? Money already in it, and withdrawals already asked for, are not affected.')) return;
+  try { await API._fetch('PATCH', `admin/notice-funds/${id}`, { status }); Toast.show(`Fund ${status}.`, 'success'); }
+  catch (err) { Toast.show(err.message || 'Could not change the fund.', 'error'); }
+  loadNoticeFundAdmin();
+}
+
+async function postNoticeFundPrice(id) {
+  const date = document.getElementById('nfDate-' + id).value;
+  const price = document.getElementById('nfPrice-' + id).value;
+  if (!(parseFloat(price) > 0)) { Toast.show('Enter the unit price.', 'error'); return; }
+  if (!confirm(`Post R${price} as the unit price for ${date}? It deals every order it covers and cannot be changed afterwards.`)) return;
+  try {
+    const r = await API._fetch('POST', `admin/notice-funds/${id}/prices`, { price_date: date, unit_price: price });
+    const s = (r && r.data && r.data.settled) || {};
+    Toast.show(`Price posted. Settled ${s.subscriptions || 0} in and ${s.redemptions || 0} out.`, 'success');
+  } catch (err) { Toast.show(err.message || 'Could not post that price.', 'error'); }
+  loadNoticeFundAdmin();
 }
 
 function renderStokvelList() {

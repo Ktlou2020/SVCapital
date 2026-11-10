@@ -45,7 +45,7 @@ console.log('\nthe rules are written once');
      'an approved change waiting on a second button is a change one person can sit on');
   ok('a mandate of one is refused here too', /MIN_QUORUM/.test(SVC));
   ok('the schema allows the new kind',
-     /'payout','mandate'\)/.test(read('server/db/setup.js')));
+     /'payout','mandate'[,)]/.test(read('server/db/setup.js')));
   ok('and an invitation still never produces a signatory',
      !/is_signatory\s*=\s*true/.test(read('server/services/stokvelInvites.js')));
 }

@@ -55,10 +55,20 @@ const newId  = p => p + '-' + crypto.randomUUID().replace(/-/g, '').slice(0, 14)
    investing the pot made every member's share collapse. */
 async function netAssets(client, subAccountId) {
   const { rows: [row] } = await client.query(
+    /* The 30-day notice fund is held at COST too (services/noticeFund.js):
+       the units a group holds, and money that has left the wallet for the
+       fund and is waiting for its price. Leave either out and a deposit
+       into the fund reads as the pot shrinking, and reconcile would share
+       that "loss" across every member. */
     `SELECT COALESCE(a.wallet_balance, 0)                      AS wallet,
             COALESCE((SELECT SUM(i.amount) FROM investments i
                        WHERE i.sub_account_id = a.id
-                         AND i.status = 'active'), 0)          AS invested,
+                         AND i.status = 'active'), 0)
+          + COALESCE((SELECT SUM(h.cost) FROM notice_fund_holdings h
+                       WHERE h.sub_account_id = a.id), 0)
+          + COALESCE((SELECT SUM(o.amount) FROM notice_fund_orders o
+                       WHERE o.sub_account_id = a.id AND o.kind = 'subscription'
+                         AND o.status = 'pending'), 0)         AS invested,
             COALESCE((SELECT SUM(d.amount_owed - d.amount_paid)
                         FROM stokvel_exit_debts d
                        WHERE d.sub_account_id = a.id

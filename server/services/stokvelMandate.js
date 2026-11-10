@@ -103,6 +103,9 @@ async function authorityFor(client, subAccount, authorityId, want) {
     if (want.kind === 'payout') {
       return { error: 'Paying the group out needs an approved authority. Plan the payout and have the signatories approve it first.' };
     }
+    if (want.kind === 'notice_deposit') {
+      return { error: 'Moving money into the notice fund needs an approved authority. Ask the signatories first.' };
+    }
     return { error: want.kind === 'investment'
       ? 'A group investment needs an approved authority. Raise a request and have the signatories approve it first.'
       : 'A group withdrawal needs an approved authority. Raise a withdrawal request and have the signatories approve it first.' };
@@ -118,7 +121,8 @@ async function authorityFor(client, subAccount, authorityId, want) {
      to it leaving for somebody's bank account. */
   if (String(authority.kind || 'withdrawal') !== want.kind) {
     const WANTED = { investment: 'an investment', exit: 'an exit settlement',
-                     payout: 'a payout to the whole group', withdrawal: 'a withdrawal' };
+                     payout: 'a payout to the whole group', withdrawal: 'a withdrawal',
+                     notice_deposit: 'a move into the notice fund' };
     return { error: `That authority was approved for a ${authority.kind || 'withdrawal'}, not ${WANTED[want.kind] || 'a withdrawal'}.` };
   }
 
@@ -141,6 +145,12 @@ async function authorityFor(client, subAccount, authorityId, want) {
   if (want.kind === 'investment') {
     if (String(authority.pool_id || '') !== String(want.poolId || '')) {
       return { error: 'That authority was approved for a different pool.' };
+    }
+  } else if (want.kind === 'notice_deposit') {
+    /* The fund is the destination, as a pool is for an investment; it rides
+       in the same column. */
+    if (String(authority.pool_id || '') !== String(want.fundId || '')) {
+      return { error: 'That authority was approved for a different fund.' };
     }
   } else if (want.kind === 'payout') {
     /* The signatories approve THE DISTRIBUTION, once, rather than one
