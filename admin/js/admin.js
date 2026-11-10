@@ -2092,6 +2092,42 @@ function _investorTypeBadge(value) {
        + `${_esc(Utils.investorTypeLabel(v))}</span>`;
 }
 
+/* What each client actually has invested, counted from the investment rows.
+   
+   NOT investors.total_invested. That column is a running total kept by hand
+   and only by SOME of the paths that create an investment:
+   
+     · from the client's own wallet      \u2713 kept
+     · from a SUB-ACCOUNT wallet          \u2717 the increment goes to
+                                            sub_accounts.total_invested, and
+                                            the investor's is never touched
+     · a rollover written by the nightly
+       maturity engine                    \u2717 never touched at all
+     · a recurring investment             \u2713 kept
+   
+   So it drifts, permanently and in one direction, and it drifts most for the
+   clients who invest through a sub-account and roll over \u2014 stokvels and
+   burial societies. It is also a LIFETIME figure that is never reduced at
+   maturity, so it is not a current position even when it is accurate.
+   
+   This is the one definition. The table and the CSV export both read it, so
+   a figure somebody sees on screen and the same figure in the file they
+   downloaded cannot disagree \u2014 which is how this was reported.
+   
+   Keyed on investor_id, which a sub-account's investments also carry, so a
+   client's own investing and their sub-accounts' are both counted here. */
+function _investorLiveTotals() {
+  const invested = {}, active = {}, total = {};
+  (STATE.investments || []).forEach(i => {
+    total[i.investor_id] = (total[i.investor_id] || 0) + 1;
+    if (i.status === 'active') {
+      invested[i.investor_id] = (invested[i.investor_id] || 0) + (parseFloat(i.amount) || 0);
+      active[i.investor_id]   = (active[i.investor_id]   || 0) + 1;
+    }
+  });
+  return { invested, active, total };
+}
+
 function renderInvestorsTable() {
   const body = document.getElementById('investorsBody');
   const start = (investorPage - 1) * INV_PAGE_SIZE;
@@ -2112,16 +2148,8 @@ function renderInvestorsTable() {
   }
 
   // Pre-compute live invested totals from investments table (faster than filtering per row)
-  const liveInvestedMap = {};
-  const liveActiveCountMap = {};
-  const liveTotalCountMap = {};
-  STATE.investments.forEach(i => {
-    liveTotalCountMap[i.investor_id] = (liveTotalCountMap[i.investor_id] || 0) + 1;
-    if (i.status === 'active') {
-      liveInvestedMap[i.investor_id]   = (liveInvestedMap[i.investor_id]   || 0) + (parseFloat(i.amount) || 0);
-      liveActiveCountMap[i.investor_id] = (liveActiveCountMap[i.investor_id] || 0) + 1;
-    }
-  });
+  const { invested: liveInvestedMap, active: liveActiveCountMap,
+          total: liveTotalCountMap } = _investorLiveTotals();
 
   // Sync select-all checkbox state
   const allCb = document.getElementById('invSelectAll');
@@ -14209,15 +14237,45 @@ function _downloadCSV(rows, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+/* The clients list, as a file.
+   
+   IT EXPORTED investors.total_invested, which is a running total kept by
+   hand and not kept by every path that creates an investment \u2014 see
+   _investorLiveTotals. A client who invests through a sub-account wallet, or
+   whose money has rolled over at maturity, has investments the column never
+   counted, so the file read R0,00 against a live position of real money
+   while the screen beside it showed the truth. Reported on Puno Stokvel
+   Association, CODE NXT Stokvel, Junior Ramela Burial Aid and Tshegofatso
+   Burial Society \u2014 stokvels and burial societies, which is the group that
+   does both of those things.
+   
+   ACTIVE INVESTED is now counted from the investment rows, by the same
+   function the table on screen uses, so the two cannot disagree.
+   
+   The recorded column is still exported, under a name that says what it is,
+   because it is not this export's place to drop a field somebody's
+   spreadsheet may read \u2014 and because it is still what IFA commission is
+   worked out from, which is worth somebody looking at. */
 function exportInvestorsCSV() {
   if (!STATE.investors.length) { Toast.error('Load investors first'); return; }
   const data = (filteredInvestors && filteredInvestors.length && filteredInvestors.length < STATE.investors.length)
     ? filteredInvestors : STATE.investors;
-  const headers = ['ID','First Name','Last Name','Email','Phone','Gender','Heard About Us','FICA Status','Wallet Balance','Total Invested','Total Returns','Date Joined'];
+  const live = _investorLiveTotals();
+  const headers = ['ID','First Name','Last Name','Email','Phone','Gender','Heard About Us',
+                   'Investor Type','FICA Status','Wallet Balance',
+                   'Active Invested','Active Investments','Total Investments',
+                   'Recorded Lifetime Invested','Total Returns','Date Joined'];
   const rows = [headers, ...data.map(i => [
     i.id, i.first_name, i.last_name, i.email, i.phone || '',
     i.gender || '', i.heard_about_us || '',
-    i.fica_status, i.wallet_balance || 0, i.total_invested || 0, i.total_returns || 0,
+    Utils.investorTypeLabel(i.investor_type),
+    i.fica_status, i.wallet_balance || 0,
+    /* Live, and including anything invested through their sub-accounts. */
+    live.invested[i.id] || 0,
+    live.active[i.id] || 0,
+    live.total[i.id] || 0,
+    i.total_invested || 0,
+    i.total_returns || 0,
     i.date_joined ? new Date(i.date_joined).toLocaleDateString('en-ZA') : '',
   ])];
   _downloadCSV(rows, `investors-${new Date().toISOString().slice(0,10)}.csv`);
