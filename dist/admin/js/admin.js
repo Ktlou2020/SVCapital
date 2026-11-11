@@ -4945,30 +4945,61 @@ async function unarchiveInvestor(id, btn) {
   });
 }
 
+/* The destination pools for a move.
+
+   This offered only pools whose status was open, filling or active — so a
+   matured or closed pool could not be chosen at all, and an admin looking
+   for one was told nothing about why it was absent. Moving an investment is
+   almost always CORRECTING WHERE IT ALWAYS BELONGED, and the pool it belongs
+   in is as likely as not to have matured since. Hiding those made the one
+   move somebody needed impossible, with no explanation.
+
+   So every pool is offered. The ones that take new money are listed first
+   and the rest are grouped under what they are, because putting a live
+   investment into a pool that has already paid out is a real mistake and the
+   list should say which is which rather than refuse the choice. The confirm
+   step asks before doing it. */
+function _movePoolGroups(currentPoolId) {
+  const all = (STATE.pools || []).filter(p => String(p.id) !== String(currentPoolId));
+  const open = all.filter(p => ['open', 'filling', 'active'].includes(p.status));
+  const rest = all.filter(p => !['open', 'filling', 'active'].includes(p.status));
+  return { all, open, rest };
+}
+
+function _moveFilterPools(currentPoolId) {
+  const q = String(document.getElementById('movePoolSearch')?.value || '').toLowerCase().trim();
+  const { open, rest } = _movePoolGroups(currentPoolId);
+  /* Open pools first, then the others, each already in their own order. The
+     status rides on the label so a matured pool cannot be picked by accident
+     in a list that looks uniform. */
+  const ordered = [...open, ...rest];
+  const hit = p => !q || [p.name, p.id, p.status, p.product_type]
+    .some(v => String(v == null ? '' : v).toLowerCase().includes(q));
+  _pickerPaint('movePoolSelect', 'movePoolCount', ordered, hit, p => p.id,
+    p => `${p.name || p.id} · ${p.status}`, '— choose a pool —', 'pools');
+}
+
 async function openMoveInvestment(investmentId, currentPoolId) {
-  // Build pool options from STATE, excluding current pool
-  const pools = (STATE.pools || []).filter(p => p.id !== currentPoolId && ['open','filling','active'].includes(p.status));
-  if (!pools.length) {
-    // Fetch fresh if STATE empty
-    try {
-      const res = await API.pools.list({ limit: 1000 });
-      STATE.pools = res.data || [];
-    } catch (e) { /* ignore */ }
-  }
-  const eligible = (STATE.pools || []).filter(p => p.id !== currentPoolId && ['open','filling','active'].includes(p.status));
+  /* Always load the full list. The old code refetched only when the FILTERED
+     list came back empty, so a STATE.pools loaded elsewhere with a smaller
+     limit silently capped what could be chosen — and it looked like the
+     pools simply did not exist. */
+  try {
+    const res = await API.pools.list({ limit: 5000 });
+    if (res && res.data) STATE.pools = res.data;
+  } catch (e) { /* fall back to whatever is already loaded */ }
 
-  const opts = eligible.map(p =>
-    `<option value="${_esc(String(p.id))}">${_esc(p.name||p.id)}</option>`
-  ).join('');
-
+  const { all } = _movePoolGroups(currentPoolId);
   const body = `
-    <div style="padding:24px;min-width:340px">
+    <div style="padding:24px;min-width:380px;max-width:460px">
       <h3 style="margin:0 0 16px;font-size:1rem">Move Investment to Pool</h3>
       <label style="font-size:0.78rem;color:var(--text-muted);display:block;margin-bottom:6px">Select destination pool</label>
-      <select id="movePoolSelect" class="form-control" style="width:100%;margin-bottom:20px">
-        <option value="">— choose a pool —</option>
-        ${opts}
-      </select>
+      <input type="search" id="movePoolSearch" class="form-control" autocomplete="off"
+             placeholder="Search by name, product or status…"
+             oninput="_moveFilterPools(${_esc(JSON.stringify(String(currentPoolId || '')))})"
+             style="width:100%;margin-bottom:8px">
+      <select id="movePoolSelect" class="form-control" style="width:100%"></select>
+      <div id="movePoolCount" style="font-size:0.72rem;color:var(--text-muted);margin:6px 0 16px;min-height:14px"></div>
       <div style="display:flex;gap:10px;justify-content:flex-end">
         <button class="btn" onclick="Modal.closeAll()">Cancel</button>
         <button class="btn btn--primary" id="movePoolConfirmBtn" onclick='_confirmMoveInvestment(${_esc(JSON.stringify(investmentId))})'>Move</button>
@@ -4976,6 +5007,13 @@ async function openMoveInvestment(investmentId, currentPoolId) {
     </div>`;
 
   Modal.openInline(body);
+  _moveFilterPools(String(currentPoolId || ''));
+  if (!all.length) {
+    const c = document.getElementById('movePoolCount');
+    if (c) c.textContent = 'No other pools exist to move this into.';
+  }
+  const s = document.getElementById('movePoolSearch');
+  if (s && s.focus) { try { s.focus(); } catch (_) {} }
 }
 
 async function _confirmMoveInvestment(investmentId) {
@@ -4983,6 +5021,20 @@ async function _confirmMoveInvestment(investmentId) {
   if (!sel || !sel.value) { Toast.error('Please select a destination pool'); return; }
   const newPoolId = sel.value;
   const newPool = (STATE.pools || []).find(p => String(p.id) === String(newPoolId));
+  /* Pools that no longer take new money are OFFERED, because a correction
+     usually points at one. They are not offered silently: the whole reason
+     they were hidden before was that moving a live investment into a pool
+     that has already paid out is a real mistake, and the answer to that is
+     to ask rather than to make the right move impossible. */
+  if (newPool && !['open', 'filling', 'active'].includes(newPool.status)) {
+    const okToGo = await Confirm.ask(`Move into a ${newPool.status} pool?`, {
+      body: `${newPool.name || newPool.id} is ${newPool.status}, so it is not taking new money. `
+        + 'That is right when you are correcting where this investment always belonged, '
+        + 'and wrong if you meant a pool that is still open. Nothing about the investment '
+        + 'itself changes — only which pool it is reported under.',
+      confirmLabel: 'Move it there' });
+    if (!okToGo) return;
+  }
   const btn = document.getElementById('movePoolConfirmBtn');
   await _withBtn(btn, async () => {
     try {
@@ -17307,20 +17359,24 @@ let _hiLast = null;
 
 const _hiNorm = s => String(s == null ? '' : s).toLowerCase().trim();
 
-/* Repaint a picker against its search box.
+/* Repaint a picker against its search box. Shared: the client and pool
+   pickers on Record a Past Investment, and the destination pool on Move
+   Investment. One definition, because the rule below is the whole reason it
+   exists and a second copy would drift from it.
 
    THE SELECTION SURVIVES THE FILTER, always. Rebuilding a <select>'s options
    drops the chosen row when it no longer matches and select.value silently
-   becomes '' — and on a form that writes money onto the books by hand that is
-   the worst shape of bug there is: the operator picks a client, types in the
-   search box to check something, the client falls out of the list, and either
-   Preview runs against nobody or — worse — they do not notice and record it
-   against whoever is now first. So whatever is selected is kept in the list
-   whether it matches or not, and the count says it is being held there.
+   becomes '' — and on a form that moves money or writes it onto the books by
+   hand that is the worst shape of bug there is: the operator picks a client,
+   types in the search box to check something, the client falls out of the
+   list, and either the form runs against nobody or — worse — they do not
+   notice and act against whoever is now first. So whatever is selected is
+   kept in the list whether it matches or not, and the count says it is being
+   held there.
 
-   Rebuilding is idempotent, so this is also what fills the pickers initially
-   and what picks up clients that loaded after the view opened. */
-function _hiPaint(selId, countId, all, hit, idOf, labelOf, placeholder, noun) {
+   Rebuilding is idempotent, so this is also what fills a picker initially
+   and what picks up rows that loaded after the view opened. */
+function _pickerPaint(selId, countId, all, hit, idOf, labelOf, placeholder, noun) {
   const sel = document.getElementById(selId);
   if (!sel) return;
   const chosen = sel.value;
@@ -17355,7 +17411,7 @@ function _hiFilterPools() {
      its id, its status, or the product it belongs to. */
   const hit = p => !q || [p.name, p.id, p.status, p.product_type]
     .some(v => _hiNorm(v).includes(q));
-  _hiPaint('hiPool', 'hiPoolCount', all, hit, p => p.id,
+  _pickerPaint('hiPool', 'hiPoolCount', all, hit, p => p.id,
     p => `${p.name} · ${p.status}`, 'Select pool…', 'pools');
 }
 
@@ -17371,7 +17427,7 @@ function _hiFilterInvestors() {
   const hit = i => !q || [
     `${i.first_name || ''} ${i.last_name || ''}`, i.first_name, i.last_name, i.id, i.email,
   ].some(v => _hiNorm(v).includes(q));
-  _hiPaint('hiInvestor', 'hiInvestorCount', all, hit, i => i.id,
+  _pickerPaint('hiInvestor', 'hiInvestorCount', all, hit, i => i.id,
     i => `${i.first_name || ''} ${i.last_name || ''} (${i.id})`.trim(),
     'Select client…', 'clients');
 }
