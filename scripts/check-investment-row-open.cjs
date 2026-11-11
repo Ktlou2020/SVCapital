@@ -28,6 +28,25 @@ const vm   = require('vm');
 const ROOT = path.join(__dirname, '..');
 const SRC  = fs.readFileSync(path.join(ROOT, 'admin', 'js', 'admin.js'), 'utf8');
 
+/* The REAL _poolLabel and _poolCell, lifted out of admin.js rather than
+   stubbed. An investment's pool can be named by pool_name OR resolved from
+   pool_id, and a stand-in here would decide for itself which — on the exact
+   cell that was reported as "the pool is not showing for this investment". */
+function _liftPoolHelpers(src) {
+  const grab = name => {
+    const at = src.indexOf('function ' + name + '(');
+    if (at < 0) throw new Error('could not lift ' + name + ' from admin.js');
+    let i = src.indexOf('{', at), d = 0, j = i;
+    for (; j < src.length; j++) {
+      if (src[j] === '{') d++;
+      else if (src[j] === '}') { d--; if (!d) break; }
+    }
+    return src.slice(at, j + 1);
+  };
+  return grab('_poolLabel') + '\n' + grab('_poolCell') + '\n';
+}
+
+
 /* The real Utils, lifted out of js/api.js, with this check's deterministic
    overrides on top.
  *
@@ -78,6 +97,7 @@ function renderInvestorTabRow() {
       rateCell: () => '<span>2.13%</span>',
       statusBadge: () => '<span class="badge">ACTIVE</span>',
     }),
+    STATE: { pools: [{ id: 'POOL-9', name: 'Resolved By Id Pool', status: 'open' }] },
     _esc: s => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])),
     JSON, Number, String,
@@ -87,7 +107,10 @@ function renderInvestorTabRow() {
     id: 'INV-OWNER-1',
   };
   vm.createContext(sandbox);
-  return vm.runInContext(`(function(){ ${body} })()`, sandbox);
+  /* The real _poolLabel/_poolCell run beside the row, reading this
+     sandbox's own STATE and _esc. */
+  return vm.runInContext(
+    `(function(){ ${_liftPoolHelpers(SRC)} ${body} })()`, sandbox);
 }
 
 /* A minimal attribute reader. Values are delimited by the quote character the

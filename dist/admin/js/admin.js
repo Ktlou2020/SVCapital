@@ -1835,7 +1835,7 @@ async function bulkArchiveInvestors() {
   if (!await Confirm.ask(`Archive ${ids.length} investor${ids.length !== 1 ? 's' : ''}?`, {
     body: `This will set status to "archived" for: ${preview}. You can undo immediately.`,
     confirmLabel: 'Archive',
-    confirmClass: 'btn--danger',
+    danger: true,
   })) return;
   const snapshot = ids.map(id => {
     const inv = STATE.investors.find(i => i.id === id);
@@ -1878,7 +1878,6 @@ async function bulkApproveFica() {
   if (!await Confirm.ask(`Approve FICA for ${ids.length} investor${ids.length !== 1 ? 's' : ''}?`, {
     body: `Sets FICA/KYC status to "approved" for: ${preview}.`,
     confirmLabel: 'Approve FICA',
-    confirmClass: 'btn--success',
   })) return;
   try {
     const res = await _bulkRun(ids, id => API.investors.update(id, { fica_status: 'approved', kyc_status: 'approved' }),
@@ -2567,7 +2566,7 @@ function viewSubAccount(saId) {
             <th style="padding:7px 9px">Started</th><th style="padding:7px 9px">Matures</th>
             <th style="padding:7px 9px">Status</th></tr></thead>
           <tbody>${saInvRows.map(i => `<tr style="border-top:1px solid var(--border)">
-            <td style="padding:7px 9px">${_esc(i.pool_name || i.pool_id || '—')}</td>
+            <td style="padding:7px 9px">${_poolCell(i)}</td>
             <td style="padding:7px 9px;text-align:right;font-weight:700">${Utils.rand(i.amount)}</td>
             <td style="padding:7px 9px;color:var(--text-dim)">${i.start_date ? Utils.date(i.start_date) : '—'}</td>
             <td style="padding:7px 9px;color:var(--text-dim)">${i.end_date ? Utils.date(i.end_date) : '—'}</td>
@@ -3079,7 +3078,7 @@ async function viewInvestor(id) {
              is what makes the capability findable. */
           const _open = `viewInvestmentDetail(${JSON.stringify(i.id)},${JSON.stringify(id)})`;
           return `<tr tabindex="0" style="cursor:pointer" onclick='${_open}' onkeydown='if(event.key==="Enter"||event.key===" "){event.preventDefault();${_open};}' title="Open investment detail">
-            <td class="td-strong" title="${_esc(i.pool_name||'')}">${_esc(i.pool_name)||'—'}</td>
+            <td class="td-strong" title="${_esc(_poolLabel(i) || 'Not in a pool')}">${_poolCell(i)}</td>
             <td title="${_esc(pi.label)}"><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
             <td class="td-muted">${Utils.date(i.start_date||i.created_at)}</td>
             <td class="td-gold fw-700">${Utils.rand(i.amount)}</td>
@@ -4087,18 +4086,25 @@ async function _recalcInvestorWallet(investorId, investorName, btn) {
   await _withBtn(btn, async () => {
     try {
       const r = await API._fetch('GET', `admin/wallet-report/${investorId}`);
+      /* Escaped, because this goes in as bodyHtml below and Confirm.ask's
+         contract puts escaping on the caller that passes it. type and status
+         are a controlled vocabulary today; that is a reason they are safe,
+         not a reason to interpolate them raw. */
       const rows = (r.by_type || [])
-        .map(t => `<tr><td style="padding:3px 10px 3px 0">${t.type}</td>`
-                + `<td style="padding:3px 10px 3px 0;color:var(--text-muted)">${t.status}</td>`
-                + `<td style="padding:3px 10px 3px 0;text-align:right">${t.count}</td>`
+        .map(t => `<tr><td style="padding:3px 10px 3px 0">${_esc(t.type)}</td>`
+                + `<td style="padding:3px 10px 3px 0;color:var(--text-muted)">${_esc(t.status)}</td>`
+                + `<td style="padding:3px 10px 3px 0;text-align:right">${_esc(t.count)}</td>`
                 + `<td style="padding:3px 0;text-align:right">${Utils.rand(t.total)}</td></tr>`)
         .join('') || '<tr><td colspan="4" style="color:var(--text-muted)">No transactions</td></tr>';
 
       const diff = r.difference;
       const diffColour = Math.abs(diff) < 0.01 ? '#22c55e' : '#f59e0b';
 
+      /* bodyHtml, not body. Confirm.ask puts `body` in as textContent, so
+         this whole report — a grid, a table, the lot — was being shown to
+         the operator as raw markup instead of as a report. */
       await Confirm.ask(`Wallet report — ${investorName}`, {
-        body: `
+        bodyHtml: `
           <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:0.9rem;margin-bottom:14px">
             <span style="color:var(--text-muted)">Stored balance</span>
             <strong>${Utils.rand(r.stored_balance)}</strong>
@@ -6232,7 +6238,7 @@ async function _kycReviewReject() {
         body: `${err?.message || 'The server did not accept them.'} The rejection itself has not ` +
               'happened yet. Continue without the notes, or cancel and copy them somewhere first?',
         confirmLabel: 'Reject without notes',
-        confirmClass: 'btn--danger',
+        danger: true,
       });
       if (!proceed) return;
     }
@@ -8677,7 +8683,7 @@ function renderInvestmentsTable() {
       </td>
       <td class="td-muted clip">${Utils.date(investDate)}</td>
       <td>${i.pool_id
-        ? `<div class="td-strong clip" style="cursor:pointer;color:var(--gold)" onclick="event.stopPropagation();viewPoolInvestors('${i.pool_id}')" title="${_esc(i.pool_name||i.pool_id)}">${_esc(i.pool_name||i.pool_id)}</div>`
+        ? `<div class="td-strong clip" style="cursor:pointer;color:var(--gold)" onclick="event.stopPropagation();viewPoolInvestors('${i.pool_id}')" title="${_esc(_poolLabel(i)||'')}">${_esc(_poolLabel(i)||'')}</div>`
         : `<div class="td-muted clip">—</div>`
       }</td>
       <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
@@ -8919,7 +8925,8 @@ function _renderInvestmentDetail(inv, backTo, backKind) {
   const invRecord = STATE.investors.find(i => i.id === inv.investor_id);
   const email = inv.investor_email || invRecord?.email || '—';
 
-  document.getElementById('invDetailTitle').textContent = `Investment — ${inv.pool_name}`;
+  document.getElementById('invDetailTitle').textContent =
+    `Investment — ${_poolLabel(inv) || 'not in a pool'}`;
   /* Returns are posted on the pool, not written back to the investment, so the
      rate and the value at maturity both have to be derived. */
   const _invRate   = Utils.effectiveRate(inv);
@@ -8945,7 +8952,7 @@ function _renderInvestmentDetail(inv, backTo, backKind) {
     <div class="grid-2 mb-16" style="gap:12px">
       <div class="info-row"><span class="info-row__label">Investor</span><span class="info-row__value td-strong">${_esc(inv.investor_name)}</span></div>
       <div class="info-row"><span class="info-row__label">Email</span><span class="info-row__value td-muted">${_esc(email)}</span></div>
-      <div class="info-row"><span class="info-row__label">Pool</span><span class="info-row__value">${_esc(inv.pool_name)}</span></div>
+      <div class="info-row"><span class="info-row__label">Pool</span><span class="info-row__value">${_poolCell(inv)}</span></div>
       <div class="info-row"><span class="info-row__label">Product</span><span class="info-row__value"><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></span></div>
       <div class="info-row"><span class="info-row__label">Invested Amount</span><span class="info-row__value td-gold fw-700">${Utils.rand(inv.amount)}</span></div>
       <div class="info-row"><span class="info-row__label">${_invRate != null && _invRate > 0 && !(parseFloat(inv.annual_rate) > 0) ? 'Return (posted)' : 'Target Return'}</span><span class="info-row__value td-green">${_invReturn != null ? Utils.rand(_invReturn) : '—'}</span></div>
@@ -9139,9 +9146,22 @@ async function cancelInvestment(id) {
   const inv = STATE.investments.find(i => i.id === id);
   if (!inv) return;
   const confirmed = await Confirm.ask('Cancel Investment & Refund?', {
-    body: `This will cancel the investment of <strong>${Utils.rand(inv.amount)}</strong> in <strong>${_esc(inv.pool_name)}</strong> and credit the full amount plus any platform fee back to <strong>${_esc(inv.investor_name)}</strong>'s wallet. This cannot be undone.`,
+    /* Two fixes on the one screen where somebody confirms something
+       irreversible.
+
+       _poolLabel, not inv.pool_name: an investment linked by pool_id with no
+       name copied onto it made this read "cancel the investment of R717,12
+       in undefined".
+
+       And bodyHtml, not body: Confirm.ask puts `body` in as textContent, so
+       this dialog has been showing its own markup — "cancel the investment
+       of <strong>R717,12</strong> in …" — literal tags and all. It is the
+       only caller in this file that passed HTML to the text field; the other
+       four already use bodyHtml. Everything interpolated here is escaped or
+       a formatted number, which is the condition bodyHtml asks of a caller. */
+    bodyHtml: `This will cancel the investment of <strong>${Utils.rand(inv.amount)}</strong> in <strong>${_poolCell(inv)}</strong> and credit the full amount plus any platform fee back to <strong>${_esc(inv.investor_name)}</strong>'s wallet. This cannot be undone.`,
     confirmLabel: 'Cancel & Refund',
-    confirmClass: 'btn--danger',
+    danger: true,
   });
   if (!confirmed) return;
   try {
@@ -17359,6 +17379,37 @@ let _hiLast = null;
 
 const _hiNorm = s => String(s == null ? '' : s).toLowerCase().trim();
 
+/* ── Which pool an investment is in, for a human ──────────────────────
+   investments carries BOTH pool_id — the real link — and pool_name, a
+   denormalised copy the schema calls legacy. Either can be null and the two
+   can disagree. The server already handles that: all-investments matches
+   `i.pool_id = $1 OR (i.pool_name = ip.name AND i.pool_id IS NULL)`.
+
+   The client's investments table read pool_name ALONE. An investment
+   properly linked by pool_id with no name copied onto it therefore rendered
+   as a bare dash — which reads as a broken screen, and was reported as one:
+   "the pool is not showing for this investment".
+
+   So: the copied name if there is one, else the pool's real name looked up
+   by id, else the id itself. Returns null only when the investment genuinely
+   belongs to no pool. */
+function _poolLabel(i) {
+  const named = String((i && i.pool_name) || '').trim();
+  if (named) return named;
+  const id = i && i.pool_id;
+  if (!id) return null;
+  const p = (STATE.pools || []).find(x => String(x.id) === String(id));
+  return String((p && String(p.name || '').trim()) || id);
+}
+
+/* And where there really is no pool, say so. A dash is indistinguishable
+   from a render that failed, and the row carries the button that fixes it. */
+function _poolCell(i) {
+  const label = _poolLabel(i);
+  return label ? _esc(label)
+    : '<span style="color:var(--text-muted);font-style:italic">Not in a pool</span>';
+}
+
 /* Repaint a picker against its search box. Shared: the client and pool
    pickers on Record a Past Investment, and the destination pool on Move
    Investment. One definition, because the rule below is the whole reason it
@@ -19002,7 +19053,7 @@ async function loadCompliance() {
           const inv = STATE.investors.find(x => x.id === i.investor_id);
           const name = inv ? `${inv.first_name} ${inv.last_name}` : i.investor_id;
           return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
-            <div><div style="font-size:0.82rem;font-weight:700;color:var(--text)">${_esc(name)}</div><div style="font-size:0.7rem;color:var(--text-muted)">${Utils.rand(i.amount)} · ${_esc(i.pool_name||'—')}</div></div>
+            <div><div style="font-size:0.82rem;font-weight:700;color:var(--text)">${_esc(name)}</div><div style="font-size:0.7rem;color:var(--text-muted)">${Utils.rand(i.amount)} · ${_poolCell(i)}</div></div>
             <span class="badge badge--yellow" style="font-size:0.68rem">No instruction</span>
           </div>`;
         }).join('')

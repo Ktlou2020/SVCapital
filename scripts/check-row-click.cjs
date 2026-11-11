@@ -22,6 +22,26 @@ const { execFileSync } = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
 const CHROME = require('./lib/chromium.cjs').findChromium();
+const ADMIN_SRC = fs.readFileSync(path.join(ROOT, 'admin', 'js', 'admin.js'), 'utf8');
+
+/* The REAL _poolLabel and _poolCell, lifted out of admin.js rather than
+   stubbed. An investment's pool can be named by pool_name OR resolved from
+   pool_id, and a stand-in here would decide for itself which — on the exact
+   cell that was reported as "the pool is not showing for this investment". */
+function _liftPoolHelpers(src) {
+  const grab = name => {
+    const at = src.indexOf('function ' + name + '(');
+    if (at < 0) throw new Error('could not lift ' + name + ' from admin.js');
+    let i = src.indexOf('{', at), d = 0, j = i;
+    for (; j < src.length; j++) {
+      if (src[j] === '{') d++;
+      else if (src[j] === '}') { d--; if (!d) break; }
+    }
+    return src.slice(at, j + 1);
+  };
+  return grab('_poolLabel') + '\n' + grab('_poolCell') + '\n';
+}
+
 
 /* The real Utils, lifted out of js/api.js, with this check's deterministic
    overrides on top.
@@ -106,13 +126,16 @@ function renderRow(tpl, extraVars) {
       productInfo: () => ({ label: 'Short Term Investment', badgeClass: 'badge--orange', icon: 'fa-bolt' }),
       rateCell: () => '<span>2.13%</span>',
     }),
+    STATE: { pools: [{ id: 'POOL-9', name: 'Resolved By Id Pool', status: 'open' }] },
     _esc: s => String(s == null ? '' : s),
     ...extraVars,
   };
   const names = Object.keys(scope);
   /* A template that already contains `return` is a body; a bare `\`<tr …\``
      is an expression. Both appear here, so wrap only the second. */
-  const body = /(^|\n)\s*return\s/.test(tpl) ? `${tpl};` : `return ${tpl};`;
+  const inner = /(^|\n)\s*return\s/.test(tpl) ? `${tpl};` : `return ${tpl};`;
+  /* The real _poolLabel/_poolCell, reading the STATE and _esc passed in. */
+  const body = _liftPoolHelpers(ADMIN_SRC) + inner;
   // eslint-disable-next-line no-new-func
   return new Function(...names, body)(...names.map(n => scope[n]));
 }
