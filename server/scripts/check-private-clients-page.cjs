@@ -344,8 +344,33 @@ console.log('\nit is a different page, not the same page twice');
        return purples.every(h => h === 'eda5ff');
      })(),
      'CLAUDE.md: #eda5ff is the one permitted purple across the platform');
-  ok('its display face is not the institutional page’s',
-     /Fraunces/.test(HTML) && /Fraunces/.test(CSS));
+  /* This used to require the two landing pages to have DIFFERENT display
+     faces — Fraunces here, DM Serif Display there. Asked for since: ONE
+     typeface across the site and every landing page. Each page was carrying
+     Poppins AND a serif, so each page had two faces and the two pages
+     disagreed with each other.
+
+     Held on both pages, and on the loaded font as well as the CSS: a family
+     still named in the Google Fonts request is still downloaded, and the
+     next heading added would reach for it. */
+  const INST_HTML = read('institutional.html');
+  const INST_CSS  = read('css/institutional.css');
+  const noSerif = (name, html, css) => {
+     /* The comments in these files describe the serifs they used to use. */
+     const code = css.replace(/\/\*[\s\S]*?\*\//g, '');
+     ok(`${name} loads no display serif`,
+        !/family=(Fraunces|DM\+Serif|Playfair|Lora|Merriweather)/.test(html),
+        (html.match(/fonts\.googleapis[^"]*/) || [''])[0]);
+     /* `sans-serif` ends in "serif" — the first version of this matched the
+        Poppins stack itself and failed on a file that was already correct. */
+     const SERIF = /font-family:[^;]*(Fraunces|DM Serif|Playfair|Georgia|(?<!sans-)\bserif\b)/;
+     ok(`and ${name} sets none in its CSS`,
+        !SERIF.test(code), (code.match(SERIF) || [''])[0]);
+     ok(`and ${name} does set Poppins`,
+        /font-family:[^;]*Poppins/.test(code) && /family=Poppins/.test(html));
+  };
+  noSerif('the private-client page', HTML, CSS);
+  noSerif('the institutional page', INST_HTML, INST_CSS);
   ok('the two pages point at each other',
      /institutional\.html/.test(HTML) && /private-clients\.html/.test(INST),
      'a reader who picked the wrong one has to be able to cross over');

@@ -76,10 +76,30 @@ const NATIVE_ORIGINS  = ['capacitor://localhost', 'ionic://localhost', 'http://l
 const STAGING_ORIGINS = ['https://svcapital-staging.up.railway.app'];
 const DEFAULT_PROD_ORIGINS = ['https://platform.svcapital.co.za', 'https://svcapital.co.za', 'https://www.svcapital.co.za', ...STAGING_ORIGINS, ...NATIVE_ORIGINS];
 const DEFAULT_DEV_ORIGINS  = ['http://localhost:3000', 'http://localhost:8080', 'http://localhost:5173', 'http://127.0.0.1:3000', 'http://127.0.0.1:8080', ...NATIVE_ORIGINS];
+/* The www. twin of every https origin already allowed.
+ *
+ * The contact form on the institutional and private-client landing pages
+ * failed with "CORS: origin https://www.platform.svcapital.co.za not
+ * allowed". That host serves the same pages as platform.svcapital.co.za,
+ * which IS allowed — the www. prefix was the whole difference, and an
+ * enquiry from a real prospect was lost to it.
+ *
+ * Bounded deliberately: this adds www.X for each X that is already allowed
+ * by name, and nothing else. A pattern like *.svcapital.co.za would be
+ * shorter and would turn any subdomain — including one somebody else came
+ * to control — into an allowed origin with credentials. */
+const wwwTwin = o => {
+  try {
+    const u = new URL(o);
+    if (u.protocol !== 'https:' || u.hostname.startsWith('www.')) return null;
+    return `https://www.${u.hostname}`;
+  } catch (_) { return null; }
+};
 // Merge env-var list with native + staging origins so ALLOWED_ORIGINS only needs to list production web domains.
-const EFFECTIVE_ORIGINS = ALLOWED_ORIGINS.length > 0
+const _named = ALLOWED_ORIGINS.length > 0
   ? [...new Set([...ALLOWED_ORIGINS, ...NATIVE_ORIGINS, ...STAGING_ORIGINS])]
   : (IS_PROD ? DEFAULT_PROD_ORIGINS : DEFAULT_DEV_ORIGINS);
+const EFFECTIVE_ORIGINS = [...new Set([..._named, ..._named.map(wwwTwin).filter(Boolean)])];
 if (IS_PROD && ALLOWED_ORIGINS.length === 0) {
   console.info(`[cors] ALLOWED_ORIGINS env var not set — defaulting to: ${DEFAULT_PROD_ORIGINS.join(', ')}. Set ALLOWED_ORIGINS to override.`);
 }

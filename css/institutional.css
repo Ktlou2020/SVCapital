@@ -10,14 +10,26 @@
    identity — it is the same firm, addressed differently. */
 
 :root {
-  --in-ink:        #10131a;
-  --in-ink-soft:   #333a46;
-  --in-muted:      #6b7380;
-  --in-line:       #e4e7ec;
+  /* The CI, taken from the CI files rather than invented for this page.
+     The hero was set on #0d1b2a — a navy that appears nowhere in brand.css
+     or home-ci.css — and that is the "dark blue" this page was flagged for.
+     The dark ground is now the CI's own dark grey and the secondary is the
+     colour brand.css records as the brand blue/teal.
+
+     That colour is #656565, which reads as a grey rather than a blue. It is
+     used here because it is what the CI files say; if the CI manual has a
+     true blue, brand.css does not have it and both should be corrected
+     together rather than this page guessing at one. White on #656565 is
+     about 4.5:1, so it carries small text and rules, not the hero ground —
+     the ground is #303030, where white is about 12:1. */
+  --in-ink:        #303030;   /* CI dark grey — --ci-text-body */
+  --in-ink-soft:   #4a4a4a;
+  --in-muted:      #656565;   /* CI blue/teal, per brand.css */
+  --in-line:       #e4e4e4;
   --in-paper:      #ffffff;
   --in-paper-alt:  #f7f8fa;
   --in-accent:     #fec24f;   /* the CI amber, used for emphasis only */
-  --in-deep:       #0d1b2a;   /* the ink the hero is set on */
+  --in-deep:       #303030;   /* the CI dark grey the hero is set on */
   --in-measure:    68ch;
 }
 
@@ -32,6 +44,13 @@
    columns overlap. This page does not load the main site's reset. */
 .in-page, .in-page *, .in-page *::before, .in-page *::after { box-sizing: border-box; }
 
+/* Set on the root, not only on the page wrapper. Anything that renders
+   outside .in-page — a browser's own form widget, a print header, an element
+   added later outside the wrapper — fell back to the UA default, which is
+   Times New Roman. That is part of what "both Poppins and Times New Roman on
+   one page" was: the serif headings fell through Georgia to Times on a
+   machine without Georgia, and the root was Times to begin with. */
+html { font-family: 'Poppins', system-ui, -apple-system, sans-serif; }
 .in-page { margin: 0; background: var(--in-paper); color: var(--in-ink);
            font-family: 'Poppins', system-ui, -apple-system, sans-serif; }
 .in-wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
@@ -40,14 +59,32 @@
 .in-hero { background: var(--in-deep); color: #fff; padding: 128px 0 88px; }
 .in-hero__eyebrow { font-size: 0.78rem; letter-spacing: 0.18em; text-transform: uppercase;
                     color: var(--in-accent); font-weight: 600; margin-bottom: 18px; }
-.in-hero h1 { font-family: 'DM Serif Display', Georgia, serif; font-weight: 400;
+/* Poppins, not a serif. Both landing pages carried a display serif beside
+   Poppins — DM Serif Display here, Fraunces on the private-client page — so
+   each page had two typefaces and the two pages did not agree with each
+   other. Asked for: one face across the site and every landing page.
+   Weight carries the heading now that the face no longer does. */
+.in-hero h1 { font-family: 'Poppins', system-ui, sans-serif; font-weight: 600;
               font-size: clamp(2.1rem, 4.6vw, 3.4rem); line-height: 1.12;
               letter-spacing: -0.01em; margin: 0 0 20px; text-wrap: balance; max-width: 18ch; }
 .in-hero p { font-size: clamp(1rem, 1.6vw, 1.12rem); line-height: 1.7;
              color: rgba(255,255,255,0.82); max-width: var(--in-measure); margin: 0 0 32px; }
-.in-hero__actions { display: flex; gap: 12px; flex-wrap: wrap; }
+/* The paragraph under these buttons used to start immediately below them,
+   so the two read as one block and the buttons lost their weight. The gap
+   belongs on the actions rather than on the paragraph: the paragraph is
+   optional on other layouts and the buttons are not. */
+.in-hero__actions { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 28px; }
 
-.in-btn { display: inline-flex; align-items: center; gap: 9px; border-radius: 10px;
+/* 14px, the radius css/style.css gives every button on the main site via
+   --radius. These were 10px here and 2px on the private-client page, so the
+   same call to action had a different shape on each landing page and a
+   third on the site itself. */
+/* font: inherit, because a <button> does not inherit the family — the
+   browser styles its own widget. The submit button that sends the
+   enquiry was rendering in Arial beside Poppins everywhere else, which
+   is the other half of "two fonts on one page". The field rule below
+   already does this for inputs; buttons were never covered. */
+.in-btn { display: inline-flex; align-items: center; gap: 9px; border-radius: 14px; font: inherit;
           padding: 14px 24px; font-weight: 600; font-size: 0.95rem; cursor: pointer;
           border: 1px solid transparent; text-decoration: none; transition: all .18s ease; }
 .in-btn--solid { background: var(--in-accent); color: #1a1a1a; }
@@ -60,7 +97,7 @@
 /* ── Sections ─────────────────────────────────────────────────────── */
 .in-section { padding: 84px 0; border-top: 1px solid var(--in-line); }
 .in-section--alt { background: var(--in-paper-alt); }
-.in-section h2 { font-family: 'DM Serif Display', Georgia, serif; font-weight: 400;
+.in-section h2 { font-family: 'Poppins', system-ui, sans-serif; font-weight: 600;
                  font-size: clamp(1.6rem, 3vw, 2.2rem); margin: 0 0 14px;
                  letter-spacing: -0.01em; text-wrap: balance; }
 .in-section__lead { color: var(--in-ink-soft); line-height: 1.75;
@@ -88,7 +125,7 @@
 .in-field label { display: block; font-size: 0.8rem; font-weight: 600;
                   color: var(--in-ink-soft); margin-bottom: 7px; }
 .in-field input, .in-field select, .in-field textarea {
-  width: 100%; padding: 12px 14px; border: 1px solid var(--in-line); border-radius: 9px;
+  width: 100%; padding: 12px 14px; border: 1px solid var(--in-line); border-radius: 8px;
   font: inherit; font-size: 0.95rem; color: var(--in-ink); background: #fff;
 }
 .in-field input:focus, .in-field select:focus, .in-field textarea:focus {
@@ -139,7 +176,7 @@
                  color: var(--in-muted); font-weight: 600; margin: 0 0 16px; }
 .in-sdg ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px; }
 .in-sdg li { font-size: 0.84rem; color: var(--in-ink-soft); line-height: 1.4;
-             border: 1px solid var(--in-line); border-radius: 6px; padding: 9px 14px; }
+             border: 1px solid var(--in-line); border-radius: 8px; padding: 9px 14px; }
 .in-sdg li strong { color: var(--in-ink); margin-right: 7px; }
 
 @media (max-width: 860px) {

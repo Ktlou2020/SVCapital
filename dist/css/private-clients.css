@@ -8,7 +8,7 @@
 
    So it is quieter than the homepage and warmer than the institutional page:
    the ground is a deep aubergine rather than navy, the accent is the house
-   purple used sparingly, the display face is Fraunces rather than DM Serif
+   purple used sparingly, and Poppins throughout — see the note on display type
    Display, and the layout is asymmetric — the proposition on the left, what
    the money actually finances alongside it, before anybody has scrolled.
 
@@ -39,6 +39,13 @@
    stylesheet, so it resets its own. */
 .pc-page, .pc-page *, .pc-page *::before, .pc-page *::after { box-sizing: border-box; }
 
+/* Set on the root, not only on the page wrapper. Anything that renders
+   outside .in-page — a browser's own form widget, a print header, an element
+   added later outside the wrapper — fell back to the UA default, which is
+   Times New Roman. That is part of what "both Poppins and Times New Roman on
+   one page" was: the serif headings fell through Georgia to Times on a
+   machine without Georgia, and the root was Times to begin with. */
+html { font-family: 'Poppins', system-ui, -apple-system, sans-serif; }
 .pc-page { margin: 0; background: var(--pc-paper); color: var(--pc-ink);
            font-family: 'Poppins', system-ui, -apple-system, sans-serif;
            -webkit-font-smoothing: antialiased; }
@@ -46,8 +53,13 @@
 
 /* ── Display type ─────────────────────────────────────────────────── */
 .pc-page h1, .pc-page h2, .pc-record {
-  font-family: 'Fraunces', 'DM Serif Display', Georgia, serif;
-  font-weight: 300; letter-spacing: -0.015em; text-wrap: balance;
+/* Poppins, not a serif. Both landing pages carried a display serif beside
+   Poppins — Fraunces here, DM Serif Display on the institutional page — so
+   each page had two typefaces and the two pages did not agree with each
+   other. Asked for: one face across the site and every landing page.
+   Weight carries the heading now that the face no longer does. */
+  font-family: 'Poppins', system-ui, sans-serif;
+  font-weight: 600; letter-spacing: -0.015em; text-wrap: balance;
 }
 
 /* ── Hero ─────────────────────────────────────────────────────────── */
@@ -71,7 +83,16 @@
 .pc-hero__actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 30px; }
 
 /* ── Buttons ──────────────────────────────────────────────────────── */
-.pc-btn { display: inline-flex; align-items: center; gap: 9px; border-radius: 2px;
+/* 14px, the radius css/style.css gives every button on the main site via
+   --radius. These were 10px here and 2px on the private-client page, so the
+   same call to action had a different shape on each landing page and a
+   third on the site itself. */
+/* font: inherit, because a <button> does not inherit the family — the
+   browser styles its own widget. The submit button that sends the
+   enquiry was rendering in Arial beside Poppins everywhere else, which
+   is the other half of "two fonts on one page". The field rule below
+   already does this for inputs; buttons were never covered. */
+.pc-btn { display: inline-flex; align-items: center; gap: 9px; border-radius: 14px; font: inherit;
           padding: 15px 26px; font-weight: 600; font-size: 0.93rem; cursor: pointer;
           border: 1px solid transparent; text-decoration: none; transition: all .18s ease; }
 .pc-btn--solid { background: var(--pc-accent); color: #1a1020; }
@@ -135,7 +156,7 @@
 .pc-steps li { counter-increment: step; display: grid;
                grid-template-columns: 62px 1fr; gap: 24px; align-items: start; }
 .pc-steps li::before {
-  content: counter(step); font-family: 'Fraunces', Georgia, serif; font-weight: 300;
+  content: counter(step); font-family: 'Poppins', system-ui, sans-serif; font-weight: 500;
   font-size: 2.1rem; line-height: 1; color: var(--pc-muted);
   border-bottom: 2px solid var(--pc-accent); padding-bottom: 10px;
 }
@@ -161,7 +182,7 @@
                   color: var(--pc-ink-soft); margin-bottom: 7px; }
 .pc-opt { font-weight: 400; color: var(--pc-muted); }
 .pc-field input, .pc-field select, .pc-field textarea {
-  width: 100%; padding: 13px 14px; border: 1px solid var(--pc-line); border-radius: 2px;
+  width: 100%; padding: 13px 14px; border: 1px solid var(--pc-line); border-radius: 8px;
   font: inherit; font-size: 0.95rem; color: var(--pc-ink); background: #fff;
 }
 .pc-field input:focus, .pc-field select:focus, .pc-field textarea:focus {
@@ -221,15 +242,15 @@
                 display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
                 gap: 22px 40px; }
 .pc-awards li { font-size: 0.9rem; line-height: 1.6; color: var(--pc-ink-soft); }
-.pc-awards__year { display: block; font-family: 'Fraunces', Georgia, serif;
-                   font-weight: 300; font-size: 1.3rem; color: var(--pc-ink);
+.pc-awards__year { display: block; font-family: 'Poppins', system-ui, sans-serif;
+                   font-weight: 500; font-size: 1.3rem; color: var(--pc-ink);
                    line-height: 1; margin-bottom: 7px;
                    font-variant-numeric: tabular-nums; }
 
 /* ── Impact ───────────────────────────────────────────────────────── */
 .pc-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
             gap: 38px 44px; }
-.pc-stat__val { font-family: 'Fraunces', Georgia, serif; font-weight: 300;
+.pc-stat__val { font-family: 'Poppins', system-ui, sans-serif; font-weight: 600;
                 font-size: clamp(1.9rem, 3.6vw, 2.7rem); line-height: 1;
                 letter-spacing: -0.01em; font-variant-numeric: tabular-nums;
                 padding-bottom: 12px; border-bottom: 2px solid var(--pc-accent); }
@@ -241,7 +262,7 @@
                  color: var(--pc-muted); font-weight: 600; margin: 0 0 16px; }
 .pc-sdg ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px; }
 .pc-sdg li { font-size: 0.85rem; color: var(--pc-ink-soft); line-height: 1.4;
-             border: 1px solid var(--pc-line); border-radius: 2px; padding: 10px 14px;
+             border: 1px solid var(--pc-line); border-radius: 8px; padding: 10px 14px;
              background: var(--pc-paper); }
 .pc-sdg li strong { color: var(--pc-ink); margin-right: 7px; }
 
