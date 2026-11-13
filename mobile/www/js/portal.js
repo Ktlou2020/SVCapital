@@ -77,7 +77,7 @@ function _openFsDoc(i) {
   // Capacitor WebView blocks window.open on both Android and iOS.
   // Use a full-screen iframe overlay instead.
   if (window.__SVC_NATIVE__) {
-    _openFsOverlay(url, doc.file_name || 'Document');
+    _openFsOverlay(url, doc.file_name || 'Document', doc);
     return;
   }
 
@@ -87,19 +87,102 @@ function _openFsDoc(i) {
   const objUrl = Utils.documentUrl(url);
   if (!objUrl) { if (typeof Toast !== 'undefined') Toast.error('Could not open document'); return; }
   const win = window.open(objUrl, '_blank', 'noopener');
-  if (!win && !/^https?:/i.test(objUrl)) _openFsOverlay(url, doc.file_name || 'Document');
+  if (!win && !/^https?:/i.test(objUrl)) _openFsOverlay(url, doc.file_name || 'Document', doc);
 }
 
-function _openFsOverlay(url, name) {
+/* ── Showing a document inside the app ────────────────────────────────
+   Reported: "I couldn't open any of the factsheets under any of the
+   investment products" — the overlay opened, with its Back button and the
+   document's name, and the body below it was blank.
+
+   ANDROID'S WEBVIEW HAS NO PDF RENDERER. Not a CSP problem, not a blob
+   problem: an <iframe> pointing at a PDF simply paints nothing there, and
+   product_factsheets.mime_type defaults to 'application/pdf', so every
+   factsheet hit it. Chrome on Android behaves the same way — it downloads a
+   PDF rather than displaying one — so there was never a version of this
+   that worked on the phone.
+
+   So the element is chosen by what the document IS:
+
+     an image   <img>, which the WebView has always been able to draw
+     a PDF      rendered page by page onto canvases with pdf.js
+     anything   the old iframe, which is right for the few things the
+     else       WebView does handle
+
+   pdf.js is loaded only when a PDF is actually opened, pinned, from the
+   same CDN the app already takes Chart.js, jsPDF and QRCode from. If it
+   cannot be reached the overlay SAYS SO and offers the file, rather than
+   showing the blank page this is here to fix. */
+/* VENDORED, not loaded from a CDN. The app already takes Chart.js, jsPDF and
+   QRCode off jsdelivr, so a CDN would have matched the house style — but a
+   factsheet is the document a client is being asked to invest on, and making
+   it unreadable whenever a CDN is slow, blocked or down is a worse trade than
+   1.4 MB in the bundle. It also means the viewer is the exact build that was
+   tested, not whatever the CDN serves that day.
+
+   Taken from npm (pdfjs-dist@3.11.174) and copied into mobile/src/vendor,
+   which mobile/scripts/build.js carries into www/ like every other override. */
+const _PDFJS_BASE = 'vendor/pdfjs';
+
+function _fsDocKind(url, doc) {
+  const declared = String((doc && doc.mime_type) || '').toLowerCase();
+  const sniffed = /^data:([^;,]*)/i.exec(String(url || ''));
+  const mime = declared || (sniffed ? sniffed[1].toLowerCase() : '');
+  if (/^image\//.test(mime)) return 'image';
+  if (/pdf/.test(mime)) return 'pdf';
+  /* No mime either way: a PDF is overwhelmingly what these are, and an
+     iframe on one is the blank screen. Guess the common case. */
+  if (!mime) return 'pdf';
+  return 'other';
+}
+
+function _loadPdfJs() {
+  if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  if (window.__pdfjsLoading) return window.__pdfjsLoading;
+  window.__pdfjsLoading = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = `${_PDFJS_BASE}/pdf.min.js`;
+    s.onload = () => {
+      if (!window.pdfjsLib) return reject(new Error('pdf.js loaded but exposed nothing'));
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = `${_PDFJS_BASE}/pdf.worker.min.js`;
+      resolve(window.pdfjsLib);
+    };
+    s.onerror = () => reject(new Error('the document viewer did not load'));
+    document.head.appendChild(s);
+  });
+  return window.__pdfjsLoading;
+}
+
+async function _renderPdfInto(host, src) {
+  const lib = await _loadPdfJs();
+  const pdf = await lib.getDocument(src).promise;
+  host.innerHTML = '';
+  for (let n = 1; n <= pdf.numPages; n++) {
+    const page = await pdf.getPage(n);
+    /* Rendered at the device's pixel ratio so the text is not a blur on a
+       phone, and capped so a long factsheet cannot exhaust memory. */
+    const base = page.getViewport({ scale: 1 });
+    const scale = Math.min((host.clientWidth || 360) / base.width, 3)
+      * Math.min(window.devicePixelRatio || 1, 2);
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    canvas.style.cssText = 'display:block;width:100%;height:auto;margin:0 auto 10px;background:#fff';
+    host.appendChild(canvas);
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+  }
+}
+
+function _openFsOverlay(url, name, doc) {
   document.getElementById('_fsNativeOverlay')?.remove();
 
   /* A blob, never the data: URL itself: the CSP's frame-src admits blob: and
-     refuses data:, so framing the original rendered blank. Falling back to
-     the raw url on failure, as this did, framed the very thing that is
-     refused — so an unusable document now says so instead. */
-  const iframeSrc = Utils.documentUrl(url);
-  if (!iframeSrc) { if (typeof Toast !== 'undefined') Toast.error('Could not open document'); return; }
+     refuses data:, so framing the original rendered blank. */
+  const src = Utils.documentUrl(url);
+  if (!src) { if (typeof Toast !== 'undefined') Toast.error('Could not open document'); return; }
 
+  const kind = _fsDocKind(url, doc);
   const isHttps = /^https?:\/\//i.test(url);
   const overlay = document.createElement('div');
   overlay.id = '_fsNativeOverlay';
@@ -110,8 +193,33 @@ function _openFsOverlay(url, name) {
       <span style="color:#fff;font-size:0.82rem;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(name)}</span>
       ${isHttps ? `<a href="${_esc(url)}" target="_blank" rel="noopener" style="color:#eda5ff;font-size:0.75rem;white-space:nowrap;flex-shrink:0"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>` : ''}
     </div>
-    <iframe src="${iframeSrc}" style="flex:1;width:100%;border:none;background:#fff" allow="fullscreen" loading="lazy"></iframe>`;
+    <div id="_fsBody" style="flex:1;overflow:auto;background:#fff;-webkit-overflow-scrolling:touch"></div>`;
   document.body.appendChild(overlay);
+
+  const body = overlay.querySelector('#_fsBody');
+  const say = html => { body.innerHTML =
+    `<div style="padding:28px 22px;color:#303030;font-size:0.9rem;line-height:1.6;text-align:center">${html}</div>`; };
+
+  if (kind === 'image') {
+    body.innerHTML = `<img src="${src}" alt="${_esc(name)}"
+      style="display:block;width:100%;height:auto;background:#fff">`;
+    return;
+  }
+  if (kind !== 'pdf') {
+    body.innerHTML = `<iframe src="${src}" style="width:100%;height:100%;border:none;background:#fff" allow="fullscreen"></iframe>`;
+    return;
+  }
+
+  say('<i class="fa-solid fa-spinner fa-spin"></i><br>Opening the document\u2026');
+  _renderPdfInto(body, src).catch(err => {
+    /* Named, not swallowed: the blank page this replaced said nothing at
+       all, which is what made it impossible to report as anything but
+       "it does not work". */
+    say(`Could not display this document on the device.<br>
+         <span style="color:#6b7280;font-size:0.82rem">${_esc(err && err.message || 'unknown error')}</span>
+         ${isHttps ? `<br><br><a href="${_esc(url)}" target="_blank" rel="noopener"
+            style="color:#E56200;font-weight:700">Open it in your browser</a>` : ''}`);
+  });
 }
 
 /* ─── Partner info profiles ─── */
