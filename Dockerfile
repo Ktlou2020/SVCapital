@@ -36,6 +36,7 @@ COPY _data/     ./_data/
 COPY index.html           ./
 COPY login.html           ./
 COPY signup.html          ./
+COPY get-app.html         ./
 COPY institutional.html   ./
 COPY private-clients.html ./
 COPY stokvels.html        ./

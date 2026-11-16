@@ -7,30 +7,13 @@
 
 const push = require('./pushService');
 const pool = require('../db/pool');
-/* Where the links in these emails point.
+/* Where the links in these emails point, and the host the footer names.
  *
- * The fallback is PRODUCTION'S address, and no environment sets BASE_URL —
- * so staging's emails carried production's links. A tester invited to a
- * group on staging followed "Sign in to SV Capital" onto the live platform,
- * where that invitation does not exist and the account signed in on that
- * browser is a different one. It reads as the link going to somebody else's
- * profile, and no amount of looking at staging explains it, because the
- * problem is that you are no longer on staging.
- *
- * Production keeps the fallback exactly as it was. Anywhere else, the
- * environment's own public address is used, so a new environment is right
- * without anybody remembering to set a variable. BASE_URL still wins when
- * it is set, which is how a custom domain is pointed at. */
-const _railwayEnv = process.env.RAILWAY_ENVIRONMENT_NAME || process.env.RAILWAY_ENVIRONMENT || '';
-const BASE_URL = process.env.BASE_URL
-  || ((_railwayEnv && _railwayEnv.toLowerCase() !== 'production' && process.env.RAILWAY_PUBLIC_DOMAIN)
-        ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
-        : 'https://platform.svcapital.co.za');
-/* The footer printed the live host as literal text whatever BASE_URL said,
-   so a staging email named the live platform in its own signature. */
-const BASE_HOST = (() => {
-  try { return new URL(BASE_URL).host; } catch (_) { return 'platform.svcapital.co.za'; }
-})();
+ * Resolved in services/appLinks.js, which the SMS service reads too — that
+ * one typed the live host straight into its message, so staging's SMS could
+ * not point anywhere but production no matter what BASE_URL said. One
+ * definition, and the comment on why lives with it. */
+const { BASE_URL, BASE_HOST } = require('./appLinks');
 const escHtml = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 // FROM_EMAIL must come from a domain verified in your Resend dashboard.
 // Until svcapital.co.za is verified, use the Resend test address:
@@ -1339,20 +1322,43 @@ function sendStokvelInvite(to, { inviteeName, inviterName, stokvelName, expiresA
      under My groups. */
   const how = alreadyAUser
     ? 'Sign in with this email address. The invitation is at the top of your dashboard, and under My groups.'
-    : 'Create a free SV Capital account using this email address. As soon as you have, the invitation will be at the top of your dashboard.';
+    : 'Get the SV Capital app and sign up with this email address. As soon as you have, the invitation will be at the top of your dashboard.';
   /* A new person's link opens sign-up showing THIS invitation (the group,
      who sent it, the rules, which address to use). It is not a way in:
      accepting still needs them signed in as this address — see
      routes/invitePreview.js for why that makes it safe to send. */
-  const go = alreadyAUser ? `${BASE_URL}/portal/?view=groups`
-           : `${BASE_URL}/signup.html${inviteId ? `?invite=${encodeURIComponent(inviteId)}` : ''}`;
+  const webGo = `${BASE_URL}/signup.html${inviteId ? `?invite=${encodeURIComponent(inviteId)}` : ''}`;
+  const go = alreadyAUser ? `${BASE_URL}/portal/?view=groups` : webGo;
+  /* THE APP IS THE WAY IN FOR SOMEBODY WHO HAS NO ACCOUNT. A stokvel is run
+     from a phone — contributions, approvals, the roster — and a member who
+     signs up in a browser is a member who has to be asked to install the app
+     later, at a point when nothing is prompting them to. So the stores are
+     the call to action here and the browser is a quiet line underneath it.
+     Not removed: somebody invited at a desk, or without a smartphone, still
+     has to be able to join, and an invitation that strands them is worse
+     than one that sends them to the wrong surface.
+     Nothing is pushed at a member who ALREADY has an account — they are
+     signing in, not signing up, and their link opens the app if they have
+     it. Being told to download what you already have is how a banner stops
+     being read. */
+  const { IOS_URL, ANDROID_URL } = require('./appLinks');
+  const storeBtn = (href, small, big) =>
+    `<a href="${href}" style="display:inline-block;padding:12px 18px;margin:4px;border-radius:12px;` +
+    `background:#303030;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;` +
+    `line-height:1.2;min-width:150px;text-align:center">` +
+    `<span style="display:block;font-weight:400;font-size:11px;opacity:0.85">${small}</span>${big}</a>`;
   return _send({
     to,
     type: 'stokvel_invite',
     subject: `${inviterName} invited you to join ${stokvelName}`,
+    /* The plain-text copy gets the app link too, as ONE url. Two store
+       addresses in a text part is most of the message, and /get-app sends
+       each phone to its own store. */
     text: `${inviterName} has invited you to join ${stokvelName} on SV Capital. `
         + (terms ? `The group's rules: ${terms} ` : '')
-        + `${how} ${go}`,
+        + `${how} `
+        + (alreadyAUser ? go
+           : `${require('./appLinks').getAppUrl(BASE_URL)} (or sign up in your browser: ${webGo})`),
     html: _wrap(`
       <h2>You have been invited to join ${escHtml(stokvelName)}</h2>
       <p>Hi${inviteeName ? ` ${escHtml(inviteeName)}` : ''}, <strong>${escHtml(inviterName)}</strong>
@@ -1371,12 +1377,21 @@ function sendStokvelInvite(to, { inviteeName, inviterName, stokvelName, expiresA
         <p style="margin:0"><strong>How to accept.</strong>
           ${alreadyAUser
             ? 'Sign in to SV Capital with this email address. The invitation is at the top of your dashboard, and under My groups.'
-            : 'Create a free SV Capital account using THIS email address. You can upload your documents later. As soon as your account exists, the invitation is at the top of your dashboard.'}</p>
+            : 'Get the SV Capital app and sign up using THIS email address. You can upload your documents later. As soon as your account exists, the invitation is at the top of your dashboard.'}</p>
       </div>
-      <p style="text-align:center"><a class="btn" href="${go}">${alreadyAUser ? 'Sign in to SV Capital' : 'Create my account'}</a></p>
-      <p style="font-size:0.84rem;color:#777">The button does not let anybody join on its own: only
-         the person signed in with this email address can accept, so a forwarded copy shows the
-         group&rsquo;s name and nothing of its money. ${when ? `The invitation is valid until ${escHtml(when)}.` : ''}</p>
+      ${alreadyAUser
+        ? `<p style="text-align:center"><a class="btn" href="${go}">Sign in to SV Capital</a></p>`
+        : `<p style="text-align:center;margin-bottom:6px"><strong>Get the SV Capital app</strong></p>
+           <p style="text-align:center;margin-top:0">
+             ${storeBtn(IOS_URL, 'Download on the', 'App Store')}
+             ${storeBtn(ANDROID_URL, 'Get it on', 'Google Play')}
+           </p>
+           <p style="text-align:center;font-size:0.82rem;color:#777;margin-top:2px">
+             <a href="${webGo}" style="color:#777">or continue in your browser</a></p>`}
+      <p style="font-size:0.84rem;color:#777">${alreadyAUser ? 'The button does not' : 'These links do not'}
+         let anybody join on their own: only the person signed in with this email address can accept,
+         so a forwarded copy shows the group&rsquo;s name and nothing of its money.
+         ${when ? `The invitation is valid until ${escHtml(when)}.` : ''}</p>
       <p style="font-size:0.84rem;color:#777">If you already have an SV Capital account under a
          different email address, ask ${escHtml(inviterName)} to send the invitation to that one
          instead. Joining a savings group means the group can see your contributions and what you owe \u2014

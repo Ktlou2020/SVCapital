@@ -2,6 +2,11 @@
 const https       = require('https');
 const querystring = require('querystring');
 
+/* The same host the emails use. This file typed platform.svcapital.co.za
+   into its messages, so a staging SMS pointed at the live site whatever
+   BASE_URL said — see services/appLinks.js. */
+const { BASE_HOST: SMS_BASE_HOST } = require('./appLinks');
+
 const AT_KEY    = process.env.AFRICASTALKING_API_KEY;
 const AT_USER   = process.env.AFRICASTALKING_USERNAME;
 const AT_SENDER = process.env.AFRICASTALKING_SENDER || '';
@@ -88,12 +93,22 @@ async function sendStokvelInvite(phone, { inviterName, stokvelName, terms, alrea
      And the SMS says the one thing that decides whether they ever see the
      invitation: use THIS number. A person who signs up under another number
      gets an account with no invitation in it. */
+  /* SOMEBODY WITH NO ACCOUNT IS SENT TO THE APP, not to a browser form. A
+     stokvel is run from a phone, and a member who signs up in a browser has
+     to be talked into installing the app later, with nothing prompting them
+     to. One link, because two store addresses would be most of a 160
+     character message: /get-app sends each phone to its own store and shows
+     both regardless, with the browser form underneath for anybody who needs
+     it.
+     The host comes from BASE_URL rather than being typed in, for the reason
+     the email footer did: this said platform.svcapital.co.za whatever
+     environment sent it, so a staging invitation pointed at the live site. */
+  const host = SMS_BASE_HOST;
   const msg = `${inviterName} invited you to join ${stokvelName} on SV Capital. `
             + (terms ? `${terms} ` : '')
             + (alreadyAUser
-              ? 'Sign in and the invite is at the top of your dashboard: platform.svcapital.co.za'
-              : 'Sign up with THIS number and the invite will be waiting for you: platform.svcapital.co.za/signup'
-                + (inviteId ? `?invite=${inviteId}` : ''));
+              ? `Sign in and the invite is at the top of your dashboard: ${host}`
+              : `Get the app and sign up with THIS number — the invite will be waiting: ${host}/get-app`);
   return _send(phone, msg);
 }
 

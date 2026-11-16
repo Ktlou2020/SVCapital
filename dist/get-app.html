@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Get the SV Capital app</title>
+<meta name="description" content="Download the SV Capital app for iPhone or Android." />
+<meta name="robots" content="noindex" />
+<link rel="icon" href="assets/favicon.ico" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* Deliberately self-contained. This page is the end of a link in an SMS,
+     opened on a phone on a bad connection by somebody who has never heard of
+     us, and every extra request is another chance for it to arrive blank. */
+  :root {
+    --ink:      #303030;
+    --muted:    #656565;
+    --line:     #e6e6e6;
+    --card:     #ffffff;
+    --bg:       #faf7fb;
+    --brand:    #eda5ff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ink: #f4f4f4; --muted: #a8a8a8; --line: #333;
+      --card: #1c1c1e; --bg: #121212;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    padding: 32px 16px;
+  }
+  .card {
+    width: 100%; max-width: 420px; background: var(--card);
+    border: 1px solid var(--line); border-radius: 18px;
+    padding: 28px 24px 24px; text-align: center;
+  }
+  .logo { height: 34px; margin-bottom: 18px; }
+  h1 { font-size: 1.3rem; font-weight: 800; margin: 0 0 8px; line-height: 1.3; }
+  p  { font-size: 0.92rem; color: var(--muted); line-height: 1.6; margin: 0 0 20px; }
+  .btns { display: flex; flex-direction: column; gap: 10px; }
+  a.store {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    padding: 13px 16px; border-radius: 14px; text-decoration: none;
+    background: var(--ink); color: var(--card); font-weight: 700; font-size: 0.95rem;
+    border: 1px solid var(--ink);
+  }
+  a.store small { display: block; font-weight: 500; font-size: 0.68rem; opacity: 0.8; }
+  a.store span  { text-align: left; line-height: 1.2; }
+  .web {
+    display: inline-block; margin-top: 18px; font-size: 0.8rem;
+    color: var(--muted); text-decoration: underline;
+  }
+  .note {
+    margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line);
+    font-size: 0.78rem; color: var(--muted); line-height: 1.6; margin-bottom: 0;
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+    <img class="logo" src="assets/sv-capital-logo-horizontal-outline-1.png" alt="SV Capital"
+         onerror="this.style.display='none'" />
+    <h1>Get the SV Capital app</h1>
+    <p>Sign up in the app with the email address or cell number your invitation was sent to, and it will be waiting on your dashboard.</p>
+    <div class="btns">
+      <a class="store" id="ios" href="https://apps.apple.com/za/app/id6670504520" rel="noopener">
+        <span><small>Download on the</small>App Store</span>
+      </a>
+      <a class="store" id="android" href="https://play.google.com/store/apps/details?id=co.za.svcapital.app" rel="noopener">
+        <span><small>Get it on</small>Google Play</span>
+      </a>
+    </div>
+    <a class="web" href="signup.html">or continue in your browser</a>
+    <p class="note">Already have the app? Open it and sign in &mdash; the invitation is at the top of your dashboard and under My groups.</p>
+  </div>
+
+<script>
+/* Send each phone to its own store, and show both either way.
+ *
+ * The redirect is the point of this page: an SMS has room for ONE link, and a
+ * message that makes an Android user pick their own store out of a list is a
+ * message half of them stop reading. But it is a convenience, not the page —
+ * both buttons are in the markup and work with this script blocked, broken or
+ * still loading, because the one thing this page must never be is blank.
+ *
+ * Desktop is left alone. There is nothing to install there, and bouncing
+ * somebody at a laptop into a store listing they cannot use hides the browser
+ * link, which is the only thing on this page that helps them.
+ *
+ * It also does not redirect when the page is reopened by the back button: a
+ * phone that has just come back from the store would be thrown straight at it
+ * again, and the person can never reach the browser link.
+ */
+(function () {
+  var ua = navigator.userAgent || '';
+  var isAndroid = /Android/i.test(ua);
+  /* iPadOS 13+ reports itself as a Macintosh; a Mac that reports touch
+     points is an iPad. Same rule as js/app-banner.js. */
+  var isIOS = /iPhone|iPad|iPod/i.test(ua)
+           || (/Macintosh/.test(ua) && Number(navigator.maxTouchPoints) > 1);
+  if (!isAndroid && !isIOS) return;
+
+  var target = isAndroid
+    ? document.getElementById('android').href
+    : document.getElementById('ios').href;
+
+  /* Back-forward cache: the page is being shown again, not opened. */
+  var restored = false;
+  try {
+    var nav = performance.getEntriesByType('navigation')[0];
+    restored = !!(nav && nav.type === 'back_forward');
+  } catch (_) {}
+  window.addEventListener('pageshow', function (e) { if (e.persisted) restored = true; });
+  if (restored) return;
+
+  /* A beat, so the page is drawn first. Somebody who lands on a white flash
+     and then a store listing has no idea what sent them there, and no way
+     back to the sentence explaining which address to sign up with. */
+  setTimeout(function () {
+    try { window.location.replace(target); } catch (_) { window.location.href = target; }
+  }, 900);
+})();
+</script>
+</body>
+</html>

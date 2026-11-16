@@ -306,16 +306,20 @@ console.log('\nand a staging email does not send people to the live platform');
      — "the link took me to another profile", and nothing on staging could
      ever explain it. */
   const vm = require('vm');
-  const EMAIL = fs.readFileSync(path.join(ROOT, 'server', 'services', 'email.js'), 'utf8');
-  const from = EMAIL.indexOf('const _railwayEnv');
-  const to   = EMAIL.indexOf('const escHtml');
+  /* It lives in appLinks.js now, because the SMS service needs the same
+     answer and used to type the live host straight into its message — so
+     staging's SMS could not point anywhere but production whatever BASE_URL
+     said. One definition, read here. */
+  const LINKS = fs.readFileSync(path.join(ROOT, 'server', 'services', 'appLinks.js'), 'utf8');
+  const from = LINKS.indexOf('const _railwayEnv');
+  const to   = LINKS.indexOf('const IOS_APP_ID');
   ok('the base-url block was found', from > 0 && to > from,
      'a slice that missed it would assert nothing while passing');
 
   const resolve = env => {
     const ctx = { process: { env }, URL };
     vm.createContext(ctx);
-    vm.runInContext(EMAIL.slice(from, to) + '\nthis.B = BASE_URL; this.H = BASE_HOST;', ctx);
+    vm.runInContext(LINKS.slice(from, to) + '\nthis.B = BASE_URL; this.H = BASE_HOST;', ctx);
     return { url: ctx.B, host: ctx.H };
   };
 
@@ -347,8 +351,18 @@ console.log('\nand a staging email does not send people to the live platform');
      stg.host + ' — a staging email claimed the live platform in its own signature');
   ok('and production\'s signature is unchanged',
      prod.host === 'platform.svcapital.co.za', prod.host);
+  const EMAIL = fs.readFileSync(path.join(ROOT, 'server', 'services', 'email.js'), 'utf8');
   ok('the footer no longer hardcodes it',
      !/>platform\.svcapital\.co\.za<\/a>/.test(EMAIL), 'server/services/email.js');
+  ok('and email.js reads the one definition rather than keeping its own',
+     /require\('\.\/appLinks'\)/.test(EMAIL) && !/const _railwayEnv/.test(EMAIL),
+     'two answers to "where are we?" is how the SMS came to have one that '
+     + 'could not be changed at all');
+  const SMS = fs.readFileSync(path.join(ROOT, 'server', 'services', 'sms.js'), 'utf8');
+  ok('and so does the SMS service, which used to type the host in',
+     /require\('\.\/appLinks'\)/.test(SMS)
+     && !/'platform\.svcapital\.co\.za/.test(SMS),
+     'server/services/sms.js');
 }
 
 /* ── 7. The screen says whose it is ──────────────────────────────────── */

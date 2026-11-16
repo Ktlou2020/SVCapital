@@ -189,19 +189,32 @@ console.log('\ngroups have a place of their own');
   ok('a notification link to view=groups opens My Groups', /view === 'groups' \? 'groups'/.test(CORE));
 }
 
-console.log('\nthe invitation sends a new person to sign-up');
+console.log('\nthe invitation sends a new person to the app, and an old one to their groups');
 {
   const EMAIL = read('server/services/email.js'), SMS = read('server/services/sms.js');
   const NOTE = read('server/services/stokvelNotify.js');
   const noComments = t => t.replace(/\/\*[\s\S]*?\*\//g, '');
   ok('no message talks about a Sub-accounts screen any more',
      !/Sub-accounts screen/.test(noComments(EMAIL + SMS + NOTE)));
-  ok('the email’s button goes to sign-up for somebody with no account',
-     /alreadyAUser \? `\$\{BASE_URL\}\/portal\/\?view=groups`/.test(EMAIL)
-     && /: `\$\{BASE_URL\}\/signup\.html/.test(EMAIL)
-     && /Create my account/.test(EMAIL));
+  /* THIS ASSERTED THE WEB FORM, which is what was wanted until the app
+     became the way in for a new member. A stokvel is run from a phone, and
+     somebody who signs up in a browser has to be talked into installing the
+     app later with nothing prompting them to. Rewritten to the new intent
+     rather than deleted: it is still about where a new person is sent, and
+     the browser must still be reachable for whoever has no smartphone.
+     check-app-invite renders the template and holds the detail. */
+  ok('the email sends somebody with no account to the app',
+     /appLinks/.test(EMAIL) && /Get the SV Capital app/.test(EMAIL));
+  ok('with the browser still offered underneath',
+     /const webGo = `\$\{BASE_URL\}\/signup\.html/.test(EMAIL)
+     && /or continue in your browser/.test(EMAIL),
+     'an invitation that strands somebody without a smartphone is worse than '
+     + 'one that sends them to the wrong surface');
+  ok('and somebody who has an account still goes straight to their groups',
+     /alreadyAUser \? `\$\{BASE_URL\}\/portal\/\?view=groups`/.test(EMAIL));
   ok('and tells them documents can wait', /You can upload your documents later/.test(EMAIL));
-  ok('the SMS says to use THIS number, and where', /Sign up with THIS number/.test(SMS) && /\/signup/.test(SMS));
+  ok('the SMS says to use THIS number, and where',
+     /THIS number/.test(noComments(SMS)) && /\/get-app/.test(noComments(SMS)));
   ok('and knows whether they already have an account',
      /alreadyAUser: !!v\.matched_investor_id[,} ]/.test(NOTE));
   ok('and the only link it carries opens sign-up, never an accept',

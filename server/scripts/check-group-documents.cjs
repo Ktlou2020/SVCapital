@@ -220,7 +220,19 @@ if (!process.env.DATABASE_URL) {
     ok('a new person’s email button opens sign-up with this invitation',
        /`\$\{BASE_URL\}\/signup\.html\$\{inviteId \? `\?invite=\$\{encodeURIComponent\(inviteId\)\}` : ''\}`/.test(EM));
     ok('somebody who has an account goes straight to My Groups', /`\$\{BASE_URL\}\/portal\/\?view=groups`/.test(EM));
-    ok('the SMS carries the link too', /signup'\s*\n\s*\+ \(inviteId \? `\?invite=\$\{inviteId\}` : ''\)/.test(read('server/services/sms.js')));
+    /* The SMS used to carry the web sign-up form and the invitation id. A
+       new member is sent to the APP now — a stokvel is run from a phone, and
+       somebody who signs up in a browser has to be talked into installing it
+       later. One link, because two store addresses would be most of a 160
+       character message. check-app-invite holds the rest of that. */
+    {
+      const SM = read('server/services/sms.js')
+        .replace(/\/\*[\s\S]*?\*\//g, ' ');   // the comments quote these very strings
+      ok('the SMS sends a new member to the app',
+         /\/get-app/.test(SM), 'server/services/sms.js');
+      ok('and an existing member to their dashboard',
+         /Sign in and the invite is at the top of your dashboard/.test(SM), 'server/services/sms.js');
+    }
     ok('and the notifier hands both the invitation id',
        (read('server/services/stokvelNotify.js').match(/inviteId: v\.id/g) || []).length === 2);
     void sent; void origSend;
