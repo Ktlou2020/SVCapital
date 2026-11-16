@@ -751,3 +751,58 @@ img { max-width: 100%; display: block; }
 .flex-1 { flex: 1; }
 .hidden { display: none !important; }
 .loading { opacity: 0.5; pointer-events: none; }
+
+/* ── Insight article editor ────────────────────────────────────────────
+   Authors could not format an article at all: the body was a plain
+   textarea whose placeholder read "Plain text — no HTML", and the public
+   page split it on blank lines and escaped it. The toolbar writes into the
+   editable box; server/services/articleMarkup.js decides what survives. */
+.ins-tb {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 2px;
+  padding: 6px; margin-bottom: -1px;
+  background: var(--dark-3); border: 1px solid var(--border);
+  border-radius: 10px 10px 0 0;
+}
+.ins-tb__b {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 30px; height: 30px; padding: 0 7px;
+  background: transparent; border: 1px solid transparent; border-radius: 7px;
+  color: var(--text-dim); font-size: 0.82rem; cursor: pointer;
+}
+.ins-tb__b:hover { background: var(--dark-2); color: var(--text-primary); }
+.ins-tb__b:focus-visible { outline: 2px solid #eda5ff; outline-offset: 1px; }
+/* Set from the selection, so the buttons report the text the caret is in
+   rather than only what was last pressed. */
+.ins-tb__b.is-on { background: rgba(237,165,255,0.16); border-color: rgba(237,165,255,0.45); color: #eda5ff; }
+.ins-tb__sep { width: 1px; height: 18px; margin: 0 4px; background: var(--border); }
+
+.ins-rich {
+  min-height: 300px; max-height: 60vh; overflow-y: auto;
+  border-radius: 0 0 10px 10px;
+  line-height: 1.65; white-space: pre-wrap; cursor: text;
+}
+.ins-rich:empty::before,
+.ins-rich[data-empty="1"]::before {
+  content: attr(data-placeholder);
+  color: var(--text-dim); pointer-events: none;
+}
+/* The editor shows roughly what the article will look like, so an author
+   is not formatting blind. Not a pixel preview — the published page has
+   its own measure and type scale — but a heading reads as a heading. */
+.ins-rich h2 { font-size: 1.3rem; font-weight: 700; margin: 18px 0 8px; line-height: 1.3; }
+.ins-rich h3 { font-size: 1.08rem; font-weight: 700; margin: 14px 0 6px; line-height: 1.35; }
+.ins-rich p  { margin: 0 0 12px; }
+.ins-rich ul, .ins-rich ol { margin: 0 0 12px; padding-left: 1.4em; }
+.ins-rich li { margin: 0 0 5px; }
+.ins-rich blockquote {
+  margin: 14px 0; padding: 2px 0 2px 14px;
+  border-left: 3px solid #eda5ff; color: var(--text-dim);
+}
+.ins-rich strong { font-weight: 700; color: var(--text-primary); }
+.ins-rich em { font-style: italic; }
+.ins-rich a { color: #eda5ff; text-decoration: underline; }
+/* Mirrors the published page: a class from a fixed set, never a style
+   attribute — articleMarkup.js will not pass one through. */
+.ins-rich .ta-left   { text-align: left; }
+.ins-rich .ta-center { text-align: center; }
+.ins-rich .ta-right  { text-align: right; }

@@ -5351,9 +5351,38 @@
                   placeholder="One or two sentences. This is the text WhatsApp shows under the headline."></textarea>
       </div>
       <div class="form-group">
-        <label class="form-label" for="insBody">Article <span style="color:#ef4444">*</span></label>
-        <textarea class="form-input" id="insBody" rows="14"
-                  placeholder="Leave a blank line between paragraphs. Plain text — no HTML."></textarea>
+        <label class="form-label" for="insBodyRich">Article <span style="color:#ef4444">*</span></label>
+        <!-- The toolbar writes into the editable box below; the box is synced
+             into the hidden textarea on save, which is still what saveInsight
+             reads. Buttons use mousedown rather than click so the caret does
+             not leave the text before the command runs. -->
+        <div class="ins-tb" id="insToolbar" role="toolbar" aria-label="Article formatting">
+          <button type="button" class="ins-tb__b" data-ins-cmd="bold" title="Bold (Ctrl+B)"><i class="fa-solid fa-bold"></i></button>
+          <button type="button" class="ins-tb__b" data-ins-cmd="italic" title="Italic (Ctrl+I)"><i class="fa-solid fa-italic"></i></button>
+          <button type="button" class="ins-tb__b" data-ins-cmd="underline" title="Underline (Ctrl+U)"><i class="fa-solid fa-underline"></i></button>
+          <span class="ins-tb__sep"></span>
+          <button type="button" class="ins-tb__b" data-ins-block="h2" title="Heading"><i class="fa-solid fa-heading"></i></button>
+          <button type="button" class="ins-tb__b" data-ins-block="h3" title="Sub-heading"><i class="fa-solid fa-heading" style="font-size:0.78em"></i></button>
+          <button type="button" class="ins-tb__b" data-ins-block="p" title="Normal text"><i class="fa-solid fa-paragraph"></i></button>
+          <button type="button" class="ins-tb__b" data-ins-block="blockquote" title="Quote"><i class="fa-solid fa-quote-left"></i></button>
+          <span class="ins-tb__sep"></span>
+          <button type="button" class="ins-tb__b" data-ins-cmd="insertUnorderedList" title="Bullet list"><i class="fa-solid fa-list-ul"></i></button>
+          <button type="button" class="ins-tb__b" data-ins-cmd="insertOrderedList" title="Numbered list"><i class="fa-solid fa-list-ol"></i></button>
+          <span class="ins-tb__sep"></span>
+          <button type="button" class="ins-tb__b" data-ins-align="ta-left" title="Align left"><i class="fa-solid fa-align-left"></i></button>
+          <button type="button" class="ins-tb__b" data-ins-align="ta-center" title="Centre"><i class="fa-solid fa-align-center"></i></button>
+          <button type="button" class="ins-tb__b" data-ins-align="ta-right" title="Align right"><i class="fa-solid fa-align-right"></i></button>
+          <span class="ins-tb__sep"></span>
+          <button type="button" class="ins-tb__b" data-ins-link="1" title="Add a link"><i class="fa-solid fa-link"></i></button>
+          <button type="button" class="ins-tb__b" data-ins-clear="1" title="Clear formatting"><i class="fa-solid fa-eraser"></i></button>
+        </div>
+        <div class="form-input ins-rich" id="insBodyRich" contenteditable="true" spellcheck="true"
+             data-placeholder="Write the article. Select text and use the buttons above to make it bold, turn it into a list, or centre it."></div>
+        <textarea id="insBody" style="display:none" aria-hidden="true" tabindex="-1"></textarea>
+        <div class="form-hint" style="font-size:0.72rem;color:var(--text-dim);margin-top:6px">
+          Pasted text arrives unformatted on purpose &mdash; paste first, then format. Headings, bullets,
+          alignment and links are kept; anything else is shown as plain words on the published page.
+        </div>
       </div>
       <div class="form-grid">
         <div class="form-group">
@@ -5412,7 +5441,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=31"></script>
 <script src="../js/investor-documents.js?v=9"></script>
-<script src="js/admin.js?v=231"></script>
+<script src="js/admin.js?v=232"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>

@@ -16,6 +16,7 @@
 
 const router = require('express').Router();
 const pool   = require('../db/pool');
+const { renderArticleBody } = require('../services/articleMarkup');
 
 const SITE = (process.env.PUBLIC_SITE_URL || 'https://platform.svcapital.co.za').replace(/\/+$/, '');
 
@@ -108,6 +109,30 @@ ${articleMeta || ''}
      article, and a slightly narrower measure, since the wider glyphs push
      more characters past a comfortable line. */
   article p{font-size:1.04rem;line-height:1.75;color:var(--ink);margin:0 0 20px;max-width:62ch}
+  /* The elements an author can now use. Without these the markup renders
+     with browser defaults — a bulleted list in Times, headings in the wrong
+     scale — which is its own kind of "formatting does not work". The measure
+     is repeated on every block so a list keeps the column the paragraphs
+     have. */
+  article h2{font-size:1.45rem;font-weight:700;letter-spacing:-.018em;line-height:1.3;
+             margin:34px 0 12px;max-width:62ch;text-wrap:balance}
+  article h3{font-size:1.15rem;font-weight:700;letter-spacing:-.012em;line-height:1.35;
+             margin:26px 0 10px;max-width:62ch;text-wrap:balance}
+  article ul,article ol{margin:0 0 20px;padding-left:1.35em;max-width:62ch}
+  article li{font-size:1.04rem;line-height:1.75;margin:0 0 8px}
+  article li::marker{color:var(--brand)}
+  article blockquote{margin:24px 0;padding:4px 0 4px 18px;border-left:3px solid var(--brand);
+                     color:var(--soft);font-size:1.06rem;line-height:1.7;max-width:62ch}
+  article strong{font-weight:700;color:var(--ink)}
+  article em{font-style:italic}
+  article u{text-decoration:underline;text-underline-offset:2px}
+  article a{color:var(--brand);text-decoration:underline;text-underline-offset:2px}
+  /* Alignment is a class from a fixed set, never a style attribute — see
+     services/articleMarkup.js for why. A centred block keeps its measure but
+     centres within the column rather than hugging the left edge of it. */
+  article .ta-left{text-align:left}
+  article .ta-center{text-align:center;margin-left:auto;margin-right:auto}
+  article .ta-right{text-align:right;margin-left:auto;margin-right:0}
   /* A hero is decorative chrome around the words, so it is capped rather than
      allowed to push the headline off a short screen. */
   img.hero{display:block;width:100%;max-height:420px;object-fit:cover;border-radius:12px;
@@ -282,7 +307,13 @@ router.get('/:slug', async (req, res) => {
 
     const a   = rows[0];
     const url = `${SITE}/insights/${encodeURIComponent(a.slug)}`;
-    const paras = String(a.body).split(/\n{2,}/).map(t => `<p>${esc(t.trim())}</p>`).join('');
+    /* Formatting, through the one gate. Authors could not apply any before —
+       the body was split on blank lines and escaped, so bold, bullets and
+       alignment were impossible. services/articleMarkup.js escapes first and
+       then restores a fixed allowlist, so an article written before there
+       was any formatting still renders as paragraphs, and nothing a body can
+       contain reaches this page as live markup. */
+    const paras = renderArticleBody(a.body);
 
     /* The share text is built here, URL-encoded once, so what WhatsApp opens is
        the headline and the link rather than a naked URL. */

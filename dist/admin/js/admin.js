@@ -16033,6 +16033,303 @@ async function loadInsights() {
   }
 }
 
+
+/* ── Insight article editor ─────────────────────────────────────────────
+   Authors could not apply any formatting: the body was a plain textarea and
+   the public page escaped it. The toolbar drives a contenteditable box; the
+   box is normalised into the hidden textarea, which is still what
+   saveInsight reads, so nothing about saving changed.
+
+   TWO LAYERS, DELIBERATELY. This normaliser exists so an author sees roughly
+   what will be stored. It is NOT the safety boundary — that is
+   server/services/articleMarkup.js, which escapes everything and restores a
+   fixed allowlist. A client cannot be trusted with what a public page
+   renders, so the server never takes this function's word for anything.
+   check-insights-formatting asserts the server accepts every construct this
+   can emit, so the two cannot drift into disagreeing. */
+
+const INS_ALIGN = ['ta-left', 'ta-center', 'ta-right'];
+const INS_BLOCKS = ['P', 'H2', 'H3', 'BLOCKQUOTE', 'LI', 'UL', 'OL'];
+/* What survives the normaliser. Kept in step with articleMarkup.js by the
+   check rather than by memory. */
+const INS_KEEP = {
+  P: 'p', H2: 'h2', H3: 'h3', UL: 'ul', OL: 'ol', LI: 'li',
+  BLOCKQUOTE: 'blockquote', STRONG: 'strong', B: 'strong', EM: 'em', I: 'em',
+  U: 'u', A: 'a', BR: 'br',
+};
+
+function _insEditor() { return document.getElementById('insBodyRich'); }
+
+/* The block the caret is in, stopping at the editor itself. */
+function _insBlockAt(node) {
+  const root = _insEditor();
+  let n = node;
+  while (n && n !== root) {
+    if (n.nodeType === 1 && INS_BLOCKS.includes(n.tagName)) return n;
+    n = n.parentNode;
+  }
+  return null;
+}
+
+/* Rebuild a subtree into the allowed set. Anything else keeps its TEXT and
+   loses its tag, which is the same rule the server applies — a construct
+   nobody allowed should cost the author their styling, never their words. */
+function _insNormalise(node, out) {
+  node.childNodes.forEach(child => {
+    if (child.nodeType === 3) { out.push(_esc(child.nodeValue)); return; }
+    if (child.nodeType !== 1) return;
+    const keep = INS_KEEP[child.tagName];
+    if (keep === 'br') { out.push('<br>'); return; }
+    if (!keep) { _insNormalise(child, out); return; }          // unwrap, keep words
+    if (keep === 'a') {
+      const href = child.getAttribute('href') || '';
+      const inner = [];
+      _insNormalise(child, inner);
+      /* Scheme-checked here too, so a bad link is visibly dropped in the
+         editor rather than silently at publish. */
+      out.push(/^(https?:\/\/[^/]|mailto:|\/(?!\/))/i.test(href.trim())
+        ? `<a href="${_esc(href.trim())}">${inner.join('')}</a>`
+        : inner.join(''));
+      return;
+    }
+    /* Alignment travels as a class from the fixed set. execCommand writes
+       style="text-align:…" instead, which the server will not pass, so it is
+       converted here rather than left to be silently dropped. */
+    let cls = INS_ALIGN.find(c => child.classList && child.classList.contains(c)) || '';
+    const st = (child.style && child.style.textAlign) || '';
+    if (!cls && st) cls = { left: 'ta-left', center: 'ta-center', right: 'ta-right' }[st] || '';
+    const inner = [];
+    _insNormalise(child, inner);
+    const body = inner.join('');
+    /* An empty block is what a stray newline leaves behind; it would publish
+       as a gap nobody typed. Lists keep theirs — an empty bullet is a bullet
+       the author is about to fill in. */
+    if (!body.trim() && keep !== 'li' && keep !== 'ul' && keep !== 'ol') return;
+    const open = cls && ['p', 'h2', 'h3', 'li', 'blockquote'].includes(keep)
+      ? `<${keep} class="${cls}">` : `<${keep}>`;
+    out.push(`${open}${body}</${keep}>`);
+  });
+  return out;
+}
+
+/* The editor's content as the markup that will be stored. Loose text at the
+   top level — which is what a browser leaves after certain edits — is
+   wrapped, so nothing is lost for want of a paragraph. */
+function _insReadEditor() {
+  const el = _insEditor();
+  if (!el) return '';
+  const tmp = document.createElement('div');
+  tmp.innerHTML = el.innerHTML;
+  /* Wrap stray inline content so it survives as a paragraph. */
+  const stray = [];
+  Array.from(tmp.childNodes).forEach(n => {
+    if (n.nodeType === 3 ? n.nodeValue.trim() : !INS_KEEP[n.tagName] || !INS_BLOCKS.includes(n.tagName)) stray.push(n);
+  });
+  if (stray.length) {
+    const p = document.createElement('p');
+    stray.forEach(n => { if (n.parentNode === tmp) p.appendChild(n); });
+    if (p.childNodes.length) tmp.appendChild(p);
+  }
+  return _insNormalise(tmp, []).join('');
+}
+
+/* Load a stored body into the editor. Plain-text articles written before
+   formatting existed become paragraphs, so opening an old article and
+   saving it does not change what it says. */
+function _insWriteEditor(body) {
+  const el = _insEditor();
+  if (!el) return;
+  const raw = String(body || '');
+  if (!raw.trim()) { el.innerHTML = ''; _insSync(); return; }
+  const isMarkup = /<\s*\/?\s*(p|h2|h3|ul|ol|li|blockquote|strong|em|u|b|i|a|br)\b/i.test(raw);
+  el.innerHTML = isMarkup
+    ? raw
+    : raw.split(/\n{2,}/).map(t => t.trim()).filter(Boolean)
+         .map(t => `<p>${_esc(t)}</p>`).join('');
+  _insSync();
+}
+
+/* Keep the hidden textarea — which is what saveInsight reads — in step. */
+function _insSync() {
+  const ta = document.getElementById('insBody');
+  const el = _insEditor();
+  if (ta) ta.value = _insReadEditor();
+  if (el) el.setAttribute('data-empty', el.textContent.trim() ? '0' : '1');
+  _insRefreshToolbar();
+}
+
+function _insRefreshToolbar() {
+  const bar = document.getElementById('insToolbar');
+  const el  = _insEditor();
+  if (!bar || !el) return;
+  const sel = window.getSelection();
+  const inEditor = sel && sel.anchorNode && el.contains(sel.anchorNode);
+  /* Same blind spot as alignment had: read the range, not the anchor node. */
+  const blk = inEditor ? (_insBlocksInSelection()[0] || _insBlockAt(sel.anchorNode)) : null;
+  bar.querySelectorAll('[data-ins-cmd]').forEach(b => {
+    let on = false;
+    try { on = inEditor && document.queryCommandState(b.dataset.insCmd); } catch (_) {}
+    b.classList.toggle('is-on', !!on);
+  });
+  bar.querySelectorAll('[data-ins-block]').forEach(b => {
+    b.classList.toggle('is-on', !!blk && blk.tagName === b.dataset.insBlock.toUpperCase());
+  });
+  bar.querySelectorAll('[data-ins-align]').forEach(b => {
+    b.classList.toggle('is-on', !!blk && blk.classList.contains(b.dataset.insAlign));
+  });
+}
+
+function _insExec(cmd) {
+  _insEditor()?.focus();
+  /* execCommand is deprecated and throws rather than returning false in some
+     browsers when a command is unavailable. Nothing useful can be done about
+     a bold that would not apply, and _insSync still runs below, so the editor
+     stays in step with the box either way. */
+  try { document.execCommand(cmd, false, null); } catch (_) {}
+  _insSync();
+}
+
+function _insSetBlock(tag) {
+  _insEditor()?.focus();
+  try { document.execCommand('formatBlock', false, tag); } catch (_) {}
+  _insSync();
+}
+
+/* EVERY BLOCK THE SELECTION TOUCHES, not the one under the caret.
+   
+   _insBlockAt walks UP from a node, which answers nothing when the anchor is
+   the editor itself — and after Ctrl+A, or any drag across two paragraphs,
+   that is exactly what it is. Alignment then did nothing at all and said
+   "put the cursor in the line you want to align first", which is both wrong
+   and impossible to act on when the whole article is selected. Bold had no
+   such problem because execCommand reads the range rather than a node, so
+   this failed on its own while every other button worked. */
+function _insBlocksInSelection() {
+  const el = _insEditor();
+  const sel = window.getSelection();
+  if (!el || !sel || !sel.rangeCount) return [];
+  const range = sel.getRangeAt(0);
+  let blocks = Array.from(el.querySelectorAll('p,h2,h3,blockquote,ul,ol'))
+    .filter(b => { try { return range.intersectsNode(b); } catch (_) { return false; } });
+  /* Outermost only: a list and its items are one thing to align, and a
+     paragraph inside a quote should not be aligned against its quote. */
+  blocks = blocks.filter(b => !blocks.some(o => o !== b && o.contains(b)));
+  if (blocks.length) return blocks;
+  const blk = _insBlockAt(range.startContainer);
+  /* A list aligns as a whole; aligning one bullet against its siblings reads
+     as a mistake rather than a choice. */
+  if (!blk) return [];
+  return [blk.tagName === 'LI' ? (blk.closest('ul,ol') || blk) : blk];
+}
+
+function _insSetAlign(cls) {
+  const el = _insEditor();
+  el?.focus();
+  let targets = _insBlocksInSelection();
+  /* NOTHING TO HANG A CLASS ON. Typing into an empty editor leaves a bare
+     text node — contenteditable does not wrap the first line in anything,
+     and defaultParagraphSeparator only decides what the NEXT line becomes.
+     So the commonest case of all, "write a sentence and centre it", had no
+     element to carry the class and silently did nothing. Bold was unaffected
+     because execCommand wraps the range itself, which is why this was the
+     one button that did not work. The line is given a paragraph first. */
+  if (!targets.length) {
+    try { document.execCommand('formatBlock', false, 'p'); } catch (_) {}
+    targets = _insBlocksInSelection();
+  }
+  if (!targets.length) { Toast.info('Put the cursor in the text you want to align first.'); return; }
+  /* Pressing it again returns to the default, but only when EVERY selected
+     block already has it — otherwise a mixed selection would clear the ones
+     that were already right instead of bringing the rest into line. */
+  const all = targets.every(t => t.classList.contains(cls));
+  targets.forEach(t => {
+    INS_ALIGN.forEach(c => t.classList.remove(c));
+    if (!all) t.classList.add(cls);
+  });
+  _insSync();
+}
+
+function _insAddLink() {
+  const el = _insEditor();
+  el?.focus();
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed) { Toast.info('Select the words you want to link first.'); return; }
+  const url = prompt('Link to (https://… , mailto:… , or /a-page-on-this-site):', 'https://');
+  if (url === null) return;
+  const u = String(url).trim();
+  if (!/^(https?:\/\/[^/]|mailto:|\/(?!\/))/i.test(u)) {
+    Toast.error('Links must start with https://, http://, mailto: or /');
+    return;
+  }
+  try { document.execCommand('createLink', false, u); } catch (_) {}
+  _insSync();
+}
+
+function _insClearFormat() {
+  _insEditor()?.focus();
+  try {
+    document.execCommand('removeFormat', false, null);
+    document.execCommand('formatBlock', false, 'p');
+  } catch (_) {}
+  const sel = window.getSelection();
+  const blk = sel && sel.anchorNode ? _insBlockAt(sel.anchorNode) : null;
+  if (blk) INS_ALIGN.forEach(c => blk.classList.remove(c));
+  _insSync();
+}
+
+/* Wired once, on the toolbar rather than per button, so the handlers survive
+   the modal being opened and closed. mousedown + preventDefault keeps the
+   selection: a click would blur the editor first and the command would have
+   nothing to act on. */
+function _insInitEditor() {
+  const bar = document.getElementById('insToolbar');
+  const el  = _insEditor();
+  if (!bar || !el || bar.dataset.wired === '1') return;
+  bar.dataset.wired = '1';
+
+  bar.addEventListener('mousedown', e => {
+    const b = e.target.closest('[data-ins-cmd],[data-ins-block],[data-ins-align],[data-ins-link],[data-ins-clear]');
+    if (!b) return;
+    e.preventDefault();
+    if (b.dataset.insCmd)        _insExec(b.dataset.insCmd);
+    else if (b.dataset.insBlock) _insSetBlock(b.dataset.insBlock);
+    else if (b.dataset.insAlign) _insSetAlign(b.dataset.insAlign);
+    else if (b.dataset.insLink)  _insAddLink();
+    else if (b.dataset.insClear) _insClearFormat();
+  });
+
+  /* Paragraphs, not divs. Without this the browser wraps each line in a div,
+     which the normaliser unwraps — and the article loses every line break it
+     appeared to have. */
+  try { document.execCommand('defaultParagraphSeparator', false, 'p'); } catch (_) {}
+
+  /* PASTE ARRIVES AS TEXT. Pasting from Word or a web page brings fonts,
+     colours and background spans that are stripped at publish, so the author
+     would format it, see it look right here, and find it plain on the site.
+     Taking the text and nothing else makes that honest. */
+  el.addEventListener('paste', e => {
+    e.preventDefault();
+    const text = (e.clipboardData || window.clipboardData)?.getData('text/plain') || '';
+    const lines = text.split(/\n{2,}/).map(t => t.trim()).filter(Boolean);
+    if (!lines.length) return;
+    try {
+      document.execCommand('insertHTML', false,
+        lines.map(t => `<p>${_esc(t).replace(/\n/g, '<br>')}</p>`).join(''));
+    } catch (_) {
+      document.execCommand('insertText', false, text);
+    }
+    _insSync();
+  });
+
+  el.addEventListener('input', _insSync);
+  el.addEventListener('keyup', _insRefreshToolbar);
+  el.addEventListener('mouseup', _insRefreshToolbar);
+  document.addEventListener('selectionchange', () => {
+    const sel = window.getSelection();
+    if (sel && sel.anchorNode && el.contains(sel.anchorNode)) _insRefreshToolbar();
+  });
+}
+
 function openInsightEditor(id) {
   const a = id ? (STATE.insights || []).find(x => x.id === id) : null;
   const set = (el, v) => { const n = document.getElementById(el); if (n) n.value = v; };
@@ -16042,7 +16339,13 @@ function openInsightEditor(id) {
   set('insIndustry', a ? a.industry : '');
   set('insSlug', a ? a.slug : '');
   set('insExcerpt', a ? a.excerpt : '');
+  /* The textarea is still the carrier saveInsight reads; the rich box is
+     what the author types into. Written through _insWriteEditor so a
+     plain-text article from before formatting existed opens as paragraphs
+     rather than as one block. */
   set('insBody', a ? a.body : '');
+  _insInitEditor();
+  _insWriteEditor(a ? a.body : '');
   set('insMins', a ? (a.read_minutes || 4) : 4);
   set('insColour', a ? (a.hero_colour || '#eda5ff') : '#eda5ff');
   set('insHeroAlt', a ? (a.hero_alt || '') : '');
@@ -16055,6 +16358,11 @@ function openInsightEditor(id) {
 }
 
 async function saveInsight() {
+  /* The editable box is the source of truth while the modal is open; the
+     textarea is only where it is read from. Synced here rather than relying
+     on the input handler, so a save that follows a toolbar press — which
+     does not fire `input` in every browser — still stores what is on screen. */
+  _insSync();
   const v = id => (document.getElementById(id)?.value || '').trim();
   const id       = v('insId');
   const title    = v('insTitle');
@@ -16067,6 +16375,11 @@ async function saveInsight() {
   if (!industry) { Toast.error('Give it an industry — it is the tag on the card.'); return; }
   if (!excerpt)  { Toast.error('The excerpt is what WhatsApp shows under the headline.'); return; }
   if (!body)     { Toast.error('The article has no body text.'); return; }
+  /* Markup with no words in it is what an empty editor leaves after a few
+     edits — <p></p> is truthy and would publish a blank article. */
+  if (!body.replace(/<[^>]*>/g, '').trim()) {
+    Toast.error('The article has no body text.'); return;
+  }
   if (!slug)     { Toast.error('That headline produced an empty URL slug — set one by hand.'); return; }
 
   const published = !!document.getElementById('insPublished')?.checked;
