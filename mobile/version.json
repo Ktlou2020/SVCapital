@@ -22,15 +22,15 @@
     "to 4-7 for 4.0.9, and are now kept monotonic ACROSS trains so that 'what is",
     "the next build number' has one unambiguous answer.",
     "",
-    "Moving versionName to 5.2 opens a new iOS train and abandons 4.1.0.",
-    "Anything already uploaded under 4.1.0 stays there and cannot be promoted.",
+    "Moving versionName to 5.3 opens a new iOS train and abandons 5.2.",
+    "Anything already uploaded under 5.2 stays there and cannot be promoted.",
     "",
     "The two numbers are kept equal deliberately: nothing requires it, but it",
     "makes a build identifiable across both stores from one figure.",
     "",
     "Run `npm run apply:android` / `npm run apply:ios` after changing this."
   ],
-  "versionName": "5.2",
-  "androidVersionCode": 94,
-  "iosBuildNumber": 94
+  "versionName": "5.3",
+  "androidVersionCode": 95,
+  "iosBuildNumber": 95
 }
