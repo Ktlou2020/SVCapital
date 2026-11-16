@@ -61,9 +61,14 @@ const Auth = {
     try {
       const payload = JSON.parse(atob(token.split('.')[1]));
       if (payload.exp && payload.exp * 1000 < Date.now()) {
-        // Expired — clean up silently
+        /* The TOKEN goes; svc_user stays. An access token ageing out is the
+           ordinary case that the silent refresh exists for, and svc_user is
+           how this browser knows it is signed in and as whom — it is an
+           identity, not a credential. Dropping it made a signed-in person
+           indistinguishable from somebody who had never been here, which
+           after the refresh was gated would have signed them out for good
+           every time their token aged out. Auth.clear() still takes both. */
         localStorage.removeItem('svc_token'); sessionStorage.removeItem('svc_token');
-        localStorage.removeItem('svc_user');  sessionStorage.removeItem('svc_user');
         return null;
       }
     } catch (_) {
@@ -78,9 +83,53 @@ const Auth = {
    * Store token and user info
    */
   setToken(token, user, remember = true) {
-    const store = remember ? localStorage : sessionStorage;
+    /* BOTH STORES ARE CLEARED FIRST. getToken() reads localStorage before
+       sessionStorage, so a token left in localStorage by an earlier sign-in
+       outranks the one just issued: somebody signing in WITHOUT "remember
+       me" was handed back the previous account on that browser. Writing one
+       store while the other still holds a live token is how two sessions
+       came to exist at once, and the stale one always won. */
+    /* Read WHERE the session lives before clearing, not after: clearing
+       first and asking afterwards always answers "nowhere", which sent every
+       refresh to localStorage — the exact promotion this is here to stop. */
+    const held = Auth._sessionStore();
+    /* And the identity, for the same reason. A refresh supplies no user, so
+       clearing svc_user would leave the session with a token and nobody
+       attached to it — and the guard that refuses a refresh belonging to a
+       DIFFERENT account reads svc_user to know whose browser this is. One
+       refresh would have blinded it. */
+    let keepUser = null;
+    if (!user) {
+      try { keepUser = (held && held.getItem('svc_user')) || null; } catch (_) {}
+    }
+    ['svc_token', 'svc_user'].forEach(k => {
+      try { localStorage.removeItem(k); } catch (_) {}
+      try { sessionStorage.removeItem(k); } catch (_) {}
+    });
+    /* A refresh calls this with no user, and must not MOVE the session.
+       Defaulting to localStorage promoted a deliberately session-only login
+       into one that outlives the tab, which is what left a live token on a
+       shared phone for the next person to pick up. */
+    const store = user ? (remember ? localStorage : sessionStorage)
+                       : (held || (remember ? localStorage : sessionStorage));
     store.setItem('svc_token', token);
     if (user) store.setItem('svc_user', JSON.stringify(user));
+    else if (keepUser) store.setItem('svc_user', keepUser);
+  },
+
+  /* Which store the current session lives in, before anything is written. */
+  _sessionStore() {
+    try { if (localStorage.getItem('svc_token')) return localStorage; } catch (_) {}
+    try { if (sessionStorage.getItem('svc_token')) return sessionStorage; } catch (_) {}
+    return null;
+  },
+
+  /* The account a token is for, without a library. Null when unreadable. */
+  subjectOf(token) {
+    try {
+      const p = JSON.parse(atob(String(token).split('.')[1]));
+      return p && (p.id != null ? String(p.id) : null);
+    } catch (_) { return null; }
   },
 
   /**
@@ -275,19 +324,62 @@ const API = {
     }
     clearTimeout(_tid);
 
-    // Handle 401 — try silent token refresh before giving up
+    /* Handle 401 — extend THIS browser's session, never create one.
+     *
+     * Reported: a stokvel invitation's "Sign in to SV Capital" link landed
+     * the recipient in somebody else's profile. The link carries no token;
+     * this did.
+     *
+     * svc_refresh is an httpOnly cookie that lives THIRTY DAYS, and this
+     * block fired on every 401 — including the 401 of somebody who had
+     * never signed in on that browser at all. The invitation link opens
+     * /portal/, the portal fetches, the fetch 401s with no token, and this
+     * posted the leftover cookie to /auth/refresh, which did exactly what
+     * it is meant to do: it returned a valid access token for whoever that
+     * cookie belongs to. The new recipient was then signed in as the last
+     * person to use that browser — no password, no prompt. On a shared
+     * phone, which is the normal case for a savings group, that is every
+     * invitation.
+     *
+     * Two conditions now. A refresh needs a session already in this browser
+     * context to extend, and the identity that comes back must be the one
+     * that was already here. Anything else is a sign-in, and a sign-in
+     * happens on the login screen.
+     */
     if (r.status === 401) {
+      const here = Auth.getUser();
+      /* "Is this browser signed in?", not "is its token still valid?" — an
+         aged-out token is precisely what a refresh is for, and getToken()
+         returns null for one. Reading only the token would have refused to
+         refresh the very sessions that need it. */
+      const hadSession = !!token || !!here;
       try {
-        const refreshRes = await fetch(`${_API_BASE}auth/refresh`, { method: 'POST', credentials: 'include' });
-        if (refreshRes.ok) {
-          const { token } = await refreshRes.json();
-          if (token) { Auth.setToken(token); }
-          // Retry the original request once with new token
-          const retryOpts = { ...opts, headers: { ...opts.headers, Authorization: `Bearer ${token}` } };
-          const retry = await fetch(url, retryOpts);
-          if (retry.ok) { if (retry.status === 204) return true; return retry.json(); }
+        if (hadSession) {
+          const refreshRes = await fetch(`${_API_BASE}auth/refresh`, { method: 'POST', credentials: 'include' });
+          if (refreshRes.ok) {
+            const { token: fresh } = await refreshRes.json();
+            const sub  = fresh ? Auth.subjectOf(fresh) : null;
+            const mine = here && here.id != null ? String(here.id) : null;
+            /* A refresh that comes back as a DIFFERENT account is the bug
+               above arriving by another door — an expired token belonging
+               to one person and a cookie belonging to another. Take it as a
+               session that has ended, not as the other person. */
+            if (fresh && (!mine || !sub || sub === mine)) {
+              Auth.setToken(fresh);
+              const retryOpts = { ...opts, headers: { ...opts.headers, Authorization: `Bearer ${fresh}` } };
+              const retry = await fetch(url, retryOpts);
+              if (retry.ok) { if (retry.status === 204) return true; return retry.json(); }
+            }
+          }
         }
       } catch (_) {}
+      /* And kill the refresh cookie on the way out. Having decided this
+         browser is not carrying a session we will extend, leaving a grant
+         that stays valid for thirty days is leaving the thing that caused
+         the problem lying about — the next 401 would simply find it again
+         through some other path. Logging out is what has actually
+         happened, so it is what we tell the server. */
+      try { await fetch(`${_API_BASE}auth/logout`, { method: 'POST', credentials: 'include' }); } catch (_) {}
       Auth.clear();
       if (window.__SVC_NATIVE__) {
         // Native: a redirect here lands mid-load and shows a white screen.

@@ -205,16 +205,30 @@ const get = (port, url) => new Promise((resolve, reject) => {
       ok('a pool with no term is left alone rather than divided by zero',
          /COALESCE\(ip\.term_months, 0\) > 0/.test(src));
       /* It was added additively, read by nothing, so that landing it shifted
-         no display. It has a reader now: the landing calculator, which
-         multiplies by the term in years and so has to be handed a per-annum
-         figure. The grid is still on the period one, which is the half of
-         this that must not change — see check-short-term-rate-label. */
+         no display. Two things read it now. */
       ok('the calculator reads the annualised field',
          /avg_annual_rate/.test(fs.readFileSync(path.join(ROOT, 'js', 'main.js'), 'utf8')),
          'it multiplies by termYears, so a period rate is prorated twice');
-      ok('and the portal grid still does not, because its label says the period',
-         !/avg_annual_rate/.test(fs.readFileSync(path.join(ROOT, 'js', 'portal-core.js'), 'utf8')),
-         'that grid shows "AVG RETURN (5 MO)" and would be wrong with an annual number under it');
+
+      /* THE GRID NOW READS IT TOO. This asserted the opposite — that the
+         grid must stay on the period figure "because its label says the
+         period" — which was right while the label said "(N MO)". Reported
+         from the app since: a figure under a label reading P.A. has to be
+         per annum, and on solar_7yr the period figure was seven years'
+         return presented as one year's.
+
+         What has to hold is not which field the grid reads, but that the
+         FIELD AND THE LABEL AGREE. Both are asserted together here, because
+         changing either one alone is the bug in one direction or the
+         other. */
+      const core = fs.readFileSync(path.join(ROOT, 'js', 'portal-core.js'), 'utf8');
+      ok('the portal grid reads the annualised field',
+         /p\.avg_annual_rate > 0 \? parseFloat\(p\.avg_annual_rate\)/.test(core),
+         'avg_actual_rate is the return over each pool\'s own period');
+      ok('AND ITS LABEL SAYS PER ANNUM, which is the half that must match',
+         /if \(isAvg\) return 'AVG RETURN P\.A\.';/.test(core)
+         && !/AVG RETURN \(\$\{termMonths\} MO\)/.test(core),
+         'an annual number under a "(N MO)" label is the same error reversed');
     }
 
     console.log('\nthe one-product special case is gone');

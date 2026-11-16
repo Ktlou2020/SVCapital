@@ -272,20 +272,81 @@ console.log('\nthe quiz is an assessment, not a formality');
     }
     /* The seed only ever reaches a brand-new database, so correcting a
        figure in it does nothing for staging or production unless a step
-       repairs the rows. This drives every EIF module back to the old minimum
+       repairs the rows. This drives every EIF module back to a wrong minimum
        the way those environments carry it — including the distractor that
        leaned on the minimums differing, which no figure substitution would
-       reproduce — and asserts the next boot rewrites all of them. */
-    console.log('\nand modules still teaching the old minimum are corrected in place');
+       reproduce — and asserts the next boot rewrites all of them.
+
+       Driven from EACH PRODUCT'S OWN minimum, not one hardcoded 'R100 000'.
+       That literal was the figure all three courses shared, and the moment
+       Murabaha moved to R1 000 000 it stopped matching anything in the
+       Murabaha modules: nothing was mangled, so nothing needed repairing,
+       and this section went on passing while testing nothing on that course.
+       A mangle that quietly matches nothing is the failure mode here, so the
+       rows it touched are counted and asserted on. */
+        /* THE SEED'S OWN PROSE. Every assertion above this point reads the
+       quiz; the terms list is prose, and it sat saying Murabaha's minimum
+       was "R100 000 — the same across all three EIF structures" for as long
+       as that was true of all three. When Murabaha moved to R1 000 000 the
+       sentence became false in both halves and nothing here noticed: the
+       repair step rewrote the module from the seed, and the seed was what
+       was wrong. A figure called the minimum in the teaching text is as
+       binding as one in an answer key, so it is read the same way. */
+    console.log('\nand the teaching text itself states the product\'s own minimum');
+    for (const c of EIF_COURSES) {
+      const type = Object.entries(COURSE_FOR).find(([, cid]) => cid === c.id);
+      const want = P[type[0]].min;
+      const said = [];
+      for (const m of c.modules) {
+        const txt = (m.content + ' ' + JSON.stringify(m.key_points))
+          .replace(/<[^>]+>/g, ' ');
+        /* Both orders, because the sentence that was wrong put the word
+           first and a figure-first scan reads straight past it. */
+        for (const re of [/R\s?(\d[\d ,\u00a0]*\d)[^.]{0,60}?minimum/gi,
+                          /minimum[^.]{0,60}?R\s?(\d[\d ,\u00a0]*\d)/gi])
+          for (const h of txt.matchAll(re))
+            said.push({ mod: m.module_index, n: +h[1].replace(/[ ,\u00a0]/g, '') });
+      }
+      ok(`${c.id}: the teaching text names a minimum at all`, said.length > 0,
+         'a scan that finds nothing asserts nothing');
+      ok(`${c.id}: and every one of them is the product's own figure (R${want})`,
+         said.every(x => x.n === want),
+         said.filter(x => x.n !== want)
+             .map(x => `module ${x.mod} says R${x.n}`).join(', '));
+    }
+
+console.log('\nand modules still teaching the old minimum are corrected in place');
     const setup = () => require(path.join(ROOT, 'server', 'db', 'setup.js'))().catch(() => {});
-    await db.query(
-      `UPDATE course_modules
-          SET content    = REPLACE(REPLACE(content, 'R100 000', 'R500'), 'R100 000', 'R500'),
-              key_points = REPLACE(REPLACE(key_points::text, 'R100 000', 'R500'), 'R100 000', 'R500')::jsonb,
-              quiz       = REPLACE(REPLACE(REPLACE(quiz::text, 'R100 000', 'R500'), 'R100 000', 'R500'),
-                                   'Whichever pool happens to be open for subscription, without reference to risk',
-                                   'Whichever carries the lowest minimum, without reference to risk')::jsonb
-        WHERE course_id LIKE 'CRS-PROD-EIF-%'`);
+    /* Any separator between the groups: the seed writes non-breaking spaces,
+       a console edit may well not. */
+    const figureRe = n => new RegExp('R\\s?' + String(n)
+      .replace(/\B(?=(\d{3})+(?!\d))/g, '[\\s,\u00a0]?'), 'g');
+    let mangled = 0;
+    for (const c of EIF_COURSES) {
+      const type = Object.entries(COURSE_FOR).find(([, cid]) => cid === c.id);
+      const re = figureRe(P[type[0]].min);
+      const { rows: before } = await db.query(
+        `SELECT module_index, content, key_points, quiz FROM course_modules
+          WHERE course_id = $1`, [c.id]);
+      for (const r of before) {
+        const kpWas = JSON.stringify(r.key_points), qWas = JSON.stringify(r.quiz);
+        const content = r.content.replace(re, 'R500');
+        const key_points = kpWas.replace(re, 'R500');
+        const quiz = qWas.replace(re, 'R500')
+          .replace('Whichever pool happens to be open for subscription, without reference to risk',
+                   'Whichever carries the lowest minimum, without reference to risk');
+        if (content === r.content && key_points === kpWas && quiz === qWas) continue;
+        mangled++;
+        await db.query(
+          `UPDATE course_modules SET content = $3, key_points = $4::jsonb, quiz = $5::jsonb
+            WHERE course_id = $1 AND module_index = $2`,
+          [c.id, r.module_index, content, key_points, quiz]);
+      }
+    }
+    /* Every course must have had something to break, or the repair below is
+       being asserted on modules that were already correct. */
+    ok('the stale state was actually written, on every course',
+       mangled >= EIF_COURSES.length, `${mangled} modules mangled`);
     await setup();
     for (const c of EIF_COURSES) {
       const { rows } = await db.query(
@@ -306,10 +367,65 @@ console.log('\nthe quiz is an assessment, not a formality');
              .map(r => `module ${r.module_index}: ${(r.content.match(/R500[^<]{0,30}/) || ['content differs'])[0]}`)
              .join(' | '));
       const qs = rows.flatMap(r => r.quiz || []);
-      ok(`${c.id}: and no quiz keys to the old figure`,
-         qs.filter(q => /\bminimum\b/i.test(q.question || ''))
-           .every(q => /R100[  ]000/.test(q.options[q.correct])),
-         qs.filter(q => /\bminimum\b/i.test(q.question || '')).map(q => q.options[q.correct]).join(' | '));
+      /* THE PRODUCT'S OWN minimum, not R100 000 for everything. This
+         hardcoded one figure across all three courses, which held only
+         while all three shared a minimum. Murabaha asks R1 000 000 now, and
+         a check that insists its answer says R100 000 is asserting the bug.
+         Read from EIF_PRODUCTS, like every other figure in this file. */
+      const typeFor = Object.entries(COURSE_FOR).find(([, cid]) => cid === c.id);
+      const wantMin = typeFor ? P[typeFor[0]].min : null;
+      ok(`${c.id}: the course maps to a product`, wantMin != null, c.id);
+      const wantedMin = n => {
+        const d = String(n);
+        const g = d.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+        return new RegExp('R(?:' + d + '|' + g.replace(/ /g, '[\\s,\u00a0]') + ')');
+      };
+      ok(`${c.id}: and every minimum question keys to the product's own figure`,
+         wantMin != null && qs.filter(q => /\bminimum\b/i.test(q.question || ''))
+           .every(q => wantedMin(wantMin).test(q.options[q.correct])),
+         'want R' + wantMin + ' — got: '
+         + qs.filter(q => /\bminimum\b/i.test(q.question || ''))
+             .map(q => q.options[q.correct]).join(' | '));
+    }
+
+    /* THE WORD-FIRST FORM ON ITS OWN. The mangle above leaves several
+       stale figures in each module, so the module is flagged by whichever
+       one the detector happens to read — and a detector that only reads
+       "R100 000 … minimum" still repairs the terms list as a side effect of
+       catching a different sentence. This breaks ONLY "Minimum investment:
+       R…", the plainest way anyone writes it, and leaves every other figure
+       correct: nothing but a detector that reads the word first can see it. */
+    const wfRows = [];
+    for (const c of EIF_COURSES) {
+      const { rows } = await db.query(
+        `SELECT module_index, content FROM course_modules
+          WHERE course_id = $1 AND content LIKE '%Minimum investment:%'`, [c.id]);
+      for (const r of rows) {
+        /* R250 000, not R500: the step also flags a module on a list of
+           SUPERSEDED figures, and R500 is on it — breaking it with one of
+           those flags the module by the marker path and proves nothing
+           about whether the sentence itself was read. This figure is on no
+           list, so the word-first pattern is the only thing that can see
+           it. */
+        const broken = r.content.replace(
+          /(Minimum investment:<\/strong>\s*)R\s?\d[\d ,\u00a0]*\d/i, '$1R250\u00a0000');
+        if (broken === r.content) continue;
+        wfRows.push({ id: c.id, mod: r.module_index, was: r.content });
+        await db.query(
+          `UPDATE course_modules SET content = $3
+            WHERE course_id = $1 AND module_index = $2`, [c.id, r.module_index, broken]);
+      }
+    }
+    ok('a module was broken in the word-first form only', wfRows.length > 0,
+       'nothing to repair means nothing asserted');
+    await setup();
+    for (const w of wfRows) {
+      const { rows: [r] } = await db.query(
+        `SELECT content FROM course_modules WHERE course_id = $1 AND module_index = $2`,
+        [w.id, w.mod]);
+      ok(`${w.id}: "Minimum investment: R250 000" is caught and repaired`,
+         !!r && r.content === w.was,
+         'the figure sits AFTER the word, which a figure-first scan reads past');
     }
 
     /* And having been corrected, a module is left alone — course content is
@@ -323,6 +439,35 @@ console.log('\nthe quiz is an assessment, not a formality');
     const { rows: [edited] } = await db.query(
       `SELECT content FROM course_modules WHERE course_id = $1 AND module_index = $2`,
       [EIF_COURSES[0].id, EIF_COURSES[0].modules[0].module_index]);
+    /* EVERY module, not one. The module above carries no quiz question
+       about the minimum, and the modules that do are the ones that were
+       being rewritten on every boot: the step read every option of such a
+       question, distractors included, so "R100 000 and six months" — a
+       wrong answer doing its job under a Murabaha question — made its
+       module permanently stale. Four modules were rewritten on the boot
+       that seeded them and on every boot since, and this assertion covered
+       none of them. Each module is edited and each edit must survive. */
+    const stamp = (id, idx) => `<p data-check="console-edit-${idx}">Edited.</p>`;
+    for (const c of EIF_COURSES)
+      for (const m of c.modules)
+        await db.query(
+          `UPDATE course_modules SET content = content || $3
+            WHERE course_id = $1 AND module_index = $2`,
+          [c.id, m.module_index, stamp(c.id, m.module_index)]);
+    await setup();
+    const survived = [];
+    for (const c of EIF_COURSES)
+      for (const m of c.modules) {
+        const { rows: [r] } = await db.query(
+          `SELECT content FROM course_modules WHERE course_id = $1 AND module_index = $2`,
+          [c.id, m.module_index]);
+        if (!r || !r.content.includes(stamp(c.id, m.module_index)))
+          survived.push(`${c.id} m${m.module_index}`);
+      }
+    ok('a console edit survives on EVERY module, including those with a minimum question',
+       survived.length === 0,
+       'rewritten from the seed, discarding the edit: ' + survived.join(', '));
+
     ok('a console edit to an already-correct module survives the next boot',
        !!edited && edited.content.includes('data-check="console-edit"'),
        'the correction is scoped by the stale figure, not by course id');

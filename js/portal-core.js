@@ -3500,7 +3500,11 @@ function _rateSubLabel(p, isAvg, termMonths) {
     return isAvg ? 'AVG SHARE P.A.' : 'TARGET SHARE P.A.';
   }
   const isSt = p.product_type === 'short_term';
-  if (isAvg) return isSt && termMonths ? `AVG RETURN (${termMonths} MO)` : 'AVG RETURN P.A.';
+  /* The average is annualised for every product now, so the "(N MO)" form
+     would be a lie about a figure that is no longer a period return. The
+     TARGET below keeps it: a short_term pool's stored target really is a
+     period rate. */
+  if (isAvg) return 'AVG RETURN P.A.';
   return isSt && termMonths ? `TARGET RETURN (${termMonths} MO)` : 'TARGET RETURN P.A.';
 }
 
@@ -3793,7 +3797,19 @@ function renderProductsGrid() {
     const pi = Utils.productInfo(p.product_type);
     const color = Utils.productColor(p);
     const icon = p.icon || pi.icon;
-    const avg = p.avg_actual_rate > 0 ? parseFloat(p.avg_actual_rate) : null;
+    /* avg_annual_rate, not avg_actual_rate. avg_actual_rate is the return
+       achieved over each pool's OWN period; this tile labels it "P.A." for
+       every product except short_term, so a seven-year solar pool's whole
+       return was being read as one year's. The products route has carried
+       the annualised average all along — AVG(actual_rate × 12 / term) — with
+       a comment saying it exists for exactly this tile and that nothing read
+       it yet. Something does now.
+
+       This also puts the grid on the same basis as the track record and the
+       Browse Pools tile, which annualise already. One rule: what is shown is
+       the average calculated for the product, per annum. */
+    const avg = p.avg_annual_rate > 0 ? parseFloat(p.avg_annual_rate)
+      : (p.avg_actual_rate > 0 ? parseFloat(p.avg_actual_rate) : null);
     const poolRate = open[0] ? parseFloat(open[0].annual_rate) : null;
     const rateLabel = avg != null ? `${(avg * 100).toFixed(2)}%` : (p.benchmark_rate ? `${(parseFloat(p.benchmark_rate) * 100).toFixed(1)}%` : (poolRate != null ? `${(poolRate * 100).toFixed(1)}%` : '—'));
     const termMonths = p.term_months || (open[0] && open[0].term_months) || null;
@@ -5928,6 +5944,30 @@ function _updateXPNavBadge() {
   }
 }
 
+/* Where a quest can be gone and done. A quest with no route here is one
+   the client cannot act on directly — reaching R100,000 invested is not a
+   button — and those say "Not yet" instead of offering one.
+
+   Functions, not a const map, because portal-core may declare no top-level
+   state and check-portal-split refuses one. */
+function _questRoutes() {
+  const go = v => `navigate('${v}', document.querySelector('[data-view=${v}]'))`;
+  return {
+    first_referral:   go('referral'),
+    first_investment: go('marketplace'),
+    diversify:        go('marketplace'),
+    first_deposit:    go('wallet'),
+  };
+}
+function _questCta() {
+  return {
+    first_referral:   'Invite',
+    first_investment: 'Invest',
+    diversify:        'Invest',
+    first_deposit:    'Top up',
+  };
+}
+
 function renderQuestView() {
   if (!PORTAL.quests) {
     const _catEl = document.getElementById('questCategories');
@@ -6050,7 +6090,20 @@ function renderQuestView() {
                   : cat === 'learning'
                     ? `<button class="btn quest-claim-btn" style="background:${quest.color}" onclick="startLearningQuest('${quest.id}')">Start</button>`
                     : `<button class="btn quest-claim-btn" style="background:${quest.color}" onclick="openSurveyModal('${quest.id}')">Start</button>`)
-              : `<div class="quest-card__locked"><i class="fa-solid fa-lock-open"></i> Available</div>`
+              /* NOT a padlock. This read "Available" beside a lock icon,
+                 which is a contradiction, and it was reported as exactly
+                 that: "the Refer & Earn option remains locked under Earn
+                 Rewards". Nothing was locked — the quest simply had not
+                 been met yet, and the card offered no way to go and meet
+                 it, so the only route was finding Refer & Earn in the side
+                 menu.
+
+                 A quest you can go and DO now gets the way there. The rest
+                 say plainly what is still outstanding. */
+              : (_questRoutes()[quest.id]
+                  ? `<button class="btn quest-claim-btn" style="background:${quest.color}"
+                        onclick="${_questRoutes()[quest.id]}">${_questCta()[quest.id] || 'Go'}</button>`
+                  : `<div class="quest-card__locked"><i class="fa-regular fa-circle"></i> Not yet</div>`)
           }
         </div>
       </div>`;
@@ -6757,7 +6810,31 @@ async function svcCopyToClipboard(text, nav, doc) {
   const n = nav || (typeof navigator !== 'undefined' ? navigator : {});
   const d = doc || (typeof document !== 'undefined' ? document : null);
   if (n.clipboard && typeof n.clipboard.writeText === 'function') {
-    try { await n.clipboard.writeText(text); return true; } catch (_) { /* fall through */ }
+    try {
+      await n.clipboard.writeText(text);
+      /* READ IT BACK where the browser allows. Reported from the app: an
+         invite was copied and what arrived in the chat had no referral code
+         in it. Every path in here was verified to copy the whole message,
+         so whatever happened was between writeText resolving and the paste
+         — and a writeText that resolves is the only evidence this had that
+         anything landed. Where readText is available, the copy is now
+         CHECKED rather than assumed, and a short or empty clipboard falls
+         through to the textarea route instead of reporting success.
+
+         readText is unavailable or permission-gated in most WebViews, which
+         is not a failure: an unverifiable copy is still a copy, and it is
+         treated as one. */
+      if (typeof n.clipboard.readText === 'function') {
+        try {
+          const back = await n.clipboard.readText();
+          if (typeof back === 'string' && back !== text) throw new Error('clipboard mismatch');
+        } catch (e) {
+          if (e && e.message === 'clipboard mismatch') throw e;
+          /* Could not read it back — allowed, and not evidence of failure. */
+        }
+      }
+      return true;
+    } catch (_) { /* fall through to the textarea route */ }
   }
   if (!d || typeof d.execCommand !== 'function') return false;
   try {
@@ -8818,7 +8895,11 @@ function selectInvestNowProduct(type) {
 function openCalcModal() {
   const sel = document.getElementById('calcPoolSelect');
   if (sel) {
-    sel.innerHTML = '<option value="">— Custom rate —</option>' +
+    /* No "Custom rate" option. It let a client model a return on a rate
+       SV Capital has never offered, and the result is indistinguishable
+       from a quote. The rate is now whichever pool is chosen, and the
+       field below it is read-only. */
+    sel.innerHTML = '<option value="">— Choose a pool —</option>' +
       (PORTAL.pools || []).filter(p => p.status === 'open' && !_poolPastClose(p) && p.product_type !== 'delivery_bikes' && p.product_type !== 'delivery_bike').map(p =>
         `<option value="${p.id}" data-rate="${p.annual_rate}" data-term="${p.term_months}">${p.name} — ${Utils.pct(p.annual_rate)} p.a.</option>`
       ).join('');
@@ -8835,7 +8916,18 @@ function openCalcModal() {
   if (rateEl) rateEl.value = '14';
   const ctaBar = document.getElementById('calcCTABar');
   if (ctaBar) ctaBar.style.display = 'none';
-  updateCalc();
+  /* Open on a real pool rather than on a default rate nobody chose. With
+     the rate read-only there is nothing a client can do to make an unopened
+     calculator mean anything, and 14% was a number with no pool behind it.
+     A client with no open pool to model sees the empty option and a rate
+     field that stays blank, which is the truth. */
+  if (sel && sel.options.length > 1) {
+    sel.selectedIndex = 1;
+    calcLoadPool();
+  } else {
+    if (rateEl) rateEl.value = '';
+    updateCalc();
+  }
   Modal.open('calcModal');
 }
 
@@ -12949,7 +13041,35 @@ function renderGroupsView() {
           <button class="btn btn--secondary btn--sm" onclick="openCreateSubAccountModal('stokvel')">
             <i class="fa-solid fa-plus"></i> Start a group</button>
         </div>` : ''}
+    ${invites.length ? '' : _svWhoAmINote()}
   </div>`;
+}
+
+/* WHO THIS SCREEN BELONGS TO.
+ *
+ * An invitation says "sign in with this email address" and links here. On a
+ * phone somebody else has used — which, for a savings club, is most of
+ * them — the browser is still signed in as that other person, so the
+ * recipient arrives in an account that is not theirs, finds no invitation,
+ * and reports that the link took them to somebody else's profile. Nothing
+ * on the screen said whose profile it was.
+ *
+ * So it says. The address is the one thing that settles it, and signing out
+ * is the one thing that helps, so both are here and nowhere else to look.
+ */
+function _svWhoAmINote() {
+  let who = null;
+  try { who = (typeof Auth !== 'undefined' && Auth.getUser && Auth.getUser()) || null; } catch (_) {}
+  const email = who && (who.email || who.username);
+  if (!email) return '';
+  return `<div style="margin-top:18px;padding:12px 14px;border:1px dashed var(--border);border-radius:12px;
+               font-size:0.82rem;color:var(--text-muted);line-height:1.6;max-width:560px">
+      <i class="fa-solid fa-circle-info"></i>
+      Expecting an invitation? It is sent to one address, and appears here only for that address.
+      You are signed in as <strong style="color:var(--text-primary)">${_esc(email)}</strong>.
+      <button class="btn btn--ghost btn--sm" style="margin-left:6px"
+              onclick="Auth.logout('/login.html')">Not you? Sign out</button>
+    </div>`;
 }
 
 /* ─── Switching into a stokvel ─────────────────────────────────────

@@ -2687,7 +2687,7 @@
       <div class="form-group" style="margin-bottom:0">
         <label class="form-label">Investment Pool (optional)</label>
         <select class="form-input" id="calcPoolSelect" onchange="calcLoadPool()">
-          <option value="">— Custom rate —</option>
+          <option value="">— Choose a pool —</option>
         </select>
       </div>
 
@@ -2711,8 +2711,15 @@
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
         <div class="form-group" style="margin-bottom:0">
           <label class="form-label">Annual Rate (%)</label>
+          <!-- READ-ONLY, and set by the pool above. A client could type any
+               rate here, so the calculator would happily show the return on
+               a rate SV Capital has never offered — and a screenshot of that
+               looks exactly like an offer. It is the pool's rate or nothing.
+               (The element also carried id="calcRate" twice; the second was
+               ignored by every browser and is gone.) -->
           <input type="number" class="form-input" id="calcRate" value="14" min="0" max="100" step="0.1"
-            oninput="updateCalc()" id="calcRate">
+            readonly aria-readonly="true" tabindex="-1"
+            style="background:rgba(128,128,128,0.10);cursor:not-allowed">
         </div>
         <div class="form-group" style="margin-bottom:0">
           <label class="form-label">Term (months)</label>
@@ -3066,7 +3073,7 @@
   </div>
 </nav>
 
-<script src="../js/api.js?v=30"></script>
+<script src="../js/api.js?v=31"></script>
 <!-- Capacitor native bridge — detects Capacitor WebView and activates native features
      (push notifications, haptics, status bar, back button, network monitoring) -->
 <script>
@@ -3076,7 +3083,7 @@ if (window.Capacitor) {
 }
 </script>
 <script src="/js/native.js"></script>
-<script src="../js/portal-core.js?v=79"></script>
+<script src="../js/portal-core.js?v=81"></script>
 <script src="../js/investor-documents.js?v=11"></script>
 <script src="js/portal.js?v=137"></script>
 <!-- sv-intelligence.js hidden -->

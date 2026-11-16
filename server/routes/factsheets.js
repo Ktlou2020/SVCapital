@@ -174,19 +174,26 @@ router.post('/upload', requireAuth, requireRole('admin', 'director'), async (req
       return res.status(400).json({ error: 'pool_id and file_url are required' });
     }
 
-    /* Period, then name. An explicit period wins; otherwise it comes from the
-       pool's close month. The name is only generated when the admin left it
-       blank — which the console no longer does, because it pre-fills the same
-       convention and shows it before the upload. */
+    /* Period, then name. An explicit period wins; otherwise it is the month
+       the sheet is being uploaded in — which is the month a monthly sheet
+       reports on.
+
+       This used to fall back to the POOL'S CLOSE MONTH, which is the month
+       the sheet reports on only for a pool that closes in it. A sheet
+       uploaded in October 2026 against a pool that closed in October 2025
+       was filed a year early, named for the wrong month, and sorted under
+       the wrong year in the investor's archive — reported as a sheet that
+       never arrived. The name is only generated when the caller left it
+       blank; the console pre-fills the same convention and shows it before
+       the upload. */
     const { rows: pr } = await pool.query(
       'SELECT name, end_date, product_type FROM investment_pools WHERE id = $1', [pool_id]);
     if (!pr.length) return res.status(400).json({ error: 'Unknown pool.' });
 
-    const periodDate = monthStart(req.body.period_date) || monthStart(pr[0].end_date);
+    const periodDate = monthStart(req.body.period_date) || monthStart(new Date());
     const file_name  = String(req.body.file_name || '').trim() || canonicalName(periodDate);
     if (!file_name) {
-      return res.status(400).json({
-        error: 'A factsheet name is required — this pool has no close date to derive one from.' });
+      return res.status(400).json({ error: 'A factsheet name is required.' });
     }
     /* Validated on the BYTES, not on what the caller says they are.
 

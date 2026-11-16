@@ -2641,7 +2641,14 @@ const EIF_PRODUCTS = [
       'Typical assets: production printers, maize inputs bought ahead of planting, weaner calves sold on to a feedlot',
       'Shorter term than most products on the platform',
     ].join('\n'),
-    min_investment: 100000, term_months: 6, benchmark_rate: 0.115, performance_fee_pct: 0,
+    /* R1m, not R100k. Reported from the app: the Murabaha minimum on screen
+       was wrong. This seed only reaches a BRAND-NEW environment — the insert
+       below is ON CONFLICT (product_type) DO NOTHING, so an environment where
+       the product already exists is never touched by it — which is exactly
+       why the wrong figure survived here unnoticed while production showed
+       whatever the console was last set to. Corrected so the next environment
+       seeded does not repeat it; production is changed in the console. */
+    min_investment: 1000000, term_months: 6, benchmark_rate: 0.115, performance_fee_pct: 0,
     risk_profile: 'Low-Medium', risk_color: '#22c55e', icon: 'fa-handshake',
     color: '#078e07', badge_class: 'badge--green', sector: 'Trade Finance', sort_order: 40,
   },
@@ -5086,9 +5093,49 @@ async function autoSetup() {
               ...(Array.isArray(row.quiz)
                     ? row.quiz.flatMap(q => [q && q.question, ...((q && q.options) || []), q && q.explanation].map(flat))
                     : [])];
+            /* Both orders. This matched only a figure BEFORE the word, so
+               "Minimum investment: R100 000" — the plainest way anyone
+               writes it, and how the terms list in every one of these
+               courses puts it — was invisible, and a stale figure sitting
+               there was never repaired. */
+            /* The content is HTML and the gap is allowed to carry INLINE
+               markup, because the sentence that was wrong is written
+               "<strong>Minimum investment:</strong> R1 000 000" — the tag
+               sits between the word and the figure, and "[^.<]" stops dead
+               at it. Only inline tags, never a block boundary: "</li><li>"
+               must still separate, or a list item ending in "minimum" would
+               claim the figure that opens the next one. */
+            const INLINE = '(?:<\\/?(?:strong|em|b|i|span|code)[^>]*>\\s*){0,3}';
+            const minPatterns = [
+              new RegExp('R\\s?(\\d[\\d ,]*\\d|\\d)[^.<]{0,60}?' + INLINE + '\\bminimum\\b', 'gi'),
+              new RegExp('\\bminimum\\b[^.<]{0,60}?' + INLINE + 'R\\s?(\\d[\\d ,]*\\d|\\d)', 'gi'),
+            ];
             const calledTheMinimum = fields.flatMap(f =>
-              [...f.matchAll(/R\s?(\d[\d ,]*\d|\d)[^.<]{0,60}?\bminimum\b/gi)]
-                .map(h => +h[1].replace(/[ ,]/g, '')));
+              minPatterns.flatMap(re => [...f.matchAll(re)]
+                .map(h => +h[1].replace(/[ ,]/g, ''))));
+            /* A QUESTION establishes the context for its own options. Read
+               field by field, an option reading "R500 and six months" says
+               nothing about a minimum — the word is in the question above
+               it — so a drifted ANSWER to "what is the minimum?" was
+               invisible here and never repaired. The question is what makes
+               those figures minimums; they are read as such when it is. */
+            if (Array.isArray(row.quiz)) {
+              for (const q of row.quiz) {
+                if (!q || !/\bminimum\b/i.test(flat(q.question || ''))) continue;
+                /* THE KEYED ANSWER ONLY. Reading every option read the
+                   DISTRACTORS too — "R100 000 and six months" under a
+                   Murabaha question whose answer is R1 000 000 — and a
+                   wrong answer is supposed to state a wrong figure. Four
+                   modules were therefore stale on the boot that seeded
+                   them, and rewritten from the seed on every boot after:
+                   a step whose whole promise is that it leaves a corrected
+                   module alone was quietly discarding console edits to
+                   them. What the course TEACHES is the keyed answer. */
+                const opt = (q.options || [])[q.correct];
+                const hit = /R\s?(\d[\d ,]*\d|\d)/.exec(flat(opt || ''));
+                if (hit) calledTheMinimum.push(+hit[1].replace(/[ ,]/g, ''));
+              }
+            }
             const stale = calledTheMinimum.some(n => n !== Number(product.min_investment))
                        || markers.some(x => fields.some(f => f.includes(x)));
             if (!stale) continue;
@@ -5118,6 +5165,18 @@ async function autoSetup() {
          that comes back after somebody dismissed the idea of it is worse than
          no notice at all. */
       const NOTICES = [
+        { id: 'ANN-2026-SIGNIN-WRONG-PROFILE', area: 'both', icon: 'fa-user-shield',
+          title: 'Opening the app on a shared phone no longer signs you in as whoever used it last',
+          body: 'REPORTED: people sent a group invitation clicked “Sign in to SV Capital” and landed in SOMEBODY ELSE’S PROFILE. The email was never the problem — it carries no sign-in link, only the address of the portal, which is why it is safe to forward. The browser was. Signing in leaves a renewal cookie that lasts THIRTY DAYS, and the app used to present that cookie whenever a request came back unauthorised — INCLUDING FOR SOMEBODY WHO HAD NEVER SIGNED IN ON THAT PHONE AT ALL. The server did what it was asked and returned a working session for whoever the cookie belonged to, so the new reader was signed in as the previous one, with no password and no prompt. On a phone a family or a savings club shares, that was every invitation. A session is now only ever RENEWED, never created: the renewal must belong to a session already open on that device AND to the same person, or the reader is sent to the sign-in screen and the stale cookie is thrown away. Signing in also clears whatever session was there before, so the account you just signed into is the one you get. STAYING SIGNED IN IS UNCHANGED for everybody else — a session whose token has simply aged out is still renewed silently. AND THE GROUPS SCREEN NOW NAMES THE ACCOUNT reading it, with a Sign out button, so anybody expecting an invitation that is not there can see at once that they are signed in as the wrong person.',
+          where: 'Client app → My Groups: the account you are signed in as is shown under the list whenever no invitation is waiting, with “Not you? Sign out”. Nothing to set up.' },
+        { id: 'ANN-2026-FACTSHEET-MONTH-DEFAULT', area: 'admin', icon: 'fa-calendar-day',
+          title: 'A factsheet is filed under the month you upload it in, not the month its pool closes',
+          body: 'REPORTED: the October 2026 cattle factsheet was uploaded and did not appear in the app, while the October 2026 short-term one did. IT WAS NEVER MISSING. The month a sheet is filed under was pre-filled from THE POOL’S CLOSE MONTH, which is the month the sheet reports on only when a pool happens to close in it. The short-term pool closed in October 2026, so that sheet landed correctly and looked like proof the feature worked. The cattle pool closed in OCTOBER 2025 — so the sheet uploaded on 21 October 2026 was stamped October 2025, auto-named “October 2025 - Factsheet” on top of the one already there, and sorted under the 2025 heading below the fold. The same default is why that archive reads August, June, April, February: pool maturity dates, not the months the sheets report on. THE MONTH NOW DEFAULTS TO THE MONTH YOU ARE IN, and is still an editable field shown before the upload, so back-filling an archive is a matter of changing it. SHEETS ALREADY FILED WRONG ARE NOT MOVED AUTOMATICALLY — a warning now appears on any pool carrying TWO SHEETS UNDER ONE MONTH, which is what a misfiled one looks like, and the pencil moves it to the right month without re-uploading the file.',
+          where: 'Console: Pools → a pool → Factsheets. The month is the first field; the warning sits under any sheet sharing a month with another. Coverage (top of that panel) lists the months each product is missing.' },
+        { id: 'ANN-2026-APP-FEEDBACK-OCT', area: 'both', icon: 'fa-mobile-screen',
+          title: 'From the October app review: the calculator, the returns shown, the quest cards and the Murabaha minimum',
+          body: 'FIVE THINGS. THE CALCULATOR NO LONGER TAKES A RATE OF ITS OWN: the rate is read from the pool you pick and cannot be typed over, and there is no “Custom rate” option — a screenshot of a return on a rate nobody offered is indistinguishable from a quote. “AVG RETURN P.A.” IS NOW PER ANNUM: the product grid read the return achieved over each pool’s OWN period under a label saying p.a., so a seven-year solar pool showed seven years’ return as one year’s. It now shows the annualised average the server has always calculated, and agrees with Browse Pools. TWO “PRINT / SAVE PDF” BUTTONS on the statement are now one: the one that remains goes through the share sheet, because the other calls the browser’s print, which does nothing on a phone. A QUEST YOU CAN ACT ON NOW SAYS HOW: “Refer Your First Friend” showed a padlock beside the word “Available” and offered no way to go and do it; quests that lead somewhere now carry the button, and ones that do not say “Not yet”. THE MURABAHA MINIMUM IS R1 000 000, corrected on the product card, in the three EIF training courses and in the quiz answers — existing environments are repaired on the next deploy without overwriting anything edited in the console.',
+          where: 'Client app → Invest (calculator, product cards, Browse Pools) and Earn Rewards (quests); My Statement for the print button. Console: Products → Murabaha Trade Finance for the minimum.' },
         { id: 'ANN-2026-NOTICE-FUND-ACTUALS', area: 'admin', icon: 'fa-scale-balanced',
           title: 'Notice fund: amend a month\u2019s projected rate, and post what the month actually returned',
           body: 'A PROJECTION CAN NOW BE AMENDED while its month is current (and for months ahead), not only before the month starts. An amendment applies to prices from then on; money already dealt keeps the price it was dealt at. ONCE A MONTH ENDS, POST ITS ACTUAL RETURN. It replaces the projection for that month in every price from then on, so every group\u2019s holding is revalued at what the month really earned, and a withdrawal still waiting is paid on the true figure. It may be negative. A posted actual is FINAL and the month\u2019s projection can no longer be changed, so check the figure before posting. The card warns when an ended month is still waiting for its actual, shows each month\u2019s projection against its actual, and keeps a log of every change: who, when, and from what to what. Groups see last month\u2019s actual beside what was projected.',

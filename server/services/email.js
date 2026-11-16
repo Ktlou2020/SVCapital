@@ -7,7 +7,30 @@
 
 const push = require('./pushService');
 const pool = require('../db/pool');
-const BASE_URL = process.env.BASE_URL || 'https://platform.svcapital.co.za';
+/* Where the links in these emails point.
+ *
+ * The fallback is PRODUCTION'S address, and no environment sets BASE_URL —
+ * so staging's emails carried production's links. A tester invited to a
+ * group on staging followed "Sign in to SV Capital" onto the live platform,
+ * where that invitation does not exist and the account signed in on that
+ * browser is a different one. It reads as the link going to somebody else's
+ * profile, and no amount of looking at staging explains it, because the
+ * problem is that you are no longer on staging.
+ *
+ * Production keeps the fallback exactly as it was. Anywhere else, the
+ * environment's own public address is used, so a new environment is right
+ * without anybody remembering to set a variable. BASE_URL still wins when
+ * it is set, which is how a custom domain is pointed at. */
+const _railwayEnv = process.env.RAILWAY_ENVIRONMENT_NAME || process.env.RAILWAY_ENVIRONMENT || '';
+const BASE_URL = process.env.BASE_URL
+  || ((_railwayEnv && _railwayEnv.toLowerCase() !== 'production' && process.env.RAILWAY_PUBLIC_DOMAIN)
+        ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+        : 'https://platform.svcapital.co.za');
+/* The footer printed the live host as literal text whatever BASE_URL said,
+   so a staging email named the live platform in its own signature. */
+const BASE_HOST = (() => {
+  try { return new URL(BASE_URL).host; } catch (_) { return 'platform.svcapital.co.za'; }
+})();
 const escHtml = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 // FROM_EMAIL must come from a domain verified in your Resend dashboard.
 // Until svcapital.co.za is verified, use the Resend test address:
@@ -44,7 +67,7 @@ p{font-size:0.93rem;color:#444;line-height:1.65;margin-bottom:14px}
 <div class="shell">
   <div class="hdr"><div class="logo"><img src="${BASE_URL}/assets/sv-capital-logo-horizontal-white-text.png" alt="SV Capital" /></div></div>
   <div class="bdy">${body}</div>
-  <div class="ftr">SV Capital (Pty) Ltd &nbsp;·&nbsp; <a href="${BASE_URL}">platform.svcapital.co.za</a><br>
+  <div class="ftr">SV Capital (Pty) Ltd &nbsp;·&nbsp; <a href="${BASE_URL}">${BASE_HOST}</a><br>
   This is an automated message — please do not reply directly.</div>
 </div></body></html>`;
 }

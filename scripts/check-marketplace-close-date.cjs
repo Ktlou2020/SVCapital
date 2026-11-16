@@ -181,7 +181,12 @@ const SITES = [
   ["the affordable/cheapest figures", /const openPools = ranked\.filter\(p => p\.status === 'open' && !_poolPastClose\(p\)\)/],
   ["the sub-account invest gate",     /function openSaInvest\([\s\S]{0,400}_poolPastClose/],
   ["the per-product open counts",     /!_poolPastClose\(p\)\) \{[\s\S]{0,120}openCounts\[k\]/],
-  ["the calculator's pool dropdown",  /calcPoolSelect[\s\S]{0,400}_poolPastClose/],
+  /* The window has to clear a comment. This was 400 characters and the
+     guard sat 418 away the moment a comment was written above the filter —
+     failing on code that still applied it. A character count is a proxy for
+     "in the same statement"; it only has to be loose enough not to fail on
+     prose, and tight enough that the next site's guard cannot satisfy it. */
+  ["the calculator's pool dropdown",  /calcPoolSelect[\s\S]{0,900}_poolPastClose/],
   ["recurring investment products",   /openProductTypes[\s\S]{0,200}_poolPastClose/],
   ["recurring minimum validation",    /const openPool = \(PORTAL\.pools \|\| \[\]\)\.find\(p => p\.status === 'open' && !_poolPastClose\(p\)/],
 ];

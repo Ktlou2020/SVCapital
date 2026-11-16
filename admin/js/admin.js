@@ -7623,16 +7623,25 @@ async function openFactsheetManager(poolId, poolName) {
   const verEl = document.getElementById('adminFsVersion');
   if (verEl) verEl.value = '';
 
-  /* Default the period to the pool's close month — the month the sheet
-     reports on. The admin can change it; most of the time they will not have
-     to, and that is what keeps the archive consistent. */
+  /* Default the period to THE MONTH WE ARE IN, which is the month a monthly
+     factsheet uploaded today reports on.
+
+     This used to default to the pool's CLOSE month, on the reasoning that a
+     sheet reports on its pool's month. That holds only for a pool that closes
+     in the month the sheet covers. The cattle pool closed in October 2025, so
+     the October 2026 cattle factsheet — uploaded 21 October 2026 — was filed
+     under October 2025, auto-named "October 2025 - Factsheet" on top of the
+     real one, and sorted into the 2025 group below the fold. It was reported
+     as missing from the app, and it was never missing: it was a year early.
+     The same default is why that product's archive reads August, June, April,
+     February — pool maturity dates, not the months the sheets report on.
+
+     Still editable, and still shown before the upload, so back-filling an
+     archive is a matter of changing the month. */
   const perEl = document.getElementById('adminFsPeriod');
   if (perEl) {
-    const p = (STATE.pools || []).find(x => x.id === poolId);
-    const end = p && p.end_date ? new Date(p.end_date) : null;
-    perEl.value = end && !isNaN(end)
-      ? `${end.getUTCFullYear()}-${String(end.getUTCMonth() + 1).padStart(2, '0')}`
-      : '';
+    const now = new Date();
+    perEl.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     _autoFsName();
   }
 
@@ -7647,6 +7656,22 @@ async function _loadAdminFactsheets(poolId, listEl) {
     const res = await API._fetch('GET', `factsheets?pool_id=${poolId}`);
     const sheets = res.data || [];
     _adminFsCache = sheets;
+    /* TWO SHEETS ON ONE POOL FILED UNDER THE SAME MONTH is what a misfiled
+       period looks like from here, and it is the only signal that does not
+       also flag a deliberate back-fill. The October 2026 cattle factsheet
+       landed on top of the October 2025 one — same pool, same month, two
+       rows, both auto-named "October 2025 - Factsheet" — and from the app it
+       read as a sheet that had never arrived. A back-filled archive uploaded
+       in one sitting has one row per month and says nothing here. */
+    const _perCount = {};
+    sheets.forEach(x => {
+      const k = x.period_date ? String(x.period_date).slice(0, 7) : null;
+      if (k) _perCount[k] = (_perCount[k] || 0) + 1;
+    });
+    const _sharesMonth = x => {
+      const k = x.period_date ? String(x.period_date).slice(0, 7) : null;
+      return !!k && _perCount[k] > 1;
+    };
     if (!sheets.length) {
       listEl.innerHTML = '<div style="color:var(--text-dim);font-size:0.78rem;text-align:center;padding:16px">No factsheets yet — upload one above.</div>';
       return;
@@ -7664,6 +7689,9 @@ async function _loadAdminFactsheets(poolId, listEl) {
                sheet filed under the wrong month has to be visible here. */
             s.period_label ? `<span style="color:var(--text-primary);font-weight:700">${_esc(s.period_label)}</span> · ` : '<span style="color:#f59e0b">No period · </span>'
           }${s.version ? `v${_esc(s.version)} · ` : ''}uploaded ${Utils.date(s.created_at)}${s.uploaded_by ? ` · ${_esc(s.uploaded_by)}` : ''}</div>
+          ${_sharesMonth(s) ? `<div style="font-size:0.68rem;color:#f59e0b;margin-top:3px">
+            <i class="fa-solid fa-triangle-exclamation"></i> Another sheet on this pool is filed under this same month —
+            one of them is probably meant for a different month. Use the pencil to move it.</div>` : ''}
         </div>
         <button class="btn btn--ghost btn--sm" onclick='_openStoredDoc(${_esc(JSON.stringify(s.id))})' title="Open"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
         <button class="btn btn--ghost btn--sm" onclick="editFactsheetMeta('${s.id}','${poolId}')" title="Change the period or name"><i class="fa-solid fa-pen"></i></button>

@@ -61,7 +61,26 @@
         shell.style.height = Math.ceil((h + 24) * scale) + 'px';
       }
     };
-    frame.addEventListener('load', fit);
+    frame.addEventListener('load', () => {
+      fit();
+      /* The document carries its own "Print / Save PDF", for when one is
+         opened in a window of its own. In this INLINE PREVIEW it is a second
+         button beside the one in the bar above it — reported from the app as
+         "there are two Print / Save PDF buttons" — and it is the one that
+         does not work on a phone, because it calls window.print(), which
+         iOS's WKWebView does not have and Android's WebView ignores.
+
+         _overlay already hid it for exactly this reason. The preview never
+         did, which is the only reason two were on screen. Hidden, not
+         removed from the template, so a document opened on its own keeps
+         it. The button in the bar is the one that goes through the share
+         sheet, so it is the one that stays. */
+      try {
+        frame.contentDocument
+          .querySelectorAll('.no-print button, .btn-print, button[onclick*="print"]')
+          .forEach(b => { b.style.display = 'none'; });
+      } catch (_) {}
+    });
     /* A phone rotating is the common case, and the scale is width-derived. */
     window.addEventListener('resize', fit);
     frame.srcdoc = html;
