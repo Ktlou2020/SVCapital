@@ -7997,9 +7997,15 @@ function _autoPoolName() {
   };
   const productLabel = typeLabels[typeEl.value] || typeEl.value;
   const partner      = partnerEl?.value.trim();
-  const closeDate    = closeEl?.value;
-  const monthYear    = closeDate
-    ? new Date(closeDate).toLocaleDateString('en-ZA', { month: 'long', year: 'numeric' })
+  /* The period in the name came from the CLOSE date, which an amount-goal
+     pool is not required to have any more. Falling through to the open date
+     keeps every pool's name carrying a month: without it, two rounds of the
+     same product with the same partner would both be named "Solar Investment
+     - The Solar Experts" and be told apart only by their id. */
+  const openEl       = document.getElementById(`${'new'}PoolOpenDate`);
+  const periodDate   = closeEl?.value || openEl?.value;
+  const monthYear    = periodDate
+    ? new Date(periodDate).toLocaleDateString('en-ZA', { month: 'long', year: 'numeric' })
     : '';
 
   const parts = [productLabel];
@@ -8009,14 +8015,64 @@ function _autoPoolName() {
   nameEl.value = parts.join(' - ');
 }
 
-/* Show/hide the Target Amount field depending on the chosen target type.
-   'amount' pools raise to a goal R amount; 'date' pools simply stay open
-   until their Close Date, so the amount goal is not applicable. */
+/* WHICH FIELD IS THE TARGET, AND THEREFORE WHICH ONE IS REQUIRED.
+ *
+ * The two target types ask for different things and the form used to ask for
+ * both regardless — it only hid the Target Amount on a date pool, and left
+ * Close Date looking equally expected either way.
+ *
+ *   amount goal   the pool raises until the money is there. The close date
+ *                 is NOT the target and is not needed: the pool closes when
+ *                 the amount is met. Leaving it blank is the normal case.
+ *   closing date  the date IS the target. A date pool with no close date has
+ *                 no target at all — it would raise forever — so that one is
+ *                 genuinely required, and is refused on save.
+ *
+ * Investment start is optional in both. It is the day the money is deployed,
+ * which is decided when it happens; the auto-fill from the close date is a
+ * convenience for a date pool and nothing is wrong with it being empty.
+ */
+const POOL_TARGET_TYPES = {
+  amount: {
+    needsCloseDate: false,
+    closeLabel: 'Close Date <span style="font-size:0.7rem;color:var(--text-muted);font-weight:400">(optional)</span>',
+    /* Says what actually happens, not what the name implies. Nothing closes
+       a pool when its target is reached: poolCyclerCron only sweeps pools
+       that HAVE a close date, and no route caps an investment at the target.
+       An operator told "it closes when it is full" would leave the date
+       blank and find the pool still taking money a month later. */
+    hint: '<strong>A close date is not needed</strong> \u2014 leave it blank and the pool keeps raising '
+        + 'until you close it yourself on this screen. Nothing closes it automatically when the target '
+        + 'is reached, so watch the raised figure. Set a close date only if the raise must stop on a '
+        + 'date whether or not the target is met.',
+  },
+  date: {
+    needsCloseDate: true,
+    closeLabel: 'Close Date <span style="color:#ef4444">*</span>',
+    hint: 'The pool stays open until its close date, whatever it has raised by then. '
+        + '<strong>The close date is the target</strong>, so it is required.',
+  },
+};
+
 function _syncPoolTargetType(which) {
   const sel  = document.getElementById(`${which}PoolTargetType`);
   const wrap = document.getElementById(`${which}PoolTargetWrap`);
   if (!sel || !wrap) return;
+  const t = POOL_TARGET_TYPES[sel.value] || POOL_TARGET_TYPES.amount;
   wrap.style.display = sel.value === 'date' ? 'none' : '';
+  const lbl  = document.getElementById(`${which}PoolCloseLabel`);
+  const hint = document.getElementById(`${which}PoolTargetHint`);
+  if (lbl)  lbl.innerHTML  = t.closeLabel;
+  if (hint) hint.innerHTML = t.hint;
+}
+
+/* The close date a pool of this type must have. Returns a message or null,
+   so both forms refuse the same thing in the same words. */
+function _poolCloseDateError(targetType, closeVal) {
+  const t = POOL_TARGET_TYPES[targetType] || POOL_TARGET_TYPES.amount;
+  if (!t.needsCloseDate || closeVal) return null;
+  return 'A closing-date pool needs a closing date \u2014 that date is its target. '
+       + 'If the pool should instead run until it is full, set Target Type to "Amount goal".';
 }
 
 function _autoCalcMaturityDate(openDateId, termId, closeDateId) {
@@ -8062,6 +8118,12 @@ async function saveNewPool(btn) {
     document.getElementById('newPoolOpenDate').value,
     document.getElementById('newPoolCloseDate').value);
   if (newWindowErr) { Toast.error(newWindowErr); return; }
+  /* An amount pool without one is the normal case and passes; a date pool
+     without one has no target at all and would raise forever. */
+  const newCloseErr = _poolCloseDateError(
+    document.getElementById('newPoolTargetType')?.value || 'amount',
+    document.getElementById('newPoolCloseDate').value);
+  if (newCloseErr) { Toast.error(newCloseErr); return; }
   const maxCapVal = document.getElementById('newPoolMaxCapacity').value;
   const max_capacity = maxCapVal ? (parseFloat(maxCapVal) || null) : null;
   await _withBtn(btn, async () => {
@@ -8519,6 +8581,11 @@ async function saveEditPool(btn) {
   };
 
   if (!updates.name) { Toast.error('Pool name is required'); return; }
+  /* Same rule on the way out as on the way in: an existing date pool must
+     not be saved with its close date cleared, which is the one edit that
+     would quietly turn it into a pool with no target. */
+  const editCloseErr = _poolCloseDateError(updates.target_type, updates.end_date);
+  if (editCloseErr) { Toast.error(editCloseErr); return; }
   const editWindowErr = _poolWindowError(updates.start_date, updates.end_date);
   if (editWindowErr) { Toast.error(editWindowErr); return; }
 
