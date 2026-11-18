@@ -271,6 +271,14 @@ async function execute(db, opts = {}) {
                 updated_at = NOW()
           WHERE id = $2`, [x.amount, pool.id]);
 
+      /* Recording history into a pool that is still open can be the money
+         that fills it, and a pool nobody closed goes on being offered. Same
+         db handle, so it is inside this transaction: either the holding and
+         the close both land or neither does. It only ever acts on a pool
+         that is still 'open', so backfilling into a long-matured pool — the
+         ordinary case here — does nothing. */
+      await require('./poolTarget').closeIfTargetMet(db, pool.id, actor);
+
       /* The matching ledger debit, when asked for. `investment` is a cash
          DEBIT, so this is what makes a wallet that already paid for the
          holding tie to its own history — and why it is OPTIONAL: where the

@@ -1991,6 +1991,19 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
                 WHERE id = $2`,
               [investAmt, clean.pool_id]
             );
+            /* And if that was the money that filled it, the pool stops
+               raising in the same request rather than at the next sweep —
+               otherwise it goes on being offered to everyone browsing until
+               tomorrow. Failure here must not fail the investment: the money
+               has already moved, and the nightly sweep closes it instead. */
+            try {
+              await require('../services/poolTarget').closeIfTargetMet(
+                pool, clean.pool_id,
+                { id: req.user && (req.user.empId || req.user.id),
+                  email: req.user && req.user.email, role: req.user && req.user.role });
+            } catch (e) {
+              console.error('[investment hook] pool target check failed:', e.message);
+            }
           }
 
           // Auto-unarchive investor when they make their first investment

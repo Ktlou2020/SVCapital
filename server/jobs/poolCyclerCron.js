@@ -408,12 +408,32 @@ async function stopRaisingLapsedPools() {
   return { moved: moved.length, stranded: stranded.length };
 }
 
+/* An amount-goal pool that is already full and still open.
+ *
+ * stopRaisingLapsedPools above is the date half — and its predicate is
+ * `end_date IS NOT NULL`, so a pool raising to an AMOUNT, which has no
+ * reason to carry a close date, was never swept by anything. It went on
+ * taking money past its goal until somebody noticed.
+ *
+ * Every path that adds money now closes the pool itself, so this is the
+ * catch-up for the ones that do not go through code: a figure typed into
+ * raised_amount in the console, a direct database edit, an import. The
+ * predicate lives in services/poolTarget.js and is shared with the live
+ * path, so the sweep cannot close something an investment would have left
+ * open. */
+async function sweepFullPools() {
+  const { closed } = await require('../services/poolTarget').sweep(pool);
+  if (closed) console.log(`[poolCycler] ${closed} pool(s) had reached their target and stopped raising.`);
+  return closed;
+}
+
 /* ── Scheduler ────────────────────────────────────────────── */
 
 function startPoolCyclerCron() {
   // Run once immediately so anything missed while the server was down is caught
   cycleExpiredPools()
     .then(stopRaisingLapsedPools)
+    .then(sweepFullPools)
     .catch(err => console.error('[poolCycler] startup run failed:', err.message));
 
   /* 00:01 SAST daily. The time is the requirement, not an implementation
@@ -428,6 +448,10 @@ function startPoolCyclerCron() {
          sweep that moved it first would leave the cycler nothing to find. */
       await cycleExpiredPools();
       await stopRaisingLapsedPools();
+      /* Last. The two passes above can themselves add money to a successor
+         pool, and a pool filled by one of them should stop raising on the
+         same run rather than waiting another day. */
+      await sweepFullPools();
     } catch (err) {
       console.error('[poolCycler] cron error:', err.message);
     }
@@ -440,6 +464,6 @@ function startPoolCyclerCron() {
 }
 
 module.exports = {
-  startPoolCyclerCron, cycleExpiredPools, stopRaisingLapsedPools,
+  startPoolCyclerCron, cycleExpiredPools, stopRaisingLapsedPools, sweepFullPools,
   INVESTMENT_START, BUSINESS_TZ, TODAY,
 };

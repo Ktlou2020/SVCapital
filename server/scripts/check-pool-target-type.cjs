@@ -68,17 +68,16 @@ console.log('\nan amount-goal pool does not need a closing date');
   ok('the label says optional rather than looking required',
      /\(optional\)/.test(ctx.T.amount.closeLabel) && !/\*/.test(ctx.T.amount.closeLabel),
      ctx.T.amount.closeLabel);
-  /* THE HINT MUST NOT PROMISE THE AUTO-CLOSE. Its first wording said the
-     pool "stays open until it is full", which reads as though reaching the
-     target closes it. Nothing does — see the last section. An operator who
-     believed that sentence would leave the date blank and find the pool
-     still taking money a month after it filled. */
+  /* THE HINT AND THE CODE HAVE TO AGREE. For one commit this said "nothing
+     closes it automatically", which was true then and would be a lie now;
+     the auto-close exists, so the sentence has to say so. Asserted in both
+     directions, because a hint that under-promises sends an operator
+     hunting for a close date they do not need. */
   ok('and the hint says what happens if it is left blank',
-     /keeps raising until you close it/i.test(ctx.T.amount.hint), ctx.T.amount.hint);
-  ok('WITHOUT promising an automatic close that does not exist',
-     /Nothing closes it automatically/i.test(ctx.T.amount.hint)
-     && !/until it is full/i.test(ctx.T.amount.hint),
+     /stops raising by itself as soon as the target is met/i.test(ctx.T.amount.hint),
      ctx.T.amount.hint);
+  ok('and does not still claim nothing closes it',
+     !/Nothing closes it automatically/i.test(ctx.T.amount.hint), ctx.T.amount.hint);
 }
 
 console.log('\nwhile a closing-date pool is nothing without one');
@@ -159,23 +158,179 @@ console.log('\nand a pool with no close date is not treated as expired');
      c2.past({ end_date: '2099-01-01' }) === false);
 }
 
-/* ── The part that is NOT built, recorded as such ────────────────────── */
-console.log('\nand nothing yet closes an amount pool when its target is met');
+/* ── And the behaviour the hint now promises ─────────────────────────── */
+console.log('\nand an amount pool really does stop raising when it is full');
 {
-  /* The request said "the closing date is when the amount is met". That is
-     the intent; it is not what the code does. Asserted as it stands so the
-     day it changes, this fails and somebody updates it on purpose. */
-  ok('the cycler only sweeps pools that HAVE a close date',
-     /AND end_date IS NOT NULL/.test(CYCLER),
-     'server/jobs/poolCyclerCron.js — a pool without one is never swept');
-  const capped = /max_capacity/.test(read('server/routes/tables.js'))
-    && /target_amount/.test(read('server/routes/investments.js'));
-  ok('and no investment route caps a pool at its target', !capped,
-     'if this fails, capping has been added and the note above is out of date');
-  ok('so the screen says so rather than implying otherwise',
-     /Nothing closes it automatically/i.test(ctx.T.amount.hint),
-     'an operator leaving the date blank should be able to read what follows');
+  const TARGET = read('server/services/poolTarget.js');
+  ok('there is one predicate for "full"', /const FULL = `/.test(TARGET),
+     'the live path and the sweep must not disagree about it');
+  ok('it only ever acts on a pool that is still open',
+     /COALESCE\(status, ''\) = 'open'/.test(TARGET),
+     'otherwise it would reopen the question every night for every pool');
+  ok('only on an amount-goal pool',
+     /COALESCE\(target_type, 'amount'\) = 'amount'/.test(TARGET),
+     'a date pool stops on its date — that IS its target');
+  ok('and only where a target was actually set',
+     /COALESCE\(target_amount, 0\) > 0/.test(TARGET),
+     'raised >= 0 is true of every pool on earth; without this the first '
+     + 'sweep closes all of them');
+  ok('it moves the pool to active, not closed',
+     /SET status = 'active'/.test(TARGET) && !/SET status = 'closed'/.test(TARGET),
+     "the cycler's own comment: closed is the end of the pool's life, after "
+     + 'maturity, and cycleExpiredPools excludes it');
+
+  /* The trap the cycler documented and this had to avoid. */
+  const TABLES = read('server/routes/tables.js');
+  /* Comments stripped: this file EXPLAINS the trap, so the word PATCH is
+     in it on purpose and a bare search finds the explanation rather than a
+     call. The lesson keeps recurring — a comment that quotes the thing it
+     warns about will satisfy any assertion looking for that thing. */
+  const targetCode = TARGET.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ');
+  ok('A PATCH TO active EMAILS THE WAITLIST, so this does not use one',
+     /body\.status === 'active' \|\| body\.status === 'open'/.test(TABLES)
+     && !/fetch\(|axios|require\('https?'\)|\/api\//.test(targetCode),
+     'telling everyone waiting that a pool has opened, at the moment it '
+     + 'filled, is the opposite of the news');
+  ok('and writes the status with its own SQL',
+     /UPDATE investment_pools/.test(targetCode) && /db\.query\(/.test(targetCode),
+     targetCode.slice(0, 200));
+
+  ok('the path that adds the money closes it in the same request',
+     /closeIfTargetMet\(/.test(TABLES),
+     'otherwise it is offered to everyone browsing until the next sweep');
+  ok('and a failure there cannot fail the investment',
+     /pool target check failed/.test(TABLES),
+     'the money has already moved; the sweep closes it instead');
+  ok('recording a past investment closes it too',
+     /closeIfTargetMet\(/.test(read('server/services/historicalInvestment.js')));
+  ok('and the nightly cycler sweeps the ones nothing called for',
+     /sweepFullPools/.test(read('server/jobs/poolCyclerCron.js')),
+     'a figure typed into raised_amount goes through no code at all');
+  ok('the sweep runs after the two passes that can fill a pool',
+     /await stopRaisingLapsedPools\(\);\s*\n[\s\S]{0,260}await sweepFullPools\(\);/
+       .test(read('server/jobs/poolCyclerCron.js')),
+     'a successor opened by the cycler should close on the same run if it fills');
+  ok('and every close is written to the audit trail',
+     /action: 'pool\.target_reached'/.test(TARGET),
+     'a pool that stops taking money on its own needs a name and a time');
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+
+/* ── And the same thing against a real database ──────────────────────── */
+async function againstDatabase() {
+  if (!process.env.DATABASE_URL) {
+    console.log('\n  SKIP  DATABASE_URL not set — the behaviour half of this check needs one');
+    return;
+  }
+  const { Pool } = require('pg');
+  const SSL = process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false };
+  const DB  = 'chk_ptgt_' + process.pid + '_' + Math.random().toString(36).slice(2, 8);
+  const admin = new Pool({ connectionString: process.env.DATABASE_URL, ssl: SSL, max: 2 });
+  const withDb = (url, n) => { const u = new URL(url); u.pathname = '/' + n; return u.toString(); };
+
+  let db;
+  try {
+    await admin.query(`DROP DATABASE IF EXISTS ${DB}`);
+    await admin.query(`CREATE DATABASE ${DB}`);
+    db = new Pool({ connectionString: withDb(process.env.DATABASE_URL, DB), ssl: SSL, max: 4 });
+    db.on('error', () => {});
+    /* Only the columns this rule reads. The whole schema is not needed and
+       building it would tie this check to every unrelated migration. */
+    await db.query(`CREATE TABLE investment_pools (
+      id TEXT PRIMARY KEY, name TEXT, status TEXT, target_type TEXT,
+      target_amount NUMERIC(18,2), raised_amount NUMERIC(18,2), updated_at TIMESTAMPTZ)`);
+
+    const target = require(path.join(ROOT, 'server', 'services', 'poolTarget.js'));
+    const add = (id, o) => db.query(
+      `INSERT INTO investment_pools (id, name, status, target_type, target_amount, raised_amount)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      [id, o.name || id, o.status || 'open', o.target_type === undefined ? 'amount' : o.target_type,
+       o.target, o.raised]);
+    const statusOf = async id =>
+      (await db.query('SELECT status FROM investment_pools WHERE id = $1', [id])).rows[0].status;
+
+    console.log('\nand against a real database, the money is what closes it');
+
+    await add('P-UNDER', { target: 100000, raised: 99999.99 });
+    await target.closeIfTargetMet(db, 'P-UNDER');
+    ok('a cent short stays open', await statusOf('P-UNDER') === 'open',
+       await statusOf('P-UNDER'));
+
+    await add('P-EXACT', { target: 100000, raised: 100000 });
+    const r = await target.closeIfTargetMet(db, 'P-EXACT');
+    ok('EXACTLY ON TARGET STOPS RAISING', await statusOf('P-EXACT') === 'active',
+       await statusOf('P-EXACT'));
+    ok('and it says so to the caller', r.closed === true, JSON.stringify(r));
+
+    await add('P-OVER', { target: 100000, raised: 150000 });
+    await target.closeIfTargetMet(db, 'P-OVER');
+    ok('and so does one already past it', await statusOf('P-OVER') === 'active');
+
+    /* The investment that crosses the line is kept. Refusing it would reject
+       a client mid-flow for being the one who filled the pool. */
+    await add('P-CROSS', { target: 100000, raised: 0 });
+    await db.query(`UPDATE investment_pools SET raised_amount = 120000 WHERE id = 'P-CROSS'`);
+    await target.closeIfTargetMet(db, 'P-CROSS');
+    ok('an investment that overshoots still lands, and then closes it',
+       await statusOf('P-CROSS') === 'active');
+
+    console.log('\nand it leaves alone everything that is not its business');
+    await add('P-DATE', { target_type: 'date', target: 100000, raised: 200000 });
+    await target.closeIfTargetMet(db, 'P-DATE');
+    ok('A DATE POOL IS UNTOUCHED however full it is',
+       await statusOf('P-DATE') === 'open',
+       'its target is the date, not the money');
+
+    await add('P-NOTARGET', { target: 0, raised: 500000 });
+    await target.closeIfTargetMet(db, 'P-NOTARGET');
+    ok('a pool with no target set is untouched',
+       await statusOf('P-NOTARGET') === 'open',
+       'raised >= 0 is true of every pool; this is what stops the sweep '
+       + 'closing all of them');
+
+    await add('P-NULLTYPE', { target_type: null, target: 100000, raised: 100000 });
+    await target.closeIfTargetMet(db, 'P-NULLTYPE');
+    ok('but a pool written before target_type existed counts as an amount pool',
+       await statusOf('P-NULLTYPE') === 'active',
+       'every other read in the codebase treats a missing one as "amount"');
+
+    await add('P-MATURED', { status: 'matured', target: 100000, raised: 100000 });
+    await target.closeIfTargetMet(db, 'P-MATURED');
+    ok('and a pool that is not open is not reopened or restyled',
+       await statusOf('P-MATURED') === 'matured');
+
+    console.log('\nand closing is idempotent and one-way');
+    const again = await target.closeIfTargetMet(db, 'P-EXACT');
+    ok('closing a closed pool does nothing', again.closed === false,
+       JSON.stringify(again));
+    await db.query(`UPDATE investment_pools SET target_amount = 500000 WHERE id = 'P-EXACT'`);
+    await target.sweep(db);
+    ok('AND RAISING THE TARGET LATER DOES NOT REOPEN IT',
+       await statusOf('P-EXACT') === 'active',
+       'a pool that reopened itself because somebody edited a figure would '
+       + 'start taking money again with nobody told');
+
+    console.log('\nand the sweep finds the ones nothing called for');
+    await add('P-SWEEP1', { target: 1000, raised: 1000 });
+    await add('P-SWEEP2', { target: 1000, raised: 9999 });
+    await add('P-SWEEP3', { target: 1000, raised: 999 });
+    const s = await target.sweep(db);
+    ok('it closes the full ones', await statusOf('P-SWEEP1') === 'active'
+       && await statusOf('P-SWEEP2') === 'active');
+    ok('and leaves the one still raising', await statusOf('P-SWEEP3') === 'open');
+    ok('and reports how many it moved', s.closed >= 2, JSON.stringify(s.closed));
+    const s2 = await target.sweep(db);
+    ok('a second sweep moves nothing', s2.closed === 0, JSON.stringify(s2.closed));
+  } finally {
+    if (db) await db.end().catch(() => {});
+    await admin.query(`DROP DATABASE IF EXISTS ${DB}`).catch(() => {});
+    await admin.end().catch(() => {});
+  }
+}
+
+againstDatabase()
+  .catch(e => { fail++; console.log('  ✗ the database run failed\n      ' + e.message); })
+  .then(() => {
+    console.log(`\n${pass} passed, ${fail} failed`);
+    process.exit(fail ? 1 : 0);
+  });

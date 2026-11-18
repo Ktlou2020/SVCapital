@@ -8036,15 +8036,17 @@ const POOL_TARGET_TYPES = {
   amount: {
     needsCloseDate: false,
     closeLabel: 'Close Date <span style="font-size:0.7rem;color:var(--text-muted);font-weight:400">(optional)</span>',
-    /* Says what actually happens, not what the name implies. Nothing closes
-       a pool when its target is reached: poolCyclerCron only sweeps pools
-       that HAVE a close date, and no route caps an investment at the target.
-       An operator told "it closes when it is full" would leave the date
-       blank and find the pool still taking money a month later. */
-    hint: '<strong>A close date is not needed</strong> \u2014 leave it blank and the pool keeps raising '
-        + 'until you close it yourself on this screen. Nothing closes it automatically when the target '
-        + 'is reached, so watch the raised figure. Set a close date only if the raise must stop on a '
-        + 'date whether or not the target is met.',
+    /* This sentence was a promise the code did not keep until the target
+       close was built: nothing stopped a full pool raising, and an operator
+       told "it closes when it is full" would find it still taking money a
+       month later. services/poolTarget.js now closes it on the path that
+       fills it, with a nightly sweep behind that, so the sentence is true
+       and says what "stops raising" means rather than leaving it to be
+       guessed at. */
+    hint: '<strong>A close date is not needed</strong> \u2014 leave it blank and the pool stops raising '
+        + 'by itself as soon as the target is met: it comes out of the marketplace and takes no further '
+        + 'money. Set a close date only if the raise must stop on a date even when the target has not '
+        + 'been reached.',
   },
   date: {
     needsCloseDate: true,
