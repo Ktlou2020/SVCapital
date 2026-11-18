@@ -281,26 +281,36 @@ function makeGridFilter(P) {
 
     console.log('\nthe console can set it, and cannot set it wrongly');
     {
-      ok('there is a control for it', /id="prodExclusive"/.test(HTML));
+      /* THE SEPARATE CONTROL IS GONE. It was a second select, hidden until
+         Offering had been switched to EIF — which meant the one screen that
+         could say "this product appears in both places" only said so after
+         you had already changed the field you were asking about. Offering is
+         now a single select carrying all three states, and these assertions
+         follow it rather than being deleted: they are still about the console
+         being able to set tab-only, and being unable to set the combination
+         that makes a product invisible. */
+      ok('there is a control for it',
+         /id="prodCategory"/.test(HTML) && /<option value="eif_only">/.test(HTML));
       ok('worded as where the product appears, not as a flag',
          /Ethical &amp; Interest-Free only/.test(HTML) &&
-         /All products, and under Ethical &amp; Interest-Free/.test(HTML));
-      ok('it is shown only for an EIF product',
-         /function onProdCategoryChange\(/.test(ADMIN_CODE) &&
-         /grp\.style\.display = isEif \? '' : 'none'/.test(ADMIN_CODE));
-      ok('and follows the Offering select as it changes',
-         /onchange="onProdCategoryChange\(\)"/.test(HTML));
-      ok('the save forces it false on anything but EIF',
-         /category_exclusive:\s*document\.getElementById\('prodCategory'\)\.value === 'eif' &&/.test(ADMIN_CODE),
-         'a hidden control is still a control with a value in it');
+         /Standard and Ethical &amp; Interest-Free/.test(HTML));
+      ok('and the both-places choice is offered without changing anything first',
+         /<option value="both">/.test(HTML),
+         'it was the default all along and no control said so');
+      ok('the hint follows the select as it changes',
+         /onchange="onProdCategoryChange\(\)"/.test(HTML)
+         && /function onProdCategoryChange\(/.test(ADMIN_CODE));
+      ok('the save cannot produce exclusive on a standard product',
+         /category_exclusive:\s*\(PROD_OFFERINGS\[/.test(ADMIN_CODE)
+         && !/standard', exclusive: true/.test(ADMIN_CODE),
+         'that pair filters a product out of the only grid that lists it');
       ok('editing an existing product brings the setting back',
-         /getElementById\('prodExclusive'\)\.value =\s*\n?\s*\(p\.category_exclusive === true/.test(ADMIN) ||
-         /p\.category_exclusive === true \|\| p\.category_exclusive === 't'/.test(ADMIN_CODE),
+         /_prodOfferingOf\(p\)/.test(ADMIN_CODE),
          'otherwise opening a product to change its name silently unsets it');
       ok('and reads the boolean in either shape it can arrive in',
          /category_exclusive === 't'/.test(ADMIN_CODE));
       ok('the new-product form starts on the safe default',
-         /getElementById\('prodExclusive'\)\.value = 'false'/.test(ADMIN_CODE));
+         /getElementById\('prodCategory'\)\.value = 'standard';/.test(ADMIN_CODE));
 
       const v = HTML.match(/js\/admin\.js\?v=(\d+)/);
       ok('admin.js is cache-busted past 166', v && Number(v[1]) > 166, v ? v[0] : 'no version');

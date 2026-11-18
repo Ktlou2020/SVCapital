@@ -4409,19 +4409,22 @@
         </div>
       </div>
       <div class="form-row form-row--2">
+        <!-- ONE QUESTION, ONE CONTROL. This was two selects: an Offering of
+             Standard or EIF, and a separate "Where it appears" that was
+             HIDDEN until Offering was switched to EIF. Showing a product in
+             both places was already what the platform did — it is the
+             default for an EIF product — but the only control that said so
+             appeared after you had already changed the thing you were asking
+             a question about, so it read as impossible and was asked for as
+             a missing feature. The three options below are the three states
+             the two columns can legitimately hold. -->
         <div class="form-group"><label class="form-label">Offering</label>
           <select class="form-select" id="prodCategory" onchange="onProdCategoryChange()">
-            <option value="standard" selected>Standard</option>
-            <option value="eif">Ethical &amp; Interest-Free</option>
+            <option value="standard" selected>Standard only</option>
+            <option value="both">Standard and Ethical &amp; Interest-Free</option>
+            <option value="eif_only">Ethical &amp; Interest-Free only</option>
           </select>
-          <div style="font-size:0.75rem;color:var(--text-muted);margin-top:6px;line-height:1.55">Ethical &amp; Interest-Free products appear under their own tab in the portal, and the return is labelled a profit share rather than an interest rate. The tab appears only while at least one of them is active — deactivate them all and the section disappears from the portal.</div>
-        </div>
-        <div class="form-group" id="prodExclusiveGroup"><label class="form-label">Where it appears</label>
-          <select class="form-select" id="prodExclusive">
-            <option value="false" selected>All products, and under Ethical &amp; Interest-Free</option>
-            <option value="true">Ethical &amp; Interest-Free only</option>
-          </select>
-          <div style="font-size:0.75rem;color:var(--text-muted);margin-top:6px;line-height:1.55" id="prodExclusiveHint">An Ethical &amp; Interest-Free product normally shows in both places, badged. Choose <strong>Ethical &amp; Interest-Free only</strong> to keep it out of the general grid entirely — clients reach it through the Ethical &amp; Interest-Free tab, and it is not offered as a switch target at maturity.</div>
+          <div style="font-size:0.75rem;color:var(--text-muted);margin-top:6px;line-height:1.55" id="prodCategoryHint"></div>
         </div>
         <div class="form-group"><label class="form-label">Risk Profile</label>
           <select class="form-select" id="prodRisk">
@@ -5441,7 +5444,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=31"></script>
 <script src="../js/investor-documents.js?v=9"></script>
-<script src="js/admin.js?v=232"></script>
+<script src="js/admin.js?v=233"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>

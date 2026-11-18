@@ -476,13 +476,26 @@ console.log('\nthe homepage carries it, on the same switches');
 
 console.log('\nand the console can create them like any other product');
 {
+  /* THE CONTROL IS NOW ONE SELECT WITH THREE CHOICES, not an offering of
+     two plus a second hidden select for whether it is tab-only. Listing an
+     EIF product in both places was always the default, but the control that
+     said so only appeared once Offering had been switched — so it read as
+     impossible and was asked for as a missing feature. These three asserted
+     the old shape; rewritten to the new one rather than deleted, since they
+     are still about the category reaching the row. check-product-offering
+     runs the mapping and holds the detail. */
   ok('the product form has an offering field',
-     /id="prodCategory"/.test(ADMINH) &&
-     /<option value="eif">/.test(ADMINH));
+     /id="prodCategory"/.test(ADMINH) && /<option value="eif_only">/.test(ADMINH));
+  ok('and it offers the EIF product in both places as well as tab-only',
+     /<option value="both">/.test(ADMINH),
+     'the general grid AND the tab is what an EIF product does by default');
   ok('it is populated when editing',
-     /getElementById\('prodCategory'\)\.value\s*=\s*p\.category \|\| 'standard'/.test(ADMINJ));
+     /getElementById\('prodCategory'\)\.value = _prodOfferingOf\(p\)/.test(ADMINJ));
   ok('it is saved',
-     /category:\s*document\.getElementById\('prodCategory'\)\.value \|\| 'standard'/.test(ADMINJ));
+     /category:\s*\(PROD_OFFERINGS\[document\.getElementById\('prodCategory'\)\.value\]/.test(ADMINJ));
+  ok('and the three choices still only ever write a real category',
+     /category: 'standard'/.test(ADMINJ) && /category: 'eif'/.test(ADMINJ),
+     'a blank category shows in neither grid and reads as deleted');
   ok('and a new product defaults to standard rather than to blank',
      /getElementById\('prodCategory'\)\.value = 'standard';/.test(ADMINJ),
      'the New Product handler blanks every field — left blank, the product ' +

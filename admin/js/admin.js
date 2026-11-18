@@ -6799,7 +6799,7 @@ async function removeProductFactsheet(productId) {
 
 function openProductModal() {
   document.getElementById('productModalTitle').textContent = 'New Product';
-  ['productId','prodType','prodLabel','prodHeadline','prodDescription','prodKeyDetails','prodMin','prodTerm','prodSort','prodBenchmark','prodPerfFee','prodPartner','prodSector','prodRisk','prodIcon','prodColor','prodRiskColor','prodCategory','prodExclusive'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  ['productId','prodType','prodLabel','prodHeadline','prodDescription','prodKeyDetails','prodMin','prodTerm','prodSort','prodBenchmark','prodPerfFee','prodPartner','prodSector','prodRisk','prodIcon','prodColor','prodRiskColor','prodCategory'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   document.getElementById('prodActive').value = 'true';
   document.getElementById('prodHomepage').value = 'true';
   document.getElementById('prodRisk').value = 'Medium';   // default risk profile for new products
@@ -6807,7 +6807,7 @@ function openProductModal() {
      the select above leaves it on '' — an empty category would drop the product
      out of both the standard grid and the EIF tab and it would look deleted. */
   document.getElementById('prodCategory').value = 'standard';
-  document.getElementById('prodExclusive').value = 'false';
+
   onProdCategoryChange();
   document.getElementById('prodType').removeAttribute('readonly');
   const ff = document.getElementById('prodFactsheetFile'); if (ff) ff.value = '';
@@ -6836,12 +6836,11 @@ function editProduct(id) {
   document.getElementById('prodPerfFee').value     = p.performance_fee_pct || '';
   document.getElementById('prodPartner').value     = p.partner_name || '';
   document.getElementById('prodSector').value      = p.sector || '';
-  document.getElementById('prodCategory').value    = p.category || 'standard';
   /* Postgres BOOLEAN comes back as true/false through the JSON API, but a
-     stored 't' from a direct edit is just as real — read both rather than
-     silently opening the form on the wrong answer and saving it back. */
-  document.getElementById('prodExclusive').value =
-    (p.category_exclusive === true || p.category_exclusive === 't' || p.category_exclusive === 'true') ? 'true' : 'false';
+     stored 't' from a direct edit is just as real — _prodOfferingOf reads
+     both, rather than silently opening the form on the wrong answer and
+     saving it back. */
+  document.getElementById('prodCategory').value = _prodOfferingOf(p);
   onProdCategoryChange();
   document.getElementById('prodRisk').value        = p.risk_profile || '';
   document.getElementById('prodIcon').value        = p.icon || '';
@@ -6903,14 +6902,50 @@ function _onProdColorText(hex) {
    own, so it is shown only for one. Hiding it also stops a value being left
    behind from a previous choice — though saveProduct forces it false anyway,
    because a hidden control is still a control with a value in it. */
+/* THE THREE CHOICES, AND THE TWO COLUMNS THEY STAND FOR.
+ *
+ * products.category says which offering a product belongs to; 
+ * products.category_exclusive says whether it is kept OUT of the general
+ * grid. Three of the four combinations mean something; the fourth —
+ * standard and exclusive — would filter a product out of the only grid that
+ * lists it, leaving it active in this console and invisible in the portal.
+ * It is not offered here, which is the first of the three places it is
+ * refused (this form, the save below, and a repair on every deploy).
+ *
+ * "Both" is category 'eif' and NOT exclusive, which is what the platform has
+ * always done with an EIF product by default. It is listed with everything
+ * else AND under its own tab. There is deliberately no option for the
+ * reverse — a standard, interest-bearing product shown under Ethical &
+ * Interest-Free — because the tab's whole claim is how the return is earned,
+ * and listing an interest-bearing product there would make that claim false.
+ */
+const PROD_OFFERINGS = {
+  standard: { category: 'standard', exclusive: false,
+    hint: 'Listed with all the other products. The return is described as an interest rate.' },
+  both: { category: 'eif', exclusive: false,
+    hint: 'Listed with all the other products AND under the Ethical &amp; Interest-Free tab, badged in both. '
+        + 'Because it belongs to that offering, its return is labelled a <strong>profit share</strong> rather than '
+        + 'an interest rate wherever it appears — including in the general grid.' },
+  eif_only: { category: 'eif', exclusive: true,
+    hint: 'Kept out of the general grid entirely. Clients reach it through the Ethical &amp; Interest-Free tab, '
+        + 'its return is labelled a profit share, and it is not offered as a switch target at maturity.' },
+};
+
+/* Which of the three a stored row is in. */
+function _prodOfferingOf(p) {
+  const cat = (p && p.category) || 'standard';
+  if (cat !== 'eif') return 'standard';
+  const ex = p && (p.category_exclusive === true || p.category_exclusive === 't' || p.category_exclusive === 'true');
+  return ex ? 'eif_only' : 'both';
+}
+
 function onProdCategoryChange() {
-  const cat = document.getElementById('prodCategory');
-  const grp = document.getElementById('prodExclusiveGroup');
-  const sel = document.getElementById('prodExclusive');
-  if (!cat || !grp) return;
-  const isEif = cat.value === 'eif';
-  grp.style.display = isEif ? '' : 'none';
-  if (!isEif && sel) sel.value = 'false';
+  const cat  = document.getElementById('prodCategory');
+  const hint = document.getElementById('prodCategoryHint');
+  if (!cat || !hint) return;
+  const o = PROD_OFFERINGS[cat.value] || PROD_OFFERINGS.standard;
+  hint.innerHTML = o.hint
+    + ' The Ethical &amp; Interest-Free tab appears in the portal only while at least one product in it is active.';
 }
 
 async function saveProduct(btn) {
@@ -6936,14 +6971,14 @@ async function saveProduct(btn) {
     /* Never null: a product with no category shows in neither the standard
        grid nor the EIF tab, which on the portal looks exactly like a product
        that has been deleted. */
-    category:            document.getElementById('prodCategory').value || 'standard',
-    /* Only meaningful on a product that HAS a tab of its own. 'standard' is
-       the general grid, so an exclusive standard product would be filtered
-       out of the only place it appears — active in this console and invisible
-       in the portal. Forced false rather than trusted, because the control is
-       hidden in that case and a hidden control still has a value. */
-    category_exclusive:  document.getElementById('prodCategory').value === 'eif' &&
-                         document.getElementById('prodExclusive').value === 'true',
+    /* Both columns come from the one choice, through the one table, so the
+       form cannot produce a pair that means nothing. Never null: a product
+       with no category shows in neither the standard grid nor the EIF tab,
+       which on the portal looks exactly like a product that was deleted. */
+    category:            (PROD_OFFERINGS[document.getElementById('prodCategory').value]
+                          || PROD_OFFERINGS.standard).category,
+    category_exclusive:  (PROD_OFFERINGS[document.getElementById('prodCategory').value]
+                          || PROD_OFFERINGS.standard).exclusive,
     risk_profile:        document.getElementById('prodRisk').value.trim() || null,
     icon:                document.getElementById('prodIcon').value.trim() || null,
     color:               document.getElementById('prodColor').value.trim() || null,
