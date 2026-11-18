@@ -1,0 +1,18 @@
+{
+  "version": "274",
+  "files": {
+    "./": "d1b22011be00c233",
+    "./index.html": "d1b22011be00c233",
+    "./js/portal.js": "38c934fa55986a61",
+    "../js/portal-core.js": "dea70fbc09120d4c",
+    "./css/portal.css": "4af1c8f4dd7a0ef8",
+    "./css/portal-premium.css": "548e0142b793b9a7",
+    "./css/mobile-app.css": "9ae951ed7a648713",
+    "../js/api.js": "dcaec24f0fa4e867",
+    "../css/admin.css": "74882cbe608de372",
+    "../css/ci-theme.css": "d3128ceeec6f466a",
+    "../assets/logo-192.png": "3a36c79af76e6a6f",
+    "../assets/logo.png": "a1238352712108b5",
+    "../assets/favicon.ico": "73c4f6bb81115126"
+  }
+}
