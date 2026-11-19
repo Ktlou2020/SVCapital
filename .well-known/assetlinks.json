@@ -1,0 +1,15 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls",
+      "delegate_permission/common.get_login_creds"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "co.za.svcapital.app",
+      "sha256_cert_fingerprints": [
+        "2C:CE:D8:3C:B0:05:85:5C:5A:D7:57:0E:D6:1D:48:D9:B1:11:E6:81:35:43:37:5C:32:99:4B:BC:FD:A4:0B:F9"
+      ]
+    }
+  }
+]

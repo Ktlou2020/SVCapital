@@ -123,6 +123,35 @@ console.log('\nand the server requires it, rather than assuming it');
      /if \(!ficaConsent\)[\s\S]{0,160}status\(400\)/.test(AUTH));
 }
 
+console.log('\nand a consent that was agreed to is really written down');
+/* THE RACE THIS CHECK CAUGHT BY LUCK, held deterministically.
+   The five inserts were fired without await and with `.catch(() => {})`,
+   so the 200 went out while they were in flight: a run under load saw
+   the other four rows written and fica_consent simply absent. A timing
+   assertion cannot be relied on to reproduce that, so the shape of the
+   code is asserted too. Comments stripped — the one above the fix quotes
+   the bug it describes, swallowed catch and all. */
+const AUTHSRC = fs.readFileSync(path.join(ROOT, 'server', 'routes', 'auth.js'), 'utf8')
+  .replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ');
+const at = AUTHSRC.indexOf('_acceptances');
+const blk = AUTHSRC.slice(at, AUTHSRC.indexOf('sendWelcome', at));
+ok('the acceptance-writing code was found', at > 0 && blk.length > 200,
+   'a slice that missed it would assert nothing while passing');
+ok('and the slice is code, not its comment',
+   !/losing one silently is the worst/.test(blk), blk.slice(0, 160));
+ok('THE CONSENT WRITES ARE AWAITED BEFORE THE RESPONSE',
+   /await\s+Promise\.all\(/.test(blk),
+   'unawaited, the 200 is sent while the inserts are in flight and a '
+   + 'consent can be missing from the record of a registration that '
+   + 'succeeded');
+ok('and a failed write is not swallowed',
+   !/\.catch\(\s*\(\s*\)\s*=>\s*\{\s*\}\s*\)/.test(blk),
+   '`.catch(() => {})` discards the one piece of evidence that the '
+   + 'consent was never recorded');
+ok('it names the investor and the document when it fails',
+   /CONSENT NOT RECORDED/.test(blk) && /investor=/.test(blk) && /document=/.test(blk),
+   blk.slice(-300));
+
 if (!process.env.DATABASE_URL) {
   console.log('\n  SKIP  the rest needs DATABASE_URL');
   console.log(`\n${pass} passed, ${fail} failed`);

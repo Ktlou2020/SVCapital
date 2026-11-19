@@ -344,6 +344,23 @@ app.get('/api/health/ready', async (req, res) => {
 app.get('/sitemap.xml', (_req, res) => res.sendFile(path.join(__dirname, '..', 'sitemap.xml'), { headers: { 'Content-Type': 'application/xml', 'Cache-Control': 'public, max-age=86400' } }));
 app.get('/robots.txt',  (_req, res) => res.sendFile(path.join(__dirname, '..', 'robots.txt'),  { headers: { 'Content-Type': 'text/plain',       'Cache-Control': 'public, max-age=86400' } }));
 
+/* ─── Digital Asset Links ───────────────────────────────────────────
+ * Android fetches https://<host>/.well-known/assetlinks.json to decide
+ * whether this app may handle that host's links and share saved credentials
+ * with it. An explicit route rather than express.static because serve-static
+ * refuses dotfiles by default, and because verification is unforgiving: it
+ * wants 200 and application/json, DOES NOT FOLLOW REDIRECTS, and a 404 or an
+ * HTML error page fails the host silently — the links simply open the browser
+ * and nobody is told why.
+ *
+ * The same file is published by the Cloudflare Pages build for the marketing
+ * hosts; this serves it for whatever host reaches the Railway app.
+ */
+app.get('/.well-known/assetlinks.json', (_req, res) =>
+  res.sendFile(path.join(__dirname, '..', '.well-known', 'assetlinks.json'), {
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=3600' },
+  }));
+
 /* ─── Legal Pages — served directly at both /page and /page.html ─── */
 // These must come BEFORE the .html redirect so they are never intercepted.
 ['terms', 'popia', 'paia', 'complaints'].forEach(page => {

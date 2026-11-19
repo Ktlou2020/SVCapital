@@ -47,12 +47,18 @@
                 <data android:scheme="svcapital" />
             </intent-filter>
 
-            <!-- App link: https://svcapital.co.za/... -->
+            <!-- App link: https://svcapital.co.za/... and the www host.
+                 BOTH are needed. Android verifies each host separately and
+                 does not treat www as the same site, so a filter naming only
+                 the apex leaves every www link opening the browser. Each host
+                 named here must serve /.well-known/assetlinks.json itself,
+                 with a 200 and no redirect. -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="svcapital.co.za" />
+                <data android:scheme="https" android:host="www.svcapital.co.za" />
             </intent-filter>
         </activity>
 

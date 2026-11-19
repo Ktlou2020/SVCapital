@@ -428,14 +428,27 @@ router.post('/register', registerLimiter, async (req, res) => {
         { type: 'fica_consent',     flag: ficaConsent,   version: FICA_CONSENT.VERSION },
         { type: 'risk_disclaimer',  flag: true,          version: '1.0' },  // implied at registration
       ];
-      for (const acc of _acceptances) {
-        if (!acc.flag) continue;
-        pool.query(
+      /* AWAITED, and the failures are not swallowed.
+         These five inserts used to be fired without await and with
+         `.catch(() => {})`, so the response went out while they were still in
+         flight and any that failed left no trace at all. A consent record is
+         the thing you have to be able to produce years later to show what a
+         person agreed to — losing one silently is the worst available
+         outcome, and the FICA row is the one that matters most. It was caught
+         exactly that way: a registration returned 200 with the other four
+         rows written and fica_consent simply not there yet.
+         Still non-fatal: a failure here is logged with the investor and the
+         document, so it can be reconstructed, rather than refusing a
+         registration the person completed correctly. */
+      await Promise.all(_acceptances
+        .filter(acc => acc.flag)
+        .map(acc => pool.query(
           `INSERT INTO accepted_client_documents (investor_id, document_type, document_version, accepted_at, ip_address, user_agent)
            VALUES ($1, $2, $3, $4, $5, $6)`,
           [invId, acc.type, acc.version, _acceptedAt, _ip, _ua]
-        ).catch(() => {});
-      }
+        ).catch(err => console.error(
+          `[register] CONSENT NOT RECORDED investor=${invId} document=${acc.type} v${acc.version}:`,
+          err.message))));
 
       // Fire-and-forget welcome email
       setImmediate(() => emailService.sendWelcome({
