@@ -143,8 +143,11 @@ console.log('\nthe change reaches a browser that already has the old one');
   }
   const stamps = Object.values(PAGES).map(p => (read(p).match(/portal-premium\.css\?v=(\d+)/) || [])[1]);
   ok('and both surfaces are on the same one', stamps[0] === stamps[1], stamps.join(' vs '));
-  ok('the service worker cache was bumped with it',
-     /svc-portal-v(\d+)/.test(read('mobile/src/sw.js')));
+  /* The service-worker cache bump used to be asserted here. There is no
+     cache any more: the app unregisters every worker at launch, so the
+     caching one was deleted along with the version nobody could observe.
+     The stamped CSS above is what actually busts a cache now, and the line
+     below is what proves the bundle was rebuilt. */
   ok('and the built bundle carries the component',
      /\.svc-switch\s*\{/.test(read('mobile/www/css/portal-premium.css')),
      'run npm run build:mobile');

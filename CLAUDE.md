@@ -45,15 +45,32 @@ side, so reading it on one machine settles it on all of them.
 Fixes to existing behaviour do not need one. A change to where something is,
 what it is called, or what it now does, does.
 
-## Service Worker Cache
-Bump `mobile/src/sw.js` CACHE version (svc-portal-vN) with every JS/CSS change to
-mobile, then rebuild: `node mobile/scripts/build.js`.
+## Rebuilding the mobile bundle
+Rebuild with `node mobile/scripts/build.js` after any change that reaches the
+app — anything in `mobile/src/`, and anything in `portal/` or the shared
+`js|css|assets/` that the app inherits.
+
+**There is no cache version to bump any more.** The app carried a caching
+service worker with a `svc-portal-vN` version, and this file used to say to
+bump it on every change. It never ran: `mobile/src/js/native.js` unregisters
+every service worker and deletes every cache at launch, deliberately — a
+cache-first worker over assets that are already local serves stale JS and
+races network against cache, so content flashes and disappears. The bundle
+now carries the push-only worker from `portal/sw.js`, which has no version.
+`check-mobile-config` holds that: it asserts the app registers no worker and
+that `native.js` still clears any it finds.
 
 `mobile/www` is a BUILD OUTPUT, generated from `portal/` plus the overrides in
-`mobile/src/`. Editing the bump into `mobile/www/sw.js` looks right and is
-wiped by the next build — leaving the app serving the stale cache the bump
-exists to clear. `check-mobile-build-reproducible` catches it: it rebuilds and
-compares byte for byte, and names any file edited in `www` instead of `src`.
+`mobile/src/`. A file edited in `www` is wiped by the next build.
+`check-mobile-build-reproducible` catches it: it rebuilds and compares byte for
+byte, and names any file edited in `www` instead of `src`.
+
+**A file in `mobile/src/` SHADOWS the shared one, so a fix made on the web
+never reaches the app.** That is what an override is for, and it is also how
+`signup.html` and `staff-auth.js` quietly fell months behind. Before adding
+one, check whether the difference is something `build.js` already injects —
+it adds the Capacitor native config to every HTML file it copies. Delete a
+file from `mobile/src/` to hand it back to the shared layer.
 
 ## Web Portal Versioning
 Bump `portal/index.html` query string (`js/portal.js?v=N`) with every web portal JS change.

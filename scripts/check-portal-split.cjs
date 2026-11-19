@@ -25,7 +25,6 @@ const MOB      = path.join(ROOT, 'mobile/src/js/portal.js');
 const MOB_BUILT= path.join(ROOT, 'mobile/www/js/portal-core.js');
 const WEB_HTML = path.join(ROOT, 'portal/index.html');
 const MOB_HTML = path.join(ROOT, 'mobile/src/index.html');
-const SW       = path.join(ROOT, 'mobile/src/sw.js');
 
 let pass = 0, fail = 0;
 const check = (name, cond, detail) => {
@@ -91,8 +90,11 @@ for (const [label, file] of [['portal', WEB_HTML], ['mobile', MOB_HTML]]) {
 check('mobile build includes portal-core.js', fs.existsSync(MOB_BUILT), 'run mobile/scripts/build.js');
 check('mobile build matches the shared source',
   fs.existsSync(MOB_BUILT) && read(MOB_BUILT) === core, 'stale build');
-check('service worker precaches portal-core.js', /portal-core\.js/.test(read(SW)),
-  'offline PWA would load portal.js without its core');
+/* The service worker used to precache portal-core.js, and this asserted it.
+   There is no precache list any more: the app's caching worker was deleted
+   because native.js unregisters every worker at launch, and the offline PWA
+   it was for was retired when Capacitor took over delivery. The app loads
+   portal-core.js from the bundle, which the two checks above hold. */
 
 console.log(`\n  core ${coreFns.size} fns / ${core.split('\n').length} lines · web ${webOnly.length} fns · mobile ${mobOnly.length} fns`);
 console.log(`  ${pass} passed, ${fail} failed`);

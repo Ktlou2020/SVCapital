@@ -174,5 +174,71 @@ console.log('\nand an invited member still lands on their groups');
      'js/portal-core.js — svcOpenDeepLink');
 }
 
+/* ── The service worker the app deliberately does not have ──────────── */
+console.log('\nand the app runs no service worker, which is the intent');
+{
+  /* It carried a caching one with a svc-portal-vN version, and CLAUDE.md
+     told every session to bump that version on each change. It never ran.
+     native.js unregisters every worker and clears every cache at launch —
+     on purpose, because a cache-first worker over assets that are already
+     local serves stale JS and races network against cache, so content
+     flashes and disappears. A version nobody could observe was ceremony,
+     and the check guarding it guarded nothing.
+
+     What is worth holding is the INTENT: the app clears workers, and the
+     bundle does not carry a caching one pretending otherwise. */
+  ok('the caching worker is gone from the overlay',
+     !has('mobile/src/sw.js'),
+     'it shipped a svc-portal-vN cache that nothing ever registered');
+
+  const built = 'mobile/www/sw.js';
+  ok('the bundle carries the push-only worker instead', has(built));
+  if (has(built)) {
+    const sw = read(built);
+    ok('and it declares no cache version',
+       !/svc-portal-v\d+/.test(sw),
+       'a version implies something is cached; nothing is');
+    ok('nor a precache list',
+       !/PRECACHE/.test(sw), built);
+    ok('while keeping the push handlers',
+       /addEventListener\('push'/.test(sw) && /notificationclick/.test(sw),
+       'the web portal registers this one, so it still has a job there');
+  }
+
+  /* The behaviour that makes all of the above safe. */
+  const native = read('mobile/src/js/native.js');
+  ok('NATIVE.JS STILL UNREGISTERS EVERY WORKER AT LAUNCH',
+     /getRegistrations\(\)/.test(native) && /\.unregister\(\)/.test(native),
+     'this is what makes a stale cache impossible in the app, and what the '
+     + 'removed version-bump ceremony was standing in for');
+  ok('and still deletes every cache',
+     /caches\.keys\(\)/.test(native) && /caches\.delete\(/.test(native), native.slice(0, 200));
+
+  /* And the instruction file must not still send people to a deleted file. */
+  const claude = read('CLAUDE.md');
+  ok('CLAUDE.md no longer tells anyone to bump a version that is gone',
+     !/Bump `mobile\/src\/sw\.js` CACHE version/.test(claude),
+     'a rule pointing at a deleted file sends the next session hunting');
+  ok('and still requires the rebuild, which has not changed',
+     /node mobile\/scripts\/build\.js/.test(claude), 'CLAUDE.md');
+}
+
+/* ── The other fork that had stopped tracking ───────────────────────── */
+console.log('\nand staff tools in the app are the ones the web has');
+{
+  ok('the staff-auth fork is gone', !has('mobile/src/js/staff-auth.js'),
+     'it had no mobile-specific content at all — just an old copy');
+  const sa = 'mobile/www/js/staff-auth.js';
+  ok('the bundle still carries staff-auth', has(sa));
+  if (has(sa)) {
+    const js = read(sa);
+    /* What the stale copy was missing. */
+    for (const m of ['syncAppAccess', 'pe_monitor', 'beefcor_recon', 'change_requests'])
+      ok(`it has ${m}`, js.includes(m),
+         'the fork predated these, so staff signing in through the app saw '
+         + 'fewer tools than on the web and their access never synced');
+  }
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

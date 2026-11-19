@@ -244,9 +244,13 @@ console.log('\nand the workspace behaves like one');
 
 console.log('\nand a notification opens the thing it is about');
 {
+  /* One worker now. The app's caching copy was deleted — native.js
+     unregisters every worker at launch, so it never ran, and the app
+     receives notifications through @capacitor/push-notifications rather
+     than through a service worker at all. The web portal's is the one that
+     still has this job. */
   const SW_WEB = read('portal/sw.js');
-  const SW_APP = read('mobile/src/sw.js');
-  for (const [name, sw] of [['the web', SW_WEB], ['the app', SW_APP]]) {
+  for (const [name, sw] of [['the web', SW_WEB]]) {
     /* FOCUS ALONE THREW THE URL AWAY. An open portal tab was brought to the
        front and the notification's destination discarded, so a deep link
        did nothing for anybody who already had the portal open \u2014 which is
