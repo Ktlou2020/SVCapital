@@ -806,3 +806,21 @@ img { max-width: 100%; display: block; }
 .ins-rich .ta-left   { text-align: left; }
 .ins-rich .ta-center { text-align: center; }
 .ins-rich .ta-right  { text-align: right; }
+
+/* ── A button label that does not fit wraps, rather than being cut off ──
+   .btn carries white-space:nowrap, which is right for "Save" and wrong for
+   "Confirm that I will be a signatory" on a 390px screen: the button grew
+   wider than its container and the container clipped it mid-word, so the
+   client read "Confirm that I will be a signato". Only at phone widths —
+   on a desktop console nowrap is still what keeps a toolbar on one line.
+   The label is centred because a wrapped second line against the left edge
+   reads as a layout accident rather than a choice. */
+@media (max-width: 560px) {
+  .btn {
+    white-space: normal;
+    text-align: center;
+    line-height: 1.3;
+    max-width: 100%;
+    height: auto;
+  }
+}

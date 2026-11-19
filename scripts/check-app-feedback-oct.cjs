@@ -77,16 +77,21 @@ console.log('\nand the calculator cannot be given a rate nobody offered');
 {
   for (const f of ['mobile/src/index.html', 'portal/index.html']) {
     const html = strip(read(f));
-    const at = html.indexOf('id="calcRate"');
-    ok(`${f.split('/')[0]}: the rate field was found`, at > 0);
-    const field = html.slice(html.lastIndexOf('<input', at), html.indexOf('>', at) + 1);
-    ok(`${f.split('/')[0]}: THE RATE IS READ-ONLY`,
-       /\breadonly\b/.test(field), field.slice(0, 200));
-    ok(`${f.split('/')[0]}: and typing in it no longer recalculates`,
-       !/oninput="updateCalc\(\)"/.test(field), field.slice(0, 200));
-    /* The element carried id="calcRate" twice; the second was ignored. */
-    ok(`${f.split('/')[0]}: and carries its id once`,
-       (field.match(/id="calcRate"/g) || []).length === 1, field.slice(0, 200));
+    /* STRONGER THAN READ-ONLY NOW: the field is gone. This asserted that a
+       rate input existed and carried `readonly`, which was the fix at the
+       time — a client could otherwise type a rate SV Capital has never
+       offered and screenshot the result. The November review asked for the
+       section to go entirely and for the calculator to read the pool, so
+       there is no input to make read-only. Rewritten to the stronger
+       guarantee rather than deleted; check-app-feedback-nov holds the rest. */
+    ok(`${f.split('/')[0]}: THERE IS NO RATE INPUT AT ALL`,
+       !/id="calcRate"/.test(html),
+       'a rate a client can type is a rate they can put in a screenshot');
+    ok(`${f.split('/')[0]}: nor a term they can choose`,
+       !/id="calcTerm"/.test(html),
+       'its options were a fixed list and the pool was snapped to the nearest');
+    ok(`${f.split('/')[0]}: and the pool's figures are shown instead`,
+       /id="calcRateShown"/.test(html) && /id="calcTermShown"/.test(html), f);
     ok(`${f.split('/')[0]}: no "custom rate" is offered`,
        !/Custom rate/.test(html), 'a custom rate is a quote nobody authorised');
   }

@@ -2466,7 +2466,15 @@ let _stmtBodyHtmlCache = '';
      jsPDF slices it into A4 pages, and the PDF blob is shared via the
      native share sheet (iOS "Save to Files" / "Print", Android share). */
 async function _handleSavePdf() {
-  if (!window.Capacitor) {
+  /* __SVC_NATIVE__, not window.Capacitor. build.js injects the first into
+     every page before any script runs and the whole app tests on it; this
+     was the one place reaching for the Capacitor bridge instead. When that
+     global was not there at click time the function fell straight through
+     to window.print(), WHICH DOES NOTHING IN A WEBVIEW — reported as
+     "nothing happens when I try to save the statement on Android". Two
+     names for one question is how a guard ends up answering the wrong one. */
+  const native = !!(window.__SVC_NATIVE__ || window.Capacitor);
+  if (!native) {
     window.print();
     return;
   }
@@ -2513,18 +2521,14 @@ async function _handleSavePdf() {
       remaining -= pgH;
     }
 
-    const pdfBlob = pdf.output('blob');
-    const pdfFile = new File([pdfBlob], 'SV-Capital-Statement.pdf', { type: 'application/pdf' });
-
-    if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
-      await navigator.share({ files: [pdfFile], title: 'SV Capital Account Statement' });
-    } else {
-      const url = URL.createObjectURL(pdfBlob);
-      const a   = document.createElement('a');
-      a.href = url; a.download = 'SV-Capital-Statement.pdf';
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 15000);
-    }
+    /* Through the one deliverer, which tries the share sheet, falls back to
+       a download on the web, says nothing when the sheet is dismissed, and
+       says so plainly when a device can do neither. This function used to
+       carry its own copy of that rule — it was the copy every other
+       document lacked, which is why statements saved and certificates
+       silently did not. */
+    svcDeliverToast(await svcDeliverFile(
+      pdf.output('blob'), 'SV-Capital-Statement.pdf', 'Statement'), 'Statement');
   } catch (err) {
     console.error('PDF generation error:', err);
     Toast.error('Could not generate PDF — please try again.');

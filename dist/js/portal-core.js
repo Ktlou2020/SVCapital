@@ -8979,10 +8979,12 @@ function openCalcModal() {
   const sldEl = document.getElementById('calcAmountSlider');
   if (amtEl) amtEl.value = '50000';
   if (sldEl) sldEl.value = '50000';
-  const termEl = document.getElementById('calcTerm');
-  if (termEl) termEl.value = '12';
-  const rateEl = document.getElementById('calcRate');
-  if (rateEl) rateEl.value = '14';
+  /* No rate or term to reset — they are read off the select, which the
+     caller has just cleared. Only the shown figures need blanking. */
+  const rateShown = document.getElementById('calcRateShown');
+  const termShown = document.getElementById('calcTermShown');
+  if (rateShown) rateShown.innerHTML = '&mdash;';
+  if (termShown) termShown.innerHTML = '&mdash;';
   const ctaBar = document.getElementById('calcCTABar');
   if (ctaBar) ctaBar.style.display = 'none';
   /* Open on a real pool rather than on a default rate nobody chose. With
@@ -9012,6 +9014,24 @@ function calcSyncSlider(val) {
   if (el) el.value = Math.max(1000, Math.min(1000000, parseFloat(val) || 50000));
 }
 
+/* The chosen pool's rate and term, read off the select every time rather
+   than cached.
+   
+   NO TOP-LEVEL STATE: portal-core is loaded beside the web and mobile
+   platform files, so a `let` here is a binding that can collide with one of
+   theirs — check-portal-split refuses it, and refused the two I added. A
+   function has no such problem, and reading the select each time cannot
+   drift out of step with it either. */
+function _calcPoolTerms() {
+  const sel = document.getElementById('calcPoolSelect');
+  const opt = sel && sel.options[sel.selectedIndex];
+  if (!opt || !opt.value) return { rate: 0, term: 0 };
+  return {
+    rate: parseFloat(opt.dataset.rate || 0) || 0,      // decimal, e.g. 0.12
+    term: parseInt(opt.dataset.term || 0, 10) || 0,    // whole months
+  };
+}
+
 function calcLoadPool() {
   const sel = document.getElementById('calcPoolSelect');
   const opt = sel?.options[sel.selectedIndex];
@@ -9022,16 +9042,18 @@ function calcLoadPool() {
     return;
   }
   _calcPoolId = opt.value;
-  const rateEl = document.getElementById('calcRate');
-  const termEl = document.getElementById('calcTerm');
-  if (rateEl) rateEl.value = Math.round((parseFloat(opt.dataset.rate || 0.14) * 100) * 10) / 10;
-  // Set term select to closest available option
-  if (termEl) {
-    const poolTerm = parseInt(opt.dataset.term || 12);
-    const opts = [...termEl.options];
-    let closest = opts.reduce((prev, cur) => Math.abs(parseInt(cur.value) - poolTerm) < Math.abs(parseInt(prev.value) - poolTerm) ? cur : prev);
-    if (closest) closest.selected = true;
-  }
+  /* THE POOL'S OWN FIGURES, NOT THE NEAREST ONES. The term used to be a
+     select of 6/12/18/24/36 and this snapped the pool's real term to the
+     closest of them — a five-month pool calculated over six, a seven-year
+     solar pool over three. The rate was a read-only box beside it, which
+     looked editable enough to be worth asking about. Both are now read
+     straight off the chosen pool and shown rather than entered. */
+  const { rate, term } = _calcPoolTerms();
+  const rateShown = document.getElementById('calcRateShown');
+  const termShown = document.getElementById('calcTermShown');
+  if (rateShown) rateShown.textContent = (Math.round(rate * 1000) / 10).toFixed(2) + '% p.a.';
+  if (termShown) termShown.textContent = term
+    ? `${term} month${term === 1 ? '' : 's'}` : '\u2014';
   const ctaBar = document.getElementById('calcCTABar');
   if (ctaBar) ctaBar.style.display = 'block';
   updateCalc();
@@ -9039,11 +9061,14 @@ function calcLoadPool() {
 
 function updateCalc() {
   const principal = parseFloat(document.getElementById('calcAmount')?.value) || 0;
-  const rateRaw   = parseFloat(document.getElementById('calcRate')?.value)   || 0;
-  const term      = parseInt(document.getElementById('calcTerm')?.value)     || 0;
-
-  // Rate from pool is stored as decimal (0.14) or percentage (14) — normalise
-  const rate = rateRaw > 1 ? rateRaw / 100 : rateRaw;  // annual rate as decimal
+  /* From the chosen pool, through calcLoadPool. There are no rate or term
+     inputs any more — a figure a client can type is a figure they can put
+     in a screenshot, and a term they can pick is one the pool may not
+     offer. */
+  const terms = _calcPoolTerms();
+  const term  = terms.term;
+  // Stored as a decimal (0.14); tolerate a percentage if one ever lands here.
+  const rate  = terms.rate > 1 ? terms.rate / 100 : terms.rate;
 
   const totalInterest = principal * rate * (term / 12);
   const total         = principal + totalInterest;
