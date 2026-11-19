@@ -50,7 +50,7 @@ const read = p => fs.readFileSync(path.join(ROOT, p), 'utf8');
 const CONSENT = require(path.join(ROOT, 'server', 'services', 'ficaConsent.js'));
 const AUTH    = read('server/routes/auth.js');
 const PAGES   = { 'signup.html': read('signup.html'),
-                  'mobile/src/signup.html': read('mobile/src/signup.html') };
+                  'mobile/www/signup.html': read('mobile/www/signup.html') };
 
 console.log('\nwhat the client is told they are agreeing to');
 {

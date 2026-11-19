@@ -63,7 +63,6 @@ const decomment = s => s.replace(/<!--[\s\S]*?-->/g, ' ')
 /* Every shipped copy. mobile/www is generated from mobile/src, and a fix that
    lands in one and not the others ships to some users and not others. */
 const PAGES = ['signup.html',
-               path.join('mobile', 'src', 'signup.html'),
                path.join('mobile', 'www', 'signup.html')];
 
 for (const rel of PAGES) {

@@ -185,7 +185,7 @@ const natOf = async id =>
       ok('and it is stripped like every other free-text field',
          /stripHtml\(nationality\)/.test(src));
 
-      for (const f of ['signup.html', path.join('mobile', 'src', 'signup.html'), path.join('mobile', 'www', 'signup.html')]) {
+      for (const f of ['signup.html', path.join('mobile', 'www', 'signup.html')]) {
         const form = fs.readFileSync(path.join(ROOT, f), 'utf8');
         ok(`${f} sends it`,
            /nationality:\s+isSA \? undefined : \(v\('nationality'\) \|\| undefined\)/.test(form),

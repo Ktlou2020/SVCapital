@@ -6,7 +6,35 @@
   <link rel="apple-touch-icon" sizes="192x192" href="assets/logo-192.png" />
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <!-- No apple-itunes-app tag, deliberately. Safari's Smart App Banner is
+       prettier and free, but once a client taps its x Safari remembers that
+       for the site and there is no way to ask again — so it cannot satisfy
+       "keep asking until they have the app", which is the rule. js/app-banner.js
+       draws our own on iOS Safari too, and it snoozes rather than silences.
+       Whether the app is already installed is answered by the server from the
+       push token, which only the app can write; that is a better answer than
+       Apple's and does not depend on this tag. -->
   <title>SV Capital — Create Account</title>
+  <meta name="robots" content="noindex, nofollow">
+  <!-- Open Graph, so a referral link pasted into WhatsApp arrives as the
+       invite card rather than a bare URL. WhatsApp, Facebook and LinkedIn
+       crawlers do not run JavaScript, so this has to be in the served HTML;
+       og:image has to be absolute and publicly fetchable, because the crawler
+       resolves it with no page context. One image for everybody — the
+       referral code travels in the message text, not in the picture. -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="SV Capital" />
+  <meta property="og:title" content="I'm inviting you to invest better with SV Capital" />
+  <meta property="og:description" content="Sign up, get KYC approved, add funds to your wallet and invest. Inflation-beating returns from South African alternative assets." />
+  <meta property="og:url" content="https://platform.svcapital.co.za/register" />
+  <meta property="og:image" content="https://platform.svcapital.co.za/assets/referral-invite.png" />
+  <meta property="og:image:width" content="1080" />
+  <meta property="og:image:height" content="1080" />
+  <meta property="og:image:alt" content="Three steps to join SV Capital: register, get KYC approved, add funds and invest." />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="I'm inviting you to invest better with SV Capital" />
+  <meta name="twitter:description" content="Sign up, get KYC approved, add funds to your wallet and invest." />
+  <meta name="twitter:image" content="https://platform.svcapital.co.za/assets/referral-invite.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
@@ -298,9 +326,6 @@
       color: var(--text-h); background: var(--bg-white);
       outline: none;
       transition: border-color 0.2s, box-shadow 0.2s;
-      -webkit-appearance: none;
-      appearance: none;
-      box-sizing: border-box;
     }
     .form-input:focus {
       border-color: var(--orange);
@@ -332,12 +357,11 @@
     }
 
     .input-icon-wrap { position: relative; }
-    .input-icon-wrap .form-input { padding-left: 48px !important; }
+    .input-icon-wrap .form-input { padding-left: 38px; }
     .input-icon-wrap .icon {
-      position: absolute; left: 16px; top: 50%;
+      position: absolute; left: 12px; top: 50%;
       transform: translateY(-50%);
       color: var(--text-dim); font-size: 0.82rem; pointer-events: none;
-      z-index: 1;
     }
     .input-toggle {
       position: absolute; right: 12px; top: 50%;
@@ -882,7 +906,7 @@
     window.__SVC_API_BASE__ = 'https://svcapital-production.up.railway.app/api/';
   </script>
   <script src="/js/native.js"></script>
-  <link rel="stylesheet" href="/css/mobile-app.css?v=8">
+  <link rel="stylesheet" href="/css/mobile-app.css">
   <!-- Kill viewFadeIn animation synchronously before first paint — prevents Android WebView blank screen -->
   <script>
   (function(){
@@ -899,7 +923,7 @@
   <!-- ── LEFT BRAND PANEL ── -->
   <div class="signup-left">
     <a href="index.html" class="brand-logo">
-      <img src="assets/full-colour-logo-horizontal-white-text.png" alt="SV Capital" id="brandLogoImg">
+      <img src="assets/sv-capital-logo-horizontal-white-text.png" alt="SV Capital" id="brandLogoImg">
       <div class="brand-logo-text">
         <span class="tagline">Investor Portal</span>
       </div>
@@ -938,7 +962,7 @@
         <div class="benefit-icon" style="background:rgba(237,165,255,0.12)">
           <i class="fa-solid fa-users" style="color:#eda5ff"></i>
         </div>
-        <div class="benefit-text"><strong>Refer &amp; earn</strong> R250 bonus on every referral</div>
+        <div class="benefit-text"><strong>Refer &amp; earn</strong> 100 XP for every friend who joins</div>
       </div>
     </div>
 
@@ -979,7 +1003,7 @@
     </div>
 
     <div class="left-footer">
-      <span>© <script>document.write(new Date().getFullYear())</script> SmartVest Financial Services (Pty) Ltd</span>
+      <span>© 2025 SmartVest Financial Services (Pty) Ltd</span>
       <a href="popia.html" target="_blank">Privacy Policy</a>
       <a href="terms.html" target="_blank">Terms of Use</a>
     </div>
@@ -993,6 +1017,11 @@
       <p>Already have an account? <a href="login.html">Sign in here</a></p>
       <div class="draft-status" id="draftStatus" aria-live="polite"></div>
     </div>
+
+    <!-- An invitation to a group, when the link carried one (?invite=).
+         Filled by prefillInvite(); see server/routes/invitePreview.js. -->
+    <div id="inviteBanner" style="display:none;margin:0 0 18px;padding:14px 16px;border-radius:14px;
+         border:2px solid #eda5ff;background:rgba(237,165,255,0.10);font-size:0.86rem;line-height:1.5"></div>
 
     <!-- Step Indicator -->
     <div class="form-steps" id="formSteps">
@@ -1445,42 +1474,52 @@
            The citizenship toggle stays on step 1 and still switches these two
            blocks by id, so a person who picks International before continuing
            sees the region field rather than the SA block when they get here. -->
-      <div class="form-grid">
+      <!-- SA address: search + expanded fields -->
+      <div id="saAddressBlock">
+        <div class="form-group" style="position:relative">
+          <label class="form-label" for="addressSearch">Address Search <span>*</span></label>
+          <input type="text" class="form-input" id="addressSearch" placeholder="Start typing your address…" autocomplete="off" />
+          <div id="addressDrop" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:9999;background:#303030;border:1px solid rgba(255,255,255,0.15);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.5);overflow:hidden"></div>
+        </div>
         <div class="form-group">
-          <label class="form-label" for="city">City <span>*</span></label>
-          <input type="text" class="form-input" id="city" placeholder="Search your city…" autocomplete="off" list="sa-cities-list" />
-          <datalist id="sa-cities-list">
-            <option value="Johannesburg"><option value="Cape Town"><option value="Durban"><option value="Pretoria"><option value="Gqeberha (Port Elizabeth)"><option value="Bloemfontein"><option value="East London"><option value="Polokwane"><option value="Mbombela (Nelspruit)"><option value="Kimberley">
-            <option value="Sandton"><option value="Randburg"><option value="Roodepoort"><option value="Soweto"><option value="Centurion"><option value="Midrand"><option value="Boksburg"><option value="Benoni"><option value="Springs"><option value="Germiston"><option value="Alberton"><option value="Edenvale"><option value="Kempton Park"><option value="Krugersdorp"><option value="Vanderbijlpark"><option value="Vereeniging"><option value="Tembisa"><option value="Brakpan"><option value="Randfontein"><option value="Westonaria"><option value="Ekurhuleni">
-            <option value="Stellenbosch"><option value="Paarl"><option value="Worcester"><option value="Somerset West"><option value="Strand"><option value="Bellville"><option value="Brackenfell"><option value="George"><option value="Mossel Bay"><option value="Knysna"><option value="Oudtshoorn"><option value="Hermanus"><option value="Robertson"><option value="Swellendam"><option value="Beaufort West"><option value="Atlantis"><option value="Mitchells Plain"><option value="Khayelitsha"><option value="Jeffreys Bay"><option value="Langebaan"><option value="Saldanha">
-            <option value="Pietermaritzburg"><option value="Richards Bay"><option value="Empangeni"><option value="Newcastle"><option value="Ladysmith"><option value="Pinetown"><option value="Umhlanga"><option value="Ballito"><option value="Margate"><option value="Port Shepstone"><option value="Tongaat">
-            <option value="Makhanda (Grahamstown)"><option value="Komani (Queenstown)"><option value="Bhisho"><option value="Uitenhage"><option value="Graaff-Reinet"><option value="Aliwal North"><option value="Port Alfred"><option value="Butterworth"><option value="Mthatha">
-            <option value="Welkom"><option value="Bethlehem"><option value="Kroonstad"><option value="Sasolburg"><option value="Parys"><option value="Harrismith"><option value="Phuthaditjhaba">
-            <option value="Tzaneen"><option value="Phalaborwa"><option value="Makhado (Louis Trichardt)"><option value="Musina"><option value="Thohoyandou"><option value="Mokopane"><option value="Lephalale"><option value="Lebowakgomo"><option value="Bela-Bela">
-            <option value="eMalahleni (Witbank)"><option value="Middelburg"><option value="Secunda"><option value="Standerton"><option value="Ermelo"><option value="Piet Retief">
-            <option value="Rustenburg"><option value="Potchefstroom"><option value="Klerksdorp"><option value="Mahikeng (Mafikeng)"><option value="Brits"><option value="Lichtenburg">
-            <option value="Upington"><option value="De Aar"><option value="Springbok"><option value="Alexander Bay"><option value="Kuruman"><option value="Colesberg">
-          </datalist>
+          <label class="form-label" for="streetAddress">Street Address <span>*</span></label>
+          <input type="text" class="form-input" id="streetAddress" placeholder="e.g. 10 Main Road" autocomplete="street-address" />
         </div>
-        <div class="form-group" id="saProvinceGroup">
-          <label class="form-label" for="province">Province <span>*</span></label>
-          <select class="form-select" id="province">
-            <option value="">Select province</option>
-            <option>Gauteng</option>
-            <option>Western Cape</option>
-            <option>KwaZulu-Natal</option>
-            <option>Eastern Cape</option>
-            <option>Limpopo</option>
-            <option>Mpumalanga</option>
-            <option>North West</option>
-            <option>Free State</option>
-            <option>Northern Cape</option>
-          </select>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label" for="suburb">Suburb</label>
+            <input type="text" class="form-input" id="suburb" placeholder="e.g. Sandton" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="city">City <span>*</span></label>
+            <input type="text" class="form-input" id="city" placeholder="e.g. Johannesburg" />
+          </div>
         </div>
-        <div class="form-group" id="intlRegionGroup" style="display:none">
-          <label class="form-label" for="region">State / Region <span>*</span></label>
-          <input type="text" class="form-input" id="region" placeholder="State or Province" autocomplete="address-level1" />
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label" for="postalCode">Postal Code <span>*</span></label>
+            <input type="text" class="form-input" id="postalCode" placeholder="e.g. 2196" inputmode="numeric" maxlength="10" />
+          </div>
+          <div class="form-group" id="saProvinceGroup">
+            <label class="form-label" for="province">Province <span>*</span></label>
+            <select class="form-select" id="province">
+              <option value="">Select province</option>
+              <option>Gauteng</option>
+              <option>Western Cape</option>
+              <option>KwaZulu-Natal</option>
+              <option>Eastern Cape</option>
+              <option>Limpopo</option>
+              <option>Mpumalanga</option>
+              <option>North West</option>
+              <option>Free State</option>
+              <option>Northern Cape</option>
+            </select>
+          </div>
         </div>
+      </div>
+      <div class="form-group" id="intlRegionGroup" style="display:none">
+        <label class="form-label" for="region">State / Region <span>*</span></label>
+        <input type="text" class="form-input" id="region" placeholder="State or Province" autocomplete="address-level1" />
       </div>
 
       <div class="info-strip">
@@ -1540,7 +1579,6 @@
         <input type="text" class="form-input" id="hearAboutOther" placeholder="How did you find out about SV Capital?" maxlength="200" autocomplete="off" />
       </div>
 
-      <!-- Return estimate widget -->
 
       <div class="btn-row">
         <button type="button" class="btn-secondary" id="btnStep3Back" style="max-width:110px">
@@ -1782,7 +1820,7 @@
 let currentStep   = 1;
 let selectedRisk  = 'moderate';
 let clientType    = 'sa'; // 'sa' | 'intl'
-let _derivedGender = null;
+let _derivedGender = null; // set when SA ID is validated
 
 const ficaFiles   = { id: null, address: null, selfie: null, bank: null, tax: null };
 const REQUIRED_DOCS = ['id', 'address', 'selfie'];
@@ -1792,7 +1830,7 @@ let _draftStatusTimer = null;
 /* ── Signup Friction Tracker ── */
 const _FT = (function() {
   const SESSION_ID = (Math.random().toString(36).slice(2) + Date.now().toString(36)).slice(0, 32);
-  const ENDPOINT   = (window.__SVC_API_BASE__ || '/api/') + 'analytics/signup-friction';
+  const ENDPOINT   = '/api/analytics/signup-friction';
   let _queue = [];
   const _stepEnterAt = {};
   let _complete = false;
@@ -1873,10 +1911,12 @@ const _FT = (function() {
 window.addEventListener('DOMContentLoaded', () => {
   _FT.stepEntered(1);
   prefillReferral();
+  prefillInvite();
   initSocialProofCounters();
   initReturnEstimate();
   bindDraftAutosave();
   restoreDraft();
+  _initSignupAddressSearch();
 
   // Citizenship toggle (both the in-step1 toggle and the waitlist panel toggle)
   document.getElementById('btnCitizenSA').addEventListener('click',    () => toggleCitizenship('sa'));
@@ -2079,7 +2119,7 @@ async function checkIdDuplicate() {
     } else {
       _idDuplicateBlocked = false;
     }
-  } catch { /* network error — server will catch duplicate at submit */ }
+  } catch { /* network error — allow form to proceed; server will catch it */ }
 }
 
 /* ── Citizenship toggle ── */
@@ -2353,7 +2393,9 @@ function validateStep(n) {
     /* Address is checked here now, with the fields. Leaving it in the n === 1
        branch after the markup moved would have made step 1 refuse to advance
        over a city it no longer shows. */
+    if (!v('streetAddress')) return showError('Please enter your street address.', 'streetAddress');
     if (!v('city')) return showError('Please enter your city.', 'city');
+    if (!v('postalCode')) return showError('Please enter your postal code.', 'postalCode');
     if (clientType === 'sa' && !v('province'))
       return showError('Please select your province.', 'province');
     if (clientType !== 'sa' && !v('region'))
@@ -2416,7 +2458,10 @@ function persistDraft() {
       passportExpiry: draftValue('passportExpiry'),
       nationality: draftValue('nationality'),
       countryResidence: draftValue('countryResidence'),
+      streetAddress: draftValue('streetAddress'),
+      suburb: draftValue('suburb'),
       city: draftValue('city'),
+      postalCode: draftValue('postalCode'),
       province: draftValue('province'),
       region: draftValue('region'),
       referralCode: draftValue('referralCode'),
@@ -2459,10 +2504,75 @@ function clearDraft() {
   try { localStorage.removeItem(SIGNUP_DRAFT_KEY); } catch (_) {}
 }
 
+function _initSignupAddressSearch() {
+  const searchEl = document.getElementById('addressSearch');
+  const dropEl   = document.getElementById('addressDrop');
+  if (!searchEl || !dropEl) return;
+
+  let _timer = null;
+  let _results = [];
+
+  const _esc = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const _hide = () => { dropEl.style.display = 'none'; };
+
+  const _show = items => {
+    _results = items;
+    if (!items.length) { _hide(); return; }
+    dropEl.innerHTML = items.map((r, i) => {
+      const line1 = [r.housenumber, r.street].filter(Boolean).join(' ') || r.city || r.formatted || '';
+      const line2 = [r.suburb || r.quarter, r.city || r.town, r.postcode].filter(Boolean).join(', ');
+      return `<div data-idx="${i}" style="padding:9px 14px;cursor:pointer;font-size:0.82rem;border-bottom:1px solid rgba(255,255,255,0.08);color:#e8edf2" onmouseover="this.style.background='rgba(237,165,255,0.1)'" onmouseout="this.style.background=''">
+        <div style="font-weight:600">${_esc(line1)}</div>
+        ${line2 ? `<div style="font-size:0.74rem;color:#8899aa;margin-top:2px">${_esc(line2)}</div>` : ''}
+      </div>`;
+    }).join('');
+    dropEl.style.display = 'block';
+  };
+
+  const _fill = r => {
+    const _s = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val; };
+    _s('streetAddress', [r.housenumber, r.street].filter(Boolean).join(' '));
+    _s('suburb',        r.suburb || r.quarter || r.neighbourhood || '');
+    _s('city',          r.city || r.town || r.municipality || '');
+    _s('postalCode',    r.postcode || '');
+    const sel = document.getElementById('province');
+    if (sel && r.state) {
+      const opt = [...sel.options].find(o => o.value.toLowerCase() === r.state.toLowerCase() || o.text.toLowerCase() === r.state.toLowerCase());
+      if (opt) opt.selected = true;
+    }
+    _hide();
+    searchEl.value = '';
+    persistDraft();
+  };
+
+  searchEl.addEventListener('input', () => {
+    clearTimeout(_timer);
+    const q = searchEl.value.trim();
+    if (q.length < 3) { _hide(); return; }
+    _timer = setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/address/autocomplete?q=${encodeURIComponent(q)}`);
+        if (!r.ok) return;
+        const d = await r.json();
+        _show(d.results || []);
+      } catch (_) {}
+    }, 300);
+  });
+
+  dropEl.addEventListener('mousedown', e => {
+    const row = e.target.closest('[data-idx]');
+    if (row) { e.preventDefault(); _fill(_results[+row.dataset.idx]); }
+  });
+
+  document.addEventListener('click', e => {
+    if (!searchEl.contains(e.target) && !dropEl.contains(e.target)) _hide();
+  });
+}
+
 function bindDraftAutosave() {
   const ids = [
     'firstName','lastName','email','phoneDialCode','phone','idNumber','passportNumber','passportExpiry',
-    'nationality','countryResidence','city','province','region','referralCode',
+    'nationality','countryResidence','streetAddress','suburb','city','postalCode','province','region','referralCode',
     'investExp','hearAbout','termsCheck','ficaConsentCheck','popiaCheck'
   ];
 
@@ -2702,6 +2812,10 @@ async function _doSubmit(skippedFica) {
          now, and the nightly FICA sweep reads it. An SA client is not asked —
          a 13-digit SA ID number is the answer — and the server defaults them. */
       nationality:   isSA ? undefined : (v('nationality') || undefined),
+      streetAddress: v('streetAddress') || undefined,
+      suburb:        v('suburb') || undefined,
+      city:          v('city') || undefined,
+      postalCode:    v('postalCode') || undefined,
       occupation:   '',
       role:         'investor',
       referredBy:    referral || '',
@@ -2803,8 +2917,13 @@ async function _doSubmit(skippedFica) {
       } catch (_) {}
     }
 
+    /* Invited to a group: land on My Groups, where the invitation is. */
+    if (window.__SVINVITE) {
+      document.getElementById('successMsg').textContent +=
+        ` Your invitation to ${window.__SVINVITE.group_name} is waiting for you under My Groups.`;
+    }
     setTimeout(() => {
-      window.location.href = window.__SVC_NATIVE__ ? '/index.html' : '/portal/index.html';
+      window.location.href = window.__SVINVITE ? '/portal/index.html?view=groups' : '/portal/index.html';
     }, 4000);
 
   } catch (err) {
@@ -2867,6 +2986,83 @@ function launchConfetti() {
   requestAnimationFrame(draw);
 }
 
+/* ── An invitation to a group (?invite=SVI-…) ──────────────────────
+   The person was invited to a savings club or investment group and has no
+   account yet. Show them what they were invited to, the group's rules, and
+   which email address or cell number to sign up with — the one thing that
+   decides whether the invitation is waiting for them afterwards. The link
+   grants nothing: accepting still needs them signed in as that contact. */
+function _inviteId() {
+  const id = new URLSearchParams(window.location.search).get('invite') || '';
+  return /^SVI-[0-9A-Fa-f]{14}$/.test(id) ? id.toUpperCase() : '';
+}
+
+async function prefillInvite() {
+  const id = _inviteId();
+  const box = document.getElementById('inviteBanner');
+  if (!id || !box) return;
+  const esc = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  let d = null;
+  try {
+    const r = await fetch('/api/invite-preview/' + encodeURIComponent(id));
+    const j = await r.json();
+    d = r.ok ? j.data : null;
+    if (!d) {
+      box.innerHTML = `<strong>This invitation is no longer available.</strong><br>${esc(j.error || '')}
+        You can still create an account; whoever invited you can send a new invitation to it.`;
+      box.style.display = '';
+      return;
+    }
+  } catch (_) { return; }
+  window.__SVINVITE = d;
+  const use = [d.email_hint && `the email address <strong>${esc(d.email_hint)}</strong>`,
+               d.cell_hint && `the cell number ending <strong>${esc(d.cell_hint.slice(-4))}</strong>`]
+              .filter(Boolean).join(' or ');
+  box.innerHTML = `
+    <div style="font-weight:800;font-size:1rem;margin-bottom:4px">
+      <i class="fa-solid fa-people-group" style="color:#c26ee0"></i>
+      ${esc(d.invited_by)} invited you to join ${esc(d.group_name)}</div>
+    <div style="margin-bottom:6px"><strong>The group&rsquo;s rules:</strong> ${esc(d.rules)}</div>
+    <div>Sign up with ${use}. That is how the invitation finds you &mdash; it will be waiting under
+      My Groups as soon as your account exists. You can upload your documents later.</div>
+    <div id="inviteMismatch" style="display:none;margin-top:8px;color:#b45309;font-weight:600"></div>
+    <div style="margin-top:8px;font-size:0.8rem">Already have an account with that address?
+      <a href="login.html">Sign in</a> and open My Groups.</div>`;
+  box.style.display = '';
+  const hear = document.getElementById('hearAbout');
+  if (hear && !hear.value) hear.value = 'friend';
+  ['email', 'phone'].forEach(f => {
+    const el = document.getElementById(f);
+    if (el) el.addEventListener('blur', _checkInviteContact);
+  });
+}
+
+/* A soft check against the masked address: the first letter, the length
+   and the domain of an email, or the last four digits of a number. Never
+   blocks — the person may have been invited on both, or may want a
+   different address and a new invitation — but says so before they finish. */
+function _checkInviteContact() {
+  const d = window.__SVINVITE;
+  const note = document.getElementById('inviteMismatch');
+  if (!d || !note) return;
+  const email = v('email').toLowerCase();
+  const digits = v('phone').replace(/\D/g, '');
+  const emailOk = (() => {
+    if (!d.email_hint || !email) return false;
+    const [hu, hd] = d.email_hint.split('@');
+    const [eu, ed] = email.split('@');
+    return !!eu && ed === hd && eu[0] === hu[0] && eu.length === hu.length;
+  })();
+  const cellOk = !!(d.cell_hint && digits && digits.slice(-4) === d.cell_hint.slice(-4));
+  const typed = email || digits;
+  const bad = typed && !emailOk && !cellOk
+    && ((d.email_hint && email) || (d.cell_hint && digits.length >= 9));
+  note.style.display = bad ? '' : 'none';
+  note.textContent = bad
+    ? 'That does not look like the address the invitation was sent to. Sign up with that one, or the invitation will not be waiting for you.'
+    : '';
+}
+
 /* ── Pre-fill referral code from URL ── */
 function prefillReferral() {
   const params = new URLSearchParams(window.location.search);
@@ -2878,10 +3074,11 @@ function prefillReferral() {
     input.value = ref.toUpperCase();
     const strip = document.createElement('div');
     strip.className = 'referral-strip';
-    strip.innerHTML = `<i class="fa-solid fa-gift"></i> Referral code <strong>${ref.toUpperCase()}</strong> applied — you'll both earn R250 bonus!`;
+    strip.innerHTML = `<i class="fa-solid fa-gift"></i> Referral code <strong>${ref.toUpperCase()}</strong> applied — they'll earn 100 XP when you join!`;
     document.getElementById('referralGroup').before(strip);
   }
 }
 </script>
+<script src="/js/app-banner.js?v=4"></script>
 </body>
 </html>

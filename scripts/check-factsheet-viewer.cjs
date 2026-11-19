@@ -152,10 +152,34 @@ const HARNESS = `<!doctype html><html><head><meta charset="utf-8"></head><body>
          window._fsDocCache would be a different variable entirely. */
       _fsDocCache = [d];
       _openFsDoc(0);
+      /* WAIT FOR INK, NOT FOR THE ELEMENT.
+      
+         This used to break as soon as a <canvas> EXISTED. pdf.js creates the
+         canvas and sizes it before it finishes painting, so under load the
+         pixels were read mid-render: the white page fill had set alpha
+         everywhere (so "drawn" was healthy) while the text had not landed
+         yet, and only the dark-pixel assertion failed. It passed alone and
+         failed perhaps one run in ten inside the parallel suite, which is
+         the worst way for a check to behave — it teaches you to re-run.
+      
+         So the loop now waits for the canvas to actually carry dark pixels.
+         The timeout is unchanged and still gives up, so a render that never
+         happens still fails the assertions below rather than hanging. */
+      const hasInk = () => {
+        const c = document.getElementById('_fsBody')?.querySelector('canvas');
+        if (!c || !c.width || !c.height) return false;
+        const px = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+        let dark = 0;
+        for (let i = 0; i < px.length; i += 4) {
+          if (px[i + 3] > 0 && px[i] < 128 && px[i + 1] < 128 && px[i + 2] < 128) {
+            if (++dark > 200) return true;
+          }
+        }
+        return false;
+      };
       for (let i = 0; i < 75; i++) {
         const b = document.getElementById('_fsBody');
-        if (b && (b.querySelector('canvas') || b.querySelector('img')
-                  || /Could not/.test(b.textContent))) break;
+        if (b && (hasInk() || b.querySelector('img') || /Could not/.test(b.textContent))) break;
         await new Promise(r => setTimeout(r, 200));
       }
       const b = document.getElementById('_fsBody');

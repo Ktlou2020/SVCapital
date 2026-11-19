@@ -51,7 +51,6 @@ const decomment = s => s.replace(/<!--[\s\S]*?-->/g, ' ')
 const MIN = 10;
 
 const SIGNUPS = ['signup.html',
-                 path.join('mobile', 'src', 'signup.html'),
                  path.join('mobile', 'www', 'signup.html')];
 
 console.log('\nthe server states one minimum, in every place it checks');

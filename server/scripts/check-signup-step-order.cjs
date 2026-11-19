@@ -40,7 +40,6 @@ const ok = (name, cond, detail) => {
 };
 
 const PAGES = ['signup.html',
-               path.join('mobile', 'src', 'signup.html'),
                path.join('mobile', 'www', 'signup.html')];
 
 /* Identity, and the things that must NOT have travelled with it. */

@@ -7,5 +7,14 @@
     ? 'http://localhost:3000/api/'
     : 'https://svcapital-production.up.railway.app/api/';
 </script>
-  <script>window.location.replace('/');</script>
+  <script>
+  /* Carry the query string and hash across. The app's shell is at '/', and
+     this stub is how anything aimed at /portal/ reaches it — including the
+     web sign-up's own redirect, which sends a member who just accepted an
+     invitation to /portal/index.html?view=groups. Replacing with a bare '/'
+     dropped that, so they landed on the dashboard and had to find My Groups
+     themselves, which is the one thing the invitation was trying to avoid.
+     svcOpenDeepLink reads it off location.search at boot. */
+  window.location.replace('/' + window.location.search + window.location.hash);
+  </script>
 </head></html>
